@@ -122,6 +122,19 @@ prisma/*.db-journal
 prisma/.env
 
 # ---------------------------------------------------------------------------
+# Database backup artifacts (Phase 1 Chunk 3)
+#
+# The Phase 1 recovery rehearsal writes its `.bak` SERVER-SIDE, inside the SQL
+# Server container's own volume, so a backup binary has no path into the
+# working tree at all. These patterns are the second line of that defence, for
+# a developer who restores or copies one onto the host by hand: a database
+# backup carries every audit row, and belongs in no commit.
+# ---------------------------------------------------------------------------
+*.bak
+*.trn
+*.bacpac
+
+# ---------------------------------------------------------------------------
 # Docker / local runtime state
 # Compose files and Dockerfiles remain tracked.
 # ---------------------------------------------------------------------------

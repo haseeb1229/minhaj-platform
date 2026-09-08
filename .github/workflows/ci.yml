@@ -153,6 +153,201 @@ jobs:
       - name: Validate the compose stack
         run: docker compose -f docker/compose.yaml config
 
+  # ---------------------------------------------------------------------------
+  # The Phase 1 database foundation, proven against a REAL SQL Server 2022
+  # Developer instance (DELIVERY_PLAN.md Phase 1).
+  #
+  # The gate protects the whole Phase 1 lifecycle, in the order a defect would
+  # surface: connectivity, the real Prisma migration lifecycle including
+  # rollback and re-apply, the least-privilege permission boundary, and finally
+  # the genuine backup/restore recovery proof — "a backup that has never been
+  # restored is not a backup" (ARCHITECTURE.md §10.4).
+  #
+  # The recovery proof runs FOR REAL here. Backup and restore are executed by
+  # the SQL Server service container against its own storage, which needs
+  # nothing of the runner beyond the service itself, so there is no reason to
+  # settle for a weaker CI-safe equivalent.
+  #
+  # Credentials are EPHEMERAL and generated per run. Nothing here reads a
+  # repository secret: a local Developer-edition database that exists only for
+  # the life of one job does not need a long-lived stored credential, and
+  # adding one would create a standing secret with no standing purpose
+  # (SECURITY_BASELINE.md §18.1).
+  # ---------------------------------------------------------------------------
+  database:
+    name: Database foundation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Generated per run and written only to `docker/.env`, which is
+      # git-ignored. `>> $GITHUB_ENV` is deliberately NOT used: values placed
+      # there are visible to every later step, and these never need to be.
+      #
+      # `openssl rand` supplies the entropy; the fixed prefix and suffix
+      # guarantee the SQL Server password policy is met (upper, lower, digit,
+      # symbol) whatever base64 produces.
+      - name: Generate ephemeral database credentials
+        run: |
+          SA_PASSWORD="Ci$(openssl rand -base64 24 | tr -d '/+=')#1aZ"
+          APP_PASSWORD="Ci$(openssl rand -base64 24 | tr -d '/+=')#2aZ"
+
+          # Masked so that if any command ever echoes one, the log shows ***.
+          echo "::add-mask::$SA_PASSWORD"
+          echo "::add-mask::$APP_PASSWORD"
+
+          mkdir -p docker
+          {
+            echo "MSSQL_SA_PASSWORD=${SA_PASSWORD}"
+            echo "MINHAJ_SQLSERVER_PORT=14330"
+            echo "DATABASE_URL=sqlserver://localhost:14330;database=MinhajPlatform;user=minhaj_app;password=${APP_PASSWORD};encrypt=true;trustServerCertificate=true"
+            echo "DATABASE_MIGRATION_URL=sqlserver://localhost:14330;database=MinhajPlatform;user=sa;password=${SA_PASSWORD};encrypt=true;trustServerCertificate=true"
+            echo "DATABASE_APP_LOGIN=minhaj_app"
+            echo "DATABASE_APP_PASSWORD=${APP_PASSWORD}"
+          } > docker/.env
+
+          chmod 600 docker/.env
+
+      # The same image and the same loopback-only port binding the local stack
+      # uses, started from the repository's own compose file so CI cannot drift
+      # from what a developer runs. Only the database service is started; the
+      # web service is not part of this gate.
+      - name: Start SQL Server 2022 Developer
+        run: docker compose -f docker/compose.yaml up -d --wait sqlserver
+
+      # `--wait` returns on the compose healthcheck, which is the same
+      # `SELECT 1` probe the local stack uses, so the server is accepting
+      # connections by this point.
+      #
+      # `db:test:connection` is deliberately NOT run here: it connects over
+      # `DATABASE_URL`, as the least-privilege runtime principal, to
+      # `MinhajPlatform` — neither of which exists yet. It runs once both do,
+      # below, where a failure means something real rather than an ordering
+      # artefact.
+      - name: Create the Phase 1 database
+        run: |
+          docker exec minhaj-sqlserver-2022 /opt/mssql-tools18/bin/sqlcmd \
+            -S localhost -U sa -P "$(grep '^MSSQL_SA_PASSWORD=' docker/.env | cut -d= -f2-)" \
+            -C -b -Q "IF DB_ID(N'MinhajPlatform') IS NULL CREATE DATABASE [MinhajPlatform];"
+
+      - name: Generate the Prisma client
+        run: npm run db:generate
+
+      - name: Validate the Prisma schema
+        run: npm run db:validate
+
+      # The REAL Prisma migration lifecycle on a disposable database: deploy,
+      # status, schema verification, seed twice, reviewed rollback, re-deploy.
+      - name: Migration lifecycle
+        run: npm run db:migrate:test
+
+      # The least-privilege boundary, proven with the actual application
+      # principal and asserted on SQL Server error numbers.
+      - name: Least-privilege permission proof
+        run: npm run db:test:permissions
+
+      # Bring the persistent CI database to the migrated, provisioned state the
+      # recovery rehearsal reads from — the state a developer's MinhajPlatform
+      # is already in locally.
+      #
+      # `migrate deploy` is invoked directly rather than through a new npm
+      # script: Phase 1 applies migrations to a persistent database
+      # deliberately and by review, never automatically (ARCHITECTURE.md §10.3),
+      # so a one-command wrapper for it is exactly what should not exist. The
+      # URL comes from `docker/.env` via `--env-file`, never from the command
+      # line, so it cannot reach the process table or the log.
+      - name: Apply migrations to the Phase 1 database
+        run: |
+          node --env-file=docker/.env --conditions=react-server \
+            node_modules/prisma/build/index.js migrate deploy \
+            --config packages/database/prisma.config.ts
+
+      - name: Provision the least-privilege principal
+        run: npm run db:provision
+
+      # Now meaningful: the database exists, the runtime login exists, and this
+      # connects AS that login. It also asserts the server is genuinely SQL
+      # Server 2022 Developer edition (major version 16), so CI cannot quietly
+      # prove Phase 1 against a different engine.
+      - name: Verify connectivity, version and edition
+        run: npm run db:test:connection
+
+      - name: Seed
+        run: npm run db:seed
+
+      # The guards, proven to fail closed. No database is touched.
+      - name: Restore-guard proof
+        run: npm run db:restore:test
+
+      # THE recovery gate: a genuine BACKUP DATABASE, a genuine RESTORE into a
+      # separate disposable database, restored-state verification, and cleanup.
+      - name: Recovery proof (real backup and restore)
+        run: npm run db:recovery:test
+
+      # Proves the rehearsal cleaned up after itself rather than trusting that
+      # it said so. Also fails if a restore database survived a failure above.
+      # Residue is verified INDEPENDENTLY of what `db:recovery:test` reported.
+      # The rehearsal now fails when its own cleanup fails, but a gate that
+      # trusts only the thing it is checking proves nothing about a leak that
+      # the rehearsal never noticed — a crashed process, or an artifact left by
+      # an earlier step. Both resource kinds are checked, and either one
+      # surviving fails the job.
+      - name: Verify no disposable resources survive
+        if: always()
+        run: |
+          RESIDUE=0
+
+          LEFTOVER_DBS=$(docker exec minhaj-sqlserver-2022 /opt/mssql-tools18/bin/sqlcmd \
+            -S localhost -U sa -P "$(grep '^MSSQL_SA_PASSWORD=' docker/.env | cut -d= -f2-)" \
+            -C -b -h-1 -W -Q "SET NOCOUNT ON; SELECT name FROM sys.databases WHERE name LIKE 'MinhajPhase1%';")
+
+          if [ -n "$(echo "$LEFTOVER_DBS" | tr -d '[:space:]')" ]; then
+            echo "Disposable databases survived the run:"
+            echo "$LEFTOVER_DBS"
+            RESIDUE=1
+          else
+            echo "No disposable test or restore databases remain."
+          fi
+
+          # Matches the approved artifact pattern exactly, so an unrelated file
+          # in the directory is not mistaken for Chunk 3 residue. A missing
+          # directory is success: nothing was ever written.
+          LEFTOVER_BAKS=$(docker exec minhaj-sqlserver-2022 \
+            find /var/opt/mssql/backup -maxdepth 1 -type f \
+            -regextype posix-extended \
+            -regex '.*/minhaj-phase1-[0-9a-f]{32}\.bak' 2>/dev/null || true)
+
+          if [ -n "$(echo "$LEFTOVER_BAKS" | tr -d '[:space:]')" ]; then
+            echo "Chunk 3 backup artifacts survived the run:"
+            echo "$LEFTOVER_BAKS"
+            RESIDUE=1
+          else
+            echo "No Chunk 3 backup artifacts remain in /var/opt/mssql/backup."
+          fi
+
+          exit "$RESIDUE"
+
+      # The container and its volume are removed with the runner, but the
+      # teardown is explicit so a failure leaves nothing holding the port, and
+      # the ephemeral credentials do not outlive the job even in a cache.
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose -f docker/compose.yaml down -v --remove-orphans || true
+          rm -f docker/.env
+
   audit:
     name: Dependency audit
     runs-on: ubuntu-latest

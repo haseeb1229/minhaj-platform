@@ -17,6 +17,10 @@ src/
   client.ts                         The application Prisma client
   config.ts                         Zod-validated, server-only configuration
   lifecycle/                        Migration, rollback, seed and provisioning mechanics
+    backup.ts                       SQL Server BACKUP/RESTORE mechanics and their guards
+    recovery-proof.ts               The marker row written before backup, verified after
+    recovery-cleanup.ts             Disposable-resource cleanup; failures fail the gate
+    restored-state.ts               Inspection of a restored database's actual state
 scripts/                            The executables behind the `db:*` commands
 ```
 
@@ -115,6 +119,9 @@ schema-level grant would silently extend to every table a later phase adds.
 | `npm run db:migrate:test`     | Full lifecycle on a disposable database       |
 | `npm run db:test:permissions` | Prove the permission boundary live            |
 | `npm run db:seed`             | Run the Phase 1 seed                          |
+| `npm run db:backup`           | Take one real, verified backup and keep it    |
+| `npm run db:restore:test`     | Prove the restore guards fail closed          |
+| `npm run db:recovery:test`    | **End-to-end backup → restore → verify**      |
 
 ## Disposable test databases
 
@@ -131,3 +138,129 @@ for them is what DELIVERY_PLAN.md forbids. The seed is a deterministic
 verification pass that writes nothing, so it is idempotent structurally rather
 than by careful upserts. Its purpose is to establish and prove the mechanism
 that later phases extend.
+
+## Backup and recovery
+
+**A backup that has never been restored is not a backup** (ARCHITECTURE.md
+§10.4). `npm run db:recovery:test` is therefore the gate, not `npm run
+db:backup`: it proves the artifact can actually be restored and that the
+restored database is intact.
+
+### The end-to-end rehearsal
+
+`npm run db:recovery:test` runs the whole lifecycle and cleans up after itself:
+
+```
+migrated MinhajPlatform
+  → write a unique synthetic audit marker row
+  → BACKUP DATABASE ... WITH FORMAT, INIT, CHECKSUM
+  → RESTORE VERIFYONLY / HEADERONLY / FILELISTONLY
+  → RESTORE DATABASE into a NEW MinhajPhase1Restore_<32 hex>
+  → verify restored schema, indexes and migration history
+  → verify the marker row survived with unchanged values
+  → verify the restored least-privilege posture, live
+  → drop the restore database, delete the artifact, prove both are gone
+```
+
+Every step uses SQL Server's own backup engine. Nothing copies rows, replays a
+migration, exports JSON or recreates schema — a rehearsal doing any of those
+would pass while proving nothing about the artifact, which is the only thing an
+incident depends on.
+
+`MinhajPlatform` is **read from and appended to, never restored over**. The
+restore target is always a fresh disposable database, and `WITH REPLACE` is
+deliberately not used, so a restore fails rather than silently overwriting.
+
+### Where backups are written
+
+`BACKUP DATABASE ... TO DISK` is executed **by the server**, so the path
+resolves inside the SQL Server container, never on the host. Artifacts are
+written to `/var/opt/mssql/backup` on the container's existing volume.
+
+This is why **a backup binary has no path into the working tree at all** — it
+is not on the host to be committed. `*.bak`, `*.trn` and `*.bacpac` are also
+git-ignored as a second line of defence, for anyone who copies one out by hand.
+
+`npm run db:backup` takes one verified backup and **leaves it in place** — a
+restore point before a risky local change. It prints the exact `docker exec`
+command that removes it. `db:recovery:test` deletes its own artifact.
+
+### Disposable restore safety
+
+Restores and drops target `MinhajPhase1Restore_<32 hex>` and nothing else. The
+guard identifies **positively** — the same discipline as the Chunk 2
+`MinhajPhase1Test_` databases — so `master`, `tempdb`, `model`, `msdb`,
+`MinhajPlatform`, an empty name, an injection-shaped name and a Chunk 2
+disposable name all fail closed. The two namespaces deliberately do not
+overlap, so neither chunk's cleanup can reach the other's databases.
+
+Backup **sources** are guarded the same way: `MinhajPlatform` is the only
+database this tooling will back up. Artifact **paths** are guarded before any
+deletion, so no wildcard, traversal or data-file path can be a target — there
+is no directory sweep anywhere in the cleanup.
+
+`npm run db:restore:test` proves all of this without touching a database.
+
+### Cleanup is part of the gate
+
+Cleanup failures **fail the command**. `db:recovery:test` exits non-zero if a
+restore database or a backup artifact survives, or if cleanup could not confirm
+that it did not — a gate that reported a leak and then exited 0 would train
+everyone to ignore the line, and in CI nobody reads a passing job's log.
+
+Every cleanup step is still **attempted** even after an earlier one fails, so a
+refused `DROP` does not also strand the artifact. Failures are collected and
+reported together, and sessions are closed regardless. Residue is verified
+_separately_ from the operation meant to remove it: a `DROP` that returns
+without error is not evidence the database is gone.
+
+If the rehearsal itself fails **and** cleanup fails, both are reported — the
+primary failure leads, since it is the reason to investigate, and the cleanup
+failures follow, since they are what is still on the server. Neither hides the
+other.
+
+CI verifies residue independently of what the rehearsal reported, checking both
+leftover `MinhajPhase1Restore_*` databases and leftover Chunk 3 `.bak`
+artifacts before teardown.
+
+### What is and is not proven
+
+**Proven:**
+
+- a real, checksum-verified SQL Server full backup of the migrated database
+- a real restore into a separate database, with logical files read from the
+  artifact's own `FILELISTONLY` and moved to fresh physical paths
+- restored `dbo.AuditLog`, its columns and its indexes
+- restored `_prisma_migrations` listing the Phase 1 migration
+- restored **data**: a marker row written before the backup, unchanged
+- restored database-level security: `minhaj_app` owns nothing, holds no broad
+  role, keeps `GRANT INSERT/SELECT` and `DENY UPDATE/DELETE` on the audit
+  table, with the denials proven live against SQL Server error 229
+- no business-domain schema anywhere in the restored database
+
+**Not proven, and deliberately out of scope:**
+
+- **Server-level login mapping.** Logins live in `master` and are _not_ inside
+  a database backup. The rehearsal reports this as a distinct fact: on this
+  instance the restored user maps back to the existing login by SID, so
+  `DATABASE STATE RESTORED` and `SERVER-LEVEL LOGIN MAPPING INTACT` are both
+  true. Restoring onto a _different_ instance would leave an orphaned user
+  needing a re-provisioning step — the database state would still be restored.
+  Nothing is granted to make a check pass.
+- Point-in-time recovery, log backups and restore chains.
+- Production backup storage, retention, offsite copies, scheduling, encryption
+  key management and RPO/RTO targets. These are external decisions gating
+  Phases 28 and 34 (OPEN_DECISIONS.md §4.4), not Phase 1 work.
+
+### Local Developer-edition assumptions
+
+This is the **local restore rehearsal** that OPEN_DECISIONS.md §4.1 places
+under engineering control. It assumes the Compose SQL Server 2022 Developer
+container, its `minhaj-platform-sqlserver-data` volume, and the container-side
+paths above. It runs as the **migration** principal — `BACKUP DATABASE`
+requires backup authority the least-privilege runtime principal does not hold
+and must never be granted.
+
+The unrelated host SQLEXPRESS instance on port 1433 is never a source, a target
+or a path: the Minhaj container binds loopback `14330` only, and every guard
+identifies its subject positively.

@@ -50,8 +50,20 @@ export default defineConfig({
     // Fixtures are deliberately invalid source linted by the tests, never run.
     passWithNoTests: false,
 
-    // Linting fixtures through the ESLint API is slower than a unit assertion.
-    testTimeout: 30_000,
+    // Linting fixtures through the ESLint API is slower than a unit assertion,
+    // and the architecture tests additionally spawn the REAL `tsc` over fixture
+    // projects — tens of seconds of CPU each, several at a time.
+    //
+    // Raised from 30s in Phase 1 Chunk 3. The architecture tests pass in
+    // isolation and under `--maxWorkers=1` but intermittently exceeded 30s once
+    // the live database suites were added alongside them: enough parallel work
+    // to starve a `tsc` child, on a runner with fewer cores than a workstation.
+    // That is a timeout measuring machine load, not a defect it can detect, and
+    // a gate that fails on scheduling teaches everyone to re-run it until green.
+    //
+    // Nothing is skipped or relaxed by this — every assertion still runs and
+    // still has to pass.
+    testTimeout: 120_000,
 
     coverage: {
       provider: 'v8',
