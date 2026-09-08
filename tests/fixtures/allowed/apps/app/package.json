@@ -1,0 +1,8 @@
+{
+  "name": "@fixture/allowedapp",
+  "private": true,
+  "type": "module",
+  "minhaj": {
+    "architecturalRole": "composition"
+  }
+}

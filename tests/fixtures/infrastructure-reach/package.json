@@ -1,0 +1,10 @@
+{
+  "name": "@fixture/infrastructure-reach",
+  "private": true,
+  "version": "0.0.0",
+  "description": "B5 — a legal Layer 0 package must not become a tunnel to prohibited concrete infrastructure.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

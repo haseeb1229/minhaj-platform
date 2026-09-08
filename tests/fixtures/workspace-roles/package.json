@@ -1,0 +1,8 @@
+{
+  "name": "workspace-roles-fixture",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

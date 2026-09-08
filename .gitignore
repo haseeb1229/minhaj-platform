@@ -22,11 +22,48 @@ dist/
 .vercel/
 .turbo/
 
+# Round 6 (B2). Authored fixture SOURCE deliberately placed in directories
+# named `dist`, `build` and `coverage`, proving the architecture gate no longer
+# treats a directory name as evidence that code is generated. The patterns
+# above are name-based and would silently delete these files from the
+# repository — the same class of mistake the fixtures exist to catch — so they
+# are re-included explicitly. Everything genuinely generated stays ignored.
+!tests/fixtures/**/src/dist/
+!tests/fixtures/**/src/dist/**
+!tests/fixtures/**/src/build/
+!tests/fixtures/**/src/build/**
+!tests/fixtures/**/src/features/dist/
+!tests/fixtures/**/src/features/dist/**
+!tests/fixtures/**/src/something/build/
+!tests/fixtures/**/src/something/build/**
+
+# Round 7 (B3). This ONE fixture must contain a populated `outDir` on disk: the
+# defect being reproduced is an authored source file importing its own project's
+# build output, so a checked-out tree with an empty `dist/` reproduces nothing
+# and the test would pass for the wrong reason. `--noEmit` is deliberate too —
+# the fixture must present a BUILT tree without the suite running a real emit.
+#
+# Scoped to the exact fixture path rather than to `dist` generally (§18): every
+# other `dist/` in the repository, fixtures included, stays ignored.
+!tests/fixtures/generated-output-import/apps/app/dist/
+!tests/fixtures/generated-output-import/apps/app/dist/**
+!tests/fixtures/generated-output-import/apps/app/types/
+!tests/fixtures/generated-output-import/apps/app/types/**
+
 # ---------------------------------------------------------------------------
 # TypeScript / tooling caches
 # ---------------------------------------------------------------------------
 *.tsbuildinfo
-next-env.d.ts
+# Next writes ONE declaration file, at the application workspace root. The
+# pattern is anchored to that path rather than left as a bare filename, for the
+# same reason the architecture analyser stopped excluding by basename (Review #4
+# B2): `next-env.d.ts` is an ordinary name a repository-local declaration may
+# legitimately carry, and a bare pattern silently swallows every one of them.
+#
+# This is load-bearing, not tidiness. Two fixtures that PROVE the B2 bypass is
+# closed are named `next-env.d.ts`; under the bare pattern they were ignored and
+# would have vanished on commit, taking the regression test's evidence with them.
+/apps/web/next-env.d.ts
 .eslintcache
 .cache/
 
@@ -39,6 +76,11 @@ next-env.d.ts
 !.env.*.example
 *.pem
 *.key
+*.pfx
+*.p12
+*.crt
+*.cer
+*.der
 secrets/
 .secrets/
 
@@ -57,6 +99,11 @@ pnpm-debug.log*
 # ---------------------------------------------------------------------------
 coverage/
 .nyc_output/
+
+# Round 6 (B2), as above: authored fixture source in a directory named
+# `coverage`, not coverage output.
+!tests/fixtures/**/src/coverage/
+!tests/fixtures/**/src/coverage/**
 
 # Playwright — reports and run artifacts only.
 # Test specs, fixtures and configuration remain tracked.

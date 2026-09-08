@@ -1,0 +1,5 @@
+/* §3/§6 — an authored STYLESHEET under a generated-looking directory. The
+   scanner supports .css/.scss, so those must be discovered here too. */
+.promo {
+  margin-left: 12px;
+}

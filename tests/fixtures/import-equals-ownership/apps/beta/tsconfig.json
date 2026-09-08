@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "moduleResolution": "Node10",
+    "module": "CommonJS",
+    "target": "ES2022",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "paths": {
+      "#target": ["../../shared/quran/target.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

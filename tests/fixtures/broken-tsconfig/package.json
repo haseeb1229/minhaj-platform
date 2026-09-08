@@ -1,0 +1,9 @@
+{
+  "name": "@fixture/broken-tsconfig",
+  "private": true,
+  "version": "0.0.0",
+  "description": "A workspace whose tsconfig cannot be parsed. Resolution is driven by the effective TypeScript configuration, so a config the analyser cannot read must be reported — never silently replaced with permissive defaults.",
+  "workspaces": [
+    "apps/*"
+  ]
+}

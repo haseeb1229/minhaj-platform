@@ -1,0 +1,7 @@
+{
+  "name": "rogue-js-generated-names-fixture",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ]
+}

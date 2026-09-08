@@ -1,0 +1,10 @@
+{
+  "name": "@fixture/import-equals-beta",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "minhaj": {
+    "architecturalRole": "composition"
+  }
+}

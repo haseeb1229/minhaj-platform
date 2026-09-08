@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "moduleResolution": "Bundler",
+    "module": "ESNext",
+    "target": "ESNext",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "paths": {
+      "#shared/*": ["../../shared/alias-a/*"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

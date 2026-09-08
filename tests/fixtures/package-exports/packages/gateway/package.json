@@ -1,0 +1,12 @@
+{
+  "name": "@fixture/gateway",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "minhaj": {
+    "architecturalRole": "platform"
+  }
+}

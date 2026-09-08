@@ -1,0 +1,8 @@
+{
+  "name": "@fixture/tsconfig-aliases-app",
+  "private": true,
+  "version": "0.0.0",
+  "minhaj": {
+    "architecturalRole": "composition"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "rtl-generated-names-fixture",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ]
+}

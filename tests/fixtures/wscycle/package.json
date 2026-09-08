@@ -1,0 +1,7 @@
+{
+  "name": "wscycle-fixture",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ]
+}

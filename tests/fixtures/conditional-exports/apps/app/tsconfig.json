@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "moduleResolution": "Bundler",
+    "module": "ESNext",
+    "customConditions": ["react-server"]
+  },
+  "include": ["src/**/*.ts"]
+}

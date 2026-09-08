@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "moduleResolution": "Bundler",
+    "module": "ESNext",
+    "target": "ESNext",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "paths": { "#target": ["../../packages/shared/src/target.ts"] }
+  },
+  "include": ["src/**/*.ts"]
+}

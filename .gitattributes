@@ -1,0 +1,20 @@
+# Normalise line endings so the repository content is identical on every
+# platform. The workstation is Windows; CI and the Docker image are Linux.
+# Without this, checked-in files differ by line ending and Prettier's
+# `endOfLine: lf` disagrees with what Git writes.
+
+* text=auto eol=lf
+
+# Binary — never normalised.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+
+# Generated. Collapsed in diffs; still reviewed when it changes.
+package-lock.json linguist-generated=true

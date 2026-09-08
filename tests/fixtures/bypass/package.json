@@ -1,0 +1,7 @@
+{
+  "name": "bypass-fixture",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ]
+}

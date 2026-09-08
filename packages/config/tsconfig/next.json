@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Minhaj Next.js application",
+  "extends": "./base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "preserve",
+    // Production application code is TypeScript/TSX only. JavaScript in the
+    // app would be unchecked by tsc AND unlinted by the architecture rules,
+    // which is precisely the silent bypass this policy removes.
+    "allowJs": false,
+    "checkJs": false,
+    "incremental": true,
+    "plugins": [{ "name": "next" }]
+  }
+}

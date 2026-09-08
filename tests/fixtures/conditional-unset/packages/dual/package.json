@@ -1,0 +1,17 @@
+{
+  "name": "@fixture/dual",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "react-server": "./src/server-branch.ts",
+      "browser": "./src/browser-branch.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "minhaj": {
+    "architecturalRole": "platform"
+  }
+}

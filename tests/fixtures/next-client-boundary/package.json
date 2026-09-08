@@ -1,0 +1,10 @@
+{
+  "name": "@minhaj/fixture-next-client-boundary",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Build fixture proving a Client Component cannot reach @minhaj/server-core. NOT part of the workspace and NOT production source.",
+  "type": "module",
+  "scripts": {
+    "build": "next build"
+  }
+}

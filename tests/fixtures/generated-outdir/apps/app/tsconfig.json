@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "moduleResolution": "Bundler",
+    "module": "ESNext",
+    "target": "ESNext",
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": false,
+    "outDir": "./generated",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*.ts"]
+}

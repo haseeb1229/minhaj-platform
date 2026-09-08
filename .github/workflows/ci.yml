@@ -1,0 +1,176 @@
+name: CI
+
+# Version check → format → typecheck → lint → architecture validation →
+# RTL validation → tests → server-only build proof → production build
+# (ARCHITECTURE.md §10.3, DELIVERY_PLAN.md Phase 0B).
+#
+# No deployment, no cloud credentials, no environments, no release workflow.
+# Only the official checkout and setup-node actions are used.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Read-only. The workflow never writes to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The locked runtime (TECH_STACK.md §3). A mismatch is a hard failure, in CI
+  # and on a workstation alike.
+  NODE_VERSION: '24.20.0'
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      # Reproducible install from the committed lockfile. `npm ci` fails if
+      # package.json and package-lock.json have drifted apart.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify locked stack versions
+        run: npm run check:versions
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Type check
+        run: npm run typecheck
+
+      # Lint carries the RTL rules, the safety rules, and `noInlineConfig` over
+      # production source so an architecture rule cannot be disabled inline.
+      - name: Lint
+        run: npm run lint
+
+      # THE authoritative architecture gate. A separate process that resolves
+      # every import to a real path, so no import syntax and no ESLint
+      # directive can evade it (ARCHITECTURE.md §6.3 rule 12).
+      - name: Architecture validation
+        run: npm run check:architecture
+
+      # Logical-direction layout across source and stylesheets.
+      - name: RTL validation
+        run: npm run check:rtl
+
+      # Adversarial regression suite: every bypass previously demonstrated
+      # against these rules must still be rejected. This includes the
+      # production-start fail-fast integration test, which drives the real
+      # start command and asserts no listener survives an invalid environment.
+      #
+      # Review #4 additions covered here:
+      #   - TypeScript PROJECT membership, so an unreferenced nested tsconfig
+      #     cannot redefine how the analyser resolves an import (B1)
+      #   - repository-local declarations named `next-env.d.ts` staying in the
+      #     graph (B2)
+      #   - Layer 4 composition rules, distinct from Layer 0 (B3)
+      #   - the SIGTERM lifecycle of the start wrapper (B4)
+      #
+      # Review #5 additions covered here:
+      #   - the real `ts.Program` closure as the ownership and graph authority,
+      #     so a file `exclude`d from root discovery but loaded by an import
+      #     keeps the project's own `paths` (B1). These tests shell out to the
+      #     REAL `tsc --noEmit -p` and assert it PASSES before asserting the
+      #     architecture fails — the missing half of the Round 4 proof.
+      #   - repository-local declarations at a WORKSPACE ROOT entering the
+      #     graph whatever they are named, with the narrow generated-Next
+      #     exception still holding (B2)
+      #   - explicit workspace roles, with no directory-tier default: an
+      #     unregistered `apps/foo` no longer receives Layer 4 (B3)
+      #   - deterministic project ownership, failing closed on genuine
+      #     ambiguity, and resolved local targets that can never vanish
+      #
+      # This runner is Linux, which matters for B4: signals are a POSIX
+      # mechanism, and on Windows the orphan assertion passes even against the
+      # broken wrapper because the OS tears down the whole process tree. The
+      # Linux run is what makes that test evidence rather than decoration.
+      - name: Tests
+        run: npm run test
+
+      # Real `next build` proof that a Client Component cannot reach
+      # `@minhaj/server-core` or the server environment implementation by ANY
+      # route — package name, package subpath, relative source path, alias, or
+      # a wrapper chain — and that a Server Component still can. Each variant
+      # must fail specifically for the boundary reason, so a broken fixture
+      # cannot masquerade as enforcement.
+      - name: Server-only boundary build proof
+        run: npm run check:server-only
+
+      - name: Production build
+        run: npm run build
+
+  # ---------------------------------------------------------------------------
+  # The container image, built and verified as its own job.
+  #
+  # Review #3 (N5) found the image copying `tests/` into the RUNNING image while
+  # omitting `.env.example`, an input three of those tests read. The Dockerfile
+  # now separates a `test` stage (complete inputs, never shipped) from a `dev`
+  # runtime stage (application source only), and CI proves BOTH: the suite
+  # passes inside the image, and the runtime image still builds.
+  #
+  # No registry, no credentials, no deployment. The image is built and
+  # discarded.
+  # ---------------------------------------------------------------------------
+  container:
+    name: Container image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      # Proves the test stage has every input its suite needs — the exact
+      # defect Review #3 reported.
+      - name: Build and run the test stage
+        run: |
+          docker build --target test -t minhaj-web-test -f docker/web.Dockerfile .
+          docker run --rm minhaj-web-test
+
+      # Proves the lean runtime stage still builds after the split.
+      - name: Build the runtime stage
+        run: docker build --target dev -t minhaj-web-dev -f docker/web.Dockerfile .
+
+      # A compose file that does not parse is a broken developer setup.
+      - name: Validate the compose stack
+        run: docker compose -f docker/compose.yaml config
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Automated vulnerability scanning in CI (SECURITY_BASELINE.md §18.3).
+      - name: Audit
+        run: npm audit --audit-level=high

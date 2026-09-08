@@ -1,0 +1,10 @@
+{
+  "name": "@fixture/declarations",
+  "private": true,
+  "version": "0.0.0",
+  "description": "B3 — repository-local .d.ts files are compile-time architectural dependencies and must be classified.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

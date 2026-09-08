@@ -1,0 +1,47 @@
+# =============================================================================
+# Local development stack — Phase 0B
+# =============================================================================
+#
+# One service. That is the whole architecture today (ARCHITECTURE.md 1):
+#
+#   - SQL Server arrives in Phase 1, the Database Foundation.
+#   - `realtime` is created in the Messaging phase, not scaffolded in advance.
+#   - NGINX belongs to the deployment phase.
+#   - Redis is explicitly not adopted (TECH_STACK.md 15).
+#
+# Services are added by the phase that genuinely needs them.
+# No secrets are defined here.
+# =============================================================================
+
+name: minhaj-platform
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: docker/web.Dockerfile
+      # The development RUNTIME stage. The `test` stage is a separate target,
+      # built and run by the verification pipeline, and is never what serves.
+      target: dev
+    container_name: minhaj-web
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: development
+      PORT: '3000'
+      LOG_LEVEL: debug
+      DEFAULT_LOCALE: en
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      NEXT_PUBLIC_DEFAULT_LOCALE: en
+      # Required for file watching to work across a bind mount.
+      WATCHPACK_POLLING: 'true'
+    volumes:
+      # Source is live-mounted; container-managed directories are masked with
+      # anonymous volumes so host artefacts and platform-specific binaries do
+      # not collide with the container's own.
+      - ..:/app
+      - /app/node_modules
+      - /app/apps/web/node_modules
+      - /app/apps/web/.next
+    working_dir: /app
+    init: true

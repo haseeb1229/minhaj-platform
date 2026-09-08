@@ -1,0 +1,7 @@
+{
+  "name": "project-config-fixture",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ]
+}

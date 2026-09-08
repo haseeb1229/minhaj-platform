@@ -1,0 +1,24 @@
+node_modules/
+.next/
+dist/
+build/
+coverage/
+package-lock.json
+*.tsbuildinfo
+next-env.d.ts
+
+# The Phase 0A architecture documents are an approved, frozen baseline.
+# They are not reformatted by tooling; a change to them is an architecture
+# decision, made deliberately and reviewed.
+docs/
+
+# A fixture whose package.json is DELIBERATELY malformed. It exists to prove
+# the architecture analyser reports an unreadable workspace manifest instead of
+# silently skipping the workspace (Review #3, N6). Formatting it would repair
+# the defect the fixture is.
+tests/fixtures/broken-manifest/packages/malformed/package.json
+
+# A fixture whose tsconfig.json is DELIBERATELY malformed. It proves the
+# analyser reports a configuration it cannot read rather than resolving with
+# permissive defaults. Formatting it would repair the defect the fixture is.
+tests/fixtures/broken-tsconfig/apps/app/tsconfig.json

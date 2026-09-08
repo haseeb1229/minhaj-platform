@@ -1,0 +1,8 @@
+{
+  "name": "mixed-claim-majority-fixture",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

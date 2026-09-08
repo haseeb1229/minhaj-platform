@@ -1,0 +1,8 @@
+{
+  "name": "@fixture/cycleapp",
+  "private": true,
+  "type": "module",
+  "minhaj": {
+    "architecturalRole": "composition"
+  }
+}

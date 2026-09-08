@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "moduleResolution": "Bundler",
+    "module": "ESNext",
+    "baseUrl": "..",
+    "paths": { "%/*": ["./apps/extended/src/*"] }
+  }
+}

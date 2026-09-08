@@ -1,0 +1,7 @@
+{
+  "name": "allowed-fixture",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ]
+}

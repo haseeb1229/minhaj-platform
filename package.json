@@ -1,0 +1,38 @@
+{
+  "name": "minhaj-platform",
+  "version": "0.0.0",
+  "private": true,
+  "description": "One Minhaj — unified multilingual digital platform for Minhaj-ul-Quran International.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": "24.20.0",
+    "npm": ">=11"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "check:architecture": "node scripts/check-architecture.mjs",
+    "check:rtl": "node scripts/check-rtl.mjs",
+    "check:server-only": "node scripts/check-server-only.mjs",
+    "check:versions": "node scripts/verify-versions.mjs",
+    "test": "vitest run",
+    "build": "npm run build --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "npm run check:versions && npm run format:check && npm run typecheck && npm run lint && npm run check:architecture && npm run check:rtl && npm run test && npm run check:server-only && npm run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.10.1",
+    "eslint": "^10.9.1",
+    "prettier": "^3.9.6",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.69.0",
+    "vitest": "~4.1.11"
+  }
+}

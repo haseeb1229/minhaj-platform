@@ -1,0 +1,14 @@
+{
+  "name": "@fixture/nextapp",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "next": "16.0.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "minhaj": {
+    "architecturalRole": "composition"
+  }
+}

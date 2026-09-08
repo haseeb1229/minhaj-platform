@@ -1,0 +1,28 @@
+{
+  "name": "@minhaj/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "One Minhaj web application — Next.js 16 App Router, React Server Components by default.",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/start.mjs",
+    "dev:next": "next dev",
+    "build": "next build",
+    "start": "node scripts/start.mjs",
+    "start:next": "next start",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@minhaj/contracts": "*",
+    "@minhaj/server-core": "*",
+    "next": "16.3.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "tailwindcss": "4.3.3"
+  }
+}
