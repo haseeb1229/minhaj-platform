@@ -39,12 +39,16 @@ describe('.env.example', () => {
     }
   });
 
-  it('declares only Phase 0B variables', async () => {
+  it('declares the Phase 1 database variables and no later-phase variables', async () => {
     const declared = Object.keys(await readExample());
 
-    // No database, auth, OAuth, email, storage, Redis or payment configuration.
+    expect(declared).toContain('DATABASE_URL');
+    expect(declared).toContain('DATABASE_MIGRATION_URL');
+    expect(declared).toContain('MSSQL_SA_PASSWORD');
+    expect(declared).toContain('MINHAJ_SQLSERVER_PORT');
+
+    // No auth, OAuth, email, storage, Redis or payment configuration.
     for (const forbidden of [
-      'DATABASE_URL',
       'BETTER_AUTH_SECRET',
       'GOOGLE_CLIENT_ID',
       'GOOGLE_CLIENT_SECRET',

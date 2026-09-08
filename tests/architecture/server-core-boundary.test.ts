@@ -57,6 +57,13 @@ describe('S1/S2 — every bypass variant has a real build fixture', () => {
     // server-env reaches are what the THIRD review showed still did.
     expect(variants.sort()).toEqual(
       [
+        // database
+        'database-alias-source',
+        'database-direct',
+        'database-dynamic',
+        'database-relative-source',
+        'database-subpath',
+        'database-wrapper',
         // server-core
         'alias-source',
         'direct',
@@ -113,6 +120,7 @@ describe('S1/S2 — every bypass variant has a real build fixture', () => {
     ) as { compilerOptions: { paths: Record<string, readonly string[]> } };
 
     for (const [variant, alias] of [
+      ['database-alias-source', '~database/'],
       ['alias-source', '~server/'],
       ['contracts-env-alias', '~contracts/'],
     ] as const) {

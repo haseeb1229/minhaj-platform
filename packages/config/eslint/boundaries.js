@@ -114,6 +114,12 @@ export function contextBoundaryConfigs({ appRoot = 'apps/web/src' } = {}) {
  */
 export const serverOnlyImportPatterns = [
   {
+    group: ['@minhaj/database', '@minhaj/database/**'],
+    message:
+      `Architecture: 'packages/database' is server-only and must never be ` +
+      `imported into a client bundle (ARCHITECTURE.md section 4.1).`,
+  },
+  {
     group: ['@minhaj/server-core', '@minhaj/server-core/**'],
     message:
       `Architecture: 'packages/server-core' is server-only and must never be ` +

@@ -73,6 +73,14 @@ describe('N5 — the test stage has complete inputs', () => {
 
     expect(test).toContain('verify');
   });
+
+  it('generates the Prisma client after copying the schema', async () => {
+    const test = await stage('test');
+
+    expect(test).toContain(
+      'prisma generate --schema packages/database/prisma/schema.prisma',
+    );
+  });
 });
 
 describe('N5 — the runtime stage stays lean', () => {
@@ -96,6 +104,14 @@ describe('N5 — the runtime stage stays lean', () => {
 
     expect(dev).toMatch(/^COPY apps /m);
     expect(dev).toMatch(/^COPY packages /m);
+  });
+
+  it('generates the Prisma client needed by the runtime', async () => {
+    const dev = await stage('dev');
+
+    expect(dev).toContain(
+      'prisma generate --schema packages/database/prisma/schema.prisma',
+    );
   });
 
   it('starts through the fail-fast wrapper', async () => {

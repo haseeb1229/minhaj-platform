@@ -49,6 +49,7 @@ COPY package.json package-lock.json ./
 COPY apps/web/package.json ./apps/web/
 COPY packages/config/package.json ./packages/config/
 COPY packages/contracts/package.json ./packages/contracts/
+COPY packages/database/package.json ./packages/database/
 COPY packages/server-core/package.json ./packages/server-core/
 
 RUN npm ci
@@ -98,6 +99,10 @@ COPY .prettierignore ./
 COPY .env.example .dockerignore ./
 COPY docker ./docker
 
+# Prisma's generated client is intentionally build output in node_modules, not
+# committed source. Generate it only after the schema enters this stage.
+RUN npx prisma generate --schema packages/database/prisma/schema.prisma
+
 # `npm run verify` ends in `npm run build`, which is a PRODUCTION build.
 #
 # The `deps` stage sets NODE_ENV=development so `npm ci` installs devDependencies
@@ -126,6 +131,10 @@ FROM deps AS dev
 COPY apps ./apps
 COPY packages ./packages
 COPY scripts ./scripts
+
+# The dev image also needs the generated client at runtime. No database URL is
+# needed to generate from this provider-only schema.
+RUN npx prisma generate --schema packages/database/prisma/schema.prisma
 
 EXPOSE 3000
 

@@ -13,7 +13,14 @@
     "apps/*",
     "packages/*"
   ],
+  "overrides": {
+    "deepmerge-ts": "8.0.0",
+    "mysql2": "3.23.1"
+  },
   "scripts": {
+    "db:generate": "node --env-file-if-exists=docker/.env --conditions=react-server node_modules/prisma/build/index.js generate --config packages/database/prisma.config.ts",
+    "db:validate": "node --env-file-if-exists=docker/.env --conditions=react-server node_modules/prisma/build/index.js validate --config packages/database/prisma.config.ts",
+    "db:test:connection": "node --env-file-if-exists=docker/.env --conditions=react-server packages/database/src/test-connection.ts",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
     "check:architecture": "node scripts/check-architecture.mjs",

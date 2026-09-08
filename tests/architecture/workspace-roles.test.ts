@@ -127,6 +127,7 @@ describe('B3 — the approved roster classifies every production workspace', () 
   const expected = {
     '@minhaj/web': ARCHITECTURAL_ROLES.COMPOSITION,
     '@minhaj/contracts': ARCHITECTURAL_ROLES.PLATFORM,
+    '@minhaj/database': ARCHITECTURAL_ROLES.PLATFORM,
     '@minhaj/server-core': ARCHITECTURAL_ROLES.SERVICE_HOST,
     '@minhaj/config': ARCHITECTURAL_ROLES.TOOLING,
     '@minhaj/realtime': ARCHITECTURAL_ROLES.REALTIME,

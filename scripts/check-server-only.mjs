@@ -35,6 +35,30 @@ const appDirectory = path.join(fixtureRoot, 'src', 'app');
  * exactly one variant and a failure is never ambiguous.
  */
 const VARIANTS = [
+  // ---- database --------------------------------------------------------
+  { route: 'database-direct', description: 'Client Component imports database directly' },
+  {
+    route: 'database-dynamic',
+    description: 'Client Component reaches database via dynamic import()',
+  },
+  {
+    route: 'database-wrapper',
+    description: 'Client Component reaches database through a re-export wrapper',
+  },
+  {
+    route: 'database-relative-source',
+    description: 'Client Component reaches database by RELATIVE SOURCE PATH',
+  },
+  {
+    route: 'database-alias-source',
+    description: 'Client Component reaches database through a REAL tsconfig alias',
+  },
+  {
+    route: 'database-subpath',
+    description: 'Client Component imports an unexported database package subpath',
+    expect: 'removed-subpath',
+  },
+
   // ---- server-core -----------------------------------------------------
   { route: 'direct', description: 'Client Component imports server-core directly' },
   { route: 'dynamic', description: 'Client Component reaches it via dynamic import()' },
@@ -186,6 +210,7 @@ function failedForRemovedSubpath(output, specifier) {
 
 /** The specifier each `removed-subpath` variant must fail to resolve. */
 const REMOVED_SUBPATHS = Object.freeze({
+  'database-subpath': '@minhaj/database/config',
   'contracts-env-schema': '@minhaj/contracts/env/schema',
 });
 

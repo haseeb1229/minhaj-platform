@@ -28,6 +28,13 @@ import { toRepoRelative } from './resolver.mjs';
  */
 export const SERVER_ONLY_SOURCE_PREFIXES = Object.freeze([
   {
+    prefix: 'packages/database/',
+    reason:
+      "'packages/database' is server-only and contains Prisma/MSSQL data access " +
+      '(ARCHITECTURE.md section 4.1)',
+    exempt: ['packages/database/src/client-import-error.ts'],
+  },
+  {
     prefix: 'packages/server-core/src/',
     reason:
       "'packages/server-core' is server-only and hosts context-owned server " +

@@ -5,7 +5,7 @@ import type { NextConfig } from 'next';
  * is enforced by a real Next build, not merely by a Vitest import assertion.
  */
 const nextConfig: NextConfig = {
-  transpilePackages: ['@minhaj/contracts', '@minhaj/server-core'],
+  transpilePackages: ['@minhaj/contracts', '@minhaj/database', '@minhaj/server-core'],
   typescript: { ignoreBuildErrors: false },
 };
 

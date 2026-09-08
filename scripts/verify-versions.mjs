@@ -14,6 +14,7 @@
  */
 
 import { createRequire } from 'node:module';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -27,11 +28,21 @@ const locked = [
   { name: 'react-dom', kind: 'exact', expected: '19.2.8' },
   { name: 'tailwindcss', kind: 'exact', expected: '4.3.3' },
   { name: 'pino', kind: 'exact', expected: '10.3.1' },
+  { name: 'prisma', kind: 'exact', expected: '7.10.0' },
+  { name: '@prisma/client', kind: 'exact', expected: '7.10.0' },
+  { name: '@prisma/adapter-mssql', kind: 'exact', expected: '7.10.0' },
   { name: 'typescript', kind: 'range', expected: '5.9' },
   { name: 'zod', kind: 'range', expected: '4.5' },
   { name: 'vitest', kind: 'range', expected: '4.1' },
   { name: 'eslint', kind: 'range', expected: '10' },
   { name: 'prettier', kind: 'range', expected: '3' },
+];
+
+// Temporary transitive security overrides; remove when the frozen Prisma line
+// resolves patched dependencies.
+const requiredSecurityOverrides = [
+  { name: 'deepmerge-ts', expected: '8.0.0' },
+  { name: 'mysql2', expected: '3.23.1' },
 ];
 
 /** The locked Node runtime. */
@@ -44,6 +55,23 @@ function installedVersion(name) {
     });
     return require(manifestPath).version;
   } catch {
+    // Some packages expose their runtime entry but deliberately do not export
+    // package.json. Resolve that entry, then find the nearest owning manifest.
+    try {
+      let directory = path.dirname(require.resolve(name, { paths: [repoRoot] }));
+
+      while (path.dirname(directory) !== directory) {
+        const candidate = path.join(directory, 'package.json');
+        if (existsSync(candidate)) {
+          const manifest = JSON.parse(readFileSync(candidate, 'utf8'));
+          if (manifest.name === name) return manifest.version ?? null;
+        }
+        directory = path.dirname(directory);
+      }
+    } catch {
+      return null;
+    }
+
     return null;
   }
 }
@@ -61,6 +89,9 @@ function withinRange(version, range) {
 
 const failures = [];
 const rows = [];
+const rootManifest = JSON.parse(
+  readFileSync(path.join(repoRoot, 'package.json'), 'utf8'),
+);
 
 for (const { name, kind, expected } of locked) {
   const actual = installedVersion(name);
@@ -88,6 +119,33 @@ for (const { name, kind, expected } of locked) {
     package: name,
     locked: kind === 'exact' ? expected : `${expected}.x`,
     resolved: actual,
+    status,
+  });
+}
+
+for (const { name, expected } of requiredSecurityOverrides) {
+  const declared = rootManifest.overrides?.[name];
+  const actual = installedVersion(name);
+  let status = 'ok';
+
+  if (declared !== expected) {
+    failures.push(
+      `${name}: root override is ${declared ?? 'missing'}, expected exactly ${expected}`,
+    );
+    status = 'OVERRIDE MISMATCH';
+  }
+
+  if (actual !== expected) {
+    failures.push(
+      `${name}: resolved ${actual ?? 'not installed'}, security override requires exactly ${expected}`,
+    );
+    status = actual === null ? 'MISSING' : 'MISMATCH';
+  }
+
+  rows.push({
+    package: `${name} (security override)`,
+    locked: expected,
+    resolved: actual ?? '—',
     status,
   });
 }

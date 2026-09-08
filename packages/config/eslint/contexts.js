@@ -231,6 +231,9 @@ export const workspaceRoles = Object.freeze({
   // ARCHITECTURE.md §6.1: "shared contracts and types" at Layer 0.
   '@minhaj/contracts': ARCHITECTURAL_ROLES.PLATFORM,
 
+  // Database is Layer 0 platform infrastructure, not a bounded context.
+  '@minhaj/database': ARCHITECTURAL_ROLES.PLATFORM,
+
   // ARCHITECTURE.md §6.1: "(`packages/server-core` hosts context-owned
   // services; it is not a layer)".
   '@minhaj/server-core': ARCHITECTURAL_ROLES.SERVICE_HOST,
