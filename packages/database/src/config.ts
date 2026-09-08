@@ -13,6 +13,23 @@ const databaseEnvironmentSchema = z.object({
   DATABASE_MIGRATION_URL: sqlServerUrl,
 });
 
+/**
+ * The least-privilege runtime principal (SECURITY_BASELINE.md §18.2).
+ *
+ * Kept separate from the URL schema because the migration workflow provisions
+ * this principal and therefore needs its credentials, while the application
+ * runtime only ever needs the URL it is already given.
+ */
+const applicationPrincipalSchema = z.object({
+  DATABASE_APP_LOGIN: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z][A-Za-z0-9_]{2,63}$/),
+  DATABASE_APP_PASSWORD: z.string().min(8),
+});
+
+export type ApplicationPrincipalCredentials = z.infer<typeof applicationPrincipalSchema>;
+
 const databaseRuntimeEnvironmentSchema = databaseEnvironmentSchema.pick({
   DATABASE_URL: true,
 });
@@ -57,6 +74,15 @@ export function getDatabaseMigrationUrl(
 ): string {
   const result = databaseMigrationEnvironmentSchema.safeParse(source);
   if (result.success) return result.data.DATABASE_MIGRATION_URL;
+
+  throw new DatabaseConfigurationError(invalidVariableNames(result.error));
+}
+
+export function getApplicationPrincipalCredentials(
+  source: Record<string, string | undefined> = process.env,
+): ApplicationPrincipalCredentials {
+  const result = applicationPrincipalSchema.safeParse(source);
+  if (result.success) return result.data;
 
   throw new DatabaseConfigurationError(invalidVariableNames(result.error));
 }

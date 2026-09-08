@@ -40,16 +40,38 @@ describe('Phase 1 Chunk 1 database foundation', () => {
     ).rejects.toThrow(/server-only/);
   });
 
-  it('contains no business model and creates no migration directory', async () => {
+  it('declares the audit foundation as its only model, and no business domain', async () => {
     const schema = await readFile(
       path.join(databaseRoot, 'prisma', 'schema.prisma'),
       'utf8',
     );
     const prismaEntries = await readdir(path.join(databaseRoot, 'prisma'));
 
-    expect(schema).not.toMatch(/^\s*model\s+/m);
-    expect(schema).not.toMatch(/AuditLog|User|Role|Article|Quran|Hadith|Book/);
-    expect(prismaEntries).not.toContain('migrations');
+    // Chunk 2 introduces the audit foundation and the migration directory that
+    // creates it. AuditLog is infrastructure required by SECURITY_BASELINE.md
+    // §13; the business-domain prohibition below is unchanged, and domain
+    // tables still arrive only with their owning slice.
+    const models = [...schema.matchAll(/^\s*model\s+(\w+)/gm)].map((match) => match[1]);
+    expect(models).toEqual(['AuditLog']);
+
+    // Asserted against declared MODELS, not raw text: the schema comments name
+    // the deferred domains in order to explain why they are absent, and a
+    // substring match would read that explanation as the very violation it
+    // documents.
+    for (const domain of [
+      'User',
+      'Role',
+      'Permission',
+      'Article',
+      'Page',
+      'Quran',
+      'Hadith',
+      'Book',
+    ]) {
+      expect(models, `${domain} arrives with its owning slice`).not.toContain(domain);
+    }
+
+    expect(prismaEntries).toContain('migrations');
   });
 
   it('keeps database secrets out of the public contracts root', async () => {

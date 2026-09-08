@@ -1,4 +1,4 @@
 {
   "extends": "@minhaj/config/tsconfig/library.json",
-  "include": ["src/**/*.ts", "prisma.config.ts"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "prisma.config.ts"]
 }

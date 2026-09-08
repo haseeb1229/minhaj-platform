@@ -30,6 +30,11 @@ export default defineConfig({
 
   test: {
     environment: 'node',
+
+    // Loads the ignored `docker/.env` so the live database tests run under
+    // `npm test` instead of silently skipping. Vitest does not apply Node's
+    // `--env-file-if-exists`, which the `db:*` commands rely on.
+    setupFiles: ['tests/database/load-database-env.ts'],
     include: ['tests/**/*.test.ts', 'packages/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/.next/**', '**/dist/**'],
 
