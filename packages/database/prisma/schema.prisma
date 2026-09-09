@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+}
+
+/// Phase 1 audit foundation (SECURITY_BASELINE.md §13).
+///
+/// Append-oriented: the application inserts and never updates or deletes.
+/// That discipline is enforced by database permissions, not by this model —
+/// see `sql/permissions/grant-application-principal.sql`.
+///
+/// Actor and target are recorded as an identifier plus a type STRING rather
+/// than a foreign key. Identity & Access, Editorial, Quran and Hadith are all
+/// deferred to later phases, so a real relation cannot exist yet; inventing
+/// those tables now to satisfy a constraint would create precisely the
+/// premature business schema Phase 1 forbids (DELIVERY_PLAN.md §Phase 1).
+model AuditLog {
+  /// Stable audit identifier.
+  id String @id @default(uuid()) @db.UniqueIdentifier
+
+  /// Actor reference. Null for unauthenticated or system-originated events.
+  actorId   String? @db.NVarChar(64)
+  actorType String  @db.NVarChar(64)
+
+  /// What happened, e.g. `fatwa.publish` (SECURITY_BASELINE.md §13.2).
+  action String @db.NVarChar(128)
+
+  /// Target entity type and identifier, resolved by the owning phase.
+  targetType String  @db.NVarChar(128)
+  targetId   String? @db.NVarChar(128)
+
+  /// Before and after state, where the audited action has them.
+  beforeState String? @db.NVarChar(Max)
+  afterState  String? @db.NVarChar(Max)
+
+  /// The authorising source for the action, where one is relevant.
+  authorisingSource String? @db.NVarChar(128)
+
+  /// Network origin. Sized for IPv6 including a zone index.
+  ipAddress String? @db.NVarChar(64)
+
+  /// Server-assigned in UTC. A client-supplied timestamp is a client-controlled
+  /// fact, and `now()` would emit CURRENT_TIMESTAMP — local server time, which
+  /// silently shifts meaning with the host timezone.
+  occurredAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  @@index([occurredAt])
+  @@index([actorId])
+  @@index([targetType, targetId])
+  @@map("AuditLog")
+}

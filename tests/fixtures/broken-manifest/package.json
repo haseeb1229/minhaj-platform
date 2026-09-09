@@ -1,0 +1,9 @@
+{
+  "name": "@fixture/broken-manifest",
+  "private": true,
+  "version": "0.0.0",
+  "description": "N6 — a matched workspace that cannot be understood must fail loudly, never disappear from enforcement.",
+  "workspaces": [
+    "packages/*"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "@fixture/valid",
+  "private": true,
+  "version": "0.0.0",
+  "minhaj": {
+    "architecturalRole": "platform"
+  }
+}

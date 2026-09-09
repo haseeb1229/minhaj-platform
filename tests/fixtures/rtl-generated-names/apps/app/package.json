@@ -1,0 +1,11 @@
+{
+  "name": "@fixture/rtl-generated-names",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "minhaj": {
+    "architecturalRole": "composition"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "baseUrl": ".",
+    "moduleResolution": "Bundler",
+    "module": "ESNext",
+    "paths": { "^/*": ["./contexts/*"] }
+  },
+  "include": ["contexts/**/*.ts"]
+}

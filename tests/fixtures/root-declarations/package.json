@@ -1,0 +1,7 @@
+{
+  "name": "root-declarations-fixture",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ]
+}

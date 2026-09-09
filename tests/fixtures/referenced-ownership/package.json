@@ -1,0 +1,7 @@
+{
+  "name": "referenced-ownership-fixture",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ]
+}

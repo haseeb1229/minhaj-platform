@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "baseUrl": "../../..",
+    "moduleResolution": "Bundler",
+    "module": "ESNext",
+    "paths": {
+      "~/contexts/quran": ["./src/contexts/learning/index.ts"],
+      "~/*": ["./src/*"]
+    }
+  }
+}

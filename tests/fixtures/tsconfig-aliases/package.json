@@ -1,0 +1,9 @@
+{
+  "name": "@fixture/tsconfig-aliases",
+  "private": true,
+  "version": "0.0.0",
+  "description": "B2 — a workspace whose OWN tsconfig declares aliases the analyser never hard-coded. Every one must resolve.",
+  "workspaces": [
+    "apps/*"
+  ]
+}

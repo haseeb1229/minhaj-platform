@@ -1,0 +1,28 @@
+@import 'tailwindcss';
+
+/*
+ * Phase 0B baseline only.
+ *
+ * This is NOT the design system. Colour, type scale, spacing tokens and the
+ * Minhaj visual identity belong to the design phase (OPEN_DECISIONS.md §6.4).
+ *
+ * RTL note: every rule below is direction-neutral or uses logical properties.
+ * Physical properties (`margin-left`, `padding-right`, `text-align: left`) are
+ * prohibited in layout code — they silently break Urdu and Arabic
+ * (TECH_STACK.md §5, ARCHITECTURE.md §9). Enforced by test.
+ */
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  margin-block: 0;
+  margin-inline: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  line-height: 1.6;
+}

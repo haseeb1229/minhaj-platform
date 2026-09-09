@@ -1,0 +1,14 @@
+{
+  "name": "@fixture/exact",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./helper": "./src/helper.ts",
+    "./deep/*": "./src/deep/*.ts"
+  },
+  "minhaj": {
+    "architecturalRole": "platform"
+  }
+}

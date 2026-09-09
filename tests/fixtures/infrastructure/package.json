@@ -1,0 +1,8 @@
+{
+  "name": "infra-fixture",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

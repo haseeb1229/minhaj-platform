@@ -1,0 +1,29 @@
+{
+  "name": "@minhaj/server-core",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Server-only HOST for context-owned services. Owns no business rules and is never imported into a client bundle (ARCHITECTURE.md 3.1).",
+  "type": "module",
+  "exports": {
+    ".": {
+      "react-server": "./src/index.ts",
+      "node": "./src/index.ts",
+      "browser": "./src/client-import-error.ts",
+      "default": "./src/index.ts"
+    },
+    "./logger": {
+      "react-server": "./src/logging/logger.ts",
+      "node": "./src/logging/logger.ts",
+      "browser": "./src/client-import-error.ts",
+      "default": "./src/logging/logger.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@minhaj/contracts": "*",
+    "pino": "10.3.1",
+    "server-only": "0.0.1"
+  }
+}

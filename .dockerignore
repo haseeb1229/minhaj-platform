@@ -1,0 +1,155 @@
+# =============================================================================
+# Docker build context exclusions
+# =============================================================================
+#
+# The Dockerfile builds from the repository root, so without this file the
+# entire working tree — including host-platform node_modules, build output and
+# any local .env — is sent to the daemon and can overwrite what the image
+# installed. Both are correctness problems, not merely size problems.
+
+# --- Dependencies -----------------------------------------------------------
+# Critical: these are Windows-host binaries. Copying them over the Linux
+# install inside the image produces a broken container.
+node_modules/
+**/node_modules/
+
+# --- Build output -----------------------------------------------------------
+.next/
+**/.next/
+out/
+**/out/
+dist/
+**/dist/
+build/
+**/build/
+.vercel/
+.turbo/
+
+# --- Caches and compiler artefacts -----------------------------------------
+*.tsbuildinfo
+**/*.tsbuildinfo
+.eslintcache
+.cache/
+coverage/
+**/coverage/
+.nyc_output/
+
+# --- Version control and CI -------------------------------------------------
+.git/
+.gitignore
+.gitattributes
+
+# `tests/config/ci-credentials.test.ts` READS the workflow: it asserts the
+# Verify job generates the Prisma client before typecheck, that CI credentials
+# carry no dotenv-breaking characters, and that compose validation keeps its
+# fail-closed guard. Those assertions are the packaged evidence that CI cannot
+# silently regress, so the file they read is a TEST-STAGE INPUT — a suite that
+# cannot read its own input is the defect this section exists to prevent, and
+# the test must not be weakened to accommodate a missing file.
+#
+# The exclusions below are DELIBERATELY `dir/*` rather than `dir/`. Docker
+# applies the last matching pattern, and a negation on a DIRECTORY re-admits
+# everything beneath it: `.github/` followed by `!.github/` re-included the
+# whole tree, so a sentinel at `.github/UNRELATED_SENTINEL` and a second
+# workflow both reached the build context. Excluding the CONTENTS instead
+# leaves each directory traversable while every child stays excluded until
+# named, so the policy fails closed for files that do not exist yet — a future
+# workflow, an action, CODEOWNERS, an issue template.
+#
+# Read as a whole: exclude everything in `.github`, re-admit only the
+# `workflows` directory so it can be descended into, exclude everything in it,
+# then re-admit exactly one file.
+.github/*
+!.github/workflows/
+.github/workflows/*
+!.github/workflows/ci.yml
+
+# --- Secrets ----------------------------------------------------------------
+# Real environment files must never enter an image layer. `.env.example` is
+# explicitly re-included below: it carries no secrets and documents the
+# variables the container expects.
+#
+# `.env` and `.env.*` are matched relative to the build context ROOT, so they
+# exclude `/.env` and nothing deeper. `COPY docker ./docker` therefore carried
+# `docker/.env` — the ignored local file holding the real `sa` and application
+# passwords — straight into the test image. The `**/` forms below are what
+# actually enforce the rule this section always claimed to: no real
+# environment file, at any depth, in any layer.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+*.crt
+*.cer
+*.der
+secrets/
+.secrets/
+
+# --- Logs and temporary files -----------------------------------------------
+logs/
+*.log
+npm-debug.log*
+*.pid
+tmp/
+temp/
+
+# --- Test build output ------------------------------------------------------
+# The Next build fixture's OUTPUT is a local artefact. The fixture SOURCE is
+# deliberately not excluded: the `test` build stage runs the suite and needs
+# it. The `dev` runtime stage simply never copies `tests/` at all, which is the
+# right place to make that distinction — a stage boundary, not an ignore rule.
+tests/fixtures/next-client-boundary/.next/
+
+# --- Authored fixture source in generated-LOOKING directories ---------------
+# Round 6 (B2). The build-output patterns above are NAME-based, and the B2
+# fixtures are authored source deliberately placed in directories called
+# `dist`, `build` and `coverage` to prove the architecture gate no longer
+# treats those names as evidence of generated code. Excluding them from the
+# build context deleted exactly the files the regression test needs, so the
+# Linux suite failed while Windows passed.
+#
+# These re-includes are narrow: one fixture tree, whose whole purpose is that
+# its directory names are misleading. Everything genuinely generated stays
+# excluded by the patterns above.
+!tests/fixtures/**/src/dist/
+!tests/fixtures/**/src/dist/**
+!tests/fixtures/**/src/build/
+!tests/fixtures/**/src/build/**
+!tests/fixtures/**/src/coverage/
+!tests/fixtures/**/src/coverage/**
+!tests/fixtures/**/src/features/dist/
+!tests/fixtures/**/src/features/dist/**
+!tests/fixtures/**/src/something/build/
+!tests/fixtures/**/src/something/build/**
+
+# Round 7 (B3). This fixture is the opposite case: its `dist/` and `types/` are
+# GENUINE build output, checked in on purpose because the defect it reproduces
+# is an authored source file importing its own project's emitted declaration.
+# A build context that stripped them would leave the import resolving to
+# nothing, and the Linux suite would fail where Windows passed — the Round 6
+# failure mode exactly.
+#
+# Scoped to the one fixture path, so every other `dist/` stays excluded.
+!tests/fixtures/generated-output-import/apps/app/dist/
+!tests/fixtures/generated-output-import/apps/app/dist/**
+!tests/fixtures/generated-output-import/apps/app/types/
+!tests/fixtures/generated-output-import/apps/app/types/**
+
+# --- Editor and OS junk -----------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Documentation ----------------------------------------------------------
+# The frozen architecture documents are not needed to build or run the app.
+docs/

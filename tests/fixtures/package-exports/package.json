@@ -1,0 +1,10 @@
+{
+  "name": "@fixture/package-exports",
+  "private": true,
+  "version": "0.0.0",
+  "description": "B4 — workspace package exports must resolve through TypeScript, wildcards and subpath patterns included.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

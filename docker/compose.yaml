@@ -1,0 +1,77 @@
+# =============================================================================
+# Local development stack — Phase 1 Chunk 1
+# =============================================================================
+#
+# SQL Server is the only Phase 1 service added to the Phase 0B stack:
+#
+#   - SQL Server 2022 Developer is the local database target.
+#   - `realtime` is created in the Messaging phase, not scaffolded in advance.
+#   - NGINX belongs to the deployment phase.
+#   - Redis is explicitly not adopted (TECH_STACK.md 15).
+#
+# Services are added by the phase that genuinely needs them.
+# No secrets are defined here.
+# =============================================================================
+
+name: minhaj-platform
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: minhaj-sqlserver-2022
+    environment:
+      ACCEPT_EULA: 'Y'
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in ignored docker/.env}
+    ports:
+      # Host 1433 is occupied by the pre-existing SQL Server installation.
+      # Keep the normal container port and bind the Minhaj instance only to
+      # loopback on a non-conflicting development port.
+      - '127.0.0.1:${MINHAJ_SQLSERVER_PORT:-14330}:1433'
+    volumes:
+      - minhaj-sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${MSSQL_SA_PASSWORD}" -C -Q "SELECT 1" -b -o /dev/null',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/web.Dockerfile
+      # The development RUNTIME stage. The `test` stage is a separate target,
+      # built and run by the verification pipeline, and is never what serves.
+      target: dev
+    container_name: minhaj-web
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: development
+      PORT: '3000'
+      LOG_LEVEL: debug
+      DEFAULT_LOCALE: en
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      NEXT_PUBLIC_DEFAULT_LOCALE: en
+      # Required for file watching to work across a bind mount.
+      WATCHPACK_POLLING: 'true'
+    volumes:
+      # Source is live-mounted; container-managed directories are masked with
+      # anonymous volumes so host artefacts and platform-specific binaries do
+      # not collide with the container's own.
+      - ..:/app
+      - /app/node_modules
+      - /app/apps/web/node_modules
+      - /app/apps/web/.next
+    working_dir: /app
+    init: true
+
+volumes:
+  minhaj-sqlserver-data:
+    name: minhaj-platform-sqlserver-data

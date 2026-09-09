@@ -1,0 +1,7 @@
+{
+  "name": "generated-outdir-fixture",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ]
+}

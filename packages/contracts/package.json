@@ -1,0 +1,24 @@
+{
+  "name": "@minhaj/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared types and Zod schemas. Layer 0 — importable by every context and by both processes, server and client.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./env/client": "./src/env/client.ts",
+    "./env/server": {
+      "react-server": "./src/env/server.ts",
+      "node": "./src/env/server.ts",
+      "browser": "./src/env/server-in-client-error.ts",
+      "default": "./src/env/server.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "server-only": "0.0.1",
+    "zod": "4.5.4"
+  }
+}

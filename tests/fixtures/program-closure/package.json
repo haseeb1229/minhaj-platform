@@ -1,0 +1,7 @@
+{
+  "name": "program-closure-fixture",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ]
+}

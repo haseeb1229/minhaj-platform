@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "baseUrl": ".",
+    "moduleResolution": "Bundler",
+    "module": "ESNext",
+    "target": "ESNext",
+    "skipLibCheck": true,
+    "paths": { "#target": ["./safe/target.ts"] }
+  },
+  "include": ["**/*.ts"]
+}
