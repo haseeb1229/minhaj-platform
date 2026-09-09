@@ -99,6 +99,13 @@ COPY .prettierignore ./
 COPY .env.example .dockerignore ./
 COPY docker ./docker
 
+# `tests/config/ci-credentials.test.ts` reads the workflow to assert the CI
+# contract: Prisma generation ordering, dotenv-safe credentials, and the
+# compose fail-closed guard. It is an input to the suite exactly as
+# `.dockerignore` and `docker/` above are, so the TEST stage carries it and
+# the runtime stage below does not.
+COPY .github/workflows/ci.yml ./.github/workflows/ci.yml
+
 # Prisma's generated client is intentionally build output in node_modules, not
 # committed source. Generate it only after the schema enters this stage.
 RUN npx prisma generate --schema packages/database/prisma/schema.prisma

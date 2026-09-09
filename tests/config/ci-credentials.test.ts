@@ -70,9 +70,28 @@ describe('A — the Verify job generates the Prisma client before it is needed',
     expect(stepBody('Generate the Prisma client')).toContain('npm run db:generate');
   });
 
-  it('does not commit generated Prisma output', () => {
-    const ignore = readFileSync(path.join(repoRoot, '.gitignore'), 'utf8');
-    expect(ignore).toMatch(/^node_modules\/$/m);
+  /**
+   * The Prisma client is generated, not committed — which is precisely why the
+   * generation step above has to exist.
+   *
+   * This asserts it from the SCHEMA rather than from `.gitignore`. The earlier
+   * revision read `.gitignore`, which is version-control metadata that
+   * `.dockerignore` deliberately keeps out of the image, so the assertion
+   * threw ENOENT inside the Docker test stage — a test failing on where it
+   * ran rather than on what it checks. The generator block is the real
+   * contract: it emits into `node_modules`, so there is no in-tree output a
+   * commit could capture.
+   */
+  it('generates the Prisma client into node_modules, never into the tree', () => {
+    const schema = readFileSync(
+      path.join(repoRoot, 'packages', 'database', 'prisma', 'schema.prisma'),
+      'utf8',
+    );
+
+    const generator = /generator\s+client\s*\{([\s\S]*?)\}/.exec(schema)?.[1] ?? '';
+    expect(generator).toContain('prisma-client-js');
+    // No `output` override: the default lands in `node_modules/.prisma`.
+    expect(generator).not.toMatch(/^\s*output\s*=/m);
   });
 
   /**

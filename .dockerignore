@@ -38,15 +38,49 @@ coverage/
 .git/
 .gitignore
 .gitattributes
-.github/
+
+# `tests/config/ci-credentials.test.ts` READS the workflow: it asserts the
+# Verify job generates the Prisma client before typecheck, that CI credentials
+# carry no dotenv-breaking characters, and that compose validation keeps its
+# fail-closed guard. Those assertions are the packaged evidence that CI cannot
+# silently regress, so the file they read is a TEST-STAGE INPUT — a suite that
+# cannot read its own input is the defect this section exists to prevent, and
+# the test must not be weakened to accommodate a missing file.
+#
+# The exclusions below are DELIBERATELY `dir/*` rather than `dir/`. Docker
+# applies the last matching pattern, and a negation on a DIRECTORY re-admits
+# everything beneath it: `.github/` followed by `!.github/` re-included the
+# whole tree, so a sentinel at `.github/UNRELATED_SENTINEL` and a second
+# workflow both reached the build context. Excluding the CONTENTS instead
+# leaves each directory traversable while every child stays excluded until
+# named, so the policy fails closed for files that do not exist yet — a future
+# workflow, an action, CODEOWNERS, an issue template.
+#
+# Read as a whole: exclude everything in `.github`, re-admit only the
+# `workflows` directory so it can be descended into, exclude everything in it,
+# then re-admit exactly one file.
+.github/*
+!.github/workflows/
+.github/workflows/*
+!.github/workflows/ci.yml
 
 # --- Secrets ----------------------------------------------------------------
 # Real environment files must never enter an image layer. `.env.example` is
 # explicitly re-included below: it carries no secrets and documents the
 # variables the container expects.
+#
+# `.env` and `.env.*` are matched relative to the build context ROOT, so they
+# exclude `/.env` and nothing deeper. `COPY docker ./docker` therefore carried
+# `docker/.env` — the ignored local file holding the real `sa` and application
+# passwords — straight into the test image. The `**/` forms below are what
+# actually enforce the rule this section always claimed to: no real
+# environment file, at any depth, in any layer.
 .env
 .env.*
+**/.env
+**/.env.*
 !.env.example
+!**/.env.example
 *.pem
 *.key
 *.pfx
