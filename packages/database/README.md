@@ -83,6 +83,19 @@ This precedence applies only to local Docker/Phase 1 tooling. Deployed
 environments have no `docker/.env`; their configuration continues to arrive as
 externally supplied environment variables.
 
+**One loader, one interpretation.** Every `db:*` command resolves configuration
+through this loader and hands the URL to the Prisma child explicitly — none of
+them reads `docker/.env` by another route. That matters because the file has
+two plausible readers with different rules: this loader splits each line at the
+first `=` and keeps the rest, while Node's `--env-file` follows dotenv rules,
+where an unquoted `#` begins a comment. CI once invoked the Prisma CLI directly
+under `--env-file`, and a generated password containing `#` truncated the
+connection URL past the password, silently discarding
+`encrypt=true;trustServerCertificate=true` and failing with **P1011** against
+the container's self-signed certificate — while every loader-based command
+passed in the same run. Applying migrations to a persistent database goes
+through `npm run db:migrate:deploy` for that reason.
+
 ### Local TLS
 
 The migration URL is encrypted (`encrypt=true`). The container serves a
@@ -116,6 +129,7 @@ schema-level grant would silently extend to every table a later phase adds.
 | `npm run db:validate`         | Validate the schema                           |
 | `npm run db:test:connection`  | Verify connectivity, version and edition      |
 | `npm run db:provision`        | Apply the least-privilege grants (idempotent) |
+| `npm run db:migrate:deploy`   | Apply pending migrations to the configured DB |
 | `npm run db:migrate:test`     | Full lifecycle on a disposable database       |
 | `npm run db:test:permissions` | Prove the permission boundary live            |
 | `npm run db:seed`             | Run the Phase 1 seed                          |

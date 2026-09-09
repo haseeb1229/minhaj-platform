@@ -25,6 +25,7 @@
     "db:test:permissions": "node --env-file-if-exists=docker/.env --conditions=react-server packages/database/scripts/test-permissions.ts",
     "db:seed": "node --env-file-if-exists=docker/.env --conditions=react-server packages/database/scripts/seed.ts",
     "db:provision": "node --env-file-if-exists=docker/.env --conditions=react-server packages/database/scripts/provision-principal.ts",
+    "db:migrate:deploy": "node --env-file-if-exists=docker/.env --conditions=react-server packages/database/scripts/migrate-deploy.ts",
     "db:backup": "node --env-file-if-exists=docker/.env --conditions=react-server packages/database/scripts/backup.ts",
     "db:restore:test": "node --env-file-if-exists=docker/.env --conditions=react-server packages/database/scripts/restore-test.ts",
     "db:recovery:test": "node --env-file-if-exists=docker/.env --conditions=react-server packages/database/scripts/recovery-test.ts",

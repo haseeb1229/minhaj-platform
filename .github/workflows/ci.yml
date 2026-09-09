@@ -50,6 +50,42 @@ jobs:
       - name: Verify locked stack versions
         run: npm run check:versions
 
+      # The Prisma client is GENERATED output. It is not committed (it lives
+      # under `node_modules/.prisma`, which `.gitignore` excludes), so on a
+      # fresh `npm ci` `@prisma/client` re-exports a module that does not exist
+      # yet and `packages/database/src/client.ts` fails to compile with
+      # TS2305 — `has no exported member 'PrismaClient'`.
+      #
+      # A workstation never sees this: it generated the client at some earlier
+      # point and the output survives in `node_modules`. Only a clean runner
+      # exposes it, which is exactly what this job is for.
+      #
+      # This is `prisma generate`, which reads the schema and emits types. It
+      # opens NO database connection — verified by generating successfully
+      # against a port with nothing listening — so it belongs here in the
+      # offline verification job rather than beside the live database gates.
+      # The Docker test stage already does the same thing before its suite.
+      #
+      # The URL below exists solely because `prisma.config.ts` resolves
+      # `env('DATABASE_MIGRATION_URL')` when the CONFIG LOADS, before Prisma
+      # knows which command was asked for. Without it, generation fails with
+      # `PrismaConfigEnvError: Cannot resolve environment variable` — on a
+      # clean runner, which has no `docker/.env`. A workstation hides this,
+      # because `--env-file-if-exists=docker/.env` supplies the variable there.
+      #
+      # It is deliberately, visibly synthetic: a database and login that exist
+      # nowhere, and a password that is not a credential because nothing
+      # authenticates with it. It is scoped to THIS STEP so no later step can
+      # inherit it — the live database gates must resolve their own real
+      # configuration and fail closed if they cannot. Making the migration URL
+      # optional in `prisma.config.ts` would have been the wrong fix: it would
+      # weaken the fail-closed contract for every command, to satisfy the one
+      # command that does not need a database at all.
+      - name: Generate the Prisma client
+        env:
+          DATABASE_MIGRATION_URL: sqlserver://127.0.0.1:14330;database=PrismaGenerateOnly;user=generate_only;password=GenerateOnly1!aZ;encrypt=true;trustServerCertificate=true
+        run: npm run db:generate
+
       - name: Check formatting
         run: npm run format:check
 
@@ -150,7 +186,20 @@ jobs:
         run: docker build --target dev -t minhaj-web-dev -f docker/web.Dockerfile .
 
       # A compose file that does not parse is a broken developer setup.
+      #
+      # `MSSQL_SA_PASSWORD` is declared `${...:?}` so the stack fails closed
+      # rather than starting SQL Server with an empty `sa` password. That guard
+      # is correct and stays: this job has no `docker/.env`, so interpolation
+      # has nothing to resolve and `config` rightly refuses.
+      #
+      # The value below exists ONLY so interpolation can complete and the file
+      # can be parsed. It is not a secret, it starts no container, and nothing
+      # connects with it — this step renders the configuration and exits. A
+      # real password here would be a committed credential; removing the guard
+      # to avoid needing one would trade a parse check for a security control.
       - name: Validate the compose stack
+        env:
+          MSSQL_SA_PASSWORD: ComposeConfigOnly1!aZ
         run: docker compose -f docker/compose.yaml config
 
   # ---------------------------------------------------------------------------
@@ -196,13 +245,31 @@ jobs:
       # git-ignored. `>> $GITHUB_ENV` is deliberately NOT used: values placed
       # there are visible to every later step, and these never need to be.
       #
-      # `openssl rand` supplies the entropy; the fixed prefix and suffix
-      # guarantee the SQL Server password policy is met (upper, lower, digit,
-      # symbol) whatever base64 produces.
+      # `openssl rand -hex 24` supplies 192 bits of entropy over `[0-9a-f]`
+      # only, and the fixed prefix and suffix guarantee the SQL Server password
+      # policy is met (upper, lower, digit, symbol).
+      #
+      # The alphabet is the load-bearing part. These passwords are written into
+      # `docker/.env` and embedded in the connection URLs there, and that file
+      # is read by TWO parsers: the repository's own loader, which splits each
+      # line at the first `=`, and Node's `--env-file`, which follows dotenv
+      # rules. An earlier revision used `-base64` with a `#` in the suffix, and
+      # dotenv treats an unquoted `#` as the start of a comment — so Node
+      # truncated `DATABASE_MIGRATION_URL` at the password and silently dropped
+      # the `encrypt=true;trustServerCertificate=true` that follows it. Prisma
+      # then met the container's self-signed certificate without the
+      # accommodation and failed with P1011, while every command going through
+      # the repository loader passed in the same run.
+      #
+      # Hex plus `!` contains no `#`, `;`, `=`, `{`, `}`, `/`, backslash or
+      # newline, so both parsers resolve the identical, complete URL.
+      # `tests/config/ci-credentials.test.ts` asserts this against the recipe
+      # read out of this file, so a future edit cannot quietly reintroduce a
+      # character that breaks one parser and not the other.
       - name: Generate ephemeral database credentials
         run: |
-          SA_PASSWORD="Ci$(openssl rand -base64 24 | tr -d '/+=')#1aZ"
-          APP_PASSWORD="Ci$(openssl rand -base64 24 | tr -d '/+=')#2aZ"
+          SA_PASSWORD="Ci$(openssl rand -hex 24)!1aZ"
+          APP_PASSWORD="Ci$(openssl rand -hex 24)!2aZ"
 
           # Masked so that if any command ever echoes one, the log shows ***.
           echo "::add-mask::$SA_PASSWORD"
@@ -262,17 +329,18 @@ jobs:
       # recovery rehearsal reads from — the state a developer's MinhajPlatform
       # is already in locally.
       #
-      # `migrate deploy` is invoked directly rather than through a new npm
-      # script: Phase 1 applies migrations to a persistent database
-      # deliberately and by review, never automatically (ARCHITECTURE.md §10.3),
-      # so a one-command wrapper for it is exactly what should not exist. The
-      # URL comes from `docker/.env` via `--env-file`, never from the command
-      # line, so it cannot reach the process table or the log.
+      # Runs the REAL `prisma migrate deploy` through the same deterministic
+      # loader every other database command uses. An earlier revision invoked
+      # the CLI directly under `node --env-file=docker/.env`, which put a
+      # second parser on that file — and dotenv's `#` comment rule truncated
+      # the connection URL past the password, dropping its TLS settings and
+      # failing with P1011 while every loader-based command passed.
+      #
+      # Applying migrations to a persistent database stays deliberate and
+      # explicit (ARCHITECTURE.md §10.3); this is a named command run on
+      # purpose, never a side effect of another step.
       - name: Apply migrations to the Phase 1 database
-        run: |
-          node --env-file=docker/.env --conditions=react-server \
-            node_modules/prisma/build/index.js migrate deploy \
-            --config packages/database/prisma.config.ts
+        run: npm run db:migrate:deploy
 
       - name: Provision the least-privilege principal
         run: npm run db:provision
