@@ -70,7 +70,12 @@ not merge them.
 6. **Religious canon contexts (Quran, Hadith) never depend on Editorial.** Editorial
    concerns must not reach canonical text.
 7. **Infrastructure is consumed through abstractions only.** No context depends on Prisma,
-   the filesystem, or a search engine directly.
+   the filesystem, or a search engine directly. A context reaches persistence through **its own
+   persistence port**, whose approved adapter is **physically implemented inside
+   `packages/database`** while remaining **semantically owned by that context**
+   (ARCHITECTURE.md §3.1.1, §4.1). Invoking a service that internally persists is not the same
+   as holding raw database capability, and **no context may use another context's persistence
+   adapter as a shortcut** — it calls that context's public interface instead.
 
 ---
 
@@ -143,6 +148,13 @@ interpretation. **An edge not listed here does not exist.**
 - **Messaging depends on Learning** because relationship authorisation must ask whether an
   enrolment or teaching assignment is *currently* valid (§15.3). This is an explicitly
   allowlisted same-level edge (§3.2), **not** an implicit lateral import.
+- **Layer 0 `database` is infrastructure, never an owner.** A context's persistence adapter may
+  be physically implemented inside `packages/database` while remaining owned by that context
+  (ARCHITECTURE.md §3.1.1). Physical placement grants no cross-context access and creates no
+  edge: **a context still reaches only what its row above permits.**
+- **`packages/server-core` is not a layer and is not a dependency edge.** Hosting a context's
+  service there changes only where it is exported from; the hosted service obeys its own
+  context's row in this table, and admission is governed by ARCHITECTURE.md §3.1.3.
 
 ### 3.2 Permitted same-level dependencies
 
@@ -332,6 +344,28 @@ behaviour defined by the owning context.
 precise physical schema — junction tables per type, or an integrity-preserving registry
 whose lifecycle is transactionally bound to the owning aggregate — is implementation-phase
 work. **Designing intentional dangling references is not an option.**
+
+#### 6.2.1 What the prohibition covers — and what it does not
+
+The prohibition addresses **relational domain references**: a pair used to *navigate* from one
+business record to another, bypassing referential integrity and typed ownership. That is the
+design SQL Server cannot enforce, and that is what is forbidden.
+
+**Historical audit identifiers are a different thing, and are explicitly allowed.** The
+`AuditLog` actor and target identifiers established in the Phase 1 database foundation are:
+
+- **historical evidence** — a snapshot of who acted and what the event concerned
+- **intentionally capable of outliving** the deletion or change of the domain records they name
+- **not relational navigation** — nothing joins from an audit row into a domain table
+- **not a shortcut for cross-domain persistence**
+- **not a polymorphic business relationship**
+
+An audit record must stay readable and truthful after its target is archived, renamed, purged
+or reassigned. A foreign key would make that impossible: it would either block a lawful purge
+(§14.3) or destroy the evidence the record exists to preserve.
+
+> **The existing Phase 1 `AuditLog` representation is therefore correct as it stands, carries
+> no foreign keys, and is not changed by this rule** (SECURITY_BASELINE.md §13).
 
 ### 6.3 Language
 
@@ -653,6 +687,30 @@ Physical modelling — cascade behaviour, tombstone shape, per-type purge steps 
 implementation-phase work for the owning slices. **The rule that hard deletion must
 transactionally resolve personalisation first is settled here.**
 
+### 14.4 "My Minhaj" is a Layer-4 experience, not this context's ownership boundary
+
+`/my/*` is an **authenticated experience and composition surface at Layer 4** (§3.3). It is
+**not** a bounded context, and it does **not** make Personalisation & Notifications the
+semantic owner of every operation reachable beneath it.
+
+| Capability surfaced under `/my` | Semantic owner |
+|---|---|
+| Account and security | **Identity & Access** (§4) |
+| Roles and permissions | **Identity & Access** (§4.4) |
+| Courses and progress rules | **Learning** (§13) |
+| Teacher and class operations | **Learning** / the teacher-owning phase as documented |
+| Messaging | **Messaging** (§15) |
+| Fatwa questions | **Fatwa** (§12) |
+| Bookmarks, history, preferences, notifications | **Personalisation & Notifications** (§14.1) |
+| Membership | **Membership** (§17.2) |
+| Donations | **Donations** (§17.3) |
+
+> **Route placement transfers no semantic or domain ownership.** A `/my` route *composes* these
+> capabilities through their owning contexts' public interfaces, exactly as any other Layer-4
+> surface does (§3.3).
+
+Personalisation & Notifications owns the aggregates listed in §14.1 — and only those.
+
 ---
 
 ## 15. Messaging
@@ -672,8 +730,14 @@ and the future realtime transport call the same implementation. That package is 
 not an owner of any rule** (ARCHITECTURE.md §3.1). **Messaging remains the semantic owner**
 and the only place these rules may change.
 
+Hosting follows the admission rule of ARCHITECTURE.md §3.1.3, and a hosted service **never
+returns raw persistence capability** to its caller. It persists internally through Messaging's
+own persistence port, whose adapter — wherever it is physically implemented — remains owned by
+Messaging (ARCHITECTURE.md §3.1.1).
+
 The future realtime process is a **transport, presence and event-delivery adapter**. It does
-not own data, does not reimplement rules, and does not access the database directly.
+not own data, does not reimplement rules, and **never acquires raw database capability**
+(ARCHITECTURE.md §3.1.2).
 
 ### 15.2 Persistence
 
@@ -856,8 +920,13 @@ record: actor, timestamp, before and after state, and the authorising source. A 
 requirement, not a logging convenience. The realistic integrity baseline is in
 SECURITY_BASELINE.md §13.
 
+**Audit actor and target identifiers are historical evidence, not relational references**, and
+are outside the polymorphic-reference prohibition (§6.2.1).
+
 ### 19.4 Referential integrity
 
 **Enforceable database-level integrity is a Phase 0A requirement**, not an implementation
-preference. Wherever the prior revision proposed `targetType + targetId`, typed
-relationships are required instead (§6.2, §7.3, §14.2).
+preference. Wherever the prior revision proposed `targetType + targetId` **as a relational
+domain reference**, typed relationships are required instead (§6.2, §7.3, §14.2). The
+historical `AuditLog` identifiers are not such a reference and are explicitly permitted
+(§6.2.1).

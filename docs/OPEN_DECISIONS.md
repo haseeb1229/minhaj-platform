@@ -114,12 +114,23 @@ notification and any residency constraints.
 regardless.
 
 ### 2.3 Legal document content
-**Owner:** Minhaj · **Gates:** Phase 4 · **Priority:** Medium
+**Owner:** Minhaj · **Gates:** **Phase 6 — publication.** Phase 4 reserves the routes only ·
+**Priority:** Medium
 
 Privacy policy, terms of use, cookie policy and accessibility statement content.
 
-Routes are reserved (ROUTE_MAP.md §3.10). **Content is an organisational and legal
-responsibility — engineering will not draft them.**
+Routes are reserved in Phase 4 (ROUTE_MAP.md §3.10). **The Page aggregate and the editorial
+workflow that publishes this content are introduced in Phase 6, not Phase 4**
+(DELIVERY_PLAN.md), so the true publishing owner is Phase 6.
+
+> **Route reservation is not publication authority.** Phase 4 shell configuration may carry
+> labels, titles, UI chrome and **non-authoritative placeholders** only. **Legal document bodies
+> are never delivered as Phase 4 configuration**, and a placeholder is **replaced** by a genuine
+> Page record rather than migrated into an informal configuration store. The Phase 6 workflow —
+> revisions, review permissions, sanitisation and audit — is the **only** production publication
+> route for this content.
+
+**Content is an organisational and legal responsibility — engineering will not draft them.**
 
 ### 2.4 Content licensing and attribution
 **Owner:** Minhaj · **Gates:** Phases 8, 18, 19, 30 · **Priority:** Medium
@@ -275,13 +286,22 @@ Phase 1 is engineering-controlled and proceeds regardless** (§4.1).
 ## 5. External services
 
 ### 5.1 Transactional email provider
-**Owner:** Joint · **Gates:** Phase 2 · **Priority:** High
+**Owner:** Joint · **Gates:** **Phase 2 — and, transitively, every phase downstream of Phase 2**
+· **Priority:** High
 
 The provider for verification, reset and notification email · sending domain · SPF, DKIM and
 DMARC configuration.
 
 **Why it matters:** Email verification and password reset are unusable without reliable
 delivery; poor domain configuration means messages land in spam.
+
+> **This is the CURRENT Phase 2 entry gate and it is not relaxed.** Because Phase 2 is an early
+> prerequisite for most later work, it is **the earliest broadly-blocking external decision in
+> the plan**. Phases that inherit it transitively include **3B (Taxonomy), 4, 5, 6, 20, 26, 27
+> and 29** — 29 because its protected migration administration requires Identity, **not**
+> because of any source-authorisation requirement (§3.1).
+>
+> **Work that does not depend on it: Phases 0B, 1, 3A and 7.**
 
 **Interim position:** An `EmailProvider` abstraction is defined. **No provider is invented by
 the architecture.**
@@ -342,13 +362,26 @@ arrangements.
 ## 6. Organisational content and data
 
 ### 6.1 Canonical organisational facts
-**Owner:** Minhaj · **Gates:** Phase 4 · **Priority:** Medium
+**Owner:** Minhaj · **Gates:** **Phase 6 — publication.** Phase 4 reserves the routes and
+renders shell UI and non-authoritative placeholders only · **Priority:** Medium
 
 Authoritative current content for vision, mission, values, objectives, history, timeline,
 leadership, governance, departments, forums, wings, institutions, UN recognition and awards.
 
 **Why external:** **Organisational facts are never invented or inferred from legacy pages that
 may be outdated.** Legacy content may start the process but requires confirmation.
+
+**Where it is published.** The editorial **Page** aggregate and its review workflow are
+introduced in **Phase 6** (DELIVERY_PLAN.md). Phase 4 delivers the public shell and reserves
+these routes without creating a Page model, so organisational content is published through the
+Phase 6 workflow like any other editorial content — **there is no parallel publishing path**.
+
+> **Canonical organisational facts are explicitly excluded from Phase 4 shell configuration.**
+> Vision, mission, values, objectives, history, timeline, leadership, governance and the rest are
+> substantive content: they enter the system as **Page** records through the Phase 6 workflow,
+> under its permissions and audit. Phase 4 may show a **non-authoritative placeholder** on a
+> reserved route; it may not publish an organisational fact as configuration, and a placeholder
+> is **replaced** rather than carried forward.
 
 ### 6.2 Centre and global network data
 **Owner:** Minhaj · **Gates:** Phase 16 · **Priority:** Medium
@@ -419,6 +452,15 @@ following **is decided**:
 | Personalisation deletion integrity: archive by default, transactional purge for hard deletes | DOMAIN_MODEL.md §14.3 |
 | Conditional `x-default` resolution | ROUTE_MAP.md §9.2.1 |
 | Realtime as a transport adapter; `server-core` hosts context-owned services and owns nothing | ARCHITECTURE.md §3.1 |
+| **Model A — encapsulated persistence through context-owned services; invoking a service that persists is not holding raw database capability** | ARCHITECTURE.md §3.1.1–§3.1.2, §4.1 |
+| **Persistence adapters may live physically inside `packages/database` while remaining semantically owned by their context** | ARCHITECTURE.md §4.1; DOMAIN_MODEL.md §2 rule 7 |
+| **`server-core` admission timing — permitted ahead of the second process only for a concrete scheduled consumer** | ARCHITECTURE.md §3.1.3 |
+| **Bounded-context ownership is enforced by application architecture, interfaces and tests — not by the single application SQL principal** | ARCHITECTURE.md §4.1 |
+| **My Minhaj is a Layer-4 composition surface, not a context that owns everything under `/my`** | DOMAIN_MODEL.md §14.4; ROUTE_MAP.md §5 |
+| **Historical audit identifiers are evidence, not polymorphic relational references; the Phase 1 `AuditLog` representation is unchanged** | DOMAIN_MODEL.md §6.2.1; SECURITY_BASELINE.md §13.3 |
+| **Three mutation protocol models — browser CSRF, signed machine callbacks, authentication callbacks — plus emailed-link token semantics** | SECURITY_BASELINE.md §7 |
+| **Compatibility is validated in the phase that actually introduces a dependency** | TECH_STACK.md §1.2, §1.5, §16 |
+| **Localisation Foundation (3A) is separated from Taxonomy (3B) to remove the `2 → 3 → 2` cycle** | DELIVERY_PLAN.md §2, Phases 3A and 3B |
 | Migration & Provenance ownership | DOMAIN_MODEL.md §16 |
 | Typed relationships; no polymorphic references | DOMAIN_MODEL.md §6.2 |
 | People & Contributors model | DOMAIN_MODEL.md §5 |
@@ -452,16 +494,27 @@ following **is decided**:
 | 4.1 | **Staging/production** SQL Server infrastructure and ownership | **28, 34** | Staging and production blocked. **Phase 1 proceeds on local Developer edition** |
 | 4.2 | Staging environment | 28 | Migration cannot run safely |
 | 5.3 | Teachers can create/use Google Meet meetings | 23 | Live classes blocked — **an organisational capability, not an API credential** |
-| 5.1 | Transactional email provider | 2 | Verification and reset unusable |
+| 5.1 | Transactional email provider | **2, and transitively everything downstream of 2** | **Phase 2 does not begin.** Verification and reset unusable. **The earliest broadly-blocking external gate** — 3B, 4, 5, 6, 20, 26, 27 and 29 inherit it |
 | 5.2 | Google **OAuth application credentials** | **2G** (only phase requiring them in V1) | **Google sign-in blocked.** Base auth (Phase 2) and **the manual Meet flow (Phase 23) proceed without them.** A future approved Google API integration would carry its own credential requirements |
 | 4.3 | Production hosting | 34 | Deployment blocked |
 | 3.4 | Legacy domain control and DNS | 35 | Legacy links break at launch |
 | 5.4 | Payment provider | **27 only** | **Donations only — Membership proceeds** |
 
-**Work that proceeds immediately with none of the above resolved:** Phases 0B, **1 (on local
-SQL Server 2022 Developer edition)**, 3, 4, and subsequently 5, 6, 7, most content domains,
-and **29 (migration framework on fixtures)**.
+**Work that proceeds immediately with none of the above resolved:** Phases **0B**, **1 (on
+local SQL Server 2022 Developer edition)**, **3A (localisation foundation — no database and no
+Identity dependency)** and **7 (storage foundation — infrastructure only)**.
+
+> **Correction.** An earlier revision listed Phases 3, 4, 5, 6 and 29 here as proceeding with
+> nothing resolved. That contradicted the delivery gates: **Phase 5 depends on Phase 2**, Phase
+> 2 carries the **transactional email provider entry gate** (§5.1), and **Phases 3B, 4 and 6 sit
+> downstream of Phase 2** as well. **Phase 29 likewise depends on Phase 2**, because it delivers
+> protected migration administration.
+>
+> **Phase 29 remains independent of live-source authorisation** (§3.1): it is fixture-only,
+> contacts no real source, and copies no real asset. The gate it inherits is email (§5.1), not
+> source authorisation. **Phase 30 still requires written per-source authorisation, unchanged.**
 
 **Raise §1.1, §1.3, §1.4, §1.5 and §2.1 first.** They require religious-authority and
 safeguarding consultation that takes real time and cannot be compressed once the dependent
-phases arrive.
+phases arrive. **Raise §5.1 with them**, because it is the earliest gate that blocks a broad
+span of downstream work.

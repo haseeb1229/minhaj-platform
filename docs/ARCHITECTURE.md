@@ -29,20 +29,30 @@ introduced **only when Messaging is implemented** — not scaffolded in advance.
               │   Next.js 16     │      │  transport ·        │
               │   App Router     │      │  presence ·         │
               │   RSC default    │      │  event delivery     │
-              │   Server Actions │      │  NO db access       │
-              └────────┬─────────┘      └──────────┬──────────┘
-                       │                           │
-                       │   both consume ONLY ↓     │
-              ┌────────▼───────────────────────────▼──────────┐
-              │   packages/server-core                        │
-              │   server-only HOST for context-owned services  │
-              │   messaging · authorization · session          │
-              │   (hosts implementations; owns no rules)       │
+              │   Server Actions │      │  NO db capability   │
+              └───┬───────────┬──┘      └──────────┬──────────┘
+                  │           │                    │
+      DEFAULT     │           │  ONLY for services EXPLICITLY admitted
+      PATH        │           │  for multi-process reuse (§3.1.3)
+                  │           │                    │
+                  │     ┌─────▼────────────────────▼───────────┐
+                  │     │   packages/server-core               │
+                  │     │   server-only HOST for the SUBSET of │
+                  │     │   context-owned services that BOTH   │
+                  │     │   processes genuinely share          │
+                  │     │   NOT a universal application path   │
+                  │     └──────────────────┬───────────────────┘
+                  │                        │  ← same context service
+              ┌───▼────────────────────────▼──────────────────┐
+              │   bounded-context public services             │
+              │   → owning-context persistence port           │
+              │   semantic owner: the bounded context         │
               └────────────────────┬──────────────────────────┘
                                    │
                       ┌────────────▼─────────────┐
                       │  packages/database       │
-                      │  Prisma Client           │
+                      │  context-owned adapters  │
+                      │  private Prisma client   │
                       └────────────┬─────────────┘
                                    │
                       ┌────────────▼─────────────┐
@@ -57,6 +67,24 @@ introduced **only when Messaging is implemented** — not scaffolded in advance.
 
   External (referenced, not hosted): YouTube · Vimeo · Google OAuth · Google Meet
 ```
+
+**Reading the diagram.** `packages/server-core` is **not** the universal path for application
+work, and the overview is drawn to say so:
+
+- **`apps/web`'s default path is direct**: composition → bounded-context public service →
+  owning-context persistence port → context-owned adapter physically in `packages/database` →
+  private Prisma → SQL Server. **Most domain operations never touch `server-core` at all.**
+- **`apps/web` routes through `server-core` only** for a service that has been **explicitly
+  admitted** for multi-process reuse under §3.1.3, and then reaches the *same* context-owned
+  service and the *same* persistence path.
+- **`apps/realtime` has one route**: an explicitly approved public `server-core`-hosted context
+  service, which is the *same* implementation `apps/web` would call, over the *same* persistence
+  path.
+
+`server-core` is therefore **a narrow, admission-controlled host for a subset of services** — not
+a layer every operation passes through, and **not an infrastructure tunnel to the database**. It
+never exposes raw persistence capability to its callers (§3.1.2), and semantic ownership stays
+with the bounded context in every one of these paths (§3.1.1).
 
 ### 1.1 Why the realtime process exists at all
 
@@ -151,8 +179,11 @@ packages/server-core/
 
 **Rules:**
 
-1. **`apps/realtime` never imports `packages/database`, Prisma, or any table access.**
-   Enforced by lint; the build fails.
+1. **`apps/realtime` never acquires raw database capability** — not `packages/database`, not
+   Prisma, not an MSSQL driver, not a persistence adapter, and not a client, delegate,
+   transaction handle or raw-query facility, whether directly or through any intermediate
+   package (§3.1.2). It **may** invoke approved public `server-core` services that persist
+   internally (§3.1.1). Enforced by lint; the build fails.
 2. **`apps/realtime` never reimplements** authentication rules, permissions, conversation
    authorisation, or message mutation invariants.
 3. **Messaging is the semantic owner** of conversations, participants, message creation,
@@ -162,8 +193,99 @@ packages/server-core/
    as it would if it were called from within `apps/web`.
 5. Both processes call the **same functions**, so there is one implementation of each rule and
    no possibility of divergence.
-6. **Admission is by justification.** A service belongs here only when a second process
-   genuinely needs it. "Shared-looking" is not a reason.
+6. **Admission is by justification**, under the timing rule of §3.1.3. A service belongs here
+   only where a second process genuinely needs it — either already, or as a **concrete
+   scheduled consumer the approved architecture names**. "Shared-looking" is not a reason.
+
+### 3.1.1 Model A — encapsulated persistence through context-owned services
+
+The approved persistence model is **Model A: encapsulated persistence through context-owned
+services**. It rests on one distinction, and every rule that follows is derived from it:
+
+> **Access to an encapsulated service that internally persists is not possession of a raw
+> database capability.**
+
+A caller that invokes a context's public service is permitted to *cause* persistence. It does
+not thereby *hold* database access, because it never receives a client, a delegate, a
+transaction handle or a raw-query facility — only the service's narrow contract and the domain
+values it returns.
+
+**The permitted conceptual path:**
+
+```
+web composition / Server Action / Route Handler
+    → context public service
+    → owning-context persistence port
+    → approved context-owned persistence adapter
+       (physically implemented inside packages/database)
+    → private Prisma client
+    → SQL Server
+
+future realtime transport
+    → explicitly approved public server-core service
+    → the SAME owning-context service implementation
+    → the SAME persistence path
+```
+
+**Semantic ownership stays with the bounded context.** Physically placing a persistence adapter
+inside `packages/database` changes **where it is implemented**, never **who owns it** — exactly
+as hosting a service in `packages/server-core` changes only where it is exported from. Every
+adapter has exactly one named semantic owning context (§4.1).
+
+`packages/database` remains **the only package that may construct or use raw Prisma database
+capability**. Everything above it depends on a narrow port, never on Prisma.
+
+### 3.1.2 Raw database capability remains forbidden
+
+Model A permits encapsulated service invocation. It permits nothing beneath it. The following
+remain prohibited, and no wrapper, re-export or intermediate package makes any of them
+permitted:
+
+- `apps/realtime` importing `packages/database`
+- `apps/realtime` importing Prisma
+- `apps/realtime` importing an MSSQL driver
+- `apps/realtime` importing a persistence adapter or repository directly
+- `apps/realtime` receiving a Prisma client
+- `apps/realtime` receiving a Prisma delegate
+- `apps/realtime` receiving a transaction handle
+- `apps/realtime` receiving a raw-query facility
+- `server-core` public APIs returning raw persistence capability
+- `server-core` public APIs exposing repositories as unrestricted database capability
+- one context reading another context's persistence adapter
+- one context reading another context's tables or models directly
+- neutral or shared packages exposing unrestricted database capability
+- **wrapper modules laundering raw database capability into a prohibited caller**
+
+Future source enforcement distinguishes **encapsulated service invocation** from **raw database
+capability acquisition**. Those rules are written in the source work that owns them, against
+this contract — never improvised at a call site.
+
+### 3.1.3 Admission to `server-core` — the timing rule
+
+Rule 6 says admission is by justification. It is refined here, because the frozen architecture
+already names Identity **session** and **authorization** services inside `server-core` before
+`apps/realtime` exists — and "a service belongs here only when a second process genuinely needs
+it", read alone, would forbid exactly what the architecture requires.
+
+A service may be admitted to `packages/server-core` **before the second process is physically
+introduced** only where **all** of the following hold:
+
+1. the approved delivery architecture already identifies a **concrete scheduled**
+   second-process consumer
+2. that future consumer is **not speculative**
+3. early placement prevents later duplication or extraction churn
+4. **semantic ownership remains with exactly one bounded context**
+5. the service exposes a **narrow context-owned contract**
+6. `server-core` adds **no new business rule**
+7. `server-core` remains **server-only**
+
+Identity's session and authorisation services qualify: the approved realtime architecture
+(§3.2, §3.3) explicitly requires the *same* implementation, so introducing them elsewhere first
+would mean extracting and rewriting a security-critical path later.
+
+**This is not a general licence.** `server-core` must never become a generic shared-code
+package, a utils package, an infrastructure tunnel, a second domain layer, or an owner of
+Identity, Messaging or Learning rules.
 
 ### 3.2 Division of responsibility
 
@@ -178,7 +300,7 @@ packages/server-core/
 | Session verification | via Identity & Access services | via the same services — **same code** |
 | Authorisation decisions | via Identity & Access services | via the same services — **same code** |
 | Business rules | **owned by the bounded contexts**, invoked here | **none of its own** |
-| Direct database access | via `packages/database` | **prohibited** |
+| Raw database capability | **never held** — persistence happens inside context-owned services (§3.1.1) | **never held** (§3.1.2) |
 
 ### 3.3 The realtime process is an adapter
 
@@ -212,9 +334,37 @@ an interface, so no context depends on a vendor.
 ### 4.1 Database boundary
 
 ```
-Next.js / Node.js  →  server-core  →  Prisma ORM  →  Microsoft SQL Server 2022
-SSMS               →                                 Microsoft SQL Server 2022
+Next.js / Node.js  →  context public service  →  owning-context persistence port
+                   →  context-owned persistence adapter (inside packages/database)
+                   →  private Prisma client    →  Microsoft SQL Server 2022
+
+server-core        →  the SAME context-owned service  →  the same path beneath it
+SSMS               →                                     Microsoft SQL Server 2022
 ```
+
+**The database surface contract (Model A, §3.1.1):**
+
+- **Raw Prisma client construction is private infrastructure.** It happens inside
+  `packages/database` and nowhere else.
+- **Raw Prisma client, delegate, transaction handle and raw-query capability are never part of
+  an ordinary application package's public API.**
+- **Context-owned persistence adapters may physically reside inside `packages/database`.**
+- **Each persistence adapter has one explicit semantic owning context.** Physical placement
+  transfers no business ownership to `packages/database`.
+- Adapters expose **narrow persistence operations**, never raw Prisma.
+- Service and domain code depends on a **narrow port/contract**, never on an adapter's internals.
+- **Cross-context model/table use is prohibited**, and **one context may never use another
+  context's persistence adapter as a shortcut** — it calls that context's public interface.
+- **Administrative migration, provisioning and recovery tooling is classified separately** from
+  runtime persistence adapters. The two are not interchangeable and are not governed by the
+  same rules.
+- **The single application SQL principal does not itself enforce bounded-context ownership.**
+  A least-privilege account constrains what the application may do to the database; it cannot
+  express which context owns which table. **Bounded-context ownership is enforced by
+  application architecture, interfaces and tests** — the SQL principal is defence in depth,
+  never the boundary.
+
+**Tooling and integrity:**
 
 - **Prisma ORM 7.10.0** with **`@prisma/adapter-mssql` 7.10.0** is the sole application
   data-access path, confined to `packages/database`.
@@ -225,7 +375,8 @@ SSMS               →                                 Microsoft SQL Server 2022
   something the deployed application communicates through.** The paths are complementary.
 - Schema changes flow through **reviewed Prisma migrations** — never ad-hoc SSMS schema edits.
 - **Referential integrity is enforced by the database.** Polymorphic `targetType + targetId`
-  references are prohibited (DOMAIN_MODEL.md §6.2).
+  **relational domain references** are prohibited (DOMAIN_MODEL.md §6.2). **Historical audit
+  identifiers are outside that prohibition** and are unchanged (DOMAIN_MODEL.md §6.2.1).
 - Local development targets SQL Server 2022 **Developer edition**.
 
 ### 4.2 Storage
@@ -292,7 +443,11 @@ minhaj-platform/
 ├── packages/
 │   ├── server-core/        Server-only HOST for selected context-owned services
 │   │                    (owns nothing; never in a client bundle)
-│   ├── database/           Prisma schema, client, migrations, seed
+│   ├── database/           Prisma schema, PRIVATE client, migrations, seed, and the
+│   │                    context-owned persistence adapters — each with one named
+│   │                    semantic owning context (§4.1). Administrative migration,
+│   │                    provisioning and recovery tooling is classified separately
+│   │                    from runtime persistence adapters.
 │   ├── contracts/          Shared types and Zod schemas
 │   ├── ui/                 Only if genuinely shared
 │   └── config/             Shared ESLint, TypeScript, Prettier config
@@ -395,8 +550,9 @@ domain-facing contracts** and never depend upward. No cycle exists.
    context. Provenance reaches them via Migration & Provenance, not Editorial.
 7. **Migration & Provenance depends on no target content context.** It publishes through
    target domains' public interfaces, composed at Layer 4.
-8. **`apps/realtime` never imports `packages/database`.** It calls context-owned services
-   hosted in `packages/server-core`.
+8. **`apps/realtime` never acquires raw database capability** (§3.1.2). It calls context-owned
+   services hosted in `packages/server-core`, which persist internally through their own
+   context's port.
 9. **`packages/server-core` is server-only** and is never imported into a client bundle.
 10. **Shared code is promoted toward foundation contexts**, never reached for sideways
     outside the allowlist.
@@ -404,12 +560,21 @@ domain-facing contracts** and never depend upward. No cycle exists.
 12. **No ESLint exceptions for architecture rules.** A rule needing an exception is a wrong
     rule or a wrong design — fix the design. **A genuinely needed new edge is added to the
     allowlist by decision, not bypassed by an exception.**
+13. **Encapsulated service invocation is not raw database capability acquisition** (§3.1.1).
+    Calling a context service that internally persists is permitted. Receiving a Prisma client,
+    delegate, transaction handle, raw-query facility or persistence adapter is not — and a
+    wrapper that launders one into the other violates this rule rather than satisfying it.
+14. **A persistence adapter's physical location never determines its owner** (§4.1). An adapter
+    inside `packages/database` is still owned by its bounded context, and only that context may
+    change its rules.
 
 ### 6.4 Enforcement
 
 ESLint `no-restricted-imports` encoding **the exact allowlist** of DOMAIN_MODEL.md §3.1 and
 §6.1.1 — including the direction of every same-level edge · a rule preventing `server-core`
-from entering client bundles · circular dependency
+from entering client bundles · **a rule distinguishing encapsulated service invocation from raw
+database capability acquisition (§3.1.1, §3.1.2), applied transitively so that no intermediate
+package launders a capability** · circular dependency
 detection · public interfaces as the only exported surface · **violations fail the build**.
 
 ---
@@ -421,8 +586,13 @@ detection · public interfaces as the only exported surface · **violations fail
   controls, search-as-you-type, messaging, media players, admin editors.
 - **Server Actions** for mutations from the platform's own UI; **Route Handlers** where a
   real HTTP contract is required (webhooks, feeds, health probes, realtime boundary).
-- **No state-changing GET.** Sign-out and every mutation are POST/action with CSRF
-  protection (SECURITY_BASELINE.md §7).
+- **Ordinary browser application mutations follow Class A** (SECURITY_BASELINE.md §7.1): POST
+  or Server Action, Origin/Host validation and framework-appropriate browser CSRF protection —
+  **sign-out included**. **A GET never performs an ordinary protected browser mutation.**
+  **Signed machine callbacks (Class B) and authentication/OAuth callbacks (Class C) follow their
+  own protocol classes**, and emailed verification/reset links (Class D) may render on GET while
+  consuming their token at the confirming mutation. **Any protocol endpoint's semantics must
+  satisfy SECURITY_BASELINE.md §7.**
 - **No global state library.** Server Components → URL state → local React state → Server
   Actions. A client-state library is added only when a concrete feature proves the need.
 
@@ -469,6 +639,10 @@ be served to a different visitor.
 - **Locale routing is implemented by the application's routing layer together with
   next-intl 4.14.x.** It is not a built-in Next.js behaviour, and the rationale should not
   claim otherwise.
+- **It is delivered once, in the Localisation Foundation phase** (DELIVERY_PLAN.md, Phase 3A),
+  **before any phase required to serve en/ur/ar routes** — including the Phase 2 authentication
+  surfaces. next-intl is introduced and compatibility-validated there (TECH_STACK.md §1.5).
+  **No later phase re-implements localisation.**
 - Locale is the first path segment; always present (ROUTE_MAP.md §1).
 - **RTL from day one:** logical CSS properties throughout, `dir` derived from locale, correct
   mixed-direction handling (Arabic Quranic text within an English page).
@@ -491,7 +665,7 @@ Linux host · Docker Compose · NGINX stable reverse proxy · self-hosted Node a
 │  │  nginx   │──▶│   web    │   │ realtime  │   │ SQL Server  │  │
 │  │  :80/443 │──▶│  :3000   │   │  :3001    │   │    2022     │  │
 │  └──────────┘   └────┬─────┘   └─────┬─────┘   └──────▲──────┘  │
-│                      │ server-core   │ server-core    │         │
+│                      │ ctx services  │ server-core    │         │
 │                      └───────────────┴────────────────┘         │
 │        └──▶ storage volume    ──▶ backup volume                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -500,6 +674,11 @@ Linux host · Docker Compose · NGINX stable reverse proxy · self-hosted Node a
 NGINX terminates TLS, applies security headers and coarse rate limiting, serves static
 assets, proxies HTTP to `web`, and upgrades WebSocket connections to `realtime` once that
 process exists.
+
+**On the two labelled paths.** `web` reaches SQL Server through **bounded-context services and
+their persistence ports** — `server-core` is on that path only for the explicitly admitted
+subset (§1, §3.1.3). `realtime` reaches the same services **only** through `server-core`, and
+holds no raw database capability (§3.1.2).
 
 **SQL Server hosting is an open decision** (OPEN_DECISIONS.md). **No production data is
 touched during Phase 0A.**
@@ -533,8 +712,8 @@ never been restored is not a backup.** Retention and RPO/RTO targets are an open
 
 | Concern | Approach |
 |---|---|
-| Validation | **Zod 4.5.x** at every trust boundary; server-side validation mandatory and independent |
-| CSRF | Origin/Host validation, `SameSite` cookies, framework-safe mutation patterns, **no state-changing GET** (SECURITY_BASELINE.md §7) |
+| Validation | **Zod 4.5.x** at every trust boundary; server-side validation of **application-owned inputs** mandatory and independent. Opaque provider/library protocol material is validated by its protocol implementation (SECURITY_BASELINE.md §7, §9.1) |
+| Mutation safety | **Four protocol security classes** (SECURITY_BASELINE.md §7). **Class A** browser mutations: Origin/Host validation, `SameSite` cookies, framework-appropriate CSRF controls, **no state-changing GET**. **Classes B, C and D** — signed machine callbacks, authentication/OAuth callbacks and emailed verification/reset links — use their own protocol guarantees, **not** browser CSRF |
 | Logging | **Pino**, structured, **logger-level redaction**; no secrets, tokens or personal content |
 | Auditing | Domain audit records for religious edits, permission grants, publication and migration publication |
 | Error handling | Domain errors distinguished from infrastructure errors; no internal detail leaked |
@@ -552,7 +731,11 @@ never been restored is not a backup.** Retention and RPO/RTO targets are an open
 | Context granularity | Contexts, not entities | 27 entity-sized modules were too fine-grained; aggregates stay distinct within contexts |
 | Infrastructure | Abstractions, not domains | Database, storage, search, email, logging, auditing and rate limiting own no business invariants |
 | Identity structure | One context, internal sub-layering | Removes the `auth`/`users` cycle; enforceable without exceptions |
-| Realtime | Calls context-owned services hosted in `packages/server-core`; no database access | Prevents a second business backend and divergent security, without transferring ownership away from the contexts |
+| Realtime | Calls context-owned services hosted in `packages/server-core`; **never holds raw database capability** | Prevents a second business backend and divergent security, without transferring ownership away from the contexts |
+| **Persistence model** | **Model A — encapsulated persistence through context-owned services** (§3.1.1) | Separates *invoking a service that persists* from *holding raw database capability*, so web and realtime share one implementation while neither becomes a data-access holder |
+| **Persistence adapter placement** | Physically inside `packages/database`; semantically owned by exactly one context (§4.1) | Keeps raw Prisma private without moving business ownership into infrastructure |
+| **`server-core` admission timing** | Permitted ahead of the second process **only** for a concrete scheduled consumer (§3.1.3) | Reconciles "admission by justification" with the architecture already naming Identity session and authorisation services there |
+| **Bounded-context ownership enforcement** | Application architecture, interfaces and tests — not the SQL principal (§4.1) | One application SQL account cannot express context ownership; it is defence in depth, not the boundary |
 | Realtime timing | Introduced with Messaging | A process before its domain accretes misplaced logic |
 | Migration provenance | Its own foundation context | Quran and Hadith need provenance without depending on Editorial |
 | Referential integrity | Typed relationships | SQL Server cannot enforce polymorphic references |

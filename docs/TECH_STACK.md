@@ -16,10 +16,20 @@ The prior revision marked most versions "CONFIRM AT INSTALL" and permitted autom
 downgrade. Both are corrected: the versions are the authoritative stack, and **automatic
 downgrade is prohibited**.
 
-### 1.2 Compatibility verification remains mandatory
+### 1.2 Compatibility verification remains mandatory — in the owning phase
 
 Locking a version does not remove the obligation to verify that the locked combination
 actually installs and builds together.
+
+> **Compatibility is proven where a dependency is actually introduced, never in advance.**
+>
+> - **Phase 0B proves compatibility for the dependencies Phase 0B actually introduces.** It
+>   makes no claim about a package it does not install.
+> - **A deferred locked dependency is compatibility-validated in its owning phase**, at its
+>   genuine first introduction (§1.5).
+>
+> Asserting that Phase 0B verified a dependency it never installed — a persistence layer, an
+> authentication library — would be a claim without evidence.
 
 > **If a locked package or version cannot be resolved, or proves incompatible during
 > installation:**
@@ -54,6 +64,28 @@ vulnerabilities — through phases that do not need them.
 | **Administration** | A workstation tool; **not an application dependency** |
 | **Infrastructure** | Deployment and operations |
 
+### 1.5 Where each deferred dependency is compatibility-validated
+
+Validation happens **at genuine introduction**, in the phase that owns it
+(DELIVERY_PLAN.md §2):
+
+| Dependency | Introduced and validated in |
+|---|---|
+| Next.js · React · TypeScript · Tailwind · Zod · Pino · Vitest · ESLint · Prettier | **Phase 0B** — the dependencies 0B actually installs |
+| **Prisma ORM · @prisma/client · @prisma/adapter-mssql** | **Phase 1** — the database foundation, where persistence first exists |
+| **Better Auth 1.7.x** | **Phase 2** — the Identity phase, where authentication persistence first exists |
+| **next-intl 4.14.x** | **Phase 3A** — the Localisation Foundation, its owning point |
+| **Playwright 1.55.x** | **First genuine introduction** — migration tooling or E2E, whichever comes first |
+| **Socket.IO 4.8.3** | **Phase 25** — when the owning Messaging/realtime work introduces it |
+| Motion · React Hook Form · Tiptap · Cheerio · shadcn/ui source | First genuine use, in the phase that needs them |
+
+**The policy at every one of those points is identical** (§1.2, §16):
+
+- **no prerelease substitution**
+- **no automatic downgrade**
+- **no speculative dependency installation**
+- a discrepancy means **STOP → investigate → explicit architecture decision**
+
 ---
 
 ## 2. Locked stack — summary
@@ -67,23 +99,23 @@ vulnerabilities — through phases that do not need them.
 | Tailwind CSS | **4.3.3** | LOCKED | Runtime | Phase 0B |
 | shadcn/ui | pinned CLI/source revision | LOCKED | Runtime (copied source) | On first component use |
 | Motion | **13.1.x** | LOCKED | Runtime | **On first genuine use** |
-| next-intl | **4.14.x** | LOCKED | Runtime | Locale foundation phase |
+| next-intl | **4.14.x** | LOCKED | Runtime | **Phase 3A — Localisation Foundation** |
 | Microsoft SQL Server | **2022** | LOCKED | Infrastructure | Environment setup |
 | SSMS | **22.9.1 GA** | LOCKED | **Administration** | **Not installed by this project** |
-| Prisma ORM | **7.10.0** | LOCKED | Runtime | Database foundation phase |
-| @prisma/client | **7.10.0** | LOCKED | Runtime | Database foundation phase |
-| **@prisma/adapter-mssql** | **7.10.0** | LOCKED | Runtime | Database foundation phase |
-| Better Auth | **1.7.x** | LOCKED | Runtime | Identity phase |
+| Prisma ORM | **7.10.0** | LOCKED | Runtime | **Phase 1 — Database Foundation** |
+| @prisma/client | **7.10.0** | LOCKED | Runtime | **Phase 1 — Database Foundation** |
+| **@prisma/adapter-mssql** | **7.10.0** | LOCKED | Runtime | **Phase 1 — Database Foundation** |
+| Better Auth | **1.7.x** | LOCKED | Runtime | **Phase 2 — Identity & Access** |
 | Zod | **4.5.x** | LOCKED | Runtime | Phase 0B |
 | React Hook Form | **7.x** | LOCKED | Runtime | **When needed** |
 | Tiptap | **3.x** | LOCKED | Runtime | **When needed** |
-| Socket.IO | **4.8.3** | LOCKED | Runtime | **When messaging is introduced** |
+| Socket.IO | **4.8.3** | LOCKED | Runtime | **Phase 25 — realtime runtime** |
 | Google Meet | — | LOCKED | Runtime (external) | Live class phase |
 | YouTube / Vimeo embeds | — | LOCKED | Runtime (external) | Media phase |
 | SQL Server Full-Text Search | — | LOCKED | Runtime | Search foundation phase |
 | StorageService abstraction | — | LOCKED | Runtime | Storage foundation phase |
 | Native `fetch` + Cheerio | current stable Cheerio | LOCKED | Development | Migration phase |
-| Playwright | **1.55.x** | LOCKED | Development | **Only when required** |
+| Playwright | **1.55.x** | LOCKED | Development | **First genuine introduction** |
 | Pino | **10.3.1** | LOCKED | Runtime | Phase 0B |
 | Vitest | **4.1.x** | LOCKED | Development | Phase 0B |
 | ESLint | **10.x** | LOCKED | Development | Phase 0B |
@@ -165,6 +197,10 @@ support is mandatory.** Decorative animation on religious content is inappropria
 **next-intl 4.14.x** — LOCKED. Purpose-built for the App Router with Server Component support,
 so translations do not force client rendering.
 
+**Introduced and compatibility-validated in Phase 3A — Localisation Foundation** (§1.5), which
+is delivered **before any phase required to serve en/ur/ar routes**, including the Phase 2
+authentication surfaces. **There is exactly one localisation implementation.**
+
 English, Urdu and Arabic supported architecturally from day one; RTL from the start; **one
 codebase, one content database**. V1 may ship English content first.
 
@@ -180,9 +216,18 @@ not a localized label (DOMAIN_MODEL.md §10.1).
 ### 7.1 The three-tool distinction
 
 ```
-Application runtime:   Next.js / Node.js → context services → Prisma → SQL Server 2022
+Application runtime:   Next.js / Node.js → context public service
+                       → owning-context persistence port
+                       → context-owned persistence adapter (inside packages/database)
+                       → PRIVATE Prisma client → SQL Server 2022
 Administration:        SSMS → SQL Server 2022
 ```
+
+**Model A — encapsulated persistence through context-owned services** (ARCHITECTURE.md §3.1.1).
+**Raw Prisma client construction is private infrastructure**, confined to `packages/database`;
+a **persistence adapter physically implemented there is still semantically owned by its bounded
+context**; and **no ordinary application package exposes a Prisma client, delegate, transaction
+handle or raw-query facility in its public API** (ARCHITECTURE.md §4.1).
 
 | Tool | What it is | Role |
 |---|---|---|
@@ -217,9 +262,15 @@ Type-safe access matching a strict TypeScript codebase · a schema reviewable in
 **Constraint:** do not use Prisma 8 RC or preview.
 
 **Rules:** Prisma is the **sole** application data-access path, confined to
-`packages/database` · schema changes flow through **reviewed migrations**, never ad-hoc SSMS
-edits · the application account is least-privilege with **no UPDATE or DELETE on audit
-tables** · **`apps/realtime` never imports it** (ARCHITECTURE.md §3.1).
+`packages/database` and **never part of another package's public API** · schema changes flow
+through **reviewed migrations**, never ad-hoc SSMS edits · the application account is
+least-privilege with **no UPDATE or DELETE on audit tables** — and **the single application SQL
+principal does not itself enforce bounded-context ownership, which is enforced by application
+architecture, interfaces and tests** (ARCHITECTURE.md §4.1) · **`apps/realtime` never acquires
+raw database capability** (ARCHITECTURE.md §3.1.2) · **administrative migration, provisioning
+and recovery tooling is classified separately from runtime persistence adapters**.
+
+**Introduced and compatibility-validated in Phase 1**, at its genuine introduction (§1.5).
 
 ### 7.4 SSMS 22.9.1 GA — LOCKED, Administration
 
@@ -237,9 +288,14 @@ administration · controlled troubleshooting.
 
 ## 8. Authentication, validation, forms, editing
 
-**Better Auth 1.7.x** — LOCKED. Self-hosted, no external identity-service dependency or
+**Better Auth 1.7.x** — LOCKED, and **remains locked at the 1.7.x range**. The **range is the
+architectural decision; the exact resolved patch is recorded in the committed lockfile** (§2,
+§16.5) and is not selected here. Self-hosted, no external identity-service dependency or
 per-user cost; data in the platform's own SQL Server; Google OAuth and email/password with
 verification and reset; TypeScript-native.
+
+**Introduced and compatibility-validated in Phase 2**, at its genuine introduction — **not in
+Phase 0B, which does not install it** (§1.2, §1.5).
 
 **Boundary:** Better Auth handles authentication mechanics only, confined to the Identity &
 Access adapter sub-layer. **Permissions are the single enforcement path**
@@ -262,7 +318,8 @@ before storage.
 
 ## 9. Realtime, live classes, video
 
-**Socket.IO 4.8.3** — LOCKED, **installed when messaging is introduced** — not in Phase 0B.
+**Socket.IO 4.8.3** — LOCKED, **introduced and compatibility-validated in Phase 25**, when the
+owning Messaging/realtime work actually introduces it — not in Phase 0B (§1.5).
 
 Runs in `apps/realtime`, which is created in the Messaging phase. **SQL Server is the
 persistence layer**; the process transports and does not own data, reaching it only through
@@ -307,6 +364,8 @@ part of the production security design** — **no scanner is selected or install
 for the majority of legacy pages.
 **Playwright 1.55.x** — LOCKED, **only where JavaScript rendering is genuinely required**.
 Never the default; dramatically heavier and pointless against static markup.
+**Compatibility-validated on first genuine introduction** — migration tooling or E2E, whichever
+arrives first (§1.5).
 
 Rate limiting, **safe retry classification**, raw snapshot preservation, checksums, resumable
 imports, **reconciliation** and **reversible publication** are required by the migration
@@ -389,9 +448,13 @@ explicit authorisation boundaries.
 1. **Every version in §2 is a LOCKED architecture decision.**
 2. **No automatic downgrade.** An unresolvable or incompatible locked version means **stop,
    investigate, report, and require an explicit architecture decision** (§1.2).
-3. **Compatibility verification at installation is mandatory.** Phase 0B tests the locked
-   combination — particularly Next/React, Prisma + client + MSSQL adapter, Better Auth
-   persistence, Tailwind build integration, and ESLint boundary configuration.
+3. **Compatibility verification at installation is mandatory, in the phase that installs.**
+   **Phase 0B tests the combination it actually introduces** — Next/React, Tailwind build
+   integration, Zod, Pino, Vitest and the ESLint boundary configuration. **Deferred locked
+   dependencies are validated at their genuine introduction** (§1.5): **Prisma + client + MSSQL
+   adapter in Phase 1**, **Better Auth persistence in Phase 2**, **next-intl in Phase 3A**,
+   **Playwright on first genuine use**, **Socket.IO in Phase 25**. Phase 0B claims nothing about
+   a package it does not install.
 4. **Installation is conditional** (§1.3). Approval is not installation.
 5. **Ranges lock the architectural choice; the lockfile records the resolved patch.**
 6. **Avoid canary, beta, RC, preview and experimental packages** unless a written architecture

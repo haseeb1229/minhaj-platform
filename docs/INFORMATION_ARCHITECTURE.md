@@ -319,11 +319,29 @@ My Minhaj
     └── Privacy
 ```
 
-**Ownership.** This entire hierarchy is owned by the **Personalisation & Notifications**
-bounded context (DOMAIN_MODEL.md §14), which defines its privacy, deletion and retention
-rules. It stores **typed references** to content; canonical content remains owned by its
-original domain, and personalisation is **never read in the anonymous cached public render
-tree**.
+**Ownership.** This hierarchy is a **Layer-4 authenticated experience and composition
+surface** (DOMAIN_MODEL.md §3.3, §14.4). It is **not** a bounded context, and it does **not**
+make one context the semantic owner of every operation beneath `/my`:
+
+| Area of the hierarchy | Semantic owner |
+|---|---|
+| Settings → Account & Security | **Identity & Access** |
+| Roles and permissions behind any surface here | **Identity & Access** |
+| My Learning, Progress → Course Progress | **Learning** |
+| My Classes, Teachers | **Learning** / the teacher-owning phase as documented |
+| Messages | **Messaging** |
+| My Questions | **Fatwa** |
+| Saved, History, Notifications, Notification Preferences, Language & Locale, Interests & Goals | **Personalisation & Notifications** (DOMAIN_MODEL.md §14) |
+| Membership surfaces reached from here | **Membership** |
+| Donation surfaces reached from here | **Donations** |
+
+> **Route placement transfers no semantic or domain ownership.** My Minhaj *composes* these
+> capabilities through their owning contexts' public interfaces.
+
+**Personalisation & Notifications** owns the aggregates of DOMAIN_MODEL.md §14.1 and defines
+their privacy, deletion and retention rules. It stores **typed references** to content;
+canonical content remains owned by its original domain, and personalisation is **never read in
+the anonymous cached public render tree**.
 
 **Naming note.** *Saved → Collections* are private, user-owned lists. Editorial
 Collections (section 1.3) are public, curated and permissioned. These are distinct

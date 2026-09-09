@@ -23,7 +23,7 @@ data leaking into shared caches**.
 Credential stuffing and brute force · user enumeration · automated account creation · email
 bombing via verification and reset · reset token leakage and reuse · OAuth state/CSRF
 attacks · **account linking abuse** · session fixation and theft · **open redirect via
-`returnTo`** · **CSRF on sign-out and every mutation**.
+`returnTo`** · **CSRF on sign-out and every browser-initiated application mutation**.
 
 ### 1.3 Authenticated user surface
 
@@ -144,8 +144,8 @@ assignment and **takes effect immediately**, including in messaging (§12.2).
 ### 3.4 Enforcement rules
 
 1. **Server-side always.** Client-side checks are presentation only.
-2. **Every mutation re-checks independently.** Route protection is navigational convenience,
-   not a security boundary.
+2. **Every protected mutation involving an authenticated principal re-checks authorisation
+   independently.** Route protection is navigational convenience, not a security boundary.
 3. **Default deny.** Absence of a grant is denial.
 4. **Ownership is verified at the data layer.** Every personal-data query is scoped to the
    requesting user's identifier — the primary defence against horizontal privilege escalation.
@@ -218,23 +218,139 @@ text uses purpose-built structured editors with validation.
 
 ---
 
-## 7. CSRF and mutation safety
+## 7. Mutation safety — four distinct protocol security classes
 
 A complete policy, absent from the prior revision, which relied on `SameSite` alone.
 
-### 7.1 Rules
+**Not every state-changing request is a browser form.** Classifying an authentication callback
+or a signed webhook as an ordinary browser POST produces either a false security claim or a
+false "CSRF bypass" finding. **Four protocol security classes** are distinguished below — **A**
+browser mutations, **B** signed machine callbacks, **C** authentication/OAuth callbacks and
+**D** emailed verification and reset links — each with its own authenticity mechanism.
 
-1. **No state-changing GET.** Every mutation is POST or a Server Action. **Sign-out is a
+> **Every endpoint and trust boundary requires endpoint-appropriate server-side validation and
+> the security controls appropriate to its protocol class.** The four classes are not
+> interchangeable, and applying one class's controls to another is an error in both directions.
+
+Two consequences are stated explicitly, because blanket wording gets them wrong:
+
+- **Authorisation** is required wherever an **already-authenticated principal and a protected
+  resource or action** are involved. An **authentication-establishing** callback (Class C)
+  instead relies on its protocol's authentication and callback guarantees — **requiring a
+  logged-in principal in order to complete sign-in would be incoherent.**
+- **Zod and application validation apply to application-owned inputs** where appropriate. The
+  application does **not** claim to independently re-validate opaque provider or library
+  protocol material in a way that would break the configured protocol; that material is
+  validated by the protocol implementation itself.
+
+### 7.1 A — Browser-initiated state-changing mutations
+
+Every ordinary application mutation a person triggers from the platform's own UI — Server
+Actions and Route Handler mutations alike. **This is where the blanket browser rules belong.**
+
+1. **Server-side authorisation** wherever the operation requires an **authenticated principal**,
+   re-checked independently (§3.4). Default deny.
+2. **No state-changing GET.** Every Class-A mutation is POST or a Server Action. **Sign-out is a
    POST/action, never a GET route** (ROUTE_MAP.md §2.4).
-2. **Origin/Host validation** on every state-changing request; mismatches are rejected.
-3. **`SameSite` cookies are necessary but not sufficient.** They are one layer, not the
-   policy.
-4. **Framework-safe mutation patterns** for Server Actions, using the framework's built-in
-   protections rather than hand-rolled alternatives.
-5. **Route Handler and REST mutations carry explicit anti-CSRF protection** — they do not
+3. **Origin/Host validation** on every state-changing request; mismatches are rejected.
+4. **Framework-appropriate browser CSRF protection**, using the framework's built-in protections
+   rather than hand-rolled alternatives.
+5. **`SameSite` and session protections where relevant.** `SameSite` is necessary but not
+   sufficient — one layer, not the policy.
+6. **Route Handler and REST mutations carry explicit anti-CSRF protection** — they do not
    inherit Server Action protections.
-6. **Webhooks are exempt from CSRF but require signature verification** (§14).
 7. **Cross-origin requests are rejected by default.**
+
+> **These seven rules are Class-A rules.** They are not blanket-applied to Class B, Class C or
+> the emailed-link GET in Class D. A Class-D flow's confirming browser mutation is separately a
+> Class-A request and carries these protections (§7.4).
+
+### 7.2 B — Signed machine callbacks and webhooks
+
+Inbound requests from an external system that holds no browser session and sends no browser
+Origin — payment webhooks and equivalents (§14).
+
+1. **Signature / authenticity verification before any processing.**
+2. **Timestamp / window verification** where the provider supplies one.
+3. **Replay prevention** — event-identifier tracking.
+4. **Idempotency** — the same event delivered twice produces exactly one effect.
+5. **Server-side payload validation**, including verification of the substantive values against
+   the provider (§14).
+
+**Class B does NOT require**, and must not be assessed against:
+
+- browser CSRF protection
+- an existing logged-in browser principal
+- ordinary browser Origin/Host semantics
+
+> **This is a distinct protocol security model, not a CSRF bypass.** Origin validation and
+> `SameSite` are meaningless for a caller that is not a browser and holds no session; the
+> equivalent guarantee is cryptographic. **A machine callback that skips signature verification
+> is the real defect**, because an unsigned webhook endpoint is an unauthenticated one.
+
+### 7.3 C — Authentication and OAuth callbacks
+
+Provider redirects and authentication-library callback routes (`/api/auth/*`, ROUTE_MAP.md §8).
+
+These are secured by **the actual protocol guarantees**, as applicable to the flow:
+
+- **`state`** — binding the callback to the request that began it
+- **PKCE** — for authorisation-code flows
+- **`nonce`** — for ID-token flows
+- **Provider callback validation** — issuer, audience, signature and expiry
+- **Verified, pre-registered redirect URI** — never a value taken from request input (§9.3)
+- **Linking ownership checks** — account linking requires **verified ownership of the email
+  address** (§2.2); unverified auto-linking is an account-takeover vector
+
+**Class C does NOT require an already-authenticated principal.** These endpoints *establish*
+authentication; demanding a logged-in user in order to complete sign-in would be incoherent, and
+**no blanket browser-form CSRF language is applied where the auth protocol supplies its own
+callback security semantics**.
+
+**Class C does still require server-side trust-boundary validation appropriate to the configured
+authentication library and protocol** — of the application-owned inputs it handles, and of the
+protocol material through the library's own verification path (§7 umbrella).
+
+> **An OAuth or authentication callback is not blindly classified as an ordinary browser POST
+> form.** `state` and PKCE are its cross-site-request defence. Applying browser form semantics
+> instead would both miss the real threat and mis-report a correct implementation as a bypass.
+
+> **No Better Auth endpoint behaviour is locked here.** The exact callback surface, its
+> parameters and its verification steps are established in **Phase 2**, at Better Auth's genuine
+> introduction and compatibility validation (TECH_STACK.md §1.5). This section states the
+> security properties the flow must exhibit, **not** an implementation contract asserted in
+> advance of that proof.
+
+### 7.4 D — Email verification and password-reset links
+
+A link in an email arrives as a **GET**, with no Origin the application controls.
+
+**GET may render:** a confirmation UI · token-status UI (valid, expired, already used) · safe
+informational state.
+
+> **GET must not silently perform a protected mutation** where the approved contract requires an
+> explicit confirmation action. The consuming mutation — setting the new password, marking an
+> address verified — is a **POST/action** carrying the Class-A protections of §7.1.
+
+**Token consumption semantics — the platform's chosen integration contract:**
+
+- Tokens are **single-use and short-lived** (§2.2).
+- A token is **consumed at the confirming mutation**, not by the act of rendering the page — so
+  a mail scanner or link prefetch cannot burn a user's reset token.
+- A completed reset or password change **invalidates outstanding tokens**, and the session rules
+  of §2.3 apply.
+
+> **This is the platform's chosen integration contract, subject to Phase 2 compatibility proof.
+> It is not a claim that Better Auth itself always behaves this way.** Phase 2 establishes
+> whether the configured library and flow can implement this contract without unsafe or custom
+> divergence (TECH_STACK.md §1.5).
+>
+> **If the exact Better Auth mechanism cannot support the approved flow without unsafe or custom
+> divergence, Phase 2 STOPS for an explicit architecture decision** (TECH_STACK.md §1.2). The
+> contract is not quietly bent to fit, and it is not assumed satisfied before the proof.
+
+**Non-negotiable regardless of the mechanism chosen:** **expired, reused and otherwise invalid
+tokens remain unusable**, and say so without revealing whether an account exists (§15.2).
 
 ---
 
@@ -266,8 +382,13 @@ rather than retrofitted.
 ### 9.1 Validation
 
 **Zod 4.5.x at every trust boundary** — Server Actions, Route Handlers, socket events, the
-import pipeline, environment configuration. **Server-side validation is mandatory and
-independent**; client validation is a UX affordance with no security value.
+import pipeline, environment configuration. **Server-side validation of application-owned inputs
+is mandatory and independent**; client validation is a UX affordance with no security value.
+
+**Opaque provider and library protocol material is validated by its protocol implementation**,
+not re-parsed by the application in a way that would break the configured protocol (§7). The
+requirement is endpoint-appropriate validation, not a uniform re-implementation of every
+protocol.
 
 **Allowlist, not denylist.** **No mass assignment** — explicitly pick permitted fields.
 **Parameterised queries only.** Type, size and range limits on every field.
@@ -366,6 +487,13 @@ and never reimplements a rule.**
 enforced by lint, because shipping server authorisation code to the browser would expose
 internal logic and invite client-side trust.
 
+**A hosted service never returns raw persistence capability to its caller.** It persists
+internally through its own context's persistence port (ARCHITECTURE.md §3.1.1). The realtime
+process may invoke such a service; it **never acquires a Prisma client, delegate, transaction
+handle, raw-query facility or persistence adapter**, directly or through any intermediate
+package (ARCHITECTURE.md §3.1.2). **Invoking a service that persists is not holding database
+access**, and no wrapper may launder one into the other.
+
 ### 12.2 Current relationship, not historical membership
 
 > **Every authorisation check validates the currently allowed relationship, not merely
@@ -439,11 +567,31 @@ append-only discipline provide real protection today.
 Each record captures actor, action, target type and identifier, before and after state where
 applicable, timestamp, IP address, and the authorising source where relevant.
 
+### 13.3 Audit identifiers are historical evidence, not relational references
+
+The audit actor and target identifiers are **not** the polymorphic `targetType + targetId`
+pattern prohibited by DOMAIN_MODEL.md §6.2. That prohibition addresses **relational domain
+references** that bypass referential integrity and typed ownership. Audit identifiers are:
+
+- **historical evidence** — a snapshot of who acted and what the event concerned
+- **intentionally capable of outliving** deletion or change of the records they name
+- **not relational navigation** — nothing joins from an audit row into a domain table
+- **not a shortcut for cross-domain persistence**
+- **not a polymorphic business relationship**
+
+An audit record must stay readable and truthful after its target is archived, renamed, purged
+or reassigned. A foreign key would either block a lawful purge (DOMAIN_MODEL.md §14.3) or
+destroy the very evidence the record exists to preserve.
+
+> **The `AuditLog` representation established in the Phase 1 database foundation is therefore
+> explicitly allowed, carries no foreign keys, and is unchanged** (DOMAIN_MODEL.md §6.2.1).
+
 ---
 
 ## 14. Webhooks and payment security
 
-No payment provider is selected in this pass. When integration exists, it **must**:
+No payment provider is selected in this pass. Webhook endpoints follow **protocol model B**
+(§7.2), not browser CSRF semantics. When integration exists, it **must**:
 
 1. **Verify the signature** of every inbound webhook before any processing.
 2. **Be idempotent** — the same event delivered twice produces one effect.
@@ -615,15 +763,26 @@ regardless.
 **Security tests are exit criteria of every feature phase**, not a final sweep. Required
 coverage:
 
-- Permission checks on every mutation, **including negative tests proving denial**
+- Permission checks on every protected mutation involving an authenticated principal,
+  **including negative tests proving denial**
 - **Capability projections never bypass permission checks**
 - **A profile without a RoleAssignment grants nothing**
 - **Horizontal privilege escalation** — one user attempting another's data
 - **Fatwa publication authorisation** — every bypass path
 - **Religious content workflow bypass attempts**
 - **Step-up reauthentication required for privileged operations**
-- **CSRF on Server Actions, Route Handlers and sign-out**
-- **No state-changing GET endpoints exist**
+- **Class A — browser CSRF on Server Actions, Route Handlers and sign-out** (§7.1)
+- **Class A — no ordinary browser mutation is performed by GET.** Scoped to Class A: Classes B,
+  C and D are asserted against their own protocol contracts below, never against this rule
+- **Class B — signed callbacks:** forged signature rejected, replay rejected, stale timestamp
+  rejected, duplicate delivery produces exactly one effect (§7.2). **Not** asserted against
+  browser CSRF or a logged-in principal
+- **Class C — authentication callbacks:** missing or mismatched `state` rejected, PKCE enforced,
+  redirect URI not taken from request input, linking requires verified email ownership (§7.3).
+  **Not** asserted against an already-authenticated principal
+- **Class D — verification and reset links:** a GET renders but performs no silent protected
+  mutation; the token is consumed at the confirming action; **expired, reused and invalid tokens
+  remain unusable** (§7.4). The confirming-action contract is proven in Phase 2
 - Open redirect attempts on `returnTo` and legacy redirects
 - XSS via imported and editorial content
 - **Raw snapshots render inertly in admin tooling**

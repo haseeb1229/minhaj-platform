@@ -24,7 +24,9 @@ unstable canonical links for a corpus meant to be cited for decades.
 and must not be cached as permanent.
 
 **This policy is implemented by the application's routing layer together with next-intl.**
-It is not built-in framework behaviour.
+It is not built-in framework behaviour. It is delivered **once**, in the Localisation Foundation
+phase (DELIVERY_PLAN.md, Phase 3A), **before any phase is required to deliver en/ur/ar routes** —
+including the authentication surfaces of §4. No later phase re-implements it.
 
 ### 1.2 Locale properties
 
@@ -253,11 +255,23 @@ citation remains valid regardless of reading preferences.
 | `/{locale}/signin` | GET / POST | Sign in — `?returnTo` |
 | `/{locale}/signup` | GET / POST | Register |
 | **Sign out** | **POST action only** | **Never a GET route** (§2.4) |
-| `/{locale}/forgot-password` · `/reset-password` | GET / POST | Recovery |
-| `/{locale}/verify-email` | GET / POST | Verification |
+| `/{locale}/forgot-password` · `/reset-password` | GET / POST | Recovery — **GET renders confirmation and token-status UI; the POST performs and consumes** |
+| `/{locale}/verify-email` | GET / POST | Verification — **same split** |
 | `/{locale}/onboarding` | GET / POST | Conditional onboarding |
 
 `returnTo` is validated against an allowlist of internal paths. **All are `noindex`.**
+
+**Protocol classification** (SECURITY_BASELINE.md §7). These routes are not all one kind of
+request, and are not treated as one:
+
+| Surface | Model | Authenticity established by |
+|---|---|---|
+| Sign-in, sign-up, sign-out, onboarding, and the POST half of recovery and verification | **A — browser mutation** (§7.1) | Server-side authorisation · Origin/Host validation · framework-appropriate CSRF controls · **no state-changing GET** |
+| Provider redirects and `/api/auth/*` callbacks | **C — authentication callback** (§7.3) | `state` · PKCE · `nonce` · provider callback validation · **verified pre-registered redirect URI** · linking ownership checks — **not ordinary browser POST semantics** |
+| The GET half of `/verify-email` and `/reset-password` | **D — emailed link** (§7.4) | A GET **renders** confirmation or token-status UI. It **must not silently perform a protected mutation** where the contract requires an explicit confirmation action. **The token is consumed at the confirming POST, not by rendering.** This is **the platform's chosen integration contract, subject to Phase 2 compatibility proof with Better Auth** — not a claim about Better Auth's own behaviour; if it cannot be met without unsafe divergence, **Phase 2 stops for an architecture decision**. **Expired, reused and invalid tokens remain unusable regardless** |
+
+**No routes are implemented by this document**, and none of the above authorises implementation
+of Phase 2 or Phase 2G work.
 
 ---
 
@@ -272,7 +286,25 @@ All authenticated, all `noindex`, all **private cache** (ARCHITECTURE.md §8.3).
 `/my/progress` (+ `/quran`, `/courses`) · `/my/questions` (+ `/ask`, `/{id}`) ·
 `/my/notifications` · `/my/settings/{section}`
 
-Owned by the Personalisation & Notifications context (DOMAIN_MODEL.md §14).
+**Ownership.** `/my` is a **Layer-4 authenticated experience and composition surface**
+(DOMAIN_MODEL.md §3.3, §14.4). It is **not** a bounded context, and it does **not** semantically
+own every operation reachable beneath it:
+
+| Capability under `/my` | Semantic owner |
+|---|---|
+| `/my/settings` account and security | **Identity & Access** |
+| roles and permissions | **Identity & Access** |
+| `/my/learning`, `/my/progress` course rules | **Learning** |
+| `/my/classes`, `/my/teachers` operations | **Learning** / the teacher-owning phase as documented |
+| `/my/messages` | **Messaging** |
+| `/my/questions` | **Fatwa** |
+| `/my/saved`, `/my/history`, `/my/notifications`, preferences | **Personalisation & Notifications** (DOMAIN_MODEL.md §14) |
+| membership | **Membership** |
+| donations | **Donations** |
+
+> **Route placement transfers no semantic or domain ownership.** These routes *compose* the
+> capabilities through their owning contexts' public interfaces. Personalisation &
+> Notifications owns the aggregates of DOMAIN_MODEL.md §14.1 — and only those.
 
 ---
 
@@ -342,11 +374,28 @@ Categories only; no endpoint contracts in this phase.
 | Health | `/api/health` · `/api/ready` | Unprefixed operational probes |
 
 **Realtime** (Messaging phase onward): `/socket.io/*`, reverse-proxied with WebSocket
-upgrade. Not part of the Next.js route tree, and it reaches data only through the
-Messaging-owned services hosted in `packages/server-core` (ARCHITECTURE.md §3.1).
+upgrade. Not part of the Next.js route tree. It causes persistence **only** by invoking the
+Messaging-owned services hosted in `packages/server-core`, and **never holds raw database
+capability** — no client, delegate, transaction handle, raw-query facility or persistence
+adapter, directly or through any intermediate package (ARCHITECTURE.md §3.1.1–§3.1.2).
 
-**All mutations — Server Actions and Route Handlers alike — carry CSRF protection, validate
-input with Zod server-side, and re-check permissions independently.**
+**Every endpoint carries endpoint-appropriate server-side validation and the controls
+appropriate to its protocol class** (SECURITY_BASELINE.md §7). **Authorisation is re-checked
+independently wherever an authenticated principal and a protected resource are involved.** The
+**four protocol security classes** are not interchangeable:
+
+- **Class A — browser-initiated mutations.** Server Actions and Route Handler mutations from the
+  platform's own UI: server-side authorisation, Origin/Host validation, framework-appropriate
+  browser CSRF protection, and **no state-changing GET** (§7.1).
+- **Class B — `/api/webhooks/{provider}`**, a **signed machine callback**: signature
+  verification, timestamp/window checks, replay prevention, idempotency and server-side payload
+  validation (§7.2). It requires **no browser CSRF, no logged-in principal and no browser
+  Origin/Host semantics** — **that is a distinct protocol security model, not a CSRF bypass**.
+- **Class C — `/api/auth/*` callbacks**, secured by `state`, PKCE, `nonce`, provider callback
+  validation and a verified pre-registered redirect URI (§7.3). These **establish**
+  authentication, so **an already-authenticated principal is not required**, and the concrete
+  endpoint behaviour is settled in Phase 2, not asserted here.
+- **Class D — emailed verification and reset links** (§7.4), covered under §4.
 
 ---
 
@@ -513,6 +562,10 @@ validation with no over-claiming · legacy 301 correctness with no chains.
 5. **Lowercase, hyphenated paths.**
 6. **Non-locale routes** are limited to `robots.txt`, sitemaps, `/api/*`, `/rss/*` and health
    probes.
-7. **No state-changing GET.** Every mutation is a POST/action with CSRF protection.
+7. **No state-changing GET.** Every browser-initiated mutation is a POST/action with
+   Origin/Host validation and framework-appropriate CSRF controls. Signed machine callbacks and
+   authentication callbacks establish authenticity by their own protocol instead
+   (SECURITY_BASELINE.md §7.2–§7.3); an emailed verification or reset link may **render** on GET
+   but **consumes its token only at the confirming POST** (§7.4).
 8. **URLs are permanent.** Every change produces a 301 — citation stability is a product
    requirement for a religious knowledge platform.
