@@ -1,0 +1,12 @@
+{
+  "name": "@fixture/raw-capability-wrapper",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "minhaj": {
+    "architecturalRole": "platform"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@fixture/model-a-server-core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "minhaj": {
+    "architecturalRole": "service-host"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

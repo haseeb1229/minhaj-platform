@@ -34,6 +34,11 @@ import {
 } from '../../packages/config/eslint/contexts.js';
 import { checkClientGraph } from './client-graph.mjs';
 import { fileAdjacency, findCycles } from './graph.mjs';
+import {
+  persistenceAdapterIndex,
+  reachRawCapability,
+  verifyEncapsulationSurface,
+} from './persistence.mjs';
 
 const knownContexts = new Set(contextSlugs);
 
@@ -215,15 +220,59 @@ function workspaceOfNode(node) {
  * internal dependencies are its own business and attributing them to a caller
  * would report the wrong owner.
  *
+ * ORDER INDEPENDENCE — the F2 correction
+ * --------------------------------------
+ * `contexts` used to be a Map KEYED BY SLUG that kept the FIRST entry the walk
+ * happened to reach. That made the verdict depend on import declaration order.
+ * Given a file reaching Learning through both
+ *
+ *     import { publicThing }  from '@/contexts/learning';        // legal
+ *     import { privateThing } from '@/contexts/learning/internal/store';
+ *
+ * whichever line came first was recorded and the other vanished. Declaring the
+ * public import first therefore MASKED the internals breach, and simply
+ * swapping the two lines changed the result — a gate whose answer depends on
+ * the order of statements is not enforcing anything, and reordering imports
+ * would have silenced a real finding.
+ *
+ * Every distinct BOUNDARY ENTRY is now recorded, keyed by the resolved target
+ * FILE, so the result is a set rather than a race. Where the same target is
+ * reached by several paths the SHORTEST is kept — with a deterministic
+ * tie-break, so two equally short paths always produce the same diagnostic —
+ * and the returned list is sorted, so the report reads identically whatever
+ * order discovery or traversal happened to take.
+ *
+ * The same shortest-wins rule is applied to `workspaces`, which had the same
+ * first-hit shape.
+ *
  * Returns:
  *   - `packages`   external packages reached, each with the path that reached it
  *   - `workspaces` repository workspaces reached, each with the path
- *   - `contexts`   bounded contexts reached, keyed by slug
+ *   - `contexts`   EVERY bounded-context boundary entry reached, one per target
  */
-function reachFrom(startFile, graph, adjacency, { ownWorkspace = null } = {}) {
+function reachFrom(
+  startFile,
+  graph,
+  adjacency,
+  { ownWorkspace = null, isEncapsulated = null } = {},
+) {
   const packages = [];
   const workspaces = new Map();
   const contexts = new Map();
+
+  /**
+   * Is `candidate` the better record for an already-seen target?
+   *
+   * Shorter path wins; equal lengths are broken by comparing the paths
+   * themselves, so the choice never depends on which was encountered first.
+   */
+  const better = (candidate, existing) => {
+    if (existing === undefined) return true;
+    if (candidate.trail.length !== existing.trail.length) {
+      return candidate.trail.length < existing.trail.length;
+    }
+    return candidate.trail.join('|') < existing.trail.join('|');
+  };
 
   const visited = new Set([startFile]);
   const queue = [{ file: startFile, trail: [startFile] }];
@@ -256,30 +305,58 @@ function reachFrom(startFile, graph, adjacency, { ownWorkspace = null } = {}) {
       // the walk continues through it, so `@minhaj/database` is seen even when
       // it is reached at the end of a chain of innocent packages.
       const targetWorkspace = workspaceOfNode(target);
-      if (
-        targetWorkspace !== null &&
-        targetWorkspace !== ownWorkspace &&
-        !workspaces.has(targetWorkspace)
-      ) {
-        workspaces.set(targetWorkspace, {
+      if (targetWorkspace !== null && targetWorkspace !== ownWorkspace) {
+        const candidate = {
           workspace: targetWorkspace,
           relative: target.relative,
           trail: nextTrail,
           direct: nextTrail.length === 2,
-        });
+        };
+        if (better(candidate, workspaces.get(targetWorkspace))) {
+          workspaces.set(targetWorkspace, candidate);
+        }
       }
+
+      // An approved ENCAPSULATION BOUNDARY — a declared context-owned
+      // persistence adapter's public entry — is stopped at for the same reason
+      // a context boundary is: what it depends on is its own business, and
+      // attributing it to a caller reports the wrong owner.
+      //
+      // Without this, `packages/database/src/index.ts` publishing a
+      // context-owned adapter was reported as a Layer 0 package depending
+      // UPWARD on that adapter's owning context — the arrangement
+      // ARCHITECTURE.md §4.1 prescribes, reported as an inversion of the
+      // layering. The workspace is still recorded above, before the stop, so a
+      // prohibited reach INTO the database package is unaffected.
+      if (isEncapsulated !== null && isEncapsulated(target)) continue;
 
       const targetContext = locateContext(target.relative);
 
       if (targetContext !== null) {
-        if (!contexts.has(targetContext.slug)) {
-          contexts.set(targetContext.slug, {
-            slug: targetContext.slug,
-            withinContext: targetContext.withinContext,
-            trail: nextTrail,
-            direct: nextTrail.length === 2,
-          });
-        }
+        // Keyed by the resolved TARGET FILE **and the module this file reached
+        // it through**, so two things are both true:
+        //
+        //   - a public entry and an internals reach into the SAME context are
+        //     two records rather than one (the whole of F2), and
+        //   - two DIFFERENT laundering routes to the same target stay two
+        //     findings. Six barrels re-exporting one Quran internal are six
+        //     modules to fix, and collapsing them to one would send a reader
+        //     round a whack-a-mole loop: fix the named barrel, re-run, discover
+        //     the next.
+        const via = nextTrail[1] ?? to;
+
+        const candidate = {
+          slug: targetContext.slug,
+          withinContext: targetContext.withinContext,
+          target: target.relative,
+          via,
+          trail: nextTrail,
+          direct: nextTrail.length === 2,
+        };
+
+        const key = `${via} ${to}`;
+        if (better(candidate, contexts.get(key))) contexts.set(key, candidate);
+
         // Stop: a context's internals are its own business.
         continue;
       }
@@ -290,7 +367,19 @@ function reachFrom(startFile, graph, adjacency, { ownWorkspace = null } = {}) {
     }
   }
 
-  return { packages, workspaces, contexts };
+  // Sorted so a report is identical whatever order the graph was walked in.
+  // Shortest trail first within a context, so the dedupe below reports the
+  // most useful path rather than an arbitrary one.
+  const reachedContexts = [...contexts.values()].sort(
+    (a, b) =>
+      a.slug.localeCompare(b.slug) ||
+      a.trail.length - b.trail.length ||
+      a.withinContext.localeCompare(b.withinContext) ||
+      a.target.localeCompare(b.target) ||
+      a.trail.join('|').localeCompare(b.trail.join('|')),
+  );
+
+  return { packages, workspaces, contexts: reachedContexts };
 }
 
 /** Formats a trail of canonical paths as a readable dependency chain. */
@@ -301,7 +390,7 @@ function formatTrail(trail, graph) {
 }
 
 /** Checks one context file against the allowlist, directly and transitively. */
-function checkContextFile(node, context, graph, adjacency, violations) {
+function checkContextFile(node, context, graph, adjacency, capability, violations) {
   const permitted = contextAllowlist[context.slug] ?? [];
 
   // ---- Direct package dependencies -------------------------------------
@@ -338,6 +427,7 @@ function checkContextFile(node, context, graph, adjacency, violations) {
 
   const reach = reachFrom(node.absolute, graph, adjacency, {
     ownWorkspace: node.workspace?.name ?? null,
+    isEncapsulated: capability.isBoundary,
   });
 
   // ---- Prohibited packages reached THROUGH a neutral wrapper ------------
@@ -386,10 +476,24 @@ function checkContextFile(node, context, graph, adjacency, violations) {
   }
 
   // ---- Context dependencies, direct and transitive ----------------------
-  for (const reached of reach.contexts.values()) {
+  //
+  // EVERY boundary entry is judged (F2). A context reached through both its
+  // legal public interface and a forbidden internal file produces two records,
+  // and the internals breach is reported whichever of the two the traversal met
+  // first. Noise is controlled by deduplicating on the FINDING — one report per
+  // forbidden context, one per distinct internal path — never by discarding a
+  // reach before it has been judged, which is what masked the breach before.
+  const reportedUnknown = new Set();
+  const reportedForbidden = new Set();
+  const reportedInternal = new Set();
+
+  for (const reached of reach.contexts) {
     if (reached.slug === context.slug) continue;
 
     if (!knownContexts.has(reached.slug)) {
+      if (reportedUnknown.has(reached.slug)) continue;
+      reportedUnknown.add(reached.slug);
+
       violations.push({
         rule: 'unknown-context',
         file: node.relative,
@@ -403,6 +507,12 @@ function checkContextFile(node, context, graph, adjacency, violations) {
     }
 
     if (!permitted.includes(reached.slug)) {
+      // Deduplicated per ROUTE. The forbidden edge is one architectural fact,
+      // but each intermediate that carries it is its own module to remove.
+      const route = `${reached.slug} ${reached.via}`;
+      if (reportedForbidden.has(route)) continue;
+      reportedForbidden.add(route);
+
       const laundered = !reached.direct;
 
       violations.push({
@@ -425,15 +535,21 @@ function checkContextFile(node, context, graph, adjacency, violations) {
 
     // Permitted edge — but interface-only (ARCHITECTURE.md §6.3 rule 4).
     if (!isPublicEntry(reached.withinContext)) {
+      const key = `${reached.slug}/${reached.withinContext}`;
+      if (reportedInternal.has(key)) continue;
+      reportedInternal.add(key);
+
       violations.push({
         rule: 'context-internal-import',
         file: node.relative,
-        specifier: graph.nodes.get(reached.trail.at(-1))?.relative ?? reached.slug,
+        specifier: reached.target,
         message:
           `'${context.slug}' may depend on '${reached.slug}', but only ` +
           `through its public interface. Reaching ` +
           `'${reached.withinContext}' inside '${reached.slug}' is prohibited ` +
-          `(ARCHITECTURE.md §6.3 rule 4).` +
+          `(ARCHITECTURE.md §6.3 rule 4). Reaching the same context's public ` +
+          `entry elsewhere in this file does not excuse it — every boundary ` +
+          `entry is judged on its own.` +
           (reached.direct ? '' : `\n    path: ${formatTrail(reached.trail, graph)}`),
       });
     }
@@ -518,15 +634,22 @@ function roleOfNode(node) {
  *   2. INFRASTRUCTURE. The prohibitions of DOMAIN_MODEL.md §2 rule 7 are not
  *      suspended by being called from a page.
  */
-function checkCompositionFile(node, graph, adjacency, violations) {
+function checkCompositionFile(node, graph, adjacency, capability, violations) {
   const workspaceName = workspaceOfNode(node);
 
   const reach = reachFrom(node.absolute, graph, adjacency, {
     ownWorkspace: workspaceName,
+    isEncapsulated: capability.isBoundary,
   });
 
-  for (const reached of reach.contexts.values()) {
+  const reportedUnknown = new Set();
+  const reportedInternal = new Set();
+
+  for (const reached of reach.contexts) {
     if (!knownContexts.has(reached.slug)) {
+      if (reportedUnknown.has(reached.slug)) continue;
+      reportedUnknown.add(reached.slug);
+
       violations.push({
         rule: 'unknown-context',
         file: node.relative,
@@ -542,10 +665,14 @@ function checkCompositionFile(node, graph, adjacency, violations) {
     // Composition may reach any context — but through its front door.
     if (isPublicEntry(reached.withinContext)) continue;
 
+    const key = `${reached.slug}/${reached.withinContext}`;
+    if (reportedInternal.has(key)) continue;
+    reportedInternal.add(key);
+
     violations.push({
       rule: 'composition-internal-import',
       file: node.relative,
-      specifier: graph.nodes.get(reached.trail.at(-1))?.relative ?? reached.slug,
+      specifier: reached.target,
       message:
         `Layer 4 composition may compose many contexts, but only through ` +
         `their public interfaces. Reaching '${reached.withinContext}' inside ` +
@@ -577,6 +704,70 @@ function checkCompositionFile(node, graph, adjacency, violations) {
         `abstractions only (DOMAIN_MODEL.md §2 rule 7).`,
     });
   }
+
+  // ---- Layer 4 never HOLDS raw database capability (Model A) -------------
+  //
+  // ARCHITECTURE.md §3.2 states it for both processes in one row: "Raw database
+  // capability | never held — persistence happens inside context-owned services
+  // (§3.1.1) | never held (§3.1.2)". The left-hand column is `apps/web`.
+  //
+  // This is the half of Model A that a context-only rule cannot express.
+  // Composition is exactly where a context service is wired to its adapter, so
+  // it MAY reach `packages/database` and reach it legitimately — what it may
+  // not do is come away holding a client, a delegate, a transaction handle or a
+  // raw-query facility. Reaching a narrow context-owned adapter's entry point
+  // is invocation; reaching past it, or reaching a wrapper that renames the
+  // capability, is possession (§3.1.2, §6.3 rule 13).
+  reportRawCapability(node, graph, adjacency, capability, violations, {
+    rule: 'composition-raw-database-capability',
+    subject: 'Layer 4 composition',
+    remedy:
+      'Call a bounded context’s public service, or wire a narrow ' +
+      'context-owned persistence adapter, and let persistence happen inside it.',
+  });
+}
+
+/**
+ * Reports every raw database capability one file can reach.
+ *
+ * The shared half of ARCHITECTURE.md §3.1.2 and §6.3 rule 13, used wherever the
+ * approved documents say a role never HOLDS database capability. The walk is
+ * transitive and exempts no intermediate module, so a wrapper chain is not a
+ * defence — and it stops at an approved encapsulation boundary, so invoking a
+ * service that persists internally is not mistaken for possessing what it uses.
+ */
+function reportRawCapability(
+  node,
+  graph,
+  adjacency,
+  capability,
+  violations,
+  { rule, subject, remedy },
+) {
+  for (const found of reachRawCapability(
+    node.absolute,
+    graph,
+    adjacency,
+    capability.isBoundary,
+  )) {
+    violations.push({
+      rule,
+      file: node.relative,
+      specifier: found.specifier,
+      ...(found.direct ? { line: found.line } : {}),
+      message:
+        `${subject} must never hold raw database capability, and this file ` +
+        `${found.direct ? 'imports' : 'reaches'} '${found.packageName}' — ` +
+        `${found.reason} (ARCHITECTURE.md §3.1.2, §6.3 rule 13). Invoking an ` +
+        `encapsulated service that persists internally is permitted; ` +
+        `receiving a client, delegate, transaction handle or raw-query ` +
+        `facility is not, and no wrapper, barrel or re-export converts the ` +
+        `second into the first. ${remedy}` +
+        (found.direct
+          ? ''
+          : `\n    path: ${formatTrail(found.trail, graph)}\n       -> ${found.specifier}`),
+    });
+  }
 }
 
 /**
@@ -587,15 +778,21 @@ function checkCompositionFile(node, graph, adjacency, violations) {
  * package reaching a context would invert the layering and, worse, would turn
  * that package into a laundering route for every context that consumes it.
  */
-function checkLayerZeroFile(node, graph, adjacency, violations) {
+function checkLayerZeroFile(node, graph, adjacency, capability, violations) {
   const workspaceName = node.workspace?.name ?? workspaceNameFromPath(node.relative);
 
   const reach = reachFrom(node.absolute, graph, adjacency, {
     ownWorkspace: workspaceName,
+    isEncapsulated: capability.isBoundary,
   });
 
   // ---- Upward: a shared package must not reach a bounded context ---------
-  for (const reached of reach.contexts.values()) {
+  const reportedUpward = new Set();
+
+  for (const reached of reach.contexts) {
+    if (reportedUpward.has(reached.slug)) continue;
+    reportedUpward.add(reached.slug);
+
     violations.push({
       rule: 'layer-zero-upward-dependency',
       file: node.relative,
@@ -658,6 +855,22 @@ function checkLayerZeroFile(node, graph, adjacency, violations) {
         `\n    path: ${formatTrail(reached.trail, graph)}\n       -> ${reached.specifier}`,
     });
   }
+
+  // ---- ...nor a tunnel to raw database CAPABILITY -----------------------
+  //
+  // The tunnel rules above are expressed over prohibited WORKSPACES and over
+  // `CONCRETE_INFRASTRUCTURE`, which between them do not name `@prisma/client`
+  // — the Prisma deny list lives on the CONTEXT rule, and a Layer 0 package is
+  // not a context. So a shared package every context consumes could import the
+  // Prisma client directly and be reported by nothing, which is the same defect
+  // as B5 with the first hop removed. Capability closes it by name.
+  reportRawCapability(node, graph, adjacency, capability, violations, {
+    rule: 'layer-zero-raw-database-capability',
+    subject: `'${workspaceName}' is a Layer 0 package every bounded context may consume, so it`,
+    remedy:
+      'Data access is confined to packages/database and reached through a ' +
+      'context-owned port (ARCHITECTURE.md §4.1).',
+  });
 }
 
 /**
@@ -671,40 +884,39 @@ function checkLayerZeroFile(node, graph, adjacency, violations) {
  * `prohibitedInContextPackages`).
  */
 /**
- * NON-BLOCKING NOTE — service-host infrastructure (Review #5, N2).
+ * THE SUPERSEDED NOTE — service-host infrastructure (Review #5, N2).
  *
- * Review #5 observed that this rule checks prohibited WORKSPACES but never
- * inspects concrete infrastructure PACKAGES (`node:fs`, a database driver, a
- * search client) the way `checkContextFile` does for bounded contexts.
- *
- * That asymmetry is deliberate, and the approved documents are the reason.
- * DOMAIN_MODEL.md §2 rule 7 — "No context depends on Prisma, the filesystem,
- * or a search engine directly" — is addressed to CONTEXTS. ARCHITECTURE.md
- * §4.1 draws the sanctioned data path in the opposite direction:
+ * A long-standing note here defended the absence of any infrastructure check on
+ * `server-core`, on the authority of the then-current ARCHITECTURE.md §4.1 data
+ * path:
  *
  *     Next.js / Node.js  ->  server-core  ->  Prisma ORM  ->  SQL Server 2022
  *
- * So `server-core` reaching data access is the ARCHITECTED route, not a
- * breach. Adding a prohibition here would enforce a rule no approved document
- * states — precisely the undocumented Node built-in blacklist that Review #3
- * (N1) removed from `CONCRETE_INFRASTRUCTURE` above, reintroduced one layer up.
+ * If that is the architected route, then `server-core` reaching Prisma is the
+ * design rather than a breach, and adding a prohibition would have been the
+ * checker inventing a rule — which is a defect this repository has corrected
+ * before (Review #3's undocumented Node built-in deny list).
  *
- * What DOES apply is enforced: the prohibited-workspace walk below is
- * transitive and exempts no intermediate package, and the client-bundle
- * prohibition (§6.3 rule 9) is proven by real Next builds in
- * `npm run check:server-only`.
+ * The accepted architecture no longer draws that path. §4.1 now reads:
  *
- * When hosted services and infrastructure ADAPTERS actually appear — the phase
- * that creates `packages/database` and the first `server-core` service — the
- * question to answer then is which infrastructure a HOST may touch directly
- * versus through an adapter. That is a design decision for that phase, taken
- * against a document, not a Phase 0B gate invented here.
+ *     server-core  ->  the SAME context-owned service  ->  the same path beneath it
+ *
+ * and §3.1 rule 4 states it directly: "Each hosted service reaches data only
+ * through its owning context's interface, exactly as it would if it were called
+ * from within `apps/web`." §3.1.2 then prohibits "`server-core` public APIs
+ * returning raw persistence capability" and "exposing repositories as
+ * unrestricted database capability".
+ *
+ * So the note's premise is gone, and with it the reason for the gap. The
+ * prohibited-workspace walk below is joined by a capability walk, for exactly
+ * the sentence that now authorises it — not because stricter felt safer.
  */
-function checkServiceHostFile(node, graph, adjacency, violations) {
+function checkServiceHostFile(node, graph, adjacency, capability, violations) {
   const workspaceName = workspaceOfNode(node);
 
   const reach = reachFrom(node.absolute, graph, adjacency, {
     ownWorkspace: workspaceName,
+    isEncapsulated: capability.isBoundary,
   });
 
   for (const reached of reach.workspaces.values()) {
@@ -723,6 +935,50 @@ function checkServiceHostFile(node, graph, adjacency, violations) {
     path: ${formatTrail(reached.trail, graph)}`,
     });
   }
+
+  // ---- Hosting a service is not bypassing its context's front door -------
+  //
+  // ARCHITECTURE.md §3.1: the host "performs no uncontrolled cross-context
+  // table access" and "never bypasses a bounded context's public interface",
+  // and rule 4 says a hosted service "reaches data only through its owning
+  // context's interface". Hosting a context's service means depending on that
+  // context — which is why the Layer-0 upward prohibition does not apply here —
+  // but it is the context's PUBLIC interface that is hosted, never its
+  // internals. Every boundary entry is judged, so a legal public reach in one
+  // import cannot mask an internals reach in another (F2).
+  const reportedInternal = new Set();
+
+  for (const reached of reach.contexts) {
+    if (isPublicEntry(reached.withinContext)) continue;
+
+    const key = `${reached.slug}/${reached.withinContext}`;
+    if (reportedInternal.has(key)) continue;
+    reportedInternal.add(key);
+
+    violations.push({
+      rule: 'service-host-context-internal-import',
+      file: node.relative,
+      specifier: reached.target,
+      message:
+        `'${workspaceName}' hosts context-owned services, so it may depend on ` +
+        `'${reached.slug}' — but only through that context's public ` +
+        `interface. Reaching '${reached.withinContext}' inside it bypasses the ` +
+        `boundary the host exists to preserve (ARCHITECTURE.md §3.1, §3.1 ` +
+        `rule 4). Placing an implementation here changes where it is exported ` +
+        `from, never who owns it.` +
+        (reached.direct ? '' : `\n    path: ${formatTrail(reached.trail, graph)}`),
+    });
+  }
+
+  // ---- The host never holds raw database capability ---------------------
+  reportRawCapability(node, graph, adjacency, capability, violations, {
+    rule: 'service-host-raw-database-capability',
+    subject: `'${workspaceName}' hosts context-owned services and`,
+    remedy:
+      'A hosted service persists through its OWN context’s port and adapter, ' +
+      'exactly as it would when called from apps/web (ARCHITECTURE.md §3.1 ' +
+      'rule 4, §4.1).',
+  });
 }
 
 /** Is this name one `apps/realtime` may never reach? */
@@ -756,13 +1012,35 @@ function realtimeProhibited(name) {
  * in force from the day the directory appears, and is proven now against
  * isolated fixtures.
  */
-function checkRealtimeFile(node, graph, adjacency, violations) {
+function checkRealtimeFile(node, graph, adjacency, capability, violations) {
   // ---- Direct imports ---------------------------------------------------
+  //
+  // Classified by RESOLVED WORKSPACE, never by the specifier text. A relative
+  // climb into `packages/database/src/adapters/...` is the same dependency as
+  // naming `@minhaj/database`, and the previous specifier-string test saw only
+  // the second: the first matched no prohibited NAME here, and the transitive
+  // walk below skips reaches it considers direct, so a one-hop relative import
+  // of the database package was reported by neither. `checkContextWorkspaceUsage`
+  // has classified by resolved workspace since Review #3 for exactly this
+  // reason; the realtime rule had not caught up.
+  //
+  // The raw specifier is still tested as well, so a specifier that NAMES a
+  // prohibited package but resolves to nothing is caught rather than excused by
+  // being broken.
   for (const entry of node.imports) {
-    const name =
-      entry.resolved.kind === 'external' ? entry.resolved.packageName : entry.specifier;
+    let name = entry.specifier;
 
-    if (!realtimeProhibited(name)) continue;
+    if (entry.resolved.kind === 'external') {
+      name = entry.resolved.packageName;
+    } else if (entry.resolved.kind === 'file') {
+      const target = graph.nodes.get(entry.resolved.absolute);
+      name =
+        (target === undefined
+          ? workspaceNameFromPath(entry.resolved.relative)
+          : workspaceOfNode(target)) ?? entry.specifier;
+    }
+
+    if (!realtimeProhibited(name) && !realtimeProhibited(entry.specifier)) continue;
 
     violations.push({
       rule: 'realtime-database-access',
@@ -770,15 +1048,18 @@ function checkRealtimeFile(node, graph, adjacency, violations) {
       specifier: entry.specifier,
       line: entry.line,
       message:
-        `'apps/realtime' never accesses the database. It calls ` +
-        `context-owned services hosted in '@minhaj/server-core' ` +
-        `(ARCHITECTURE.md §3.1 rule 1).`,
+        `'apps/realtime' never acquires raw database capability — not ` +
+        `'${name}', by package name or by relative path. It calls ` +
+        `context-owned services hosted in '@minhaj/server-core', which ` +
+        `persist internally through their own context's port ` +
+        `(ARCHITECTURE.md §3.1 rule 1, §3.1.2).`,
     });
   }
 
   // ---- Reached through ANY chain of local modules (B5) -------------------
   const reach = reachFrom(node.absolute, graph, adjacency, {
     ownWorkspace: node.workspace?.name ?? null,
+    isEncapsulated: capability.isBoundary,
   });
 
   for (const reached of reach.workspaces.values()) {
@@ -813,6 +1094,31 @@ function checkRealtimeFile(node, graph, adjacency, violations) {
         `\n    path: ${formatTrail(reached.trail, graph)}\n       -> ${reached.specifier}`,
     });
   }
+
+  // ---- Capability, by any name ------------------------------------------
+  //
+  // `realtimeProhibitedPackages` names `@minhaj/database`, `@prisma/client` and
+  // `prisma`. It does NOT name `mssql` or `tedious`, so the driver beneath
+  // Prisma — the same capability one layer down, and exactly the substitution
+  // §3.1.2 anticipates by listing "an MSSQL driver" separately — went
+  // unreported. The capability walk closes that, and closes it transitively.
+  //
+  // What it deliberately does NOT close is the architected route. The walk
+  // stops at an approved encapsulation boundary, so
+  //
+  //     apps/realtime -> server-core-hosted context service
+  //                   -> the same context service -> its adapter -> Prisma
+  //
+  // reports nothing: the realtime process caused persistence without ever
+  // holding the means to perform it (§3.1.1, §3.2). Rejecting that would ban
+  // the design the shared server boundary exists to provide.
+  reportRawCapability(node, graph, adjacency, capability, violations, {
+    rule: 'realtime-raw-database-capability',
+    subject: "'apps/realtime'",
+    remedy:
+      'Call an approved context-owned service hosted in @minhaj/server-core ' +
+      '(ARCHITECTURE.md §3.1 rule 1, §3.3).',
+  });
 }
 
 /**
@@ -872,10 +1178,292 @@ function checkContextWorkspaceUsage(node, context, graph, violations) {
   }
 }
 
+/**
+ * A CONTEXT-OWNED PERSISTENCE ADAPTER, physically inside `packages/database`.
+ *
+ * ARCHITECTURE.md §6.3 rule 14: "A persistence adapter's physical location
+ * never determines its owner. An adapter inside `packages/database` is still
+ * owned by its bounded context, and only that context may change its rules."
+ *
+ * This is the one place the analyser must NOT apply the Layer 0 rules. An
+ * adapter implements its owning context's persistence port, so it depends on
+ * that context — and `layer-zero-upward-dependency`, applied here, would report
+ * the architecture itself as an inversion. The declared ownership is what makes
+ * the difference expressible: the adapter is not a Layer 0 module reaching
+ * upward, it is part of a context that happens to be implemented here.
+ *
+ * What ownership grants is narrow and nothing more:
+ *
+ *   - the OWNER context's PUBLIC interface, and only the public one
+ *   - private Prisma/MSSQL capability, which is the adapter's whole job (§4.1)
+ *
+ * What it does not grant, in the words of §4.1: "Cross-context model/table use
+ * is prohibited, and one context may never use another context's persistence
+ * adapter as a shortcut — it calls that context's public interface."
+ *
+ * And an adapter's PUBLIC ENTRY must expose narrow persistence operations,
+ * never raw Prisma. That is verified rather than assumed, in `surface.mjs`,
+ * because otherwise "declare a directory an adapter" would be a way to switch
+ * the capability walk off — the laundering §6.3 rule 13 explicitly names.
+ */
+function checkPersistenceAdapterFile(
+  node,
+  adapter,
+  graph,
+  adjacency,
+  capability,
+  violations,
+) {
+  const reach = reachFrom(node.absolute, graph, adjacency, {
+    ownWorkspace: workspaceOfNode(node),
+    isEncapsulated: capability.isBoundary,
+  });
+
+  // ---- Contexts: the owner's public interface, and nothing else ----------
+  const reportedCross = new Set();
+  const reportedInternal = new Set();
+
+  for (const reached of reach.contexts) {
+    if (reached.slug !== adapter.owner) {
+      if (reportedCross.has(reached.slug)) continue;
+      reportedCross.add(reached.slug);
+
+      violations.push({
+        rule: 'persistence-adapter-cross-context-dependency',
+        file: node.relative,
+        specifier: reached.target,
+        message:
+          `This persistence adapter is semantically owned by ` +
+          `'${adapter.owner}' (declared in ` +
+          `'${adapter.workspaceName}'), so it must not depend on ` +
+          `'${reached.slug}'. Physical placement inside a platform package ` +
+          `transfers no ownership and grants no cross-context access ` +
+          `(ARCHITECTURE.md §4.1, §6.3 rule 14; DOMAIN_MODEL.md §3.1). An ` +
+          `adapter serves one context's port; a second context is reached ` +
+          `through its own public interface, by the service that needs it.` +
+          `\n    path: ${formatTrail(reached.trail, graph)}`,
+      });
+      continue;
+    }
+
+    if (isPublicEntry(reached.withinContext)) continue;
+
+    const key = reached.withinContext;
+    if (reportedInternal.has(key)) continue;
+    reportedInternal.add(key);
+
+    violations.push({
+      rule: 'persistence-adapter-context-internal-import',
+      file: node.relative,
+      specifier: reached.target,
+      message:
+        `This adapter is owned by '${adapter.owner}' and may depend on it — ` +
+        `but through its public interface. Reaching ` +
+        `'${reached.withinContext}' inside '${adapter.owner}' is prohibited ` +
+        `(ARCHITECTURE.md §6.3 rule 4). The adapter implements the context's ` +
+        `PORT; it does not reach into the context's internals.` +
+        (reached.direct ? '' : `\n    path: ${formatTrail(reached.trail, graph)}`),
+    });
+  }
+
+  // ---- Another context's adapter is never a shortcut --------------------
+  //
+  // The case declared ownership uniquely makes visible. Two adapters sitting
+  // side by side in the same platform package are two DIFFERENT contexts'
+  // persistence, and one reading the other is cross-context table access with
+  // the boundary removed — reachable without ever naming a context, so no
+  // context rule would see it.
+  const reportedAdapters = new Set();
+  const visited = new Set([node.absolute]);
+  const queue = [{ file: node.absolute, trail: [node.absolute] }];
+
+  while (queue.length > 0) {
+    const { file, trail } = queue.shift();
+
+    for (const { to } of adjacency.get(file) ?? []) {
+      const target = graph.nodes.get(to);
+      if (target === undefined) continue;
+
+      const nextTrail = [...trail, to];
+      const other = capability.adapterIndex.adapterFor(target.relative);
+
+      if (other !== null) {
+        if (other.directoryRelative === adapter.directoryRelative) continue;
+        if (reportedAdapters.has(other.directoryRelative)) continue;
+        reportedAdapters.add(other.directoryRelative);
+
+        violations.push({
+          rule: 'persistence-adapter-cross-adapter-dependency',
+          file: node.relative,
+          specifier: target.relative,
+          message:
+            `A persistence adapter owned by '${adapter.owner}' must not reach ` +
+            `the adapter owned by '${other.owner}'. "One context may never use ` +
+            `another context's persistence adapter as a shortcut — it calls ` +
+            `that context's public interface" (ARCHITECTURE.md §4.1). Sharing ` +
+            `a platform package is a physical fact and grants nothing.` +
+            `\n    path: ${formatTrail(nextTrail, graph)}`,
+        });
+        continue;
+      }
+
+      // A context boundary is handled above; do not attribute a context's own
+      // dependencies to the adapter that called it.
+      if (locateContext(target.relative) !== null) continue;
+
+      if (visited.has(to)) continue;
+      visited.add(to);
+      queue.push({ file: to, trail: nextTrail });
+    }
+  }
+
+  // ---- The adapter's PUBLIC SURFACE must be narrow ----------------------
+  if (capability.adapterIndex.isAdapterEntry(node.relative) !== null) {
+    for (const finding of verifyEncapsulationSurface(node.absolute, graph)) {
+      violations.push({
+        rule:
+          finding.kind === 'raw'
+            ? 'persistence-adapter-exposes-raw-capability'
+            : 'persistence-adapter-unverifiable-surface',
+        file: node.relative,
+        specifier: `${finding.module}#${finding.exportName}`,
+        message:
+          (finding.kind === 'raw'
+            ? `This adapter's public entry exposes raw database capability: ` +
+              `${finding.detail}. An adapter exposes "narrow persistence ` +
+              `operations, never raw Prisma" (ARCHITECTURE.md §4.1), and a ` +
+              `wrapper that renames a client, delegate, transaction handle or ` +
+              `raw-query facility violates §6.3 rule 13 rather than satisfying ` +
+              `it. Being declared an adapter is not what makes a boundary — ` +
+              `having a surface that can be shown to be narrow is.`
+            : `This adapter's public entry cannot be shown to be narrow: ` +
+              `${finding.detail}. An encapsulation boundary states its contract ` +
+              `explicitly, because the capability walk stops here and an ` +
+              `inferred type is invisible to it. Annotate the export with the ` +
+              `context-owned port it implements (ARCHITECTURE.md §4.1).`) +
+          `\n    surface: ${finding.module}`,
+      });
+    }
+  }
+}
+
+/**
+ * No workspace's PUBLIC API hands out raw database capability.
+ *
+ * ARCHITECTURE.md §4.1: "Raw Prisma client, delegate, transaction handle and
+ * raw-query capability are never part of an ordinary application package's
+ * public API", and §3.1.2 adds "neutral or shared packages exposing
+ * unrestricted database capability" to the prohibition list.
+ *
+ * Checked against the package's OWN public entry points — the targets its
+ * `exports` map actually resolves to — rather than only where a consumer is
+ * caught holding the result. A package that publishes `getDatabaseClient` has
+ * already broken the boundary whether or not anything imports it yet, and the
+ * finding belongs where it was introduced. `packages/database` is not exempt:
+ * it is where raw capability is CONSTRUCTED and confined (§4.1), which is
+ * precisely why its front door must not hand it out.
+ */
+function checkPublicSurfaces(graph, adjacency, capability, violations) {
+  for (const workspace of graph.workspaces ?? []) {
+    const directory = path
+      .relative(repoRoot, workspace.directory)
+      .split(path.sep)
+      .join('/');
+
+    for (const entry of publicEntryTargets(workspace)) {
+      const relative = `${directory}/${entry.replace(/^\.\//, '')}`;
+      const absolute = path.resolve(repoRoot, relative);
+
+      const node =
+        graph.nodes.get(absolute) ??
+        [...graph.nodes.values()].find((candidate) => candidate.relative === relative);
+
+      if (node === undefined) continue;
+
+      for (const found of reachRawCapability(
+        node.absolute,
+        graph,
+        adjacency,
+        capability.isBoundary,
+      )) {
+        violations.push({
+          rule: 'public-surface-raw-database-capability',
+          file: node.relative,
+          specifier: found.specifier,
+          message:
+            `'${workspace.name}' publishes this file as a public entry point, ` +
+            `and it ${found.direct ? 'imports' : 'reaches'} ` +
+            `'${found.packageName}' — ${found.reason}. Raw Prisma client, ` +
+            `delegate, transaction handle and raw-query capability are never ` +
+            `part of a package's public API (ARCHITECTURE.md §4.1, §3.1.2). ` +
+            `Keep the capability private to the package and publish a narrow ` +
+            `context-owned persistence adapter instead.` +
+            `\n    path: ${formatTrail(found.trail, graph)}\n       -> ${found.specifier}`,
+        });
+      }
+    }
+  }
+}
+
+/**
+ * Every file a workspace's `exports` map publishes, as workspace-relative paths.
+ *
+ * Read from the manifest rather than assumed, so a conditional export, a
+ * subpath and a nested condition object are all covered — the `exports` map is
+ * the package's actual public interface, and any branch of it is a front door.
+ * A workspace declaring no `exports` falls back to the repository's `src/index`
+ * convention, which is what a bare `import '<package>'` would resolve to.
+ */
+function publicEntryTargets(workspace) {
+  const declared = workspace.manifest?.exports;
+  const targets = new Set();
+
+  const collect = (value) => {
+    if (typeof value === 'string') {
+      if (value.startsWith('./')) targets.add(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) collect(item);
+      return;
+    }
+    if (value !== null && typeof value === 'object') {
+      for (const item of Object.values(value)) collect(item);
+    }
+  };
+
+  collect(declared);
+
+  if (targets.size === 0) {
+    for (const fallback of ['./src/index.ts', './src/index.tsx', './src/index.d.ts']) {
+      targets.add(fallback);
+    }
+  }
+
+  return [...targets];
+}
+
+/**
+ * The capability model for one graph: what encapsulates, and what holds.
+ *
+ * Built once per run and threaded through the rules, so every rule agrees about
+ * which modules are approved encapsulation boundaries and which hold raw
+ * capability. Two independent answers to that question would be two
+ * architectures.
+ */
+function capabilityModelFor(graph) {
+  const adapterIndex = persistenceAdapterIndex(graph);
+
+  const isBoundary = (node) => adapterIndex.isAdapterEntry(node.relative) !== null;
+
+  return { adapterIndex, isBoundary };
+}
+
 /** Applies every rule to the graph. */
 export function checkGraph(graph) {
   const violations = [];
   const adjacency = fileAdjacency(graph);
+  const capability = capabilityModelFor(graph);
 
   // Workspaces that DECLARE a TypeScript project. A workspace with none is a
   // different finding from a file its project fails to include, and the two
@@ -953,6 +1541,28 @@ export function checkGraph(graph) {
       file: path.relative(repoRoot, problem.directory).split(path.sep).join('/'),
       specifier: '(package.json)',
       message: problem.message,
+    });
+  }
+
+  // ---- A persistence-adapter declaration that cannot be understood ------
+  //
+  // The declaration is the ONLY thing that establishes adapter ownership
+  // (ARCHITECTURE.md §4.1). One that cannot be read is not "no adapters" — it
+  // is an unknown number of unowned ones, so it is reported rather than
+  // treated as absent.
+  for (const root of capability.adapterIndex.roots) {
+    if (root.malformed === null || root.malformed === undefined) continue;
+
+    violations.push({
+      rule: 'malformed-persistence-adapter-declaration',
+      file: `${root.workspaceRelative}/package.json`,
+      specifier: '(minhaj.persistenceAdapters)',
+      message:
+        `Workspace '${root.workspaceName}' declares ` +
+        `'minhaj.persistenceAdapters' but it ${root.malformed}. Adapter ` +
+        `ownership is explicit or it does not exist (ARCHITECTURE.md §4.1, ` +
+        `§6.3 rule 14), and a declaration that cannot be parsed must not be ` +
+        `read as "this workspace hosts no adapters".`,
     });
   }
 
@@ -1203,6 +1813,67 @@ export function checkGraph(graph) {
     const context = locateContext(node.relative);
 
     if (context === null) {
+      // ---- A context-owned persistence adapter (§4.1, §6.3 rule 14) -----
+      //
+      // Checked BEFORE the architectural role, because an adapter is precisely
+      // the file whose role its LOCATION does not describe: it sits inside a
+      // Layer 0 platform package and is semantically owned by a bounded
+      // context. Applying the Layer 0 rules here would report the approved
+      // architecture as an inversion.
+      //
+      // Fails closed in the other direction too: source beneath a declared
+      // adapter root that no `owners` entry claims is an adapter nobody owns,
+      // and an unowned adapter is exactly what the declaration exists to
+      // prevent.
+      const adapter = capability.adapterIndex.adapterFor(node.relative);
+      const adapterRoot = capability.adapterIndex.rootFor(node.relative);
+
+      if (adapter === null && adapterRoot !== null) {
+        violations.push({
+          rule: 'undeclared-persistence-adapter',
+          file: node.relative,
+          specifier: '(adapter ownership)',
+          message:
+            `This file sits under the declared persistence-adapter root ` +
+            `'${adapterRoot.rootRelative}', but no adapter declared by ` +
+            `'${adapterRoot.workspaceName}' owns it. "Each persistence adapter ` +
+            `has one explicit semantic owning context" (ARCHITECTURE.md §4.1), ` +
+            `and ownership is DECLARED — a directory name grants nothing. Add ` +
+            `the adapter to 'minhaj.persistenceAdapters.owners' in that ` +
+            `workspace's package.json, naming the one bounded context that ` +
+            `owns it, or move the file out of the adapter root. An adapter ` +
+            `nobody owns is data access with no boundary attached.`,
+        });
+        continue;
+      }
+
+      if (adapter !== null) {
+        if (!adapter.ownerKnown) {
+          violations.push({
+            rule: 'persistence-adapter-unknown-owner',
+            file: node.relative,
+            specifier: '(adapter ownership)',
+            message:
+              `The adapter '${adapter.name}' declares '${adapter.owner}' as its ` +
+              `owning context, which is not one of the 16 bounded contexts ` +
+              `(DOMAIN_MODEL.md §1). A context is created by architecture ` +
+              `decision; naming one in a manifest does not create it, and an ` +
+              `adapter whose owner cannot be identified is unowned.`,
+          });
+          continue;
+        }
+
+        checkPersistenceAdapterFile(
+          node,
+          adapter,
+          graph,
+          adjacency,
+          capability,
+          violations,
+        );
+        continue;
+      }
+
       // NOT a bounded-context implementation file. What it may do depends on
       // its ARCHITECTURAL ROLE, which is declared — never inferred from the
       // absence of a `contexts/` segment (B3).
@@ -1212,12 +1883,12 @@ export function checkGraph(graph) {
         case ARCHITECTURAL_ROLES.COMPOSITION:
           // Layer 4. May compose many contexts' public interfaces
           // (DOMAIN_MODEL.md §3.3).
-          checkCompositionFile(node, graph, adjacency, violations);
+          checkCompositionFile(node, graph, adjacency, capability, violations);
           break;
 
         case ARCHITECTURAL_ROLES.PLATFORM:
           // Layer 0. Sits beneath every context and must not reach upward.
-          checkLayerZeroFile(node, graph, adjacency, violations);
+          checkLayerZeroFile(node, graph, adjacency, capability, violations);
           break;
 
         case ARCHITECTURAL_ROLES.SERVICE_HOST:
@@ -1227,7 +1898,7 @@ export function checkGraph(graph) {
           // and must not become an infrastructure tunnel either. The client
           // -bundle prohibition (§6.3 rule 9) is proven by the real Next build
           // in `npm run check:server-only`.
-          checkServiceHostFile(node, graph, adjacency, violations);
+          checkServiceHostFile(node, graph, adjacency, capability, violations);
           break;
 
         case ARCHITECTURAL_ROLES.TOOLING:
@@ -1236,7 +1907,7 @@ export function checkGraph(graph) {
           break;
 
         case ARCHITECTURAL_ROLES.REALTIME:
-          checkRealtimeFile(node, graph, adjacency, violations);
+          checkRealtimeFile(node, graph, adjacency, capability, violations);
           break;
 
         default: {
@@ -1298,7 +1969,7 @@ export function checkGraph(graph) {
       continue;
     }
 
-    checkContextFile(node, context, graph, adjacency, violations);
+    checkContextFile(node, context, graph, adjacency, capability, violations);
     checkContextWorkspaceUsage(node, context, graph, violations);
   }
 
@@ -1330,6 +2001,9 @@ export function checkGraph(graph) {
         cycle.join('\n       -> '),
     });
   }
+
+  // ---- No package's public API hands out raw database capability --------
+  checkPublicSurfaces(graph, adjacency, capability, violations);
 
   // ---- Client bundle must not reach server-only source ------------------
   violations.push(...checkClientGraph(graph));

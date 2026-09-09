@@ -79,6 +79,33 @@ because their directory names look generated, and the name-based patterns in
 both ignore files would otherwise delete them from the repository and from the
 Docker build context — the same class of mistake the fixture exists to catch.
 
+## Pre-Phase-2 baseline hardening fixtures
+
+These five trees prove the corrections to the accepted architecture contract:
+Model A persistence (encapsulated service invocation versus raw database
+capability), order-independent context boundary enforcement, and the legal
+import and Server Action semantics the previous rules rejected.
+
+Two of them are POSITIVE trees. `model-a/` must produce **zero** violations, and
+so must the named control files inside the negative trees. That half matters as
+much as the rejections: a gate that also rejects the approved architecture is
+not a strict gate, it is a different architecture, and every fix here began as
+one of those.
+
+| Directory         | Proves                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model-a/`        | **F1 positive.** The whole approved path: a context owning its persistence port, a service that persists through it, a context-owned adapter physically inside the database package and semantically owned by the context, Layer 4 wiring the two, a `server-core` host exporting the context's service, and a realtime process calling that service. Must report NOTHING.                                                                                                                                                                                                                                 |
+| `raw-capability/` | **F1 negative.** Every way the service/capability distinction can be cheated: contexts reaching the database package, Prisma and the MSSQL driver; a neutral wrapper and a re-export barrel handing Layer 4 the raw client; realtime reaching an adapter by relative path, a wrapper package, and the driver; adapter entries that re-export, rename or re-type the client; cross-adapter and cross-context adapter reads; an undeclared adapter and an unknown owner; and public entry points that publish capability. Carries its own controls — `wires-adapter.ts` and `adapters/messaging/` must PASS. |
+| `boundary-order/` | **F2.** One context reaching another through BOTH its legal public entry and a forbidden internal file, in four arrangements: public first, private first, public through a barrel, private through a wrapper. All four must produce the same rejection, because a gate whose answer depends on statement order is not enforcing anything.                                                                                                                                                                                                                                                                 |
+| `context-entry/`  | **F3 context semantics.** Nested own-context relative imports and the explicit `/index` public entry must PASS; cross-context internals by relative path, by alias, and by private subpath must FAIL.                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `server-actions/` | **F3 Server Actions.** A Client Component calling a real, async-only `'use server'` module must PASS while its server-side implementation stays unbundled. Comments, string constants, misplaced/function-level directives, ordinary wrappers/barrels, non-function exports, synchronous exports and unverifiable re-exports must all still FAIL. Also carries a `'use server'` module that breaks a context rule, proving the directive exempts it from nothing else.                                                                                                                                     |
+
+`raw-capability/` and `boundary-order/` deliberately name their packages
+`@minhaj/database`, `@minhaj/contracts` and `@minhaj/server-core` where a rule
+keys on the production package name. Discovery is scoped to each fixture's own
+root manifest, so those names resolve to the fixture's packages and never to the
+real ones.
+
 ## How a fixture workspace declares its architectural role
 
 Round 5 removed the directory-tier default that silently made every unknown

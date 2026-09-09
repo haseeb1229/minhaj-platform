@@ -1,0 +1,8 @@
+{
+  "name": "model-a-fixture",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

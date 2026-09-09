@@ -23,7 +23,11 @@ import {
   workspacePackageMap,
   workspaceProblems,
 } from '../shared/workspaces.mjs';
-import { extractModuleSpecifiers, hasUseClientDirective } from './parser.mjs';
+import {
+  extractModuleSpecifiers,
+  isServerActionBoundary,
+  moduleDirectives,
+} from './parser.mjs';
 import {
   canonicalise,
   createWorkspaceRedirect,
@@ -467,6 +471,8 @@ export function buildGraph({ workspaces = discoverWorkspaces(), roots = null } =
 
     const isDeclaration = absolute.endsWith('.d.ts');
     const membershipKey = projectMembershipKey(absolute);
+    // Parsed once: both directives come from the same prologue.
+    const directives = moduleDirectives(absolute);
 
     nodes.set(absolute, {
       absolute,
@@ -475,7 +481,15 @@ export function buildGraph({ workspaces = discoverWorkspaces(), roots = null } =
       isTooling: isToolingWorkspace(owningWorkspace),
       extension: isDeclaration ? '.d.ts' : path.extname(absolute),
       isDeclaration,
-      isClientEntry: hasUseClientDirective(absolute),
+      isClientEntry: directives.has('use client'),
+      // A module carrying the module-level `'use server'` directive is a
+      // SERVER ACTION BOUNDARY. A Client Component importing one receives a
+      // callable reference; the implementation behind it — and everything that
+      // implementation imports — stays on the server and is not bundled for
+      // the browser. `client-graph.mjs` is the only consumer, and it stops its
+      // CLIENT-BUNDLE traversal here without exempting this module from any
+      // other rule.
+      isServerActionBoundary: isServerActionBoundary(absolute),
       // No TypeScript project compiles this file — neither as a declared input
       // nor anywhere in any project's Program closure. Its imports were
       // resolved without any project's `paths`/`baseUrl`, so the analyser

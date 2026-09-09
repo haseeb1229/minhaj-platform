@@ -1,0 +1,8 @@
+{
+  "name": "@fixture/boundary-order-app",
+  "private": true,
+  "type": "module",
+  "minhaj": {
+    "architecturalRole": "composition"
+  }
+}

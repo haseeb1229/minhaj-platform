@@ -1,0 +1,7 @@
+{
+  "name": "boundary-order-fixture",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ]
+}

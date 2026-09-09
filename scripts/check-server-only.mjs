@@ -19,7 +19,7 @@
  */
 
 import { execFile } from 'node:child_process';
-import { mkdir, rm, readFile, writeFile } from 'node:fs/promises';
+import { cp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -117,6 +117,11 @@ const VARIANTS = [
       'REVIEW #3 BYPASS — Client Component imports @minhaj/contracts/env/schema',
     expect: 'removed-subpath',
   },
+  {
+    route: 'invalid-server-action',
+    description: "Client imports a 'use server' module with a non-function export",
+    expect: 'invalid-server-action',
+  },
 ];
 
 /**
@@ -130,11 +135,7 @@ const VARIANTS_SOURCE = path.join(fixtureRoot, 'variants');
 /** Copies one variant into the app directory. */
 async function activate(route) {
   const to = path.join(appDirectory, route);
-  await mkdir(to, { recursive: true });
-  await writeFile(
-    path.join(to, 'page.tsx'),
-    await readFile(path.join(VARIANTS_SOURCE, route, 'page.tsx'), 'utf8'),
-  );
+  await cp(path.join(VARIANTS_SOURCE, route), to, { recursive: true });
 }
 
 async function deactivate(route) {
@@ -208,6 +209,13 @@ function failedForRemovedSubpath(output, specifier) {
   return unresolved && output.includes(specifier);
 }
 
+/** Did Next reject a trivially invalid module-level Server Action surface? */
+function failedForInvalidServerAction(output) {
+  return /only async functions.*use server|use server.*only.*async functions|invalid-use-server-value/i.test(
+    output,
+  );
+}
+
 /** The specifier each `removed-subpath` variant must fail to resolve. */
 const REMOVED_SUBPATHS = Object.freeze({
   'database-subpath': '@minhaj/database/config',
@@ -218,14 +226,27 @@ export async function proveServerOnlyBoundary({ log = console.log } = {}) {
   const results = [];
   await clearAllVariants();
 
-  // ---- Control: a Server Component may use server-core ------------------
+  // ---- Control: legitimate server usage still builds ---------------------
+  //
+  // Three routes, all of which MUST compile:
+  //   - a Server Component using `@minhaj/server-core` and `@minhaj/database`
+  //   - a Client Component using the BROWSER-SAFE contracts root
+  //   - a Client Component calling a real module-level Server Action whose
+  //     implementation reaches server-only code (ARCHITECTURE.md §7)
+  //
+  // The third is the half of the Server Action rule no Vitest assertion can
+  // establish. The architecture analyser stops its client-bundle walk at a
+  // `'use server'` boundary on the grounds that Next keeps the implementation
+  // on the server; this build is what proves Next actually does, rather than
+  // leaving the analyser to model a framework that does not exist.
   log(
-    '\n[control] Server Component using @minhaj/server-core, plus a Client ' +
-      'Component using the BROWSER-SAFE contracts root — expect BUILD OK',
+    '\n[control] Server Component using @minhaj/server-core, a Client ' +
+      'Component using the BROWSER-SAFE contracts root, and a Client ' +
+      'Component calling a real Server Action — expect BUILD OK',
   );
   const control = await buildFixture();
   results.push({
-    name: 'control (Server Component + browser-safe contracts client)',
+    name: 'control (server component + browser-safe client + Server Action)',
     expected: 'build succeeds',
     passed: control.ok,
     output: control.output,
@@ -242,19 +263,24 @@ export async function proveServerOnlyBoundary({ log = console.log } = {}) {
     await deactivate(route);
 
     const removedSubpath = expect === 'removed-subpath';
+    const invalidServerAction = expect === 'invalid-server-action';
     const specifier = REMOVED_SUBPATHS[route] ?? '';
 
     const passed =
       !result.ok &&
-      (removedSubpath
-        ? failedForRemovedSubpath(result.output, specifier)
-        : failedForServerOnlyReason(result.output));
+      (invalidServerAction
+        ? failedForInvalidServerAction(result.output)
+        : removedSubpath
+          ? failedForRemovedSubpath(result.output, specifier)
+          : failedForServerOnlyReason(result.output));
 
     results.push({
       name: route,
-      expected: removedSubpath
-        ? `build fails because '${specifier}' no longer exists`
-        : 'build fails with a server/client boundary error',
+      expected: invalidServerAction
+        ? "build fails because a 'use server' file exports a non-async value"
+        : removedSubpath
+          ? `build fails because '${specifier}' no longer exists`
+          : 'build fails with a server/client boundary error',
       passed,
       output: result.output,
     });

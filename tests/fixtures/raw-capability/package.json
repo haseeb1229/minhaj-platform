@@ -1,0 +1,8 @@
+{
+  "name": "raw-capability-fixture",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

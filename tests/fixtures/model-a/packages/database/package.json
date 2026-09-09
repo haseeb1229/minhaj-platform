@@ -1,0 +1,18 @@
+{
+  "name": "@fixture/model-a-database",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "minhaj": {
+    "architecturalRole": "platform",
+    "persistenceAdapters": {
+      "root": "src/adapters",
+      "owners": {
+        "messaging": "messaging"
+      }
+    }
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

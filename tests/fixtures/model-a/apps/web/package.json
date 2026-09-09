@@ -1,0 +1,12 @@
+{
+  "name": "@fixture/model-a-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "minhaj": {
+    "architecturalRole": "composition"
+  },
+  "exports": {
+    "./contexts/messaging": "./src/contexts/messaging/index.ts"
+  }
+}

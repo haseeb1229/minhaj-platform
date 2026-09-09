@@ -12,6 +12,12 @@
       "default": "./src/index.ts"
     }
   },
+  "minhaj": {
+    "persistenceAdapters": {
+      "root": "src/adapters",
+      "owners": {}
+    }
+  },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

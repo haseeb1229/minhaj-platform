@@ -79,6 +79,8 @@ describe('S1/S2 — every bypass variant has a real build fixture', () => {
         'contracts-env-schema',
         'contracts-env-subpath',
         'contracts-env-wrapper',
+        // invalid Server Action marker
+        'invalid-server-action',
       ].sort(),
     );
   });

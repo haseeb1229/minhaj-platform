@@ -132,6 +132,37 @@ export function checkClientGraph(graph) {
         const nextTrail = [...trail, edge.to];
         const reason = serverOnlyReason(edge.relative);
 
+        // ---- A genuine Server Action boundary (§7 of the hardening gate) ---
+        //
+        // A module carrying the module-level `'use server'` directive is NOT
+        // ordinary client-bundle reachability. Next.js replaces the import
+        // with a callable REFERENCE: the action's implementation, and
+        // everything that implementation imports — a context service, a
+        // `server-core`-hosted service, a persistence adapter — stays on the
+        // server and never enters the browser bundle. ARCHITECTURE.md §7 makes
+        // Server Actions the sanctioned mutation path from the platform's own
+        // UI, so treating one as a client leak would report the architecture
+        // itself as a violation.
+        //
+        // Three things keep this from becoming a laundering marker:
+        //
+        //   1. The directive is read from the REAL module prologue
+        //      (`parser.mjs`), so a commented-out directive, a directive in a
+        //      string, one placed after another statement, and a function-level
+        //      one all leave the module ordinary — and an ordinary module that
+        //      reaches server-only code still fails, exactly as before.
+        //   2. The boundary module is still classified itself. If the module
+        //      carrying the directive IS server-only source, that is reported
+        //      before the traversal stops, because a directive cannot relocate
+        //      a file out of `packages/server-core`.
+        //   3. Stopping the CLIENT-BUNDLE walk exempts the action from nothing
+        //      else. Every context, layering, capability and server-side rule
+        //      in `rules.mjs` still applies to it — this decides only what is
+        //      bundled for the browser (§7.2).
+        const target = graph.nodes.get(edge.to);
+
+        if (reason === null && target?.isServerActionBoundary === true) continue;
+
         if (reason !== null) {
           if (reported.has(edge.relative)) continue;
           reported.add(edge.relative);

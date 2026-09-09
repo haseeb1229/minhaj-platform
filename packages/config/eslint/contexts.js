@@ -177,6 +177,138 @@ export const realtimeProhibitedPackages = Object.freeze([
 ]);
 
 /**
+ * RAW DATABASE CAPABILITY — the concrete things that ARE the capability.
+ *
+ * ARCHITECTURE.md §3.1.1 states the distinction the whole persistence model
+ * rests on:
+ *
+ *   "Access to an encapsulated service that internally persists is not
+ *    possession of a raw database capability."
+ *
+ * A caller that invokes a context's public service may CAUSE persistence. It
+ * does not thereby HOLD database access, "because it never receives a client, a
+ * delegate, a transaction handle or a raw-query facility". This list names the
+ * packages that hand out exactly those things, and §3.1.2 enumerates the
+ * prohibition: no wrapper, re-export or intermediate package makes possession
+ * of one of them permitted.
+ *
+ * This is deliberately NOT the same list as `prohibitedInContextPackages`.
+ * That list is about which WORKSPACES a bounded context may name.  This one is
+ * about a CAPABILITY that travels: it is followed transitively through every
+ * neutral module, and it stops only at an approved encapsulation boundary
+ * (§3.1.1) — a context-owned persistence adapter whose exported surface has
+ * been proven narrow.
+ *
+ * `@minhaj/database` is absent on purpose. The package is where raw capability
+ * is CONSTRUCTED and confined (§4.1); the capability itself is the Prisma and
+ * MSSQL surface below it, and it is that surface, not the package name, that
+ * must not escape.
+ */
+export const rawDatabaseCapabilityPackages = Object.freeze({
+  '@prisma/client':
+    'the Prisma client, its generated delegates and its transaction handles',
+  '@prisma/adapter-mssql': 'the Prisma driver adapter for Microsoft SQL Server',
+  prisma: 'the Prisma toolkit',
+  mssql: 'the MSSQL driver — connection pools, requests and transactions',
+  tedious: 'the TDS driver beneath the MSSQL client',
+});
+
+/**
+ * Does this package name hand out raw database capability? Returns the reason
+ * or `null`.
+ *
+ * Matched by package name and by scope, so `@prisma/anything` counts: the
+ * generated client is published under that scope and a new member of it is
+ * still Prisma.
+ */
+export function rawDatabaseCapabilityReason(name) {
+  const exact = rawDatabaseCapabilityPackages[name];
+  if (exact !== undefined) return exact;
+
+  if (name === '@prisma' || name.startsWith('@prisma/')) {
+    return 'the Prisma client, its generated delegates and its transaction handles';
+  }
+
+  for (const [prohibited, reason] of Object.entries(rawDatabaseCapabilityPackages)) {
+    if (name.startsWith(`${prohibited}/`)) return reason;
+  }
+
+  return null;
+}
+
+/**
+ * CONTEXT-OWNED PERSISTENCE ADAPTERS, declared by the workspace that hosts them.
+ *
+ * ARCHITECTURE.md §4.1 and §6.3 rule 14:
+ *
+ *   "Context-owned persistence adapters may physically reside inside
+ *    `packages/database`. Each persistence adapter has one explicit semantic
+ *    owning context. Physical placement transfers no business ownership to
+ *    `packages/database`."
+ *
+ * "Explicit" is the operative word, and it is why ownership is DECLARED rather
+ * than inferred. A directory name is chosen by whoever writes the code and
+ * carries no authority (this repository has removed inference-by-spelling twice
+ * already — Review #4's `next-env.d.ts` basename and Review #6's `dist`
+ * directories). So the hosting workspace states, in its own manifest, both
+ * where adapters live and which single bounded context owns each one:
+ *
+ *     "minhaj": {
+ *       "persistenceAdapters": {
+ *         "root": "src/adapters",
+ *         "owners": { "messaging": "messaging" }
+ *       }
+ *     }
+ *
+ * `root` is where adapters are permitted to live, relative to the workspace.
+ * `owners` maps a directory NAME beneath that root to the slug of the ONE
+ * bounded context that owns the adapter semantically.
+ *
+ * The declaration fails closed in both directions: source under `root` that no
+ * entry claims is an undeclared adapter and is rejected, and an owner slug that
+ * is not one of the sixteen bounded contexts is rejected. Declaring the root
+ * predeclares no schema and names no future table — it only makes the
+ * convention authoritative before the first adapter exists, so an adapter
+ * cannot arrive unowned.
+ *
+ * Returns `null` when the workspace declares nothing, `{ root, owners }`
+ * otherwise. A malformed declaration returns `{ root, owners, malformed }` so
+ * the caller reports it rather than treating it as absent.
+ */
+export function persistenceAdapterPolicy(manifest) {
+  const declared = manifest?.minhaj?.persistenceAdapters;
+  if (declared === undefined || declared === null) return null;
+
+  if (typeof declared !== 'object' || Array.isArray(declared)) {
+    return { root: null, owners: {}, malformed: 'must be an object' };
+  }
+
+  const { root, owners } = declared;
+
+  if (typeof root !== 'string' || root === '') {
+    return {
+      root: null,
+      owners: {},
+      malformed: "must declare a string 'root' naming where adapters live",
+    };
+  }
+
+  if (owners !== undefined && (typeof owners !== 'object' || Array.isArray(owners))) {
+    return {
+      root,
+      owners: {},
+      malformed: "'owners' must be an object mapping adapter directory to context slug",
+    };
+  }
+
+  return {
+    root: root.replaceAll('\\', '/').replace(/^\.\//, '').replace(/\/+$/, ''),
+    owners: Object.freeze({ ...(owners ?? {}) }),
+    malformed: null,
+  };
+}
+
+/**
  * ARCHITECTURAL ROLES — what a workspace IS, decided by the approved documents.
  *
  * Review #4 (B3) found the analyser inferring "not a bounded context" to mean
