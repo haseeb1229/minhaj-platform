@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -630,9 +630,28 @@ describe('F13.8 — the security overrides are proved from source too', () => {
 });
 
 describe('F13.9 — the transcribed policy matches TECH_STACK.md', () => {
-  const techStack = readFileSync(path.join(repoRoot, 'docs', 'TECH_STACK.md'), 'utf8');
+  // The Docker test stage builds from a context that deliberately excludes
+  // `docs/` — documentation is not a build input, and widening the image to
+  // satisfy a test would be the wrong repair. Reading the document at suite
+  // definition time therefore failed COLLECTION there, taking the whole file
+  // down with it, including the checks below that never touch the document.
+  //
+  // Only the assertion that literally reads TECH_STACK.md is conditional. It is
+  // reported as SKIPPED where the document is absent — never as passing, which
+  // would turn a missing proof into a green one — and runs normally in every
+  // full checkout, which is where the transcription can actually drift.
+  const techStackPath = path.join(repoRoot, 'docs', 'TECH_STACK.md');
+  const techStack = existsSync(techStackPath)
+    ? readFileSync(techStackPath, 'utf8')
+    : null;
 
-  it.each(lockedStack as readonly { name: string; expected: string; kind: string }[])(
+  const documented = lockedStack as readonly {
+    name: string;
+    expected: string;
+    kind: string;
+  }[];
+
+  it.skipIf(techStack === null).each(documented)(
     'finds $expected for $name in the frozen document',
     ({ expected }) => {
       expect(techStack).toContain(expected);
