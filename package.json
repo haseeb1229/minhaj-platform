@@ -35,11 +35,12 @@
     "check:rtl": "node scripts/check-rtl.mjs",
     "check:server-only": "node scripts/check-server-only.mjs",
     "check:versions": "node scripts/verify-versions.mjs",
+    "check:docker-context": "node scripts/check-docker-context.mjs",
     "test": "vitest run",
     "build": "npm run build --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "npm run check:versions && npm run format:check && npm run typecheck && npm run lint && npm run check:architecture && npm run check:rtl && npm run test && npm run check:server-only && npm run build"
+    "verify": "npm run check:versions && npm run check:docker-context && npm run format:check && npm run typecheck && npm run lint && npm run check:architecture && npm run check:rtl && npm run test && npm run check:server-only && npm run build"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

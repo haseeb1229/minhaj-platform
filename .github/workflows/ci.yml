@@ -6,19 +6,53 @@ name: CI
 #
 # No deployment, no cloud credentials, no environments, no release workflow.
 # Only the official checkout and setup-node actions are used.
+#
+# Every job below runs for each trigger. There is no path filter anywhere in
+# this file, deliberately: a filter that skipped CI for "documentation-only"
+# changes is one rename away from letting a source change through unvalidated,
+# and the whole suite is minutes rather than hours.
 
+# WHICH REFS ARE VALIDATED
+#
+# `main` and pull requests into it were the whole policy, and the consequence
+# was that governed work received no remote validation at all: pushing
+# `feature/pre-phase-2-baseline-hardening` triggered nothing, so the only ways
+# to obtain CI were to open a pull request for work that was not ready for one,
+# or to merge to `main` to find out whether merging to `main` was safe.
+#
+# Feature and phase branches are therefore validated on push. The namespace is
+# narrow ON PURPOSE: `feature/**` is the convention every branch in this
+# repository already follows, and a catch-all `'**'` would spend runner time on
+# scratch branches while proving nothing extra about the work that matters.
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'feature/**'
   pull_request:
     branches: [main]
 
-# Read-only. The workflow never writes to the repository.
+# Read-only, unchanged. The workflow never writes to the repository, reads no
+# repository secret, and uses no `pull_request_target` (SECURITY_BASELINE.md
+# §18.1). Validating more branches must not widen what CI is trusted to do.
 permissions:
   contents: read
 
+# One run per EVENT AND REF.
+#
+# A branch with an open pull request now matches both triggers, and the two
+# arrive under different refs — `refs/heads/<branch>` and `refs/pull/N/merge` —
+# and validate different contexts. The push checks the branch-head commit; the
+# pull request checks GitHub's synthetic merge ref against current `main`.
+# Cancelling either one with the other can discard the only merge-ref proof or
+# the only branch-push proof, so cross-event cancellation is not safe.
+#
+# `github.event_name` keeps push and pull-request validation independent.
+# `github.ref` keeps branch pushes separate and gives every pull request its own
+# `refs/pull/<number>/merge` group, including forks whose source branches happen
+# to share a name. A newer run for the same event/ref still cancels stale work.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -49,6 +83,15 @@ jobs:
 
       - name: Verify locked stack versions
         run: npm run check:versions
+
+      # No secret artifact may reach a Docker build context, at any depth, and
+      # no later `.dockerignore` negation may re-open one (SECURITY_BASELINE.md
+      # §18.1). Deliberately in THIS job rather than beside the image build: it
+      # reasons about the committed policy and needs no daemon, so it runs on
+      # every push and every pull request, which is where an unsafe edit is
+      # actually made.
+      - name: Verify the Docker build-context secret policy
+        run: npm run check:docker-context
 
       # The Prisma client is GENERATED output. It is not committed (it lives
       # under `node_modules/.prisma`, which `.gitignore` excludes), so on a

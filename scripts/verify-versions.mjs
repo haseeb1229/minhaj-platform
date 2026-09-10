@@ -1,15 +1,22 @@
 #!/usr/bin/env node
 /**
- * Locked-stack compatibility verification (TECH_STACK.md §16.3).
+ * Locked-stack verification (TECH_STACK.md §16.3).
  *
- * Reads the versions actually installed and compares them against the locked
- * stack. Exact pins must match exactly; `x` ranges must resolve to a stable
- * patch inside the range. A prerelease is a failure regardless of range —
- * canary, beta, RC, preview and experimental packages are excluded
- * (TECH_STACK.md §15, SECURITY_BASELINE.md §18.3).
+ * Proves the locked stack from COMMITTED REPOSITORY STATE — the root manifest,
+ * every workspace manifest and `package-lock.json` — because those three files
+ * are what a clean `npm ci` installs. The previous revision asked
+ * `require.resolve()` what was present instead, which made `node_modules` the
+ * authority: a workspace could declare an out-of-policy version and pass on
+ * hoisting alone, a manifest and the lockfile could disagree entirely and pass
+ * because neither was read, and a deferred package could arrive at any version
+ * in any phase with nothing to notice.
  *
- * On any discrepancy this exits non-zero. It does not substitute a version:
- * the policy is stop, investigate, report, and require an explicit architecture
+ * `node_modules` is still consulted, but only as a CONSISTENCY check — it can
+ * report that the working tree has drifted from the lockfile. It can no longer
+ * be the reason anything passes, so the whole check holds on a fresh runner.
+ *
+ * On any discrepancy this exits non-zero. It does not substitute a version: the
+ * policy is stop, investigate, report, and require an explicit architecture
  * decision (TECH_STACK.md §1.2).
  */
 
@@ -18,54 +25,83 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
+import {
+  deferredStack,
+  evaluateVersionPolicy,
+  lockedFamilies,
+  lockedStack,
+  requiredSecurityOverrides,
+} from './shared/version-policy.mjs';
+import { discoverWorkspaces, workspaceProblems } from './shared/workspaces.mjs';
+
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-/** The locked stack, transcribed from TECH_STACK.md §2. */
-const locked = [
-  { name: 'next', kind: 'exact', expected: '16.3.3' },
-  { name: 'react', kind: 'exact', expected: '19.2.8' },
-  { name: 'react-dom', kind: 'exact', expected: '19.2.8' },
-  { name: 'tailwindcss', kind: 'exact', expected: '4.3.3' },
-  { name: 'pino', kind: 'exact', expected: '10.3.1' },
-  { name: 'prisma', kind: 'exact', expected: '7.10.0' },
-  { name: '@prisma/client', kind: 'exact', expected: '7.10.0' },
-  { name: '@prisma/adapter-mssql', kind: 'exact', expected: '7.10.0' },
-  { name: 'typescript', kind: 'range', expected: '5.9' },
-  { name: 'zod', kind: 'range', expected: '4.5' },
-  { name: 'vitest', kind: 'range', expected: '4.1' },
-  { name: 'eslint', kind: 'range', expected: '10' },
-  { name: 'prettier', kind: 'range', expected: '3' },
-];
+/** Reads and parses JSON, or exits. Unreadable policy input is never a pass. */
+function readJsonOrFail(file, description) {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'));
+  } catch (error) {
+    console.error('\nLocked stack verification FAILED:\n');
+    console.error(`  - ${description} could not be read or parsed: ${error.message}`);
+    console.error(
+      '\nThe locked stack is proved from committed repository state. Missing or ' +
+        'malformed input is a failure, never a pass.',
+    );
+    process.exit(1);
+  }
+}
 
-// Temporary transitive security overrides; remove when the frozen Prisma line
-// resolves patched dependencies.
-const requiredSecurityOverrides = [
-  { name: 'deepmerge-ts', expected: '8.0.0' },
-  { name: 'mysql2', expected: '3.23.1' },
-];
+const rootManifest = readJsonOrFail(
+  path.join(repoRoot, 'package.json'),
+  'the root package.json',
+);
+const lock = readJsonOrFail(
+  path.join(repoRoot, 'package-lock.json'),
+  'package-lock.json',
+);
 
-/** The locked Node runtime. */
-const lockedNode = '24.20.0';
+// Workspace discovery reads the `workspaces` globs from the root manifest, so a
+// package added later enters validation the moment it exists.
+const discovered = discoverWorkspaces(repoRoot);
+const problems = workspaceProblems(discovered);
 
+if (problems.length > 0) {
+  console.error('\nLocked stack verification FAILED:\n');
+  for (const problem of problems) console.error(`  - ${problem.message ?? problem}`);
+  console.error('\nA workspace manifest that cannot be read fails closed.');
+  process.exit(1);
+}
+
+const workspaces = discovered.map((workspace) => ({
+  name: workspace.name,
+  directory: path.relative(repoRoot, workspace.directory).replaceAll('\\', '/'),
+  manifest: workspace.manifest,
+}));
+
+/**
+ * What `node_modules` actually holds, for the consistency check only.
+ *
+ * Deliberately best-effort: on a runner that has not installed yet, every
+ * lookup returns null and the policy is still fully proved from source.
+ */
 function installedVersion(name) {
   try {
-    const manifestPath = require.resolve(`${name}/package.json`, {
-      paths: [repoRoot],
-    });
-    return require(manifestPath).version;
+    return require(require.resolve(`${name}/package.json`, { paths: [repoRoot] }))
+      .version;
   } catch {
-    // Some packages expose their runtime entry but deliberately do not export
-    // package.json. Resolve that entry, then find the nearest owning manifest.
+    // Some packages expose their runtime entry but do not export package.json.
     try {
       let directory = path.dirname(require.resolve(name, { paths: [repoRoot] }));
 
       while (path.dirname(directory) !== directory) {
         const candidate = path.join(directory, 'package.json');
+
         if (existsSync(candidate)) {
           const manifest = JSON.parse(readFileSync(candidate, 'utf8'));
           if (manifest.name === name) return manifest.version ?? null;
         }
+
         directory = path.dirname(directory);
       }
     } catch {
@@ -76,102 +112,31 @@ function installedVersion(name) {
   }
 }
 
-function isPrerelease(version) {
-  return version.includes('-');
+const installed = {};
+
+for (const { name } of [...lockedStack, ...deferredStack, ...requiredSecurityOverrides]) {
+  installed[name] = installedVersion(name);
 }
 
-function withinRange(version, range) {
-  const versionParts = version.split('.');
-  const rangeParts = range.split('.');
-
-  return rangeParts.every((part, index) => versionParts[index] === part);
+for (const { prefix } of lockedFamilies) {
+  for (const manifest of [rootManifest, ...workspaces.map((w) => w.manifest)]) {
+    for (const field of ['dependencies', 'devDependencies', 'optionalDependencies']) {
+      for (const name of Object.keys(manifest?.[field] ?? {})) {
+        if (name.startsWith(prefix)) installed[name] = installedVersion(name);
+      }
+    }
+  }
 }
 
-const failures = [];
-const rows = [];
-const rootManifest = JSON.parse(
-  readFileSync(path.join(repoRoot, 'package.json'), 'utf8'),
-);
-
-for (const { name, kind, expected } of locked) {
-  const actual = installedVersion(name);
-
-  if (actual === null) {
-    failures.push(`${name}: not installed (locked ${expected})`);
-    rows.push({ package: name, locked: expected, resolved: '—', status: 'MISSING' });
-    continue;
-  }
-
-  let status = 'ok';
-
-  if (isPrerelease(actual)) {
-    failures.push(`${name}: ${actual} is a prerelease; prereleases are excluded`);
-    status = 'PRERELEASE';
-  } else if (kind === 'exact' && actual !== expected) {
-    failures.push(`${name}: resolved ${actual}, locked exactly ${expected}`);
-    status = 'MISMATCH';
-  } else if (kind === 'range' && !withinRange(actual, expected)) {
-    failures.push(`${name}: resolved ${actual}, outside locked range ${expected}.x`);
-    status = 'OUT OF RANGE';
-  }
-
-  rows.push({
-    package: name,
-    locked: kind === 'exact' ? expected : `${expected}.x`,
-    resolved: actual,
-    status,
-  });
-}
-
-for (const { name, expected } of requiredSecurityOverrides) {
-  const declared = rootManifest.overrides?.[name];
-  const actual = installedVersion(name);
-  let status = 'ok';
-
-  if (declared !== expected) {
-    failures.push(
-      `${name}: root override is ${declared ?? 'missing'}, expected exactly ${expected}`,
-    );
-    status = 'OVERRIDE MISMATCH';
-  }
-
-  if (actual !== expected) {
-    failures.push(
-      `${name}: resolved ${actual ?? 'not installed'}, security override requires exactly ${expected}`,
-    );
-    status = actual === null ? 'MISSING' : 'MISMATCH';
-  }
-
-  rows.push({
-    package: `${name} (security override)`,
-    locked: expected,
-    resolved: actual ?? '—',
-    status,
-  });
-}
-
-// The Node runtime. A mismatch is a HARD FAILURE everywhere — locally exactly
-// as in CI. Validating the locked stack on a different runtime proves nothing
-// about the runtime that actually ships, so this must never report success.
-const nodeActual = process.versions.node;
-const nodeMatches = nodeActual === lockedNode;
-
-rows.push({
-  package: 'node (runtime)',
-  locked: lockedNode,
-  resolved: nodeActual,
-  status: nodeMatches ? 'ok' : 'MISMATCH',
+const { failures, rows } = evaluateVersionPolicy({
+  rootManifest,
+  workspaces,
+  lock,
+  nodeVersion: process.versions.node,
+  installed,
 });
 
 console.table(rows);
-
-if (!nodeMatches) {
-  failures.push(
-    `node: running ${nodeActual}, locked ${lockedNode}. The locked runtime is ` +
-      `an architecture decision (TECH_STACK.md §3) — align the workstation ` +
-      `rather than validating against a different runtime.`,
-  );
-}
 
 if (failures.length > 0) {
   console.error('\nLocked stack verification FAILED:\n');
@@ -183,4 +148,7 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('\nLocked stack verified against TECH_STACK.md §2.');
+console.log(
+  '\nLocked stack verified against TECH_STACK.md §2, from the root manifest, ' +
+    `${workspaces.length} workspace manifests and package-lock.json.`,
+);

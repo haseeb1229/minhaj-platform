@@ -1,0 +1,660 @@
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
+import { describe, expect, it } from 'vitest';
+
+import { repoRoot } from '../architecture/architecture-harness.ts';
+// @ts-expect-error — the enforcement scripts are plain ESM, deliberately not
+// part of a TypeScript project. The test consumes them exactly as the gate does.
+import {
+  deferredStack,
+  evaluateVersionPolicy,
+  isDeferred,
+  lockedNode,
+  lockedStack,
+  policyFor,
+  specifierViolation,
+  versionSatisfies,
+} from '../../scripts/shared/version-policy.mjs';
+
+/**
+ * F13 — the version policy must be provable from COMMITTED SOURCE.
+ *
+ * The previous checker resolved packages out of `node_modules`, which is not
+ * repository state — it is whatever the last install left behind. Three holes
+ * followed, and all three are closed here:
+ *
+ *   - a workspace could declare an out-of-policy version and pass, because
+ *     hoisting meant the resolver found the ROOT copy;
+ *   - a manifest and the lockfile could disagree entirely and pass, because
+ *     neither file was read;
+ *   - the deferred packages — Better Auth, next-intl, Socket.IO, Playwright —
+ *     had no contract at all, so any version could arrive in any phase.
+ *
+ * Every case below is a SYNTHETIC manifest and lockfile passed to the engine.
+ * No real manifest is mutated to simulate a bad state, nothing is installed,
+ * and no test reaches the network.
+ */
+
+/* ---------------------------------------------------------------------------
+ * A minimal, compliant repository state, and helpers to bend one field of it.
+ * ------------------------------------------------------------------------ */
+
+interface Manifest {
+  name?: string;
+  engines?: Record<string, string>;
+  overrides?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+}
+
+function baseRootManifest(): Manifest {
+  return {
+    name: 'minhaj-platform',
+    engines: { node: lockedNode },
+    overrides: { 'deepmerge-ts': '8.0.0', mysql2: '3.23.1' },
+    devDependencies: {
+      eslint: '^10.9.1',
+      prettier: '^3.9.6',
+      typescript: '~5.9.3',
+      vitest: '~4.1.11',
+    },
+  };
+}
+
+function baseWorkspaces(): { name: string; directory: string; manifest: Manifest }[] {
+  return [
+    {
+      name: '@minhaj/web',
+      directory: 'apps/web',
+      manifest: {
+        dependencies: { next: '16.3.3', react: '19.2.8', 'react-dom': '19.2.8' },
+        devDependencies: { tailwindcss: '4.3.3' },
+      },
+    },
+    {
+      name: '@minhaj/database',
+      directory: 'packages/database',
+      manifest: {
+        dependencies: {
+          '@prisma/adapter-mssql': '7.10.0',
+          '@prisma/client': '7.10.0',
+          zod: '4.5.4',
+        },
+        devDependencies: { prisma: '7.10.0' },
+      },
+    },
+    {
+      name: '@minhaj/server-core',
+      directory: 'packages/server-core',
+      manifest: { dependencies: { pino: '10.3.1' } },
+    },
+  ];
+}
+
+function baseLock(): { packages: Record<string, { version?: string }> } {
+  return {
+    packages: {
+      '': {},
+      'node_modules/next': { version: '16.3.3' },
+      'node_modules/react': { version: '19.2.8' },
+      'node_modules/react-dom': { version: '19.2.8' },
+      'node_modules/tailwindcss': { version: '4.3.3' },
+      'node_modules/pino': { version: '10.3.1' },
+      'node_modules/prisma': { version: '7.10.0' },
+      'node_modules/@prisma/client': { version: '7.10.0' },
+      'node_modules/@prisma/adapter-mssql': { version: '7.10.0' },
+      'node_modules/typescript': { version: '5.9.3' },
+      'node_modules/zod': { version: '4.5.4' },
+      'node_modules/vitest': { version: '4.1.11' },
+      'node_modules/eslint': { version: '10.9.1' },
+      'node_modules/prettier': { version: '3.9.6' },
+      'node_modules/deepmerge-ts': { version: '8.0.0' },
+      'node_modules/mysql2': { version: '3.23.1' },
+    },
+  };
+}
+
+interface State {
+  rootManifest: Manifest;
+  workspaces: { name: string; directory: string; manifest: Manifest }[];
+  lock: { packages: Record<string, { version?: string }> };
+  nodeVersion?: string;
+  installed?: Record<string, string | null>;
+}
+
+function baseState(): State {
+  return {
+    rootManifest: baseRootManifest(),
+    workspaces: baseWorkspaces(),
+    lock: baseLock(),
+    nodeVersion: lockedNode,
+  };
+}
+
+/** The baseline, optionally bent in exactly one place, evaluated. */
+function failuresFor(mutate?: (state: State) => void): string[] {
+  const state = baseState();
+  mutate?.(state);
+  return evaluateVersionPolicy(state).failures as string[];
+}
+
+/** The `apps/web` manifest of a state, for the common mutation. */
+function web(state: State): Manifest {
+  return state.workspaces.find((workspace) => workspace.directory === 'apps/web')!
+    .manifest;
+}
+
+describe('F13.1 — the baseline passes', () => {
+  it('accepts a compliant synthetic repository', () => {
+    expect(failuresFor()).toEqual([]);
+  });
+
+  it('accepts the REAL repository through the committed gate', () => {
+    const result = spawnSync(
+      process.execPath,
+      [path.join(repoRoot, 'scripts', 'verify-versions.mjs')],
+      { cwd: repoRoot, encoding: 'utf8' },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('package-lock.json');
+  });
+
+  it('proves the policy WITHOUT node_modules as the source of truth', () => {
+    // The decisive property. The engine is given no `installed` map at all —
+    // the state a fresh runner is in before `npm ci` — and still both passes a
+    // compliant repository and catches a violation.
+    expect(failuresFor()).toEqual([]);
+
+    const caught = failuresFor((state) => {
+      web(state).dependencies!['next'] = '17.0.0';
+      state.lock.packages['node_modules/next'] = { version: '17.0.0' };
+    });
+
+    expect(caught.join('\n')).toMatch(/next/);
+  });
+});
+
+describe('F13.2 — frozen exact pins stay exact', () => {
+  it.each([
+    ['prisma', 'packages/database'],
+    ['@prisma/client', 'packages/database'],
+    ['@prisma/adapter-mssql', 'packages/database'],
+  ])('keeps %s frozen at 7.10.0', (name) => {
+    expect(policyFor(name)).toMatchObject({ kind: 'exact', expected: '7.10.0' });
+  });
+
+  it('rejects a range where an exact pin is required', () => {
+    const failures = failuresFor((state) => {
+      state.workspaces.find(
+        (w) => w.directory === 'packages/database',
+      )!.manifest.devDependencies!['prisma'] = '^7.10.0';
+    });
+
+    expect(failures.join('\n')).toMatch(/prisma.*locked exactly at 7\.10\.0/s);
+  });
+
+  it('rejects the wrong exact patch of a frozen package', () => {
+    const failures = failuresFor((state) => {
+      state.workspaces.find(
+        (w) => w.directory === 'packages/database',
+      )!.manifest.dependencies!['@prisma/client'] = '7.10.1';
+      state.lock.packages['node_modules/@prisma/client'] = { version: '7.10.1' };
+    });
+
+    expect(failures.join('\n')).toMatch(/@prisma\/client/);
+  });
+
+  it('rejects a wrong MAJOR', () => {
+    const failures = failuresFor((state) => {
+      web(state).dependencies!['next'] = '17.0.0';
+      state.lock.packages['node_modules/next'] = { version: '17.0.0' };
+    });
+
+    expect(failures.join('\n')).toMatch(/next/);
+  });
+
+  it('rejects a wrong MINOR where the contract fixes the minor', () => {
+    // `zod` is locked to the 4.5.x range: 4.6.0 is a different architectural
+    // choice, not a patch.
+    const failures = failuresFor((state) => {
+      state.workspaces.find(
+        (w) => w.directory === 'packages/database',
+      )!.manifest.dependencies!['zod'] = '4.6.0';
+      state.lock.packages['node_modules/zod'] = { version: '4.6.0' };
+    });
+
+    expect(failures.join('\n')).toMatch(/zod.*4\.5\.x/s);
+  });
+
+  it('rejects a caret that would float past the fixed minor', () => {
+    // `^5.9.3` LOOKS like 5.9. It permits 5.10, which is outside the range —
+    // the difference between naming a version and fixing one.
+    expect(
+      specifierViolation(
+        { name: 'typescript', kind: 'range', expected: '5.9' },
+        '^5.9.3',
+      ),
+    ).toMatch(/does not fix/);
+
+    expect(
+      specifierViolation(
+        { name: 'typescript', kind: 'range', expected: '5.9' },
+        '~5.9.3',
+      ),
+    ).toBeNull();
+  });
+
+  it('accepts a caret where the contract fixes only the major', () => {
+    expect(
+      specifierViolation({ name: 'eslint', kind: 'range', expected: '10' }, '^10.9.1'),
+    ).toBeNull();
+  });
+});
+
+describe('F13.3 — prereleases are rejected everywhere', () => {
+  it.each([
+    '7.11.0-alpha.1',
+    '8.0.0-beta.2',
+    '7.10.1-rc.1',
+    '8.0.0-next.3',
+    '7.10.1-canary.0',
+  ])('rejects the declared prerelease %s', (version) => {
+    expect(
+      specifierViolation({ name: 'prisma', kind: 'exact', expected: '7.10.0' }, version),
+    ).toMatch(/prerelease/);
+  });
+
+  it('rejects a prerelease even when semver ordering would place it in range', () => {
+    // `4.5.5-rc.1` sits inside the 4.5 line by ordering alone. §15 excludes it
+    // regardless: the rule is about stability, not arithmetic.
+    expect(versionSatisfies('4.5.5-rc.1', { kind: 'range', expected: '4.5' })).toBe(
+      false,
+    );
+  });
+
+  it('rejects a prerelease resolved by the LOCKFILE even when the manifest looks clean', () => {
+    const failures = failuresFor((state) => {
+      state.lock.packages['node_modules/zod'] = { version: '4.5.5-rc.1' };
+    });
+
+    expect(failures.join('\n')).toMatch(/prerelease/);
+  });
+});
+
+describe('F13.4 — every workspace is inspected', () => {
+  it('rejects a root/workspace conflict', () => {
+    const failures = failuresFor((state) => {
+      state.rootManifest.dependencies = { pino: '10.2.0' };
+      state.lock.packages['node_modules/pino'] = { version: '10.3.1' };
+    });
+
+    expect(failures.join('\n')).toMatch(/pino/);
+    expect(failures.join('\n')).toMatch(/conflicting declarations|locked exactly/);
+  });
+
+  it('rejects a workspace/workspace conflict', () => {
+    const failures = failuresFor((state) => {
+      state.workspaces.find(
+        (w) => w.directory === 'packages/server-core',
+      )!.manifest.dependencies!['zod'] = '4.5.2';
+    });
+
+    expect(failures.join('\n')).toMatch(/zod.*conflicting declarations/s);
+  });
+
+  /**
+   * The hoisting hole, reproduced exactly. `apps/web` declares its own Next,
+   * the lockfile gives it its own nested copy, and the ROOT `node_modules`
+   * still holds the compliant version — so the old resolver-based checker saw
+   * 16.3.3 and passed.
+   */
+  it('catches a workspace-local version that hoisting used to hide', () => {
+    const failures = failuresFor((state) => {
+      web(state).dependencies!['next'] = '16.2.0';
+      state.lock.packages['apps/web/node_modules/next'] = { version: '16.2.0' };
+    });
+
+    expect(failures.join('\n')).toMatch(/next/);
+    expect(failures.join('\n')).toMatch(/apps\/web/);
+  });
+
+  it('inspects devDependencies and optionalDependencies, not only dependencies', () => {
+    expect(
+      failuresFor((state) => {
+        web(state).devDependencies!['tailwindcss'] = '4.4.0';
+        state.lock.packages['node_modules/tailwindcss'] = { version: '4.4.0' };
+      }).join('\n'),
+    ).toMatch(/tailwindcss/);
+
+    expect(
+      failuresFor((state) => {
+        web(state).optionalDependencies = { pino: '9.0.0' };
+      }).join('\n'),
+    ).toMatch(/pino/);
+  });
+
+  it('rejects an npm alias that hides a policy-controlled package', () => {
+    const failures = failuresFor((state) => {
+      web(state).dependencies!['our-next'] = 'npm:next@17.0.0';
+    });
+
+    expect(failures.join('\n')).toMatch(/alias/);
+  });
+
+  it('rejects a floating specifier for a locked package', () => {
+    expect(
+      failuresFor((state) => {
+        web(state).dependencies!['next'] = '*';
+      }).join('\n'),
+    ).toMatch(/pins nothing/);
+  });
+
+  it('rejects a specifier the policy cannot reason about', () => {
+    expect(
+      failuresFor((state) => {
+        web(state).dependencies!['next'] = '>=16.0.0 <17';
+      }).join('\n'),
+    ).toMatch(/cannot prove/);
+  });
+});
+
+describe('F13.5 — the lockfile is authoritative and must agree', () => {
+  it('rejects a declared package with no lock resolution', () => {
+    const failures = failuresFor((state) => {
+      delete state.lock.packages['node_modules/pino'];
+    });
+
+    expect(failures.join('\n')).toMatch(/pino.*resolves it nowhere/s);
+  });
+
+  it('rejects a manifest and lockfile that disagree', () => {
+    const failures = failuresFor((state) => {
+      state.lock.packages['node_modules/next'] = { version: '16.3.2' };
+    });
+
+    expect(failures.join('\n')).toMatch(/next.*resolves.*16\.3\.2/s);
+  });
+
+  it('rejects a lock entry carrying no version at all', () => {
+    const failures = failuresFor((state) => {
+      state.lock.packages['node_modules/pino'] = {};
+    });
+
+    expect(failures.join('\n')).toMatch(/declares no version/);
+  });
+
+  it('rejects a malformed resolved version instead of accepting its numeric prefix', () => {
+    const failures = failuresFor((state) => {
+      state.lock.packages['node_modules/typescript'] = {
+        version: '5.9.3garbage',
+      };
+    });
+
+    expect(failures.join('\n')).toMatch(/typescript.*outside the locked 5\.9\.x/s);
+    expect(versionSatisfies('5.9.3garbage', { kind: 'range', expected: '5.9' })).toBe(
+      false,
+    );
+  });
+
+  it('rejects two direct declarations resolving to different versions', () => {
+    const failures = failuresFor((state) => {
+      state.rootManifest.dependencies = { pino: '10.3.1' };
+      state.lock.packages['packages/server-core/node_modules/pino'] = {
+        version: '10.3.0',
+      };
+    });
+
+    expect(failures.join('\n')).toMatch(/pino/);
+  });
+
+  /**
+   * The distinction that keeps the gate credible. A transitive copy at another
+   * version is an ordinary dependency tree, not a policy breach — failing on
+   * it would make the check cry wolf until someone switched it off.
+   */
+  it('does NOT fail on a harmless transitive copy', () => {
+    expect(
+      failuresFor((state) => {
+        state.lock.packages['node_modules/some-tool/node_modules/zod'] = {
+          version: '3.22.0',
+        };
+      }),
+    ).toEqual([]);
+  });
+
+  it('does not compare a workspace-local direct install to an unrelated root copy', () => {
+    expect(
+      failuresFor((state) => {
+        state.lock.packages['apps/web/node_modules/next'] = { version: '16.3.3' };
+        state.lock.packages['node_modules/next'] = { version: '15.5.0' };
+        state.installed = { next: '15.5.0' };
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe('F13.6 — deferred packages: absent is correct, present is contracted', () => {
+  it.each(deferredStack as readonly { name: string }[])(
+    'treats $name as legitimately absent',
+    ({ name }) => {
+      expect(isDeferred(name)).toBe(true);
+      expect(failuresFor()).toEqual([]);
+    },
+  );
+
+  it('reports each deferred package as deferred rather than missing', () => {
+    const { rows } = evaluateVersionPolicy(baseState()) as {
+      rows: { package: string; status: string }[];
+    };
+
+    for (const { name } of deferredStack as readonly { name: string }[]) {
+      expect(rows.find((row) => row.package === name)?.status).toMatch(/^deferred/);
+    }
+  });
+
+  it('accepts a deferred package introduced at its approved version', () => {
+    expect(
+      failuresFor((state) => {
+        web(state).dependencies!['better-auth'] = '1.7.4';
+        state.lock.packages['node_modules/better-auth'] = { version: '1.7.4' };
+      }),
+    ).toEqual([]);
+
+    expect(
+      failuresFor((state) => {
+        web(state).dependencies!['next-intl'] = '~4.14.2';
+        state.lock.packages['node_modules/next-intl'] = { version: '4.14.2' };
+      }),
+    ).toEqual([]);
+  });
+
+  it('rejects a deferred package introduced at the wrong version', () => {
+    expect(
+      failuresFor((state) => {
+        web(state).dependencies!['better-auth'] = '1.8.0';
+        state.lock.packages['node_modules/better-auth'] = { version: '1.8.0' };
+      }).join('\n'),
+    ).toMatch(/better-auth/);
+
+    expect(
+      failuresFor((state) => {
+        web(state).dependencies!['socket.io'] = '4.9.0';
+        state.lock.packages['node_modules/socket.io'] = { version: '4.9.0' };
+      }).join('\n'),
+    ).toMatch(/socket\.io/);
+  });
+
+  it('rejects a deferred package introduced as a prerelease', () => {
+    expect(
+      failuresFor((state) => {
+        web(state).devDependencies = { '@playwright/test': '1.55.0-beta.1' };
+      }).join('\n'),
+    ).toMatch(/prerelease/);
+  });
+
+  it('does not freeze a Better Auth patch the architecture left to Phase 2', () => {
+    // TECH_STACK.md §2 locks the 1.7.x RANGE; §1.5 places the exact resolved
+    // patch at genuine introduction. Deciding it here would pre-empt Phase 2.
+    expect(policyFor('better-auth')).toMatchObject({ kind: 'range', expected: '1.7' });
+  });
+
+  it('covers a scoped family without enumerating its packages', () => {
+    expect(policyFor('@tiptap/starter-kit')).toMatchObject({
+      kind: 'range',
+      expected: '3',
+    });
+
+    expect(
+      failuresFor((state) => {
+        web(state).dependencies!['@tiptap/core'] = '2.9.0';
+        state.lock.packages['node_modules/@tiptap/core'] = { version: '2.9.0' };
+      }).join('\n'),
+    ).toMatch(/@tiptap\/core/);
+  });
+
+  it('adds no deferred dependency to the real repository', () => {
+    // H2 must not install a deferred package merely to exercise the checker.
+    const manifests = ['package.json', 'apps/web/package.json'].map(
+      (file) => JSON.parse(readFileSync(path.join(repoRoot, file), 'utf8')) as Manifest,
+    );
+
+    for (const manifest of manifests) {
+      const declared = Object.keys({
+        ...manifest.dependencies,
+        ...manifest.devDependencies,
+        ...manifest.optionalDependencies,
+      });
+
+      for (const { name } of deferredStack as readonly { name: string }[]) {
+        expect(declared, `${name} must not be installed yet`).not.toContain(name);
+      }
+    }
+  });
+});
+
+describe('F13.7 — the check fails closed on unusable input', () => {
+  it('fails when package-lock.json is missing', () => {
+    const { failures } = evaluateVersionPolicy({
+      ...baseState(),
+      lock: null,
+    }) as { failures: string[] };
+
+    expect(failures.join('\n')).toMatch(/lockfile/);
+  });
+
+  it('fails when the lockfile carries no `packages` map', () => {
+    const { failures } = evaluateVersionPolicy({
+      ...baseState(),
+      lock: { lockfileVersion: 3 },
+    }) as { failures: string[] };
+
+    expect(failures.join('\n')).toMatch(/packages/);
+  });
+
+  it('fails when the root manifest cannot be parsed', () => {
+    const { failures } = evaluateVersionPolicy({
+      ...baseState(),
+      rootManifest: null,
+    }) as { failures: string[] };
+
+    expect(failures.length).toBeGreaterThan(0);
+  });
+
+  it('fails when a workspace manifest cannot be parsed', () => {
+    const failures = failuresFor((state) => {
+      state.workspaces.push({
+        name: '@minhaj/broken',
+        directory: 'packages/broken',
+        manifest: null as unknown as Manifest,
+      });
+    });
+
+    expect(failures.join('\n')).toMatch(/could not be parsed/);
+  });
+
+  it('fails when a dependency block is not an object', () => {
+    const failures = failuresFor((state) => {
+      web(state).dependencies = 'nonsense' as unknown as Record<string, string>;
+    });
+
+    expect(failures.join('\n')).toMatch(/not an object/);
+  });
+
+  it('fails when a locked runtime package is declared by nobody', () => {
+    const failures = failuresFor((state) => {
+      delete web(state).dependencies!['next'];
+    });
+
+    expect(failures.join('\n')).toMatch(/next.*declared by no workspace/s);
+  });
+
+  it('fails on the wrong Node runtime rather than reporting success', () => {
+    const failures = failuresFor((state) => {
+      state.nodeVersion = '22.11.0';
+    });
+
+    expect(failures.join('\n')).toMatch(/node: running 22\.11\.0/);
+  });
+
+  it('fails when engines.node drifts from the locked runtime', () => {
+    const failures = failuresFor((state) => {
+      state.rootManifest.engines = { node: '>=24' };
+    });
+
+    expect(failures.join('\n')).toMatch(/engines\.node/);
+  });
+});
+
+describe('F13.8 — the security overrides are proved from source too', () => {
+  it('rejects a removed override', () => {
+    const failures = failuresFor((state) => {
+      delete state.rootManifest.overrides!['mysql2'];
+    });
+
+    expect(failures.join('\n')).toMatch(/mysql2.*root override is missing/s);
+  });
+
+  it('rejects a lockfile that resolves an overridden package elsewhere', () => {
+    const failures = failuresFor((state) => {
+      state.lock.packages['node_modules/mssql/node_modules/mysql2'] = {
+        version: '3.22.0',
+      };
+    });
+
+    expect(failures.join('\n')).toMatch(/mysql2/);
+  });
+});
+
+describe('F13.9 — the transcribed policy matches TECH_STACK.md', () => {
+  const techStack = readFileSync(path.join(repoRoot, 'docs', 'TECH_STACK.md'), 'utf8');
+
+  it.each(lockedStack as readonly { name: string; expected: string; kind: string }[])(
+    'finds $expected for $name in the frozen document',
+    ({ expected }) => {
+      expect(techStack).toContain(expected);
+    },
+  );
+
+  it('names every deferred dependency the document defers', () => {
+    const names = (deferredStack as readonly { name: string }[]).map(
+      (entry) => entry.name,
+    );
+
+    expect(names).toContain('better-auth');
+    expect(names).toContain('next-intl');
+    expect(names).toContain('socket.io');
+    expect(names).toContain('playwright');
+  });
+
+  it('keeps the Phase 1 Prisma trio exact', () => {
+    for (const name of ['prisma', '@prisma/client', '@prisma/adapter-mssql']) {
+      expect(policyFor(name)).toEqual(
+        expect.objectContaining({ kind: 'exact', expected: '7.10.0' }),
+      );
+    }
+  });
+});

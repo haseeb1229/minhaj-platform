@@ -10,6 +10,7 @@ import {
   isSafeContextField,
   redactionPlaceholder,
   sanitiseForLog,
+  sanitiseString,
 } from './redaction.ts';
 
 /**
@@ -38,7 +39,11 @@ import {
  */
 export function sanitiseLogArguments(args: readonly unknown[]): unknown[] {
   return args.map((argument) =>
-    typeof argument === 'object' && argument !== null
+    // Strings go through too. `logger.error('cannot reach sqlserver://sa:pw@db')`
+    // is an everyday call, and an earlier revision passed the message argument
+    // through untouched — a leak that no amount of key-name redaction reaches,
+    // because the message has no key. Ordinary messages are returned unchanged.
+    typeof argument === 'string' || (typeof argument === 'object' && argument !== null)
       ? sanitiseForLog(argument)
       : argument,
   );
@@ -106,7 +111,15 @@ export function withContext(
   const safe: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(bindings)) {
-    safe[key] = isSafeContextField(key) ? value : redactionPlaceholder;
+    if (!isSafeContextField(key)) {
+      safe[key] = redactionPlaceholder;
+      continue;
+    }
+
+    // Allowlisted, but still value-sanitised. `route` is permitted correlation
+    // metadata and a reset route carries its token IN THE PATH, so the
+    // allowlist alone would bind that token to every subsequent line.
+    safe[key] = typeof value === 'string' ? sanitiseString(value) : value;
   }
 
   return logger.child(safe);

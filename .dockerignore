@@ -153,3 +153,62 @@ desktop.ini
 # --- Documentation ----------------------------------------------------------
 # The frozen architecture documents are not needed to build or run the app.
 docs/
+
+# =============================================================================
+# FINAL SECRET DENY — this block must remain LAST
+# =============================================================================
+#
+# Docker applies the LAST matching pattern, so every exclusion above is only as
+# strong as the lines that follow it. Two independent defects proved that:
+#
+#   1. `*.pem`, `*.key`, `*.pfx`, `*.p12` and the certificate patterns are
+#      ROOT-ANCHORED. A single `*` never crosses a separator, so they exclude
+#      `/server.key` and NOTHING deeper — `apps/web/server.key` and
+#      `docker/tls.pem` went straight into the context.
+#
+#   2. The fixture re-includes above — written for the Round 6/7 architecture
+#      fixtures, for reasons that have nothing to do with secrets — reopened
+#      `**/.env` beneath themselves. `tests/fixtures/a/src/dist/.env` was
+#      admitted by `!tests/fixtures/**/src/dist/**`, the last pattern to match
+#      it. Each line was individually correct; their ORDER was not.
+#
+# This block is therefore the authoritative one, stated recursively and placed
+# where nothing above can override it. `scripts/check-docker-context.mjs`
+# EVALUATES the whole file against secret paths — including paths derived from
+# whatever negations the file happens to contain — so a future edit that
+# reopens any of this fails `npm run verify` and CI rather than shipping.
+#
+# Environment files, at any depth.
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Private key and certificate material, at any depth. The root-anchored forms
+# above are kept for readability; these are the ones that actually hold.
+**/*.pem
+**/*.key
+**/*.pfx
+**/*.p12
+**/*.crt
+**/*.cer
+**/*.der
+
+# Credential directories, at any depth.
+secrets/
+.secrets/
+**/secrets/
+**/.secrets/
+
+# The ONE deliberate exception (SECURITY_BASELINE.md §18.1): a valueless
+# example file, asserted to carry no values by `tests/config/env-example.test.ts`
+# and read by the suite inside the `test` stage.
+!.env.example
+!**/.env.example
+
+# Docker patterns cannot distinguish a file from a directory. Without this
+# final descendant guard, a directory named `.env.example` would be re-admitted
+# with every secret beneath it. The real valueless file still matches the two
+# exceptions above; only content below a same-named directory is denied here.
+.env.example/**
+**/.env.example/**
