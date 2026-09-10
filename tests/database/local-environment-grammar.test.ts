@@ -299,12 +299,29 @@ describe('F4 — an unreadable expected file never falls back to the shell', () 
 });
 
 /**
- * `chmod` is a no-op for the owner on Windows, so the permission case can only
- * be proven where the platform actually enforces it. Skipped rather than
- * weakened: a test that passed by not testing anything would be worse than one
- * that says where it ran.
+ * Whether this runtime can actually create an unreadable file.
+ *
+ * Two environments cannot, for different reasons:
+ *
+ *   - Windows, where `chmod` is a no-op for the owner;
+ *   - any POSIX process running as effective UID 0, because root overrides the
+ *     discretionary permission check and reads the file anyway. The container
+ *     test stage in `docker/web.Dockerfile` is exactly this: it inherits from
+ *     `deps` with no `USER`, so `npm run verify` runs as root there.
+ *
+ * In both the `chmod 000` never produces the EACCES the proof depends on, so
+ * the precondition does not exist and the test would fail for a reason that
+ * says nothing about the resolver.
  */
-describe.skipIf(process.platform === 'win32')(
+const CAN_PROVE_OWNER_DENIAL = process.platform !== 'win32' && process.getuid?.() !== 0;
+
+/**
+ * Skipped rather than weakened where the precondition cannot be created: a test
+ * that passed by not testing anything would be worse than one that says where
+ * it ran. A normal non-root Linux runner — the CI `Verify` job — still executes
+ * it, so the EACCES path stays proven on every push.
+ */
+describe.skipIf(!CAN_PROVE_OWNER_DENIAL)(
   'F4 — a file that exists but cannot be read',
   () => {
     it('fails rather than falling back to the shell environment', () => {
