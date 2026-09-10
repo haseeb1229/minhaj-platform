@@ -3,14 +3,18 @@ import { loadLocalDatabaseEnvironment } from '../../packages/database/src/lifecy
 /**
  * Applies the ignored local `docker/.env` for the live database tests.
  *
- * Vitest does not apply Node's `--env-file-if-exists`, which the `db:*`
- * commands rely on, so without this the live lifecycle tests would silently
- * skip during `npm test` — passing while proving nothing.
+ * The `db:*` commands take a RESOLVED record and pass it explicitly, but a test
+ * runner cannot: the suites read configuration through module-level helpers
+ * defaulting to `process.env`, so the run has to be configured once, here.
  *
- * It delegates to the same loader the lifecycle scripts use, so the test run
- * and `npm run db:migrate:test` cannot resolve different configuration. An
- * earlier revision kept its own copy of this parsing, with the opposite
- * precedence: it deferred to whatever the shell already had, which is the
- * behaviour that let two terminals disagree.
+ * It delegates to the same loader those commands use, so the test run and
+ * `npm run db:migrate:test` cannot resolve different configuration. The file is
+ * OPTIONAL at this level — a machine without the container still runs the whole
+ * offline suite, and the live suites skip themselves when configuration is
+ * absent. It is the COMMANDS that require the file, because they are the ones
+ * that would otherwise mutate a database chosen by an ambient shell variable.
+ *
+ * A malformed file fails the entire run rather than partly configuring it,
+ * which is the intended behaviour: there is no half-resolved state to test in.
  */
-loadLocalDatabaseEnvironment();
+loadLocalDatabaseEnvironment(process.env, { requireLocalFile: false });

@@ -1,14 +1,6 @@
 import 'server-only';
 
-// Applied BEFORE any configuration is read: `docker/.env` is authoritative for
-// local lifecycle tooling, so a stale shell variable cannot decide which
-// database this rehearsal touches.
-import { loadLocalDatabaseEnvironment } from '../src/lifecycle/local-environment.ts';
-
-const localEnvironment = loadLocalDatabaseEnvironment();
-
-const { getApplicationPrincipalCredentials, getDatabaseMigrationUrl } =
-  await import('../src/config.ts');
+import { getApplicationPrincipalCredentials } from '../src/config.ts';
 import {
   assertBackupSourceDatabase,
   backupArtifactExists,
@@ -18,17 +10,12 @@ import {
   restoreDatabaseFromBackup,
 } from '../src/lifecycle/backup.ts';
 import { openMasterSession } from '../src/lifecycle/disposable-database.ts';
+import { loadMigrations } from '../src/lifecycle/migrations.ts';
 import {
   cleanUpRecoveryResources,
   RecoveryCleanupError,
   type CleanupOutcome,
 } from '../src/lifecycle/recovery-cleanup.ts';
-import {
-  assertLocalMigrationConnection,
-  describeConnection,
-  formatConnectionMetadata,
-} from '../src/lifecycle/local-environment.ts';
-import { loadMigrations } from '../src/lifecycle/migrations.ts';
 import {
   newRecoveryMarker,
   verifyRestoredMarker,
@@ -38,11 +25,13 @@ import {
   inspectRestoredSecurity,
   verifyRestoredSchema,
 } from '../src/lifecycle/restored-state.ts';
+import { inspectPrincipalAuthority } from '../src/lifecycle/principal-authority.ts';
 import {
   openSession,
   withDatabase,
   type SqlSession,
 } from '../src/lifecycle/sql-connection.ts';
+import { reportConfiguration, startLocalCommand } from './local-bootstrap.ts';
 
 /**
  * `npm run db:recovery:test` — THE Phase 1 end-to-end recovery gate.
@@ -75,13 +64,16 @@ function fail(message: string): never {
   throw new Error(message);
 }
 
-const migrationUrl = getDatabaseMigrationUrl();
-// Fails closed on an unencrypted or otherwise unusable local configuration.
-const connection = assertLocalMigrationConnection(migrationUrl);
-// Fails closed unless the configured database is the one Phase 1 backs up.
+// Resolves docker/.env as the sole authority and proves the approved local
+// target: loopback host, the configured local port, MinhajPlatform, and a
+// migration principal distinct from the runtime one. A real BACKUP and a real
+// RESTORE follow, so nothing below may run on an unproven target.
+const command = startLocalCommand('source');
+const connection = command.connection;
+// Belt and braces: the source-database rule stated where the backup happens.
 assertBackupSourceDatabase(connection.database);
 
-const principal = getApplicationPrincipalCredentials();
+const principal = getApplicationPrincipalCredentials(command.environment.values);
 const target = newBackupTarget();
 const restoreDatabase = newRestoreDatabaseName();
 const marker = newRecoveryMarker();
@@ -105,16 +97,7 @@ let recoveryError: unknown;
 let cleanupOutcome!: CleanupOutcome;
 
 process.stdout.write(`Phase 1 recovery rehearsal\n`);
-report(
-  'configuration',
-  formatConnectionMetadata(describeConnection(connection, 'docker/.env')),
-);
-if (localEnvironment.overridden.length > 0) {
-  report(
-    'shell override',
-    `docker/.env took precedence over ${localEnvironment.overridden.join(', ')}`,
-  );
-}
+reportConfiguration(command, 26);
 report('source database', connection.database);
 report('restore target', restoreDatabase);
 
@@ -280,6 +263,27 @@ try {
         user: principal.DATABASE_APP_LOGIN,
         password: principal.DATABASE_APP_PASSWORD,
       });
+
+      // Direct catalogue rows do not describe authority inherited through a
+      // custom role. Re-run the effective database/schema probes AS the restored
+      // runtime principal so a broad inherited grant cannot survive unnoticed.
+      const authority = await inspectPrincipalAuthority(app);
+      const broadEffective = [
+        ...authority.broadRoles,
+        ...authority.databasePermissions
+          .filter((entry) => entry.held)
+          .map((entry) => `DATABASE ${entry.permission}`),
+        ...authority.schemaPermissions
+          .filter((entry) => entry.held)
+          .map((entry) => `SCHEMA dbo ${entry.permission}`),
+      ];
+      if (broadEffective.length > 0) {
+        fail(
+          `The restored runtime principal holds broad effective authority: ` +
+            broadEffective.join(', '),
+        );
+      }
+      report('restored effective rights', 'no broad database/schema authority');
 
       const [visible] = await app.query<{ total: number }>(
         'SELECT COUNT_BIG(*) AS total FROM [dbo].[AuditLog];',

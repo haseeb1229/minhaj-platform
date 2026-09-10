@@ -114,7 +114,9 @@ jobs:
       # knows which command was asked for. Without it, generation fails with
       # `PrismaConfigEnvError: Cannot resolve environment variable` — on a
       # clean runner, which has no `docker/.env`. A workstation hides this,
-      # because `--env-file-if-exists=docker/.env` supplies the variable there.
+      # because the repository loader reads the variable out of that file.
+      # `db:generate` is offline tooling, so the file is OPTIONAL to it and a
+      # caller without one must supply the variable itself, exactly as here.
       #
       # It is deliberately, visibly synthetic: a database and login that exist
       # nowhere, and a password that is not a credential because nothing
@@ -415,40 +417,89 @@ jobs:
       # the rehearsal never noticed — a crashed process, or an artifact left by
       # an earlier step. Both resource kinds are checked, and either one
       # surviving fails the job.
+      # Every inspection here must produce POSITIVE evidence. The previous
+      # revision ended the artifact scan with `2>/dev/null || true`, so a
+      # `docker exec` that could not reach the container, or a `find` that
+      # failed, produced empty output — indistinguishable from "found nothing",
+      # and read as "no residue". A gate whose broken inspection is its passing
+      # condition is worse than no gate.
+      #
+      # Each probe therefore ends by printing a marker, and the classification
+      # below accepts a result ONLY when its marker is present. An inspection
+      # that failed for any reason leaves no marker and fails the job. `|| true`
+      # appears nowhere in an evidence-gathering command.
       - name: Verify no disposable resources survive
         if: always()
         run: |
+          set -eu
+
+          DB_SCAN=$(docker exec minhaj-sqlserver-2022 /opt/mssql-tools18/bin/sqlcmd \
+            -S localhost -U sa -P "$(grep '^MSSQL_SA_PASSWORD=' docker/.env | cut -d= -f2-)" \
+            -C -b -h-1 -W -Q "SET NOCOUNT ON; SELECT name FROM sys.databases WHERE name LIKE 'MinhajPhase1%'; SELECT 'DB_SCAN_COMPLETE';")
+
+          # A missing backup directory means nothing was ever written, which is
+          # a real answer — but only when the probe says so explicitly. It is
+          # reported as its own marker rather than inferred from empty output.
+          BACKUP_SCAN=$(docker exec minhaj-sqlserver-2022 sh -c '
+            set -eu
+            if [ ! -d /var/opt/mssql/backup ]; then
+              echo BACKUP_DIRECTORY_ABSENT
+              exit 0
+            fi
+            find /var/opt/mssql/backup -maxdepth 1 -type f \
+              -regextype posix-extended \
+              -regex ".*/minhaj-phase1-[0-9a-f]{32}\.bak"
+            echo BACKUP_SCAN_COMPLETE
+          ')
+
+          # >>> residue-classification
+          #
+          # Extracted verbatim and driven with synthetic probe results by
+          # tests/config/ci-residue-evidence.test.ts, so the three outcomes —
+          # clean, residue found, inspection failed — are proven rather than
+          # asserted in a comment.
+          #
+          # The `|| true` below are on `grep` FILTERS of evidence already
+          # gathered and already proven complete by the marker check, not on the
+          # gathering itself: grep exits 1 when the marker line is the only
+          # line, which is the clean case.
           RESIDUE=0
 
-          LEFTOVER_DBS=$(docker exec minhaj-sqlserver-2022 /opt/mssql-tools18/bin/sqlcmd \
-            -S localhost -U sa -P "$(grep '^MSSQL_SA_PASSWORD=' docker/.env | cut -d= -f2-)" \
-            -C -b -h-1 -W -Q "SET NOCOUNT ON; SELECT name FROM sys.databases WHERE name LIKE 'MinhajPhase1%';")
+          DB_MARKERS=$(printf '%s\n' "$DB_SCAN" | grep -Fxc 'DB_SCAN_COMPLETE' || true)
+          if [ "$DB_MARKERS" -ne 1 ]; then
+            echo "The disposable-database inspection produced no conclusive result."
+            exit 1
+          fi
 
-          if [ -n "$(echo "$LEFTOVER_DBS" | tr -d '[:space:]')" ]; then
+          LEFTOVER_DBS=$(printf '%s\n' "$DB_SCAN" | grep -Fvx 'DB_SCAN_COMPLETE' || true)
+          if [ -n "$(printf '%s' "$LEFTOVER_DBS" | tr -d '[:space:]')" ]; then
             echo "Disposable databases survived the run:"
-            echo "$LEFTOVER_DBS"
+            printf '%s\n' "$LEFTOVER_DBS"
             RESIDUE=1
           else
             echo "No disposable test or restore databases remain."
           fi
 
-          # Matches the approved artifact pattern exactly, so an unrelated file
-          # in the directory is not mistaken for Chunk 3 residue. A missing
-          # directory is success: nothing was ever written.
-          LEFTOVER_BAKS=$(docker exec minhaj-sqlserver-2022 \
-            find /var/opt/mssql/backup -maxdepth 1 -type f \
-            -regextype posix-extended \
-            -regex '.*/minhaj-phase1-[0-9a-f]{32}\.bak' 2>/dev/null || true)
-
-          if [ -n "$(echo "$LEFTOVER_BAKS" | tr -d '[:space:]')" ]; then
-            echo "Chunk 3 backup artifacts survived the run:"
-            echo "$LEFTOVER_BAKS"
-            RESIDUE=1
+          BACKUP_COMPLETE_MARKERS=$(printf '%s\n' "$BACKUP_SCAN" | grep -Fxc 'BACKUP_SCAN_COMPLETE' || true)
+          BACKUP_ABSENT_MARKERS=$(printf '%s\n' "$BACKUP_SCAN" | grep -Fxc 'BACKUP_DIRECTORY_ABSENT' || true)
+          if [ "$BACKUP_COMPLETE_MARKERS" -eq 0 ] && [ "$BACKUP_ABSENT_MARKERS" -eq 1 ]; then
+            echo "No backup directory exists; no Chunk 3 artifact was ever written."
+          elif [ "$BACKUP_COMPLETE_MARKERS" -eq 1 ] && [ "$BACKUP_ABSENT_MARKERS" -eq 0 ]; then
+            LEFTOVER_BAKS=$(printf '%s\n' "$BACKUP_SCAN" | grep -Fvx 'BACKUP_SCAN_COMPLETE' || true)
+            if [ -n "$(printf '%s' "$LEFTOVER_BAKS" | tr -d '[:space:]')" ]; then
+              echo "Chunk 3 backup artifacts survived the run:"
+              printf '%s\n' "$LEFTOVER_BAKS"
+              RESIDUE=1
+            else
+              echo "No Chunk 3 backup artifacts remain in /var/opt/mssql/backup."
+            fi
           else
-            echo "No Chunk 3 backup artifacts remain in /var/opt/mssql/backup."
+            echo "The backup-artifact inspection produced no conclusive result."
+            exit 1
           fi
 
           exit "$RESIDUE"
+          # <<< residue-classification
 
       # The container and its volume are removed with the runner, but the
       # teardown is explicit so a failure leaves nothing holding the port, and

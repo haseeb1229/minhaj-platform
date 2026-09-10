@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { BROAD_DATABASE_ROLES } from './principal-authority.ts';
 import type { SqlSession } from './sql-connection.ts';
 
 /**
@@ -219,7 +220,14 @@ export interface RestoredSecurityReport {
   auditPermissions: { permission: string; state: string }[];
 }
 
-const BROAD_ROLES = ['db_owner', 'db_ddladmin', 'db_securityadmin', 'db_accessadmin'];
+/**
+ * Broad roles, shared with the live permission proof.
+ *
+ * `db_datareader` and `db_datawriter` were missing here, and they are the two
+ * that matter most: either one grants authority across every table while the
+ * explicit `dbo.AuditLog` denials below still read as correct.
+ */
+const BROAD_ROLES = BROAD_DATABASE_ROLES;
 
 export async function inspectRestoredSecurity(
   restored: SqlSession,

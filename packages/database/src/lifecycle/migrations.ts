@@ -100,18 +100,24 @@ export interface PrismaCliResult {
  * variable left in one terminal decides which database the CLI touches, and
  * two shells running the same command disagree — the cross-session P1011.
  */
-export function buildPrismaChildEnvironment(databaseUrl: string): NodeJS.ProcessEnv {
+export function buildPrismaChildEnvironment(
+  databaseUrl: string | undefined,
+  baseEnvironment: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {
-    ...process.env,
-    DATABASE_MIGRATION_URL: databaseUrl,
+    ...baseEnvironment,
     // Prisma colourises for a TTY; plain text keeps assertions legible.
     NO_COLOR: '1',
   };
 
-  // Competing sources Prisma would otherwise consult. Removed so the URL above
-  // is the only connection the child can resolve.
+  // Competing sources Prisma would otherwise consult. Removed so the resolved
+  // URL is the only connection the child can resolve.
   delete environment['DATABASE_URL'];
   delete environment['PRISMA_DATABASE_URL'];
+
+  if (databaseUrl !== undefined) {
+    environment['DATABASE_MIGRATION_URL'] = databaseUrl;
+  }
 
   return environment;
 }
@@ -129,11 +135,26 @@ export function buildPrismaChildEnvironment(databaseUrl: string): NodeJS.Process
  * The URL is passed through the environment rather than the command line so it
  * does not reach the process table, and no failure message here reproduces it.
  */
+export interface PrismaCliOptions {
+  /** Replaces `DATABASE_MIGRATION_URL` in the child. Omitted for offline commands. */
+  databaseUrl?: string;
+  /**
+   * The RESOLVED environment the child starts from.
+   *
+   * Passed explicitly so the child's configuration is data this caller holds,
+   * not a consequence of some module having mutated `process.env` first.
+   */
+  baseEnvironment?: NodeJS.ProcessEnv | undefined;
+  /** Stream the CLI's own output instead of capturing it. */
+  streamOutput?: boolean;
+}
+
 export async function runPrismaCli(
   args: readonly string[],
-  databaseUrl: string,
+  options: PrismaCliOptions = {},
 ): Promise<PrismaCliResult> {
   const command = `prisma ${args.join(' ')}`;
+  const stream = options.streamOutput === true;
 
   const child = spawn(
     process.execPath,
@@ -145,14 +166,16 @@ export async function runPrismaCli(
     ],
     {
       cwd: repoRoot,
-      env: buildPrismaChildEnvironment(databaseUrl),
-      stdio: ['ignore', 'pipe', 'pipe'],
+      env: buildPrismaChildEnvironment(options.databaseUrl, options.baseEnvironment),
+      stdio: stream ? ['ignore', 'inherit', 'inherit'] : ['ignore', 'pipe', 'pipe'],
     },
   );
 
   let output = '';
-  child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
-  child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()));
+  if (!stream) {
+    child.stdout?.on('data', (chunk: Buffer) => (output += chunk.toString()));
+    child.stderr?.on('data', (chunk: Buffer) => (output += chunk.toString()));
+  }
 
   const exitCode = await new Promise<number>((resolve, reject) => {
     child.on('error', reject);
@@ -178,13 +201,19 @@ export async function runPrismaCli(
  * Returns the CLI output so a caller can assert on what Prisma reported, not
  * merely that it exited 0.
  */
-export async function deployMigrations(databaseUrl: string): Promise<PrismaCliResult> {
-  return runPrismaCli(['migrate', 'deploy'], databaseUrl);
+export async function deployMigrations(
+  databaseUrl: string,
+  baseEnvironment?: NodeJS.ProcessEnv,
+): Promise<PrismaCliResult> {
+  return runPrismaCli(['migrate', 'deploy'], { databaseUrl, baseEnvironment });
 }
 
 /** Runs the REAL `prisma migrate status`. */
-export async function migrationStatus(databaseUrl: string): Promise<PrismaCliResult> {
-  return runPrismaCli(['migrate', 'status'], databaseUrl);
+export async function migrationStatus(
+  databaseUrl: string,
+  baseEnvironment?: NodeJS.ProcessEnv,
+): Promise<PrismaCliResult> {
+  return runPrismaCli(['migrate', 'status'], { databaseUrl, baseEnvironment });
 }
 
 /**

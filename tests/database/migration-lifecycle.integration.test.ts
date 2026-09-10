@@ -20,10 +20,14 @@ import {
   runPrismaCli,
   type Migration,
 } from '../../packages/database/src/lifecycle/migrations.ts';
+import {
+  assertApprovedLocalTarget,
+  localTargetPolicy,
+} from '../../packages/database/src/lifecycle/local-target.ts';
+import { resolveLocalDatabaseEnvironment } from '../../packages/database/src/lifecycle/local-environment.ts';
 import { runSeed } from '../../packages/database/src/lifecycle/seed.ts';
 import {
   openSession,
-  parseSqlServerUrl,
   withDatabase,
   type SqlSession,
 } from '../../packages/database/src/lifecycle/sql-connection.ts';
@@ -46,6 +50,9 @@ import {
 
 const configured = (() => {
   try {
+    if (!resolveLocalDatabaseEnvironment({ requireLocalFile: false }).localFilePresent) {
+      return false;
+    }
     getDatabaseMigrationUrl();
     getApplicationPrincipalCredentials();
     return true;
@@ -83,12 +90,19 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
 
   beforeAll(async () => {
     const migrationUrl = getDatabaseMigrationUrl();
-    const connection = parseSqlServerUrl(migrationUrl);
+    const connection = assertApprovedLocalTarget(
+      migrationUrl,
+      localTargetPolicy(process.env, 'source', 'migration'),
+    );
     const principal = getApplicationPrincipalCredentials();
 
     disposableUrl = migrationUrl.replace(
       `database=${connection.database}`,
       `database=${databaseName}`,
+    );
+    assertApprovedLocalTarget(
+      disposableUrl,
+      localTargetPolicy(process.env, 'disposable', 'migration'),
     );
 
     const migrations = await loadMigrations();

@@ -7,8 +7,6 @@ import {
 import {
   backupArtifactExists,
   backupDatabase,
-  deleteBackupArtifact,
-  dropRestoreDatabase,
   newBackupTarget,
   newRestoreDatabaseName,
   restoreDatabaseFromBackup,
@@ -17,6 +15,15 @@ import {
 } from '../../packages/database/src/lifecycle/backup.ts';
 import { openMasterSession } from '../../packages/database/src/lifecycle/disposable-database.ts';
 import { loadMigrations } from '../../packages/database/src/lifecycle/migrations.ts';
+import {
+  assertApprovedLocalTarget,
+  localTargetPolicy,
+} from '../../packages/database/src/lifecycle/local-target.ts';
+import { resolveLocalDatabaseEnvironment } from '../../packages/database/src/lifecycle/local-environment.ts';
+import {
+  cleanUpRecoveryResources,
+  RecoveryCleanupError,
+} from '../../packages/database/src/lifecycle/recovery-cleanup.ts';
 import {
   newRecoveryMarker,
   verifyRestoredMarker,
@@ -31,7 +38,6 @@ import {
 } from '../../packages/database/src/lifecycle/restored-state.ts';
 import {
   openSession,
-  parseSqlServerUrl,
   withDatabase,
   type SqlServerConnection,
   type SqlSession,
@@ -56,6 +62,9 @@ import {
 
 const configured = (() => {
   try {
+    if (!resolveLocalDatabaseEnvironment({ requireLocalFile: false }).localFilePresent) {
+      return false;
+    }
     getDatabaseMigrationUrl();
     getApplicationPrincipalCredentials();
     return true;
@@ -79,7 +88,11 @@ describe.skipIf(!configured)('Phase 1 recovery lifecycle (live SQL Server)', () 
   let sourceRowCount: number;
 
   beforeAll(async () => {
-    connection = parseSqlServerUrl(getDatabaseMigrationUrl());
+    const migrationUrl = getDatabaseMigrationUrl();
+    connection = assertApprovedLocalTarget(
+      migrationUrl,
+      localTargetPolicy(process.env, 'source', 'migration'),
+    );
 
     const migrations = await loadMigrations();
     const first = migrations[0];
@@ -106,13 +119,16 @@ describe.skipIf(!configured)('Phase 1 recovery lifecycle (live SQL Server)', () 
   }, 240_000);
 
   afterAll(async () => {
-    await restored?.close();
-    if (master !== undefined) await dropRestoreDatabase(master, restoreDatabase);
-    if (source !== undefined) {
-      await deleteBackupArtifact(source, target.path);
-      await source.close();
-    }
-    await master?.close();
+    if (master === undefined) return;
+
+    const outcome = await cleanUpRecoveryResources({
+      master,
+      source,
+      restored,
+      restoreDatabase,
+      backupPath: target.path,
+    });
+    if (outcome.failures.length > 0) throw new RecoveryCleanupError(outcome.failures);
   }, 120_000);
 
   it('produced a genuine, verified full backup', () => {

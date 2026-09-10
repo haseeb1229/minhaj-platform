@@ -112,9 +112,18 @@ export function parseSqlServerUrl(url: string): SqlServerConnection {
     );
   }
 
-  const [server, port] = (authority ?? '').split(':');
+  const authorityParts = (authority ?? '').split(':');
+  const [server, port] = authorityParts;
   if (server === undefined || server === '') {
     throw new SqlConnectionUrlError('host', 'missing a host');
+  }
+  if (authorityParts.length > 2) {
+    throw new SqlConnectionUrlError('host', 'the authority has more than one colon');
+  }
+  // `Number.parseInt` stops at the first non-digit, so `14330x` would otherwise
+  // parse as the approved port and pass a guard comparing numbers.
+  if (port !== undefined && !/^\d{1,5}$/.test(port)) {
+    throw new SqlConnectionUrlError('port', 'the port is not a decimal number');
   }
 
   return {

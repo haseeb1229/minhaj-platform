@@ -128,12 +128,36 @@ export async function cleanUpRecoveryResources(
   // Verified independently of the DROP above: this is the check that catches a
   // drop which reported success and left the database in place.
   await attempt(outcome, 'restore database residue', async () => {
-    const [row] = await master.query<{ present: number }>(
+    const rows = await master.query<{ present: number | null }>(
       `SELECT CASE WHEN DB_ID(N'${restoreDatabase}') IS NULL THEN 0 ELSE 1 END AS present;`,
     );
-    if (Number(row?.present ?? 1) !== 0) {
+
+    // Absence must be POSITIVELY established. No row, a NULL, or a value that
+    // is neither 0 nor 1 means the inspection did not answer — and an
+    // unanswered inspection is a cleanup failure, never a clean result.
+    if (rows.length !== 1) {
+      throw new Error(
+        `the residue inspection returned ${rows.length} rows; ${restoreDatabase} ` +
+          `is in an unknown state`,
+      );
+    }
+    const present = rows[0]?.present;
+    if (present === null || present === undefined) {
+      throw new Error(
+        `the residue inspection returned no value; ${restoreDatabase} is in an ` +
+          `unknown state`,
+      );
+    }
+    if (present !== 0 && present !== 1) {
+      throw new Error(
+        `the residue inspection reported '${String(present)}'; only 0 or 1 is an ` +
+          `answer about ${restoreDatabase}`,
+      );
+    }
+    if (present !== 0) {
       throw new Error(`${restoreDatabase} still exists after the drop attempt`);
     }
+
     return `${restoreDatabase} absent, DB_ID is NULL`;
   });
 

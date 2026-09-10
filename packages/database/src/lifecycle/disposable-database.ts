@@ -78,4 +78,27 @@ export async function dropDisposableDatabase(
       DROP DATABASE [${name}];
     END;
   `);
+
+  // A DROP that returned without throwing is not evidence that the database is
+  // gone. Require one explicit, interpretable DB_ID answer before cleanup can
+  // report success.
+  const rows = await master.query<{ present: number | null }>(`
+    SELECT CASE WHEN DB_ID(N'${name}') IS NULL THEN 0 ELSE 1 END AS present;
+  `);
+  if (rows.length !== 1) {
+    throw new Error(
+      `Disposable-database residue inspection returned ${rows.length} rows for ` +
+        `${name}; its state is unknown.`,
+    );
+  }
+  const present = rows[0]?.present;
+  if (present !== 0 && present !== 1) {
+    throw new Error(
+      `Disposable-database residue inspection returned no valid answer for ${name}; ` +
+        `its state is unknown.`,
+    );
+  }
+  if (present === 1) {
+    throw new Error(`${name} still exists after the drop attempt.`);
+  }
 }

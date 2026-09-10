@@ -1,14 +1,6 @@
 import 'server-only';
 
-// Applied BEFORE any configuration is read: `docker/.env` is authoritative for
-// local lifecycle tooling, so a stale shell variable cannot decide which
-// database or TLS settings this run uses.
-import { loadLocalDatabaseEnvironment } from '../src/lifecycle/local-environment.ts';
-
-const localEnvironment = loadLocalDatabaseEnvironment();
-
-const { getApplicationPrincipalCredentials, getDatabaseMigrationUrl } =
-  await import('../src/config.ts');
+import { getApplicationPrincipalCredentials } from '../src/config.ts';
 import { provisionApplicationPrincipal } from '../src/lifecycle/application-principal.ts';
 import {
   createDisposableDatabase,
@@ -16,18 +8,26 @@ import {
   newDisposableDatabaseName,
   openMasterSession,
 } from '../src/lifecycle/disposable-database.ts';
-import {
-  assertLocalMigrationConnection,
-  describeConnection,
-  formatConnectionMetadata,
-} from '../src/lifecycle/local-environment.ts';
 import { deployMigrations, loadMigrations } from '../src/lifecycle/migrations.ts';
+import {
+  assertSentinelIntact,
+  createUngrantedSentinel,
+  inspectPrincipalAuthority,
+  overreachingGrants,
+  recordedPermissions,
+  SENTINEL_PROHIBITIONS,
+  SENTINEL_TABLE,
+} from '../src/lifecycle/principal-authority.ts';
 import {
   openSession,
   withDatabase,
-  type SqlServerConnection,
   type SqlSession,
 } from '../src/lifecycle/sql-connection.ts';
+import {
+  reportConfiguration,
+  retargetAtDisposable,
+  startLocalCommand,
+} from './local-bootstrap.ts';
 
 /**
  * `npm run db:test:permissions` — proves the least-privilege boundary using the
@@ -135,25 +135,17 @@ async function expectAllowed(
   }
 }
 
-const migrationUrl = getDatabaseMigrationUrl();
-// Fails closed on an unencrypted or otherwise unusable local configuration.
-const migrationConnection: SqlServerConnection =
-  assertLocalMigrationConnection(migrationUrl);
-const principal = getApplicationPrincipalCredentials();
+// Resolves docker/.env as the sole authority and proves the approved local
+// target before a disposable database is created.
+const command = startLocalCommand('migration-target');
+const migrationConnection = command.connection;
+const environment = command.environment;
+const principal = getApplicationPrincipalCredentials(environment.values);
 const databaseName = newDisposableDatabaseName();
 
 // Retarget the SAME encrypted migration configuration at the disposable
-// database; only the database name differs.
-const disposableUrl = migrationUrl.replace(
-  `database=${migrationConnection.database}`,
-  `database=${databaseName}`,
-);
-if (disposableUrl === migrationUrl) {
-  throw new Error(
-    'Could not retarget an encrypted migration URL at the disposable database.',
-  );
-}
-assertLocalMigrationConnection(disposableUrl);
+// database; only the database name differs, and the result is re-proven.
+const { url: disposableUrl } = retargetAtDisposable(command, databaseName);
 
 const master = await openMasterSession(migrationConnection);
 let admin: SqlSession | undefined;
@@ -162,16 +154,7 @@ let app: SqlSession | undefined;
 process.stdout.write(`Phase 1 permission proof on ${databaseName}\n`);
 
 // Safe metadata only: never the password, never the whole URL.
-process.stdout.write(
-  `  ${'configuration'.padEnd(38)} ` +
-    `${formatConnectionMetadata(describeConnection(migrationConnection, 'docker/.env'))}\n`,
-);
-if (localEnvironment.overridden.length > 0) {
-  process.stdout.write(
-    `  ${'shell override'.padEnd(38)} ` +
-      `docker/.env took precedence over ${localEnvironment.overridden.join(', ')}\n`,
-  );
-}
+reportConfiguration(command, 38);
 
 try {
   // ---- a migrated database with the principal provisioned ------------------
@@ -185,11 +168,26 @@ try {
 
   // The real Prisma CLI, over the same encrypted configuration the normal
   // migration path uses — never a direct replay of migration.sql.
-  await deployMigrations(disposableUrl);
+  await deployMigrations(disposableUrl, environment.values);
   await provisionApplicationPrincipal(
     admin,
     principal.DATABASE_APP_LOGIN,
     principal.DATABASE_APP_PASSWORD,
+  );
+
+  // ---- an object nobody granted the runtime principal anything on ----------
+  //
+  // Created AFTER the grant script has run, so it cannot be caught by it, and
+  // proven to exist by this administrative session — SQL Server answers "does
+  // not exist" and "you may not see it" with the same silence to a denied
+  // caller, so existence has to be established by someone who can see it.
+  //
+  // It lives only in this disposable database and dies with it. No Phase 1
+  // migration is touched to make this proof possible.
+  const sentinel = await createUngrantedSentinel(admin);
+  pass(
+    `${SENTINEL_TABLE} exists`,
+    `object_id ${sentinel.objectId}, ${sentinel.rowCount} row, no grant to the principal`,
   );
 
   // Connect AS the application principal. Everything below is its authority.
@@ -246,22 +244,52 @@ try {
     }
   }
 
-  // Effective role membership, from the server rather than from script text.
-  const roles = await app.query<{ role: string }>(`
-    SELECT r.name AS role
-    FROM sys.database_role_members m
-    JOIN sys.database_principals r ON r.principal_id = m.role_principal_id
-    JOIN sys.database_principals u ON u.principal_id = m.member_principal_id
-    WHERE u.name = USER_NAME();
-  `);
-  const roleNames = roles.map((row) => row.role);
-  const broadRoles = roleNames.filter((role) =>
-    ['db_owner', 'db_ddladmin', 'db_securityadmin', 'db_accessadmin'].includes(role),
-  );
-  if (broadRoles.length > 0) {
-    fail('no broad database roles', `member of ${broadRoles.join(', ')}`);
+  // ---- EFFECTIVE authority -------------------------------------------------
+  //
+  // Role membership and permission text are the design; this is what the
+  // principal can actually do. `HAS_PERMS_BY_NAME` answers for the CURRENT
+  // login and already accounts for role inheritance, ownership and DENY — the
+  // three routes by which authority arrives without appearing in the grant
+  // script.
+  //
+  // The old check looked only for four administrative roles, so
+  // `db_datareader` and `db_datawriter` — the two that grant read and write
+  // across EVERY table — passed it, while the AuditLog assertions below stayed
+  // green because AuditLog has its own explicit rules.
+  const authority = await inspectPrincipalAuthority(app);
+
+  if (authority.broadRoles.length > 0) {
+    fail('no broad database roles', `member of ${authority.broadRoles.join(', ')}`);
   } else {
-    pass('no broad database roles', `roles: ${roleNames.join(', ') || '(none)'}`);
+    pass(
+      'no broad database roles',
+      `roles: ${authority.roles.join(', ') || '(none)'}; db_datareader/db_datawriter ` +
+        `and the administrative roles all absent`,
+    );
+  }
+
+  const heldDatabase = authority.databasePermissions
+    .filter((entry) => entry.held)
+    .map((entry) => entry.permission);
+  if (heldDatabase.length > 0) {
+    fail('no broad database-scope rights', `effective: ${heldDatabase.join(', ')}`);
+  } else {
+    pass(
+      'no broad database-scope rights',
+      `${authority.databasePermissions.length} probes, none effective`,
+    );
+  }
+
+  const heldSchema = authority.schemaPermissions
+    .filter((entry) => entry.held)
+    .map((entry) => entry.permission);
+  if (heldSchema.length > 0) {
+    fail('no broad dbo-schema rights', `effective: ${heldSchema.join(', ')}`);
+  } else {
+    pass(
+      'no broad dbo-schema rights',
+      `${authority.schemaPermissions.length} probes, none effective`,
+    );
   }
 
   // ---- permitted runtime operation ----------------------------------------
@@ -320,6 +348,21 @@ try {
     'SELECT TOP 1 [migration_name] FROM [dbo].[_prisma_migrations];',
   );
 
+  // ---- the ungranted object ------------------------------------------------
+  //
+  // The sharpest of these cases. Every Phase 1 object carries an explicit rule,
+  // so a denial on one of them cannot distinguish "the rule works" from "the
+  // rule is masking a broad grant underneath": `db_datareader` plus the
+  // script's DENY on AuditLog produces exactly the results every check above
+  // expects. This table has no rule at all, so a SELECT that succeeds on it
+  // could only have come from authority that should not exist.
+  //
+  // Its existence was established by the admin session, so "does not exist or
+  // you do not have permission" here can only mean the second.
+  for (const [label, statement] of SENTINEL_PROHIBITIONS) {
+    await expectDenied(app, `ungranted ${label} denied`, statement);
+  }
+
   // ---- the audit row survived every attempt --------------------------------
   const [survivor] = await admin.query<{ total: number; action: string }>(
     'SELECT COUNT_BIG(*) AS total, MIN([action]) AS action FROM [dbo].[AuditLog];',
@@ -340,8 +383,36 @@ try {
     );
   }
 
+  // ---- the ungranted object was not merely unreadable, it is unchanged -----
+  await assertSentinelIntact(admin);
+  pass(`${SENTINEL_TABLE} unchanged`, 'one row, marker intact after four attempts');
+
+  // ---- what the catalogue actually records ---------------------------------
+  //
+  // The probes above ask "can it?". This asks "what was written down?", with
+  // administrative authority, and catches a direct database- or schema-level
+  // GRANT that some DENY elsewhere currently happens to mask. Together they
+  // close both routes; either alone leaves one open.
+  const recorded = await recordedPermissions(admin, principal.DATABASE_APP_LOGIN);
+  const overreaching = overreachingGrants(recorded);
+
+  if (overreaching.length > 0) {
+    fail(
+      'no grant beyond the audit table',
+      overreaching
+        .map((entry) => `${entry.state} ${entry.permission} on ${entry.object}`)
+        .join('; '),
+    );
+  } else {
+    pass(
+      'no grant beyond the audit table',
+      `${recorded.length} recorded entries; the only object GRANTs are ` +
+        `INSERT/SELECT on [dbo].[AuditLog]`,
+    );
+  }
+
   // ---- migration authority is separate -------------------------------------
-  const runtimeUrl = process.env['DATABASE_URL'] ?? '';
+  const runtimeUrl = environment.values['DATABASE_URL'] ?? '';
   const runtimeUser = /(?:^|;)user=([^;]*)/i.exec(runtimeUrl)?.[1] ?? '';
   if (runtimeUser.toLowerCase() === 'sa' || runtimeUser === '') {
     fail(
@@ -357,7 +428,7 @@ try {
     pass('runtime URL uses the app principal', `user=${runtimeUser}`);
   }
 
-  const migrationUser = /(?:^|;)user=([^;]*)/i.exec(getDatabaseMigrationUrl())?.[1] ?? '';
+  const migrationUser = migrationConnection.user;
   if (migrationUser === runtimeUser) {
     fail(
       'migration authority is separate',

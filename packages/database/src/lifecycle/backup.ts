@@ -353,20 +353,74 @@ export async function deleteBackupArtifact(
   await admin.query(`EXEC master.sys.xp_delete_files N'${path}';`);
 }
 
-/** Reports whether the server can still see the artifact — cleanup evidence. */
+/**
+ * Reports whether the server can still see the artifact — cleanup EVIDENCE.
+ *
+ * ## Why this is strict to the point of rudeness
+ *
+ * The previous revision ended `Number(row?.fileExists ?? 0) === 1`, which reads
+ * every inconclusive outcome as "the file is gone": no row returned, a NULL,
+ * a renamed column, a value that is neither 0 nor 1. Absence is the answer that
+ * lets `db:recovery:test` exit 0, so a broken inspection silently became a
+ * passing cleanup gate — precisely the failure the gate exists to catch.
+ *
+ * Only two results are answers. `file_exists = 1` proves presence,
+ * `file_exists = 0` proves absence, and EVERYTHING else throws, because
+ * "I could not tell" is not evidence of anything.
+ */
 export async function backupArtifactExists(
   admin: SqlSession,
   path: string,
 ): Promise<boolean> {
   assertBackupPath(path);
 
-  const [row] = await admin.query<{ fileExists: number }>(`
+  const rows = await admin.query<{
+    fileExists: number | null;
+    isDirectory: number | null;
+  }>(`
     DECLARE @result TABLE (
       file_exists BIT, is_directory BIT, parent_directory_exists BIT
     );
     INSERT INTO @result EXEC master.dbo.xp_fileexist N'${path}';
-    SELECT CAST(file_exists AS INT) AS fileExists FROM @result;
+    SELECT CAST(file_exists AS INT) AS fileExists,
+           CAST(is_directory AS INT) AS isDirectory
+    FROM @result;
   `);
 
-  return Number(row?.fileExists ?? 0) === 1;
+  if (rows.length !== 1) {
+    throw new Error(
+      `xp_fileexist returned ${rows.length} rows for ${path}; expected exactly 1. ` +
+        `The artifact's state is unknown, which is not evidence that it is gone.`,
+    );
+  }
+
+  const row = rows[0];
+  const fileExists = row?.fileExists;
+  if (fileExists === null || fileExists === undefined) {
+    throw new Error(
+      `xp_fileexist returned no file_exists value for ${path}. The artifact's ` +
+        `state is unknown, which is not evidence that it is gone.`,
+    );
+  }
+
+  if (fileExists !== 0 && fileExists !== 1) {
+    throw new Error(
+      `xp_fileexist reported file_exists=${String(fileExists)} for ${path}; only ` +
+        `0 or 1 is an answer.`,
+    );
+  }
+
+  // A directory where the artifact should be is not the artifact, and deleting
+  // it is not what cleanup verified. Treated as an unknown state, not absence.
+  if (row?.isDirectory !== 0 && row?.isDirectory !== 1) {
+    throw new Error(
+      `xp_fileexist returned no valid is_directory value for ${path}. The ` +
+        `artifact's state is unknown.`,
+    );
+  }
+  if (row.isDirectory === 1) {
+    throw new Error(`xp_fileexist reports ${path} is a directory, not a backup file.`);
+  }
+
+  return fileExists === 1;
 }

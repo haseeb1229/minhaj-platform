@@ -71,7 +71,8 @@ function fakeSession(options: FakeSessionOptions = {}): FakeSession {
 
       // Residue probes, answered as "already gone" unless a test overrides.
       if (statement.includes('DB_ID')) return [{ present: 0 }] as Row[];
-      if (statement.includes('xp_fileexist')) return [{ fileExists: 0 }] as Row[];
+      if (statement.includes('xp_fileexist'))
+        return [{ fileExists: 0, isDirectory: 0 }] as Row[];
 
       return [] as Row[];
     },
@@ -217,7 +218,9 @@ describe('D — backup artifact residue after an apparently clean delete', () =>
   it('detects the surviving artifact even though the delete did not throw', async () => {
     const source = fakeSession({
       answer: (statement) =>
-        statement.includes('xp_fileexist') ? [{ fileExists: 1 }] : undefined,
+        statement.includes('xp_fileexist')
+          ? [{ fileExists: 1, isDirectory: 0 }]
+          : undefined,
     });
 
     const outcome = await cleanUpRecoveryResources({

@@ -1,29 +1,27 @@
 import 'server-only';
 
-// Applied BEFORE any configuration is read: `docker/.env` is authoritative for
-// local lifecycle tooling, so a stale shell variable cannot decide which
-// database this deploy targets.
-import { loadLocalDatabaseEnvironment } from '../src/lifecycle/local-environment.ts';
-
-const localEnvironment = loadLocalDatabaseEnvironment();
-
-const { getDatabaseMigrationUrl } = await import('../src/config.ts');
-import {
-  assertLocalMigrationConnection,
-  describeConnection,
-  formatConnectionMetadata,
-} from '../src/lifecycle/local-environment.ts';
 import { deployMigrations, migrationStatus } from '../src/lifecycle/migrations.ts';
+import { reportConfiguration, startLocalCommand } from './local-bootstrap.ts';
 
 /**
  * `npm run db:migrate:deploy` — applies pending migrations to the PERSISTENT
- * configured database with the real Prisma CLI.
+ * local Phase 1 database with the real Prisma CLI.
  *
  * Deliberate and explicit (ARCHITECTURE.md §10.3: migrations are reviewed and
  * applied deliberately, never automatically on deploy). Nothing invokes this
  * as a side effect of another command; it is run when someone means to change
  * a persistent database, and by the CI job that must bring `MinhajPlatform`
  * to the migrated state its recovery proof reads from.
+ *
+ * ## This is LOCAL lifecycle tooling, not a deployment command
+ *
+ * Despite the name it inherits from `prisma migrate deploy`, this targets the
+ * local Docker SQL Server and nothing else: `startLocalCommand` requires
+ * `docker/.env` and proves the target is loopback, on the configured local
+ * port, and is `MinhajPlatform` or a disposable database. Deploying schema to a
+ * hosted environment is a Phase 28 concern with a pipeline that does not exist
+ * yet; when it arrives it will be its own command with its own configuration
+ * path, not this one pointed somewhere else.
  *
  * ## Why this exists rather than a raw CLI invocation
  *
@@ -37,42 +35,34 @@ import { deployMigrations, migrationStatus } from '../src/lifecycle/migrations.t
  * with P1011 — while every command routed through the repository loader passed
  * in the very same run.
  *
- * The credential recipe no longer emits `#`, but two parsers disagreeing about
- * one file is the defect underneath that symptom. This script closes it: every
- * database command now resolves configuration through
- * `loadLocalDatabaseEnvironment()` and hands the URL to the Prisma child
- * explicitly, exactly as `db:migrate:test` does.
+ * The credential recipe no longer emits `#`, and the second parser is gone
+ * entirely: `--env-file-if-exists` has been removed from every `db:*` script,
+ * so `docker/.env` now has exactly one reader.
  *
  * No migration behaviour is defined here. `deployMigrations()` is the same
  * function the Chunk 2 lifecycle gate uses, so the reviewed path and this one
  * cannot drift apart.
  */
 
-const migrationUrl = getDatabaseMigrationUrl();
-// Fails closed on a URL that is unencrypted, missing the local certificate
-// accommodation, or lacking a migration principal — the class of defect that
-// produced P1011, caught before the CLI is launched rather than as an opaque
-// failure several steps later.
-const connection = assertLocalMigrationConnection(migrationUrl);
+// Fails closed before the CLI is launched on: a missing or unreadable
+// `docker/.env`, a non-loopback host, the wrong port, a database this command
+// may not migrate, a migration principal that is the runtime principal, or a
+// URL without the local TLS posture — the class of defect that produced P1011,
+// caught here rather than as an opaque failure several steps later.
+const command = startLocalCommand('migration-target');
+const { connection, migrationUrl, environment } = command;
 
 process.stdout.write(`Applying migrations to ${connection.database}\n`);
 
 // Safe metadata only: never the password, never the whole URL.
-process.stdout.write(
-  `  ${'configuration'.padEnd(20)} ` +
-    `${formatConnectionMetadata(describeConnection(connection, 'docker/.env'))}\n`,
-);
-if (localEnvironment.overridden.length > 0) {
-  process.stdout.write(
-    `  ${'shell override'.padEnd(20)} ` +
-      `docker/.env took precedence over ${localEnvironment.overridden.join(', ')}\n`,
-  );
-}
+reportConfiguration(command);
 
-const deploy = await deployMigrations(migrationUrl);
+// The child receives the RESOLVED environment explicitly, so a stale
+// `DATABASE_MIGRATION_URL` in the caller's shell cannot reach the CLI.
+const deploy = await deployMigrations(migrationUrl, environment.values);
 process.stdout.write(`  ${'migrate deploy'.padEnd(20)} applied by the real Prisma CLI\n`);
 
-const status = await migrationStatus(migrationUrl);
+const status = await migrationStatus(migrationUrl, environment.values);
 if (!status.output.includes('Database schema is up to date!')) {
   throw new Error(
     `prisma migrate status is not healthy after deploy.\n${status.output.trim()}`,

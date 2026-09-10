@@ -1,14 +1,6 @@
 import 'server-only';
 
-// Applied BEFORE any configuration is read: `docker/.env` is authoritative for
-// local lifecycle tooling, so a stale shell variable cannot decide which
-// database or TLS settings this run uses.
-import { loadLocalDatabaseEnvironment } from '../src/lifecycle/local-environment.ts';
-
-const localEnvironment = loadLocalDatabaseEnvironment();
-
-const { getApplicationPrincipalCredentials, getDatabaseMigrationUrl } =
-  await import('../src/config.ts');
+import { getApplicationPrincipalCredentials } from '../src/config.ts';
 import { provisionApplicationPrincipal } from '../src/lifecycle/application-principal.ts';
 import {
   createDisposableDatabase,
@@ -16,11 +8,6 @@ import {
   newDisposableDatabaseName,
   openMasterSession,
 } from '../src/lifecycle/disposable-database.ts';
-import {
-  assertLocalMigrationConnection,
-  describeConnection,
-  formatConnectionMetadata,
-} from '../src/lifecycle/local-environment.ts';
 import {
   appliedMigrationNames,
   deployMigrations,
@@ -34,6 +21,11 @@ import {
   withDatabase,
   type SqlSession,
 } from '../src/lifecycle/sql-connection.ts';
+import {
+  reportConfiguration,
+  retargetAtDisposable,
+  startLocalCommand,
+} from './local-bootstrap.ts';
 
 /**
  * `npm run db:migrate:test` — the full Phase 1 migration lifecycle against a
@@ -138,23 +130,17 @@ function assertHealthyStatus(output: string, stage: string): void {
   }
 }
 
-const migrationUrl = getDatabaseMigrationUrl();
-// Fails closed on a URL that is unencrypted, missing the local certificate
-// accommodation, or lacking a migration principal.
-const connection = assertLocalMigrationConnection(migrationUrl);
-const principal = getApplicationPrincipalCredentials();
+// Resolves docker/.env as the sole authority and proves the target is the
+// approved local SQL Server before a database is created or the CLI is run.
+const command = startLocalCommand('migration-target');
+const { connection, environment } = command;
+const principal = getApplicationPrincipalCredentials(environment.values);
 const databaseName = newDisposableDatabaseName();
 
 // The CLI must target the disposable database, over the SAME encrypted
-// configuration the normal migration path uses. Only the database name differs.
-const disposableUrl = migrationUrl.replace(
-  `database=${connection.database}`,
-  `database=${databaseName}`,
-);
-if (disposableUrl === migrationUrl) {
-  fail('Could not retarget the migration URL at the disposable database.');
-}
-assertLocalMigrationConnection(disposableUrl);
+// configuration the normal migration path uses. Only the database name
+// differs, and the retargeted URL is re-proven as an approved local target.
+const { url: disposableUrl } = retargetAtDisposable(command, databaseName);
 
 const master = await openMasterSession(connection);
 let session: SqlSession | undefined;
@@ -162,16 +148,7 @@ let session: SqlSession | undefined;
 process.stdout.write(`Phase 1 migration lifecycle on ${databaseName}\n`);
 
 // Safe metadata only: never the password, never the whole URL.
-report(
-  'configuration',
-  formatConnectionMetadata(describeConnection(connection, 'docker/.env')),
-);
-if (localEnvironment.overridden.length > 0) {
-  report(
-    'shell override',
-    `docker/.env took precedence over ${localEnvironment.overridden.join(', ')}`,
-  );
-}
+reportConfiguration(command, 24);
 
 try {
   const migrations = await loadMigrations();
@@ -193,7 +170,7 @@ try {
   report('clean database', 'no user tables');
 
   // ---- REAL prisma migrate deploy ------------------------------------------
-  const firstDeploy = await deployMigrations(disposableUrl);
+  const firstDeploy = await deployMigrations(disposableUrl, environment.values);
   if (!firstDeploy.output.includes(migration.id)) {
     fail(
       `migrate deploy did not report applying ${migration.id}.\n${firstDeploy.output}`,
@@ -201,7 +178,7 @@ try {
   }
   report('migrate deploy', 'applied by the real Prisma CLI');
 
-  const firstStatus = await migrationStatus(disposableUrl);
+  const firstStatus = await migrationStatus(disposableUrl, environment.values);
   assertHealthyStatus(firstStatus.output, 'the first deploy');
   report('migrate status', 'database schema is up to date');
 
@@ -274,7 +251,7 @@ try {
   report('rollback', 'AuditLog dropped, history row removed');
 
   // ---- REAL prisma migrate deploy, again -----------------------------------
-  const secondDeploy = await deployMigrations(disposableUrl);
+  const secondDeploy = await deployMigrations(disposableUrl, environment.values);
   if (!secondDeploy.output.includes(migration.id)) {
     fail(
       `Re-deploy did not re-apply ${migration.id} — the rollback left history ` +
@@ -283,7 +260,7 @@ try {
   }
   report('migrate deploy', 're-applied by the real Prisma CLI');
 
-  const finalStatus = await migrationStatus(disposableUrl);
+  const finalStatus = await migrationStatus(disposableUrl, environment.values);
   assertHealthyStatus(finalStatus.output, 'the re-deploy');
   report('migrate status', 'database schema is up to date');
 

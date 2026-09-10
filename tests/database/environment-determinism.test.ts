@@ -4,26 +4,32 @@ import { describe, expect, it } from 'vitest';
 
 import { getDatabaseMigrationUrl } from '../../packages/database/src/config.ts';
 import {
-  assertLocalMigrationConnection,
   describeConnection,
   formatConnectionMetadata,
-  loadLocalDatabaseEnvironment,
+  resolveLocalDatabaseEnvironment,
 } from '../../packages/database/src/lifecycle/local-environment.ts';
+import {
+  assertApprovedLocalTarget,
+  DEFAULT_LOCAL_SQL_PORT,
+  localTargetPolicy,
+} from '../../packages/database/src/lifecycle/local-target.ts';
 import { buildPrismaChildEnvironment } from '../../packages/database/src/lifecycle/migrations.ts';
 import { repoRoot } from '../architecture/architecture-harness.ts';
 
 /**
  * Cross-shell determinism for the local database lifecycle.
  *
- * Node's `--env-file-if-exists` only fills variables that are NOT already set,
- * so a `DATABASE_MIGRATION_URL` left in one terminal silently outranked
- * `docker/.env`. Two shells then ran the same repository command against
- * different TLS settings, and one saw the Prisma CLI fail with P1011 while
- * another saw it pass.
+ * `docker/.env` was read by two parsers with different rules and the wrong
+ * precedence: Node's `--env-file-if-exists` fills only variables that are NOT
+ * already set, so a `DATABASE_MIGRATION_URL` left in one terminal silently
+ * outranked the file. Two shells then ran the same repository command against
+ * different databases with different TLS settings, and one saw the Prisma CLI
+ * fail with P1011 while another saw it pass.
  *
- * These tests run FRESH CHILD PROCESSES with deliberately contaminated
- * environments, because an in-process assertion cannot prove what a new shell
- * would do.
+ * The flag is gone. These tests run FRESH CHILD PROCESSES with deliberately
+ * contaminated environments, because an in-process assertion cannot prove what
+ * a new shell would do — and they spawn them WITHOUT the flag, so they exercise
+ * what `npm run db:*` actually does now.
  */
 
 /** A synthetic URL: wrong TLS, wrong database, never a real credential. */
@@ -33,7 +39,9 @@ const CONTAMINATED_URL =
 
 const configured = (() => {
   try {
-    getDatabaseMigrationUrl();
+    getDatabaseMigrationUrl(
+      resolveLocalDatabaseEnvironment({ requireLocalFile: false }).values,
+    );
     return true;
   } catch {
     return false;
@@ -45,20 +53,22 @@ interface RunResult {
   output: string;
 }
 
-/** Runs a Node script in a fresh process with an explicit environment. */
+/**
+ * Runs a Node script in a fresh process with an explicit environment.
+ *
+ * No `--env-file-if-exists`: the repository loader is the only thing that reads
+ * `docker/.env`, and a test that kept the flag would be proving the behaviour
+ * of a command line no `db:*` script uses.
+ */
 async function runFresh(
   script: string,
   environment: NodeJS.ProcessEnv,
 ): Promise<RunResult> {
-  const child = spawn(
-    process.execPath,
-    ['--env-file-if-exists=docker/.env', '--conditions=react-server', '-e', script],
-    {
-      cwd: repoRoot,
-      env: { ...process.env, ...environment, NO_COLOR: '1' },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  );
+  const child = spawn(process.execPath, ['--conditions=react-server', '-e', script], {
+    cwd: repoRoot,
+    env: { ...process.env, ...environment, NO_COLOR: '1' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 
   let output = '';
   child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
@@ -73,16 +83,21 @@ async function runFresh(
 }
 
 /**
- * Prints safe connection metadata from a fresh process, so the assertions
- * observe what a new shell actually resolves.
+ * Prints safe connection metadata from a fresh process, resolved exactly as a
+ * `db:*` command resolves it.
  */
 const REPORT_METADATA_SCRIPT = `
-  const { loadLocalDatabaseEnvironment, describeConnection, formatConnectionMetadata } =
+  const { resolveLocalDatabaseEnvironment, describeConnection, formatConnectionMetadata } =
     await import('./packages/database/src/lifecycle/local-environment.ts');
-  loadLocalDatabaseEnvironment();
   const { getDatabaseMigrationUrl } = await import('./packages/database/src/config.ts');
-  const { parseSqlServerUrl } = await import('./packages/database/src/lifecycle/sql-connection.ts');
-  const connection = parseSqlServerUrl(getDatabaseMigrationUrl());
+  const { assertApprovedLocalTarget, localTargetPolicy } =
+    await import('./packages/database/src/lifecycle/local-target.ts');
+
+  const environment = resolveLocalDatabaseEnvironment({ requireLocalFile: true });
+  const connection = assertApprovedLocalTarget(
+    getDatabaseMigrationUrl(environment.values),
+    localTargetPolicy(environment.values, 'source', 'migration'),
+  );
   process.stdout.write(formatConnectionMetadata(describeConnection(connection, 'docker/.env')));
 `;
 
@@ -121,53 +136,76 @@ describe.skipIf(!configured)('local database configuration is deterministic', ()
   }, 120_000);
 
   it('hands the Prisma CLI child an environment it cannot mis-resolve', () => {
-    const intended = getDatabaseMigrationUrl();
-    const environment = buildPrismaChildEnvironment(intended);
+    const environment = resolveLocalDatabaseEnvironment({ requireLocalFile: true });
+    const intended = getDatabaseMigrationUrl(environment.values);
 
-    expect(environment['DATABASE_MIGRATION_URL']).toBe(intended);
+    // The base is the RESOLVED record, not `process.env`: the child's
+    // configuration is data this caller holds, not a side effect it hopes
+    // happened first.
+    const childEnvironment = buildPrismaChildEnvironment(intended, {
+      ...environment.values,
+      DATABASE_MIGRATION_URL: CONTAMINATED_URL,
+    });
+
+    expect(childEnvironment['DATABASE_MIGRATION_URL']).toBe(intended);
     // Competing sources are cleared, not merely outranked.
-    expect(environment['DATABASE_URL']).toBeUndefined();
-    expect(environment['PRISMA_DATABASE_URL']).toBeUndefined();
+    expect(childEnvironment['DATABASE_URL']).toBeUndefined();
+    expect(childEnvironment['PRISMA_DATABASE_URL']).toBeUndefined();
   });
 
   it('reports docker/.env displacing a conflicting shell value', () => {
-    const target: NodeJS.ProcessEnv = { DATABASE_MIGRATION_URL: CONTAMINATED_URL };
-    const result = loadLocalDatabaseEnvironment(target);
+    const resolved = resolveLocalDatabaseEnvironment({
+      requireLocalFile: true,
+      processEnvironment: { DATABASE_MIGRATION_URL: CONTAMINATED_URL },
+    });
 
-    expect(result.localFilePresent).toBe(true);
-    expect(result.overridden).toContain('DATABASE_MIGRATION_URL');
-    expect(target['DATABASE_MIGRATION_URL']).not.toBe(CONTAMINATED_URL);
+    expect(resolved.localFilePresent).toBe(true);
+    expect(resolved.overridden).toContain('DATABASE_MIGRATION_URL');
+    expect(resolved.values['DATABASE_MIGRATION_URL']).not.toBe(CONTAMINATED_URL);
   });
 
-  it('leaves the shell alone when the local file supplies nothing', () => {
-    // A deployed context has no docker/.env; externally supplied configuration
-    // must survive untouched.
+  it('leaves externally supplied configuration the file does not mention alone', () => {
+    // A deployed context has no docker/.env at all; here the point is narrower:
+    // keys the file does not supply survive untouched.
     const externallySupplied = 'sqlserver://prod-host:1433;database=D;user=u;pwd=v';
-    const target: NodeJS.ProcessEnv = { SOME_UNRELATED_KEY: externallySupplied };
 
-    loadLocalDatabaseEnvironment(target);
+    const resolved = resolveLocalDatabaseEnvironment({
+      requireLocalFile: true,
+      processEnvironment: { SOME_UNRELATED_KEY: externallySupplied },
+    });
 
-    expect(target['SOME_UNRELATED_KEY']).toBe(externallySupplied);
+    expect(resolved.values['SOME_UNRELATED_KEY']).toBe(externallySupplied);
   });
 });
 
 describe('local migration configuration fails closed', () => {
+  const policy = localTargetPolicy(
+    {
+      MINHAJ_SQLSERVER_PORT: String(DEFAULT_LOCAL_SQL_PORT),
+      DATABASE_APP_LOGIN: 'minhaj_app',
+    },
+    'source',
+    'migration',
+  );
+
   it('rejects an unencrypted migration URL', () => {
     expect(() =>
-      assertLocalMigrationConnection(
-        'sqlserver://localhost:14330;database=D;user=sa;' +
+      assertApprovedLocalTarget(
+        'sqlserver://localhost:14330;database=MinhajPlatform;user=sa;' +
           'password=SYNTHETIC_DETERMINISM_MARKER;encrypt=false',
+        policy,
       ),
-    ).toThrow(/encrypt=true/);
+    ).toThrow(/not encrypted/);
   });
 
   it('rejects a URL missing the local certificate accommodation', () => {
     // This exact shape is what produced P1011 across sessions.
     let thrown: unknown;
     try {
-      assertLocalMigrationConnection(
-        'sqlserver://localhost:14330;database=D;user=sa;' +
+      assertApprovedLocalTarget(
+        'sqlserver://localhost:14330;database=MinhajPlatform;user=sa;' +
           'password=SYNTHETIC_DETERMINISM_MARKER;encrypt=true',
+        policy,
       );
     } catch (error) {
       thrown = error;
@@ -180,9 +218,10 @@ describe('local migration configuration fails closed', () => {
   });
 
   it('accepts the approved local shape and exposes only safe metadata', () => {
-    const connection = assertLocalMigrationConnection(
+    const connection = assertApprovedLocalTarget(
       'sqlserver://localhost:14330;database=MinhajPlatform;user=sa;' +
         'password=SYNTHETIC_DETERMINISM_MARKER;encrypt=true;trustServerCertificate=true',
+      policy,
     );
 
     const rendered = formatConnectionMetadata(
@@ -197,24 +236,49 @@ describe('local migration configuration fails closed', () => {
   });
 });
 
-describe.skipIf(!configured)('the lifecycle command runs in a fresh process', () => {
+describe('the lifecycle command runs in a fresh process', () => {
   it('fails closed when the resolved local configuration is invalid', async () => {
-    // No docker/.env available to the child, and a deliberately broken URL:
-    // the command must refuse rather than silently proceeding.
     const script = `
-      const { assertLocalMigrationConnection } =
-        await import('./packages/database/src/lifecycle/local-environment.ts');
-      assertLocalMigrationConnection(process.env.PROBE_URL);
+      const { assertApprovedLocalTarget, localTargetPolicy } =
+        await import('./packages/database/src/lifecycle/local-target.ts');
+      assertApprovedLocalTarget(
+        process.env.PROBE_URL,
+        localTargetPolicy({ DATABASE_APP_LOGIN: 'minhaj_app' }, 'source', 'migration'),
+      );
     `;
 
     const { exitCode, output } = await runFresh(script, {
       PROBE_URL:
-        'sqlserver://localhost:14330;database=D;user=sa;' +
+        'sqlserver://localhost:14330;database=MinhajPlatform;user=sa;' +
         'password=SYNTHETIC_DETERMINISM_MARKER;encrypt=false',
     });
 
     expect(exitCode).not.toBe(0);
-    expect(output).toMatch(/encrypt=true/);
+    expect(output).toMatch(/not encrypted/);
+    expect(output).not.toContain('SYNTHETIC_DETERMINISM_MARKER');
+  }, 120_000);
+
+  it('refuses a non-local target in a fresh process, before anything runs', async () => {
+    // The F5 case, end to end: a URL that satisfied the old guard completely.
+    const script = `
+      const { assertApprovedLocalTarget, localTargetPolicy } =
+        await import('./packages/database/src/lifecycle/local-target.ts');
+      assertApprovedLocalTarget(
+        process.env.PROBE_URL,
+        localTargetPolicy({ DATABASE_APP_LOGIN: 'minhaj_app' }, 'source', 'migration'),
+      );
+      process.stdout.write('THE GUARD LET THIS THROUGH');
+    `;
+
+    const { exitCode, output } = await runFresh(script, {
+      PROBE_URL:
+        'sqlserver://nonlocal.invalid:14330;database=MinhajPlatform;user=sa;' +
+        'password=SYNTHETIC_DETERMINISM_MARKER;encrypt=true;trustServerCertificate=true',
+    });
+
+    expect(exitCode).not.toBe(0);
+    expect(output).not.toContain('THE GUARD LET THIS THROUGH');
+    expect(output).toMatch(/not the loopback interface/);
     expect(output).not.toContain('SYNTHETIC_DETERMINISM_MARKER');
   }, 120_000);
 

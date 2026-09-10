@@ -1,11 +1,5 @@
 import 'server-only';
 
-// Applied BEFORE any configuration is read, for consistency with every other
-// `db:*` command: `docker/.env` is authoritative for local lifecycle tooling.
-import { loadLocalDatabaseEnvironment } from '../src/lifecycle/local-environment.ts';
-
-loadLocalDatabaseEnvironment();
-
 import {
   assertBackupPath,
   assertBackupSourceDatabase,
@@ -17,6 +11,7 @@ import {
   newRestoreDatabaseName,
   RESTORE_PREFIX,
 } from '../src/lifecycle/backup.ts';
+import { resolveLocalDatabaseEnvironment } from '../src/lifecycle/local-environment.ts';
 
 /**
  * `npm run db:restore:test` — proves the restore and cleanup guards FAIL
@@ -213,7 +208,12 @@ if (!artifact.path.startsWith(`${BACKUP_DIRECTORY}/`)) {
 }
 
 // The artifact name must not be derivable from, or able to carry, a credential.
-const password = process.env['DATABASE_APP_PASSWORD'] ?? '';
+// `db:restore:test` opens no connection, so the local file is optional here;
+// it is read only to obtain the value this assertion must NOT find.
+const password =
+  resolveLocalDatabaseEnvironment({ requireLocalFile: false }).values[
+    'DATABASE_APP_PASSWORD'
+  ] ?? '';
 if (password !== '' && artifact.fileName.includes(password)) {
   fail('artifact name carries no credential', 'the file name contains a password');
 } else {

@@ -1,24 +1,12 @@
 import 'server-only';
 
-// Applied BEFORE any configuration is read: `docker/.env` is authoritative for
-// local lifecycle tooling, so a stale shell variable cannot decide which
-// database this run backs up.
-import { loadLocalDatabaseEnvironment } from '../src/lifecycle/local-environment.ts';
-
-const localEnvironment = loadLocalDatabaseEnvironment();
-
-const { getDatabaseMigrationUrl } = await import('../src/config.ts');
 import {
   assertBackupSourceDatabase,
   backupDatabase,
   newBackupTarget,
 } from '../src/lifecycle/backup.ts';
-import {
-  assertLocalMigrationConnection,
-  describeConnection,
-  formatConnectionMetadata,
-} from '../src/lifecycle/local-environment.ts';
 import { openSession } from '../src/lifecycle/sql-connection.ts';
+import { reportConfiguration, startLocalCommand } from './local-bootstrap.ts';
 
 /**
  * `npm run db:backup` — takes one REAL, verified SQL Server backup of the
@@ -37,28 +25,21 @@ import { openSession } from '../src/lifecycle/sql-connection.ts';
  * artifact path. No password and no connection URL (§18.1).
  */
 
-const migrationUrl = getDatabaseMigrationUrl();
-// Fails closed on an unencrypted or otherwise unusable local configuration.
-const connection = assertLocalMigrationConnection(migrationUrl);
+// Resolves docker/.env, validates the migration URL out of that resolved
+// record, and proves the target is the approved local SQL Server: loopback
+// host, the configured local port, MinhajPlatform, and a migration principal
+// distinct from the runtime one. Nothing below runs if any of that fails.
+const command = startLocalCommand('source');
+const connection = command.connection;
 
-// Fails closed before a session is even opened if the configured database is
-// not the one Phase 1 backs up — a system database, or an unexpected name.
+// Belt and braces: the source-database rule stated where the backup happens.
 assertBackupSourceDatabase(connection.database);
 
 const target = newBackupTarget();
 const admin = await openSession(connection);
 
 process.stdout.write(`Phase 1 backup of ${connection.database}\n`);
-process.stdout.write(
-  `  ${'configuration'.padEnd(20)} ` +
-    `${formatConnectionMetadata(describeConnection(connection, 'docker/.env'))}\n`,
-);
-if (localEnvironment.overridden.length > 0) {
-  process.stdout.write(
-    `  ${'shell override'.padEnd(20)} ` +
-      `docker/.env took precedence over ${localEnvironment.overridden.join(', ')}\n`,
-  );
-}
+reportConfiguration(command);
 
 try {
   const result = await backupDatabase(admin, connection.database, target);
