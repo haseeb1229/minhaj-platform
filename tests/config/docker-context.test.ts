@@ -180,7 +180,8 @@ describe('F7.4 — legitimate build inputs are preserved', () => {
   );
 
   it.each([
-    ['ordinary application source', 'apps/web/src/app/layout.tsx'],
+    ['ordinary application source', 'apps/web/src/app/[locale]/layout.tsx'],
+    ['an interface message catalogue', 'apps/web/messages/en.json'],
     ['package source', 'packages/contracts/src/index.ts'],
     ['a migration', 'packages/database/prisma/migrations/0001_init/migration.sql'],
     ['the Prisma schema', 'packages/database/prisma/schema.prisma'],

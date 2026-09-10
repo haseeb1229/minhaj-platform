@@ -41,12 +41,7 @@ import 'server-only';
 
 import { z } from 'zod';
 
-import {
-  localeSchema,
-  logLevelSchema,
-  nodeEnvSchema,
-  parseEnvironment,
-} from './shared.ts';
+import { logLevelSchema, nodeEnvSchema, parseEnvironment } from './shared.ts';
 
 /**
  * Server environment schema — Phase 0B scope only.
@@ -67,12 +62,6 @@ export const serverEnvSchema = z.object({
 
   /** Pino level (TECH_STACK.md §12). */
   LOG_LEVEL: logLevelSchema.default('info'),
-
-  /**
-   * Locale resolved when a visitor expresses no preference
-   * (ROUTE_MAP.md §1.1: stored preference, then Accept-Language, then `en`).
-   */
-  DEFAULT_LOCALE: localeSchema.default('en'),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

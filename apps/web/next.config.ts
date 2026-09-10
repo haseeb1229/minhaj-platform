@@ -1,11 +1,19 @@
 import type { NextConfig } from 'next';
+import createNextIntlPlugin from 'next-intl/plugin';
 
 /**
- * Next.js configuration — Phase 0B.
+ * Next.js configuration.
  *
- * Minimal by design. Locale routing (ROUTE_MAP.md §1), security headers,
- * image domains and cache directives belong to the phases that introduce them.
+ * The next-intl plugin resolves `src/i18n/request.ts` — one of its default
+ * locations — and aliases it so the server can load per-request configuration.
+ * It is the only wiring the library needs at build time; the routing rules
+ * themselves live in `src/i18n/routing.ts`, not here.
+ *
+ * Deliberately minimal otherwise. Security headers, image domains and cache
+ * directives belong to the phases that introduce them.
  */
+const withNextIntl = createNextIntlPlugin();
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
 
@@ -22,4 +30,4 @@ const nextConfig: NextConfig = {
   // ESLint during `next build`, so there is nothing to disable here.
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

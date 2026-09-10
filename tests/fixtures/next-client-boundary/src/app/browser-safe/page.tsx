@@ -17,7 +17,6 @@ export default function BrowserSafePage() {
       onClick={() =>
         parseClientEnv({
           NEXT_PUBLIC_SITE_URL: 'https://example.org',
-          NEXT_PUBLIC_DEFAULT_LOCALE: 'en',
         })
       }
     >

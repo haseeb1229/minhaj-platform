@@ -23,13 +23,11 @@ declare namespace NodeJS {
     readonly NODE_ENV: 'development' | 'test' | 'production';
     readonly PORT?: string;
     readonly LOG_LEVEL?: string;
-    readonly DEFAULT_LOCALE?: string;
 
     /** Set by Next.js to the runtime executing the current code. */
     readonly NEXT_RUNTIME?: 'nodejs' | 'edge';
 
     // --- Client, PUBLIC — inlined into the browser bundle ----------------
     readonly NEXT_PUBLIC_SITE_URL?: string;
-    readonly NEXT_PUBLIC_DEFAULT_LOCALE?: string;
   }
 }

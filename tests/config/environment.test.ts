@@ -26,23 +26,20 @@ describe('server environment', () => {
       NODE_ENV: 'production',
       PORT: '3000',
       LOG_LEVEL: 'warn',
-      DEFAULT_LOCALE: 'ur',
     });
 
     expect(env).toEqual({
       NODE_ENV: 'production',
       PORT: 3000,
       LOG_LEVEL: 'warn',
-      DEFAULT_LOCALE: 'ur',
     });
   });
 
-  it('applies Phase 0B defaults when nothing is supplied', () => {
+  it('applies the documented defaults when nothing is supplied', () => {
     expect(parseServerEnv({})).toEqual({
       NODE_ENV: 'development',
       PORT: 3000,
       LOG_LEVEL: 'info',
-      DEFAULT_LOCALE: 'en',
     });
   });
 
@@ -56,13 +53,10 @@ describe('server environment', () => {
     // `.env.example` is valueless (SECURITY_BASELINE.md §18.1), so copying it
     // verbatim produces `PORT=` rather than an absent PORT. Following the
     // documented setup must not produce a validation failure.
-    expect(
-      parseServerEnv({ NODE_ENV: '', PORT: '', LOG_LEVEL: '', DEFAULT_LOCALE: '' }),
-    ).toEqual({
+    expect(parseServerEnv({ NODE_ENV: '', PORT: '', LOG_LEVEL: '' })).toEqual({
       NODE_ENV: 'development',
       PORT: 3000,
       LOG_LEVEL: 'info',
-      DEFAULT_LOCALE: 'en',
     });
   });
 
@@ -71,8 +65,8 @@ describe('server environment', () => {
     expect(() => parseServerEnv({ PORT: '70000' })).toThrow(/PORT/);
   });
 
-  it('rejects an unsupported locale', () => {
-    expect(() => parseServerEnv({ DEFAULT_LOCALE: 'fr' })).toThrow(/DEFAULT_LOCALE/);
+  it('rejects an unsupported log level', () => {
+    expect(() => parseServerEnv({ LOG_LEVEL: 'chatty' })).toThrow(/LOG_LEVEL/);
   });
 
   it('names the offending variable without printing its value', () => {
@@ -98,13 +92,9 @@ describe('server environment', () => {
 
 describe('client environment', () => {
   it('accepts a valid configuration', () => {
-    const env = parseClientEnv({
-      NEXT_PUBLIC_SITE_URL: 'https://minhaj.org',
-      NEXT_PUBLIC_DEFAULT_LOCALE: 'ar',
-    });
+    const env = parseClientEnv({ NEXT_PUBLIC_SITE_URL: 'https://minhaj.org' });
 
     expect(env.NEXT_PUBLIC_SITE_URL).toBe('https://minhaj.org');
-    expect(env.NEXT_PUBLIC_DEFAULT_LOCALE).toBe('ar');
   });
 
   it('rejects a malformed site URL', () => {
@@ -136,6 +126,46 @@ describe('client environment', () => {
         ).toBe(false);
       }
     }
+  });
+});
+
+describe('the final route locale is not configurable', () => {
+  /**
+   * ROUTE_MAP.md §1.1 fixes the last step of locale resolution at `en`.
+   *
+   * Phase 0B carried `DEFAULT_LOCALE` and `NEXT_PUBLIC_DEFAULT_LOCALE`, which
+   * existed only to choose the single locale a routing-less skeleton rendered.
+   * Once real locale routing arrived they became a way to contradict the
+   * accepted contract from a deployment file — set `DEFAULT_LOCALE=ur` and
+   * every visitor with no preference lands somewhere §1.1 says they must not.
+   *
+   * They are retired. These assertions are what stops them coming back as a
+   * convenience: environment validation is where such a variable would have to
+   * be declared to mean anything at all.
+   */
+  it('declares no default-locale variable on either schema', () => {
+    const declared = [
+      ...Object.keys(serverEnvSchema.shape),
+      ...Object.keys(clientEnvSchema.shape),
+    ];
+
+    expect(declared).not.toContain('DEFAULT_LOCALE');
+    expect(declared).not.toContain('NEXT_PUBLIC_DEFAULT_LOCALE');
+  });
+
+  it('accepts a supplied default-locale variable only by ignoring it', () => {
+    // A stale deployment file may still set it. It must have NO effect —
+    // neither a validation failure that blocks a deploy, nor any influence on
+    // the parsed configuration.
+    expect(parseServerEnv({ DEFAULT_LOCALE: 'ur' })).toEqual({
+      NODE_ENV: 'development',
+      PORT: 3000,
+      LOG_LEVEL: 'info',
+    });
+
+    expect(parseClientEnv({ NEXT_PUBLIC_DEFAULT_LOCALE: 'ur' })).toEqual({
+      NEXT_PUBLIC_SITE_URL: 'http://localhost:3000',
+    });
   });
 });
 
@@ -203,7 +233,6 @@ describe('B7 — invalid configuration prevents startup', () => {
       NODE_ENV: 'production',
       PORT: '3000',
       LOG_LEVEL: 'info',
-      DEFAULT_LOCALE: 'en',
     });
 
     expect(result.ok).toBe(true);
@@ -225,11 +254,17 @@ describe('B7 — invalid configuration prevents startup', () => {
   });
 
   it('never prints the offending value during startup failure', async () => {
+    // Driven through PORT because `DEFAULT_LOCALE` no longer exists: Phase 3A
+    // fixed the final no-preference locale at `en` (ROUTE_MAP.md §1.1) and
+    // retired the variable that could contradict it. The property is
+    // unchanged — the VARIABLE is named, its VALUE never is — and it is now
+    // asserted against a variable the schema still rejects values for, which
+    // is what keeps this a real test rather than one that cannot fail.
     const secret = 'STARTUP-SECRET-MUST-NOT-LEAK';
-    const result = await initialiseWith({ DEFAULT_LOCALE: secret });
+    const result = await initialiseWith({ PORT: secret });
 
     expect(result.ok).toBe(false);
-    expect(result.message).toContain('DEFAULT_LOCALE');
+    expect(result.message).toContain('PORT');
     expect(result.message).not.toContain(secret);
   });
 });

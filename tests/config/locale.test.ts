@@ -1,124 +1,219 @@
+import { readFile, readdir } from 'node:fs/promises';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
   FALLBACK_LOCALE,
   directionOf,
-  resolveDefaultLocale,
+  endonymOf,
+  isSupportedLocale,
 } from '../../apps/web/src/config/locale.ts';
+import { localeSchema } from '../../packages/contracts/src/env/shared.ts';
+import { repoRoot } from '../architecture/architecture-harness.ts';
 
 /**
- * N2 — locale configuration must behave as it is documented to behave.
+ * Locale properties and the FIXED final fallback (ROUTE_MAP.md §1.1, §1.2).
  *
- * Review #3 found `NEXT_PUBLIC_DEFAULT_LOCALE` resolved with `.catch('en')`,
- * silently replacing an invalid explicit value with English, while the comment
- * beside it claimed invalid configuration fails.
+ * WHAT CHANGED IN PHASE 3A, AND WHY THESE TESTS CHANGED WITH IT
+ * -------------------------------------------------------------
+ * This file used to test `resolveDefaultLocale`, which read
+ * `NEXT_PUBLIC_DEFAULT_LOCALE` and decided the single locale the Phase 0B
+ * skeleton rendered. Those assertions were correct for a skeleton with no
+ * locale routing. They describe something that no longer exists, and keeping
+ * them would mean asserting that the final fallback is CONFIGURABLE — which is
+ * exactly what ROUTE_MAP.md §1.1 says it is not.
  *
- * Silently discarding a deliberate value is the worse of the two failures the
- * code could have: the build passes, the site renders in the wrong language and
- * the wrong text DIRECTION, and nothing anywhere explains why. For a
- * trilingual platform with two RTL locales (ROUTE_MAP.md §1.2) that is not a
- * cosmetic bug.
- *
- * The distinction now enforced:
- *   - unset or blank  → the documented default, because nothing was configured
- *   - present, valid  → that locale
- *   - present, invalid → a build failure naming the variable
+ * The property they protected has not been dropped; it has been strengthened.
+ * The old test proved an invalid configured locale could not silently become
+ * English. The tests below prove something stricter: no configuration can move
+ * the final fallback at all, and an unsupported locale is not merely
+ * substituted but REJECTED — by the function the render tree calls on every
+ * request. `tests/config/locale-routing.integration.test.ts` proves that
+ * rejection end to end, over real HTTP.
  */
 
-describe('N2 — absent configuration uses the documented default', () => {
-  it('falls back when the variable is unset', () => {
-    expect(resolveDefaultLocale(undefined)).toBe(FALLBACK_LOCALE);
+/** Source with comments removed, so prose about a defect is not the defect. */
+async function codeOf(file: string): Promise<string> {
+  const source = await readFile(path.join(repoRoot, file), 'utf8');
+
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+}
+
+describe('the final no-preference fallback is fixed, not configured', () => {
+  it('is `en`, as ROUTE_MAP.md §1.1 requires', () => {
     expect(FALLBACK_LOCALE).toBe('en');
   });
 
-  it('falls back when the variable is blank', () => {
-    // `.env.example` is valueless by policy (SECURITY_BASELINE.md §18.1), so
-    // copying it yields `NEXT_PUBLIC_DEFAULT_LOCALE=` — the documented, working
-    // local configuration. Failing here would break the documented setup.
-    expect(resolveDefaultLocale('')).toBe(FALLBACK_LOCALE);
+  it('is itself a supported locale', () => {
+    expect(isSupportedLocale(FALLBACK_LOCALE)).toBe(true);
   });
 
-  it('falls back when the variable is whitespace only', () => {
-    expect(resolveDefaultLocale('   ')).toBe(FALLBACK_LOCALE);
+  it('reads no environment variable to decide it', async () => {
+    // The regression this replaces: a deployment file setting
+    // `DEFAULT_LOCALE=ur` would have sent every visitor with no preference to
+    // Urdu, contradicting the accepted routing contract from outside the
+    // repository entirely. Asserted against the SOURCE, because the defect is
+    // the existence of the reading rather than any value it returns.
+    expect(await codeOf('apps/web/src/config/locale.ts')).not.toMatch(/process\.env/);
+  });
+
+  it('is not reintroduced through the tracked environment example', async () => {
+    // `.env.example` is the file a developer copies, so a stale entry there is
+    // how a retired variable comes back with someone believing it still works.
+    const example = await readFile(path.join(repoRoot, '.env.example'), 'utf8');
+
+    expect(example).not.toMatch(/^\s*DEFAULT_LOCALE=/m);
+    expect(example).not.toMatch(/^\s*NEXT_PUBLIC_DEFAULT_LOCALE=/m);
   });
 });
 
-describe('N2 — every supported locale resolves to itself', () => {
-  it.each(['en', 'ur', 'ar'] as const)('accepts %s', (locale) => {
-    expect(resolveDefaultLocale(locale)).toBe(locale);
-  });
-
-  it('resolves the correct direction for each', () => {
-    // The reason an invalid value must not be swallowed: direction follows
-    // locale, and a wrong direction is a visibly broken page.
+describe('direction is derived from the locale', () => {
+  it('maps each supported locale to its accepted direction', () => {
+    // ROUTE_MAP.md §1.2. A wrong direction is a visibly broken page rather
+    // than a cosmetic defect, which is why it is a table and not a heuristic.
     expect(directionOf('en')).toBe('ltr');
     expect(directionOf('ur')).toBe('rtl');
     expect(directionOf('ar')).toBe('rtl');
   });
-});
 
-describe('N2 — an explicitly invalid locale FAILS rather than falling back', () => {
-  it('throws for an unsupported language code', () => {
-    // Someone wrote `de` and meant it. Substituting English hides a real
-    // configuration error behind a working-looking build.
-    expect(() => resolveDefaultLocale('de')).toThrow(/NEXT_PUBLIC_DEFAULT_LOCALE/);
-  });
-
-  it('throws for a plausible-but-wrong value', () => {
-    // `en-GB` is the shape of a locale and is not one of the three supported.
-    expect(() => resolveDefaultLocale('en-GB')).toThrow(/NEXT_PUBLIC_DEFAULT_LOCALE/);
-  });
-
-  it('throws for a value differing only in case', () => {
-    expect(() => resolveDefaultLocale('EN')).toThrow(/NEXT_PUBLIC_DEFAULT_LOCALE/);
-  });
-
-  it('names the supported locales so the error is actionable', () => {
-    expect(() => resolveDefaultLocale('de')).toThrow(/en, ur, ar/);
-  });
-
-  it('explains that leaving it unset is the supported way to get the default', () => {
-    // Without this, the obvious "fix" for the error is to delete the check.
-    expect(() => resolveDefaultLocale('de')).toThrow(/unset/);
+  it('answers for every supported locale, with no gaps', () => {
+    // Driven from the locale schema, so a locale added later must be given a
+    // direction here rather than silently inheriting one.
+    for (const locale of localeSchema.options) {
+      expect(['ltr', 'rtl']).toContain(directionOf(locale));
+    }
   });
 });
 
-describe('N2 — the documentation and the behaviour agree', () => {
-  it('no longer swallows invalid configuration with `.catch`', async () => {
-    // The specific defect: `localeSchema.catch('en')`. Asserting its absence
-    // stops it returning as a convenient fix for a failing build.
-    //
-    // Matched as a real CALL on the schema, not as the bare substring, so the
-    // module may still name the defect it was written to correct.
-    const { readFile } = await import('node:fs/promises');
-    const source = await readFile('apps/web/src/config/locale.ts', 'utf8');
-
-    expect(source).not.toMatch(/localeSchema[\s\S]{0,20}\.catch\(/);
+describe('every locale has a name in its own script', () => {
+  it('names each supported locale', () => {
+    expect(endonymOf('en')).toBe('English');
+    expect(endonymOf('ur')).toBe('اردو');
+    expect(endonymOf('ar')).toBe('العربية');
   });
 
-  it('keeps locale resolution off the render path', async () => {
-    // ARCHITECTURE.md §8: the anonymous public tree must stay cacheable.
-    // Reading configuration during render would force every route dynamic —
-    // the regression this module exists to avoid — so the value stays a
-    // build-time constant and no route declares `dynamic = 'force-dynamic'`.
-    //
-    // Matched as the real ROUTE SEGMENT EXPORT rather than as the bare string,
-    // because these files legitimately discuss the regression in prose and a
-    // test that forbids explaining itself is a bad test.
-    const { readFile } = await import('node:fs/promises');
+  it('has a non-empty endonym for every supported locale', () => {
+    for (const locale of localeSchema.options) {
+      expect(endonymOf(locale).trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it('writes the RTL locales in their own scripts, not transliterated', () => {
+    // Why these are not translated messages: the option exists FOR a reader
+    // who cannot read the Latin script, and "Urdu" is useless to them.
+    // Asserted by script range, so an edit to `Urdu` fails here.
+    expect(endonymOf('ur')).toMatch(/\p{Script=Arabic}/u);
+    expect(endonymOf('ar')).toMatch(/\p{Script=Arabic}/u);
+  });
+});
+
+describe('locale validation fails closed', () => {
+  it('accepts every supported locale', () => {
+    for (const locale of localeSchema.options) {
+      expect(isSupportedLocale(locale)).toBe(true);
+    }
+  });
+
+  it.each(['de', 'en-GB', 'EN', 'Ur', '', ' en', 'en ', 'zz', '../en', 'en/../de'])(
+    'rejects %j',
+    (candidate) => {
+      // `[locale]` is effectively a catch-all, so this function is what stands
+      // between an arbitrary path segment and a page rendering as though that
+      // segment named a supported language.
+      expect(isSupportedLocale(candidate)).toBe(false);
+    },
+  );
+
+  it('is exactly the accepted locale set, with nothing added', () => {
+    expect([...localeSchema.options]).toEqual(['en', 'ur', 'ar']);
+  });
+});
+
+describe('the render and routing tree stays statically renderable', () => {
+  /**
+   * ARCHITECTURE.md §8: the anonymous public tree must stay cacheable.
+   *
+   * Reading configuration or a request-time API during render would force
+   * every route dynamic — the regression the previous revision of this file
+   * guarded `app/layout.tsx` and `app/page.tsx` against. Those files no longer
+   * exist. The protection follows the code to the locale-prefixed tree that
+   * replaced them, and now covers the routing layer as well.
+   */
+  const renderTree = [
+    'apps/web/src/config/locale.ts',
+    'apps/web/src/i18n/routing.ts',
+    'apps/web/src/i18n/request.ts',
+    'apps/web/src/i18n/navigation.ts',
+    'apps/web/src/i18n/query.ts',
+    'apps/web/src/app/[locale]/layout.tsx',
+    'apps/web/src/app/[locale]/page.tsx',
+    'apps/web/src/components/locale-switcher.tsx',
+    'apps/web/src/components/locale-switcher-links.tsx',
+  ];
+
+  it.each(renderTree)('%s does not force dynamic rendering', async (file) => {
     const forceDynamicExport =
       /export\s+const\s+dynamic\s*(:[^=]+)?=\s*['"]force-dynamic['"]/;
 
-    for (const file of [
-      'apps/web/src/config/locale.ts',
-      'apps/web/src/app/layout.tsx',
-      'apps/web/src/app/page.tsx',
-    ]) {
-      const source = await readFile(file, 'utf8');
+    expect(await codeOf(file)).not.toMatch(forceDynamicExport);
+  });
 
-      expect(source, `${file} must not force dynamic rendering`).not.toMatch(
-        forceDynamicExport,
+  it.each(renderTree)('%s reads no request-time server API', async (file) => {
+    // `headers()` or `cookies()` anywhere in this tree would opt every locale
+    // route out of static generation. The locale arrives as a route parameter
+    // precisely so that neither is needed; resolving a locale FROM a cookie or
+    // an `Accept-Language` header is the proxy's job, and the proxy is not a
+    // render path.
+    const code = await codeOf(file);
+
+    expect(code).not.toMatch(/from\s+['"]next\/headers['"]/);
+    expect(code).not.toMatch(/\bcookies\s*\(\s*\)/);
+    expect(code).not.toMatch(/\bheaders\s*\(\s*\)/);
+  });
+
+  it('covers every file in the localisation and component tree', async () => {
+    // A file added to either directory later must be listed above, or the two
+    // guards quietly stop covering the code they exist for.
+    const found: string[] = [];
+
+    for (const directory of ['apps/web/src/i18n', 'apps/web/src/components']) {
+      for (const entry of await readdir(path.join(repoRoot, directory))) {
+        found.push(`${directory}/${entry}`);
+      }
+    }
+
+    expect(found.length).toBeGreaterThan(0);
+
+    for (const file of found) {
+      expect(renderTree, `${file} must be covered by the static-render guard`).toContain(
+        file,
       );
     }
+  });
+
+  it('declares exactly one routing entry point, on the Next 16 convention', async () => {
+    // Next fails the build when both `middleware.ts` and `proxy.ts` exist, so
+    // this cannot regress silently — but it can regress into the WRONG one of
+    // the two, and a routing file nobody notices is how a second, divergent
+    // locale implementation begins.
+    const { existsSync } = await import('node:fs');
+
+    for (const location of ['apps/web/src', 'apps/web']) {
+      expect(existsSync(path.join(repoRoot, location, 'middleware.ts'))).toBe(false);
+    }
+
+    expect(existsSync(path.join(repoRoot, 'apps/web/src/proxy.ts'))).toBe(true);
+  });
+
+  it('keeps no unprefixed public application tree beside the locale one', async () => {
+    // ROUTE_MAP.md §1.1: the locale segment is ALWAYS present. A surviving
+    // `app/layout.tsx` and `app/page.tsx` would make `/` answer directly and
+    // reintroduce exactly the duplicate-URL problem the contract removes.
+    const entries = await readdir(path.join(repoRoot, 'apps/web/src/app'));
+
+    expect(entries).toEqual(['[locale]']);
   });
 });

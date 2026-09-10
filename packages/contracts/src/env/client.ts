@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { localeSchema, parseEnvironment } from './shared.ts';
+import { parseEnvironment } from './shared.ts';
 
 /**
  * Client environment schema — Phase 0B scope only.
@@ -19,9 +19,6 @@ export const clientEnvSchema = z.object({
    * canonical link and sitemap entry (ROUTE_MAP.md §2).
    */
   NEXT_PUBLIC_SITE_URL: z.url({ protocol: /^https?$/ }).default('http://localhost:3000'),
-
-  /** Default locale, mirrored for client-side locale resolution. */
-  NEXT_PUBLIC_DEFAULT_LOCALE: localeSchema.default('en'),
 });
 
 export type ClientEnv = z.infer<typeof clientEnvSchema>;

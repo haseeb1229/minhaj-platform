@@ -56,9 +56,7 @@ services:
       NODE_ENV: development
       PORT: '3000'
       LOG_LEVEL: debug
-      DEFAULT_LOCALE: en
       NEXT_PUBLIC_SITE_URL: http://localhost:3000
-      NEXT_PUBLIC_DEFAULT_LOCALE: en
       # Required for file watching to work across a bind mount.
       WATCHPACK_POLLING: 'true'
     volumes:

@@ -29,8 +29,10 @@ import {
  *     hoisting meant the resolver found the ROOT copy;
  *   - a manifest and the lockfile could disagree entirely and pass, because
  *     neither file was read;
- *   - the deferred packages — Better Auth, next-intl, Socket.IO, Playwright —
- *     had no contract at all, so any version could arrive in any phase.
+ *   - the deferred packages — Better Auth, Socket.IO, Playwright — had no
+ *     contract at all, so any version could arrive in any phase. (next-intl
+ *     was among them until Phase 3A installed it at its owning point; its
+ *     contract is now the LOCKED one, where absence fails.)
  *
  * Every case below is a SYNTHETIC manifest and lockfile passed to the engine.
  * No real manifest is mutated to simulate a bad state, nothing is installed,
@@ -70,7 +72,12 @@ function baseWorkspaces(): { name: string; directory: string; manifest: Manifest
       name: '@minhaj/web',
       directory: 'apps/web',
       manifest: {
-        dependencies: { next: '16.3.3', react: '19.2.8', 'react-dom': '19.2.8' },
+        dependencies: {
+          next: '16.3.3',
+          'next-intl': '4.14.3',
+          react: '19.2.8',
+          'react-dom': '19.2.8',
+        },
         devDependencies: { tailwindcss: '4.3.3' },
       },
     },
@@ -99,6 +106,7 @@ function baseLock(): { packages: Record<string, { version?: string }> } {
     packages: {
       '': {},
       'node_modules/next': { version: '16.3.3' },
+      'node_modules/next-intl': { version: '4.14.3' },
       'node_modules/react': { version: '19.2.8' },
       'node_modules/react-dom': { version: '19.2.8' },
       'node_modules/tailwindcss': { version: '4.3.3' },
@@ -466,8 +474,8 @@ describe('F13.6 — deferred packages: absent is correct, present is contracted'
 
     expect(
       failuresFor((state) => {
-        web(state).dependencies!['next-intl'] = '~4.14.2';
-        state.lock.packages['node_modules/next-intl'] = { version: '4.14.2' };
+        web(state).dependencies!['socket.io'] = '4.8.3';
+        state.lock.packages['node_modules/socket.io'] = { version: '4.8.3' };
       }),
     ).toEqual([]);
   });
@@ -664,9 +672,105 @@ describe('F13.9 — the transcribed policy matches TECH_STACK.md', () => {
     );
 
     expect(names).toContain('better-auth');
-    expect(names).toContain('next-intl');
     expect(names).toContain('socket.io');
     expect(names).toContain('playwright');
+
+    // next-intl was here until Phase 3A. TECH_STACK.md §1.5 places validation
+    // at genuine introduction, and this is what that migration looks like from
+    // the policy's side: it is no longer legitimately absent.
+    expect(names).not.toContain('next-intl');
+  });
+
+  /**
+   * next-intl at its owning point (TECH_STACK.md §1.5, DELIVERY_PLAN.md
+   * Phase 3A).
+   *
+   * The direction of this contract INVERTED in Phase 3A. While the package was
+   * deferred, absence passed and presence had to be justified. Now that
+   * localisation is delivered, absence is a broken application, and these
+   * assertions are what stop the policy quietly sliding back to "not installed
+   * yet is fine" if a manifest ever loses the dependency.
+   */
+  it('locks next-intl to the 4.14.x range at its owning phase', () => {
+    expect(policyFor('next-intl')).toEqual(
+      expect.objectContaining({ kind: 'range', expected: '4.14' }),
+    );
+
+    // TECH_STACK.md §2: "the range is the locked architectural choice and the
+    // exact resolved patch is recorded in the committed lockfile". A frozen
+    // patch in the POLICY would be a different architectural decision.
+    expect(policyFor('next-intl')).not.toEqual(
+      expect.objectContaining({ kind: 'exact' }),
+    );
+  });
+
+  it('names Phase 3A as the phase that introduced it', () => {
+    expect(policyFor('next-intl')?.introduced).toMatch(/Phase 3A/);
+  });
+
+  it('FAILS when next-intl is absent, where absence used to pass', () => {
+    const failures = failuresFor((state) => {
+      delete web(state).dependencies!['next-intl'];
+      delete state.lock.packages['node_modules/next-intl'];
+    });
+
+    expect(failures.join('\n')).toMatch(/next-intl/);
+    expect(failures.join('\n')).toMatch(/declared by no workspace/);
+  });
+
+  it('accepts the installed 4.14.x patch', () => {
+    expect(
+      failuresFor((state) => {
+        web(state).dependencies!['next-intl'] = '4.14.1';
+        state.lock.packages['node_modules/next-intl'] = { version: '4.14.1' };
+      }),
+    ).toEqual([]);
+  });
+
+  it.each(['4.13.7', '5.0.0', '4.15.0'])(
+    'rejects next-intl resolving to %s, outside the locked range',
+    (version) => {
+      expect(
+        failuresFor((state) => {
+          web(state).dependencies!['next-intl'] = version;
+          state.lock.packages['node_modules/next-intl'] = { version };
+        }).join('\n'),
+      ).toMatch(/next-intl/);
+    },
+  );
+
+  it('rejects a next-intl prerelease', () => {
+    expect(
+      failuresFor((state) => {
+        web(state).dependencies!['next-intl'] = '4.14.4-beta.1';
+        state.lock.packages['node_modules/next-intl'] = { version: '4.14.4-beta.1' };
+      }).join('\n'),
+    ).toMatch(/next-intl/);
+  });
+
+  it('rejects a next-intl declaration that floats outside 4.14', () => {
+    // `^4.14.3` names 4.14.3 but fixes only the major, so it permits 4.15.
+    expect(
+      failuresFor((state) => {
+        web(state).dependencies!['next-intl'] = '^4.14.3';
+      }).join('\n'),
+    ).toMatch(/next-intl/);
+  });
+
+  it('rejects next-intl smuggled in under an npm alias', () => {
+    expect(
+      failuresFor((state) => {
+        web(state).dependencies!['intl'] = 'npm:next-intl@4.14.3';
+      }).join('\n'),
+    ).toMatch(/next-intl/);
+  });
+
+  it('proves the REAL repository declares it, not only the synthetic one', () => {
+    const manifest = JSON.parse(
+      readFileSync(path.join(repoRoot, 'apps/web/package.json'), 'utf8'),
+    ) as Manifest;
+
+    expect(Object.keys(manifest.dependencies ?? {})).toContain('next-intl');
   });
 
   it('keeps the Phase 1 Prisma trio exact', () => {

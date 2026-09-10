@@ -5,6 +5,7 @@ import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 
 import { repoRoot } from '../architecture/architecture-harness.ts';
+import { ensureProductionBuild, webRoot } from './next-production-build.ts';
 
 /**
  * E1 — production startup must fail fast, BEFORE the listener exists.
@@ -21,10 +22,8 @@ import { repoRoot } from '../architecture/architecture-harness.ts';
  */
 
 const run = promisify(execFile);
-const webRoot = path.join(repoRoot, 'apps', 'web');
 const startScript = path.join(webRoot, 'scripts', 'start.mjs');
 const validateScript = path.join(webRoot, 'scripts', 'validate-env.mjs');
-const nextBin = path.join(repoRoot, 'node_modules', 'next', 'dist', 'bin', 'next');
 
 /**
  * Reserves a free TCP port and releases it.
@@ -134,14 +133,22 @@ describe('E1 — invalid configuration terminates before listening', () => {
 
   it('never prints the supplied invalid value', async () => {
     // A validation failure must not become a credential leak (§19.2).
+    //
+    // Driven through LOG_LEVEL because `DEFAULT_LOCALE` no longer exists:
+    // Phase 3A fixed the final no-preference locale at `en` (ROUTE_MAP.md
+    // §1.1) and retired the variable that could contradict it. The property
+    // asserted is the same one — the offending VARIABLE is named, its VALUE
+    // never is — and it is asserted against a variable the schema still has,
+    // which is the only way this can remain a real test rather than one that
+    // passes because nothing rejects anything.
     const secret = 'SUPPLIED-VALUE-MUST-NOT-APPEAR';
     const result = await startWith({
-      DEFAULT_LOCALE: secret,
+      LOG_LEVEL: secret,
       PORT: String(await reservePort()),
     });
 
     expect(result.code).not.toBe(0);
-    expect(result.output).toContain('DEFAULT_LOCALE');
+    expect(result.output).toContain('LOG_LEVEL');
     expect(result.output).not.toContain(secret);
   });
 
@@ -360,36 +367,14 @@ async function waitFor(
 }
 
 /**
- * Ensures a production build exists before a `start` test runs.
+ * The production build these tests need is produced by the SHARED helper.
  *
- * `npm run verify` runs the suite BEFORE `npm run build`, so in a clean
- * checkout — and in the Docker test stage, which is exactly that — `.next` does
- * not yet exist and `next start` refuses to serve. That made these tests depend
- * on the order of an unrelated script: they passed locally, where a build
- * happened to be lying around, and failed in the container.
- *
- * A test that needs a build must produce one. Built once per run and reused, so
- * the cost is paid a single time.
+ * It used to be built here. A second suite — the Phase 3A locale routing proof
+ * — now needs a built application too, and Vitest runs test files in parallel
+ * processes, so two independent "build if absent" helpers would race to write
+ * the same `.next` directory. `ensureProductionBuild` holds a cross-process
+ * lock and builds exactly once; the guarantee for this file is unchanged.
  */
-let productionBuild: Promise<void> | null = null;
-
-function ensureProductionBuild(): Promise<void> {
-  productionBuild ??= (async () => {
-    const { existsSync } = await import('node:fs');
-
-    // A BUILD_ID means a complete production build is already present.
-    if (existsSync(path.join(webRoot, '.next', 'BUILD_ID'))) return;
-
-    await run(process.execPath, [nextBin, 'build'], {
-      cwd: webRoot,
-      env: { ...process.env, NODE_ENV: 'production' },
-      timeout: 300_000,
-      maxBuffer: 32 * 1024 * 1024,
-    });
-  })();
-
-  return productionBuild;
-}
 
 /** Launches the ordinary, UNCONDITIONED start wrapper, as a container does. */
 async function launchWrapper(

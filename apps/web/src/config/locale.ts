@@ -1,86 +1,83 @@
 import { localeSchema, type Locale } from '@minhaj/contracts';
 
 /**
- * Locale constants for the Phase 0B skeleton.
+ * Locale PROPERTIES — the direction and the endonym of each supported locale.
  *
- * Build-time, deliberately. Reading a runtime environment variable in the
- * render tree would force every public route to be dynamic and destroy the
- * caching capability ARCHITECTURE.md §8 requires — the regression this module
- * exists to avoid.
+ * This module deliberately owns no locale LIST. `localeSchema` in
+ * `@minhaj/contracts` is the single definition of the three supported interface
+ * locales (ROUTE_MAP.md §1.2), and `apps/web/src/i18n/routing.ts` derives the
+ * routing locales from it. Two lists would drift, and the drift would be
+ * silent.
  *
- * `NEXT_PUBLIC_DEFAULT_LOCALE` is a build-time constant by construction: Next
- * inlines `NEXT_PUBLIC_` values during compilation, so reading it here is a
- * static substitution rather than a request-time lookup, and the page stays
- * statically renderable.
+ * WHAT THIS MODULE NO LONGER DOES — and why
+ * -----------------------------------------
+ * Phase 0B resolved a CONFIGURABLE default locale here, from
+ * `NEXT_PUBLIC_DEFAULT_LOCALE`, because no locale routing existed yet and
+ * something had to decide the single `<html lang>` the skeleton rendered.
  *
- * This is NOT the final locale routing. ROUTE_MAP.md §1 specifies an
- * always-present locale path segment resolved per request, delivered by the
- * localisation phase together with next-intl. Phase 0B only needs `lang` and
- * `dir` to be correct, and to leave that future design unobstructed.
+ * Phase 3A delivers the real contract, and ROUTE_MAP.md §1.1 fixes it:
+ *
+ *     stored preference → Accept-Language → en
+ *
+ * The last step is `en`. Not "whatever `DEFAULT_LOCALE` says", because an
+ * environment variable that can move the final fallback to `ur` or `ar` is a
+ * way to contradict the accepted routing contract from a deployment file — and
+ * a visitor with no preference and no matching `Accept-Language` would then
+ * land on a locale the contract says they must not. The configurable keys are
+ * therefore retired, in this phase, along with the resolution function that
+ * read them.
  */
 
 /** RTL locales (ROUTE_MAP.md §1.2). */
 const rtlLocales = new Set<Locale>(['ur', 'ar']);
 
 /**
- * The locale used when the variable is absent (ROUTE_MAP.md §1.1).
+ * The locale a visitor reaches when they express no usable preference
+ * (ROUTE_MAP.md §1.1, final step).
  *
- * `.env.example` is valueless by policy (SECURITY_BASELINE.md §18.1), so an
- * unset OR blank variable is the documented, supported configuration and must
- * resolve to this.
+ * A fixed contract, not configuration. It is the `defaultLocale` of the
+ * next-intl routing configuration, which is the only place it is consumed.
  */
 export const FALLBACK_LOCALE: Locale = 'en';
-
-/**
- * Resolves the configured default locale.
- *
- * Two cases, deliberately different — Review #3 (N2) found them conflated:
- *
- *   - UNSET or BLANK  → `FALLBACK_LOCALE`. Nothing was configured, so the
- *     documented default applies. This is normal and not an error.
- *
- *   - PRESENT BUT INVALID → THROWS. Someone configured `NEXT_PUBLIC_DEFAULT_
- *     LOCALE=de` and meant it. The previous implementation used `.catch('en')`,
- *     which silently substituted English while the surrounding comment claimed
- *     invalid configuration fails the build. Silently discarding a deliberate
- *     value is the worse failure of the two: the build passes, the site renders
- *     in the wrong language and direction, and nothing anywhere says why.
- *
- * Exported so tests drive the real resolution rather than a copy of it.
- */
-export function resolveDefaultLocale(raw: string | undefined): Locale {
-  if (raw === undefined || raw.trim() === '') return FALLBACK_LOCALE;
-
-  const result = localeSchema.safeParse(raw);
-
-  if (!result.success) {
-    // The variable name appears; the supplied value never does
-    // (SECURITY_BASELINE.md §19.2). `NEXT_PUBLIC_` values are public by
-    // definition, but the redaction habit is not worth breaking for one case.
-    throw new Error(
-      'Invalid NEXT_PUBLIC_DEFAULT_LOCALE. Supported locales are ' +
-        `${localeSchema.options.join(', ')} (ROUTE_MAP.md §1.2). Leave the ` +
-        `variable unset to use the documented default '${FALLBACK_LOCALE}'; an ` +
-        'explicit value that is not a supported locale fails the build rather ' +
-        'than silently rendering the wrong language and text direction.',
-    );
-  }
-
-  return result.data;
-}
-
-/**
- * The default locale, validated at build time.
- *
- * An invalid explicit value fails the build rather than silently rendering the
- * wrong direction. Runtime server configuration is validated separately, before
- * the process listens (`apps/web/scripts/start.mjs`).
- */
-export const defaultLocale: Locale = resolveDefaultLocale(
-  process.env.NEXT_PUBLIC_DEFAULT_LOCALE,
-);
 
 /** Text direction for a locale. */
 export function directionOf(locale: Locale): 'ltr' | 'rtl' {
   return rtlLocales.has(locale) ? 'rtl' : 'ltr';
+}
+
+/**
+ * Each locale's name IN ITS OWN LANGUAGE AND SCRIPT.
+ *
+ * Endonyms, deliberately — and deliberately NOT in the message catalogues.
+ * A language's own name does not change with the interface language: the Urdu
+ * option reads اردو whether the surrounding page is English, Urdu or Arabic.
+ * Translating it would produce "Urdu" for a reader who cannot read the Latin
+ * script, which is precisely the audience the option exists for (WCAG 2.2,
+ * and the reason `lang`/`dir` are set per label at the call site).
+ *
+ * Keeping them here rather than in `messages/*.json` also means the three
+ * catalogues cannot drift into disagreeing about what a language is called.
+ */
+const localeEndonyms: Readonly<Record<Locale, string>> = Object.freeze({
+  en: 'English',
+  ur: 'اردو',
+  ar: 'العربية',
+});
+
+/** A locale's name in its own language, for a language-choice control. */
+export function endonymOf(locale: Locale): string {
+  return localeEndonyms[locale];
+}
+
+/**
+ * Narrows an unvalidated route segment to a supported locale.
+ *
+ * The `[locale]` segment is effectively a catch-all: proxy routing is a
+ * convenience, not the trust boundary, so the render tree validates the value
+ * it was handed rather than trusting that something upstream already did
+ * (SECURITY_BASELINE.md §9.1 — server-side validation of application-owned
+ * input is mandatory and independent).
+ */
+export function isSupportedLocale(value: string): value is Locale {
+  return localeSchema.safeParse(value).success;
 }

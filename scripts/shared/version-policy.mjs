@@ -12,10 +12,11 @@
  *     hoisting meant the resolver found the ROOT copy.
  *   - A manifest and the lockfile could disagree entirely and pass, because
  *     neither was read.
- *   - A deferred package — Better Auth, next-intl, Socket.IO, Playwright — had
- *     no contract at all. It could arrive at any version, in any workspace, and
- *     the checker would not notice, because it only ever looked for the
- *     thirteen names it already knew.
+ *   - A deferred package — Better Auth, Socket.IO, Playwright — had no contract
+ *     at all. It could arrive at any version, in any workspace, and the checker
+ *     would not notice, because it only ever looked for the thirteen names it
+ *     already knew. (next-intl was one of these until Phase 3A installed it at
+ *     its owning point; it is now in `lockedStack`, where its ABSENCE fails.)
  *
  * The authority is therefore the COMMITTED SOURCE: the root manifest, every
  * workspace manifest, and `package-lock.json`. Those three files decide what a
@@ -54,6 +55,20 @@ export const lockedStack = Object.freeze([
     expected: '7.10.0',
     introduced: 'Phase 1',
   },
+  {
+    // TECH_STACK.md §2 locks the 4.14.x RANGE, not a patch: "the range is the
+    // locked architectural choice and the exact resolved patch is recorded in
+    // the committed lockfile". The lockfile records 4.14.3.
+    //
+    // It moved here from `deferredStack` in Phase 3A, its owning point (§1.5).
+    // Absence is now a FAILURE: localisation is delivered, and a manifest that
+    // stops declaring next-intl is a broken application rather than a package
+    // that has not arrived yet.
+    name: 'next-intl',
+    kind: 'range',
+    expected: '4.14',
+    introduced: 'Phase 3A — Localisation Foundation',
+  },
   { name: 'typescript', kind: 'range', expected: '5.9', introduced: 'Phase 0B' },
   { name: 'zod', kind: 'range', expected: '4.5', introduced: 'Phase 0B' },
   { name: 'vitest', kind: 'range', expected: '4.1', introduced: 'Phase 0B' },
@@ -80,12 +95,6 @@ export const deferredStack = Object.freeze([
     kind: 'range',
     expected: '1.7',
     introduced: 'Phase 2 — Identity & Access',
-  },
-  {
-    name: 'next-intl',
-    kind: 'range',
-    expected: '4.14',
-    introduced: 'Phase 3A — Localisation Foundation',
   },
   {
     name: 'socket.io',

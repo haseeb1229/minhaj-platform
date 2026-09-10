@@ -16,6 +16,7 @@
     "@minhaj/contracts": "*",
     "@minhaj/server-core": "*",
     "next": "16.3.3",
+    "next-intl": "4.14.3",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

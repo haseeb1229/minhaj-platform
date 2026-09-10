@@ -1,0 +1,16 @@
+{
+  "metadata": {
+    "title": "One Minhaj — Platform Foundation",
+    "description": "Repository and tooling foundation for the One Minhaj digital platform."
+  },
+  "foundation": {
+    "heading": "One Minhaj",
+    "intro": "Repository and tooling foundation. The platform architecture is recorded in the project documentation; no domain functionality is implemented yet.",
+    "phaseLabel": "Phase",
+    "phaseValue": "3A — Localisation Foundation",
+    "localeLabel": "Interface language"
+  },
+  "localeSwitcher": {
+    "label": "Choose a language"
+  }
+}
