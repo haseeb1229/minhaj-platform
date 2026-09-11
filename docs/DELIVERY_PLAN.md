@@ -39,11 +39,11 @@
 | 6 | Editorial Core: articles, pages, workflow | 4, 5 |
 | 7 | Storage Foundation *(infrastructure only)* | 1 |
 | 8 | Library: works, editions, translations | 5, 6, 7 |
-| 9 | Research & Publications | 8 |
-| 10 | Media: Video | 5, 6 |
-| 11 | Media: Audio | 10 |
+| 9 | Research & Publications | 8, **17** |
+| 10 | Media: Video | 5, 6, **17** |
+| 11 | Media: Audio | **7**, 10 |
 | 12 | Media: Galleries | 7, 10 |
-| 13 | News | 6 |
+| 13 | News | 6, **17** |
 | 14 | Events | 6, **12**, 13, **16** |
 | 15 | Collections | 6, 8, 10, 13 |
 | 16 | Global Network | 6, **13** |
@@ -51,7 +51,7 @@
 | 18 | Quran | **3B**, 5, 7, **17** |
 | 19 | Hadith | **3B**, 5, **17** |
 | 20 | Fatwa | 2, 5, **17** |
-| 21 | Personalisation & Notifications | 2, 18, 19 |
+| 21 | Personalisation & Notifications | 2, **10**, 18, 19 |
 | 22 | Learning: courses & paths | 5, 6, **17** |
 | 23 | Teacher Experience & Live Classes | 22, **safeguarding decision** *(manual Meet flow — no Google API credential required)* |
 | 24 | Messaging: domain & shared server services | 2, **7**, 22, 23, **safeguarding decision** |
@@ -84,9 +84,42 @@ Row order in this table is a readability aid only. The former Phase 3 is split i
 renumbering the roadmap. **3A enters from 0B, carries no database dependency, and may be
 delivered in parallel with Phase 1.**
 
-Phases 8–13, 15 and 16 remain largely parallelisable; **Phase 14 follows 12, 13 and 16**,
-because Centres and Galleries must exist before Events owns relational references to them.
-18 and 19 remain independent of each other. **27 never blocks 26.**
+**Phase 14 follows 12, 13 and 16**, because Centres and Galleries must exist before Events
+owns relational references to them. 18 and 19 remain independent of each other. **27 never
+blocks 26.**
+
+**Search Foundation (17) is now an explicit prerequisite of every searchable domain that
+follows it.** Phases 9, 10 and 13 join 18, 19, 20 and 22 in carrying Phase 17 in their
+dependency path, because each promises a **search projection** in its own deliverables and
+exit criteria (§3), and a projection cannot be delivered before the foundation it projects
+into exists. That ordering was previously left to the numeric reading of this table, which is
+not a schedule — **the prerequisite is now stated, so the ordering is deterministic rather
+than accidental**. Phases 8–13, 15 and 16 remain parallelisable **within** those constraints.
+
+Two further prerequisites are recorded for the same reason — a promised deliverable needs its
+target to exist:
+
+- **11 → 7.** Non-Quran audio is storage-backed: AudioTrack has an asset lifecycle, and this
+  phase supplies and tests its own Identity-derived authorisation policy against the
+  default-deny serving route of Phase 7 (§3).
+- **21 → 10.** The My Minhaj contract includes **WatchHistory** and video-backed
+  personalisation (DOMAIN_MODEL.md §14.1). A typed reference to Video cannot be delivered
+  before Video exists — and **no forward or placeholder foreign key is created to avoid the
+  dependency**.
+
+**Deliberately NOT added**, because permission to depend is not evidence of a current need:
+
+| Rejected edge | Why it is not added |
+|---|---|
+| 21 → 11 | V1 My Minhaj promises **Watch** history. There is no required audio listening-history contract, so Audio is not a prerequisite of Personalisation |
+| 21 → 20 | **My Questions is semantically owned by Fatwa** (DOMAIN_MODEL.md §14.4). My Minhaj is incremental Layer-4 composition; Phase 21 owns no Fatwa schema or workflow and composes the surface when Fatwa has delivered it |
+| 22 → 10 | Learning **may** depend on Media under the context allowlist (DOMAIN_MODEL.md §3.1), but the allowlist grants permission, not necessity. Phase 22's current schema and deliverables require no Video relation |
+| 22 → 16 | Learning **may** depend on Global Network for the same reason, and current Phase-22 deliverables require no Centre relation |
+
+> **If a future concrete Learning schema genuinely requires a Media or Global Network
+> relational target, the owning phase adds the required phase prerequisite *before*
+> implementing the relation.** No forward foreign key, no placeholder foreign key, and no
+> premature target schema — the same rule that ordered 16 before 14.
 
 **The in-scope feature-delivery set — Phase 33 dependency rule.** Its required baseline
 prerequisites are the literal tokens in its `Depends on` cell. It has one separately defined
@@ -125,14 +158,68 @@ Exit criteria for **all** feature phases, not a later sweep:
 | **Referential integrity** | Typed relationships; **no polymorphic `targetType + targetId` as a relational domain reference**. **Historical audit identifiers are outside this rule** and are not changed (DOMAIN_MODEL.md §6.2.1) |
 | **Localisation** | Works in en/ur/ar; **RTL verified**. Any phase delivering routed surfaces therefore has **Phase 3A in its dependency path** |
 | **Private asset serving** | Any phase serving private assets **supplies and tests its own Identity-derived authorisation policy** for the default-deny serving route delivered in Phase 7 |
-| **Accessibility** | **WCAG 2.2 AA** for delivered surfaces |
+| **Accessibility** | **WCAG 2.2 AA** for delivered surfaces. **Software conformance and content conformance are accepted separately** — where a source supplies no caption, transcript or alternative, the gap is recorded and never fabricated (SECURITY_BASELINE.md §16.3) |
+| **Design system** | Every routed surface uses the shared token, component and state contract of ARCHITECTURE.md §13. **No phase invents throw-away styling**, and no phase re-implements the design system |
+| **Responsive and motion** | Delivered surfaces work from small phone to wide desktop with **no horizontal overflow**, correct RTL at every breakpoint, and `prefers-reduced-motion` honoured (ARCHITECTURE.md §13.5–§13.6) |
+| **Data scale** | Bounded queries and page sizes, deterministic ordering with tie-breakers, relevant indexes, no whole-corpus client filtering, bounded bulk actions (ARCHITECTURE.md §13.9). **A phase claims no scale it has not exercised** |
+| **Time and money** | Authoritative instants in UTC, IANA zones for user scheduling, exact non-floating money (DOMAIN_MODEL.md §19.5–§19.6) |
+| **Slug history** | A phase that delivers an **editable public canonical slug** delivers that resource's **native slug history and 301 behaviour in the same phase** (DOMAIN_MODEL.md §19.7). It never defers redirects to Migration |
+| **Derived work** | Search, cache, sitemap, email and provider effects are **not** described or tested as atomic with the authoritative domain transaction. Where correctness needs them, the phase delivers durable, observable, retryable derived-work intent (ARCHITECTURE.md §8.5) |
+| **Concurrency** | Material operator mutations carry expected-version/state conflict handling; stale publish, stale approval and stale grant updates are rejected (DOMAIN_MODEL.md §19.8) |
+| **Outbound communication** | A phase that sends mail owns the event and its eligibility, and sends through the shared provider contract — **never a direct provider call from a business context** (ARCHITECTURE.md §4.6.1) |
+| **Personal-data disposition** | A phase owning personal data documents and tests its own access, export, retention and disposition behaviour (SECURITY_BASELINE.md §19.1) |
 | **Audit** | Domain audit records where required |
 | **Logging** | Structured; no secrets, tokens or personal content |
 | **Context boundaries** | Dependency rules respected; **violations fail the build; no ESLint exceptions** |
 | **Search projection** | Every searchable domain has a projection, filters and tests. A domain delivered **after** Search Foundation adds its own — so **Phase 17 is in its dependency path**. A domain delivered **before** Phase 17 has its projection added in Phase 17 or in a named later step. **Phase 31 proves none is missing** |
 | **SEO** | Canonical, `hreflang` and structured data correct for delivered routes |
 | **Testing** | Unit, integration, and E2E for critical paths |
+| **Licensing awareness** | A phase that introduces a dependency, font, icon set, image, embed or dataset records its licence at introduction (TECH_STACK.md §18) |
 | **No AI attribution** | No agent branding, co-author trailers or generated-by notices anywhere |
+
+---
+
+### 3.1 Four gate types — what a phase's completion does and does not mean
+
+A phase is blocked by different kinds of thing, and treating them as one kind produces two
+opposite errors: either a religious-authority decision is quietly waived to keep building, or
+the entire software roadmap stalls because an external corpus is unavailable. **Neither is
+acceptable**, so the gates are named separately.
+
+| Gate type | What it gates | Who closes it |
+|---|---|---|
+| **Implementation gate** | Whether the software for a phase may be **built and proven** | Engineering prerequisites, plus any external decision that genuinely changes the **required software semantics** |
+| **Activation gate** | Whether a delivered capability may be **switched on in production** | The owning external authority |
+| **Content-acceptance gate** | Whether **authoritative real content** may be published | Religious or organisational authority |
+| **Launch gate** | Whether the platform **goes live on the official origin** | Minhaj-ul-Quran International |
+
+**The rule that follows from this:**
+
+> **A phase dependency is satisfied by the owning phase's approved ENGINEERING
+> IMPLEMENTATION EXIT**, unless that dependency itself genuinely requires the external
+> production decision.
+
+So downstream *software* is not held hostage to an unavailable official corpus. Equally:
+
+> **An engineering implementation exit is never described as authoritative corpus acceptance,
+> religious production approval, safeguarding approval or launch approval.**
+
+A phase may therefore stand at:
+
+```
+ENGINEERING IMPLEMENTATION   COMPLETE
+AUTHORITATIVE CONTENT        OPEN
+PRODUCTION ACTIVATION        BLOCKED
+LAUNCH                       GATED
+```
+
+and that is an honest, fully reportable state — not a completed phase and not a stalled one.
+
+**This distinction may never be used to weaken religious integrity, safeguarding, security,
+licensing, privacy or migration authorisation.** Where an external decision genuinely
+determines required behaviour — a guardian-consent rule, an age threshold, a retention rule —
+that behaviour remains an **implementation gate** until the decision exists, and the
+capability stays **fail-closed** in the meantime (§4, Phases 18–20 and 23–25).
 
 ---
 
@@ -192,9 +279,22 @@ and **tested restore** procedure.
 **Explicitly NOT:** business schema for later owners. **Domain tables arrive with their
 owning slice.**
 
-**Tests:** Migrations apply and roll back on a clean database; **the application account
-cannot UPDATE or DELETE audit rows**; a restore is performed successfully.
-**Exit:** Database tooling proven. Restore proven. No premature business schema.
+**Tests:** Migrations apply and roll back **on a disposable, empty database**; **the
+application account cannot UPDATE or DELETE audit rows**; a restore is performed
+successfully.
+
+> **The reviewed rollback artifact is a migration-correctness proof, not a production
+> rollback procedure.** It is exercised against a disposable database that holds no accepted
+> data, where dropping the objects and deleting the history row costs nothing. **A
+> destructive reverse script is not automatically a safe production rollback**, and direct
+> mutation of migration history is not a routine production recovery step. Future migrations
+> against **populated** business schema follow the safety requirements recorded in
+> `packages/database/README.md` — reviewed plan, data-preservation strategy, populated
+> rehearsal where material, roll-forward plan, restore plan, and compatibility with the
+> deployment rollout.
+
+**Exit:** Database tooling proven. Restore proven. No premature business schema. **The
+disposable-database proof implies no production rollback semantics.**
 
 ---
 
@@ -209,16 +309,54 @@ V1 delivery plan they are required for Google sign-in (Phase 2G).
 > localisation foundation must therefore already exist. **This is not a taxonomy dependency** —
 > Phase 3B (Taxonomy) depends on *this* phase, and the split is what keeps the graph acyclic.
 
-**Better Auth 1.7.x is introduced and compatibility-validated here**, at its genuine point of
-introduction (TECH_STACK.md §16.3).
+> **This phase depends on neither Phase 3B nor Phase 21.** Authentication needs neither the
+> topic taxonomy nor personalisation. **Account setup** — the account, its verified email, its
+> interface locale and timezone, its account-setup state — is owned here. **Personalisation
+> onboarding** — interests, goals, learner level, preferred format — is owned by Phase 21
+> (DOMAIN_MODEL.md §4.2, §14.1). Merging them would recreate the `2 -> 3 -> 2` cycle that
+> splitting the former Phase 3 removed.
+
+**Three dependencies are introduced and compatibility-validated here**, at their genuine point
+of introduction (TECH_STACK.md §16.3):
+
+- **Better Auth 1.7.x** — the authentication library.
+- **The privileged second-factor mechanism** — TOTP plus single-use recovery codes, proven
+  against the chosen Better Auth configuration, Prisma 7.10.0, SQL Server and the accepted
+  Identity schema. **No Better Auth API, plugin or schema behaviour is asserted in advance of
+  that proof** (SECURITY_BASELINE.md §8.2).
+- **Playwright 1.55.x** — this is the first genuinely browser-critical phase
+  (ARCHITECTURE.md §13.10).
 
 **Deliverables:** Identity & Access context with internal sub-layering (ARCHITECTURE.md §6.2)
 · User, Account, Session, Verification · **email/password** with verification and reset ·
-session management with revocation · **Permission, Role, RoleAssignment — the single
-enforcement path** · **capability projections as derived read-only views** · `can()` helpers
-for Server Actions and Route Handlers · **step-up reauthentication mechanism** · sign-in,
-sign-up, reset, onboarding routes · **sign-out as a POST action** · CSRF protections · rate
-limiting via the **RateLimiter abstraction** · authentication and permission audit logging.
+**account email, interface locale, timezone, account status and account-setup state**
+(DOMAIN_MODEL.md §4.2) · **the account lifecycle invariants of DOMAIN_MODEL.md §4.6** —
+canonical email comparison, race-safe database-enforced uniqueness, signup and email-change
+collision handling, verified email change, disable, suspension, reactivation, closure and
+later re-registration · session management with revocation · **Permission, Role,
+RoleAssignment — the single enforcement path** · **capability projections as derived
+read-only views** · `can()` helpers for Server Actions and Route Handlers · **step-up
+reauthentication mechanism** · **privileged second-factor enrolment and verification**
+(SECURITY_BASELINE.md §8) · **the one-time initial privileged operator bootstrap**
+(SECURITY_BASELINE.md §8.3) · sign-in, sign-up, reset and **account-setup** routes ·
+**sign-out as a POST action** · CSRF protections · rate limiting via the **RateLimiter
+abstraction** · authentication and permission audit logging · **the durable outbound
+communication mechanism at its first genuine need** (ARCHITECTURE.md §4.6.1) · **a usable
+minimum Account & Security surface** plus the **initial identity administration surfaces**
+(ROUTE_MAP.md §5.1) · **the minimum shared visual and interaction foundation** those surfaces
+require, taken from the design-system contract rather than invented locally
+(ARCHITECTURE.md §13).
+
+> **Identity security capabilities must not exist only as backend services.** If a user can
+> change a password, revoke a session, review connected accounts or enrol a second factor in
+> the domain layer, they must be able to do it **in the product**. Phase 4 later delivers the
+> canonical broad design system and public shell; this phase delivers only the minimum that
+> authentication, Account & Security and the privileged entry surfaces genuinely need —
+> **built from the shared contract, never as throw-away styling**.
+
+**Explicitly NOT in this phase:** Topic, Language or Tag schema · interests and goals ·
+personalisation aggregates · notification preferences · the broad public design system · any
+content domain.
 
 **Tests:** Sign-in, verification, reset · session expiry, rotation, revocation ·
 **negative permission tests prove denial** · **horizontal privilege escalation fails** ·
@@ -228,8 +366,26 @@ protection verified · **authentication callbacks verified against their own pro
 (§7.3) · **verification and reset links render on GET without silently mutating, consume their
 token at the confirming action, and reject expired or reused tokens** (§7.4) · rate limiting
 effective · no user enumeration.
+Additionally: **signup collision under concurrency resolves to exactly one account** ·
+**email-change collision is rejected safely** · **a canonical-equivalent address cannot create
+a second account** · reset and verification token reuse fails · **account status is enforced
+on every authenticated request** · **closure does not restore prior grants or private data on
+later re-registration** · **the final usable authentication method cannot be removed** ·
+**sessions are revoked after a high-risk security or privilege change** · **privileged
+capabilities are refused until the required second factor is enrolled** · **recovery codes are
+single-use, and regeneration invalidates the prior set** · **no administrator action silently
+disables a second factor to restore privileged access** · **the bootstrap is one-time,
+race-safe, audited and unavailable after first success** · **self-elevation fails** · **a
+committed security event whose mail delivery fails is retried idempotently without minting a
+second verification or reset token** (ARCHITECTURE.md §4.6.1).
+
 **Exit:** Base authentication and the single authorisation path working, with security tests
-passing. **Google is not required for this phase.**
+passing, **reachable through a usable Account & Security surface**. **Google is not required
+for this phase.**
+
+> **Gate status (§3.1).** This phase's **implementation gate** includes the transactional-email
+> entry gate above, because verification and reset are unusable without delivery. **Selecting a
+> provider does not close it** — it closes on the evidence listed in OPEN_DECISIONS.md §5.1.
 
 ---
 
@@ -307,7 +463,17 @@ administration protected.
 framework · footer · home-shell composition · Explore route shells · 404 and error surfaces ·
 **anonymous cached public tree with the session boundary enforced** · security headers and base
 CSP · **`hreflang`, canonical and `x-default` emission** · sitemap index skeleton ·
-`robots.txt` · **organisational presentation infrastructure**.
+`robots.txt` · **the pre-adoption indexing posture** (ROUTE_MAP.md §9.5) · **organisational
+presentation infrastructure** · **the canonical product design system** (ARCHITECTURE.md §13)
+— semantic tokens, tri-script typography, the component and state contract, responsive
+breakpoint behaviour, navigation and scroll behaviour, and the motion and reduced-motion rules.
+
+> **Phase 4 owns the canonical broad design system; Phase 2 delivered only the minimum
+> foundation its own surfaces needed.** This phase extends that foundation to the full public
+> product — it does not replace it, and Phase 2's surfaces are not restyled from scratch.
+> Later specialised phases extend it again for readers, media, editorial, religious content,
+> learning and administrative complexity. **There is one design system**, and no phase forks
+> it (ARCHITECTURE.md §13.1).
 
 > **No Page business aggregate is introduced here.** The editorial **Page** aggregate — with its
 > mandatory review workflow, revisions, publish permissions and audit — is introduced **exactly
@@ -358,7 +524,10 @@ CSP · **`hreflang`, canonical and `x-default` emission** · sitemap index skele
 **Tests:** Navigation in three locales · **full keyboard navigation and visible focus** ·
 screen reader landmarks · **WCAG 2.2 AA for delivered surfaces** · **pages render with no
 session** · **cache-leakage test: no session state in the public tree** · security headers
-verified · canonical and `hreflang` correct · **no Page aggregate, Editorial schema or
+verified · canonical and `hreflang` correct · **layouts hold from small phone to wide desktop
+with no horizontal overflow, in LTR and RTL** · **`prefers-reduced-motion` suppresses
+non-essential motion** · **the pre-adoption origin emits `noindex` and is excluded from
+submitted sitemaps** · **no Page aggregate, Editorial schema or
 publishing workflow is created in this phase** · **no substantive organisational or legal body
 content exists in shell configuration** — reserved routes carry a non-authoritative placeholder
 or a clear "not yet published" state, never a published body.
@@ -395,7 +564,24 @@ consumers.**
 — author cannot approve own work by default · Tiptap for editorial content only ·
 **server-side HTML sanitisation** · admin editorial routes and queue · typed topic assignment ·
 public article routes · **organisational and legal Page records replacing the non-authoritative
-Phase 4 placeholders on the reserved routes** · audit logging.
+Phase 4 placeholders on the reserved routes** · audit logging · **native slug history and
+automatic 301s for the editable canonical slugs introduced here** (DOMAIN_MODEL.md §19.7) ·
+**expected-revision concurrency control** for editorial mutations (DOMAIN_MODEL.md §19.8) ·
+**durable scheduled publication** (§ below) · the **limited private correspondence area** —
+**ContactInquiry** and **Feedback** (DOMAIN_MODEL.md §7.5) with triage, spam disposition,
+operator notes, retention and a permission-controlled admin surface.
+
+> **Scheduled publication is owned here, as its first concrete owner.** The schedule is
+> durable and cancellable; the executor is bounded; catch-up after downtime is defined; and
+> execution **re-checks current state, current approval and current authority** before it
+> publishes, so a superseded approval can never publish. Retry is safe. **No generic worker
+> platform, queue product or event bus is introduced because scheduling exists**
+> (ARCHITECTURE.md §8.5).
+
+> **The correspondence area is not a CRM and not public editorial content.** ContactInquiry
+> and Feedback are private records with their own lifecycles; a Fatwa Question remains
+> Fatwa-owned and entirely separate (DOMAIN_MODEL.md §12). Ordinary published contact
+> *information* stays a **Page**.
 
 > **This phase is the single introduction of the Page aggregate.** Phase 4 delivered
 > presentation infrastructure and reserved routes; it created no Page model. Once Page exists,
@@ -406,7 +592,13 @@ Phase 4 placeholders on the reserved routes** · audit logging.
 **XSS payloads sanitised** · negative permission cases · author self-approval blocked ·
 `Article` and `BreadcrumbList` structured data valid · **organisational and legal pages are
 publishable only through the reviewed workflow** · **exactly one Page aggregate exists in the
-system**.
+system** · **a slug change 301s from the previous slug, and slugs are never reused** · **a
+stale-revision publish is rejected** · **two operators editing one record produce a reported
+conflict, not a silent overwrite** · **an edit after approval invalidates that approval, and
+the scheduled publish then refuses** · **a cancelled schedule does not fire** · **a schedule
+whose moment passed during downtime is caught up deliberately, re-checking authority** ·
+**ContactInquiry and Feedback are private, rate-limited, permission-gated, and never appear in
+public listings, search or caches**.
 **Exit:** Content publishable only through the reviewed workflow.
 
 ---
@@ -447,31 +639,70 @@ onward; each consuming phase supplies and tests its real policy** (§3).
 **Entry:** Phases 5, 6, 7 complete.
 
 **Deliverables:** **Work, Edition, BookTranslation** (DOMAIN_MODEL.md §10.1) · contributors via
-People & Contributors · SalePoint · public library routes · admin management.
+People & Contributors · SalePoint · public library routes · admin management · **a genuinely
+usable long-form reading experience for available editions** — edition selection, truthful
+language and translation relationships, reader navigation, reflow, accessible reading controls
+· **a stable position identifier** that later authenticated reading position can attach to ·
+**rights-aware download availability** · **an explicit unavailable-edition state** · large PDF
+and file handling through the Phase 7 StorageService, **with this phase's own Identity-derived
+authorisation policy where an edition is not public** (§3).
+
+> **PRODUCT_SCOPE.md §2.1 promises readable access, not a catalogue card.** This phase does not
+> end at metadata pages. A visitor who reaches a Work must be able to **read what is genuinely
+> available**, and to see honestly when an edition is not available to them — rights, not a
+> missing feature, are the only acceptable reason a download is absent.
+
+> **The position identifier is a seam, not a feature.** Phase 8 defines a stable way to name a
+> location in an edition; **Phase 21 later owns the authenticated reading position and history**
+> that uses it (DOMAIN_MODEL.md §14.1). Phase 8 stores no per-user state.
 
 **Tests:** **A Work with multiple Editions in multiple languages is modelled correctly** ·
 **localized metadata is distinguishable from a genuine translated Edition** · contributors
-resolve to `/people/{slug}` · `Book` structured data only where genuine ISBN and author exist.
-**Exit:** Library modelled without conflating localisation and translation.
+resolve to `/people/{slug}` · `Book` structured data only where genuine ISBN and author exist ·
+**a long-form edition is readable, navigable by keyboard and reflows at 200% zoom** · **the
+position identifier is stable across reloads and reading-preference changes** · **a
+rights-restricted edition offers no download and says so honestly** · **an unavailable edition
+renders an explicit state rather than an error or an empty page** · **no per-user reading state
+is stored in this phase**.
+**Exit:** Library modelled without conflating localisation and translation, **and genuinely
+readable** — not a metadata-only catalogue.
 
 ---
 
 ### Phase 9 — Research & Publications
-**Entry:** Phase 8 complete.
+**Entry:** Phases 8 and **17** complete.
+
+> **Phase 17 is a prerequisite** because this phase is searchable and promises a **search
+> projection** (§3). Stating it makes the integration deterministic rather than dependent on
+> the order the phases happen to run in.
+
 **Deliverables:** Research, ResearchPaper, Publication, Magazine, MagazineIssue, Encyclopedia ·
-public routes · admin management.
-**Tests:** Issue hierarchy navigation · contributor references · standing requirements.
-**Exit:** Scholarly and periodical content complete.
+public routes · admin management · **search projection, filters, publication and removal
+behaviour, rebuild behaviour and visibility rules** · native slug history for the editable
+canonical slugs introduced here.
+**Tests:** Issue hierarchy navigation · contributor references · **unpublished and archived
+records never appear in search** · **a withdrawn record leaves the index and the listings** ·
+standing requirements.
+**Exit:** Scholarly and periodical content complete **and searchable**.
 
 ---
 
 ### Phases 10–12 — Media, split into three slices
 
+**Phase 10 enters from 5, 6 and 17** — Video is searchable and delivers its projection
+deterministically. **Phase 11 enters from 7 and 10** — non-Quran audio is storage-backed and
+supplies its own Identity-derived authorisation policy against the Phase 7 default-deny serving
+route (§3). **Phase 12 enters from 7 and 10**, unchanged.
+
 | Phase | Slice | Deliverables | Key tests |
 |---|---|---|---|
-| **10** | **Video** | Video with provider metadata, Series, Playlist, speaker references, embed components, **CSP provider allowlist**, public watch routes | Embeds render; **no video files hosted**; `VideoObject` structured data valid; a video belongs to one Series but many Playlists |
-| **11** | **Audio** | AudioTrack, AudioSeries — **non-Quran audio only**, `/listen` routes | **No AudioTrack can duplicate a Quran Recitation** (DOMAIN_MODEL.md §8.1) |
+| **10** | **Video** | Video with provider metadata, Series, Playlist, speaker references, embed components, **CSP provider allowlist**, **the third-party embed privacy contract** (ARCHITECTURE.md §4.7.1), public watch routes, **search projection and filters**, native slug history | Embeds render; **no video files hosted**; `VideoObject` structured data valid; a video belongs to one Series but many Playlists; **a removed or failed provider item degrades to an accessible fallback, never a broken frame**; **no non-essential provider tracking loads before the privacy posture allows it**; **unpublished video never appears in search** |
+| **11** | **Audio** | AudioTrack, AudioSeries — **non-Quran audio only**, `/listen` routes, **storage-backed asset lifecycle through Phase 7 with this phase's own authorisation policy**, search projection, native slug history | **No AudioTrack can duplicate a Quran Recitation** (DOMAIN_MODEL.md §8.1); **a private or unpublished audio asset is unreachable without an explicit allow decision**; the player is keyboard-operable with no autoplay with sound |
 | **12** | **Galleries** | Photo, Gallery, GalleryItem and the historical archive. **No Event relationship is created here** — Event does not yet exist | Asset handling via Phase 7, **with this phase's own authorisation policy where assets are private**; accessibility of image content; **no forward reference to Event exists** |
+
+> **Captions and transcripts are surfaced where the source genuinely supplies them, and are
+> never fabricated** (SECURITY_BASELINE.md §16.2–§16.3). A missing transcript is recorded as
+> missing, not invented.
 
 ---
 
@@ -479,7 +710,7 @@ public routes · admin management.
 
 | Phase | Deliverables | Key tests |
 |---|---|---|
-| **13 News** | NewsArticle, PressRelease, Statement, MediaCoverage; archive; public routes | `NewsArticle` structured data; `?sort=latest` is a query, **not a path** |
+| **13 News** | NewsArticle, PressRelease, Statement, MediaCoverage; archive; public routes; **search projection and filters**; native slug history. **Enters from 6 and 17**, because News is searchable and delivers its projection deterministically | `NewsArticle` structured data; `?sort=latest` is a query, **not a path**; **unpublished and archived news never appears in search**; **a slug change 301s** |
 | **14 Events** | Event, EventSchedule; **typed Centre references — Global Network (16) is already delivered**; **the typed Event↔Gallery association, owned here because both targets now exist** | `Event` structured data with genuine date and location; **the Centre reference is a real foreign key, not a placeholder**; **Events owns no Gallery schema and Galleries owns no Event schema**; **no polymorphic placeholder is used to dodge ownership** |
 | **15 Collections** | Collection with **typed item membership**; curated mixed-type sets. **Membership types cover only the content types delivered by this phase's prerequisites**; a later domain adds its own membership type when it arrives | **Deleting a Collection deletes no content**; **no polymorphic references**; item integrity enforced; **no membership type is pre-created for a domain that does not yet exist** |
 
@@ -512,13 +743,38 @@ owns a relational Centre reference**.
 ### Phase 17 — Search Foundation
 **Entry:** Phases 6 and 8 complete.
 
-**Deliverables:** **`SearchService` abstraction** · **SQL Server FTS proof** · indexing on
-publication · **initial indexed domains: editorial and library** · filters by type, topic,
-language, date · search UI · rate limiting · `noindex` on search routes.
+**Deliverables:** **`SearchService` abstraction** · **SQL Server FTS proof** · **durable
+derived-work indexing driven by publication** (ARCHITECTURE.md §8.5) · filters by type, topic,
+language, date · search UI · rate limiting · `noindex` on search routes · **rebuild and
+reconciliation tooling** · **an operator-visible view of indexing lag and failures**.
 
-**Tests:** Results across the **initial** domains · **Arabic and Urdu tokenisation validated
-with real content** · filters combine · **unpublished content never appears** · injection
-attempts fail · expensive-query protection.
+**The initial searchable inventory is stated, not inferred.** These domains already exist by
+this phase's prerequisites, and each gets its projection here:
+
+| Domain | Delivered by | What search exposes |
+|---|---|---|
+| **Taxonomy — Topics** | Phase 3B | Topic names and descriptions per locale, as navigable results into `/topics/{slug}` |
+| **People & Contributors** | Phase 5 | Person and profile records, as results into `/people/{slug}` |
+| **Editorial** | Phase 6 | Article and published Page records |
+| **Library** | Phase 8 | Work, Edition and BookTranslation records |
+
+Every later searchable domain adds **its own** projection, filters, publication and removal
+behaviour, rebuild behaviour, visibility rules and tests, and therefore carries **Phase 17 in
+its dependency path** (§3). **Phase 31 proves none is missing.**
+
+> **Indexing is derived work, not part of the authoritative transaction.** The owning domain's
+> publication state commits in its own database transaction; the search projection is updated
+> through **durable, observable, retryable derived-work intent**. **SQL Server FTS is never
+> described as atomically committed with authoritative publication state** — FTS population is
+> asynchronous by nature, and claiming otherwise would be false and would hide exactly the
+> staleness window that the security rule below exists to handle.
+
+**Tests:** Results across **every domain in the initial inventory above** · **Arabic and Urdu
+tokenisation validated with real content** · filters combine · **unpublished content never
+appears** · injection attempts fail · expensive-query protection · **a withdrawn or unpublished
+record is not disclosed from a stale index — current visibility is enforced before any
+sensitive or withdrawn payload is returned** · **a failed indexing attempt is visible and
+retried, not silently lost** · **a rebuild reproduces the index from authoritative state**.
 **Exit:** Search infrastructure proven on initial domains. **Tokenisation quality assessed and
 recorded** — an engineering acceptance criterion; if inadequate, the abstraction permits
 reconsideration without rework.
@@ -533,8 +789,30 @@ reconsideration without rework.
 ---
 
 ### Phase 18 — Quran
-**Entry:** Phases 3B, 5, 7 and **17** complete. **Authoritative Quran text source available**
-(OPEN_DECISIONS.md).
+
+**Entry — implementation gate (§3.1):** Phases 3B, 5, 7 and **17** complete.
+
+**Activation and content-acceptance gates — OPEN:** authoritative Quran text source and
+encoding · approved translations, tafsir works and reciters · applicable rights and attribution
+· authoritative corpus acceptance (OPEN_DECISIONS.md §1.1, §1.2, §2.4).
+
+> **Engineering implementation may proceed before the corpus exists; publication of real
+> scripture may not.** The software is built and proven against **controlled, unmistakably
+> non-authoritative fixtures** sufficient to establish schema and invariants, Surah/Ayah/Juz
+> relationships, translation, tafsir and recitation layering, reader UX, accessibility,
+> canonical citation references, permissions, step-up security, audit behaviour, the search
+> projection, and the **import-validation and mismatch-blocking mechanics**.
+>
+> **Fixtures are never represented as Quranic scripture.** No generated or placeholder text is
+> presented as the Quran, in the product, in seeds, in tests or in a demonstration. The
+> character-level verification mechanism is proven **as a mechanism**; it is exercised against
+> the real corpus only once an authoritative source has been supplied.
+>
+> **Completing the engineering implementation satisfies this phase's downstream *software*
+> dependencies** (Phase 21). It is **not** corpus acceptance, and it is **never** described as
+> "Quran corpus approved". **Real Quran corpus publication and production activation remain
+> blocked** until the gates above are satisfied, and launch acceptance for Quran requires their
+> actual closure.
 
 > **Phase 17 is a prerequisite** because this phase's deliverables and exit criteria include a
 > **search projection** (§3). A projection cannot be delivered before the Search Foundation it
@@ -546,20 +824,51 @@ preference selection · indexes and Quran search · **canonical citation URLs** 
 material via topics · **admin surfaces with `quran.editCanonical` and step-up
 reauthentication** · full audit logging · search projection.
 
-**Tests:** **Arabic text verified character-by-character against the authoritative source** ·
-multiple translations coexist with **none privileged** · **Arabic renders correctly in all
+**Engineering tests:** **character-level verification and mismatch blocking are proven against
+controlled, unmistakably non-authoritative fixtures** · multiple translations coexist with
+**none privileged** · **Arabic renders correctly in all
 three locales** · citation URLs stable, preferences as query parameters · **canonical edit
 requires the permission AND step-up, and writes an audit record** · **no automated publication
 path exists** · **no Media AudioTrack duplicates a Recitation** · **Quran reader accessibility
 criteria met** (SECURITY_BASELINE.md §16.2).
-**Exit:** Quran readable in three locales with **verified** text integrity. Never assumed
-correct.
+**Exit — engineering implementation:** the Quran experience is complete, secure, accessible and
+searchable in three locales, with the **verification mechanism proven** and no automated
+publication path in existence.
+
+**Activation / content-acceptance evidence:** the authoritative source is supplied and the real
+Arabic corpus passes **character-by-character** verification; the approved layered works
+and reciters are confirmed, and rights and attribution are settled. **Text integrity is never
+assumed correct**, and engineering completion never substitutes for that acceptance.
 
 ---
 
 ### Phase 19 — Hadith
-**Entry:** Phases 3B, 5 and **17** complete. **Authoritative Hadith sources and grading
-authority confirmed** (OPEN_DECISIONS.md).
+
+**Entry — implementation gate (§3.1):** Phases 3B, 5 and **17** complete.
+
+**Activation and content-acceptance gates — OPEN:** authoritative collections and editions ·
+reference-numbering policy · **grading authority** · chain and source policy · content rights
+and attribution · required scholarly acceptance (OPEN_DECISIONS.md §1.3, §1.6, §2.4).
+
+> **Engineering implementation may proceed against controlled, unmistakably non-authoritative
+> fixtures**, sufficient to prove the Collection -> Book -> Chapter -> Hadith hierarchy, source,
+> edition and reference identity, translation and commentary structure, **sourced** grading and
+> chain fields, permissions, step-up security, audit, search, and the source-conflict
+> escalation mechanics.
+>
+> **Fixtures are never represented as genuine Hadith, and no scholarly grading is invented and
+> presented as real.** The platform stores what an authority provides; a fixture proves the
+> field exists and is audited, never that a grading is true.
+>
+> **Completing the engineering implementation satisfies this phase's downstream *software*
+> dependencies** (Phase 21). It is **not** described as "Hadith corpus approved". Production
+> corpus activation and publication remain blocked until the gates above close.
+
+> **Reference identity must not silently collide.** The same apparent reference number can
+> denote different narrations across collections, across editions of one collection, and across
+> source systems. Identity is therefore modelled so that a Hadith reference is qualified by its
+> **collection, edition and source system** — a bare number is never a platform-wide key
+> (DOMAIN_MODEL.md §9).
 
 > **Phase 17 is a prerequisite** for the same reason as Phase 18: this phase promises a
 > **search projection** in its deliverables and exit criteria.
@@ -572,13 +881,35 @@ audit logging · search projection.
 **Tests:** Hierarchy navigation · **gradings and chains stored exactly as sourced, never
 inferred or generated** · source reference numbers preserved · translations separate ·
 **elevated permission plus step-up required** · **Hadith is not merged with Quran anywhere**.
-**Exit:** Hadith browsable and searchable with sourced, audited data.
+**Exit — engineering implementation:** Hadith is browsable, searchable, permission-protected
+and audited, with sourced-data fields proven and conflicts escalated rather than resolved.
+
+**Exit — production activation:** reached only when authoritative collections and editions, the
+reference-numbering policy, the grading authority and the applicable rights are confirmed, and
+the real corpus has been reviewed. **Engineering completion is not scholarly acceptance.**
 
 ---
 
 ### Phase 20 — Fatwa
-**Entry:** Phases 2, 5 and **17** complete. **Authorised Fatwa scholars identified and
-`fatwa.publish` grants approved by Minhaj** (OPEN_DECISIONS.md).
+
+**Entry — implementation gate (§3.1):** Phases 2, 5 and **17** complete.
+
+**Activation and content-acceptance gates — OPEN:** named authorised scholars · the approved
+role and grant process · organisational Fatwa workflow authority · real publication approval
+(OPEN_DECISIONS.md §1.4, §6.3).
+
+> **Engineering implementation may proceed against clearly synthetic questions, rulings and
+> test identities**, sufficient to prove the private Question workflow, triage, assignment,
+> review, `fatwa.publish` enforcement, step-up, anonymisation, correction and revision
+> behaviour, audit, exclusion of private and unpublished material from search, the absence of
+> any bypass path, and the absence of any AI ruling-generation path.
+>
+> **Synthetic material is never represented as a genuine Fatwa** anywhere — product, seed,
+> fixture or demonstration.
+>
+> **Real `fatwa.publish` grants and real Fatwa publication remain blocked** until the gates
+> above close. Completing the engineering implementation satisfies downstream *software*
+> dependencies; it is **never** described as "Fatwa authority approved".
 
 > **Phase 17 is a prerequisite** because this phase promises a **search projection**. The
 > projection must additionally prove that **unpublished rulings and private questions never
@@ -594,27 +925,52 @@ fails: direct API, admin route, import path, bulk operation** · **questions are
 another user cannot read them, and they never appear in listings, search, logs or caches ·
 publication anonymises the question · rulings immutable in substance · **no AI path can create
 or publish a Fatwa** · **`/fatwa/latest` and `/fatwa/popular` do not exist as paths**.
-**Exit:** **Fatwa publication provably restricted to authorised scholars.** The
-highest-consequence exit criterion in this plan; **signed off by Minhaj**.
+**Exit — engineering implementation:** **Fatwa publication is provably restricted to holders of
+`fatwa.publish` with step-up**, every bypass path is proven closed, and private questions are
+proven private.
+
+**Exit — production activation:** the highest-consequence acceptance in this plan. Real grants
+are issued only to **named individuals approved by Minhaj**, and real publication begins only
+then. **Signed off by Minhaj** — an engineering exit never substitutes for that signature.
 
 ---
 
 ### Phase 21 — Personalisation & Notifications
-**Entry:** Phases 2, 18, 19 complete.
+**Entry:** Phases 2, **10**, 18, 19 complete.
+
+> **Why Phase 10 is a prerequisite.** This phase delivers **WatchHistory** and video-backed
+> personalisation, which hold **typed references** to Video (DOMAIN_MODEL.md §14.1–§14.2). A
+> typed reference cannot precede its target, and **no forward or placeholder foreign key is
+> created to avoid the dependency**.
+>
+> **Phase 11 and Phase 20 are deliberately not prerequisites.** V1 promises Watch history, not
+> an audio listening-history contract; and **My Questions is owned by Fatwa**, composed here
+> only once Fatwa has delivered it (DOMAIN_MODEL.md §14.4).
 
 **Deliverables:** The **Personalisation & Notifications context** (DOMAIN_MODEL.md §14) —
 Bookmark, Note, SavedItem, PrivateCollection, ReadingHistory, WatchHistory, ReadingProgress,
-NotificationPreference, Notification · **typed references to content** · My Minhaj routes ·
-conditional onboarding · settings with data export and account deletion.
+NotificationPreference, Notification · **NewsletterSubscriber with the double opt-in lifecycle**
+(DOMAIN_MODEL.md §14.5) · **typed references to content** · the My Minhaj routes this context
+owns (ROUTE_MAP.md §5.1) · **personalisation onboarding** — interests and goals — which is
+**distinct from Phase 2 account setup** · notification and privacy settings · data export ·
+**this context's part of account closure**, coordinated by Layer 4 rather than owned here
+(SECURITY_BASELINE.md §19.1).
 
 **Tests:** **All queries scoped to the requesting user** · **horizontal privilege escalation
-fails** · **deleting an account deletes personalisation records** · **archiving referenced
-content leaves the typed reference valid and renders as unavailable/archived** · **a hard
-purge transactionally resolves personalisation records first and leaves no broken foreign
-key** · **public pages still render fully signed out** ·
-**cache-leakage: no personalisation in the public tree** · export and deletion work.
-**Exit:** Personalisation working with **defined ownership, privacy and deletion rules** and no
-reduction in public access.
+fails** · **closing an account disposes of this context's records according to policy** ·
+**archiving referenced content leaves the typed reference valid and renders as
+unavailable/archived** · **during a hard purge this context removes, anonymises or tombstones
+its own records through its own public service, idempotently and resumably — no broken foreign
+key is left, and no persistence capability crosses a context boundary**
+(DOMAIN_MODEL.md §14.3) · **an interrupted purge is safely resumed and the target stays
+non-public until it completes** · **public pages still render fully signed out** ·
+**cache-leakage: no personalisation in the public tree** · export works · **newsletter
+submission alone does not create a subscription; confirmation does** · **a replayed or expired
+confirmation link does not activate a subscription** · **account creation does not subscribe
+the account** · **unsubscribe works without signing in** · **a marketing unsubscribe does not
+suppress security or account-service mail**.
+**Exit:** Personalisation working with **defined ownership, privacy and disposition rules** and
+no reduction in public access.
 
 ---
 
@@ -622,17 +978,58 @@ reduction in public access.
 **Entry:** Phases 5, 6 and **17** complete — **Phase 17 because this phase promises a search
 projection** (§3).
 **Deliverables:** Course, CourseModule, Lesson, LearningPath, Enrolment, Progress · public
-catalogue · My Learning · admin management · TrialClassRequest and Booking · search projection.
+catalogue · **My Learning and course progress** (ROUTE_MAP.md §5.1) · admin management ·
+**TrialClassRequest creation and booking-request semantics** · search projection · native slug
+history for the catalogue's editable canonical slugs.
+
+> **This phase creates the request; Phase 23 confirms it.** Requesting a trial class is a
+> Learning-owned act that needs no teacher assignment to exist. **Conflict-safe confirmation,
+> scheduling and the ClassSession itself belong to Phase 23**, where availability and current
+> teaching assignments exist.
+
+> **No Media or Global Network prerequisite is added here.** The context allowlist permits
+> Learning to depend on both (DOMAIN_MODEL.md §3.1), but permission to depend is not evidence
+> of a current need, and this phase's schema requires neither a Video nor a Centre relation. If
+> a future concrete Learning schema requires one, **that phase adds the prerequisite before
+> implementing the relation** — never a forward or placeholder foreign key.
+
 **Tests:** Catalogue browsable **without an account** · enrolment requires authentication ·
-progress scoped per user · **Enrolment and Booking remain distinct**.
-**Exit:** Courses browsable publicly; enrolment and progress working.
+progress scoped per user · **Enrolment and Booking remain distinct** · **unpublished courses
+never appear in the catalogue or in search** · **no Video or Centre foreign key exists in this
+phase's schema**.
+**Exit:** Courses browsable publicly; enrolment, progress and trial requests working.
 
 ---
 
 ### Phase 23 — Teacher Experience & Live Classes
-**Entry:** Phase 22 complete. **⚠ Under-18 safeguarding decision received**
-(OPEN_DECISIONS.md §2.1). **The organisation and its teachers can legitimately create and use
+
+**Entry — implementation gate (§3.1):** Phase 22 complete.
+
+**Activation gates — OPEN:** the **under-18 safeguarding decision** (OPEN_DECISIONS.md §2.1)
+and confirmation that **the organisation and its teachers can legitimately create and use
 Google Meet meetings** (§5.3).
+
+> **Safeguarding is an external authority, legal and product-policy decision, and it is not
+> pre-empted here.** But the absence of a final policy does not prevent building the
+> **policy-independent, default-deny mechanics** that any policy will require. Engineering may
+> implement and test: current teaching-assignment checks · enrolment and relationship checks ·
+> default-deny access · participant authorisation · private meeting-URL handling · attendance
+> mechanics · teacher revocation behaviour · class and session data protection · and the
+> absence of accidental public disclosure.
+>
+> **Until a safeguarding policy explicitly permits otherwise**, and as a **fail-closed
+> pre-policy state** rather than a permanent product decision:
+>
+> - **under-18-specific production capability remains disabled**;
+> - **student-to-student messaging remains disabled** (Phase 24);
+> - **no guardian-consent rule, age threshold, vetting policy, one-to-one minor communication
+>   rule or special minor-retention rule is invented** by engineering.
+>
+> **This does not declare the platform adults-only.** When the policy arrives, any behaviour it
+> genuinely requires becomes an **implementation gate** for that behaviour, and must be
+> implemented and tested **before** the corresponding production capability is activated.
+>
+> **The safeguarding production gate is not closed by this phase's engineering exit.**
 
 > **Google OAuth / Calendar / Meet API credentials are NOT a prerequisite for this phase.**
 > Within the current V1 delivery plan, Google OAuth application credentials are required for
@@ -644,22 +1041,48 @@ Google Meet meetings** (§5.3).
 > requirements.**
 
 **Deliverables:** Teacher area routes gated by a **current `teaching.perform` assignment** ·
-students, courses, calendar, resources · Availability · Attendance · **ClassSession storing
-`meetingProvider` and `meetingUrl`, entered manually** · **provider/URL consistency validation
-and HTTPS `meet.google.com` allowlist** · `MeetingProvider` abstraction.
+students, courses, calendar, resources · Availability · **conflict-safe booking confirmation**
+of the trial requests created in Phase 22 · **ClassSession**, attendance, **cancellation,
+reschedule and completion** · no-show handling where the accepted workflow genuinely uses it ·
+**teacher replacement and revocation** · **My Classes and My Teachers**, with class detail and
+history (ROUTE_MAP.md §5.1) · **class reminders** through the shared communication contract
+(ARCHITECTURE.md §4.6.1) · **ClassSession storing `meetingProvider` and `meetingUrl`, entered
+manually** · **provider/URL consistency validation and HTTPS `meet.google.com` allowlist** ·
+`MeetingProvider` abstraction.
+
+> **Manual Google Meet remains the V1 mechanism, and no Google Calendar or Meet API integration
+> is introduced.** The application validates and stores a string; it never calls a Google API.
+> Reminder scheduling and rescheduling **update the reminders that were already scheduled** —
+> a rescheduled class does not fire the old reminder (DOMAIN_MODEL.md §19.5).
 
 **Tests:** **A teacher can access only their currently assigned students** · **a revoked
 assignment immediately removes access** · attendance permission-enforced · **meeting URLs are
 exposed only to authorised participants** · **meeting URLs never appear in public caches or
 logs** · a non-Meet or non-HTTPS URL is rejected for the Google Meet provider · **a
 TeacherProfile without a RoleAssignment grants nothing**.
-**Exit:** Teachers run classes with manually entered, validated Meet links. **No recording. No
+Additionally: **two confirmations of the same slot cannot both succeed** · **a cancelled or
+rescheduled class updates its reminders** · **a replaced teacher loses access and the
+replacement gains it** · **student-to-student messaging and under-18-specific capability remain
+disabled in the pre-policy state**.
+
+**Exit — engineering implementation:** Teachers run classes with manually entered, validated
+Meet links, under current-assignment authorisation and default-deny access. **No recording. No
 automated provisioning.**
+
+**Exit — production activation:** reached only when the safeguarding policy exists, any
+behaviour it genuinely requires has been implemented and tested, and the organisation's Meet
+capability is confirmed.
 
 ---
 
 ### Phase 24 — Messaging: domain & shared server services
-**Entry:** Phases 2, **7**, 22, 23 complete. **⚠ Safeguarding decision received.**
+
+**Entry — implementation gate (§3.1):** Phases 2, **7**, 22 and 23 complete.
+
+**Activation gate — OPEN:** the **under-18 safeguarding decision** (OPEN_DECISIONS.md §2.1),
+and the **student-to-student messaging policy** (§2.5). The default-deny mechanics below may be
+built and proven; the policy-dependent capability stays **disabled** until the policy exists,
+exactly as in Phase 23.
 
 > **Phase 7 is an explicit prerequisite** because message attachments are storage-backed. This
 > phase supplies and tests the **Identity-derived authorisation policy** for attachment serving
@@ -671,15 +1094,37 @@ Attachment, **Block, Report**, moderation · **Messaging-owned application servi
 `packages/server-core`** so one implementation serves both processes — **Messaging remains the
 semantic owner** (ARCHITECTURE.md §3.1) · **current-relationship authorisation** · attachment handling via
 Phase 7 · **non-realtime messaging fully working through the web application** · attachment
-retention policy · moderation evidence access controls.
+retention policy · moderation evidence access controls · **conversation list and detail,
+pagination, durable ordering, unread and read state, and reconnect catch-up** · **idempotent
+send and retry keyed by a client-supplied operation identifier**, so a retried send creates one
+message · **the account-closure policy for shared conversations** (SECURITY_BASELINE.md §19.1)
+· **authenticated support conversations** — the `Messages -> Support` surface of
+INFORMATION_ARCHITECTURE.md §5, delivered as a **support conversation type owned by Messaging**
+(DOMAIN_MODEL.md §15.5).
+
+> **Support reuses Messaging; it does not become a second system.** Conversation, Participant,
+> Message, ReadState, attachment security and the blocking and reporting rules are the same
+> ones. **No support-ticket or CRM bounded context is created.** Operator participation is
+> permission-controlled, sensitive support access is audited, and **one user can never read
+> another user's support conversation**. This is distinct from the unauthenticated `/contact`
+> and `/feedback` correspondence workflows, which are Editorial-owned (DOMAIN_MODEL.md §7.5).
 
 **Tests:** **Authorisation validates the current relationship, not historical membership** —
 negative tests for **unrelated teacher, former teacher, revoked assignment, blocked user,
 unauthorised student, removed class/course membership** · **messages persist before any
 broadcast** · blocking prevents initiation and continuation · moderation evidence access
 restricted and audited · **student↔student disabled by default**.
-**Exit:** Messaging works **without any realtime process**, with relationship authorisation
-proven.
+Additionally: **the current-relationship check protects history and attachment access, not
+only sending** · **a retried send with the same operation identifier produces exactly one
+message** · **a user cannot read another user's support conversation** · **closing an account
+follows the documented shared-conversation policy rather than silently destroying another
+participant's history**.
+
+**Exit — engineering implementation:** Messaging works **without any realtime process**, with
+relationship authorisation proven and student-to-student messaging **disabled by default**.
+
+**Exit — production activation:** reached when the safeguarding and student-to-student policies
+exist and any behaviour they require has been implemented and tested.
 
 ---
 
@@ -703,24 +1148,60 @@ never persisted** · socket input Zod-validated.
 
 ### Phase 26 — Membership
 **Entry:** Phases 2, 5, 16 complete. **Not blocked by any payment provider.**
-**Deliverables:** MembershipType, Membership, MembershipApplication · public membership routes
-· admin management.
-**Tests:** Application lifecycle · permission enforcement · **the phase completes with no
-payment provider selected**.
-**Exit:** Membership functional and **independent of Donations**.
+**Deliverables:** MembershipType, Membership, MembershipApplication · **the full applicant
+lifecycle** — application, review and decision, status, and withdrawal or closure where
+appropriate · public membership information routes · **applicant-facing status at
+`/my/membership`** (ROUTE_MAP.md §5.1) · operator management with permission checks ·
+**application and status service communication** through the shared contract
+(ARCHITECTURE.md §4.6.1).
+**Tests:** Application lifecycle transitions enforced server-side · permission enforcement ·
+**an applicant sees only their own application** · **the phase completes with no payment
+provider selected and no payment code path** · service communication is delivered durably.
+**Exit:** Membership functional and **independent of Donations**. **Payment remains
+irrelevant to this phase** — an unresolved provider never blocks membership.
 
 ---
 
 ### Phase 27 — Donations
-**Entry:** Phase 2 complete. **Payment provider decided** (OPEN_DECISIONS.md). **May be
-deferred indefinitely without blocking anything.**
-**Deliverables:** DonationCampaign, Donation behind the `PaymentProvider` abstraction · public
-donate routes · **webhook handling with signature verification, idempotency and replay
-resistance**.
+**Entry — implementation gate (§3.1):** Phase 2 complete. **May be deferred indefinitely
+without blocking anything.** A sandbox adapter may be selected and proven during this phase;
+the production merchant/provider account is a separate activation gate (OPEN_DECISIONS.md §5.4).
+**Deliverables:** DonationCampaign and Donation behind the `PaymentProvider` abstraction ·
+public donate routes · **anonymous donation and optional user-linked donation** · a
+**server-created, immutable expected amount and currency** for each attempt · the **full
+provider-neutral state lifecycle** — pending, succeeded, failed, cancelled, expired where the
+provider requires it, refunded, partially refunded where supported, and disputed or charged
+back where the provider requires it · **duplicate-submission prevention** · provider
+transaction and event identifiers, **scoped to the provider account and environment** ·
+**webhook handling with signature verification, idempotency, replay resistance, durable event
+deduplication and out-of-order event handling** · **reconciliation for ambiguous, delayed or
+missing events** · confirmation and refund service communication · donor privacy · optional
+signed-in donation history at `/my/donations` where that is genuinely in scope · admin
+filtering, reconciliation and export · redacted logs.
+
+> **A browser redirect never proves payment success.** Success is established from the
+> provider's verified server-side state, not from the URL the donor lands on.
+
+> **No provider is selected by this baseline**, and none is selected by this correction. Money
+> follows DOMAIN_MODEL.md §19.6: ISO currency codes, an exact non-floating representation, no
+> assumption that every currency has two decimal places, and refunds that cannot exceed the
+> captured amount.
+
+> **Nothing here introduces ecommerce.** There is no cart, no order, no shipping, no inventory,
+> no subscription engine, and no Gift Aid or tax-receipt jurisdiction logic.
 **Tests:** **Signature verification rejects forged webhooks** · **duplicate delivery produces
 one effect** · **replayed events rejected** · **amount, currency and status verified
 server-side** · **no card or payment credential data stored** · no payment data in logs.
-**Exit:** Donations functional with verified webhooks and no sensitive data stored.
+Additionally: **a duplicate submission produces one donation** · **out-of-order provider events
+converge on the correct final state** · **an ambiguous or missing event is reconciled rather
+than assumed successful** · **a refund cannot exceed the captured amount**.
+
+**Exit — engineering implementation:** Donations functional with verified webhooks, a complete
+provider-neutral lifecycle, and no sensitive data stored. **Sandbox provider integration is
+sufficient to prove the software.**
+
+**Exit — production activation:** requires the organisation's own merchant and provider account
+readiness, which is **separately gated** (OPEN_DECISIONS.md §5.4).
 
 ---
 
@@ -762,7 +1243,11 @@ AssetProvenance · the pipeline of MIGRATION_STRATEGY.md §4 · **link extractio
 · **reconciliation counting** · **reversible publication** · **safe retry classification and
 `Retry-After`** · **SSRF and DNS-rebinding protections** · **sanitisation before staging** ·
 **inert raw rendering in admin** · isolated staging · deduplication queue · admin migration
-area · `scripts/migration/` adapter tooling structure.
+area · `scripts/migration/` adapter tooling structure · **bounded batches, checkpoints and
+resumability for large sources** · **parser and adapter version provenance on every staged
+record** · **classification of source disappearance** (MIGRATION_STRATEGY.md §5.3) · **the
+reviewed promotion manifest** used to move an accepted corpus from staging to production
+(MIGRATION_STRATEGY.md §10.1.1).
 
 **Tests:** **Interrupted runs resume correctly** · **re-running produces no duplicates** ·
 **raw snapshots are immutable and render inertly** · **staged content is not publicly
@@ -770,14 +1255,24 @@ reachable or indexable** · **imported XSS payloads sanitised before storage** �
 rebinding attempts blocked, including post-redirect revalidation** · **ordinary 4xx are not
 retried; `Retry-After` respected** · **reconciliation arithmetic balances** · **a publish
 manifest can be rolled back** · **link rewriting works and unresolved links are reported** ·
-**publication goes through target domain interfaces, not table writes**.
+**publication goes through target domain interfaces, not table writes** · **a source that stops
+returning a record is classified, not treated as deletion evidence** · **an executable legacy
+export is restored and inspected only in an isolated source environment, and never becomes the
+target schema** · **an interrupted promotion resumes without duplicating** · **identical bytes
+do not merge two assets whose rights, provenance, owner or visibility differ**.
 **Exit:** Framework proven **against controlled fixtures — never against a live Minhaj site**.
 **No real legacy source has been contacted and no real asset copied.**
 
 ---
 
 ### Phase 30 — Source Adapters & Initial Migration
-**Entry:** Phase 29 complete. All target domains complete. Staging available.
+**Entry:** Phase 29 complete. All target domains have reached their **engineering
+implementation exit** (§3.1). Staging available.
+
+> **Engineering completeness of a target domain is what this phase needs in order to *run*.**
+> It is not permission to publish that domain's authoritative content: religious publication
+> still requires its own domain approval, and **migration publication authority never
+> substitutes for scholarly review** (MIGRATION_STRATEGY.md §8.4).
 
 > **⚠ Written authorisation recorded per source is mandatory before this phase begins.** It
 > gates **live-source adapters and access, fetching any real legacy Minhaj source, copying any
@@ -830,7 +1325,17 @@ legacy-redirect portion of acceptance**.
 > The non-redirect acceptance criteria — canonical correctness, `hreflang`, sitemaps, structured
 > data, `noindex`, WCAG 2.2 AA and RTL QA — depend only on the in-scope public domains.
 **Deliverables:** Full SEO contract verification (ROUTE_MAP.md §9) · complete accessibility
-audit · RTL QA across **every** page in Urdu and Arabic · Arabic and Urdu typography review.
+audit · RTL QA across **every** page in Urdu and Arabic · Arabic and Urdu typography review ·
+**the assembled UX acceptance pass** across the design system, responsive behaviour, navigation
+and motion contracts (ARCHITECTURE.md §13) · **a recorded content-conformance register**
+listing every place where an authoritative source supplies no caption, transcript or accessible
+alternative.
+
+> **Software conformance and content conformance are accepted separately** (C22,
+> SECURITY_BASELINE.md §16.3). This phase may accept **WCAG 2.2 AA for the software** while
+> recording that specific content lacks source-supplied alternatives. **No unqualified
+> whole-product conformance claim is made while those gaps remain**, and **no alternative is
+> ever fabricated to close one.**
 **Tests:** **Canonical correctness across locales** · **reciprocal `hreflang` with correct
 `x-default` resolved conditionally, never unconditionally English (ROUTE_MAP.md §9.2.1)** ·
 **every `hreflang` target is a genuine canonical language version** · **untranslated content
@@ -864,9 +1369,15 @@ passed its own security exit criteria**.
 This phase is **final assurance, not the first application of security**.
 
 **Deliverables:** Full CSP · complete security headers · rate limiting reviewed end-to-end ·
-**step-up coverage verified across all privileged operations** · audit coverage verified ·
-logging redaction verified · secrets audit · dependency vulnerability scan · **penetration
-testing of SECURITY_BASELINE.md §20**.
+**step-up coverage verified across all privileged operations** · **independent re-assurance of
+the privileged second-factor requirement and of the initial-operator bootstrap** — that the
+bootstrap is genuinely unavailable after first use, that no administrator path silently
+disables a second factor, and that no permanent break-glass account or hidden master factor
+exists (SECURITY_BASELINE.md §8) · audit coverage verified, **including that audit payloads
+are minimised rather than carrying full sensitive record snapshots** (SECURITY_BASELINE.md
+§13.4) · logging redaction verified · secrets audit · dependency vulnerability scan ·
+**verification that the pre-adoption indexing posture is still in force if the platform has not
+yet launched officially** · **penetration testing of SECURITY_BASELINE.md §20**.
 
 **Tests:** The complete security suite · **Fatwa publication authorisation re-verified** ·
 **religious workflow bypass attempts fail** · **cache-leakage across every personalised
@@ -882,12 +1393,25 @@ SQL Server instance and access, DBA ownership, licensing, network access and any
 expectations (OPEN_DECISIONS.md §4.1).
 **Deliverables:** Performance profiling, query and index optimisation · caching strategy ·
 asset optimisation · production Docker Compose · NGINX with TLS, headers and WebSocket upgrade
-· SQL Server production setup · **backup automation with tested restores** · monitoring,
-alerting and log aggregation · deployment runbook · **rollback procedure** · incident response.
-**Tests:** Deployment to production-shaped staging · **restore verified** · **rollback
+· SQL Server production setup · **backup automation with tested restores** · **backup of the
+authoritative storage volume alongside the database** · monitoring, alerting and log
+aggregation · deployment runbook · **the complete recovery procedure of ARCHITECTURE.md §10.4**
+· **rollback procedure** · incident response · **the Level A system-handover material of
+ARCHITECTURE.md §10.5**.
+
+> **A successful SQL restore with missing authoritative assets is not a successful platform
+> recovery.** Recovery is verified across **both** authoritative stores, with derived state
+> rebuilt rather than restored, and with **external provider effects reconciled before anything
+> is replayed** (ARCHITECTURE.md §10.4).
+
+**Tests:** Deployment to production-shaped staging · **restore verified across database and
+authoritative assets together** · **restored access controls and least-privilege mappings
+verified** · **already-completed external effects are not blindly replayed after a restore** ·
+**derived search, cache and sitemap state rebuilds from authoritative state** · **rollback
 verified** · alerts fire correctly · **a web deployment does not destructively drop realtime
 connections** · performance targets met on low-bandwidth mobile.
-**Exit:** Deployable, monitored, backed up, with a **proven** rollback.
+**Exit:** Deployable, monitored, backed up, with a **proven** rollback and a **proven complete
+recovery** — not a database-only one.
 
 ---
 
@@ -895,9 +1419,18 @@ connections** · performance targets met on low-bandwidth mobile.
 **Entry:** Phases 30, 31, 32, 33, 34 complete. **Organisational go-live approval. DNS and
 legacy hosting access arranged.** **Cutover rollback runbook written and rehearsed.**
 
-**Deliverables:** Delta migration **with unchanged review requirements** · final URL mapping
-verification · **301 redirects live** · legacy domain cutover per organisational decision ·
-unmapped-URL logging · post-launch monitoring.
+**Deliverables:** Delta migration **with unchanged review requirements** · **promotion of the
+accepted corpus from staging to production through the reviewed promotion manifest**
+(MIGRATION_STRATEGY.md §10.1.1) · final URL mapping verification · **301 redirects live** ·
+legacy domain cutover per organisational decision · unmapped-URL logging · **the transition to
+official-origin indexing** — `noindex` lifted, canonical URLs moved to the official origin and
+sitemaps submitted **only at this point** (PRODUCT_SCOPE.md, *Product status and acceptance*) ·
+post-launch monitoring.
+
+> **Staging acceptance is not production promotion.** Promotion carries provenance, review
+> integrity and checksums forward, and **excludes staging test accounts, known-password users,
+> development credentials and unrelated staging configuration**. A defined source cutoff,
+> protection of new production writes, and a named rollback owner are settled before cutover.
 
 > **Launch scope is the approved in-scope phase set.** An explicitly approved deferral, such as
 > Donations (Phase 27), is not a launch prerequisite and never becomes one by implication.
@@ -922,6 +1455,8 @@ A phase is complete only when **all** hold:
 5. Documentation updated where architecture changed
 6. Exit criteria explicitly verified, not assumed
 7. Reviewer approval obtained
+8. **The phase's gate status is stated honestly** (§3.1) — an engineering implementation exit
+   is reported as exactly that, and never as content acceptance, activation or launch approval
 
 **Phases 18, 19, 20 and 30 additionally require sign-off from Minhaj religious authority** for
 the content they handle. That is not an engineering judgement and cannot be substituted by one.
@@ -955,11 +1490,12 @@ implement / document → inspect git diff → run required validation
 
 | Risk | Mitigation |
 |---|---|
-| **Religious review capacity is the bottleneck** | Sequenced so review begins early on lower-risk content; reviewer tooling in Phase 29; **no fixed deadline, precisely because this cannot be rushed** |
+| **Religious review capacity is the bottleneck** | Sequenced so review begins early on lower-risk content; reviewer tooling in Phase 29; **no fixed deadline, precisely because this cannot be rushed**. **Engineering is not blocked by it**: Phases 18–20 reach an engineering implementation exit against non-authoritative fixtures, while corpus acceptance and production activation stay open (§3.1) |
+| **An unavailable authoritative corpus stalls the whole roadmap** | The four gate types (§3.1) separate *building* from *activating* and *publishing*, so downstream software proceeds while religious acceptance remains genuinely open — **without ever describing engineering completion as religious approval** |
 | Migration reveals unanticipated structures | Raw preservation permits reparsing without refetching; adapters isolated per source |
 | **Arabic/Urdu search quality inadequate** | Assessed in Phase 17 and re-validated in Phase 31; the abstraction keeps replacement cheap |
 | Scope pressure to recombine phases | Boundaries follow dependency and risk; **vertical slices exist so verification stays possible** |
-| **Safeguarding decision arrives late** | Gates only Phases 23–25; **all other work proceeds**; raised early in OPEN_DECISIONS.md |
+| **Safeguarding decision arrives late** | Gates the **activation** of Phases 23–25; **all other work proceeds**, and those phases may still build **policy-independent, default-deny mechanics**. Under-18 capability and student-to-student messaging stay **disabled in the fail-closed pre-policy state**, and any behaviour the eventual policy requires is implemented and tested **before** activation; raised early in OPEN_DECISIONS.md |
 | **Payment provider unresolved** | Gates only Phase 27; **Membership is independent** |
 | Single-instance realtime becomes a constraint | Known, bounded, documented; the RateLimiter and realtime abstractions permit a shared store later |
 | External decisions block phases | Tracked in OPEN_DECISIONS.md with the phases each gates |

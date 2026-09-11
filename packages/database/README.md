@@ -65,6 +65,44 @@ path — a TLS error such as P1011, for instance — fails the gate instead of
 being masked by a direct-SQL substitute. Direct SQL is used only for database
 creation, state inspection, and the reviewed rollback artifact.
 
+## What the rollback artifact is — and what it is not
+
+The rollback artifact and `db:migrate:test` are a **migration-correctness
+proof**. They run against a **disposable database that holds no accepted data**,
+where dropping the objects and deleting the history row costs nothing.
+
+> **A destructive reverse script is not automatically a safe production
+> rollback**, and directly mutating `_prisma_migrations` is not a routine
+> production recovery step.
+
+Both are safe here **because the database is disposable**. Neither property
+survives contact with a populated database: the same script that cleanly
+reverses an empty migration will drop accepted user and content data from a
+live one.
+
+**Future migrations against populated business schema therefore require:**
+
+- a **reviewed migration plan**;
+- **forward compatibility** where the rollout needs it;
+- **backward compatibility** where that is feasible and needed;
+- an explicit **data-preservation strategy** — what happens to existing rows;
+- a **populated, representative rehearsal** where the change is material;
+- a **roll-forward plan**, which is usually the real answer for a populated
+  database;
+- a **restore and recovery plan** (ARCHITECTURE.md §10.4 — recovery covers the
+  database **and** authoritative stored assets, not the database alone);
+- **compatibility with the deployment rollout**, so that old and new
+  application instances can both run against the schema during the change.
+
+**Production rollback must never casually drop accepted user or content data,
+and never reverse a destructive change without a data strategy.** Where a
+reverse script cannot meet that standard, the correct answer is a forward fix,
+not a rollback.
+
+None of this changes the rule above: every forward migration still ships with
+its paired reviewed rollback artifact, and the pairing is still enforced
+mechanically. The artifact's **scope of validity** is what is stated here.
+
 ### Local configuration precedence
 
 For the local `db:*` lifecycle commands, **`docker/.env` is authoritative**. It

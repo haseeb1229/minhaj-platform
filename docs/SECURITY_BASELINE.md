@@ -94,6 +94,20 @@ for V1.
 - **Failed sign-in responses are generic and uniform** — never "no such user" versus "wrong
   password".
 - Reset tokens are single-use, short-lived, and invalidated on use or password change.
+- **Address identity is compared by one defined canonical rule**, applied consistently at
+  signup, sign-in, email change, reset and linking, and **uniqueness is enforced by the
+  database** so concurrent signups cannot both succeed. **Provider-specific rewriting —
+  Gmail-style dot-stripping or plus-tag removal — is not used as a global canonicalisation
+  rule**, because applying one provider's behaviour universally merges distinct people's
+  accounts (DOMAIN_MODEL.md §4.6).
+- **The final usable authentication method cannot be removed**, and **sessions are revoked
+  after a high-risk security or privilege change** (§2.3).
+- **Account closure does not restore prior grants or private data** on later re-registration,
+  and closure is coordinated across semantic owners rather than performed by one context
+  reaching into another's data (§19.1).
+
+The complete set of account lifecycle invariants — status, suspension, reactivation, closure,
+collision handling and verified email change — is in **DOMAIN_MODEL.md §4.6**.
 
 ### 2.3 Sessions
 
@@ -354,12 +368,17 @@ tokens remain unusable**, and say so without revealing whether an account exists
 
 ---
 
-## 8. Privileged operations and step-up authentication
+## 8. Privileged operations, second factor and step-up authentication
 
-The highest-consequence operations require **MFA or step-up/recent reauthentication before
-production**. A long-lived session is not sufficient authority to publish a religious ruling.
+A long-lived session is not sufficient authority to publish a religious ruling. **Two distinct
+controls apply, and they are not alternatives:**
 
-Operations requiring step-up:
+- **An enrolled second factor** is required *before a high-consequence capability may be
+  exercised at all* (§8.2).
+- **Step-up / recent reauthentication** is required *at the moment* a sensitive operation is
+  performed, where the operation warrants it (§8.1).
+
+### 8.1 Operations requiring step-up
 
 | Operation | Permission |
 |---|---|
@@ -374,6 +393,84 @@ Operations requiring step-up:
 Recent-reauthentication windows are short and configurable. **This requirement does not block
 Phase 0B scaffolding**; it is a production requirement documented now so it is designed in
 rather than retrofitted.
+
+### 8.2 Privileged multi-factor authentication — a V1 production requirement, precisely scoped
+
+> **High-consequence privileged capabilities require an enrolled second factor before those
+> capabilities may be exercised.**
+
+This covers **permission and grant administration** · **sensitive account-security
+administration** · **the first and other privileged administrator functions** · **canonical
+Quran authority operations** · **canonical Hadith authority operations** · **Fatwa
+publication** · and **equivalent high-consequence religious publishing or privilege and
+security operations**.
+
+**It is deliberately not universal.**
+
+- **General-user MFA is not mandatory in V1.** A visitor who bookmarks an ayah is not an
+  administrator, and requiring a second factor of everyone because the library supports one
+  would add friction with no matching risk.
+- **Passkeys remain an optional future**, not a V1 commitment.
+- **SMS-based MFA is not introduced by this baseline.**
+
+**Preferred V1 privileged mechanism: TOTP plus single-use recovery / backup codes** — **subject
+to actual Phase-2 proof** of compatibility with Better Auth 1.7.x, Prisma 7.10.0, SQL Server and
+the accepted Identity schema.
+
+> **No Better Auth API, plugin, schema, session or recovery behaviour is asserted here.** The
+> exact storage, encryption, schema, plugin surface, session behaviour and recovery API are
+> established at that phase's compatibility proof (TECH_STACK.md §1.5). This section states the
+> **security properties the mechanism must exhibit**, not an implementation contract claimed in
+> advance of evidence.
+
+**Recovery and security invariants — independent of the mechanism chosen:**
+
+- **Recovery and backup codes are authentication secrets**, handled as such.
+- **Backup codes are single-use**, and **regeneration invalidates every prior code**.
+- **TOTP secrets are sensitive secrets.**
+- **Neither backup codes nor TOTP secrets are ever logged** (§19.2).
+- Recovery material is **never persisted or handled casually by application code**. Plaintext
+  recovery material is shown **only** through the compatibility-proven flow, and **only** at an
+  appropriate authenticated setup or regeneration moment.
+- **No administrator or helpdesk action may silently disable a second factor to restore
+  privileged access.** Privileged recovery requires an **explicit, audited recovery procedure**.
+- If the chosen version offers a **"trusted device"** feature, it **must not bypass required
+  step-up authentication** for high-consequence operations.
+- **Recovery must never create a permanent password-only privileged bypass.**
+- **No hidden master factor. No permanent break-glass account.**
+
+### 8.3 Initial privileged operator bootstrap
+
+A system with no administrator cannot grant the first permission, and the usual answers — a
+seeded superuser, a hard-coded credential, an open setup endpoint — are each a standing
+vulnerability.
+
+**The bootstrap is:**
+
+- **controlled** and **one-time**;
+- **race-safe**, so concurrent attempts cannot produce two initial operators;
+- **audited**;
+- **unavailable after successful initial provisioning** — it stops existing as a usable path.
+
+**It is never:**
+
+- ✘ a **public, permanently open** bootstrap endpoint;
+- ✘ a **hard-coded admin identity** or **hard-coded master credential**;
+- ✘ a **secret committed to the repository** (§18.1);
+- ✘ a route to **self-elevation** (§3.4).
+
+**After bootstrap, all privilege changes use the normal Permission and RoleAssignment path**
+(DOMAIN_MODEL.md §4.4).
+
+**The initial privileged operator may be provisioned before enrolling a second factor, but
+cannot exercise protected high-consequence capabilities until the required second factor and
+recovery setup are complete** (§8.2).
+
+**Lockout recovery does not create a universal bypass.** It is an explicit, audited procedure
+for a named account, not a mode the system can be put into.
+
+Phase 2 owns the concrete mechanism; **Phase 33 independently re-assures it**
+(DELIVERY_PLAN.md).
 
 ---
 
@@ -586,6 +683,33 @@ destroy the very evidence the record exists to preserve.
 > **The `AuditLog` representation established in the Phase 1 database foundation is therefore
 > explicitly allowed, carries no foreign keys, and is unchanged** (DOMAIN_MODEL.md §6.2.1).
 
+### 13.4 Audit payloads are minimised
+
+§13.2 requires "before and after state where applicable". Read carelessly, that turns a
+general-purpose audit table into **a second copy of every sensitive record** — private Fatwa
+questions, message content, personal data — held under different access rules, retained for a
+different period, and exported by a different route.
+
+> **A generic audit payload must not become a full sensitive record snapshot.**
+
+**Rules:**
+
+1. **Audit payloads are minimised.** They record **which fields changed** and enough context to
+   understand the action and hold the actor accountable — not a wholesale serialisation of the
+   record.
+2. **Sensitive content is referenced, not copied**, into generic audit rows: private question
+   bodies, message content, attachment content, recovery material and credentials never appear
+   there (§19.2).
+3. **Where richer evidence is genuinely required** — a religious-content revision history, where
+   the previous exact wording *is* the evidence — it is held as **that domain's own revision
+   record**, with the owning context named, **permission-restricted access**, and a **defined
+   retention period**. It is not smuggled into the general audit log.
+4. **Retention and export rules follow the sensitivity of the payload**, not the convenience of
+   the table.
+
+This does not weaken auditability: who acted, on what, when, under what authority, and what
+changed all remain recorded (§13.2).
+
 ---
 
 ## 14. Webhooks and payment security
@@ -600,6 +724,18 @@ No payment provider is selected in this pass. Webhook endpoints follow **protoco
    donation as successful. Client-reported outcomes are never trusted.
 5. **Store no card or payment credential data.**
 6. Log no payment credentials or full payloads containing personal data.
+7. **Deduplicate provider events durably**, and **handle out-of-order delivery** so that a late
+   event cannot overwrite a newer state.
+8. **Reconcile ambiguous, delayed and missing events.** An outcome that was never confirmed is
+   **never assumed successful**.
+9. **Scope provider transaction and event identifiers to the provider account and
+   environment**, so a sandbox identifier can never be mistaken for a live one.
+10. **A browser redirect never proves payment success.** Success is established from verified
+    provider state, never from the URL the donor lands on.
+
+**The same reliability rules apply to provider events for email delivery** — authenticity
+verification, idempotency and replay resistance (ARCHITECTURE.md §4.6.1). A provider callback
+is a Class-B request wherever it appears (§7.2).
 
 **Membership and Donations are separate implementation slices** (DOMAIN_MODEL.md §17). An
 unresolved payment provider must never block Membership.
@@ -661,6 +797,29 @@ screen reader testing in all three locales · `prefers-reduced-motion` honoured 
 | **RTL** | Every page verified in Urdu and Arabic — **not merely those checked during development** |
 | **Forms** | Labels, error identification, and instructions meeting AA |
 
+### 16.3 Software conformance and content conformance are accepted separately
+
+The platform can be accessible before every authoritative content asset is. Conflating the two
+produces either a false conformance claim or a permanently deferred one.
+
+| Dimension | What it means | When it can be accepted |
+|---|---|---|
+| **Software accessibility capability** | The application supports captions, transcripts, alternative text, reading controls, keyboard operation and correct semantics wherever content supplies them | When the software meets **WCAG 2.2 AA** for its delivered surfaces |
+| **Content conformance** | The actual corpus carries the alternatives the guidelines require | Only when the authoritative source supplies them |
+
+**Rules:**
+
+- **An alternative is never fabricated.** No invented caption, transcript, alternative text or
+  description is generated to close a gap — for media generally, and emphatically for religious
+  content (§5, §6).
+- **A missing alternative is recorded, not hidden.** Phase 32 maintains a content-conformance
+  register of the gaps (DELIVERY_PLAN.md).
+- > **No unqualified whole-product WCAG 2.2 AA claim is made while required source-content
+  > alternatives are missing.** The software claim is made on its own terms, and the content
+  > position is stated honestly alongside it.
+- Where a provider or source **does** supply captions or transcripts, they are **surfaced**
+  (§16.2) — availability is the constraint, not effort.
+
 ---
 
 ## 17. Public caching boundary
@@ -718,8 +877,38 @@ opportunistic majors during feature work.** Lockfiles committed and respected.
 repurposed) · **defined retention** for logs, audit records and personal data · **user
 rights** — view, export, correct, delete, revoke sessions.
 
-Account deletion removes personalisation records (DOMAIN_MODEL.md §14.2) while preserving
-anonymised aggregates and legally required audit records.
+**Deleting personalisation is not platform-wide erasure.** A previous revision described
+account deletion mainly in terms of personalisation records, which understates it: a person's
+data lives in several contexts, each with its own lawful basis and retention rule.
+
+> **Every semantic data owner owns the disposition of its own data.**
+
+- **Identity & Access owns account closure** and the authentication and security state
+  (DOMAIN_MODEL.md §4.6).
+- **Layer 4 may coordinate a cross-domain user request and report its status.** It gains **no
+  direct ownership of another context's tables** by doing so (DOMAIN_MODEL.md §3.3), and the
+  coordination follows the durable, fail-closed pattern of ARCHITECTURE.md §3.1.2.1.
+- Anonymised aggregates and **legally required audit records are preserved** (§13).
+
+**For each class of personal data, the owning context defines** access · correction where
+applicable · export · retention · archive · anonymisation · purge · deletion · any legally or
+operationally retained state · and any **pending disposition**. The classes this covers:
+
+Identity · sessions · profile · saved items · notes · history · learning and progress ·
+**private Fatwa questions** · messages · attachments · **ContactInquiry** · **Feedback** ·
+**NewsletterSubscriber** · **email delivery metadata** · donor data · **migration raw
+snapshots** (MIGRATION_STRATEGY.md §8.3) · and audit evidence.
+
+> **Erasure is not reported as complete while required owner work remains pending.** A status of
+> "pending" is honest; a status of "done" while records remain is not.
+
+**Consent evidence.** Where consent is the basis — newsletter subscription being the clear case
+(DOMAIN_MODEL.md §14.5) — the record retains **the purpose, the notice or version consented to,
+the timestamp, the source, and revocation history where applicable**.
+
+**No automatic behavioural tracking is introduced, and no cosmetic cookie banner is added.** A
+consent surface exists only where genuine non-essential processing requires one
+(ARCHITECTURE.md §4.7.1).
 
 **Fatwa questions are sensitive** — strictest access control, never exposed in listings,
 search, logs or caches. **Student data** is limited to teachers with a **current** assignment.
@@ -748,6 +937,28 @@ reporting and escalation · moderation requirements · retention requirements.
 
 **This does not block Phase 0B tooling or foundation work.** It gates the specific phases
 above and nothing else.
+
+**What engineering may build before the policy arrives.** The absence of a final policy does not
+prevent implementing the **policy-independent, default-deny mechanics** that any policy will
+require: current teaching-assignment checks · enrolment and relationship checks · default-deny
+access · participant authorisation · private meeting-URL handling · attendance mechanics ·
+blocking · reporting infrastructure · moderation primitives · message persistence and security ·
+teacher revocation behaviour · class and session data protection · and the absence of accidental
+public disclosure.
+
+**The fail-closed pre-policy state.** Until a safeguarding policy explicitly permits otherwise:
+
+- **under-18-specific production capability remains disabled**;
+- **student-to-student messaging remains disabled** (§12.3);
+- **no guardian-consent rule, age threshold, teacher-vetting policy, one-to-one minor
+  communication rule or special minor-retention rule is invented by engineering.**
+
+> **This is a fail-closed pre-policy state, not a declaration that the platform is
+> adults-only.** When the policy exists, any behaviour it genuinely requires becomes an
+> implementation requirement for that behaviour, and is **implemented and tested before the
+> corresponding production capability is activated** (DELIVERY_PLAN.md §3.1).
+
+**The safeguarding gate is not closed by an engineering exit.**
 
 ### 19.4 Multi-jurisdiction
 
@@ -793,5 +1004,28 @@ coverage:
 - **SSRF and DNS rebinding attempts through importer source configuration**
 - **Cache-leakage validation** — no session-derived data in shared cache entries
 - **Meeting URL disclosure limited to authorised participants**
+- **Privileged second factor required before a high-consequence capability can be exercised**;
+  **backup codes are single-use**; **regeneration invalidates prior codes**; **no administrator
+  path silently disables it**; **no permanent break-glass account exists** (§8.2)
+- **Initial bootstrap is one-time, race-safe, audited and unavailable after first success**;
+  **self-elevation fails** (§8.3)
+- **Account lifecycle:** signup collision under concurrency · email-change collision ·
+  canonical-equivalent address · final authentication method protected · sessions revoked after
+  a high-risk change · closure does not restore prior grants (DOMAIN_MODEL.md §4.6)
+- **Communication durability:** a crash after the domain commit but before delivery is retried
+  idempotently, **without minting a second verification or reset token**; suppression, bounce
+  and complaint handling; duplicate and out-of-order provider events (ARCHITECTURE.md §4.6.1)
+- **Newsletter:** submission alone does not subscribe · replayed and expired confirmations fail
+  · enumeration resistance · unsubscribe without sign-in · **marketing suppression does not
+  suppress security mail** (DOMAIN_MODEL.md §14.5)
+- **Cross-context purge:** fail-closed, resumable, leaves no broken reference, and **no
+  persistence capability crosses a context boundary** (ARCHITECTURE.md §3.1.2.1)
+- **Concurrency:** stale publish, stale approval and stale grant updates are rejected
+  (DOMAIN_MODEL.md §19.8)
+- **Search and cache staleness never discloses** withdrawn, unpublished or private content
+  (ARCHITECTURE.md §8.5)
+- **Audit payloads are minimised** and carry no sensitive full-record snapshots (§13.4)
+- **Recovery:** database and authoritative assets restore together; restored access controls
+  hold; **already-completed external effects are not blindly replayed** (ARCHITECTURE.md §10.4)
 
 **A permission check without a negative test is an untested permission check.**

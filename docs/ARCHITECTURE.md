@@ -88,9 +88,9 @@ with the bounded context in every one of these paths (§3.1.1).
 
 ### 1.1 Why the realtime process exists at all
 
-`apps/web` is stateless and request-scoped; it scales horizontally and restarts freely.
-Long-lived WebSocket connections have a different lifecycle: a web deployment must not drop
-every open conversation.
+`apps/web` is stateless and request-scoped; it restarts freely, and it is the tier that can be
+scaled out (subject to §3.5.1). Long-lived WebSocket connections have a different lifecycle: a
+web deployment must not drop every open conversation.
 
 That difference in connection lifetime is the **sole** justification for the split, and it
 is the only split in the system.
@@ -113,7 +113,7 @@ One deployable web application, internally divided into **16 bounded contexts**
 | Consideration | Finding |
 |---|---|
 | Domain coupling | The core product value is the *unified content graph*. A topic page joins works, videos, articles, research, Fatawa, courses, audio and contributors. Distributed, this becomes network joins and consistency problems — solving with infrastructure what a database join solves for free. |
-| Transactional integrity | Publishing a Fatwa updates the ruling, question status, topic assignments, audit log and search index. One database, one transaction. Across services: sagas and compensating actions, for religious content where correctness is non-negotiable. |
+| Transactional integrity | Publishing a Fatwa updates the ruling, its question status, topic assignments and the audit log. **One database, one transaction, inside the owning context.** Across services this becomes sagas and compensating actions, for religious content where correctness is non-negotiable. (The **search projection is derived work**, committed as durable intent rather than inside that transaction — §8.5.) |
 | Team size | Small team. Microservices turn every cross-domain change into multi-repository coordination. |
 | Operational cost | Service discovery, distributed tracing and per-service CI/CD are permanent costs. Nothing requires scaling Library independently of Editorial. |
 | Explicit exclusion | Kubernetes and microservices are excluded by requirement. |
@@ -260,6 +260,50 @@ Future source enforcement distinguishes **encapsulated service invocation** from
 capability acquisition**. Those rules are written in the source work that owns them, against
 this contract — never improvised at a call site.
 
+### 3.1.2.1 Cross-context consistency — without a generic transaction port
+
+Model A keeps raw transaction capability private (§3.1.2). A blanket rule that cross-context
+work happens "in a single transaction" would contradict that, because the only way to honour it
+would be to hand a transaction handle across a boundary. **The contradiction is resolved by
+narrowing the claim, not by adding a mechanism.**
+
+**A. Single-context authoritative mutations.** A bounded context performs its own atomic
+transaction internally, through its own application service and persistence adapter. **Raw
+transaction capability never leaves that private boundary.** This covers the overwhelming
+majority of mutations, including the Fatwa publication above.
+
+**B. Derived and external effects are not in that transaction.** Search and FTS, cache
+invalidation, sitemap refresh, email delivery and external provider effects are **derived or
+external work**. They are never described or tested as atomically committed with authoritative
+domain state (§8.5).
+
+**C. Rare cross-context hard purge** uses a **fail-closed, durable, resumable orchestration**,
+not one cross-context SQL transaction (DOMAIN_MODEL.md §14.3):
+
+1. the target is first marked **unavailable, archived or purge-pending**;
+2. it **cannot leak publicly** while the purge is incomplete;
+3. **Layer 4 coordinates the public services of the semantic owners** — it does not reach into
+   their tables;
+4. each owner **removes, anonymises or tombstones its own records** according to its policy;
+5. every step is **idempotent and resumable**, so retries after interruption are safe;
+6. the absence of any prohibited relational reference is **verified**;
+7. **only then** may the owning content context physically delete;
+8. workflow state and failures are **audited**.
+
+A failure may **delay** final physical deletion. It must never break referential integrity,
+leak content, or bypass semantic ownership.
+
+> **Explicitly not introduced:** a generic atomic-execution port, a UnitOfWork abstraction, a
+> transaction-callback API, a shared repository gateway, an arbitrary transaction coordinator,
+> a public transaction handle, or cross-context raw Prisma capability. Each would be
+> **capability laundering** under §3.1.2 — a route by which a caller acquires database authority
+> it is not permitted to hold.
+
+**If a future concrete use case genuinely requires same-transaction cross-context atomicity,
+that phase STOPS and obtains a separate explicit architecture decision** with a narrowly proven
+mechanism. **No such mechanism is pre-built now**, because a general-purpose one would be used
+generally.
+
 ### 3.1.3 Admission to `server-core` — the timing rule
 
 Rule 6 says admission is by justification. It is refined here, because the frozen architecture
@@ -322,7 +366,27 @@ still works through the web application — delivery degrades from instant to on
 
 Socket.IO runs single-instance when introduced. Horizontally scaling the realtime tier would
 require an adapter; that is accepted until measured volume justifies it, and is revisitable
-without domain change. **The web tier scales horizontally regardless.**
+without domain change.
+
+### 3.5.1 Horizontal scaling of the web tier is conditional, not automatic
+
+A previous revision said the web tier "scales horizontally regardless". **That overstated the
+position and is corrected here.** Statelessness is necessary for scaling out; it is not
+sufficient. Running more than one web instance requires each of the following to be true, and
+**each is a real piece of work, not an assumption**:
+
+| Concern | What multi-instance actually requires |
+|---|---|
+| **Application and route cache** | Cache and revalidation behaviour coordinated across instances, so one instance's publish is not invisible to another |
+| **Storage** | Assets on **shared or portable storage** — a per-instance local volume silently serves 404s from the wrong node |
+| **Secrets and configuration** | Every instance built and configured compatibly, including any build-time origin values (§10.5.3) |
+| **Scheduled work** | **Leasing or single-execution election**, so a scheduled publication does not fire once per instance (§8.5) |
+| **Rate limiting** | A shared limiter strategy wherever a security-critical flow needs cross-instance consistency (§4.5) |
+| **Realtime** | The Socket.IO adapter above, where the realtime tier is also scaled |
+
+**None of this infrastructure is added before measured need.** It is recorded so that scaling
+out is a deliberate, costed decision rather than a surprise during an incident — and so the
+baseline stops claiming a property it has not established.
 
 ---
 
@@ -418,9 +482,70 @@ A **RateLimiter abstraction**, not a mandated infrastructure dependency.
 
 ### 4.6 Email, logging, auditing
 
-**EmailProvider** abstraction — no provider invented in Phase 0A. **Pino 10.3.1** structured
-logging with **logger-level redaction**. **Audit** is durable domain data with the realistic
-integrity baseline of SECURITY_BASELINE.md §13.
+**EmailProvider** abstraction. **Pino 10.3.1** structured logging with **logger-level
+redaction**. **Audit** is durable domain data with the realistic integrity baseline of
+SECURITY_BASELINE.md §13.
+
+**The first EmailProvider adapter is Resend**, introduced with Phase 2. It is recorded here as
+the **first and development/pre-adoption adapter behind the abstraction**, not as a permanent
+platform dependency: an adopting organisation may run its own provider by supplying another
+adapter, and **no business context ever calls Resend directly** (§4.6.1).
+
+| Origin | Value | Note |
+|---|---|---|
+| Development / presentation app | `minhajulquran.haseebliaqat.me` | Pre-adoption origin (PRODUCT_SCOPE.md, *Product status and acceptance*) |
+| Development sender domain | `mail.minhajulquran.haseebliaqat.me` | Used for development and presentation mail only |
+| `notify.haseebliaqat.me` | **Unrelated** | Belongs to **ParaForce**. It is **not** a One Minhaj sender and must stay separate |
+
+> **Selecting a provider does not close the Phase 2 email entry gate.** That gate closes only on
+> evidence — verified sending domain, SPF where applicable, verified DKIM, configured DMARC, a
+> securely provisioned restricted sending credential, and successful delivery to a real
+> controlled inbox (OPEN_DECISIONS.md §5.1). The eventual **official production sender remains
+> organisation-controlled and separate**. **No API key or secret appears in this repository's
+> documentation.**
+
+### 4.6.1 Outbound communication — one architecture, three owners
+
+Mail is neither a domain nor a free-for-all. Ownership splits three ways, and the split is what
+keeps template wording next to the business rule that justifies it while keeping provider
+mechanics in one place:
+
+| Owner | Owns |
+|---|---|
+| **The originating business or security context** | Why the communication exists · recipient eligibility · the business event · its domain meaning · the domain-specific message content |
+| **The shared platform email concern** | The provider contract and adapter · rendering infrastructure · the shared visual shell and branding · common localisation and accessibility mechanics · sending · provider event verification · delivery metadata |
+| **Personalisation & Notifications** | In-app `Notification` · optional notification preferences · optional email-channel and category preferences where appropriate |
+
+The lifecycles this covers are those the product already implies: **Identity/security**
+(verification, resend, reset, password changed, email changed, justified security alerts);
+**Learning** (trial and booking lifecycle, confirmation, change, cancellation, reminders);
+**Membership** (application and status); **Fatwa** (question lifecycle, only where privacy
+permits); **Donations** (confirmation, failure where useful, refund, receipt-style service
+mail); **Messaging** (optional notification mail); and the **Newsletter**, which is a separate
+marketing lifecycle owned by Personalisation & Notifications (DOMAIN_MODEL.md §14.5).
+
+**Reliability.** Where a committed business or security event must not silently lose its
+communication, the event commits **durable delivery intent** in SQL, dispatched by bounded
+scheduled work. Required behaviour: stable idempotency · bounded retry with backoff · a
+distinction between permanent and transient failure · suppression · bounce and complaint
+handling · operator-visible failure · verified webhook authenticity · idempotent, replay-safe
+handling of provider events · redacted logs. **No Redis, queue product, generic worker platform
+or event bus is introduced** — durable rows plus bounded scheduled dispatch is the whole
+mechanism (§8.5).
+
+> **Critical exception — authentication tokens.** Retrying an email **must never** create a
+> second token system. Email verification and password reset use the **compatibility-proven
+> Better Auth 1.7.x token lifecycle** and nothing else. A retry must not duplicate token
+> authority, create a parallel token table, silently extend expiry, resurrect a consumed token,
+> mint a new valid token invisibly, or make a GET perform the confirming mutation. **A GET may
+> display or validate link state; the confirming action consumes the token** according to the
+> proven protocol (SECURITY_BASELINE.md §7.4).
+>
+> Durable **post-commit notifications** — password changed, email changed, account-security
+> alerts — carry no token authority and may use the communication-intent mechanism freely.
+
+> **Critical service mail is not marketing.** A marketing unsubscribe or suppression **never**
+> suppresses security-critical or account-service communication.
 
 ### 4.7 Integration abstractions
 
@@ -429,7 +554,25 @@ integrity baseline of SECURITY_BASELINE.md §13.
 | Live class | `MeetingProvider` storing provider + manually entered URL, with validation (DOMAIN_MODEL.md §13.1) | Google Calendar/Meet API provisioning |
 | Video | `VideoProvider` — YouTube/Vimeo metadata and embed | Additional providers |
 | Payment | `PaymentProvider` interface only | Provider selection is an open decision |
-| Email | `EmailProvider` interface | Provider selection is an open decision |
+| Email | `EmailProvider` interface, **first adapter Resend** (§4.6) | An adopting organisation supplies its own provider adapter |
+
+### 4.7.1 Third-party embeds — privacy and loading
+
+A provider embed is not privacy-neutral merely because it is an `iframe`. **A third-party embed
+must not silently introduce unmanaged non-essential tracking.**
+
+- Prefer a **privacy-enhanced or provider-minimising embed mode** wherever the provider
+  supports one and it is compatible with the product.
+- Where a provider **necessarily** introduces non-essential cookies or tracking, the privacy and
+  consent posture must account for it **before the embed loads** — not after.
+- A **blocked or deferred embed always has an accessible fallback**: a described link to the
+  provider, never a dead frame or a silent gap.
+- Provider scripts and frames remain constrained by the approved **CSP provider allowlist**.
+- **No generic cookie-consent platform is introduced** unless genuine non-essential processing
+  actually requires one.
+
+Captions and transcripts are surfaced **where the provider or source genuinely supplies them**,
+and are never fabricated (SECURITY_BASELINE.md §16.2).
 
 ---
 
@@ -624,13 +767,60 @@ A signed-in visitor sees the same cached public page plus their own uncached isl
 ### 8.3 Private surfaces are never publicly cached
 
 `/my/*`, `/teacher/*`, `/admin/*` and every authenticated API response carry private,
-no-store cache directives and `noindex` (ROUTE_MAP.md §11).
+no-store cache directives and `noindex` (ROUTE_MAP.md §9.5).
 
 ### 8.4 Validation
 
 **Cache-leakage tests are a standing exit criterion of every feature phase**: no
 session-derived value may appear in a shared cache entry, and no personalised fragment may
 be served to a different visitor.
+
+### 8.5 Authoritative state and derived work
+
+Publication has an authoritative half and a derived half, and **conflating them produces a
+false reliability claim**.
+
+> **Publication success means one thing: the owning domain's authoritative state committed
+> validly in its own database transaction.**
+
+Everything else that publication implies — the **search/FTS projection**, the **route and data
+cache**, the **sitemap**, **canonical and `hreflang` metadata**, **redirects**, **email**, and
+**external provider effects** — is **derived or external work**. **None of it is atomically
+committed with the authoritative transaction**, and no document in this baseline describes it
+as though it were. SQL Server FTS in particular is populated asynchronously; claiming synchronous
+atomicity would be false and would conceal the staleness window.
+
+**Where correctness depends on that work actually happening**, the authoritative transaction
+commits **durable derived-work intent** alongside the domain change, and the work is:
+
+- **observable** — pending, failed and lagging work is visible to an operator;
+- **retryable** — safely, idempotently, with bounded retry;
+- **reconstructable** — an index or projection can be rebuilt from authoritative state;
+- **safe** — failure degrades availability of the derived view, never correctness of the
+  authoritative record.
+
+**The security rule that makes staleness survivable:**
+
+> **Private, draft, staged, unpublished or withdrawn content must never become visible because
+> a cache or index is stale.** Current publication, visibility and authorisation are enforced
+> **before** a sensitive or withdrawn payload is returned, wherever the architecture requires
+> such a check. A stale index may omit something; it may never disclose something.
+
+Each lifecycle transition — **publish, unpublish, archive, restore, delete, slug change,
+visibility change** — defines its resulting behaviour across the canonical route, listings,
+related content, cache, search, sitemap, canonical and alternate metadata, and redirects. The
+owning phase delivers and tests that behaviour (DELIVERY_PLAN.md §3).
+
+**Scheduled work** — scheduled publication being the first concrete case (DELIVERY_PLAN.md,
+Phase 6) — follows the same discipline: the schedule is **durable and cancellable**, the
+executor is **bounded**, **downtime catch-up is defined**, and execution **re-checks current
+state, current approval and current authority** before acting, so a superseded approval can
+never publish. Retry is safe. **No generic worker platform, queue product or event bus is
+introduced because scheduling exists**, and multi-instance execution requires leasing
+(§3.5.1).
+
+**No distributed cache infrastructure is added.** This section defines semantics, not new
+infrastructure.
 
 ---
 
@@ -689,7 +879,8 @@ touched during Phase 0A.**
 |---|---|
 | Local | Developer workstation; SQL Server 2022 Developer edition |
 | **Staging** | Production-shaped; migration dry-runs and editorial/religious QA |
-| Production | Live platform |
+| **Pre-adoption / presentation** | The **same application** on a developer-controlled origin, before official adoption. **Non-indexable**, claims no official adoption, and is **not a reduced build** (PRODUCT_SCOPE.md, *Product status and acceptance*) |
+| Production | Live platform on the official origin |
 
 **Staging is delivered as its own foundation milestone before any live-source migration**
 (DELIVERY_PLAN.md), not as part of final production hardening. Migration dry-runs and
@@ -701,10 +892,93 @@ Type check → lint → **architecture boundary rules** → unit and integration
 E2E on critical paths. Migrations are reviewed and applied deliberately, never automatically
 on deploy.
 
-### 10.4 Backups
+### 10.4 Backups and complete recovery
 
 SQL Server backups with **tested restores**, plus storage volume backups. **A backup that has
 never been restored is not a backup.** Retention and RPO/RTO targets are an open decision.
+
+**Product recovery is not database recovery.** The platform has **two authoritative stores**,
+and restoring one of them is a partial recovery that looks complete:
+
+| Category | Examples | Posture |
+|---|---|---|
+| **Authoritative — SQL** | Domain records · security and permission state · audit · idempotency and deduplication records · durable communication, payment and provider state | Backed up; restored |
+| **Authoritative — storage** | PDFs · images · hosted audio · message attachments · other owned files · checksums and storage metadata · quarantine and scan state where authoritative | Backed up; restored |
+| **Derived — rebuildable** | Search indexes · caches · rebuildable projections · generated sitemap and metadata | **Rebuilt, not restored** (§8.5) |
+
+> **A successful SQL restore with missing authoritative assets is not a successful platform
+> recovery.**
+
+**Conceptual restore ordering** — the order exists so that nothing is exposed or re-fired
+before it has been verified:
+
+1. **isolate** the restored environment;
+2. **disable unintended outbound and provider side effects**;
+3. restore **SQL**;
+4. recover required **configuration and key custody**;
+5. recreate **least-privilege database login mappings** where needed;
+6. restore **authoritative stored assets**;
+7. **reconcile asset checksums and references** against the database;
+8. **fail closed on uncertain scan or private state** — an asset of unknown status stays
+   unreachable;
+9. verify **Identity, permission and security state**;
+10. verify **privacy, consent and audit state**;
+11. **reconcile external provider outcomes before any replay** — a payment already captured or
+    an email already delivered is **not** re-executed because a durable intent row looks pending;
+12. rebuild **published-only** search projections;
+13. rebuild sitemap, cache and other derived state;
+14. verify **public and private boundaries**;
+15. verify representative **critical workflows**;
+16. **deliberately resume schedules**;
+17. **deliberately resume traffic and outbound effects**.
+
+**Storage gains no Identity dependency from any of this** — the storage foundation stays
+infrastructure, and consuming phases supply the authorisation policy (DELIVERY_PLAN.md, Phase 7).
+
+### 10.5 Handover and portability
+
+Two **technical** handover levels are distinguished, because they are frequently assumed to be
+one. **Neither is a commercial document, and no licensing or contractual terms are recorded in
+this repository.**
+
+#### 10.5.1 Level A — source and system handover
+
+The recipient organisation's engineers receive enough to operate the system with **their own
+accounts**: the repository · the committed lockfile · the environment template · these
+architecture documents · database migrations · import and migration tooling · a setup guide ·
+a provider inventory · a deployment guide · the backup and restore guide (§10.4) · the admin
+bootstrap procedure (SECURITY_BASELINE.md §8.3) · and operational and security notes.
+
+#### 10.5.2 Level B — separately requested implemented deployment
+
+The **same codebase** configured and deployed against adopter-owned official domain, DNS,
+infrastructure, database, email, OAuth, payment, storage, monitoring, backup destination and
+approved content sources, with authorised migration and cutover executed.
+
+> **Level B is not automatically included in a Level A handover.** They are separate pieces of
+> work.
+
+#### 10.5.3 Production ownership and origin portability
+
+- **Adopted production must not depend on personal developer credentials.** Every
+  development-time credential is **replaceable and revocable**, and replacing one is a
+  configuration change, not a code change.
+- Moving to the official origin may require **DNS, TLS, a rebuild, cookie and callback
+  configuration, OAuth redirect updates, sender verification and new credentials**.
+- It must **never** require rewriting User business records, content records or domain
+  relationships. **Origin is configuration; the data model is not.**
+
+> **Build-time versus runtime configuration — stated accurately.** Values inlined into the
+> client bundle at build time (anything `NEXT_PUBLIC_`) **do not change because an environment
+> variable changed at runtime**; an already-built bundle keeps what it was built with. Origin
+> changes that touch client-visible configuration therefore require a **rebuild and redeploy**,
+> and this baseline does not claim otherwise.
+
+**One organisation per deployment.** The platform is not multi-tenant, and no white-label or
+generic-CMS engine is introduced. A future product reuses this foundation by **forking and
+adapting** it — Quran, Hadith, Fatwa authority, the Minhaj information architecture, religious
+safeguards and organisation-specific semantics are **not genericised for hypothetical future
+clients**.
 
 ---
 
@@ -749,3 +1023,125 @@ never been restored is not a backup.** Retention and RPO/RTO targets are an open
 | Public caching | Explicit anonymous boundary | Prevents personalised data entering shared caches |
 | Dependency model | **Explicit acyclic allowlist**, not strictly downward | Honest about legitimate same-level edges such as `Messaging → Learning`, rather than reorganising the architecture to satisfy diagram aesthetics |
 | Boundary enforcement | Build-time lint, **no exceptions** | Conventions decay; gates do not |
+| **Cross-context consistency** | Owner-coordinated, durable, fail-closed — **no generic transaction port** (§3.1.2.1) | Preserves Model A: a blanket "one transaction" rule could only be honoured by laundering database capability |
+| **Derived work** | Search, cache, sitemap, email and provider effects are **not** atomic with the authoritative transaction (§8.5) | A reliability claim without a mechanism invites reliance; FTS is asynchronous by nature |
+| **Outbound communication** | Originating context owns the event; a shared concern owns the provider; **Resend is the first adapter** (§4.6–§4.6.1) | One sending path, no direct provider calls from business code, and no second auth-token system |
+| **Design system** | Staged ownership — minimum in Phase 2, canonical in Phase 4 (§13.1) | Authentication surfaces need a foundation before the public shell exists, without inviting throw-away styling |
+| **Horizontal scaling** | **Conditional**, not automatic (§3.5.1) | Statelessness is necessary, not sufficient; cache, storage, config, scheduling and limiting all have to hold |
+| **Deployment portability** | One organisation per deployment; origin is configuration (§10.5) | Avoids multi-tenancy and white-labelling that nothing has asked for |
+
+---
+
+## 13. Experience and design system
+
+The platform's presentation is an architectural concern, not a decoration applied at the end.
+This section is the contract every routed surface is built against.
+
+### 13.1 Staged ownership — one system, delivered in stages
+
+| Stage | Owns |
+|---|---|
+| **Phase 2** | The **minimum** shared visual and interaction foundation needed by authentication, Account & Security and the initial privileged entry surfaces |
+| **Phase 4** | The **canonical broad product design system** and the public shell |
+| **Later specialised phases** | Extensions for readers, media, editorial, religious content, learning and administrative complexity |
+| **Phase 32** | The assembled UX, accessibility and SEO acceptance pass |
+
+> **There is exactly one design system.** Phase 2 delivers a genuine subset of it, **not
+> throw-away styling to be discarded in Phase 4**; Phase 4 extends that subset rather than
+> replacing it; later phases extend it again. **No phase forks it**, and no phase re-implements
+> a primitive that already exists.
+
+### 13.2 Design tokens
+
+Semantic tokens, never raw values scattered through components: **colour by role** — surfaces,
+foreground and muted text, action and accent, error, warning, success, info, border — plus
+**spacing**, **radius**, **shadow/elevation** where it earns its place, and **layering** only
+where a real stacking problem exists.
+
+> **No arbitrary palette is frozen here.** Brand assets, the colour palette and approved
+> typefaces are an organisational input (OPEN_DECISIONS.md §6.4). The **token structure** is
+> the architectural decision; the **values** arrive with accepted brand evidence, and the
+> structure is what makes substituting them a configuration change.
+
+### 13.3 Typography across three scripts
+
+English, Urdu and Arabic — including **mixed scripts within one page** — with deliberate
+decisions on long-form reading, line height, hierarchy, readable measure, loading performance
+and **licensing**. Quran-specific typography remains specialised to the Quran phase and is not
+generalised into the shared scale (SECURITY_BASELINE.md §16.2).
+
+### 13.4 Component and state contract
+
+The shared inventory: button · link · input · textarea · select/combobox where genuinely
+needed · checkbox and radio · form field with help and error · card · alert · badge · tabs ·
+breadcrumbs · pagination · table · dialog · drawer/sheet · menus · tooltip only where it is
+accessible and useful · toast/status where justified · skeleton · and the **empty, loading,
+error and confirmation** states.
+
+**Every interactive component defines every state it can be in:** default · hover ·
+**focus-visible** · active · selected · pressed · disabled · destructive · pending ·
+submitting · success · error. A state that is undefined is a state that will be invented
+inconsistently later.
+
+### 13.5 Responsive layout
+
+Small phone · phone · tablet · laptop · desktop · wide. Fluid layouts with a **maximum reading
+measure**, responsive grids, responsive tables, a responsive administrative surface, and
+adequate **touch targets**.
+
+**Two absolutes:** **no horizontal overflow at any supported width**, and **RTL correctness at
+every breakpoint** — not only at the width a developer happened to check (§9).
+
+### 13.6 Navigation, scroll, focus and motion
+
+**Skip links** · deliberate focus management · sensible sticky behaviour · a real mobile
+navigation · **keyboard-operable mega menus** · scroll restoration · predictable anchor
+behaviour · **focus restoration when a dialog closes** · scroll locking while it is open · and
+no scroll jank.
+
+**Motion is purposeful, subtle and consistent.** `prefers-reduced-motion` support is
+**mandatory**, not optional. **No decorative animation on religious content**
+(SECURITY_BASELINE.md §16.2), and none of the constant-motion behaviour of a promotional
+agency site.
+
+### 13.7 Visual character
+
+**Premium, calm, scholarly, trustworthy, modern, clean and content-first.**
+
+Deliberately avoided: the generic template look · a SaaS-dashboard aesthetic applied
+everywhere · gratuitous gradients · excessive glassmorphism · constant animation ·
+overwhelming ornament.
+
+### 13.8 Low bandwidth
+
+The audience is global, predominantly mobile and frequently on constrained connections
+(PRODUCT_SCOPE.md §5). Image optimisation · responsive images · lazy loading · font
+discipline · **Server Components by default** · minimal client JavaScript · stable layout
+without shift · bounded lists · route-level loading states · graceful media degradation.
+
+### 13.9 Data scale
+
+**No claim of unlimited scale is made.** The posture is a substantial multilingual corpus, met
+by discipline:
+
+bounded queries · bounded page sizes · **deterministic ordering with explicit tie-breakers** ·
+relevant indexes · **no whole-corpus filtering in the client** · bounded administrative bulk
+actions · **cursor/keyset scans** where appropriate · batched migration and backfill · bounded
+memory use · and validation against **representative mixed-script data** with long text and
+sparse translation coverage.
+
+> **A phase claims only the scale it has actually exercised.** Foundation work that has not run
+> against a large corpus is **not** described as load-proven; large-corpus validation belongs to
+> Phases 31 and 34 (DELIVERY_PLAN.md).
+
+### 13.10 Browser testing
+
+**Playwright 1.55.x is introduced in Phase 2**, the first genuinely browser-critical phase,
+subject to compatibility proof at introduction (TECH_STACK.md §1.5).
+
+It is introduced there because that phase is the first whose correctness genuinely lives in the
+browser: real cookies · session transitions · CSRF and browser behaviour · sign-out ·
+verification and reset confirmation · authentication navigation and return paths · the
+Account & Security surface · focus and error behaviour · and locale and RTL flows.
+
+**It is not installed before that phase.**

@@ -74,8 +74,10 @@ Validation happens **at genuine introduction**, in the phase that owns it
 | Next.js · React · TypeScript · Tailwind · Zod · Pino · Vitest · ESLint · Prettier | **Phase 0B** — the dependencies 0B actually installs |
 | **Prisma ORM · @prisma/client · @prisma/adapter-mssql** | **Phase 1** — the database foundation, where persistence first exists |
 | **Better Auth 1.7.x** | **Phase 2** — the Identity phase, where authentication persistence first exists |
+| **The privileged second-factor mechanism** (TOTP + recovery codes) | **Phase 2** — proven against the chosen Better Auth configuration, Prisma, SQL Server and the accepted Identity schema (SECURITY_BASELINE.md §8.2) |
+| **Resend** — first `EmailProvider` adapter | **Phase 2**, where transactional mail first exists (ARCHITECTURE.md §4.6) |
 | **next-intl 4.14.x** | **Phase 3A** — the Localisation Foundation, its owning point |
-| **Playwright 1.55.x** | **First genuine introduction** — migration tooling or E2E, whichever comes first |
+| **Playwright 1.55.x** | **Phase 2** — the first genuinely browser-critical phase (ARCHITECTURE.md §13.10) |
 | **Socket.IO 4.8.3** | **Phase 25** — when the owning Messaging/realtime work introduces it |
 | Motion · React Hook Form · Tiptap · Cheerio · shadcn/ui source | First genuine use, in the phase that needs them |
 
@@ -106,6 +108,7 @@ Validation happens **at genuine introduction**, in the phase that owns it
 | @prisma/client | **7.10.0** | LOCKED | Runtime | **Phase 1 — Database Foundation** |
 | **@prisma/adapter-mssql** | **7.10.0** | LOCKED | Runtime | **Phase 1 — Database Foundation** |
 | Better Auth | **1.7.x** | LOCKED | Runtime | **Phase 2 — Identity & Access** |
+| **Resend** (first `EmailProvider` adapter) | current stable at introduction | LOCKED as the **first/development adapter**, behind the abstraction | Runtime | **Phase 2** |
 | Zod | **4.5.x** | LOCKED | Runtime | Phase 0B |
 | React Hook Form | **7.x** | LOCKED | Runtime | **When needed** |
 | Tiptap | **3.x** | LOCKED | Runtime | **When needed** |
@@ -115,7 +118,7 @@ Validation happens **at genuine introduction**, in the phase that owns it
 | SQL Server Full-Text Search | — | LOCKED | Runtime | Search foundation phase |
 | StorageService abstraction | — | LOCKED | Runtime | Storage foundation phase |
 | Native `fetch` + Cheerio | current stable Cheerio | LOCKED | Development | Migration phase |
-| Playwright | **1.55.x** | LOCKED | Development | **First genuine introduction** |
+| Playwright | **1.55.x** | LOCKED | Development | **Phase 2 — first browser-critical phase** |
 | Pino | **10.3.1** | LOCKED | Runtime | Phase 0B |
 | Vitest | **4.1.x** | LOCKED | Development | Phase 0B |
 | ESLint | **10.x** | LOCKED | Development | Phase 0B |
@@ -297,6 +300,18 @@ verification and reset; TypeScript-native.
 **Introduced and compatibility-validated in Phase 2**, at its genuine introduction — **not in
 Phase 0B, which does not install it** (§1.2, §1.5).
 
+**Privileged multi-factor authentication is a Phase-2 compatibility gate of its own.** The
+preferred V1 mechanism is **TOTP plus single-use recovery codes** for high-consequence
+privileged capabilities (SECURITY_BASELINE.md §8.2), and it must be **proven** against the
+chosen Better Auth 1.7.x configuration, Prisma 7.10.0, SQL Server and the accepted Identity
+schema.
+
+> **No Better Auth plugin, API, schema, session or recovery behaviour is asserted in advance of
+> that proof.** If the mechanism cannot meet the required security properties without unsafe or
+> custom divergence, **Phase 2 stops for an explicit architecture decision** (§1.2) rather than
+> bending the security contract to fit the library. **General-user MFA is not mandatory in V1,
+> and SMS MFA is not introduced by this baseline.**
+
 **Boundary:** Better Auth handles authentication mechanics only, confined to the Identity &
 Access adapter sub-layer. **Permissions are the single enforcement path**
 (DOMAIN_MODEL.md §4.4); capability labels are derived projections, never stored booleans.
@@ -363,9 +378,9 @@ part of the production security design** — **no scanner is selected or install
 **Cheerio** (current stable) — LOCKED, installed in the migration phase. Fast and sufficient
 for the majority of legacy pages.
 **Playwright 1.55.x** — LOCKED, **only where JavaScript rendering is genuinely required**.
-Never the default; dramatically heavier and pointless against static markup.
-**Compatibility-validated on first genuine introduction** — migration tooling or E2E, whichever
-arrives first (§1.5).
+Never the default; dramatically heavier and pointless against static markup. **It is introduced
+and compatibility-validated in Phase 2** (§1.5), so by the time migration tooling needs it the
+dependency already exists and is proven.
 
 Rate limiting, **safe retry classification**, raw snapshot preservation, checksums, resumable
 imports, **reconciliation** and **reversible publication** are required by the migration
@@ -381,8 +396,11 @@ Application logging is distinct from **domain audit** (SECURITY_BASELINE.md §13
 **Vitest 4.1.x** — LOCKED. **Do not jump to a newly released Vitest 5 during this project
 foundation.**
 
-**Playwright 1.55.x** for E2E — LOCKED. The same tool serves migration and E2E, so one browser
-automation dependency covers both. **Browser tooling is installed when first genuinely used.**
+**Playwright 1.55.x** for E2E — LOCKED, **introduced in Phase 2**. The same tool serves E2E and
+migration, so one browser-automation dependency covers both. Phase 2 is where it genuinely earns
+its place: real cookies, session transitions, CSRF and browser behaviour, sign-out, verification
+and reset confirmation, authentication return paths, the Account & Security surface, and locale
+and RTL flows (ARCHITECTURE.md §13.10). **It is not installed before that phase.**
 
 **ESLint 10.x** · **Prettier 3.x** — LOCKED. ESLint additionally enforces **bounded-context
 dependency rules** transcribed from DOMAIN_MODEL.md §3.1. **Architecture violations fail the
@@ -453,8 +471,8 @@ explicit authorisation boundaries.
    integration, Zod, Pino, Vitest and the ESLint boundary configuration. **Deferred locked
    dependencies are validated at their genuine introduction** (§1.5): **Prisma + client + MSSQL
    adapter in Phase 1**, **Better Auth persistence in Phase 2**, **next-intl in Phase 3A**,
-   **Playwright on first genuine use**, **Socket.IO in Phase 25**. Phase 0B claims nothing about
-   a package it does not install.
+   **Playwright in Phase 2**, **Socket.IO in Phase 25**. Phase 0B claims nothing about a package
+   it does not install.
 4. **Installation is conditional** (§1.3). Approval is not installation.
 5. **Ranges lock the architectural choice; the lockfile records the resolved patch.**
 6. **Avoid canary, beta, RC, preview and experimental packages** unless a written architecture
@@ -472,8 +490,8 @@ explicit authorisation boundaries.
 ### Runtime — ships in production
 Node.js 24.20.0 · Next.js 16.3.3 · React 19.2.8 · Tailwind CSS 4.3.3 · shadcn/ui (copied
 source) · Motion 13.1.x · next-intl 4.14.x · Prisma ORM 7.10.0 · @prisma/client 7.10.0 ·
-**@prisma/adapter-mssql 7.10.0** · Better Auth 1.7.x · Zod 4.5.x · React Hook Form 7.x ·
-Tiptap 3.x · Socket.IO 4.8.3 · Pino 10.3.1
+**@prisma/adapter-mssql 7.10.0** · Better Auth 1.7.x · **Resend (first `EmailProvider`
+adapter)** · Zod 4.5.x · React Hook Form 7.x · Tiptap 3.x · Socket.IO 4.8.3 · Pino 10.3.1
 **Infrastructure:** Microsoft SQL Server 2022 · NGINX · Docker
 **External services:** Google OAuth · Google Meet · YouTube / Vimeo
 
@@ -487,3 +505,28 @@ npm workspaces · GitHub Actions
 > The deployed application reaches SQL Server **through Prisma**.
 > Developers and DBAs administer SQL Server **through SSMS**.
 > **Separate paths. SSMS is never part of the application runtime.**
+
+---
+
+## 18. Licensing and provenance awareness
+
+Licensing is recorded **at the moment something is introduced**, by the phase that introduces
+it. Reconstructing it later, across a multilingual corpus with migrated assets, is far harder
+than recording it once.
+
+A lightweight inventory is maintained for: **runtime dependency licences** · relevant
+**development dependency licences** · the **copied shadcn/ui source and its recorded CLI and
+source revision** (§5) · **fonts**, including the Urdu and Arabic typefaces
+(OPEN_DECISIONS.md §6.4) · **icon sets** · **stock images**, **illustrations**, **logos** and
+**brand assets** · **external embeds** · **imported legacy assets**, which additionally carry
+per-asset provenance (MIGRATION_STRATEGY.md §4.9) · **religious datasets** · and any other
+copied or generated asset.
+
+> **Public availability is not permission to redistribute or migrate.** That a file can be
+> downloaded says nothing about whether this platform may host, republish or migrate it. The
+> distinction matters most exactly where it is easiest to overlook: religious texts,
+> translations, tafsir works and recitations (OPEN_DECISIONS.md §2.4).
+
+**No enterprise SBOM programme is introduced**, and no speculative compliance bureaucracy. The
+requirement is a maintained, honest inventory — proportionate to a platform that will hold
+third-party scholarly material for a long time.

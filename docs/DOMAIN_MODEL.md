@@ -20,14 +20,14 @@ table, and not every aggregate deserves one.
 | 1 | **Identity & Access** | User accounts, authentication, sessions, roles, permissions, capability projections |
 | 2 | **People & Contributors** | Person, and the Author / Speaker / Scholar / Teacher profiles attached to a Person |
 | 3 | **Taxonomy** | Canonical Topics, Languages, Tags, and typed topic assignment |
-| 4 | **Editorial** | Article, Page, News, PressRelease, Statement, MediaCoverage, Event, Collection, and the shared editorial workflow |
+| 4 | **Editorial** | Article, Page, News, PressRelease, Statement, MediaCoverage, Event, Collection, the shared editorial workflow, and a **limited private correspondence area** — ContactInquiry and Feedback (§7.5) |
 | 5 | **Quran** | Surah, Ayah, Juz, Translation, Transliteration, Tafsir, Tajweed, **Recitation** |
 | 6 | **Hadith** | Collection, Book, Chapter, Hadith, Translation, Commentary, Sciences, Narrator |
 | 7 | **Library** | Work, Edition, BookTranslation, Research, ResearchPaper, Publication, Magazine, MagazineIssue, Encyclopedia, SalePoint |
 | 8 | **Media** | Video, Series, Playlist, AudioTrack (non-Quran), AudioSeries, Photo, Gallery |
 | 9 | **Fatwa** | FatwaCategory, Question, Fatwa, and the ruling workflow |
 | 10 | **Learning** | Course, Module, Lesson, LearningPath, Enrolment, Progress, ClassSession, Availability, Attendance, TrialClassRequest, Booking |
-| 11 | **Personalisation & Notifications** | Bookmarks, notes, saved items, private collections, reading/watch history, progress projections, notification preferences, notifications |
+| 11 | **Personalisation & Notifications** | Bookmarks, notes, saved items, private collections, reading/watch history, progress projections, notification preferences, notifications, **NewsletterSubscriber** (§14.5) |
 | 12 | **Messaging** | Conversation, Participant, Message, ReadState, Block, Report, moderation |
 | 13 | **Global Network** | Country, Region, City, Centre, CentreContact |
 | 14 | **Membership** | MembershipType, Membership, MembershipApplication |
@@ -209,8 +209,9 @@ depended upon, never depending upward. The graph is acyclic.
 ### 4.2 User
 
 The authoritative internal record for an application identity. Indicative concerns:
-internal identifier, email, display name, locale preference, timezone, status, onboarding
-state, timestamps.
+internal identifier, **account email**, display name, **private basic account profile**,
+**account interface locale**, **timezone**, **account status**, **account-setup state**,
+timestamps.
 
 **Rules:**
 - A User exists independently of any authentication method.
@@ -218,6 +219,17 @@ state, timestamps.
 - **A User account is authentication/application identity. It is NOT automatically a public
   Person profile** (§5.2).
 - One person, one User record, regardless of how many sign-in methods.
+
+> **Account setup is not personalisation onboarding.** Identity & Access owns the
+> **account-setup state** — the account exists, its email is verified, its interface locale and
+> timezone are chosen. **Personalisation & Notifications owns personalisation onboarding** —
+> interests, goals, learner level, preferred format (§14.1). They are separate states with
+> separate owners and separate delivery phases, and **Identity depends on neither Taxonomy nor
+> Personalisation** to complete its own.
+>
+> **Account locale and timezone belong here**, because authentication surfaces, security mail
+> and session handling need them before any personalisation context exists. They remain
+> distinct from **content language** (§6.3).
 
 ### 4.3 Account, Session, Verification
 
@@ -260,6 +272,65 @@ assignments**. They are read-only conveniences for presentation and query.
 **A profile alone grants nothing.** Creating a Teacher profile confers no teaching
 privilege; **teacher approval must create an auditable RoleAssignment**. This corrects the
 prior revision, where a profile flag and a permission were two gates that could disagree.
+
+### 4.6 Account lifecycle — product and security invariants
+
+Identity & Access owns the whole life of an account, not merely the moment of sign-in. These
+invariants are stated here because each of them is a place where a plausible implementation is
+quietly wrong. **The exact Better Auth-compatible mechanism is implementation-phase proof
+(DELIVERY_PLAN.md, Phase 2); the invariants are settled now.**
+
+**Identity of an address**
+
+- **Canonical comparison semantics are defined and applied consistently** wherever an address
+  is compared — signup, sign-in, email change, reset and linking. Normalisation and case
+  handling follow one rule, and that rule is the same everywhere.
+- **Uniqueness is enforced by the database**, not only by an application check, so two
+  concurrent signups cannot both succeed. **Race-safety is a schema property.**
+- > **Provider-specific rewriting is not canonicalisation.** Gmail-style dot-stripping and
+  > plus-tag removal are **not** applied as a global rule. Treating `a.b@example.com` and
+  > `ab@example.com` as one identity is a provider behaviour, not an internet-wide one, and
+  > applying it globally merges distinct people's accounts.
+
+**Collisions and change**
+
+- A **signup collision** resolves deterministically to exactly one account, with a
+  **non-enumerating** response.
+- An **email-change collision** is rejected safely, without revealing whether the target
+  address already has an account.
+- **Changing an email requires proving ownership of the new address**, and the account's
+  verified state follows the address rather than persisting from the previous one.
+
+**Status and closure**
+
+- **Disable**, **suspension**, **reactivation where supported** and **closure/deletion** are
+  distinct states with distinct effects, and **account status is enforced on every
+  authenticated request**, not only at sign-in.
+- **Later re-registration with the same address starts clean.** Closure followed by a new
+  account must **never** restore prior role assignments, grants or private data.
+- Account closure is **coordinated across semantic owners** rather than performed by one
+  context reaching into another's data (§14.3, SECURITY_BASELINE.md §19.1).
+
+**Authentication methods**
+
+- **Provider account linking requires verified ownership** of the address (§4.3).
+- **Unlinking is safe**: the system **refuses to remove the final usable authentication
+  method**, which would otherwise lock a person out of their own account irrecoverably.
+
+**Sessions**
+
+- **Sessions are revoked after a high-risk security or privilege change** — password change,
+  email change, second-factor change, or a change to what the account is permitted to do.
+
+**Responses**
+
+- Sign-in, signup, reset and resend responses are **generic and uniform**, so none of them
+  discloses whether an account exists (SECURITY_BASELINE.md §15.2).
+
+> **These capabilities must be reachable in the product.** A password change, a session
+> revocation, a connected-account review or a second-factor enrolment that exists only as a
+> backend service is not delivered. Phase 2 ships a **usable minimum Account & Security
+> surface** (ROUTE_MAP.md §5.1).
 
 ---
 
@@ -421,6 +492,39 @@ exactly the reason given in §6.2.
 `Featured`, `Popular` and `Latest` are **flags and queries**, never separate aggregates,
 tables or workflows. A featured book is a Work with `isFeatured = true`.
 
+### 7.5 The limited private correspondence area
+
+Public visitors can write to the organisation through `/contact` and `/feedback`
+(ROUTE_MAP.md §3.1). Those submissions had no owner, which is how they end up either as an
+unmanaged mailbox or as an invented ticketing product. **They are owned here**, in a
+deliberately limited private area of Editorial.
+
+| Aggregate | What it is |
+|---|---|
+| **ContactInquiry** | A private inbound enquiry from a visitor |
+| **Feedback** | A private inbound suggestion or report — **a distinct record and workflow**, because its fields and lifecycle genuinely differ |
+
+**Lifecycle:** submitted -> triaged -> assigned / in progress -> resolved / closed, plus an
+explicit **spam disposition**.
+
+**Required behaviour for both:** rate limiting and anti-abuse · private operator notes where
+needed · acknowledgement to the sender where appropriate · privacy · a **defined retention
+period** · **permission-controlled operator access** · an admin triage surface · and honest
+success and failure behaviour for the submitter.
+
+**What this is not:**
+
+- ✘ **Not public editorial content.** These records never appear in listings, search or caches.
+- ✘ **Not a Fatwa Question.** A religious question is Fatwa-owned, with its own privacy and
+  workflow (§12). A contact form is not a route into the Fatwa pipeline.
+- ✘ **Not a CRM.** There is no pipeline, no lead, no campaign and no contact-management product.
+- ✘ **Not a support conversation.** Authenticated `Messages -> Support` is **Messaging-owned**
+  (§15.5); this is the unauthenticated public path.
+
+**Ordinary published contact information** — addresses, phone numbers, office details — remains
+**Page** content under the normal editorial workflow (§7.1). Only the private inbound records
+live here.
+
 ---
 
 ## 8. Quran
@@ -487,6 +591,14 @@ it**. Different structures, different scholarship, different integrity rules.
 - Source reference numbering is retained for citation.
 - Edits require `hadith.editCanonical`, step-up reauthentication and an audit entry.
 - **Conflicting variants between sources are escalated, never silently resolved.**
+- **A reference number is never a platform-wide key.** The same apparent number denotes
+  different narrations across collections, across editions of one collection, and across source
+  systems. Hadith identity is therefore **qualified by collection, edition and source system**,
+  so that two sources numbering differently — or identically — **cannot silently collide** or
+  overwrite one another during migration or editing.
+- **Narrator is sourced data where it is included at all.** A conceptual mention of Narrator in
+  this model is **not** authority to build a narrator-management subsystem
+  (PRODUCT_SCOPE.md §4.4).
 
 ---
 
@@ -618,6 +730,7 @@ history and notifications with no owner and no retention rules.
 | ReadingProgress | Quran reading position and course progress projections |
 | NotificationPreference | Per-channel, per-category preferences |
 | Notification | A system-generated, one-directional message to a user |
+| **NewsletterSubscriber** | A confirmed or pending subscription to the newsletter — **independent of User** (§14.5) |
 
 ### 14.2 Ownership and privacy rules
 
@@ -660,20 +773,38 @@ detached.
 This also serves the content domains: archival preserves provenance, audit history and legacy
 URL mappings that a hard delete would destroy.
 
-#### Hard deletion is a rare, explicit, transactional purge
+#### Hard deletion is a rare, explicit, durable, fail-closed purge
 
 Genuine hard deletion is reserved for legal, security or retention-driven purposes — an
 erasure request, a copyright demand, unlawful material, an expired retention window.
 
-It is performed by an **explicit purge workflow**, never by an ordinary delete:
+A previous revision required the purge to run **in a single transaction** spanning the content
+context and Personalisation. **That is corrected here**, because the only way to honour it
+would be to pass a transaction handle across a context boundary — precisely the capability
+laundering Model A prohibits (ARCHITECTURE.md §3.1.2). **The guarantee is preserved; the
+mechanism changes.**
 
-1. The purge runs **in a single transaction**.
-2. It **first resolves every affected Personalisation record** — removing, anonymising or
-   converting it to a tombstone reference according to the applicable policy.
-3. **Only then** is the content row removed.
-4. **A broken foreign key is never left behind**, and the operation is audited.
-5. The workflow requires elevated permission and **step-up reauthentication**
-   (SECURITY_BASELINE.md §8).
+The purge is an **explicit, durable, resumable workflow**, never an ordinary delete
+(ARCHITECTURE.md §3.1.2.1):
+
+1. The target is first marked **unavailable, archived or purge-pending**.
+2. **It cannot leak publicly while the purge is incomplete** — the workflow is fail-closed, so
+   an interruption withholds content rather than exposing it.
+3. **Layer 4 coordinates the public services of the semantic owners.** It calls interfaces; it
+   never reaches into another context's tables.
+4. **Each owner disposes of its own records** — removing, anonymising or converting them to a
+   tombstone reference — according to its own policy. Personalisation resolves its records
+   through its own service, as every other owner does.
+5. **Every step is idempotent and resumable**, so a retry after interruption is safe.
+6. The absence of any prohibited relational reference is **verified**.
+7. **Only then** may the owning content context physically delete the row.
+8. **Workflow state and failures are audited**, and the workflow requires elevated permission
+   and **step-up reauthentication** (SECURITY_BASELINE.md §8).
+
+**A failure may delay final physical deletion. It must never break referential integrity, leak
+content, or bypass semantic ownership** — and **no Prisma client, delegate, transaction handle,
+persistence adapter, repository or raw-query capability crosses a context boundary at any
+point.**
 
 #### What is explicitly rejected
 
@@ -684,8 +815,10 @@ It is performed by an **explicit purge workflow**, never by an ordinary delete:
 - ✘ **Nullable references left dangling after deletion.**
 
 Physical modelling — cascade behaviour, tombstone shape, per-type purge steps — is
-implementation-phase work for the owning slices. **The rule that hard deletion must
-transactionally resolve personalisation first is settled here.**
+implementation-phase work for the owning slices. **The settled rule is that hard deletion
+resolves every owner's records, through that owner's own service, before the content row is
+removed — durably, idempotently and fail-closed — and that no purge leaves a broken reference
+behind.**
 
 ### 14.4 "My Minhaj" is a Layer-4 experience, not this context's ownership boundary
 
@@ -710,6 +843,45 @@ semantic owner of every operation reachable beneath it.
 > surface does (§3.3).
 
 Personalisation & Notifications owns the aggregates listed in §14.1 — and only those.
+
+### 14.5 Newsletter — subscription is consent, not a stored address
+
+The newsletter is promised across the information architecture (Explore, the footer,
+`/newsletter`) and had no owner. **It is owned here**, alongside the other communication
+preferences — and **no new bounded context is created for it**.
+
+> **`NewsletterSubscriber` is independent of `User`.** A visitor subscribes without an account,
+> and **creating an account never subscribes it**. Marketing consent is not a side effect of
+> registering.
+
+**V1 uses double opt-in**, as an engineering-controlled safe default:
+
+```
+submitted -> confirmation pending -> confirmed subscriber -> unsubscribed / suppressed
+```
+
+**Rules:**
+
+- **Submitting an address alone does not activate a subscription.** Only confirmation does —
+  it is what proves mailbox control and explicit consent, and it is what stops a third party
+  subscribing someone else's address.
+- Confirmation attempts are **rate-limited**, and responses are **anti-enumerating**: the
+  result never reveals whether an address is already subscribed.
+- Confirmation tokens are **single-purpose, bounded-lifetime and replay-safe**. They carry no
+  authentication authority and are **not** the Better Auth tokens (ARCHITECTURE.md §4.6.1).
+- **Unsubscribe is simple and never requires signing in.**
+- Locale or language preference is retained where useful; **consent evidence is retained
+  appropriately** (SECURITY_BASELINE.md §19.1).
+- **Provider bounce and complaint suppression overrides any future optional marketing send.**
+- The operator broadcast lifecycle stays bounded. **No marketing automation platform and no
+  campaign CRM is introduced.**
+
+> **A marketing unsubscribe never suppresses security-critical or account-service
+> communication** (ARCHITECTURE.md §4.6.1). They are different classes of mail with different
+> consent bases.
+
+This posture is a safe V1 default. **A future adopter or jurisdiction may require stricter
+behaviour; it is never weakened below verified explicit opt-in.**
 
 ---
 
@@ -765,6 +937,16 @@ Required negative tests (DELIVERY_PLAN.md): unrelated teacher · **former teache
 **revoked assignment** · blocked user · unauthorised student · **removed class/course
 membership**.
 
+> **The check is not only on send.** Wherever the *data itself* is relationship-protected —
+> reading conversation history, listing conversations, opening an attachment — the **current**
+> relationship is what authorises access. Restricting only the send path would leave a revoked
+> teacher able to keep reading a student's history, which is the same defect in a quieter form.
+
+**Send is idempotent.** A client supplies an **operation identifier**, so a retry after a
+timeout or a lost response produces **exactly one message** rather than a duplicate. Ordering
+is durable, history is paginated, read and unread state is tracked, and a reconnecting client
+**catches up** rather than silently missing messages.
+
 ### 15.4 Safety rules
 
 - **Block** — a blocked pair cannot initiate or continue a conversation.
@@ -773,7 +955,39 @@ membership**.
   authorised moderators and audited.
 - **Attachment retention** — retention and disposal are defined policy, not incidental.
 - **Student ↔ student requires policy approval** and is disabled by default.
+- **Account closure follows a defined shared-conversation policy** — closing one participant's
+  account must not silently destroy another participant's history
+  (SECURITY_BASELINE.md §19.1).
+- **With the realtime process unavailable, messaging degrades to on-refresh and loses nothing**
+  (§15.2).
 - **Explicitly excluded:** calling, stories, statuses, and social-network cloning.
+
+### 15.5 Authenticated support conversations
+
+The authenticated information architecture promises `Messages -> Support`
+(INFORMATION_ARCHITECTURE.md §5). Its V1 meaning is stated here rather than left open.
+
+> **Support is a conversation type owned by Messaging.** It is a conversation between an
+> authenticated user and authorised support or operator participants.
+
+It **reuses** Conversation, Participant, Message, ReadState, attachment security, and the
+blocking and reporting rules where they apply. **No separate support-ticket or CRM bounded
+context is created** — a support thread is a conversation, and modelling it twice would give
+the platform two message stores with two authorisation implementations.
+
+**Rules:**
+
+- Support and operator participation is **permission-controlled**, through the normal
+  Permission/RoleAssignment path (§4.4) — the support participant must **currently** hold the
+  support permission (§15.3).
+- **Sensitive support access is audited** where appropriate (SECURITY_BASELINE.md §13.2).
+- **User A can never read user B's support conversation.**
+- Support conversations follow the same **privacy and retention** rules as the rest of
+  Messaging.
+
+**This is distinct from the unauthenticated public path.** `/contact` and `/feedback` are
+**Editorial-owned correspondence workflows** (§7.5) for visitors with no account. The two are
+not merged, and neither is a route into the other.
 
 ---
 
@@ -845,15 +1059,48 @@ A Centre's news and events are ordinary Editorial records carrying a Centre refe
 **MembershipType** · **Membership** · **MembershipApplication**. Modelled separately from
 User: membership is an organisational relationship with its own lifecycle.
 
+**Applicant lifecycle:** application -> review and decision -> status -> withdrawal or closure
+where appropriate. The context owns the public membership information, the **applicant-facing
+status**, operator management with permission checks, and its **application and status service
+communication** (ARCHITECTURE.md §4.6.1). An applicant sees **only their own** application.
+
 **Membership does not depend on Donations** and is delivered as its own slice — an
-unresolved payment provider must never block it.
+unresolved payment provider must never block it. **Membership contains no payment code path
+whatsoever**; joining is an organisational act, and any future fee arrangement would be a
+separate explicit decision rather than an implied one.
 
 ### 17.3 Donations
 
-**DonationCampaign** · **Donation**, behind a `PaymentProvider` abstraction. **No provider
-is selected in Phase 0A.** **No card or payment credential data is ever stored.** Webhook
-requirements — signature verification, idempotency, replay resistance, and server-side
-verification of amount, currency and status — are in SECURITY_BASELINE.md §14.
+**DonationCampaign** · **Donation**, behind a `PaymentProvider` abstraction. **No provider is
+selected in Phase 0A, and none is selected since.** **No card or payment credential data is
+ever stored.** Webhook requirements — signature verification, idempotency, replay resistance,
+and server-side verification of amount, currency and status — are in SECURITY_BASELINE.md §14.
+
+**A donation carries a provider-neutral lifecycle**, so that changing provider is an adapter
+change rather than a remodelling:
+
+- an **anonymous** donor, or an **optional user-linked** donor;
+- a **server-created, immutable expected amount and currency** for the attempt — the client
+  never asserts what is owed;
+- states: **pending, succeeded, failed, cancelled**, **expired** where the provider's semantics
+  require it, **refunded**, **partially refunded** where supported, and **disputed / charged
+  back** where the provider requires it;
+- **duplicate-submission prevention**;
+- provider transaction and event identifiers, **scoped to the provider account and
+  environment**, so a sandbox identifier can never be mistaken for a live one;
+- **durable event deduplication** and **out-of-order event handling**;
+- **reconciliation** for ambiguous, delayed or missing provider events;
+- confirmation, refund and receipt-style **service communication**
+  (ARCHITECTURE.md §4.6.1);
+- donor privacy, optional signed-in donation history where genuinely in scope, and operator
+  filtering, reconciliation and export — with **redacted logs**.
+
+> **A browser redirect never proves payment success.** Success comes from the provider's
+> verified server-side state, never from the URL a donor lands on.
+
+**Money follows §19.6.** And nothing here introduces ecommerce: **no cart, no order, no
+shipping, no inventory, no subscription engine, and no Gift Aid or tax-receipt jurisdiction
+logic.**
 
 ---
 
@@ -889,6 +1136,14 @@ verification of amount, currency and status — are in SECURITY_BASELINE.md §14
 | **Membership and User** | An organisational relationship with its own lifecycle |
 | **Featured/Popular/Latest and content types** | Flags and queries, never entities |
 | **Migration provenance and Editorial content** | Provenance serves every domain, including those forbidden to depend on Editorial |
+| **ContactInquiry and Fatwa Question** | A contact form is not a route into the religious ruling pipeline (§7.5, §12) |
+| **ContactInquiry/Feedback and a support conversation** | Unauthenticated public correspondence vs an authenticated Messaging thread (§7.5, §15.5) |
+| **Support conversation and a ticketing system** | Support is a conversation type, not a second message store (§15.5) |
+| **NewsletterSubscriber and User** | Marketing consent is never a side effect of registering (§14.5) |
+| **Account setup and personalisation onboarding** | Different owners, different states, different phases (§4.2, §14.1) |
+| **Account locale and content language** | An account preference vs a property of the content (§4.2, §6.3) |
+| **Native slug history and LegacyMapping** | Runtime renames are context-owned; legacy source URLs are Migration-owned (§19.7) |
+| **Authoritative state and derived work** | Search, cache and sitemap are rebuilt, not authoritative (ARCHITECTURE.md §8.5) |
 
 ---
 
@@ -930,3 +1185,76 @@ preference. Wherever the prior revision proposed `targetType + targetId` **as a 
 domain reference**, typed relationships are required instead (§6.2, §7.3, §14.2). The
 historical `AuditLog` identifiers are not such a reference and are explicitly permitted
 (§6.2.1).
+
+### 19.5 Time, dates and timezones
+
+A platform with classes, events, reminders and three locales cannot treat time casually.
+
+- **Authoritative instants are stored in UTC.** Security-relevant timestamps are
+  **server-authoritative** and never taken from a client.
+- A user's scheduling preference is an **IANA timezone identifier**, not an offset — an offset
+  is wrong twice a year.
+- **Events and classes preserve the timezone they were scheduled in**, because the intended
+  local time is the fact, not the instant alone.
+- **Daylight-saving behaviour is explicit**, and **ambiguous or non-existent local times**
+  across a transition are handled deliberately rather than by whatever the library defaults to.
+- **A date-only fact is not a fake midnight UTC timestamp.** A publication date, a birth year
+  or an issue date is a date, and storing it as an instant shifts it across a timezone.
+- Display is **locale-aware** across en/ur/ar, including duration formatting.
+- **Rescheduling updates whatever was already scheduled against the old time** — a moved class
+  does not fire yesterday's reminder (ARCHITECTURE.md §8.5).
+
+### 19.6 Money
+
+- **ISO currency codes**, always stored with the amount.
+- An **exact representation**: integer minor units, or another exact database-safe decimal
+  representation chosen by the owning payment phase. **Binary floating point is never used for
+  money.**
+- **Not every currency has two decimal places.** No code assumes it does.
+- Provider-specific unit conversion lives **inside the provider adapter**, never in domain code.
+- Sensible bounds are enforced, and **a refund may never exceed the captured or settled
+  amount**.
+
+### 19.7 Native slug history
+
+> **A context that owns a resource with an editable public canonical slug owns that resource's
+> slug history**, from the first phase in which the slug becomes editable.
+
+Slugs are permanent and never reused; changing one creates a **301** from the previous slug
+(ROUTE_MAP.md §1.4, §9.7). That behaviour is **native to the owning context** and is delivered
+in the same phase as the editable slug — it is not deferred, and it does not wait for
+Migration.
+
+> **`LegacyMapping` is Migration-owned and maps *legacy source* URLs** (§16.1). It is **not**
+> the platform's runtime slug-history mechanism. Using it as one would make every domain's
+> ordinary rename depend on the Migration context, invert the dependency rules, and leave
+> pre-migration renames with no redirect at all.
+
+### 19.8 Concurrency on material mutations
+
+Two operators acting on the same record is normal, and last-write-wins silently destroys one
+of them.
+
+**Material operator mutations carry expected-version or expected-state conflict handling**,
+at minimum across: editorial revisions · Quran and Hadith administrative edits · Fatwa review
+and publication · taxonomy changes · role and permission grants · high-value administrative
+records · booking confirmation · financial state transitions · and migration promotion and
+rollback.
+
+**Rules:**
+
+- **Approval binds to a specific reviewed revision.** Approving "the article" approves the
+  version that was read.
+- **An edit after approval invalidates or supersedes that approval**, according to the owner's
+  workflow — so newly edited content cannot ride an old approval into publication.
+- **Stale publish, stale unpublish/archive, and stale permission or grant updates are
+  rejected**, not applied.
+- **Booking confirmation prevents race conflicts**; two confirmations of one slot cannot both
+  succeed.
+- **Payment and refund transitions validate current state** before applying.
+- **Migration rollback verifies the target has not materially diverged** since publication
+  (MIGRATION_STRATEGY.md §7.2).
+- **Bulk actions report per-item conflicts** rather than partially succeeding in silence.
+
+**Last-write-wins is acceptable only for deliberately low-consequence preferences** — a
+display setting, a collapsed panel. **No collaborative realtime editing is introduced.**

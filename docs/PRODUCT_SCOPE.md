@@ -1,8 +1,68 @@
 # Product Scope — One Minhaj Platform
 
-**Status:** Phase 0A Architecture Freeze — revised after independent architecture audit
-**Owner:** Minhaj-ul-Quran International
+**Status:** Phase 0A Architecture Freeze — revised after independent architecture audit,
+and again at the pre-Phase-2 product-completeness review
+**Intended organisation:** Minhaj-ul-Quran International
+**Target product:** One Minhaj
 **Document type:** Planning only. No implementation is authorised by this document.
+
+---
+
+## Product status and acceptance
+
+### Current implementation status
+
+One Minhaj is an **independently developed implementation intended for possible adoption by
+Minhaj-ul-Quran International**. It is **not currently officially commissioned, sponsored,
+adopted or deployed** by that organisation, and nothing in this baseline should be read as
+claiming that it is.
+
+That status describes *who has accepted the work*, not *what the work is*. The product itself
+remains a **complete production-target platform**:
+
+> **This is not a demo, a prototype, a mock system or a reduced architecture.**
+
+Where official material is not yet available — the authoritative corpus, organisational
+accounts, official infrastructure, the official domain — the gap is **environment and content
+state**, never a smaller product. Representative development content is data, not
+architecture. **There is no DemoMode**, and no second, lesser version of the system exists.
+
+### Three acceptance dimensions, never conflated
+
+| Dimension | What it accepts | Who accepts it |
+|---|---|---|
+| **1. Software / engineering acceptance** | That an implementation meets its phase deliverables, security exit criteria and tests | Engineering, through the review workflow (DELIVERY_PLAN.md §6) |
+| **2. Authoritative content / corpus acceptance** | That published religious and organisational content is authentic, approved and correctly attributed | Minhaj religious and organisational authority (OPEN_DECISIONS.md §1, §6) |
+| **3. Deployment / launch acceptance** | That the platform is adopted, provisioned on official infrastructure and launched on the official origin | Minhaj-ul-Quran International (OPEN_DECISIONS.md §4, §7) |
+
+**No dimension implies another.** Software acceptance of the Quran phase is not corpus
+acceptance; corpus acceptance is not launch approval; launch approval is not a claim that
+every later phase has shipped. The corresponding **gate types** — implementation, activation,
+content acceptance and launch — are defined in DELIVERY_PLAN.md §3.1.
+
+### Pre-adoption deployment
+
+A publicly reachable **developer-controlled pre-adoption / presentation origin** — currently
+`minhajulquran.haseebliaqat.me` — may run the platform before adoption. It is the **same
+application**, built and configured the same way.
+
+While the platform has not been officially adopted and launched:
+
+- the pre-adoption deployment is **kept non-indexable** — `noindex` plus the corresponding
+  crawler controls (ROUTE_MAP.md §9.5);
+- it **emits no SEO posture that competes with or impersonates the official organisation
+  site** — no official-origin canonical URLs, no submitted sitemaps, and no structured data
+  asserting the organisation's identity as though published by it;
+- it **claims no official endorsement, commissioning or adoption**;
+- the application itself is **not reduced in any way**.
+
+This is an **environment and launch-state safeguard**, not a mode of the software. Official
+indexing and canonical production SEO are enabled only at the approved official-origin launch
+transition (DELIVERY_PLAN.md, Phase 35).
+
+Commercial questions — source ownership, licensing, portfolio rights, retention of a clone,
+future reuse — are **outside technical architecture** and are deliberately not recorded in
+this baseline.
 
 ---
 
@@ -59,7 +119,7 @@ The following must be fully usable by an anonymous visitor:
 | Quran | Read, browse by Surah and Juz, search, translation, transliteration, tafsir, tajweed guidance, recitation audio, Quran topics, and linked books/videos/articles/research |
 | Hadith | Browse collections, books and chapters, search, Hadith by topic, Hadith sciences, commentary, and linked material |
 | Learn | Canonical topics, course catalogue, learning paths, teacher directory, training and resources (browsing; enrolment is authenticated) |
-| Library | All resources, works and editions, contributors, topics, languages, collections, articles, research, research papers, publications, encyclopedias, magazines and journals, downloads, printed-book/sale-point information |
+| Library | All resources, works and editions, contributors, topics, languages, collections, articles, research, research papers, publications, encyclopedias, magazines and journals, **readable long-form access to available editions**, **rights-aware downloads**, printed-book/sale-point information |
 | Watch / Listen | Video and audio catalogue with embedded third-party players, series, programs, speakers, playlists, recitations |
 | Fatwa | Search, categories, topics, browse all (with latest/popular as query-based views), how-it-works (asking a question is authenticated) |
 | News & Events | Latest, news, events, press releases, statements, media coverage, photo galleries, collections, newsletter, archive |
@@ -86,9 +146,18 @@ messages and all application domain data. **Google authentication must never cre
 Minhaj email address** — it is an identity provider, not a mailbox provider. **A user account
 is application identity and is not automatically a public contributor profile.**
 
-Onboarding is conditional and personalised, collecting interests and goals, language, and
-— only where relevant to what the visitor has expressed interest in — learner level and
-preferred learning format.
+**Two distinct onboarding steps exist, and they are never merged.**
+
+- **Account setup** belongs to **Identity & Access** and arrives with authentication. It
+  establishes the account, its verified email address, its interface locale and timezone, and
+  its account-setup state.
+- **Personalisation onboarding** belongs to **Personalisation & Notifications** and arrives
+  with that context. It is conditional, collecting interests and goals and — only where
+  relevant to what the visitor has expressed interest in — learner level and preferred
+  learning format.
+
+**Authentication therefore depends on neither the topic taxonomy nor personalisation**
+(DOMAIN_MODEL.md §4.2, §14.1).
 
 ### 2.3 Teacher experience
 
@@ -100,6 +169,10 @@ students, courses, messages, resources, attendance, availability, profile.
 
 The editorial and administrative surface for all content domains, with permission-based
 access control, domain-specific review workflows, and audit logging.
+
+**High-consequence privileged capabilities additionally require an enrolled second factor
+before they may be exercised**, and step-up reauthentication where the operation warrants it
+(SECURITY_BASELINE.md §8). Ordinary users are not required to enrol a second factor.
 
 ### 2.5 Live classes
 
@@ -199,6 +272,10 @@ introduced much later. It performs navigation and search assistance over existin
 structure. It does not generate religious rulings, interpret scripture, or produce
 free-form theological text.
 
+> **Minhaj Guide is unscheduled and is not a V1 promise.** It has no phase, no route, no
+> navigation entry and no reserved bounded context (DOMAIN_MODEL.md §1.1), and it is not
+> referenced from any delivered surface until a phase genuinely owns it (§4.4).
+
 ### 4.2 Excluded technologies
 
 Azure Communication Services · Jitsi · custom WebRTC · Redis (initially) · Kubernetes ·
@@ -217,6 +294,32 @@ preview or experimental dependency.
   provide exports, API access, source access or other authorised migration sources** — that
   possibility is not foreclosed, merely not assumed
 
+### 4.4 Unscheduled — mentioned somewhere, promised nowhere
+
+Some capabilities appear in this baseline as *conceptual* future possibilities. They are
+recorded so the model does not have to be rewritten later — **they are not V1 commitments**,
+and no phase owns them:
+
+| Unscheduled item | Where it is mentioned | Status |
+|---|---|---|
+| **Minhaj Guide** assistant | §4.1; TECH_STACK.md §14 | No phase, no route, no context |
+| **Certificates** | INFORMATION_ARCHITECTURE.md §5 | Marked *later phase*; no schema, no route |
+| **Learning streaks** | INFORMATION_ARCHITECTURE.md §5 | Marked *later phase*; no schema, no route |
+| **Narrator** records and chains | DOMAIN_MODEL.md §9 | Sourced Hadith data where included; **no standalone narrator-management subsystem is introduced** |
+
+**Rules:**
+
+- An unscheduled item **never acquires a navigation entry, a call to action, a reserved
+  indexable route or a sitemap entry** before the phase that delivers it.
+- A conceptual mention in the domain model is **not** authority to build an administration
+  subsystem for it.
+- Anything that becomes genuinely scheduled gains an owning phase, deliverables, tests and
+  exit criteria like any other work — it is not smuggled in as a sub-feature.
+
+This rule and the availability rule for **deferred but in-scope** capability
+(ROUTE_MAP.md §5.2) are different things: the first concerns work nobody has committed to,
+the second concerns committed work that has not arrived yet.
+
 ---
 
 ## 5. Scale posture
@@ -231,6 +334,20 @@ page or brochure site. Architectural decisions assume:
 - Long content lifetime, where permanent URLs and citation stability matter
 - Religious content whose accuracy carries reputational and doctrinal weight
 
+### 5.1 A substantial corpus, stated honestly
+
+**No claim of unlimited scale is made anywhere in this baseline.** The posture is a
+*substantial multilingual corpus*, and it is met by discipline rather than by assertion —
+the standing data-scale requirements of ARCHITECTURE.md §13.9 apply to every phase: bounded
+queries and page sizes, deterministic ordering with tie-breakers, relevant indexes, no
+whole-corpus filtering in the client, bounded administrative bulk actions, keyset scans
+where appropriate, batched migration and backfill, and bounded memory use.
+
+**Volume behaviour is proven where the volume exists**, against representative mixed-script
+data with long text and sparse translation coverage. A foundation phase that has not been
+exercised at corpus scale is **not described as having been load-proven**; large-corpus
+validation belongs to Phases 31 and 34.
+
 ---
 
 ## 6. Success criteria for V1
@@ -243,5 +360,12 @@ page or brochure site. Architectural decisions assume:
 5. No religious content is publishable without passing its domain's review workflow.
 6. The public site renders correctly and completely with no session present, with **no
    session-derived state in the anonymous cached render tree**.
-7. The platform meets **WCAG 2.2 AA**, including the Quran reader, long-form readers and
-   media surfaces.
+7. **The software meets WCAG 2.2 AA** across its delivered surfaces, including the Quran
+   reader, long-form readers and media surfaces.
+8. **Content conformance is accepted separately from software conformance.** Where an
+   authoritative source supplies no caption, transcript, alternative text or accessible
+   alternative, the platform presents what genuinely exists and records the gap. It never
+   fabricates an alternative, and **no unqualified whole-product conformance claim is made
+   while required source alternatives are missing** (SECURITY_BASELINE.md §16.3).
+9. The pre-adoption deployment remains **non-indexable and makes no claim of official
+   adoption** until the approved launch transition (*Product status and acceptance*).

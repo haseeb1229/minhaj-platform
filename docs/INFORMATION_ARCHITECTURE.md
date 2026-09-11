@@ -326,14 +326,26 @@ make one context the semantic owner of every operation beneath `/my`:
 | Area of the hierarchy | Semantic owner |
 |---|---|
 | Settings → Account & Security | **Identity & Access** |
+| **Settings → Language & Locale** — the **account** interface locale and timezone | **Identity & Access** (DOMAIN_MODEL.md §4.2) |
+| **Account setup state** | **Identity & Access** |
 | Roles and permissions behind any surface here | **Identity & Access** |
 | My Learning, Progress → Course Progress | **Learning** |
 | My Classes, Teachers | **Learning** / the teacher-owning phase as documented |
-| Messages | **Messaging** |
+| Messages, **including Messages → Support** | **Messaging** (DOMAIN_MODEL.md §15.5) |
 | My Questions | **Fatwa** |
-| Saved, History, Notifications, Notification Preferences, Language & Locale, Interests & Goals | **Personalisation & Notifications** (DOMAIN_MODEL.md §14) |
+| Saved, History, Notifications, Notification Preferences, **Interests & Goals**, **personalisation onboarding**, **newsletter subscription** | **Personalisation & Notifications** (DOMAIN_MODEL.md §14) |
 | Membership surfaces reached from here | **Membership** |
 | Donation surfaces reached from here | **Donations** |
+
+> **Language & Locale sits with Identity, not Personalisation.** Authentication surfaces,
+> security mail and session handling need an account locale and timezone **before any
+> personalisation context exists**, and Phase 2 must not depend on Phase 21
+> (DOMAIN_MODEL.md §4.2). **Interests & Goals remain Personalisation's**, because they are
+> personalisation input rather than account configuration.
+>
+> **Messages → Support is a Messaging conversation type**, not a ticketing product and not the
+> public `/contact` form — those are Editorial-owned correspondence records
+> (DOMAIN_MODEL.md §7.5).
 
 > **Route placement transfers no semantic or domain ownership.** My Minhaj *composes* these
 > capabilities through their owning contexts' public interfaces.
@@ -397,7 +409,10 @@ Admin
 │   ├── Press Releases & Statements
 │   ├── Events
 │   ├── Pages                 Organisational/static content
-│   └── Editorial Queue       Cross-domain review workload
+│   ├── Editorial Queue       Cross-domain review workload
+│   └── Correspondence        Private inbound, permission-controlled
+│       ├── Contact Inquiries  Triage, assignment, resolution, spam disposition
+│       └── Feedback           Distinct record and workflow
 ├── Religious Content         Elevated permissions and stricter workflow
 │   ├── Quran
 │   │   ├── Text & Structure
@@ -433,11 +448,17 @@ Admin
 │   ├── Classes & Sessions
 │   ├── Enrolments
 │   └── Trial Class Requests
-├── People
-│   ├── Users
-│   ├── Roles & Permissions
-│   ├── Teachers              Approval and capability assignment
-│   ├── Scholars              Profiles and capability flags
+├── Identity & Access         Accounts and authorisation — Identity-owned
+│   ├── Users                 Account status and lifecycle
+│   ├── Roles
+│   ├── Permissions
+│   ├── Role Assignments      Auditable grants and revocations
+│   └── Security              Second-factor state, bootstrap status, identity audit
+├── People                    Public contributor identity — People & Contributors
+│   ├── Persons
+│   ├── Teachers              Approval creates an auditable RoleAssignment
+│   ├── Scholars              Profiles; capability labels are derived projections
+│   ├── Speakers
 │   └── Authors
 ├── Global
 │   ├── Countries, Regions & Cities
@@ -458,13 +479,32 @@ Admin
 │   ├── Publish Manifests    Reversible publication records
 │   ├── Reconciliation       Counts must balance
 │   └── Import Errors        Raw snapshots render inertly
+├── Communications
+│   ├── Newsletter            Subscribers, confirmation state, suppression
+│   └── Delivery Status       Pending, failed and suppressed outbound mail
 └── System
     ├── Navigation & Menus
-    ├── Redirects
-    ├── Search Configuration
+    ├── Redirects & Slug History  Native redirects and legacy mappings, distinguished
+    ├── Search Operations         Configuration, rebuild, indexing lag and failures
     ├── Audit Log
-    ├── Integrations
+    ├── Integrations              Provider configuration and status diagnostics
     └── Settings
+
+**Two corrections are recorded in this tree.**
+
+**Accounts and authorisation are Identity-owned, not People-owned.** A previous revision placed
+Users and *Roles & Permissions* under **People**, which conflicts with the domain model and with
+the route map: **Identity & Access** owns User, Role, Permission and RoleAssignment
+(DOMAIN_MODEL.md §4), while **People & Contributors** owns the public Person and its profiles
+(§5). They are separate branches because they are separate contexts — and because **a profile
+grants nothing**, while a RoleAssignment grants everything (ROUTE_MAP.md §7).
+
+**Operator surfaces exist for the things operators must actually see.** Search rebuild and
+indexing lag, outbound delivery failures, provider status, and the distinction between native
+slug redirects and legacy mappings are all operational realities of this architecture
+(ARCHITECTURE.md §8.5, §4.6.1; DOMAIN_MODEL.md §19.7). A surface that is promised here is
+delivered by the phase that owns the capability, under the availability rule of
+ROUTE_MAP.md §5.2.
 ```
 
 ### 7.1 Why Religious Content is a separate admin branch
@@ -523,3 +563,8 @@ These are reachable from many places and belong to no single section:
 | **Legacy provenance inside editorial content** | **Migration & Provenance owns it, so Quran and Hadith carry provenance without depending on Editorial** |
 | **Bookmarks, notes, history and notifications with no owner** | **Personalisation & Notifications context** |
 | **Polymorphic `targetType + targetId` references** | **Typed relationships with database-enforced integrity** |
+| **Contact and feedback submissions with no owner** | **A limited private correspondence area in Editorial** — not a CRM, not a Fatwa Question (DOMAIN_MODEL.md §7.5) |
+| **Newsletter promised in four places, owned nowhere** | **Personalisation & Notifications**, with double opt-in and independent of User (DOMAIN_MODEL.md §14.5) |
+| **`Messages → Support` with no defined meaning** | **A Messaging conversation type**, reusing the existing model (DOMAIN_MODEL.md §15.5) |
+| **Accounts and roles administered under "People"** | **Identity & Access administers accounts and grants; People administers public contributor identity** (§7) |
+| **Account locale owned by Personalisation** | **Account locale and timezone are Identity's**, so Phase 2 needs no personalisation context (§5) |

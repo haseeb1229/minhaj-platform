@@ -42,6 +42,26 @@ authorisation; explicit confirmation is required and tracked per source.
 - **Never invent organisational facts.**
 - **Never publish migrated religious content without domain review.**
 
+### 1.3 A legacy database or export is a SOURCE, never the target
+
+If Minhaj later supplies a `.sql` dump, a database backup, CSV or JSON exports, a CMS export, an
+API or source access, that material is **a migration source**. It is emphatically **not** the
+new One Minhaj production database.
+
+> **The target remains the One Minhaj SQL Server schema, its reviewed Prisma migrations and its
+> bounded-context model** (DOMAIN_MODEL.md, ARCHITECTURE.md §4.1).
+
+- An executable legacy dump belonging to **another schema or engine** is **restored and
+  inspected only in an appropriately isolated migration/source environment**. It is never
+  restored over, alongside, or into the target database.
+- **The target architecture is not reshaped to mimic a legacy schema.** Legacy structure is an
+  input to parsing, not a design constraint on the platform.
+- **Real target writes happen only through target public interfaces**, orchestrated at Layer 4
+  (§2.2) — never as direct table writes from Migration, and never as a bulk restore.
+
+A structured export improves **parsing fidelity and review burden**. It changes nothing about
+ownership, review workflows or religious approval.
+
 ---
 
 ## 2. Ownership
@@ -256,6 +276,10 @@ Every run closes with reconciliation (§6).
   published, human-reviewed record.
 - Runs track per-record status, so an interrupted run resumes precisely.
 - Stages are individually re-runnable against preserved raw snapshots.
+- Large sources are processed in **bounded batches with checkpoints**, so memory stays bounded
+  and an interruption costs one batch rather than one run (ARCHITECTURE.md §13.9).
+- Every staged record carries **parser and adapter version provenance**, so records produced by
+  a parser later found faulty can be identified and reparsed from raw snapshots (§10.3).
 
 ### 5.2 Deduplication
 
@@ -267,7 +291,8 @@ shared ISBN or identifier · same video provider identifier · same contributor 
 substantial body-text similarity.
 
 **Resolution:**
-- **Exact asset checksum match** → automatically the same asset.
+- **Exact asset checksum match** → automatically the same **bytes**, and the stored blob may be
+  shared. **It does not follow that it is the same asset** — see the rights rule below.
 - **Same video provider identifier** → automatically the same video.
 - **Everything else** → a **human deduplication queue**. Titles differ across transliterations
   and languages; automated merging of religious material is unacceptable.
@@ -276,6 +301,34 @@ substantial body-text similarity.
 
 **Cross-language records are never merged.** An Urdu Work and its English translation are a
 Work and a translated Edition (DOMAIN_MODEL.md §10.1) — related, not duplicates.
+
+> **Byte identity is not rights identity.** The same PDF may appear on two sources under
+> different licences, with different owners, different authorisation evidence and different
+> visibility. **Deduplicating storage must never merge rights, provenance, ownership, access
+> entitlement or publication permission.** Each asset keeps its own `AssetProvenance` (§4.9)
+> even where the underlying bytes are stored once, so a restriction attached to one source's
+> copy is never silently lost by pointing at another's.
+
+### 5.3 Source withdrawal is not deletion evidence
+
+A record that stops appearing at a source has **not** thereby been deleted, and treating absence
+as an instruction to unpublish would let a transient failure remove reviewed religious content.
+
+> **Absence is not evidence of withdrawal.** It is an observation requiring classification.
+
+Delta processing distinguishes:
+
+| Observation | Meaning |
+|---|---|
+| **Genuinely withdrawn** | The source has deliberately removed or retired the item |
+| **Moved** | The item exists at a new URL — a mapping problem, not a deletion |
+| **Source error** | The source is returning an error or a broken page for an item that still exists |
+| **Transient fetch failure** | Timeout, rate limit, network failure — **retryable** (§4.2) |
+| **Authentication or access failure** | Access has changed; **never worked around** (§1.2) |
+
+**Removal or retirement of published content therefore requires reconciliation and human
+review** (§6), never an automatic consequence of a failed fetch. An unresolved disappearance is
+**reported**, and the published record is left as it is until a person decides.
 
 ---
 
@@ -347,6 +400,21 @@ or maintenance · incident recorded and root cause established before any re-att
 during an incident. Cutover requires DNS and legacy hosting access the project does not
 control (OPEN_DECISIONS.md).
 
+**Cutover additionally defines, in advance:**
+
+- a **final source watermark or cutoff** — the point after which source changes belong to a
+  later delta rather than to this cutover;
+- **protection of new production writes** — once the platform is live, editors, donors and
+  learners are creating real data, and **a rollback must never discard legitimate new production
+  writes** in order to restore a pre-cutover state;
+- a **named promotion and cutover owner**, and a **named rollback owner** with the authority and
+  access to execute it (OPEN_DECISIONS.md §3.4);
+- how delta reconciliation resumes afterwards.
+
+> **Rollback restores the platform's pre-cutover *published* state; it does not roll back time.**
+> Where new production writes exist, they are preserved and reconciled, exactly as §7.2 already
+> refuses to automatically revert human review work.
+
 ---
 
 ## 8. Security during migration
@@ -400,6 +468,12 @@ religious material**.
 Every migrated record stores source system, original full URL, original identifier and
 resulting canonical URL. Created at publication; permanent.
 
+> **`LegacyMapping` maps legacy *source* URLs, and nothing else.** It is **not** the platform's
+> runtime slug-history mechanism: an ordinary rename of a natively authored record is handled by
+> **native slug history owned by that record's own context** (DOMAIN_MODEL.md §19.7). Using
+> `LegacyMapping` for both would make every domain's rename depend on Migration, invert the
+> dependency rules, and leave pre-migration renames with no redirect at all.
+
 ### 9.2 Redirect rules
 
 - Legacy URL → canonical URL with **301**.
@@ -447,6 +521,28 @@ cannot be rushed, and by then the pipeline has been hardened on lower-risk conte
 mappings complete · redirects verified · **reconciliation balanced** · unresolved-link report
 reviewed.
 
+#### 10.1.1 Promotion from staging to production
+
+> **Staging acceptance is not production promotion.** Content accepted in staging still has to
+> reach production, and copying a staging environment wholesale would carry test state into the
+> live platform.
+
+Promotion runs from a **reviewed promotion manifest** — an explicitly approved corpus set — and
+**carries forward**: provenance · approval and review integrity · checksums and revisions where
+appropriate · legacy URL mappings.
+
+**Promotion never carries forward:**
+
+- ✘ **staging test accounts** or any **known-password user**;
+- ✘ **development credentials** of any kind;
+- ✘ unrelated **staging configuration**;
+- ✘ arbitrary **test records** (PRODUCT_SCOPE.md §4.4, and the test-data rules of
+  DELIVERY_PLAN.md §3).
+
+Promotion is **bounded, checkpointed, idempotent and resumable** (§5.1): an interrupted
+promotion resumes without duplicating, and a resumed promotion cannot republish content whose
+approval has since been withdrawn (DOMAIN_MODEL.md §19.8).
+
 ### 10.2 Stage 2 — Launch delta migration
 
 Legacy sites continue publishing during the migration period. The delta run captures
@@ -484,6 +580,11 @@ for re-import of records whose parsing is later found faulty.
 | Write directly to target domain tables | Publication goes through public interfaces |
 | Retry ordinary permanent 4xx | Pointless load; edges toward circumvention |
 | Render raw snapshots as live HTML | Stored XSS against administrators |
+| **Treat a missing source record as a deletion instruction** | Absence is an observation, not evidence (§5.3) |
+| **Merge rights or provenance because bytes match** | Byte identity is not rights identity (§5.2) |
+| **Restore a legacy dump as the target database** | A legacy export is a source, never the target (§1.3) |
+| **Promote staging test accounts or credentials to production** | Promotion carries content, not environment state (§10.1.1) |
+| **Own runtime slug history** | Native renames belong to the owning context (§9.1) |
 
 ---
 

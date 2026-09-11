@@ -9,13 +9,52 @@
 This document records **only genuine external, business, organisational or infrastructure
 decisions that the project cannot resolve internally.**
 
-It is **not** a place to defer engineering decisions. Every question a competent engineering
-team can answer has been answered in the other nine documents.
+It is **not** a place to defer engineering decisions. Where a question can be answered by a
+competent engineering team, it is answered in the other nine documents — and **§8 records the
+engineering decisions that have since been closed**, including several this document previously
+left open.
 
 Each item records what is needed, why it is external, which phase it gates, and what happens
 if it remains unanswered.
 
 **Owner:** *Minhaj* = Minhaj-ul-Quran International · *Dev* = development team · *Joint* = both.
+
+---
+
+## How to read an entry — category and gate type
+
+Two independent things have to be known about any decision: **whose decision it is**, and **what
+it actually blocks**. Conflating them is what produces both of the failure modes this baseline
+guards against — waiving a religious-authority decision to keep building, or stalling the entire
+roadmap because an external corpus has not arrived.
+
+**Decision category — whose decision is it?**
+
+| Category | Meaning |
+|---|---|
+| **A — Engineering-controlled now** | Settled by engineering; recorded here only where this document previously implied otherwise |
+| **B — Development / pre-adoption selectable, production-replaceable** | Engineering may choose one now; an adopting organisation replaces it in production |
+| **C — Adopter-specific** | Belongs to whoever adopts and operates the platform |
+| **D — Religious, legal or safeguarding authority** | Belongs to an authority; **no engineering judgement substitutes for it** |
+| **E — Production infrastructure or credential gate** | Requires provisioning, access or credentials the project does not control |
+
+**Gate type — what does it actually block?** (DELIVERY_PLAN.md §3.1)
+
+| Gate | Blocks |
+|---|---|
+| **Implementation** | Building and proving the software |
+| **Activation** | Switching a delivered capability on in production |
+| **Content acceptance** | Publishing authoritative real content |
+| **Launch** | Going live on the official origin |
+
+> **A decision that gates activation, content or launch does not necessarily gate
+> implementation.** Where it genuinely determines required software semantics — a guardian
+> consent rule, an age threshold — it **does** gate implementation of that behaviour, and the
+> capability stays fail-closed until it exists (SECURITY_BASELINE.md §19.3).
+>
+> **A development substitute never closes a production gate.** Choosing an email provider does
+> not prove deliverability; a sandbox payment account is not a merchant account; a non-
+> authoritative fixture is not a corpus.
 
 ---
 
@@ -33,7 +72,14 @@ against which reference imported Arabic must be verified character-by-character.
 **Why external:** **A religious authority decision. Emphatically not an engineering choice,
 and no engineering judgement may substitute for it.**
 
-**If unanswered:** **Phase 18 does not begin.** Quran text is never imported on assumption.
+**Category D · Gate: content acceptance and activation.**
+
+**If unanswered:** **no real Quran corpus is imported, published or activated — ever, on
+assumption.** Phase 18's **engineering implementation** may still proceed against controlled,
+**unmistakably non-authoritative fixtures** that prove schema, reader, permissions, audit,
+search and the character-level verification *mechanism* (DELIVERY_PLAN.md, Phase 18). **Fixtures
+are never represented as Quranic scripture**, and an engineering exit is **never** described as
+corpus approval.
 
 ### 1.2 Approved translations, tafsir and recitations
 **Owner:** Minhaj · **Gates:** Phase 18 · **Priority:** High
@@ -50,7 +96,13 @@ holds authority over gradings**.
 **Why external:** Hadith grading is a scholarly discipline. **The platform never infers,
 generates or assigns a grading** — it stores what an authority provides.
 
-**If unanswered:** **Phase 19 does not begin.**
+**Category D · Gate: content acceptance and activation.**
+
+**If unanswered:** **no real Hadith corpus is published or activated.** Phase 19's **engineering
+implementation** may proceed against non-authoritative fixtures proving hierarchy, reference and
+edition identity, sourced grading and chain fields, permissions, audit, search and conflict
+escalation. **No grading is ever invented and presented as real**, and an engineering exit is
+never scholarly acceptance.
 
 ### 1.4 Authorised Fatwa scholars
 **Owner:** Minhaj · **Gates:** Phase 20 · **Priority:** Critical
@@ -61,7 +113,13 @@ triages questions before assignment, and the escalation path for sensitive quest
 **Why external:** **The highest-consequence permission in the platform.** An incorrect grant
 means a religious ruling published under Minhaj-ul-Quran's name by an unauthorised person.
 
-**If unanswered:** **Phase 20 does not begin.**
+**Category D · Gate: content acceptance and activation.**
+
+**If unanswered:** **no real `fatwa.publish` grant is issued and no real Fatwa is published.**
+Phase 20's **engineering implementation** may proceed against clearly synthetic questions,
+rulings and test identities, proving the private workflow, publication authorisation, step-up,
+anonymisation, audit and the absence of every bypass path. **Synthetic material is never
+presented as a genuine Fatwa.**
 
 ### 1.5 Religious content review capacity
 **Owner:** Minhaj · **Gates:** Phases 18, 19, 30 · **Priority:** High
@@ -90,7 +148,20 @@ Required decisions: **whether minors are supported** · age thresholds · parent
 consent · **teacher vetting** · one-to-one communication rules · reporting and escalation ·
 moderation requirements · retention requirements.
 
+**Category D · Gate: activation — and implementation only for behaviour the policy itself
+determines.**
+
 **Why external:** A safeguarding policy decision with legal and child-protection dimensions.
+
+**What engineering may build meanwhile.** Phases 23–25 may implement and test the
+**policy-independent, default-deny mechanics** — current-assignment checks, relationship checks,
+participant authorisation, private meeting-URL handling, attendance, blocking, reporting,
+moderation primitives, message security and revocation behaviour. Until the policy exists,
+**under-18-specific capability and student-to-student messaging remain disabled** as a
+**fail-closed pre-policy state**, and **no consent rule, age threshold, vetting policy or
+minor-retention rule is invented by engineering** (SECURITY_BASELINE.md §19.3).
+
+**This is not a declaration that the platform is adults-only**, and it does not close this gate.
 
 **Why it matters:** It **materially changes** consent flows, messaging policy, moderation and
 data handling. Far cheaper to know before Phase 23 than after.
@@ -303,8 +374,29 @@ delivery; poor domain configuration means messages land in spam.
 >
 > **Work that does not depend on it: Phases 0B, 1, 3A and 7.**
 
-**Interim position:** An `EmailProvider` abstraction is defined. **No provider is invented by
-the architecture.**
+**Category B · Gate: implementation (for Phase 2) — and it remains OPEN.**
+
+**Provider selected; gate not closed.** The first `EmailProvider` adapter is **Resend**, with the
+development sender domain `mail.minhajulquran.haseebliaqat.me` on the pre-adoption origin
+`minhajulquran.haseebliaqat.me` (ARCHITECTURE.md §4.6). The unrelated sender
+`notify.haseebliaqat.me` belongs to **ParaForce** and stays separate.
+
+> **Selecting a provider is not evidence of deliverability.** This gate closes only when **all**
+> of the following are demonstrated:
+>
+> - the **sending domain is verified**;
+> - **SPF** is correctly configured and verified where applicable;
+> - **DKIM** is verified;
+> - **DMARC** is configured;
+> - a **restricted sending credential** is securely provisioned;
+> - **delivery to a real controlled inbox succeeds**.
+
+**The official production email account and sender remain organisation-controlled and separate**,
+and are replaced at adoption without code change (ARCHITECTURE.md §10.5.3). **No API key or
+secret is recorded in this repository.**
+
+**Interim position:** the `EmailProvider` abstraction is the boundary; **no business context ever
+calls a provider directly** (ARCHITECTURE.md §4.6.1).
 
 ### 5.2 Google OAuth application credentials
 **Owner:** Minhaj · **Gates:** **Phase 2G** (the only phase in the current V1 delivery plan
@@ -354,6 +446,13 @@ Provider(s) · supported currencies and regions · recurring donations · Gift A
 arrangements.
 
 > **This blocks Donations only. Membership (Phase 26) is independent and proceeds without it.**
+
+**Category C/E · Gate: activation for Phase 27; never implementation.**
+
+**Sandbox proves the software; a merchant account activates it.** The donation lifecycle is
+provider-neutral (DOMAIN_MODEL.md §17.3), so Phase 27 can be **built and proven against a
+provider sandbox**. **Production readiness — the organisation's own merchant and provider
+account — is separately gated and is not closed by a successful sandbox integration.**
 
 **Constraint regardless of choice:** **no card or payment credential data is ever stored.**
 
@@ -407,8 +506,17 @@ The `fatwa.publish` portion is Critical and duplicated at §1.4 because of its c
 Logo assets · colour palette · approved typefaces **including Urdu and Arabic typefaces with
 licensing** · brand guidelines.
 
+**Category C · Gate: content acceptance for the brand assets; not implementation.**
+
 **Why it matters:** Arabic and Urdu typography is not a detail. Poor font selection makes
 religious text hard to read and can render it inappropriately.
+
+**What is already decided.** The **token structure** and the typography contract are engineering
+decisions and are settled (ARCHITECTURE.md §13.2–§13.3): semantic colour roles, spacing, radius,
+elevation, and tri-script type behaviour. **No arbitrary palette or typeface is frozen without
+accepted brand evidence** — and because the structure is semantic, supplying the real values
+later is a token substitution rather than a redesign. **Font licensing is recorded at
+introduction** (TECH_STACK.md §18).
 
 ### 6.5 Content team structure and roles
 **Owner:** Minhaj · **Gates:** Phase 6 · **Priority:** Medium
@@ -480,25 +588,83 @@ following **is decided**:
 | Phase sequencing, vertical slices and exit criteria | DELIVERY_PLAN.md |
 | npm workspaces; no Turborepo; no Kubernetes; no Azure | ARCHITECTURE.md; TECH_STACK.md |
 
+**Closed at the pre-Phase-2 product-completeness review.** Several of the following were
+previously left implicit or were treated as open; each is an engineering decision and is now
+settled:
+
+| Decided | Where |
+|---|---|
+| **Four gate types** — implementation, activation, content acceptance, launch | DELIVERY_PLAN.md §3.1 |
+| **Search Foundation is an explicit prerequisite** of Phases 9, 10 and 13; **11 depends on 7**; **21 depends on 10** | DELIVERY_PLAN.md §2 |
+| **Cross-context consistency without a generic transaction port**; purge is durable, fail-closed and owner-coordinated | ARCHITECTURE.md §3.1.2.1; DOMAIN_MODEL.md §14.3 |
+| **Derived work — search, cache, sitemap, email, provider effects — is not atomic with the authoritative transaction** | ARCHITECTURE.md §8.5 |
+| **Privileged MFA is a V1 requirement, scoped to high-consequence capabilities**; general-user MFA is not mandatory; no SMS MFA | SECURITY_BASELINE.md §8.2 |
+| **Initial privileged operator bootstrap** — one-time, race-safe, audited, self-closing | SECURITY_BASELINE.md §8.3 |
+| **Account lifecycle invariants**, including that provider-specific email rewriting is not global canonicalisation | DOMAIN_MODEL.md §4.6 |
+| **Account locale and timezone are Identity-owned**; personalisation onboarding is separate | DOMAIN_MODEL.md §4.2; INFORMATION_ARCHITECTURE.md §5 |
+| **Outbound communication ownership and durable delivery intent**; Better Auth retains sole token authority | ARCHITECTURE.md §4.6.1 |
+| **Contact and Feedback belong to a limited private correspondence area in Editorial** | DOMAIN_MODEL.md §7.5 |
+| **Newsletter is Personalisation-owned, independent of User, double opt-in** | DOMAIN_MODEL.md §14.5 |
+| **`Messages → Support` is a Messaging conversation type**, not a ticketing context | DOMAIN_MODEL.md §15.5 |
+| **Native slug history is context-owned**; `LegacyMapping` is legacy-source only | DOMAIN_MODEL.md §19.7 |
+| **Concurrency and scheduled publication semantics** | DOMAIN_MODEL.md §19.8; ARCHITECTURE.md §8.5 |
+| **Time, timezone and money rules** | DOMAIN_MODEL.md §19.5–§19.6 |
+| **Design-system staged ownership and the experience contract** | ARCHITECTURE.md §13 |
+| **Playwright is introduced in Phase 2** | TECH_STACK.md §1.5 |
+| **Complete recovery covers database *and* authoritative assets** | ARCHITECTURE.md §10.4 |
+| **Handover levels, origin portability, and the build-time origin caveat** | ARCHITECTURE.md §10.5 |
+| **Horizontal scaling is conditional, not automatic** | ARCHITECTURE.md §3.5.1 |
+| **Legacy exports are migration sources, never the target database**; source withdrawal requires reconciliation; promotion uses a reviewed manifest | MIGRATION_STRATEGY.md §1.3, §5.3, §10.1.1 |
+| **Byte deduplication never merges rights or provenance** | MIGRATION_STRATEGY.md §5.2 |
+| **Audit payloads are minimised** | SECURITY_BASELINE.md §13.4 |
+| **Software accessibility and content conformance are accepted separately** | SECURITY_BASELINE.md §16.3 |
+| **Pre-adoption deployment is non-indexable and claims no official adoption** | PRODUCT_SCOPE.md, *Product status and acceptance*; ROUTE_MAP.md §9.5 |
+| **One organisation per deployment** — no multi-tenancy, no white-label engine | ARCHITECTURE.md §10.5.3 |
+| **Unscheduled items gain no route or navigation** | PRODUCT_SCOPE.md §4.4; ROUTE_MAP.md §5.2 |
+
 ---
 
 ## 9. Blocking summary
 
-| # | Decision | Gates | Consequence if unresolved |
-|---|---|---|---|
-| 1.1 | Authoritative Quran text source | 18 | **Phase 18 does not begin** |
-| 1.3 | Authoritative Hadith sources and grading authority | 19 | **Phase 19 does not begin** |
-| 1.4 | Authorised Fatwa scholars | 20 | **Phase 20 does not begin** |
-| 3.1 | Written migration authorisation per source | **30 only** | **No live ingestion.** **Phase 29 framework proceeds on fixtures** |
-| 2.1 | Under-18 safeguarding policy | 23, 24, 25 | **Teacher, live-class and messaging phases blocked** |
-| 4.1 | **Staging/production** SQL Server infrastructure and ownership | **28, 34** | Staging and production blocked. **Phase 1 proceeds on local Developer edition** |
-| 4.2 | Staging environment | 28 | Migration cannot run safely |
-| 5.3 | Teachers can create/use Google Meet meetings | 23 | Live classes blocked — **an organisational capability, not an API credential** |
-| 5.1 | Transactional email provider | **2, and transitively everything downstream of 2** | **Phase 2 does not begin.** Verification and reset unusable. **The earliest broadly-blocking external gate** — 3B, 4, 5, 6, 20, 26, 27 and 29 inherit it |
-| 5.2 | Google **OAuth application credentials** | **2G** (only phase requiring them in V1) | **Google sign-in blocked.** Base auth (Phase 2) and **the manual Meet flow (Phase 23) proceed without them.** A future approved Google API integration would carry its own credential requirements |
-| 4.3 | Production hosting | 34 | Deployment blocked |
-| 3.4 | Legacy domain control and DNS | 35 | Legacy links break at launch |
-| 5.4 | Payment provider | **27 only** | **Donations only — Membership proceeds** |
+**Every entry in this document is classified below** by category (A–E) and by what it actually
+gates. A decision may gate more than one thing.
+
+| # | Decision | Cat. | Gate type | Gates phase | Consequence if unresolved |
+|---|---|---|---|---|---|
+| 1.1 | Authoritative Quran text source | **D** | Content acceptance · activation | 18 | **No real corpus is imported or published.** Engineering implementation proceeds on non-authoritative fixtures |
+| 1.2 | Approved translations, tafsir, reciters | **D** | Content acceptance | 18 | Those layered works are not published |
+| 1.3 | Authoritative Hadith sources and grading authority | **D** | Content acceptance · activation | 19 | **No real corpus is published.** Engineering implementation proceeds on fixtures |
+| 1.4 | Authorised Fatwa scholars | **D** | Content acceptance · activation | 20 | **No real grant is issued and no real Fatwa published.** Engineering implementation proceeds on synthetic material |
+| 1.5 | Religious review capacity | **D** | Content acceptance | 18, 19, 30 | Publication throughput, not engineering progress |
+| 1.6 | Source-conflict escalation path | **D** | Content acceptance | 30 | Conflicts are surfaced and blocked, never silently resolved |
+| 2.1 | Under-18 safeguarding policy | **D** | **Activation**, plus implementation of policy-determined behaviour | 23, 24, 25 | **Fail-closed pre-policy state**: minors-specific capability and student-to-student messaging stay disabled; default-deny mechanics may still be built |
+| 2.2 | Applicable jurisdictions | **D** | Activation · launch | 21, 33 | Export, deletion and consent tracking are supported regardless |
+| 2.3 | Legal document content | **D** | Content acceptance | 6 publishes | Routes reserved; **no body content published as configuration** |
+| 2.4 | Content licensing and attribution | **D** | Content acceptance | 8, 18, 19, 30 | Affected material is not published or migrated |
+| 2.5 | Student↔student messaging policy | **D** | Activation | 24 | Disabled by default |
+| 3.1 | Written migration authorisation per source | **D** | **Implementation of live-source work**; activation | **30 only** | **No live ingestion.** **Phase 29 framework proceeds on fixtures** |
+| 3.2 | Source, API or export access | **C** | Content acceptance quality | 30 | Higher parsing effort; **an export is a source, never the target** (MIGRATION_STRATEGY.md §1.3) |
+| 3.3 | Migration scope per source | **C** | Content acceptance | 30 | Scope undetermined |
+| 3.4 | Legacy domain control and DNS | **C/E** | Launch | 35 | Legacy links break at launch |
+| 4.1 | **Staging/production** SQL Server infrastructure and ownership | **E** | Implementation (28, 34) · launch | **28, 34** | Staging and production blocked. **Phase 1 proceeds on local Developer edition** |
+| 4.2 | Staging environment | **E** | Implementation | 28 | Migration cannot run safely |
+| 4.3 | Production hosting | **E** | Launch | 34 | Deployment blocked |
+| 4.4 | Backup, retention and recovery targets | **C/E** | Launch | 28, 34 | Conservative defaults; **local restore rehearsal proceeds** |
+| 5.1 | Transactional email provider **evidence** | **B** | **Implementation** | **2, and transitively everything downstream of 2** | **Phase 2 does not begin.** **Resend is selected; the gate is evidence, not selection** |
+| 5.2 | Google **OAuth application credentials** | **C/E** | Activation | **2G** | **Google sign-in blocked.** Base auth (2) and the **manual Meet flow (23)** proceed without them |
+| 5.3 | Teachers can create/use Google Meet meetings | **C** | Activation | 23 | Live classes not activated — **an organisational capability, not an API credential** |
+| 5.4 | Payment provider and merchant account | **C/E** | Activation | **27 only** | **Sandbox proves the software; production needs the merchant account.** Membership proceeds |
+| 6.1 | Canonical organisational facts | **D** | Content acceptance | 6 publishes | Placeholders only; **never published as configuration** |
+| 6.2 | Centre and global network data | **C** | Content acceptance | 16 | Find a Centre has no authoritative data |
+| 6.3 | Contributor records and capability grants | **D** | Activation · content acceptance | 5, 20, 23 | No real grants issued |
+| 6.4 | Brand and visual identity | **C** | Content acceptance | 4 | **Token structure is decided**; real values substituted later |
+| 6.5 | Content team structure and roles | **C** | Activation | 6 | Separation-of-duties default applies |
+| 6.6 | Support and moderation ownership | **C** | Activation | 24 | Support conversations not staffed |
+| 7.1 | Search Console and analytics access | **C** | Launch | 35 | No third-party analytics assumed |
+**§5.1 remains the earliest broadly-blocking external gate.** It gates Phase 2, and therefore
+transitively **3B, 4, 5, 6, 20, 26, 27 and 29** — 29 because its protected migration
+administration requires Identity, **not** because of any source-authorisation requirement
+(§3.1).
 
 **Work that proceeds immediately with none of the above resolved:** Phases **0B**, **1 (on
 local SQL Server 2022 Developer edition)**, **3A (localisation foundation — no database and no
@@ -513,6 +679,13 @@ Identity dependency)** and **7 (storage foundation — infrastructure only)**.
 > **Phase 29 remains independent of live-source authorisation** (§3.1): it is fixture-only,
 > contacts no real source, and copies no real asset. The gate it inherits is email (§5.1), not
 > source authorisation. **Phase 30 still requires written per-source authorisation, unchanged.**
+
+> **A reminder about what "blocked" means here.** Most of the entries above gate **activation,
+> content acceptance or launch** — not **implementation** (DELIVERY_PLAN.md §3.1). Phases 18,
+> 19, 20 and 23–25 can reach an **engineering implementation exit** while their external gates
+> stay genuinely open, provided that fixtures are never passed off as authoritative content and
+> that an engineering exit is never reported as religious, safeguarding or launch approval.
+> **None of these gates is closed by a development substitute.**
 
 **Raise §1.1, §1.3, §1.4, §1.5 and §2.1 first.** They require religious-authority and
 safeguarding consultation that takes real time and cannot be compressed once the dependent
