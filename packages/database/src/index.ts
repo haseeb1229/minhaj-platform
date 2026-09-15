@@ -3,7 +3,7 @@
  *
  * WHAT THIS PACKAGE PUBLISHES
  * ---------------------------
- * Context-owned persistence adapters, and nothing else.
+ * Narrow, owned adapter surfaces, and nothing else.
  *
  * ARCHITECTURE.md §4.1 is explicit about what may not appear here:
  *
@@ -12,34 +12,38 @@
  *   - "Raw Prisma client, delegate, transaction handle and raw-query capability
  *      are never part of an ordinary application package's public API."
  *
- * This entry point previously exported `getDatabaseClient` and the
- * `DatabaseClient` type. Construction did indeed happen inside the package —
- * and then the constructed client was handed out through the front door, so
- * anything that imported `@minhaj/database` HELD a Prisma client. Under Model A
- * (§3.1.1) that is possession of raw database capability, which §3.2 says
- * neither `apps/web` nor `apps/realtime` ever has, and §6.3 rule 13 says a
- * wrapper cannot convert into permitted invocation. The export is removed.
+ * This entry point once exported `getDatabaseClient` and the `DatabaseClient`
+ * type. Construction did indeed happen inside the package — and then the
+ * constructed client was handed out through the front door, so anything that
+ * imported `@minhaj/database` HELD a Prisma client. Under Model A (§3.1.1) that
+ * is possession of raw database capability, which §3.2 says neither `apps/web`
+ * nor `apps/realtime` ever has, and §6.3 rule 13 says a wrapper cannot convert
+ * into permitted invocation. The export is gone and stays gone.
  *
- * `getDatabaseClient` still exists, in `./client.ts`, and is still the one place
- * a Prisma client is constructed. It is reached by PACKAGE-INTERNAL relative
- * import only — by the adapters that will live under `./adapters/`, and by the
- * administrative tooling described below.
+ * `getDatabaseClient` still exists, in `./client.ts`, and is still the one
+ * place a Prisma client is constructed. It is reached by PACKAGE-INTERNAL
+ * relative import only — by the adapters below, and by the administrative
+ * tooling described at the end.
  *
- * WHAT REPLACES IT
- * ----------------
- * A context-owned persistence adapter: narrow persistence operations
- * implementing one bounded context's port, physically implemented here and
- * semantically owned by that context (§4.1, §6.3 rule 14). Ownership is
- * declared in this package's own `package.json`, under
+ * ONE ENTRY POINT, DELIBERATELY
+ * -----------------------------
+ * Each adapter could have been published at its own subpath. It is not, because
+ * an adapter directory published directly becomes a PACKAGE public entry, and a
+ * package entry that reaches Prisma is raw capability on the public API — the
+ * exact thing above. Re-exporting the narrow surfaces through one entry keeps
+ * the declared adapter entries as the encapsulation boundary they are meant to
+ * be, and keeps the capability walk stopping there.
+ *
+ * WHO OWNS WHAT
+ * -------------
+ * Physical placement transfers no semantic ownership (§4.1, §6.3 rule 14).
+ * Ownership is DECLARED in this package's own `package.json` under
  * `minhaj.persistenceAdapters`, and the architecture gate fails closed on an
- * adapter that no declaration owns.
+ * adapter no declaration owns:
  *
- * There are none yet, and this file therefore exports nothing. That is the
- * honest state: an adapter belongs to a bounded context, no bounded context has
- * been implemented, and inventing one to populate an export list is how a
- * platform package becomes the god-package §3.1 defines it not to be. The
- * convention is nonetheless declared and enforced now, so the first adapter
- * cannot arrive unowned.
+ *   - `identity-access` — the Identity & Access CONTEXT owns it
+ *   - `email`, `rate-limiting`, `auditing` — Layer-0 platform CONCERNS own
+ *     them, and a Layer-0 adapter may reach no bounded context at all
  *
  * ADMINISTRATIVE TOOLING IS NOT THIS SURFACE
  * ------------------------------------------
@@ -58,4 +62,54 @@
 
 import 'server-only';
 
-export {};
+/* ---- Identity & Access (context-owned) ---------------------------------- */
+
+export {
+  AuthMechanicsError,
+  createAuthMechanicsAdapter,
+  createIdentityPersistence,
+  tombstoneEmail,
+} from './adapters/identity-access/index.ts';
+
+export type {
+  AuthMechanicsConfiguration,
+  AuthMechanicsFailure,
+} from './adapters/identity-access/index.ts';
+
+/* ---- Layer-0: email ----------------------------------------------------- */
+
+export {
+  classifyProviderStatus,
+  createEmailDeliveryStore,
+  createEmailSuppression,
+  createProviderEventStore,
+  createResendProvider,
+  providerFailureCode,
+  recipientDigest,
+  recipientFromEvent,
+  verifyResendWebhook,
+} from './adapters/email/index.ts';
+
+export type {
+  DeliveryStoreConfiguration,
+  DigestConfiguration,
+  ResendConfiguration,
+  WebhookConfiguration,
+  WebhookHeaders,
+  WebhookRejection,
+  WebhookVerification,
+} from './adapters/email/index.ts';
+
+/* ---- Layer-0: auditing -------------------------------------------------- */
+
+export { createAuditWriter } from './adapters/auditing/index.ts';
+
+/* ---- Layer-0: rate limiting --------------------------------------------- */
+
+export {
+  createRateLimiter,
+  rateLimitKey,
+  sameKey,
+} from './adapters/rate-limiting/index.ts';
+
+export type { RateLimiterConfiguration } from './adapters/rate-limiting/index.ts';

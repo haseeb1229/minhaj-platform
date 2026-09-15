@@ -409,6 +409,13 @@ jobs:
       - name: Recovery proof (real backup and restore)
         run: npm run db:recovery:test
 
+      # Phase 2 adds populated identity/security state that a schema-only
+      # restore cannot prove. Keep this in the existing Database foundation job:
+      # it writes synthetic rows in every Phase-2 table, performs a checksum
+      # backup/restore, verifies values/FKs/runtime rights, and proves cleanup.
+      - name: Populated Phase-2 recovery proof
+        run: npm run db:recovery:populated
+
       # Proves the rehearsal cleaned up after itself rather than trusting that
       # it said so. Also fails if a restore database survived a failure above.
       # Residue is verified INDEPENDENTLY of what `db:recovery:test` reported.
@@ -504,6 +511,115 @@ jobs:
       # The container and its volume are removed with the runner, but the
       # teardown is explicit so a failure leaves nothing holding the port, and
       # the ephemeral credentials do not outlive the job even in a cache.
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose -f docker/compose.yaml down -v --remove-orphans || true
+          rm -f docker/.env
+
+  browser:
+    name: Browser flows
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    # WHY A SEPARATE JOB RATHER THAN PART OF `Verify`.
+    #
+    # `Verify` builds and checks the CONTAINER IMAGE, and that image is
+    # deliberately browserless. Adding Chromium and its system libraries to it
+    # so a test could run would change what the production image contains, for
+    # the benefit of something production never does. The browser proofs
+    # therefore run here, against the same production BUILD, on a runner that
+    # is allowed to have a browser on it.
+    #
+    # It is a required job like any other. Nothing here is advisory, and a
+    # failure fails the run.
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Generated per run and written only to `docker/.env`, which is
+      # git-ignored — the same recipe, and the same reasoning about parser-safe
+      # characters, as the `Database foundation` job above.
+      # `tests/config/ci-credentials.test.ts` asserts the alphabet.
+      - name: Generate ephemeral database credentials
+        run: |
+          SA_PASSWORD="Ci$(openssl rand -hex 24)!1aZ"
+          APP_PASSWORD="Ci$(openssl rand -hex 24)!2aZ"
+
+          echo "::add-mask::$SA_PASSWORD"
+          echo "::add-mask::$APP_PASSWORD"
+
+          mkdir -p docker
+          {
+            echo "MSSQL_SA_PASSWORD=${SA_PASSWORD}"
+            echo "MINHAJ_SQLSERVER_PORT=14330"
+            echo "DATABASE_URL=sqlserver://localhost:14330;database=MinhajPlatform;user=minhaj_app;password=${APP_PASSWORD};encrypt=true;trustServerCertificate=true"
+            echo "DATABASE_MIGRATION_URL=sqlserver://localhost:14330;database=MinhajPlatform;user=sa;password=${SA_PASSWORD};encrypt=true;trustServerCertificate=true"
+            echo "DATABASE_APP_LOGIN=minhaj_app"
+            echo "DATABASE_APP_PASSWORD=${APP_PASSWORD}"
+          } > docker/.env
+
+          chmod 600 docker/.env
+
+      - name: Start SQL Server 2022 Developer
+        run: docker compose -f docker/compose.yaml up -d --wait sqlserver
+
+      # The suite creates its OWN disposable database per run and drops it
+      # again; this is only the server it creates it on.
+      - name: Create the base database
+        run: |
+          docker exec minhaj-sqlserver-2022 /opt/mssql-tools18/bin/sqlcmd \
+            -S localhost -U sa -P "$(grep '^MSSQL_SA_PASSWORD=' docker/.env | cut -d= -f2-)" \
+            -C -b -Q "IF DB_ID(N'MinhajPlatform') IS NULL CREATE DATABASE [MinhajPlatform];"
+
+      - name: Generate the Prisma client
+        run: npm run db:generate
+
+      # Chromium only, matching `playwright.config.ts`. Downloading every
+      # engine would triple the job for claims this suite does not make.
+      - name: Install Chromium
+        run: npm run test:browser:install
+
+      # THE PRODUCTION BUILD. `next dev` behaves differently around caching,
+      # cookies and Server Actions, so a browser proof that ran against it
+      # would be proving something the deployment does not do.
+      #
+      # Built here rather than reused from `Verify`: the jobs run in parallel
+      # and passing a build between them would couple them for no gain.
+      - name: Build
+        run: npm run build
+
+      # `scripts/browser-server.mjs` starts the application against a
+      # disposable database and drops it on the way out; Playwright starts and
+      # stops that script.
+      - name: Browser flows
+        run: npm run test:browser
+
+      # Traces and screenshots for a FAILURE only. A trace of an
+      # authentication flow contains session cookies, so nothing is uploaded
+      # for a passing run (SECURITY_BASELINE.md §19.2), and the retention is
+      # short.
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failure-artifacts
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 3
+          if-no-files-found: ignore
+
       - name: Tear down
         if: always()
         run: |

@@ -1,28 +1,118 @@
 @import 'tailwindcss';
 
 /*
- * Phase 0B baseline only.
+ * THE design foundation — Phase 2's subset of it.
  *
- * This is NOT the design system. Colour, type scale, spacing tokens and the
- * Minhaj visual identity belong to the design phase (OPEN_DECISIONS.md §6.4).
+ * There is exactly one design system (ARCHITECTURE.md §13.1). This is a genuine
+ * subset of it, not throw-away styling to be discarded in Phase 4: Phase 4
+ * EXTENDS these tokens and primitives with the broad public shell rather than
+ * replacing them.
  *
- * RTL note: every rule below is direction-neutral or uses logical properties.
- * Physical properties (`margin-left`, `padding-right`, `text-align: left`) are
- * prohibited in layout code — they silently break Urdu and Arabic
- * (TECH_STACK.md §5, ARCHITECTURE.md §9). Enforced by test.
+ * TOKENS, NOT VALUES. Colour is declared by ROLE — surface, foreground, action,
+ * border, error — so the palette can be substituted as a configuration change
+ * when brand evidence arrives (OPEN_DECISIONS.md §6.4). The values below are a
+ * deliberately restrained, accessible placeholder set, NOT a frozen brand
+ * palette: calm, scholarly and content-first, with no SaaS-dashboard gradient,
+ * no glassmorphism and no decorative motion.
+ *
+ * RTL. Every rule is direction-neutral or uses logical properties. Physical
+ * properties (`margin-left`, `text-align: left`) are prohibited in layout code
+ * — they silently break Urdu and Arabic, and the RTL checker fails the build on
+ * them (TECH_STACK.md §5, ARCHITECTURE.md §9).
+ *
+ * CONTRAST. Every foreground/background pair below meets WCAG 2.2 AA at its
+ * intended size (SECURITY_BASELINE.md §16.1), asserted by test rather than by
+ * eye.
  */
 
+@theme {
+  /* Surfaces */
+  --color-surface: #faf9f7;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #f1efea;
+
+  /* Foreground */
+  --color-foreground: #1b1b1b;
+  --color-foreground-muted: #5b5b5b;
+
+  /* Action — the one accent, used sparingly */
+  --color-action: #1f3d2b;
+  --color-action-hover: #17301f;
+  --color-action-foreground: #ffffff;
+
+  /* Feedback */
+  --color-error: #8a1f1f;
+  --color-error-surface: #fdf3f3;
+  --color-success: #1f5a3a;
+  --color-success-surface: #f1f8f4;
+  --color-warning: #7a4a11;
+  --color-warning-surface: #fdf7ef;
+  --color-info: #1f3f5a;
+  --color-info-surface: #f1f6fa;
+
+  /* Structure */
+  --color-border: #ddd9d1;
+  --color-border-strong: #b8b2a7;
+  --color-focus: #1f3d2b;
+
+  --radius-control: 0.375rem;
+  --radius-panel: 0.625rem;
+
+  --shadow-panel: 0 1px 2px rgb(27 27 27 / 0.05);
+}
+
 :root {
-  color-scheme: light dark;
+  /* The platform commits to a single light presentation for now. A dark
+     palette is a design decision with its own contrast obligations, and
+     announcing support this foundation has not verified would be a claim
+     rather than a feature. */
+  color-scheme: light;
 }
 
 body {
   margin-block: 0;
   margin-inline: 0;
+  background-color: var(--color-surface);
+  color: var(--color-foreground);
   font-family:
     system-ui,
     -apple-system,
     'Segoe UI',
     sans-serif;
   line-height: 1.6;
+}
+
+/*
+ * Urdu and Arabic need more vertical room than the Latin default: their
+ * ascenders and descenders are taller, and the same line height that reads
+ * comfortably in English crowds them (ARCHITECTURE.md §13.3).
+ */
+:root:lang(ur) body,
+:root:lang(ar) body {
+  line-height: 1.9;
+}
+
+/*
+ * A visible focus indicator on every focusable element, without exception.
+ * Keyboard operation is unusable without it, and it is the single most
+ * commonly removed accessibility affordance (SECURITY_BASELINE.md §16.1).
+ */
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/*
+ * Reduced motion is honoured as a preference, not an afterthought. There is
+ * very little motion here to begin with, which is the point.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

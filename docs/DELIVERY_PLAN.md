@@ -377,7 +377,10 @@ single-use, and regeneration invalidates the prior set** · **no administrator a
 disables a second factor to restore privileged access** · **the bootstrap is one-time,
 race-safe, audited and unavailable after first success** · **self-elevation fails** · **a
 committed security event whose mail delivery fails is retried idempotently without minting a
-second verification or reset token** (ARCHITECTURE.md §4.6.1).
+second verification or reset token**; **a password reset, password change or verified email
+change remains durably discoverable for token-free audit/notification reconciliation after a
+process crash, without a generic workflow engine or second bearer store** (ARCHITECTURE.md
+§4.6.1).
 
 **Exit:** Base authentication and the single authorisation path working, with security tests
 passing, **reachable through a usable Account & Security surface**. **Google is not required
@@ -1502,5 +1505,5 @@ implement / document → inspect git diff → run required validation
 | **Unprovisioned production SQL stalls foundation work** | **Phase 1 runs on local Developer edition; only Phases 28 and 34 need external instances** |
 | **Migration authorisation delays framework work** | **Phase 29 is fixture-only; authorisation gates Phase 30 alone** |
 | **Google credential delays block live classes** | **The manual Meet flow needs no application API credential; within the current V1 plan only Google sign-in (Phase 2G) requires them. A future approved Google API integration would carry its own requirements** |
-| **The transactional email provider gate is the earliest broadly-blocking external decision** | It gates Phase 2 and therefore everything downstream of Phase 2, including 3B, 4, 5, 6 and 29. **Phases 0B, 1, 3A and 7 proceed without it**; raise it alongside the religious-authority and safeguarding items (OPEN_DECISIONS.md §5.1, §9) |
+| ~~**The transactional email provider gate is the earliest broadly-blocking external decision**~~ **CLOSED ON EVIDENCE** | It gated Phase 2 and therefore everything downstream of Phase 2, including 3B, 4, 5, 6 and 29. The **development / pre-adoption** sending gate is now closed on demonstrated evidence — verified sender domain, DKIM, sending/SPF configuration, DMARC, a restricted sender credential and a successful controlled real-inbox delivery. **Official adopter-controlled production email remains a separate later activation** (OPEN_DECISIONS.md §5.1) |
 | Opportunistic dependency upgrades destabilise work | Versioning policy: **stop, investigate, report** — never automatic substitution |

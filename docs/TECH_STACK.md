@@ -108,7 +108,7 @@ Validation happens **at genuine introduction**, in the phase that owns it
 | @prisma/client | **7.10.0** | LOCKED | Runtime | **Phase 1 — Database Foundation** |
 | **@prisma/adapter-mssql** | **7.10.0** | LOCKED | Runtime | **Phase 1 — Database Foundation** |
 | Better Auth | **1.7.x** | LOCKED | Runtime | **Phase 2 — Identity & Access** |
-| **Resend** (first `EmailProvider` adapter) | current stable at introduction | LOCKED as the **first/development adapter**, behind the abstraction | Runtime | **Phase 2** |
+| **Resend** (first `EmailProvider` adapter) | **6.27.0** | LOCKED as the **first/development adapter**, behind the abstraction | Runtime | **Phase 2** |
 | Zod | **4.5.x** | LOCKED | Runtime | Phase 0B |
 | React Hook Form | **7.x** | LOCKED | Runtime | **When needed** |
 | Tiptap | **3.x** | LOCKED | Runtime | **When needed** |

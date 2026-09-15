@@ -63,6 +63,8 @@ import path from 'node:path';
 
 import {
   contextSlugs,
+  describeAdapterOwner,
+  layerZeroPersistentConcerns,
   persistenceAdapterPolicy,
   rawDatabaseCapabilityReason,
 } from '../../packages/config/eslint/contexts.js';
@@ -129,11 +131,24 @@ export function persistenceAdapterIndex(graph) {
     });
 
     for (const [name, owner] of Object.entries(policy.owners)) {
+      // `persistenceAdapterPolicy` has already normalised and rejected
+      // anything it cannot read, so an owner arriving here is either a known
+      // context or a known Layer-0 concern. `ownerKnown` stays as the single
+      // place that decides, rather than trusting the normalisation twice.
+      const ownerKnown =
+        owner?.kind === 'context'
+          ? knownContexts.has(owner.slug)
+          : owner?.kind === 'layer0' &&
+            layerZeroPersistentConcerns.includes(owner.concern);
+
       adapters.push({
         workspaceName: workspace.name,
         name,
         owner,
-        ownerKnown: typeof owner === 'string' && knownContexts.has(owner),
+        ownerKind: owner?.kind ?? null,
+        ownerSlug: owner?.kind === 'context' ? owner.slug : null,
+        ownerLabel: describeAdapterOwner(owner),
+        ownerKnown,
         directoryRelative: `${rootRelative}/${name}`,
       });
     }

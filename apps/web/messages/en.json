@@ -12,5 +12,131 @@
   },
   "localeSwitcher": {
     "label": "Choose a language"
+  },
+  "identity": {
+    "common": {
+      "email": "Email address",
+      "password": "Password",
+      "newPassword": "New password",
+      "currentPassword": "Current password",
+      "name": "Name",
+      "passwordHelp": "At least {min} characters.",
+      "working": "Working…",
+      "checkFields": "Check the details you entered and try again.",
+      "rateLimited": "Too many attempts. Wait a little and try again.",
+      "unavailable": "Something went wrong. Try again shortly.",
+      "backToSignIn": "Back to sign in",
+      "save": "Save",
+      "saved": "Saved."
+    },
+    "confirmChange": {
+      "title": "Confirm your new email address",
+      "description": "Confirm that {email} is yours. Your other devices will be signed out.",
+      "submit": "Confirm this address",
+      "done": "Your email address has been changed.",
+      "invalid": "This link is no longer usable. Request the change again from your security settings.",
+      "missing": "This link is incomplete.",
+      "needSignIn": "Sign in to the account you are changing, then open this link again.",
+      "backToSecurity": "Back to security settings"
+    },
+    "denied": {
+      "signedOut": "You need to sign in to see this.",
+      "disabled": "This account is not available.",
+      "suspended": "This account is not available.",
+      "closed": "This account is not available."
+    },
+    "forgot": {
+      "title": "Reset your password",
+      "description": "Enter your email address and we will send a link to choose a new password.",
+      "submit": "Send the link",
+      "submitted": "If that address has an account, a link is on its way."
+    },
+    "language": {
+      "title": "Language and time zone",
+      "description": "The language this site uses for you, and the time zone your dates are shown in."
+    },
+    "my": {
+      "title": "My Minhaj",
+      "description": "Your account. More will appear here as the platform grows.",
+      "profile": "Profile",
+      "security": "Security",
+      "language": "Language and time zone",
+      "signOut": "Sign out"
+    },
+    "profile": {
+      "title": "Profile",
+      "description": "How your account is shown to you. This is not a public profile.",
+      "displayName": "Name"
+    },
+    "reset": {
+      "title": "Choose a new password",
+      "submit": "Save the new password",
+      "done": "Your password has been changed. You can sign in with it now.",
+      "invalid": "This link is not valid. Ask for a new one.",
+      "expired": "This link has expired. Ask for a new one.",
+      "requestAnother": "Request another link"
+    },
+    "security": {
+      "title": "Security",
+      "description": "Your password, your active sessions and your account.",
+      "changePassword": "Change password",
+      "passwordChanged": "Your password has been changed. Other devices were signed out.",
+      "passwordWrong": "That current password is not right.",
+      "changeEmail": "Change email address",
+      "changeEmailHelp": "We will send a link to the new address to confirm it.",
+      "newEmail": "New email address",
+      "emailSubmitted": "If that address can be used, a confirmation link is on its way.",
+      "sessions": "Active sessions",
+      "sessionsHelp": "Where your account is signed in. Sign out anywhere you do not recognise.",
+      "currentSession": "This device",
+      "signedInAt": "Signed in",
+      "lastSeenFrom": "From",
+      "revoke": "Sign out",
+      "revokeOthers": "Sign out everywhere else",
+      "noSessions": "No other sessions.",
+      "methods": "Sign-in methods",
+      "methodsHelp": "How you sign in. More options will be added later.",
+      "methodPassword": "Email and password",
+      "methodFinal": "This is your only way to sign in, so it cannot be removed.",
+      "close": "Close account",
+      "closeHelp": "Closing removes your sign-in details and signs you out everywhere. Your email address becomes free to use again, and a new account made with it starts from nothing.",
+      "closeConfirm": "Enter your password to close the account",
+      "closeSubmit": "Close my account"
+    },
+    "setup": {
+      "title": "Finish setting up",
+      "description": "Choose the language and time zone for your account. You can change both later.",
+      "language": "Account language",
+      "timezone": "Time zone",
+      "submit": "Finish"
+    },
+    "signIn": {
+      "title": "Sign in",
+      "description": "Sign in to your Minhaj account. The rest of the site is open to everyone without one.",
+      "submit": "Sign in",
+      "failed": "Those details did not match an account.",
+      "forgot": "Forgotten your password?",
+      "noAccount": "No account yet?",
+      "createAccount": "Create one"
+    },
+    "signUp": {
+      "title": "Create an account",
+      "description": "An account saves your place and lets you take part. Reading, searching and listening need no account.",
+      "submit": "Create account",
+      "submitted": "Check your email for a link to confirm your address.",
+      "haveAccount": "Already have an account?",
+      "signIn": "Sign in"
+    },
+    "verify": {
+      "title": "Confirm your email address",
+      "description": "Confirm this address to finish setting up your account.",
+      "submit": "Confirm this address",
+      "done": "Your address is confirmed. You can sign in now.",
+      "invalid": "This link is not valid. Ask for a new one.",
+      "expired": "This link has expired. Ask for a new one.",
+      "missing": "This link is incomplete. Open it again from your email.",
+      "resend": "Send another link",
+      "resent": "If that address needs confirming, a link is on its way."
+    }
   }
 }

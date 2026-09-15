@@ -10,6 +10,7 @@ import {
 } from '../src/lifecycle/disposable-database.ts';
 import { deployMigrations, loadMigrations } from '../src/lifecycle/migrations.ts';
 import {
+  allowedObjectGrants,
   assertSentinelIntact,
   createUngrantedSentinel,
   inspectPrincipalAuthority,
@@ -398,16 +399,17 @@ try {
 
   if (overreaching.length > 0) {
     fail(
-      'no grant beyond the audit table',
+      'no grant beyond the approved inventory',
       overreaching
         .map((entry) => `${entry.state} ${entry.permission} on ${entry.object}`)
         .join('; '),
     );
   } else {
+    const objects = Object.keys(allowedObjectGrants).length;
     pass(
-      'no grant beyond the audit table',
-      `${recorded.length} recorded entries; the only object GRANTs are ` +
-        `INSERT/SELECT on [dbo].[AuditLog]`,
+      'no grant beyond the approved inventory',
+      `${recorded.length} recorded entries; object GRANTs confined to the ` +
+        `${objects} approved tables, per verb`,
     );
   }
 

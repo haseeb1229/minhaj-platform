@@ -58,6 +58,7 @@ function baseRootManifest(): Manifest {
     engines: { node: lockedNode },
     overrides: { 'deepmerge-ts': '8.0.0', mysql2: '3.23.1' },
     devDependencies: {
+      '@playwright/test': '1.55.1',
       eslint: '^10.9.1',
       prettier: '^3.9.6',
       typescript: '~5.9.3',
@@ -88,6 +89,8 @@ function baseWorkspaces(): { name: string; directory: string; manifest: Manifest
         dependencies: {
           '@prisma/adapter-mssql': '7.10.0',
           '@prisma/client': '7.10.0',
+          'better-auth': '1.7.4',
+          resend: '6.27.0',
           zod: '4.5.4',
         },
         devDependencies: { prisma: '7.10.0' },
@@ -114,6 +117,9 @@ function baseLock(): { packages: Record<string, { version?: string }> } {
       'node_modules/prisma': { version: '7.10.0' },
       'node_modules/@prisma/client': { version: '7.10.0' },
       'node_modules/@prisma/adapter-mssql': { version: '7.10.0' },
+      'node_modules/better-auth': { version: '1.7.4' },
+      'node_modules/resend': { version: '6.27.0' },
+      'node_modules/@playwright/test': { version: '1.55.1' },
       'node_modules/typescript': { version: '5.9.3' },
       'node_modules/zod': { version: '4.5.4' },
       'node_modules/vitest': { version: '4.1.11' },
@@ -153,6 +159,12 @@ function failuresFor(mutate?: (state: State) => void): string[] {
 function web(state: State): Manifest {
   return state.workspaces.find((workspace) => workspace.directory === 'apps/web')!
     .manifest;
+}
+
+function database(state: State): Manifest {
+  return state.workspaces.find(
+    (workspace) => workspace.directory === 'packages/database',
+  )!.manifest;
 }
 
 describe('F13.1 — the baseline passes', () => {
@@ -504,10 +516,33 @@ describe('F13.6 — deferred packages: absent is correct, present is contracted'
     ).toMatch(/prerelease/);
   });
 
-  it('does not freeze a Better Auth patch the architecture left to Phase 2', () => {
-    // TECH_STACK.md §2 locks the 1.7.x RANGE; §1.5 places the exact resolved
-    // patch at genuine introduction. Deciding it here would pre-empt Phase 2.
-    expect(policyFor('better-auth')).toMatchObject({ kind: 'range', expected: '1.7' });
+  it('pins the Better Auth patch Phase 2 actually resolved', () => {
+    // TECH_STACK.md §2 locks the 1.7.x RANGE and §1.5 places the exact resolved
+    // patch at genuine introduction. Phase 2 is that introduction, and it
+    // resolved 1.7.4 — so the patch is no longer something this policy would
+    // be pre-empting by naming.
+    //
+    // It is pinned EXACTLY rather than left as a range because the patch is
+    // load-bearing: 1.7.0-1.7.2 required an `account.issuer` column and a
+    // unique index on (issuer, accountId), which 1.7.3 withdrew and 1.7.4
+    // keeps withdrawn. A range permitting 1.7.0 would permit a version whose
+    // schema this repository deliberately does not have.
+    expect(policyFor('better-auth')).toMatchObject({
+      kind: 'exact',
+      expected: '1.7.4',
+    });
+    expect(policyFor('better-auth')?.introduced).toMatch(/Phase 2/);
+  });
+
+  it('rejects the withdrawn 1.7.0-1.7.2 account schema line', () => {
+    for (const version of ['1.7.0', '1.7.1', '1.7.2', '1.7.3', '1.8.0']) {
+      expect(
+        failuresFor((state) => {
+          database(state).dependencies!['better-auth'] = version;
+          state.lock.packages['node_modules/better-auth'] = { version };
+        }).join('\n'),
+      ).toMatch(/better-auth/);
+    }
   });
 
   it('covers a scoped family without enumerating its packages', () => {
@@ -659,10 +694,41 @@ describe('F13.9 — the transcribed policy matches TECH_STACK.md', () => {
     kind: string;
   }[];
 
+  /**
+   * What the DOCUMENT is expected to contain for a package.
+   *
+   * Usually the policy's own value. Better Auth is the exception, and the
+   * exception is deliberate rather than a fudge: TECH_STACK.md §2 records the
+   * locked architectural choice as the `1.7.x` RANGE and states that "the exact
+   * resolved patch is recorded in the committed lockfile". The policy pins
+   * `1.7.4` exactly because the patch is load-bearing here — 1.7.0-1.7.2
+   * carried an `account.issuer` column that 1.7.3 withdrew, so a range
+   * permitting 1.7.0 would permit a schema this repository deliberately does
+   * not have.
+   *
+   * Both statements are true and they are about different things: the document
+   * fixes the architectural range, the policy fixes the patch Phase 2 resolved.
+   * The document is checked against the range it actually states.
+   *
+   * `@playwright/test` is the same case for the same reason: §2 records
+   * Playwright as the `1.55.x` RANGE, while the policy pins the patch the
+   * browser suite actually runs against.
+   *
+   * Resend is deliberately NOT here. Its §2 row read "current stable at
+   * introduction" — a forward reference the document left for its owning
+   * phase to resolve — and Phase 2 is that introduction, so the resolved
+   * `6.27.0` is recorded in the document itself and checked against it
+   * directly. An override here would have had nothing to match.
+   */
+  const documentedVersion: Record<string, string> = {
+    'better-auth': '1.7.x',
+    '@playwright/test': '1.55.x',
+  };
+
   it.skipIf(techStack === null).each(documented)(
     'finds $expected for $name in the frozen document',
-    ({ expected }) => {
-      expect(techStack).toContain(expected);
+    ({ name, expected }) => {
+      expect(techStack).toContain(documentedVersion[name] ?? expected);
     },
   );
 
@@ -671,9 +737,14 @@ describe('F13.9 — the transcribed policy matches TECH_STACK.md', () => {
       (entry) => entry.name,
     );
 
-    expect(names).toContain('better-auth');
     expect(names).toContain('socket.io');
     expect(names).toContain('playwright');
+
+    // better-auth was here until Phase 2, and next-intl until Phase 3A.
+    // TECH_STACK.md §1.5 places validation at genuine introduction, and this
+    // is what that migration looks like from the policy's side: neither is
+    // legitimately absent any more.
+    expect(names).not.toContain('better-auth');
 
     // next-intl was here until Phase 3A. TECH_STACK.md §1.5 places validation
     // at genuine introduction, and this is what that migration looks like from

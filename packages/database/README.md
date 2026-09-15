@@ -16,6 +16,8 @@ sql/
 src/
   client.ts                         The application Prisma client
   config.ts                         Zod-validated, server-only configuration
+  adapters/                         Context-owned and Layer-0 persistence adapters
+    identity-access/                Owned by the Identity & Access CONTEXT
   lifecycle/                        Migration, rollback, seed and provisioning mechanics
     backup.ts                       SQL Server BACKUP/RESTORE mechanics and their guards
     recovery-proof.ts               The marker row written before backup, verified after
@@ -23,6 +25,49 @@ src/
     restored-state.ts               Inspection of a restored database's actual state
 scripts/                            The executables behind the `db:*` commands
 ```
+
+## Adapters — physical placement, semantic ownership
+
+`src/adapters/` hosts persistence adapters that this package does **not** own.
+Ownership is DECLARED in `package.json` under `minhaj.persistenceAdapters`, and
+the architecture gate fails closed on an adapter no declaration owns:
+
+```jsonc
+"owners": {
+  "identity-access": "identity-access",                  // a bounded context
+  "email": { "kind": "layer0", "concern": "email" }      // a Layer-0 concern
+}
+```
+
+Placing an adapter here changes **where it is implemented**, never **who owns
+it** (ARCHITECTURE.md §4.1, §6.3 rule 14). Only the owning context may change
+what its adapter means.
+
+Two owner kinds exist because the architecture has two kinds of persistent
+state. A bounded context owns domain state; a **Layer-0 platform concern** —
+`email`, `rate-limiting`, `auditing` — owns infrastructure state such as
+delivery metadata, rate-limit windows and audit rows. DOMAIN_MODEL.md §1.1 is
+explicit that those are not bounded contexts, so without the second kind their
+state could only have been filed under whichever context happened to need it
+first. A Layer-0 adapter also buys LESS: it may reach no bounded context at all,
+where a context-owned adapter may reach its own context's public interface.
+
+### `identity-access` — why Better Auth is constructed here
+
+`prismaAdapter` takes a `PrismaClient`, and a bounded context may never hold one
+(§3.1.2). Constructing the Better Auth instance beside the private client is the
+only arrangement in which neither the client nor Better Auth's generic
+`DBAdapter` crosses a boundary.
+
+What crosses is a narrow, named operation port declared in
+`@minhaj/contracts/identity`. `auth`, `auth.api`, `auth.$context` and the
+internal adapter are module-private and are never exported.
+
+This adapter performs **mechanics only**. It creates a credential, checks a
+password, resolves a session, mints and consumes a token. It decides nothing:
+who may sign in, whether a message should be sent and what it says, whether a
+rate limit applies, whether an operation is authorised — all of that belongs to
+the Identity context and stays there.
 
 ## Migration convention
 
@@ -161,19 +206,20 @@ schema-level grant would silently extend to every table a later phase adds.
 
 ## Commands
 
-| Command                       | Purpose                                       |
-| ----------------------------- | --------------------------------------------- |
-| `npm run db:generate`         | Generate the Prisma client                    |
-| `npm run db:validate`         | Validate the schema                           |
-| `npm run db:test:connection`  | Verify connectivity, version and edition      |
-| `npm run db:provision`        | Apply the least-privilege grants (idempotent) |
-| `npm run db:migrate:deploy`   | Apply pending migrations to the configured DB |
-| `npm run db:migrate:test`     | Full lifecycle on a disposable database       |
-| `npm run db:test:permissions` | Prove the permission boundary live            |
-| `npm run db:seed`             | Run the Phase 1 seed                          |
-| `npm run db:backup`           | Take one real, verified backup and keep it    |
-| `npm run db:restore:test`     | Prove the restore guards fail closed          |
-| `npm run db:recovery:test`    | **End-to-end backup → restore → verify**      |
+| Command                         | Purpose                                         |
+| ------------------------------- | ----------------------------------------------- |
+| `npm run db:generate`           | Generate the Prisma client                      |
+| `npm run db:validate`           | Validate the schema                             |
+| `npm run db:test:connection`    | Verify connectivity, version and edition        |
+| `npm run db:provision`          | Apply the least-privilege grants (idempotent)   |
+| `npm run db:migrate:deploy`     | Apply pending migrations to the configured DB   |
+| `npm run db:migrate:test`       | Full lifecycle on a disposable database         |
+| `npm run db:test:permissions`   | Prove the permission boundary live              |
+| `npm run db:seed`               | Run the Phase 1 seed                            |
+| `npm run db:backup`             | Take one real, verified backup and keep it      |
+| `npm run db:restore:test`       | Prove the restore guards fail closed            |
+| `npm run db:recovery:test`      | **End-to-end backup → restore → verify**        |
+| `npm run db:recovery:populated` | **Populated Phase-2 backup → restore → verify** |
 
 ## Disposable test databases
 
@@ -223,6 +269,45 @@ incident depends on.
 restore target is always a fresh disposable database, and `WITH REPLACE` is
 deliberately not used, so a restore fails rather than silently overwriting.
 
+### The populated rehearsal
+
+The rehearsal above proves the OPERATIONAL artifact: that the engineering
+database's backup restores, and that the restored database is intact. What it
+cannot prove is that populated business data survives, because it only ever
+asserts an audit marker — a check a database holding one table would also pass.
+
+`npm run db:recovery:populated` proves the CONTENT:
+
+```
+create a disposable MinhajPhase1Test_<32 hex> SOURCE
+  → deploy EVERY migration with the real Prisma CLI
+  → provision the least-privilege runtime principal
+  → write synthetic rows into every Phase-2 table, related as real ones are
+  → BACKUP DATABASE ... WITH FORMAT, INIT, CHECKSUM
+  → RESTORE DATABASE into a NEW MinhajPhase1Restore_<32 hex>
+  → verify every row VALUE BY VALUE, and the foreign keys between them
+  → verify the COMPLETE migration history, not merely the first entry
+  → verify the restored least-privilege posture as the runtime principal
+  → drop both databases, delete the artifact, prove all three are gone
+```
+
+It builds its own source rather than writing accounts into `MinhajPlatform`: a
+rehearsal should not leave synthetic people behind in a real database. Every
+fixture value is non-secret and self-identifying — addresses under `.invalid`,
+a placeholder where a password hash would be, and the literal word `synthetic`
+where a token would be.
+
+The two commands are complementary and both are gates. Neither is sufficient
+alone: the first cannot speak for data it does not hold, and the second cannot
+speak for the real database's artifact. `db:recovery:test` reports explicitly
+when a repository migration is not yet deployed to `MinhajPlatform`, so the
+gap is visible rather than silently uncovered.
+
+The populated rehearsal also runs inside the existing remote
+`Database foundation` job. Phase-2 reconciliation state is therefore restored
+and permission-checked on the clean CI runner rather than relying only on local
+evidence.
+
 ### Where backups are written
 
 `BACKUP DATABASE ... TO DISK` is executed **by the server**, so the path
@@ -246,10 +331,12 @@ guard identifies **positively** — the same discipline as the Chunk 2
 disposable name all fail closed. The two namespaces deliberately do not
 overlap, so neither chunk's cleanup can reach the other's databases.
 
-Backup **sources** are guarded the same way: `MinhajPlatform` is the only
-database this tooling will back up. Artifact **paths** are guarded before any
-deletion, so no wildcard, traversal or data-file path can be a target — there
-is no directory sweep anywhere in the cleanup.
+Backup **sources** are guarded the same way, as an allowlist of two positive
+shapes: `MinhajPlatform`, and a disposable `MinhajPhase1Test_<32 hex>` database
+for the populated rehearsal. A restore target is deliberately **not** a valid
+source — backing one up would prove a copy of a copy. Artifact **paths** are
+guarded before any deletion, so no wildcard, traversal or data-file path can be
+a target — there is no directory sweep anywhere in the cleanup.
 
 `npm run db:restore:test` proves all of this without touching a database.
 

@@ -376,6 +376,23 @@ async function waitFor(
  * lock and builds exactly once; the guarantee for this file is unchanged.
  */
 
+/**
+ * The secrets a PRODUCTION process must supply for itself.
+ *
+ * `parseServerEnv` rejects the repository's development defaults when
+ * `NODE_ENV=production` (SECURITY_BASELINE.md §18.1), and the start wrapper
+ * validates BEFORE `next start` runs — so a production launch without these
+ * exits non-zero and never listens, which is the guard working. A launch that
+ * is testing SHUTDOWN therefore has to get past it.
+ *
+ * Synthetic sentinels, recognisably not credentials, and never a real value.
+ */
+const PRODUCTION_SECRETS = {
+  AUTH_SECRETS: '1:synthetic-startup-sentinel-value-0001',
+  RATE_LIMIT_DIGEST_KEY: 'synthetic-startup-rate-limit-0001',
+  EMAIL_DIGEST_KEY: 'synthetic-startup-email-digest-0001',
+} as const;
+
 /** Launches the ordinary, UNCONDITIONED start wrapper, as a container does. */
 async function launchWrapper(
   port: number,
@@ -399,6 +416,7 @@ describe('B4 — SIGTERM to the top-level wrapper stops the listener', () => {
     const wrapper = await launchWrapper(port, {
       NODE_ENV: 'production',
       npm_lifecycle_event: 'start',
+      ...PRODUCTION_SECRETS,
     });
 
     const topLevelPid = wrapper.pid;
@@ -454,6 +472,7 @@ describe('B4 — SIGTERM to the top-level wrapper stops the listener', () => {
       const wrapper = await launchWrapper(port, {
         NODE_ENV: 'production',
         npm_lifecycle_event: 'start',
+        ...PRODUCTION_SECRETS,
       });
 
       const outcome = new Promise<{ code: number | null; signal: string | null }>(
@@ -519,6 +538,30 @@ describe('B4 — an invalid environment starts no process to strand', () => {
     );
 
     expect(code, 'invalid configuration must exit non-zero').not.toBe(0);
+    expect(await isListening(port), 'nothing may be listening').toBe(false);
+  }, 60_000);
+
+  it('refuses to start in production on a development secret default', async () => {
+    // The guard, end to end. `AUTH_SECRETS`, `RATE_LIMIT_DIGEST_KEY` and
+    // `EMAIL_DIGEST_KEY` all carry a development default so a fresh checkout
+    // runs — and a default secret in a deployed environment is not a secret
+    // (SECURITY_BASELINE.md §18.1).
+    //
+    // Asserted here rather than only at the schema, because the property that
+    // matters is that the PROCESS does not come up: a deployment that started
+    // and served traffic while signing sessions with a published value would
+    // be the failure, not the parse.
+    const port = await reservePort();
+    const wrapper = await launchWrapper(port, {
+      NODE_ENV: 'production',
+      npm_lifecycle_event: 'start',
+    });
+
+    const { code } = await new Promise<{ code: number | null }>((resolve) =>
+      wrapper.once('exit', (exitCode) => resolve({ code: exitCode })),
+    );
+
+    expect(code, 'a defaulted production secret must exit non-zero').not.toBe(0);
     expect(await isListening(port), 'nothing may be listening').toBe(false);
   }, 60_000);
 });

@@ -85,6 +85,9 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
   let admin: SqlSession;
   let app: SqlSession;
   let migration: Migration;
+  let allMigrations: Migration[];
+  /** A table the NEWEST migration owns, used to observe its rollback. */
+  const rolledBackTable = 'Verification';
   /** The normal encrypted migration URL, retargeted at the disposable database. */
   let disposableUrl: string;
 
@@ -105,10 +108,15 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
       localTargetPolicy(process.env, 'disposable', 'migration'),
     );
 
-    const migrations = await loadMigrations();
-    const first = migrations[0];
-    if (first === undefined) throw new Error('No migrations to test.');
-    migration = first;
+    allMigrations = await loadMigrations();
+    const newest = allMigrations.at(-1);
+    if (newest === undefined) throw new Error('No migrations to test.');
+
+    // The NEWEST migration is the one this suite rolls back and re-deploys.
+    // Rolling back the OLDEST while a later one is still applied leaves the
+    // history out of order, and `migrate status` rightly reports the set as
+    // incomplete — a state the rollback artifacts are not written to produce.
+    migration = newest;
 
     master = await openMasterSession(connection);
     await createDisposableDatabase(master, databaseName);
@@ -166,8 +174,22 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
       WHERE s.name = 'dbo' ORDER BY t.name;
     `);
 
+    // Every table the delivered phases own, and nothing else. Naming them
+    // exhaustively is the point: a table appearing here that no delivered
+    // phase created is premature schema, and a table missing is a migration
+    // that did not do what it claims.
     expect(tables.map((table) => table.name).sort()).toEqual([
+      'Account',
       'AuditLog',
+      'EmailDelivery',
+      'EmailSuppression',
+      'IdentityCommunicationIntent',
+      'IdentitySecurityOperation',
+      'ProviderEvent',
+      'RateLimitCounter',
+      'Session',
+      'User',
+      'Verification',
       '_prisma_migrations',
     ]);
   });
@@ -323,7 +345,7 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
     await rollbackMigration(admin, migration);
 
     const afterRollback = await admin.query<{ name: string }>(
-      `SELECT name FROM sys.tables WHERE name = N'AuditLog';`,
+      `SELECT name FROM sys.tables WHERE name = N'${rolledBackTable}';`,
     );
     expect(afterRollback).toHaveLength(0);
 
@@ -339,7 +361,7 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
     expect(redeploy.output).toContain(migration.id);
 
     const afterReapply = await admin.query<{ name: string }>(
-      `SELECT name FROM sys.tables WHERE name = N'AuditLog';`,
+      `SELECT name FROM sys.tables WHERE name = N'${rolledBackTable}';`,
     );
     expect(afterReapply).toHaveLength(1);
     expect(await appliedMigrationNames(admin)).toContain(migration.id);
@@ -356,7 +378,16 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
   it('runs the CLI without exposing the connection URL on the command line', async () => {
     // The URL travels in the child environment, not argv, so it never reaches
     // the process table where any local user could read it.
-    const result = await runPrismaCli(['migrate', 'status'], disposableUrl);
+    //
+    // The second argument is an OPTIONS OBJECT. This call previously passed
+    // the URL as a bare string, so `options.databaseUrl` was `undefined` and
+    // the child fell back to the configured default database — the assertion
+    // held, but against the wrong target. It only looked correct while the
+    // default and the disposable database happened to share a schema state;
+    // Phase 2 made them differ and the mistake surfaced.
+    const result = await runPrismaCli(['migrate', 'status'], {
+      databaseUrl: disposableUrl,
+    });
 
     expect(result.exitCode).toBe(0);
     expect(result.command).not.toContain(disposableUrl);

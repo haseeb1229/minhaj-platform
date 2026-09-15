@@ -73,6 +73,28 @@ async function request(
   return fetch(base + path, { headers, redirect: 'manual' });
 }
 
+/**
+ * The secrets a PRODUCTION process must supply for itself.
+ *
+ * Phase 2 gave the server-environment schema three values with development
+ * defaults, and `parseServerEnv` REJECTS those defaults under
+ * `NODE_ENV=production` (SECURITY_BASELINE.md §18.1). The instrumentation hook
+ * validates at startup, so a production launch without them answers 500 to
+ * every request — which is the guard working exactly as intended.
+ *
+ * This suite is about LOCALE ROUTING and has to get past it, the same way
+ * `tests/config/startup.test.ts` does. Supplying them here weakens nothing:
+ * the guard itself is proved in that file, by a test that launches WITHOUT
+ * them and asserts the process exits non-zero and never listens.
+ *
+ * Synthetic sentinels, recognisably not credentials, and never a real value.
+ */
+const PRODUCTION_SECRETS = {
+  AUTH_SECRETS: '1:synthetic-locale-routing-sentinel-0001',
+  RATE_LIMIT_DIGEST_KEY: 'synthetic-locale-routing-rate-limit-0001',
+  EMAIL_DIGEST_KEY: 'synthetic-locale-routing-email-digest-0001',
+} as const;
+
 beforeAll(async () => {
   await ensureProductionBuild();
 
@@ -82,7 +104,7 @@ beforeAll(async () => {
   server = spawn(process.execPath, [nextBin, 'start', '-p', String(port)], {
     cwd: webRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, NODE_ENV: 'production' },
+    env: { ...process.env, NODE_ENV: 'production', ...PRODUCTION_SECRETS },
   });
 
   /**
@@ -116,8 +138,17 @@ beforeAll(async () => {
       const html = await probe.text();
 
       if (!html.includes('<html lang="en" dir="ltr">')) {
+        // The STATUS and the server's own output, not merely "something else".
+        //
+        // This check cannot tell a stolen port from this application failing to
+        // serve, and the two need opposite repairs. Reporting only the former
+        // sends the reader hunting for a port conflict when the answer — a
+        // rejected environment, a half-written build — was on the child's
+        // stderr the whole time.
         throw new Error(
-          `port ${port} is served by something other than this application`,
+          `\`next start\` on port ${port} did not serve this application: ` +
+            `HTTP ${probe.status}, body begins ${JSON.stringify(html.slice(0, 200))}.\n` +
+            `${output}`,
         );
       }
 

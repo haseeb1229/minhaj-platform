@@ -16,6 +16,12 @@
       "node": "./src/logging/logger.ts",
       "browser": "./src/client-import-error.ts",
       "default": "./src/logging/logger.ts"
+    },
+    "./session": {
+      "react-server": "./src/session/index.ts",
+      "node": "./src/session/index.ts",
+      "browser": "./src/client-import-error.ts",
+      "default": "./src/session/index.ts"
     }
   },
   "scripts": {

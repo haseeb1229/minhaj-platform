@@ -30,6 +30,7 @@ import {
   physicalStyleValues,
   physicalToLogicalStyleProperties,
 } from '../packages/config/eslint/rtl.js';
+import { ts } from './architecture/parser.mjs';
 import {
   configuredOutputRootsFor,
   generatedRootsFor,
@@ -135,18 +136,65 @@ function extractStringLiterals(source) {
   return literals;
 }
 
-/** Physical inline-style property keys, in object-literal position. */
-function findPhysicalStyleKeys(source) {
-  const found = [];
+/**
+ * Object-literal properties, read from the REAL parse tree.
+ *
+ * These two rules are about INLINE STYLE OBJECTS, and an inline style object is
+ * an object literal — so the check asks the parser for object literals rather
+ * than asking a regular expression what a colon might mean.
+ *
+ * The previous form matched `<name>:` anywhere a `{`, `,` or space preceded it,
+ * which is also the shape of a TypeScript type annotation. `function sameKey(
+ * left: string, right: string)` was therefore reported as an inline style, and
+ * every future `right: number` on an interface would have been too. Suppressing
+ * that by renaming a parameter would leave the rule wrong and the next author
+ * to discover it; reading the tree makes the rule mean what it says.
+ *
+ * `PropertyAssignment` occurs only inside an `ObjectLiteralExpression`.
+ * Parameters, interface members, type literals and class properties are
+ * different nodes and are not visited — which is the whole correction.
+ */
+function objectLiteralProperties(file, source) {
+  const parsed = ts.createSourceFile(
+    file,
+    source,
+    ts.ScriptTarget.Latest,
+    /* setParentNodes */ false,
+    file.endsWith('.tsx') || file.endsWith('.jsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
 
-  for (const property of Object.keys(physicalToLogicalStyleProperties)) {
-    const pattern = new RegExp(`(?:^|[{,\\s])['"]?${property}['"]?\\s*:`, 'm');
-    if (pattern.test(source)) {
-      found.push({
-        property,
-        logical: physicalToLogicalStyleProperties[property],
-      });
+  const properties = [];
+
+  const visit = (node) => {
+    if (ts.isPropertyAssignment(node)) {
+      const name = node.name;
+      const key = ts.isIdentifier(name)
+        ? name.text
+        : ts.isStringLiteralLike(name)
+          ? name.text
+          : null;
+
+      if (key !== null) properties.push({ key, initializer: node.initializer });
     }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(parsed);
+  return properties;
+}
+
+/** Physical inline-style property keys, in object-literal position. */
+function findPhysicalStyleKeys(properties) {
+  const found = [];
+  const seen = new Set();
+
+  for (const { key } of properties) {
+    const logical = physicalToLogicalStyleProperties[key];
+    if (logical === undefined || seen.has(key)) continue;
+
+    seen.add(key);
+    found.push({ property: key, logical });
   }
 
   return found;
@@ -158,18 +206,47 @@ function findPhysicalStyleKeys(source) {
  * Matched as property AND value together, so `textAlign: 'start'` passes and
  * only `textAlign: 'left'` fails.
  */
-function findPhysicalStyleValues(source) {
+function findPhysicalStyleValues(properties) {
+  const found = [];
+  const seen = new Set();
+
+  for (const { key, initializer } of properties) {
+    const rule = physicalStyleValues[key];
+    if (rule === undefined) continue;
+    if (!ts.isStringLiteralLike(initializer)) continue;
+
+    const logical = rule.prohibited[initializer.text];
+    if (logical === undefined) continue;
+
+    const signature = `${key}:${initializer.text}`;
+    if (seen.has(signature)) continue;
+
+    seen.add(signature);
+    found.push({ property: key, value: initializer.text, logical });
+  }
+
+  return found;
+}
+
+/**
+ * CSS carried in an HTML `style` attribute inside source.
+ *
+ * Reading the parse tree for style OBJECTS would otherwise have quietly
+ * dropped the one place this platform writes CSS as text: the transactional
+ * email bodies, which are HTML strings with inline styles because that is the
+ * only styling a mail client reliably honours. Urdu and Arabic mail is RTL, so
+ * a `margin-left` there breaks it exactly as it would in the application.
+ *
+ * Scoped to the contents of a `style` attribute rather than every string, so a
+ * sentence that happens to contain `right:` is not a finding.
+ */
+function findStyleAttributeCss(literal) {
   const found = [];
 
-  for (const [property, { prohibited }] of Object.entries(physicalStyleValues)) {
-    for (const [value, logical] of Object.entries(prohibited)) {
-      const pattern = new RegExp(
-        `(?:^|[{,\\s])['"]?${property}['"]?\\s*:\\s*['"]${value}['"]`,
-        'm',
-      );
-      if (pattern.test(source)) {
-        found.push({ property, value, logical });
-      }
+  for (const match of literal.matchAll(/style\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+    const css = match[1] ?? match[2] ?? '';
+    for (const declaration of findPhysicalCssDeclarations(css)) {
+      found.push(declaration);
     }
   }
 
@@ -203,7 +280,8 @@ export async function validateRtl(roots, { workspaceRoot = null } = {}) {
       if (RULE_DEFINITION_FILES.has(relative)) continue;
 
       filesChecked += 1;
-      const source = stripComments(readFileSync(file, 'utf8'));
+      const raw = readFileSync(file, 'utf8');
+      const source = stripComments(raw);
 
       for (const literal of extractStringLiterals(source)) {
         for (const { physical, logical } of findPhysicalDirectionUtilities(literal)) {
@@ -214,9 +292,22 @@ export async function validateRtl(roots, { workspaceRoot = null } = {}) {
             message: `'${physical}-*' breaks RTL. Use '${logical}-*'.`,
           });
         }
+
+        for (const { declaration, logical } of findStyleAttributeCss(literal)) {
+          violations.push({
+            rule: 'physical-css-declaration',
+            file: relative,
+            detail: declaration,
+            message: `'${declaration}' breaks RTL. Use '${logical}'.`,
+          });
+        }
       }
 
-      for (const { property, logical } of findPhysicalStyleKeys(source)) {
+      // The PARSE TREE, not the comment-stripped text: the parser discards
+      // comments itself, and a style object is an object literal.
+      const properties = objectLiteralProperties(file, raw);
+
+      for (const { property, logical } of findPhysicalStyleKeys(properties)) {
         violations.push({
           rule: 'physical-inline-style',
           file: relative,
@@ -225,7 +316,7 @@ export async function validateRtl(roots, { workspaceRoot = null } = {}) {
         });
       }
 
-      for (const { property, value, logical } of findPhysicalStyleValues(source)) {
+      for (const { property, value, logical } of findPhysicalStyleValues(properties)) {
         violations.push({
           rule: 'physical-inline-style-value',
           file: relative,

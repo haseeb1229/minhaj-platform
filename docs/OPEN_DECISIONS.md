@@ -366,30 +366,42 @@ DMARC configuration.
 **Why it matters:** Email verification and password reset are unusable without reliable
 delivery; poor domain configuration means messages land in spam.
 
-> **This is the CURRENT Phase 2 entry gate and it is not relaxed.** Because Phase 2 is an early
-> prerequisite for most later work, it is **the earliest broadly-blocking external decision in
-> the plan**. Phases that inherit it transitively include **3B (Taxonomy), 4, 5, 6, 20, 26, 27
-> and 29** — 29 because its protected migration administration requires Identity, **not**
-> because of any source-authorisation requirement (§3.1).
+> **This WAS the Phase 2 entry gate.** Because Phase 2 is an early prerequisite for most later
+> work, it was **the earliest broadly-blocking external decision in the plan**. Phases that
+> inherited it transitively include **3B (Taxonomy), 4, 5, 6, 20, 26, 27 and 29** — 29 because
+> its protected migration administration requires Identity, **not** because of any
+> source-authorisation requirement (§3.1).
 >
-> **Work that does not depend on it: Phases 0B, 1, 3A and 7.**
+> **Work that never depended on it: Phases 0B, 1, 3A and 7.**
 
-**Category B · Gate: implementation (for Phase 2) — and it remains OPEN.**
+**Category B · Gate: implementation (for Phase 2) — CLOSED ON EVIDENCE.**
 
-**Provider selected; gate not closed.** The first `EmailProvider` adapter is **Resend**, with the
-development sender domain `mail.minhajulquran.haseebliaqat.me` on the pre-adoption origin
+**Provider selected, and the development/pre-adoption sending gate is closed.** The first
+`EmailProvider` adapter is **Resend**, with the development sender domain
+`mail.minhajulquran.haseebliaqat.me` on the pre-adoption origin
 `minhajulquran.haseebliaqat.me` (ARCHITECTURE.md §4.6). The unrelated sender
 `notify.haseebliaqat.me` belongs to **ParaForce** and stays separate.
 
-> **Selecting a provider is not evidence of deliverability.** This gate closes only when **all**
-> of the following are demonstrated:
+> **Selecting a provider was not evidence of deliverability.** The gate required **all** of the
+> following, and **each has been demonstrated**:
 >
-> - the **sending domain is verified**;
-> - **SPF** is correctly configured and verified where applicable;
-> - **DKIM** is verified;
-> - **DMARC** is configured;
-> - a **restricted sending credential** is securely provisioned;
-> - **delivery to a real controlled inbox succeeds**.
+> - the **sending domain is verified** — ✅;
+> - **SPF**-related sending configuration is correct and verified — ✅;
+> - **DKIM** is verified — ✅;
+> - **DMARC** is configured — ✅;
+> - a **restricted sending credential** is securely provisioned, scoped to that sender domain
+>   — ✅;
+> - **delivery to a real controlled inbox succeeds** — ✅.
+
+> **What this closes, and what it does not.** It closes the **development / pre-adoption**
+> transactional sending gate, which is what Phase 2 needed in order to begin and to be proved.
+> It does **not** decide the **official, adopter-controlled production** sender, which remains a
+> later deployment and activation concern and is replaced without code change
+> (ARCHITECTURE.md §10.5.3).
+>
+> **Webhook provisioning and the signing secret are deployment setup, not part of this gate.**
+> Their absence in an environment refuses inbound callbacks; it never reopens sending, and it
+> never causes an unverified callback to be accepted (SECURITY_BASELINE.md §7.2).
 
 **The official production email account and sender remain organisation-controlled and separate**,
 and are replaced at adoption without code change (ARCHITECTURE.md §10.5.3). **No API key or
@@ -650,7 +662,7 @@ gates. A decision may gate more than one thing.
 | 4.2 | Staging environment | **E** | Implementation | 28 | Migration cannot run safely |
 | 4.3 | Production hosting | **E** | Launch | 34 | Deployment blocked |
 | 4.4 | Backup, retention and recovery targets | **C/E** | Launch | 28, 34 | Conservative defaults; **local restore rehearsal proceeds** |
-| 5.1 | Transactional email provider **evidence** | **B** | **Implementation** | **2, and transitively everything downstream of 2** | **Phase 2 does not begin.** **Resend is selected; the gate is evidence, not selection** |
+| 5.1 | Transactional email provider **evidence** | **B** | **Implementation** | ~~2, and transitively everything downstream of 2~~ | **CLOSED ON EVIDENCE.** Domain, DKIM, sending/SPF configuration, DMARC, restricted credential and a real controlled-inbox delivery all demonstrated. **Official adopter-controlled production email remains a separate later activation** |
 | 5.2 | Google **OAuth application credentials** | **C/E** | Activation | **2G** | **Google sign-in blocked.** Base auth (2) and the **manual Meet flow (23)** proceed without them |
 | 5.3 | Teachers can create/use Google Meet meetings | **C** | Activation | 23 | Live classes not activated — **an organisational capability, not an API credential** |
 | 5.4 | Payment provider and merchant account | **C/E** | Activation | **27 only** | **Sandbox proves the software; production needs the merchant account.** Membership proceeds |
@@ -672,9 +684,13 @@ Identity dependency)** and **7 (storage foundation — infrastructure only)**.
 
 > **Correction.** An earlier revision listed Phases 3, 4, 5, 6 and 29 here as proceeding with
 > nothing resolved. That contradicted the delivery gates: **Phase 5 depends on Phase 2**, Phase
-> 2 carries the **transactional email provider entry gate** (§5.1), and **Phases 3B, 4 and 6 sit
+> 2 carried the **transactional email provider entry gate** (§5.1), and **Phases 3B, 4 and 6 sit
 > downstream of Phase 2** as well. **Phase 29 likewise depends on Phase 2**, because it delivers
 > protected migration administration.
+>
+> **Update.** §5.1 is now **closed on evidence**, so Phase 2 is no longer gated on it and the
+> phases downstream of Phase 2 no longer inherit it. Their remaining dependency is on Phase 2
+> being **delivered**, which is an ordinary delivery dependency rather than an external one.
 >
 > **Phase 29 remains independent of live-source authorisation** (§3.1): it is fixture-only,
 > contacts no real source, and copies no real asset. The gate it inherits is email (§5.1), not

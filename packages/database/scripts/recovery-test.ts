@@ -10,7 +10,7 @@ import {
   restoreDatabaseFromBackup,
 } from '../src/lifecycle/backup.ts';
 import { openMasterSession } from '../src/lifecycle/disposable-database.ts';
-import { loadMigrations } from '../src/lifecycle/migrations.ts';
+import { appliedMigrationNames, loadMigrations } from '../src/lifecycle/migrations.ts';
 import {
   cleanUpRecoveryResources,
   RecoveryCleanupError,
@@ -79,8 +79,16 @@ const restoreDatabase = newRestoreDatabaseName();
 const marker = newRecoveryMarker();
 
 const migrations = await loadMigrations();
-const migration = migrations[0];
-if (migration === undefined) fail('No migrations found; nothing to prove recoverable.');
+if (migrations.length === 0) fail('No migrations found; nothing to prove recoverable.');
+
+// EVERY migration this repository ships that the SOURCE has actually applied.
+//
+// This used to be `migrations[0]` alone, which asserted the first migration
+// and ignored the rest — so a restore that had lost later history passed. The
+// expectation is intersected with what the source really holds, because a
+// migration authored but not yet deployed to this database is not something
+// its backup can be blamed for failing to contain.
+const repositoryMigrations = migrations.map((entry) => entry.id);
 
 const master = await openMasterSession(connection);
 let source: SqlSession | undefined;
@@ -108,11 +116,37 @@ try {
   //
   // Backing up a database that is not in the expected state would produce an
   // artifact whose restore proves nothing.
-  const sourceState = await verifyRestoredSchema(source, migration.id);
+  const applied = await appliedMigrationNames(source);
+  const expectedMigrations = repositoryMigrations.filter((id) => applied.includes(id));
+
+  if (expectedMigrations.length === 0) {
+    fail(
+      `The source database has applied none of this repository's migrations ` +
+        `(${repositoryMigrations.join(', ')}). Its backup would prove nothing.`,
+    );
+  }
+
+  const unknown = applied.filter((id) => !repositoryMigrations.includes(id));
+  if (unknown.length > 0) {
+    fail(
+      `The source database has migrations this repository does not ship: ${unknown.join(', ')}`,
+    );
+  }
+
+  const sourceState = await verifyRestoredSchema(source, expectedMigrations);
   report(
     'source verified',
-    `AuditLog + _prisma_migrations present, migration ${migration.id} applied`,
+    `AuditLog + _prisma_migrations present, applied: ${expectedMigrations.join(', ')}`,
   );
+
+  if (expectedMigrations.length < repositoryMigrations.length) {
+    const pending = repositoryMigrations.filter((id) => !applied.includes(id));
+    report(
+      'NOT COVERED HERE',
+      `${pending.join(', ')} — not deployed to ${connection.database}; ` +
+        `populated coverage is \`npm run db:recovery:populated\``,
+    );
+  }
 
   // ---- proof state ---------------------------------------------------------
   await writeRecoveryMarker(source, marker);
@@ -160,7 +194,7 @@ try {
   restored = await openSession(withDatabase(connection, restoreDatabase));
 
   // ---- restored schema, indexes and history --------------------------------
-  const restoredState = await verifyRestoredSchema(restored, migration.id);
+  const restoredState = await verifyRestoredSchema(restored, expectedMigrations);
   report(
     'restored schema',
     `${restoredState.columns.length} AuditLog columns, ` +

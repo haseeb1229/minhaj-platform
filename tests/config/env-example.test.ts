@@ -39,15 +39,46 @@ describe('.env.example', () => {
     }
   });
 
-  it('declares the Phase 1 database variables and no later-phase variables', async () => {
+  it('declares the Phase 1 database variables', async () => {
     const declared = Object.keys(await readExample());
 
     expect(declared).toContain('DATABASE_URL');
     expect(declared).toContain('DATABASE_MIGRATION_URL');
     expect(declared).toContain('MSSQL_SA_PASSWORD');
     expect(declared).toContain('MINHAJ_SQLSERVER_PORT');
+  });
 
-    // No auth, OAuth, email, storage, Redis or payment configuration.
+  it('declares the Phase 2 identity and email variables', async () => {
+    const declared = Object.keys(await readExample());
+
+    // The file a developer copies to start work. A Phase-2 variable missing
+    // here is a variable nobody knows to set — and two of them are the keys
+    // that keep addresses and client IPs out of the database in clear.
+    for (const required of [
+      'AUTH_BASE_URL',
+      'AUTH_SECRETS',
+      'RATE_LIMIT_DIGEST_KEY',
+      'RATE_LIMIT_DIGEST_KEY_VERSION',
+      'TRUST_PROXY_HEADERS',
+      'EMAIL_FROM_ADDRESS',
+      'EMAIL_FROM_NAME',
+      'EMAIL_DIGEST_KEY',
+      'EMAIL_DIGEST_KEY_VERSION',
+      'RESEND_API_KEY',
+      'RESEND_WEBHOOK_SECRET',
+    ]) {
+      expect(declared).toContain(required);
+    }
+  });
+
+  it('declares no variable belonging to a later phase', async () => {
+    const declared = Object.keys(await readExample());
+
+    // OAuth arrives in Phase 2G, storage/payments later still. `SMTP_URL` and
+    // `BETTER_AUTH_SECRET` are named because they are the shapes this
+    // configuration is easily mistaken for: mail goes through the Resend
+    // adapter, and the auth secret is VERSIONED (`AUTH_SECRETS`) so rotation
+    // does not invalidate live tokens.
     for (const forbidden of [
       'BETTER_AUTH_SECRET',
       'GOOGLE_CLIENT_ID',
@@ -58,6 +89,16 @@ describe('.env.example', () => {
       'STRIPE_SECRET_KEY',
     ]) {
       expect(declared).not.toContain(forbidden);
+    }
+  });
+
+  it('carries no value that looks like a real provider credential', async () => {
+    const values = await readExample();
+
+    // Belt and braces beside the valueless assertion above: a Resend key is
+    // `re_...`, and this is the file most likely to receive one by accident.
+    for (const [key, value] of Object.entries(values)) {
+      expect(value.startsWith('re_'), `${key} must not carry a provider key`).toBe(false);
     }
   });
 

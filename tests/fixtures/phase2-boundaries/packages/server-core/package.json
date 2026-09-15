@@ -1,0 +1,14 @@
+{
+  "name": "@fixture/server-core",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "minhaj": {
+    "architecturalRole": "service-host"
+  },
+  "dependencies": {
+    "@minhaj/database": "*"
+  }
+}

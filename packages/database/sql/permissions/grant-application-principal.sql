@@ -67,6 +67,105 @@ BEGIN
   DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[AuditLog] TO [$(app_login)];
 END;
 
+-- Identity & Access -----------------------------------------------------------
+--
+-- Phase 2 Chunk 1. Grants are per object and per verb: the runtime gets what
+-- authentication genuinely performs and nothing beyond it.
+--
+-- `User` is the one that needs explaining. The runtime may INSERT (sign-up) and
+-- UPDATE (verification, profile, locale, status, closure) — but it may NOT
+-- DELETE. Account closure RETAINS the row, pseudonymises the profile and
+-- replaces the address with a non-routable tombstone, so a person's historical
+-- attribution survives while the address becomes available again
+-- (DOMAIN_MODEL.md §4.6). A runtime that could delete a user could also erase
+-- the subject of an audit trail, which is the one thing audit exists to
+-- prevent; DELETE is therefore denied explicitly rather than merely withheld.
+IF OBJECT_ID(N'[dbo].[User]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[User] TO [$(app_login)];
+  DENY DELETE, ALTER ON OBJECT::[dbo].[User] TO [$(app_login)];
+END;
+
+-- Sessions are created, refreshed and REVOKED, so DELETE is required here: a
+-- session that cannot be deleted cannot be revoked.
+IF OBJECT_ID(N'[dbo].[Session]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[Session] TO [$(app_login)];
+  DENY ALTER ON OBJECT::[dbo].[Session] TO [$(app_login)];
+END;
+
+-- Credential and future provider accounts. DELETE is required for unlinking an
+-- authentication method and for disposing credentials at closure.
+IF OBJECT_ID(N'[dbo].[Account]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[Account] TO [$(app_login)];
+  DENY ALTER ON OBJECT::[dbo].[Account] TO [$(app_login)];
+END;
+
+-- Tokens are created and CONSUMED. Consumption is a delete-returning, which is
+-- what makes a token single-use under concurrency, so DELETE is the mechanism
+-- rather than a convenience.
+IF OBJECT_ID(N'[dbo].[Verification]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[Verification] TO [$(app_login)];
+  DENY ALTER ON OBJECT::[dbo].[Verification] TO [$(app_login)];
+END;
+
+-- Identity's own durable notification intent. Committed, then marked relayed.
+-- It is never deleted: an intent is evidence that a security event was
+-- communicated, and a relayed row is the record of that.
+IF OBJECT_ID(N'[dbo].[IdentityCommunicationIntent]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[IdentityCommunicationIntent] TO [$(app_login)];
+  DENY DELETE, ALTER ON OBJECT::[dbo].[IdentityCommunicationIntent] TO [$(app_login)];
+END;
+
+-- Identity's narrow vendor-mutation reconciliation marker. Runtime prepares,
+-- stamps and completes it, but cannot erase committed evidence.
+IF OBJECT_ID(N'[dbo].[IdentitySecurityOperation]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[IdentitySecurityOperation] TO [$(app_login)];
+  DENY DELETE, ALTER ON OBJECT::[dbo].[IdentitySecurityOperation] TO [$(app_login)];
+END;
+
+-- Layer-0 platform concerns --------------------------------------------------
+--
+-- Delivery metadata is append-and-update: a delivery is claimed, attempted and
+-- resolved. Deleting one would erase the record of a message the platform owed
+-- someone, so DELETE is denied and retention is an operational decision made
+-- deliberately, not a side effect of dispatch.
+IF OBJECT_ID(N'[dbo].[EmailDelivery]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[EmailDelivery] TO [$(app_login)];
+  DENY DELETE, ALTER ON OBJECT::[dbo].[EmailDelivery] TO [$(app_login)];
+END;
+
+-- Suppression protects a recipient from mail their provider has already
+-- rejected. The runtime may add one; removing one is an operator decision,
+-- because a runtime that could quietly un-suppress could resume sending to an
+-- address that complained.
+IF OBJECT_ID(N'[dbo].[EmailSuppression]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT ON OBJECT::[dbo].[EmailSuppression] TO [$(app_login)];
+  DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[EmailSuppression] TO [$(app_login)];
+END;
+
+-- Provider-event de-duplication. Append and mark processed; never delete, or
+-- replay resistance would last exactly as long as the row did.
+IF OBJECT_ID(N'[dbo].[ProviderEvent]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[ProviderEvent] TO [$(app_login)];
+  DENY DELETE, ALTER ON OBJECT::[dbo].[ProviderEvent] TO [$(app_login)];
+END;
+
+-- Rate-limit counters are the one genuinely disposable table here: windows
+-- expire and bounded cleanup removes them, so DELETE is required.
+IF OBJECT_ID(N'[dbo].[RateLimitCounter]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[RateLimitCounter] TO [$(app_login)];
+  DENY ALTER ON OBJECT::[dbo].[RateLimitCounter] TO [$(app_login)];
+END;
+
 -- Migration history is administrative state, not application data.
 IF OBJECT_ID(N'[dbo].[_prisma_migrations]', N'U') IS NOT NULL
 BEGIN

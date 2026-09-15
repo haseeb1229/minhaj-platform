@@ -154,6 +154,34 @@ export const layerZeroPackages = Object.freeze(['@minhaj/contracts']);
  * (DOMAIN_MODEL.md §2 rule 7). Data access is confined to `packages/database`
  * and reached through an interface (ARCHITECTURE.md §4.1).
  */
+/**
+ * Third-party PROVIDER SDKs, which a bounded context may never name.
+ *
+ * The same rule as Prisma, for the same reason and a different resource:
+ * infrastructure is consumed through an abstraction (DOMAIN_MODEL.md §2 rule
+ * 7), and ARCHITECTURE.md §4.6 puts email behind an `EmailProvider` interface
+ * so the first adapter can be replaced without a context noticing.
+ *
+ * The failure this prevents is specific. A context that imports the mail SDK
+ * directly acquires the decision of WHETHER to send, WHAT to say and WHERE to
+ * send it, in a place that has no delivery record, no suppression check, no
+ * idempotency key and no retry — and it does so while looking like ordinary
+ * business code. By the time a second provider is needed, the call sites are
+ * spread across contexts that were never supposed to know a provider exists.
+ *
+ * Kept as its own table so the reason reads correctly for each package rather
+ * than being filed under a database rule it has nothing to do with.
+ */
+export const providerSdkPackages = Object.freeze({
+  resend:
+    'the email provider SDK — a context sends through the EmailProvider ' +
+    'abstraction, never a provider directly (ARCHITECTURE.md §4.6, §4.6.1)',
+  'better-auth':
+    'the authentication library — Identity reaches its mechanics through the ' +
+    'auth port, and the instance itself is private to the adapter that holds ' +
+    'the Prisma client (ARCHITECTURE.md §3.1.2, §4.1)',
+});
+
 export const prohibitedInContextPackages = Object.freeze({
   '@minhaj/database':
     'data access is confined to packages/database and reached through an ' +
@@ -163,6 +191,7 @@ export const prohibitedInContextPackages = Object.freeze({
     'context never depends on it (ARCHITECTURE.md §3.1)',
   '@prisma/client': 'no context depends on Prisma directly (DOMAIN_MODEL.md §2 rule 7)',
   prisma: 'no context depends on Prisma directly (DOMAIN_MODEL.md §2 rule 7)',
+  ...providerSdkPackages,
 });
 
 /**
@@ -261,19 +290,51 @@ export function rawDatabaseCapabilityReason(name) {
  *     }
  *
  * `root` is where adapters are permitted to live, relative to the workspace.
- * `owners` maps a directory NAME beneath that root to the slug of the ONE
- * bounded context that owns the adapter semantically.
+ * `owners` maps a directory NAME beneath that root to its ONE semantic owner.
  *
- * The declaration fails closed in both directions: source under `root` that no
- * entry claims is an undeclared adapter and is rejected, and an owner slug that
- * is not one of the sixteen bounded contexts is rejected. Declaring the root
+ * TWO KINDS OF OWNER, because the architecture has two kinds of persistent
+ * state and only one of them belongs to a bounded context.
+ *
+ *   1. A BOUNDED CONTEXT, written as its slug:
+ *
+ *          "owners": { "identity-access": "identity-access" }
+ *
+ *   2. A LAYER-0 PLATFORM CONCERN, written explicitly:
+ *
+ *          "owners": { "email": { "kind": "layer0", "concern": "email" } }
+ *
+ * The second kind exists because DOMAIN_MODEL.md §1.1 is explicit that
+ * `email`, `auditing` and `rate limiting` are "platform/infrastructure
+ * services exposed through abstractions", NOT bounded contexts — while
+ * ARCHITECTURE.md §4.6.1 equally clearly gives the shared email concern
+ * "delivery metadata", which is persistent state. Under a context-only
+ * vocabulary that state could not be declared at all, and the only way to ship
+ * it would have been to file it under whichever context happened to need it
+ * first — making Identity & Access the owner of Learning's booking mail and
+ * Membership's application mail. That would be false, and unpicking it later
+ * would be a migration.
+ *
+ * This adds NO seventeenth bounded context, NO dependency edge and NO change
+ * to the sixteen. It makes an ownership relation the accepted documents
+ * already describe expressible to the analyser, and it BUYS LESS than context
+ * ownership does: a context-owned adapter may reach its own context's public
+ * interface, whereas a Layer-0 adapter may reach NO bounded context at all
+ * (enforced in `scripts/architecture/rules.mjs`).
+ *
+ * The declaration fails closed in every direction: source under `root` that no
+ * entry claims is an undeclared adapter and is rejected; an owner slug that is
+ * not one of the sixteen bounded contexts is rejected; a `layer0` owner whose
+ * concern is not one of the enumerated Layer-0 modules is rejected; and any
+ * other shape is rejected rather than guessed at. Declaring the root
  * predeclares no schema and names no future table — it only makes the
  * convention authoritative before the first adapter exists, so an adapter
  * cannot arrive unowned.
  *
  * Returns `null` when the workspace declares nothing, `{ root, owners }`
- * otherwise. A malformed declaration returns `{ root, owners, malformed }` so
- * the caller reports it rather than treating it as absent.
+ * otherwise, where each owner is normalised to `{ kind: 'context', slug }` or
+ * `{ kind: 'layer0', concern }`. A malformed declaration returns
+ * `{ root, owners, malformed }` so the caller reports it rather than treating
+ * it as absent.
  */
 export function persistenceAdapterPolicy(manifest) {
   const declared = manifest?.minhaj?.persistenceAdapters;
@@ -297,15 +358,80 @@ export function persistenceAdapterPolicy(manifest) {
     return {
       root,
       owners: {},
-      malformed: "'owners' must be an object mapping adapter directory to context slug",
+      malformed: "'owners' must be an object mapping adapter directory to its owner",
     };
+  }
+
+  // An owner this policy cannot read is recorded as `null`, NOT as a malformed
+  // declaration.
+  //
+  // The distinction matters. `malformed` describes the DECLARATION — no root,
+  // `owners` not an object — and disables every adapter in the workspace,
+  // which is right when the declaration itself cannot be parsed. A single
+  // unreadable owner is a different fault: it makes ONE adapter unowned, and
+  // the caller reports exactly that against exactly that adapter. Treating it
+  // as malformed would take every other adapter's boundary down with it, and
+  // an adapter that stops being a recognised boundary stops stopping the
+  // capability walk — so one bad entry would turn into raw capability leaking
+  // through every OTHER adapter in the package.
+  const normalised = {};
+
+  for (const [directory, declared] of Object.entries(owners ?? {})) {
+    normalised[directory] = normaliseAdapterOwner(declared);
   }
 
   return {
     root: root.replaceAll('\\', '/').replace(/^\.\//, '').replace(/\/+$/, ''),
-    owners: Object.freeze({ ...(owners ?? {}) }),
+    owners: Object.freeze(normalised),
     malformed: null,
   };
+}
+
+/**
+ * Layer-0 concerns that may legitimately OWN persistent state.
+ *
+ * A strict subset of `layerZeroModules`. `database` is the package this all
+ * lives in and cannot own an adapter within itself; `storage`, `search` and
+ * `logging` own no relational state in the approved architecture — storage
+ * keeps files with its metadata owned by the consuming context, search holds a
+ * rebuildable projection rather than authoritative state (ARCHITECTURE.md
+ * §8.5), and logging writes a log. Listing only what genuinely owns rows keeps
+ * this from becoming a back door into Layer 0 for anything that wants a table.
+ */
+export const layerZeroPersistentConcerns = Object.freeze([
+  'email',
+  'rate-limiting',
+  'auditing',
+]);
+
+/**
+ * Reads one declared owner into its normalised form, or `null` when the
+ * declaration is not one this policy recognises.
+ *
+ * Fails closed on every unknown shape. An owner nobody can identify is an
+ * unowned adapter, which is the state the declaration exists to prevent.
+ */
+export function normaliseAdapterOwner(declared) {
+  if (typeof declared === 'string') {
+    return contextSlugs.includes(declared) ? { kind: 'context', slug: declared } : null;
+  }
+
+  if (typeof declared !== 'object' || declared === null || Array.isArray(declared)) {
+    return null;
+  }
+
+  if (declared.kind !== 'layer0') return null;
+
+  return layerZeroPersistentConcerns.includes(declared.concern)
+    ? { kind: 'layer0', concern: declared.concern }
+    : null;
+}
+
+/** A human-readable name for an owner, for analyser messages. */
+export function describeAdapterOwner(owner) {
+  if (owner === null || owner === undefined) return '(unowned)';
+  if (owner.kind === 'context') return owner.slug;
+  return `Layer 0 '${owner.concern}'`;
 }
 
 /**

@@ -20,15 +20,59 @@ import {
  * browser by accident.
  */
 
+/**
+ * The values the schema supplies when nothing is set.
+ *
+ * Written out rather than derived from the schema, deliberately: a test that
+ * asked the schema what its defaults are would agree with any defaults at all,
+ * including a secret that lost its `development-only` marker. These are the
+ * documented ones, and `.env.example` copied verbatim must produce exactly
+ * this (SECURITY_BASELINE.md §18.1).
+ */
+const SERVER_DEFAULTS = {
+  NODE_ENV: 'development',
+  PORT: 3000,
+  LOG_LEVEL: 'info',
+
+  AUTH_BASE_URL: 'http://localhost:3000',
+  AUTH_SECRETS: '1:development-only-auth-secret-not-for-deployment',
+
+  EMAIL_FROM_ADDRESS: 'no-reply@localhost.invalid',
+  EMAIL_FROM_NAME: 'Minhaj',
+
+  RATE_LIMIT_DIGEST_KEY: 'development-only-rate-limit-digest-key',
+  RATE_LIMIT_DIGEST_KEY_VERSION: 1,
+  EMAIL_DIGEST_KEY: 'development-only-email-digest-key',
+  EMAIL_DIGEST_KEY_VERSION: 1,
+
+  // Off unless a deployment declares a proxy in front of it. The per-client
+  // rate-limit budget is keyed on a header only a proxy can be trusted to set.
+  TRUST_PROXY_HEADERS: false,
+} as const;
+
+/**
+ * Secrets a PRODUCTION environment must supply itself.
+ *
+ * Synthetic sentinels — never a real credential, and recognisably not one.
+ */
+const PRODUCTION_SECRETS = {
+  AUTH_SECRETS: '1:synthetic-production-sentinel-value-0001',
+  RATE_LIMIT_DIGEST_KEY: 'synthetic-rate-limit-sentinel-0001',
+  EMAIL_DIGEST_KEY: 'synthetic-email-digest-sentinel-0001',
+} as const;
+
 describe('server environment', () => {
   it('accepts a valid configuration', () => {
     const env = parseServerEnv({
       NODE_ENV: 'production',
       PORT: '3000',
       LOG_LEVEL: 'warn',
+      ...PRODUCTION_SECRETS,
     });
 
     expect(env).toEqual({
+      ...SERVER_DEFAULTS,
+      ...PRODUCTION_SECRETS,
       NODE_ENV: 'production',
       PORT: 3000,
       LOG_LEVEL: 'warn',
@@ -36,11 +80,7 @@ describe('server environment', () => {
   });
 
   it('applies the documented defaults when nothing is supplied', () => {
-    expect(parseServerEnv({})).toEqual({
-      NODE_ENV: 'development',
-      PORT: 3000,
-      LOG_LEVEL: 'info',
-    });
+    expect(parseServerEnv({})).toEqual(SERVER_DEFAULTS);
   });
 
   it('fails clearly on an invalid value', () => {
@@ -53,11 +93,9 @@ describe('server environment', () => {
     // `.env.example` is valueless (SECURITY_BASELINE.md §18.1), so copying it
     // verbatim produces `PORT=` rather than an absent PORT. Following the
     // documented setup must not produce a validation failure.
-    expect(parseServerEnv({ NODE_ENV: '', PORT: '', LOG_LEVEL: '' })).toEqual({
-      NODE_ENV: 'development',
-      PORT: 3000,
-      LOG_LEVEL: 'info',
-    });
+    expect(parseServerEnv({ NODE_ENV: '', PORT: '', LOG_LEVEL: '' })).toEqual(
+      SERVER_DEFAULTS,
+    );
   });
 
   it('rejects an out-of-range port', () => {
@@ -157,11 +195,7 @@ describe('the final route locale is not configurable', () => {
     // A stale deployment file may still set it. It must have NO effect —
     // neither a validation failure that blocks a deploy, nor any influence on
     // the parsed configuration.
-    expect(parseServerEnv({ DEFAULT_LOCALE: 'ur' })).toEqual({
-      NODE_ENV: 'development',
-      PORT: 3000,
-      LOG_LEVEL: 'info',
-    });
+    expect(parseServerEnv({ DEFAULT_LOCALE: 'ur' })).toEqual(SERVER_DEFAULTS);
 
     expect(parseClientEnv({ NEXT_PUBLIC_DEFAULT_LOCALE: 'ur' })).toEqual({
       NEXT_PUBLIC_SITE_URL: 'http://localhost:3000',
@@ -233,6 +267,7 @@ describe('B7 — invalid configuration prevents startup', () => {
       NODE_ENV: 'production',
       PORT: '3000',
       LOG_LEVEL: 'info',
+      ...PRODUCTION_SECRETS,
     });
 
     expect(result.ok).toBe(true);

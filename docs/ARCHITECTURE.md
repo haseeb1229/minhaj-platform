@@ -533,6 +533,17 @@ handling of provider events · redacted logs. **No Redis, queue product, generic
 or event bus is introduced** — durable rows plus bounded scheduled dispatch is the whole
 mechanism (§8.5).
 
+Better Auth's password and verified-email endpoints do not expose a transaction
+that may safely carry arbitrary application writes. Identity therefore prepares
+a narrow, token-free `IdentitySecurityOperation` marker before those calls. Its
+private database adapter stamps that exact marker in the same SQL transaction as
+the authoritative password or email write. Audit plus communication intent are
+then finalized idempotently, immediately or by the existing bounded dispatch
+sweep after restart. A marker contains only operation kind, historical
+user/session identifiers and lifecycle timestamps—never an address, password,
+hash or bearer. This is Identity-specific reconciliation, not a generic unit of
+work, outbox, saga, event bus or cross-owner transaction.
+
 > **Critical exception — authentication tokens.** Retrying an email **must never** create a
 > second token system. Email verification and password reset use the **compatibility-proven
 > Better Auth 1.7.x token lifecycle** and nothing else. A retry must not duplicate token

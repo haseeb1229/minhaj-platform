@@ -14,6 +14,7 @@ import {
   loadMigrations,
   migrationStatus,
   rollbackMigration,
+  type Migration,
 } from '../src/lifecycle/migrations.ts';
 import { runSeed } from '../src/lifecycle/seed.ts';
 import {
@@ -28,28 +29,68 @@ import {
 } from './local-bootstrap.ts';
 
 /**
- * `npm run db:migrate:test` — the full Phase 1 migration lifecycle against a
+ * `npm run db:migrate:test` — the full migration lifecycle against a
  * disposable database this run creates and drops.
  *
  *   clean database -> prisma migrate deploy -> prisma migrate status
- *                  -> verify schema -> seed x2 -> reviewed rollback
- *                  -> verify absence -> prisma migrate deploy -> status
+ *                  -> verify schema -> seed x2 -> reviewed rollbacks, newest
+ *                  first -> verify absence -> prisma migrate deploy -> status
  *
  * The forward direction is the REAL Prisma CLI, over the normal encrypted
  * migration URL. Direct SQL is used only for database creation, state
- * inspection, and the reviewed rollback artifact — never as a substitute for
+ * inspection, and the reviewed rollback artifacts — never as a substitute for
  * `migrate deploy`, and the migration-history row is written by Prisma alone.
  *
  * Every stage inspects actual database state. An exit code of 0 from a
  * migration command is not evidence that the objects it claims to create exist.
+ *
+ * MIGRATION COUNT. This script previously asserted "exactly one migration",
+ * which was true of Phase 1 and became a false gate the moment Phase 2 added
+ * its own. The count is not the property worth asserting; what each migration
+ * actually creates is. `MIGRATION_EXPECTATIONS` below states that per
+ * migration, and a migration nobody has described fails the run rather than
+ * passing unverified — so the gate still cannot be satisfied by adding a
+ * directory.
  */
 
-const BUSINESS_TABLES = [
-  'User',
-  'Account',
-  'Session',
+/**
+ * What each reviewed migration must create, and what must therefore be gone
+ * once its rollback has run.
+ *
+ * Keyed by migration id. Every migration on disk must appear here.
+ */
+const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
+  '20260908000000_phase1_database_foundation': ['AuditLog'],
+  '20260912000000_phase2_identity_foundation': [
+    'User',
+    'Session',
+    'Account',
+    'Verification',
+    'IdentityCommunicationIntent',
+    'IdentitySecurityOperation',
+    'EmailDelivery',
+    'EmailSuppression',
+    'ProviderEvent',
+    'RateLimitCounter',
+  ],
+};
+
+/**
+ * Tables no delivered phase owns yet.
+ *
+ * Their presence would mean schema had been created ahead of the phase that
+ * owns it: domain schema arrives with its owning phase (DELIVERY_PLAN.md). `User`, `Session` and `Account` left this list when Phase 2 Chunk 1
+ * genuinely delivered them; `Role`, `Permission` and `RoleAssignment` stay on
+ * it until Phase 2 Chunk 2 delivers authorisation.
+ */
+const PREMATURE_TABLES = [
   'Role',
   'Permission',
+  'RolePermission',
+  'RoleAssignment',
+  'StepUpGrant',
+  'IdentityBootstrap',
+  'TwoFactor',
   'Article',
   'Page',
   'Quran',
@@ -86,6 +127,27 @@ const EXPECTED_AUDIT_INDEXES = [
   'AuditLog_targetType_targetId_idx',
 ];
 
+/**
+ * Columns whose SIZE is a correctness property rather than a preference.
+ *
+ * Prisma's default `String` on SQL Server is NVARCHAR(1000) = 2000 bytes,
+ * above the 1700-byte nonclustered index key limit, so a uniquely indexed
+ * column left at the default is a latent failure. `account.password` is here
+ * for a different reason: Better Auth's scrypt hash is 161 characters, and a
+ * column too small to hold it would truncate a credential.
+ */
+const EXPECTED_COLUMN_SIZES: readonly {
+  table: string;
+  column: string;
+  characters: number;
+}[] = [
+  { table: 'User', column: 'email', characters: 320 },
+  { table: 'Session', column: 'token', characters: 255 },
+  { table: 'Account', column: 'password', characters: 255 },
+  { table: 'Verification', column: 'identifier', characters: 400 },
+  { table: 'EmailDelivery', column: 'idempotencyKey', characters: 200 },
+];
+
 function report(step: string, detail: string): void {
   process.stdout.write(`  ${step.padEnd(24)} ${detail}\n`);
 }
@@ -111,11 +173,24 @@ async function auditColumns(session: SqlSession): Promise<string[]> {
   return rows.map((row) => row.name);
 }
 
-function assertNoBusinessTables(tables: string[], stage: string): void {
-  const premature = tables.filter((table) => BUSINESS_TABLES.includes(table));
+function assertNoPrematureTables(tables: string[], stage: string): void {
+  const premature = tables.filter((table) => PREMATURE_TABLES.includes(table));
   if (premature.length > 0) {
     fail(`Premature business-domain tables after ${stage}: ${premature.join(', ')}`);
   }
+}
+
+function expectationsFor(migration: Migration): readonly string[] {
+  const expected = MIGRATION_EXPECTATIONS[migration.id];
+  if (expected === undefined) {
+    fail(
+      `Migration '${migration.id}' has no declared expectation in ` +
+        `MIGRATION_EXPECTATIONS. A migration this gate cannot describe is a ` +
+        `migration it cannot verify; describe what it creates rather than ` +
+        `letting it apply unchecked.`,
+    );
+  }
+  return expected;
 }
 
 /** Asserts `migrate status` reports a healthy, fully-applied database. */
@@ -128,6 +203,35 @@ function assertHealthyStatus(output: string, stage: string): void {
       `prisma migrate status reports outstanding work after ${stage}.\n${output.trim()}`,
     );
   }
+}
+
+/**
+ * Verifies the declared character length of a column.
+ *
+ * `sys.columns.max_length` is BYTES, and NVARCHAR is two bytes per character,
+ * so an NVARCHAR(320) column reports 640. `-1` is the MAX types.
+ */
+async function assertColumnSizes(session: SqlSession): Promise<void> {
+  for (const expected of EXPECTED_COLUMN_SIZES) {
+    const rows = await session.query<{ max_length: number }>(`
+      SELECT c.max_length FROM sys.columns c
+      WHERE c.object_id = OBJECT_ID(N'[dbo].[${expected.table}]')
+        AND c.name = N'${expected.column}';
+    `);
+
+    const actual = rows[0]?.max_length;
+    if (actual === undefined) {
+      fail(`Column ${expected.table}.${expected.column} does not exist.`);
+    }
+    if (actual !== expected.characters * 2) {
+      fail(
+        `Column ${expected.table}.${expected.column} is NVARCHAR(${actual / 2}), ` +
+          `expected NVARCHAR(${expected.characters}). Index key size and ` +
+          `credential storage both depend on this being deliberate.`,
+      );
+    }
+  }
+  report('column sizes', `${EXPECTED_COLUMN_SIZES.length} explicit sizes verified`);
 }
 
 // Resolves docker/.env as the sole authority and proves the target is the
@@ -145,19 +249,19 @@ const { url: disposableUrl } = retargetAtDisposable(command, databaseName);
 const master = await openMasterSession(connection);
 let session: SqlSession | undefined;
 
-process.stdout.write(`Phase 1 migration lifecycle on ${databaseName}\n`);
+process.stdout.write(`Migration lifecycle on ${databaseName}\n`);
 
 // Safe metadata only: never the password, never the whole URL.
 reportConfiguration(command, 24);
 
 try {
   const migrations = await loadMigrations();
-  const migration = migrations[0];
-  if (migration === undefined) fail('No migrations to test.');
-  if (migrations.length > 1) {
-    fail(`Phase 1 Chunk 2 expects exactly one migration; found ${migrations.length}.`);
-  }
-  report('migration', migration.id);
+  if (migrations.length === 0) fail('No migrations to test.');
+
+  // Every migration must be described before any of it runs, so an
+  // undescribed migration fails the gate rather than applying unverified.
+  const expectedTables = migrations.flatMap((entry) => expectationsFor(entry));
+  report('migrations', migrations.map((entry) => entry.id).join(', '));
 
   // ---- clean database ------------------------------------------------------
   await createDisposableDatabase(master, databaseName);
@@ -171,12 +275,14 @@ try {
 
   // ---- REAL prisma migrate deploy ------------------------------------------
   const firstDeploy = await deployMigrations(disposableUrl, environment.values);
-  if (!firstDeploy.output.includes(migration.id)) {
-    fail(
-      `migrate deploy did not report applying ${migration.id}.\n${firstDeploy.output}`,
-    );
+  for (const migration of migrations) {
+    if (!firstDeploy.output.includes(migration.id)) {
+      fail(
+        `migrate deploy did not report applying ${migration.id}.\n${firstDeploy.output}`,
+      );
+    }
   }
-  report('migrate deploy', 'applied by the real Prisma CLI');
+  report('migrate deploy', `${migrations.length} migration(s) by the real Prisma CLI`);
 
   const firstStatus = await migrationStatus(disposableUrl, environment.values);
   assertHealthyStatus(firstStatus.output, 'the first deploy');
@@ -184,13 +290,16 @@ try {
 
   // ---- verify actual schema and history ------------------------------------
   const afterApply = await userTables(session);
-  if (!afterApply.includes('AuditLog')) {
-    fail(`AuditLog missing after deploy. Tables: ${afterApply.join(', ') || '(none)'}`);
+  for (const table of expectedTables) {
+    if (!afterApply.includes(table)) {
+      fail(`${table} missing after deploy. Tables: ${afterApply.join(', ') || '(none)'}`);
+    }
   }
   if (!afterApply.includes('_prisma_migrations')) {
     fail('Prisma did not create its own migration-history table.');
   }
-  assertNoBusinessTables(afterApply, 'deploy');
+  assertNoPrematureTables(afterApply, 'deploy');
+  report('tables', `${expectedTables.length} expected table(s) present`);
 
   const columns = await auditColumns(session);
   if (columns.join(',') !== EXPECTED_AUDIT_COLUMNS.join(',')) {
@@ -211,12 +320,16 @@ try {
       fail(`Missing index ${expected}. Present: ${indexNames.join(', ')}`);
     }
   }
+  report('audit schema', `${columns.length} columns, ${indexNames.length} indexes`);
+
+  await assertColumnSizes(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
-  if (!historyAfterApply.includes(migration.id)) {
-    fail(`Prisma history does not list ${migration.id} after deploy.`);
+  for (const migration of migrations) {
+    if (!historyAfterApply.includes(migration.id)) {
+      fail(`Prisma history does not list ${migration.id} after deploy.`);
+    }
   }
-  report('schema verified', `${columns.length} columns, ${indexNames.length} indexes`);
 
   // ---- least-privilege principal -------------------------------------------
   await provisionApplicationPrincipal(
@@ -237,26 +350,38 @@ try {
   }
   report('seed x2', `identical result, ${firstSeed.seededRecords} records seeded`);
 
-  // ---- reviewed rollback artifact ------------------------------------------
-  await rollbackMigration(session, migration);
+  // ---- reviewed rollback artifacts, newest first ---------------------------
+  //
+  // Reverse order is the only safe one: a later migration's foreign keys
+  // reference an earlier migration's tables, so rolling back oldest-first
+  // would fail on a constraint that still exists.
+  for (const migration of [...migrations].reverse()) {
+    await rollbackMigration(session, migration);
 
-  const afterRollback = await userTables(session);
-  if (afterRollback.includes('AuditLog')) fail('AuditLog still present after rollback.');
-  if (!afterRollback.includes('_prisma_migrations')) {
-    fail('Rollback must not remove the Prisma history table itself.');
+    const afterThisRollback = await userTables(session);
+    for (const table of expectationsFor(migration)) {
+      if (afterThisRollback.includes(table)) {
+        fail(`${table} still present after rolling back ${migration.id}.`);
+      }
+    }
+    if (!afterThisRollback.includes('_prisma_migrations')) {
+      fail('Rollback must not remove the Prisma history table itself.');
+    }
+    if ((await appliedMigrationNames(session)).includes(migration.id)) {
+      fail(`Migration history still lists ${migration.id} after rollback.`);
+    }
   }
-  if ((await appliedMigrationNames(session)).includes(migration.id)) {
-    fail('Migration history still lists the migration after rollback.');
-  }
-  report('rollback', 'AuditLog dropped, history row removed');
+  report('rollback', `${migrations.length} reversed, history rows removed`);
 
   // ---- REAL prisma migrate deploy, again -----------------------------------
   const secondDeploy = await deployMigrations(disposableUrl, environment.values);
-  if (!secondDeploy.output.includes(migration.id)) {
-    fail(
-      `Re-deploy did not re-apply ${migration.id} — the rollback left history ` +
-        `claiming it was still applied.\n${secondDeploy.output}`,
-    );
+  for (const migration of migrations) {
+    if (!secondDeploy.output.includes(migration.id)) {
+      fail(
+        `Re-deploy did not re-apply ${migration.id} — the rollback left history ` +
+          `claiming it was still applied.\n${secondDeploy.output}`,
+      );
+    }
   }
   report('migrate deploy', 're-applied by the real Prisma CLI');
 
@@ -266,15 +391,21 @@ try {
 
   // ---- verify final schema and history -------------------------------------
   const afterReapply = await userTables(session);
-  if (!afterReapply.includes('AuditLog')) fail('AuditLog missing after re-deploy.');
-  assertNoBusinessTables(afterReapply, 're-deploy');
+  for (const table of expectedTables) {
+    if (!afterReapply.includes(table)) fail(`${table} missing after re-deploy.`);
+  }
+  assertNoPrematureTables(afterReapply, 're-deploy');
 
   if ((await auditColumns(session)).join(',') !== EXPECTED_AUDIT_COLUMNS.join(',')) {
     fail('Schema after re-deploy differs from the first deploy.');
   }
+  await assertColumnSizes(session);
+
   const finalHistory = await appliedMigrationNames(session);
-  if (!finalHistory.includes(migration.id)) {
-    fail('Migration history does not list the migration after re-deploy.');
+  for (const migration of migrations) {
+    if (!finalHistory.includes(migration.id)) {
+      fail(`Migration history does not list ${migration.id} after re-deploy.`);
+    }
   }
   report('final state', `history: ${finalHistory.join(', ')}`);
 

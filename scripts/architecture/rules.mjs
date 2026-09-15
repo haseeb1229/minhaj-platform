@@ -1224,7 +1224,32 @@ function checkPersistenceAdapterFile(
   const reportedInternal = new Set();
 
   for (const reached of reach.contexts) {
-    if (reached.slug !== adapter.owner) {
+    // A LAYER-0 adapter owns platform state, not domain state, and reaches NO
+    // bounded context whatever. Infrastructure "owns no business invariants"
+    // (DOMAIN_MODEL.md §1.1) — the moment it depends on a context it has
+    // acquired one, and the shared concern has become that context's.
+    if (adapter.ownerKind === 'layer0') {
+      if (reportedCross.has(reached.slug)) continue;
+      reportedCross.add(reached.slug);
+
+      violations.push({
+        rule: 'layer-zero-adapter-context-dependency',
+        file: node.relative,
+        specifier: reached.target,
+        message:
+          `This adapter is owned by ${adapter.ownerLabel} (declared in ` +
+          `'${adapter.workspaceName}'), a Layer-0 platform concern, so it ` +
+          `must depend on NO bounded context — and it depends on ` +
+          `'${reached.slug}'. Infrastructure is consumed by contexts through ` +
+          `an abstraction; it never reaches back up into one ` +
+          `(DOMAIN_MODEL.md §1.1, §2 rule 7). A context that needs this ` +
+          `concern to know something passes it in.` +
+          `\n    path: ${formatTrail(reached.trail, graph)}`,
+      });
+      continue;
+    }
+
+    if (reached.slug !== adapter.ownerSlug) {
       if (reportedCross.has(reached.slug)) continue;
       reportedCross.add(reached.slug);
 
@@ -1234,7 +1259,7 @@ function checkPersistenceAdapterFile(
         specifier: reached.target,
         message:
           `This persistence adapter is semantically owned by ` +
-          `'${adapter.owner}' (declared in ` +
+          `'${adapter.ownerLabel}' (declared in ` +
           `'${adapter.workspaceName}'), so it must not depend on ` +
           `'${reached.slug}'. Physical placement inside a platform package ` +
           `transfers no ownership and grants no cross-context access ` +
@@ -1257,9 +1282,9 @@ function checkPersistenceAdapterFile(
       file: node.relative,
       specifier: reached.target,
       message:
-        `This adapter is owned by '${adapter.owner}' and may depend on it — ` +
+        `This adapter is owned by '${adapter.ownerLabel}' and may depend on it — ` +
         `but through its public interface. Reaching ` +
-        `'${reached.withinContext}' inside '${adapter.owner}' is prohibited ` +
+        `'${reached.withinContext}' inside '${adapter.ownerSlug}' is prohibited ` +
         `(ARCHITECTURE.md §6.3 rule 4). The adapter implements the context's ` +
         `PORT; it does not reach into the context's internals.` +
         (reached.direct ? '' : `\n    path: ${formatTrail(reached.trail, graph)}`),
@@ -1297,8 +1322,8 @@ function checkPersistenceAdapterFile(
           file: node.relative,
           specifier: target.relative,
           message:
-            `A persistence adapter owned by '${adapter.owner}' must not reach ` +
-            `the adapter owned by '${other.owner}'. "One context may never use ` +
+            `A persistence adapter owned by '${adapter.ownerLabel}' must not reach ` +
+            `the adapter owned by '${other.ownerLabel}'. "One context may never use ` +
             `another context's persistence adapter as a shortcut — it calls ` +
             `that context's public interface" (ARCHITECTURE.md §4.1). Sharing ` +
             `a platform package is a physical fact and grants nothing.` +
@@ -1854,11 +1879,12 @@ export function checkGraph(graph) {
             file: node.relative,
             specifier: '(adapter ownership)',
             message:
-              `The adapter '${adapter.name}' declares '${adapter.owner}' as its ` +
-              `owning context, which is not one of the 16 bounded contexts ` +
-              `(DOMAIN_MODEL.md §1). A context is created by architecture ` +
-              `decision; naming one in a manifest does not create it, and an ` +
-              `adapter whose owner cannot be identified is unowned.`,
+              `The adapter '${adapter.name}' declares an owner that is neither ` +
+              `one of the 16 bounded contexts (DOMAIN_MODEL.md §1) nor one of ` +
+              `the Layer-0 concerns permitted to own persistent state ` +
+              `(§1.1). A context is created by architecture decision; naming ` +
+              `one in a manifest does not create it, and an adapter whose ` +
+              `owner cannot be identified is unowned.`,
           });
           continue;
         }

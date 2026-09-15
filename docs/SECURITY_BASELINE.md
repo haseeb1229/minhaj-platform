@@ -664,6 +664,16 @@ append-only discipline provide real protection today.
 Each record captures actor, action, target type and identifier, before and after state where
 applicable, timestamp, IP address, and the authorising source where relevant.
 
+For Better Auth password reset, password change and verified email change, the
+required audit cannot depend on the request process surviving after the vendor
+write. Identity prepares a token-free operation marker, the private adapter
+stamps it atomically with the authoritative mutation, and immediate/restart
+reconciliation commits the audit and required communication intent once. A
+failed or stale pre-mutation marker is fenced before cancellation, so it cannot
+later authorize a write or fabricate a success event. Account closure commits
+its state, mandatory audit and communication intent in one private Identity
+transaction.
+
 ### 13.3 Audit identifiers are historical evidence, not relational references
 
 The audit actor and target identifiers are **not** the polymorphic `targetType + targetId`

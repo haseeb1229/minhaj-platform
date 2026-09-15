@@ -1,0 +1,573 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+
+import { describe, expect, it } from 'vitest';
+
+import {
+  canonicaliseEmail,
+  emailSchema,
+  MAX_PASSWORD_LENGTH,
+  MIN_PASSWORD_LENGTH,
+  passwordSchema,
+  timezoneSchema,
+} from '../../packages/contracts/src/identity/index.ts';
+import {
+  accountSetupComplete,
+  canTransition,
+  mayHoldSession,
+  notificationKey,
+  wouldRemoveFinalAuthenticationMethod,
+} from '../../apps/web/src/contexts/identity-access/domain/account.ts';
+import { safeReturnTo } from '../../apps/web/src/composition/return-to.ts';
+import { repoRoot } from '../architecture/architecture-harness.ts';
+
+/**
+ * PROTOCOL AND INPUT RULES — the parts that need no database.
+ *
+ * SECURITY_BASELINE.md §7 divides requests into protocol classes and applies a
+ * DIFFERENT model to each: a browser mutation gets CSRF and Origin checks, an
+ * emailed link gets "GET renders, POST consumes", a provider callback gets a
+ * signature. Applying the wrong model to a class is the failure this section
+ * exists to prevent, and most of it is structural — visible in what the source
+ * exports and how the routes are shaped.
+ */
+
+async function sourceOf(relative: string): Promise<string> {
+  return readFile(path.join(repoRoot, relative), 'utf8');
+}
+
+const ACTIONS = 'apps/web/src/app/[locale]/(identity)/actions.ts';
+
+describe('returnTo destinations', () => {
+  const locale = 'en';
+
+  it('accepts a same-origin path under a supported locale', () => {
+    expect(safeReturnTo('/en/my/settings/security', locale)).toBe(
+      '/en/my/settings/security',
+    );
+    expect(safeReturnTo('/ur/my', locale)).toBe('/ur/my');
+    expect(safeReturnTo('/ar/my/settings/profile', locale)).toBe(
+      '/ar/my/settings/profile',
+    );
+  });
+
+  it('falls back safely for every hostile shape', () => {
+    // An open redirect under a trusted domain is a phishing primitive, and a
+    // particular reputational risk for a religious organisation whose visitors
+    // have every reason to trust a link that appears to come from it
+    // (SECURITY_BASELINE.md §9.3).
+    //
+    // ALLOWLIST, not denylist: everything that is not provably a local route
+    // under a known locale falls back, so a shape nobody thought of fails
+    // closed rather than passing through.
+    const hostile = [
+      // Absolute and scheme-bearing.
+      'https://evil.example/steal',
+      'http://evil.example',
+      '//evil.example',
+      '//evil.example/path',
+      'javascript:alert(1)',
+      'JaVaScRiPt:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'vbscript:msgbox(1)',
+      // Backslash variants some parsers normalise to `//`.
+      '/\\evil.example',
+      '/\\/evil.example',
+      '/en/\\evil.example',
+      // Traversal, raw and encoded.
+      '/en/../../etc/passwd',
+      '/en/%2e%2e/%2e%2e/admin',
+      '/en/..%2fadmin',
+      '/%2e%2e/%2e%2e',
+      // Not a path at all.
+      'my/settings',
+      '',
+      'en/my',
+      // A locale nobody supports.
+      '/fr/my',
+      '/xx/my',
+      '/admin',
+      '/en/not-a-real-route',
+      // Control characters, including the newline that splits a header.
+      '/en/my\nSet-Cookie: a=b',
+      '/en/my\r\nLocation: https://evil.example',
+      '/en/my\u0000',
+      // Malformed percent-encoding, which cannot be reasoned about.
+      '/en/%zz',
+      '/en/%',
+    ];
+
+    for (const candidate of hostile) {
+      expect(safeReturnTo(candidate, locale), `${JSON.stringify(candidate)}`).toBe(
+        '/en/my',
+      );
+    }
+  });
+
+  it('falls back for an absent destination', () => {
+    expect(safeReturnTo(null, locale)).toBe('/en/my');
+  });
+
+  it('falls back into the CALLER locale, not a fixed one', () => {
+    expect(safeReturnTo(null, 'ur')).toBe('/ur/my');
+    expect(safeReturnTo('https://evil.example', 'ar')).toBe('/ar/my');
+  });
+});
+
+describe('the mutation surface', () => {
+  it('is a Server Action module, with no non-async export', async () => {
+    const source = await sourceOf(ACTIONS);
+
+    // Next requires every runtime export of a `'use server'` module to be an
+    // async function, and the architecture analyser only treats such a module
+    // as a client-graph boundary when that holds. One `export const` here
+    // silently pulls the whole database graph into the client walk.
+    expect(source.startsWith("'use server';")).toBe(true);
+    expect(source).not.toMatch(/^export const /m);
+    expect(source).not.toMatch(/^export \{/m);
+    expect(source).not.toMatch(/^export default/m);
+
+    for (const match of source.matchAll(/^export (?:async )?function (\w+)/gm)) {
+      expect(source, `${match[1]} must be async`).toContain(
+        `export async function ${match[1]}`,
+      );
+    }
+  });
+
+  it('exposes NO route handler for authentication', async () => {
+    // No blanket `/api/auth/*`. Mounting one would expose Better Auth's whole
+    // endpoint collection — delete-user, change-email, change-password,
+    // session revocation — OUTSIDE the wrappers that apply rate limiting,
+    // audit and status enforcement.
+    const { readdir } = await import('node:fs/promises');
+
+    const walk = async (directory: string): Promise<string[]> => {
+      const found: string[] = [];
+
+      for (const entry of await readdir(path.join(repoRoot, directory), {
+        withFileTypes: true,
+      })) {
+        const relative = `${directory}/${entry.name}`;
+        if (entry.isDirectory()) found.push(...(await walk(relative)));
+        else if (entry.name === 'route.ts' || entry.name === 'route.tsx') {
+          found.push(relative);
+        }
+      }
+
+      return found;
+    };
+
+    const routes = await walk('apps/web/src/app');
+
+    // Exactly one, and it is the provider callback — which cannot be a Server
+    // Action because it is not a browser and holds no action id.
+    expect(routes).toEqual(['apps/web/src/app/api/webhooks/resend/route.ts']);
+  });
+
+  it('has no sign-out GET anywhere', async () => {
+    const { readdir } = await import('node:fs/promises');
+
+    const entries = await readdir(path.join(repoRoot, 'apps/web/src/app/[locale]'), {
+      withFileTypes: true,
+    });
+
+    // A GET that mutates session state can be triggered by an image tag or a
+    // link prefetch, so `/signout` does not exist as a page at all
+    // (ROUTE_MAP.md §2.4).
+    expect(entries.map((entry) => entry.name)).not.toContain('signout');
+    expect(entries.map((entry) => entry.name)).not.toContain('sign-out');
+  });
+
+  it('accepts only POST on the provider callback', async () => {
+    const source = await sourceOf('apps/web/src/app/api/webhooks/resend/route.ts');
+
+    expect(source).toContain('export async function POST');
+
+    // Any other verb would be a second, unreviewed entry point on a path whose
+    // whole authentication is a signature over a POST body.
+    for (const verb of ['GET', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']) {
+      expect(source, `${verb} must not be exported`).not.toContain(
+        `export async function ${verb}`,
+      );
+    }
+  });
+
+  it('re-checks the session inside every authenticated action', async () => {
+    const source = await sourceOf(ACTIONS);
+
+    // Route protection is navigational convenience, not a security boundary:
+    // every mutation re-checks independently (SECURITY_BASELINE.md §3.4 rule
+    // 2). The guard on `/my` exists so a signed-out visitor sees a sign-in
+    // page, not so the actions can trust it.
+    for (const action of [
+      'revokeSessionAction',
+      'revokeOtherSessionsAction',
+      'changePasswordAction',
+      'requestEmailChangeAction',
+      'confirmEmailChangeAction',
+      'updateProfileAction',
+      'updateLanguageAction',
+      'completeAccountSetupAction',
+      'closeAccountAction',
+    ]) {
+      const body = source.slice(
+        source.indexOf(`export async function ${action}`),
+        source.indexOf('}\n', source.indexOf(`export async function ${action}`)),
+      );
+
+      expect(body, `${action} must resolve a session`).toContain('activeSession(locale)');
+    }
+  });
+
+  it('renders emailed links with a GET that consumes nothing', async () => {
+    for (const page of [
+      'apps/web/src/app/[locale]/(identity)/verify-email/page.tsx',
+      'apps/web/src/app/[locale]/(identity)/reset-password/page.tsx',
+      'apps/web/src/app/[locale]/(identity)/confirm-email-change/page.tsx',
+    ]) {
+      const source = await sourceOf(page);
+
+      // The GET may INSPECT. It may not confirm, consume or reset — those are
+      // the POST's, reached through a Server Action (SECURITY_BASELINE.md
+      // §7.4).
+      expect(source, `${page} must not consume`).not.toMatch(
+        /identity\.(confirmVerification|resetPassword|confirmEmailChange)\(/,
+      );
+      expect(source).toMatch(/identity\.inspect\w+\(/);
+    }
+  });
+
+  it('marks every authentication surface noindex', async () => {
+    const { readdir } = await import('node:fs/promises');
+
+    const walk = async (directory: string): Promise<string[]> => {
+      const found: string[] = [];
+
+      for (const entry of await readdir(path.join(repoRoot, directory), {
+        withFileTypes: true,
+      })) {
+        const relative = `${directory}/${entry.name}`;
+        if (entry.isDirectory()) found.push(...(await walk(relative)));
+        else if (entry.name === 'page.tsx') found.push(relative);
+      }
+
+      return found;
+    };
+
+    const pages = [
+      ...(await walk('apps/web/src/app/[locale]/(identity)')),
+      ...(await walk('apps/web/src/app/[locale]/my')),
+    ];
+
+    expect(pages.length).toBeGreaterThan(0);
+
+    for (const page of pages) {
+      const source = await sourceOf(page);
+
+      // An indexed sign-in or account page is a page a search engine will
+      // fetch, cache and show — with whatever a crawler's request rendered
+      // (ROUTE_MAP.md §4).
+      expect(source, `${page} must be noindex`).toContain('robots: { index: false');
+    }
+  });
+});
+
+describe('session cookie security', () => {
+  it('derives `Secure` from the ORIGIN SCHEME, not from NODE_ENV', async () => {
+    const source = await sourceOf('apps/web/src/composition/identity.ts');
+
+    // `Secure` is a statement about the scheme a cookie may travel over, so
+    // the scheme decides it. Keying it on `NODE_ENV` is wrong in BOTH
+    // directions: an HTTPS deployment without `NODE_ENV=production` would
+    // issue session cookies with no `Secure` at all, and a
+    // `NODE_ENV=production` process behind a plain-HTTP origin would issue
+    // cookies the browser stores and never sends back.
+    expect(source).toContain(
+      "useSecureCookies: new URL(environment.AUTH_BASE_URL).protocol === 'https:'",
+    );
+    expect(source).not.toMatch(/useSecureCookies:\s*environment\.NODE_ENV/);
+  });
+
+  it('marks every auth cookie HttpOnly, and SameSite=Lax', async () => {
+    const source = await sourceOf(
+      'packages/database/src/adapters/identity-access/auth.ts',
+    );
+
+    // HttpOnly keeps a session token out of reach of any script on the page,
+    // which is the difference between an XSS that defaces and one that takes
+    // the account. `Lax` still permits the top-level navigation an emailed
+    // link performs, while refusing a cross-site form post.
+    expect(source).toContain('httpOnly: true');
+    expect(source).toContain("sameSite: 'lax'");
+  });
+
+  it('hands the cookie store a DECODED value, so it is not encoded twice', async () => {
+    const source = await sourceOf('apps/web/src/composition/request.ts');
+
+    // The auth library hands over an already-serialised `Set-Cookie`, so its
+    // value is percent-encoded. Next's cookie store serialises again, and an
+    // already-encoded value therefore goes out encoded TWICE: a signature
+    // containing `+` leaves as `%252B`, returns decoded once as `%2B`, and no
+    // longer verifies.
+    //
+    // The failure is unusually quiet — sign-in appears to work, because the
+    // action's own response renders the destination with the session it just
+    // created, and the NEXT page load is signed out with no error anywhere.
+    // A browser found it; this keeps it found.
+    expect(source).toContain('value: decodeCookieValue(parsed.value)');
+    expect(source).not.toMatch(/^\s*value: parsed\.value,$/m);
+  });
+
+  it('carries the library’s own cookie attributes across rather than re-deciding them', async () => {
+    const source = await sourceOf('apps/web/src/composition/request.ts');
+
+    // `HttpOnly`, `Secure` and `SameSite` are security properties the auth
+    // library chose for that specific cookie. Re-deriving them at this layer
+    // is how a session cookie quietly loses one.
+    for (const attribute of ['httpOnly', 'secure', 'sameSite', 'path', 'maxAge']) {
+      expect(source, `${attribute} must be carried across`).toContain(
+        `parsed.${attribute}`,
+      );
+    }
+  });
+
+  it('caches no session, so a revocation takes effect immediately', async () => {
+    const source = await sourceOf(
+      'packages/database/src/adapters/identity-access/auth.ts',
+    );
+
+    // A cached session cannot be revoked on another device until the cache
+    // expires, which would make "sign out everywhere else" a promise the
+    // product could not keep.
+    expect(source).toContain('cookieCache: { enabled: false }');
+  });
+});
+
+describe('input rules', () => {
+  it('canonicalises an address by trimming and lowercasing, and no more', () => {
+    expect(canonicaliseEmail('  Someone@Example.COM ')).toBe('someone@example.com');
+
+    // Provider-specific rewriting is NOT canonicalisation. Applying Gmail's
+    // dot and plus behaviour globally merges distinct people's accounts
+    // (DOMAIN_MODEL.md §4.6).
+    expect(canonicaliseEmail('a.b@example.com')).toBe('a.b@example.com');
+    expect(canonicaliseEmail('a+tag@example.com')).toBe('a+tag@example.com');
+  });
+
+  it('canonicalises as part of PARSING, so no caller holds a raw address', () => {
+    expect(emailSchema.parse('  Person@Example.COM  ')).toBe('person@example.com');
+  });
+
+  it('rejects an address that is not one', () => {
+    for (const candidate of [
+      '',
+      'a',
+      'not-an-address',
+      '@example.com',
+      'a@',
+      'a b@c.d',
+    ]) {
+      expect(emailSchema.safeParse(candidate).success, candidate).toBe(false);
+    }
+  });
+
+  it('bounds an address at the addressable RFC limit', () => {
+    const oversized = `${'a'.repeat(320)}@example.com`;
+    expect(emailSchema.safeParse(oversized).success).toBe(false);
+  });
+
+  it('bounds a password at both ends', () => {
+    expect(passwordSchema.safeParse('a'.repeat(MIN_PASSWORD_LENGTH - 1)).success).toBe(
+      false,
+    );
+    expect(passwordSchema.safeParse('a'.repeat(MIN_PASSWORD_LENGTH)).success).toBe(true);
+    expect(passwordSchema.safeParse('a'.repeat(MAX_PASSWORD_LENGTH)).success).toBe(true);
+
+    // An unbounded password is an unbounded hash input, and the hash is
+    // deliberately memory-hard.
+    expect(passwordSchema.safeParse('a'.repeat(MAX_PASSWORD_LENGTH + 1)).success).toBe(
+      false,
+    );
+  });
+
+  it('imposes no complexity theatre', () => {
+    // Character-class rules push people toward predictable substitutions
+    // without measurably improving resistance; the defence is the hash and the
+    // limiter (SECURITY_BASELINE.md §15).
+    expect(passwordSchema.safeParse('correct horse battery staple').success).toBe(true);
+  });
+
+  it('validates a timezone against the runtime zone table, not a pattern', () => {
+    expect(timezoneSchema.safeParse('Asia/Karachi').success).toBe(true);
+    expect(timezoneSchema.safeParse('Europe/London').success).toBe(true);
+
+    // A pattern would accept this. An unknown zone must fail HERE rather than
+    // at first use, months later, in a scheduling calculation.
+    expect(timezoneSchema.safeParse('Middle/Earth').success).toBe(false);
+    expect(timezoneSchema.safeParse('').success).toBe(false);
+  });
+});
+
+describe('account domain rules', () => {
+  it('permits only the accepted status transitions', () => {
+    expect(canTransition('active', 'disabled')).toBe(true);
+    expect(canTransition('active', 'suspended')).toBe(true);
+    expect(canTransition('disabled', 'active')).toBe(true);
+    expect(canTransition('suspended', 'active')).toBe(true);
+  });
+
+  it('makes closure TERMINAL', () => {
+    // `closed` reaches nothing, so no reactivation path can be added by
+    // accident — the shape of the whole table is the guarantee.
+    for (const target of ['active', 'disabled', 'suspended', 'closed'] as const) {
+      expect(canTransition('closed', target), `closed -> ${target}`).toBe(false);
+    }
+  });
+
+  it('lets only an ACTIVE account hold a session', () => {
+    expect(mayHoldSession('active')).toBe(true);
+
+    for (const status of ['disabled', 'suspended', 'closed'] as const) {
+      expect(mayHoldSession(status), status).toBe(false);
+    }
+  });
+
+  it('refuses to remove the final authentication method', () => {
+    expect(wouldRemoveFinalAuthenticationMethod(1)).toBe(true);
+    expect(wouldRemoveFinalAuthenticationMethod(0)).toBe(true);
+    expect(wouldRemoveFinalAuthenticationMethod(2)).toBe(false);
+  });
+
+  it('treats setup as incomplete until the address, locale and zone are settled', () => {
+    const base = {
+      id: 'u1',
+      email: 'a@b.invalid',
+      name: 'A',
+      locale: 'en',
+      status: 'active' as const,
+      createdAt: new Date(),
+    };
+
+    expect(
+      accountSetupComplete({
+        ...base,
+        emailVerified: false,
+        timezone: 'Asia/Karachi',
+        accountSetupCompletedAt: new Date(),
+      }),
+    ).toBe(false);
+
+    expect(
+      accountSetupComplete({
+        ...base,
+        emailVerified: true,
+        timezone: null,
+        accountSetupCompletedAt: new Date(),
+      }),
+    ).toBe(false);
+
+    expect(
+      accountSetupComplete({
+        ...base,
+        emailVerified: true,
+        timezone: 'Asia/Karachi',
+        accountSetupCompletedAt: null,
+      }),
+    ).toBe(false);
+
+    expect(
+      accountSetupComplete({
+        ...base,
+        emailVerified: true,
+        timezone: 'Asia/Karachi',
+        accountSetupCompletedAt: new Date(),
+      }),
+    ).toBe(true);
+  });
+
+  it('derives a notification key deterministically per event', () => {
+    const key = notificationKey({
+      purpose: 'identity.password-changed',
+      accountId: 'u1',
+      occasion: 'change:1',
+    });
+
+    // Deterministic per (purpose, account, occasion), so a relay that retried
+    // after committing cannot produce a second message — and two GENUINE
+    // changes still produce two.
+    expect(
+      notificationKey({
+        purpose: 'identity.password-changed',
+        accountId: 'u1',
+        occasion: 'change:1',
+      }),
+    ).toBe(key);
+
+    expect(
+      notificationKey({
+        purpose: 'identity.password-changed',
+        accountId: 'u1',
+        occasion: 'change:2',
+      }),
+    ).not.toBe(key);
+  });
+});
+
+describe('rate-limit policy', () => {
+  it('covers every exposed sensitive self-service operation', async () => {
+    const { IDENTITY_RATE_LIMITS } =
+      await import('../../apps/web/src/contexts/identity-access/domain/rate-limits.ts');
+
+    // A flow that reaches the platform without a budget is a flow an attacker
+    // may repeat without cost (SECURITY_BASELINE.md §15.2).
+    for (const flow of [
+      'sign-in',
+      'sign-up',
+      'verification-resend',
+      'verification-confirm',
+      'password-reset-request',
+      'password-reset-confirm',
+      'password-change',
+      'email-change-request',
+      'email-change-confirm',
+      'account-closure',
+    ] as const) {
+      const limit = IDENTITY_RATE_LIMITS[flow];
+
+      expect(limit, flow).toBeDefined();
+      expect(limit.perAccount.max, `${flow} per-account`).toBeGreaterThan(0);
+      expect(limit.perClient.max, `${flow} per-client`).toBeGreaterThan(0);
+      expect(limit.perAccount.window, `${flow} window`).toBeGreaterThan(0);
+    }
+  });
+
+  it('keeps the mail-sending flows tightest', async () => {
+    const { IDENTITY_RATE_LIMITS } =
+      await import('../../apps/web/src/contexts/identity-access/domain/rate-limits.ts');
+
+    // Their abuse lands in SOMEBODY ELSE's inbox, which is what makes
+    // verification resend and forgot-password the classic mail-bombing vectors
+    // rather than merely noisy ones.
+    for (const flow of [
+      'verification-resend',
+      'password-reset-request',
+      'email-change-request',
+    ] as const) {
+      expect(IDENTITY_RATE_LIMITS[flow].perAccount.max, flow).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('gives every flow BOTH a per-account and a per-client budget', async () => {
+    const { IDENTITY_RATE_LIMITS } =
+      await import('../../apps/web/src/contexts/identity-access/domain/rate-limits.ts');
+
+    // Either alone leaves the other attack unbounded: per-account stops
+    // credential stuffing against one person, per-client stops one source
+    // spraying everybody.
+    for (const [flow, limit] of Object.entries(IDENTITY_RATE_LIMITS)) {
+      expect(limit.perClient.max, `${flow} client budget`).toBeGreaterThanOrEqual(
+        limit.perAccount.max,
+      );
+    }
+  });
+});

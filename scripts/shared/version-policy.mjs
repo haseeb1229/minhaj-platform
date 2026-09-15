@@ -69,6 +69,51 @@ export const lockedStack = Object.freeze([
     expected: '4.14',
     introduced: 'Phase 3A — Localisation Foundation',
   },
+  {
+    // TECH_STACK.md §2 locks the 1.7.x RANGE and §1.5 places the exact patch
+    // at genuine introduction. Phase 2 selected 1.7.4 and pins it EXACTLY.
+    //
+    // The patch matters here in a way a range would not express. 1.7.0-1.7.2
+    // added a required `account.issuer` column and a unique index on
+    // (issuer, accountId); 1.7.3 reversed that and restored the 1.6 account
+    // shape, and 1.7.4 keeps the reversal. A range permitting 1.7.0 would
+    // permit a version whose schema this repository deliberately does not
+    // have.
+    //
+    // It moved here from `deferredStack` in Phase 2, its owning point. Absence
+    // is now a FAILURE: authentication is delivered, and a manifest that stops
+    // declaring it is a broken application rather than a package that has not
+    // arrived yet.
+    name: 'better-auth',
+    kind: 'exact',
+    expected: '1.7.4',
+    introduced: 'Phase 2 — Identity & Access',
+  },
+  {
+    // The transactional email provider — the FIRST `EmailProvider` adapter,
+    // not a permanent platform dependency (ARCHITECTURE.md §4.6). Pinned
+    // EXACTLY rather than by range: the SDK carries the webhook verifier, and
+    // the code that decides whether an inbound callback is authentic is not
+    // something to let float across a minor release.
+    name: 'resend',
+    kind: 'exact',
+    expected: '6.27.0',
+    introduced: 'Phase 2 — Identity & Access',
+  },
+  {
+    // Browser coverage, first genuinely needed in Phase 2. The class-D rule —
+    // a GET renders and only a POST consumes — and real cookie behaviour are
+    // properties of a browser, and nothing below one can prove them.
+    //
+    // It moved here from `deferredStack` at that introduction, so absence is
+    // now a FAILURE rather than the correct state: the browser suite is a
+    // delivered proof, and a manifest that stopped declaring its runner would
+    // be a suite nobody can run.
+    name: '@playwright/test',
+    kind: 'exact',
+    expected: '1.55.1',
+    introduced: 'Phase 2 — Identity & Access',
+  },
   { name: 'typescript', kind: 'range', expected: '5.9', introduced: 'Phase 0B' },
   { name: 'zod', kind: 'range', expected: '4.5', introduced: 'Phase 0B' },
   { name: 'vitest', kind: 'range', expected: '4.1', introduced: 'Phase 0B' },
@@ -91,12 +136,6 @@ export const lockedStack = Object.freeze([
  */
 export const deferredStack = Object.freeze([
   {
-    name: 'better-auth',
-    kind: 'range',
-    expected: '1.7',
-    introduced: 'Phase 2 — Identity & Access',
-  },
-  {
     name: 'socket.io',
     kind: 'exact',
     expected: '4.8.3',
@@ -111,16 +150,16 @@ export const deferredStack = Object.freeze([
     introduced: 'Phase 25 — realtime runtime',
   },
   {
+    // `playwright` itself stays DEFERRED even though the browser suite now
+    // exists. `@playwright/test` depends on it at an exact matching version
+    // and is the package the tests import, so declaring the runtime
+    // separately would give two places to state one version — and one of them
+    // would eventually be wrong. Its absence remains correct; its APPEARANCE
+    // at some other version is exactly the drift this list catches (§1.2).
     name: 'playwright',
     kind: 'range',
     expected: '1.55',
-    introduced: 'first genuine introduction',
-  },
-  {
-    name: '@playwright/test',
-    kind: 'range',
-    expected: '1.55',
-    introduced: 'first genuine introduction',
+    introduced: 'only if a direct dependency is ever genuinely needed',
   },
   { name: 'motion', kind: 'range', expected: '13.1', introduced: 'first genuine use' },
   { name: 'react-hook-form', kind: 'range', expected: '7', introduced: 'when needed' },
@@ -136,6 +175,23 @@ export const deferredStack = Object.freeze([
  */
 export const lockedFamilies = Object.freeze([
   { prefix: '@tiptap/', kind: 'range', expected: '3', introduced: 'when needed' },
+
+  // Better Auth ships its adapters and plugins as a family of `@better-auth/*`
+  // packages that `better-auth` itself depends on at an EXACT matching
+  // version, so none of them is declared directly here and the family is
+  // aligned structurally rather than by declaration.
+  //
+  // The rule exists for the case where one IS declared directly: a workspace
+  // reaching for `@better-auth/prisma-adapter` at some other version would be
+  // running two Better Auth versions in one process, which is the mixed-family
+  // drift TECH_STACK.md §1.2 exists to stop. `@better-auth/utils` versions
+  // independently of the 1.7 line and is deliberately not covered.
+  {
+    prefix: '@better-auth/',
+    kind: 'range',
+    expected: '1.7',
+    introduced: 'Phase 2 — Identity & Access',
+  },
 ]);
 
 /** Transitive security overrides, pinned at the root (root `overrides`). */

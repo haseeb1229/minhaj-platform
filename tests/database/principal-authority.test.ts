@@ -278,7 +278,27 @@ describe('F8 — recorded grants beyond the approved set', () => {
       '[dbo].[_prisma_migrations]',
       'SELECT',
     ],
-    ['SELECT on some other table', 'OBJECT_OR_COLUMN', '[dbo].[User]', 'SELECT'],
+    // A table nothing grants on at all.
+    [
+      'SELECT on a table outside the inventory',
+      'OBJECT_OR_COLUMN',
+      '[dbo].[Phase1UngrantedSentinel]',
+      'SELECT',
+    ],
+    // An APPROVED table, but a verb its row does not permit. The inventory is
+    // per verb precisely so this is caught: closure retains the user row and
+    // pseudonymises it, so a runtime able to DELETE one could erase the
+    // subject of an audit trail.
+    ['DELETE on the user table', 'OBJECT_OR_COLUMN', '[dbo].[User]', 'DELETE'],
+    // Suppression is add-only to the runtime: silently un-suppressing an
+    // address would resume sending to someone whose provider already rejected
+    // or complained about the mail.
+    [
+      'DELETE on the suppression table',
+      'OBJECT_OR_COLUMN',
+      '[dbo].[EmailSuppression]',
+      'DELETE',
+    ],
   ])('flags %s', (_label, entryClass, object, permission) => {
     const found = overreachingGrants([
       ...approved,

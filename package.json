@@ -29,6 +29,7 @@
     "db:backup": "node --conditions=react-server packages/database/scripts/backup.ts",
     "db:restore:test": "node --conditions=react-server packages/database/scripts/restore-test.ts",
     "db:recovery:test": "node --conditions=react-server packages/database/scripts/recovery-test.ts",
+    "db:recovery:populated": "node --conditions=react-server packages/database/scripts/recovery-populated-test.ts",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
     "check:architecture": "node scripts/check-architecture.mjs",
@@ -40,10 +41,13 @@
     "build": "npm run build --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "npm run check:versions && npm run check:docker-context && npm run format:check && npm run typecheck && npm run lint && npm run check:architecture && npm run check:rtl && npm run test && npm run check:server-only && npm run build"
+    "verify": "npm run check:versions && npm run check:docker-context && npm run format:check && npm run typecheck && npm run lint && npm run check:architecture && npm run check:rtl && npm run test && npm run check:server-only && npm run build",
+    "test:browser": "node --conditions=react-server node_modules/@playwright/test/cli.js test",
+    "test:browser:install": "playwright install --with-deps chromium"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.55.1",
     "@types/node": "^24.10.1",
     "eslint": "^10.9.1",
     "prettier": "^3.9.6",

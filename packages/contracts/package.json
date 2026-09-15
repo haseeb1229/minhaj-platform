@@ -6,6 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./identity": "./src/identity/index.ts",
+    "./platform": "./src/platform/index.ts",
     "./env/client": "./src/env/client.ts",
     "./env/server": {
       "react-server": "./src/env/server.ts",

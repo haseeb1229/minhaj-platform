@@ -22,4 +22,18 @@ export async function register(): Promise<void> {
   const { assertServerEnv } = await import('@/config/server-env');
 
   assertServerEnv();
+
+  // The outbound-mail retry sweep, started once per server process — this hook
+  // is the only thing Next guarantees runs exactly that often.
+  //
+  // Production only. `next dev` recompiles and re-registers on every change, and
+  // a background timer that survives a hot reload is a timer nobody can see or
+  // stop. Development still sends: every action that enqueues mail dispatches
+  // after its own response, so the first attempt at everything happens there
+  // and only RETRIES wait for this.
+  if (process.env.NODE_ENV !== 'production') return;
+
+  const { startDispatchSweep } = await import('@/composition/dispatch');
+
+  startDispatchSweep();
 }

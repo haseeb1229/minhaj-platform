@@ -53,13 +53,18 @@ export const EXPECTED_AUDIT_INDEXES = [
  * A restore that produced any of these would mean the artifact came from some
  * other database, so the check is evidence about the backup's provenance as
  * much as about premature schema.
+ *
+ * `User`, `Account` and `Session` USED to be on this list and are not any
+ * more: Phase 2 owns them, and they are now legitimate content of a current
+ * artifact. Leaving them here would have turned the first correct Phase-2
+ * backup into a failure. `Role` and `Permission` stay, because authorisation
+ * is Chunk 2 and has not arrived.
  */
-const BUSINESS_TABLES = [
-  'User',
-  'Account',
-  'Session',
+const FUTURE_DOMAIN_TABLES = [
   'Role',
   'Permission',
+  'RolePermission',
+  'RoleAssignment',
   'Article',
   'Page',
   'Quran',
@@ -74,6 +79,26 @@ const BUSINESS_TABLES = [
   'Membership',
   'Donation',
   'MigrationProvenance',
+];
+
+/**
+ * Tables the Phase-2 migration creates.
+ *
+ * Checked as REQUIRED whenever the Phase-2 migration is among those the caller
+ * expects, so a restore cannot satisfy the history check while having lost the
+ * schema that history describes.
+ */
+export const PHASE2_TABLES = [
+  'Account',
+  'EmailDelivery',
+  'EmailSuppression',
+  'IdentityCommunicationIntent',
+  'IdentitySecurityOperation',
+  'ProviderEvent',
+  'RateLimitCounter',
+  'Session',
+  'User',
+  'Verification',
 ];
 
 async function userTables(session: SqlSession): Promise<string[]> {
@@ -131,8 +156,12 @@ export interface RestoredSchemaReport {
  */
 export async function verifyRestoredSchema(
   restored: SqlSession,
-  expectedMigrationId: string,
+  expectedMigrationIds: readonly string[],
 ): Promise<RestoredSchemaReport> {
+  if (expectedMigrationIds.length === 0) {
+    throw new Error('No expected migrations supplied; the check would prove nothing.');
+  }
+
   const tables = await userTables(restored);
 
   if (!tables.includes('AuditLog')) {
@@ -144,11 +173,23 @@ export async function verifyRestoredSchema(
     throw new Error('Restored database has no Prisma migration-history table.');
   }
 
-  const premature = tables.filter((table) => BUSINESS_TABLES.includes(table));
+  const premature = tables.filter((table) => FUTURE_DOMAIN_TABLES.includes(table));
   if (premature.length > 0) {
     throw new Error(
-      `Restored database contains business-domain tables: ${premature.join(', ')}`,
+      `Restored database contains future-domain tables: ${premature.join(', ')}`,
     );
+  }
+
+  // The SCHEMA the expected history describes must actually be there. A
+  // restore that carried the history row but not the tables would otherwise
+  // report a migration as applied over a database that cannot honour it.
+  if (expectedMigrationIds.some((id) => id.includes('phase2'))) {
+    const missing = PHASE2_TABLES.filter((table) => !tables.includes(table));
+    if (missing.length > 0) {
+      throw new Error(
+        `Restored database is missing Phase-2 tables: ${missing.join(', ')}`,
+      );
+    }
   }
 
   const columns = await auditColumns(restored);
@@ -168,10 +209,14 @@ export async function verifyRestoredSchema(
     }
   }
 
+  // EVERY expected migration, not merely the first one. Checking only
+  // `migrations[0]` let a restore that had lost later history pass, which is
+  // precisely the state a partial or stale artifact produces.
   const migrations = await restoredMigrationHistory(restored);
-  if (!migrations.includes(expectedMigrationId)) {
+  const absent = expectedMigrationIds.filter((id) => !migrations.includes(id));
+  if (absent.length > 0) {
     throw new Error(
-      `Restored migration history does not list ${expectedMigrationId}. ` +
+      `Restored migration history is missing ${absent.join(', ')}. ` +
         `Found: ${migrations.join(', ') || '(none)'}`,
     );
   }

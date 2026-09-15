@@ -40,28 +40,50 @@ describe('Phase 1 Chunk 1 database foundation', () => {
     ).rejects.toThrow(/server-only/);
   });
 
-  it('declares the audit foundation as its only model, and no business domain', async () => {
+  it('declares exactly the delivered models, and no later-phase domain', async () => {
     const schema = await readFile(
       path.join(databaseRoot, 'prisma', 'schema.prisma'),
       'utf8',
     );
     const prismaEntries = await readdir(path.join(databaseRoot, 'prisma'));
 
-    // Chunk 2 introduces the audit foundation and the migration directory that
-    // creates it. AuditLog is infrastructure required by SECURITY_BASELINE.md
-    // §13; the business-domain prohibition below is unchanged, and domain
-    // tables still arrive only with their owning slice.
+    // The schema is EXHAUSTIVE, so a model arriving without its owning phase
+    // fails here rather than being noticed later. `AuditLog` is the Phase 1
+    // audit foundation (SECURITY_BASELINE.md §13); the rest are Phase 2
+    // Chunk 1 — Identity & Access, plus the Layer-0 concerns that phase first
+    // genuinely needs (ARCHITECTURE.md §4.5, §4.6.1).
     const models = [...schema.matchAll(/^\s*model\s+(\w+)/gm)].map((match) => match[1]);
-    expect(models).toEqual(['AuditLog']);
+    expect(models).toEqual([
+      'AuditLog',
+      'User',
+      'Session',
+      'Account',
+      'Verification',
+      'IdentityCommunicationIntent',
+      'IdentitySecurityOperation',
+      'EmailDelivery',
+      'EmailSuppression',
+      'ProviderEvent',
+      'RateLimitCounter',
+    ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name
     // the deferred domains in order to explain why they are absent, and a
     // substring match would read that explanation as the very violation it
     // documents.
+    // `Role`, `Permission`, `RolePermission`, `RoleAssignment`, `StepUpGrant`,
+    // `IdentityBootstrap` and `TwoFactor` belong to Phase 2 CHUNK 2 —
+    // authorisation and privileged security — and must not appear until that
+    // chunk delivers the enforcement that gives them meaning. The rest belong
+    // to later phases entirely.
     for (const domain of [
-      'User',
       'Role',
       'Permission',
+      'RolePermission',
+      'RoleAssignment',
+      'StepUpGrant',
+      'IdentityBootstrap',
+      'TwoFactor',
       'Article',
       'Page',
       'Quran',

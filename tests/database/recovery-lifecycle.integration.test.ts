@@ -14,7 +14,10 @@ import {
   type BackupTarget,
 } from '../../packages/database/src/lifecycle/backup.ts';
 import { openMasterSession } from '../../packages/database/src/lifecycle/disposable-database.ts';
-import { loadMigrations } from '../../packages/database/src/lifecycle/migrations.ts';
+import {
+  appliedMigrationNames,
+  loadMigrations,
+} from '../../packages/database/src/lifecycle/migrations.ts';
 import {
   assertApprovedLocalTarget,
   localTargetPolicy,
@@ -84,6 +87,10 @@ describe.skipIf(!configured)('Phase 1 recovery lifecycle (live SQL Server)', () 
   let restored: SqlSession;
   let backup: BackupResult;
   let migrationId: string;
+  /** Every repository migration the SOURCE has actually applied. */
+  let expectedMigrations: string[];
+  /** The source's own table list, read before the backup. */
+  let sourceTables: string[];
   /** Audit rows present in the source at the moment the backup was taken. */
   let sourceRowCount: number;
 
@@ -101,6 +108,31 @@ describe.skipIf(!configured)('Phase 1 recovery lifecycle (live SQL Server)', () 
 
     master = await openMasterSession(connection);
     source = await openSession(connection);
+
+    // EXPECTATIONS COME FROM THE SOURCE, not from a hard-coded list.
+    //
+    // This rehearsal backs up the engineering database, and which migrations
+    // that database has had deployed is an operational fact rather than a
+    // property of the artifact. Naming one migration here made the proof both
+    // weaker than it should be — later history went unchecked — and brittle in
+    // the other direction, because deploying the next migration would have
+    // broken a test that was never about deployment state.
+    const applied = await appliedMigrationNames(source);
+    expectedMigrations = migrations
+      .map((migration) => migration.id)
+      .filter((id) => applied.includes(id));
+
+    if (expectedMigrations.length === 0) {
+      throw new Error('The source has applied none of this repository migrations.');
+    }
+
+    sourceTables = (
+      await source.query<{ name: string }>(
+        `SELECT t.name AS name FROM sys.tables AS t
+         JOIN sys.schemas AS s ON s.schema_id = t.schema_id
+         WHERE s.name = 'dbo' ORDER BY t.name;`,
+      )
+    ).map((row) => row.name);
 
     // Proof state, written to the source BEFORE the backup and never to the
     // restore target. Its presence afterwards is what distinguishes a genuine
@@ -153,7 +185,7 @@ describe.skipIf(!configured)('Phase 1 recovery lifecycle (live SQL Server)', () 
   });
 
   it('restored the audit table, its columns, indexes and migration history', async () => {
-    const report = await verifyRestoredSchema(restored, migrationId);
+    const report = await verifyRestoredSchema(restored, expectedMigrations);
 
     expect(report.tables).toContain('AuditLog');
     expect(report.tables).toContain('_prisma_migrations');
@@ -165,11 +197,19 @@ describe.skipIf(!configured)('Phase 1 recovery lifecycle (live SQL Server)', () 
     }
   });
 
-  it('restored no business-domain schema', async () => {
-    const report = await verifyRestoredSchema(restored, migrationId);
-    expect(report.tables.toSorted()).toEqual(
-      ['AuditLog', '_prisma_migrations'].toSorted(),
-    );
+  it('restored EXACTLY the schema the source held, and nothing else', async () => {
+    const report = await verifyRestoredSchema(restored, expectedMigrations);
+
+    // Fidelity, stated as equality with the SOURCE. A restore that invented a
+    // table would fail here, and so would one that dropped one — neither of
+    // which a fixed list naming today's deployment could detect.
+    expect(report.tables.toSorted()).toEqual(sourceTables.toSorted());
+
+    // And every migration the source had applied is in the restored history,
+    // not merely the first.
+    for (const id of expectedMigrations) {
+      expect(report.migrations).toContain(id);
+    }
   });
 
   /** The heart of the proof: data written before the backup came back intact. */

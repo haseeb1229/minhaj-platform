@@ -52,3 +52,348 @@ model AuditLog {
   @@index([targetType, targetId])
   @@map("AuditLog")
 }
+
+// ===========================================================================
+// Phase 2 Chunk 1 — Identity & Access, and the Layer-0 concerns it first needs
+// ===========================================================================
+//
+// OWNERSHIP. Physical placement here transfers no semantic ownership
+// (ARCHITECTURE.md §4.1, §6.3 rule 14). `User`, `Session`, `Account` and
+// `Verification` are owned by the IDENTITY & ACCESS context; `EmailDelivery`,
+// `EmailSuppression` and `ProviderEvent` by the Layer-0 EMAIL concern;
+// `RateLimitCounter` by the Layer-0 RATE-LIMITING concern. Those owners are
+// declared in this package's own manifest under `minhaj.persistenceAdapters`,
+// and the architecture gate fails closed on an adapter no declaration owns.
+//
+// LIFECYCLE. `User`, `Session`, `Account` and `Verification` carry Better
+// Auth's mechanics and One Minhaj's application state on the SAME physical
+// row — there is no second user table and no join to keep in step. Better
+// Auth 1.7.4 owns their write mechanics; One Minhaj owns the columns marked
+// below and every rule about them. The shape is proved against the library's
+// own `getSchema()` by test rather than trusted (P-2).
+//
+// SIZING. Every uniquely indexed string column is sized explicitly. Prisma's
+// default `String` on SQL Server is NVARCHAR(1000) = 2000 bytes, above the
+// 1700-byte nonclustered index key limit, so a default would push a unique
+// index over the edge.
+//
+// TIMESTAMPS. `createdAt`/`updatedAt` on the Better Auth tables carry NO
+// database default, deliberately: Better Auth always supplies them, and
+// Prisma's `now()` emits CURRENT_TIMESTAMP — local server time, which shifts
+// meaning with the host timezone. Tables this project writes itself use
+// `SYSUTCDATETIME()`, exactly as `AuditLog` does.
+
+/// Application identity. Authoritative for roles, preferences and application
+/// state (SECURITY_BASELINE.md §2.2); Better Auth authenticates it.
+model User {
+  id String @id @db.NVarChar(36)
+
+  // ---- Better Auth core -------------------------------------------------
+  name          String  @db.NVarChar(200)
+  email         String  @unique @db.NVarChar(320)
+  emailVerified Boolean
+  image         String? @db.NVarChar(2048)
+
+  createdAt DateTime @db.DateTime2
+  updatedAt DateTime @db.DateTime2
+
+  // ---- One Minhaj-owned application state -------------------------------
+  //
+  // Declared to Better Auth as `user.additionalFields` with `input: false`,
+  // so none of them can be set by a sign-up body. They change only through
+  // Identity's own services (DOMAIN_MODEL.md §4.2).
+
+  /// Account INTERFACE locale — distinct from content language (§19.1).
+  locale String @db.NVarChar(8)
+
+  /// IANA zone for user-facing scheduling (§19.5). Absent until chosen.
+  timezone String? @db.NVarChar(64)
+
+  /// active | disabled | suspended | closed. Enforced on EVERY authenticated
+  /// request, not only at sign-in (DOMAIN_MODEL.md §4.6).
+  status String @db.NVarChar(32)
+
+  /// Set when account setup completes. NOT personalisation onboarding, which
+  /// belongs to Phase 21 (DOMAIN_MODEL.md §4.2, §14.1).
+  accountSetupCompletedAt DateTime? @db.DateTime2
+
+  /// Closure. The row is RETAINED for historical attribution; the address is
+  /// replaced by a non-routable tombstone and profile data pseudonymised, so
+  /// later re-registration with the original address starts clean.
+  closedAt        DateTime? @db.DateTime2
+  pseudonymisedAt DateTime? @db.DateTime2
+
+  sessions             Session[]
+  accounts             Account[]
+  communicationIntents IdentityCommunicationIntent[]
+  securityOperations   IdentitySecurityOperation[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("User")
+}
+
+/// Server-side session record. Its existence is what makes revocation
+/// possible (SECURITY_BASELINE.md §2.3).
+model Session {
+  id        String   @id @db.NVarChar(36)
+  expiresAt DateTime @db.DateTime2
+  token     String   @unique @db.NVarChar(255)
+  createdAt DateTime @db.DateTime2
+  updatedAt DateTime @db.DateTime2
+  ipAddress String?  @db.NVarChar(64)
+  userAgent String?  @db.NVarChar(512)
+
+  userId String @db.NVarChar(36)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("Session")
+}
+
+/// One authentication method bound to a User. Phase 2 creates only the
+/// `credential` provider; Phase 2G adds Google through this same shape, which
+/// is why the linking seam needs no later schema change.
+model Account {
+  id         String @id @db.NVarChar(36)
+  accountId  String @db.NVarChar(255)
+  providerId String @db.NVarChar(64)
+
+  userId String @db.NVarChar(36)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Provider tokens. Unused by the credential provider; present because the
+  /// library's shape requires them and Phase 2G will populate them.
+  accessToken           String?   @db.NVarChar(Max)
+  refreshToken          String?   @db.NVarChar(Max)
+  idToken               String?   @db.NVarChar(Max)
+  accessTokenExpiresAt  DateTime? @db.DateTime2
+  refreshTokenExpiresAt DateTime? @db.DateTime2
+  scope                 String?   @db.NVarChar(1000)
+
+  /// scrypt hash, `salt:key` hex — 161 characters at Better Auth's
+  /// N=16384, r=16, p=1, dkLen=64 parameters. NEVER logged, NEVER audited.
+  password String? @db.NVarChar(255)
+
+  createdAt DateTime @db.DateTime2
+  updatedAt DateTime @db.DateTime2
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("Account")
+}
+
+/// Better Auth's authoritative token store — and the ONLY durable home for
+/// auth bearer material in this platform (ARCHITECTURE.md §4.6.1).
+///
+/// It holds email-verification, password-reset and email-change tokens under
+/// the Email-OTP lifecycle, stored encrypted and recoverable so a failed
+/// DELIVERY can be retried with the SAME token rather than minting a second
+/// one. No other table may ever carry a bearer token.
+model Verification {
+  id         String   @id @db.NVarChar(36)
+  identifier String   @db.NVarChar(400)
+  value      String   @db.NVarChar(2000)
+  expiresAt  DateTime @db.DateTime2
+  createdAt  DateTime @db.DateTime2
+  updatedAt  DateTime @db.DateTime2
+
+  @@index([identifier])
+  @@index([expiresAt])
+  @@map("Verification")
+}
+
+/// IDENTITY-OWNED durable intent for required, TOKEN-FREE communication —
+/// "your password was changed", "your email was changed", security alerts.
+///
+/// For Identity-owned changes it commits in the owning transaction. For the
+/// three private Better Auth mutations it is finalized from a durable operation
+/// stamp that commits with the vendor write. Layer 4 relays only after Identity
+/// commit; no cross-owner transaction capability exists (ARCHITECTURE.md §3.1.2.1).
+///
+/// It carries NO bearer token, ever. Token-bearing mail is driven from
+/// `Verification` instead, which is why this table has no token column to
+/// misuse.
+model IdentityCommunicationIntent {
+  id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
+
+  /// Why the message exists, e.g. `identity.password-changed`.
+  purpose String @db.NVarChar(64)
+
+  userId String @db.NVarChar(36)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Interface locale to render in, captured at commit so a later locale
+  /// change cannot retranslate an already-described event.
+  locale String @db.NVarChar(8)
+
+  /// Deterministic per (purpose, user, event) so a relay retry cannot produce
+  /// a second message.
+  idempotencyKey String @unique @db.NVarChar(200)
+
+  /// Where to send it, when the account's own address can no longer say.
+  ///
+  /// NULL for every intent but one. Account closure replaces the address with
+  /// a non-routable tombstone in the SAME transaction that commits this row,
+  /// so by the time the relay runs there is nothing left to read the former
+  /// address from — and the closure notice is precisely the message that has
+  /// to reach it. Reading the tombstone back is not an option and neither is
+  /// leaving the old address on the closed `User`: the point of closure is
+  /// that the row stops naming the person (DOMAIN_MODEL.md §4.6).
+  ///
+  /// BOUNDED BY CONSTRUCTION. It is written only by closure and CLEARED the
+  /// moment the intent is relayed, so it lives for the seconds between the
+  /// closure transaction and the next dispatch tick — not for the lifetime of
+  /// the row. That is the whole of its retention, and it is enforced in the
+  /// same operation that marks the intent relayed rather than by a policy
+  /// somebody has to remember (SECURITY_BASELINE.md §19.2).
+  recipientOverride String? @db.NVarChar(320)
+
+  /// pending | relayed | abandoned
+  status String @db.NVarChar(16)
+
+  relayedAt DateTime? @db.DateTime2
+  createdAt DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  @@index([status, createdAt])
+  @@map("IdentityCommunicationIntent")
+}
+
+/// Identity-only crash marker for vendor-owned password/email mutations.
+/// It contains no password, hash, bearer token or address. `committedAt` is
+/// stamped in the same SQL transaction as the authoritative vendor write.
+model IdentitySecurityOperation {
+  id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
+  /// password-reset | password-change | email-change
+  kind String @db.NVarChar(32)
+  userId String @db.NVarChar(36)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  initiatingSessionId String? @db.NVarChar(36)
+  replacementSessionId String? @db.NVarChar(36)
+  committedAt DateTime? @db.DateTime2
+  cancelledAt DateTime? @db.DateTime2
+  completedAt DateTime? @db.DateTime2
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  @@index([completedAt, committedAt, createdAt])
+  @@index([userId, completedAt])
+  @@map("IdentitySecurityOperation")
+}
+
+/// LAYER-0 EMAIL. Provider delivery metadata and nothing else.
+///
+/// It records THAT a message of a given purpose is owed to a recipient and how
+/// delivery went. It never stores the message body, the recipient's address in
+/// clear, or — above all — an auth bearer token. The recipient is a keyed
+/// digest; `sourceReference` is an opaque handle the originating owner can
+/// resolve back to its own authoritative state.
+model EmailDelivery {
+  id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
+
+  purpose String @db.NVarChar(64)
+
+  /// HMAC digest of the canonical recipient address, key-versioned. Raw
+  /// addresses do not belong in general infrastructure storage (§19.2).
+  recipientDigest  String @db.NVarChar(64)
+  digestKeyVersion Int
+
+  /// Opaque handle to the owner's authoritative state — for token mail, the
+  /// delivery identity the auth-mechanics port can re-materialise from. It is
+  /// NOT the token and cannot be exchanged for one by anything but that port.
+  sourceReference String @db.NVarChar(200)
+
+  /// Stable across retries of the SAME message, and sent to the provider as
+  /// `Idempotency-Key`.
+  idempotencyKey String @unique @db.NVarChar(200)
+
+  /// pending | sending | sent | failed | suppressed
+  status String @db.NVarChar(16)
+
+  attemptCount  Int
+  nextAttemptAt DateTime? @db.DateTime2
+
+  /// Lease, so a crashed dispatcher's row becomes claimable again and two
+  /// dispatchers can never send the same message concurrently. This is the
+  /// leasing multi-instance execution requires (ARCHITECTURE.md §3.5.1).
+  claimedUntil DateTime? @db.DateTime2
+
+  /// Normalised failure CLASS and CODE only — never a provider payload.
+  failureClass String? @db.NVarChar(16)
+  failureCode  String? @db.NVarChar(64)
+
+  providerMessageId String? @db.NVarChar(200)
+
+  createdAt DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  sentAt    DateTime? @db.DateTime2
+
+  @@index([status, nextAttemptAt])
+  @@index([recipientDigest])
+  @@map("EmailDelivery")
+}
+
+/// LAYER-0 EMAIL. Addresses that must not be sent to, from bounce and
+/// complaint events.
+///
+/// Typed by reason and scope so the distinction is structural from the first
+/// row: marketing suppression can never suppress security or account-service
+/// mail (ARCHITECTURE.md §4.6.1).
+model EmailSuppression {
+  id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
+
+  recipientDigest  String @unique @db.NVarChar(64)
+  digestKeyVersion Int
+
+  /// bounce | complaint
+  reason String @db.NVarChar(16)
+
+  /// transactional | marketing — the scope the suppression applies to.
+  scope String @db.NVarChar(16)
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  @@index([reason])
+  @@map("EmailSuppression")
+}
+
+/// LAYER-0 EMAIL. Inbound provider event de-duplication (protocol class B).
+///
+/// The same event delivered twice produces exactly one effect, and a replayed
+/// event identifier is refused. Only the identifiers and the type are kept —
+/// no arbitrary provider payload is stored (SECURITY_BASELINE.md §7.2).
+model ProviderEvent {
+  id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
+
+  provider String @db.NVarChar(32)
+  eventId  String @db.NVarChar(200)
+  type     String @db.NVarChar(64)
+
+  receivedAt  DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  processedAt DateTime? @db.DateTime2
+
+  @@unique([provider, eventId])
+  @@index([receivedAt])
+  @@map("ProviderEvent")
+}
+
+/// LAYER-0 RATE LIMITING. One shared store, two callers.
+///
+/// Better Auth reaches it through its `customStorage.consume(key, rule)`
+/// contract and the application's own mutations reach it directly, so there
+/// are not two contradictory limiters (ARCHITECTURE.md §4.5).
+///
+/// Subjects are keyed HMAC digests: a raw email address or IP in an
+/// infrastructure table is personal data nobody asked to store (§19.2).
+model RateLimitCounter {
+  /// Purpose-scoped, key-versioned HMAC of the subject.
+  key String @id @db.NVarChar(200)
+
+  keyVersion Int
+
+  count           Int
+  windowStartedAt DateTime @db.DateTime2
+  windowExpiresAt DateTime @db.DateTime2
+
+  @@index([windowExpiresAt])
+  @@map("RateLimitCounter")
+}

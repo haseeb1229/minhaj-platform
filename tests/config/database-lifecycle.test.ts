@@ -58,18 +58,40 @@ describe('Phase 1 Chunk 2 migration convention', () => {
     }
   });
 
-  it('creates the audit table and no business-domain table', async () => {
+  it('creates the delivered tables and no later-phase table', async () => {
     const migrations = await loadMigrations();
     const forward = migrations.map((migration) => migration.forwardSql).join('\n');
 
-    expect(forward).toMatch(/CREATE TABLE \[dbo\]\.\[AuditLog\]/);
-
+    // Every table a delivered phase owns is genuinely created by a migration.
+    // A model in the schema that no migration creates is a table that will not
+    // exist in a deployed database — a gap only the database would reveal, and
+    // only at runtime.
     for (const table of [
+      'AuditLog',
       'User',
-      'Account',
       'Session',
+      'Account',
+      'Verification',
+      'IdentityCommunicationIntent',
+      'IdentitySecurityOperation',
+      'EmailDelivery',
+      'EmailSuppression',
+      'ProviderEvent',
+      'RateLimitCounter',
+    ]) {
+      expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
+    }
+
+    // Phase 2 Chunk 2 — authorisation and privileged security — and every
+    // later phase still arrive with the slice that owns them.
+    for (const table of [
       'Role',
       'Permission',
+      'RolePermission',
+      'RoleAssignment',
+      'StepUpGrant',
+      'IdentityBootstrap',
+      'TwoFactor',
       'Article',
       'Page',
       'Quran',

@@ -199,17 +199,66 @@ describe('the browser export condition is a second gate', () => {
 });
 
 describe('server-core is a host, not a domain', () => {
-  it('hosts no invented business services', async () => {
-    // ARCHITECTURE.md §3.1: admission is by justification. Phase 0B is
-    // structure only, so the messaging/authorization/relationships/session
-    // directories must NOT exist — the contexts that own them do not.
+  async function hostedDirectories(): Promise<string[]> {
     const entries = await readdir(path.join(serverCoreRoot, 'src'), {
       withFileTypes: true,
     });
-    const directories = entries.filter((entry) => entry.isDirectory()).map((e) => e.name);
 
-    for (const premature of ['messaging', 'authorization', 'relationships', 'session']) {
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  }
+
+  it('hosts no invented business services', async () => {
+    // ARCHITECTURE.md §3.1: admission is BY JUSTIFICATION, one directory at a
+    // time, as the context that owns it arrives. `session/` was on this list
+    // until Phase 2 and has now been admitted under §3.1.3 — the approved
+    // realtime architecture (§3.2, §3.3) names a concrete scheduled consumer
+    // that must verify sessions through the SAME code the web process uses,
+    // and introducing that inside `apps/web` first would mean extracting a
+    // security-critical path later.
+    //
+    // The rest stay prohibited. `authorization/` in particular does not follow
+    // until Chunk 2 brings the enforcement that gives it meaning: an empty
+    // module claiming to be an authorization service is worse than its
+    // absence, because callers would start depending on it.
+    const directories = await hostedDirectories();
+
+    for (const premature of ['messaging', 'authorization', 'relationships']) {
       expect(directories).not.toContain(premature);
+    }
+  });
+
+  it('hosts nothing that no phase has admitted', async () => {
+    // The complement of the rule above, and the half that fails closed. Naming
+    // only the PROHIBITED directories lets an unforeseen one — `content/`,
+    // `search/`, `notifications/` — arrive unchallenged. Admission is a
+    // decision; this is the list of decisions that have been taken.
+    const directories = await hostedDirectories();
+
+    expect([...directories].sort()).toEqual(['logging', 'session']);
+  });
+
+  it('keeps the session service free of infrastructure', async () => {
+    // §3.1: physical hosting transfers no ownership, and the host reaches no
+    // adapter. The session service holds a narrow INJECTED reader and a
+    // policy — a Prisma import, a `packages/database` import or a provider SDK
+    // here would make the future realtime process acquire raw database
+    // capability just by verifying a session.
+    const source = await readFile(
+      path.join(serverCoreRoot, 'src/session/index.ts'),
+      'utf8',
+    );
+
+    for (const forbidden of [
+      '@minhaj/database',
+      '@prisma/client',
+      'better-auth',
+      'resend',
+      'next/',
+      'mssql',
+    ]) {
+      expect(source, `session must not import ${forbidden}`).not.toContain(
+        `from '${forbidden}`,
+      );
     }
   });
 });

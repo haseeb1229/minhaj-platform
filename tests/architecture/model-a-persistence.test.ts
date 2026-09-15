@@ -345,11 +345,84 @@ describe('F1 — adapter ownership is explicit and fails closed', () => {
     expect(
       persistenceAdapterPolicy({ minhaj: { persistenceAdapters: {} } })?.malformed,
     ).toBeTruthy();
+
+    // A bounded-context slug normalises to an explicit kind, so a Layer-0
+    // owner and a context owner are distinguishable downstream rather than
+    // both being bare strings the caller has to guess about.
     expect(
       persistenceAdapterPolicy({
         minhaj: { persistenceAdapters: { root: 'src/adapters', owners: { a: 'quran' } } },
       }),
-    ).toMatchObject({ root: 'src/adapters', owners: { a: 'quran' }, malformed: null });
+    ).toMatchObject({
+      root: 'src/adapters',
+      owners: { a: { kind: 'context', slug: 'quran' } },
+      malformed: null,
+    });
+  });
+
+  it('accepts a Layer-0 concern as an owner, and only an enumerated one', () => {
+    // Infrastructure owns persistent state — delivery metadata, rate-limit
+    // windows, audit rows — and DOMAIN_MODEL.md §1.1 is explicit that it is
+    // NOT a bounded context. Without this the state could not be declared at
+    // all, and it would have to be filed under whichever context needed it
+    // first (ARCHITECTURE.md §4.6.1).
+    expect(
+      persistenceAdapterPolicy({
+        minhaj: {
+          persistenceAdapters: {
+            root: 'src/adapters',
+            owners: { email: { kind: 'layer0', concern: 'email' } },
+          },
+        },
+      })?.owners,
+    ).toMatchObject({ email: { kind: 'layer0', concern: 'email' } });
+
+    // `database` is where adapters live and cannot own one within itself;
+    // `storage`, `search` and `logging` own no relational state in the
+    // approved architecture. An owner outside the enumerated set is unowned.
+    for (const concern of ['database', 'storage', 'search', 'logging', 'invented']) {
+      expect(
+        persistenceAdapterPolicy({
+          minhaj: {
+            persistenceAdapters: {
+              root: 'src/adapters',
+              owners: { x: { kind: 'layer0', concern } },
+            },
+          },
+        })?.owners['x'],
+      ).toBeNull();
+    }
+
+    // And a shape this policy does not recognise is never guessed at.
+    for (const declared of [{ kind: 'context', slug: 'quran' }, 42, [], null, {}]) {
+      expect(
+        persistenceAdapterPolicy({
+          minhaj: {
+            persistenceAdapters: { root: 'src/adapters', owners: { x: declared } },
+          },
+        })?.owners['x'],
+      ).toBeNull();
+    }
+  });
+
+  it('keeps ONE unreadable owner from disabling every other adapter', () => {
+    // A single bad entry must not be treated as a malformed DECLARATION.
+    // Malformed disables every adapter in the workspace, and an adapter that
+    // stops being a recognised boundary stops stopping the capability walk —
+    // so one typo would leak raw capability through every OTHER adapter in
+    // the package.
+    const policy = persistenceAdapterPolicy({
+      minhaj: {
+        persistenceAdapters: {
+          root: 'src/adapters',
+          owners: { good: 'quran', bad: 'not-a-bounded-context' },
+        },
+      },
+    });
+
+    expect(policy?.malformed).toBeNull();
+    expect(policy?.owners['good']).toMatchObject({ kind: 'context', slug: 'quran' });
+    expect(policy?.owners['bad']).toBeNull();
   });
 });
 
@@ -448,7 +521,7 @@ describe('F1 — the production database package publishes no raw capability', (
     expect(connection).toContain("from './client.ts'");
   });
 
-  it('declares the adapter root so the first adapter cannot arrive unowned', async () => {
+  it('declares every adapter it hosts, and each with a readable owner', async () => {
     const manifest = JSON.parse(
       await readFile(path.join(repoRoot, 'packages', 'database', 'package.json'), 'utf8'),
     ) as Record<string, unknown>;
@@ -456,9 +529,25 @@ describe('F1 — the production database package publishes no raw capability', (
     const policy = persistenceAdapterPolicy(manifest);
 
     expect(policy?.root).toBe('src/adapters');
-    // No adapters yet, and none invented: an adapter belongs to a bounded
-    // context, and no bounded context is implemented.
-    expect(policy?.owners).toEqual({});
+    expect(policy?.malformed).toBeNull();
+
+    // Phase 2 Chunk 1 brought the first adapters. Identity & Access is a
+    // bounded context; email, rate limiting and auditing are Layer-0 platform
+    // concerns, which own persistent state without being contexts
+    // (DOMAIN_MODEL.md §1.1, ARCHITECTURE.md §4.6.1).
+    expect(policy?.owners).toEqual({
+      'identity-access': { kind: 'context', slug: 'identity-access' },
+      email: { kind: 'layer0', concern: 'email' },
+      'rate-limiting': { kind: 'layer0', concern: 'rate-limiting' },
+      auditing: { kind: 'layer0', concern: 'auditing' },
+    });
+
+    // Every declared owner is readable. An entry normalising to `null` would
+    // be an adapter nobody owns, which is the state the declaration exists to
+    // make impossible.
+    for (const [directory, owner] of Object.entries(policy?.owners ?? {})) {
+      expect(owner, `${directory} has a readable owner`).not.toBeNull();
+    }
   });
 });
 

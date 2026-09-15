@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
 
   // Workspace packages are TypeScript source, compiled by the app's build.
-  transpilePackages: ['@minhaj/contracts', '@minhaj/server-core'],
+  transpilePackages: ['@minhaj/contracts', '@minhaj/server-core', '@minhaj/database'],
 
   typescript: {
     // A type error must fail the build. Never relaxed to make a build pass.

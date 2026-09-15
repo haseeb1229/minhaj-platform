@@ -291,10 +291,52 @@ export async function recordedPermissions(
 }
 
 /**
- * Recorded GRANTs that are broader than the Phase 1 runtime principal is meant
- * to hold — database scope, schema scope, or an object other than `dbo.AuditLog`.
+ * THE complete inventory of object rights the runtime principal may hold.
  *
- * DENY rows are never findings: the grant script writes several deliberately.
+ * Exhaustive and per verb, mirroring `sql/permissions/grant-application-principal.sql`
+ * exactly. Anything recorded against the principal that is not listed here is a
+ * finding — which is the point: this catches a right added directly in the
+ * database, or added to the grant script without anybody deciding it was
+ * needed.
+ *
+ * Two shapes of DELETE are visible here, and the difference is deliberate:
+ *
+ *   - `Session`, `Account`, `Verification` and `RateLimitCounter` MUST be
+ *     deletable. Revoking a session, unlinking an authentication method,
+ *     consuming a single-use token and expiring a rate-limit window are all
+ *     deletions; without the right, each of those controls stops working.
+ *   - `User`, `AuditLog`, `IdentityCommunicationIntent`,
+ *     `IdentitySecurityOperation`, `EmailDelivery`, `EmailSuppression` and
+ *     `ProviderEvent` must NOT be. Each is evidence —
+ *     of who existed, what happened, what was owed, what was refused and what
+ *     was already processed — and evidence the runtime can delete is evidence
+ *     an attacker with the runtime's authority can delete.
+ */
+const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
+  // Phase 1 — append-oriented audit (SECURITY_BASELINE.md §13.1).
+  '[dbo].[auditlog]': ['INSERT', 'SELECT'],
+
+  // Phase 2 Chunk 1 — Identity & Access.
+  '[dbo].[user]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[session]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[account]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[verification]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[identitycommunicationintent]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[identitysecurityoperation]': ['SELECT', 'INSERT', 'UPDATE'],
+
+  // Phase 2 Chunk 1 — Layer-0 platform concerns.
+  '[dbo].[emaildelivery]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[emailsuppression]': ['SELECT', 'INSERT'],
+  '[dbo].[providerevent]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[ratelimitcounter]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+};
+
+/**
+ * Recorded GRANTs broader than the runtime principal is meant to hold —
+ * database scope, schema scope, an object nothing grants on, or a verb beyond
+ * what that object's row in `ALLOWED_OBJECT_GRANTS` permits.
+ *
+ * DENY rows are never findings: the grant script writes many deliberately.
  */
 export function overreachingGrants(
   recorded: readonly RecordedPermission[],
@@ -306,13 +348,18 @@ export function overreachingGrants(
     if (entry.class === 'DATABASE') {
       return !ALLOWED_DATABASE_SCOPE_GRANTS.includes(entry.permission);
     }
+
+    // A schema-level grant silently extends to every table a later phase adds,
+    // so it is never permitted regardless of the right.
     if (entry.class === 'SCHEMA') return true;
 
-    // Object scope: only the audit table, and only the two approved rights.
-    const auditLog = entry.object.toLowerCase() === '[dbo].[auditlog]';
-    return !auditLog || !['INSERT', 'SELECT'].includes(entry.permission);
+    const permitted = ALLOWED_OBJECT_GRANTS[entry.object.toLowerCase()];
+    return permitted === undefined || !permitted.includes(entry.permission);
   });
 }
+
+/** The inventory, for tests that assert it matches the grant script. */
+export const allowedObjectGrants = ALLOWED_OBJECT_GRANTS;
 
 function assertLoginIdentifier(login: string): void {
   if (!/^[A-Za-z][A-Za-z0-9_]{2,63}$/.test(login)) {

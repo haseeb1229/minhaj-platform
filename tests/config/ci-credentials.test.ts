@@ -267,8 +267,18 @@ describe('B — CI credentials survive every parser that reads docker/.env', () 
 
   const recipes = [...workflow.matchAll(RECIPE)].map((match) => match[1] ?? '');
 
-  it('defines both ephemeral credentials', () => {
-    expect(recipes.length).toBe(2);
+  it('defines both ephemeral credentials, in every job that generates them', () => {
+    // Two jobs now write `docker/.env` — `Database foundation` and the Phase-2
+    // `Browser flows` — and each must define BOTH credentials. Counting
+    // recipes in pairs rather than fixing an absolute number keeps the
+    // property ("every generating step defines an sa password and an app
+    // password") separate from the number of jobs that happen to need one.
+    const generators = [
+      ...workflow.matchAll(/name: Generate ephemeral database credentials/g),
+    ];
+
+    expect(generators.length).toBeGreaterThanOrEqual(1);
+    expect(recipes.length).toBe(generators.length * 2);
   });
 
   it.each([

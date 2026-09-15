@@ -2,6 +2,7 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 
+import { DISPOSABLE_PREFIX, isDisposableDatabaseName } from './disposable-database.ts';
 import type { SqlSession } from './sql-connection.ts';
 
 /**
@@ -89,19 +90,38 @@ export function assertRestoreDatabaseName(name: string): void {
 }
 
 /**
- * Throws unless `database` is the one database Phase 1 backs up.
+ * Throws unless `database` is a database this platform may back up.
+ *
+ * TWO POSITIVE SHAPES, and an allowlist rather than a denylist:
+ *
+ *   - `MinhajPlatform`, the engineering database the operational rehearsal
+ *     reads;
+ *   - a DISPOSABLE `MinhajPhase1Test_<32 hex>` database, which the populated
+ *     recovery rehearsal creates, fills with synthetic rows and drops.
+ *
+ * The second was added because proving a restore of POPULATED Phase-2 state
+ * requires a source holding that state, and writing account rows into the
+ * engineering database to obtain one is the wrong trade: a rehearsal should
+ * not leave synthetic people behind in a real database. A disposable source is
+ * created by the run that uses it and destroyed by the same run.
+ *
+ * A RESTORE database (`MinhajPhase1Restore_*`) is deliberately NOT a valid
+ * source. It is the output of a rehearsal, and backing it up would prove a
+ * copy of a copy.
  *
  * Fails closed on the system databases, on an unknown name, on a name that
  * differs only in case, and on anything carrying SQL syntax.
  */
 export function assertBackupSourceDatabase(database: string): void {
-  if (database !== BACKUP_SOURCE_DATABASE) {
-    throw new Error(
-      `Refusing to back up '${database}': Phase 1 backs up ${BACKUP_SOURCE_DATABASE} ` +
-        `and nothing else. System databases, unknown databases and the host ` +
-        `SQLEXPRESS instance are never valid sources.`,
-    );
-  }
+  if (database === BACKUP_SOURCE_DATABASE) return;
+  if (isDisposableDatabaseName(database)) return;
+
+  throw new Error(
+    `Refusing to back up '${database}': the only valid sources are ` +
+      `${BACKUP_SOURCE_DATABASE} and a disposable ${DISPOSABLE_PREFIX}<32 hex> ` +
+      `database. System databases, restore targets, unknown databases and the ` +
+      `host SQLEXPRESS instance are never valid sources.`,
+  );
 }
 
 /** A deterministic, credential-free backup file name and its server-side path. */

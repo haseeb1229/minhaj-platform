@@ -11,6 +11,10 @@ import {
   newRestoreDatabaseName,
   RESTORE_PREFIX,
 } from '../src/lifecycle/backup.ts';
+import {
+  DISPOSABLE_PREFIX,
+  newDisposableDatabaseName,
+} from '../src/lifecycle/disposable-database.ts';
 import { resolveLocalDatabaseEnvironment } from '../src/lifecycle/local-environment.ts';
 
 /**
@@ -156,6 +160,25 @@ expectAccepted(
   BACKUP_SOURCE_DATABASE,
   assertBackupSourceDatabase,
 );
+
+// The POPULATED rehearsal builds its own source rather than writing synthetic
+// accounts into the engineering database, so a disposable name is a valid
+// source — and only in the generated shape. A restore target never is, which
+// the forbidden list above still proves.
+expectAccepted(
+  'backup source accepted: a disposable rehearsal source',
+  newDisposableDatabaseName(),
+  assertBackupSourceDatabase,
+);
+
+for (const [label, value] of [
+  ['disposable prefix with no suffix', DISPOSABLE_PREFIX],
+  ['disposable prefix with a short suffix', `${DISPOSABLE_PREFIX}abc`],
+  ['disposable prefix with non-hex', `${DISPOSABLE_PREFIX}${'g'.repeat(32)}`],
+  ['disposable name with a trailing statement', `${DISPOSABLE_PREFIX}${'a'.repeat(32)};`],
+] as const) {
+  expectRejected(`backup source refused: ${label}`, value, assertBackupSourceDatabase);
+}
 
 // ---- artifact paths that must always be refused -----------------------------
 //

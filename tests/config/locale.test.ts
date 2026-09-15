@@ -144,6 +144,7 @@ describe('the render and routing tree stays statically renderable', () => {
    */
   const renderTree = [
     'apps/web/src/config/locale.ts',
+    'apps/web/src/config/route-locale.ts',
     'apps/web/src/i18n/routing.ts',
     'apps/web/src/i18n/request.ts',
     'apps/web/src/i18n/navigation.ts',
@@ -152,6 +153,7 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/app/[locale]/page.tsx',
     'apps/web/src/components/locale-switcher.tsx',
     'apps/web/src/components/locale-switcher-links.tsx',
+    'apps/web/src/components/ui/index.tsx',
   ];
 
   it.each(renderTree)('%s does not force dynamic rendering', async (file) => {
@@ -177,12 +179,25 @@ describe('the render and routing tree stays statically renderable', () => {
   it('covers every file in the localisation and component tree', async () => {
     // A file added to either directory later must be listed above, or the two
     // guards quietly stop covering the code they exist for.
+    //
+    // RECURSIVE. The walk used to read one level, so the first component
+    // SUBDIRECTORY to appear — `components/ui/` did — would have been recorded
+    // as a single unlisted entry, and every file inside it would have escaped
+    // both guards while the list still looked complete.
     const found: string[] = [];
 
-    for (const directory of ['apps/web/src/i18n', 'apps/web/src/components']) {
-      for (const entry of await readdir(path.join(repoRoot, directory))) {
-        found.push(`${directory}/${entry}`);
+    const walk = async (directory: string): Promise<void> => {
+      for (const entry of await readdir(path.join(repoRoot, directory), {
+        withFileTypes: true,
+      })) {
+        const relative = `${directory}/${entry.name}`;
+        if (entry.isDirectory()) await walk(relative);
+        else found.push(relative);
       }
+    };
+
+    for (const directory of ['apps/web/src/i18n', 'apps/web/src/components']) {
+      await walk(directory);
     }
 
     expect(found.length).toBeGreaterThan(0);
@@ -209,11 +224,42 @@ describe('the render and routing tree stays statically renderable', () => {
   });
 
   it('keeps no unprefixed public application tree beside the locale one', async () => {
-    // ROUTE_MAP.md §1.1: the locale segment is ALWAYS present. A surviving
-    // `app/layout.tsx` and `app/page.tsx` would make `/` answer directly and
-    // reintroduce exactly the duplicate-URL problem the contract removes.
+    // ROUTE_MAP.md §1.1: the locale segment is ALWAYS present for PAGES. A
+    // surviving `app/layout.tsx` and `app/page.tsx` would make `/` answer
+    // directly and reintroduce exactly the duplicate-URL problem the contract
+    // removes.
+    //
+    // `api/` is the accepted exception and not a page tree: §10 rule 6 names
+    // `/api/*` among the routes that carry no locale prefix, and the proxy
+    // excludes it for the same reason — a redirect on a provider callback path
+    // is a silent integration failure.
     const entries = await readdir(path.join(repoRoot, 'apps/web/src/app'));
 
-    expect(entries).toEqual(['[locale]']);
+    expect([...entries].sort()).toEqual(['[locale]', 'api']);
+  });
+
+  it('exposes no page outside the locale segment', async () => {
+    // The stronger form of the rule above: whatever lives beside `[locale]`
+    // must not RENDER anything. A `page.tsx` under `api/` would be an
+    // unprefixed public page wearing a non-locale path.
+    const outside: string[] = [];
+
+    const walk = async (directory: string): Promise<void> => {
+      for (const entry of await readdir(path.join(repoRoot, directory), {
+        withFileTypes: true,
+      })) {
+        if (entry.name === '[locale]') continue;
+
+        const relative = `${directory}/${entry.name}`;
+        if (entry.isDirectory()) await walk(relative);
+        else if (/^(page|layout|template|default)\.(tsx|jsx)$/.test(entry.name)) {
+          outside.push(relative);
+        }
+      }
+    };
+
+    await walk('apps/web/src/app');
+
+    expect(outside).toEqual([]);
   });
 });
