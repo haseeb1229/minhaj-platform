@@ -99,6 +99,11 @@ COPY .prettierignore ./
 COPY .env.example .dockerignore ./
 COPY docker ./docker
 
+# The Phase 2 architecture gate verifies that the permission catalogue still
+# matches the frozen security baseline. Carry that single non-secret document
+# in the test image only; the runtime stage remains documentation-free.
+COPY docs/SECURITY_BASELINE.md ./docs/SECURITY_BASELINE.md
+
 # `tests/config/ci-credentials.test.ts` reads the workflow to assert the CI
 # contract: Prisma generation ordering, dotenv-safe credentials, and the
 # compose fail-closed guard. It is an input to the suite exactly as

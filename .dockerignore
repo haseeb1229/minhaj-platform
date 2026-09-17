@@ -152,7 +152,9 @@ desktop.ini
 
 # --- Documentation ----------------------------------------------------------
 # The frozen architecture documents are not needed to build or run the app.
-docs/
+# Keep them out of the context except for the one baseline the test stage reads.
+docs/*
+!docs/SECURITY_BASELINE.md
 
 # =============================================================================
 # FINAL SECRET DENY — this block must remain LAST
