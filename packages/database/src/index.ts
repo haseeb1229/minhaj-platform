@@ -76,6 +76,12 @@ export type {
   AuthMechanicsFailure,
 } from './adapters/identity-access/index.ts';
 
+export {
+  AuthorizationDataError,
+  createAuthorizationPersistence,
+  createAuthorizationReader,
+} from './adapters/identity-access/index.ts';
+
 /* ---- Layer-0: email ----------------------------------------------------- */
 
 export {

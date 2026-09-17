@@ -11,9 +11,13 @@
  * INTERFACES and is handed their implementations by Layer 4; it never names
  * one (DOMAIN_MODEL.md §3.1 — "Identity & Access: Layer 0 only").
  *
- * Authorisation — `can()`, roles, permissions, step-up — arrives with Chunk 2.
- * Nothing here pretends to offer it: an authorisation helper that always
- * answered "yes" would be worse than its absence.
+ * WHERE THE AUTHORISATION CHECK IS. Not here. `can()` and
+ * `requirePermission()` are hosted in `packages/server-core/authorization`,
+ * because ARCHITECTURE.md §3.2 requires the realtime transport to make
+ * authorisation decisions through the same code the web process uses, and a
+ * context may not depend on that host. This file exports what CHANGES
+ * privilege; the host exports what CHECKS it, and the split is what keeps one
+ * enforcement path reachable from both processes (§3.1.3).
  */
 
 export { createIdentityService } from './application/identity-service.ts';
@@ -25,7 +29,29 @@ export type {
   IdentityService,
   IdentityServiceDependencies,
   RequestContext,
+  SignInOutcome,
 } from './application/identity-service.ts';
+
+export { createAuthorizationService } from './application/authorization-service.ts';
+
+export type {
+  AuthorizationAdminService,
+  AuthorizationError,
+  AuthorizationFailure,
+  AuthorizationResult,
+  AuthorizationServiceDependencies,
+} from './application/authorization-service.ts';
+
+export { createPrivilegedSecurityService } from './application/privileged-security-service.ts';
+
+export type {
+  PrivilegedSecurityError,
+  PrivilegedSecurityFailure,
+  PrivilegedSecurityResult,
+  PrivilegedSecurityService,
+  PrivilegedSecurityServiceDependencies,
+  PrivilegedSecurityState,
+} from './application/privileged-security-service.ts';
 
 export {
   MESSAGE_LOCALES,
@@ -40,6 +66,18 @@ export {
   notificationKey,
   wouldRemoveFinalAuthenticationMethod,
 } from './domain/account.ts';
+
+export {
+  PROTECTED_ROLE_KEYS,
+  grantReasonSchema,
+  isProtectedRoleKey,
+  isSelfElevation,
+  permissionBundleSchema,
+  roleDescriptionSchema,
+  roleKeySchema,
+  roleNameSchema,
+  wouldRemoveFinalAdministrator,
+} from './domain/authorization.ts';
 
 export { IDENTITY_RATE_LIMITS } from './domain/rate-limits.ts';
 export type { IdentityFlow, IdentityRateLimit } from './domain/rate-limits.ts';

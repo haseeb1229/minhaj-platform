@@ -45,6 +45,9 @@ export const EXPECTED_AUDIT_INDEXES = [
   'AuditLog_actorId_idx',
   'AuditLog_occurredAt_idx',
   'AuditLog_targetType_targetId_idx',
+  // Chunk 2: the read-only admin audit view filters by action and orders by
+  // time, and only indexed filters are offered (SECURITY_BASELINE.md §28).
+  'AuditLog_action_occurredAt_idx',
 ];
 
 /**
@@ -57,14 +60,12 @@ export const EXPECTED_AUDIT_INDEXES = [
  * `User`, `Account` and `Session` USED to be on this list and are not any
  * more: Phase 2 owns them, and they are now legitimate content of a current
  * artifact. Leaving them here would have turned the first correct Phase-2
- * backup into a failure. `Role` and `Permission` stay, because authorisation
- * is Chunk 2 and has not arrived.
+ * backup into a failure. `Role`, `Permission`, `RolePermission` and
+ * `RoleAssignment` left it for the same reason when Chunk 2 delivered
+ * authorisation; every table remaining belongs to a phase that has not
+ * happened.
  */
 const FUTURE_DOMAIN_TABLES = [
-  'Role',
-  'Permission',
-  'RolePermission',
-  'RoleAssignment',
   'Article',
   'Page',
   'Quran',
@@ -99,6 +100,17 @@ export const PHASE2_TABLES = [
   'Session',
   'User',
   'Verification',
+  // Chunk 2 — authorisation, step-up and the privileged second factor. An
+  // artifact that restored the accounts but not who may administer them would
+  // be a restore that looks complete and leaves the platform ungoverned.
+  'Permission',
+  'Role',
+  'RolePermission',
+  'RoleAssignment',
+  'StepUpGrant',
+  'TwoFactor',
+  'PrivilegedSecurityPosture',
+  'IdentityBootstrap',
 ];
 
 async function userTables(session: SqlSession): Promise<string[]> {

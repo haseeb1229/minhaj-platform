@@ -34,11 +34,28 @@ declare module 'mssql' {
     rowsAffected: number[];
   }
 
+  /**
+   * A driver type marker, as `mssql` exposes them.
+   *
+   * Opaque here on purpose: the lifecycle code binds one type, `NVarChar`, and
+   * a declaration that described the driver's whole type table would be a
+   * second copy of it to keep in step.
+   */
+  export interface SqlType {
+    readonly __sqlType: unique symbol;
+  }
+
+  export const NVarChar: SqlType;
+
   export interface Request {
     /** Runs a single statement. */
     query: <Row>(command: string) => Promise<Result<Row>>;
     /** Runs a statement batch, as a `GO`-separated script section would be. */
     batch: <Row>(command: string) => Promise<Result<Row>>;
+    /** Binds one named parameter, typed by the driver rather than spliced. */
+    input: (name: string, type: SqlType, value: unknown) => Request;
+    /** Calls a stored procedure with the bound parameters. */
+    execute: <Row>(procedure: string) => Promise<Result<Row>>;
   }
 
   export class ConnectionPool {
@@ -50,6 +67,7 @@ declare module 'mssql' {
 
   const mssql: {
     ConnectionPool: typeof ConnectionPool;
+    NVarChar: SqlType;
   };
 
   export default mssql;

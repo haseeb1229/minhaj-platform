@@ -17,6 +17,12 @@
       "browser": "./src/client-import-error.ts",
       "default": "./src/logging/logger.ts"
     },
+    "./authorization": {
+      "react-server": "./src/authorization/index.ts",
+      "node": "./src/authorization/index.ts",
+      "browser": "./src/client-import-error.ts",
+      "default": "./src/authorization/index.ts"
+    },
     "./session": {
       "react-server": "./src/session/index.ts",
       "node": "./src/session/index.ts",

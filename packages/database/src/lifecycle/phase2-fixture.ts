@@ -45,6 +45,14 @@ export interface Phase2Fixture {
   readonly providerEventId: string;
   readonly rateLimitKey: string;
   readonly auditId: string;
+
+  // ---- Chunk 2: authorisation and privileged security ------------------
+  readonly customRoleId: string;
+  readonly customRoleKey: string;
+  readonly assignmentId: string;
+  readonly protectedAssignmentId: string;
+  readonly stepUpGrantId: string;
+  readonly twoFactorId: string;
 }
 
 export function newPhase2Fixture(): Phase2Fixture {
@@ -66,6 +74,16 @@ export function newPhase2Fixture(): Phase2Fixture {
     providerEventId: randomUUID(),
     rateLimitKey: `v1:${TAG}:${runId}`,
     auditId: randomUUID(),
+
+    customRoleId: randomUUID(),
+    // A key nothing else can collide with, and obviously rehearsal machinery.
+    // It carries the WHOLE run identifier, which is what `assertSafe` checks:
+    // a truncated one would be a value this module cannot prove it generated.
+    customRoleKey: `${TAG}-${runId}`,
+    assignmentId: randomUUID(),
+    protectedAssignmentId: randomUUID(),
+    stepUpGrantId: randomUUID(),
+    twoFactorId: randomUUID(),
   };
 }
 
@@ -188,6 +206,92 @@ export async function writePhase2Fixture(
       (N'${f.auditId}', N'user', N'${f.accountId}', N'identity.password.changed',
        N'user', N'${f.accountId}', N'db:recovery:populated');
   `);
+
+  // ---- Chunk 2: authorisation and privileged security --------------------
+  //
+  // WHY THESE ROWS MATTER MOST. An artifact that restored the accounts but not
+  // WHO MAY ADMINISTER THEM is a restore that looks complete and leaves the
+  // platform ungoverned — and the protected role, the assignment history and
+  // the second-factor state are precisely what nobody can reconstruct by hand.
+  //
+  // NOTHING HERE IS A CREDENTIAL. The stored secret and recovery codes are
+  // fixed non-secret placeholders, not encrypted material and not values any
+  // account accepts.
+
+  await admin.query(`
+    INSERT INTO [dbo].[Role] ([id], [key], [name], [description], [system])
+    VALUES
+      (N'${f.customRoleId}', N'${f.customRoleKey}', N'Recovery Rehearsal Role',
+       N'A custom role written by the populated recovery rehearsal.', 0);
+  `);
+
+  // A bundle drawn from the MIGRATION-SEEDED catalogue, so the foreign key to
+  // `Permission` is genuinely exercised rather than worked around.
+  await admin.query(`
+    INSERT INTO [dbo].[RolePermission] ([roleId], [permissionKey])
+    VALUES
+      (N'${f.customRoleId}', N'audit.read'),
+      (N'${f.customRoleId}', N'users.read');
+  `);
+
+  await admin.query(`
+    INSERT INTO [dbo].[RoleAssignment]
+      ([id], [userId], [roleId], [grantedById], [grantedReason])
+    VALUES
+      (N'${f.assignmentId}', N'${f.accountId}', N'${f.customRoleId}',
+       N'${f.accountId}', N'${TAG}-${f.runId}');
+  `);
+
+  // The completed bootstrap record below is legal only after a usable holder
+  // of the protected role exists. This mirrors the production procedure's
+  // assignment-before-bootstrap order and makes that invariant part of the
+  // populated restore proof.
+  await admin.query(`
+    INSERT INTO [dbo].[RoleAssignment]
+      ([id], [userId], [roleId], [grantedById], [grantedReason])
+    SELECT N'${f.protectedAssignmentId}', N'${f.accountId}', r.[id],
+           N'${f.accountId}', N'${TAG}-${f.runId}-bootstrap'
+    FROM [dbo].[Role] r
+    WHERE r.[key] = N'platform-administrator';
+  `);
+
+  await admin.query(`
+    INSERT INTO [dbo].[StepUpGrant]
+      ([id], [userId], [sessionId], [purpose], [expiresAt])
+    VALUES
+      (N'${f.stepUpGrantId}', N'${f.accountId}', N'${f.sessionId}',
+       N'privilege-administration', DATEADD(minute, 5, SYSUTCDATETIME()));
+  `);
+
+  await admin.query(`
+    INSERT INTO [dbo].[TwoFactor]
+      ([id], [secret], [backupCodes], [userId], [verified])
+    VALUES
+      (N'${f.twoFactorId}', N'not-a-real-secret-${TAG}-${f.runId}',
+       N'not-real-codes-${TAG}-${f.runId}', N'${f.accountId}', 1);
+  `);
+
+  await admin.query(`
+    UPDATE [dbo].[User] SET [twoFactorEnabled] = 1 WHERE [id] = N'${f.accountId}';
+  `);
+
+  await admin.query(`
+    INSERT INTO [dbo].[PrivilegedSecurityPosture]
+      ([userId], [secondFactorVerifiedAt], [recoveryCodesIssuedAt],
+       [recoveryCodesConfirmedAt])
+    VALUES
+      (N'${f.accountId}', SYSUTCDATETIME(), SYSUTCDATETIME(), SYSUTCDATETIME());
+  `);
+
+  // The one-time bootstrap record. Singleton by primary key and CHECK
+  // constraint, so a restore that lost it would let a second bootstrap run.
+  await admin.query(`
+    INSERT INTO [dbo].[IdentityBootstrap]
+      ([id], [targetUserId], [operatorLogin], [ticket])
+    VALUES
+      (N'platform-administrator', N'${f.accountId}', N'rehearsal_operator',
+       N'${TAG}-${f.runId}');
+  `);
 }
 
 /** What a single verification found, for reporting. */
@@ -295,6 +399,8 @@ export async function verifyRestoredPhase2(
     table: 'IdentityCommunicationIntent',
     detail: 'pending, key intact, recipientOverride column present',
   });
+
+  await verifyRestoredAuthorization(restored, fixture, found);
 
   const operations = await restored.query<{
     kind: string;
@@ -414,4 +520,166 @@ export async function verifyRestoredIntegrity(
   }
 
   return `${untrusted.length === 0 ? 'all trusted' : ''}, orphan INSERT refused (547)`;
+}
+
+/**
+ * Reads the Chunk-2 authorisation state back out of the RESTORED database.
+ *
+ * VALUES AND RELATIONSHIPS, like the rest of this module: the bundle is walked
+ * through the real foreign key to `Permission`, the assignment through the one
+ * to `Role`, and the singleton bootstrap record is checked for the exact key
+ * its CHECK constraint permits. A restore that recovered the tables but lost
+ * the graph between them would satisfy a count and fail here.
+ */
+async function verifyRestoredAuthorization(
+  restored: SqlSession,
+  fixture: Phase2Fixture,
+  found: Phase2Restored[],
+): Promise<void> {
+  const f = fixture;
+
+  // THE SEEDED CATALOGUE. It is migration-controlled foundation data, so it
+  // travels in the artifact like any other row.
+  const [catalogue] = await restored.query<{ total: number }>(
+    'SELECT COUNT_BIG(*) AS total FROM [dbo].[Permission];',
+  );
+  expect(
+    Number(catalogue?.total) === 12,
+    `Restored permission catalogue holds ${catalogue?.total ?? 0} rows, expected 12.`,
+  );
+  found.push({ table: 'Permission', detail: '12 migration-seeded permissions' });
+
+  const [protectedRole] = await restored.query<{ total: number }>(
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[Role] AS r
+     JOIN [dbo].[RolePermission] AS rp ON rp.[roleId] = r.[id]
+     WHERE r.[key] = N'platform-administrator' AND r.[system] = 1;`,
+  );
+  expect(
+    Number(protectedRole?.total) === 12,
+    'Restored protected role lost part of its permission bundle.',
+  );
+  found.push({ table: 'Role', detail: 'protected system role with its full bundle' });
+
+  const [custom] = await restored.query<{ name: string; system: boolean | number }>(
+    `SELECT [name], [system] FROM [dbo].[Role] WHERE [id] = N'${f.customRoleId}';`,
+  );
+  expect(custom !== undefined, 'Restored database has no rehearsal custom role.');
+  expect(custom?.name === 'Recovery Rehearsal Role', 'Restored custom role renamed.');
+  expect(!custom?.system, 'Restored custom role became a protected one.');
+
+  const [bundle] = await restored.query<{ total: number }>(
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[RolePermission] AS rp
+     JOIN [dbo].[Permission] AS p ON p.[key] = rp.[permissionKey]
+     WHERE rp.[roleId] = N'${f.customRoleId}';`,
+  );
+  expect(
+    Number(bundle?.total) === 2,
+    'Restored custom bundle did not survive with its catalogue relationship.',
+  );
+  found.push({
+    table: 'RolePermission',
+    detail: '2 memberships joined to the catalogue',
+  });
+
+  const [assignment] = await restored.query<{
+    reason: string | null;
+    revokedAt: Date | null;
+  }>(
+    `SELECT ra.[grantedReason] AS reason, ra.[revokedAt] AS revokedAt
+     FROM [dbo].[RoleAssignment] AS ra
+     JOIN [dbo].[Role] AS r ON r.[id] = ra.[roleId]
+     JOIN [dbo].[User] AS u ON u.[id] = ra.[userId]
+     WHERE ra.[id] = N'${f.assignmentId}';`,
+  );
+  expect(assignment !== undefined, 'Restored role assignment did not survive.');
+  expect(
+    assignment?.reason === `${TAG}-${f.runId}`,
+    'Restored assignment lost its grant reason.',
+  );
+  expect(assignment?.revokedAt === null, 'Restored assignment came back revoked.');
+  found.push({
+    table: 'RoleAssignment',
+    detail: 'live assignment joined to its User and Role',
+  });
+
+  const [protectedAssignment] = await restored.query<{ total: number }>(
+    `SELECT COUNT_BIG(*) AS total
+     FROM [dbo].[RoleAssignment] ra
+     JOIN [dbo].[Role] r ON r.[id] = ra.[roleId]
+     JOIN [dbo].[User] u ON u.[id] = ra.[userId]
+     WHERE ra.[id] = N'${f.protectedAssignmentId}'
+       AND r.[key] = N'platform-administrator'
+       AND r.[deactivatedAt] IS NULL
+       AND ra.[revokedAt] IS NULL
+       AND u.[status] = N'active'
+       AND u.[emailVerified] = 1;`,
+  );
+  expect(
+    Number(protectedAssignment?.total) === 1,
+    'Restored bootstrap has no usable protected-role holder.',
+  );
+  found.push({
+    table: 'RoleAssignment',
+    detail: 'usable protected-role holder preserves the bootstrap invariant',
+  });
+
+  const [grant] = await restored.query<{ purpose: string }>(
+    `SELECT sg.[purpose] FROM [dbo].[StepUpGrant] AS sg
+     JOIN [dbo].[Session] AS s ON s.[id] = sg.[sessionId]
+     WHERE sg.[id] = N'${f.stepUpGrantId}';`,
+  );
+  expect(
+    grant?.purpose === 'privilege-administration',
+    'Restored step-up grant did not survive with its session relationship.',
+  );
+  found.push({ table: 'StepUpGrant', detail: 'grant joined to its Session' });
+
+  const [factor] = await restored.query<{ verified: boolean | number; secret: string }>(
+    `SELECT [verified], [secret] FROM [dbo].[TwoFactor] WHERE [id] = N'${f.twoFactorId}';`,
+  );
+  expect(factor !== undefined, 'Restored second-factor record did not survive.');
+  expect(Boolean(factor?.verified), 'Restored second factor lost its verified flag.');
+  expect(
+    factor?.secret === `not-a-real-secret-${TAG}-${f.runId}`,
+    'Restored second-factor payload changed.',
+  );
+  found.push({ table: 'TwoFactor', detail: 'verified factor, payload intact' });
+
+  const [posture] = await restored.query<{ total: number }>(
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[PrivilegedSecurityPosture]
+     WHERE [userId] = N'${f.accountId}'
+       AND [recoveryCodesConfirmedAt] IS NOT NULL
+       AND [reenrolmentRequiredAt] IS NULL;`,
+  );
+  expect(
+    Number(posture?.total) === 1,
+    'Restored privileged posture did not survive complete.',
+  );
+  found.push({
+    table: 'PrivilegedSecurityPosture',
+    detail: 'complete posture, no re-enrolment demanded',
+  });
+
+  const [bootstrap] = await restored.query<{
+    id: string;
+    operatorLogin: string;
+    ticket: string;
+  }>('SELECT [id], [operatorLogin], [ticket] FROM [dbo].[IdentityBootstrap];');
+  expect(bootstrap !== undefined, 'Restored bootstrap record did not survive.');
+  expect(
+    bootstrap?.id === 'platform-administrator',
+    'Restored bootstrap record carries an unexpected key.',
+  );
+  expect(
+    bootstrap?.operatorLogin === 'rehearsal_operator',
+    'Restored bootstrap lost the operator identity it recorded.',
+  );
+  expect(
+    bootstrap?.ticket === `${TAG}-${f.runId}`,
+    'Restored bootstrap lost its ticket.',
+  );
+  found.push({
+    table: 'IdentityBootstrap',
+    detail: 'one-time record intact, operator and ticket preserved',
+  });
 }

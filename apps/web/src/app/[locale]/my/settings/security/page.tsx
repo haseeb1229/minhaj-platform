@@ -23,6 +23,7 @@ import {
 } from '../../../(identity)/actions';
 import { requireActiveSession } from '../../guard';
 import { RevokeSessionForm } from './revoke-form';
+import { SecondFactorSection } from './second-factor';
 
 /**
  * Account & Security — the NON-PRIVILEGED self-service surface (ROUTE_MAP.md
@@ -33,11 +34,16 @@ import { RevokeSessionForm } from './revoke-form';
  * as a backend service is not delivered. Everything here is the account acting
  * on itself.
  *
- * WHAT IS DELIBERATELY ABSENT. No second-factor enrolment, no recovery codes,
- * no role or permission display, no privileged administration. Those need the
- * authorisation enforcement that arrives with Chunk 2, and a surface that
- * showed them without it would be a control that does not control anything
- * (SECURITY_BASELINE.md §3.4).
+ * TWO-STEP VERIFICATION LIVES HERE, and reaching it needs only an active
+ * session. That is deliberate and load-bearing: it is where a freshly
+ * bootstrapped administrator, and a recovered one, complete the setup their
+ * privileged capabilities are waiting on. Gating it on the posture it exists to
+ * establish would make the bootstrap and the audited recovery circular
+ * (SECURITY_BASELINE.md §8.3).
+ *
+ * WHAT IS STILL DELIBERATELY ABSENT. No role or permission display and no
+ * privileged administration: those are the `/admin` surfaces, behind the
+ * permission checks that give them meaning (§3.4).
  */
 export const metadata = { robots: { index: false, follow: false } };
 
@@ -63,6 +69,9 @@ export default async function SecurityPage({
 
   const sessions = await identity.listSessions(context);
   const methods = await identity.describeAuthenticationMethods(session);
+
+  const { privilegedSecurity } = identityRuntime();
+  const posture = await privilegedSecurity.describe(session.account.id);
 
   const others = sessions.filter((entry) => !entry.current);
 
@@ -178,6 +187,58 @@ export default async function SecurityPage({
           </ActionForm>
         </Panel>
       </section>
+
+      {/* ---- Two-step verification ---------------------------------------- */}
+
+      <SecondFactorSection
+        locale={locale}
+        enrolled={posture.secondFactorEnrolled}
+        recoveryCodesConfirmed={posture.recoveryCodesConfirmed}
+        reenrolmentRequired={posture.reenrolmentRequired}
+        labels={{
+          heading: t('security.twoFactor'),
+          help: t('security.twoFactorHelp'),
+          stateEnrolled: t('security.stateEnrolled'),
+          stateIncomplete: t('security.stateIncomplete'),
+          stateNone: t('security.stateNone'),
+          stateReenrol: t('security.stateReenrol'),
+          enrolIntro: t('security.enrolIntro'),
+          enrolSubmit: t('security.enrolSubmit'),
+          enrolPending: t('security.enrolPending'),
+          enrolUri: t('security.enrolUri'),
+          enrolUriHelp: t('security.enrolUriHelp'),
+          enrolCodes: t('security.enrolCodes'),
+          enrolCodesHelp: t('security.enrolCodesHelp'),
+          confirmCodes: t('security.confirmCodes'),
+          confirmCodesPending: t('security.confirmCodesPending'),
+          codesConfirmed: t('security.codesConfirmed'),
+          verifyTitle: t('security.verifyTitle'),
+          verifyHelp: t('security.verifyHelp'),
+          code: t('security.code'),
+          verifySubmit: t('security.verifySubmit'),
+          verifyPending: t('security.verifyPending'),
+          verified: t('security.verified'),
+          regenerate: t('security.regenerate'),
+          regenerateHelp: t('security.regenerateHelp'),
+          regenerateSubmit: t('security.regenerateSubmit'),
+          regeneratePending: t('security.regeneratePending'),
+          regenerated: t('security.regenerated'),
+          disable: t('security.disable'),
+          disableHelp: t('security.disableHelp'),
+          disableSubmit: t('security.disableSubmit'),
+          disablePending: t('security.disablePending'),
+          disabled: t('security.disabled'),
+          recoveryCode: t('security.recoveryCode'),
+          password: t('common.currentPassword'),
+          invalidCode: t('security.invalidCode'),
+          invalidCredentials: t('security.passwordWrong'),
+          notEnrolled: t('security.notEnrolled'),
+          alreadyEnrolled: t('security.alreadyEnrolled'),
+          rateLimited: t('common.rateLimited'),
+          unavailable: t('common.unavailable'),
+          checkFields: t('common.checkFields'),
+        }}
+      />
 
       {/* ---- Sessions ----------------------------------------------------- */}
 

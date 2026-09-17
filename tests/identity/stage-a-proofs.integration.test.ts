@@ -152,6 +152,15 @@ describe.skipIf(!configured)('Phase 2 Stage A — compatibility and token proofs
       tokenExpiresInSeconds: 3_600,
       tokenAllowedAttempts: 5,
       rateLimiter: limiter,
+      // The SAME privileged second-factor policy the composition root injects.
+      // These proofs are about what the LIBRARY actually does on this stack, so
+      // they must construct the instance the deployment constructs.
+      secondFactor: {
+        recoveryCodeCount: 10,
+        totpDigits: 6 as const,
+        totpPeriodSeconds: 30,
+        signInLockout: { maxFailedAttempts: 10, durationSeconds: 900 },
+      },
       onTokenIssued: async (event: {
         purpose: string;
         email: string;
@@ -880,6 +889,12 @@ describe.skipIf(!configured)('Phase 2 Stage A — compatibility and token proofs
         tokenExpiresInSeconds: 3_600,
         tokenAllowedAttempts: 5,
         rateLimiter: countingRateLimiter(),
+        secondFactor: {
+          recoveryCodeCount: 10,
+          totpDigits: 6 as const,
+          totpPeriodSeconds: 30,
+          signInLockout: { maxFailedAttempts: 10, durationSeconds: 900 },
+        },
         onTokenIssued: async () => undefined,
       });
 

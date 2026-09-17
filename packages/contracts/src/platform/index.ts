@@ -14,6 +14,7 @@ export type {
   AuditPort,
   DeliveryAccepted,
   DeliveryFailureClass,
+  DeliveryOperatorRecord,
   DeliveryOutcome,
   DeliveryPurpose,
   DeliveryRecord,
@@ -34,6 +35,7 @@ export type {
   RateLimitDecision,
   RateLimitRule,
   RateLimiterPort,
+  SuppressionCount,
   SuppressionReason,
   SuppressionScope,
 } from './ports.ts';

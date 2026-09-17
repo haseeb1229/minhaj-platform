@@ -324,6 +324,29 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[identitycommunicationintent]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[identitysecurityoperation]': ['SELECT', 'INSERT', 'UPDATE'],
 
+  // Phase 2 Chunk 2 — authorisation, step-up and privileged second factor.
+  //
+  // `permission` and `identitybootstrap` are SELECT-only: one is an immutable
+  // catalogue and the other is the record that the one-time bootstrap has
+  // happened. A runtime that could write either could invent a capability or
+  // erase the fact that the first administrator was provisioned.
+  //
+  // `role`, `roleassignment` and `privilegedsecurityposture` carry no DELETE:
+  // each is privilege HISTORY, and history the runtime can delete is history an
+  // attacker with the runtime's authority can delete.
+  //
+  // `rolepermission` and `stepupgrant` do, because for them a delete is the
+  // operation rather than an erasure — removing a permission from a bundle, and
+  // revoking an elevation.
+  '[dbo].[permission]': ['SELECT'],
+  '[dbo].[role]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[rolepermission]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[roleassignment]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[stepupgrant]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[twofactor]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[privilegedsecurityposture]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[identitybootstrap]': ['SELECT'],
+
   // Phase 2 Chunk 1 — Layer-0 platform concerns.
   '[dbo].[emaildelivery]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[emailsuppression]': ['SELECT', 'INSERT'],

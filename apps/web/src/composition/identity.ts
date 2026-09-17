@@ -1,9 +1,18 @@
 import 'server-only';
 
-import { createIdentityService, type IdentityService } from '@/contexts/identity-access';
+import {
+  createAuthorizationService,
+  createIdentityService,
+  createPrivilegedSecurityService,
+  type AuthorizationAdminService,
+  type IdentityService,
+  type PrivilegedSecurityService,
+} from '@/contexts/identity-access';
 import {
   createAuditWriter,
   createAuthMechanicsAdapter,
+  createAuthorizationPersistence,
+  createAuthorizationReader,
   createEmailDeliveryStore,
   createEmailSuppression,
   createIdentityPersistence,
@@ -12,6 +21,10 @@ import {
   createResendProvider,
   rateLimitKey,
 } from '@minhaj/database';
+import {
+  createAuthorizationService as createAuthorizationRuntime,
+  type AuthorizationService,
+} from '@minhaj/server-core/authorization';
 import { createSessionService, type SessionService } from '@minhaj/server-core/session';
 import type {
   EmailDeliveryStorePort,
@@ -66,6 +79,12 @@ function parseSecrets(raw: string): { version: number; value: string }[] {
 export interface IdentityRuntime {
   readonly identity: IdentityService;
   readonly session: SessionService;
+  /** THE authorisation check. One implementation, hosted for two processes. */
+  readonly authorization: AuthorizationService;
+  /** Privilege ADMINISTRATION, owned by the Identity context. */
+  readonly administration: AuthorizationAdminService;
+  /** Step-up, the second factor and the recovery codes. */
+  readonly privilegedSecurity: PrivilegedSecurityService;
   readonly deliveries: EmailDeliveryStorePort;
   readonly suppression: EmailSuppressionPort;
   readonly providerEvents: ProviderEventPort;
@@ -99,6 +118,8 @@ export function identityRuntime(): IdentityRuntime {
 
   const limiter = createRateLimiter(limiterConfiguration);
   const persistence = createIdentityPersistence();
+  const authorizationPersistence = createAuthorizationPersistence();
+  const authorizationReader = createAuthorizationReader();
   const audit = createAuditWriter();
   const deliveries = createEmailDeliveryStore({ digest });
   const suppression = createEmailSuppression({ digest });
@@ -142,6 +163,18 @@ export function identityRuntime(): IdentityRuntime {
     tokenAllowedAttempts: 5,
     rateLimiter: limiter,
 
+    // PRIVILEGED SECOND-FACTOR policy. Ten single-use recovery codes, the
+    // standard six-digit thirty-second TOTP every authenticator app supports,
+    // and a sign-in lockout after ten consecutive failures across challenges
+    // and factors. The signed-in path has no library budget at all, which is
+    // why Identity spends the SQL limiter on every privileged proof.
+    secondFactor: {
+      recoveryCodeCount: 10,
+      totpDigits: 6,
+      totpPeriodSeconds: 30,
+      signInLockout: { maxFailedAttempts: 10, durationSeconds: 900 },
+    },
+
     // The adapter reports that a token exists; it does not decide what to do
     // about it. Identity enqueues its own delivery when it issues the token,
     // so this hook stays empty rather than becoming a second path that could
@@ -159,6 +192,34 @@ export function identityRuntime(): IdentityRuntime {
     rateLimitKey: (input) =>
       rateLimitKey({ ...input, configuration: limiterConfiguration }),
     baseUrl: environment.AUTH_BASE_URL,
+
+    // ONE named capability, not the authorisation port. A status change has to
+    // invalidate step-up grants as well as sessions; Identity is handed exactly
+    // that operation and nothing that could grant, revoke or read a privilege.
+    privilege: {
+      revokeStepUpGrants: (accountId) =>
+        authorizationPersistence.revokeStepUpGrantsForAccount(accountId),
+    },
+  });
+
+  const privilegedSecurity = createPrivilegedSecurityService({
+    auth,
+    authorization: authorizationPersistence,
+    persistence,
+    audit,
+    limiter,
+    rateLimitKey: (input) =>
+      rateLimitKey({ ...input, configuration: limiterConfiguration }),
+  });
+
+  // THE authorisation check, given the NARROW reader: three read operations,
+  // and nothing that can change what it reads. The realtime transport will be
+  // given the same one (ARCHITECTURE.md §3.1.2, §3.1.3, §3.2).
+  const authorization = createAuthorizationRuntime({ reader: authorizationReader });
+
+  const administration = createAuthorizationService({
+    authorization: authorizationPersistence,
+    verifyActor: (input) => authorization.verifyPrivilegedActor(input),
   });
 
   // The session service is given a NARROW reader, not the auth port. The
@@ -172,6 +233,16 @@ export function identityRuntime(): IdentityRuntime {
     },
   });
 
-  runtime = { identity, session, deliveries, suppression, providerEvents, provider };
+  runtime = {
+    identity,
+    session,
+    authorization,
+    administration,
+    privilegedSecurity,
+    deliveries,
+    suppression,
+    providerEvents,
+    provider,
+  };
   return runtime;
 }

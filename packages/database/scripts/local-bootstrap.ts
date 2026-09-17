@@ -1,6 +1,9 @@
 import 'server-only';
 
-import { getDatabaseMigrationUrl } from '../src/config.ts';
+import {
+  getDatabaseMigrationUrl,
+  getOperatorPrincipalCredentials,
+} from '../src/config.ts';
 import {
   describeConnection,
   formatConnectionMetadata,
@@ -114,6 +117,60 @@ export function retargetAtDisposable(
   const connection = assertApprovedLocalTarget(
     url,
     localTargetPolicy(command.environment.values, 'disposable', 'migration'),
+  );
+
+  return { url, connection };
+}
+
+/**
+ * Builds and PROVES the operator connection for a host-only privileged command.
+ *
+ * The migration command has already proved the server, the port and the
+ * database. What remains is the PRINCIPAL, and it is proved the same way
+ * everything else here is — positively, by constructing the URL the operator
+ * would connect with and putting it through the same guard.
+ *
+ * Three distinct accounts, and the check says so: the operator must be the
+ * configured `DATABASE_OPERATOR_LOGIN`, must not be the runtime principal
+ * (enforced inside the guard), and must not be the migration principal
+ * (enforced here, because only this function knows what the migration
+ * connection was). An operator that was any of the other two would be an
+ * operator whose authority nobody had actually narrowed.
+ */
+export function operatorConnection(command: LocalCommand): {
+  url: string;
+  connection: SqlServerConnection;
+} {
+  const credentials = getOperatorPrincipalCredentials(command.environment.values);
+  const login = credentials.DATABASE_OPERATOR_LOGIN;
+
+  if (login === command.connection.user) {
+    throw new Error(
+      'The operator principal is the same account as the migration principal; ' +
+        'routine bootstrap and recovery must not run with migration authority.',
+    );
+  }
+
+  const password = credentials.DATABASE_OPERATOR_PASSWORD;
+  if (password.includes('}')) {
+    // The URL grammar quotes a value containing `;` with braces, and there is
+    // no escape for a brace inside one. Refusing is the honest answer: a
+    // password this function cannot represent exactly is a password it must
+    // not represent approximately.
+    throw new Error(
+      'DATABASE_OPERATOR_PASSWORD contains a closing brace, which the SQL Server ' +
+        'connection-URL grammar cannot quote. Choose a password without one.',
+    );
+  }
+
+  const { server, port, database } = command.connection;
+  const url =
+    `sqlserver://${server}:${port};database=${database};user=${login};` +
+    `password={${password}};encrypt=true;trustServerCertificate=true`;
+
+  const connection = assertApprovedLocalTarget(
+    url,
+    localTargetPolicy(command.environment.values, 'source', 'operator'),
   );
 
   return { url, connection };

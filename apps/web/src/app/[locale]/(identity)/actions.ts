@@ -201,10 +201,67 @@ export async function signInAction(
 
   // Cookies are DATA until Layer 4 writes them. Dropping this call would leave
   // someone looking signed out immediately after signing in.
+  //
+  // THIS APPLIES TO THE CHALLENGE TOO. An account with a second factor gets a
+  // short-lived challenge cookie instead of a session, and it is just as
+  // essential: dropping it abandons a sign-in halfway through.
   await applySetCookies(result.setCookies);
+
+  const destination = safeReturnTo(form.get('returnTo') as string | null, locale);
+
+  if (result.state === 'second-factor-required') {
+    // NOT SIGNED IN YET, and the redirect says so. The destination travels
+    // through the challenge so the person still lands where they were going.
+    redirect(`/${locale}/signin/two-factor?returnTo=${encodeURIComponent(destination)}`);
+  }
 
   // Only a validated same-origin destination. An unvalidated one is an open
   // redirect under a trusted domain (SECURITY_BASELINE.md §9.3).
+  redirect(destination);
+}
+
+/**
+ * Answers the second-factor challenge.
+ *
+ * A Class-A mutation like every other action here: a POST through a Server
+ * Action, never a GET. The code is short-lived and the challenge is
+ * single-use, and neither is a reason to relax that — a GET carrying a
+ * second factor would sit in history, in logs and in referrers
+ * (SECURITY_BASELINE.md §7.1).
+ *
+ * TWO WAYS IN, ONE PATH OUT. A TOTP code and a recovery code are different
+ * proofs with different budgets, and they are the same flow afterwards.
+ */
+const secondFactorSchema = z.object({
+  // Trimmed and bounded, not pattern-matched: the library owns what a valid
+  // code looks like, and a client-side shape rule here would be a second
+  // opinion that could disagree with it.
+  code: z.string().trim().min(1).max(64),
+  kind: z.union([z.literal('totp'), z.literal('recovery-code')]),
+});
+
+export async function verifySecondFactorAction(
+  _previous: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  const locale = localeFrom(form);
+  const parsed = secondFactorSchema.safeParse({
+    code: form.get('code'),
+    kind: form.get('kind'),
+  });
+  if (!parsed.success) return invalid();
+
+  const { identity } = identityRuntime();
+  const result = await identity.completeSecondFactor(
+    await requestContext(locale),
+    parsed.data,
+  );
+
+  if (!result.ok) return failed(result.failure, result.retryAfter);
+
+  await applySetCookies(result.setCookies);
+  refreshAccountSurfaces(locale);
+
   redirect(safeReturnTo(form.get('returnTo') as string | null, locale));
 }
 

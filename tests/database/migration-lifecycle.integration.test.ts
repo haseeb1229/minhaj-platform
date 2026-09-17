@@ -86,8 +86,16 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
   let app: SqlSession;
   let migration: Migration;
   let allMigrations: Migration[];
-  /** A table the NEWEST migration owns, used to observe its rollback. */
-  const rolledBackTable = 'Verification';
+  /**
+   * A table the NEWEST migration owns, used to observe its rollback.
+   *
+   * DERIVED from that migration's own SQL rather than named here. A hard-coded
+   * table belongs to whichever migration was newest when somebody wrote it
+   * down, so the next migration silently turns this proof into an assertion
+   * that an unrelated table was not dropped — which passes for the wrong
+   * reason until it fails for a confusing one.
+   */
+  let rolledBackTable: string;
   /** The normal encrypted migration URL, retargeted at the disposable database. */
   let disposableUrl: string;
 
@@ -117,6 +125,15 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
     // history out of order, and `migrate status` rightly reports the set as
     // incomplete — a state the rollback artifacts are not written to produce.
     migration = newest;
+
+    const created = /CREATE TABLE \[dbo\]\.\[(\w+)\]/.exec(newest.forwardSql)?.[1];
+    if (created === undefined) {
+      throw new Error(
+        `The newest migration '${newest.id}' creates no table, so its rollback ` +
+          `cannot be observed by the absence of one.`,
+      );
+    }
+    rolledBackTable = created;
 
     master = await openMasterSession(connection);
     await createDisposableDatabase(master, databaseName);
@@ -183,11 +200,19 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
       'AuditLog',
       'EmailDelivery',
       'EmailSuppression',
+      'IdentityBootstrap',
       'IdentityCommunicationIntent',
       'IdentitySecurityOperation',
+      'Permission',
+      'PrivilegedSecurityPosture',
       'ProviderEvent',
       'RateLimitCounter',
+      'Role',
+      'RoleAssignment',
+      'RolePermission',
       'Session',
+      'StepUpGrant',
+      'TwoFactor',
       'User',
       'Verification',
       '_prisma_migrations',

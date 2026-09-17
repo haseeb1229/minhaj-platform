@@ -78,20 +78,22 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'EmailSuppression',
       'ProviderEvent',
       'RateLimitCounter',
+      // Phase 2 Chunk 2 — authorisation, step-up and the privileged second
+      // factor, each created by the migration that delivers its enforcement.
+      'Permission',
+      'Role',
+      'RolePermission',
+      'RoleAssignment',
+      'StepUpGrant',
+      'TwoFactor',
+      'PrivilegedSecurityPosture',
+      'IdentityBootstrap',
     ]) {
       expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }
 
-    // Phase 2 Chunk 2 — authorisation and privileged security — and every
-    // later phase still arrive with the slice that owns them.
+    // Every LATER phase still arrives with the slice that owns it.
     for (const table of [
-      'Role',
-      'Permission',
-      'RolePermission',
-      'RoleAssignment',
-      'StepUpGrant',
-      'IdentityBootstrap',
-      'TwoFactor',
       'Article',
       'Page',
       'Quran',

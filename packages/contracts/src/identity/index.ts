@@ -32,6 +32,40 @@ export type {
   TokenPurpose,
 } from './values.ts';
 
+export {
+  PERMISSION_CATALOGUE,
+  PERMISSION_GRANT,
+  PLATFORM_ADMINISTRATOR_PERMISSIONS,
+  PLATFORM_ADMINISTRATOR_ROLE,
+  STEP_UP_LIFETIME_SECONDS,
+  STEP_UP_PURPOSES,
+  isPermissionKey,
+} from './permissions.ts';
+
+export type {
+  PermissionDefinition,
+  PermissionKey,
+  StepUpPurpose,
+} from './permissions.ts';
+
+export type {
+  AccountPage,
+  AccountSummary,
+  AssignmentPage,
+  AuditPage,
+  AuditRecordView,
+  AuthorizationPersistencePort,
+  AuthorizationReaderPort,
+  BootstrapStatus,
+  CreateCustomRoleInput,
+  PrivilegeInvalidation,
+  PrivilegedActor,
+  PrivilegedPosture,
+  RoleAssignmentRecord,
+  RoleSummary,
+  StepUpGrantSummary,
+} from './authorization.ts';
+
 export type {
   AddressTokenPurpose,
   AuthMechanicsPort,

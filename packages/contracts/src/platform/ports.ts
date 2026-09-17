@@ -86,7 +86,8 @@ export type DeliveryPurpose =
   | 'identity.password-changed'
   | 'identity.email-changed'
   | 'identity.account-closed'
-  | 'identity.sessions-revoked';
+  | 'identity.sessions-revoked'
+  | 'identity.second-factor-changed';
 
 export type DeliveryStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'suppressed';
 
@@ -175,12 +176,57 @@ export interface EmailDeliveryStorePort {
 
   /** Operator view: pending, failed and suppressed mail. */
   summarise(): Promise<DeliverySummary>;
+
+  /**
+   * One bounded page of deliveries, for the operator surface.
+   *
+   * NOTE WHAT IT CANNOT RETURN: a recipient, a subject, a body or a token.
+   * Layer 0 never learns any of them, so an operator screen built on this
+   * shows what a stuck message IS and how it failed, and nothing about who it
+   * was for (SECURITY_BASELINE.md §19.2).
+   */
+  listForOperator(input: {
+    readonly status: DeliveryStatus | null;
+    readonly limit: number;
+    readonly offset: number;
+  }): Promise<{
+    readonly items: readonly DeliveryOperatorRecord[];
+    readonly more: boolean;
+  }>;
+
+  /**
+   * Puts a failed delivery back on the schedule, NOW.
+   *
+   * The one operator MUTATION this surface has, and deliberately the only one:
+   * it changes when a message is next attempted and nothing about what it says
+   * or who it reaches. It does not reset the attempt count, so a message that
+   * has exhausted its budget cannot be retried forever by pressing a button.
+   *
+   * Returns false when the delivery is not in a state a retry means anything
+   * for — already sent, or suppressed, which is a provider's decision and not
+   * an operator's to overrule.
+   */
+  rescheduleDelivery(id: string): Promise<boolean>;
 }
 
 export interface DeliverySummary {
   readonly pending: number;
   readonly failed: number;
   readonly suppressed: number;
+}
+
+/** A delivery as the operator surface shows it. Privacy-safe by construction. */
+export interface DeliveryOperatorRecord {
+  readonly id: string;
+  readonly purpose: DeliveryPurpose;
+  readonly status: DeliveryStatus;
+  readonly attemptCount: number;
+  readonly nextAttemptAt: Date | null;
+  readonly failureClass: DeliveryFailureClass | null;
+  /** A normalised CODE, never a provider message body. */
+  readonly failureCode: string | null;
+  readonly createdAt: Date;
+  readonly sentAt: Date | null;
 }
 
 /**
@@ -254,6 +300,23 @@ export interface EmailSuppressionPort {
     readonly recipient: string;
     readonly scope: SuppressionScope;
   }): Promise<boolean>;
+
+  /**
+   * How many addresses are suppressed, by reason and scope.
+   *
+   * COUNTS, not rows. An operator needs to know that complaints are rising and
+   * that transactional suppression is or is not involved; listing the
+   * suppressed recipients — even as keyed digests — would put a set of people
+   * who bounced or complained on a screen, which is personal data nobody asked
+   * this surface to display (SECURITY_BASELINE.md §19.2).
+   */
+  summarise(): Promise<readonly SuppressionCount[]>;
+}
+
+export interface SuppressionCount {
+  readonly reason: SuppressionReason;
+  readonly scope: SuppressionScope;
+  readonly count: number;
 }
 
 /**

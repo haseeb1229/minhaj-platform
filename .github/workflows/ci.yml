@@ -315,10 +315,16 @@ jobs:
         run: |
           SA_PASSWORD="Ci$(openssl rand -hex 24)!1aZ"
           APP_PASSWORD="Ci$(openssl rand -hex 24)!2aZ"
+          # Phase 2 Chunk 2: the dedicated privileged-operations principal. A
+          # THIRD account, because the migration principal must not perform
+          # routine bootstrap or recovery and the runtime principal must never
+          # be able to (SECURITY_BASELINE.md 8.3, 18.2).
+          OPERATOR_PASSWORD="Ci$(openssl rand -hex 24)!3aZ"
 
           # Masked so that if any command ever echoes one, the log shows ***.
           echo "::add-mask::$SA_PASSWORD"
           echo "::add-mask::$APP_PASSWORD"
+          echo "::add-mask::$OPERATOR_PASSWORD"
 
           mkdir -p docker
           {
@@ -328,6 +334,8 @@ jobs:
             echo "DATABASE_MIGRATION_URL=sqlserver://localhost:14330;database=MinhajPlatform;user=sa;password=${SA_PASSWORD};encrypt=true;trustServerCertificate=true"
             echo "DATABASE_APP_LOGIN=minhaj_app"
             echo "DATABASE_APP_PASSWORD=${APP_PASSWORD}"
+            echo "DATABASE_OPERATOR_LOGIN=minhaj_operator_ci"
+            echo "DATABASE_OPERATOR_PASSWORD=${OPERATOR_PASSWORD}"
           } > docker/.env
 
           chmod 600 docker/.env
@@ -370,6 +378,14 @@ jobs:
       - name: Least-privilege permission proof
         run: npm run db:test:permissions
 
+      # Phase 2 Chunk 2. The HOST-ONLY privileged boundary, with the actual
+      # principals: the operator may execute exactly two audited procedures and
+      # nothing else, the application principal may execute neither, and the
+      # bootstrap is one-time, race-safe and audited
+      # (SECURITY_BASELINE.md 8.2, 8.3).
+      - name: Privileged operator proof
+        run: npm run db:test:operator
+
       # Bring the persistent CI database to the migrated, provisioned state the
       # recovery rehearsal reads from — the state a developer's MinhajPlatform
       # is already in locally.
@@ -389,6 +405,11 @@ jobs:
 
       - name: Provision the least-privilege principal
         run: npm run db:provision
+
+      # The operator principal, whose only capability is EXECUTE on the two
+      # host-only procedures the authorisation migration created.
+      - name: Provision the privileged-operations principal
+        run: npm run db:provision:operator
 
       # Now meaningful: the database exists, the runtime login exists, and this
       # connects AS that login. It also asserts the server is genuinely SQL
@@ -555,9 +576,15 @@ jobs:
         run: |
           SA_PASSWORD="Ci$(openssl rand -hex 24)!1aZ"
           APP_PASSWORD="Ci$(openssl rand -hex 24)!2aZ"
+          # Phase 2 Chunk 2: the dedicated privileged-operations principal. A
+          # THIRD account, because the migration principal must not perform
+          # routine bootstrap or recovery and the runtime principal must never
+          # be able to (SECURITY_BASELINE.md 8.3, 18.2).
+          OPERATOR_PASSWORD="Ci$(openssl rand -hex 24)!3aZ"
 
           echo "::add-mask::$SA_PASSWORD"
           echo "::add-mask::$APP_PASSWORD"
+          echo "::add-mask::$OPERATOR_PASSWORD"
 
           mkdir -p docker
           {
@@ -567,6 +594,8 @@ jobs:
             echo "DATABASE_MIGRATION_URL=sqlserver://localhost:14330;database=MinhajPlatform;user=sa;password=${SA_PASSWORD};encrypt=true;trustServerCertificate=true"
             echo "DATABASE_APP_LOGIN=minhaj_app"
             echo "DATABASE_APP_PASSWORD=${APP_PASSWORD}"
+            echo "DATABASE_OPERATOR_LOGIN=minhaj_operator_ci"
+            echo "DATABASE_OPERATOR_PASSWORD=${OPERATOR_PASSWORD}"
           } > docker/.env
 
           chmod 600 docker/.env

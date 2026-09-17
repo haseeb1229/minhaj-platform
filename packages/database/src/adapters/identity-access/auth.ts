@@ -7,6 +7,7 @@ import type { RateLimiterPort } from '@minhaj/contracts/platform';
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { emailOTP } from 'better-auth/plugins/email-otp';
+import { twoFactor } from 'better-auth/plugins/two-factor';
 
 import { getDatabaseClient } from '../../client.ts';
 import { createReconciledAuthClient } from './reconciled-auth-client.ts';
@@ -61,6 +62,25 @@ export interface AuthMechanicsConfiguration {
   readonly tokenAllowedAttempts: number;
   /** The shared limiter. Better Auth consumes the SAME store the app does. */
   readonly rateLimiter: RateLimiterPort;
+  /**
+   * PRIVILEGED SECOND-FACTOR policy, owned by the Identity context.
+   *
+   * Every number here is a security decision about this platform — how many
+   * recovery codes a person is given, how long a TOTP step lasts, how many
+   * failed second factors lock an account during sign-in. The library counts
+   * and compares; it does not decide any of them.
+   */
+  readonly secondFactor: {
+    readonly recoveryCodeCount: number;
+    /** 6 or 8 — the only lengths the TOTP implementation accepts. */
+    readonly totpDigits: 6 | 8;
+    readonly totpPeriodSeconds: number;
+    /** SIGN-IN lockout only. The signed-in path has none; see below. */
+    readonly signInLockout: {
+      readonly maxFailedAttempts: number;
+      readonly durationSeconds: number;
+    };
+  };
   /** Told that a token now exists, so Identity can decide what to send. */
   readonly onTokenIssued: TokenIssuedListener;
 }
@@ -130,6 +150,7 @@ export function createAuthInstance(configuration: AuthMechanicsConfiguration) {
     tokenExpiresInSeconds,
     tokenAllowedAttempts,
     rateLimiter,
+    secondFactor,
     onTokenIssued,
   } = configuration;
 
@@ -269,6 +290,9 @@ export function createAuthInstance(configuration: AuthMechanicsConfiguration) {
       // — this is the mass-assignment defence at the library boundary
       // (SECURITY_BASELINE.md §9.1).
       additionalFields: {
+        // `twoFactorEnabled` is NOT declared here. The two-factor plugin adds
+        // it to the user model itself, with `input: false`; declaring it twice
+        // would be two definitions of one column.
         locale: { type: 'string', required: true, input: false, defaultValue: 'en' },
         timezone: { type: 'string', required: false, input: false },
         status: { type: 'string', required: true, input: false, defaultValue: 'active' },
@@ -341,6 +365,60 @@ export function createAuthInstance(configuration: AuthMechanicsConfiguration) {
             email,
             expiresAt: new Date(Date.now() + tokenExpiresInSeconds * 1000),
           });
+        },
+      }),
+
+      twoFactor({
+        // Shown in the authenticator app beside the account. The platform's
+        // name, not a configurable one: an issuer a deployment could change
+        // would let two installations produce indistinguishable entries.
+        issuer: 'One Minhaj',
+
+        totpOptions: {
+          digits: secondFactor.totpDigits,
+          period: secondFactor.totpPeriodSeconds,
+        },
+
+        backupCodeOptions: {
+          amount: secondFactor.recoveryCodeCount,
+          length: 10,
+          // ENCRYPTED, not hashed. Consumption is a compare-and-set over the
+          // whole set, which needs the set to be readable by the library; the
+          // encryption key is the same versioned secret configuration
+          // everything else uses, so a rotation does not invalidate a person's
+          // codes. They are never returned by any operation this adapter
+          // exposes, and never written anywhere but this row
+          // (SECURITY_BASELINE.md §8.2).
+          storeBackupCodes: 'encrypted',
+        },
+
+        // `otpOptions` is DELIBERATELY ABSENT. Without `sendOTP` the library
+        // refuses `method: 'otp'` outright, so an emailed second factor cannot
+        // be enabled — a code sent to the mailbox proves the mailbox is
+        // readable, which is what an attacker reading the mailbox already has.
+        // TOTP plus single-use recovery codes is the accepted V1 mechanism
+        // (SECURITY_BASELINE.md §8.2), and SMS is not introduced.
+
+        // Enrolment is NOT complete until a code from the authenticator is
+        // verified. Skipping that would mark an account protected by a secret
+        // nobody has yet proved they can read.
+        skipVerificationOnEnable: false,
+
+        // A credential account always exists in Phase 2, so the library's
+        // passwordless allowance would never apply; stated so a future
+        // provider cannot quietly enable a factor without a password.
+        allowPasswordless: false,
+
+        // ACCOUNT-LEVEL LOCKOUT, and it covers the SIGN-IN path only. The
+        // library applies no attempt budget at all to a SIGNED-IN verification
+        // — `verifyTwoFactor` returns a no-op `beginAttempt` when a session
+        // exists, and neither the lockout nor the per-challenge counter runs.
+        // Every application-controlled privileged proof therefore spends the
+        // SQL rate limiter before reaching the library (CLAUDE.md §16, §38).
+        accountLockout: {
+          enabled: true,
+          maxFailedAttempts: secondFactor.signInLockout.maxFailedAttempts,
+          durationSeconds: secondFactor.signInLockout.durationSeconds,
         },
       }),
     ],

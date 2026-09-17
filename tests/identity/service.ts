@@ -1,5 +1,6 @@
 import type {
   AuthMechanicsPort,
+  AuthorizationPersistencePort,
   IdentityPersistencePort,
 } from '../../packages/contracts/src/identity/index.ts';
 import type { RequestContext } from '../../apps/web/src/contexts/identity-access/index.ts';
@@ -24,6 +25,15 @@ import { capturingProvider, PROOF_SECRETS, type CapturingProvider } from './harn
 export interface IdentityHarness {
   readonly identity: Awaited<ReturnType<typeof buildIdentity>>['identity'];
   readonly session: Awaited<ReturnType<typeof buildIdentity>>['session'];
+  /** THE authorisation check, wired to the same narrow reader Layer 4 wires. */
+  readonly authorization: Awaited<ReturnType<typeof buildIdentity>>['authorization'];
+  /** Privilege administration — roles, assignments, step-up, posture. */
+  readonly administration: Awaited<ReturnType<typeof buildIdentity>>['administration'];
+  readonly privilegedSecurity: Awaited<
+    ReturnType<typeof buildIdentity>
+  >['privilegedSecurity'];
+  /** The authorisation PERSISTENCE, for proofs that need to read state back. */
+  readonly authorizationStore: AuthorizationPersistencePort;
   readonly deliveries: Awaited<ReturnType<typeof buildIdentity>>['deliveries'];
   readonly suppression: Awaited<ReturnType<typeof buildIdentity>>['suppression'];
   readonly providerEvents: Awaited<ReturnType<typeof buildIdentity>>['providerEvents'];
@@ -62,19 +72,32 @@ export interface HarnessOptions {
   readonly wrapPersistence?: (
     persistence: IdentityPersistencePort,
   ) => IdentityPersistencePort;
+  /** The same seam for the authorisation side. */
+  readonly wrapAuthorization?: (
+    authorization: AuthorizationPersistencePort,
+  ) => AuthorizationPersistencePort;
 }
 
 async function buildIdentity(provider: CapturingProvider, options: HarnessOptions = {}) {
-  const { createAuthMechanicsAdapter, createIdentityPersistence } =
-    await import('../../packages/database/src/adapters/identity-access/index.ts');
+  const {
+    createAuthMechanicsAdapter,
+    createAuthorizationPersistence,
+    createAuthorizationReader,
+    createIdentityPersistence,
+  } = await import('../../packages/database/src/adapters/identity-access/index.ts');
   const { createRateLimiter, rateLimitKey } =
     await import('../../packages/database/src/adapters/rate-limiting/index.ts');
   const { createEmailDeliveryStore, createEmailSuppression, createProviderEventStore } =
     await import('../../packages/database/src/adapters/email/delivery.ts');
   const { createSessionService } =
     await import('../../packages/server-core/src/session/index.ts');
-  const { createIdentityService } =
-    await import('../../apps/web/src/contexts/identity-access/index.ts');
+  const { createAuthorizationService: createAuthorizationRuntime } =
+    await import('../../packages/server-core/src/authorization/index.ts');
+  const {
+    createIdentityService,
+    createAuthorizationService,
+    createPrivilegedSecurityService,
+  } = await import('../../apps/web/src/contexts/identity-access/index.ts');
 
   const limiterConfiguration = {
     digestKey: PROOF_SECRETS.digestKey,
@@ -92,6 +115,13 @@ async function buildIdentity(provider: CapturingProvider, options: HarnessOption
     options.wrapPersistence === undefined
       ? realPersistence
       : options.wrapPersistence(realPersistence);
+
+  const realAuthorization = createAuthorizationPersistence();
+  const authorizationStore =
+    options.wrapAuthorization === undefined
+      ? realAuthorization
+      : options.wrapAuthorization(realAuthorization);
+  const authorizationReader = createAuthorizationReader();
   const deliveries = createEmailDeliveryStore({ digest });
   const suppression = createEmailSuppression({ digest });
   const providerEvents = createProviderEventStore({ digest });
@@ -118,6 +148,15 @@ async function buildIdentity(provider: CapturingProvider, options: HarnessOption
     tokenExpiresInSeconds: 3_600,
     tokenAllowedAttempts: 5,
     rateLimiter: limiter,
+    // The SAME privileged second-factor policy the composition root injects.
+    // A suite that proved a different one would prove nothing about the
+    // deployment.
+    secondFactor: {
+      recoveryCodeCount: 10,
+      totpDigits: 6,
+      totpPeriodSeconds: 30,
+      signInLockout: { maxFailedAttempts: 10, durationSeconds: 900 },
+    },
     onTokenIssued: async () => undefined,
   });
 
@@ -133,6 +172,28 @@ async function buildIdentity(provider: CapturingProvider, options: HarnessOption
     rateLimitKey: (input) =>
       rateLimitKey({ ...input, configuration: limiterConfiguration }),
     baseUrl: BASE_URL,
+    privilege: {
+      revokeStepUpGrants: (accountId) =>
+        authorizationStore.revokeStepUpGrantsForAccount(accountId),
+    },
+  });
+
+  const privilegedSecurity = createPrivilegedSecurityService({
+    auth,
+    authorization: authorizationStore,
+    persistence,
+    audit,
+    limiter,
+    rateLimitKey: (input) =>
+      rateLimitKey({ ...input, configuration: limiterConfiguration }),
+  });
+
+  // The NARROW reader, exactly as Layer 4 wires it.
+  const authorization = createAuthorizationRuntime({ reader: authorizationReader });
+
+  const administration = createAuthorizationService({
+    authorization: authorizationStore,
+    verifyActor: (input) => authorization.verifyPrivilegedActor(input),
   });
 
   const session = createSessionService({
@@ -143,7 +204,19 @@ async function buildIdentity(provider: CapturingProvider, options: HarnessOption
     },
   });
 
-  return { identity, session, deliveries, suppression, providerEvents, auth, provider };
+  return {
+    identity,
+    session,
+    authorization,
+    administration,
+    privilegedSecurity,
+    authorizationStore,
+    deliveries,
+    suppression,
+    providerEvents,
+    auth,
+    provider,
+  };
 }
 
 export async function createIdentityHarness(

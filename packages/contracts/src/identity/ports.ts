@@ -55,11 +55,32 @@ export type SetCookieHeaders = readonly string[];
  * client, a delegate or a transaction handle, so a surface built on it cannot
  * be SHOWN to be narrow (ARCHITECTURE.md §6.3 rule 13). Two small concrete
  * shapes prove what one generic one only asserts.
+ *
+ * A password was accepted — and that is not always the end of signing in.
+ *
+ * TWO STATES, because Chunk 2 makes the second one real. An account with an
+ * enrolled second factor gets NO session from a correct password: the library
+ * deletes the session it briefly created, sets a short-lived challenge cookie
+ * and waits for the factor. Collapsing that into "authenticated" would mean
+ * either dropping the challenge cookie — signing the person out of a flow they
+ * are halfway through — or reporting a session that does not exist.
+ *
+ * The `account` is deliberately ABSENT from the challenge state. Nothing about
+ * the account has been established to the CALLER at that point; the pending
+ * identity lives in the server-side challenge record and nowhere else, so a
+ * surface cannot accidentally render "signed in as …" to somebody holding only
+ * a password.
  */
-export interface AuthenticationOutcome {
-  readonly account: AccountIdentity;
-  readonly setCookies: SetCookieHeaders;
-}
+export type AuthenticationOutcome =
+  | {
+      readonly state: 'authenticated';
+      readonly account: AccountIdentity;
+      readonly setCookies: SetCookieHeaders;
+    }
+  | {
+      readonly state: 'second-factor-required';
+      readonly setCookies: SetCookieHeaders;
+    };
 
 export interface SignOutOutcome {
   readonly setCookies: SetCookieHeaders;
@@ -285,6 +306,103 @@ export interface AuthMechanicsPort {
     readonly headers: RequestHeaders;
     readonly sessionId: string;
   }): Promise<boolean>;
+
+  // ---- Privileged second factor ---------------------------------------
+  //
+  // MECHANICS ONLY, like everything else on this port. The library owns the
+  // TOTP secret, its encryption and the recovery-code material; this platform
+  // owns whether a factor is REQUIRED, what a failed attempt costs, and what a
+  // change to one invalidates. None of those decisions appear below.
+  //
+  // THE SECRET NEVER CROSSES. `beginSecondFactorEnrolment` returns the
+  // otpauth: URI the authenticator app scans, which is the enrolment payload
+  // and is shown once; there is no operation that returns the stored secret,
+  // and none that lists existing recovery codes. A port that could read either
+  // back would make every holder of it a credential store.
+
+  /**
+   * Starts enrolment: creates the unverified factor and its recovery codes.
+   *
+   * Requires the account PASSWORD — recent primary-auth proof appropriate to
+   * an account that has no second factor yet. It deliberately does NOT require
+   * an already-enrolled TOTP, which would make first enrolment, bootstrap and
+   * audited recovery impossible (SECURITY_BASELINE.md §8.3).
+   *
+   * The codes are returned ONCE, here. They are not persisted in clear by this
+   * platform and there is no operation that shows them again.
+   */
+  beginSecondFactorEnrolment(input: {
+    readonly headers: RequestHeaders;
+    readonly password: string;
+  }): Promise<{
+    readonly totpUri: string;
+    readonly recoveryCodes: readonly string[];
+    readonly recoveryCodeReceipt: string;
+  }>;
+
+  /**
+   * Verifies the first code and marks the factor verified.
+   *
+   * ROTATES the session — the library replaces it when the account's factor
+   * state changes — so the replacement cookies come back for Layer 4 to write.
+   */
+  verifySecondFactorEnrolment(input: {
+    readonly headers: RequestHeaders;
+    readonly code: string;
+  }): Promise<{ readonly verified: boolean; readonly setCookies: SetCookieHeaders }>;
+
+  /**
+   * Checks a TOTP code for an ALREADY signed-in account, changing nothing.
+   *
+   * Used by step-up. The library applies no attempt budget on this path — its
+   * lockout and per-challenge counter are both scoped to the sign-in flow — so
+   * the caller MUST rate-limit it (SECURITY_BASELINE.md §15, CLAUDE.md §16).
+   */
+  verifySecondFactorCode(input: {
+    readonly headers: RequestHeaders;
+    readonly code: string;
+  }): Promise<boolean>;
+
+  /**
+   * Consumes one single-use recovery code for a signed-in account.
+   *
+   * Consumption is a compare-and-set against the stored set, so two concurrent
+   * uses of the same code cannot both succeed. Rate-limited by the caller for
+   * the same reason as above.
+   */
+  consumeRecoveryCode(input: {
+    readonly headers: RequestHeaders;
+    readonly code: string;
+  }): Promise<boolean>;
+
+  /** Issues a fresh set, invalidating every prior unused code. */
+  regenerateRecoveryCodes(input: {
+    readonly headers: RequestHeaders;
+    readonly password: string;
+  }): Promise<{
+    readonly recoveryCodes: readonly string[];
+    readonly recoveryCodeReceipt: string;
+  }>;
+
+  /** Removes the factor and its recovery material for the CALLER's account. */
+  disableSecondFactor(input: {
+    readonly headers: RequestHeaders;
+    readonly password: string;
+  }): Promise<SessionRotation>;
+
+  // ---- Completing a sign-in that was challenged ------------------------
+
+  /** Answers an outstanding challenge with a TOTP code; issues the session. */
+  completeSignInWithCode(input: {
+    readonly headers: RequestHeaders;
+    readonly code: string;
+  }): Promise<AuthenticationOutcome>;
+
+  /** Answers it with a single-use recovery code instead. */
+  completeSignInWithRecoveryCode(input: {
+    readonly headers: RequestHeaders;
+    readonly code: string;
+  }): Promise<AuthenticationOutcome>;
 }
 
 /**
@@ -426,7 +544,16 @@ export type IdentityNotificationPurpose =
   | 'identity.password-reset'
   | 'identity.email-changed'
   | 'identity.account-closed'
-  | 'identity.sessions-revoked';
+  | 'identity.sessions-revoked'
+  /**
+   * A privileged second factor was enrolled, re-enrolled or removed.
+   *
+   * TOKEN-FREE like every other intent here, and content-free about the factor
+   * itself: it says that the account's second factor changed, never what it is,
+   * what it was, or any part of the secret or the recovery codes
+   * (SECURITY_BASELINE.md §8.2, §19.2).
+   */
+  | 'identity.second-factor-changed';
 
 /**
  * The NARROW reader the reusable session service receives.

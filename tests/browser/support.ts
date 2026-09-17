@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { base32 } from '@better-auth/utils/base32';
+import { createOTP } from '@better-auth/utils/otp';
 import {
+  expect,
   test as base,
   type Browser,
   type BrowserContext,
@@ -11,6 +14,12 @@ import {
   type Page,
   type TestInfo,
 } from '@playwright/test';
+
+import {
+  openSession,
+  parseSqlServerUrl,
+  type SqlSession,
+} from '../../packages/database/src/lifecycle/sql-connection.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..');
@@ -49,6 +58,31 @@ export function browserEnvironment(): BrowserEnvironment {
 
   return environment;
 }
+
+/** Where the application under test is listening, as an absolute origin. */
+export function baseUrl(): string {
+  return `http://127.0.0.1:${browserEnvironment().port}`;
+}
+
+/**
+ * Where the one bootstrapped administrator's signed-in state is kept.
+ *
+ * WHY A SAVED SESSION RATHER THAN SIGNING IN AGAIN. Two real constraints meet
+ * here. The bootstrap is a SINGLETON by database constraint — exactly one
+ * account can ever be made the first administrator — so every privileged spec
+ * has to be the same person. And sign-in is rate limited per account, five in
+ * fifteen minutes, so a suite that signed that person in once per test would
+ * start failing on the sixth for a reason unrelated to anything it proves.
+ *
+ * Reusing the cookie jar is also what a person does: they sign in once and
+ * keep working. The sign-in-with-a-factor path is proved on its own, in the
+ * spec that exists for it.
+ */
+export const ADMINISTRATOR_STATE = path.join(
+  repoRoot,
+  'test-results',
+  'browser-administrator.json',
+);
 
 /* ===========================================================================
  * Client identity
@@ -97,9 +131,17 @@ export const test = base.extend<{ clientAddress: string }>({
     await use(clientAddressFor(testInfo));
   },
 
-  context: async ({ browser, clientAddress }, use) => {
+  context: async ({ browser, contextOptions, clientAddress }, use) => {
+    // `contextOptions` FIRST, so the project's own configuration survives —
+    // `baseURL`, which is what makes every relative `goto` in this suite work,
+    // and `storageState` where a spec asks for one. Constructing the options
+    // from scratch here silently dropped both.
     const context = await browser.newContext({
-      extraHTTPHeaders: { 'x-forwarded-for': clientAddress },
+      ...contextOptions,
+      extraHTTPHeaders: {
+        ...contextOptions.extraHTTPHeaders,
+        'x-forwarded-for': clientAddress,
+      },
     });
 
     await use(context);
@@ -107,7 +149,7 @@ export const test = base.extend<{ clientAddress: string }>({
   },
 });
 
-export { expect } from '@playwright/test';
+export { expect };
 
 /* ===========================================================================
  * Regions
@@ -205,6 +247,18 @@ async function authMechanics() {
     session: { expiresInSeconds: 604_800, updateAgeSeconds: 86_400 },
     tokenExpiresInSeconds: 3_600,
     tokenAllowedAttempts: 5,
+
+    // The SAME second-factor mechanics the composition configures. The harness
+    // never verifies a code through this adapter — it only re-materialises an
+    // outstanding token — but the plugin is constructed with the rest of the
+    // instance, so an absent configuration is a constructor failure rather
+    // than an unused field.
+    secondFactor: {
+      recoveryCodeCount: 10,
+      totpDigits: 6,
+      totpPeriodSeconds: 30,
+      signInLockout: { maxFailedAttempts: 10, durationSeconds: 900 },
+    },
     rateLimiter: createRateLimiter({
       digestKey: configuration.RATE_LIMIT_DIGEST_KEY,
       digestKeyVersion: 1,
@@ -354,4 +408,210 @@ export async function signOut(page: Page): Promise<void> {
   await page.goto('/en/my');
   await page.getByRole('button', { name: BUTTON.signOut, exact: true }).click();
   await page.waitForURL(/\/en$/);
+}
+
+/* ===========================================================================
+ * Privileged state — Phase 2 Chunk 2
+ * ========================================================================= */
+
+/**
+ * A privileged session against the run's disposable database.
+ *
+ * The browser server hands the suite the MIGRATION connection for that
+ * database, which is what lets a spec do the two things a browser genuinely
+ * cannot: look an account's internal identifier up, and run the HOST-ONLY
+ * bootstrap procedure.
+ *
+ * THAT IS THE POINT, not a shortcut. The bootstrap has no HTTP path by design
+ * (SECURITY_BASELINE.md §8.3), so a browser spec that needed one would be
+ * asserting the existence of the thing this phase removed. It is performed the
+ * way an operator performs it — against the database — and everything after it
+ * happens in the browser.
+ */
+export async function privilegedSession(): Promise<SqlSession> {
+  const { databaseUrl } = browserEnvironment();
+  return openSession(parseSqlServerUrl(databaseUrl));
+}
+
+/** The internal identifier for an address. Never guessed from the address. */
+export async function accountIdFor(sql: SqlSession, email: string): Promise<string> {
+  const [row] = await sql.query<{ id: string }>(
+    `SELECT [id] FROM [dbo].[User] WHERE [email] = N'${email}';`,
+  );
+  if (row === undefined) throw new Error(`No account for ${email}`);
+  return row.id;
+}
+
+/** Runs the one-time bootstrap, exactly as `npm run identity:bootstrap` does. */
+export async function bootstrapAdministrator(
+  sql: SqlSession,
+  accountId: string,
+  ticket = 'BROWSER-PROOF initial administrator',
+): Promise<void> {
+  await sql.execute('IdentityBootstrapPlatformAdministrator', {
+    targetUserId: accountId,
+    ticket,
+  });
+}
+
+const PERIOD_SECONDS = 30;
+
+/** The last code this process handed out, so the next one is never a repeat. */
+let lastCode: string | null = null;
+
+/**
+ * The current TOTP code for an enrolment URI.
+ *
+ * The library's own implementation, over the secret the page displayed — so a
+ * code this produces is a code an authenticator app would produce.
+ *
+ * NEVER THE SAME CODE TWICE IN A ROW. A signed-in administrator steps up
+ * several times in one journey, and two step-ups inside one thirty-second
+ * window would otherwise submit identical codes. A replayed one-time code is
+ * not a second proof, so the helper waits for the period to roll rather than
+ * producing a refusal that would look like a product defect.
+ */
+export async function totpCodeFor(totpUri: string): Promise<string> {
+  const encoded = new URL(totpUri).searchParams.get('secret');
+  if (encoded === null) throw new Error('The enrolment URI carries no secret.');
+
+  const secret = new TextDecoder().decode(base32.decode(encoded));
+  const otp = createOTP(secret, { digits: 6, period: PERIOD_SECONDS });
+
+  let code = await otp.totp();
+
+  if (code === lastCode) {
+    // Wait out the remainder of this window, and a moment beyond it so the
+    // server and this process agree on which window they are in.
+    const elapsed = (Date.now() / 1_000) % PERIOD_SECONDS;
+    await new Promise((resolve) =>
+      setTimeout(resolve, (PERIOD_SECONDS - elapsed) * 1_000 + 1_000),
+    );
+    code = await otp.totp();
+  }
+
+  lastCode = code;
+  return code;
+}
+
+/** The labels the Chunk-2 surfaces use, in one place. */
+export const ADMIN = {
+  beginSetup: 'Begin setup',
+  savedCodes: 'I have saved these codes',
+  confirmCode: 'Confirm',
+  stepUp: 'Confirm',
+  password: 'Password',
+  currentPassword: 'Current password',
+  authenticationCode: 'Authentication code',
+  createRole: 'Create the role',
+  grantRole: 'Grant the role',
+  revoke: 'Revoke',
+} as const;
+
+/** The section heading, in English — the locale every journey spec uses. */
+const SECOND_FACTOR_HEADING = 'Two-step verification';
+
+/** What the summary sentence says in each of the two states a spec asserts. */
+export const SECOND_FACTOR_ON = 'Two-step verification is on';
+export const SECOND_FACTOR_OFF = 'Two-step verification is off';
+
+/**
+ * THE two-step verification section of the account's security surface.
+ *
+ * SCOPED BY ITS ACCESSIBLE NAME, not by position. The same page carries a
+ * "Current password" field for changing the password as well, so an ordinal
+ * would pick whichever form happens to render first — and would silently start
+ * picking the other one the day a section moves. Asking for the named region
+ * also proves the section is labelled, which is what its `aria-labelledby` is
+ * for.
+ */
+export function secondFactorSection(page: Page): Locator {
+  return page.getByRole('region', { name: SECOND_FACTOR_HEADING });
+}
+
+/** The recovery codes as the page renders them: `xxxxx-xxxxx`, one per item. */
+export async function recoveryCodesOn(page: Page): Promise<string[]> {
+  const entries = await secondFactorSection(page).getByRole('listitem').allInnerTexts();
+
+  return entries
+    .map((entry) => entry.trim())
+    .filter((entry) => /^[A-Za-z0-9]{5}-[A-Za-z0-9]{5}$/.test(entry));
+}
+
+/**
+ * Begins an enrolment and returns what the page shows ONCE.
+ *
+ * The setup key is read off the rendered page rather than out of the database,
+ * which is what proves the key a person is shown is the key that works.
+ */
+export async function beginSecondFactorEnrolment(
+  page: Page,
+): Promise<{ totpUri: string; recoveryCodes: string[] }> {
+  const section = secondFactorSection(page);
+
+  await section.getByLabel(ADMIN.currentPassword, { exact: true }).fill(PASSWORD);
+  await section.getByRole('button', { name: ADMIN.beginSetup }).click();
+
+  const totpUri = await section
+    .locator('code', { hasText: 'otpauth://' })
+    .first()
+    .innerText();
+  expect(totpUri).toContain('otpauth://totp/');
+
+  return { totpUri, recoveryCodes: await recoveryCodesOn(page) };
+}
+
+/**
+ * Enrols a second factor THROUGH THE UI, and confirms the recovery codes.
+ *
+ * Every step is a real interaction. It returns the setup key, because a
+ * privileged journey needs a fresh code for each later step-up and the key is
+ * shown exactly once — re-reading it later is impossible by design.
+ */
+export async function enrolSecondFactorInBrowser(
+  page: Page,
+): Promise<{ totpUri: string; recoveryCodes: string[] }> {
+  await page.goto('/en/my/settings/security');
+
+  const section = secondFactorSection(page);
+  const enrolment = await beginSecondFactorEnrolment(page);
+
+  await section.getByRole('button', { name: ADMIN.savedCodes }).click();
+
+  await section
+    .getByLabel(ADMIN.authenticationCode, { exact: true })
+    .first()
+    .fill(await totpCodeFor(enrolment.totpUri));
+  await section.getByRole('button', { name: ADMIN.confirmCode, exact: true }).click();
+
+  // THE POSTURE, not merely "something was announced". The summary sentence is
+  // a status region whatever it says, so waiting for a status alone would pass
+  // on a page that had done nothing at all.
+  await expect(section).toContainText(SECOND_FACTOR_ON);
+
+  return enrolment;
+}
+
+/**
+ * Signs in with the password AND the second factor, answering the challenge.
+ *
+ * Used whenever a spec needs the one bootstrapped administrator on a fresh
+ * context: the password alone stops producing a session the moment a factor is
+ * enrolled, which is the property the suite proves elsewhere.
+ */
+export async function signInWithSecondFactor(
+  page: Page,
+  email: string,
+  totpUri: string,
+): Promise<void> {
+  await page.goto('/en/signin');
+  await page.getByLabel(LABEL.email).fill(email);
+  await page.getByLabel(LABEL.password, { exact: true }).fill(PASSWORD);
+  await page.getByRole('button', { name: BUTTON.signIn, exact: true }).click();
+
+  await page.waitForURL(/\/signin\/two-factor/);
+
+  await page.getByLabel('Authentication code').fill(await totpCodeFor(totpUri));
+  await page.getByRole('button', { name: 'Verify and sign in' }).click();
+  await page.waitForURL('**/my');
 }

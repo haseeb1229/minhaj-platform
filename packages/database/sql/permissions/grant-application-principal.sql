@@ -128,6 +128,99 @@ BEGIN
   DENY DELETE, ALTER ON OBJECT::[dbo].[IdentitySecurityOperation] TO [$(app_login)];
 END;
 
+-- Identity & Access — authorisation (Phase 2 Chunk 2) -------------------------
+--
+-- The permission catalogue is IMMUTABLE AT RUNTIME. SELECT and nothing else,
+-- with every write verb denied explicitly: "a permission cannot be created at
+-- runtime" then holds because the database refuses it, not because application
+-- code remembers to (SECURITY_BASELINE.md 3.1).
+IF OBJECT_ID(N'[dbo].[Permission]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT ON OBJECT::[dbo].[Permission] TO [$(app_login)];
+  DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[Permission] TO [$(app_login)];
+END;
+
+-- Roles are created and edited at runtime — CUSTOM ones. The protected system
+-- role is defended by application invariants AND by the absence of DELETE:
+-- a role with history is soft-deactivated, never destroyed, so the record of
+-- who held what survives.
+IF OBJECT_ID(N'[dbo].[Role]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Role] TO [$(app_login)];
+  DENY DELETE, ALTER ON OBJECT::[dbo].[Role] TO [$(app_login)];
+END;
+
+-- A bundle is a SET: a membership exists or it does not, so INSERT and DELETE
+-- are the operations and UPDATE is denied — there is no third state for a
+-- composite key to be moved into.
+IF OBJECT_ID(N'[dbo].[RolePermission]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[RolePermission] TO [$(app_login)];
+  DENY UPDATE, ALTER ON OBJECT::[dbo].[RolePermission] TO [$(app_login)];
+END;
+
+-- Assignments are granted and REVOKED, and revoking marks the row rather than
+-- removing it. DELETE is denied because "this person held the administrator
+-- role between these dates" is exactly the fact an investigation needs and
+-- exactly the fact a delete destroys (SECURITY_BASELINE.md 13.3).
+IF OBJECT_ID(N'[dbo].[RoleAssignment]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[RoleAssignment] TO [$(app_login)];
+  DENY DELETE, ALTER ON OBJECT::[dbo].[RoleAssignment] TO [$(app_login)];
+END;
+
+-- A step-up grant is issued and REVOKED, and revoking one is a delete — which
+-- is the whole reason it is a row rather than a token. UPDATE is denied: the
+-- lifetime is fixed when the grant is created, and a runtime that could extend
+-- one could turn a five-minute elevation into a permanent one.
+IF OBJECT_ID(N'[dbo].[StepUpGrant]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[StepUpGrant] TO [$(app_login)];
+  DENY UPDATE, ALTER ON OBJECT::[dbo].[StepUpGrant] TO [$(app_login)];
+END;
+
+-- Better Auth's two-factor record. The library creates it at enrolment,
+-- updates it when a code is verified or a recovery code is spent, and deletes
+-- it when the factor is disabled — so all four verbs are genuinely required.
+IF OBJECT_ID(N'[dbo].[TwoFactor]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[TwoFactor] TO [$(app_login)];
+  DENY ALTER ON OBJECT::[dbo].[TwoFactor] TO [$(app_login)];
+END;
+
+-- The privileged posture. Written by enrolment and cleared by disable, but
+-- never DELETED: the row is how the platform knows an account once held
+-- privileged authority, and clearing it to nulls says that truthfully while
+-- removing it would not.
+IF OBJECT_ID(N'[dbo].[PrivilegedSecurityPosture]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[PrivilegedSecurityPosture] TO [$(app_login)];
+  DENY DELETE, ALTER ON OBJECT::[dbo].[PrivilegedSecurityPosture] TO [$(app_login)];
+END;
+
+-- The one-time bootstrap record is READ by the admin security surface and
+-- written by nothing the application can reach. The bootstrap itself is a
+-- host-only procedure the runtime principal may not execute
+-- (SECURITY_BASELINE.md 8.3).
+IF OBJECT_ID(N'[dbo].[IdentityBootstrap]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT ON OBJECT::[dbo].[IdentityBootstrap] TO [$(app_login)];
+  DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[IdentityBootstrap] TO [$(app_login)];
+END;
+
+-- THE OPERATOR PROCEDURES ARE NOT THE APPLICATION'S.
+--
+-- Ownership chaining would give the runtime principal nothing here — it holds
+-- no EXECUTE — but the denial is written explicitly so the boundary is legible
+-- in sys.database_permissions and survives any future role change. A web
+-- request must never be able to provision an administrator or reset a second
+-- factor, whatever the application code says.
+IF OBJECT_ID(N'[dbo].[IdentityBootstrapPlatformAdministrator]', N'P') IS NOT NULL
+  DENY EXECUTE ON OBJECT::[dbo].[IdentityBootstrapPlatformAdministrator] TO [$(app_login)];
+
+IF OBJECT_ID(N'[dbo].[IdentityRecoverPrivilegedSecondFactor]', N'P') IS NOT NULL
+  DENY EXECUTE ON OBJECT::[dbo].[IdentityRecoverPrivilegedSecondFactor] TO [$(app_login)];
+
 -- Layer-0 platform concerns --------------------------------------------------
 --
 -- Delivery metadata is append-and-update: a delivery is claimed, attempted and

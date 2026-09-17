@@ -155,6 +155,20 @@ export interface SqlSession {
   query: <Row>(statement: string) => Promise<Row[]>;
   /** Runs a multi-statement script, splitting on `GO` batch separators. */
   runScript: (script: string) => Promise<void>;
+  /**
+   * Calls a stored procedure with BOUND parameters.
+   *
+   * The only parameterised path in this module, and it exists because the
+   * host-only operator commands are the one place lifecycle tooling accepts
+   * values a human typed — a target account id and a ticket reference. Those
+   * must reach the procedure as parameters rather than as text spliced into a
+   * batch; the rest of this module runs fixed, reviewed statements
+   * (SECURITY_BASELINE.md §9.1).
+   */
+  execute: (
+    procedure: string,
+    parameters: Readonly<Record<string, string>>,
+  ) => Promise<void>;
   close: () => Promise<void>;
 }
 
@@ -189,6 +203,25 @@ export async function openSession(connection: SqlServerConnection): Promise<SqlS
       for (const batch of batches) {
         await pool.request().batch(batch);
       }
+    },
+
+    async execute(
+      procedure: string,
+      parameters: Readonly<Record<string, string>>,
+    ): Promise<void> {
+      // The NAME is not a parameter and cannot be one, so it is constrained to
+      // a plain identifier. Every call site passes a constant from
+      // `OPERATOR_PROCEDURES`; this refuses anything else reaching it.
+      if (!/^[A-Za-z][A-Za-z0-9_]{0,127}$/.test(procedure)) {
+        throw new Error(`Invalid procedure name '${procedure}'.`);
+      }
+
+      const request = pool.request();
+      for (const [name, value] of Object.entries(parameters)) {
+        request.input(name, sql.NVarChar, value);
+      }
+
+      await request.execute(`[dbo].[${procedure}]`);
     },
 
     async close(): Promise<void> {

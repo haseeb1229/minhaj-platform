@@ -220,6 +220,35 @@ const COPY: Readonly<Record<DeliveryPurpose, Readonly<Record<Locale, Copy>>>> = 
       signature: 'منهاج',
     },
   },
+
+  // NOTHING ABOUT THE FACTOR ITSELF. It says the account's second factor
+  // changed and no more: not the secret, not a recovery code, not which
+  // authenticator, not how many codes remain. A security notice that described
+  // the control would be a security notice worth intercepting.
+  'identity.second-factor-changed': {
+    en: {
+      subject: 'Your two-step verification changed',
+      greeting: 'Assalamu alaikum,',
+      body: 'The two-step verification on your Minhaj account was changed, and every signed-in device was signed out.',
+      ignore: 'If this was not you, reset your password immediately and contact support.',
+      signature: 'Minhaj',
+    },
+    ur: {
+      subject: 'آپ کی دو مرحلہ تصدیق تبدیل ہو گئی',
+      greeting: 'السلام علیکم،',
+      body: 'آپ کے منہاج اکاؤنٹ کی دو مرحلہ تصدیق تبدیل کر دی گئی ہے، اور تمام آلات کو سائن آؤٹ کر دیا گیا ہے۔',
+      ignore:
+        'اگر یہ آپ نے نہیں کیا تو فوراً اپنا پاس ورڈ دوبارہ ترتیب دیں اور مدد سے رابطہ کریں۔',
+      signature: 'منہاج',
+    },
+    ar: {
+      subject: 'تغيّرت التحقق بخطوتين لحسابك',
+      greeting: 'السلام عليكم،',
+      body: 'تم تغيير التحقق بخطوتين في حسابك بمنهاج، وتم تسجيل الخروج من جميع الأجهزة.',
+      ignore: 'إذا لم تكن أنت من قام بذلك، فأعد تعيين كلمة المرور فورًا وتواصل مع الدعم.',
+      signature: 'منهاج',
+    },
+  },
 };
 
 /** Escapes text for interpolation into the HTML body. */

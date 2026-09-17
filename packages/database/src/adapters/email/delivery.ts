@@ -2,6 +2,7 @@ import 'server-only';
 
 import type {
   DeliveryFailureClass,
+  DeliveryOperatorRecord,
   DeliveryPurpose,
   DeliveryRecord,
   DeliveryStatus,
@@ -278,6 +279,67 @@ export function createEmailDeliveryStore(
 
       return { pending, failed, suppressed };
     },
+
+    async listForOperator({ status, limit, offset }) {
+      const take = Math.min(Math.max(Math.trunc(limit), 1), 100);
+      const skip = Math.max(Math.trunc(offset), 0);
+
+      const rows = await prisma.emailDelivery.findMany({
+        where: status === null ? {} : { status },
+        select: {
+          id: true,
+          purpose: true,
+          status: true,
+          attemptCount: true,
+          nextAttemptAt: true,
+          failureClass: true,
+          failureCode: true,
+          createdAt: true,
+          sentAt: true,
+          // `recipientDigest` is NOT selected. It is not an address, but it is
+          // a stable per-person handle, and putting one on an operator screen
+          // is how a list of people who bounced becomes a thing that exists.
+        },
+        // DETERMINISTIC, and indexed: `(status, nextAttemptAt)` already exists
+        // for the dispatcher, and `createdAt` breaks ties with the id.
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: take + 1,
+      });
+
+      return {
+        items: rows.slice(0, take).map((row): DeliveryOperatorRecord => ({
+          id: row.id,
+          purpose: row.purpose as DeliveryPurpose,
+          status: row.status as DeliveryStatus,
+          attemptCount: row.attemptCount,
+          nextAttemptAt: row.nextAttemptAt,
+          failureClass: row.failureClass as DeliveryFailureClass | null,
+          failureCode: row.failureCode,
+          createdAt: row.createdAt,
+          sentAt: row.sentAt,
+        })),
+        more: rows.length > take,
+      };
+    },
+
+    async rescheduleDelivery(id: string): Promise<boolean> {
+      // Conditional on the status, so the operation cannot resurrect a message
+      // that was SENT, and cannot overrule a SUPPRESSION — which is the
+      // provider telling this platform not to write to that address again.
+      const updated = await prisma.emailDelivery.updateMany({
+        where: { id, status: { in: ['failed', 'pending', 'sending'] } },
+        data: {
+          status: 'pending',
+          nextAttemptAt: new Date(),
+          // The lease is released so the next dispatcher tick can claim it
+          // rather than waiting out a lease held by a process that has gone.
+          claimedUntil: null,
+        },
+      });
+
+      return updated.count === 1;
+    },
   };
 }
 
@@ -299,6 +361,19 @@ export function createEmailSuppression(
   const prisma = getDatabaseClient();
 
   return {
+    async summarise() {
+      const rows = await prisma.emailSuppression.groupBy({
+        by: ['reason', 'scope'],
+        _count: { _all: true },
+      });
+
+      return rows.map((row) => ({
+        reason: row.reason as SuppressionReason,
+        scope: row.scope as SuppressionScope,
+        count: row._count._all,
+      }));
+    },
+
     async isSuppressed({ recipient, scope }): Promise<boolean> {
       const digest = recipientDigest(recipient, configuration.digest);
       const row = await prisma.emailSuppression.findUnique({

@@ -50,6 +50,11 @@ model AuditLog {
   @@index([occurredAt])
   @@index([actorId])
   @@index([targetType, targetId])
+  /// Chunk 2. The read-only admin audit view filters by action and orders by
+  /// time, and §28 permits INDEXED filters only — an unindexed `action`
+  /// predicate over a table that grows forever is a scan the operator surface
+  /// would perform on every page.
+  @@index([action, occurredAt])
   @@map("AuditLog")
 }
 
@@ -123,10 +128,24 @@ model User {
   closedAt        DateTime? @db.DateTime2
   pseudonymisedAt DateTime? @db.DateTime2
 
+  /// Better Auth's own two-factor flag (Chunk 2). VENDOR-OWNED: the library
+  /// sets it when an enrolment is verified and clears it on disable, and this
+  /// platform never writes it. It is NOT the privileged posture — an enrolled
+  /// factor whose recovery codes were never confirmed does not satisfy
+  /// SECURITY_BASELINE.md §8.2. `PrivilegedSecurityPosture` holds that.
+  ///
+  /// Non-null WITH a default, which is what lets Better Auth omit it on an
+  /// insert; `input: false` keeps it off every sign-up body.
+  twoFactorEnabled Boolean @default(false)
+
   sessions             Session[]
   accounts             Account[]
   communicationIntents IdentityCommunicationIntent[]
   securityOperations   IdentitySecurityOperation[]
+  roleAssignments      RoleAssignment[]
+  stepUpGrants         StepUpGrant[]
+  twoFactor            TwoFactor[]
+  privilegedPosture    PrivilegedSecurityPosture?
 
   @@index([status])
   @@index([createdAt])
@@ -146,6 +165,9 @@ model Session {
 
   userId String @db.NVarChar(36)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Step-up grants die with the session that earned them (Chunk 2).
+  stepUpGrants StepUpGrant[]
 
   @@index([userId])
   @@index([expiresAt])
@@ -396,4 +418,265 @@ model RateLimitCounter {
 
   @@index([windowExpiresAt])
   @@map("RateLimitCounter")
+}
+
+// ===========================================================================
+// Phase 2 Chunk 2 — authorisation, step-up and privileged second factor
+// ===========================================================================
+//
+// OWNERSHIP. Every model below belongs to the IDENTITY & ACCESS context, which
+// already owns its adapter directory in this package's manifest. Physical
+// placement transfers no semantic ownership (ARCHITECTURE.md §4.1).
+//
+// ONE ENFORCEMENT PATH. `Permission` is the vocabulary, `Role` bundles it,
+// `RoleAssignment` binds a bundle to an account, and `can()` reads exactly
+// those three. There is no second boolean anywhere that decides authority
+// (SECURITY_BASELINE.md §3.1, DOMAIN_MODEL.md §4.4).
+//
+// NO FUTURE-DOMAIN VOCABULARY. The seeded catalogue is Identity's and the
+// system surfaces' only. Quran, Fatwa, Learning and the rest arrive with the
+// contexts that own them.
+//
+// NO SPECULATIVE SCOPE. DOMAIN_MODEL.md §4.4 says a RoleAssignment may
+// OPTIONALLY be scoped — "for example to one Centre or one Course". Neither
+// Centre nor Course exists, so no scope column is created: a generic
+// `scopeType + scopeId` added now would be exactly the polymorphic reference
+// §6.2 prohibits, and a typed one would need a table from a context that has
+// not shipped. Scoped privilege arrives with its owning domain, through a
+// typed relation.
+
+/// The immutable permission catalogue.
+///
+/// MIGRATION-SEEDED AND RUNTIME READ-ONLY. The runtime principal holds SELECT
+/// and nothing else on this table, so "a permission cannot be created at
+/// runtime" is enforced by the database rather than by an application check
+/// somebody could forget (SECURITY_BASELINE.md §18.2).
+///
+/// The KEY is the primary key. A permission's identity IS its code: that is
+/// what `can(user, 'permissions.grant')` names, and a surrogate id would allow
+/// two rows to claim the same code.
+model Permission {
+  key         String @id @db.NVarChar(64)
+  description String @db.NVarChar(200)
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  roles RolePermission[]
+
+  @@map("Permission")
+}
+
+/// A named bundle of permissions.
+///
+/// PROTECTED SYSTEM ROLES are `system = true`. They are foundation data the
+/// migration controls: the Platform Administrator role must already exist for
+/// the one-time bootstrap to assign it, and no runtime path renames,
+/// re-bundles or deactivates it. Custom roles are everything else and carry
+/// the full lifecycle.
+model Role {
+  id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
+
+  /// Stable code, e.g. `platform-administrator`. Never a display string.
+  key String @unique @db.NVarChar(64)
+
+  name        String @db.NVarChar(120)
+  description String @db.NVarChar(400)
+
+  /// Protected foundation data when true.
+  system Boolean
+
+  /// Soft deactivation. A custom role with history is never destroyed; its
+  /// authority stops and the record of who held it survives.
+  deactivatedAt DateTime? @db.DateTime2
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  permissions RolePermission[]
+  assignments RoleAssignment[]
+
+  @@index([system])
+  @@map("Role")
+}
+
+/// Role membership of a permission. SET semantics, by construction.
+///
+/// The composite primary key is what makes a duplicate membership impossible
+/// under concurrency — two racing writers cannot both insert the same pair,
+/// and neither needs to read first to find out.
+model RolePermission {
+  roleId        String @db.NVarChar(36)
+  permissionKey String @db.NVarChar(64)
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  /// NO ACTION, deliberately: the catalogue is immutable, so a cascade here
+  /// would describe a deletion that cannot happen.
+  permission Permission @relation(fields: [permissionKey], references: [key], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([roleId, permissionKey])
+  @@index([permissionKey])
+  @@map("RolePermission")
+}
+
+/// Binds an account to a role, with grant and revoke history.
+///
+/// NO DESTRUCTIVE RUNTIME DELETE. A revoked assignment is marked, not removed:
+/// "this person held the administrator role between these dates" is precisely
+/// the fact an investigation needs, and it is the fact a delete destroys.
+///
+/// AT MOST ONE LIVE ASSIGNMENT per (account, role), enforced by a FILTERED
+/// unique index the migration creates — `WHERE [revokedAt] IS NULL`. Prisma's
+/// schema language cannot express a filtered index, so it is written in the
+/// migration and asserted by the lifecycle proof. Race-safety is a schema
+/// property, not an application check (DOMAIN_MODEL.md §4.6).
+model RoleAssignment {
+  id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
+
+  userId String @db.NVarChar(36)
+  roleId String @db.NVarChar(36)
+
+  /// NO ACTION on both: neither a User nor a Role is ever hard-deleted at
+  /// runtime, and a cascade would offer a way to erase privilege history.
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  role Role @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  grantedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  /// Historical ATTRIBUTION identifiers, not relations — the same accepted
+  /// pattern `AuditLog` uses (SECURITY_BASELINE.md §13.3). The grantor may
+  /// later close their account; the record of who granted must survive that
+  /// without a constraint deciding whether it may.
+  grantedById   String? @db.NVarChar(36)
+  grantedReason String? @db.NVarChar(200)
+
+  revokedAt     DateTime? @db.DateTime2
+  revokedById   String?   @db.NVarChar(36)
+  revokedReason String?   @db.NVarChar(200)
+
+  @@index([userId, revokedAt])
+  @@index([roleId, revokedAt])
+  @@map("RoleAssignment")
+}
+
+/// Durable, revocable proof that somebody re-authenticated a moment ago.
+///
+/// NOT A TOKEN and not a second session. It is a row: nothing a client sends
+/// creates one, nothing carries it, and revoking it is a delete. It is bound
+/// to ONE session and ONE purpose, so re-proving yourself to change your own
+/// second factor does not silently authorise granting somebody the
+/// administrator role (SECURITY_BASELINE.md §8.1).
+///
+/// The session FOREIGN KEY cascades. A revoked session takes its grants with
+/// it, which makes "a step-up grant is unusable after its session is revoked"
+/// a property of the schema rather than of remembering to delete twice.
+model StepUpGrant {
+  id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
+
+  userId    String @db.NVarChar(36)
+  sessionId String @db.NVarChar(36)
+
+  /// privilege-administration | account-administration | second-factor
+  purpose String @db.NVarChar(32)
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  expiresAt DateTime @db.DateTime2
+
+  /// NO ACTION on the user and CASCADE on the session: one cascade path only,
+  /// which is what SQL Server permits, and the cascading one is the path that
+  /// carries the security meaning.
+  user    User    @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId])
+  @@index([sessionId, purpose, expiresAt])
+  @@index([expiresAt])
+  @@map("StepUpGrant")
+}
+
+/// Better Auth's two-factor record. VENDOR-OWNED MECHANICS.
+///
+/// The library owns every column: the TOTP secret and the recovery codes are
+/// stored encrypted under its own key configuration, and this platform never
+/// decrypts, reads back or copies either. There is deliberately no operation
+/// anywhere in this repository that returns the stored secret or lists
+/// existing codes (SECURITY_BASELINE.md §8.2).
+///
+/// `failedVerificationCount` and `lockedUntil` are the library's SIGN-IN
+/// lockout, and they apply on the sign-in path only. The signed-in
+/// verification path has no library-side attempt budget at all, which is why
+/// every application-controlled privileged proof endpoint spends the SQL rate
+/// limiter instead (CLAUDE.md §16, §38).
+model TwoFactor {
+  id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
+
+  /// Encrypted TOTP secret. NEVER logged, NEVER audited, never returned.
+  secret String @db.NVarChar(Max)
+
+  /// Encrypted single-use recovery codes. Same rules.
+  backupCodes String @db.NVarChar(Max)
+
+  userId String @db.NVarChar(36)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// False until the first correct code proves the authenticator works.
+  verified Boolean @default(false)
+
+  failedVerificationCount Int       @default(0)
+  lockedUntil             DateTime? @db.DateTime2
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  @@index([userId])
+  @@map("TwoFactor")
+}
+
+/// THE privileged second-factor posture — One Minhaj's, not the library's.
+///
+/// WHY IT IS NOT `User.twoFactorEnabled`. That flag says a factor is enrolled.
+/// SECURITY_BASELINE.md §8.2 requires more than that before high-consequence
+/// authority may be exercised: the recovery codes must have been issued AND
+/// confirmed as stored, because an enrolled factor with no usable recovery is
+/// a lockout waiting to be resolved by exactly the silent administrative
+/// disable the baseline forbids.
+///
+/// `reenrolmentRequiredAt` is what the host-only operational recovery sets. It
+/// keeps privileged capability denied until the account enrols again, WITHOUT
+/// touching the role assignment — recovery never grants and never regrants a
+/// role (CLAUDE.md §23).
+model PrivilegedSecurityPosture {
+  userId String @id @db.NVarChar(36)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  secondFactorVerifiedAt   DateTime? @db.DateTime2
+  recoveryCodesIssuedAt    DateTime? @db.DateTime2
+  recoveryCodesConfirmedAt DateTime? @db.DateTime2
+  reenrolmentRequiredAt    DateTime? @db.DateTime2
+
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  @@map("PrivilegedSecurityPosture")
+}
+
+/// The one-time initial privileged operator bootstrap (SECURITY_BASELINE.md §8.3).
+///
+/// SELF-CLOSING BY THE PRIMARY KEY. There is exactly one legal id, so a second
+/// successful bootstrap is a primary-key violation rather than a rule somebody
+/// has to check — which is also what makes concurrent attempts resolve to
+/// exactly one winner.
+///
+/// It records the DATABASE login that performed it, taken from
+/// `ORIGINAL_LOGIN()` inside the procedure rather than from a parameter: an
+/// operator identity a caller supplies is an operator identity a caller can
+/// choose.
+model IdentityBootstrap {
+  /// Always `platform-administrator`. Enforced by a CHECK constraint.
+  id String @id @db.NVarChar(64)
+
+  targetUserId  String   @db.NVarChar(36)
+  operatorLogin String   @db.NVarChar(128)
+  ticket        String   @db.NVarChar(200)
+  completedAt   DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  @@map("IdentityBootstrap")
 }

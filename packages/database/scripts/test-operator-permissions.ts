@@ -1,0 +1,621 @@
+import 'server-only';
+
+import { randomUUID } from 'node:crypto';
+
+import {
+  getApplicationPrincipalCredentials,
+  getOperatorPrincipalCredentials,
+} from '../src/config.ts';
+import { provisionApplicationPrincipal } from '../src/lifecycle/application-principal.ts';
+import {
+  createDisposableDatabase,
+  dropDisposableDatabase,
+  newDisposableDatabaseName,
+  openMasterSession,
+} from '../src/lifecycle/disposable-database.ts';
+import { deployMigrations, loadMigrations } from '../src/lifecycle/migrations.ts';
+import {
+  OPERATOR_PROCEDURES,
+  OPERATOR_ROLE,
+  provisionOperatorPrincipal,
+} from '../src/lifecycle/operator-principal.ts';
+import { inspectPrincipalAuthority } from '../src/lifecycle/principal-authority.ts';
+import {
+  openSession,
+  withDatabase,
+  type SqlSession,
+} from '../src/lifecycle/sql-connection.ts';
+import {
+  reportConfiguration,
+  retargetAtDisposable,
+  startLocalCommand,
+} from './local-bootstrap.ts';
+
+/**
+ * `npm run db:test:operator` — proves the HOST-ONLY privileged boundary with
+ * the actual principals, against a disposable database.
+ *
+ * ## What this proof has to establish, and why each half is needed
+ *
+ * POSITIVE: the operator can run the two audited procedures, and they do what
+ * SECURITY_BASELINE.md §8.3 says — one-time, race-safe, audited, refusing an
+ * ineligible target, and never granting a role during recovery.
+ *
+ * NEGATIVE: the operator can do NOTHING ELSE, and the application principal
+ * cannot run them at all. A bootstrap the web process could execute would be
+ * the open setup endpoint the baseline forbids, wearing a different hat.
+ *
+ * Both halves matter. An operator that could also SELECT from `User` would
+ * satisfy the positive half completely while holding authority nobody granted
+ * it, and the permission system would record that as normal.
+ */
+
+/**
+ * Error numbers SQL Server raises when it refuses a statement for permissions.
+ *
+ * Identical to the runtime proof's set, and for the same reason: a test that
+ * accepted any failure would pass on a typo. 229/230/262 are direct refusals;
+ * 300 is `EXECUTE permission was denied`.
+ */
+const PERMISSION_DENIED = new Set([229, 230, 262, 300, 1088, 3701]);
+
+/** The procedures' own THROW numbers, from the migration. */
+const BOOTSTRAP_ALREADY_DONE = 51001;
+const BOOTSTRAP_INELIGIBLE_TARGET = 51003;
+const RECOVERY_NOT_AN_ADMINISTRATOR = 51012;
+
+interface SqlError extends Error {
+  number?: number;
+}
+
+function errorNumber(error: unknown): number | undefined {
+  return (error as SqlError | undefined)?.number;
+}
+
+let failures = 0;
+
+function pass(label: string, detail: string): void {
+  process.stdout.write(`  PASS  ${label.padEnd(44)} ${detail}\n`);
+}
+
+function fail(label: string, detail: string): void {
+  failures += 1;
+  process.stdout.write(`  FAIL  ${label.padEnd(44)} ${detail}\n`);
+}
+
+/** Asserts a statement is refused BY THE PERMISSION SYSTEM, not by anything else. */
+async function expectDenied(
+  session: SqlSession,
+  label: string,
+  run: () => Promise<unknown>,
+): Promise<void> {
+  try {
+    await run();
+  } catch (error) {
+    const number = errorNumber(error);
+    if (number !== undefined && PERMISSION_DENIED.has(number)) {
+      pass(label, `denied, SQL Server error ${number}`);
+      return;
+    }
+    fail(
+      label,
+      `rejected for the WRONG reason (error ${number ?? 'unknown'}): ` +
+        `${(error as Error).message.split('\n')[0]}`,
+    );
+    return;
+  }
+  fail(label, 'statement SUCCEEDED but must be denied');
+}
+
+/** Asserts a PROCEDURE refused for its own documented reason, not a permission one. */
+async function expectRefusedBy(
+  label: string,
+  expected: number,
+  run: () => Promise<unknown>,
+): Promise<void> {
+  try {
+    await run();
+  } catch (error) {
+    const number = errorNumber(error);
+    if (number === expected) {
+      pass(label, `refused by the procedure, error ${number}`);
+      return;
+    }
+    fail(label, `expected procedure error ${expected}, got ${number ?? 'unknown'}`);
+    return;
+  }
+  fail(label, 'the procedure SUCCEEDED but must refuse');
+}
+
+async function expectAllowed(
+  label: string,
+  detail: string,
+  run: () => Promise<unknown>,
+): Promise<void> {
+  try {
+    await run();
+    pass(label, detail);
+  } catch (error) {
+    fail(
+      label,
+      `should be permitted but failed: ${(error as Error).message.split('\n')[0]}`,
+    );
+  }
+}
+
+/** A synthetic account. `.invalid` is reserved and can never resolve. */
+async function createAccount(
+  admin: SqlSession,
+  options: { verified: boolean; status: string },
+): Promise<string> {
+  const id = randomUUID();
+  await admin.query(`
+    INSERT INTO [dbo].[User]
+      ([id], [name], [email], [emailVerified], [status], [locale], [createdAt], [updatedAt])
+    VALUES
+      (N'${id}', N'Operator Proof', N'operator-proof-${id}@proof.invalid',
+       ${options.verified ? 1 : 0}, N'${options.status}', N'en',
+       SYSUTCDATETIME(), SYSUTCDATETIME());
+  `);
+  return id;
+}
+
+async function scalar(session: SqlSession, statement: string): Promise<number> {
+  const [row] = await session.query<{ total: number }>(statement);
+  return Number(row?.total ?? 0);
+}
+
+const command = startLocalCommand('migration-target');
+const migrationConnection = command.connection;
+const environment = command.environment;
+const application = getApplicationPrincipalCredentials(environment.values);
+const operator = getOperatorPrincipalCredentials(environment.values);
+const databaseName = newDisposableDatabaseName();
+
+const { url: disposableUrl } = retargetAtDisposable(command, databaseName);
+
+const master = await openMasterSession(migrationConnection);
+let admin: SqlSession | undefined;
+let app: SqlSession | undefined;
+let host: SqlSession | undefined;
+let second: SqlSession | undefined;
+
+process.stdout.write(`Privileged operator proof on ${databaseName}\n`);
+reportConfiguration(command, 44);
+
+try {
+  await createDisposableDatabase(master, databaseName);
+  admin = await openSession(withDatabase(migrationConnection, databaseName));
+
+  if ((await loadMigrations()).length === 0) {
+    throw new Error('No migrations to test against.');
+  }
+
+  await deployMigrations(disposableUrl, environment.values);
+  await provisionApplicationPrincipal(
+    admin,
+    application.DATABASE_APP_LOGIN,
+    application.DATABASE_APP_PASSWORD,
+  );
+  await provisionOperatorPrincipal(
+    admin,
+    operator.DATABASE_OPERATOR_LOGIN,
+    operator.DATABASE_OPERATOR_PASSWORD,
+  );
+
+  // ---- the migration's own foundation data ---------------------------------
+  const seededPermissions = await scalar(
+    admin,
+    'SELECT COUNT_BIG(*) AS total FROM [dbo].[Permission];',
+  );
+  const seededBundle = await scalar(
+    admin,
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[RolePermission] rp
+     JOIN [dbo].[Role] r ON r.[id] = rp.[roleId]
+     WHERE r.[key] = N'platform-administrator';`,
+  );
+  if (seededPermissions === 0 || seededBundle !== seededPermissions) {
+    fail(
+      'protected role is migration-seeded',
+      `${seededPermissions} permissions, ${seededBundle} bundled`,
+    );
+  } else {
+    pass(
+      'protected role is migration-seeded',
+      `${seededPermissions} permissions, all bundled into the protected role`,
+    );
+  }
+
+  // ---- the operator's EFFECTIVE authority ----------------------------------
+  //
+  // Bound to a local as well as to the outer `finally` handle: the outer one is
+  // `SqlSession | undefined` for cleanup, and every use below needs a value the
+  // type system knows is present rather than an assertion that it is.
+  const operatorSession = await openSession({
+    ...withDatabase(migrationConnection, databaseName),
+    user: operator.DATABASE_OPERATOR_LOGIN,
+    password: operator.DATABASE_OPERATOR_PASSWORD,
+  });
+  host = operatorSession;
+
+  const authority = await inspectPrincipalAuthority(operatorSession);
+
+  if (authority.broadRoles.length > 0) {
+    fail('operator holds no broad database role', authority.broadRoles.join(', '));
+  } else if (!authority.roles.includes(OPERATOR_ROLE)) {
+    fail(
+      'operator holds no broad database role',
+      `expected membership of ${OPERATOR_ROLE}; roles: ${authority.roles.join(', ') || '(none)'}`,
+    );
+  } else {
+    pass(
+      'operator holds no broad database role',
+      `${OPERATOR_ROLE} only; db_datareader/db_datawriter and the administrative roles absent`,
+    );
+  }
+
+  const heldDatabase = authority.databasePermissions
+    .filter((entry) => entry.held)
+    .map((entry) => entry.permission);
+  if (heldDatabase.length > 0) {
+    fail(
+      'operator holds no database-scope rights',
+      `effective: ${heldDatabase.join(', ')}`,
+    );
+  } else {
+    pass(
+      'operator holds no database-scope rights',
+      `${authority.databasePermissions.length} probes, none effective`,
+    );
+  }
+
+  const heldSchema = authority.schemaPermissions
+    .filter((entry) => entry.held)
+    .map((entry) => entry.permission);
+  if (heldSchema.length > 0) {
+    fail('operator holds no dbo-schema rights', `effective: ${heldSchema.join(', ')}`);
+  } else {
+    pass(
+      'operator holds no dbo-schema rights',
+      `${authority.schemaPermissions.length} probes, none effective`,
+    );
+  }
+
+  // ---- no general table access ---------------------------------------------
+  //
+  // The sharpest negative case. The procedures below WILL read and write every
+  // one of these tables on the operator's behalf, through ownership chaining —
+  // so proving the operator cannot touch them directly is what shows the
+  // chaining is the whole of its authority rather than a convenience on top of
+  // rights it already had.
+  for (const table of [
+    'User',
+    'Session',
+    'RoleAssignment',
+    'TwoFactor',
+    'PrivilegedSecurityPosture',
+    'AuditLog',
+  ]) {
+    await expectDenied(operatorSession, `operator SELECT on ${table} denied`, () =>
+      operatorSession.query(`SELECT TOP 1 1 AS probe FROM [dbo].[${table}];`),
+    );
+  }
+
+  await expectDenied(operatorSession, 'operator INSERT on RoleAssignment denied', () =>
+    operatorSession.query(`
+      INSERT INTO [dbo].[RoleAssignment] ([userId], [roleId])
+      VALUES (N'injected', N'injected');
+    `),
+  );
+
+  await expectDenied(operatorSession, 'operator CREATE TABLE denied', () =>
+    operatorSession.query(
+      'CREATE TABLE [dbo].[OperatorShouldNotCreateThis] ([id] INT NOT NULL);',
+    ),
+  );
+
+  // ---- the application principal cannot execute either procedure -----------
+  const applicationSession = await openSession({
+    ...withDatabase(migrationConnection, databaseName),
+    user: application.DATABASE_APP_LOGIN,
+    password: application.DATABASE_APP_PASSWORD,
+  });
+  app = applicationSession;
+
+  const eligible = await createAccount(admin, { verified: true, status: 'active' });
+
+  for (const procedure of OPERATOR_PROCEDURES) {
+    await expectDenied(
+      applicationSession,
+      `application EXECUTE on ${procedure} denied`,
+      () =>
+        applicationSession.execute(procedure, {
+          targetUserId: eligible,
+          ticket: 'proof',
+        }),
+    );
+  }
+
+  // ---- bootstrap: ineligible targets ---------------------------------------
+  const unverified = await createAccount(admin, { verified: false, status: 'active' });
+  const disabled = await createAccount(admin, { verified: true, status: 'disabled' });
+
+  await expectRefusedBy(
+    'bootstrap refuses an unverified target',
+    BOOTSTRAP_INELIGIBLE_TARGET,
+    () =>
+      operatorSession.execute(OPERATOR_PROCEDURES[0], {
+        targetUserId: unverified,
+        ticket: 'OPS-1 unverified',
+      }),
+  );
+
+  await expectRefusedBy(
+    'bootstrap refuses an inactive target',
+    BOOTSTRAP_INELIGIBLE_TARGET,
+    () =>
+      operatorSession.execute(OPERATOR_PROCEDURES[0], {
+        targetUserId: disabled,
+        ticket: 'OPS-2 disabled',
+      }),
+  );
+
+  // ---- bootstrap: concurrent attempts resolve to exactly one ---------------
+  //
+  // Two operator sessions, the same instant, two DIFFERENT eligible targets.
+  // Different targets matter: identical ones could both "succeed" against a
+  // naive idempotency rule and hide the race. Exactly one must win.
+  const rivalSession = await openSession({
+    ...withDatabase(migrationConnection, databaseName),
+    user: operator.DATABASE_OPERATOR_LOGIN,
+    password: operator.DATABASE_OPERATOR_PASSWORD,
+  });
+  second = rivalSession;
+
+  const contender = await createAccount(admin, { verified: true, status: 'active' });
+
+  const outcomes = await Promise.allSettled([
+    operatorSession.execute(OPERATOR_PROCEDURES[0], {
+      targetUserId: eligible,
+      ticket: 'OPS-3 concurrent A',
+    }),
+    rivalSession.execute(OPERATOR_PROCEDURES[0], {
+      targetUserId: contender,
+      ticket: 'OPS-3 concurrent B',
+    }),
+  ]);
+
+  const succeeded = outcomes.filter((outcome) => outcome.status === 'fulfilled').length;
+  const administrators = await scalar(
+    admin,
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[RoleAssignment] ra
+     JOIN [dbo].[Role] r ON r.[id] = ra.[roleId]
+     WHERE r.[key] = N'platform-administrator' AND ra.[revokedAt] IS NULL;`,
+  );
+  const bootstrapRows = await scalar(
+    admin,
+    'SELECT COUNT_BIG(*) AS total FROM [dbo].[IdentityBootstrap];',
+  );
+
+  if (succeeded !== 1 || administrators !== 1 || bootstrapRows !== 1) {
+    fail(
+      'concurrent bootstrap yields exactly one',
+      `${succeeded} call(s) succeeded, ${administrators} administrator(s), ` +
+        `${bootstrapRows} bootstrap row(s)`,
+    );
+  } else {
+    pass(
+      'concurrent bootstrap yields exactly one',
+      '1 success, 1 administrator, 1 bootstrap record',
+    );
+  }
+
+  // Which of the two won is not determined, and must not be: the property is
+  // that exactly one did. The winner is read back for the recovery cases.
+  const [winner] = await admin.query<{ userId: string }>(
+    `SELECT TOP 1 ra.[userId] AS userId FROM [dbo].[RoleAssignment] ra
+     JOIN [dbo].[Role] r ON r.[id] = ra.[roleId]
+     WHERE r.[key] = N'platform-administrator' AND ra.[revokedAt] IS NULL;`,
+  );
+  const administratorId = winner?.userId ?? '';
+
+  // ---- bootstrap self-closes ------------------------------------------------
+  await expectRefusedBy('a second bootstrap is refused', BOOTSTRAP_ALREADY_DONE, () =>
+    operatorSession.execute(OPERATOR_PROCEDURES[0], {
+      targetUserId: disabled,
+      ticket: 'OPS-4 second attempt',
+    }),
+  );
+
+  // ---- the bootstrap recorded WHO, WHAT and WHY ---------------------------
+  const [record] = await admin.query<{
+    operatorLogin: string;
+    ticket: string;
+    targetUserId: string;
+  }>('SELECT [operatorLogin], [ticket], [targetUserId] FROM [dbo].[IdentityBootstrap];');
+
+  if (record?.operatorLogin !== operator.DATABASE_OPERATOR_LOGIN) {
+    fail(
+      'bootstrap records the real DB login',
+      `recorded '${record?.operatorLogin ?? ''}', expected the operator login`,
+    );
+  } else if (record.targetUserId !== administratorId || record.ticket === '') {
+    fail('bootstrap records the real DB login', 'target or ticket is missing');
+  } else {
+    pass(
+      'bootstrap records the real DB login',
+      `ORIGINAL_LOGIN() = ${record.operatorLogin}, ticket recorded`,
+    );
+  }
+
+  const bootstrapAudit = await scalar(
+    admin,
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[AuditLog]
+     WHERE [action] = N'identity.bootstrap.completed'
+       AND [actorType] = N'operator'
+       AND [actorId] = N'${operator.DATABASE_OPERATOR_LOGIN}';`,
+  );
+  if (bootstrapAudit !== 1) {
+    fail('bootstrap is audited', `${bootstrapAudit} audit row(s)`);
+  } else {
+    pass('bootstrap is audited', 'one operator-attributed audit record');
+  }
+
+  // ---- recovery -------------------------------------------------------------
+  await expectRefusedBy(
+    'recovery refuses a non-administrator',
+    RECOVERY_NOT_AN_ADMINISTRATOR,
+    () =>
+      operatorSession.execute(OPERATOR_PROCEDURES[1], {
+        targetUserId: disabled,
+        ticket: 'OPS-5 not an administrator',
+      }),
+  );
+
+  // Give the administrator a live session, a step-up grant, an enrolled factor
+  // and a complete posture, so recovery has something real to clear.
+  const sessionId = randomUUID();
+  await admin.query(`
+    INSERT INTO [dbo].[Session] ([id], [expiresAt], [token], [createdAt], [updatedAt], [userId])
+    VALUES (N'${sessionId}', DATEADD(day, 7, SYSUTCDATETIME()), N'token-${sessionId}',
+            SYSUTCDATETIME(), SYSUTCDATETIME(), N'${administratorId}');
+  `);
+  await admin.query(`
+    INSERT INTO [dbo].[StepUpGrant] ([userId], [sessionId], [purpose], [expiresAt])
+    VALUES (N'${administratorId}', N'${sessionId}', N'privilege-administration',
+            DATEADD(minute, 5, SYSUTCDATETIME()));
+  `);
+  await admin.query(`
+    INSERT INTO [dbo].[TwoFactor] ([secret], [backupCodes], [userId], [verified])
+    VALUES (N'synthetic-not-a-secret', N'synthetic-not-a-code', N'${administratorId}', 1);
+  `);
+  await admin.query(`
+    UPDATE [dbo].[User] SET [twoFactorEnabled] = 1 WHERE [id] = N'${administratorId}';
+  `);
+  await admin.query(`
+    INSERT INTO [dbo].[PrivilegedSecurityPosture]
+      ([userId], [secondFactorVerifiedAt], [recoveryCodesIssuedAt], [recoveryCodesConfirmedAt])
+    VALUES (N'${administratorId}', SYSUTCDATETIME(), SYSUTCDATETIME(), SYSUTCDATETIME());
+  `);
+
+  await expectAllowed(
+    'operator EXECUTE on the recovery procedure',
+    'the two host-only procedures are the operator’s whole authority',
+    () =>
+      operatorSession.execute(OPERATOR_PROCEDURES[1], {
+        targetUserId: administratorId,
+        ticket: 'OPS-6 lost authenticator',
+      }),
+  );
+
+  const remainingSessions = await scalar(
+    admin,
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[Session] WHERE [userId] = N'${administratorId}';`,
+  );
+  const remainingGrants = await scalar(
+    admin,
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[StepUpGrant] WHERE [userId] = N'${administratorId}';`,
+  );
+  const remainingFactors = await scalar(
+    admin,
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[TwoFactor] WHERE [userId] = N'${administratorId}';`,
+  );
+  const stillEnabled = await scalar(
+    admin,
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[User]
+     WHERE [id] = N'${administratorId}' AND [twoFactorEnabled] = 1;`,
+  );
+  const reenrolment = await scalar(
+    admin,
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[PrivilegedSecurityPosture]
+     WHERE [userId] = N'${administratorId}'
+       AND [reenrolmentRequiredAt] IS NOT NULL
+       AND [secondFactorVerifiedAt] IS NULL
+       AND [recoveryCodesConfirmedAt] IS NULL;`,
+  );
+
+  if (
+    remainingSessions !== 0 ||
+    remainingGrants !== 0 ||
+    remainingFactors !== 0 ||
+    stillEnabled !== 0 ||
+    reenrolment !== 1
+  ) {
+    fail(
+      'recovery clears the factor and demands re-enrolment',
+      `${remainingSessions} session(s), ${remainingGrants} grant(s), ` +
+        `${remainingFactors} factor(s), enabled=${stillEnabled}, posture=${reenrolment}`,
+    );
+  } else {
+    pass(
+      'recovery clears the factor and demands re-enrolment',
+      'sessions, grants and factor gone; re-enrolment required',
+    );
+  }
+
+  // ---- recovery NEVER touches the role assignment --------------------------
+  const assignmentsAfter = await admin.query<{ id: string; revokedAt: Date | null }>(
+    `SELECT ra.[id] AS id, ra.[revokedAt] AS revokedAt FROM [dbo].[RoleAssignment] ra
+     JOIN [dbo].[Role] r ON r.[id] = ra.[roleId]
+     WHERE r.[key] = N'platform-administrator';`,
+  );
+
+  if (assignmentsAfter.length !== 1 || assignmentsAfter[0]?.revokedAt !== null) {
+    fail(
+      'recovery neither grants nor regrants a role',
+      `${assignmentsAfter.length} assignment row(s); expected the original, unrevoked`,
+    );
+  } else {
+    pass(
+      'recovery neither grants nor regrants a role',
+      'the original assignment is intact and unrevoked',
+    );
+  }
+
+  const recoveryAudit = await scalar(
+    admin,
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[AuditLog]
+     WHERE [action] = N'identity.security.factor-recovered'
+       AND [actorType] = N'operator'
+       AND [actorId] = N'${operator.DATABASE_OPERATOR_LOGIN}';`,
+  );
+  if (recoveryAudit !== 1) {
+    fail('recovery is audited', `${recoveryAudit} audit row(s)`);
+  } else {
+    pass('recovery is audited', 'one operator-attributed audit record');
+  }
+
+  // ---- nothing sensitive reached the audit record --------------------------
+  const leaked = await scalar(
+    admin,
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[AuditLog]
+     WHERE ISNULL([beforeState], N'') LIKE N'%secret%'
+        OR ISNULL([afterState], N'')  LIKE N'%secret%'
+        OR ISNULL([beforeState], N'') LIKE N'%synthetic-not-a-code%'
+        OR ISNULL([afterState], N'')  LIKE N'%synthetic-not-a-code%';`,
+  );
+  if (leaked !== 0) {
+    fail('no second-factor material is audited', `${leaked} row(s) carry it`);
+  } else {
+    pass(
+      'no second-factor material is audited',
+      'no secret or recovery code in any payload',
+    );
+  }
+} finally {
+  await second?.close();
+  await host?.close();
+  await app?.close();
+  await admin?.close();
+  await dropDisposableDatabase(master, databaseName);
+  await master.close();
+}
+
+if (failures > 0) {
+  process.stdout.write(`\n${failures} operator check(s) FAILED.\n`);
+  process.exit(1);
+}
+
+process.stdout.write(
+  '\nHost-only bootstrap and recovery verified against the live operator principal.\n',
+);

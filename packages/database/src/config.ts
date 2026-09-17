@@ -30,6 +30,28 @@ const applicationPrincipalSchema = z.object({
 
 export type ApplicationPrincipalCredentials = z.infer<typeof applicationPrincipalSchema>;
 
+/**
+ * The dedicated privileged-operations principal (SECURITY_BASELINE.md §8.3).
+ *
+ * SEPARATE FROM BOTH OTHERS, and that is the point. The migration principal
+ * can change schema and must not be used for routine bootstrap or recovery;
+ * the runtime principal must never be able to provision an administrator. This
+ * one holds EXECUTE on exactly two procedures.
+ *
+ * Its own schema, like the application principal's, because only the host-only
+ * operator commands need it — a web process that never reads these variables
+ * cannot be misconfigured into holding them.
+ */
+const operatorPrincipalSchema = z.object({
+  DATABASE_OPERATOR_LOGIN: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z][A-Za-z0-9_]{2,63}$/),
+  DATABASE_OPERATOR_PASSWORD: z.string().min(8),
+});
+
+export type OperatorPrincipalCredentials = z.infer<typeof operatorPrincipalSchema>;
+
 const databaseRuntimeEnvironmentSchema = databaseEnvironmentSchema.pick({
   DATABASE_URL: true,
 });
@@ -82,6 +104,15 @@ export function getApplicationPrincipalCredentials(
   source: Record<string, string | undefined> = process.env,
 ): ApplicationPrincipalCredentials {
   const result = applicationPrincipalSchema.safeParse(source);
+  if (result.success) return result.data;
+
+  throw new DatabaseConfigurationError(invalidVariableNames(result.error));
+}
+
+export function getOperatorPrincipalCredentials(
+  source: Record<string, string | undefined> = process.env,
+): OperatorPrincipalCredentials {
+  const result = operatorPrincipalSchema.safeParse(source);
   if (result.success) return result.data;
 
   throw new DatabaseConfigurationError(invalidVariableNames(result.error));

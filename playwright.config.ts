@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Browser coverage for Phase 2 Chunk 1.
+ * Browser coverage for Phase 2.
  *
  * WHY A SECOND RUNNER AT ALL. Vitest proves the services, the adapters and the
  * database behaviour, and it proves them well. What it cannot prove is the

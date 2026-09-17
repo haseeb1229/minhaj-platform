@@ -14,6 +14,7 @@ import type { Prisma } from '@prisma/client';
 
 import { auditRow } from '../../audit-row.ts';
 import { getDatabaseClient } from '../../client.ts';
+import { isFinalAdministratorDatabaseError } from './final-administrator.ts';
 import { toAccountIdentity, type AuthUserRow } from './projection.ts';
 
 /**
@@ -37,6 +38,26 @@ import { toAccountIdentity, type AuthUserRow } from './projection.ts';
  * pasting it into a mail client.
  */
 const TOMBSTONE_DOMAIN = 'closed.invalid';
+
+class IdentityPersistenceError extends Error {
+  readonly reason = 'final-administrator' as const;
+
+  constructor() {
+    super('The final usable Platform Administrator cannot be removed.');
+    this.name = 'IdentityPersistenceError';
+  }
+}
+
+async function preserveFinalAdministrator<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (isFinalAdministratorDatabaseError(error)) {
+      throw new IdentityPersistenceError();
+    }
+    throw error;
+  }
+}
 
 /**
  * The address a closed account keeps.
@@ -206,10 +227,12 @@ export function createIdentityPersistence(): IdentityPersistencePort {
     },
 
     async setAccountStatus({ accountId, status }): Promise<void> {
-      await prisma.user.update({
-        where: { id: accountId },
-        data: { status: status satisfies AccountStatus, updatedAt: new Date() },
-      });
+      await preserveFinalAdministrator(() =>
+        prisma.user.update({
+          where: { id: accountId },
+          data: { status: status satisfies AccountStatus, updatedAt: new Date() },
+        }),
+      );
     },
 
     async completeAccountSetup(accountId: string): Promise<AccountIdentity> {
@@ -307,116 +330,159 @@ export function createIdentityPersistence(): IdentityPersistencePort {
       // describes, because a closure the person is never told about is a
       // closure they cannot question. Layer 4 relays it AFTER commit; there is
       // no cross-owner transaction anywhere in this (ARCHITECTURE.md §3.1.2.1).
-      await prisma.$transaction(async (tx) => {
-        const closedAt = new Date();
+      await preserveFinalAdministrator(() =>
+        prisma.$transaction(async (tx) => {
+          const closedAt = new Date();
 
-        // Lock this account's complete operation-key range before touching the
-        // User. A concurrent vendor stamp either commits first and is finalized
-        // below, or waits and then observes its marker cancelled. HOLDLOCK also
-        // prevents a new operation marker appearing halfway through closure.
-        const operations = await tx.$queryRaw<{ id: string }[]>`
+          // Lock this account's complete operation-key range before touching the
+          // User. A concurrent vendor stamp either commits first and is finalized
+          // below, or waits and then observes its marker cancelled. HOLDLOCK also
+          // prevents a new operation marker appearing halfway through closure.
+          const operations = await tx.$queryRaw<{ id: string }[]>`
           SELECT [id]
           FROM [dbo].[IdentitySecurityOperation] WITH (UPDLOCK, HOLDLOCK)
           WHERE [userId] = ${accountId} AND [completedAt] IS NULL
           ORDER BY [createdAt]
         `;
 
-        await tx.identitySecurityOperation.updateMany({
-          where: {
-            userId: accountId,
-            committedAt: null,
-            cancelledAt: null,
-            completedAt: null,
-          },
-          data: { cancelledAt: closedAt },
-        });
+          await tx.identitySecurityOperation.updateMany({
+            where: {
+              userId: accountId,
+              committedAt: null,
+              cancelledAt: null,
+              completedAt: null,
+            },
+            data: { cancelledAt: closedAt },
+          });
 
-        for (const operation of operations) {
-          await finalizeSecurityOperation(tx, operation.id);
-        }
+          for (const operation of operations) {
+            await finalizeSecurityOperation(tx, operation.id);
+          }
 
-        const account = await tx.user.findUnique({ where: { id: accountId } });
-        if (account === null || account.status === 'closed') {
-          throw new Error('Account is not available for closure.');
-        }
+          const account = await tx.user.findUnique({ where: { id: accountId } });
+          if (account === null || account.status === 'closed') {
+            throw new Error('Account is not available for closure.');
+          }
 
-        // Any earlier unrelayed security notice now needs the same bounded
-        // destination capture as the closure notice: the User address is about
-        // to become a tombstone. Relay clears every override after enqueue.
-        await tx.identityCommunicationIntent.updateMany({
-          where: { userId: accountId, status: 'pending' },
-          data: { recipientOverride: account.email },
-        });
+          // Any earlier unrelayed security notice now needs the same bounded
+          // destination capture as the closure notice: the User address is about
+          // to become a tombstone. Relay clears every override after enqueue.
+          await tx.identityCommunicationIntent.updateMany({
+            where: { userId: accountId, status: 'pending' },
+            data: { recipientOverride: account.email },
+          });
 
-        // The former address travels WITH the intent, because the update
-        // below is about to remove the only other copy of it. A closure notice
-        // has exactly one correct destination and it is the address that is
-        // being released; resolving the recipient at relay time — which every
-        // other notification does, so that it follows an address change — would
-        // resolve to the tombstone.
-        //
-        // It is carried here rather than left on the closed `User`, and it is
-        // discarded when the intent is relayed, so the window in which the
-        // platform still holds the address is the gap between this commit and
-        // the next dispatch tick (DOMAIN_MODEL.md §4.6).
-        await tx.identityCommunicationIntent.create({
-          data: {
-            purpose: intent.purpose,
-            userId: intent.accountId,
-            locale: intent.locale,
-            idempotencyKey: intent.idempotencyKey,
-            recipientOverride: intent.recipientOverride ?? null,
-            status: 'pending',
-          },
-        });
+          // The former address travels WITH the intent, because the update
+          // below is about to remove the only other copy of it. A closure notice
+          // has exactly one correct destination and it is the address that is
+          // being released; resolving the recipient at relay time — which every
+          // other notification does, so that it follows an address change — would
+          // resolve to the tombstone.
+          //
+          // It is carried here rather than left on the closed `User`, and it is
+          // discarded when the intent is relayed, so the window in which the
+          // platform still holds the address is the gap between this commit and
+          // the next dispatch tick (DOMAIN_MODEL.md §4.6).
+          await tx.identityCommunicationIntent.create({
+            data: {
+              purpose: intent.purpose,
+              userId: intent.accountId,
+              locale: intent.locale,
+              idempotencyKey: intent.idempotencyKey,
+              recipientOverride: intent.recipientOverride ?? null,
+              status: 'pending',
+            },
+          });
 
-        // Mandatory user-management evidence belongs in this same private
-        // Identity transaction. AuditLog remains FK-free and append-only.
-        await tx.auditLog.create({ data: auditRow(audit) });
+          // Mandatory user-management evidence belongs in this same private
+          // Identity transaction. AuditLog remains FK-free and append-only.
+          await tx.auditLog.create({ data: auditRow(audit) });
 
-        // Sessions first: while any of these live, the account is still usable.
-        await tx.session.deleteMany({ where: { userId: accountId } });
+          // Step-up grants BEFORE the sessions that carry them. The session
+          // cascade would take them anyway; doing it explicitly means closure
+          // does not depend on a constraint remaining as it is (Chunk 2).
+          await tx.stepUpGrant.deleteMany({ where: { userId: accountId } });
 
-        // Credentials and provider links. The row stays; the ability to
-        // authenticate as it does not.
-        await tx.account.deleteMany({ where: { userId: accountId } });
+          // Sessions first: while any of these live, the account is still usable.
+          await tx.session.deleteMany({ where: { userId: accountId } });
 
-        // Outstanding verification and reset tokens for the OLD address.
-        // Leaving one live would let a token minted before closure verify or
-        // reset an address that is about to become available to someone else.
-        await tx.verification.deleteMany({
-          where: {
-            OR: [
-              { identifier: `email-verification-otp-${account.email}` },
-              { identifier: `forget-password-otp-${account.email}` },
-              {
-                identifier: {
-                  startsWith: `change-email-otp-${account.email}-`,
+          // Credentials and provider links. The row stays; the ability to
+          // authenticate as it does not.
+          await tx.account.deleteMany({ where: { userId: accountId } });
+
+          // PRIVILEGE, in the same transaction (Chunk 2).
+          //
+          // Assignments are REVOKED rather than deleted: who held what, and
+          // when, is exactly the history closure must not destroy. Revoking them
+          // is what stops the closed account granting anything, and what stops a
+          // later re-registration of the released address inheriting it — the
+          // new account is a new `User.id`, so it would not have inherited the
+          // rows anyway, and this makes the closed row grant nothing either
+          // (DOMAIN_MODEL.md §4.6).
+          await tx.roleAssignment.updateMany({
+            where: { userId: accountId, revokedAt: null },
+            data: { revokedAt: closedAt, revokedReason: 'account-closed' },
+          });
+
+          // The second factor and its recovery material are DESTROYED. They are
+          // authentication secrets for an account that can no longer
+          // authenticate, and keeping them would mean keeping a credential for a
+          // person who asked to leave (SECURITY_BASELINE.md §8.2, §19.1).
+          await tx.twoFactor.deleteMany({ where: { userId: accountId } });
+
+          // The posture row is cleared rather than deleted, like every other
+          // piece of evidence here: it records that this account once held
+          // privileged authority, which stays true after closure.
+          await tx.privilegedSecurityPosture.updateMany({
+            where: { userId: accountId },
+            data: {
+              secondFactorVerifiedAt: null,
+              recoveryCodesIssuedAt: null,
+              recoveryCodesConfirmedAt: null,
+              reenrolmentRequiredAt: null,
+              updatedAt: closedAt,
+            },
+          });
+
+          // Outstanding verification and reset tokens for the OLD address.
+          // Leaving one live would let a token minted before closure verify or
+          // reset an address that is about to become available to someone else.
+          await tx.verification.deleteMany({
+            where: {
+              OR: [
+                { identifier: `email-verification-otp-${account.email}` },
+                { identifier: `forget-password-otp-${account.email}` },
+                {
+                  identifier: {
+                    startsWith: `change-email-otp-${account.email}-`,
+                  },
                 },
-              },
-            ],
-          },
-        });
+              ],
+            },
+          });
 
-        // The row is RETAINED for historical attribution, pseudonymised, and
-        // its address replaced by a deterministic non-routable tombstone — so
-        // the original address becomes available again and a later signup
-        // with it is a genuinely new account (DOMAIN_MODEL.md §4.6).
-        await tx.user.update({
-          where: { id: accountId },
-          data: {
-            status: 'closed' satisfies AccountStatus,
-            closedAt,
-            pseudonymisedAt: closedAt,
-            email: tombstoneEmail(accountId),
-            emailVerified: false,
-            name: PSEUDONYM,
-            image: null,
-            timezone: null,
-            updatedAt: closedAt,
-          },
-        });
-      });
+          // The row is RETAINED for historical attribution, pseudonymised, and
+          // its address replaced by a deterministic non-routable tombstone — so
+          // the original address becomes available again and a later signup
+          // with it is a genuinely new account (DOMAIN_MODEL.md §4.6).
+          await tx.user.update({
+            where: { id: accountId },
+            data: {
+              status: 'closed' satisfies AccountStatus,
+              closedAt,
+              pseudonymisedAt: closedAt,
+              email: tombstoneEmail(accountId),
+              emailVerified: false,
+              name: PSEUDONYM,
+              image: null,
+              timezone: null,
+              // The library's own factor flag follows the factor rows out.
+              twoFactorEnabled: false,
+              updatedAt: closedAt,
+            },
+          });
+        }),
+      );
     },
 
     async commitCommunicationIntent(intent: CommunicationIntentInput): Promise<void> {

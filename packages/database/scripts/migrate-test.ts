@@ -73,24 +73,29 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
     'ProviderEvent',
     'RateLimitCounter',
   ],
+  '20260916000000_phase2_authorization_privileged_security': [
+    'Permission',
+    'Role',
+    'RolePermission',
+    'RoleAssignment',
+    'StepUpGrant',
+    'TwoFactor',
+    'PrivilegedSecurityPosture',
+    'IdentityBootstrap',
+  ],
 };
 
 /**
  * Tables no delivered phase owns yet.
  *
  * Their presence would mean schema had been created ahead of the phase that
- * owns it: domain schema arrives with its owning phase (DELIVERY_PLAN.md). `User`, `Session` and `Account` left this list when Phase 2 Chunk 1
- * genuinely delivered them; `Role`, `Permission` and `RoleAssignment` stay on
- * it until Phase 2 Chunk 2 delivers authorisation.
+ * owns it: domain schema arrives with its owning phase (DELIVERY_PLAN.md).
+ * `User`, `Session` and `Account` left this list when Phase 2 Chunk 1
+ * genuinely delivered them; `Role`, `Permission`, `RolePermission`,
+ * `RoleAssignment`, `StepUpGrant`, `TwoFactor` and `IdentityBootstrap` left it
+ * when Chunk 2 delivered authorisation and the privileged second factor.
  */
 const PREMATURE_TABLES = [
-  'Role',
-  'Permission',
-  'RolePermission',
-  'RoleAssignment',
-  'StepUpGrant',
-  'IdentityBootstrap',
-  'TwoFactor',
   'Article',
   'Page',
   'Quran',
@@ -125,6 +130,9 @@ const EXPECTED_AUDIT_INDEXES = [
   'AuditLog_actorId_idx',
   'AuditLog_occurredAt_idx',
   'AuditLog_targetType_targetId_idx',
+  // Chunk 2: the read-only admin audit view filters by action and orders by
+  // time, and only indexed filters are offered (SECURITY_BASELINE.md §28).
+  'AuditLog_action_occurredAt_idx',
 ];
 
 /**
@@ -146,6 +154,38 @@ const EXPECTED_COLUMN_SIZES: readonly {
   { table: 'Account', column: 'password', characters: 255 },
   { table: 'Verification', column: 'identifier', characters: 400 },
   { table: 'EmailDelivery', column: 'idempotencyKey', characters: 200 },
+  // Chunk 2. `Permission.key` is a PRIMARY KEY and `Role.key` a UNIQUE
+  // constraint, so both are index keys and both would exceed the 1700-byte
+  // limit at Prisma's NVARCHAR(1000) default.
+  { table: 'Permission', column: 'key', characters: 64 },
+  { table: 'Role', column: 'key', characters: 64 },
+  { table: 'RolePermission', column: 'permissionKey', characters: 64 },
+];
+
+/**
+ * Database objects this repository creates that Prisma's schema language
+ * cannot express, so nothing else would notice their absence.
+ *
+ * The FILTERED unique index is the race-safety property behind "at most one
+ * live assignment per account and role"; the two PROCEDURES are the whole of
+ * the host-only privileged surface. A migration that created the tables and
+ * silently dropped either would leave a gate that looks present and is not.
+ */
+const EXPECTED_FILTERED_INDEX = {
+  table: 'RoleAssignment',
+  index: 'RoleAssignment_userId_roleId_live_key',
+};
+
+const EXPECTED_PROCEDURES = [
+  'IdentityBootstrapPlatformAdministrator',
+  'IdentityRecoverPrivilegedSecondFactor',
+];
+
+const EXPECTED_TRIGGERS = [
+  'IdentityFinalAdministrator_Bootstrap',
+  'IdentityFinalAdministrator_Role',
+  'IdentityFinalAdministrator_RoleAssignment',
+  'IdentityFinalAdministrator_User',
 ];
 
 function report(step: string, detail: string): void {
@@ -232,6 +272,61 @@ async function assertColumnSizes(session: SqlSession): Promise<void> {
     }
   }
   report('column sizes', `${EXPECTED_COLUMN_SIZES.length} explicit sizes verified`);
+}
+
+/** Asserts the objects Prisma's schema language cannot describe. */
+async function assertNonPrismaObjects(session: SqlSession): Promise<void> {
+  const [filtered] = await session.query<{ has_filter: number }>(`
+    SELECT i.has_filter FROM sys.indexes i
+    WHERE i.object_id = OBJECT_ID(N'[dbo].[${EXPECTED_FILTERED_INDEX.table}]')
+      AND i.name = N'${EXPECTED_FILTERED_INDEX.index}'
+      AND i.is_unique = 1;
+  `);
+
+  if (filtered === undefined) {
+    fail(
+      `The unique index ${EXPECTED_FILTERED_INDEX.index} is missing. Without it, ` +
+        `two concurrent grants of the same role to the same account both succeed.`,
+    );
+  }
+  if (Number(filtered.has_filter) !== 1) {
+    fail(
+      `${EXPECTED_FILTERED_INDEX.index} exists but is not FILTERED, so a second ` +
+        `grant after a revoke would be refused rather than recorded as new history.`,
+    );
+  }
+
+  for (const procedure of EXPECTED_PROCEDURES) {
+    const rows = await session.query<{ name: string }>(`
+      SELECT name FROM sys.procedures WHERE name = N'${procedure}';
+    `);
+    if (rows.length !== 1) {
+      fail(`The host-only procedure ${procedure} is missing after deploy.`);
+    }
+  }
+
+  for (const trigger of EXPECTED_TRIGGERS) {
+    const rows = await session.query<{ name: string }>(
+      `SELECT name FROM sys.triggers WHERE name = N'${trigger}';`,
+    );
+    if (rows.length !== 1) {
+      fail('The final-administrator trigger ' + trigger + ' is missing after deploy.');
+    }
+  }
+
+  const roleRows = await session.query<{ name: string }>(`
+    SELECT name FROM sys.database_principals
+    WHERE name = N'minhaj_operator' AND type = 'R';
+  `);
+  if (roleRows.length !== 1) {
+    fail('The minhaj_operator database role is missing after deploy.');
+  }
+
+  report(
+    'privileged objects',
+    `1 filtered unique index, ${EXPECTED_PROCEDURES.length} procedures, ` +
+      `${EXPECTED_TRIGGERS.length} invariant triggers, 1 operator role`,
+  );
 }
 
 // Resolves docker/.env as the sole authority and proves the target is the
@@ -323,6 +418,7 @@ try {
   report('audit schema', `${columns.length} columns, ${indexNames.length} indexes`);
 
   await assertColumnSizes(session);
+  await assertNonPrismaObjects(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
   for (const migration of migrations) {
@@ -400,6 +496,7 @@ try {
     fail('Schema after re-deploy differs from the first deploy.');
   }
   await assertColumnSizes(session);
+  await assertNonPrismaObjects(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

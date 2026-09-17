@@ -3,10 +3,9 @@
 import { useActionState } from 'react';
 
 import { Alert, Button } from '@/components/ui';
-import type { ActionState } from './actions';
 
 /**
- * The one Client Component the authentication surfaces use.
+ * The one Client Component the authentication and administration surfaces use.
  *
  * Server Components by default (ARCHITECTURE.md §7); this opts out because a
  * form needs pending state and a result to announce, and both are genuinely
@@ -16,8 +15,21 @@ import type { ActionState } from './actions';
  * PROGRESSIVE ENHANCEMENT. The underlying `<form action={…}>` submits and works
  * with JavaScript disabled; `useActionState` adds the pending and result states
  * on top rather than being the mechanism.
+ *
+ * GENERIC OVER ITS STATE since Chunk 2. Identity and administration have
+ * different failure vocabularies, and widening one union to hold both would
+ * mean every call site could pass a failure the other's messages do not
+ * describe. The shape they share — a status, an optional failure key — is what
+ * this component actually depends on, so that is what it asks for.
  */
-export function ActionForm({
+export interface FormActionState {
+  readonly status: 'idle' | 'success' | 'error';
+  /** Keys a message table; never a provider message and never a token. */
+  readonly failure?: string;
+  readonly retryAfter?: number;
+}
+
+export function ActionForm<State extends FormActionState>({
   action,
   submitLabel,
   pendingLabel,
@@ -25,7 +37,7 @@ export function ActionForm({
   children,
   tone = 'primary',
 }: {
-  readonly action: (state: ActionState, form: FormData) => Promise<ActionState>;
+  readonly action: (state: State, form: FormData) => Promise<State>;
   readonly submitLabel: string;
   readonly pendingLabel: string;
   /** Message for each outcome. Keyed by failure, with `success` and a default. */
@@ -33,7 +45,9 @@ export function ActionForm({
   readonly children: React.ReactNode;
   readonly tone?: 'primary' | 'secondary' | 'destructive';
 }) {
-  const [state, submit, pending] = useActionState(action, { status: 'idle' });
+  const [state, submit, pending] = useActionState<State, FormData>(action, {
+    status: 'idle',
+  } as Awaited<State>);
 
   const message =
     state.status === 'success'

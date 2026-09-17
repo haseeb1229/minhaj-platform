@@ -71,6 +71,43 @@ export const IDENTITY_RATE_LIMITS = {
     perAccount: { window: HOUR, max: 3 },
     perClient: { window: HOUR, max: 10 },
   },
+
+  // ---- Privileged proof (Chunk 2) ---------------------------------------
+  //
+  // THESE EXIST BECAUSE THE LIBRARY'S DO NOT. Better Auth applies an attempt
+  // budget and an account lockout to second-factor verification on the SIGN-IN
+  // path only: `verifyTwoFactor` returns a no-op attempt counter when a session
+  // already exists, so a signed-in caller can try codes as fast as the network
+  // allows. A six-digit TOTP is 10^6 values and a step accepts a window of
+  // them, which is well inside reach without a budget (CLAUDE.md §16, §38).
+  //
+  // Tighter than the sign-in flows, because every one of these is a PRIVILEGED
+  // proof: a person legitimately mistypes a code once or twice, and a caller
+  // who needs twenty attempts is not that person.
+
+  /** Re-proving the password (and factor) to earn a step-up grant. */
+  'step-up': {
+    perAccount: { window: 15 * MINUTE, max: 5 },
+    perClient: { window: 15 * MINUTE, max: 20 },
+  },
+
+  /** A signed-in TOTP verification: step-up, and enrolment confirmation. */
+  'second-factor-verify': {
+    perAccount: { window: 15 * MINUTE, max: 5 },
+    perClient: { window: 15 * MINUTE, max: 20 },
+  },
+
+  /** Spending a single-use recovery code while signed in. */
+  'recovery-code': {
+    perAccount: { window: HOUR, max: 5 },
+    perClient: { window: HOUR, max: 20 },
+  },
+
+  /** Starting or regenerating enrolment. Password-guarded, and mail-free. */
+  'second-factor-enrolment': {
+    perAccount: { window: HOUR, max: 5 },
+    perClient: { window: HOUR, max: 20 },
+  },
 } as const satisfies Record<string, IdentityRateLimit>;
 
 export type IdentityFlow = keyof typeof IDENTITY_RATE_LIMITS;

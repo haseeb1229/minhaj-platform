@@ -209,20 +209,21 @@ describe('server-core is a host, not a domain', () => {
 
   it('hosts no invented business services', async () => {
     // ARCHITECTURE.md §3.1: admission is BY JUSTIFICATION, one directory at a
-    // time, as the context that owns it arrives. `session/` was on this list
-    // until Phase 2 and has now been admitted under §3.1.3 — the approved
-    // realtime architecture (§3.2, §3.3) names a concrete scheduled consumer
-    // that must verify sessions through the SAME code the web process uses,
-    // and introducing that inside `apps/web` first would mean extracting a
-    // security-critical path later.
+    // time, as the context that owns it arrives. `session/` and
+    // `authorization/` are both admitted under §3.1.3 — the approved realtime
+    // architecture (§3.2, §3.3) names a concrete scheduled consumer that must
+    // verify sessions AND make authorisation decisions through the SAME code
+    // the web process uses, and introducing either inside `apps/web` first
+    // would mean extracting a security-critical path later.
     //
-    // The rest stay prohibited. `authorization/` in particular does not follow
-    // until Chunk 2 brings the enforcement that gives it meaning: an empty
+    // `authorization/` arrived with Chunk 2 and not before, because an empty
     // module claiming to be an authorization service is worse than its
-    // absence, because callers would start depending on it.
+    // absence: callers would start depending on it.
+    //
+    // The rest stay prohibited until the contexts that own them arrive.
     const directories = await hostedDirectories();
 
-    for (const premature of ['messaging', 'authorization', 'relationships']) {
+    for (const premature of ['messaging', 'relationships']) {
       expect(directories).not.toContain(premature);
     }
   });
@@ -234,7 +235,31 @@ describe('server-core is a host, not a domain', () => {
     // decision; this is the list of decisions that have been taken.
     const directories = await hostedDirectories();
 
-    expect([...directories].sort()).toEqual(['logging', 'session']);
+    expect([...directories].sort()).toEqual(['authorization', 'logging', 'session']);
+  });
+
+  it('keeps the authorization service free of infrastructure', async () => {
+    // The same rule the session service is held to, and for the same reason:
+    // the future realtime process must be able to make an authorisation
+    // decision without acquiring raw database capability to do it. The service
+    // holds a NARROW injected reader — three read operations — and a policy.
+    const source = await readFile(
+      path.join(serverCoreRoot, 'src/authorization/index.ts'),
+      'utf8',
+    );
+
+    for (const forbidden of [
+      '@minhaj/database',
+      '@prisma/client',
+      'better-auth',
+      'resend',
+      'next/',
+      'mssql',
+    ]) {
+      expect(source, `authorization must not import ${forbidden}`).not.toContain(
+        `from '${forbidden}`,
+      );
+    }
   });
 
   it('keeps the session service free of infrastructure', async () => {

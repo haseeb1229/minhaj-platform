@@ -330,3 +330,107 @@ export function SessionRow({
     </Panel>
   );
 }
+
+/* ===========================================================================
+ * Tabular data — the administrative surfaces
+ * ========================================================================= */
+
+/**
+ * A bounded data table.
+ *
+ * A REAL `<table>` with a `<caption>`, because that is what makes a grid of
+ * values navigable to a screen reader: it announces the caption, the column
+ * count and the header for each cell. A grid of `<div>`s reads as a wall of
+ * unrelated text (SECURITY_BASELINE.md §16.1).
+ *
+ * The horizontal scroll lives on the WRAPPER rather than the page. A table is
+ * one of the three things allowed to be wider than the viewport; the document
+ * itself is not, and an administrative screen on a phone is a real case for an
+ * audience this platform serves.
+ */
+export function DataTable({
+  caption,
+  columns,
+  children,
+}: {
+  readonly caption: string;
+  readonly columns: readonly string[];
+  readonly children: ReactNode;
+}) {
+  return (
+    <div className="w-full overflow-x-auto">
+      <table className="w-full min-w-[32rem] border-collapse text-sm">
+        <caption className="pb-2 text-start text-xs text-[color:var(--color-foreground-muted)]">
+          {caption}
+        </caption>
+        <thead>
+          <tr className="border-b border-[color:var(--color-border-strong)]">
+            {columns.map((column) => (
+              <th
+                key={column}
+                scope="col"
+                className="px-3 py-2 text-start text-xs font-semibold tracking-wide uppercase"
+              >
+                {column}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  );
+}
+
+/** One table row. Bordered rather than striped, so it survives a dark theme. */
+export function DataRow({ children }: { readonly children: ReactNode }) {
+  return (
+    <tr className="border-b border-[color:var(--color-border)] align-top">{children}</tr>
+  );
+}
+
+/** One table cell. */
+export function DataCell({
+  children,
+  wrap = false,
+}: {
+  readonly children: ReactNode;
+  readonly wrap?: boolean;
+}) {
+  return (
+    <td className={`px-3 py-2 ${wrap ? 'break-words' : 'whitespace-nowrap'}`}>
+      {children}
+    </td>
+  );
+}
+
+/**
+ * A short status word.
+ *
+ * Text, never colour alone. A badge that said "active" only by being green
+ * would say nothing in monochrome, nothing to a screen reader and nothing to a
+ * reader with colour-vision deficiency — and account status is exactly the kind
+ * of security state that must survive all three (§16.1).
+ */
+export function StatusBadge({
+  tone,
+  children,
+}: {
+  readonly tone: 'neutral' | 'positive' | 'caution';
+  readonly children: ReactNode;
+}) {
+  const tones = {
+    neutral:
+      'border-[color:var(--color-border-strong)] text-[color:var(--color-foreground-muted)]',
+    positive: 'border-[color:var(--color-success)] text-[color:var(--color-success)]',
+    caution: 'border-[color:var(--color-warning)] text-[color:var(--color-warning)]',
+  } as const;
+
+  return (
+    <span
+      className={`inline-block rounded-[var(--radius-control)] border px-2 py-0.5 text-xs font-medium ${tones[tone]}`}
+    >
+      {children}
+    </span>
+  );
+}

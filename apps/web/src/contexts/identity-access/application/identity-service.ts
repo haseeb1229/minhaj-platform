@@ -29,8 +29,9 @@ import {
   notificationKey,
   wouldRemoveFinalAuthenticationMethod,
 } from '../domain/account.ts';
-import { IDENTITY_RATE_LIMITS, type IdentityFlow } from '../domain/rate-limits.ts';
+import { type IdentityFlow } from '../domain/rate-limits.ts';
 import { renderMessage } from './messages.ts';
+import { createSpender } from './spend.ts';
 
 /**
  * Identity & Access — the application service.
@@ -65,6 +66,7 @@ export type IdentityFailure =
   | 'too-many-attempts'
   | 'email-unavailable'
   | 'final-authentication-method'
+  | 'final-administrator'
   | 'invalid-transition'
   | 'unavailable';
 
@@ -76,6 +78,26 @@ export interface IdentityError {
 }
 
 export type IdentityResult<T> = ({ readonly ok: true } & T) | IdentityError;
+
+/**
+ * What a correct password produced.
+ *
+ * TWO OUTCOMES, because an account with an enrolled second factor gets a
+ * CHALLENGE rather than a session. The caller must handle both: rendering
+ * "signed in" for the challenge state would be a lie, and dropping its cookies
+ * would abandon a flow the person is halfway through
+ * (SECURITY_BASELINE.md §8.2).
+ */
+export type SignInOutcome =
+  | {
+      readonly state: 'authenticated';
+      readonly account: AccountIdentity;
+      readonly setCookies: SetCookieHeaders;
+    }
+  | {
+      readonly state: 'second-factor-required';
+      readonly setCookies: SetCookieHeaders;
+    };
 
 function fail(failure: IdentityFailure, retryAfter?: number): IdentityError {
   return retryAfter === undefined
@@ -106,6 +128,18 @@ export interface IdentityServiceDependencies {
   }) => string;
   /** Canonical application origin, for building emailed links. */
   readonly baseUrl: string;
+  /**
+   * The step-up consequence of a security or status change.
+   *
+   * ONE OPERATION, injected rather than imported. Account status and closure
+   * are this service's, step-up grants are the authorisation persistence's, and
+   * a status change has to invalidate both; handing over a single named
+   * capability keeps that true without this service acquiring the ability to
+   * grant, revoke or read a privilege (ARCHITECTURE.md §3.1.2).
+   */
+  readonly privilege: {
+    revokeStepUpGrants(accountId: string): Promise<number>;
+  };
 }
 
 /* ===========================================================================
@@ -113,38 +147,27 @@ export interface IdentityServiceDependencies {
  * ========================================================================= */
 
 export function createIdentityService(dependencies: IdentityServiceDependencies) {
-  const { auth, persistence, limiter, audit, deliveries, suppression } = dependencies;
+  const { auth, persistence, audit, deliveries, suppression, privilege } = dependencies;
+
+  const charge = createSpender({
+    limiter: dependencies.limiter,
+    rateLimitKey: dependencies.rateLimitKey,
+  });
 
   /**
-   * Spends both budgets for a flow.
+   * Spends both budgets for a flow, in this service's own result shape.
    *
-   * The per-account budget is charged first so an attacker cannot exhaust a
-   * victim's budget cheaply from many addresses without also spending their
-   * own per-client budget.
+   * The budgets themselves live in `./spend.ts`, shared with the
+   * privileged-security service so the two cannot disagree about what a flow
+   * costs.
    */
   async function spend(
     flow: IdentityFlow,
     context: RequestContext,
     subject: string,
   ): Promise<IdentityError | null> {
-    const limits = IDENTITY_RATE_LIMITS[flow];
-
-    const account = await limiter.consume(
-      dependencies.rateLimitKey({ purpose: `${flow}:account`, subject }),
-      limits.perAccount,
-    );
-    if (!account.allowed) return fail('rate-limited', account.retryAfter ?? undefined);
-
-    const client = await limiter.consume(
-      dependencies.rateLimitKey({
-        purpose: `${flow}:client`,
-        subject: context.clientAddress,
-      }),
-      limits.perClient,
-    );
-    if (!client.allowed) return fail('rate-limited', client.retryAfter ?? undefined);
-
-    return null;
+    const denied = await charge(flow, context, subject);
+    return denied === null ? null : fail('rate-limited', denied.retryAfter);
   }
 
   /**
@@ -442,9 +465,7 @@ export function createIdentityService(dependencies: IdentityServiceDependencies)
     async signIn(
       context: RequestContext,
       input: { readonly email: string; readonly password: string },
-    ): Promise<
-      IdentityResult<{ account: AccountIdentity; setCookies: SetCookieHeaders }>
-    > {
+    ): Promise<IdentityResult<SignInOutcome>> {
       const email = canonicaliseEmail(input.email);
 
       const limited = await spend('sign-in', context, email);
@@ -473,6 +494,26 @@ export function createIdentityService(dependencies: IdentityServiceDependencies)
           headers: context.headers,
         });
 
+        if (outcome.state === 'second-factor-required') {
+          // The password was right and the sign-in is NOT finished. Audited as
+          // a challenge rather than a success, because an account that stops
+          // here has not been signed in to — and the difference is exactly what
+          // an investigation into a stolen password needs to see.
+          await audit.record({
+            action: 'identity.signin.second-factor-required',
+            actorType: 'user',
+            actorId: existing?.id ?? null,
+            targetType: 'user',
+            targetId: existing?.id ?? null,
+          });
+
+          return {
+            ok: true,
+            state: 'second-factor-required',
+            setCookies: outcome.setCookies,
+          };
+        }
+
         await audit.record({
           action: 'identity.signin.succeeded',
           actorType: 'user',
@@ -481,7 +522,12 @@ export function createIdentityService(dependencies: IdentityServiceDependencies)
           targetId: outcome.account.id,
         });
 
-        return { ok: true, account: outcome.account, setCookies: outcome.setCookies };
+        return {
+          ok: true,
+          state: 'authenticated',
+          account: outcome.account,
+          setCookies: outcome.setCookies,
+        };
       } catch {
         await audit.record({
           action: 'identity.signin.failed',
@@ -489,6 +535,79 @@ export function createIdentityService(dependencies: IdentityServiceDependencies)
           actorId: null,
           targetType: 'user',
           targetId: existing?.id ?? null,
+        });
+        return fail('invalid-credentials');
+      }
+    },
+
+    /**
+     * Answers an outstanding second-factor challenge and finishes signing in.
+     *
+     * THE LIMITER IS THE APPLICATION'S HERE TOO, even though the library does
+     * apply its own budget on this path: its per-challenge counter is five
+     * attempts and its account lockout ten, both of which reset a challenge
+     * rather than the CLIENT. A per-client budget is what stops one source
+     * working through challenges for many accounts (SECURITY_BASELINE.md §15).
+     *
+     * The subject is the CHALLENGED account's address where one was found by
+     * the sign-in that preceded this, and the client address otherwise: the
+     * challenge itself names no address this layer can see, which is deliberate
+     * — the pending identity lives in the server-side record and nowhere else.
+     */
+    async completeSecondFactor(
+      context: RequestContext,
+      input: { readonly code: string; readonly kind: 'totp' | 'recovery-code' },
+    ): Promise<
+      IdentityResult<{ account: AccountIdentity; setCookies: SetCookieHeaders }>
+    > {
+      const flow: IdentityFlow =
+        input.kind === 'totp' ? 'second-factor-verify' : 'recovery-code';
+
+      const limited = await spend(flow, context, context.clientAddress);
+      if (limited !== null) return limited;
+
+      try {
+        const outcome =
+          input.kind === 'totp'
+            ? await auth.completeSignInWithCode({
+                headers: context.headers,
+                code: input.code,
+              })
+            : await auth.completeSignInWithRecoveryCode({
+                headers: context.headers,
+                code: input.code,
+              });
+
+        // The library cannot return a challenge from a challenge; a defensive
+        // check rather than a reachable branch, and it fails closed.
+        if (outcome.state !== 'authenticated') return fail('invalid-credentials');
+
+        await audit.record({
+          action:
+            input.kind === 'totp'
+              ? 'identity.signin.second-factor-verified'
+              : 'identity.signin.recovery-code-used',
+          actorType: 'user',
+          actorId: outcome.account.id,
+          targetType: 'user',
+          targetId: outcome.account.id,
+        });
+
+        return {
+          ok: true,
+          account: outcome.account,
+          setCookies: outcome.setCookies,
+        };
+      } catch {
+        // A wrong code, an expired challenge and an absent one all report the
+        // same thing. Distinguishing them would say whether a challenge exists,
+        // which is a fact about somebody else's sign-in.
+        await audit.record({
+          action: 'identity.signin.second-factor-failed',
+          actorType: 'anonymous',
+          actorId: null,
+          targetType: 'user',
+          targetId: null,
         });
         return fail('invalid-credentials');
       }
@@ -914,16 +1033,29 @@ export function createIdentityService(dependencies: IdentityServiceDependencies)
         return fail('invalid-transition');
       }
 
-      await persistence.setAccountStatus({
-        accountId: input.accountId,
-        status: input.status,
-      });
+      try {
+        await persistence.setAccountStatus({
+          accountId: input.accountId,
+          status: input.status,
+        });
+      } catch (error) {
+        if ((error as { reason?: unknown } | null)?.reason === 'final-administrator') {
+          return fail('final-administrator');
+        }
+        throw error;
+      }
 
       // A status that removes the ability to act takes effect NOW, not at the
       // next sign-in. The session chokepoint would refuse the next request
       // anyway; revoking here means there is nothing left to refuse.
+      //
+      // STEP-UP GRANTS GO TOO (Chunk 2). The session cascade takes them with
+      // the sessions, and they are revoked explicitly as well so the guarantee
+      // does not rest on a foreign-key action remaining as it is
+      // (SECURITY_BASELINE.md §8.1).
       if (input.status !== 'active') {
         await auth.revokeAllSessionsForAccount(input.accountId);
+        await privilege.revokeStepUpGrants(input.accountId);
       }
 
       await audit.record({
@@ -970,29 +1102,36 @@ export function createIdentityService(dependencies: IdentityServiceDependencies)
       // The destination travels with the intent instead, committed inside the
       // transaction and discarded when it is relayed. The message becomes
       // sendable only if the closure actually happened.
-      await persistence.closeAccount({
-        accountId: account.id,
-        intent: {
-          purpose: 'identity.account-closed',
+      try {
+        await persistence.closeAccount({
           accountId: account.id,
-          locale: account.locale,
-          idempotencyKey: notificationKey({
+          intent: {
             purpose: 'identity.account-closed',
             accountId: account.id,
-            occasion: 'closure',
-          }),
-          recipientOverride: account.email,
-        },
-        audit: {
-          action: 'identity.account.closed',
-          actorType: 'user',
-          actorId: account.id,
-          targetType: 'user',
-          targetId: account.id,
-          before: { status: account.status },
-          after: { status: 'closed' },
-        },
-      });
+            locale: account.locale,
+            idempotencyKey: notificationKey({
+              purpose: 'identity.account-closed',
+              accountId: account.id,
+              occasion: 'closure',
+            }),
+            recipientOverride: account.email,
+          },
+          audit: {
+            action: 'identity.account.closed',
+            actorType: 'user',
+            actorId: account.id,
+            targetType: 'user',
+            targetId: account.id,
+            before: { status: account.status },
+            after: { status: 'closed' },
+          },
+        });
+      } catch (error) {
+        if ((error as { reason?: unknown } | null)?.reason === 'final-administrator') {
+          return fail('final-administrator');
+        }
+        throw error;
+      }
 
       return { ok: true, closed: true };
     },
