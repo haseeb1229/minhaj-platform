@@ -150,10 +150,24 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/i18n/navigation.ts',
     'apps/web/src/i18n/query.ts',
     'apps/web/src/app/[locale]/layout.tsx',
-    'apps/web/src/app/[locale]/page.tsx',
+
+    // Phase 4 moved the home page into the `(public)` route group and added
+    // the public shell around it. The group contributes no path segment, so
+    // the URL is unchanged — but every one of these files renders on the
+    // anonymous public path and must stay statically renderable, which is
+    // exactly what this guard is for.
+    'apps/web/src/app/[locale]/(public)/layout.tsx',
+    'apps/web/src/app/[locale]/(public)/page.tsx',
+
     'apps/web/src/components/locale-switcher.tsx',
     'apps/web/src/components/locale-switcher-links.tsx',
     'apps/web/src/components/ui/index.tsx',
+    'apps/web/src/components/shell/site-header.tsx',
+    'apps/web/src/components/shell/site-footer.tsx',
+    'apps/web/src/components/shell/explore-panel.tsx',
+    'apps/web/src/components/shell/publication-status.tsx',
+    'apps/web/src/components/shell/disclosure-menu.tsx',
+    'apps/web/src/components/shell/mobile-nav.tsx',
   ];
 
   it.each(renderTree)('%s does not force dynamic rendering', async (file) => {
@@ -229,13 +243,24 @@ describe('the render and routing tree stays statically renderable', () => {
     // directly and reintroduce exactly the duplicate-URL problem the contract
     // removes.
     //
-    // `api/` is the accepted exception and not a page tree: §10 rule 6 names
-    // `/api/*` among the routes that carry no locale prefix, and the proxy
-    // excludes it for the same reason — a redirect on a provider callback path
-    // is a silent integration failure.
+    // THE ACCEPTED NON-LOCALE ROUTES, and only those. ROUTE_MAP.md §10 rule 6
+    // names the complete set: `robots.txt`, the sitemaps, `/api/*`, `/rss/*`
+    // and the health probes. Each is machine-readable and unprefixed BY
+    // CONTRACT — a locale prefix on `/robots.txt` would simply be wrong, and a
+    // redirect on a provider callback path is a silent integration failure.
+    // The proxy's matcher excludes exactly these for the same reason.
+    //
+    // None of them is a page. The assertion below this one proves that
+    // separately, by looking for anything that renders.
     const entries = await readdir(path.join(repoRoot, 'apps/web/src/app'));
 
-    expect([...entries].sort()).toEqual(['[locale]', 'api']);
+    expect([...entries].sort()).toEqual([
+      '[locale]',
+      'api',
+      'robots.ts',
+      'sitemap.xml',
+      'sitemaps',
+    ]);
   });
 
   it('exposes no page outside the locale segment', async () => {

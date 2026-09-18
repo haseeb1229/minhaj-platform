@@ -289,11 +289,21 @@ describe.skipIf(!databaseConfigured)(
       /** The keys the Phase-3B migration appended, and the only ones. */
       const PHASE_3B_KEYS = ['taxonomy.administer', 'taxonomy.read'];
 
+      /**
+       * The key the Phase-4 migration appended, and the only one.
+       *
+       * READ ONLY BY DESIGN. There is no `navigation.administer`, because the
+       * surface it opens has no mutation: the shell route registry is code, and
+       * a write key with no action behind it would be grantable authority over
+       * nothing.
+       */
+      const PHASE_4_KEYS = ['navigation.read'];
+
       it('is exactly what the delivered migrations seeded', async () => {
         const catalogue = await harness.administration.catalogue();
         const keys = catalogue.map((entry) => entry.key).sort();
 
-        expect(keys).toEqual([...PHASE_2_KEYS, ...PHASE_3B_KEYS].sort());
+        expect(keys).toEqual([...PHASE_2_KEYS, ...PHASE_3B_KEYS, ...PHASE_4_KEYS].sort());
 
         // Every stored key is one this build can describe: a catalogue the
         // interface cannot explain is a catalogue nobody can administer.

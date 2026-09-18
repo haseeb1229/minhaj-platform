@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 
 import { directionOf, isSupportedLocale } from '@/config/locale';
 import { routing } from '@/i18n/routing';
+import { PRODUCT_NAME } from '@/shell/product';
 import '@/styles/globals.css';
 
 /**
@@ -64,20 +65,30 @@ export async function generateMetadata({ params }: LocaleParams): Promise<Metada
   const t = await getTranslations({ locale, namespace: 'metadata' });
 
   return {
-    title: t('title'),
+    /**
+     * THE DOCUMENT TITLE, and the template every page beneath composes with.
+     *
+     * The product name is a constant rather than a translated string, for the
+     * same reason the wordmark is: naming the organisation's platform in Urdu
+     * or Arabic is a brand decision nobody has taken (OPEN_DECISIONS.md §6.4),
+     * and inventing one in a message catalogue would make it look decided.
+     */
+    title: { default: PRODUCT_NAME, template: `%s · ${PRODUCT_NAME}` },
     description: t('description'),
 
     /**
-     * Nothing is published yet, so the foundation must not be indexed — the
-     * Phase 0B behaviour, preserved through the routing restructure.
+     * NOINDEX BY DEFAULT, FOR THE WHOLE TREE.
      *
-     * No `alternates` are declared, deliberately. Three interface locales now
-     * exist, and it would be mechanical to advertise all three as language
-     * versions of every page. That would be a false claim: an interface locale
-     * is not evidence that the CONTENT exists in that language, and
-     * ROUTE_MAP.md §9.2 requires every advertised alternate to be a genuine
-     * canonical version. The content-aware canonical/`hreflang`/`x-default`
-     * system is Phase 4's, and it needs content to reason about.
+     * This is the fail-closed half of the indexing posture. Phase 4 gives a
+     * handful of genuinely publishable shell routes a way to OPT IN — through
+     * `@/seo/metadata`, and only when the deployment permits indexing at all
+     * (ROUTE_MAP.md §9.5) — and everything that does not opt in inherits this.
+     * A new route is therefore non-indexable until somebody decides otherwise,
+     * rather than indexable until somebody remembers.
+     *
+     * No `alternates` here either. An interface locale is not evidence that
+     * CONTENT exists in that language, so alternates are declared per route by
+     * the helper that knows whether it does (§9.2).
      */
     robots: { index: false, follow: false },
   };

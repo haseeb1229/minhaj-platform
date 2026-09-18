@@ -1,4 +1,5 @@
 import createMiddleware from 'next-intl/middleware';
+import type { NextRequest } from 'next/server';
 
 import { routing } from '@/i18n/routing';
 
@@ -31,7 +32,25 @@ import { routing } from '@/i18n/routing';
  * here — a matcher change, a direct hit on a prefixed path — still cannot
  * render an unsupported locale.
  */
-export default createMiddleware(routing);
+const localeMiddleware = createMiddleware(routing);
+
+export default function proxy(request: NextRequest) {
+  const response = localeMiddleware(request);
+  const pathname = request.nextUrl.pathname;
+  const explicitlyPrefixed = routing.locales.some(
+    (locale) => pathname === `/${locale}` || pathname.startsWith(`/${locale}/`),
+  );
+
+  if (explicitlyPrefixed) {
+    // next-intl normally remembers any explicit prefix. That makes an ordinary
+    // public GET emit Set-Cookie even though its render is session-independent,
+    // which defeats the shared response boundary Phase 4 establishes. The
+    // switcher stores the same preference on explicit user action instead.
+    response.headers.delete('set-cookie');
+  }
+
+  return response;
+}
 
 /**
  * Which requests are locale-routed.

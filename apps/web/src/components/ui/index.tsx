@@ -52,6 +52,88 @@ export function AuthLayout({
   );
 }
 
+/**
+ * The centred column a public page sits in.
+ *
+ * ONE container, so every public surface shares a gutter and a maximum width
+ * instead of each route inventing its own. The inline padding is what keeps
+ * text off the edge of a small phone, and it is logical, so it is on the
+ * correct side in Urdu and Arabic.
+ */
+export function Container({
+  children,
+  as: Element = 'div',
+}: {
+  readonly children: ReactNode;
+  readonly as?: 'div' | 'header' | 'footer' | 'nav' | 'main' | 'section';
+}) {
+  return <Element className="mx-auto w-full max-w-6xl px-4 sm:px-6">{children}</Element>;
+}
+
+/**
+ * A bounded reading column.
+ *
+ * `--measure-prose` is a token rather than a number here because "how wide may
+ * a line of text be" is a system decision, not a per-page one
+ * (ARCHITECTURE.md §13.5).
+ */
+export function Prose({ children }: { readonly children: ReactNode }) {
+  return (
+    <div className="flex max-w-[var(--measure-prose)] flex-col gap-4">{children}</div>
+  );
+}
+
+/**
+ * A breadcrumb trail.
+ *
+ * A real `<nav>` with an ordered list, because the order is the meaning, and
+ * `aria-current="page"` on the last item so the position is announced rather
+ * than merely shown. The separator is decorative and hidden from assistive
+ * technology — read aloud, a column of slashes is noise.
+ *
+ * NO `BreadcrumbList` STRUCTURED DATA. Phase 4 emits no JSON-LD at all on a
+ * pre-adoption origin (ROUTE_MAP.md §9.6, and the phase contract's negative
+ * rule); this is navigation for a person, not a search-engine claim.
+ */
+export function Breadcrumbs({
+  label,
+  trail,
+}: {
+  readonly label: string;
+  readonly trail: readonly { readonly href?: string; readonly text: string }[];
+}) {
+  return (
+    <nav aria-label={label}>
+      <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[color:var(--color-foreground-muted)]">
+        {trail.map((crumb, index) => (
+          <li key={crumb.text} className="flex items-center gap-2">
+            {index === 0 ? null : (
+              <span
+                aria-hidden="true"
+                className="text-[color:var(--color-border-strong)]"
+              >
+                /
+              </span>
+            )}
+            {crumb.href === undefined ? (
+              <span
+                aria-current="page"
+                className="font-medium text-[color:var(--color-foreground)]"
+              >
+                {crumb.text}
+              </span>
+            ) : (
+              <a href={crumb.href} className="underline underline-offset-2">
+                {crumb.text}
+              </a>
+            )}
+          </li>
+        ))}
+      </ol>
+    </nav>
+  );
+}
+
 /** A bordered panel. The one container shape this phase uses. */
 export function Panel({
   children,

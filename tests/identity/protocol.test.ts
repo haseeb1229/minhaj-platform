@@ -159,9 +159,34 @@ describe('the mutation surface', () => {
 
     const routes = await walk('apps/web/src/app');
 
-    // Exactly one, and it is the provider callback — which cannot be a Server
-    // Action because it is not a browser and holds no action id.
-    expect(routes).toEqual(['apps/web/src/app/api/webhooks/resend/route.ts']);
+    // THE COMPLETE SET, named exactly, so a new handler cannot appear without
+    // somebody deciding it should.
+    //
+    // The webhook is the provider callback, which cannot be a Server Action
+    // because it is not a browser and holds no action id. The two Phase-4
+    // handlers serve the machine-readable sitemaps: ROUTE_MAP.md §10 rule 6
+    // makes those unprefixed non-locale routes, and they are GET-only,
+    // read-only, unauthenticated and mutate nothing. None of the three is an
+    // authentication endpoint, which is what this test exists to prevent.
+    expect(routes).toEqual([
+      'apps/web/src/app/api/webhooks/resend/route.ts',
+      'apps/web/src/app/sitemap.xml/route.ts',
+      'apps/web/src/app/sitemaps/[partition]/route.ts',
+    ]);
+
+    // And the two new ones genuinely are read-only: a mutating verb on either
+    // would be a state-changing endpoint outside the Class-A controls.
+    const { readFile } = await import('node:fs/promises');
+
+    for (const route of routes.filter((entry) => entry.includes('sitemap'))) {
+      const source = await readFile(path.join(repoRoot, route), 'utf8');
+
+      for (const verb of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+        expect(source, `${route} exports ${verb}`).not.toMatch(
+          new RegExp(`export\\s+(async\\s+)?function\\s+${verb}\\b`),
+        );
+      }
+    }
   });
 
   it('has no sign-out GET anywhere', async () => {

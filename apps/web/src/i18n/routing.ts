@@ -2,6 +2,7 @@ import { localeSchema } from '@minhaj/contracts';
 import { defineRouting } from 'next-intl/routing';
 
 import { FALLBACK_LOCALE } from '@/config/locale';
+import { LOCALE_COOKIE } from '@/config/locale-cookie';
 
 /**
  * THE locale routing configuration (ROUTE_MAP.md §1).
@@ -84,10 +85,7 @@ export const routing = defineRouting({
    * persistence is Phase 21's, not this cookie's.
    */
   localeCookie: {
-    name: 'NEXT_LOCALE',
-    path: '/',
-    sameSite: 'lax',
+    ...LOCALE_COOKIE,
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 60 * 60 * 24 * 365,
   },
 });

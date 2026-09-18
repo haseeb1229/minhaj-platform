@@ -117,7 +117,6 @@ async function main() {
       DATABASE_URL: databaseUrl,
       DATABASE_MIGRATION_URL: databaseUrl,
       AUTH_BASE_URL: `http://127.0.0.1:${port}`,
-      NEXT_PUBLIC_SITE_URL: `http://127.0.0.1:${port}`,
       EMAIL_FROM_ADDRESS: 'no-reply@browser-suite.invalid',
       EMAIL_FROM_NAME: 'Minhaj',
       LOG_LEVEL: 'warn',

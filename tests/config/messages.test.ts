@@ -101,9 +101,16 @@ describe('the catalogues agree on their keys', () => {
       readCatalogue('ar'),
     ]);
 
+    // Retargeted at the surfaces that now exist: the Phase-4 home shell
+    // replaced the Phase-0B foundation page, so the keys it used are gone. The
+    // claim is unchanged, and it is made against MORE prose than before.
     for (const key of [
-      'foundation.intro',
-      'foundation.phaseLabel',
+      'shell.home.lede',
+      'shell.home.buildStatus',
+      'shell.nav.explore',
+      'shell.reserved.body',
+      'shell.footer.preAdoption',
+      'shell.notFound.body',
       'localeSwitcher.label',
     ]) {
       const value = (locale: Catalogue) =>
@@ -121,8 +128,16 @@ describe('the catalogues agree on their keys', () => {
     for (const locale of ['ur', 'ar']) {
       const prose = Object.fromEntries(leaves(await readCatalogue(locale)));
 
-      expect(String(prose['foundation.intro'])).toMatch(/\p{Script=Arabic}/u);
-      expect(String(prose['localeSwitcher.label'])).toMatch(/\p{Script=Arabic}/u);
+      for (const key of [
+        'shell.home.lede',
+        'shell.reserved.heading',
+        'shell.footer.preAdoption',
+        'shell.nav.myMinhaj',
+        'admin.navigation.title',
+        'localeSwitcher.label',
+      ]) {
+        expect(String(prose[key]), `${locale} ${key}`).toMatch(/\p{Script=Arabic}/u);
+      }
     }
   });
 });

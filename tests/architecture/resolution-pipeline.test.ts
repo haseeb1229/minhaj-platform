@@ -374,7 +374,7 @@ describe('the resolution pipeline behaves identically on Windows and Linux', () 
     const workspacePackages = workspacePackageMap(discoverWorkspaces());
 
     const resolved = resolveSpecifier(
-      '@minhaj/contracts/env/client',
+      '@minhaj/contracts/env/prerender',
       path.join(repoRoot, 'apps', 'web', 'src', 'app', 'page.tsx'),
       { workspacePackages },
     );
@@ -382,7 +382,7 @@ describe('the resolution pipeline behaves identically on Windows and Linux', () 
     expect(resolved.kind).toBe('file');
     // Repository-relative paths are reported in POSIX form on every platform,
     // so rule matching and diagnostics do not vary by operating system.
-    expect(resolved.relative).toBe('packages/contracts/src/env/client.ts');
+    expect(resolved.relative).toBe('packages/contracts/src/env/prerender.ts');
     expect(resolved.relative).not.toContain(String.fromCharCode(92));
   });
 

@@ -509,6 +509,11 @@ const PERMISSION_MIGRATIONS = [
     id: '20260917000000_phase3b_taxonomy',
     keys: ['taxonomy.administer', 'taxonomy.read'],
   },
+  {
+    phase: 'Phase 4',
+    id: '20260918000000_phase4_navigation_permission',
+    keys: ['navigation.read'],
+  },
 ] as const;
 
 describe('the permission catalogue is one definition, appended only by owners', () => {

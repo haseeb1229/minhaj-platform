@@ -84,6 +84,13 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
     'IdentityBootstrap',
   ],
   '20260917000000_phase3b_taxonomy': ['Topic', 'TopicTranslation', 'Language', 'Tag'],
+
+  // PHASE 4 CREATES NO TABLE, and the empty list says so deliberately rather
+  // than by omission. The public shell has no business schema: its route
+  // registry is code, and the migration exists only to seed one permission key
+  // and extend the protected bundle. An absent entry would fail this gate; an
+  // empty one asserts that nothing is expected to appear or to disappear.
+  '20260918000000_phase4_navigation_permission': [],
 };
 
 /**
@@ -267,6 +274,15 @@ const CANONICAL_TOPIC_SLUGS = [
 
 /** The Taxonomy permissions Phase 3B appends to the immutable catalogue. */
 const TAXONOMY_PERMISSIONS = ['taxonomy.administer', 'taxonomy.read'];
+
+/**
+ * The permission Phase 4 appends, and the only one.
+ *
+ * READ ONLY. The absence of a `navigation.administer` key is itself part of
+ * what this gate proves: the navigation status surface has no mutation, so a
+ * write key would be authority over nothing.
+ */
+const NAVIGATION_PERMISSIONS = ['navigation.read'];
 
 function report(step: string, detail: string): void {
   process.stdout.write(`  ${step.padEnd(24)} ${detail}\n`);
@@ -656,6 +672,46 @@ async function assertTaxonomyFoundation(session: SqlSession): Promise<void> {
  * instead - the same `INSERT ... WHERE NOT EXISTS` shape the migration uses -
  * and the row counts must not move.
  */
+/**
+ * The Phase-4 catalogue extension, and the privilege change that paid for it.
+ *
+ * Scoped to `navigation.%` so it proves exactly what Phase 4 seeded, the same
+ * way the taxonomy check above proves exactly what Phase 3B seeded. It also
+ * asserts the NEGATIVE: no `navigation.administer` exists, because a write key
+ * with no mutation behind it is grantable authority over nothing.
+ */
+async function assertNavigationPermission(session: SqlSession): Promise<void> {
+  const permissions = await session.query<{ key: string }>(`
+    SELECT [key] FROM [dbo].[Permission]
+    WHERE [key] LIKE N'navigation.%' ORDER BY [key];
+  `);
+  if (permissions.map((row) => row.key).join(',') !== NAVIGATION_PERMISSIONS.join(',')) {
+    fail(
+      `Navigation permissions differ; found: ` +
+        `${permissions.map((row) => row.key).join(', ') || '(none)'}`,
+    );
+  }
+
+  const bundled = await session.query<{ permissionKey: string }>(`
+    SELECT rp.[permissionKey]
+    FROM [dbo].[RolePermission] rp
+    INNER JOIN [dbo].[Role] r ON r.[id] = rp.[roleId]
+    WHERE r.[key] = N'platform-administrator' AND rp.[permissionKey] LIKE N'navigation.%'
+    ORDER BY rp.[permissionKey];
+  `);
+  if (
+    bundled.map((row) => row.permissionKey).join(',') !== NAVIGATION_PERMISSIONS.join(',')
+  ) {
+    fail(
+      `The protected Platform Administrator bundle did not gain the navigation ` +
+        `permission through the migration; found: ` +
+        `${bundled.map((row) => row.permissionKey).join(', ') || '(none)'}`,
+    );
+  }
+
+  report('navigation permission', `${permissions.length} key seeded and bundled`);
+}
+
 async function assertSeedGuardsIdempotent(session: SqlSession): Promise<void> {
   const countOf = async (table: string): Promise<number> => {
     const [row] = await session.query<{ total: number }>(
@@ -821,6 +877,7 @@ try {
   await assertCheckConstraints(session);
   await assertNoPolymorphicAssignment(session);
   await assertTaxonomyFoundation(session);
+  await assertNavigationPermission(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -903,6 +960,7 @@ try {
   await assertCheckConstraints(session);
   await assertNoPolymorphicAssignment(session);
   await assertTaxonomyFoundation(session);
+  await assertNavigationPermission(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

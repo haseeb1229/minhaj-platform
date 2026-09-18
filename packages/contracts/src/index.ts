@@ -5,7 +5,9 @@
  * both processes. It owns no business rules and reaches no infrastructure.
  *
  * THIS ROOT IS BROWSER-SAFE. Everything exported here may legitimately end up
- * in a client bundle.
+ * in a client bundle. There is currently no client environment variable: the
+ * former site-origin setting duplicated the canonical server origin and had no
+ * browser consumer, so it was retired rather than preserved as dead config.
  *
  * Server environment parsing is deliberately NOT re-exported here. It reads
  * `process.env` and will, in later phases, describe secrets; reaching it should
@@ -36,11 +38,3 @@ export {
   parseEnvironment,
 } from './env/shared.ts';
 export type { Locale, LogLevel, NodeEnv } from './env/shared.ts';
-
-export {
-  clientEnvSchema,
-  clientEnvKeys,
-  parseClientEnv,
-  secretNameFragments,
-} from './env/client.ts';
-export type { ClientEnv } from './env/client.ts';

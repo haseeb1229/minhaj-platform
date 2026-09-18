@@ -122,6 +122,12 @@ test.describe('administrative routes', () => {
     const response = await page.goto('/en/admin/identity/users');
     expect(response?.status()).toBe(404);
 
+    // Phase 4's surface is gated the same way and refuses the same way. It
+    // discloses the platform's route shape, including reserved routes nothing
+    // public links to, so "read-only" is not a reason to leave it open.
+    const navigation = await page.goto('/en/admin/system/navigation');
+    expect(navigation?.status()).toBe(404);
+
     // The root is a route too. It must not render an administrative shell to
     // an account with no administrative permission.
     const root = await page.goto('/en/admin');
@@ -172,6 +178,42 @@ test.describe('the privileged administrator', () => {
 
     await page.goto('/en/admin/identity/users');
     await expect(page.getByRole('main')).toContainText(administrator.email);
+  });
+
+  /**
+   * PHASE 4 — the navigation status surface, read by the one account that may.
+   *
+   * It lives here rather than in the shell spec because the bootstrap is a
+   * singleton by database constraint: there is exactly one administrator for
+   * the life of a database, and this file is where that person exists. The
+   * refusal half — an ordinary account reaching the same URL — is proved
+   * alongside the other unauthorised-route cases above.
+   */
+  test('reads the navigation status, and is offered nothing to change', async ({
+    page,
+  }) => {
+    await page.goto('/en/admin/system/navigation');
+
+    const main = page.getByRole('main');
+
+    // A DELIVERED route, a RESERVED placeholder and a DEFERRED domain, each
+    // reported as what it is. The third is the one that matters: the shell
+    // must be able to say "not built yet" about a promised domain without
+    // linking to it anywhere.
+    await expect(main).toContainText('Delivered');
+    await expect(main).toContainText('Reserved');
+    await expect(main).toContainText('Deferred');
+    await expect(main).toContainText('No route yet');
+
+    // The posture this deployment is actually in, stated on the screen.
+    await expect(main).toContainText('Public indexing is disabled');
+
+    // READ-ONLY, AND NOT BY OMISSION. No form, no submit control, no editor:
+    // the registry is code, so there is no mutation contract to expose and a
+    // Save button would be a promise nothing keeps.
+    await expect(main.getByRole('button')).toHaveCount(0);
+    await expect(main.getByRole('textbox')).toHaveCount(0);
+    await expect(main.locator('form')).toHaveCount(0);
   });
 
   test('shows bootstrap status and offers no way to perform it', async ({ page }) => {

@@ -1,11 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  clientEnvKeys,
-  clientEnvSchema,
-  parseClientEnv,
-  secretNameFragments,
-} from '../../packages/contracts/src/env/client.ts';
+  parsePrerenderEnv,
+  prerenderEnvKeys,
+} from '../../packages/contracts/src/env/prerender.ts';
 import {
   parseServerEnv,
   serverEnvKeys,
@@ -48,6 +46,12 @@ const SERVER_DEFAULTS = {
   // Off unless a deployment declares a proxy in front of it. The per-client
   // rate-limit budget is keyed on a header only a proxy can be trusted to set.
   TRUST_PROXY_HEADERS: false,
+
+  // Phase 4. FAIL CLOSED: a deployment that configures nothing is
+  // non-indexable, which is the safe direction — the failure of an indexing
+  // switch must be invisibility, never accidental publication
+  // (ROUTE_MAP.md §9.5).
+  PUBLIC_INDEXING_ENABLED: false,
 } as const;
 
 /**
@@ -60,6 +64,18 @@ const PRODUCTION_SECRETS = {
   RATE_LIMIT_DIGEST_KEY: 'synthetic-rate-limit-sentinel-0001',
   EMAIL_DIGEST_KEY: 'synthetic-email-digest-sentinel-0001',
 } as const;
+
+const SECRET_NAME_FRAGMENTS = [
+  'SECRET',
+  'PASSWORD',
+  'TOKEN',
+  'PRIVATE',
+  'CREDENTIAL',
+  'API_KEY',
+  'APIKEY',
+  'CONNECTION_STRING',
+  'DATABASE_URL',
+] as const;
 
 describe('server environment', () => {
   it('accepts a valid configuration', () => {
@@ -128,42 +144,86 @@ describe('server environment', () => {
   });
 });
 
-describe('client environment', () => {
-  it('accepts a valid configuration', () => {
-    const env = parseClientEnv({ NEXT_PUBLIC_SITE_URL: 'https://minhaj.org' });
+/**
+ * The PRERENDER projection (Phase 4, ARCHITECTURE.md §8.3.1).
+ *
+ * The public shell is statically rendered, so its pages read configuration
+ * during `next build` — in CI, and on machines that hold no production
+ * credential. They therefore read a narrow projection of the server schema
+ * rather than the whole thing.
+ *
+ * THE RISK THAT CREATES is a second, laxer door into server configuration, and
+ * these are the two properties that keep it shut: the projection carries no
+ * secret-bearing variable, and every field in it is the SAME field the server
+ * schema declares rather than a re-declaration that could drift.
+ */
+describe('prerender configuration', () => {
+  it('declares a non-empty, strict subset of the server schema', () => {
+    expect(prerenderEnvKeys.length).toBeGreaterThan(0);
+    expect(prerenderEnvKeys.length).toBeLessThan(serverEnvKeys.length);
 
-    expect(env.NEXT_PUBLIC_SITE_URL).toBe('https://minhaj.org');
-  });
-
-  it('rejects a malformed site URL', () => {
-    expect(() => parseClientEnv({ NEXT_PUBLIC_SITE_URL: 'not-a-url' })).toThrow(
-      /NEXT_PUBLIC_SITE_URL/,
-    );
-  });
-
-  it('rejects a non-http protocol', () => {
-    expect(() => parseClientEnv({ NEXT_PUBLIC_SITE_URL: 'javascript:alert(1)' })).toThrow(
-      /NEXT_PUBLIC_SITE_URL/,
-    );
-  });
-
-  it('prefixes every client variable with NEXT_PUBLIC_', () => {
-    expect(clientEnvKeys.length).toBeGreaterThan(0);
-
-    for (const key of clientEnvKeys) {
-      expect(key.startsWith('NEXT_PUBLIC_'), `${key} must be NEXT_PUBLIC_`).toBe(true);
+    for (const key of prerenderEnvKeys) {
+      expect(serverEnvKeys, `${key} must come from the server schema`).toContain(key);
     }
   });
 
-  it('names nothing secret-shaped', () => {
-    for (const key of clientEnvKeys) {
-      for (const fragment of secretNameFragments) {
-        expect(
-          key.toUpperCase().includes(fragment),
-          `${key} must not contain ${fragment}`,
-        ).toBe(false);
+  it('names nothing secret-bearing', () => {
+    // The same vocabulary the client schema is held to. A prerendered page is
+    // not a browser, but a variable it reads is one a build machine must have,
+    // and a secret that has to exist on every build machine is not a secret.
+    for (const key of prerenderEnvKeys) {
+      for (const fragment of SECRET_NAME_FRAGMENTS) {
+        expect(key.toUpperCase(), `${key} looks secret-bearing`).not.toContain(fragment);
       }
     }
+  });
+
+  it('reuses the server schema field, so the two cannot drift', () => {
+    // Parsed through the projection and through the full schema, one value must
+    // produce one result. A re-declared field with a different rule would show
+    // up here as a disagreement.
+    const source = {
+      AUTH_BASE_URL: 'https://drift.invalid',
+      PUBLIC_INDEXING_ENABLED: 'true',
+    };
+
+    const projected = parsePrerenderEnv(source);
+    const full = parseServerEnv(source);
+
+    expect(projected.AUTH_BASE_URL).toBe(full.AUTH_BASE_URL);
+    expect(projected.PUBLIC_INDEXING_ENABLED).toBe(full.PUBLIC_INDEXING_ENABLED);
+  });
+
+  it('parses in production WITHOUT any secret, which is what makes a build possible', () => {
+    // The behavioural claim, and the reason the projection exists at all.
+    // `parseServerEnv` correctly REFUSES this input — it would be running a
+    // deployment on development secrets — and a prerendered page must not have
+    // to satisfy that to be built.
+    const productionBuild = {
+      NODE_ENV: 'production',
+      AUTH_BASE_URL: 'https://build.invalid',
+    };
+
+    expect(() => parseServerEnv(productionBuild)).toThrow(
+      /Invalid server environment configuration/,
+    );
+
+    expect(parsePrerenderEnv(productionBuild)).toEqual({
+      AUTH_BASE_URL: 'https://build.invalid',
+      // Fail closed: a build that configures no indexing posture is
+      // non-indexable (ROUTE_MAP.md §9.5).
+      PUBLIC_INDEXING_ENABLED: false,
+    });
+  });
+
+  it('validates its own values rather than passing them through', () => {
+    // It is a narrower door, not an unguarded one.
+    expect(() => parsePrerenderEnv({ AUTH_BASE_URL: 'not-a-url' })).toThrow(
+      /AUTH_BASE_URL/,
+    );
+    expect(() => parsePrerenderEnv({ PUBLIC_INDEXING_ENABLED: 'yes' })).toThrow(
+      /PUBLIC_INDEXING_ENABLED/,
+    );
   });
 });
 
@@ -182,10 +242,7 @@ describe('the final route locale is not configurable', () => {
    * be declared to mean anything at all.
    */
   it('declares no default-locale variable on either schema', () => {
-    const declared = [
-      ...Object.keys(serverEnvSchema.shape),
-      ...Object.keys(clientEnvSchema.shape),
-    ];
+    const declared = Object.keys(serverEnvSchema.shape);
 
     expect(declared).not.toContain('DEFAULT_LOCALE');
     expect(declared).not.toContain('NEXT_PUBLIC_DEFAULT_LOCALE');
@@ -196,19 +253,16 @@ describe('the final route locale is not configurable', () => {
     // neither a validation failure that blocks a deploy, nor any influence on
     // the parsed configuration.
     expect(parseServerEnv({ DEFAULT_LOCALE: 'ur' })).toEqual(SERVER_DEFAULTS);
-
-    expect(parseClientEnv({ NEXT_PUBLIC_DEFAULT_LOCALE: 'ur' })).toEqual({
-      NEXT_PUBLIC_SITE_URL: 'http://localhost:3000',
-    });
   });
 });
 
-describe('the server and client schemas stay disjoint', () => {
-  it('shares no variable between them', () => {
-    expect(serverEnvKeys.filter((key) => clientEnvKeys.includes(key))).toEqual([]);
+describe('the environment schemas stay minimal', () => {
+  it('declares no browser-visible variable without a browser consumer', () => {
+    expect(serverEnvKeys.some((key) => key.startsWith('NEXT_PUBLIC_'))).toBe(false);
+    expect(prerenderEnvKeys.some((key) => key.startsWith('NEXT_PUBLIC_'))).toBe(false);
   });
 
-  it('keeps both schemas minimal for this phase', () => {
+  it('keeps the schemas minimal for this phase', () => {
     const forbidden = [
       'DATABASE_URL',
       'BETTER_AUTH_SECRET',
@@ -220,10 +274,7 @@ describe('the server and client schemas stay disjoint', () => {
       'STRIPE_SECRET_KEY',
     ];
 
-    const declared = [
-      ...Object.keys(serverEnvSchema.shape),
-      ...Object.keys(clientEnvSchema.shape),
-    ];
+    const declared = Object.keys(serverEnvSchema.shape);
 
     for (const name of forbidden) {
       expect(declared).not.toContain(name);
@@ -314,12 +365,11 @@ describe('B7 — the contracts root stays browser-safe', () => {
     expect(root).not.toHaveProperty('serverEnvKeys');
   });
 
-  it('still exports the client and shared contracts', async () => {
+  it('still exports the browser-safe shared contracts', async () => {
     const root = await import('../../packages/contracts/src/index.ts');
 
-    expect(root).toHaveProperty('parseClientEnv');
-    expect(root).toHaveProperty('clientEnvSchema');
     expect(root).toHaveProperty('localeSchema');
+    expect(root).not.toHaveProperty('parseClientEnv');
   });
 
   it('guards the server subpath with a browser export condition', async () => {

@@ -1,6 +1,6 @@
 /**
- * The `browser` export condition of `@minhaj/contracts/env/server` resolves
- * here.
+ * The `browser` export condition of the server-only environment subpaths
+ * resolves here.
  *
  * Server environment parsing reads `process.env` and, in later phases, will
  * describe secrets. A client bundle must never reach it
@@ -8,16 +8,13 @@
  * bundler resolving the browser condition fails immediately rather than
  * shipping server configuration to a visitor.
  *
- * Client configuration has its own schema, deliberately separate:
- *
- *     import { parseClientEnv } from '@minhaj/contracts/env/client';
+ * No browser environment variable is currently required. A public variable is
+ * introduced only when browser code has a real consumer for it.
  */
 
 throw new Error(
-  "'@minhaj/contracts/env/server' is server-only and cannot be imported into " +
-    'a client bundle (SECURITY_BASELINE.md §18.1). Public configuration lives ' +
-    "in '@minhaj/contracts/env/client'; every variable there is NEXT_PUBLIC_ " +
-    'and understood to be disclosed to every visitor.',
+  'This environment module is server-only and cannot be imported into a client ' +
+    'bundle (SECURITY_BASELINE.md §18.1).',
 );
 
 export {};

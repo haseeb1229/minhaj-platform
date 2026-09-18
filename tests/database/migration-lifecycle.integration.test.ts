@@ -87,15 +87,39 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
   let migration: Migration;
   let allMigrations: Migration[];
   /**
-   * A table the NEWEST migration owns, used to observe its rollback.
+   * Something the NEWEST migration creates, used to observe its rollback.
    *
    * DERIVED from that migration's own SQL rather than named here. A hard-coded
    * table belongs to whichever migration was newest when somebody wrote it
    * down, so the next migration silently turns this proof into an assertion
    * that an unrelated table was not dropped — which passes for the wrong
    * reason until it fails for a confusing one.
+   *
+   * NOT EVERY MIGRATION CREATES A TABLE. Phase 4 adds no schema at all: the
+   * public shell has no business model, and its migration seeds a single
+   * permission key. The observation is therefore of an EFFECT rather than of a
+   * table — the effect the migration actually has — and the assertions are
+   * unchanged: present after deploy, gone after rollback, back after re-deploy.
+   * A migration with no observable effect of either kind still fails the run,
+   * because a rollback nobody can observe is a rollback nobody has proved.
    */
-  let rolledBackTable: string;
+  let observation:
+    | { readonly kind: 'table'; readonly name: string }
+    | { readonly kind: 'permission'; readonly key: string };
+
+  /** How many rows the newest migration's observable effect currently has. */
+  async function observationCount(): Promise<number> {
+    const rows =
+      observation.kind === 'table'
+        ? await admin.query(
+            `SELECT name FROM sys.tables WHERE name = N'${observation.name}';`,
+          )
+        : await admin.query(
+            `SELECT [key] FROM [dbo].[Permission] WHERE [key] = N'${observation.key}';`,
+          );
+
+    return rows.length;
+  }
   /** The normal encrypted migration URL, retargeted at the disposable database. */
   let disposableUrl: string;
 
@@ -127,13 +151,17 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
     migration = newest;
 
     const created = /CREATE TABLE \[dbo\]\.\[(\w+)\]/.exec(newest.forwardSql)?.[1];
-    if (created === undefined) {
+    const seeded = /\(N'([a-z]+\.[a-zA-Z]+)',\s*N'/.exec(newest.forwardSql)?.[1];
+
+    if (created !== undefined) observation = { kind: 'table', name: created };
+    else if (seeded !== undefined) observation = { kind: 'permission', key: seeded };
+    else {
       throw new Error(
-        `The newest migration '${newest.id}' creates no table, so its rollback ` +
-          `cannot be observed by the absence of one.`,
+        `The newest migration '${newest.id}' creates neither a table nor a ` +
+          `permission, so its rollback cannot be observed at all. A rollback ` +
+          `nobody can observe is a rollback nobody has proved.`,
       );
     }
-    rolledBackTable = created;
 
     master = await openMasterSession(connection);
     await createDisposableDatabase(master, databaseName);
@@ -396,12 +424,12 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         (NEWID(), 'decoy', SYSUTCDATETIME(), N'${decoyId}', SYSUTCDATETIME(), 1);
     `);
 
+    // Present before the rollback, so its absence afterwards means something.
+    expect(await observationCount()).toBe(1);
+
     await rollbackMigration(admin, migration);
 
-    const afterRollback = await admin.query<{ name: string }>(
-      `SELECT name FROM sys.tables WHERE name = N'${rolledBackTable}';`,
-    );
-    expect(afterRollback).toHaveLength(0);
+    expect(await observationCount()).toBe(0);
 
     const historyAfterRollback = await appliedMigrationNames(admin);
     expect(historyAfterRollback).not.toContain(migration.id);
@@ -414,10 +442,7 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
     expect(redeploy.exitCode).toBe(0);
     expect(redeploy.output).toContain(migration.id);
 
-    const afterReapply = await admin.query<{ name: string }>(
-      `SELECT name FROM sys.tables WHERE name = N'${rolledBackTable}';`,
-    );
-    expect(afterReapply).toHaveLength(1);
+    expect(await observationCount()).toBe(1);
     expect(await appliedMigrationNames(admin)).toContain(migration.id);
     expect(await appliedMigrationNames(admin)).toContain(decoyId);
 

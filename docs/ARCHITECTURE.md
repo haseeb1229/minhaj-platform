@@ -491,6 +491,14 @@ the **first and development/pre-adoption adapter behind the abstraction**, not a
 platform dependency: an adopting organisation may run its own provider by supplying another
 adapter, and **no business context ever calls Resend directly** (§4.6.1).
 
+> **There is ONE application origin, and `AUTH_BASE_URL` is it.** It bounds what the
+> authentication library may redirect to, it builds emailed links, and from Phase 4 it also
+> builds every canonical URL, `hreflang` alternate and sitemap entry (ROUTE_MAP.md §9.1). A
+> second origin variable beside it would be two names for one fact, and the two would drift the
+> first time a deployment set only one. The unused `NEXT_PUBLIC_SITE_URL` declaration was
+> therefore retired in Phase 4; a browser-visible origin variable returns only if browser code
+> acquires a distinct, demonstrated need for one.
+
 | Origin | Value | Note |
 |---|---|---|
 | Development / presentation app | `minhajulquran.haseebliaqat.me` | Pre-adoption origin (PRODUCT_SCOPE.md, *Product status and acceptance*) |
@@ -779,6 +787,27 @@ A signed-in visitor sees the same cached public page plus their own uncached isl
 
 `/my/*`, `/teacher/*`, `/admin/*` and every authenticated API response carry private,
 no-store cache directives and `noindex` (ROUTE_MAP.md §9.5).
+
+### 8.3.1 What a statically rendered page may read
+
+A page in the anonymous public tree is **prerendered at build time**, which constrains its
+configuration as well as its data.
+
+- **Only non-secret, build-time configuration.** The build runs in CI and on developer
+  machines that hold no production credential, so a prerendered page reads a validated
+  **projection** of the server environment containing only the variables it genuinely needs
+  — currently the application origin and the indexing posture. It does **not** call the full
+  server-environment parser, which correctly refuses a development secret in production and
+  would make every build demand credentials it never uses.
+- **The projection shares field definitions with the server schema.** Each variable has
+  exactly one definition and one validation rule in a non-secret module consumed by both
+  schemas. The public import graph never reaches the full secret-bearing server schema.
+- **A consequence, recorded rather than discovered later:** a value read this way is fixed at
+  build time. Changing the indexing posture is a rebuild and redeploy, which is what the
+  launch transition of DELIVERY_PLAN.md Phase 35 already is.
+
+> **This is the configuration counterpart of §8.1.** That rule keeps session state out of the
+> cached tree; this one keeps the tree buildable without the secrets a session would need.
 
 ### 8.4 Validation
 

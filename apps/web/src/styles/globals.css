@@ -59,6 +59,54 @@
   --radius-panel: 0.625rem;
 
   --shadow-panel: 0 1px 2px rgb(27 27 27 / 0.05);
+
+  /* -------------------------------------------------------------------------
+   * Phase 4 — the broad product system.
+   *
+   * EXTENDING, NEVER REPLACING (ARCHITECTURE.md §13.1). Every role above keeps
+   * its name and its value: the authentication and administrative surfaces are
+   * not restyled, and nothing below forks a second system. What is added here
+   * is what the public shell genuinely consumes and nothing beyond it — a token
+   * with no consumer is an unused abstraction, not foresight.
+   * ---------------------------------------------------------------------- */
+
+  /* Reading measure. A line of text wider than this is measurably harder to
+     read, and the public shell is content-first (ARCHITECTURE.md §13.5). */
+  --measure-prose: 68ch;
+
+  /* Layering, declared only because a REAL stacking problem exists: a sticky
+     header and a mobile drawer that must cover it (§13.2 — "layering only where
+     a real stacking problem exists"). Two values, not a z-index scale. */
+  --layer-header: 30;
+  --layer-overlay: 40;
+
+  /* Motion. Short and unobtrusive; there is very little of it, which is the
+     point. Suppressed entirely under `prefers-reduced-motion` below. */
+  --duration-fast: 120ms;
+  --duration-medium: 200ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* -------------------------------------------------------------------------
+   * TRI-SCRIPT TYPOGRAPHY — script SLOTS, not a brand typeface.
+   *
+   * Three named roles, each a stack of fonts the visitor's own system may
+   * already have, ending at the generic family. NOTHING IS DOWNLOADED and
+   * nothing is bundled: an approved typeface with Urdu and Arabic coverage and
+   * its licensing is organisational input that has not arrived
+   * (OPEN_DECISIONS.md §6.4), and shipping an unapproved font would be both a
+   * licensing risk and a brand claim. Substituting the real faces later is an
+   * edit to these three lines.
+   *
+   * Urdu is listed with Nastaliq faces FIRST. Naskh is legible for Urdu but it
+   * is not how Urdu is set, and a reader who has a Nastaliq face installed
+   * should see it (ARCHITECTURE.md §13.3).
+   * ---------------------------------------------------------------------- */
+  --font-latin: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-urdu:
+    'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Nafees Nastaleeq',
+    'Noto Naskh Arabic', 'Segoe UI', serif;
+  --font-arabic:
+    'Noto Naskh Arabic', 'Geeza Pro', 'Traditional Arabic', 'Segoe UI', serif;
 }
 
 :root {
@@ -74,11 +122,7 @@ body {
   margin-inline: 0;
   background-color: var(--color-surface);
   color: var(--color-foreground);
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    sans-serif;
+  font-family: var(--font-latin);
   line-height: 1.6;
 }
 
@@ -86,10 +130,95 @@ body {
  * Urdu and Arabic need more vertical room than the Latin default: their
  * ascenders and descenders are taller, and the same line height that reads
  * comfortably in English crowds them (ARCHITECTURE.md §13.3).
+ *
+ * The SCRIPT SLOT is selected the same way, so a page in Urdu is set in the
+ * Urdu stack rather than in whatever the Latin stack happens to fall back to.
  */
-:root:lang(ur) body,
-:root:lang(ar) body {
+:root:lang(ur) body {
+  font-family: var(--font-urdu);
   line-height: 1.9;
+}
+
+:root:lang(ar) body {
+  font-family: var(--font-arabic);
+  line-height: 1.9;
+}
+
+/*
+ * A RUN of another script inside a page carries its own slot.
+ *
+ * This is the mixed-direction case the platform actually has — اردو inside an
+ * English page, an Arabic phrase inside an Urdu one — and it is keyed on the
+ * `lang` the markup already sets per element, so nothing has to guess from the
+ * characters (ARCHITECTURE.md §9, §13.3).
+ */
+:lang(ur) {
+  font-family: var(--font-urdu);
+}
+
+:lang(ar) {
+  font-family: var(--font-arabic);
+}
+
+:lang(en) {
+  font-family: var(--font-latin);
+}
+
+/*
+ * LONG LABELS AND HEADINGS WRAP RATHER THAN CLIP.
+ *
+ * Navigation labels and headings in Urdu and Arabic are frequently longer than
+ * their English equivalents, and a fixed-height bar that fitted "News & Events"
+ * will not fit its translation. Wrapping is the default everywhere; `balance`
+ * distributes a wrapped heading across its lines instead of leaving one word
+ * stranded.
+ */
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+/*
+ * Scroll lock, while the mobile navigation drawer is open.
+ *
+ * On the ROOT element rather than the body: iOS Safari keeps scrolling the
+ * document behind a fixed overlay when only the body is locked, and the page
+ * sliding about underneath a drawer is disorienting rather than merely untidy.
+ * The class is added and removed by the drawer, and removed on unmount too, so
+ * a navigation while it is open cannot leave the document stuck.
+ */
+.shell-scroll-locked {
+  overflow: hidden;
+}
+
+/*
+ * The skip link.
+ *
+ * Off-screen until focused, then the first thing a keyboard visitor sees. It is
+ * NOT `display: none` at rest — that would remove it from the tab order, which
+ * is the one thing it exists to be in (SECURITY_BASELINE.md §16.1).
+ *
+ * Positioned with `inset-inline-start`, so it appears on the correct side in
+ * Urdu and Arabic.
+ */
+.shell-skip-link {
+  position: absolute;
+  inset-inline-start: 0.5rem;
+  inset-block-start: -100%;
+  z-index: var(--layer-overlay);
+  border-radius: var(--radius-control);
+  background-color: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  padding: 0.5rem 1rem;
+}
+
+.shell-skip-link:focus {
+  inset-block-start: 0.5rem;
 }
 
 /*

@@ -521,66 +521,21 @@ describe('nothing a visitor controls can move a redirect off this site', () => {
 });
 
 describe('the locale cookie is a preference and carries no authority', () => {
-  /**
-   * A response that genuinely stores a preference.
-   *
-   * Arriving at `/ar` from a browser configured for English is the case the
-   * cookie exists for: the visitor's choice differs from what their browser
-   * would have negotiated, so it is worth remembering.
-   */
-  async function localeCookie(): Promise<string> {
+  it('does not write visitor state merely because a public locale URL was requested', async () => {
+    // A prefixed page is an ordinary shared-cache response, not proof that a
+    // person deliberately changed their preference. The browser switcher test
+    // covers the explicit action that does persist one.
     const response = await request('/ar', { 'accept-language': 'en' });
-    const cookie = response.headers.get('set-cookie');
 
-    expect(cookie, 'choosing a locale must store the preference').not.toBeNull();
-
-    return cookie as string;
-  }
-
-  it('stores the chosen locale', async () => {
-    expect(await localeCookie()).toMatch(/^NEXT_LOCALE=ar/);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('set-cookie')).toBeNull();
   });
 
-  it('stores nothing when the preference would merely restate the browser', async () => {
-    // A visitor whose browser already asks for Arabic needs no cookie: the
-    // negotiation reaches the same answer on every request. Not writing one is
-    // the correct amount of state to keep about an anonymous visitor.
+  it('stores nothing when negotiation redirects to the browser preference', async () => {
     const response = await request('/', { 'accept-language': 'ar' });
 
     expect(response.headers.get('location')).toBe('/ar');
     expect(response.headers.get('set-cookie')).toBeNull();
-  });
-
-  it('is scoped to the whole site', async () => {
-    expect(await localeCookie()).toMatch(/;\s*Path=\//i);
-  });
-
-  it('is SameSite=Lax, so a cross-site subrequest cannot carry it', async () => {
-    expect(await localeCookie()).toMatch(/;\s*SameSite=lax/i);
-  });
-
-  it('is Secure in production', async () => {
-    // This server runs with NODE_ENV=production, which is what makes the
-    // assertion meaningful rather than a restatement of a default.
-    expect(await localeCookie()).toMatch(/;\s*Secure/i);
-  });
-
-  it('expires, rather than pinning a language forever', async () => {
-    const cookie = await localeCookie();
-    const maxAge = Number(/Max-Age=(\d+)/i.exec(cookie)?.[1] ?? NaN);
-
-    expect(Number.isFinite(maxAge)).toBe(true);
-    expect(maxAge).toBeGreaterThan(0);
-  });
-
-  it('carries only a locale, and no identity or capability', async () => {
-    const cookie = await localeCookie();
-    const value = /NEXT_LOCALE=([^;]*)/.exec(cookie)?.[1] ?? '';
-
-    // The whole value is one supported locale. Nothing here is a token, a
-    // session, a role or a signature, so there is nothing for the server to
-    // trust beyond which language to render.
-    expect(['en', 'ur', 'ar']).toContain(value);
   });
 
   it('grants nothing: a forged value only chooses a language', async () => {
@@ -709,11 +664,37 @@ describe('locale routes stay publicly cacheable', () => {
 // ===========================================================================
 
 describe('the locale switcher is present, accessible and same-origin', () => {
-  /** The switcher's anchors, as raw markup. */
+  /**
+   * The SWITCHER'S anchors, as raw markup.
+   *
+   * SCOPED TO THE SWITCHER, and it has to be. When Phase 3A wrote these
+   * assertions the page was a foundation placeholder whose only links were the
+   * three the switcher rendered, so scraping the whole document happened to be
+   * the same thing. Phase 4 puts the switcher in a real header, on a page with
+   * a mega menu and a footer, and a document-wide scrape would now be asserting
+   * that the entire shell has exactly three links.
+   *
+   * The switcher's `<nav>` is identified by the endonyms it renders — the three
+   * language names, each in its own script — which is the one thing that is
+   * true of it and of nothing else on the page, in every locale.
+   */
   async function anchorsOf(path: string): Promise<string[]> {
     const html = await (await request(path)).text();
 
-    return html.match(/<a\b[^>]*>[^<]*<\/a>/g) ?? [];
+    const switcher = (html.match(/<nav\b[\s\S]*?<\/nav>/g) ?? []).find(
+      (region) =>
+        region.includes('English') &&
+        region.includes('اردو') &&
+        region.includes('العربية'),
+    );
+
+    // Not `?? []`: an empty list would make every assertion below pass
+    // vacuously on a page that had lost its switcher entirely.
+    if (switcher === undefined) {
+      throw new Error(`No locale switcher found on ${path}.`);
+    }
+
+    return switcher.match(/<a\b[^>]*>[^<]*<\/a>/g) ?? [];
   }
 
   it.each(['/en', '/ur', '/ar'])(

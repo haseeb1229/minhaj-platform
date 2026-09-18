@@ -18,7 +18,8 @@
  *
  * APPENDED ONLY BY AN OWNING PHASE. Phase 2 seeded the Identity and system
  * surfaces' vocabulary; Phase 3B appended Taxonomy's two keys with the
- * migration that delivered those surfaces. `quran.editCanonical`,
+ * migration that delivered those surfaces; Phase 4 appended the one read key
+ * its navigation status surface needs. `quran.editCanonical`,
  * `fatwa.publish`, `teaching.perform` and the rest are named by
  * DOMAIN_MODEL.md §4.4 as INDICATIVE examples of the shape; they belong to
  * contexts that do not exist yet. Seeding one now would fix another owner's
@@ -135,6 +136,27 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     key: 'taxonomy.administer',
     description:
       'Create and change canonical topics, their translations, content languages and tags.',
+  }),
+
+  /* ---- Phase 4 — Public shell ----------------------------------------- */
+  //
+  // ONE KEY, AND READ ONLY.
+  //
+  // ROUTE_MAP.md §7 promises `/{locale}/admin/system/navigation` at Phase 4,
+  // and every admin route is gated by a permission key rather than by a role
+  // name. No existing key means this: `taxonomy.read` is the canonical subject
+  // taxonomy, and stretching it to cover the public shell's navigation status
+  // would make one grant confer two unrelated authorities.
+  //
+  // THERE IS DELIBERATELY NO `navigation.administer`. The surface has no
+  // mutation to authorise — the shell route registry is code, reviewed as code,
+  // and no accepted contract promises an editing screen. A write key added for
+  // symmetry would be grantable authority over nothing, and a permission that
+  // authorises nothing is a permission nobody can reason about. It arrives with
+  // a mutation contract, if one is ever accepted.
+  Object.freeze({
+    key: 'navigation.read',
+    description: 'View the effective public shell navigation and its availability.',
   }),
 ]);
 

@@ -1,14 +1,154 @@
 {
   "metadata": {
-    "title": "One Minhaj — Platform Foundation",
-    "description": "Repository and tooling foundation for the One Minhaj digital platform."
+    "description": "A unified digital platform for the Quran, Hadith, learning, library and media resources of Minhaj-ul-Quran International."
   },
-  "foundation": {
-    "heading": "One Minhaj",
-    "intro": "Repository and tooling foundation. The platform architecture is recorded in the project documentation; no domain functionality is implemented yet.",
-    "phaseLabel": "Phase",
-    "phaseValue": "3A — Localisation Foundation",
-    "localeLabel": "Interface language"
+  "shell": {
+    "nav": {
+      "home": "Home",
+      "primary": "Main navigation",
+      "breadcrumbs": "Breadcrumb",
+      "skipToContent": "Skip to content",
+      "openMenu": "Menu",
+      "closeMenu": "Close",
+      "explore": "Explore",
+      "quran": "Quran",
+      "hadith": "Hadith",
+      "learn": "Learn",
+      "library": "Library",
+      "watch": "Watch and Listen",
+      "fatwa": "Fatwa",
+      "newsEvents": "News and Events",
+      "global": "Global Network",
+      "search": "Search",
+      "myMinhaj": "My Minhaj",
+      "donate": "Donate",
+      "findACentre": "Find a Centre",
+      "membership": "Membership",
+      "contactHelp": "Contact and Help",
+      "sitemap": "Sitemap"
+    },
+    "home": {
+      "description": "A unified digital platform for the Quran, Hadith, learning, library and media resources of Minhaj-ul-Quran International.",
+      "lede": "A unified digital platform for the Quran, Hadith, learning, library and media resources of Minhaj-ul-Quran International.",
+      "buildStatus": "The platform is being built in stages. What is available now is the public shell: the navigation, the structure, and the routes each area will occupy. Published content arrives with the phase that delivers it.",
+      "exploreAction": "Explore the platform",
+      "exploreHeading": "Explore",
+      "exploreIntro": "Sections describing the organisation, its leadership and its work. Each section is published as it is completed.",
+      "accountHeading": "My Minhaj",
+      "accountBody": "An account is optional. Everything published here can be read without one; My Minhaj is for the parts of the platform that need to know who you are."
+    },
+    "explore": {
+      "title": "Explore",
+      "description": "Sections describing the organisation, its leadership and its work. Each section is published as it is completed.",
+      "about": {
+        "title": "About",
+        "summary": "Introduction, vision, mission, values, objectives, history and global impact.",
+        "pages": {
+          "introduction": "Introduction",
+          "vision": "Vision",
+          "mission": "Mission",
+          "values": "Values",
+          "objectives": "Objectives",
+          "history": "History",
+          "timeline": "Timeline",
+          "global-impact": "Global Impact"
+        }
+      },
+      "leadership": {
+        "title": "Leadership",
+        "summary": "The leadership of the organisation."
+      },
+      "shaykh-ul-islam": {
+        "title": "Shaykh-ul-Islam",
+        "summary": "Biography, education, academic work, written works and chains of authority.",
+        "pages": {
+          "biography": "Biography",
+          "early-life": "Early Life",
+          "education": "Education",
+          "academic-work": "Academic Work",
+          "achievements": "Achievements",
+          "works": "Works",
+          "isnad": "Chains of Authority",
+          "views-of-dignitaries": "Views of Dignitaries",
+          "books": "Books",
+          "articles": "Articles",
+          "lectures": "Lectures",
+          "collections": "Collections"
+        }
+      },
+      "organization": {
+        "title": "Organisation",
+        "summary": "Governance, departments, forums, wings, institutions and annual reports.",
+        "pages": {
+          "governance": "Governance",
+          "departments": "Departments",
+          "forums": "Forums",
+          "wings": "Wings",
+          "institutions": "Institutions",
+          "annual-reports": "Annual Reports",
+          "un-recognition": "United Nations Recognition",
+          "awards": "Awards"
+        }
+      },
+      "our-work": {
+        "title": "Our Work",
+        "summary": "Education, research, welfare, women, youth, students, interfaith, human rights and peace.",
+        "pages": {
+          "education": "Education",
+          "research": "Research",
+          "welfare": "Welfare",
+          "women": "Women",
+          "youth": "Youth",
+          "students": "Students",
+          "interfaith": "Interfaith",
+          "human-rights": "Human Rights",
+          "peace": "Peace and Counter-extremism"
+        }
+      },
+      "community": {
+        "title": "Community",
+        "summary": "The community section of the platform."
+      },
+      "digital-resources": {
+        "title": "Digital Resources",
+        "summary": "Mobile applications, newsletter, feeds and social media.",
+        "pages": {
+          "mobile-apps": "Mobile Apps",
+          "newsletter": "Newsletter",
+          "rss": "RSS Feeds",
+          "social-media": "Social Media"
+        }
+      }
+    },
+    "legal": {
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Use",
+      "cookies": "Cookie Policy",
+      "accessibility": "Accessibility Statement"
+    },
+    "footer": {
+      "exploreHeading": "Explore",
+      "legalHeading": "Legal and site",
+      "preAdoption": "One Minhaj is an independently developed platform. It is not currently commissioned, sponsored, adopted or deployed by Minhaj-ul-Quran International, and nothing here should be read as an official statement by the organisation."
+    },
+    "reserved": {
+      "heading": "Not yet published",
+      "body": "This page is reserved. Its content is prepared and approved by Minhaj-ul-Quran International and published through the platform’s editorial review process. Nothing on this page is an official statement by the organisation."
+    },
+    "sitemap": {
+      "title": "Sitemap",
+      "description": "Every public page on this platform. Sections marked reserved exist but have no published content yet.",
+      "reservedBadge": "Reserved"
+    },
+    "notFound": {
+      "title": "Page not found",
+      "body": "The address you followed does not match a page on this platform. It may have been mistyped, or it may belong to an area that has not been published yet."
+    },
+    "error": {
+      "title": "Something went wrong",
+      "body": "This page could not be displayed. You can try again; if the problem continues, it has been recorded for the people who maintain the platform.",
+      "retry": "Try again"
+    }
   },
   "localeSwitcher": {
     "label": "Choose a language"
@@ -203,7 +343,8 @@
       "audit": "Audit",
       "integrations": "Integrations",
       "delivery": "Mail delivery",
-      "taxonomy": "Taxonomy"
+      "taxonomy": "Taxonomy",
+      "navigation": "Navigation"
     },
     "common": {
       "none": "Nothing to show.",
@@ -481,6 +622,30 @@
         "retireSubmit": "Retire tag",
         "restoreSubmit": "Restore tag",
         "statusChanged": "The tag status was changed."
+      }
+    },
+    "navigation": {
+      "title": "Navigation status",
+      "description": "The effective public shell: which routes exist, which are reserved placeholders, and which are still deferred to a later phase.",
+      "codeManaged": "This is a read-only view. The shell route registry is managed in source and deployed with the application; there is no navigation record in the database and nothing on this page can be edited.",
+      "indexingDisabled": "Public indexing is disabled for this deployment. Every page emits noindex, the crawler is disallowed and no sitemap is advertised, whatever a route is eligible for below.",
+      "indexingEnabled": "Public indexing is enabled for this deployment. The routes marked eligible below are indexable and appear in the sitemap.",
+      "caption": "Every route the public shell knows about, with its availability and indexing eligibility.",
+      "columnRoute": "Route",
+      "columnPath": "Path",
+      "columnPlacement": "Placement",
+      "columnAvailability": "Availability",
+      "columnIndexing": "Indexing",
+      "noPath": "No route yet",
+      "noPlacement": "Not in navigation",
+      "availability": {
+        "delivered": "Delivered",
+        "reserved": "Reserved",
+        "deferred": "Deferred"
+      },
+      "indexing": {
+        "eligible": "Eligible",
+        "excluded": "Excluded"
       }
     },
     "audit": {

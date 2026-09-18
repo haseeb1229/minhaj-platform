@@ -5,6 +5,7 @@ import type { QueryParams } from 'next-intl/navigation';
 import { useSearchParams } from 'next/navigation';
 
 import { directionOf, endonymOf } from '@/config/locale';
+import { localeCookieValue } from '@/config/locale-cookie';
 import { Link, usePathname } from '@/i18n/navigation';
 import { toQueryParams } from '@/i18n/query';
 
@@ -65,6 +66,17 @@ function LanguageList({
                  */
                 href={{ pathname, query }}
                 locale={option}
+                onClick={() => {
+                  if (isCurrent) return;
+
+                  // Store a preference only when the person uses the language
+                  // control. Merely rendering or requesting a public page must
+                  // not emit Set-Cookie and turn a shared response private.
+                  document.cookie = localeCookieValue(
+                    option,
+                    process.env.NODE_ENV === 'production',
+                  );
+                }}
                 /**
                  * The label is written in the language it names, so it carries
                  * that language's own `lang` and `dir` regardless of the

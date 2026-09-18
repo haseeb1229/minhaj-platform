@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { parseClientEnv } from '../../packages/contracts/src/env/client.ts';
 import { parseServerEnv } from '../../packages/contracts/src/env/server.ts';
 import { repoRoot } from '../architecture/architecture-harness.ts';
 
@@ -107,6 +106,5 @@ describe('.env.example', () => {
     const values = await readExample();
 
     expect(() => parseServerEnv(values)).not.toThrow();
-    expect(() => parseClientEnv(values)).not.toThrow();
   });
 });

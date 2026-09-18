@@ -527,6 +527,16 @@ copied or generated asset.
 > distinction matters most exactly where it is easiest to overlook: religious texts,
 > translations, tafsir works and recitations (OPEN_DECISIONS.md §2.4).
 
+> **Naming a font family is not shipping one, and the inventory records the difference.** Phase 4
+> declares three semantic script slots — Latin, Urdu and Arabic — whose values are stacks of
+> family NAMES ending in a generic family. Nothing is downloaded, nothing is bundled, no
+> `@font-face` is declared and no network request is made, so no licence is acquired or
+> required: a visitor sees a face only if their own system already has it. **The moment a font
+> FILE enters this repository, or a remote font is requested at runtime, that is an
+> introduction** and it carries a recorded licence — and, for the Urdu and Arabic typefaces,
+> the accepted brand evidence of OPEN_DECISIONS.md §6.4 as well. Substituting the approved
+> faces later is a change to those three token values.
+
 **No enterprise SBOM programme is introduced**, and no speculative compliance bureaucracy. The
 requirement is a maintained, honest inventory — proportionate to a platform that will hold
 third-party scholarly material for a long time.

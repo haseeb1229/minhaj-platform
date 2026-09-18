@@ -9,7 +9,18 @@
     "./identity": "./src/identity/index.ts",
     "./taxonomy": "./src/taxonomy/index.ts",
     "./platform": "./src/platform/index.ts",
-    "./env/client": "./src/env/client.ts",
+    "./env/prerender": {
+      "react-server": "./src/env/prerender.ts",
+      "node": "./src/env/prerender.ts",
+      "browser": "./src/env/server-in-client-error.ts",
+      "default": "./src/env/prerender.ts"
+    },
+    "./env/prerender-build": {
+      "types": "./src/env/prerender-build.ts",
+      "node": "./src/env/prerender-build.ts",
+      "browser": "./src/env/server-in-client-error.ts",
+      "default": "./src/env/server-in-client-error.ts"
+    },
     "./env/server": {
       "react-server": "./src/env/server.ts",
       "node": "./src/env/server.ts",

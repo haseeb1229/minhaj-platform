@@ -41,6 +41,10 @@ import 'server-only';
 
 import { z } from 'zod';
 
+import {
+  applicationOriginSchema,
+  publicIndexingEnabledSchema,
+} from './prerender-build.ts';
 import { logLevelSchema, nodeEnvSchema, parseEnvironment } from './shared.ts';
 
 /**
@@ -71,7 +75,7 @@ export const serverEnvSchema = z.object({
    * Canonical application origin, used to build emailed links and to bound
    * what the authentication library will redirect to.
    */
-  AUTH_BASE_URL: z.url({ protocol: /^https?$/ }).default('http://localhost:3000'),
+  AUTH_BASE_URL: applicationOriginSchema,
 
   /**
    * Versioned signing and encryption secrets, newest first.
@@ -132,6 +136,39 @@ export const serverEnvSchema = z.object({
   /** HMAC key for recipient digests in delivery and suppression state. */
   EMAIL_DIGEST_KEY: z.string().min(16).default('development-only-email-digest-key'),
   EMAIL_DIGEST_KEY_VERSION: z.coerce.number().int().min(1).default(1),
+
+  // -------------------------------------------------------------------------
+  // Phase 4 — Public shell
+  // -------------------------------------------------------------------------
+
+  /**
+   * Whether this deployment may be indexed by search engines at all.
+   *
+   * FAIL CLOSED, and deliberately so. While the platform runs on a
+   * developer-controlled pre-adoption origin it must not compete with or
+   * impersonate the official organisation site, so the entire site is
+   * `noindex`, the crawler is disallowed, no sitemap is advertised and no
+   * canonical URL points at an official origin (ROUTE_MAP.md §9.5,
+   * PRODUCT_SCOPE.md, *Product status and acceptance*). Defaulting to `false`
+   * means a deployment that forgets to configure anything is non-indexable,
+   * which is the safe direction: the failure of an indexing switch must be
+   * invisibility, never accidental publication.
+   *
+   * AN ENVIRONMENT AND LAUNCH-STATE CONTROL, NOT A PRODUCT MODE. It changes no
+   * route, no capability and no rendering. The application is not reduced in
+   * any way by being non-indexable, and there is no `DemoMode` anywhere in this
+   * codebase.
+   *
+   * SERVER-ONLY. It is not `NEXT_PUBLIC_`, because indexing posture is decided
+   * where robots and metadata are emitted and nothing in the browser has an
+   * opinion about it.
+   *
+   * ONE VARIABLE, NOT A FEATURE-FLAG PLATFORM. It answers one question that has
+   * a documented owner and a documented launch transition (DELIVERY_PLAN.md,
+   * Phase 35); it is not a general runtime toggling facility, and nothing else
+   * is switched through it.
+   */
+  PUBLIC_INDEXING_ENABLED: publicIndexingEnabledSchema,
 
   /**
    * Whether a reverse proxy in front of this process sets the forwarding

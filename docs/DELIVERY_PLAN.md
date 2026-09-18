@@ -1430,6 +1430,16 @@ official-origin indexing** — `noindex` lifted, canonical URLs moved to the off
 sitemaps submitted **only at this point** (PRODUCT_SCOPE.md, *Product status and acceptance*) ·
 post-launch monitoring.
 
+> **The indexing transition is one server-only setting, and this is its name.** Phase 4 delivered
+> the control as **`PUBLIC_INDEXING_ENABLED`**, which defaults to `false` and fails closed: while
+> it is off, every page emits `noindex`, `robots.txt` disallows the whole site, no canonical or
+> `hreflang` is emitted and the sitemap routes answer 404. Turning it on at the official origin —
+> together with `AUTH_BASE_URL`, the single application origin canonical URLs are built from — is
+> what performs this transition. **It is an environment and launch-state control, not a product
+> mode**, and the application is not reduced in any way while it is off. The public shell is
+> statically rendered, so the value is read at build time: the transition is a deliberate
+> rebuild and redeploy, not a runtime toggle.
+
 > **Staging acceptance is not production promotion.** Promotion carries provenance, review
 > integrity and checksums forward, and **excludes staging test accounts, known-password users,
 > development credentials and unrelated staging configuration**. A defined source cutoff,

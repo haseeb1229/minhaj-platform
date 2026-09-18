@@ -29,6 +29,7 @@ const BASE_URL = `http://127.0.0.1:${PORT}`;
 export default defineConfig({
   testDir: './tests/browser',
   testMatch: '**/*.spec.ts',
+  globalTeardown: './tests/browser/global-teardown.ts',
 
   // Each spec creates its own accounts and never reads another's, and each
   // presents its OWN client address (see `tests/browser/support.ts`), so the

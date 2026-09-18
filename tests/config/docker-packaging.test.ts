@@ -68,6 +68,12 @@ describe('N5 — the test stage has complete inputs', () => {
     expect(test).toContain('vitest.config.ts');
   });
 
+  it('copies the Playwright configuration the cleanup regression reads', async () => {
+    const test = await stage('test');
+
+    expect(test).toContain('playwright.config.ts');
+  });
+
   /**
    * The same defect as `.env.example`, one round later.
    * `tests/config/ci-credentials.test.ts` READS the workflow to assert the CI

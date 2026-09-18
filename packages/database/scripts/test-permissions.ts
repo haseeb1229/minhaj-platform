@@ -513,33 +513,48 @@ try {
     total: number;
     probe: number;
     tampered: number;
+    taxonomyProvisioned: number;
+    navigationProvisioned: number;
   }>(`
     SELECT COUNT_BIG(*) AS total,
            SUM(CASE WHEN [action] = N'phase1.permission.probe' THEN 1 ELSE 0 END) AS probe,
-           SUM(CASE WHEN [action] = N'tampered' THEN 1 ELSE 0 END) AS tampered
+           SUM(CASE WHEN [action] = N'tampered' THEN 1 ELSE 0 END) AS tampered,
+           SUM(CASE WHEN [action] = N'taxonomy.permissions.provisioned'
+                     AND [actorType] = N'migration' THEN 1 ELSE 0 END)
+             AS taxonomyProvisioned,
+           SUM(CASE WHEN [action] = N'navigation.permissions.provisioned'
+                     AND [actorType] = N'migration' THEN 1 ELSE 0 END)
+             AS navigationProvisioned
     FROM [dbo].[AuditLog];
   `);
 
-  // The rows a freshly migrated, probed database must hold: the migration's
-  // provisioning record and this run's probe. Stated as a number so an
-  // unexplained extra row is a failure rather than something nobody counted.
-  const EXPECTED_AUDIT_ROWS = 2;
+  // Exactly three rows: the Phase-3B privilege extension, the Phase-4
+  // privilege extension, and this run's probe. Naming both migration actions
+  // is load-bearing: deriving the expected total from whatever provisioning
+  // rows happened to survive would pass if this phase omitted its own audit.
+  const EXPECTED_AUDIT_ROWS = 3;
 
   if (
+    Number(survivor?.taxonomyProvisioned ?? 0) !== 1 ||
+    Number(survivor?.navigationProvisioned ?? 0) !== 1 ||
     Number(survivor?.probe ?? 0) !== 1 ||
     Number(survivor?.tampered ?? -1) !== 0 ||
     Number(survivor?.total ?? 0) !== EXPECTED_AUDIT_ROWS
   ) {
     fail(
       'audit rows unmodified',
-      `expected ${EXPECTED_AUDIT_ROWS} rows with 1 probe and 0 tampered; found ` +
-        `${survivor?.total ?? 0} rows, ${survivor?.probe ?? 0} probe, ` +
-        `${survivor?.tampered ?? 0} tampered`,
+      `expected ${EXPECTED_AUDIT_ROWS} rows with 1 taxonomy provisioning, ` +
+        `1 navigation provisioning, 1 probe and 0 tampered; found ` +
+        `${survivor?.total ?? 0} rows, ` +
+        `${survivor?.taxonomyProvisioned ?? 0} taxonomy provisioning, ` +
+        `${survivor?.navigationProvisioned ?? 0} navigation provisioning, ` +
+        `${survivor?.probe ?? 0} probe, ${survivor?.tampered ?? 0} tampered`,
     );
   } else {
     pass(
       'audit rows unmodified',
-      'the probe row and the migration record are intact after UPDATE/DELETE attempts',
+      'the probe row and both exact migration records are intact after ' +
+        'UPDATE/DELETE attempts',
     );
   }
 

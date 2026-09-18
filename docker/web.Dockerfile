@@ -80,7 +80,7 @@ COPY tests ./tests
 # the ignore file, Prettier tries to parse those fixtures and `format:check`
 # fails inside the image for a packaging reason — which is the same class of
 # defect Review #3 reported about `.env.example`.
-COPY eslint.config.js prettier.config.js vitest.config.ts ./
+COPY eslint.config.js prettier.config.js vitest.config.ts playwright.config.ts ./
 COPY .prettierignore ./
 
 # Inputs the SUITE reads. Copied ONLY into this stage: the runtime has no use
