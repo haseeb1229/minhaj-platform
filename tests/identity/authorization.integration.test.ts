@@ -261,31 +261,61 @@ describe.skipIf(!databaseConfigured)(
     /* ---- The permission catalogue --------------------------------------- */
 
     describe('the permission catalogue', () => {
-      it('is exactly what the migration seeded, and Phase-2 vocabulary only', async () => {
+      /**
+       * The Phase-2 vocabulary, which is not this phase's to change.
+       *
+       * RETARGETED WHEN PHASE 3B ARRIVED, not deleted. The original assertion
+       * read "exactly this, and nothing else", which was correct while one
+       * phase owned the catalogue. What it was PROTECTING — that Phase 2's keys
+       * are all still there and that nobody has quietly renamed one — is still
+       * worth protecting, so it is stated separately from the part that
+       * legitimately grows.
+       */
+      const PHASE_2_KEYS = [
+        'assignments.read',
+        'audit.read',
+        'delivery.operate',
+        'delivery.read',
+        'integrations.read',
+        'permissions.grant',
+        'permissions.read',
+        'roles.administer',
+        'roles.read',
+        'security.read',
+        'users.administer',
+        'users.read',
+      ];
+
+      /** The keys the Phase-3B migration appended, and the only ones. */
+      const PHASE_3B_KEYS = ['taxonomy.administer', 'taxonomy.read'];
+
+      it('is exactly what the delivered migrations seeded', async () => {
         const catalogue = await harness.administration.catalogue();
         const keys = catalogue.map((entry) => entry.key).sort();
 
-        expect(keys).toEqual([
-          'assignments.read',
-          'audit.read',
-          'delivery.operate',
-          'delivery.read',
-          'integrations.read',
-          'permissions.grant',
-          'permissions.read',
-          'roles.administer',
-          'roles.read',
-          'security.read',
-          'users.administer',
-          'users.read',
-        ]);
+        expect(keys).toEqual([...PHASE_2_KEYS, ...PHASE_3B_KEYS].sort());
 
         // Every stored key is one this build can describe: a catalogue the
         // interface cannot explain is a catalogue nobody can administer.
         expect(catalogue.every((entry) => entry.known)).toBe(true);
+      });
 
-        // No later owner's vocabulary. Seeding one now would fix another
-        // context's language before that context exists to have an opinion.
+      it('still holds every Phase-2 key, unrenamed', async () => {
+        const keys = (await harness.administration.catalogue()).map((entry) => entry.key);
+
+        for (const key of PHASE_2_KEYS) {
+          expect(keys, `${key} must still exist`).toContain(key);
+        }
+      });
+
+      it('holds no vocabulary belonging to a context that has not shipped', async () => {
+        const keys = (await harness.administration.catalogue()).map((entry) => entry.key);
+
+        // Seeding one now would fix another context's language before that
+        // context exists to have an opinion, and would leave grantable
+        // authority over nothing. `taxonomy.` is absent from this list because
+        // Taxonomy HAS shipped — which is the whole rule: a domain leaves it at
+        // its owning phase and not before.
         for (const domain of [
           'quran.',
           'hadith.',
@@ -295,8 +325,26 @@ describe.skipIf(!databaseConfigured)(
           'donations.',
           'migration.',
           'teaching.',
+          'editorial.',
+          'media.',
+          'library.',
+          'messaging.',
         ]) {
           expect(keys.some((key) => key.startsWith(domain))).toBe(false);
+        }
+      });
+
+      it('gives the protected role the appended Taxonomy keys, by migration', async () => {
+        // The protected bundle is the whole catalogue, so an appended
+        // permission widens what a live administrator may do. That extension is
+        // migration-controlled: no runtime path can re-bundle a protected role,
+        // and this proves the migration did it rather than some later write.
+        const role = await harness.administration.findRole('platform-administrator');
+
+        expect(role).not.toBeNull();
+        expect(role?.system).toBe(true);
+        for (const key of PHASE_3B_KEYS) {
+          expect(role?.permissions, `${key} must be bundled`).toContain(key);
         }
       });
 

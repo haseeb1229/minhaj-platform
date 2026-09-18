@@ -2,6 +2,8 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 
+import { PERMISSION_CATALOGUE } from '@minhaj/contracts/identity';
+
 import type { SqlSession } from './sql-connection.ts';
 
 /**
@@ -30,6 +32,17 @@ import type { SqlSession } from './sql-connection.ts';
 
 /** Marks every row this module writes, so a rehearsal's residue is obvious. */
 const TAG = 'phase2-recovery';
+
+/**
+ * How many permissions the delivered migrations seed.
+ *
+ * Derived from the compiled catalogue rather than written as a literal: the
+ * catalogue and the migrations are proved equal by
+ * `tests/architecture/phase2-chunk2-boundaries.test.ts`, so counting it here
+ * asks the one definition rather than adding a second number for a later phase
+ * to forget.
+ */
+const EXPECTED_PERMISSION_COUNT = PERMISSION_CATALOGUE.length;
 
 export interface Phase2Fixture {
   readonly runId: string;
@@ -540,22 +553,35 @@ async function verifyRestoredAuthorization(
 
   // THE SEEDED CATALOGUE. It is migration-controlled foundation data, so it
   // travels in the artifact like any other row.
+  //
+  // COUNTED AGAINST THE DELIVERED VOCABULARY rather than a fixed number. The
+  // catalogue grows when a phase that owns new administrative surfaces ships
+  // one — Phase 3B appended Taxonomy's two — so a literal here would have to be
+  // edited by every such phase, and the phase that forgot would report the
+  // omission as a restore failure. What must not change is that the RESTORE
+  // brings back exactly what the migrations put there.
   const [catalogue] = await restored.query<{ total: number }>(
     'SELECT COUNT_BIG(*) AS total FROM [dbo].[Permission];',
   );
   expect(
-    Number(catalogue?.total) === 12,
-    `Restored permission catalogue holds ${catalogue?.total ?? 0} rows, expected 12.`,
+    Number(catalogue?.total) === EXPECTED_PERMISSION_COUNT,
+    `Restored permission catalogue holds ${catalogue?.total ?? 0} rows, expected ` +
+      `${EXPECTED_PERMISSION_COUNT}.`,
   );
-  found.push({ table: 'Permission', detail: '12 migration-seeded permissions' });
+  found.push({
+    table: 'Permission',
+    detail: `${EXPECTED_PERMISSION_COUNT} migration-seeded permissions`,
+  });
 
+  // THE PROTECTED BUNDLE IS THE WHOLE CATALOGUE, which is why the two counts
+  // are the same number and why extending one is a privilege change.
   const [protectedRole] = await restored.query<{ total: number }>(
     `SELECT COUNT_BIG(*) AS total FROM [dbo].[Role] AS r
      JOIN [dbo].[RolePermission] AS rp ON rp.[roleId] = r.[id]
      WHERE r.[key] = N'platform-administrator' AND r.[system] = 1;`,
   );
   expect(
-    Number(protectedRole?.total) === 12,
+    Number(protectedRole?.total) === EXPECTED_PERMISSION_COUNT,
     'Restored protected role lost part of its permission bundle.',
   );
   found.push({ table: 'Role', detail: 'protected system role with its full bundle' });

@@ -52,7 +52,8 @@ describe('Phase 1 Chunk 1 database foundation', () => {
     // audit foundation (SECURITY_BASELINE.md §13); then Phase 2 Chunk 1 —
     // Identity & Access, plus the Layer-0 concerns that phase first genuinely
     // needs (ARCHITECTURE.md §4.5, §4.6.1); then Phase 2 Chunk 2 —
-    // authorisation, step-up and the privileged second factor.
+    // authorisation, step-up and the privileged second factor; then Phase 3B —
+    // the canonical taxonomy and the content-language reference data.
     const models = [...schema.matchAll(/^\s*model\s+(\w+)/gm)].map((match) => match[1]);
     expect(models).toEqual([
       'AuditLog',
@@ -75,6 +76,11 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'TwoFactor',
       'PrivilegedSecurityPosture',
       'IdentityBootstrap',
+      // Phase 3B — Taxonomy.
+      'Topic',
+      'TopicTranslation',
+      'Language',
+      'Tag',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name

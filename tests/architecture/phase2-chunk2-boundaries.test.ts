@@ -326,7 +326,7 @@ describe('Phase 2 Chunk 2 — what the delivered code does NOT contain', () => {
     // DOMAIN_MODEL.md §4.4 permits a FUTURE scope; §6.2 prohibits the
     // polymorphic shape. Neither Centre nor Course exists, so the correct
     // amount of scope to model now is none — a `scopeType + scopeId` added in
-    // anticipation is exactly the prohibited reference (CLAUDE.md §11).
+    // anticipation is exactly the prohibited reference (DOMAIN_MODEL.md §6.2).
     const schema = await sourceOf('packages/database/prisma/schema.prisma');
     const model = schema.slice(
       schema.indexOf('model RoleAssignment'),
@@ -433,37 +433,146 @@ describe('Phase 2 Chunk 2 — what the delivered code does NOT contain', () => {
   });
 });
 
-describe('Phase 2 Chunk 2 — the permission catalogue is one definition', () => {
-  it('seeds exactly the keys the contract declares', async () => {
-    // Two copies of a security vocabulary is two things to keep in step, and
-    // the one that drifts is the one nobody reads. The migration and the
-    // contract are compared directly.
-    const contract = await sourceOf('packages/contracts/src/identity/permissions.ts');
-    const migration = await sourceOf(
-      'packages/database/prisma/migrations/' +
-        '20260916000000_phase2_authorization_privileged_security/migration.sql',
-    );
+/**
+ * The permission keys one migration seeds into `Permission`.
+ *
+ * Read from the `INSERT INTO [dbo].[Permission]` statement specifically, not
+ * from the file at large: a migration may legitimately NAME a permission
+ * elsewhere — extending the protected bundle does exactly that — and counting
+ * those would report keys the migration did not create.
+ */
+async function permissionsSeededBy(migrationId: string): Promise<string[]> {
+  const migration = await sourceOf(
+    `packages/database/prisma/migrations/${migrationId}/migration.sql`,
+  );
 
-    // `permissions.grant` is declared through its named constant, because
-    // SECURITY_BASELINE.md §3.4 rule 6 names the key and the constant is what
-    // stops a call site spelling it differently. Both forms count.
-    const grant = /export const PERMISSION_GRANT = '([a-z.]+)'/.exec(contract)?.[1];
-    expect(grant).toBeDefined();
+  const insert = /INSERT INTO \[dbo\]\.\[Permission\][\s\S]*?;/.exec(migration);
+  if (insert === null) return [];
 
-    const declared = [
-      ...[...contract.matchAll(/key: '([a-z.]+)'/g)]
-        .map((match) => match[1])
-        .filter((key): key is string => key !== undefined),
-      grant as string,
-    ].sort();
+  return [...insert[0].matchAll(/\(N'([a-z.]+)',\s+N'/g)]
+    .map((match) => match[1])
+    .filter((key): key is string => key !== undefined)
+    .sort();
+}
 
-    const seeded = [...migration.matchAll(/\(N'([a-z.]+)',\s+N'/g)]
+/** Every permission key the compiled contract declares. */
+async function declaredPermissions(): Promise<string[]> {
+  const contract = await sourceOf('packages/contracts/src/identity/permissions.ts');
+
+  // `permissions.grant` is declared through its named constant, because
+  // SECURITY_BASELINE.md §3.4 rule 6 names the key and the constant is what
+  // stops a call site spelling it differently. Both forms count.
+  const grant = /export const PERMISSION_GRANT = '([a-z.]+)'/.exec(contract)?.[1];
+  expect(grant).toBeDefined();
+
+  return [
+    ...[...contract.matchAll(/key: '([a-z.]+)'/g)]
       .map((match) => match[1])
-      .filter((key): key is string => key !== undefined)
+      .filter((key): key is string => key !== undefined),
+    grant as string,
+  ].sort();
+}
+
+/**
+ * Every migration that seeds permissions, and the phase that owns each one.
+ *
+ * RETARGETED RATHER THAN WIDENED when Phase 3B arrived. The original assertion
+ * compared the contract against ONE migration, which was exactly right while
+ * one phase had a vocabulary — and would have had to be deleted the moment a
+ * second phase appended to it. Deleting it would have lost the property worth
+ * keeping, so it was split in two instead: the union still equals the contract,
+ * AND each phase's migration seeds only its own keys. The second half is the
+ * stronger claim, because it is what stops a later phase quietly seeding
+ * another owner's vocabulary.
+ */
+const PERMISSION_MIGRATIONS = [
+  {
+    phase: 'Phase 2 Chunk 2',
+    id: '20260916000000_phase2_authorization_privileged_security',
+    keys: [
+      'assignments.read',
+      'audit.read',
+      'delivery.operate',
+      'delivery.read',
+      'integrations.read',
+      'permissions.grant',
+      'permissions.read',
+      'roles.administer',
+      'roles.read',
+      'security.read',
+      'users.administer',
+      'users.read',
+    ],
+  },
+  {
+    phase: 'Phase 3B',
+    id: '20260917000000_phase3b_taxonomy',
+    keys: ['taxonomy.administer', 'taxonomy.read'],
+  },
+] as const;
+
+describe('the permission catalogue is one definition, appended only by owners', () => {
+  it('seeds exactly the keys the contract declares, across every migration', async () => {
+    // Two copies of a security vocabulary is two things to keep in step, and
+    // the one that drifts is the one nobody reads. The UNION of what the
+    // migrations seed is compared against what the contract declares.
+    const declared = await declaredPermissions();
+
+    const seeded = (
+      await Promise.all(
+        PERMISSION_MIGRATIONS.map((migration) => permissionsSeededBy(migration.id)),
+      )
+    )
+      .flat()
       .sort();
 
     expect(declared.length).toBeGreaterThan(0);
     expect(seeded).toEqual(declared);
+  });
+
+  it('contains no duplicate key across migrations', async () => {
+    // Two migrations seeding the same key would make the union test pass while
+    // the second `INSERT ... WHERE NOT EXISTS` silently did nothing — and would
+    // mean two phases claiming one permission.
+    const seeded = (
+      await Promise.all(
+        PERMISSION_MIGRATIONS.map((migration) => permissionsSeededBy(migration.id)),
+      )
+    ).flat();
+
+    expect(seeded.length).toBe(new Set(seeded).size);
+  });
+
+  it.each(PERMISSION_MIGRATIONS)(
+    '$phase seeds only its own vocabulary',
+    async ({ id, keys }) => {
+      expect(await permissionsSeededBy(id)).toEqual([...keys].sort());
+    },
+  );
+
+  it('seeds no permission for a context that has not shipped', async () => {
+    // The standing rule, restated against the whole catalogue rather than one
+    // migration: a key seeded now would fix another owner's vocabulary before
+    // that owner exists to have an opinion, and would leave grantable authority
+    // over nothing.
+    const declared = await declaredPermissions();
+
+    for (const domain of [
+      'quran.',
+      'hadith.',
+      'fatwa.',
+      'learning.',
+      'membership.',
+      'donations.',
+      'migration.',
+      'teaching.',
+      'editorial.',
+      'media.',
+      'library.',
+      'messaging.',
+    ]) {
+      expect(declared.some((key) => key.startsWith(domain))).toBe(false);
+    }
   });
 
   it('names `permissions.grant` exactly as the security baseline does', async () => {

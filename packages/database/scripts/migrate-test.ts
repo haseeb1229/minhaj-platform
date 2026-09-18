@@ -83,6 +83,7 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
     'PrivilegedSecurityPosture',
     'IdentityBootstrap',
   ],
+  '20260917000000_phase3b_taxonomy': ['Topic', 'TopicTranslation', 'Language', 'Tag'],
 };
 
 /**
@@ -110,6 +111,27 @@ const PREMATURE_TABLES = [
   'Membership',
   'Donation',
   'MigrationProvenance',
+];
+
+/**
+ * Tables that must never exist, at any phase.
+ *
+ * DIFFERENT FROM `PREMATURE_TABLES`, which names schema that is merely EARLY.
+ * These are shapes DOMAIN_MODEL.md §6.2 prohibits outright: one shared
+ * assignment table carrying a target TYPE and a target IDENTIFIER. SQL Server
+ * cannot foreign-key such a pair to many tables, so the design guarantees
+ * dangling references whenever a target is deleted — and no later phase makes
+ * it acceptable.
+ *
+ * Checked by NAME here and by SHAPE in `assertNoPolymorphicAssignment`, because
+ * a prohibited design renamed is still the prohibited design.
+ */
+const PROHIBITED_TABLES = [
+  'TopicAssignment',
+  'TaxonomyAssignment',
+  'EntityTopic',
+  'ContentTopic',
+  'TopicTarget',
 ];
 
 const EXPECTED_AUDIT_COLUMNS = [
@@ -160,6 +182,15 @@ const EXPECTED_COLUMN_SIZES: readonly {
   { table: 'Permission', column: 'key', characters: 64 },
   { table: 'Role', column: 'key', characters: 64 },
   { table: 'RolePermission', column: 'permissionKey', characters: 64 },
+  // Phase 3B. `Topic.slug` and `Tag.slug` are UNIQUE constraints and
+  // `Language.code` is a PRIMARY KEY, so all three are index keys that would
+  // exceed the 1700-byte limit at Prisma's NVARCHAR(1000) default.
+  // `TopicTranslation.locale` is half of a composite primary key and is sized
+  // to match `User.locale`, because the two hold the same kind of value.
+  { table: 'Topic', column: 'slug', characters: 160 },
+  { table: 'TopicTranslation', column: 'locale', characters: 8 },
+  { table: 'Language', column: 'code', characters: 16 },
+  { table: 'Tag', column: 'slug', characters: 120 },
 ];
 
 /**
@@ -181,12 +212,61 @@ const EXPECTED_PROCEDURES = [
   'IdentityRecoverPrivilegedSecondFactor',
 ];
 
+/**
+ * Every invariant trigger this repository creates.
+ *
+ * Each one enforces something no constraint can express and no application
+ * check can guarantee under concurrency. A migration that created the tables
+ * and silently dropped one would leave a gate that looks present and is not.
+ */
 const EXPECTED_TRIGGERS = [
   'IdentityFinalAdministrator_Bootstrap',
   'IdentityFinalAdministrator_Role',
   'IdentityFinalAdministrator_RoleAssignment',
   'IdentityFinalAdministrator_User',
+  // Phase 3B: cycle and depth safety for the topic hierarchy, and the
+  // fallback translation every topic must keep.
+  'TaxonomyTopicHierarchy',
+  'TaxonomyTopicFallback',
 ];
+
+/** CHECK constraints that carry a correctness rule rather than a preference. */
+const EXPECTED_CHECK_CONSTRAINTS = [
+  { table: 'IdentityBootstrap', constraint: 'IdentityBootstrap_singleton_ck' },
+  { table: 'Topic', constraint: 'Topic_not_self_parent_ck' },
+];
+
+/**
+ * The canonical top-level topics, exactly as DOMAIN_MODEL.md §6.1 names them.
+ *
+ * Stated here as well as in the migration ON PURPOSE: this list is what the
+ * gate compares the database against, so a migration that seeded eighteen, or
+ * twenty, or the same one twice, fails rather than passing quietly.
+ */
+const CANONICAL_TOPIC_SLUGS = [
+  'ahl-al-bayt',
+  'aqeedah',
+  'contemporary-issues',
+  'economics-and-finance',
+  'education',
+  'ethics',
+  'family-and-society',
+  'fiqh',
+  'hadith',
+  'human-rights',
+  'interfaith',
+  'islam-and-science',
+  'islamic-history',
+  'peace',
+  'quran',
+  'sahabah',
+  'seerah',
+  'spirituality',
+  'worship',
+];
+
+/** The Taxonomy permissions Phase 3B appends to the immutable catalogue. */
+const TAXONOMY_PERMISSIONS = ['taxonomy.administer', 'taxonomy.read'];
 
 function report(step: string, detail: string): void {
   process.stdout.write(`  ${step.padEnd(24)} ${detail}\n`);
@@ -217,6 +297,15 @@ function assertNoPrematureTables(tables: string[], stage: string): void {
   const premature = tables.filter((table) => PREMATURE_TABLES.includes(table));
   if (premature.length > 0) {
     fail(`Premature business-domain tables after ${stage}: ${premature.join(', ')}`);
+  }
+
+  const prohibited = tables.filter((table) => PROHIBITED_TABLES.includes(table));
+  if (prohibited.length > 0) {
+    fail(
+      `Prohibited polymorphic assignment tables after ${stage}: ` +
+        `${prohibited.join(', ')}. DOMAIN_MODEL.md 6.2 requires a typed junction ` +
+        `owned by the context that owns the target.`,
+    );
   }
 }
 
@@ -329,6 +418,316 @@ async function assertNonPrismaObjects(session: SqlSession): Promise<void> {
   );
 }
 
+/**
+ * NO POLYMORPHIC TOPIC ASSIGNMENT EXISTS - checked by SHAPE, not only by name.
+ *
+ * A prohibited design renamed is still the prohibited design, so this looks for
+ * the SHAPE DOMAIN_MODEL.md 6.2 forbids: a table that references `Topic` and
+ * also carries a column pair naming a target by TYPE and IDENTIFIER rather than
+ * by foreign key.
+ *
+ * It also proves the positive half of the rule: every foreign key into `Topic`
+ * from another table belongs to a junction that ALSO has a real foreign key to
+ * something else. A junction with a topic edge and no target edge is a
+ * half-typed assignment - real integrity on one side, a dangling identifier on
+ * the other.
+ *
+ * NON-VACUOUS BY CONSTRUCTION. It asserts a count it knows: exactly one foreign
+ * key references `Topic` today, and it is Topic's own self-referencing parent
+ * edge. If that stops being true without a junction arriving, the inventory has
+ * changed for a reason nobody declared.
+ */
+async function assertNoPolymorphicAssignment(session: SqlSession): Promise<void> {
+  const suspects = await session.query<{ tableName: string }>(`
+    SELECT t.name AS tableName
+    FROM sys.tables t
+    WHERE EXISTS (
+        SELECT 1 FROM sys.columns c
+        WHERE c.object_id = t.object_id AND c.name IN (N'targetType', N'targetId')
+    )
+      AND EXISTS (
+        SELECT 1 FROM sys.foreign_keys fk
+        WHERE fk.parent_object_id = t.object_id
+          AND fk.referenced_object_id = OBJECT_ID(N'[dbo].[Topic]')
+    );
+  `);
+
+  if (suspects.length > 0) {
+    fail(
+      `A table references Topic AND carries a targetType/targetId pair: ` +
+        suspects.map((row) => row.tableName).join(', '),
+    );
+  }
+
+  const topicReferences = await session.query<{
+    junctionTable: string;
+    otherForeignKeys: number;
+  }>(`
+    SELECT OBJECT_NAME(fk.parent_object_id) AS junctionTable,
+           (
+               SELECT COUNT_BIG(*) FROM sys.foreign_keys other
+               WHERE other.parent_object_id = fk.parent_object_id
+                 AND other.referenced_object_id <> OBJECT_ID(N'[dbo].[Topic]')
+           ) AS otherForeignKeys
+    FROM sys.foreign_keys fk
+    WHERE fk.referenced_object_id = OBJECT_ID(N'[dbo].[Topic]');
+  `);
+
+  // TAXONOMY'S OWN TABLES ARE NOT ASSIGNMENTS, and the distinction is the whole
+  // point of the check. `Topic.parentId` is the HIERARCHY and
+  // `TopicTranslation.topicId` is part of the Topic AGGREGATE — its name in one
+  // interface locale. An assignment is a foreign key into `Topic` from a table
+  // belonging to a context that owns the thing being classified.
+  const AGGREGATE_TABLES = ['Topic', 'TopicTranslation'];
+
+  const junctions = topicReferences.filter(
+    (row) => !AGGREGATE_TABLES.includes(row.junctionTable),
+  );
+  for (const junction of junctions) {
+    if (Number(junction.otherForeignKeys) === 0) {
+      fail(
+        `${junction.junctionTable} references Topic but has no foreign key to any ` +
+          `target. A topic assignment must be typed at BOTH ends.`,
+      );
+    }
+  }
+
+  // The aggregate's OWN edges are stated exactly, so this proof cannot pass
+  // because a query happened to return nothing — and so a later phase that
+  // added a third edge into `Topic` from inside the aggregate would have to say
+  // so here rather than have it quietly counted as neither.
+  const aggregateEdges = topicReferences
+    .filter((row) => AGGREGATE_TABLES.includes(row.junctionTable))
+    .map((row) => row.junctionTable)
+    .sort();
+
+  if (aggregateEdges.join(',') !== 'Topic,TopicTranslation') {
+    fail(
+      `Expected exactly the hierarchy and translation edges into Topic; found ` +
+        `${aggregateEdges.join(', ') || '(none)'}.`,
+    );
+  }
+
+  report(
+    'assignment strategy',
+    `no polymorphic pair, ${junctions.length} typed junction(s), ` +
+      `aggregate edges: ${aggregateEdges.join(', ')}`,
+  );
+}
+
+/**
+ * The Phase-3B foundation data, checked against the accepted list.
+ *
+ * COUNT, IDENTITY AND SHAPE. Nineteen canonical topics, each at the root, each
+ * `system`, each active, each with exactly one English name and none in any
+ * other locale - which is the deliberate state the migration describes, not an
+ * omission nobody noticed.
+ */
+async function assertTaxonomyFoundation(session: SqlSession): Promise<void> {
+  const topics = await session.query<{
+    slug: string;
+    parentId: string | null;
+    status: string;
+    system: boolean;
+    position: number;
+  }>(`
+    SELECT [slug], [parentId], [status], [system], [position]
+    FROM [dbo].[Topic] ORDER BY [slug];
+  `);
+
+  const slugs = topics.map((row) => row.slug);
+  if (slugs.join(',') !== CANONICAL_TOPIC_SLUGS.join(',')) {
+    fail(
+      `Canonical topic seed differs.\n  expected: ${CANONICAL_TOPIC_SLUGS.join(', ')}\n` +
+        `  actual:   ${slugs.join(', ') || '(none)'}`,
+    );
+  }
+
+  for (const topic of topics) {
+    if (topic.parentId !== null)
+      fail(`Canonical topic ${topic.slug} is not at the root.`);
+    if (topic.status !== 'active') fail(`Canonical topic ${topic.slug} is not active.`);
+    if (!topic.system) fail(`Canonical topic ${topic.slug} is not marked system.`);
+  }
+
+  const positions = topics.map((row) => Number(row.position)).sort((a, b) => a - b);
+  if (positions.join(',') !== positions.map((_, index) => index).join(',')) {
+    fail(
+      `Canonical topic positions are not 0..${topics.length - 1}: ${positions.join(', ')}`,
+    );
+  }
+
+  const translations = await session.query<{ locale: string; total: number }>(`
+    SELECT [locale], COUNT_BIG(*) AS total
+    FROM [dbo].[TopicTranslation] GROUP BY [locale];
+  `);
+
+  if (translations.length !== 1 || translations[0]?.locale !== 'en') {
+    fail(
+      `The canonical seed must carry the fallback locale and nothing else; found: ` +
+        `${translations.map((row) => `${row.locale}=${row.total}`).join(', ') || '(none)'}`,
+    );
+  }
+  if (Number(translations[0]?.total) !== CANONICAL_TOPIC_SLUGS.length) {
+    fail(
+      `Expected ${CANONICAL_TOPIC_SLUGS.length} English topic names, found ` +
+        `${translations[0]?.total}.`,
+    );
+  }
+
+  // ---- content languages, and the script they are written in ---------------
+  const languages = await session.query<{
+    code: string;
+    nativeName: string;
+    direction: string;
+    status: string;
+  }>(
+    `SELECT [code], [nativeName], [direction], [status] FROM [dbo].[Language] ORDER BY [code];`,
+  );
+
+  if (languages.map((row) => row.code).join(',') !== 'ar,en,ur') {
+    fail(
+      `Content-language seed differs; found: ` +
+        `${languages.map((row) => row.code).join(', ') || '(none)'}`,
+    );
+  }
+
+  // ENCODING ROUND TRIP. The endonyms are written in Arabic script in the
+  // migration file. A file read under the wrong encoding would seed rows of
+  // replacement characters, which nothing else in the pipeline would notice.
+  for (const language of languages) {
+    if (language.code === 'en') continue;
+    if (!/\p{Script=Arabic}/u.test(language.nativeName)) {
+      fail(
+        `Content language '${language.code}' did not keep its own script: ` +
+          `nativeName is '${language.nativeName}'. The migration file's encoding ` +
+          `did not survive.`,
+      );
+    }
+    if (language.direction !== 'rtl') {
+      fail(
+        `Content language '${language.code}' should be rtl, is '${language.direction}'.`,
+      );
+    }
+  }
+
+  // ---- the catalogue extension and the protected bundle --------------------
+  const permissions = await session.query<{ key: string }>(`
+    SELECT [key] FROM [dbo].[Permission]
+    WHERE [key] LIKE N'taxonomy.%' ORDER BY [key];
+  `);
+  if (permissions.map((row) => row.key).join(',') !== TAXONOMY_PERMISSIONS.join(',')) {
+    fail(
+      `Taxonomy permissions differ; found: ` +
+        `${permissions.map((row) => row.key).join(', ') || '(none)'}`,
+    );
+  }
+
+  const bundled = await session.query<{ permissionKey: string }>(`
+    SELECT rp.[permissionKey]
+    FROM [dbo].[RolePermission] rp
+    INNER JOIN [dbo].[Role] r ON r.[id] = rp.[roleId]
+    WHERE r.[key] = N'platform-administrator' AND rp.[permissionKey] LIKE N'taxonomy.%'
+    ORDER BY rp.[permissionKey];
+  `);
+  if (
+    bundled.map((row) => row.permissionKey).join(',') !== TAXONOMY_PERMISSIONS.join(',')
+  ) {
+    fail(
+      `The protected Platform Administrator bundle did not gain the Taxonomy ` +
+        `permissions through the migration; found: ` +
+        `${bundled.map((row) => row.permissionKey).join(', ') || '(none)'}`,
+    );
+  }
+
+  report(
+    'taxonomy foundation',
+    `${topics.length} canonical topics, ${languages.length} content languages, ` +
+      `${permissions.length} permissions bundled`,
+  );
+}
+
+/**
+ * The seed guards are IDEMPOTENT, proved by re-running them.
+ *
+ * `prisma migrate deploy` will not re-apply a migration it has already
+ * recorded, so "what happens on a second provisioning" is not something the
+ * deploy path can demonstrate. The guards themselves are re-executed here
+ * instead - the same `INSERT ... WHERE NOT EXISTS` shape the migration uses -
+ * and the row counts must not move.
+ */
+async function assertSeedGuardsIdempotent(session: SqlSession): Promise<void> {
+  const countOf = async (table: string): Promise<number> => {
+    const [row] = await session.query<{ total: number }>(
+      `SELECT COUNT_BIG(*) AS total FROM [dbo].[${table}];`,
+    );
+    return Number(row?.total ?? -1);
+  };
+
+  const before = {
+    topics: await countOf('Topic'),
+    translations: await countOf('TopicTranslation'),
+    languages: await countOf('Language'),
+    permissions: await countOf('Permission'),
+  };
+
+  await session.query(`
+    INSERT INTO [dbo].[Topic] ([id], [slug], [parentId], [position], [status], [system])
+    SELECT CONVERT(nvarchar(36), NEWID()), v.[slug], NULL, 0, N'active', 1
+    FROM (VALUES (N'quran'), (N'hadith'), (N'peace')) AS v([slug])
+    WHERE NOT EXISTS (SELECT 1 FROM [dbo].[Topic] t WHERE t.[slug] = v.[slug]);
+  `);
+
+  await session.query(`
+    INSERT INTO [dbo].[TopicTranslation] ([topicId], [locale], [name])
+    SELECT t.[id], N'en', N'Quran'
+    FROM [dbo].[Topic] t
+    WHERE t.[slug] = N'quran'
+      AND NOT EXISTS (
+          SELECT 1 FROM [dbo].[TopicTranslation] tr
+          WHERE tr.[topicId] = t.[id] AND tr.[locale] = N'en'
+      );
+  `);
+
+  await session.query(`
+    INSERT INTO [dbo].[Language] ([code], [englishName], [nativeName], [direction], [status])
+    SELECT v.[code], N'English', N'English', N'ltr', N'active'
+    FROM (VALUES (N'en'), (N'ur'), (N'ar')) AS v([code])
+    WHERE NOT EXISTS (SELECT 1 FROM [dbo].[Language] l WHERE l.[code] = v.[code]);
+  `);
+
+  const after = {
+    topics: await countOf('Topic'),
+    translations: await countOf('TopicTranslation'),
+    languages: await countOf('Language'),
+    permissions: await countOf('Permission'),
+  };
+
+  if (JSON.stringify(before) !== JSON.stringify(after)) {
+    fail(
+      `Re-applying the seed guards changed row counts.\n` +
+        `  before: ${JSON.stringify(before)}\n  after:  ${JSON.stringify(after)}`,
+    );
+  }
+
+  report('seed guards', `re-applied, counts unchanged (${before.topics} topics)`);
+}
+
+/** Asserts the CHECK constraints that carry a correctness rule. */
+async function assertCheckConstraints(session: SqlSession): Promise<void> {
+  for (const expected of EXPECTED_CHECK_CONSTRAINTS) {
+    const rows = await session.query<{ name: string }>(`
+      SELECT name FROM sys.check_constraints
+      WHERE name = N'${expected.constraint}'
+        AND parent_object_id = OBJECT_ID(N'[dbo].[${expected.table}]');
+    `);
+    if (rows.length !== 1) {
+      fail(`The CHECK constraint ${expected.constraint} is missing after deploy.`);
+    }
+  }
+  report('check constraints', `${EXPECTED_CHECK_CONSTRAINTS.length} verified`);
+}
+
 // Resolves docker/.env as the sole authority and proves the target is the
 // approved local SQL Server before a database is created or the CLI is run.
 const command = startLocalCommand('migration-target');
@@ -419,6 +818,10 @@ try {
 
   await assertColumnSizes(session);
   await assertNonPrismaObjects(session);
+  await assertCheckConstraints(session);
+  await assertNoPolymorphicAssignment(session);
+  await assertTaxonomyFoundation(session);
+  await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
   for (const migration of migrations) {
@@ -497,6 +900,9 @@ try {
   }
   await assertColumnSizes(session);
   await assertNonPrismaObjects(session);
+  await assertCheckConstraints(session);
+  await assertNoPolymorphicAssignment(session);
+  await assertTaxonomyFoundation(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

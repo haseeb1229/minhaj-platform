@@ -31,6 +31,7 @@ const SURFACES: readonly {
     | 'permissions'
     | 'assignments'
     | 'security'
+    | 'taxonomy'
     | 'audit'
     | 'integrations'
     | 'delivery';
@@ -42,6 +43,7 @@ const SURFACES: readonly {
   { key: 'permissions', permission: 'permissions.read', path: 'identity/permissions' },
   { key: 'assignments', permission: 'assignments.read', path: 'identity/assignments' },
   { key: 'security', permission: 'security.read', path: 'identity/security' },
+  { key: 'taxonomy', permission: 'taxonomy.read', path: 'taxonomy/topics' },
   { key: 'audit', permission: 'audit.read', path: 'system/audit' },
   { key: 'integrations', permission: 'integrations.read', path: 'system/integrations' },
   { key: 'delivery', permission: 'delivery.read', path: 'communications/delivery' },
@@ -53,6 +55,7 @@ const DESCRIPTIONS = {
   permissions: 'permissions.description',
   assignments: 'assignments.description',
   security: 'security.description',
+  taxonomy: 'taxonomy.description',
   audit: 'audit.description',
   integrations: 'integrations.description',
   delivery: 'delivery.description',

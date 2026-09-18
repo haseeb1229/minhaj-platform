@@ -62,10 +62,19 @@ export const EXPECTED_AUDIT_INDEXES = [
  * artifact. Leaving them here would have turned the first correct Phase-2
  * backup into a failure. `Role`, `Permission`, `RolePermission` and
  * `RoleAssignment` left it for the same reason when Chunk 2 delivered
- * authorisation; every table remaining belongs to a phase that has not
- * happened.
+ * authorisation. `Topic`, `TopicTranslation`, `Language` and `Tag` were never
+ * on it and are now required by `PHASE3B_TABLES` instead. Every table remaining
+ * belongs to a phase that has not happened, or to a design that is prohibited.
  */
 const FUTURE_DOMAIN_TABLES = [
+  // Prohibited outright rather than merely early: a single shared assignment
+  // table carrying a target type and identifier is the polymorphic reference
+  // DOMAIN_MODEL.md §6.2 forbids, and no later phase makes it acceptable. A
+  // RESTORE is the one operation that can introduce schema this repository
+  // never wrote, so the check belongs here as well as in the migration gate.
+  'TopicAssignment',
+  'TaxonomyAssignment',
+  'EntityTopic',
   'Article',
   'Page',
   'Quran',
@@ -112,6 +121,16 @@ export const PHASE2_TABLES = [
   'PrivilegedSecurityPosture',
   'IdentityBootstrap',
 ];
+
+/**
+ * Tables the Phase-3B migration creates.
+ *
+ * Checked as REQUIRED whenever the Phase-3B migration is among those the caller
+ * expects. A restore that carried the history row but not the canonical
+ * taxonomy would be a restore that looks complete and has lost the vocabulary
+ * every later context classifies its content by.
+ */
+export const PHASE3B_TABLES = ['Topic', 'TopicTranslation', 'Language', 'Tag'];
 
 async function userTables(session: SqlSession): Promise<string[]> {
   const rows = await session.query<{ name: string }>(`
@@ -200,6 +219,15 @@ export async function verifyRestoredSchema(
     if (missing.length > 0) {
       throw new Error(
         `Restored database is missing Phase-2 tables: ${missing.join(', ')}`,
+      );
+    }
+  }
+
+  if (expectedMigrationIds.some((id) => id.includes('phase3b'))) {
+    const missing = PHASE3B_TABLES.filter((table) => !tables.includes(table));
+    if (missing.length > 0) {
+      throw new Error(
+        `Restored database is missing Phase-3B taxonomy tables: ${missing.join(', ')}`,
       );
     }
   }

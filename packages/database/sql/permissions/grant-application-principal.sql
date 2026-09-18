@@ -259,6 +259,59 @@ BEGIN
   DENY ALTER ON OBJECT::[dbo].[RateLimitCounter] TO [$(app_login)];
 END;
 
+-- Taxonomy (Phase 3B) ---------------------------------------------------------
+--
+-- NO DELETE ON ANY OF THE THREE AGGREGATES, and that is the phase's central
+-- integrity claim rather than a preference.
+--
+-- A later context's typed topic assignment will carry a real foreign key to
+-- `Topic`. If the runtime could delete a Topic, it could either orphan that
+-- assignment or be blocked by it at an arbitrary moment; denying DELETE means
+-- neither is reachable, and "deleting a Topic cannot orphan an assignment" is
+-- enforced by the grant rather than by an application check somebody wrote.
+-- Archive and retire are the lifecycles, exactly as `Role` is soft-deactivated.
+IF OBJECT_ID(N'[dbo].[Topic]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Topic] TO [$(app_login)];
+  -- A Topic slug is chosen at creation and is then a stable public identity.
+  -- There is no redirect or slug-history mechanism in Phase 3B, so even a
+  -- caller holding the runtime principal cannot rewrite an existing slug.
+  DENY UPDATE ON OBJECT::[dbo].[Topic] ([slug]) TO [$(app_login)];
+  DENY DELETE, ALTER ON OBJECT::[dbo].[Topic] TO [$(app_login)];
+END;
+
+-- The ONE taxonomy table the runtime may delete from, and only because removing
+-- a locale's translation is a real administrative act: an Urdu name entered in
+-- error has to be removable, and blanking it to an empty string would be a
+-- translation that exists and says nothing.
+--
+-- The fallback row is still not removable — `TaxonomyTopicFallback` refuses any
+-- delete that would leave a Topic without it, so this grant cannot be used to
+-- make a Topic render as nothing.
+IF OBJECT_ID(N'[dbo].[TopicTranslation]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[TopicTranslation] TO [$(app_login)];
+  DENY ALTER ON OBJECT::[dbo].[TopicTranslation] TO [$(app_login)];
+END;
+
+-- Content-language reference data. Retired, never deleted: a work recorded in a
+-- language stays true after the organisation stops publishing in it, and a
+-- delete would either destroy that record or be blocked by it.
+IF OBJECT_ID(N'[dbo].[Language]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Language] TO [$(app_login)];
+  DENY DELETE, ALTER ON OBJECT::[dbo].[Language] TO [$(app_login)];
+END;
+
+-- Tags are free-form, and still not destroyed. A tag an editor applied is part
+-- of how content was described at the time; retiring it stops it being offered
+-- without rewriting that history.
+IF OBJECT_ID(N'[dbo].[Tag]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Tag] TO [$(app_login)];
+  DENY DELETE, ALTER ON OBJECT::[dbo].[Tag] TO [$(app_login)];
+END;
+
 -- Migration history is administrative state, not application data.
 IF OBJECT_ID(N'[dbo].[_prisma_migrations]', N'U') IS NOT NULL
 BEGIN

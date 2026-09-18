@@ -119,6 +119,48 @@ async function assertObjectVisible(session: SqlSession, table: string): Promise<
   pass(`${table} is visible to the principal`, `object_id ${row.objectId}, readable`);
 }
 
+/**
+ * Asserts a statement is refused BY A DATA INVARIANT rather than by a grant.
+ *
+ * A SEPARATE HELPER FROM `expectDenied`, deliberately. That one proves the
+ * PERMISSION system refused — one of a known set of access-denied error numbers
+ * — and collapsing the two would let a trigger refusal satisfy a permission
+ * assertion, or a permission denial satisfy an invariant one. They are
+ * different guarantees and a suite that could not tell them apart would be
+ * proving neither.
+ *
+ * The number is the migration's own `THROW`, so a refusal for any other reason
+ * — including an access denial — fails.
+ */
+async function expectRefusedByInvariant(
+  session: SqlSession,
+  label: string,
+  statement: string,
+  expected: number,
+): Promise<void> {
+  try {
+    await session.query(statement);
+  } catch (error) {
+    const number = errorNumber(error);
+    const message = (error as Error).message;
+
+    // `\\b` rather than `\b`: inside a template literal the single form is a
+    // BACKSPACE character, not a word boundary, so the pattern would never
+    // match and the assertion would fail for the wrong reason.
+    if (number === expected || new RegExp(`\\b${expected}\\b`).test(message)) {
+      pass(label, `refused by the invariant, SQL Server error ${expected}`);
+      return;
+    }
+    fail(
+      label,
+      `rejected for the WRONG reason (error ${number ?? 'unknown'}): ` +
+        `${message.split('\n')[0]}`,
+    );
+    return;
+  }
+  fail(label, 'statement SUCCEEDED but the invariant must refuse it');
+}
+
 async function expectAllowed(
   session: SqlSession,
   label: string,
@@ -305,13 +347,20 @@ try {
     'row inserted by the runtime principal',
   );
 
+  // THE PROBE ROW, not the whole table. A freshly migrated database is no
+  // longer empty of audit rows: the Phase-3B migration records the privilege
+  // change it makes when it extends the protected administrator bundle, which
+  // is exactly the kind of event the audit log exists for. Counting every row
+  // would make this check about how many migrations have shipped rather than
+  // about whether the runtime principal may write and read one.
   const [inserted] = await app.query<{ total: number }>(
-    'SELECT COUNT_BIG(*) AS total FROM [dbo].[AuditLog];',
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[AuditLog]
+     WHERE [action] = N'phase1.permission.probe';`,
   );
   if (Number(inserted?.total ?? 0) !== 1) {
-    fail('audit row is readable', `expected 1 row, found ${inserted?.total ?? 0}`);
+    fail('audit row is readable', `expected 1 probe row, found ${inserted?.total ?? 0}`);
   } else {
-    pass('audit row is readable', '1 row visible to the runtime principal');
+    pass('audit row is readable', 'the probe row is visible to the runtime principal');
   }
 
   // ---- prohibited audit mutation ------------------------------------------
@@ -349,6 +398,93 @@ try {
     'SELECT TOP 1 [migration_name] FROM [dbo].[_prisma_migrations];',
   );
 
+  // ---- Phase 3B: the taxonomy is administrable but not destructible --------
+  //
+  // The runtime genuinely administers this data, so the permitted operations
+  // are proven to WORK rather than merely being listed. What it must not be
+  // able to do is remove a row: a later context's typed topic assignment will
+  // hold a real foreign key to a `Topic`, and "deleting a topic cannot orphan
+  // an assignment" is enforced by the absence of the right rather than by an
+  // application check somebody could forget.
+  await expectAllowed(
+    app,
+    'topic INSERT succeeds',
+    `INSERT INTO [dbo].[Topic] ([id], [slug], [parentId], [position], [status], [system])
+     VALUES (NEWID(), N'permission-probe-topic', NULL, 990, N'active', 0);`,
+    'the runtime may create a topic',
+  );
+  // The translation too, in the same shape the adapter writes it: a topic
+  // without its fallback name is a topic that renders as nothing, and a probe
+  // that left one behind would be modelling the state the application never
+  // produces.
+  await expectAllowed(
+    app,
+    'topic translation INSERT succeeds',
+    `INSERT INTO [dbo].[TopicTranslation] ([topicId], [locale], [name])
+     SELECT [id], N'en', N'Permission probe topic' FROM [dbo].[Topic]
+     WHERE [slug] = N'permission-probe-topic';`,
+    'the runtime may name a topic in the fallback locale',
+  );
+
+  await expectAllowed(
+    app,
+    'topic UPDATE succeeds',
+    `UPDATE [dbo].[Topic] SET [status] = N'archived'
+     WHERE [slug] = N'permission-probe-topic';`,
+    'the runtime may archive a topic',
+  );
+
+  await expectDenied(
+    app,
+    'topic slug UPDATE denied',
+    `UPDATE [dbo].[Topic] SET [slug] = N'permission-probe-topic-renamed'
+     WHERE [slug] = N'permission-probe-topic';`,
+  );
+
+  const [stableSlug] = await admin.query<{ total: number }>(
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[Topic]
+     WHERE [slug] = N'permission-probe-topic';`,
+  );
+  if (Number(stableSlug?.total ?? 0) !== 1) {
+    fail('topic slug remains stable', 'the runtime-principal rename attempt changed it');
+  } else {
+    pass('topic slug remains stable', 'the create-time slug is unchanged');
+  }
+
+  await expectDenied(app, 'topic DELETE denied', 'DELETE FROM [dbo].[Topic];');
+
+  // The FALLBACK translation is protected by the trigger rather than by the
+  // grant — the runtime legitimately holds DELETE on this table, because
+  // removing a locale's name is a real administrative act. What it may not do
+  // is leave a topic with no name at all, and that refusal has to hold for a
+  // caller that never touches the adapter.
+  await expectRefusedByInvariant(
+    app,
+    'fallback translation DELETE refused by the invariant',
+    `DELETE FROM [dbo].[TopicTranslation] WHERE [locale] = N'en';`,
+    51033,
+  );
+  await expectDenied(app, 'language DELETE denied', 'DELETE FROM [dbo].[Language];');
+  await expectDenied(app, 'tag DELETE denied', 'DELETE FROM [dbo].[Tag];');
+
+  // The canonical seed is still exactly what the migration wrote, after the
+  // runtime has had its turn. A probe that archived a seeded topic, or removed
+  // one, would show up here rather than in a later phase.
+  const [seeded] = await admin.query<{ total: number; archived: number }>(`
+    SELECT COUNT_BIG(*) AS total,
+           SUM(CASE WHEN [status] <> N'active' THEN 1 ELSE 0 END) AS archived
+    FROM [dbo].[Topic] WHERE [system] = 1;
+  `);
+  if (Number(seeded?.total ?? 0) !== 19 || Number(seeded?.archived ?? -1) !== 0) {
+    fail(
+      'canonical topics intact',
+      `expected 19 active canonical topics, found ${seeded?.total ?? 0} with ` +
+        `${seeded?.archived ?? 0} archived`,
+    );
+  } else {
+    pass('canonical topics intact', '19 seeded topics, all active');
+  }
+
   // ---- the ungranted object ------------------------------------------------
   //
   // The sharpest of these cases. Every Phase 1 object carries an explicit rule,
@@ -364,23 +500,46 @@ try {
     await expectDenied(app, `ungranted ${label} denied`, statement);
   }
 
-  // ---- the audit row survived every attempt --------------------------------
-  const [survivor] = await admin.query<{ total: number; action: string }>(
-    'SELECT COUNT_BIG(*) AS total, MIN([action]) AS action FROM [dbo].[AuditLog];',
-  );
+  // ---- the audit rows survived every attempt --------------------------------
+  //
+  // THREE SEPARATE FACTS, because the single row count used to stand in for all
+  // of them and can no longer: the migration's own privilege-change record is a
+  // legitimate second row.
+  //
+  //   - the probe row is still there, and still says what it said;
+  //   - the UPDATE wrote nothing, so no row carries the tampered value;
+  //   - the DELETE removed nothing, so every row that was there still is.
+  const [survivor] = await admin.query<{
+    total: number;
+    probe: number;
+    tampered: number;
+  }>(`
+    SELECT COUNT_BIG(*) AS total,
+           SUM(CASE WHEN [action] = N'phase1.permission.probe' THEN 1 ELSE 0 END) AS probe,
+           SUM(CASE WHEN [action] = N'tampered' THEN 1 ELSE 0 END) AS tampered
+    FROM [dbo].[AuditLog];
+  `);
+
+  // The rows a freshly migrated, probed database must hold: the migration's
+  // provisioning record and this run's probe. Stated as a number so an
+  // unexplained extra row is a failure rather than something nobody counted.
+  const EXPECTED_AUDIT_ROWS = 2;
+
   if (
-    Number(survivor?.total ?? 0) !== 1 ||
-    survivor?.action !== 'phase1.permission.probe'
+    Number(survivor?.probe ?? 0) !== 1 ||
+    Number(survivor?.tampered ?? -1) !== 0 ||
+    Number(survivor?.total ?? 0) !== EXPECTED_AUDIT_ROWS
   ) {
     fail(
-      'audit row unmodified',
-      `expected the original row intact; found ${survivor?.total ?? 0} row(s), ` +
-        `action='${survivor?.action ?? ''}'`,
+      'audit rows unmodified',
+      `expected ${EXPECTED_AUDIT_ROWS} rows with 1 probe and 0 tampered; found ` +
+        `${survivor?.total ?? 0} rows, ${survivor?.probe ?? 0} probe, ` +
+        `${survivor?.tampered ?? 0} tampered`,
     );
   } else {
     pass(
-      'audit row unmodified',
-      'original action value intact after UPDATE/DELETE attempts',
+      'audit rows unmodified',
+      'the probe row and the migration record are intact after UPDATE/DELETE attempts',
     );
   }
 

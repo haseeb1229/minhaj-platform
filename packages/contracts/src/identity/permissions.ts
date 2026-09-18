@@ -1,5 +1,5 @@
 /**
- * THE Phase-2 permission vocabulary.
+ * THE platform permission vocabulary, as the delivered phases have built it.
  *
  * Permissions are the SOLE enforcement path (SECURITY_BASELINE.md §3.1,
  * DOMAIN_MODEL.md §4.4). There is no role-name check, no profile flag and no
@@ -11,17 +11,26 @@
  * gives them meaning lives in the authorization service.
  *
  * MIGRATION-SEEDED AND RUNTIME-IMMUTABLE. The catalogue below is the source
- * this repository ships; the Chunk-2 migration seeds exactly these rows, the
+ * this repository ships; each phase's migration seeds exactly ITS OWN rows, the
  * runtime principal holds SELECT and nothing else on the table, and a test
- * proves the two agree. A permission that could be created at runtime would be
- * a permission nobody reviewed.
+ * proves the union of the migrations equals this list. A permission that could
+ * be created at runtime would be a permission nobody reviewed.
  *
- * PHASE-2 VOCABULARY ONLY. `quran.editCanonical`, `fatwa.publish`,
- * `teaching.perform` and the rest are named by DOMAIN_MODEL.md §4.4 as
- * INDICATIVE examples of the shape; they belong to contexts that do not exist
- * yet. Seeding them now would fix another owner's vocabulary before that owner
- * can have an opinion about it, and would leave grantable authority over
- * nothing (CLAUDE.md, DELIVERY_PLAN.md Phase 2).
+ * APPENDED ONLY BY AN OWNING PHASE. Phase 2 seeded the Identity and system
+ * surfaces' vocabulary; Phase 3B appended Taxonomy's two keys with the
+ * migration that delivered those surfaces. `quran.editCanonical`,
+ * `fatwa.publish`, `teaching.perform` and the rest are named by
+ * DOMAIN_MODEL.md §4.4 as INDICATIVE examples of the shape; they belong to
+ * contexts that do not exist yet. Seeding one now would fix another owner's
+ * vocabulary before that owner can have an opinion about it, and would leave
+ * grantable authority over nothing (DELIVERY_PLAN.md).
+ *
+ * EXTENDING IT IS A PRIVILEGE CHANGE. The protected Platform Administrator
+ * bundle below is the whole catalogue, so appending a key widens what a live
+ * administrator may do. The owning phase's migration therefore performs the
+ * same invalidation an ordinary bundle change performs — it revokes the
+ * holders' sessions and step-up grants in the transaction that extends the
+ * bundle (SECURITY_BASELINE.md §8.1).
  */
 
 /**
@@ -43,9 +52,9 @@ export interface PermissionDefinition {
 }
 
 /**
- * The complete Phase-2 catalogue, derived from the administrative surfaces
- * ROUTE_MAP.md §5.1 assigns to this phase and from the privileged operations
- * SECURITY_BASELINE.md §8.1 lists.
+ * The complete catalogue, in phase order, derived from the administrative
+ * surfaces ROUTE_MAP.md §7 assigns to each delivered phase and from the
+ * privileged operations SECURITY_BASELINE.md §8.1 lists.
  *
  * READ AND ADMINISTER ARE SEPARATE KEYS, deliberately. Seeing that an account
  * is suspended and suspending one are different authorities, and collapsing
@@ -99,6 +108,34 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     key: 'delivery.operate',
     description: 'Reschedule or abandon a stuck outbound delivery.',
   }),
+
+  /* ---- Phase 3B — Taxonomy ------------------------------------------- */
+  //
+  // APPENDED BY THE OWNING PHASE, which is the rule this catalogue is meant to
+  // demonstrate rather than merely state. Phase 2 seeded its own vocabulary and
+  // stopped; Taxonomy adds exactly the two keys its administrative surfaces
+  // need, at the phase that delivers them, and the Phase-3B migration is what
+  // puts them in the database. `quran.*`, `fatwa.*`, `learning.*` and the rest
+  // still belong to contexts that do not exist.
+  //
+  // READ AND ADMINISTER, for the same reason the Identity pairs are split:
+  // seeing the canonical subject taxonomy and changing it are different
+  // authorities, and an editor who must consult topics should not thereby be
+  // able to re-parent them (§4, separation of duties).
+  //
+  // TWO KEYS, NOT FOUR. Topics, content languages and tags are one
+  // administrative concern with one owner, and `taxonomy.topics.administer`
+  // beside `taxonomy.tags.administer` would be grantable authority nobody asked
+  // to separate. A later phase may split them if a real role needs it.
+  Object.freeze({
+    key: 'taxonomy.read',
+    description: 'View canonical topics, content languages and tags.',
+  }),
+  Object.freeze({
+    key: 'taxonomy.administer',
+    description:
+      'Create and change canonical topics, their translations, content languages and tags.',
+  }),
 ]);
 
 /** Every catalogue key, as a union. Mistyping one is a compile error. */
@@ -134,7 +171,7 @@ export const PLATFORM_ADMINISTRATOR_ROLE = 'platform-administrator';
  * Migration-controlled foundation data rather than an ordinary editable row:
  * the role has to exist before the one-time bootstrap can assign it, and a
  * runtime path that could re-bundle or deactivate it would be a path to
- * removing the platform's only administrator (CLAUDE.md §8).
+ * removing the platform's only administrator (SECURITY_BASELINE.md §8).
  */
 export const PLATFORM_ADMINISTRATOR_PERMISSIONS: readonly PermissionKey[] = Object.freeze(
   PERMISSION_CATALOGUE.map((entry) => entry.key),

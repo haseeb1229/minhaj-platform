@@ -606,7 +606,7 @@ model StepUpGrant {
 /// lockout, and they apply on the sign-in path only. The signed-in
 /// verification path has no library-side attempt budget at all, which is why
 /// every application-controlled privileged proof endpoint spends the SQL rate
-/// limiter instead (CLAUDE.md §16, §38).
+/// limiter instead (SECURITY_BASELINE.md §8.2).
 model TwoFactor {
   id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
 
@@ -643,7 +643,7 @@ model TwoFactor {
 /// `reenrolmentRequiredAt` is what the host-only operational recovery sets. It
 /// keeps privileged capability denied until the account enrols again, WITHOUT
 /// touching the role assignment — recovery never grants and never regrants a
-/// role (CLAUDE.md §23).
+/// role (SECURITY_BASELINE.md §8.3).
 model PrivilegedSecurityPosture {
   userId String @id @db.NVarChar(36)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -679,4 +679,212 @@ model IdentityBootstrap {
   completedAt   DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
 
   @@map("IdentityBootstrap")
+}
+
+// ===========================================================================
+// Phase 3B — Taxonomy
+// ===========================================================================
+//
+// OWNERSHIP. Every model below belongs to the TAXONOMY context, which owns its
+// own adapter directory in this package's manifest. Physical placement here
+// transfers no semantic ownership (ARCHITECTURE.md §4.1, §6.3 rule 14).
+//
+// WHAT IS NOT HERE, AND WHY IT MATTERS MOST.
+//
+// There is no `TopicAssignment`, no `targetType + targetId`, and no
+// `ArticleTopic`, `QuranTopic`, `FatwaTopic` or any of the other junctions
+// DOMAIN_MODEL.md §6.2 names. The first is prohibited outright — SQL Server
+// cannot foreign-key a polymorphic pair to many tables, so such a design
+// guarantees dangling references. The rest are absent because their TARGETS do
+// not exist: Article, Quran, Hadith and Fatwa belong to contexts that have not
+// shipped, and creating placeholder tables to hang a junction from would be
+// precisely the premature business schema the delivery plan forbids.
+//
+// What Phase 3B delivers instead is the INTEGRATION RULE and the proof that it
+// holds: a later owner creates its own typed junction — real foreign key to
+// `Topic`, real foreign key to its own target — at its owning phase. The
+// Taxonomy adapter reads the database's foreign-key catalogue to report which
+// such relationships actually exist, and an integration test builds one against
+// a synthetic target in a disposable database to prove the integrity the rule
+// promises. Neither requires a table here.
+//
+// NO HARD DELETE ANYWHERE IN THIS SECTION. `Topic`, `Language` and `Tag` are
+// archived or retired, never removed, and the runtime principal holds no DELETE
+// on any of them. That is what makes "a topic assignment cannot be orphaned by
+// an administrator" a property of the grant rather than of a check somebody
+// wrote; it is the same posture `Role` already has.
+
+/// The canonical, hierarchical, locale-aware subject taxonomy
+/// (DOMAIN_MODEL.md §6.1).
+///
+/// HIERARCHY SAFETY IS IN THE DATABASE, not in the application. A CHECK
+/// constraint refuses a self-parent, and the `TaxonomyTopicHierarchy` trigger —
+/// holding a transaction-scoped application lock — refuses a cycle and a tree
+/// deeper than the accepted bound. Two concurrent re-parents therefore cannot
+/// both read the old shape and commit a loop between them, which no amount of
+/// application validation alone cannot prevent.
+///
+/// `system` MARKS THE CANONICAL SEED. The nineteen top-level topics
+/// DOMAIN_MODEL.md §6.1 names are foundation data the migration controls: their
+/// slug is stable, they stay at the root, and they are not archived. Their
+/// localised names and descriptions ARE administrable, because how a subject is
+/// worded in Urdu is editorial work and not a schema decision. The flag mirrors
+/// `Role.system`, and for the same reason.
+model Topic {
+  id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
+
+  /// Stable, globally unique, URL-safe identity. `/topics/{slug}` sits at the
+  /// root of the route map (ROUTE_MAP.md §3.1), so uniqueness is global rather
+  /// than per parent: two `history` topics under different parents would be two
+  /// rows competing for one public URL.
+  ///
+  /// NOT DERIVED FROM A NAME. The name is localised; a slug derived from it
+  /// would depend on which locale the creator happened to be working in.
+  slug String @unique @db.NVarChar(160)
+
+  /// Parent Topic, or null for a root.
+  ///
+  /// NO ACTION on both edges. SQL Server refuses a cascading self-reference
+  /// outright, and NO ACTION is also what this model wants: deleting a topic
+  /// would have to decide the fate of its subtree, and nothing deletes a topic.
+  parentId String? @db.NVarChar(36)
+  parent   Topic?  @relation("TopicHierarchy", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children Topic[] @relation("TopicHierarchy")
+
+  /// Sibling order. Ordering is `position` then `slug`, and because slug is
+  /// globally unique that pair is TOTAL — two siblings sharing a position still
+  /// render in the same order on every request.
+  position Int
+
+  /// active | archived. The smallest lifecycle a canonical taxonomy needs;
+  /// editorial publication workflow belongs to the contexts that publish.
+  status String @db.NVarChar(16)
+
+  /// Protected canonical seed data when true.
+  system Boolean
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  translations TopicTranslation[]
+
+  /// The one index the hierarchy read needs: seek the children of one parent,
+  /// already in order. Nothing else here is queried by a predicate the
+  /// clustered key does not already serve, and an index with no query behind it
+  /// is write cost nobody asked for.
+  @@index([parentId, position])
+  @@map("Topic")
+}
+
+/// A Topic's name and description in ONE INTERFACE LOCALE.
+///
+/// TRANSLATION ROWS, NOT PARALLEL COLUMNS. DOMAIN_MODEL.md §19.1 is explicit:
+/// locale-aware fields are rows related to the parent record, never
+/// `name_en`/`name_ur`. Adding a fourth interface locale is then a data
+/// operation, and a missing translation is detectable by a query.
+///
+/// KEYED BY INTERFACE LOCALE, AND DELIBERATELY NOT BY `Language`.
+///
+/// This is the distinction DOMAIN_MODEL.md §18 names as a modelling error to
+/// avoid. A `Language` row is a CONTENT language — what a work is written in.
+/// A Topic is not written in anything; it is a label the interface renders, so
+/// it follows the locale the interface is being read in, exactly as
+/// `User.locale` and `IdentityCommunicationIntent.locale` do. Keying this table
+/// to `Language` would mean an administrator retiring a content language
+/// silently changed which topic names the site can display.
+///
+/// ONE ROW PER (TOPIC, LOCALE), by the composite primary key. That is what
+/// makes a duplicate impossible under concurrency rather than merely unlikely:
+/// two editors saving the Urdu name at once produce one row, and neither had to
+/// read first to find out.
+///
+/// THE FALLBACK TRANSLATION CANNOT BE REMOVED. `TaxonomyTopicFallback` refuses
+/// any delete or update that would leave a Topic without its `en` row, so
+/// resolving a Topic in any locale always yields a name (ROUTE_MAP.md §1.1).
+model TopicTranslation {
+  topicId String @db.NVarChar(36)
+
+  /// The interface locale: `en`, `ur`, `ar`. Sized as `User.locale` is.
+  locale String @db.NVarChar(8)
+
+  /// CASCADE, and it is the only cascade path into this table. A topic is never
+  /// deleted at runtime, so this describes what a reviewed rollback does rather
+  /// than anything an administrator can cause.
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  name        String  @db.NVarChar(200)
+  description String? @db.NVarChar(500)
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  @@id([topicId, locale])
+  @@map("TopicTranslation")
+}
+
+/// A CONTENT language — what a work is written in (DOMAIN_MODEL.md §6.3).
+///
+/// NOT THE INTERFACE LOCALE, and structurally incapable of becoming it. Nothing
+/// relates this table to `TopicTranslation`, to `User.locale` or to the
+/// next-intl routing configuration, and administering a row here changes no
+/// interface behaviour whatsoever. The UI may be English while the content is
+/// Urdu; conflating the two is the damaging modelling error §6.3 warns about.
+///
+/// THE CODE IS THE PRIMARY KEY. A language's identity IS its code — `ur` is
+/// what a filter, an import and a citation will carry — and a surrogate id
+/// would let two rows claim the same one.
+///
+/// `direction` IS DOMAIN DATA. A title in Urdu renders right-to-left inside an
+/// English page, and only the content language can say so.
+model Language {
+  code String @id @db.NVarChar(16)
+
+  englishName String @db.NVarChar(120)
+
+  /// The language's name in its own script. Required: a catalogue that can only
+  /// name a language in English is unusable to the readers it exists for.
+  nativeName String @db.NVarChar(120)
+
+  /// ltr | rtl
+  direction String @db.NVarChar(3)
+
+  /// active | retired. Retired rather than deleted: a work recorded in a
+  /// language stays true after the organisation stops publishing in it.
+  status String @db.NVarChar(16)
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  @@map("Language")
+}
+
+/// A free-form editorial label (DOMAIN_MODEL.md §6.4).
+///
+/// EVERYTHING A TOPIC HAS THAT THIS DOES NOT is the point of the model. No
+/// parent, no ordering, no translation table, no `system` flag, no canonical
+/// guarantee — because a Tag is an editorial convenience and a Topic is the
+/// curated vocabulary the platform navigates by. A tag that acquired a parent
+/// would be a second, unreviewed taxonomy competing with the real one.
+///
+/// THE SLUG EXISTS FOR IDENTITY, NOT FOR CANONICITY. It is what makes "the same
+/// tag" mean something under concurrency: two editors typing the same label
+/// produce one row. It promises nothing else.
+model Tag {
+  id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
+
+  slug  String @unique @db.NVarChar(120)
+  label String @db.NVarChar(120)
+
+  /// active | retired
+  status String @db.NVarChar(16)
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  /// The bounded administrative listing seeks on status and searches by slug or
+  /// label prefix, ordered by slug. Tags are the one table here that genuinely
+  /// grows, so both prefix paths are indexed rather than left to a scan.
+  @@index([status, slug])
+  @@index([status, label])
+  @@map("Tag")
 }

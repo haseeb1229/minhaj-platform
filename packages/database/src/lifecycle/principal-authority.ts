@@ -352,6 +352,25 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[emailsuppression]': ['SELECT', 'INSERT'],
   '[dbo].[providerevent]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[ratelimitcounter]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+
+  // Phase 3B - Taxonomy.
+  //
+  // NO DELETE ON `topic`, `language` OR `tag`, and that is the phase's central
+  // integrity claim rather than a preference. A later context's typed topic
+  // assignment will carry a real foreign key to a `topic`; a runtime that could
+  // delete the row could either orphan that assignment or be blocked by it at
+  // an arbitrary moment. Archive and retire are the lifecycles, exactly as
+  // `role` is soft-deactivated.
+  //
+  // `topictranslation` is the one exception, and a bounded one: removing a
+  // locale's name is a real administrative act - an Urdu name entered in error
+  // has to be removable - and the FALLBACK row is still not removable, because
+  // the `TaxonomyTopicFallback` trigger refuses any delete that would leave a
+  // topic without it.
+  '[dbo].[topic]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[topictranslation]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[language]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[tag]': ['SELECT', 'INSERT', 'UPDATE'],
 };
 
 /**

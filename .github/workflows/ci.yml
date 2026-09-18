@@ -431,10 +431,13 @@ jobs:
         run: npm run db:recovery:test
 
       # Phase 2 adds populated identity/security state that a schema-only
-      # restore cannot prove. Keep this in the existing Database foundation job:
-      # it writes synthetic rows in every Phase-2 table, performs a checksum
-      # backup/restore, verifies values/FKs/runtime rights, and proves cleanup.
-      - name: Populated Phase-2 recovery proof
+      # restore cannot prove, and Phase 3B adds a canonical taxonomy whose
+      # hierarchy, localisation and enforcing constraints a schema check cannot
+      # see either. Keep this in the existing Database foundation job: it writes
+      # synthetic rows in every Phase-2 and Phase-3B table, performs a checksum
+      # backup/restore, verifies values/FKs/triggers/runtime rights, and proves
+      # cleanup.
+      - name: Populated recovery proof (Phase 2 and Phase 3B)
         run: npm run db:recovery:populated
 
       # Proves the rehearsal cleaned up after itself rather than trusting that

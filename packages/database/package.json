@@ -17,6 +17,7 @@
       "root": "src/adapters",
       "owners": {
         "identity-access": "identity-access",
+        "taxonomy": "taxonomy",
         "email": {
           "kind": "layer0",
           "concern": "email"

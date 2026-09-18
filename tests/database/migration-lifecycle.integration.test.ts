@@ -203,6 +203,7 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
       'IdentityBootstrap',
       'IdentityCommunicationIntent',
       'IdentitySecurityOperation',
+      'Language',
       'Permission',
       'PrivilegedSecurityPosture',
       'ProviderEvent',
@@ -212,6 +213,9 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
       'RolePermission',
       'Session',
       'StepUpGrant',
+      'Tag',
+      'Topic',
+      'TopicTranslation',
       'TwoFactor',
       'User',
       'Verification',
@@ -251,13 +255,26 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
          N'vitest', N'127.0.0.1');
     `);
 
+    // THE PROBE ROW, not the whole table. A freshly migrated database is no
+    // longer empty of audit rows: the Phase-3B migration records the privilege
+    // change it makes when it extends the protected administrator bundle, which
+    // is precisely the kind of event the audit log exists for. Counting every
+    // row would make this assertion about how many migrations have shipped
+    // rather than about whether the runtime may write one.
     const [row] = await app.query<{ total: number }>(
-      'SELECT COUNT_BIG(*) AS total FROM [dbo].[AuditLog];',
+      `SELECT COUNT_BIG(*) AS total FROM [dbo].[AuditLog]
+       WHERE [action] = N'phase1.lifecycle.probe';`,
     );
     expect(Number(row?.total)).toBe(1);
   });
 
   it('denies the application UPDATE and DELETE on audit rows', async () => {
+    // Captured BEFORE the attempts, so "nothing was removed" is measured
+    // against what was actually there rather than against a fixed number.
+    const [before] = await admin.query<{ total: number }>(
+      'SELECT COUNT_BIG(*) AS total FROM [dbo].[AuditLog];',
+    );
+
     const updateError = await denialErrorNumber(
       app,
       `UPDATE [dbo].[AuditLog] SET [action] = N'tampered';`,
@@ -269,12 +286,24 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
     expect(PERMISSION_DENIED.has(updateError ?? 0)).toBe(true);
     expect(PERMISSION_DENIED.has(deleteError ?? 0)).toBe(true);
 
-    // The row is intact — the denial protected data, it did not merely error.
-    const [row] = await admin.query<{ total: number; action: string }>(
-      'SELECT COUNT_BIG(*) AS total, MIN([action]) AS action FROM [dbo].[AuditLog];',
+    // The data is intact — the denial protected it, it did not merely error.
+    // Both halves matter: nothing was deleted, and the probe row's own value is
+    // unchanged rather than merely present.
+    const [after] = await admin.query<{ total: number }>(
+      'SELECT COUNT_BIG(*) AS total FROM [dbo].[AuditLog];',
     );
-    expect(Number(row?.total)).toBe(1);
-    expect(row?.action).toBe('phase1.lifecycle.probe');
+    expect(Number(after?.total)).toBe(Number(before?.total));
+
+    const [probe] = await admin.query<{ total: number }>(
+      `SELECT COUNT_BIG(*) AS total FROM [dbo].[AuditLog]
+       WHERE [action] = N'phase1.lifecycle.probe';`,
+    );
+    expect(Number(probe?.total)).toBe(1);
+
+    const [tampered] = await admin.query<{ total: number }>(
+      `SELECT COUNT_BIG(*) AS total FROM [dbo].[AuditLog] WHERE [action] = N'tampered';`,
+    );
+    expect(Number(tampered?.total)).toBe(0);
   });
 
   it('denies the application every form of schema-changing DDL', async () => {

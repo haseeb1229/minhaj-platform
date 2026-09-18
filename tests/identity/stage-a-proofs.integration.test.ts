@@ -584,19 +584,44 @@ describe.skipIf(!configured)('Phase 2 Stage A — compatibility and token proofs
       }
 
       // And nowhere else in the database at all.
+      //
+      // These five tables are EMPTY, because nothing in this flow writes to
+      // them. That is the strongest available statement and it is still true.
       for (const table of [
         'IdentityCommunicationIntent',
         'IdentitySecurityOperation',
         'EmailDelivery',
         'EmailSuppression',
         'ProviderEvent',
-        'AuditLog',
       ]) {
         const count = await admin.query<{ total: number }>(
           `SELECT COUNT(*) AS total FROM dbo.[${table}];`,
         );
         expect(count[0]?.total).toBe(0);
       }
+
+      // `AuditLog` is asserted DIFFERENTLY, and more precisely.
+      //
+      // A freshly migrated database is no longer empty of audit rows: the
+      // Phase-3B migration records the privilege change it makes when it
+      // extends the protected administrator bundle. Asserting emptiness would
+      // now be asserting how many migrations have shipped, which this proof is
+      // not about — so it asserts the two things it IS about instead: this flow
+      // wrote no audit row, and the token appears in no column of any row that
+      // is there.
+      const audit = await admin.query<{ action: string; actorType: string }>(
+        'SELECT [action], [actorType] FROM dbo.[AuditLog];',
+      );
+      for (const row of audit) {
+        expect(row.actorType, `${row.action} was not written by this flow`).toBe(
+          'migration',
+        );
+      }
+
+      const [serialised] = await admin.query<{ contents: string | null }>(
+        'SELECT (SELECT * FROM dbo.[AuditLog] FOR JSON AUTO) AS contents;',
+      );
+      expect(serialised?.contents ?? '').not.toContain(token);
     });
 
     it('bounds expiry', async () => {

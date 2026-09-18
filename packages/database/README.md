@@ -18,11 +18,14 @@ src/
   config.ts                         Zod-validated, server-only configuration
   adapters/                         Context-owned and Layer-0 persistence adapters
     identity-access/                Owned by the Identity & Access CONTEXT
+    taxonomy/                       Owned by the Taxonomy CONTEXT
   lifecycle/                        Migration, rollback, seed and provisioning mechanics
     backup.ts                       SQL Server BACKUP/RESTORE mechanics and their guards
     recovery-proof.ts               The marker row written before backup, verified after
     recovery-cleanup.ts             Disposable-resource cleanup; failures fail the gate
     restored-state.ts               Inspection of a restored database's actual state
+    phase2-fixture.ts               Populated Identity state, written before backup
+    phase3b-fixture.ts              Populated Taxonomy state, written before backup
 scripts/                            The executables behind the `db:*` commands
 ```
 
@@ -35,6 +38,7 @@ the architecture gate fails closed on an adapter no declaration owns:
 ```jsonc
 "owners": {
   "identity-access": "identity-access",                  // a bounded context
+  "taxonomy": "taxonomy",                                // a bounded context
   "email": { "kind": "layer0", "concern": "email" }      // a Layer-0 concern
 }
 ```
@@ -51,6 +55,21 @@ explicit that those are not bounded contexts, so without the second kind their
 state could only have been filed under whichever context happened to need it
 first. A Layer-0 adapter also buys LESS: it may reach no bounded context at all,
 where a context-owned adapter may reach its own context's public interface.
+
+### `taxonomy` — what its adapter does NOT offer
+
+The Taxonomy adapter publishes a narrow reader and a narrow persistence port,
+and deliberately no operation that assigns a topic to a content record.
+DOMAIN_MODEL.md §6.2 requires a TYPED junction with a real foreign key to
+`Topic` and a real foreign key to its single target, owned by the context that
+owns that target — and no such context has shipped. A generic
+`assignTopic(targetType, targetId)` here would be the polymorphic reference that
+section prohibits, wearing a service's clothes.
+
+`topicAssignmentStatus()` reads the database's own foreign-key catalogue
+instead. It reports a semantic count of enforced and incomplete typed
+relationships rather than exposing physical tables or columns, returns zero
+while no owner has arrived, and needs no change when one does.
 
 ### `identity-access` — why Better Auth is constructed here
 

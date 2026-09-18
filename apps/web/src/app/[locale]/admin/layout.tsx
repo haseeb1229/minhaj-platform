@@ -45,6 +45,10 @@ const SURFACES: readonly { key: string; permission: PermissionKey; path: string 
   { key: 'permissions', permission: 'permissions.read', path: 'identity/permissions' },
   { key: 'assignments', permission: 'assignments.read', path: 'identity/assignments' },
   { key: 'security', permission: 'security.read', path: 'identity/security' },
+  // Phase 3B. One nav entry for the taxonomy area: `taxonomy.read` opens all
+  // four of its surfaces, and four entries for one permission would be four
+  // links that appear and disappear together.
+  { key: 'taxonomy', permission: 'taxonomy.read', path: 'taxonomy/topics' },
   { key: 'audit', permission: 'audit.read', path: 'system/audit' },
   { key: 'integrations', permission: 'integrations.read', path: 'system/integrations' },
   { key: 'delivery', permission: 'delivery.read', path: 'communications/delivery' },

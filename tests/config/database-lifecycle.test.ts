@@ -88,6 +88,12 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'TwoFactor',
       'PrivilegedSecurityPosture',
       'IdentityBootstrap',
+      // Phase 3B — the canonical taxonomy, its per-interface-locale names, the
+      // content-language reference data and editorial tags.
+      'Topic',
+      'TopicTranslation',
+      'Language',
+      'Tag',
     ]) {
       expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }
@@ -108,6 +114,20 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'Membership',
       'Donation',
       'MigrationProvenance',
+    ]) {
+      expect(forward).not.toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
+    }
+
+    // And a shape no phase may ever create. These are not EARLY tables — they
+    // are the polymorphic topic assignment DOMAIN_MODEL.md §6.2 prohibits
+    // outright, because SQL Server cannot foreign-key a target type and
+    // identifier pair to many tables. A later phase does not make one lawful.
+    for (const table of [
+      'TopicAssignment',
+      'TaxonomyAssignment',
+      'EntityTopic',
+      'ContentTopic',
+      'TopicTarget',
     ]) {
       expect(forward).not.toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }

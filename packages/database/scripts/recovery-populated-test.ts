@@ -22,6 +22,12 @@ import {
   verifyRestoredPhase2,
   writePhase2Fixture,
 } from '../src/lifecycle/phase2-fixture.ts';
+import {
+  newPhase3bFixture,
+  verifyRestoredPhase3b,
+  verifyRestoredTaxonomyIntegrity,
+  writePhase3bFixture,
+} from '../src/lifecycle/phase3b-fixture.ts';
 import { inspectPrincipalAuthority } from '../src/lifecycle/principal-authority.ts';
 import {
   cleanUpRecoveryResources,
@@ -50,7 +56,8 @@ import {
  *   create a DISPOSABLE source
  *     -> deploy EVERY migration with the real Prisma CLI
  *     -> provision the least-privilege runtime principal
- *     -> write representative synthetic rows into EVERY Phase-2 table
+ *     -> write representative synthetic rows into EVERY Phase-2 and
+ *        Phase-3B table
  *     -> REAL BACKUP DATABASE ... WITH CHECKSUM
  *     -> RESTORE into a separate disposable database
  *     -> verify the rows, their relationships and the whole migration history
@@ -63,8 +70,10 @@ import {
  * engineering database and restores it. This one rehearses the CONTENT: it
  * proves that populated Phase-2 state — accounts, credentials, sessions,
  * communication intents, deliveries, suppressions, provider events, limiter
- * windows and audit rows — survives a backup and restore with its values and
- * its relationships intact.
+ * windows and audit rows — and populated Phase-3B state — the canonical topic
+ * seed, a topic hierarchy, localisations in three scripts, a content language
+ * and a tag — survive a backup and restore with their values, their
+ * relationships and their enforcing constraints intact.
  *
  * Neither is sufficient alone. The first proved only that an AuditLog marker
  * came back, which a database holding one table would also prove; the second
@@ -96,6 +105,7 @@ const sourceDatabase = newDisposableDatabaseName();
 const restoreDatabase = newRestoreDatabaseName();
 const target = newBackupTarget();
 const fixture = newPhase2Fixture();
+const taxonomyFixture = newPhase3bFixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -114,7 +124,7 @@ let recoveryError: unknown;
 let cleanupOutcome!: CleanupOutcome;
 const sourceFailures: CleanupFailure[] = [];
 
-process.stdout.write(`Populated Phase-2 recovery rehearsal\n`);
+process.stdout.write(`Populated Phase-2 and Phase-3B recovery rehearsal\n`);
 reportConfiguration(command, 30);
 report('disposable source', sourceDatabase);
 report('restore target', restoreDatabase);
@@ -142,6 +152,13 @@ try {
   await writePhase2Fixture(admin, fixture);
   report('fixture written', `run ${fixture.runId}`);
   report('fixture account', fixture.email);
+
+  // Phase-3B taxonomy, written into a database that ALREADY holds the nineteen
+  // canonical topics the migration seeded — so the restore has both foundation
+  // data and administered data to bring back, and the assertions can tell the
+  // two apart.
+  await writePhase3bFixture(admin, taxonomyFixture);
+  report('taxonomy fixture', `run ${taxonomyFixture.runId}`);
 
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
@@ -183,6 +200,15 @@ try {
 
   const integrity = await verifyRestoredIntegrity(restored, fixture);
   report('referential integrity', integrity);
+
+  const taxonomyRows = await verifyRestoredPhase3b(restored, taxonomyFixture);
+  for (const row of taxonomyRows) report(`restored ${row.table}`, row.detail);
+
+  const taxonomyIntegrity = await verifyRestoredTaxonomyIntegrity(
+    restored,
+    taxonomyFixture,
+  );
+  report('taxonomy integrity', taxonomyIntegrity);
 
   // ---- restored security posture -------------------------------------------
   const security = await inspectRestoredSecurity(restored, principal.DATABASE_APP_LOGIN);
@@ -283,6 +309,14 @@ try {
           'EmailSuppression UPDATE',
           `UPDATE [dbo].[EmailSuppression] SET [reason] = N'x';`,
         ],
+        // Phase 3B. The whole integrity claim of the taxonomy rests on the
+        // runtime being unable to DELETE a topic: a later context's typed
+        // assignment will hold a real foreign key to one, and a runtime that
+        // could remove the row could orphan it or be blocked by it. The denial
+        // has to survive a RESTORE, not merely exist in the source.
+        ['Topic DELETE', 'DELETE FROM [dbo].[Topic];'],
+        ['Language DELETE', 'DELETE FROM [dbo].[Language];'],
+        ['Tag DELETE', 'DELETE FROM [dbo].[Tag];'],
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -305,6 +339,7 @@ try {
 
       // The populated state is exactly as restored after those attempts.
       await verifyRestoredPhase2(restored, fixture);
+      await verifyRestoredPhase3b(restored, taxonomyFixture);
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
     } finally {
       await app?.close();
@@ -317,10 +352,12 @@ try {
   }
 
   process.stdout.write(
-    '\nPopulated recovery verified: representative rows in every Phase-2 table were\n' +
-      'backed up, restored into a separate database, and checked value by value —\n' +
-      'together with referential integrity, the complete migration history and the\n' +
-      'least-privilege posture of the restored runtime principal.\n' +
+    '\nPopulated recovery verified: representative rows in every Phase-2 and\n' +
+      'Phase-3B table were backed up, restored into a separate database, and\n' +
+      'checked value by value — together with referential integrity, the topic\n' +
+      'hierarchy, non-Latin script, the trusted taxonomy constraints and their\n' +
+      'invariant triggers, the complete migration history and the least-privilege\n' +
+      'posture of the restored runtime principal.\n' +
       'Cleanup is verified below; this run passes only if it also succeeds.\n\n',
   );
 } catch (error) {

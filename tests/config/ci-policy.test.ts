@@ -482,7 +482,12 @@ describe('F14.7 — every existing job is preserved', () => {
     expect(bodyOf('container')).toContain('Build and run the test stage');
     expect(bodyOf('container')).toContain('Validate the compose stack');
     expect(bodyOf('database')).toContain('Recovery proof (real backup and restore)');
-    expect(bodyOf('database')).toContain('Populated Phase-2 recovery proof');
+    // RETARGETED, not relaxed. The step used to be named for Phase 2 alone and
+    // now covers Phase 3B as well, so the assertion names the COMMAND — which
+    // is what actually runs the proof — plus the part of the label that says
+    // what kind of proof it is. A future phase widening it again changes the
+    // name and not this line; a future phase DELETING it still fails here.
+    expect(bodyOf('database')).toContain('Populated recovery proof');
     expect(bodyOf('database')).toContain('npm run db:recovery:populated');
     expect(bodyOf('database')).toContain('Least-privilege permission proof');
     expect(bodyOf('audit')).toContain('npm audit --audit-level=high');
