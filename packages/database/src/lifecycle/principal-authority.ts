@@ -371,6 +371,48 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[topictranslation]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[language]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[tag]': ['SELECT', 'INSERT', 'UPDATE'],
+
+  // Phase 5 - People & Contributors.
+  //
+  // NO DELETE ON `person` OR ON ANY OF THE FOUR PROFILE AGGREGATES, for the
+  // reason the taxonomy has none: a later content context's contributor
+  // reference will carry a real foreign key to one of them, and a runtime that
+  // could delete the row could either orphan that attribution or be blocked by
+  // it at an arbitrary moment. Archive is the lifecycle.
+  //
+  // `person` additionally carries a COLUMN-level DENY on `slug`, which this
+  // inventory cannot express because it is recorded against the column rather
+  // than the object. The probe suite proves it directly.
+  //
+  // The CHILD rows are deletable, and the asymmetry is deliberate: removing a
+  // locale's entry entered in error is a real administrative act, and blanking
+  // it to an empty string would be a translation that exists and says nothing.
+  // The primary-locale entry is still not removable, because the
+  // `PeoplePersonPrimaryName` trigger refuses any delete that would leave a
+  // contributor without one.
+  //
+  // Direct INSERT on `person` and `personnamevariant` is absent too. Their
+  // narrow procedures are the only runtime creation paths: one atomically
+  // creates the primary translation, and one serialises the per-locale variant
+  // count before inserting. Both procedures use ownership chaining and expose
+  // only EXECUTE, not broader table authority.
+  //
+  // The two language tables are SETS - a language is listed or it is not - so
+  // they take INSERT and DELETE and no UPDATE, exactly as `rolepermission`
+  // does.
+  '[dbo].[peoplecreateperson]': ['EXECUTE'],
+  '[dbo].[peopleaddnamevariant]': ['EXECUTE'],
+  '[dbo].[person]': ['SELECT', 'UPDATE'],
+  '[dbo].[persontranslation]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[personnamevariant]': ['SELECT', 'DELETE'],
+  '[dbo].[authorprofile]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[speakerprofile]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[scholarprofile]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[scholarprofiletranslation]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[scholarprofilelanguage]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[teacherprofile]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[teacherprofiletranslation]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[teacherprofilelanguage]': ['SELECT', 'INSERT', 'DELETE'],
 };
 
 /**

@@ -49,6 +49,10 @@ const SURFACES: readonly { key: string; permission: PermissionKey; path: string 
   // four of its surfaces, and four entries for one permission would be four
   // links that appear and disappear together.
   { key: 'taxonomy', permission: 'taxonomy.read', path: 'taxonomy/topics' },
+  // Phase 5. One nav entry for the People area, for the same reason Taxonomy
+  // has one: `people.read` opens all five of its surfaces, and five entries for
+  // one permission would be five links that appear and disappear together.
+  { key: 'people', permission: 'people.read', path: 'people/persons' },
   // Phase 4. A READ-ONLY view of the public shell's effective navigation; the
   // registry behind it is code, so there is no editing surface to reach.
   { key: 'navigation', permission: 'navigation.read', path: 'system/navigation' },

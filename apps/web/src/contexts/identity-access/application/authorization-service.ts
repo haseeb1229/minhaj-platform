@@ -407,6 +407,26 @@ export function createAuthorizationService({
       return authorization.findAccountSummary(accountId);
     },
 
+    /**
+     * Of the accounts named, those this context has CLOSED.
+     *
+     * EXPOSED FOR THE CROSS-OWNER DISPOSITION, and shaped so that it can be
+     * used for nothing else. Identity owns account closure (DOMAIN_MODEL.md
+     * §4.6); the other semantic owners dispose of their own data afterwards
+     * (SECURITY_BASELINE.md §19.1), and an owner whose disposal was interrupted
+     * has to be able to find out. It answers with identifiers the caller
+     * already supplied and discloses nothing about the accounts themselves, so
+     * it is not a route to the directory `users.read` guards.
+     *
+     * NO PERMISSION IS CHECKED HERE, and none is appropriate: the caller is the
+     * Layer-4 closure coordinator acting on behalf of the person who closed
+     * their own account, not an operator reading a list.
+     */
+    async closedAccounts(accountIds: readonly string[]): Promise<readonly string[]> {
+      if (accountIds.length === 0) return [];
+      return authorization.closedAccountIds(accountIds);
+    },
+
     async listAuditRecords(input: {
       readonly action: string | null;
       readonly actorId: string | null;

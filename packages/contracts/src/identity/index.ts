@@ -48,6 +48,14 @@ export type {
   StepUpPurpose,
 } from './permissions.ts';
 
+export {
+  CONTRIBUTOR_CAPABILITY_SOURCES,
+  NO_CONTRIBUTOR_CAPABILITIES,
+  projectContributorCapabilities,
+} from './capabilities.ts';
+
+export type { ContributorCapabilities } from './capabilities.ts';
+
 export type {
   AccountPage,
   AccountSummary,

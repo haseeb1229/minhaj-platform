@@ -809,6 +809,37 @@ configuration as well as its data.
 > **This is the configuration counterpart of §8.1.** That rule keeps session state out of the
 > cached tree; this one keeps the tree buildable without the secrets a session would need.
 
+#### 8.3.1.1 Not every public page is prerendered
+
+The section above describes the **prerendered** public tree, which was the whole of the public
+surface while its content was code — the route registry, the message catalogues. From the first
+phase that publishes **data**, the public surface has two kinds of route, and they are
+constrained differently.
+
+| | **Prerendered shell route** | **Public content route** |
+|---|---|---|
+| Content comes from | code, reviewed as code | records an operator changes |
+| Rendering | prerendered at build time | rendered per request |
+| May read configuration | the non-secret build-time projection only (§8.3.1) | the same projection; the indexing decision stays build-bound |
+| May read a database | **no** — the build holds no credential | **yes**, through its owning context's service (§3.1.1) |
+| May read session state | **no** | **no** |
+
+**Only the last row is a security rule, and it does not bend.** §8.1 forbids the anonymous
+public tree from reading session-derived state — "any per-user record" — and published
+editorial content is not that. A content route therefore reads its own domain and **must still
+reach no session service, no authorisation service and no authentication library at all**; the
+guarantee is enforced as an absence from the module graph rather than as a rule about what the
+page calls.
+
+**A content route is dynamic because its data is mutable, not because it is personalised.** A
+prerendered copy would keep serving a record that has since been withdrawn, and "unpublished,
+staged or draft content is never publicly reachable at all" (ROUTE_MAP.md §9.5) is not a claim
+a stale page can honour. Prerendering one would also put a database connection on the build's
+critical path, which §8.3.1 exists to prevent.
+
+> Caching such a route is a **later, separate decision** with its own invalidation proof
+> (§8.4, DELIVERY_PLAN.md Phase 34). Serving it uncached is correct until then.
+
 ### 8.4 Validation
 
 **Cache-leakage tests are a standing exit criterion of every feature phase**: no

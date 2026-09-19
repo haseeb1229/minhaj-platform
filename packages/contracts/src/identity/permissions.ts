@@ -158,6 +158,37 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     key: 'navigation.read',
     description: 'View the effective public shell navigation and its availability.',
   }),
+
+  /* ---- Phase 5 — People & Contributors -------------------------------- */
+  //
+  // READ AND ADMINISTER, for the reason every other pair here is split: seeing
+  // the contributor directory and changing it are different authorities, and an
+  // operator who must look up an author should not thereby be able to publish a
+  // contributor record (§4, separation of duties).
+  //
+  // TWO KEYS, NOT FIVE. ROUTE_MAP.md §7 gives People five administrative routes
+  // — persons, authors, speakers, scholars, teachers — and it would have been
+  // easy to mint a key apiece. They are five VIEWS of one administrative
+  // concern with one owner, and `people.authors.administer` beside
+  // `people.teachers.administer` would be grantable authority nobody asked to
+  // separate. A later phase may split them if a real role needs it.
+  //
+  // WHAT IS DELIBERATELY STILL ABSENT, and is most tempting at exactly this
+  // phase: `teaching.perform`, `question.receive`, `content.review` and
+  // `fatwa.publish`. Phase 5 consumes the capability projections those four
+  // codes feed (DOMAIN_MODEL.md §4.5, `./capabilities.ts`), so seeding one
+  // would have made a projection test trivial to write. They belong to
+  // Learning, Fatwa and Editorial, which have not shipped, and OPEN_DECISIONS.md
+  // §6.3 separately reserves who receives them to the organisation. A Phase-5
+  // database correctly projects all four as false.
+  Object.freeze({
+    key: 'people.read',
+    description: 'View contributor records and their profiles.',
+  }),
+  Object.freeze({
+    key: 'people.administer',
+    description: 'Create, edit, link and archive contributor records and their profiles.',
+  }),
 ]);
 
 /** Every catalogue key, as a union. Mistyping one is a compile error. */

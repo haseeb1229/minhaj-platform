@@ -911,6 +911,24 @@ export function createAuthorizationPersistence(): AuthorizationPersistencePort {
       };
     },
 
+    async closedAccountIds(accountIds) {
+      // BOUNDED BEFORE THE QUERY IS BUILT. The caller supplies the set, and a
+      // caller is not a place to enforce a bound: an `IN` list of arbitrary
+      // length is a query whose plan changes with its input.
+      const wanted = accountIds.slice(0, MAX_PAGE);
+      if (wanted.length === 0) return [];
+
+      const rows = await prisma.user.findMany({
+        where: { id: { in: [...wanted] }, status: 'closed' },
+        // THE IDENTIFIER AND NOTHING ELSE. Selecting the address here would put
+        // it one refactor away from a caller that has no business holding one
+        // (SECURITY_BASELINE.md §19.1).
+        select: { id: true },
+      });
+
+      return rows.map((row) => row.id);
+    },
+
     /* ---- Audit ------------------------------------------------------------ */
 
     async listAuditRecords({ action, actorId, limit, offset }) {

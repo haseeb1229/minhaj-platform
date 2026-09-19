@@ -204,7 +204,13 @@ describe('under a synthetic indexable configuration', () => {
   it('lists only eligible canonical URLs, and never a placeholder or a private route', async () => {
     const { sitemapPartitions } = await withIndexing(true);
 
-    const urls = sitemapPartitions().flatMap((partition) => partition.urls);
+    // `urls` carries entries rather than bare strings since Phase 5, because a
+    // contributor URL has a genuine `lastmod` and a shell route does not. The
+    // claim asserted here is unchanged: these exact canonical URLs appear, and
+    // no private, filtered or placeholder route does.
+    const urls = sitemapPartitions().flatMap((partition) =>
+      partition.urls.map((entry) => entry.loc),
+    );
 
     expect(urls).toContain(`${ORIGIN}/en`);
     expect(urls).toContain(`${ORIGIN}/ar/explore`);
@@ -221,10 +227,13 @@ describe('under a synthetic indexable configuration', () => {
     }
   });
 
-  it('emits no lastmod anywhere', async () => {
+  it('emits no lastmod for the BUILD-BOUND shell partitions', async () => {
     // It must reflect genuine content modification and never build or deploy
-    // time (§9.4). The shell has no such timestamp, so the element is absent
-    // rather than invented.
+    // time (§9.4). The shell's content is CODE and has no such timestamp, so
+    // the element is absent rather than invented — and it stays absent now that
+    // the renderer is capable of emitting one, which is the version of this
+    // claim worth making. The contributor partitions DO carry a genuine
+    // `lastmod`, proved against a real database in the People SEO suite.
     const { sitemapPartitions, renderSitemapPartition, renderSitemapIndex } =
       await withIndexing(true);
 
@@ -393,5 +402,21 @@ describe('the canonical origin', () => {
       expect(code, file).not.toContain('minhaj.org');
       expect(code, file).not.toContain('haseebliaqat');
     }
+  });
+});
+
+describe('structured-data serialization', () => {
+  it('cannot be terminated by stored contributor text', async () => {
+    const { serializeStructuredData } =
+      await import('../../apps/web/src/seo/metadata.ts');
+    const hostile = '</script><script>globalThis.compromised=true</script>';
+    const serialized = serializeStructuredData({
+      '@type': 'Person',
+      name: hostile,
+    });
+
+    expect(serialized).not.toContain('</script>');
+    expect(serialized).toContain('\\u003c/script>');
+    expect(JSON.parse(serialized)).toMatchObject({ name: hostile });
   });
 });

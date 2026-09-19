@@ -531,10 +531,11 @@ describe('F1 — the production database package publishes no raw capability', (
     expect(policy?.root).toBe('src/adapters');
     expect(policy?.malformed).toBeNull();
 
-    // Phase 2 Chunk 1 brought the first adapters and Phase 3B added Taxonomy's.
-    // Identity & Access and Taxonomy are bounded CONTEXTS; email, rate limiting
-    // and auditing are Layer-0 platform CONCERNS, which own persistent state
-    // without being contexts (DOMAIN_MODEL.md §1.1, ARCHITECTURE.md §4.6.1).
+    // Phase 2 Chunk 1 brought the first adapters, Phase 3B added Taxonomy's and
+    // Phase 5 added People & Contributors'. Identity & Access, Taxonomy and
+    // People & Contributors are bounded CONTEXTS; email, rate limiting and
+    // auditing are Layer-0 platform CONCERNS, which own persistent state without
+    // being contexts (DOMAIN_MODEL.md §1.1, ARCHITECTURE.md §4.6.1).
     //
     // EXACT, not a superset. A new adapter directory appearing here without a
     // declaration is the state the manifest exists to make impossible, and an
@@ -542,6 +543,7 @@ describe('F1 — the production database package publishes no raw capability', (
     // notice one.
     expect(policy?.owners).toEqual({
       'identity-access': { kind: 'context', slug: 'identity-access' },
+      'people-contributors': { kind: 'context', slug: 'people-contributors' },
       taxonomy: { kind: 'context', slug: 'taxonomy' },
       email: { kind: 'layer0', concern: 'email' },
       'rate-limiting': { kind: 'layer0', concern: 'rate-limiting' },

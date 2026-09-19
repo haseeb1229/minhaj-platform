@@ -42,6 +42,13 @@ export default function robots(): MetadataRoute.Robots {
     `/${locale}/admin`,
   ]);
 
+  // THE BUILD-BOUND PARTITIONS ARE THE RIGHT QUESTION HERE, and deliberately
+  // not the whole index. This file is generated with the artifact; asking for
+  // the contributor partitions would put a database read on the build's
+  // critical path to answer a question their contents cannot change. While
+  // indexing is enabled the shell always contributes at least one URL, so an
+  // index always exists — the `people` segment adds to it rather than deciding
+  // whether it is there (ROUTE_MAP.md §9.4).
   const partitions = sitemapPartitions();
 
   return {

@@ -485,6 +485,191 @@ try {
     pass('canonical topics intact', '19 seeded topics, all active');
   }
 
+  // ---- Phase 5: contributors are administrable but not destructible --------
+  //
+  // THE SAME POSTURE AS THE TAXONOMY, AND FOR A SHARPER REASON. A later content
+  // context's contributor reference will hold a real foreign key to `Person` or
+  // to one of the four profile aggregates, so "removing a contributor cannot
+  // orphan an attribution" is enforced by the ABSENCE of DELETE rather than by
+  // an application check somebody could forget.
+  //
+  // The permitted operations are proven to WORK rather than merely listed: a
+  // suite that only asserted denials would pass just as well against a
+  // principal that had been granted nothing at all.
+  await expectDenied(
+    app,
+    'direct person INSERT denied',
+    `INSERT INTO [dbo].[Person] ([id], [slug], [primaryLocale], [status])
+     VALUES (N'permission-probe-person', N'permission-probe-person', N'en', N'draft');`,
+  );
+
+  // The one admitted creation capability creates the parent and its primary
+  // translation atomically. Direct INSERT is denied above so no runtime SQL
+  // path can commit the parent-only state.
+  await expectAllowed(
+    app,
+    'atomic person creation procedure succeeds',
+    `EXEC [dbo].[PeopleCreatePerson]
+       @id=N'permission-probe-person',
+       @slug=N'permission-probe-person',
+       @primaryLocale=N'en',
+       @name=N'Permission probe contributor',
+       @biography=NULL,
+       @at='2026-09-19T00:00:00Z';`,
+    'the runtime may create a contributor only with its primary translation',
+  );
+
+  await expectAllowed(
+    app,
+    'person UPDATE succeeds',
+    `UPDATE [dbo].[Person] SET [status] = N'published'
+     WHERE [id] = N'permission-probe-person';`,
+    'the runtime may publish and archive a contributor',
+  );
+
+  // THE SLUG IS IMMUTABLE AT THE GRANT, not merely in the service.
+  // DOMAIN_MODEL.md §19.7 permits an editable canonical slug only alongside
+  // native slug history and automatic 301s, and Phase 5 ships neither — so the
+  // column-level DENY is what makes "the public URL is stable" true for a
+  // caller holding the runtime principal and bypassing the adapter entirely.
+  await expectDenied(
+    app,
+    'person slug UPDATE denied',
+    `UPDATE [dbo].[Person] SET [slug] = N'permission-probe-person-renamed'
+     WHERE [id] = N'permission-probe-person';`,
+  );
+
+  const [stablePersonSlug] = await admin.query<{ total: number }>(
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[Person]
+     WHERE [slug] = N'permission-probe-person';`,
+  );
+  if (Number(stablePersonSlug?.total ?? 0) !== 1) {
+    fail('person slug remains stable', 'the runtime-principal rename attempt changed it');
+  } else {
+    pass('person slug remains stable', 'the create-time slug is unchanged');
+  }
+
+  await expectDenied(app, 'person DELETE denied', 'DELETE FROM [dbo].[Person];');
+
+  // The PRIMARY-LOCALE translation is protected by the trigger rather than by
+  // the grant — the runtime legitimately holds DELETE on this table, because
+  // removing a locale's entry is a real administrative act. What it may not do
+  // is leave a contributor with no entry in their own original language, and
+  // that refusal has to hold for a caller that never touches the adapter.
+  await expectRefusedByInvariant(
+    app,
+    'primary translation DELETE refused by the invariant',
+    `DELETE FROM [dbo].[PersonTranslation]
+     WHERE [personId] = N'permission-probe-person' AND [locale] = N'en';`,
+    51040,
+  );
+
+  // The parent side is guarded too: moving primaryLocale to a translation that
+  // does not exist is the same invalid state reached from the other direction.
+  await expectRefusedByInvariant(
+    app,
+    'missing primaryLocale UPDATE refused by the invariant',
+    `UPDATE [dbo].[Person] SET [primaryLocale] = N'ur'
+     WHERE [id] = N'permission-probe-person';`,
+    51040,
+  );
+
+  // Direct INSERT is denied because only the procedure can acquire the
+  // per-Person/locale lock before counting. The procedure remains an ordinary
+  // runtime capability; variants are still added and removed, never edited.
+  await expectDenied(
+    app,
+    'direct name variant INSERT denied',
+    `INSERT INTO [dbo].[PersonNameVariant] ([id], [personId], [locale], [value], [normalised])
+     VALUES (NEWID(), N'permission-probe-person', N'en', N'Probe Variant', N'probe variant');`,
+  );
+  await expectAllowed(
+    app,
+    'serialised name variant procedure succeeds',
+    `EXEC [dbo].[PeopleAddNameVariant]
+       @id=N'permission-probe-variant',
+       @personId=N'permission-probe-person',
+       @locale=N'en',
+       @value=N'Probe Variant',
+       @normalised=N'probe variant',
+       @at='2026-09-19T00:00:00Z';`,
+    'the runtime may record an alternative spelling',
+  );
+  await expectDenied(
+    app,
+    'name variant UPDATE denied',
+    `UPDATE [dbo].[PersonNameVariant] SET [value] = N'Edited'
+     WHERE [personId] = N'permission-probe-person';`,
+  );
+
+  // The four profile aggregates, each proven separately. One loop over a list
+  // would have been shorter and would have proven one table four times if a
+  // later change collapsed them; naming them is what keeps the claim about
+  // FOUR distinct aggregates (DOMAIN_MODEL.md §5.2).
+  for (const table of [
+    'AuthorProfile',
+    'SpeakerProfile',
+    'ScholarProfile',
+    'TeacherProfile',
+  ]) {
+    await expectAllowed(
+      app,
+      `${table} INSERT succeeds`,
+      `INSERT INTO [dbo].[${table}] ([id], [personId], [status])
+       VALUES (NEWID(), N'permission-probe-person', N'draft');`,
+      'the runtime may add this facet',
+    );
+    await expectAllowed(
+      app,
+      `${table} UPDATE succeeds`,
+      `UPDATE [dbo].[${table}] SET [status] = N'archived'
+       WHERE [personId] = N'permission-probe-person';`,
+      'the runtime may archive this facet',
+    );
+    await expectDenied(app, `${table} DELETE denied`, `DELETE FROM [dbo].[${table}];`);
+  }
+
+  // A profile's language list is a SET: a language is listed or it is not, so
+  // INSERT and DELETE are the operations and UPDATE is denied — there is no
+  // third state for a composite-key membership row to be moved into.
+  await expectAllowed(
+    app,
+    'profile language INSERT succeeds',
+    `INSERT INTO [dbo].[TeacherProfileLanguage] ([teacherProfileId], [languageCode])
+     SELECT [id], N'ur' FROM [dbo].[TeacherProfile]
+     WHERE [personId] = N'permission-probe-person';`,
+    'the runtime may list a teaching language',
+  );
+  await expectDenied(
+    app,
+    'profile language UPDATE denied',
+    `UPDATE [dbo].[TeacherProfileLanguage] SET [languageCode] = N'ar';`,
+  );
+  await expectAllowed(
+    app,
+    'profile language DELETE succeeds',
+    `DELETE FROM [dbo].[TeacherProfileLanguage];`,
+    'the runtime may replace the whole set',
+  );
+
+  // NO CONTRIBUTOR RECORD MAY GRANT ANYTHING, proved at the grant level rather
+  // than only in the service. Even holding the runtime principal and writing
+  // SQL directly, a caller administering People cannot create an assignment:
+  // `RoleAssignment` is INSERT-able by the runtime because Identity's own
+  // privileged path needs it, so the claim worth proving here is the one the
+  // application makes — no People statement above touched it.
+  const [assignments] = await admin.query<{ total: number }>(
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[RoleAssignment];`,
+  );
+  if (Number(assignments?.total ?? -1) !== 0) {
+    fail(
+      'contributor probes granted nothing',
+      `the People probes left ${assignments?.total ?? 0} role assignments behind`,
+    );
+  } else {
+    pass('contributor probes granted nothing', 'no role assignment exists');
+  }
+
   // ---- the ungranted object ------------------------------------------------
   //
   // The sharpest of these cases. Every Phase 1 object carries an explicit rule,
@@ -515,6 +700,7 @@ try {
     tampered: number;
     taxonomyProvisioned: number;
     navigationProvisioned: number;
+    peopleProvisioned: number;
   }>(`
     SELECT COUNT_BIG(*) AS total,
            SUM(CASE WHEN [action] = N'phase1.permission.probe' THEN 1 ELSE 0 END) AS probe,
@@ -524,19 +710,25 @@ try {
              AS taxonomyProvisioned,
            SUM(CASE WHEN [action] = N'navigation.permissions.provisioned'
                      AND [actorType] = N'migration' THEN 1 ELSE 0 END)
-             AS navigationProvisioned
+             AS navigationProvisioned,
+           SUM(CASE WHEN [action] = N'people.permissions.provisioned'
+                     AND [actorType] = N'migration' THEN 1 ELSE 0 END)
+             AS peopleProvisioned
     FROM [dbo].[AuditLog];
   `);
 
-  // Exactly three rows: the Phase-3B privilege extension, the Phase-4
-  // privilege extension, and this run's probe. Naming both migration actions
-  // is load-bearing: deriving the expected total from whatever provisioning
-  // rows happened to survive would pass if this phase omitted its own audit.
-  const EXPECTED_AUDIT_ROWS = 3;
+  // Exactly four rows: the Phase-3B, Phase-4 and Phase-5 privilege extensions,
+  // and this run's probe. Naming every migration action is load-bearing:
+  // deriving the expected total from whatever provisioning rows happened to
+  // survive would pass if a phase omitted its own audit, and each privilege
+  // extension must be able to show that it paid for itself
+  // (SECURITY_BASELINE.md §8.1).
+  const EXPECTED_AUDIT_ROWS = 4;
 
   if (
     Number(survivor?.taxonomyProvisioned ?? 0) !== 1 ||
     Number(survivor?.navigationProvisioned ?? 0) !== 1 ||
+    Number(survivor?.peopleProvisioned ?? 0) !== 1 ||
     Number(survivor?.probe ?? 0) !== 1 ||
     Number(survivor?.tampered ?? -1) !== 0 ||
     Number(survivor?.total ?? 0) !== EXPECTED_AUDIT_ROWS
@@ -544,16 +736,17 @@ try {
     fail(
       'audit rows unmodified',
       `expected ${EXPECTED_AUDIT_ROWS} rows with 1 taxonomy provisioning, ` +
-        `1 navigation provisioning, 1 probe and 0 tampered; found ` +
-        `${survivor?.total ?? 0} rows, ` +
+        `1 navigation provisioning, 1 people provisioning, 1 probe and ` +
+        `0 tampered; found ${survivor?.total ?? 0} rows, ` +
         `${survivor?.taxonomyProvisioned ?? 0} taxonomy provisioning, ` +
         `${survivor?.navigationProvisioned ?? 0} navigation provisioning, ` +
+        `${survivor?.peopleProvisioned ?? 0} people provisioning, ` +
         `${survivor?.probe ?? 0} probe, ${survivor?.tampered ?? 0} tampered`,
     );
   } else {
     pass(
       'audit rows unmodified',
-      'the probe row and both exact migration records are intact after ' +
+      'the probe row and all three exact migration records are intact after ' +
         'UPDATE/DELETE attempts',
     );
   }
@@ -583,7 +776,7 @@ try {
     pass(
       'no grant beyond the approved inventory',
       `${recorded.length} recorded entries; object GRANTs confined to the ` +
-        `${objects} approved tables, per verb`,
+        `${objects} approved objects, per verb`,
     );
   }
 

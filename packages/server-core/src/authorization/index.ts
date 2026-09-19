@@ -2,12 +2,14 @@ import 'server-only';
 
 import type {
   AuthorizationReaderPort,
+  ContributorCapabilities,
   PermissionKey,
   PrivilegedActor,
   PrivilegedPosture,
   ResolvedSession,
   StepUpPurpose,
 } from '@minhaj/contracts/identity';
+import { projectContributorCapabilities } from '@minhaj/contracts/identity';
 
 /**
  * THE authorisation service — Identity & Access's, hosted here.
@@ -142,6 +144,27 @@ export interface AuthorizationService {
 
   /** The account's privileged posture, for the surfaces that report it. */
   posture(accountId: string): Promise<PrivilegedPosture>;
+
+  /**
+   * The four named capability projections for one account.
+   *
+   * IDENTITY'S ANSWER TO A QUESTION PEOPLE ASKS. DOMAIN_MODEL.md §4.5 makes
+   * `canTeach`, `canReceiveQuestions`, `canReviewContent` and `canIssueFatwa`
+   * projections of explicit grants — "never independently stored booleans, and
+   * never an enforcement path" — so the only correct place to compute them is
+   * beside the live permission read they are derived from. A projection
+   * computed in People would be a second opinion about Identity's authority.
+   *
+   * IT REUSES `effectivePermissions` EXACTLY, which is what makes the four fail
+   * closed without this method knowing why: that read already excludes revoked
+   * assignments, deactivated roles and any account that is not `active`, so a
+   * disabled, suspended or closed account projects false on every one of them.
+   *
+   * READ-ONLY, AND NOT A GATE. It authorises nothing and is never consulted to
+   * decide whether an action may proceed; `requirePermission` and
+   * `requirePrivilegedAction` above remain the only paths that do that.
+   */
+  contributorCapabilities(accountId: string): Promise<ContributorCapabilities>;
 }
 
 export interface AuthorizationServiceDependencies {
@@ -267,6 +290,13 @@ export function createAuthorizationService({
 
     async posture(accountId) {
       return reader.privilegedPosture(accountId);
+    },
+
+    async contributorCapabilities(accountId) {
+      // The SAME live read every authorisation decision uses. Nothing is
+      // cached between the read and the projection, so there is no window in
+      // which a revoked grant still projects.
+      return projectContributorCapabilities(await reader.effectivePermissions(accountId));
     },
   };
 }

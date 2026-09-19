@@ -557,6 +557,19 @@ privilege** · capability projections reflect only actual grants · **grants are
 **Exit:** One contributor identity model. **Author is delivered exactly once, before its
 consumers.**
 
+> **PHASE-2 MAINTENANCE GATE — MUST BE RESOLVED BEFORE PHASE 6 STARTS.** The Phase-5
+> actual-diff review confirmed two inherited Identity & Access defects that are outside
+> Phase 5 ownership and unchanged by this phase: (1) `changePassword` catches every
+> `auth.changePassword` failure and reports `invalid-credentials`, so infrastructure and
+> reconciliation failures can be misclassified as a bad current password; (2) the live
+> mutual-administrator revocation proof requires exactly one fulfilled transaction, but the
+> underlying concurrent SQL path has no deterministic retry/serialization contract for a
+> deadlock or lock-victim outcome. Phase 2 maintenance must narrow the password failure
+> mapping, make the revocation concurrency outcome deterministic (including bounded retry
+> where appropriate), and add regression proofs for both. These are recorded here as a
+> hard entry gate; they are not reassigned to Phase 5 and are not evidence that Phase 5 may
+> broaden into Identity implementation work.
+
 ---
 
 ### Phase 6 — Editorial Core

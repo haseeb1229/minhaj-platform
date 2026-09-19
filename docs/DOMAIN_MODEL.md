@@ -376,6 +376,35 @@ compiler, narrator, reciter, speaker — the relationship carries the **role of 
 contribution**. The contributor is referenced from People & Contributors; the relationship
 row belongs to the owning content context.
 
+### 5.4 Data disposition — what account closure does to a Person
+
+SECURITY_BASELINE.md §19.1 requires **every semantic data owner to define the disposition of
+its own data**, and names `profile` among the classes that must be covered. This is People &
+Contributors' definition, settled here because the answer must not be re-decided per phase.
+
+| Record | On closure of a linked account |
+|---|---|
+| **Person, and every profile** | **Unchanged.** A Person is a *public contributor record* with its own lifecycle. Closing an account is not a decision to withdraw somebody's authorship, and destroying the record would break attributions later content domains carry |
+| **The optional `Person → User` link** | **Released.** People removes it, through its own service, after Identity's closure has committed |
+
+**Why the live link is released rather than retained.** `Person` and `User` are distinct
+aggregates, and `Person.userId` is an operational account-linkage mechanism rather than the
+contributor-history or provenance record. Once that application account is closed, the live
+association has no current sign-in or authorisation purpose. Releasing it is One Minhaj's
+privacy-minimising product default; it is not a claim that every jurisdiction legally requires
+release. If an adopted legal or operational policy later requires a historical association, it
+must introduce an explicit, separately reviewed retention/provenance mechanism rather than keep
+the live link as a surrogate for that future requirement.
+
+**Consequences, in the order they matter:** the contributor page renders exactly as before;
+the capability projections (§4.5) report false, because there is no account to project from;
+and a later re-registration of the same address is a **new** `User` id that is **not** relinked
+— nothing links by email or name, and no People operation runs on sign-up.
+
+> **The two halves are two owners' own transactions**, coordinated at Layer 4 and **idempotent
+> and resumable** (ARCHITECTURE.md §3.1.2.1). A cross-context transaction is never used, and an
+> interrupted closure leaves a link that the next reconciliation releases.
+
 ---
 
 ## 6. Taxonomy

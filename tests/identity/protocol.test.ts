@@ -165,20 +165,32 @@ describe('the mutation surface', () => {
     // The webhook is the provider callback, which cannot be a Server Action
     // because it is not a browser and holds no action id. The two Phase-4
     // handlers serve the machine-readable sitemaps: ROUTE_MAP.md §10 rule 6
-    // makes those unprefixed non-locale routes, and they are GET-only,
-    // read-only, unauthenticated and mutate nothing. None of the three is an
+    // makes those unprefixed non-locale routes. The two Phase-5 handlers are
+    // the contributor ALIASES, which are handlers rather than pages for one
+    // reason — ROUTE_MAP.md §9.1 rule 3 names the status code `301`, and a
+    // page-level `permanentRedirect()` emits 308.
+    //
+    // All four of the non-webhook handlers are GET-only, read-only,
+    // unauthenticated and mutate nothing. None of the five is an
     // authentication endpoint, which is what this test exists to prevent.
-    expect(routes).toEqual([
-      'apps/web/src/app/api/webhooks/resend/route.ts',
-      'apps/web/src/app/sitemap.xml/route.ts',
-      'apps/web/src/app/sitemaps/[partition]/route.ts',
-    ]);
+    expect([...routes].sort()).toEqual(
+      [
+        'apps/web/src/app/api/webhooks/resend/route.ts',
+        'apps/web/src/app/sitemap.xml/route.ts',
+        'apps/web/src/app/sitemaps/[partition]/route.ts',
+        'apps/web/src/app/[locale]/(public)/authors/[slug]/route.ts',
+        'apps/web/src/app/[locale]/(public)/library/authors/[slug]/route.ts',
+      ].sort(),
+    );
 
-    // And the two new ones genuinely are read-only: a mutating verb on either
+    // And the four genuinely are read-only: a mutating verb on any of them
     // would be a state-changing endpoint outside the Class-A controls.
     const { readFile } = await import('node:fs/promises');
 
-    for (const route of routes.filter((entry) => entry.includes('sitemap'))) {
+    const readOnly = routes.filter((entry) => !entry.includes('webhooks'));
+    expect(readOnly).toHaveLength(4);
+
+    for (const route of readOnly) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');
 
       for (const verb of ['POST', 'PUT', 'PATCH', 'DELETE']) {
@@ -242,6 +254,27 @@ describe('the mutation surface', () => {
 
       expect(body, `${action} must resolve a session`).toContain('activeSession(locale)');
     }
+  });
+
+  it('coordinates People disposition before account-closure success', async () => {
+    // Account closure is a Layer-4 coordination: Identity commits first,
+    // People's idempotent disposition runs before success is reported.
+    const actions = await sourceOf(ACTIONS);
+    const closureStart = actions.indexOf('export async function closeAccountAction');
+    const closureBody = actions.slice(
+      closureStart,
+      actions.indexOf('\n}', closureStart) + 2,
+    );
+    expect(closureBody.indexOf('releaseAccountLink(')).toBeGreaterThan(
+      closureBody.indexOf('identity.closeAccount('),
+    );
+    expect(closureBody.indexOf('reconcileClosedAccountLinks(')).toBeGreaterThan(
+      closureBody.indexOf('releaseAccountLink('),
+    );
+    expect(closureBody.indexOf('redirect(')).toBeGreaterThan(
+      closureBody.indexOf('reconcileClosedAccountLinks('),
+    );
+    expect(closureBody).toContain('reconciliationFailed');
   });
 
   it('renders emailed links with a GET that consumes nothing', async () => {

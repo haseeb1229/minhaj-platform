@@ -81,6 +81,22 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'TopicTranslation',
       'Language',
       'Tag',
+      // Phase 5 — People & Contributors. FOUR PROFILE AGGREGATES, and the count
+      // is part of the claim: DOMAIN_MODEL.md §5.2 requires Person, User and
+      // the four profiles to stay six distinct models, so a migration that
+      // delivered one `Profile` table with a `type` column would satisfy
+      // "People shipped" and fail here.
+      'Person',
+      'PersonTranslation',
+      'PersonNameVariant',
+      'AuthorProfile',
+      'SpeakerProfile',
+      'ScholarProfile',
+      'ScholarProfileTranslation',
+      'ScholarProfileLanguage',
+      'TeacherProfile',
+      'TeacherProfileTranslation',
+      'TeacherProfileLanguage',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name
@@ -93,6 +109,15 @@ describe('Phase 1 Chunk 1 database foundation', () => {
     // later phase entirely.
     for (const domain of ['Article', 'Page', 'Quran', 'Hadith', 'Book']) {
       expect(models, `${domain} arrives with its owning slice`).not.toContain(domain);
+    }
+
+    // The two shapes Phase 5 must NOT have produced, asserted by name beside
+    // the deferred domains above. A single `Profile` table would be §5.2's
+    // merge; a generic `Contribution` would be §6.2's polymorphic pair one
+    // boundary along, with a real foreign key to the contributor and a type
+    // string for the work.
+    for (const merged of ['Profile', 'ContributorProfile', 'Contribution']) {
+      expect(models, `${merged} is a shape the model prohibits`).not.toContain(merged);
     }
 
     expect(prismaEntries).toContain('migrations');

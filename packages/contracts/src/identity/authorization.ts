@@ -373,6 +373,25 @@ export interface AuthorizationPersistencePort {
 
   findAccountSummary(accountId: string): Promise<AccountSummary | null>;
 
+  /**
+   * Of the accounts named, those whose status is `closed`.
+   *
+   * ADDED FOR THE CROSS-OWNER CLOSURE DISPOSITION (SECURITY_BASELINE.md §19.1).
+   * Account closure is Identity's and commits in Identity's own transaction;
+   * the other semantic owners then dispose of THEIR data through their own
+   * services. That second step can be interrupted, so each owner needs to be
+   * able to ask which of the accounts it still holds data for have since been
+   * closed — and to ask it once for a set rather than once per row.
+   *
+   * IT RETURNS IDENTIFIERS THE CALLER ALREADY SUPPLIED, and nothing else: no
+   * address, no name, no timestamp. A caller learns only that something it
+   * already knew about is closed, so this cannot become a back door to the
+   * account directory `users.read` guards.
+   *
+   * Bounded by the caller's own input set, which the adapter caps again.
+   */
+  closedAccountIds(accountIds: readonly string[]): Promise<readonly string[]>;
+
   /* ---- Audit ------------------------------------------------------------ */
 
   listAuditRecords(input: {

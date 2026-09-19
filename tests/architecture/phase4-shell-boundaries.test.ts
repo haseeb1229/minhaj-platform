@@ -24,6 +24,49 @@ import { repoRoot } from './architecture-harness.ts';
 const APP_SRC = path.join(repoRoot, 'apps', 'web', 'src');
 const PUBLIC_GROUP = path.join(APP_SRC, 'app', '[locale]', '(public)');
 
+/**
+ * THE PUBLIC GROUP HOLDS TWO KINDS OF ROUTE SINCE PHASE 5, and the properties
+ * each must satisfy are not the same. Both are stated below; neither is
+ * relaxed.
+ *
+ * PRERENDERED SHELL ROUTES are Phase 4's. Their content is CODE — the route
+ * registry, the message catalogues — so they are built at build time, and
+ * ARCHITECTURE.md §8.3.1 governs them by name: "A page in the anonymous public
+ * tree is prerendered at build time, which constrains its configuration as well
+ * as its data … The build runs in CI and on developer machines that hold no
+ * production credential." They reach no database, no server environment schema,
+ * no session and no request-scoped API, and none of them is dynamic.
+ *
+ * CONTENT ROUTES are Phase 5's first, and every later content phase's. Their
+ * content is DATA an administrator changes, which DELIVERY_PLAN.md requires of
+ * the canonical `/people/{slug}` profile. They CANNOT be prerendered — a static
+ * copy would keep serving a withdrawn contributor, and "unpublished, staged or
+ * draft content is never publicly reachable at all" (ROUTE_MAP.md §9.5) is not
+ * a claim a stale page can honour.
+ *
+ * WHAT DOES NOT CHANGE FOR EITHER is §8.1 itself: "the anonymous public render
+ * tree must never read session-derived state". A contributor record is
+ * published editorial content, not "any per-user record", so reading one is not
+ * what that rule forbids — and the content routes are still proven, below, to
+ * reach no session, no identity service and no authentication library at all.
+ *
+ * The split is declared rather than inferred, so a new route joins one list
+ * deliberately. A file under the public group that is in NEITHER list fails the
+ * first test in each block, which is what stops the distinction being used to
+ * quietly exempt something.
+ */
+const CONTENT_ROUTE_FILES = [
+  'apps/web/src/app/[locale]/(public)/people-alias.ts',
+  'apps/web/src/app/[locale]/(public)/people/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/authors/[slug]/route.ts',
+  'apps/web/src/app/[locale]/(public)/library/authors/[slug]/route.ts',
+];
+
+/** Is this file one of the declared data-backed content routes? */
+function isContentRoute(file: string): boolean {
+  return CONTENT_ROUTE_FILES.includes(relative(file));
+}
+
 /* ===========================================================================
  * A small module-graph walker
  * ========================================================================= */
@@ -147,11 +190,29 @@ function code(source: string): string {
     .replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1');
 }
 
-let cached: Graph | null = null;
+let cachedPrerendered: Graph | null = null;
+let cachedContent: Graph | null = null;
 
+/**
+ * The graph reachable from the PRERENDERED shell routes.
+ *
+ * The content routes are excluded at the ENTRY POINTS rather than filtered from
+ * the result, because the property being proven is reachability: a module the
+ * shell can reach is a module the shell might one day call.
+ */
 async function publicGraph(): Promise<Graph> {
-  cached ??= await reachableFrom(await filesUnder(PUBLIC_GROUP));
-  return cached;
+  const entries = (await filesUnder(PUBLIC_GROUP)).filter(
+    (file) => !isContentRoute(file),
+  );
+  cachedPrerendered ??= await reachableFrom(entries);
+  return cachedPrerendered;
+}
+
+/** The graph reachable from the declared data-backed content routes. */
+async function contentGraph(): Promise<Graph> {
+  const entries = (await filesUnder(PUBLIC_GROUP)).filter(isContentRoute);
+  cachedContent ??= await reachableFrom(entries);
+  return cachedContent;
 }
 
 /* ===========================================================================
@@ -387,6 +448,215 @@ describe('the public shell is server-rendered, with narrow client islands', () =
 
       expect(code(source), relative(file)).not.toMatch(/https?:\/\/(?!127\.0\.0\.1)/);
       expect(code(source), relative(file)).not.toContain('next/font');
+    }
+  });
+
+  it('requests no external font, script or stylesheet from a CONTENT route', async () => {
+    // THE SAME CLAIM FOR THE DATA-BACKED ROUTES, with one documented exception
+    // and a stricter check beside it.
+    //
+    // `https://schema.org` appears in the contributor profile as the `@context`
+    // of a JSON-LD document. It is a VOCABULARY IDENTIFIER inside an
+    // `application/ld+json` block — a string a consumer matches against, never
+    // a URL a browser fetches — so it creates no external request and no
+    // privacy exposure, which is what this rule exists to prevent
+    // (ARCHITECTURE.md §4.7.1).
+    //
+    // Allowing one exact string rather than loosening the pattern is the point:
+    // every OTHER external origin is still refused, and the assertion below
+    // additionally forbids the attributes that would actually fetch one — which
+    // the original blanket regex never checked for directly.
+    const { modules } = await contentGraph();
+
+    for (const [file, source] of modules) {
+      if (!file.startsWith(APP_SRC)) continue;
+
+      const body = code(source).replaceAll('https://schema.org', '');
+
+      expect(body, relative(file)).not.toMatch(/https?:\/\/(?!127\.0\.0\.1)/);
+      expect(body, relative(file)).not.toContain('next/font');
+
+      for (const fetching of ['<link', '<img', 'src=', 'srcSet', '@import']) {
+        expect(code(source), `${relative(file)} ${fetching}`).not.toContain(fetching);
+      }
+    }
+  });
+});
+
+/* ===========================================================================
+ * Data-backed public content routes
+ * ========================================================================= */
+
+describe('a public CONTENT route reads data, and still reads no session', () => {
+  it('reaches a real graph, so nothing below passes vacuously', async () => {
+    const { modules } = await contentGraph();
+
+    expect(modules.size).toBeGreaterThan(3);
+    expect([...modules.keys()].map(relative)).toContain(
+      'apps/web/src/composition/people-read.ts',
+    );
+  });
+
+  it('every declared content route exists', async () => {
+    // The list is an allowance, so a stale entry would be an allowance for
+    // nothing — and, worse, would hide the day a route was deleted.
+    for (const file of CONTENT_ROUTE_FILES) {
+      await expect(stat(path.join(repoRoot, file))).resolves.toBeDefined();
+    }
+  });
+
+  it('imports no identity, session or authorisation module anywhere in the graph', async () => {
+    // THE RULE THAT DOES NOT BEND. §8.1 forbids the anonymous public tree from
+    // reading session-derived state, and the strongest form of that guarantee
+    // is a graph in which the capability is not present to be misused.
+    //
+    // `@/composition/people` is on this list beside the Identity modules, and
+    // that is the Phase-5 addition worth understanding: the FULL People runtime
+    // wires Identity in for the capability projection and the closure
+    // coordinator, so reaching it would pull the session service and the
+    // authentication library into a public document by one import. The public
+    // routes use `@/composition/people-read`, which takes no Identity port at
+    // all.
+    const forbidden = [
+      '@/composition/identity',
+      '@/composition/authorization',
+      '@/composition/request',
+      '@/composition/dispatch',
+      '@/composition/people',
+      '@/contexts/identity-access',
+      '@/config/server-env',
+      '@minhaj/contracts/env/server',
+    ];
+
+    const { modules } = await contentGraph();
+
+    for (const [file, source] of modules) {
+      for (const specifier of specifiersIn(source)) {
+        expect(
+          forbidden.some((entry) => specifier === entry),
+          `${relative(file)} imports ${specifier}`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  it('imports no request-scoped framework API and no authentication library', async () => {
+    // `cookies()` and `headers()` are how a session would be read. A content
+    // route is dynamic for a different reason — its data changes — and being
+    // dynamic must not become a licence to read a request's identity.
+    const forbidden = ['next/headers', 'next/cookies', 'better-auth'];
+
+    const { packages, modules } = await contentGraph();
+
+    for (const specifier of packages) {
+      expect(
+        forbidden.some(
+          (entry) => specifier === entry || specifier.startsWith(`${entry}/`),
+        ),
+        `the content graph imports ${specifier}`,
+      ).toBe(false);
+    }
+
+    // `@prisma/*` and `@minhaj/server-core` stay out as well: Model A confines
+    // raw database capability to `packages/database`, and a public page holds
+    // an interface rather than a client (ARCHITECTURE.md §3.1.1).
+    for (const specifier of packages) {
+      expect(specifier.startsWith('@minhaj/server-core'), specifier).toBe(false);
+      expect(specifier.startsWith('@prisma/'), specifier).toBe(false);
+    }
+
+    expect(modules.size).toBeGreaterThan(0);
+  });
+
+  it('marks every content route dynamic, so none of them is ever prerendered', async () => {
+    // THE INVERSE OF THE SHELL RULE, and it is a requirement rather than an
+    // exemption. A prerendered contributor profile would keep serving a
+    // withdrawn record, and enumerating these routes at build time would put a
+    // database connection on the build critical path — which §8.3.1 forbids,
+    // because the build "runs in CI and on developer machines that hold no
+    // production credential".
+    for (const file of CONTENT_ROUTE_FILES) {
+      const source = await readFile(path.join(repoRoot, file), 'utf8');
+      // The shared alias implementation is not a route segment of its own, so
+      // it carries no segment configuration; every actual route does.
+      if (
+        !source.includes('export default') &&
+        !source.includes('export async function GET')
+      ) {
+        continue;
+      }
+
+      expect(code(source), file).toContain("dynamic = 'force-dynamic'");
+    }
+  });
+
+  it('makes the two author aliases 301s that are never indexable', async () => {
+    // ROUTE_MAP.md §9.1 rule 3 names the STATUS CODE, and §2.3 classifies a
+    // legacy alias as not indexable. Both are asserted on the shared
+    // implementation, because both aliases are one function.
+    //
+    // 301 AND NOT 308. `permanentRedirect()` in a page would emit 308, which is
+    // a permanent redirect that every crawler treats as one — and is still not
+    // the code the accepted contract names. A route handler sets it exactly,
+    // which is why an alias is a handler rather than a page.
+    const shared = await readFile(
+      path.join(repoRoot, 'apps/web/src/app/[locale]/(public)/people-alias.ts'),
+      'utf8',
+    );
+
+    expect(code(shared)).toContain('status: 301');
+    expect(code(shared)).toContain("'x-robots-tag': 'noindex'");
+    // A redirect carries no document, so there is no `<meta robots>` to set and
+    // `permanentRedirect` must not be what emits it.
+    expect(code(shared)).not.toContain('permanentRedirect');
+
+    // And each route is a handler that delegates, with no render of its own.
+    for (const file of [
+      'apps/web/src/app/[locale]/(public)/authors/[slug]/route.ts',
+      'apps/web/src/app/[locale]/(public)/library/authors/[slug]/route.ts',
+    ]) {
+      const source = code(await readFile(path.join(repoRoot, file), 'utf8'));
+
+      expect(source, file).toContain('contributorAlias(params)');
+      expect(source, file).not.toContain('export default');
+    }
+  });
+
+  it('gives the public read service no mutation and no account data', async () => {
+    // WHAT A PUBLIC PAGE IS HANDED DECIDES WHAT IT CAN DO. The read service has
+    // three methods, all reads; none returns a draft record or the linked
+    // account identifier, and none of the administrative reads is on it.
+    const source = code(
+      await readFile(
+        path.join(
+          repoRoot,
+          'apps/web/src/contexts/people-contributors/application/people-service.ts',
+        ),
+        'utf8',
+      ),
+    );
+
+    const readService = source.slice(
+      source.indexOf('export function createPeopleReadService'),
+      source.indexOf('export type PeopleReadService'),
+    );
+
+    expect(readService.length).toBeGreaterThan(0);
+
+    for (const forbidden of [
+      'createPerson',
+      'setStatus',
+      'linkAccount',
+      'unlinkAccount',
+      'releaseAccountLink',
+      'createProfile',
+      'capabilitiesFor',
+      'listPeople',
+      'findPerson',
+      'linkedAccountId',
+      'accounts.',
+    ]) {
+      expect(readService, forbidden).not.toContain(forbidden);
     }
   });
 });

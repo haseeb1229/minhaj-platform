@@ -28,6 +28,12 @@ import {
   verifyRestoredTaxonomyIntegrity,
   writePhase3bFixture,
 } from '../src/lifecycle/phase3b-fixture.ts';
+import {
+  newPhase5Fixture,
+  verifyRestoredPeopleIntegrity,
+  verifyRestoredPhase5,
+  writePhase5Fixture,
+} from '../src/lifecycle/phase5-fixture.ts';
 import { inspectPrincipalAuthority } from '../src/lifecycle/principal-authority.ts';
 import {
   cleanUpRecoveryResources,
@@ -56,8 +62,8 @@ import {
  *   create a DISPOSABLE source
  *     -> deploy EVERY migration with the real Prisma CLI
  *     -> provision the least-privilege runtime principal
- *     -> write representative synthetic rows into EVERY Phase-2 and
- *        Phase-3B table
+ *     -> write representative synthetic rows into EVERY Phase-2, Phase-3B
+ *        and Phase-5 table
  *     -> REAL BACKUP DATABASE ... WITH CHECKSUM
  *     -> RESTORE into a separate disposable database
  *     -> verify the rows, their relationships and the whole migration history
@@ -72,8 +78,8 @@ import {
  * communication intents, deliveries, suppressions, provider events, limiter
  * windows and audit rows — and populated Phase-3B state — the canonical topic
  * seed, a topic hierarchy, localisations in three scripts, a content language
- * and a tag — survive a backup and restore with their values, their
- * relationships and their enforcing constraints intact.
+ * and a tag — and populated Phase-5 People/profile state survive a backup and
+ * restore with their values, relationships and enforcing constraints intact.
  *
  * Neither is sufficient alone. The first proved only that an AuditLog marker
  * came back, which a database holding one table would also prove; the second
@@ -106,6 +112,7 @@ const restoreDatabase = newRestoreDatabaseName();
 const target = newBackupTarget();
 const fixture = newPhase2Fixture();
 const taxonomyFixture = newPhase3bFixture();
+const peopleFixture = newPhase5Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -124,7 +131,7 @@ let recoveryError: unknown;
 let cleanupOutcome!: CleanupOutcome;
 const sourceFailures: CleanupFailure[] = [];
 
-process.stdout.write(`Populated Phase-2 and Phase-3B recovery rehearsal\n`);
+process.stdout.write(`Populated Phase-2, Phase-3B and Phase-5 recovery rehearsal\n`);
 reportConfiguration(command, 30);
 report('disposable source', sourceDatabase);
 report('restore target', restoreDatabase);
@@ -159,6 +166,13 @@ try {
   // two apart.
   await writePhase3bFixture(admin, taxonomyFixture);
   report('taxonomy fixture', `run ${taxonomyFixture.runId}`);
+
+  // Phase-5 contributors: one holding all four facets and an account link, and
+  // one historical contributor with no account at all. Both halves are written
+  // BEFORE the backup, so the restore has to reproduce the relationships
+  // between them rather than merely the rows.
+  await writePhase5Fixture(admin, peopleFixture);
+  report('people fixture', `run ${peopleFixture.runId}`);
 
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
@@ -209,6 +223,12 @@ try {
     taxonomyFixture,
   );
   report('taxonomy integrity', taxonomyIntegrity);
+
+  const peopleRows = await verifyRestoredPhase5(restored, peopleFixture);
+  for (const row of peopleRows) report(`restored ${row.table}`, row.detail);
+
+  const peopleIntegrity = await verifyRestoredPeopleIntegrity(restored, peopleFixture);
+  report('people integrity', peopleIntegrity);
 
   // ---- restored security posture -------------------------------------------
   const security = await inspectRestoredSecurity(restored, principal.DATABASE_APP_LOGIN);
@@ -317,6 +337,16 @@ try {
         ['Topic DELETE', 'DELETE FROM [dbo].[Topic];'],
         ['Language DELETE', 'DELETE FROM [dbo].[Language];'],
         ['Tag DELETE', 'DELETE FROM [dbo].[Tag];'],
+        // Phase 5. The same claim for contributors: a later content context's
+        // attribution will hold a real foreign key to one of these, so the
+        // absence of DELETE has to survive a restore as well as a deploy.
+        ['Person DELETE', 'DELETE FROM [dbo].[Person];'],
+        ['AuthorProfile DELETE', 'DELETE FROM [dbo].[AuthorProfile];'],
+        ['TeacherProfile DELETE', 'DELETE FROM [dbo].[TeacherProfile];'],
+        [
+          'Person slug UPDATE',
+          "UPDATE [dbo].[Person] SET [slug] = N'restored-rename-attempt';",
+        ],
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -340,6 +370,7 @@ try {
       // The populated state is exactly as restored after those attempts.
       await verifyRestoredPhase2(restored, fixture);
       await verifyRestoredPhase3b(restored, taxonomyFixture);
+      await verifyRestoredPhase5(restored, peopleFixture);
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
     } finally {
       await app?.close();
@@ -352,12 +383,14 @@ try {
   }
 
   process.stdout.write(
-    '\nPopulated recovery verified: representative rows in every Phase-2 and\n' +
-      'Phase-3B table were backed up, restored into a separate database, and\n' +
-      'checked value by value — together with referential integrity, the topic\n' +
-      'hierarchy, non-Latin script, the trusted taxonomy constraints and their\n' +
-      'invariant triggers, the complete migration history and the least-privilege\n' +
-      'posture of the restored runtime principal.\n' +
+    '\nPopulated recovery verified: representative rows in every Phase-2,\n' +
+      'Phase-3B and Phase-5 tables were backed up, restored into a separate\n' +
+      'database, and checked value by value — together with referential\n' +
+      'integrity, the topic hierarchy, the four distinct contributor profile\n' +
+      'aggregates and their independent lifecycles, the optional account link,\n' +
+      'non-Latin script, the trusted constraints and their invariant triggers,\n' +
+      'the complete migration history and the least-privilege posture of the\n' +
+      'restored runtime principal.\n' +
       'Cleanup is verified below; this run passes only if it also succeeds.\n\n',
   );
 } catch (error) {

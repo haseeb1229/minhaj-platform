@@ -42,6 +42,7 @@
  * adapter no declaration owns:
  *
  *   - `identity-access` — the Identity & Access CONTEXT owns it
+ *   - `people-contributors` — the People & Contributors CONTEXT owns it
  *   - `taxonomy` — the Taxonomy CONTEXT owns it
  *   - `email`, `rate-limiting`, `auditing` — Layer-0 platform CONCERNS own
  *     them, and a Layer-0 adapter may reach no bounded context at all
@@ -82,6 +83,14 @@ export {
   createAuthorizationPersistence,
   createAuthorizationReader,
 } from './adapters/identity-access/index.ts';
+
+/* ---- People & Contributors (context-owned) ------------------------------ */
+
+export {
+  PeopleDataError,
+  createPeoplePersistence,
+  createPeopleReader,
+} from './adapters/people-contributors/index.ts';
 
 /* ---- Taxonomy (context-owned) ------------------------------------------- */
 

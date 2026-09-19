@@ -299,11 +299,48 @@ describe.skipIf(!databaseConfigured)(
        */
       const PHASE_4_KEYS = ['navigation.read'];
 
+      /**
+       * The keys the Phase-5 migration appended, and the only ones.
+       *
+       * TWO, NOT FIVE. ROUTE_MAP.md §7 gives People five administrative routes
+       * — persons, authors, speakers, scholars, teachers — and they are five
+       * VIEWS of one administrative concern with one owner, so they share one
+       * read key and one administer key.
+       */
+      const PHASE_5_KEYS = ['people.administer', 'people.read'];
+
+      /**
+       * The four capability-projection sources, which MUST NOT be grantable.
+       *
+       * DOMAIN_MODEL.md §4.5 derives `canTeach`, `canReceiveQuestions`,
+       * `canReviewContent` and `canIssueFatwa` from these codes, and Phase 5
+       * consumes that projection — which made seeding one of them the obvious
+       * shortcut for a projection test. They belong to Learning, Fatwa and
+       * Editorial, none of which has shipped, and OPEN_DECISIONS.md §6.3
+       * separately reserves who receives them to the organisation.
+       */
+      const UNSEEDED_CAPABILITY_KEYS = [
+        'teaching.perform',
+        'question.receive',
+        'content.review',
+        'fatwa.answer',
+        'fatwa.publish',
+      ];
+
       it('is exactly what the delivered migrations seeded', async () => {
         const catalogue = await harness.administration.catalogue();
         const keys = catalogue.map((entry) => entry.key).sort();
 
-        expect(keys).toEqual([...PHASE_2_KEYS, ...PHASE_3B_KEYS, ...PHASE_4_KEYS].sort());
+        expect(keys).toEqual(
+          [...PHASE_2_KEYS, ...PHASE_3B_KEYS, ...PHASE_4_KEYS, ...PHASE_5_KEYS].sort(),
+        );
+
+        // AND NOT ONE CAPABILITY SOURCE, asserted against the live catalogue
+        // rather than the migration text: a key seeded by any route at all
+        // would be grantable authority over a context that has not shipped.
+        for (const key of UNSEEDED_CAPABILITY_KEYS) {
+          expect(keys, `${key} belongs to a later phase`).not.toContain(key);
+        }
 
         // Every stored key is one this build can describe: a catalogue the
         // interface cannot explain is a catalogue nobody can administer.

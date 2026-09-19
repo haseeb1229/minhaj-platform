@@ -312,6 +312,114 @@ BEGIN
   DENY DELETE, ALTER ON OBJECT::[dbo].[Tag] TO [$(app_login)];
 END;
 
+-- People & Contributors (Phase 5) ---------------------------------------------
+--
+-- NO DELETE ON `Person` OR ON ANY OF THE FOUR PROFILE TABLES, and that is this
+-- phase's central integrity claim rather than a preference.
+--
+-- A later content context's contributor reference will carry a real foreign key
+-- to `Person` or to one of the profiles. If the runtime could delete one, it
+-- could either orphan that reference or be blocked by it at an arbitrary
+-- moment; denying DELETE means neither is reachable, and "removing a
+-- contributor cannot orphan an attribution" is enforced by the grant rather
+-- than by an application check somebody wrote. Archive is the lifecycle,
+-- exactly as it is for `Topic` and `Role`.
+IF OBJECT_ID(N'[dbo].[Person]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, UPDATE ON OBJECT::[dbo].[Person] TO [$(app_login)];
+  DENY INSERT ON OBJECT::[dbo].[Person] TO [$(app_login)];
+  -- A Person slug is chosen at creation and is then a stable public identity.
+  -- DOMAIN_MODEL.md §19.7 permits an editable canonical slug only alongside
+  -- native slug history and automatic 301s, and Phase 5 ships neither — so even
+  -- a caller holding the runtime principal cannot rewrite one. The same
+  -- column-level denial `Topic.slug` carries, for the same reason.
+  DENY UPDATE ON OBJECT::[dbo].[Person] ([slug]) TO [$(app_login)];
+  DENY DELETE, ALTER ON OBJECT::[dbo].[Person] TO [$(app_login)];
+END;
+
+IF OBJECT_ID(N'[dbo].[PeopleCreatePerson]', N'P') IS NOT NULL
+  GRANT EXECUTE ON OBJECT::[dbo].[PeopleCreatePerson] TO [$(app_login)];
+
+IF OBJECT_ID(N'[dbo].[PeopleAddNameVariant]', N'P') IS NOT NULL
+  GRANT EXECUTE ON OBJECT::[dbo].[PeopleAddNameVariant] TO [$(app_login)];
+
+-- The child rows ARE deletable, and the asymmetry is deliberate. Removing an
+-- Urdu name entered in error is a real administrative act, and blanking it to
+-- an empty string would be a translation that exists and says nothing. The
+-- primary-locale translation is still not removable — `PeoplePersonPrimaryName`
+-- refuses any delete that would leave a Person without one — so this grant
+-- cannot be used to make a Person render as nothing.
+IF OBJECT_ID(N'[dbo].[PersonTranslation]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[PersonTranslation] TO [$(app_login)];
+  DENY ALTER ON OBJECT::[dbo].[PersonTranslation] TO [$(app_login)];
+END;
+
+-- Name variants are added and removed, never edited: changing one in place
+-- would silently rewrite what the unique index compared, so UPDATE is denied
+-- and a correction is a remove followed by an add.
+IF OBJECT_ID(N'[dbo].[PersonNameVariant]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, DELETE ON OBJECT::[dbo].[PersonNameVariant] TO [$(app_login)];
+  DENY INSERT, UPDATE, ALTER ON OBJECT::[dbo].[PersonNameVariant] TO [$(app_login)];
+END;
+
+-- The four profile aggregates. Created and moved through their own lifecycles;
+-- never destroyed, for the same reason `Person` is not.
+IF OBJECT_ID(N'[dbo].[AuthorProfile]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[AuthorProfile] TO [$(app_login)];
+  DENY DELETE, ALTER ON OBJECT::[dbo].[AuthorProfile] TO [$(app_login)];
+END;
+
+IF OBJECT_ID(N'[dbo].[SpeakerProfile]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[SpeakerProfile] TO [$(app_login)];
+  DENY DELETE, ALTER ON OBJECT::[dbo].[SpeakerProfile] TO [$(app_login)];
+END;
+
+IF OBJECT_ID(N'[dbo].[ScholarProfile]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[ScholarProfile] TO [$(app_login)];
+  DENY DELETE, ALTER ON OBJECT::[dbo].[ScholarProfile] TO [$(app_login)];
+END;
+
+IF OBJECT_ID(N'[dbo].[TeacherProfile]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[TeacherProfile] TO [$(app_login)];
+  DENY DELETE, ALTER ON OBJECT::[dbo].[TeacherProfile] TO [$(app_login)];
+END;
+
+-- Profile prose, per locale. Removable for the same reason a Person
+-- translation is: an entry made in error must be retractable.
+IF OBJECT_ID(N'[dbo].[ScholarProfileTranslation]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[ScholarProfileTranslation] TO [$(app_login)];
+  DENY ALTER ON OBJECT::[dbo].[ScholarProfileTranslation] TO [$(app_login)];
+END;
+
+IF OBJECT_ID(N'[dbo].[TeacherProfileTranslation]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[TeacherProfileTranslation] TO [$(app_login)];
+  DENY ALTER ON OBJECT::[dbo].[TeacherProfileTranslation] TO [$(app_login)];
+END;
+
+-- A profile's language list is a SET: a language is listed or it is not, so
+-- INSERT and DELETE are the operations and UPDATE is denied — there is no third
+-- state for a composite-key membership row to be moved into. The same posture
+-- `RolePermission` already has, for the same reason.
+IF OBJECT_ID(N'[dbo].[ScholarProfileLanguage]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[ScholarProfileLanguage] TO [$(app_login)];
+  DENY UPDATE, ALTER ON OBJECT::[dbo].[ScholarProfileLanguage] TO [$(app_login)];
+END;
+
+IF OBJECT_ID(N'[dbo].[TeacherProfileLanguage]', N'U') IS NOT NULL
+BEGIN
+  GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[TeacherProfileLanguage] TO [$(app_login)];
+  DENY UPDATE, ALTER ON OBJECT::[dbo].[TeacherProfileLanguage] TO [$(app_login)];
+END;
+
 -- Migration history is administrative state, not application data.
 IF OBJECT_ID(N'[dbo].[_prisma_migrations]', N'U') IS NOT NULL
 BEGIN

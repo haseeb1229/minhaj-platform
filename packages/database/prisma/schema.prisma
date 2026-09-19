@@ -147,6 +147,17 @@ model User {
   twoFactor            TwoFactor[]
   privilegedPosture    PrivilegedSecurityPosture?
 
+  /// The OPTIONAL public contributor record this account belongs to (Phase 5).
+  ///
+  /// A BACK-REFERENCE PRISMA REQUIRES, AND NOT A DEPENDENCY. The relation is
+  /// declared and owned on `Person`, which holds the foreign key and the unique
+  /// index; this side exists only because Prisma will not accept a one-sided
+  /// relation. Identity never reads it — the Identity services, adapters and
+  /// authorisation path contain no reference to `Person` — because People owns
+  /// the link and its disposition (DOMAIN_MODEL.md §5.1, SECURITY_BASELINE.md
+  /// §19.1). A `User` with no `Person` is the ordinary case.
+  person Person?
+
   @@index([status])
   @@index([createdAt])
   @@map("User")
@@ -887,4 +898,443 @@ model Tag {
   @@index([status, slug])
   @@index([status, label])
   @@map("Tag")
+}
+
+// ===========================================================================
+// Phase 5 — People & Contributors
+// ===========================================================================
+//
+// OWNERSHIP. Physical placement here transfers no semantic ownership
+// (ARCHITECTURE.md §4.1, §6.3 rule 14). Every table below is owned by the
+// PEOPLE & CONTRIBUTORS context, declared in this package's manifest under
+// `minhaj.persistenceAdapters`, and the architecture gate fails closed on an
+// adapter no declaration owns.
+//
+// SIX DISTINCT MODELS, AND THEY ARE NEVER MERGED. DOMAIN_MODEL.md §5.2 states
+// it as a rule: "Person, AuthorProfile, SpeakerProfile, ScholarProfile,
+// TeacherProfile and User are six distinct models and are never merged."
+//
+// So there is deliberately NO `Profile` table with a `type` column, NO
+// `isAuthor`/`isTeacher` boolean on `Person`, and NO merge of `Person` into
+// `User`. Four separate tables cost four unique indexes and buy four
+// independent lifecycles — a person's author facet stays visible while their
+// teacher facet is withdrawn, and neither transition can touch the other by
+// sharing a row with it.
+//
+// NO CAPABILITY IS STORED ANYWHERE IN THIS SECTION. `canTeach`,
+// `canReceiveQuestions`, `canReviewContent` and `canIssueFatwa` are projections
+// of Identity grants (§4.5); the closest thing to one of them here is the
+// ABSENCE of a column, which is the point. "A profile alone grants nothing",
+// and a schema with nowhere to record the opposite is how that stays true.
+//
+// NO CONTRIBUTION JUNCTION. §5.3 puts the relationship row in the context that
+// owns the TARGET, and no such context has shipped. The role VOCABULARY is
+// `CONTRIBUTION_ROLES` in `packages/contracts/src/people/values.ts`; there is
+// no table here for a `targetType` + `targetId` pair to live in, which is what
+// §6.2 prohibits and what a "generic contribution" table would be.
+//
+// NO TAXONOMY REFERENCE. People's allowlist row is "Layer 0; Identity & Access"
+// (§3.1), so nothing below carries a foreign key to `Topic` or `Language`.
+// Profile languages are scalar BCP-47 style codes validated by a People-owned
+// schema, which is a duplication chosen deliberately over an architecture edge.
+//
+// NO IMAGE, NO ASSET, NO URL. Storage arrives at Phase 7 and profile media with
+// the phase that owns it. A portrait column added now would either be an
+// unowned blob or an authoritative external reference nobody reviewed.
+//
+// NO HARD DELETE for the aggregates. `Person` and the four profiles are
+// archived, never removed, and the runtime principal holds no DELETE on any of
+// them — so a later content context's typed contributor reference can never be
+// orphaned by an administrator pressing a button. The CHILD rows (translations,
+// name variants, profile languages) ARE deletable, because removing a
+// translation entered in error is a real administrative act and blanking it to
+// an empty string would be a translation that exists and says nothing.
+
+/// A human being who contributes to the platform's content
+/// (DOMAIN_MODEL.md §5.1).
+///
+/// A PUBLIC RECORD, AND NOT AN ACCOUNT. "It exists for historical figures with
+/// no account, and for contributors who have never signed in." The link to
+/// `User` is optional in both directions and is private; nothing about an
+/// account reaches a public surface through this table.
+///
+/// THE SLUG IS IMMUTABLE. DOMAIN_MODEL.md §19.7 permits an editable canonical
+/// slug only with native slug history and automatic 301s delivered by the same
+/// phase. Phase 5 delivers neither, so it takes the other branch: the slug is
+/// fixed at creation and the runtime principal is DENIED UPDATE on the column,
+/// exactly as it is on `Topic.slug`. A stable public URL is then a property of
+/// the grant rather than of a rule somebody remembered.
+model Person {
+  id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
+
+  /// Stable, globally unique, URL-safe public identity. `/people/{slug}` is the
+  /// canonical contributor route (ROUTE_MAP.md §2.1), so uniqueness is global.
+  ///
+  /// NOT DERIVED FROM A NAME. The name is localised and frequently written in a
+  /// non-Latin script; a slug transliterated from it would depend on who
+  /// transliterated it.
+  slug String @unique @db.NVarChar(160)
+
+  /// The OPTIONAL account link (DOMAIN_MODEL.md §5.1).
+  ///
+  /// UNIQUE, WHICH IS WHAT MAKES IT ONE-TO-ONE. Without the unique index two
+  /// concurrent administrators could each attach the same account to a
+  /// different Person and both succeed; with it, exactly one does and the other
+  /// is refused by the database rather than by whichever check ran first.
+  ///
+  /// NO ACTION ON DELETE, deliberately, and not a cascade nobody configured.
+  /// Account closure RETAINS the `User` row — pseudonymised, with a tombstone
+  /// address (§4.6) — so there is no delete for a cascade to follow. If one
+  /// ever occurred, a cascade would destroy a PUBLIC contributor record because
+  /// a private account disappeared, inverting the ownership this model rests on.
+  ///
+  /// WHAT CLOSURE ACTUALLY DOES to this column is release it: People removes
+  /// its own link through its own service after Identity commits. That is the
+  /// settled product default: the public Person survives, while the operational
+  /// account association does not. Any future historical association needs an
+  /// explicit retention/provenance mechanism; this comment makes no universal
+  /// legal-basis claim (DOMAIN_MODEL.md §5.4; SECURITY_BASELINE.md §19.1).
+  userId String? @unique @db.NVarChar(36)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  /// The interface locale this Person's content was originally written in.
+  ///
+  /// NOT ASSUMED TO BE ENGLISH, and that is the whole reason it is stored.
+  /// ROUTE_MAP.md §9.2.1 resolves `x-default` to the ORIGINAL language when no
+  /// English version exists, and much of this corpus is Urdu-original or
+  /// Arabic-original. A platform that defaulted the answer would advertise an
+  /// English URL for a person who has no English version.
+  ///
+  /// It is an INTERFACE locale, not a content `Language`: these are the three
+  /// languages the platform's own pages are read in, which is what a `hreflang`
+  /// alternate has to name.
+  primaryLocale String @db.NVarChar(8)
+
+  /// draft | published | archived. Only `published` is publicly visible, and
+  /// the visibility predicate lives in the query rather than in the page.
+  status String @db.NVarChar(16)
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  translations PersonTranslation[]
+  nameVariants PersonNameVariant[]
+
+  /// The four facets. Each is OPTIONAL and each is its own aggregate: a Person
+  /// may hold all four at once, in any combination, with four independent
+  /// lifecycles (DOMAIN_MODEL.md §5.2).
+  authorProfile  AuthorProfile?
+  speakerProfile SpeakerProfile?
+  scholarProfile ScholarProfile?
+  teacherProfile TeacherProfile?
+
+  /// The administrative directory seeks on status and orders by slug, which is
+  /// unique — so the ordering is TOTAL and a page boundary can neither repeat a
+  /// row nor skip one.
+  @@index([status, slug])
+  /// The sitemap and the public reader both ask for published people ordered by
+  /// their last genuine modification.
+  @@index([status, updatedAt])
+  @@map("Person")
+}
+
+/// A Person's name and biography in ONE INTERFACE LOCALE.
+///
+/// TRANSLATION ROWS, NOT PARALLEL COLUMNS. DOMAIN_MODEL.md §19.1 is explicit:
+/// locale-aware fields are rows related to the parent record, never
+/// `name_en`/`name_ur`. Adding a fourth interface locale is then a data
+/// operation, and a missing translation is detectable by a query — which is
+/// exactly what the public route needs, because it must omit a locale from
+/// `hreflang` rather than advertise a fallback as a translation
+/// (ROUTE_MAP.md §9.2).
+///
+/// ONE ROW PER (PERSON, LOCALE), by the composite primary key. Two editors
+/// saving the Urdu name at once produce one row, and neither had to read first
+/// to find out.
+///
+/// THE PRIMARY-LOCALE TRANSLATION CANNOT BE REMOVED. `PeoplePersonPrimaryName`
+/// refuses any delete or update that would leave a Person without a translation
+/// in their own primary locale, so resolving a Person always yields a real name
+/// in a real language — and the canonical URL always points at a genuine
+/// language version rather than at a fallback (§9.3).
+model PersonTranslation {
+  personId String @db.NVarChar(36)
+
+  /// The interface locale: `en`, `ur`, `ar`. Sized as `User.locale` is.
+  locale String @db.NVarChar(8)
+
+  /// CASCADE, and it is one of several cascade paths inside this context. A
+  /// Person is never deleted at runtime, so this describes what a reviewed
+  /// rollback does rather than anything an administrator can cause.
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  name String @db.NVarChar(200)
+
+  /// Optional, and empty means absent. A contributor record with no biography
+  /// is the normal case — a historical author may be nothing but a name — and a
+  /// required column would be filled with invented prose about a real person
+  /// (OPEN_DECISIONS.md §6.3).
+  biography String? @db.NVarChar(4000)
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  /// The administrative directory searches contributors by name PREFIX, and an
+  /// unindexed predicate over a table that grows with every contributor in
+  /// every language is a scan on every keystroke. `startsWith` is what an index
+  /// can seek; a `contains` search would be a leading wildcard and could not
+  /// use this index at all, which is why the query does not offer one.
+  @@index([name])
+  @@id([personId, locale])
+  @@map("PersonTranslation")
+}
+
+/// An alternative way one Person's name is written, in one locale.
+///
+/// A ROW AND NOT A DELIMITED COLUMN. A historical author is routinely known by
+/// several names, and the public profile lists them. A comma-separated string
+/// is a list the database cannot count, cannot index and cannot de-duplicate,
+/// so all three jobs would move into application code where a concurrent writer
+/// can step around them.
+///
+/// DE-DUPLICATION IS ON THE NORMALISED FORM, WHICH IS STORED.
+/// `normaliseNameVariant` case-folds and collapses whitespace after NFC, and
+/// nothing else — no transliteration and no diacritic stripping, because
+/// removing the diacritics from a name written in Arabic script can change
+/// which name it is. The normalised value has its own column so the unique
+/// index is over the value actually compared; an application that normalised at
+/// write time and indexed the raw value would enforce a different rule from the
+/// one it documents.
+///
+/// COUNT-BOUNDED BY A TRIGGER, not by the writer. `PeopleNameVariantBound`
+/// refuses the insert that would exceed the accepted per-locale maximum, so two
+/// concurrent adds cannot both observe a count below the bound and commit past
+/// it.
+model PersonNameVariant {
+  id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
+
+  personId String @db.NVarChar(36)
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  locale String @db.NVarChar(8)
+
+  /// As entered, and as displayed. The reader sees what an editor typed.
+  value String @db.NVarChar(200)
+
+  /// As compared. Never displayed.
+  normalised String @db.NVarChar(200)
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  @@unique([personId, locale, normalised])
+  @@map("PersonNameVariant")
+}
+
+/// A writer of works (DOMAIN_MODEL.md §5.2).
+///
+/// "May be historical; no longer owned by Library." That last clause is why
+/// this table exists at Phase 5 rather than at Phase 8: the prior revision let
+/// `books` own Author, which left Speaker unowned and authorship duplicated
+/// across contexts. Author is delivered exactly once, before its consumers
+/// (DELIVERY_PLAN.md, Phase 5 exit).
+///
+/// NO FIELDS OF ITS OWN, AND THAT IS NOT AN OVERSIGHT. §5.2 names none for
+/// Author, so none is invented. It is a distinct aggregate because it has a
+/// distinct MEANING and a distinct LIFECYCLE — not because it has distinct
+/// columns, and adding a field apiece to make the four tables look symmetrical
+/// would be modelling by table layout.
+model AuthorProfile {
+  id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
+
+  /// UNIQUE: at most one author facet per Person. Four tables, four unique
+  /// indexes — which is what makes "one Person may hold all four" and "one
+  /// Person may hold each at most once" both properties of the schema.
+  personId String @unique @db.NVarChar(36)
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  /// draft | active | archived. Its OWN lifecycle, independent of the Person's
+  /// and of the other three facets'.
+  status String @db.NVarChar(16)
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  @@map("AuthorProfile")
+}
+
+/// A speaker in video or audio (DOMAIN_MODEL.md §5.2).
+///
+/// "Explicitly owned here — previously unowned." Media and Learning will
+/// reference a speaker through this boundary rather than growing their own
+/// notion of one.
+///
+/// NO FIELDS OF ITS OWN, for the same reason `AuthorProfile` has none.
+model SpeakerProfile {
+  id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
+
+  personId String @unique @db.NVarChar(36)
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  status String @db.NVarChar(16)
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  @@map("SpeakerProfile")
+}
+
+/// A public scholarly profile (DOMAIN_MODEL.md §5.2).
+///
+/// "Qualifications, expertise, languages" — the three concerns §5.2's own table
+/// names, and the reason this aggregate has child rows where Author and Speaker
+/// have none.
+///
+/// IT ESTABLISHES NO RELIGIOUS AUTHORITY. A ScholarProfile is a description,
+/// not an appointment: issuing a Fatwa requires the `fatwa.publish` grant,
+/// which no phase has yet made grantable and which OPEN_DECISIONS.md §6.3
+/// reserves to the organisation. Nothing in this table can confer it, and
+/// nothing reads it to decide anything.
+///
+/// ITS QUALIFICATIONS ARE NOT VERIFIED BY THIS PLATFORM. There is no
+/// verification workflow, no evidence upload and no awarding body, because
+/// inventing one would be inventing a credential-verification product nobody
+/// asked for. The field records what an authorised administrator entered.
+model ScholarProfile {
+  id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
+
+  personId String @unique @db.NVarChar(36)
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  status String @db.NVarChar(16)
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  translations ScholarProfileTranslation[]
+  languages    ScholarProfileLanguage[]
+
+  @@map("ScholarProfile")
+}
+
+/// One scholar profile's qualifications and expertise in ONE interface locale.
+///
+/// LOCALISED, because these are prose a reader reads, and a trilingual platform
+/// that stored them once would show Urdu readers an English paragraph.
+///
+/// FREE TEXT RATHER THAN A STRUCTURED EXPERTISE LIST, and the reason is an
+/// ownership boundary. A structured subject vocabulary is a taxonomy; Taxonomy
+/// owns taxonomies; People may not depend on Taxonomy (§3.1). Growing a second
+/// subject vocabulary here would be the shadow taxonomy that boundary exists to
+/// prevent, and the typed link between a scholar and a Topic belongs to the
+/// context that owns the target when one ships (§6.2).
+model ScholarProfileTranslation {
+  scholarProfileId String         @db.NVarChar(36)
+  scholarProfile   ScholarProfile @relation(fields: [scholarProfileId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  locale String @db.NVarChar(8)
+
+  /// Optional, and empty is absent. An unentered qualification must read as
+  /// "nothing is recorded", never as an empty claim.
+  qualifications String? @db.NVarChar(2000)
+  expertise      String? @db.NVarChar(2000)
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  @@id([scholarProfileId, locale])
+  @@map("ScholarProfileTranslation")
+}
+
+/// One content language a scholar works in.
+///
+/// A SCALAR CODE, NOT A FOREIGN KEY. Taxonomy owns the administered `Language`
+/// catalogue and People may not depend on Taxonomy, so this stores a validated
+/// BCP-47 style code and claims nothing about a catalogue row.
+///
+/// ITS OWN TABLE, NOT SHARED WITH `TeacherProfileLanguage`. One table serving
+/// both would need a column saying which kind of profile the row belongs to,
+/// and that column is the polymorphic reference §6.2 prohibits. Two small
+/// tables with real foreign keys cost a duplicated shape and buy referential
+/// integrity the database enforces.
+model ScholarProfileLanguage {
+  scholarProfileId String         @db.NVarChar(36)
+  scholarProfile   ScholarProfile @relation(fields: [scholarProfileId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  /// Lowercase, as `contributorLanguageCodeSchema` normalises it, so the
+  /// composite key treats one language as one row.
+  languageCode String @db.NVarChar(16)
+
+  @@id([scholarProfileId, languageCode])
+  @@map("ScholarProfileLanguage")
+}
+
+/// An approved teacher (DOMAIN_MODEL.md §5.2).
+///
+/// "Teaching subjects, languages, public biography" — §5.2's own three
+/// concerns.
+///
+/// "APPROVED" IS NOT WHAT THIS ROW MEANS, and the distinction is the single
+/// most important one in this file. §4.5: "Creating a Teacher profile confers
+/// no teaching privilege; teacher approval must create an auditable
+/// RoleAssignment." An `active` TeacherProfile says a teaching facet has been
+/// described and may be shown. `canTeach` comes from the `teaching.perform`
+/// grant and from nowhere else, and this table has no column that could
+/// disagree with it.
+///
+/// NO SAFEGUARDING STATE, NO VETTING, NO MINOR-ELIGIBILITY FLAG. Those belong
+/// to Phases 23–25 behind an external safeguarding gate (DELIVERY_PLAN.md), and
+/// a default-deny field invented here would be policy this project has not been
+/// given.
+model TeacherProfile {
+  id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
+
+  personId String @unique @db.NVarChar(36)
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  status String @db.NVarChar(16)
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  translations TeacherProfileTranslation[]
+  languages    TeacherProfileLanguage[]
+
+  @@map("TeacherProfile")
+}
+
+/// One teacher profile's public biography and subjects in ONE interface locale.
+///
+/// A SEPARATE BIOGRAPHY FROM THE PERSON'S, because §5.2 names one for this
+/// aggregate specifically: what a teacher tells a prospective student is not
+/// the same text as the contributor biography that heads the profile, and
+/// collapsing the two would make editing one change the other.
+model TeacherProfileTranslation {
+  teacherProfileId String         @db.NVarChar(36)
+  teacherProfile   TeacherProfile @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  locale String @db.NVarChar(8)
+
+  biography String? @db.NVarChar(2000)
+  subjects  String? @db.NVarChar(2000)
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  @@id([teacherProfileId, locale])
+  @@map("TeacherProfileTranslation")
+}
+
+/// One content language a teacher teaches in.
+///
+/// Its own table for the same reason `ScholarProfileLanguage` is: a shared one
+/// would need a discriminator column, and that column is the polymorphic
+/// reference DOMAIN_MODEL.md §6.2 prohibits.
+model TeacherProfileLanguage {
+  teacherProfileId String         @db.NVarChar(36)
+  teacherProfile   TeacherProfile @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  languageCode String @db.NVarChar(16)
+
+  @@id([teacherProfileId, languageCode])
+  @@map("TeacherProfileLanguage")
 }

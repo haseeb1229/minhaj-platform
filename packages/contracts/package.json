@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./identity": "./src/identity/index.ts",
     "./taxonomy": "./src/taxonomy/index.ts",
+    "./people": "./src/people/index.ts",
     "./platform": "./src/platform/index.ts",
     "./env/prerender": {
       "react-server": "./src/env/prerender.ts",

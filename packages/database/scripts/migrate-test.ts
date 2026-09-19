@@ -91,6 +91,24 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // and extend the protected bundle. An absent entry would fail this gate; an
   // empty one asserts that nothing is expected to appear or to disappear.
   '20260918000000_phase4_navigation_permission': [],
+
+  // ELEVEN TABLES, AND THE COUNT IS ITSELF PART OF THE PROOF. Four of them are
+  // the four profile aggregates DOMAIN_MODEL.md §5.2 requires to stay distinct;
+  // a migration that delivered one `Profile` table with a `type` column would
+  // satisfy "People shipped" and fail this list.
+  '20260919000000_phase5_people_contributors': [
+    'Person',
+    'PersonTranslation',
+    'PersonNameVariant',
+    'AuthorProfile',
+    'SpeakerProfile',
+    'ScholarProfile',
+    'ScholarProfileTranslation',
+    'ScholarProfileLanguage',
+    'TeacherProfile',
+    'TeacherProfileTranslation',
+    'TeacherProfileLanguage',
+  ],
 };
 
 /**
@@ -110,6 +128,11 @@ const PREMATURE_TABLES = [
   'Hadith',
   'Book',
   'Fatwa',
+  // `Scholar` and `Teacher` stay here after Phase 5, and the near-miss is
+  // deliberate. Phase 5 delivers `ScholarProfile` and `TeacherProfile` —
+  // FACETS of a Person. A bare `Scholar` or `Teacher` table would be a second,
+  // standalone notion of the same human being, which is the duplication
+  // DOMAIN_MODEL.md §5 exists to remove.
   'Scholar',
   'Teacher',
   'Course',
@@ -139,6 +162,27 @@ const PROHIBITED_TABLES = [
   'EntityTopic',
   'ContentTopic',
   'TopicTarget',
+
+  // PHASE 5 ADDS TWO PROHIBITED SHAPES OF ITS OWN, and they fail for the two
+  // different reasons DOMAIN_MODEL.md gives.
+  //
+  // A single `Profile` or `ContributorProfile` table would be §5.2's merge: the
+  // four aggregates collapsed into one row with a `type` column, so a person's
+  // author facet and teacher facet would share a lifecycle and could not be
+  // archived independently.
+  'Profile',
+  'ContributorProfile',
+  'PersonProfile',
+  //
+  // A generic `Contribution` or `ContributorTarget` table would be §6.2's
+  // polymorphic pair again, one boundary along: the contributor edge would be a
+  // real foreign key and the WORK edge would be a type string beside an
+  // identifier. The relationship row belongs to the context that owns the
+  // target (§5.3), and no such context has shipped.
+  'Contribution',
+  'ContributorTarget',
+  'ContributionTarget',
+  'PersonContribution',
 ];
 
 const EXPECTED_AUDIT_COLUMNS = [
@@ -198,6 +242,20 @@ const EXPECTED_COLUMN_SIZES: readonly {
   { table: 'TopicTranslation', column: 'locale', characters: 8 },
   { table: 'Language', column: 'code', characters: 16 },
   { table: 'Tag', column: 'slug', characters: 120 },
+  // Phase 5. `Person.slug` is a UNIQUE constraint and `Person.userId` carries a
+  // unique FILTERED index, so both are index keys that would exceed the
+  // 1700-byte limit at Prisma's NVARCHAR(1000) default.
+  // `PersonNameVariant.normalised` is the third column of a composite UNIQUE
+  // constraint alongside `personId` and `locale`; at the default the three
+  // together would be far past the limit.
+  // `PersonTranslation.locale` is half of a composite primary key and is sized
+  // to match `User.locale`, because the two hold the same kind of value.
+  { table: 'Person', column: 'slug', characters: 160 },
+  { table: 'Person', column: 'userId', characters: 36 },
+  { table: 'PersonTranslation', column: 'locale', characters: 8 },
+  { table: 'PersonNameVariant', column: 'normalised', characters: 200 },
+  { table: 'ScholarProfileLanguage', column: 'languageCode', characters: 16 },
+  { table: 'TeacherProfileLanguage', column: 'languageCode', characters: 16 },
 ];
 
 /**
@@ -209,14 +267,32 @@ const EXPECTED_COLUMN_SIZES: readonly {
  * the host-only privileged surface. A migration that created the tables and
  * silently dropped either would leave a gate that looks present and is not.
  */
-const EXPECTED_FILTERED_INDEX = {
-  table: 'RoleAssignment',
-  index: 'RoleAssignment_userId_roleId_live_key',
-};
+const EXPECTED_FILTERED_INDEXES: readonly {
+  table: string;
+  index: string;
+  why: string;
+}[] = [
+  {
+    table: 'RoleAssignment',
+    index: 'RoleAssignment_userId_roleId_live_key',
+    why: 'two concurrent grants of the same role to the same account both succeed',
+  },
+  // Phase 5. Filtered for the opposite reason to RoleAssignment's: SQL Server's
+  // UNIQUE treats two NULLs as equal, so an unfiltered index here would let the
+  // platform hold exactly ONE Person without an account — and a Person with no
+  // User is the ordinary case (DOMAIN_MODEL.md §5.1).
+  {
+    table: 'Person',
+    index: 'Person_userId_key',
+    why: 'one account could be linked to two different contributor records at once',
+  },
+];
 
 const EXPECTED_PROCEDURES = [
   'IdentityBootstrapPlatformAdministrator',
   'IdentityRecoverPrivilegedSecondFactor',
+  'PeopleAddNameVariant',
+  'PeopleCreatePerson',
 ];
 
 /**
@@ -235,12 +311,26 @@ const EXPECTED_TRIGGERS = [
   // fallback translation every topic must keep.
   'TaxonomyTopicHierarchy',
   'TaxonomyTopicFallback',
+  // Phase 5: the translation a Person must keep in its own primary locale, and
+  // the per-locale bound on name variants.
+  'PeoplePersonPrimaryName',
+  'PeoplePersonPrimaryLocale',
+  'PeopleNameVariantBound',
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
 const EXPECTED_CHECK_CONSTRAINTS = [
   { table: 'IdentityBootstrap', constraint: 'IdentityBootstrap_singleton_ck' },
   { table: 'Topic', constraint: 'Topic_not_self_parent_ck' },
+  // Phase 5 lifecycles, refused by the database rather than by a validator, so
+  // a status nobody defined cannot enter by a route the application does not
+  // own. Four profile constraints and not one shared constraint, because there
+  // are four tables.
+  { table: 'Person', constraint: 'Person_status_ck' },
+  { table: 'AuthorProfile', constraint: 'AuthorProfile_status_ck' },
+  { table: 'SpeakerProfile', constraint: 'SpeakerProfile_status_ck' },
+  { table: 'ScholarProfile', constraint: 'ScholarProfile_status_ck' },
+  { table: 'TeacherProfile', constraint: 'TeacherProfile_status_ck' },
 ];
 
 /**
@@ -283,6 +373,33 @@ const TAXONOMY_PERMISSIONS = ['taxonomy.administer', 'taxonomy.read'];
  * write key would be authority over nothing.
  */
 const NAVIGATION_PERMISSIONS = ['navigation.read'];
+
+/** The People permissions Phase 5 appends to the immutable catalogue. */
+const PEOPLE_PERMISSIONS = ['people.administer', 'people.read'];
+
+/**
+ * The four capability-projection sources, which MUST NOT be seeded yet.
+ *
+ * DOMAIN_MODEL.md §4.5 derives `canTeach`, `canReceiveQuestions`,
+ * `canReviewContent` and `canIssueFatwa` from these codes. Phase 5 consumes the
+ * projection and it would have been trivially convenient to seed them so a test
+ * could grant one — which is exactly why this is asserted as a NEGATIVE.
+ *
+ * They belong to Learning, Fatwa and Editorial, none of which has shipped.
+ * Seeding one now would fix another owner's vocabulary before that owner can
+ * have an opinion about it, and would leave grantable authority over nothing.
+ * OPEN_DECISIONS.md §6.3 separately reserves WHO receives them to the
+ * organisation.
+ *
+ * `fatwa.answer` is listed alongside `fatwa.publish` because §6.3 names both.
+ */
+const UNSEEDED_CAPABILITY_PERMISSIONS = [
+  'teaching.perform',
+  'question.receive',
+  'content.review',
+  'fatwa.answer',
+  'fatwa.publish',
+];
 
 function report(step: string, detail: string): void {
   process.stdout.write(`  ${step.padEnd(24)} ${detail}\n`);
@@ -381,24 +498,24 @@ async function assertColumnSizes(session: SqlSession): Promise<void> {
 
 /** Asserts the objects Prisma's schema language cannot describe. */
 async function assertNonPrismaObjects(session: SqlSession): Promise<void> {
-  const [filtered] = await session.query<{ has_filter: number }>(`
-    SELECT i.has_filter FROM sys.indexes i
-    WHERE i.object_id = OBJECT_ID(N'[dbo].[${EXPECTED_FILTERED_INDEX.table}]')
-      AND i.name = N'${EXPECTED_FILTERED_INDEX.index}'
-      AND i.is_unique = 1;
-  `);
+  for (const expected of EXPECTED_FILTERED_INDEXES) {
+    const [filtered] = await session.query<{ has_filter: number }>(`
+      SELECT i.has_filter FROM sys.indexes i
+      WHERE i.object_id = OBJECT_ID(N'[dbo].[${expected.table}]')
+        AND i.name = N'${expected.index}'
+        AND i.is_unique = 1;
+    `);
 
-  if (filtered === undefined) {
-    fail(
-      `The unique index ${EXPECTED_FILTERED_INDEX.index} is missing. Without it, ` +
-        `two concurrent grants of the same role to the same account both succeed.`,
-    );
-  }
-  if (Number(filtered.has_filter) !== 1) {
-    fail(
-      `${EXPECTED_FILTERED_INDEX.index} exists but is not FILTERED, so a second ` +
-        `grant after a revoke would be refused rather than recorded as new history.`,
-    );
+    if (filtered === undefined) {
+      fail(`The unique index ${expected.index} is missing. Without it, ${expected.why}.`);
+    }
+    if (Number(filtered.has_filter) !== 1) {
+      fail(
+        `${expected.index} exists but is not FILTERED. The filter is what makes ` +
+          `the index hold only where it should: without it, rows the design ` +
+          `requires to coexist collide on NULL or on a superseded value.`,
+      );
+    }
   }
 
   for (const procedure of EXPECTED_PROCEDURES) {
@@ -429,7 +546,8 @@ async function assertNonPrismaObjects(session: SqlSession): Promise<void> {
 
   report(
     'privileged objects',
-    `1 filtered unique index, ${EXPECTED_PROCEDURES.length} procedures, ` +
+    `${EXPECTED_FILTERED_INDEXES.length} filtered unique indexes, ` +
+      `${EXPECTED_PROCEDURES.length} procedures, ` +
       `${EXPECTED_TRIGGERS.length} invariant triggers, 1 operator role`,
   );
 }
@@ -712,6 +830,134 @@ async function assertNavigationPermission(session: SqlSession): Promise<void> {
   report('navigation permission', `${permissions.length} key seeded and bundled`);
 }
 
+/**
+ * The Phase-5 People foundation — what it seeds, and what it deliberately does
+ * not.
+ *
+ * FOUR CLAIMS, and three of them are negatives, because the interesting
+ * failures of this phase are all things that should NOT be in the database:
+ *
+ *   1. `people.read` and `people.administer` exist and are bundled into the
+ *      protected role, through the migration rather than through a screen;
+ *   2. NO capability-source permission has been seeded early — the shortcut
+ *      that would have made a projection test easy and the vocabulary wrong;
+ *   3. the four profile aggregates are four real tables, each with its own
+ *      unique index on `personId`, so "a Person may hold all four" and "at most
+ *      one of each" are both properties of the schema;
+ *   4. no People table carries a stored capability, which is what makes "a
+ *      profile alone grants nothing" unable to be contradicted by data.
+ */
+async function assertPeopleFoundation(session: SqlSession): Promise<void> {
+  // ---- the catalogue extension and the protected bundle --------------------
+  const permissions = await session.query<{ key: string }>(`
+    SELECT [key] FROM [dbo].[Permission]
+    WHERE [key] LIKE N'people.%' ORDER BY [key];
+  `);
+  if (permissions.map((row) => row.key).join(',') !== PEOPLE_PERMISSIONS.join(',')) {
+    fail(
+      `People permissions differ; found: ` +
+        `${permissions.map((row) => row.key).join(', ') || '(none)'}`,
+    );
+  }
+
+  const bundled = await session.query<{ permissionKey: string }>(`
+    SELECT rp.[permissionKey]
+    FROM [dbo].[RolePermission] rp
+    INNER JOIN [dbo].[Role] r ON r.[id] = rp.[roleId]
+    WHERE r.[key] = N'platform-administrator' AND rp.[permissionKey] LIKE N'people.%'
+    ORDER BY rp.[permissionKey];
+  `);
+  if (
+    bundled.map((row) => row.permissionKey).join(',') !== PEOPLE_PERMISSIONS.join(',')
+  ) {
+    fail(
+      `The protected Platform Administrator bundle did not gain the People ` +
+        `permissions through the migration; found: ` +
+        `${bundled.map((row) => row.permissionKey).join(', ') || '(none)'}`,
+    );
+  }
+
+  // ---- the four capability sources are NOT grantable yet -------------------
+  const premature = await session.query<{ key: string }>(`
+    SELECT [key] FROM [dbo].[Permission]
+    WHERE [key] IN (${UNSEEDED_CAPABILITY_PERMISSIONS.map((key) => `N'${key}'`).join(', ')})
+    ORDER BY [key];
+  `);
+  if (premature.length > 0) {
+    fail(
+      `Capability-source permissions were seeded before their owning phase: ` +
+        `${premature.map((row) => row.key).join(', ')}. DOMAIN_MODEL.md §4.5 ` +
+        `derives the four contributor capabilities from these codes, but they ` +
+        `belong to Learning, Fatwa and Editorial — and OPEN_DECISIONS.md §6.3 ` +
+        `reserves who receives them to the organisation.`,
+    );
+  }
+
+  // ---- four aggregates, four unique indexes --------------------------------
+  const PROFILE_TABLES = [
+    'AuthorProfile',
+    'SpeakerProfile',
+    'ScholarProfile',
+    'TeacherProfile',
+  ];
+
+  for (const table of PROFILE_TABLES) {
+    const unique = await session.query<{ name: string }>(`
+      SELECT i.name FROM sys.indexes i
+      JOIN sys.index_columns ic
+        ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+      JOIN sys.columns c
+        ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+      WHERE i.object_id = OBJECT_ID(N'[dbo].[${table}]')
+        AND i.is_unique = 1 AND c.name = N'personId';
+    `);
+    if (unique.length !== 1) {
+      fail(
+        `${table} has no unique index on personId, so one Person could hold two ` +
+          `of the same facet. DOMAIN_MODEL.md §5.2 gives each Person at most one ` +
+          `profile of each kind.`,
+      );
+    }
+  }
+
+  // ---- no stored capability anywhere in People -----------------------------
+  //
+  // BY SHAPE, not by table name. A `canTeach` column added to `Person`,
+  // `TeacherProfile` or any child of them would be the stored boolean §4.5
+  // prohibits, and it would look entirely reasonable in a diff.
+  const capabilityColumns = await session.query<{ tableName: string; name: string }>(`
+    SELECT t.name AS tableName, c.name
+    FROM sys.columns c
+    JOIN sys.tables t ON t.object_id = c.object_id
+    WHERE t.name IN (
+        N'Person', N'PersonTranslation', N'PersonNameVariant',
+        N'AuthorProfile', N'SpeakerProfile', N'ScholarProfile', N'TeacherProfile',
+        N'ScholarProfileTranslation', N'ScholarProfileLanguage',
+        N'TeacherProfileTranslation', N'TeacherProfileLanguage'
+      )
+      AND (
+        c.name LIKE N'can[A-Z]%'
+        OR c.name LIKE N'is[A-Z]%'
+        OR c.name LIKE N'%permission%'
+        OR c.name LIKE N'%role%'
+      );
+  `);
+  if (capabilityColumns.length > 0) {
+    fail(
+      `People schema carries a capability or privilege column: ` +
+        `${capabilityColumns.map((row) => `${row.tableName}.${row.name}`).join(', ')}. ` +
+        `Capability projections are derived from RoleAssignments and are never ` +
+        `stored (DOMAIN_MODEL.md §4.5).`,
+    );
+  }
+
+  report(
+    'people foundation',
+    `${permissions.length} permissions bundled, 4 distinct profile aggregates, ` +
+      `0 capability columns, 0 early capability permissions`,
+  );
+}
+
 async function assertSeedGuardsIdempotent(session: SqlSession): Promise<void> {
   const countOf = async (table: string): Promise<number> => {
     const [row] = await session.query<{ total: number }>(
@@ -878,6 +1124,7 @@ try {
   await assertNoPolymorphicAssignment(session);
   await assertTaxonomyFoundation(session);
   await assertNavigationPermission(session);
+  await assertPeopleFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -961,6 +1208,7 @@ try {
   await assertNoPolymorphicAssignment(session);
   await assertTaxonomyFoundation(session);
   await assertNavigationPermission(session);
+  await assertPeopleFoundation(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

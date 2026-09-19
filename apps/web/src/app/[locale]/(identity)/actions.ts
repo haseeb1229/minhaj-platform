@@ -14,6 +14,7 @@ import { z } from 'zod';
 
 import { dispatchAfterResponse } from '@/composition/dispatch';
 import { identityRuntime } from '@/composition/identity';
+import { peopleRuntime } from '@/composition/people';
 import { applySetCookies, requestContext } from '@/composition/request';
 import { safeReturnTo } from '@/composition/return-to';
 import type { IdentityFailure } from '@/contexts/identity-access';
@@ -619,12 +620,34 @@ export async function closeAccountAction(
   const result = await identity.closeAccount(context, session);
   if (!result.ok) return failed(result.failure, result.retryAfter);
 
+  // TWO OWNERS, TWO TRANSACTIONS, ONE HONEST COMPLETION. Identity has committed
+  // its closure; People now releases its optional live account link through
+  // People's own service. A failure is not reported as success, and the
+  // idempotent reconciliation sweep makes a crash between the two resumable.
+  const disposition = await peopleRuntime().people.releaseAccountLink({
+    accountId: session.account.id,
+  });
+
+  let reconciliationFailed = false;
+  if (disposition.ok) {
+    try {
+      await peopleRuntime().people.reconcileClosedAccountLinks();
+    } catch {
+      reconciliationFailed = true;
+    }
+  }
+
   // The closure notice is enqueued against the address the account HAD, before
   // the tombstone replaces it. It goes out after this response.
   dispatchAfterResponse();
 
   const signedOut = await identity.signOut(context);
   if (signedOut.ok) await applySetCookies(signedOut.setCookies);
+
+  // The Identity transaction has already closed the account, so its notice and
+  // local sign-out still happen. What is withheld is a false successful
+  // completion while People's required owner work is pending.
+  if (!disposition.ok || reconciliationFailed) return failed('unavailable');
 
   redirect(`/${locale}`);
 }

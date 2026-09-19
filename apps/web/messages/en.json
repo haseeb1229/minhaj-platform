@@ -344,6 +344,7 @@
       "integrations": "Integrations",
       "delivery": "Mail delivery",
       "taxonomy": "Taxonomy",
+      "people": "Contributors",
       "navigation": "Navigation"
     },
     "common": {
@@ -696,6 +697,187 @@
       "reason": "Reason",
       "scope": "Scope",
       "count": "Count"
+    },
+    "people": {
+      "saved": "Saved.",
+      "pagination": "Contributor pages",
+      "previous": "Previous",
+      "next": "Next",
+      "denied": {
+        "duplicateSlug": "That identifier is already in use by another contributor.",
+        "accountAlreadyLinked": "That account is already linked to a different contributor.",
+        "personAlreadyLinked": "This contributor already has an account linked. Unlink it first.",
+        "accountNotFound": "No account exists with that identifier.",
+        "profileExists": "This contributor already has that kind of profile.",
+        "profileHasNoDetail": "Author and speaker profiles have no descriptive fields of their own.",
+        "duplicateVariant": "That spelling is already recorded for this language.",
+        "variantLimit": "This contributor already has the maximum number of alternative names for that language.",
+        "primaryTranslationRequired": "A contributor keeps the entry for their original language. Remove another language instead.",
+        "tooManyLanguages": "That is more languages than a profile may list."
+      },
+      "status": {
+        "draft": "Draft",
+        "published": "Published",
+        "archived": "Archived"
+      },
+      "profileStatus": {
+        "draft": "Draft",
+        "active": "Active",
+        "archived": "Archived"
+      },
+      "kind": {
+        "author": "Author",
+        "speaker": "Speaker",
+        "scholar": "Scholar",
+        "teacher": "Teacher"
+      },
+      "capability": {
+        "canTeach": "May teach",
+        "canReceiveQuestions": "May receive questions",
+        "canReviewContent": "May review content",
+        "canIssueFatwa": "May publish a Fatwa"
+      },
+      "persons": {
+        "title": "Contributors",
+        "description": "The people who write, speak and teach. One record per person, with the author, speaker, scholar and teacher facets that apply.",
+        "acceptanceNotice": "Only enter people whose details the organisation has confirmed. Nothing here is published until you set a record to Published.",
+        "search": "Search",
+        "searchHelp": "Matches the start of an identifier or of a stored name.",
+        "statusFilter": "Status",
+        "statusAny": "Any status",
+        "searchSubmit": "Search",
+        "directory": "Contributor records",
+        "empty": "No contributor records match. Create one below.",
+        "caption": "Contributors, ordered by identifier",
+        "name": "Name",
+        "slug": "Identifier",
+        "status": "Status",
+        "coverage": "Languages",
+        "facets": "Facets",
+        "account": "Account",
+        "actions": "Actions",
+        "view": "View",
+        "edit": "Edit",
+        "shownIn": "Shown in {locale}",
+        "complete": "All languages",
+        "missing": "Missing: {locales}",
+        "noFacets": "None yet",
+        "accountLinked": "Linked",
+        "accountNone": "None",
+        "createTitle": "Add a contributor",
+        "createHelp": "The record is created as a draft. Nothing is public until you publish it.",
+        "createSubmit": "Create contributor",
+        "slugHelp": "Lowercase letters, digits and hyphens. This permanent identifier appears in the public web address, so choose it carefully — it cannot be changed afterwards.",
+        "primaryLocale": "Original language",
+        "primaryLocaleHelp": "The language this person's details are written in first. Other languages fall back to it, and it cannot be removed.",
+        "nameField": "Name",
+        "biography": "Biography",
+        "biographyHelp": "Optional. Leave it empty rather than writing a placeholder."
+      },
+      "editor": {
+        "title": "Editing {name}",
+        "slugImmutable": "Fixed when the record was created and not editable.",
+        "viewPublic": "View the public profile",
+        "statusField": "Status",
+        "statusHelp": "Only a published contributor appears publicly or in a sitemap.",
+        "statusSubmit": "Save status",
+        "translations": "Names and biographies",
+        "translationsHelp": "One entry per interface language. A language with no entry falls back to the original language, and the public page says so.",
+        "primaryBadge": "original language",
+        "noTranslation": "No entry in this language.",
+        "translationSubmit": "Save",
+        "translationRemove": "Remove this language",
+        "variants": "Alternative names",
+        "variantsHelp": "Other ways this person's name is written, up to {max} per language. Shown on the public profile.",
+        "noVariants": "No alternative names recorded.",
+        "variantAdd": "Add alternative name",
+        "variantRemove": "Remove",
+        "variantLocale": "Language",
+        "variantValue": "Spelling",
+        "account": "Linked account",
+        "accountHelp": "Optional. Most contributors have no account, and a historical author never will. Linking changes nothing about what the person is permitted to do.",
+        "accountAbsent": "No account is linked.",
+        "accountPresent": "An account is linked.",
+        "accountPresentWithId": "An account is linked: {id}",
+        "accountField": "Account identifier",
+        "accountFieldHelp": "Copy it from the Accounts screen. There is no account search here, so that managing contributors does not become a way to browse accounts.",
+        "accountLink": "Link account",
+        "accountUnlink": "Unlink account",
+        "capabilities": "Approved capabilities",
+        "capabilitiesNotice": "These are read-only. A profile grants nothing: what a person is permitted to do comes from a role assignment made on the Identity screens, and is shown here only so you can see it.",
+        "capabilitiesCaption": "Capabilities and the permission each is derived from",
+        "capability": "Capability",
+        "capabilitySource": "Derived from",
+        "capabilityHeld": "Held",
+        "capabilityYes": "Yes",
+        "capabilityNo": "No",
+        "profiles": "Facets",
+        "profilesHelp": "One person may hold any combination of the four. Each has its own status, and adding one grants nothing.",
+        "addFacet": "Add a facet",
+        "addFacetField": "Facet",
+        "addFacetHelp": "Created as a draft. It appears publicly once you set it to Active.",
+        "addFacetSubmit": "Add facet",
+        "facetStatusField": "Facet status",
+        "facetStatusSubmit": "Save facet status",
+        "facetNoFields": "This facet has no descriptive fields of its own — it records that the person is one.",
+        "facetDetailSubmit": "Save details",
+        "qualifications": "Qualifications",
+        "qualificationsHelp": "Record only what the organisation has confirmed. This platform verifies nothing.",
+        "expertise": "Areas of expertise",
+        "facetBiography": "Teaching biography",
+        "facetBiographyHelp": "What a prospective student reads. Separate from the main biography above.",
+        "subjects": "Subjects taught",
+        "subjectsHelp": "Written out in this language. Subject classification arrives with a later phase.",
+        "languages": "Languages",
+        "languagesHelp": "Language codes, separated by spaces — for example: ur en ar. Up to {max}.",
+        "languagesSubmit": "Save languages"
+      },
+      "facets": {
+        "author": {
+          "title": "Authors",
+          "description": "Contributors who hold an author facet, including historical authors with no account.",
+          "empty": "No contributor has an author facet yet.",
+          "caption": "Contributors with an author facet"
+        },
+        "speaker": {
+          "title": "Speakers",
+          "description": "Contributors who hold a speaker facet, for video and audio.",
+          "empty": "No contributor has a speaker facet yet.",
+          "caption": "Contributors with a speaker facet"
+        },
+        "scholar": {
+          "title": "Scholars",
+          "description": "Contributors who hold a scholar facet, with their qualifications and areas of expertise.",
+          "empty": "No contributor has a scholar facet yet.",
+          "caption": "Contributors with a scholar facet",
+          "notice": "A scholar facet is a description, not an appointment. It confers no religious authority and no permission to publish a Fatwa."
+        },
+        "teacher": {
+          "title": "Teachers",
+          "description": "Contributors who hold a teacher facet, with the subjects and languages they teach in.",
+          "empty": "No contributor has a teacher facet yet.",
+          "caption": "Contributors with a teacher facet",
+          "notice": "A teacher facet is a description, not an approval. Permission to teach comes from a role assignment made on the Identity screens."
+        }
+      }
+    }
+  },
+  "people": {
+    "alsoKnownAs": "Also written as",
+    "facets": "Contributions",
+    "languages": "Languages",
+    "fallbackNotice": "This profile has not been translated into {requested} yet. It is shown in {shown}.",
+    "field": {
+      "qualifications": "Qualifications",
+      "expertise": "Areas of expertise",
+      "biography": "Teaching",
+      "subjects": "Subjects taught"
+    },
+    "kind": {
+      "author": "Author",
+      "speaker": "Speaker",
+      "scholar": "Scholar",
+      "teacher": "Teacher"
     }
   }
 }
