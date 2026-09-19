@@ -1287,3 +1287,14 @@ rollback.
 
 **Last-write-wins is acceptable only for deliberately low-consequence preferences** — a
 display setting, a collapsed panel. **No collaborative realtime editing is introduced.**
+
+**A refusal and a failure to serialise are different answers and are never reported as the
+same one.** "The invariant says no" is authoritative and final; "this transaction could not be
+serialised well enough to ask" is transient, may be retried within a bounded number of
+attempts, and is reported as a generic unavailability. Collapsing the second into the first
+tells an operator that a rule forbids what they asked for when no rule was ever evaluated.
+
+**A transaction that a cross-record invariant will test takes that invariant's serialisation
+point before its first protected write**, not afterwards. An invariant enforced after the write
+has already taken its locks makes two well-behaved transactions acquire the same two resources
+in opposite orders, which is a deadlock rather than a decision.

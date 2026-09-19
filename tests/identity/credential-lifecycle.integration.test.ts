@@ -917,7 +917,11 @@ describe.skipIf(!databaseConfigured)('Phase 2 Chunk 1 — credential lifecycle',
         newPassword: PROOF_NEW_PASSWORD,
       });
 
-      expect(attempt.ok).toBe(false);
+      // The CLASS matters, not merely that it failed. `invalid-credentials` is
+      // what a wrong current password means, and it is now the only failure
+      // this operation reports for that reason — every other mechanics failure
+      // is `unavailable` (DELIVERY_PLAN.md §4, Phase-2 maintenance gate).
+      expect(attempt).toMatchObject({ ok: false, failure: 'invalid-credentials' });
 
       const stillWorks = await harness.identity.signIn(
         anonymousContext('198.51.100.141'),

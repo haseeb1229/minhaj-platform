@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { AuthMechanicsPort } from '../../packages/contracts/src/identity/index.ts';
+import { ProtectedMutationUnavailableError } from '../../packages/database/src/adapters/identity-access/final-administrator.ts';
+import { AuthMechanicsError } from '../../packages/database/src/adapters/identity-access/projection.ts';
 
 import {
   createProofDatabase,
@@ -599,7 +601,12 @@ describe.skipIf(!databaseConfigured)('Phase 2 Chunk 1 — crash ordering', () =>
         currentPassword: PROOF_PASSWORD,
         newPassword: PROOF_NEW_PASSWORD,
       });
-      expect(result).toMatchObject({ ok: false, failure: 'invalid-credentials' });
+
+      // `unavailable`, NOT `invalid-credentials`. A synthetic crash before the
+      // vendor mutation says nothing about the password that was typed, and
+      // this assertion used to record the mapping defect the Phase-2
+      // maintenance gate exists to correct (DELIVERY_PLAN.md §4).
+      expect(result).toMatchObject({ ok: false, failure: 'unavailable' });
       expect(captured).toBeDefined();
 
       const marker = await database.admin.query<{
@@ -931,6 +938,330 @@ describe.skipIf(!databaseConfigured)('Phase 2 Chunk 1 — crash ordering', () =>
          WHERE userId = '${newId}';`,
       );
       expect(Number(intents[0]?.total)).toBe(0);
+    }, 120_000);
+  });
+
+  /* =========================================================================
+   * PHASE-2 MAINTENANCE — what a failed password change is allowed to SAY
+   * =======================================================================*/
+
+  /**
+   * The mapping defect this maintenance exists for (DELIVERY_PLAN.md §4).
+   *
+   * `changePassword` caught every exception from the mechanics port and
+   * answered `invalid-credentials`. Only ONE of those exceptions means the
+   * current password was wrong. A provider outage, a lost connection, a
+   * reconciliation failure — and, worst of all, a failure raised AFTER the new
+   * password had already been committed — all came back as "that is not your
+   * current password".
+   *
+   * That answer is not merely imprecise. It tells a person whose password HAS
+   * changed to retype the old one, it hides an outage behind a credential
+   * error, and it makes a monitored security signal — repeated wrong-password
+   * attempts on a signed-in account — fire for events that are not attempts at
+   * all (SECURITY_BASELINE.md §15.2).
+   *
+   * The fence itself is unchanged and is re-proved here: cancellation still
+   * matches only an operation the vendor transaction has not stamped, and
+   * reconciliation still finishes one that it has.
+   */
+  describe('password-change failure classification', () => {
+    /** Fails the mechanics call with one exact adapter failure class. */
+    async function changePasswordFailingWith(
+      prefix: string,
+      failure: () => unknown,
+    ): Promise<{
+      readonly result: Awaited<ReturnType<IdentityHarness['identity']['changePassword']>>;
+      readonly accountId: string;
+      readonly email: string;
+      readonly operationId: string;
+    }> {
+      const account = await verifiedSession(prefix);
+      const context = sessionContext(account.cookie);
+      let operationId = '';
+
+      const crashing = await createIdentityHarness({
+        wrapAuth: (auth) => ({
+          ...auth,
+          async changePassword(input) {
+            operationId = input.securityOperation.id;
+            throw failure();
+          },
+        }),
+      });
+
+      const session = await crashing.session.resolve(context.headers);
+      if (session.state !== 'active') throw new Error('unreachable');
+
+      const result = await crashing.identity.changePassword(context, session.session, {
+        currentPassword: PROOF_PASSWORD,
+        newPassword: PROOF_NEW_PASSWORD,
+      });
+
+      return { result, accountId: account.accountId, email: account.email, operationId };
+    }
+
+    it('reports a genuinely wrong current password as invalid-credentials', async () => {
+      const account = await verifiedSession('classify-wrong-password');
+      const context = sessionContext(account.cookie);
+      const session = await harness.session.resolve(context.headers);
+      if (session.state !== 'active') throw new Error('unreachable');
+
+      // THE REAL MECHANICS, not an injected failure: the one case that must
+      // keep its credential answer has to be proved through the real library.
+      const result = await harness.identity.changePassword(context, session.session, {
+        currentPassword: 'definitely-not-the-current-passphrase',
+        newPassword: PROOF_NEW_PASSWORD,
+      });
+
+      expect(result).toMatchObject({ ok: false, failure: 'invalid-credentials' });
+
+      // And nothing changed: the old password still signs in.
+      const stillWorks = await harness.identity.signIn(anonymousContext(), {
+        email: account.email,
+        password: PROOF_PASSWORD,
+      });
+      expect(stillWorks.ok).toBe(true);
+    }, 120_000);
+
+    it('keeps invalid-credentials for the explicit mechanics class', async () => {
+      const { result } = await changePasswordFailingWith(
+        'classify-explicit-credentials',
+        () => new AuthMechanicsError('invalid-credentials'),
+      );
+      expect(result).toMatchObject({ ok: false, failure: 'invalid-credentials' });
+    }, 120_000);
+
+    it('reports an UNKNOWN mechanics failure as unavailable', async () => {
+      const { result } = await changePasswordFailingWith(
+        'classify-unknown',
+        () => new AuthMechanicsError('unknown'),
+      );
+      expect(result).toMatchObject({ ok: false, failure: 'unavailable' });
+    }, 120_000);
+
+    it('reports a raw, unrecognised exception as unavailable', async () => {
+      const { result } = await changePasswordFailingWith(
+        'classify-raw',
+        () => new Error('ECONNRESET: the database went away mid-write'),
+      );
+      expect(result).toMatchObject({ ok: false, failure: 'unavailable' });
+    }, 120_000);
+
+    it('never reports a TOKEN failure class as a wrong password', async () => {
+      // A password change consumes no token, so these classes cannot mean the
+      // credential was wrong. `too-many-attempts` belongs to OTP verification;
+      // this surface states its own rate limit separately, as `rate-limited`.
+      for (const [index, failure] of (
+        [
+          'invalid-token',
+          'expired-token',
+          'too-many-attempts',
+          'duplicate-email',
+        ] as const
+      ).entries()) {
+        const { result } = await changePasswordFailingWith(
+          `classify-token-${index}`,
+          () => new AuthMechanicsError(failure),
+        );
+        expect(result.ok).toBe(false);
+        expect(result.ok ? '' : result.failure).not.toBe('invalid-credentials');
+        expect(result.ok ? '' : result.failure).toBe('unavailable');
+      }
+    }, 300_000);
+
+    it('leaks no provider or database detail into the failure', async () => {
+      const { result } = await changePasswordFailingWith('classify-no-leak', () =>
+        Object.assign(new Error('Login failed for user sa on server db-primary-01'), {
+          code: 'ELOGIN',
+          query: 'UPDATE [dbo].[Account] SET [password] = @P1',
+        }),
+      );
+
+      // The CLASS crosses the boundary and nothing else — no message, no
+      // driver code, no query, no `cause` carrying either.
+      expect(result).toEqual({ ok: false, failure: 'unavailable' });
+    }, 120_000);
+
+    it('fences an UNCOMMITTED failure and owes no follow-up', async () => {
+      const { result, accountId, email, operationId } = await changePasswordFailingWith(
+        'classify-uncommitted',
+        () => new AuthMechanicsError('unknown'),
+      );
+      expect(result).toMatchObject({ ok: false, failure: 'unavailable' });
+
+      const [marker] = await database.admin.query<{
+        committedAt: Date | null;
+        cancelledAt: Date | null;
+      }>(
+        `SELECT committedAt, cancelledAt FROM dbo.IdentitySecurityOperation
+         WHERE id = '${operationId}';`,
+      );
+      expect(marker?.committedAt).toBeNull();
+      expect(marker?.cancelledAt).not.toBeNull();
+
+      expect(
+        await followUpCounts(
+          accountId,
+          'identity.password.changed',
+          'identity.password-changed',
+        ),
+      ).toEqual({ audits: 0, intents: 0 });
+
+      // The credential is untouched, which is what makes `unavailable` the
+      // honest answer rather than a softened version of success.
+      const signIn = await harness.identity.signIn(anonymousContext(), {
+        email,
+        password: PROOF_PASSWORD,
+      });
+      expect(signIn.ok).toBe(true);
+    }, 120_000);
+
+    /**
+     * THE CASE THE OLD MAPPING GOT MOST WRONG.
+     *
+     * The vendor transaction stamped the operation and committed the new
+     * password; the step AFTER it failed. Cancellation correctly matches
+     * nothing, reconciliation correctly finishes the committed operation and
+     * owes its follow-up — and the caller is told `unavailable`, not that the
+     * password they just successfully changed was the wrong one.
+     */
+    it('completes a COMMITTED operation and still refuses to blame the password', async () => {
+      const account = await verifiedSession('classify-committed');
+      const context = sessionContext(account.cookie);
+
+      const crashing = await createIdentityHarness({
+        wrapAuth: (auth) => ({
+          ...auth,
+          async changePassword(input) {
+            // The real mutation runs and COMMITS; the session rotation it
+            // returns is then lost, which is the crash window under test.
+            await auth.changePassword(input);
+            throw new Error('synthetic failure after the vendor commit');
+          },
+        }),
+      });
+
+      const session = await crashing.session.resolve(context.headers);
+      if (session.state !== 'active') throw new Error('unreachable');
+
+      const result = await crashing.identity.changePassword(context, session.session, {
+        currentPassword: PROOF_PASSWORD,
+        newPassword: PROOF_NEW_PASSWORD,
+      });
+
+      expect(result).toMatchObject({ ok: false, failure: 'unavailable' });
+      expect(result.ok ? '' : result.failure).not.toBe('invalid-credentials');
+
+      // The change REALLY HAPPENED, and the reconciliation owed for it was
+      // performed exactly once rather than cancelled out from under it.
+      expect(
+        await followUpCounts(
+          account.accountId,
+          'identity.password.changed',
+          'identity.password-changed',
+        ),
+      ).toEqual({ audits: 1, intents: 1 });
+
+      const withNew = await harness.identity.signIn(anonymousContext(), {
+        email: account.email,
+        password: PROOF_NEW_PASSWORD,
+      });
+      expect(withNew.ok).toBe(true);
+    }, 120_000);
+
+    it('still ROTATES the session on a successful change', async () => {
+      const account = await verifiedSession('classify-success-rotates');
+      const context = sessionContext(account.cookie);
+      const session = await harness.session.resolve(context.headers);
+      if (session.state !== 'active') throw new Error('unreachable');
+
+      const changed = await harness.identity.changePassword(context, session.session, {
+        currentPassword: PROOF_PASSWORD,
+        newPassword: PROOF_NEW_PASSWORD,
+      });
+
+      expect(changed.ok).toBe(true);
+      if (!changed.ok) throw new Error('unreachable');
+
+      // The narrowed mapping changed nothing about success: the replacement
+      // cookie is still carried back, and the old one is dead.
+      expect(changed.setCookies.length).toBeGreaterThan(0);
+      expect((await harness.session.resolve(context.headers)).state).toBe('denied');
+
+      const rotated = sessionContext(cookieHeader(changed.setCookies));
+      expect((await harness.session.resolve(rotated.headers)).state).toBe('active');
+    }, 120_000);
+
+    /**
+     * The TOKEN flows are deliberately left alone.
+     *
+     * They consume a token, so `invalid-token` and `expired-token` are real
+     * answers there and their surfaces already render them. Narrowing the
+     * password-change mapping must not have reached them.
+     */
+    it('leaves the password-RESET mapping unchanged', async () => {
+      const email = await signedUp('classify-reset-untouched');
+      await harness.dispatch();
+
+      const reset = await harness.identity.resetPassword(anonymousContext(), {
+        email,
+        token: '000000',
+        newPassword: PROOF_NEW_PASSWORD,
+      });
+
+      expect(reset.ok).toBe(false);
+      expect(reset.ok ? '' : reset.failure).toBe('invalid-token');
+    }, 120_000);
+  });
+
+  describe('protected-mutation exhaustion classification', () => {
+    it('reports an exhausted status-change retry as unavailable without side effects', async () => {
+      const account = await verifiedSession('status-serialisation');
+      const unavailable = await createIdentityHarness({
+        wrapPersistence: (persistence) => ({
+          ...persistence,
+          async setAccountStatus() {
+            throw new ProtectedMutationUnavailableError(3);
+          },
+        }),
+      });
+
+      const changed = await unavailable.identity.setAccountStatus({
+        accountId: account.accountId,
+        status: 'suspended',
+        actorId: null,
+        actorType: 'system',
+      });
+
+      expect(changed).toEqual({ ok: false, failure: 'unavailable' });
+      expect(
+        (await harness.session.resolve(sessionContext(account.cookie).headers)).state,
+      ).toBe('active');
+    }, 120_000);
+
+    it('reports an exhausted closure retry as unavailable without closing the account', async () => {
+      const account = await verifiedSession('closure-serialisation');
+      const context = sessionContext(account.cookie);
+      const unavailable = await createIdentityHarness({
+        wrapPersistence: (persistence) => ({
+          ...persistence,
+          async closeAccount() {
+            throw new ProtectedMutationUnavailableError(3);
+          },
+        }),
+      });
+      const session = await unavailable.session.resolve(context.headers);
+      if (session.state !== 'active') throw new Error('unreachable');
+
+      const closed = await unavailable.identity.closeAccount(context, session.session);
+
+      expect(closed).toEqual({ ok: false, failure: 'unavailable' });
+      expect((await harness.session.resolve(context.headers)).state).toBe('active');
+      const [stillOpen] = await database.admin.query<{ email: string; status: string }>(
+        `SELECT email, status FROM dbo.[User] WHERE id = '${account.accountId}';`,
+      );
+      expect(stillOpen).toMatchObject({ email: account.email, status: 'active' });
     }, 120_000);
   });
 });

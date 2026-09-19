@@ -105,6 +105,15 @@ function fail(failure: IdentityFailure, retryAfter?: number): IdentityError {
     : { ok: false, failure, retryAfter };
 }
 
+/** Maps the two safe outcomes a protected database mutation may expose. */
+function mapProtectedMutationFailure(error: unknown): IdentityFailure | null {
+  const reason = (error as { reason?: unknown } | null)?.reason;
+
+  if (reason === 'final-administrator') return 'final-administrator';
+  if (reason === 'invariant-serialisation') return 'unavailable';
+  return null;
+}
+
 /** The caller's context, as Layer 4 knows it. */
 export interface RequestContext {
   readonly headers: RequestHeaders;
@@ -813,10 +822,22 @@ export function createIdentityService(dependencies: IdentityServiceDependencies)
           newPassword: input.newPassword,
           securityOperation: operation,
         }));
-      } catch {
+      } catch (error) {
+        // The FENCE runs first and is unchanged: cancellation matches only an
+        // operation the vendor transaction has not already stamped, and
+        // reconciliation finishes one that it has. A failure raised after the
+        // password was durably changed therefore still completes its follow-up
+        // rather than being abandoned.
         await persistence.cancelSecurityOperation(operation.id);
         await persistence.reconcileSecurityOperation(operation.id);
-        return fail('invalid-credentials');
+
+        // WHAT THE PERSON IS TOLD is the part that was wrong. Every failure
+        // here used to be reported as `invalid-credentials`, so a provider
+        // outage, a lost connection or a crash after the credential had
+        // ALREADY been replaced all came back as "that is not your current
+        // password" — advice that is untrue, and in the last case advice to
+        // retype a password that no longer exists.
+        return fail(mapPasswordChangeFailure(error));
       }
 
       if (!(await persistence.reconcileSecurityOperation(operation.id))) {
@@ -1039,9 +1060,8 @@ export function createIdentityService(dependencies: IdentityServiceDependencies)
           status: input.status,
         });
       } catch (error) {
-        if ((error as { reason?: unknown } | null)?.reason === 'final-administrator') {
-          return fail('final-administrator');
-        }
+        const failure = mapProtectedMutationFailure(error);
+        if (failure !== null) return fail(failure);
         throw error;
       }
 
@@ -1127,9 +1147,8 @@ export function createIdentityService(dependencies: IdentityServiceDependencies)
           },
         });
       } catch (error) {
-        if ((error as { reason?: unknown } | null)?.reason === 'final-administrator') {
-          return fail('final-administrator');
-        }
+        const failure = mapProtectedMutationFailure(error);
+        if (failure !== null) return fail(failure);
         throw error;
       }
 
@@ -1313,6 +1332,27 @@ export type IdentityService = ReturnType<typeof createIdentityService>;
  */
 function verificationPath(purpose: AddressTokenPurpose): string {
   return purpose === 'password-reset' ? '/reset-password' : '/verify-email';
+}
+
+/**
+ * Maps a mechanics failure from a PASSWORD CHANGE onto an application failure.
+ *
+ * Its own mapper, because a password change and a token flow do not share a
+ * vocabulary. Only one class means the current password was wrong; a token
+ * class cannot be reached from an operation that consumes no token, and an
+ * attempt-counter class belongs to OTP verification rather than to this
+ * surface, which states its own rate limit separately. Everything else —
+ * including `unknown`, which is what an infrastructure or reconciliation
+ * failure becomes — is a failure of the MECHANISM, and the honest answer is
+ * that the operation could not be completed (DELIVERY_PLAN.md §4, Phase-2
+ * maintenance gate; SECURITY_BASELINE.md §15.2).
+ *
+ * The structured failure CLASS is read; the provider's message never is.
+ */
+function mapPasswordChangeFailure(error: unknown): IdentityFailure {
+  const failure = (error as { failure?: unknown } | null)?.failure;
+
+  return failure === 'invalid-credentials' ? 'invalid-credentials' : 'unavailable';
 }
 
 /** Maps an adapter failure class onto an application failure. */

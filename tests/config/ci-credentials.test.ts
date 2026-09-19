@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -194,26 +194,59 @@ describe('A (behavioural) — generation on a true clean runner', () => {
     status: number | null;
     output: string;
   } {
-    const result = spawnSync(
-      process.execPath,
-      [
-        path.join(repoRoot, 'node_modules', 'prisma', 'build', 'index.js'),
-        'generate',
-        '--config',
-        path.join(repoRoot, 'packages', 'database', 'prisma.config.ts'),
-      ],
-      {
-        cwd: repoRoot,
-        env: { ...environment, NO_COLOR: '1' },
-        encoding: 'utf8',
-        timeout: 180_000,
-      },
+    // Keep the schema beneath this installation so Prisma can resolve the
+    // installed `@prisma/client`, while its explicit output remains isolated.
+    const isolated = mkdtempSync(
+      path.join(repoRoot, 'node_modules', '.minhaj-prisma-generate-'),
     );
 
-    return {
-      status: result.status,
-      output: `${result.stdout ?? ''}${result.stderr ?? ''}`,
-    };
+    try {
+      const sourceSchema = readFileSync(
+        path.join(repoRoot, 'packages', 'database', 'prisma', 'schema.prisma'),
+        'utf8',
+      );
+      const output = path.join(isolated, 'client').replaceAll('\\', '/');
+      const generatorHeader = /generator client \{\r?\n\s*provider\s*=\s*[^\r\n]+/;
+      if (!generatorHeader.test(sourceSchema)) {
+        throw new Error('The Prisma client generator block could not be isolated.');
+      }
+      const isolatedSchema = sourceSchema.replace(
+        generatorHeader,
+        (header) => `${header}\n  output = ${JSON.stringify(output)}`,
+      );
+      const schemaPath = path.join(isolated, 'schema.prisma');
+      writeFileSync(schemaPath, isolatedSchema, 'utf8');
+
+      // Keep the REAL repository config, whose environment loading is the
+      // behavior under proof, but never regenerate the shared client while
+      // other Vitest workers are importing it. Prisma replaces its output
+      // directory during generation; using node_modules here created a brief
+      // missing-module window and made unrelated suites nondeterministic.
+      const result = spawnSync(
+        process.execPath,
+        [
+          path.join(repoRoot, 'node_modules', 'prisma', 'build', 'index.js'),
+          'generate',
+          '--config',
+          path.join(repoRoot, 'packages', 'database', 'prisma.config.ts'),
+          '--schema',
+          schemaPath,
+        ],
+        {
+          cwd: repoRoot,
+          env: { ...environment, NO_COLOR: '1' },
+          encoding: 'utf8',
+          timeout: 180_000,
+        },
+      );
+
+      return {
+        status: result.status,
+        output: `${result.stdout ?? ''}${result.stderr ?? ''}`,
+      };
+    } finally {
+      rmSync(isolated, { recursive: true, force: true });
+    }
   }
 
   it('fails without the synthetic URL, naming the unresolved variable', () => {
@@ -232,7 +265,7 @@ describe('A (behavioural) — generation on a true clean runner', () => {
       DATABASE_MIGRATION_URL: syntheticUrl,
     });
 
-    expect(status).toBe(0);
+    expect(status, output).toBe(0);
     expect(output).toContain('Generated Prisma Client');
   });
 
@@ -247,7 +280,7 @@ describe('A (behavioural) — generation on a true clean runner', () => {
       DATABASE_MIGRATION_URL: syntheticUrl.replace(':14330;', ':59999;'),
     });
 
-    expect(status).toBe(0);
+    expect(status, output).toBe(0);
     expect(output).toContain('Generated Prisma Client');
   });
 });

@@ -20,7 +20,10 @@ import type { Prisma } from '@prisma/client';
 
 import { auditRow } from '../../audit-row.ts';
 import { getDatabaseClient } from '../../client.ts';
-import { isFinalAdministratorDatabaseError } from './final-administrator.ts';
+import {
+  classifyProtectedMutationError,
+  withProtectedInvariantMutation,
+} from './final-administrator.ts';
 
 /**
  * Identity's AUTHORISATION persistence — the roles, the assignments, the
@@ -682,7 +685,36 @@ export function createAuthorizationPersistence(): AuthorizationPersistencePort {
     },
 
     async grantRoleAssignment({ accountId, roleId, reason, actor, auditAction }) {
-      return prisma.$transaction(async (tx) => {
+      // The same ordering as the revoke below, and for the same reason:
+      // inserting a PROTECTED assignment fires the same trigger, so a grant
+      // racing a revoke would otherwise meet it holding the opposite locks.
+      //
+      // Like the revoke, the lock is taken for every role rather than only the
+      // protected one. For a protected assignment it adds no contention that
+      // was not already there — the trigger takes the same lock a moment
+      // later regardless — and for an ordinary role it serialises an operator
+      // action against other operator actions, which is not a cost worth a
+      // conditional that has to be right about which writes the trigger
+      // watches.
+      //
+      // The outcome is CAPTURED rather than returned through the helper: what
+      // this operation hands back is typed by the port it implements, and the
+      // transaction that produced it never appears in that type
+      // (ARCHITECTURE.md §4.1).
+      //
+      // It is captured on a HOLDER rather than in a bare local because the
+      // compiler does not follow an assignment made inside a callback: a plain
+      // `let` narrows to `never` after the null check below, which would make
+      // the returned shape unchecked. A property keeps its declared type, so
+      // the port's contract is still enforced here.
+      const captured: {
+        value: {
+          readonly outcome: 'granted' | 'already-held';
+          readonly invalidation: PrivilegeInvalidation;
+        } | null;
+      } = { value: null };
+
+      await withProtectedInvariantMutation(async (tx) => {
         const role = await tx.role.findUnique({
           where: { id: roleId },
           select: { id: true, key: true, deactivatedAt: true },
@@ -722,14 +754,15 @@ export function createAuthorizationPersistence(): AuthorizationPersistencePort {
           // produce one row and one audit record; the loser reports what is
           // true — the account already holds the role — rather than failing.
           if ((error as { code?: string }).code === 'P2002') {
-            return {
-              outcome: 'already-held' as const,
+            captured.value = {
+              outcome: 'already-held',
               invalidation: {
                 accountsAffected: 0,
                 sessionsRevoked: 0,
                 stepUpGrantsRevoked: 0,
               },
             };
+            return;
           }
           throw error;
         }
@@ -743,13 +776,42 @@ export function createAuthorizationPersistence(): AuthorizationPersistencePort {
           after: { role: role.key, granted: 'true' },
         });
 
-        return { outcome: 'granted' as const, invalidation };
+        captured.value = { outcome: 'granted', invalidation };
       });
+
+      if (captured.value === null) throw new Error('The grant produced no outcome.');
+      return captured.value;
     },
 
     async revokeRoleAssignment({ assignmentId, reason, actor, auditAction }) {
+      // CAPTURED on a holder, for both reasons the grant above gives: a
+      // transaction handle never appears in what this boundary hands back, and
+      // a property keeps the declared type the port checks against.
+      const captured: {
+        value: {
+          readonly outcome: 'revoked' | 'not-held';
+          readonly invalidation: PrivilegeInvalidation;
+        } | null;
+      } = { value: null };
+
       try {
-        return await prisma.$transaction(async (tx) => {
+        // THE INVARIANT LOCK IS TAKEN FIRST, before the row below is touched.
+        //
+        // Revoking an assignment is the mutation the protected trigger exists
+        // for, and taking its lock only once the row lock is already held is
+        // what made two administrators revoking each other deadlock on every
+        // attempt (`final-administrator.ts`).
+        //
+        // It is taken for EVERY role rather than only the protected one. The
+        // assignment's role is not known until it is read, and deciding the
+        // lock from a read taken outside the transaction that writes is the
+        // shape this is trying to remove. Role revocation is an operator
+        // action at operator volumes, so serialising all of them costs nothing
+        // that determinism here is not worth.
+        //
+        // The protected paths gain no new contention from this: the trigger
+        // takes the very same lock, and took it before. Only the ORDER moved.
+        await withProtectedInvariantMutation(async (tx) => {
           // Conditional on `revokedAt IS NULL`, so two concurrent revokes produce
           // one state change and one audit record — the same shape the grant path
           // gets from its unique index.
@@ -773,14 +835,15 @@ export function createAuthorizationPersistence(): AuthorizationPersistencePort {
                 'No such role assignment.',
               );
             }
-            return {
-              outcome: 'not-held' as const,
+            captured.value = {
+              outcome: 'not-held',
               invalidation: {
                 accountsAffected: 0,
                 sessionsRevoked: 0,
                 stepUpGrantsRevoked: 0,
               },
             };
+            return;
           }
 
           const assignment = await tx.roleAssignment.findUniqueOrThrow({
@@ -798,10 +861,20 @@ export function createAuthorizationPersistence(): AuthorizationPersistencePort {
             after: { role: assignment.role.key, held: 'false' },
           });
 
-          return { outcome: 'revoked' as const, invalidation };
+          captured.value = { outcome: 'revoked', invalidation };
         });
+
+        if (captured.value === null) {
+          throw new Error('The revocation produced no outcome.');
+        }
+        return captured.value;
       } catch (error) {
-        if (isFinalAdministratorDatabaseError(error)) {
+        // ONLY the semantic refusal becomes `final-administrator`. A transient
+        // serialisation failure that survived the bounded retry arrives here
+        // as a safe `ProtectedMutationUnavailableError`, whose reason the
+        // application layer maps to generic unavailability instead of
+        // claiming an invariant refusal that the database never made.
+        if (classifyProtectedMutationError(error) === 'final-administrator') {
           throw new AuthorizationDataError(
             'final-administrator',
             'The final usable Platform Administrator cannot be removed.',
