@@ -20,15 +20,16 @@ name: CI
 # to obtain CI were to open a pull request for work that was not ready for one,
 # or to merge to `main` to find out whether merging to `main` was safe.
 #
-# Feature and phase branches are therefore validated on push. The namespace is
-# narrow ON PURPOSE: `feature/**` is the convention every branch in this
-# repository already follows, and a catch-all `'**'` would spend runner time on
-# scratch branches while proving nothing extra about the work that matters.
+# Governed feature, phase and maintenance branches are therefore validated on
+# push. The namespaces are narrow ON PURPOSE: `feature/**` covers planned work
+# and `fix/**` covers maintenance checkpoints. A catch-all `'**'` would spend
+# runner time on scratch branches while proving nothing extra about governed work.
 on:
   push:
     branches:
       - main
       - 'feature/**'
+      - 'fix/**'
   pull_request:
     branches: [main]
 

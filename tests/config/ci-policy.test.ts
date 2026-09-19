@@ -273,8 +273,17 @@ describe('F14.2 — which pushes trigger CI', () => {
     expect(matchesBranch(branchPatterns('push'), branch)).toBe(true);
   });
 
-  it('does not become a catch-all', () => {
-    // A narrow namespace is the decision, not an accident. `'**'` would spend
+  it.each(['fix/phase-2-maintenance-pre-phase-6', 'fix/security/hardening'])(
+    'validates a push to the governed maintenance branch %s',
+    (branch) => {
+      expect(matchesBranch(branchPatterns('push'), branch)).toBe(true);
+    },
+  );
+
+  it('keeps the governed namespaces exact and does not become a catch-all', () => {
+    expect(branchPatterns('push')).toEqual(['main', 'feature/**', 'fix/**']);
+
+    // Narrow namespaces are the decision, not an accident. `'**'` would spend
     // runner time on scratch branches and prove nothing extra.
     for (const branch of ['scratch', 'wip/experiment', 'dependabot/npm_and_yarn/x']) {
       expect(matchesBranch(branchPatterns('push'), branch), branch).toBe(false);
