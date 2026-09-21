@@ -379,7 +379,12 @@ describe('no shell message is carried without a consumer', () => {
 
     expect(keys.length).toBeGreaterThan(50);
 
-    const source = await appSource();
+    const source =
+      (await appSource()) +
+      (await readFile(
+        path.join(repoRoot, 'packages/contracts/src/editorial/routes.ts'),
+        'utf8',
+      ));
 
     const unused = keys.filter((key) => {
       const last = key.split('.').at(-1) ?? key;

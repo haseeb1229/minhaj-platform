@@ -1,3 +1,4 @@
+import { editorialSitemapPartitions, mergePagePartitions } from './editorial-sitemap';
 import 'server-only';
 
 import { localeSchema } from '@minhaj/contracts';
@@ -6,12 +7,7 @@ import type { PersonSitemapEntry } from '@minhaj/contracts/people';
 import { peopleReadRuntime } from '@/composition/people-read';
 import { absoluteUrl } from '@/config/origin';
 import { publicIndexingEnabled } from '@/config/indexing';
-import {
-  partitionNamed,
-  partitionPath,
-  sitemapPartitions,
-  type SitemapPartition,
-} from './sitemap';
+import { partitionPath, sitemapPartitions, type SitemapPartition } from './sitemap';
 
 /**
  * The CONTENT half of the sitemap — Phase 5's `people` segment.
@@ -133,7 +129,11 @@ export async function peopleSitemapPartitions(): Promise<readonly SitemapPartiti
  * ASYNC, so its caller is a route handler rather than a build artifact.
  */
 export async function allSitemapPartitions(): Promise<readonly SitemapPartition[]> {
-  return [...sitemapPartitions(), ...(await peopleSitemapPartitions())];
+  return mergePagePartitions([
+    ...sitemapPartitions(),
+    ...(await peopleSitemapPartitions()),
+    ...(await editorialSitemapPartitions()),
+  ]);
 }
 
 /**
@@ -152,12 +152,9 @@ export async function allSitemapPartitions(): Promise<readonly SitemapPartition[
 export async function findSitemapPartition(
   filename: string,
 ): Promise<SitemapPartition | null> {
-  const fromShell = partitionNamed(filename);
-  if (fromShell !== null) return fromShell;
-
   return (
-    (await peopleSitemapPartitions()).find(
-      (partition) => partitionPath(partition) === `/sitemaps/${filename}`,
+    (await allSitemapPartitions()).find(
+      (partition) => partitionPath(partition) === '/sitemaps/' + filename,
     ) ?? null
   );
 }

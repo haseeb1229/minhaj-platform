@@ -1,3 +1,4 @@
+import { correspondenceRetentionDaysSchema } from '../editorial/values.ts';
 /**
  * Server environment SCHEMA and PARSER — implementation, not public API.
  *
@@ -59,6 +60,7 @@ import { logLevelSchema, nodeEnvSchema, parseEnvironment } from './shared.ts';
  * development defaults are rejected in production below.
  */
 export const serverEnvSchema = z.object({
+  CORRESPONDENCE_RETENTION_DAYS: correspondenceRetentionDaysSchema,
   NODE_ENV: nodeEnvSchema.default('development'),
 
   /** Port the web process listens on. */

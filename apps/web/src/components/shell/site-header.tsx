@@ -21,16 +21,14 @@ import { linksIn, pathFor, routeByKey, isAvailable } from '@/shell/registry';
  * that says the same thing to everybody, which is what keeps the whole public
  * tree cacheable as one entry for all visitors.
  *
- * WHAT IS ABSENT IS THE POINT. Nine of the twelve primary items and all three
- * deferred utility items belong to phases that have not shipped, so they are
- * not here at all — not greyed out, not "coming soon", not linked to a stub.
- * A deferred capability is absent (ROUTE_MAP.md §5.2), and the registry makes
+ * Deferred capabilities remain absent from navigation. The registry makes
  * that structural: a deferred route carries no path to link to.
  */
 export async function SiteHeader({ locale }: { readonly locale: Locale }) {
   const t = await getTranslations({ locale, namespace: 'shell' });
 
   const primary = linksIn('primary');
+  const utility = linksIn('utility');
   const explore = routeByKey('explore');
   const hasExplore = explore !== null && isAvailable(explore);
 
@@ -39,15 +37,21 @@ export async function SiteHeader({ locale }: { readonly locale: Locale }) {
       {/*
        * THE UTILITY BAR (INFORMATION_ARCHITECTURE.md §2.1).
        *
-       * The language switcher and nothing else. Find a Centre, Membership and
-       * Contact / Help belong to Global Network, Membership and Editorial, and
-       * none of those has shipped — so none of them appears. The switcher is
-       * here rather than inside a menu because it is a site-wide concern that
-       * must be reachable from every page without opening anything.
+       * Delivered utility routes and the language switcher remain reachable
+       * from every page without opening a menu.
        */}
       <div className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)]">
         <Container>
-          <div className="flex items-center justify-end py-1.5 text-sm">
+          <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 py-1.5 text-sm">
+            {utility.map((route) => (
+              <a
+                key={route.key}
+                href={pathFor(locale, route)}
+                className="inline-flex min-h-8 items-center"
+              >
+                {t(route.label as 'nav.contactHelp')}
+              </a>
+            ))}
             <LocaleSwitcher locale={locale} />
           </div>
         </Container>

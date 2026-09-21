@@ -219,6 +219,9 @@ export function createPeopleReadService({
   readonly reader: PeopleReaderPort;
 }) {
   return {
+    contributorReferences(ids: readonly string[], locale: Locale) {
+      return reader.contributorReferences(ids, locale);
+    },
     /**
      * One contributor as the PUBLIC profile page renders them, or `null`.
      *

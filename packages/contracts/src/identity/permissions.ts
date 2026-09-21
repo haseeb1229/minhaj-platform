@@ -189,6 +189,30 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     key: 'people.administer',
     description: 'Create, edit, link and archive contributor records and their profiles.',
   }),
+  Object.freeze({
+    key: 'content.read',
+    description: 'Read private Article and Page drafts and revisions.',
+  }),
+  Object.freeze({
+    key: 'content.author',
+    description: 'Create and revise Article and Page drafts and submit them for review.',
+  }),
+  Object.freeze({
+    key: 'content.review',
+    description: 'Approve or return an independently authored editorial revision.',
+  }),
+  Object.freeze({
+    key: 'content.publish',
+    description: 'Publish, schedule, cancel and archive reviewed editorial content.',
+  }),
+  Object.freeze({
+    key: 'correspondence.read',
+    description: 'Read private ContactInquiry and Feedback submissions.',
+  }),
+  Object.freeze({
+    key: 'correspondence.administer',
+    description: 'Triage private correspondence and dispose of expired submissions.',
+  }),
 ]);
 
 /** Every catalogue key, as a union. Mistyping one is a compile error. */

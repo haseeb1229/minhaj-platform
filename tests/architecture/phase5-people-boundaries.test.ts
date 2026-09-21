@@ -377,14 +377,15 @@ describe('nothing in People can grant, store or fabricate a capability', () => {
     expect(source).toContain("requirePermittedAction(locale, 'people.administer')");
   });
 
-  it('derives the four projections from permissions that are not yet grantable', () => {
+  it('keeps future capability sources ungrantable while Editorial owns content.review', () => {
     // THE SHORTCUT NOT TAKEN. Seeding one of these would have made a projection
     // test trivial; they belong to Learning, Fatwa and Editorial, and
     // OPEN_DECISIONS.md §6.3 reserves who receives them to the organisation.
     const catalogue = PERMISSION_CATALOGUE.map((entry) => entry.key);
 
     for (const source of Object.values(CONTRIBUTOR_CAPABILITY_SOURCES)) {
-      expect(catalogue, `${source} belongs to a later phase`).not.toContain(source);
+      if (source === 'content.review') expect(catalogue).toContain(source);
+      else expect(catalogue, `${source} belongs to a later phase`).not.toContain(source);
     }
   });
 

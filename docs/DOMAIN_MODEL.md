@@ -503,6 +503,34 @@ history.
 prior revision's third architecture-breaking defect, because Quran and Hadith needed
 provenance while being forbidden from depending on Editorial.
 
+#### 7.2.1 Article and Page publication snapshots
+
+Each Article and Page owns separate immutable revision, translation, typed Topic/Person
+reference, and permanent slug-reservation tables. Approval names the exact current revision.
+Neither its creator nor that revision's editor may approve it, including a Platform
+Administrator. Author, reviewer and publisher authority are distinct live Permission checks;
+`content.review` is now a grantable Editorial permission and remains the sole source of
+Identity's `canReviewContent` projection. A contributor profile grants nothing.
+
+Every material mutation carries an expected version. Saving a new revision returns the
+record to draft, withdraws its published representation, and clears approval and scheduling.
+The administrative form discloses this before saving. Publication requires fresh independent
+approval; no parallel published/draft branch is maintained in Phase 6. Revisions retain the
+structured document, schema version and server-sanitised rendering. Public DTOs exclude the
+authoring document and private workflow actors.
+
+Article slugs and help-article Page slugs may change; all prior slugs remain reserved and
+resolve directly to the current published canonical URL with HTTP 301. Fixed organisational,
+legal and utility Page destinations are an allowlist, immutable after creation, with the
+internal slug `page`. They cannot claim another context's route.
+
+The stored schedule binds UTC time, an IANA display zone, revision and scheduling actor.
+A single-instance executor processes at most 25 Articles and 25 Pages per sweep, rechecking
+reviewer and publisher authority. Failed authority or execution leaves a visible stopped
+schedule; an authorised publisher may reschedule after review. Expected-version transactions
+make duplicate execution harmless. Restart resumes pending due work; multi-instance hosting
+still requires the leasing gate in ARCHITECTURE §3.5.1.
+
 ### 7.3 Collection — typed membership
 
 A curated, ordered, described set that may contain items of **mixed type**: historical

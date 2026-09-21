@@ -313,6 +313,21 @@ export async function recordedPermissions(
  *     an attacker with the runtime's authority can delete.
  */
 const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
+  '[dbo].[article]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[page]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[articlerevision]': ['SELECT', 'INSERT'],
+  '[dbo].[pagerevision]': ['SELECT', 'INSERT'],
+  '[dbo].[articlerevisiontranslation]': ['SELECT', 'INSERT'],
+  '[dbo].[pagerevisiontranslation]': ['SELECT', 'INSERT'],
+  '[dbo].[articletopic]': ['SELECT', 'INSERT'],
+  '[dbo].[pagetopic]': ['SELECT', 'INSERT'],
+  '[dbo].[articlecontributor]': ['SELECT', 'INSERT'],
+  '[dbo].[pagecontributor]': ['SELECT', 'INSERT'],
+  '[dbo].[articleslughistory]': ['SELECT', 'INSERT'],
+  '[dbo].[pageslughistory]': ['SELECT', 'INSERT'],
+  '[dbo].[contactinquiry]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[feedback]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+
   // Phase 1 — append-oriented audit (SECURITY_BASELINE.md §13.1).
   '[dbo].[auditlog]': ['INSERT', 'SELECT'],
 

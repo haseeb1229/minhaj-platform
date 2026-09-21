@@ -1,3 +1,11 @@
+import { randomUUID } from 'node:crypto';
+import { newPhase5Fixture, writePhase5Fixture } from '../src/lifecycle/phase5-fixture.ts';
+import {
+  newPhase6Fixture,
+  writePhase6Fixture,
+  capturePhase6Fixture,
+  verifyRestoredPhase6,
+} from '../src/lifecycle/phase6-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -701,6 +709,7 @@ try {
     taxonomyProvisioned: number;
     navigationProvisioned: number;
     peopleProvisioned: number;
+    editorialProvisioned: number;
   }>(`
     SELECT COUNT_BIG(*) AS total,
            SUM(CASE WHEN [action] = N'phase1.permission.probe' THEN 1 ELSE 0 END) AS probe,
@@ -713,22 +722,26 @@ try {
              AS navigationProvisioned,
            SUM(CASE WHEN [action] = N'people.permissions.provisioned'
                      AND [actorType] = N'migration' THEN 1 ELSE 0 END)
-             AS peopleProvisioned
+             AS peopleProvisioned,
+           SUM(CASE WHEN [action] = N'editorial.permissions.provisioned'
+                     AND [actorType] = N'migration' THEN 1 ELSE 0 END)
+             AS editorialProvisioned
     FROM [dbo].[AuditLog];
   `);
 
-  // Exactly four rows: the Phase-3B, Phase-4 and Phase-5 privilege extensions,
+  // Exactly five rows: the Phase-3B through Phase-6 privilege extensions,
   // and this run's probe. Naming every migration action is load-bearing:
   // deriving the expected total from whatever provisioning rows happened to
   // survive would pass if a phase omitted its own audit, and each privilege
   // extension must be able to show that it paid for itself
   // (SECURITY_BASELINE.md §8.1).
-  const EXPECTED_AUDIT_ROWS = 4;
+  const EXPECTED_AUDIT_ROWS = 5;
 
   if (
     Number(survivor?.taxonomyProvisioned ?? 0) !== 1 ||
     Number(survivor?.navigationProvisioned ?? 0) !== 1 ||
     Number(survivor?.peopleProvisioned ?? 0) !== 1 ||
+    Number(survivor?.editorialProvisioned ?? 0) !== 1 ||
     Number(survivor?.probe ?? 0) !== 1 ||
     Number(survivor?.tampered ?? -1) !== 0 ||
     Number(survivor?.total ?? 0) !== EXPECTED_AUDIT_ROWS
@@ -736,7 +749,7 @@ try {
     fail(
       'audit rows unmodified',
       `expected ${EXPECTED_AUDIT_ROWS} rows with 1 taxonomy provisioning, ` +
-        `1 navigation provisioning, 1 people provisioning, 1 probe and ` +
+        `1 navigation provisioning, 1 people provisioning, 1 editorial provisioning, 1 probe and ` +
         `0 tampered; found ${survivor?.total ?? 0} rows, ` +
         `${survivor?.taxonomyProvisioned ?? 0} taxonomy provisioning, ` +
         `${survivor?.navigationProvisioned ?? 0} navigation provisioning, ` +
@@ -746,8 +759,89 @@ try {
   } else {
     pass(
       'audit rows unmodified',
-      'the probe row and all three exact migration records are intact after ' +
+      'the probe row and all four exact migration records are intact after ' +
         'UPDATE/DELETE attempts',
+    );
+  }
+
+  // Phase 6: actual writes through the runtime login, then exact refusal probes.
+  const editorialPeople = newPhase5Fixture();
+  await writePhase5Fixture(admin, editorialPeople);
+  const editorialReviewer = randomUUID();
+  await admin.query(
+    `INSERT INTO [User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled]) VALUES (N'${editorialReviewer}',N'Synthetic reviewer',N'${editorialReviewer}@proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);`,
+  );
+  const [editorialTopic] = await admin.query<{ id: string }>(
+    "SELECT TOP 1 [id] FROM [Topic] WHERE [status]=N'active' ORDER BY [id];",
+  );
+  if (!editorialTopic) throw new Error('No fixture Topic found.');
+  const editorialFixture = newPhase6Fixture();
+  await writePhase6Fixture(app, editorialFixture, {
+    authorId: editorialPeople.accountId,
+    reviewerId: editorialReviewer,
+    personId: editorialPeople.linkedPersonId,
+    topicId: editorialTopic.id,
+  });
+  const editorialSnapshot = await capturePhase6Fixture(app, editorialFixture);
+  pass(
+    'Editorial runtime writes',
+    '14 tables written and read through the actual application principal',
+  );
+  for (const table of [
+    'Article',
+    'Page',
+    'ArticleRevision',
+    'PageRevision',
+    'ArticleRevisionTranslation',
+    'PageRevisionTranslation',
+    'ArticleTopic',
+    'PageTopic',
+    'ArticleContributor',
+    'PageContributor',
+    'ArticleSlugHistory',
+    'PageSlugHistory',
+  ]) {
+    await expectDenied(
+      app,
+      table + ' DELETE denied',
+      'DELETE FROM [dbo].[' + table + '];',
+    );
+    await expectDenied(
+      app,
+      table + ' ALTER denied',
+      'ALTER TABLE [dbo].[' + table + '] ADD [probe] INT NULL;',
+    );
+    if (!['Article', 'Page'].includes(table)) {
+      const column = table.includes('RevisionTranslation')
+        ? 'title'
+        : table.endsWith('Revision')
+          ? 'slug'
+          : table.endsWith('SlugHistory')
+            ? 'slug'
+            : 'ownerId';
+      await expectDenied(
+        app,
+        table + ' UPDATE denied',
+        'UPDATE [dbo].[' + table + '] SET [' + column + ']=[' + column + '];',
+      );
+    }
+  }
+  await verifyRestoredPhase6(admin, editorialFixture, editorialSnapshot);
+  for (const [table, id] of [
+    ['ContactInquiry', editorialFixture.contactId],
+    ['Feedback', editorialFixture.feedbackId],
+  ]) {
+    await expectAllowed(
+      app,
+      table + ' triage UPDATE',
+      `UPDATE [${table}] SET [version]=[version]+1,[state]=N'closed' WHERE [id]=N'${id}';`,
+      'private triage remains writable',
+    );
+    await expectAllowed(
+      app,
+      table + ' retention DELETE',
+      `DELETE FROM [${table}] WHERE [id]=N'${id}';`,
+      'expired data disposition remains possible',
     );
   }
 

@@ -173,6 +173,9 @@ export function createTaxonomyService({ reader, taxonomy }: TaxonomyServiceDepen
 
   return {
     /* ---- Reading --------------------------------------------------------- */
+    topicReferences(ids: readonly string[], locale: Locale) {
+      return reader.topicReferences(ids, locale);
+    },
 
     /**
      * One level of the hierarchy, resolved for one interface locale.

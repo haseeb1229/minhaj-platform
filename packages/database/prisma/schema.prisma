@@ -91,6 +91,16 @@ model AuditLog {
 /// Application identity. Authoritative for roles, preferences and application
 /// state (SECURITY_BASELINE.md §2.2); Better Auth authenticates it.
 model User {
+  pageCreations Page[] @relation("PageCreator")
+  pageApprovals Page[] @relation("PageReviewer")
+  pageSchedules Page[] @relation("PageScheduler")
+  pageRevisions PageRevision[]
+
+  articleCreations Article[] @relation("ArticleCreator")
+  articleApprovals Article[] @relation("ArticleReviewer")
+  articleSchedules Article[] @relation("ArticleScheduler")
+  articleRevisions ArticleRevision[]
+
   id String @id @db.NVarChar(36)
 
   // ---- Better Auth core -------------------------------------------------
@@ -742,6 +752,10 @@ model IdentityBootstrap {
 /// worded in Urdu is editorial work and not a schema decision. The flag mirrors
 /// `Role.system`, and for the same reason.
 model Topic {
+  pageTopics PageTopic[]
+
+  articleTopics ArticleTopic[]
+
   id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
 
   /// Stable, globally unique, URL-safe identity. `/topics/{slug}` sits at the
@@ -848,6 +862,10 @@ model TopicTranslation {
 /// `direction` IS DOMAIN DATA. A title in Urdu renders right-to-left inside an
 /// English page, and only the content language can say so.
 model Language {
+  pageTranslations PageRevisionTranslation[]
+
+  articleTranslations ArticleRevisionTranslation[]
+
   code String @id @db.NVarChar(16)
 
   englishName String @db.NVarChar(120)
@@ -965,6 +983,10 @@ model Tag {
 /// exactly as it is on `Topic.slug`. A stable public URL is then a property of
 /// the grant rather than of a rule somebody remembered.
 model Person {
+  pageContributions PageContributor[]
+
+  articleContributions ArticleContributor[]
+
   id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
 
   /// Stable, globally unique, URL-safe public identity. `/people/{slug}` is the
@@ -1337,4 +1359,221 @@ model TeacherProfileLanguage {
 
   @@id([teacherProfileId, languageCode])
   @@map("TeacherProfileLanguage")
+}
+
+// Editorial owns these typed relationships and immutable revision snapshots.
+model Article {
+  id String @id @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+
+  state String @db.NVarChar(16)
+  version Int
+  currentRevision Int?
+  approvedRevision Int?
+  approvedById String? @db.NVarChar(36)
+  creatorId String @db.NVarChar(36)
+  scheduledRevision Int?
+  scheduledAt DateTime? @db.DateTime2
+  scheduledTimezone String? @db.NVarChar(64)
+  scheduledById String? @db.NVarChar(36)
+  scheduleStatus String? @db.NVarChar(32)
+  publishedAt DateTime? @db.DateTime2
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @db.DateTime2
+  creator User @relation("ArticleCreator", fields:[creatorId], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  reviewer User? @relation("ArticleReviewer", fields:[approvedById], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  scheduler User? @relation("ArticleScheduler", fields:[scheduledById], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  current ArticleRevision? @relation("ArticleCurrent", fields:[id,currentRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  approval ArticleRevision? @relation("ArticleApproval", fields:[id,approvedRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  scheduled ArticleRevision? @relation("ArticleScheduled", fields:[id,scheduledRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  revisions ArticleRevision[] @relation("ArticleHistory")
+  slugs ArticleSlugHistory[]
+  @@unique([slug])
+  @@index([state,updatedAt,id])
+  @@index([state,publishedAt(sort: Desc),id])
+  @@index([scheduleStatus,scheduledAt,id])
+}
+model ArticleRevision {
+  ownerId String @db.NVarChar(36)
+  number Int
+  editorId String @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+  primaryLanguage String @db.NVarChar(16)
+  schemaVersion Int @default(1)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  owner Article @relation("ArticleHistory",fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  editor User @relation(fields:[editorId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  currentFor Article[] @relation("ArticleCurrent")
+  approvedFor Article[] @relation("ArticleApproval")
+  scheduledFor Article[] @relation("ArticleScheduled")
+  translations ArticleRevisionTranslation[]
+  topics ArticleTopic[]
+  contributors ArticleContributor[]
+  @@id([ownerId,number])
+}
+model ArticleRevisionTranslation {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  languageCode String @db.NVarChar(16)
+  title String @db.NVarChar(200)
+  excerpt String @db.NVarChar(600)
+  seoTitle String @db.NVarChar(200)
+  seoDescription String @db.NVarChar(300)
+  document String @db.NVarChar(Max)
+  html String @db.NVarChar(Max)
+  revision ArticleRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  language Language @relation(fields:[languageCode],references:[code],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,languageCode])
+}
+model ArticleTopic {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  topicId String @db.NVarChar(36)
+  revision ArticleRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  topic Topic @relation(fields:[topicId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,topicId])
+  @@index([topicId,ownerId])
+}
+model ArticleContributor {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  personId String @db.NVarChar(36)
+  role String @db.NVarChar(32)
+  position Int
+  revision ArticleRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  person Person @relation(fields:[personId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,personId,role])
+  @@index([personId,ownerId])
+}
+model ArticleSlugHistory {
+  slug String @db.NVarChar(120)
+
+  ownerId String @db.NVarChar(36)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  owner Article @relation(fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([slug])
+  @@index([ownerId])
+}
+
+// Editorial owns these typed relationships and immutable revision snapshots.
+model Page {
+  id String @id @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+  routeBinding String @db.NVarChar(100)
+  state String @db.NVarChar(16)
+  version Int
+  currentRevision Int?
+  approvedRevision Int?
+  approvedById String? @db.NVarChar(36)
+  creatorId String @db.NVarChar(36)
+  scheduledRevision Int?
+  scheduledAt DateTime? @db.DateTime2
+  scheduledTimezone String? @db.NVarChar(64)
+  scheduledById String? @db.NVarChar(36)
+  scheduleStatus String? @db.NVarChar(32)
+  publishedAt DateTime? @db.DateTime2
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @db.DateTime2
+  creator User @relation("PageCreator", fields:[creatorId], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  reviewer User? @relation("PageReviewer", fields:[approvedById], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  scheduler User? @relation("PageScheduler", fields:[scheduledById], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  current PageRevision? @relation("PageCurrent", fields:[id,currentRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  approval PageRevision? @relation("PageApproval", fields:[id,approvedRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  scheduled PageRevision? @relation("PageScheduled", fields:[id,scheduledRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  revisions PageRevision[] @relation("PageHistory")
+  slugs PageSlugHistory[]
+  @@unique([routeBinding,slug])
+  @@index([state,updatedAt,id])
+  @@index([scheduleStatus,scheduledAt,id])
+}
+model PageRevision {
+  ownerId String @db.NVarChar(36)
+  number Int
+  editorId String @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+  primaryLanguage String @db.NVarChar(16)
+  schemaVersion Int @default(1)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  owner Page @relation("PageHistory",fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  editor User @relation(fields:[editorId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  currentFor Page[] @relation("PageCurrent")
+  approvedFor Page[] @relation("PageApproval")
+  scheduledFor Page[] @relation("PageScheduled")
+  translations PageRevisionTranslation[]
+  topics PageTopic[]
+  contributors PageContributor[]
+  @@id([ownerId,number])
+}
+model PageRevisionTranslation {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  languageCode String @db.NVarChar(16)
+  title String @db.NVarChar(200)
+  excerpt String @db.NVarChar(600)
+  seoTitle String @db.NVarChar(200)
+  seoDescription String @db.NVarChar(300)
+  document String @db.NVarChar(Max)
+  html String @db.NVarChar(Max)
+  revision PageRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  language Language @relation(fields:[languageCode],references:[code],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,languageCode])
+}
+model PageTopic {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  topicId String @db.NVarChar(36)
+  revision PageRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  topic Topic @relation(fields:[topicId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,topicId])
+  @@index([topicId,ownerId])
+}
+model PageContributor {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  personId String @db.NVarChar(36)
+  role String @db.NVarChar(32)
+  position Int
+  revision PageRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  person Person @relation(fields:[personId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,personId,role])
+  @@index([personId,ownerId])
+}
+model PageSlugHistory {
+  slug String @db.NVarChar(120)
+  routeBinding String @db.NVarChar(100)
+  ownerId String @db.NVarChar(36)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  owner Page @relation(fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([routeBinding,slug])
+  @@index([ownerId])
+}
+
+model ContactInquiry {
+  id String @id @db.NVarChar(36)
+  name String @db.NVarChar(120)
+  email String @db.NVarChar(320)
+  subject String @db.NVarChar(200)
+  body String @db.NVarChar(Max)
+  state String @db.NVarChar(16)
+  version Int
+  note String @db.NVarChar(2000)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @db.DateTime2
+  retainUntil DateTime @db.DateTime2
+  @@index([state,createdAt,id])
+  @@index([retainUntil,id])
+}
+
+model Feedback {
+  id String @id @db.NVarChar(36)
+  category String @db.NVarChar(32)
+  body String @db.NVarChar(Max)
+  state String @db.NVarChar(16)
+  version Int
+  note String @db.NVarChar(2000)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @db.DateTime2
+  retainUntil DateTime @db.DateTime2
+  @@index([state,createdAt,id])
+  @@index([retainUntil,id])
 }

@@ -96,6 +96,22 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // the four profile aggregates DOMAIN_MODEL.md §5.2 requires to stay distinct;
   // a migration that delivered one `Profile` table with a `type` column would
   // satisfy "People shipped" and fail this list.
+  '20260920000000_phase6_editorial_core': [
+    'Article',
+    'ArticleRevision',
+    'ArticleRevisionTranslation',
+    'ArticleTopic',
+    'ArticleContributor',
+    'ArticleSlugHistory',
+    'Page',
+    'PageRevision',
+    'PageRevisionTranslation',
+    'PageTopic',
+    'PageContributor',
+    'PageSlugHistory',
+    'ContactInquiry',
+    'Feedback',
+  ],
   '20260919000000_phase5_people_contributors': [
     'Person',
     'PersonTranslation',
@@ -122,8 +138,9 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
  * when Chunk 2 delivered authorisation and the privileged second factor.
  */
 const PREMATURE_TABLES = [
-  'Article',
-  'Page',
+  'NewsArticle',
+  'Event',
+  'Collection',
   'Quran',
   'Hadith',
   'Book',
@@ -222,6 +239,10 @@ const EXPECTED_COLUMN_SIZES: readonly {
   column: string;
   characters: number;
 }[] = [
+  { table: 'Article', column: 'slug', characters: 120 },
+  { table: 'Page', column: 'routeBinding', characters: 100 },
+  { table: 'Page', column: 'slug', characters: 120 },
+  { table: 'ArticleRevisionTranslation', column: 'languageCode', characters: 16 },
   { table: 'User', column: 'email', characters: 320 },
   { table: 'Session', column: 'token', characters: 255 },
   { table: 'Account', column: 'password', characters: 255 },
@@ -303,6 +324,19 @@ const EXPECTED_PROCEDURES = [
  * and silently dropped one would leave a gate that looks present and is not.
  */
 const EXPECTED_TRIGGERS = [
+  ...['Article', 'Page'].flatMap((kind) => [
+    kind + 'RevisionImmutable',
+    kind + 'RevisionTranslationImmutable',
+    kind + 'TopicImmutable',
+    kind + 'ContributorImmutable',
+    kind + 'SlugHistoryImmutable',
+    kind + 'RevisionTranslationAppend',
+    kind + 'TopicAppend',
+    kind + 'ContributorAppend',
+    kind + 'CurrentIntegrity',
+    kind + 'RevisionSequence',
+    kind + 'RevisionForward',
+  ]),
   'IdentityFinalAdministrator_Bootstrap',
   'IdentityFinalAdministrator_Role',
   'IdentityFinalAdministrator_RoleAssignment',
@@ -320,6 +354,19 @@ const EXPECTED_TRIGGERS = [
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
 const EXPECTED_CHECK_CONSTRAINTS = [
+  ...['Article', 'Page'].flatMap((table) =>
+    ['state', 'version', 'approval', 'publication', 'published_date', 'schedule'].map(
+      (rule) => ({ table, constraint: table + '_' + rule + '_ck' }),
+    ),
+  ),
+  { table: 'Page', constraint: 'Page_binding_ck' },
+  { table: 'Feedback', constraint: 'Feedback_category_ck' },
+  ...['ContactInquiry', 'Feedback'].flatMap((table) =>
+    ['state', 'retention'].map((rule) => ({
+      table,
+      constraint: table + '_' + rule + '_ck',
+    })),
+  ),
   { table: 'IdentityBootstrap', constraint: 'IdentityBootstrap_singleton_ck' },
   { table: 'Topic', constraint: 'Topic_not_self_parent_ck' },
   // Phase 5 lifecycles, refused by the database rather than by a validator, so
@@ -396,7 +443,6 @@ const PEOPLE_PERMISSIONS = ['people.administer', 'people.read'];
 const UNSEEDED_CAPABILITY_PERMISSIONS = [
   'teaching.perform',
   'question.receive',
-  'content.review',
   'fatwa.answer',
   'fatwa.publish',
 ];
@@ -1083,6 +1129,23 @@ try {
   const firstStatus = await migrationStatus(disposableUrl, environment.values);
   assertHealthyStatus(firstStatus.output, 'the first deploy');
   report('migrate status', 'database schema is up to date');
+
+  const editorialKeys = [
+    'content.author',
+    'content.publish',
+    'content.read',
+    'content.review',
+    'correspondence.administer',
+    'correspondence.read',
+  ];
+  const editorialRows = await session.query<{ key: string }>(
+    "SELECT p.[key] FROM [Permission] p JOIN [RolePermission] rp ON rp.[permissionKey]=p.[key] JOIN [Role] r ON r.[id]=rp.[roleId] WHERE r.[key]=N'platform-administrator' AND (p.[key] LIKE N'content.%' OR p.[key] LIKE N'correspondence.%') ORDER BY p.[key];",
+  );
+  if (editorialRows.map((row) => row.key).join(',') !== editorialKeys.join(','))
+    fail(
+      'Editorial catalogue/protected bundle differs from its six accepted permissions.',
+    );
+  report('editorial permissions', 'six keys seeded and bundled');
 
   // ---- verify actual schema and history ------------------------------------
   const afterApply = await userTables(session);

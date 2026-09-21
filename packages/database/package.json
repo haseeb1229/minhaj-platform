@@ -30,7 +30,8 @@
         "auditing": {
           "kind": "layer0",
           "concern": "auditing"
-        }
+        },
+        "editorial": "editorial"
       }
     }
   },

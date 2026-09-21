@@ -94,14 +94,29 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'TopicTranslation',
       'Language',
       'Tag',
+      'Article',
+      'ArticleRevision',
+      'ArticleRevisionTranslation',
+      'ArticleTopic',
+      'ArticleContributor',
+      'ArticleSlugHistory',
+      'Page',
+      'PageRevision',
+      'PageRevisionTranslation',
+      'PageTopic',
+      'PageContributor',
+      'PageSlugHistory',
+      'ContactInquiry',
+      'Feedback',
     ]) {
       expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }
 
     // Every LATER phase still arrives with the slice that owns it.
     for (const table of [
-      'Article',
-      'Page',
+      'NewsArticle',
+      'Event',
+      'Collection',
       'Quran',
       'Hadith',
       'Book',

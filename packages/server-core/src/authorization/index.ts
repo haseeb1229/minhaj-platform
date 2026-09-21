@@ -82,6 +82,7 @@ export type PrivilegedOutcome =
   | { readonly state: 'denied'; readonly reason: AuthorizationDenial };
 
 export interface AuthorizationService {
+  hasPermission(accountId: string, permission: PermissionKey): Promise<boolean>;
   /**
    * Resolves what this session may do, NOW.
    *
@@ -216,6 +217,9 @@ export function createAuthorizationService({
   }
 
   return {
+    async hasPermission(accountId, permission) {
+      return (await reader.effectivePermissions(accountId)).includes(permission);
+    },
     evaluate,
     requirePermission,
 

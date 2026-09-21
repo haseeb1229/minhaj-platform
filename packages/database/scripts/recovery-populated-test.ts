@@ -1,3 +1,9 @@
+import {
+  newPhase6Fixture,
+  writePhase6Fixture,
+  capturePhase6Fixture,
+  verifyRestoredPhase6,
+} from '../src/lifecycle/phase6-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -113,6 +119,7 @@ const target = newBackupTarget();
 const fixture = newPhase2Fixture();
 const taxonomyFixture = newPhase3bFixture();
 const peopleFixture = newPhase5Fixture();
+const editorialFixture = newPhase6Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -173,6 +180,14 @@ try {
   // between them rather than merely the rows.
   await writePhase5Fixture(admin, peopleFixture);
   report('people fixture', `run ${peopleFixture.runId}`);
+  await writePhase6Fixture(admin, editorialFixture, {
+    authorId: fixture.accountId,
+    reviewerId: peopleFixture.accountId,
+    personId: peopleFixture.linkedPersonId,
+    topicId: taxonomyFixture.childTopicId,
+  });
+  const editorialSnapshot = await capturePhase6Fixture(admin, editorialFixture);
+  report('editorial fixture', '14 populated authoritative tables');
 
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
@@ -229,6 +244,10 @@ try {
 
   const peopleIntegrity = await verifyRestoredPeopleIntegrity(restored, peopleFixture);
   report('people integrity', peopleIntegrity);
+  report(
+    'editorial recovery',
+    await verifyRestoredPhase6(restored, editorialFixture, editorialSnapshot),
+  );
 
   // ---- restored security posture -------------------------------------------
   const security = await inspectRestoredSecurity(restored, principal.DATABASE_APP_LOGIN);
@@ -341,6 +360,10 @@ try {
         // attribution will hold a real foreign key to one of these, so the
         // absence of DELETE has to survive a restore as well as a deploy.
         ['Person DELETE', 'DELETE FROM [dbo].[Person];'],
+        ['Article DELETE', 'DELETE FROM [dbo].[Article];'],
+        ['Page DELETE', 'DELETE FROM [dbo].[Page];'],
+        ['Article revision UPDATE', 'UPDATE [dbo].[ArticleRevision] SET [slug]=[slug];'],
+        ['Page revision DELETE', 'DELETE FROM [dbo].[PageRevision];'],
         ['AuthorProfile DELETE', 'DELETE FROM [dbo].[AuthorProfile];'],
         ['TeacherProfile DELETE', 'DELETE FROM [dbo].[TeacherProfile];'],
         [
@@ -371,6 +394,7 @@ try {
       await verifyRestoredPhase2(restored, fixture);
       await verifyRestoredPhase3b(restored, taxonomyFixture);
       await verifyRestoredPhase5(restored, peopleFixture);
+      await verifyRestoredPhase6(restored, editorialFixture, editorialSnapshot);
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
     } finally {
       await app?.close();

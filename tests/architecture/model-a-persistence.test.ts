@@ -545,6 +545,7 @@ describe('F1 — the production database package publishes no raw capability', (
       'identity-access': { kind: 'context', slug: 'identity-access' },
       'people-contributors': { kind: 'context', slug: 'people-contributors' },
       taxonomy: { kind: 'context', slug: 'taxonomy' },
+      editorial: { kind: 'context', slug: 'editorial' },
       email: { kind: 'layer0', concern: 'email' },
       'rate-limiting': { kind: 'layer0', concern: 'rate-limiting' },
       auditing: { kind: 'layer0', concern: 'auditing' },

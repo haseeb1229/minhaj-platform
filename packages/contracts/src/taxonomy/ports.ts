@@ -57,6 +57,12 @@ export interface TopicTreeQuery {
 }
 
 export interface TaxonomyReaderPort {
+  topicReferences(
+    ids: readonly string[],
+    locale: Locale,
+  ): Promise<
+    readonly { readonly id: string; readonly slug: string; readonly name: string }[]
+  >;
   /**
    * One bounded slice of the hierarchy, each Topic resolved for one locale.
    *

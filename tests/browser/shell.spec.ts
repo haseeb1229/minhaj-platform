@@ -437,7 +437,7 @@ test.describe('the mobile navigation', () => {
 
 test.describe('navigation is honest about what exists', () => {
   test('renders no link to an undelivered domain', async ({ page }) => {
-    // The nine deferred primary items, plus the three deferred utility ones.
+    // Only domains still awaiting implementation remain absent.
     // Absent, not greyed out and not linked to a stub (ROUTE_MAP.md §5.2).
     const deferred = [
       '/quran',
@@ -453,8 +453,6 @@ test.describe('navigation is honest about what exists', () => {
       '/search',
       '/donate',
       '/membership',
-      '/contact',
-      '/help',
       '/topics',
       '/people',
       '/collections',
@@ -468,6 +466,12 @@ test.describe('navigation is honest about what exists', () => {
         .evaluateAll((links) =>
           links.map((link) => (link as HTMLAnchorElement).getAttribute('href') ?? ''),
         );
+
+      for (const delivered of ['/contact', '/help', '/feedback', '/library/articles']) {
+        expect(hrefs, `${path} exposes delivered ${delivered}`).toContain(
+          `/en${delivered}`,
+        );
+      }
 
       for (const href of hrefs) {
         for (const domain of deferred) {

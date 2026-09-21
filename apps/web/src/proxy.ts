@@ -1,5 +1,5 @@
 import createMiddleware from 'next-intl/middleware';
-import type { NextRequest } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 
 import { routing } from '@/i18n/routing';
 
@@ -34,7 +34,36 @@ import { routing } from '@/i18n/routing';
  */
 const localeMiddleware = createMiddleware(routing);
 
-export default function proxy(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    const match = /^\/(en|ur|ar)\/(library\/articles|help)\/([^/]+)$/.exec(
+      request.nextUrl.pathname,
+    );
+    if (match?.[3]) {
+      let slug: string | null = null;
+      try {
+        slug = decodeURIComponent(match[3]);
+      } catch {
+        /* Invalid encoded input continues to the route's 404. */
+      }
+      if (slug !== null) {
+        const { editorialReadRuntime } = await import('@/composition/editorial-read');
+        const record =
+          match[2] === 'help'
+            ? await editorialReadRuntime().pageCanonicalSlug('help-article', slug)
+            : await editorialReadRuntime().articleCanonicalSlug(slug);
+        if (record && record !== slug) {
+          const target = request.nextUrl.clone();
+          target.pathname =
+            '/' + match[1] + '/' + match[2] + '/' + encodeURIComponent(record);
+          const redirect = NextResponse.redirect(target, 301);
+          redirect.headers.set('Cache-Control', 'no-store');
+          redirect.headers.set('X-Robots-Tag', 'noindex');
+          return redirect;
+        }
+      }
+    }
+  }
   const response = localeMiddleware(request);
   const pathname = request.nextUrl.pathname;
   const explicitlyPrefixed = routing.locales.some(

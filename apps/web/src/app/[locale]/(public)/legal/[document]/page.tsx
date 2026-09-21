@@ -1,3 +1,8 @@
+import {
+  readPage,
+  publishedPageMetadata,
+  PublicContent,
+} from '@/components/editorial/public-content';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
@@ -27,6 +32,7 @@ import { LEGAL_DOCUMENTS, isLegalDocument, requireRoute } from '@/shell/registry
  * carrying four dead links until Phase 6.
  */
 
+export const dynamic = 'force-dynamic';
 export const dynamicParams = false;
 
 export function generateStaticParams(): { document: string }[] {
@@ -44,6 +50,9 @@ export async function generateMetadata({ params }: LegalParams): Promise<Metadat
 
   const t = await getTranslations({ locale, namespace: 'shell' });
 
+  const published = await publishedPageMetadata(locale, `/legal/${document}`);
+  if (published) return published;
+
   return shellMetadata({
     locale,
     route: requireRoute(`legal.${document}`),
@@ -60,6 +69,17 @@ export default async function LegalDocumentPage({ params }: LegalParams) {
 
   const t = await getTranslations({ locale, namespace: 'shell' });
   const title = t(`legal.${document}` as 'legal.privacy');
+
+  const published = await readPage(`/legal/${document}`);
+  if (published)
+    return (
+      <PublicContent
+        record={published}
+        locale={locale}
+        path={`/legal/${document}`}
+        kind="WebPage"
+      />
+    );
 
   return (
     <Container>

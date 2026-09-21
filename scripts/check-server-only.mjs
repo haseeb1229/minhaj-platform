@@ -35,6 +35,10 @@ const appDirectory = path.join(fixtureRoot, 'src', 'app');
  * exactly one variant and a failure is never ambiguous.
  */
 const VARIANTS = [
+  {
+    route: 'editorial-renderer',
+    description: 'Editorial client cannot import the server rich-text renderer',
+  },
   // ---- database --------------------------------------------------------
   { route: 'database-direct', description: 'Client Component imports database directly' },
   {

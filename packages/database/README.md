@@ -422,3 +422,23 @@ and must never be granted.
 The unrelated host SQLEXPRESS instance on port 1433 is never a source, a target
 or a path: the Minhaj container binds loopback `14330` only, and every guard
 identifies its subject positively.
+
+## Phase 6 authoritative editorial data
+
+`20260920000000_phase6_editorial_core` adds separate Article/Page snapshots and typed
+references, permanent slug reservations, durable publication schedules, and private
+ContactInquiry/Feedback retention/triage. Use the normal migration deployment command;
+accepted history is append-only. The paired rollback is a disposable rehearsal only;
+populated deployments require a roll-forward or reviewed restore, never history edits.
+
+The runtime can insert immutable revision/reference/history rows but cannot update/delete
+or alter them. It can update workflow roots but cannot delete them; private correspondence
+permits bounded retention deletion. The populated recovery rehearsal compares all 14 tables,
+including multilingual documents/renderings, exact revision approvals, schedule provenance,
+typed references, slug history, private bodies/notes and deadlines, before and after backup.
+These fixture values are synthetic and are not logged as recovery output.
+
+The persistent engineering database and volumes are preserved. Two pre-existing disposable
+databases remain outside this phase's cleanup authority:
+`MinhajPhase1Test_452d390f683e46b8a882ceab04f1fbb2` and
+`MinhajPhase1Test_9d2356b6877143f18fafbcf7e39c2b33`.

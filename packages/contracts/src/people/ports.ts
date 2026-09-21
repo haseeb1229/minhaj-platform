@@ -71,6 +71,12 @@ export interface PersonQuery {
 }
 
 export interface PeopleReaderPort {
+  contributorReferences(
+    ids: readonly string[],
+    locale: Locale,
+  ): Promise<
+    readonly { readonly id: string; readonly slug: string; readonly name: string }[]
+  >;
   /** One bounded, deterministically ordered page of the contributor directory. */
   listPeople(query: PersonQuery): Promise<PersonPage>;
 

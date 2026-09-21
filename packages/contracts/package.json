@@ -27,13 +27,16 @@
       "node": "./src/env/server.ts",
       "browser": "./src/env/server-in-client-error.ts",
       "default": "./src/env/server.ts"
-    }
+    },
+    "./editorial": "./src/editorial/index.ts",
+    "./editorial/editor": "./src/editorial/editor.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "server-only": "0.0.1",
-    "zod": "4.5.4"
+    "zod": "4.5.4",
+    "@tiptap/starter-kit": "3.31.3"
   }
 }

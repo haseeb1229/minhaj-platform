@@ -56,10 +56,25 @@ const PUBLIC_GROUP = path.join(APP_SRC, 'app', '[locale]', '(public)');
  * quietly exempt something.
  */
 const CONTENT_ROUTE_FILES = [
+  'apps/web/src/app/[locale]/(public)/contact/page.tsx',
+  'apps/web/src/app/[locale]/(public)/feedback/page.tsx',
+  'apps/web/src/app/[locale]/(public)/help/page.tsx',
+  'apps/web/src/app/[locale]/(public)/help/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/volunteer/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/articles/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/articles/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/legal/[document]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/explore/[section]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/explore/[section]/[page]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/correspondence-form.tsx',
   'apps/web/src/app/[locale]/(public)/people-alias.ts',
   'apps/web/src/app/[locale]/(public)/people/[slug]/page.tsx',
   'apps/web/src/app/[locale]/(public)/authors/[slug]/route.ts',
   'apps/web/src/app/[locale]/(public)/library/authors/[slug]/route.ts',
+];
+
+const PUBLIC_ACTION_FILES = [
+  'apps/web/src/app/[locale]/(public)/correspondence-actions.ts',
 ];
 
 /** Is this file one of the declared data-backed content routes? */
@@ -171,7 +186,11 @@ async function reachableFrom(entries: readonly string[]): Promise<Graph> {
       const resolved = await resolveInApp(current, specifier);
 
       if (resolved === null) packages.add(specifier);
-      else if (!modules.has(resolved)) queue.push(resolved);
+      else if (
+        !modules.has(resolved) &&
+        !PUBLIC_ACTION_FILES.includes(relative(resolved))
+      )
+        queue.push(resolved);
     }
   }
 
@@ -202,7 +221,7 @@ let cachedContent: Graph | null = null;
  */
 async function publicGraph(): Promise<Graph> {
   const entries = (await filesUnder(PUBLIC_GROUP)).filter(
-    (file) => !isContentRoute(file),
+    (file) => !isContentRoute(file) && !PUBLIC_ACTION_FILES.includes(relative(file)),
   );
   cachedPrerendered ??= await reachableFrom(entries);
   return cachedPrerendered;
@@ -666,16 +685,16 @@ describe('a public CONTENT route reads data, and still reads no session', () => 
  * ========================================================================= */
 
 describe('Phase 4 introduces no editorial content model', () => {
-  it('adds no table, no model and no enum to the schema', async () => {
+  it('keeps Page in its single Phase-6 owner and adds no shell CMS models', async () => {
     // The hard boundary of the phase: Page arrives exactly once, in Phase 6.
     const schema = await readFile(
       path.join(repoRoot, 'packages', 'database', 'prisma', 'schema.prisma'),
       'utf8',
     );
 
+    expect(schema.match(/\bmodel\s+Page\s*\{/g)).toHaveLength(1);
+    expect(schema.match(/\bmodel\s+Article\s*\{/g)).toHaveLength(1);
     for (const model of [
-      'Page',
-      'PageRevision',
       'Navigation',
       'NavigationItem',
       'Menu',
@@ -886,5 +905,38 @@ describe('the base security headers', () => {
     // at length why the one allowance exists and why the other does not, and
     // the explanation must not be what the count measures.
     expect(code(config).match(/'unsafe-inline'/g) ?? []).toHaveLength(1);
+  });
+});
+
+describe('Phase 6 anonymous Server Action boundary', () => {
+  it('keeps the submission graph session-free while allowing the anonymous limiter address', async () => {
+    const entry = path.join(repoRoot, PUBLIC_ACTION_FILES[0]!);
+    expect(code(await readFile(entry, 'utf8')).trimStart()).toMatch(
+      /^['"]use server['"]/,
+    );
+    const graph = await reachableFrom([entry]);
+    expect([...graph.modules.keys()].map(relative)).toContain(
+      'apps/web/src/composition/request-address.ts',
+    );
+    for (const [file, source] of graph.modules)
+      for (const specifier of specifiersIn(source)) {
+        expect(
+          [
+            '@/composition/identity',
+            '@/composition/authorization',
+            '@/composition/request',
+            '@/contexts/identity-access',
+            'better-auth',
+          ].some(
+            (forbidden) =>
+              specifier === forbidden || specifier.startsWith(forbidden + '/'),
+          ),
+          relative(file),
+        ).toBe(false);
+      }
+    const address = code(
+      await readFile(path.join(APP_SRC, 'composition/request-address.ts'), 'utf8'),
+    );
+    expect(address).not.toContain('cookies');
   });
 });

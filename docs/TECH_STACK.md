@@ -540,3 +540,17 @@ copied or generated asset.
 **No enterprise SBOM programme is introduced**, and no speculative compliance bureaucracy. The
 requirement is a maintained, honest inventory — proportionate to a platform that will hold
 third-party scholarly material for a long time.
+
+### 18.1 Phase-6 rich-text dependency inventory
+
+| Direct dependency | Exact version | Use and provenance |
+| --- | --- | --- |
+| `@tiptap/core`, `@tiptap/pm`, `@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/static-renderer` | 3.31.3 each | MIT; [Tiptap source](https://github.com/ueberdosis/tiptap). StarterKit defines the shared schema, React/core/pm power the lazy editor, static-renderer produces authoritative server HTML. React 19 peer support and the locked Node 24 runtime are checked against installed manifests and the production build. |
+| `sanitize-html` | 2.17.7 | MIT; [source](https://github.com/apostrophecms/sanitize-html). Server-only allowlist sanitisation after schema-validated rendering. |
+| `@types/sanitize-html` | 2.16.1 | MIT; [DefinitelyTyped source](https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/sanitize-html). Development-only type declarations. |
+
+Only Article/Page authoring imports the Tiptap client island. The supported schema is bounded
+paragraphs, headings 2–4, lists, quotations, emphasis/strike and HTTP(S) or internal links.
+Images, embeds, raw HTML, scripts and custom styles are refused. Tiptap CSS injection and
+unused cursor extensions are disabled; typography uses the shared stylesheet and tokens.
+No font, icon, image, religious corpus or third-party content was introduced with this editor.

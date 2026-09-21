@@ -75,8 +75,9 @@ const FUTURE_DOMAIN_TABLES = [
   'TopicAssignment',
   'TaxonomyAssignment',
   'EntityTopic',
-  'Article',
-  'Page',
+  'NewsArticle',
+  'Event',
+  'Collection',
   'Quran',
   'Hadith',
   'Book',
@@ -232,6 +233,29 @@ export async function verifyRestoredSchema(
     }
   }
 
+  if (expectedMigrationIds.some((id) => id.includes('phase6'))) {
+    const expected = [
+      'Article',
+      'ArticleRevision',
+      'ArticleRevisionTranslation',
+      'ArticleTopic',
+      'ArticleContributor',
+      'ArticleSlugHistory',
+      'Page',
+      'PageRevision',
+      'PageRevisionTranslation',
+      'PageTopic',
+      'PageContributor',
+      'PageSlugHistory',
+      'ContactInquiry',
+      'Feedback',
+    ];
+    const missing = expected.filter((table) => !tables.includes(table));
+    if (missing.length)
+      throw new Error(
+        'Restored database is missing Phase 6 tables: ' + missing.join(', '),
+      );
+  }
   const columns = await auditColumns(restored);
   if (columns.join(',') !== EXPECTED_AUDIT_COLUMNS.join(',')) {
     throw new Error(

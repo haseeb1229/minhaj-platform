@@ -245,3 +245,43 @@ p {
     scroll-behavior: auto !important;
   }
 }
+
+/* Editorial uses the same typography on the server and in the isolated editor. */
+.editorial-prose {
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+}
+.editorial-prose > * + * {
+  margin-block-start: 1rem;
+}
+.editorial-prose h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+.editorial-prose h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+.editorial-prose h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+.editorial-prose ul {
+  list-style-type: disc;
+  padding-inline-start: 1.5rem;
+}
+.editorial-prose ol {
+  list-style-type: decimal;
+  padding-inline-start: 1.5rem;
+}
+.editorial-prose blockquote {
+  border-inline-start: 3px solid var(--color-border);
+  padding-inline-start: 1rem;
+}
+.editorial-prose a {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.editorial-prose[contenteditable] {
+  white-space: pre-wrap;
+}

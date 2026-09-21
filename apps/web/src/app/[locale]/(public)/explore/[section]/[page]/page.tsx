@@ -1,3 +1,8 @@
+import {
+  readPage,
+  publishedPageMetadata,
+  PublicContent,
+} from '@/components/editorial/public-content';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
@@ -26,6 +31,7 @@ import { requireRoute } from '@/shell/registry';
  * reserved route, and reserving a route authorises no publication on it.
  */
 
+export const dynamic = 'force-dynamic';
 export const dynamicParams = false;
 
 export function generateStaticParams(): { section: string; page: string }[] {
@@ -65,6 +71,9 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
   const owner = requirePage(section, page);
   const t = await getTranslations({ locale, namespace: 'shell' });
 
+  const published = await publishedPageMetadata(locale, `/explore/${owner}/${page}`);
+  if (published) return published;
+
   return shellMetadata({
     locale,
     route: requireRoute(`explore.${owner}.${page}`),
@@ -82,6 +91,17 @@ export default async function ExplorePagePage({ params }: PageParams) {
 
   const sectionTitle = t(`explore.${owner}.title` as 'explore.about.title');
   const title = t(`explore.${owner}.pages.${page}` as 'explore.about.pages.vision');
+
+  const published = await readPage(`/explore/${owner}/${page}`);
+  if (published)
+    return (
+      <PublicContent
+        record={published}
+        locale={locale}
+        path={`/explore/${owner}/${page}`}
+        kind="WebPage"
+      />
+    );
 
   return (
     <Container>

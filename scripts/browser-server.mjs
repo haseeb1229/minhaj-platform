@@ -127,6 +127,8 @@ async function main() {
       // itself as a distinct visitor, which the real per-client rate limit
       // otherwise makes impossible after five accounts.
       TRUST_PROXY_HEADERS: 'true',
+      // Synthetic disposable correspondence fixtures only; not a production policy.
+      CORRESPONDENCE_RETENTION_DAYS: '30',
 
       // DELIBERATELY ABSENT: `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET`. No
       // real provider is contacted, the adapter reports itself unavailable and

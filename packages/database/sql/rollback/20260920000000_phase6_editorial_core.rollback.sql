@@ -1,0 +1,30 @@
+-- Disposable migration rehearsal only. Populated deployments require roll-forward or restored backup.
+BEGIN TRY
+BEGIN TRAN;
+DELETE g FROM [dbo].[StepUpGrant] g WHERE EXISTS (SELECT 1 FROM [dbo].[RoleAssignment] a JOIN [dbo].[RolePermission] p ON p.roleId=a.roleId WHERE a.userId=g.userId AND a.revokedAt IS NULL AND p.permissionKey IN (N'content.read',N'content.author',N'content.review',N'content.publish',N'correspondence.read',N'correspondence.administer'));
+DELETE s FROM [dbo].[Session] s WHERE EXISTS (SELECT 1 FROM [dbo].[RoleAssignment] a JOIN [dbo].[RolePermission] p ON p.roleId=a.roleId WHERE a.userId=s.userId AND a.revokedAt IS NULL AND p.permissionKey IN (N'content.read',N'content.author',N'content.review',N'content.publish',N'correspondence.read',N'correspondence.administer'));
+DELETE FROM [dbo].[RolePermission] WHERE permissionKey IN (N'content.read',N'content.author',N'content.review',N'content.publish',N'correspondence.read',N'correspondence.administer');
+DELETE FROM [dbo].[Permission] WHERE [key] IN (N'content.read',N'content.author',N'content.review',N'content.publish',N'correspondence.read',N'correspondence.administer');
+ALTER TABLE [dbo].[Article] DROP CONSTRAINT [Article_id_currentRevision_fkey];
+ALTER TABLE [dbo].[Article] DROP CONSTRAINT [Article_id_approvedRevision_fkey];
+ALTER TABLE [dbo].[Article] DROP CONSTRAINT [Article_id_scheduledRevision_fkey];
+DROP TABLE [dbo].[ArticleContributor];
+DROP TABLE [dbo].[ArticleTopic];
+DROP TABLE [dbo].[ArticleRevisionTranslation];
+DROP TABLE [dbo].[ArticleRevision];
+DROP TABLE [dbo].[ArticleSlugHistory];
+DROP TABLE [dbo].[Article];
+ALTER TABLE [dbo].[Page] DROP CONSTRAINT [Page_id_currentRevision_fkey];
+ALTER TABLE [dbo].[Page] DROP CONSTRAINT [Page_id_approvedRevision_fkey];
+ALTER TABLE [dbo].[Page] DROP CONSTRAINT [Page_id_scheduledRevision_fkey];
+DROP TABLE [dbo].[PageContributor];
+DROP TABLE [dbo].[PageTopic];
+DROP TABLE [dbo].[PageRevisionTranslation];
+DROP TABLE [dbo].[PageRevision];
+DROP TABLE [dbo].[PageSlugHistory];
+DROP TABLE [dbo].[Page];
+DROP TABLE [dbo].[ContactInquiry];
+DROP TABLE [dbo].[Feedback];
+DELETE FROM [dbo].[_prisma_migrations] WHERE migration_name=N'20260920000000_phase6_editorial_core';
+COMMIT TRAN;
+END TRY BEGIN CATCH IF @@TRANCOUNT>0 ROLLBACK TRAN; THROW; END CATCH;

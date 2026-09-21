@@ -1,3 +1,4 @@
+import { clientAddressFrom } from './request-address';
 import 'server-only';
 
 import { headers as nextHeaders, cookies as nextCookies } from 'next/headers';
@@ -151,19 +152,6 @@ function parseSetCookie(header: string): ParsedCookie | null {
  * The value is used ONLY as a limiter subject, where it is immediately
  * HMAC-digested. It is never stored in clear and never logged (§19.2).
  */
-function clientAddressFrom(source: Headers, trustProxyHeaders: boolean): string {
-  if (!trustProxyHeaders) return 'direct';
-
-  const forwarded = source.get('x-forwarded-for');
-  if (forwarded !== null) {
-    // The FIRST entry is the originating client; later ones are the proxies it
-    // passed through.
-    const first = forwarded.split(',')[0]?.trim();
-    if (first !== undefined && first !== '') return first;
-  }
-
-  return source.get('x-real-ip') ?? 'unknown';
-}
 
 /**
  * Rebuilds the `Cookie` header from the cookie store rather than the request.

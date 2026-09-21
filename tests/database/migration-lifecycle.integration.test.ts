@@ -212,7 +212,7 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
     ]);
   });
 
-  it('creates no business-domain table', async () => {
+  it('creates exactly the delivered owner tables', async () => {
     const tables = await admin.query<{ name: string }>(`
       SELECT t.name FROM sys.tables t
       JOIN sys.schemas s ON s.schema_id = t.schema_id
@@ -223,43 +223,59 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
     // exhaustively is the point: a table appearing here that no delivered
     // phase created is premature schema, and a table missing is a migration
     // that did not do what it claims.
-    expect(tables.map((table) => table.name).sort()).toEqual([
-      'Account',
-      'AuditLog',
-      'AuthorProfile',
-      'EmailDelivery',
-      'EmailSuppression',
-      'IdentityBootstrap',
-      'IdentityCommunicationIntent',
-      'IdentitySecurityOperation',
-      'Language',
-      'Permission',
-      'Person',
-      'PersonNameVariant',
-      'PersonTranslation',
-      'PrivilegedSecurityPosture',
-      'ProviderEvent',
-      'RateLimitCounter',
-      'Role',
-      'RoleAssignment',
-      'RolePermission',
-      'ScholarProfile',
-      'ScholarProfileLanguage',
-      'ScholarProfileTranslation',
-      'Session',
-      'SpeakerProfile',
-      'StepUpGrant',
-      'Tag',
-      'TeacherProfile',
-      'TeacherProfileLanguage',
-      'TeacherProfileTranslation',
-      'Topic',
-      'TopicTranslation',
-      'TwoFactor',
-      'User',
-      'Verification',
-      '_prisma_migrations',
-    ]);
+    expect(tables.map((table) => table.name).sort()).toEqual(
+      [
+        'Account',
+        'AuditLog',
+        'AuthorProfile',
+        'EmailDelivery',
+        'EmailSuppression',
+        'IdentityBootstrap',
+        'IdentityCommunicationIntent',
+        'IdentitySecurityOperation',
+        'Language',
+        'Permission',
+        'Person',
+        'PersonNameVariant',
+        'PersonTranslation',
+        'PrivilegedSecurityPosture',
+        'ProviderEvent',
+        'RateLimitCounter',
+        'Role',
+        'RoleAssignment',
+        'RolePermission',
+        'ScholarProfile',
+        'ScholarProfileLanguage',
+        'ScholarProfileTranslation',
+        'Session',
+        'SpeakerProfile',
+        'StepUpGrant',
+        'Tag',
+        'TeacherProfile',
+        'TeacherProfileLanguage',
+        'TeacherProfileTranslation',
+        'Topic',
+        'TopicTranslation',
+        'TwoFactor',
+        'User',
+        'Verification',
+        '_prisma_migrations',
+        'Article',
+        'ArticleRevision',
+        'ArticleRevisionTranslation',
+        'ArticleTopic',
+        'ArticleContributor',
+        'ArticleSlugHistory',
+        'Page',
+        'PageRevision',
+        'PageRevisionTranslation',
+        'PageTopic',
+        'PageContributor',
+        'PageSlugHistory',
+        'ContactInquiry',
+        'Feedback',
+      ].sort(),
+    );
   });
 
   it('runs the application as a principal that is neither sa nor an owner', async () => {

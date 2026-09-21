@@ -619,6 +619,19 @@ public listings, search or caches**.
 
 ---
 
+**Phase-6 continuity:** Organisational Page facts (§6.1), legal bodies (§2.3), named editorial
+grants/team structure (§6.3, §6.5) and correspondence retention (§2.3.1) remain external gates
+in OPEN_DECISIONS. No production content or real editorial-team grants are engineering seeds.
+Self-approval has no exception path. Storage (7), News/Events/Collections (13–15), Search (17),
+live migration (30), formal SEO/accessibility acceptance (32) and performance/operations (34)
+remain with their existing owners; Phase 2G remains separately deferred.
+
+Phase-6 local implementation remains unstaged, uncommitted and unpushed pending independent
+targeted actual-diff review. The separate whole-baseline architecture milestone still follows
+Phase-6 remote-green; the builder run does not consume it.
+
+---
+
 ### Phase 7 — Storage Foundation
 **Entry:** Phase 1 complete. **Separate from Library. Infrastructure only — no Identity
 dependency.**

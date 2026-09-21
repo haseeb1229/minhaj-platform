@@ -36,4 +36,8 @@ export async function register(): Promise<void> {
   const { startDispatchSweep } = await import('@/composition/dispatch');
 
   startDispatchSweep();
+  if (process.env['NEXT_PHASE'] !== 'phase-production-build') {
+    const { startEditorialSweep } = await import('@/composition/editorial-sweep');
+    startEditorialSweep();
+  }
 }

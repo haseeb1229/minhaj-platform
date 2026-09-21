@@ -518,7 +518,9 @@ export function createPeopleReader(): PeopleReaderPort {
   function kindFilter(kind: ProfileKind): Prisma.PersonWhereInput {
     switch (kind) {
       case 'author':
-        return { authorProfile: { isNot: null } };
+        return {
+          authorProfile: { isNot: null },
+        };
       case 'speaker':
         return { speakerProfile: { isNot: null } };
       case 'scholar':
@@ -529,6 +531,29 @@ export function createPeopleReader(): PeopleReaderPort {
   }
 
   return {
+    async contributorReferences(ids, locale) {
+      if (ids.length > 300) throw new Error('Contributor reference batch exceeds bound');
+      const rows = await getDatabaseClient().person.findMany({
+        where: { id: { in: [...ids] }, status: 'published' },
+        select: {
+          id: true,
+          slug: true,
+          primaryLocale: true,
+          translations: { select: { locale: true, name: true } },
+        },
+        take: 300,
+        orderBy: { id: 'asc' },
+      });
+      return rows.map((row) => ({
+        id: row.id,
+        slug: row.slug,
+        name:
+          (
+            row.translations.find((t) => t.locale === locale) ??
+            row.translations.find((t) => t.locale === row.primaryLocale)
+          )?.name ?? row.slug,
+      }));
+    },
     async listPeople({ query, status, profileKind, locale, limit, offset }) {
       const cap = boundedLimit(limit);
       const skip = boundedOffset(offset);

@@ -1306,10 +1306,10 @@ describeLive('Phase 5 — People & Contributors over a live database', () => {
       ]);
     });
 
-    it('creates no table that relates a contributor to a work', async () => {
+    it('allows only People tables and the two delivered typed Editorial contributor owners', async () => {
       // §5.3 puts the relationship row in the context that owns the TARGET, and
-      // no such context has shipped. Read from the catalogue: every table with a
-      // foreign key to `Person` must be one of People's own.
+      // Editorial is the first delivered target owner. Read its two typed
+      // contributor tables alongside People's own relationships.
       const referencing = await admin.query<{ tableName: string }>(`
         SELECT DISTINCT OBJECT_NAME(fk.parent_object_id) AS tableName
         FROM sys.foreign_keys fk
@@ -1318,7 +1318,9 @@ describeLive('Phase 5 — People & Contributors over a live database', () => {
       `);
 
       expect(referencing.map((row) => row.tableName)).toEqual([
+        'ArticleContributor',
         'AuthorProfile',
+        'PageContributor',
         'PersonNameVariant',
         'PersonTranslation',
         'ScholarProfile',

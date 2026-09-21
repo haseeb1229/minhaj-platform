@@ -214,9 +214,7 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
  * Utility navigation (INFORMATION_ARCHITECTURE.md §2.1).
  *
  * The LANGUAGE SWITCHER is not here, because it is not a route: it is a control
- * that rewrites the current one, and the header renders it directly. The other
- * three are deferred to the phases that own them — Global Network, Membership
- * and Editorial respectively.
+ * that rewrites the current one, and the header renders it directly. Other utility routes become visible when their owning phase delivers them.
  */
 const UTILITY: readonly ShellRoute[] = Object.freeze([
   Object.freeze({
@@ -234,8 +232,11 @@ const UTILITY: readonly ShellRoute[] = Object.freeze([
   Object.freeze({
     key: 'contact-help',
     label: 'nav.contactHelp',
+    path: '/help',
     placements: Object.freeze(['utility'] as const),
-    availability: 'deferred' as const,
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'excluded' as const,
   }),
 ]);
 
@@ -309,6 +310,42 @@ const LEGAL: readonly ShellRoute[] = Object.freeze(
 
 /** The routes the shell itself delivers. */
 const SHELL: readonly ShellRoute[] = Object.freeze([
+  Object.freeze({
+    key: 'articles',
+    label: 'nav.articles',
+    path: '/library/articles',
+    placements: Object.freeze(['footer-utility'] as const),
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'excluded' as const,
+  }),
+  Object.freeze({
+    key: 'contact',
+    label: 'nav.contact',
+    path: '/contact',
+    placements: Object.freeze(['footer-utility'] as const),
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'excluded' as const,
+  }),
+  Object.freeze({
+    key: 'feedback',
+    label: 'nav.feedback',
+    path: '/feedback',
+    placements: Object.freeze(['footer-utility'] as const),
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'excluded' as const,
+  }),
+  Object.freeze({
+    key: 'volunteer',
+    label: 'nav.volunteer',
+    path: '/volunteer',
+    placements: Object.freeze([] as const),
+    visibility: 'public' as const,
+    availability: 'reserved' as const,
+    indexing: 'excluded' as const,
+  }),
   Object.freeze({
     key: 'home',
     label: 'nav.home',

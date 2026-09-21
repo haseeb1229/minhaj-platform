@@ -64,6 +64,7 @@ describe('S1/S2 — every bypass variant has a real build fixture', () => {
         'database-relative-source',
         'database-subpath',
         'database-wrapper',
+        'editorial-renderer',
         // server-core
         'alias-source',
         'direct',

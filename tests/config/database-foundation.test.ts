@@ -97,6 +97,20 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'TeacherProfile',
       'TeacherProfileTranslation',
       'TeacherProfileLanguage',
+      'Article',
+      'ArticleRevision',
+      'ArticleRevisionTranslation',
+      'ArticleTopic',
+      'ArticleContributor',
+      'ArticleSlugHistory',
+      'Page',
+      'PageRevision',
+      'PageRevisionTranslation',
+      'PageTopic',
+      'PageContributor',
+      'PageSlugHistory',
+      'ContactInquiry',
+      'Feedback',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name
@@ -107,7 +121,14 @@ describe('Phase 1 Chunk 1 database foundation', () => {
     // The authorisation models left this list when Chunk 2 delivered the
     // enforcement that gives them meaning. Everything remaining belongs to a
     // later phase entirely.
-    for (const domain of ['Article', 'Page', 'Quran', 'Hadith', 'Book']) {
+    for (const domain of [
+      'NewsArticle',
+      'Event',
+      'Collection',
+      'Quran',
+      'Hadith',
+      'Book',
+    ]) {
       expect(models, `${domain} arrives with its owning slice`).not.toContain(domain);
     }
 

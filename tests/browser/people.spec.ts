@@ -901,12 +901,9 @@ test.describe('the contributor editor', () => {
     }
   });
 
-  test('projects every capability as No, because none is grantable yet', async ({
-    page,
-  }) => {
-    // The honest answer against a real Phase-5 database: `teaching.perform` and
-    // its three siblings belong to contexts that have not shipped, so no
-    // assignment can hold one (DOMAIN_MODEL.md §4.5, OPEN_DECISIONS.md §6.3).
+  test('projects teaching as No without the required grant', async ({ page }) => {
+    // A profile grants no authority. Editorial review is now grantable, but
+    // teaching remains unavailable and this fixture holds no teaching grant.
     await page.goto(`/en/admin/people/persons?q=${FIXTURE.published}`);
     await page.getByRole('link', { name: 'Edit' }).first().click();
 

@@ -40,6 +40,12 @@ interface LayoutProps {
 
 /** Each surface, the permission that opens it, and where it lives. */
 const SURFACES: readonly { key: string; permission: PermissionKey; path: string }[] = [
+  { key: 'editorial', permission: 'content.read', path: 'editorial/articles' },
+  {
+    key: 'correspondence',
+    permission: 'correspondence.read',
+    path: 'editorial/correspondence',
+  },
   { key: 'users', permission: 'users.read', path: 'identity/users' },
   { key: 'roles', permission: 'roles.read', path: 'identity/roles' },
   { key: 'permissions', permission: 'permissions.read', path: 'identity/permissions' },

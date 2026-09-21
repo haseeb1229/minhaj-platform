@@ -137,3 +137,9 @@ export {
 } from './adapters/rate-limiting/index.ts';
 
 export type { RateLimiterConfiguration } from './adapters/rate-limiting/index.ts';
+
+export {
+  createEditorialPersistence,
+  createEditorialPublicReader,
+} from './adapters/editorial/index.ts';
+export { createCorrespondencePersistence } from './adapters/editorial/index.ts';

@@ -425,3 +425,19 @@ IF OBJECT_ID(N'[dbo].[_prisma_migrations]', N'U') IS NOT NULL
 BEGIN
   DENY SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[_prisma_migrations] TO [$(app_login)];
 END;
+
+-- Phase 6: immutable revisions/slugs, mutable workflow, and narrowly owned correspondence purge.
+IF OBJECT_ID(N'[dbo].[Article]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Article] TO [$(app_login)]; DENY ALTER, DELETE ON OBJECT::[dbo].[Article] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Page]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Page] TO [$(app_login)]; DENY ALTER, DELETE ON OBJECT::[dbo].[Page] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ArticleRevision]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[ArticleRevision] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[ArticleRevision] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PageRevision]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[PageRevision] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[PageRevision] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ArticleRevisionTranslation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[ArticleRevisionTranslation] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[ArticleRevisionTranslation] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PageRevisionTranslation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[PageRevisionTranslation] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[PageRevisionTranslation] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ArticleTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[ArticleTopic] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[ArticleTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PageTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[PageTopic] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[PageTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ArticleContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[ArticleContributor] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[ArticleContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PageContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[PageContributor] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[PageContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ArticleSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[ArticleSlugHistory] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[ArticleSlugHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PageSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[PageSlugHistory] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[PageSlugHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ContactInquiry]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[ContactInquiry] TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[ContactInquiry] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Feedback]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[Feedback] TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[Feedback] TO [$(app_login)]; END;

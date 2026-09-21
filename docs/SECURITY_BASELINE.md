@@ -923,6 +923,23 @@ consent surface exists only where genuine non-essential processing requires one
 **Fatwa questions are sensitive** — strictest access control, never exposed in listings,
 search, logs or caches. **Student data** is limited to teachers with a **current** assignment.
 
+#### 19.1.1 Phase-6 general correspondence
+
+ContactInquiry and Feedback have separate private storage and lifecycles. `correspondence.read`
+authorises bounded operator access; `correspondence.administer` authorises version-checked
+triage and private notes. Editorial author/reviewer/publisher grants do not imply either.
+Anonymous intake uses the existing digest-keyed limiter and Origin-protected Server Actions.
+There is no public lookup, download/export endpoint, search entry or sitemap record; an
+on-site acknowledgement carries no message body. No automatic outbound copy is sent.
+Requests for access/export require the privacy owner's verification process; this anonymous
+form is not an identity-verification or data-subject request portal.
+
+Intake remains inactive until OPEN_DECISIONS §2.3.1 is resolved. Stored deadlines govern
+exclusion and bounded purge (25 records of each kind per sweep). The purge deletes contact
+identity, body and operator notes together. No private correspondence text enters audit,
+application diagnostics or shared caches. Backup retention/disposition remains separately
+owned under OPEN_DECISIONS §4.4.
+
 ### 19.2 Logging
 
 **Pino**, structured, with correlation identifiers. **Redaction is configured at the logger

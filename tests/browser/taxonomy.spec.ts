@@ -382,13 +382,18 @@ test.describe('the taxonomy editor', () => {
     await expect(main).toContainText(slug);
   });
 
-  test('shows the mapping surface honestly, with no control over nothing', async ({
+  test('shows typed editorial relationships without a generic assignment control', async ({
     page,
   }) => {
     await page.goto('/en/admin/taxonomy/mapping');
 
     const main = page.getByRole('main');
-    await expect(main).toContainText('Nothing can be assigned a topic yet');
+    await expect(main).toContainText(
+      'The database enforces 2 typed topic-assignment relationships.',
+    );
+    await expect(main).toContainText(
+      'Every detected relationship has real foreign keys at both ends.',
+    );
     await expect(main).toContainText('How a new kind of content gets topics');
 
     // NO FORM AT ALL. A generic content picker here would be the polymorphic

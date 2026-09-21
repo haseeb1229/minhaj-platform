@@ -16,15 +16,22 @@
     "@minhaj/contracts": "*",
     "@minhaj/database": "*",
     "@minhaj/server-core": "*",
+    "@tiptap/core": "3.31.3",
+    "@tiptap/pm": "3.31.3",
+    "@tiptap/react": "3.31.3",
+    "@tiptap/starter-kit": "3.31.3",
+    "@tiptap/static-renderer": "3.31.3",
     "next": "16.3.3",
     "next-intl": "4.14.3",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "sanitize-html": "2.17.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@types/sanitize-html": "2.16.1",
     "tailwindcss": "4.3.3"
   }
 }

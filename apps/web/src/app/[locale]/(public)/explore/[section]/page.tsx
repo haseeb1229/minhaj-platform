@@ -1,3 +1,8 @@
+import {
+  readPage,
+  publishedPageMetadata,
+  PublicContent,
+} from '@/components/editorial/public-content';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
@@ -26,6 +31,7 @@ import { requireRoute } from '@/shell/registry';
  * (OPEN_DECISIONS.md §6.1).
  */
 
+export const dynamic = 'force-dynamic';
 export const dynamicParams = false;
 
 export function generateStaticParams(): { section: ExploreSection }[] {
@@ -47,6 +53,9 @@ export async function generateMetadata({ params }: SectionParams): Promise<Metad
   const section = requireSection((await params).section);
   const t = await getTranslations({ locale, namespace: 'shell' });
 
+  const published = await publishedPageMetadata(locale, `/explore/${section}`);
+  if (published) return published;
+
   return shellMetadata({
     locale,
     route: requireRoute(`explore.${section}`),
@@ -62,6 +71,17 @@ export default async function ExploreSectionPage({ params }: SectionParams) {
   const t = await getTranslations({ locale, namespace: 'shell' });
   const slugs = exploreSlugsOf(section);
   const title = t(`explore.${section}.title` as 'explore.about.title');
+
+  const published = await readPage(`/explore/${section}`);
+  if (published)
+    return (
+      <PublicContent
+        record={published}
+        locale={locale}
+        path={`/explore/${section}`}
+        kind="WebPage"
+      />
+    );
 
   return (
     <Container>

@@ -363,7 +363,6 @@ describe('Phase 2 Chunk 2 — what the delivered code does NOT contain', () => {
         'membership.',
         'donations.',
         'teaching.',
-        'content.',
         'question.',
       ]) {
         expect(source, `${file} must not seed ${domain}*`).not.toContain(`n'${domain}`);
@@ -449,7 +448,7 @@ async function permissionsSeededBy(migrationId: string): Promise<string[]> {
   const insert = /INSERT INTO \[dbo\]\.\[Permission\][\s\S]*?;/.exec(migration);
   if (insert === null) return [];
 
-  return [...insert[0].matchAll(/\(N'([a-z.]+)',\s+N'/g)]
+  return [...insert[0].matchAll(/\(N'([a-z.]+)',\s*N'/g)]
     .map((match) => match[1])
     .filter((key): key is string => key !== undefined)
     .sort();
@@ -518,6 +517,18 @@ const PERMISSION_MIGRATIONS = [
     phase: 'Phase 5',
     id: '20260919000000_phase5_people_contributors',
     keys: ['people.administer', 'people.read'],
+  },
+  {
+    phase: 'Phase 6',
+    id: '20260920000000_phase6_editorial_core',
+    keys: [
+      'content.author',
+      'content.publish',
+      'content.read',
+      'content.review',
+      'correspondence.administer',
+      'correspondence.read',
+    ],
   },
 ] as const;
 

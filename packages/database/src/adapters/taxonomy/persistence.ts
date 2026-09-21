@@ -338,6 +338,28 @@ export function createTaxonomyReader(): TaxonomyReaderPort {
   }
 
   return {
+    async topicReferences(ids, locale) {
+      if (ids.length > 300) throw new Error('Topic reference batch exceeds bound');
+      const rows = await getDatabaseClient().topic.findMany({
+        where: { id: { in: [...ids] }, status: 'active' },
+        select: {
+          id: true,
+          slug: true,
+          translations: { select: { locale: true, name: true } },
+        },
+        take: 300,
+        orderBy: { id: 'asc' },
+      });
+      return rows.map((row) => ({
+        id: row.id,
+        slug: row.slug,
+        name:
+          (
+            row.translations.find((t) => t.locale === locale) ??
+            row.translations.find((t) => t.locale === 'en')
+          )?.name ?? row.slug,
+      }));
+    },
     async listTopicTree({ parentId, depth, includeArchived, locale, limit }) {
       const levels = boundedDepth(depth);
       const cap = boundedLimit(limit);

@@ -308,6 +308,14 @@ describe.skipIf(!databaseConfigured)(
        * read key and one administer key.
        */
       const PHASE_5_KEYS = ['people.administer', 'people.read'];
+      const PHASE_6_KEYS = [
+        'content.author',
+        'content.publish',
+        'content.read',
+        'content.review',
+        'correspondence.administer',
+        'correspondence.read',
+      ];
 
       /**
        * The four capability-projection sources, which MUST NOT be grantable.
@@ -322,7 +330,6 @@ describe.skipIf(!databaseConfigured)(
       const UNSEEDED_CAPABILITY_KEYS = [
         'teaching.perform',
         'question.receive',
-        'content.review',
         'fatwa.answer',
         'fatwa.publish',
       ];
@@ -332,7 +339,13 @@ describe.skipIf(!databaseConfigured)(
         const keys = catalogue.map((entry) => entry.key).sort();
 
         expect(keys).toEqual(
-          [...PHASE_2_KEYS, ...PHASE_3B_KEYS, ...PHASE_4_KEYS, ...PHASE_5_KEYS].sort(),
+          [
+            ...PHASE_2_KEYS,
+            ...PHASE_3B_KEYS,
+            ...PHASE_4_KEYS,
+            ...PHASE_5_KEYS,
+            ...PHASE_6_KEYS,
+          ].sort(),
         );
 
         // AND NOT ONE CAPABILITY SOURCE, asserted against the live catalogue

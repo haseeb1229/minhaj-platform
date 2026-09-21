@@ -203,6 +203,22 @@ workflow that publishes this content are introduced in Phase 6, not Phase 4**
 
 **Content is an organisational and legal responsibility — engineering will not draft them.**
 
+### 2.3.1 Correspondence retention and intake activation
+**Owner:** Minhaj privacy/legal and support owners · **Gate:** Phase-6 correspondence
+activation · **Status:** Open.
+
+Approve the retention period for ContactInquiry and Feedback before enabling public intake.
+Engineering provides the server-only `CORRESPONDENCE_RETENTION_DAYS` gate; absence disables
+submission. Its 1–3650 whole-day range is an engineering bound, not an accepted retention
+policy. Synthetic disposable tests use their own explicit test value and confer no approval.
+
+Each accepted submission fixes its own UTC retention deadline. Later configuration changes
+apply only to new submissions. Expired rows are excluded from operator reads and triage and
+are purged in bounded batches, including contact details, body and private notes. Audits retain
+only action/state/opaque identifiers, never correspondence text. Backup disposition remains
+part of the approved backup/retention policy (§4.4), so restoring a backup does not reactivate
+expired data. No legal-hold or minors-specific policy is inferred.
+
 ### 2.4 Content licensing and attribution
 **Owner:** Minhaj · **Gates:** Phases 8, 18, 19, 30 · **Priority:** Medium
 
@@ -652,6 +668,7 @@ gates. A decision may gate more than one thing.
 | 2.1 | Under-18 safeguarding policy | **D** | **Activation**, plus implementation of policy-determined behaviour | 23, 24, 25 | **Fail-closed pre-policy state**: minors-specific capability and student-to-student messaging stay disabled; default-deny mechanics may still be built |
 | 2.2 | Applicable jurisdictions | **D** | Activation · launch | 21, 33 | Export, deletion and consent tracking are supported regardless |
 | 2.3 | Legal document content | **D** | Content acceptance | 6 publishes | Routes reserved; **no body content published as configuration** |
+| 2.3.1 | Correspondence retention period | **D** | Activation | 6 | Public intake stays disabled until the privacy/legal and support owners approve a period |
 | 2.4 | Content licensing and attribution | **D** | Content acceptance | 8, 18, 19, 30 | Affected material is not published or migrated |
 | 2.5 | Student↔student messaging policy | **D** | Activation | 24 | Disabled by default |
 | 3.1 | Written migration authorisation per source | **D** | **Implementation of live-source work**; activation | **30 only** | **No live ingestion.** **Phase 29 framework proceeds on fixtures** |
