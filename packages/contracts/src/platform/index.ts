@@ -39,3 +39,18 @@ export type {
   SuppressionReason,
   SuppressionScope,
 } from './ports.ts';
+
+export type {
+  AssetAccessRequest,
+  AssetAuthorizationPort,
+  AssetPersistencePort,
+  AssetRecord,
+  AssetRejection,
+  AssetState,
+  AssetStream,
+  MalwareScannerPort,
+  ScanOutcome,
+  StorageServicePort,
+  StoredAsset,
+  UploadPolicy,
+} from './storage.ts';

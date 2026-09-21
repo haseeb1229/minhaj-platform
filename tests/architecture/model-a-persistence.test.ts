@@ -378,9 +378,14 @@ describe('F1 — adapter ownership is explicit and fails closed', () => {
     ).toMatchObject({ email: { kind: 'layer0', concern: 'email' } });
 
     // `database` is where adapters live and cannot own one within itself;
-    // `storage`, `search` and `logging` own no relational state in the
-    // approved architecture. An owner outside the enumerated set is unowned.
-    for (const concern of ['database', 'storage', 'search', 'logging', 'invented']) {
+    // `search` and `logging` own no relational state in the approved
+    // architecture. An owner outside the enumerated set is unowned.
+    //
+    // `storage` LEFT this list in Phase 7, when the storage foundation gained
+    // the Asset table and therefore genuinely owns relational state. It is
+    // enumerated above with email, rate limiting and auditing. The others stay:
+    // a concern joins this set when a phase gives it state, never in advance.
+    for (const concern of ['database', 'search', 'logging', 'invented']) {
       expect(
         persistenceAdapterPolicy({
           minhaj: {
@@ -549,6 +554,7 @@ describe('F1 — the production database package publishes no raw capability', (
       email: { kind: 'layer0', concern: 'email' },
       'rate-limiting': { kind: 'layer0', concern: 'rate-limiting' },
       auditing: { kind: 'layer0', concern: 'auditing' },
+      storage: { kind: 'layer0', concern: 'storage' },
     });
 
     // Every declared owner is readable. An entry normalising to `null` would

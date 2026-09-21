@@ -189,6 +189,11 @@ export const prohibitedInContextPackages = Object.freeze({
   '@minhaj/server-core':
     'server-core hosts context-owned services; it is not a layer and a ' +
     'context never depends on it (ARCHITECTURE.md §3.1)',
+  '@minhaj/storage':
+    'the storage foundation holds the storage root, the filesystem and the ' +
+    'scanner socket. A context receives a storage port from composition and ' +
+    'never the implementation, exactly as with the database ' +
+    '(DOMAIN_MODEL.md §2 rule 7, ARCHITECTURE.md §6.1)',
   '@prisma/client': 'no context depends on Prisma directly (DOMAIN_MODEL.md §2 rule 7)',
   prisma: 'no context depends on Prisma directly (DOMAIN_MODEL.md §2 rule 7)',
   ...providerSdkPackages,
@@ -402,6 +407,7 @@ export const layerZeroPersistentConcerns = Object.freeze([
   'email',
   'rate-limiting',
   'auditing',
+  'storage',
 ]);
 
 /**
@@ -491,6 +497,11 @@ export const workspaceRoles = Object.freeze({
 
   // Database is Layer 0 platform infrastructure, not a bounded context.
   '@minhaj/database': ARCHITECTURAL_ROLES.PLATFORM,
+
+  // ARCHITECTURE.md §6.1 names `storage` at Layer 0, beside database, search,
+  // email, logging, auditing and rate limiting. It is infrastructure holding
+  // untrusted bytes, not a bounded context, and it depends on none.
+  '@minhaj/storage': ARCHITECTURAL_ROLES.PLATFORM,
 
   // ARCHITECTURE.md §6.1: "(`packages/server-core` hosts context-owned
   // services; it is not a layer)".

@@ -274,6 +274,7 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'PageSlugHistory',
         'ContactInquiry',
         'Feedback',
+        'Asset',
       ].sort(),
     );
   });

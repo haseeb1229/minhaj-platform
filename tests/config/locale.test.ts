@@ -247,11 +247,17 @@ describe('the render and routing tree stays statically renderable', () => {
     // removes.
     //
     // THE ACCEPTED NON-LOCALE ROUTES, and only those. ROUTE_MAP.md §10 rule 6
-    // names the complete set: `robots.txt`, the sitemaps, `/api/*`, `/rss/*`
-    // and the health probes. Each is machine-readable and unprefixed BY
-    // CONTRACT — a locale prefix on `/robots.txt` would simply be wrong, and a
-    // redirect on a provider callback path is a silent integration failure.
-    // The proxy's matcher excludes exactly these for the same reason.
+    // names the complete set: `robots.txt`, the sitemaps, `/api/*`, `/rss/*`,
+    // the health probes and `/assets/{id}`. Each is machine-readable and
+    // unprefixed BY CONTRACT — a locale prefix on `/robots.txt` would simply be
+    // wrong, and a redirect on a provider callback path is a silent integration
+    // failure. The proxy's matcher excludes exactly these for the same reason.
+    //
+    // `assets` joined the set in Phase 7. It serves stored BYTES, which have no
+    // interface locale: three localised URLs for one object would give the same
+    // bytes three cache entries and three canonical addresses. It is a route
+    // handler behind a default-deny authorisation decision and returns a file
+    // or a 404 — never markup.
     //
     // None of them is a page. The assertion below this one proves that
     // separately, by looking for anything that renders.
@@ -260,6 +266,7 @@ describe('the render and routing tree stays statically renderable', () => {
     expect([...entries].sort()).toEqual([
       '[locale]',
       'api',
+      'assets',
       'robots.ts',
       'sitemap.xml',
       'sitemaps',

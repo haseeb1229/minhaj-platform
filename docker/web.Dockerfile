@@ -51,6 +51,7 @@ COPY packages/config/package.json ./packages/config/
 COPY packages/contracts/package.json ./packages/contracts/
 COPY packages/database/package.json ./packages/database/
 COPY packages/server-core/package.json ./packages/server-core/
+COPY packages/storage/package.json ./packages/storage/
 
 RUN npm ci
 

@@ -525,6 +525,26 @@ from the internal mapping table**, never from user input.
 **No malware scanner is selected or installed in Phase 0A.** Provider and tool selection occur
 in the phase that implements the storage foundation.
 
+**Selected in Phase 7: ClamAV (`clamd`), pinned to an exact version** (TECH_STACK.md §18.2). It
+runs as a Compose sidecar and is reached over its socket with `INSTREAM`, so the scanner is never
+given access to the storage root.
+
+**Scanning is fail closed.** A scanner that is unreachable, unresponsive or unintelligible leaves
+the upload quarantined; none of those outcomes is a pass. Retries are bounded and apply only to a
+transient unavailability — an `infected` or `unscannable` verdict is an answer, not a failure to
+retry. A clearance names the CHECKSUM it cleared, so bytes that changed after the scan do not
+inherit the verdict, and a scan that did not transfer the whole file never yields a clean result.
+
+**An asset is servable only in the `clean` state**, and the database enforces what `clean`
+requires: a CHECK constraint refuses any row that claims it without a media type, a byte size and
+a checksum. That holds against any writer, not only the application.
+
+**Phase 7 delivers the serving MECHANISM, default-deny, and no policy.** The route takes an
+injected allow/deny decision and treats anything that is not an explicit `allow` — including a
+throw or a malformed answer — as a denial. It reads the asset identifier from the path and
+nothing else from the request, so no query parameter, header, cookie or filename can influence
+it. Each Identity-aware consuming phase supplies and tests its own policy.
+
 ### 10.2 Imported HTML — the largest injection vector
 
 Legacy content is **untrusted input**, regardless of Minhaj owning the source site. Those

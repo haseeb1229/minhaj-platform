@@ -328,6 +328,12 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[contactinquiry]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[feedback]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
 
+  // Phase 7 — storage custody metadata. DELETE is genuinely the operation
+  // here: reconciliation removes rows a crash left mid-upload, which is
+  // cleanup of the runtime's own partial work rather than erasure of history.
+  // No ALTER, so the lifecycle CHECK constraints stay beyond its reach.
+  '[dbo].[asset]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+
   // Phase 1 — append-oriented audit (SECURITY_BASELINE.md §13.1).
   '[dbo].[auditlog]': ['INSERT', 'SELECT'],
 

@@ -42,6 +42,38 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  # The malware scanner (SECURITY_BASELINE.md 10.1 rule 4). Selected in this
+  # phase, as the baseline defers it to "the phase that implements the storage
+  # foundation".
+  #
+  # A SIDECAR, not part of the web image. The runtime image stays lean and the
+  # scanner's signature database is not rebuilt every time the application is.
+  #
+  # NO STORAGE MOUNT. The application sends bytes over the socket with clamd's
+  # INSTREAM command, so the scanner never needs access to the storage root. A
+  # compromised scanner cannot reach the corpus because it was never shown it.
+  clamav:
+    image: clamav/clamav:1.5.2
+    container_name: minhaj-clamav
+    environment:
+      # Signature updates are a deliberate operational action, not something
+      # that happens while a developer is trying to start the stack. The image
+      # ships with a database; refreshing it is enabled per environment.
+      CLAMAV_NO_FRESHCLAMD: 'true'
+    ports:
+      - '127.0.0.1:${MINHAJ_CLAMAV_PORT:-3310}:3310'
+    healthcheck:
+      # clamd answers PING with PONG only once its database is loaded, which
+      # takes appreciably longer than the process takes to start. Waiting for
+      # the real answer is what stops an upload meeting a scanner that is up
+      # but not yet able to scan.
+      test: ['CMD-SHELL', 'clamdcheck.sh || exit 1']
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 120s
+    restart: unless-stopped
+
   web:
     build:
       context: ..
@@ -58,6 +90,14 @@ services:
       LOG_LEVEL: debug
       # Required for file watching to work across a bind mount.
       WATCHPACK_POLLING: 'true'
+      # Inside the container the storage root is a named volume, deliberately
+      # outside /app so it is not shadowed by the live source bind mount.
+      STORAGE_ROOT: /var/lib/minhaj/storage
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: '3310'
+    depends_on:
+      clamav:
+        condition: service_healthy
     volumes:
       # Source is live-mounted; container-managed directories are masked with
       # anonymous volumes so host artefacts and platform-specific binaries do
@@ -66,9 +106,16 @@ services:
       - /app/node_modules
       - /app/apps/web/node_modules
       - /app/apps/web/.next
+      - minhaj-storage-data:/var/lib/minhaj/storage
     working_dir: /app
     init: true
 
 volumes:
   minhaj-sqlserver-data:
     name: minhaj-platform-sqlserver-data
+
+  # PERSISTENT from the moment it first exists. It holds the authoritative
+  # bytes of every stored asset, which no backup of SQL Server contains, and it
+  # is never a cleanup target. Tests use disposable temporary roots instead.
+  minhaj-storage-data:
+    name: minhaj-platform-storage-data

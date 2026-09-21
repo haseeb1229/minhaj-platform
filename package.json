@@ -42,6 +42,7 @@
     "check:versions": "node scripts/verify-versions.mjs",
     "check:docker-context": "node scripts/check-docker-context.mjs",
     "test": "vitest run",
+    "test:storage": "vitest run tests/storage",
     "build": "npm run build --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

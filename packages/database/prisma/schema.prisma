@@ -1577,3 +1577,48 @@ model Feedback {
   @@index([state,createdAt,id])
   @@index([retainUntil,id])
 }
+
+/// Layer-0 storage custody. NOT a bounded context and NOT business data.
+///
+/// There is deliberately no owner column of any kind — no `userId`, no
+/// `personId`, and no `targetType` + `targetId` pair. A business context owns
+/// its own typed relation to an Asset when that context arrives; a polymorphic
+/// owner here would make storage depend on every context that stores anything.
+///
+/// File BYTES ARE NEVER HERE. Large files are not database BLOBs
+/// (DOMAIN_MODEL.md §10.1); this row holds only the technical facts about
+/// bytes that live on the filesystem.
+model Asset {
+  id String @id @db.NVarChar(36)
+
+  /// Server-generated and opaque. Never derived from caller input.
+  storageKey String @db.NVarChar(80)
+
+  /// The type the BYTES are, as sniffed — never the declared or client value.
+  /// Null until the bytes have been measured and identified.
+  mediaType String? @db.NVarChar(120)
+  byteSize  BigInt?
+
+  /// SHA-256 over the exact stored bytes, lowercase hex.
+  checksum String? @db.NVarChar(64)
+
+  /// uploading · quarantined · clean · rejected · failed. Only `clean` serves.
+  state String @db.NVarChar(16)
+
+  rejection String? @db.NVarChar(32)
+
+  /// Display only, bounded. It never reaches a path or a storage key.
+  displayName String? @db.NVarChar(200)
+
+  scanAttempts Int @default(0)
+
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @db.DateTime2
+
+  /// A key names at most one object, so a generated collision cannot quietly
+  /// overwrite an existing asset.
+  @@unique([storageKey])
+  /// Serving reads by id and state; reconciliation sweeps by state and age.
+  @@index([state, updatedAt, id])
+  @@map("Asset")
+}

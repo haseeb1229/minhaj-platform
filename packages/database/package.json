@@ -31,7 +31,11 @@
           "kind": "layer0",
           "concern": "auditing"
         },
-        "editorial": "editorial"
+        "editorial": "editorial",
+        "storage": {
+          "kind": "layer0",
+          "concern": "storage"
+        }
       }
     }
   },

@@ -845,6 +845,40 @@ try {
     );
   }
 
+  // ---- Phase 7: storage custody metadata -----------------------------------
+  //
+  // The runtime owns the whole Asset lifecycle, including DELETE, because
+  // reconciliation removes rows a crash left mid-upload. What it must NOT have
+  // is ALTER: the CHECK constraints are what make "an unmeasured asset can
+  // never be clean" true against any writer, and a principal that could drop
+  // them could serve an unscanned file.
+  const assetId = randomUUID();
+  const assetKey = 'ab/cd/' + randomUUID().replaceAll('-', '');
+
+  await expectAllowed(
+    app,
+    'Asset INSERT',
+    `INSERT INTO [dbo].[Asset] ([id],[storageKey],[state],[updatedAt]) VALUES (N'${assetId}',N'${assetKey}',N'uploading',SYSUTCDATETIME());`,
+    'custody rows are created by the runtime',
+  );
+  await expectAllowed(
+    app,
+    'Asset UPDATE',
+    `UPDATE [dbo].[Asset] SET [state]=N'quarantined',[mediaType]=N'image/png',[byteSize]=12,[checksum]=REPLICATE(N'a',64) WHERE [id]=N'${assetId}';`,
+    'the custody lifecycle advances',
+  );
+  await expectAllowed(
+    app,
+    'Asset reconciliation DELETE',
+    `DELETE FROM [dbo].[Asset] WHERE [id]=N'${assetId}';`,
+    'stale upload rows can be reconciled away',
+  );
+  await expectDenied(
+    app,
+    'Asset ALTER denied',
+    'ALTER TABLE [dbo].[Asset] DROP CONSTRAINT [Asset_clean_measured_ck];',
+  );
+
   // ---- the ungranted object was not merely unreadable, it is unchanged -----
   await assertSentinelIntact(admin);
   pass(`${SENTINEL_TABLE} unchanged`, 'one row, marker intact after four attempts');

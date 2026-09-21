@@ -108,6 +108,7 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'PageSlugHistory',
       'ContactInquiry',
       'Feedback',
+      'Asset',
     ]) {
       expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }

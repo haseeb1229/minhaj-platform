@@ -16,6 +16,7 @@
     "@minhaj/contracts": "*",
     "@minhaj/database": "*",
     "@minhaj/server-core": "*",
+    "@minhaj/storage": "*",
     "@tiptap/core": "3.31.3",
     "@tiptap/pm": "3.31.3",
     "@tiptap/react": "3.31.3",

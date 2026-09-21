@@ -439,6 +439,58 @@ jobs:
       - name: Populated recovery proof (Phases 2, 3B and 5)
         run: npm run db:recovery:populated
 
+      # -----------------------------------------------------------------
+      # Phase 7 — the storage foundation's live proofs.
+      #
+      # WHY HERE RATHER THAN IN `Verify`. These need a real SQL Server and a
+      # real malware scanner. `Verify` has neither: it runs the suite with no
+      # database, so every `*.integration.test.ts` skips there by design. This
+      # job is the one that HAS a configured database, so it is where the
+      # storage lifecycle, the filesystem recovery rehearsal and the real
+      # scanner are genuinely exercised rather than skipped.
+      #
+      # It is a REQUIRED blocking job, so none of this is advisory.
+      # -----------------------------------------------------------------
+      - name: Start the malware scanner
+        run: |
+          docker run -d \
+            --name minhaj-clamav-ci \
+            -e CLAMAV_NO_FRESHCLAMD=true \
+            -p 127.0.0.1:3310:3310 \
+            clamav/clamav:1.5.2
+
+      # clamd answers PING only once its signature database is loaded, which
+      # is much later than the process starting. Waiting for the real answer
+      # is what stops the suite meeting a scanner that is up but cannot scan —
+      # which would make the storage tests skip and report success.
+      - name: Wait for the scanner to load its signatures
+        run: |
+          for attempt in $(seq 1 60); do
+            if docker exec minhaj-clamav-ci clamdcheck.sh >/dev/null 2>&1; then
+              echo "clamd ready after ${attempt} attempt(s)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'clamd never became ready' >&2
+          docker logs minhaj-clamav-ci 2>&1 | tail -40 >&2
+          exit 1
+
+      # Asserts the proofs actually RAN. A skipped storage suite would
+      # otherwise look identical to a passing one, and the whole point of
+      # placing these here is that they are not skipped.
+      - name: Storage foundation proof (SQL, filesystem, recovery, real scanner)
+        env:
+          CLAMAV_HOST: 127.0.0.1
+          CLAMAV_PORT: '3310'
+        run: |
+          npm run test:storage -- --reporter=json --outputFile=storage-report.json
+          node scripts/assert-storage-proofs.mjs storage-report.json
+
+      - name: Stop the malware scanner
+        if: always()
+        run: docker rm -f minhaj-clamav-ci || true
+
       # Proves the rehearsal cleaned up after itself rather than trusting that
       # it said so. Also fails if a restore database survived a failure above.
       # Residue is verified INDEPENDENTLY of what `db:recovery:test` reported.

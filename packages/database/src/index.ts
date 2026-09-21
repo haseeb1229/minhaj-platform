@@ -143,3 +143,5 @@ export {
   createEditorialPublicReader,
 } from './adapters/editorial/index.ts';
 export { createCorrespondencePersistence } from './adapters/editorial/index.ts';
+
+export { createAssetPersistence } from './adapters/storage/index.ts';

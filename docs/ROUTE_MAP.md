@@ -285,6 +285,7 @@ citation remains valid regardless of reading preferences.
 |---|---|
 | `/legal/{privacy\|terms\|cookies\|accessibility}` | Compliance surfaces |
 | `/robots.txt` · `/sitemap.xml` · `/sitemaps/{segment}-{locale}.xml` | Unprefixed |
+| `/assets/{id}` | Unprefixed. Authorisation-checking asset serving, default deny (Phase 7) |
 | `/rss` · `/rss/{feed}` | Feeds |
 
 ---
@@ -715,8 +716,12 @@ validation with no over-claiming · legacy 301 correctness with no chains.
    may be a path** — the distinction is set out in §2.3.
 4. **Derived sort and flag views are query parameters** (§2.3).
 5. **Lowercase, hyphenated paths.**
-6. **Non-locale routes** are limited to `robots.txt`, sitemaps, `/api/*`, `/rss/*` and health
-   probes.
+6. **Non-locale routes** are limited to `robots.txt`, sitemaps, `/api/*`, `/rss/*`, health
+   probes and `/assets/{id}`. Each is machine-readable and unprefixed BY CONTRACT; none
+   renders a page. **`/assets/{id}` is stored bytes, not a document**: an asset has no
+   interface locale, and giving one object three localised URLs would give the same bytes
+   three cache entries and three canonical addresses. It is the default-deny serving route
+   delivered in Phase 7, and it returns a file or a 404, never markup.
 7. **No state-changing GET.** Every browser-initiated mutation is a POST/action with
    Origin/Host validation and framework-appropriate CSRF controls. Signed machine callbacks and
    authentication callbacks establish authenticity by their own protocol instead

@@ -554,3 +554,27 @@ paragraphs, headings 2–4, lists, quotations, emphasis/strike and HTTP(S) or in
 Images, embeds, raw HTML, scripts and custom styles are refused. Tiptap CSS injection and
 unused cursor extensions are disabled; typography uses the shared stylesheet and tokens.
 No font, icon, image, religious corpus or third-party content was introduced with this editor.
+
+### 18.2 Phase-7 storage foundation inventory
+
+| Tool | Exact version | Use and provenance |
+| --- | --- | --- |
+| ClamAV (`clamav/clamav`) | 1.5.2 | GPL-2.0; [Cisco Talos images](https://github.com/Cisco-Talos/clamav-docker), [engine source](https://github.com/Cisco-Talos/clamav). The malware scanner SECURITY_BASELINE.md §10.1 rule 4 requires and defers to "the phase that implements the storage foundation". Self-hosted, Linux, Docker Compose, no paid cloud service and no Azure dependency. Pinned to an exact version tag, never `latest`, matching the `node:24.20.0-bookworm-slim` precedent. |
+
+**No new npm dependency was introduced.** The storage foundation uses Node built-ins —
+`node:crypto` for SHA-256 and key generation, `node:fs` and `node:stream` for streaming, and
+`node:net` for the scanner socket — plus the already-locked Zod for configuration.
+
+**Content sniffing is a magic-number table, not a library.** The foundation recognises a small
+closed set of formats and refuses everything else, so the detector is a reviewable table rather
+than a general-purpose identifier. A dependency would earn its place if the requirement were
+"identify anything"; it is the opposite. A later phase that genuinely needs deep format parsing
+introduces one with its own evidence.
+
+**`INSTREAM`, not a shared mount.** The application sends bytes to `clamd` over the socket, so
+the scanner container is never given access to the storage volume. One fewer mount, and a
+compromised scanner cannot reach the corpus.
+
+**The storage volume is persistent state.** `minhaj-platform-storage-data` holds the
+authoritative bytes of every stored asset — bytes no SQL Server backup contains. It is protected
+from the moment it exists and is never a cleanup target; tests use disposable temporary roots.

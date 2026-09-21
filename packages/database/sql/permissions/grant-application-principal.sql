@@ -441,3 +441,9 @@ IF OBJECT_ID(N'[dbo].[ArticleSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT,
 IF OBJECT_ID(N'[dbo].[PageSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[PageSlugHistory] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[PageSlugHistory] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[ContactInquiry]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[ContactInquiry] TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[ContactInquiry] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[Feedback]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[Feedback] TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[Feedback] TO [$(app_login)]; END;
+
+-- Phase 7: storage custody metadata. The runtime creates, measures, clears and
+-- reconciles assets, so it needs DELETE here — reconciliation removes rows a
+-- crash left mid-upload. It never needs ALTER, and the state CHECK constraints
+-- are therefore beyond its reach: it cannot widen the lifecycle it is bound by.
+IF OBJECT_ID(N'[dbo].[Asset]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[Asset] TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[Asset] TO [$(app_login)]; END;

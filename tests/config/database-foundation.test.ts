@@ -111,6 +111,7 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'PageSlugHistory',
       'ContactInquiry',
       'Feedback',
+      'Asset',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name

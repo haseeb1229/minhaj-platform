@@ -170,8 +170,14 @@ describe('the mutation surface', () => {
     // reason — ROUTE_MAP.md §9.1 rule 3 names the status code `301`, and a
     // page-level `permanentRedirect()` emits 308.
     //
-    // All four of the non-webhook handlers are GET-only, read-only,
-    // unauthenticated and mutate nothing. None of the five is an
+    // The Phase-7 handler serves stored BYTES behind a default-deny
+    // authorisation decision. It is a handler rather than a page because it
+    // returns a file, and it is unprefixed because an asset has no interface
+    // locale (ROUTE_MAP.md §10 rule 6). It imports NO Identity at all — the
+    // decision port is injected, and Phase 7 ships no policy that ever allows.
+    //
+    // All five of the non-webhook handlers are GET-only, read-only,
+    // unauthenticated and mutate nothing. None of the six is an
     // authentication endpoint, which is what this test exists to prevent.
     expect([...routes].sort()).toEqual(
       [
@@ -180,15 +186,16 @@ describe('the mutation surface', () => {
         'apps/web/src/app/sitemaps/[partition]/route.ts',
         'apps/web/src/app/[locale]/(public)/authors/[slug]/route.ts',
         'apps/web/src/app/[locale]/(public)/library/authors/[slug]/route.ts',
+        'apps/web/src/app/assets/[id]/route.ts',
       ].sort(),
     );
 
-    // And the four genuinely are read-only: a mutating verb on any of them
+    // And the five genuinely are read-only: a mutating verb on any of them
     // would be a state-changing endpoint outside the Class-A controls.
     const { readFile } = await import('node:fs/promises');
 
     const readOnly = routes.filter((entry) => !entry.includes('webhooks'));
-    expect(readOnly).toHaveLength(4);
+    expect(readOnly).toHaveLength(5);
 
     for (const route of readOnly) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');

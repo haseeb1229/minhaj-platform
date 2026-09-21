@@ -1,0 +1,23 @@
+{
+  "name": "@minhaj/storage",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Server-only Layer 0 storage foundation: custody of untrusted bytes. Platform infrastructure, not a bounded business context.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "react-server": "./src/index.ts",
+      "node": "./src/index.ts",
+      "browser": "./src/client-import-error.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@minhaj/contracts": "*",
+    "server-only": "0.0.1",
+    "zod": "4.5.4"
+  }
+}
