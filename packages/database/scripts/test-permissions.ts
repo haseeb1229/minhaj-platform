@@ -710,6 +710,7 @@ try {
     navigationProvisioned: number;
     peopleProvisioned: number;
     editorialProvisioned: number;
+    libraryProvisioned: number;
   }>(`
     SELECT COUNT_BIG(*) AS total,
            SUM(CASE WHEN [action] = N'phase1.permission.probe' THEN 1 ELSE 0 END) AS probe,
@@ -725,23 +726,27 @@ try {
              AS peopleProvisioned,
            SUM(CASE WHEN [action] = N'editorial.permissions.provisioned'
                      AND [actorType] = N'migration' THEN 1 ELSE 0 END)
-             AS editorialProvisioned
+             AS editorialProvisioned,
+           SUM(CASE WHEN [action] = N'library.permissions.provisioned'
+                     AND [actorType] = N'migration' THEN 1 ELSE 0 END)
+             AS libraryProvisioned
     FROM [dbo].[AuditLog];
   `);
 
-  // Exactly five rows: the Phase-3B through Phase-6 privilege extensions,
+  // Exactly six rows: the Phase-3B through Phase-8 privilege extensions,
   // and this run's probe. Naming every migration action is load-bearing:
   // deriving the expected total from whatever provisioning rows happened to
   // survive would pass if a phase omitted its own audit, and each privilege
   // extension must be able to show that it paid for itself
   // (SECURITY_BASELINE.md §8.1).
-  const EXPECTED_AUDIT_ROWS = 5;
+  const EXPECTED_AUDIT_ROWS = 6;
 
   if (
     Number(survivor?.taxonomyProvisioned ?? 0) !== 1 ||
     Number(survivor?.navigationProvisioned ?? 0) !== 1 ||
     Number(survivor?.peopleProvisioned ?? 0) !== 1 ||
     Number(survivor?.editorialProvisioned ?? 0) !== 1 ||
+    Number(survivor?.libraryProvisioned ?? 0) !== 1 ||
     Number(survivor?.probe ?? 0) !== 1 ||
     Number(survivor?.tampered ?? -1) !== 0 ||
     Number(survivor?.total ?? 0) !== EXPECTED_AUDIT_ROWS
@@ -749,17 +754,20 @@ try {
     fail(
       'audit rows unmodified',
       `expected ${EXPECTED_AUDIT_ROWS} rows with 1 taxonomy provisioning, ` +
-        `1 navigation provisioning, 1 people provisioning, 1 editorial provisioning, 1 probe and ` +
+        `1 navigation provisioning, 1 people provisioning, 1 editorial provisioning, ` +
+        `1 library provisioning, 1 probe and ` +
         `0 tampered; found ${survivor?.total ?? 0} rows, ` +
         `${survivor?.taxonomyProvisioned ?? 0} taxonomy provisioning, ` +
         `${survivor?.navigationProvisioned ?? 0} navigation provisioning, ` +
         `${survivor?.peopleProvisioned ?? 0} people provisioning, ` +
+        `${survivor?.editorialProvisioned ?? 0} editorial provisioning, ` +
+        `${survivor?.libraryProvisioned ?? 0} library provisioning, ` +
         `${survivor?.probe ?? 0} probe, ${survivor?.tampered ?? 0} tampered`,
     );
   } else {
     pass(
       'audit rows unmodified',
-      'the probe row and all four exact migration records are intact after ' +
+      'the probe row and all five exact migration records are intact after ' +
         'UPDATE/DELETE attempts',
     );
   }
@@ -877,6 +885,185 @@ try {
     app,
     'Asset ALTER denied',
     'ALTER TABLE [dbo].[Asset] DROP CONSTRAINT [Asset_clean_measured_ck];',
+  );
+
+  // ---- Phase 8: Library aggregates and the permanent slug namespace ---------
+  //
+  // THREE DISTINCT POSTURES here, and the differences are the rule rather than
+  // an accident of how the grant script was written:
+  //
+  //   - the AGGREGATES — `Work`, `Edition`, `SalePoint` — are INSERT and UPDATE
+  //     and never DELETE. A Work is withdrawn by moving its state to `archived`,
+  //     which keeps the row that a slug reservation, an audit entry and a
+  //     contributor attribution all point at. A runtime that could delete one
+  //     could break all three at once.
+  //
+  //   - the RELATION SETS — `WorkLabel`, `WorkContributor`, `WorkTopic`,
+  //     `WorkSalePoint`, `BookTranslator` — are replaced wholesale on every
+  //     save, so INSERT and DELETE are the operations and UPDATE is DENIED:
+  //     a composite-key membership row has no third state to be moved into.
+  //     The same posture `RolePermission` has, for the same reason.
+  //
+  //   - `WorkSlugHistory` is APPEND ONLY. It is the namespace that makes "a
+  //     slug is permanent and never reused" true (DOMAIN_MODEL.md §19.7), and a
+  //     runtime that could update or delete a reservation could hand one Work's
+  //     established public address to another Work.
+  //
+  // THE RESERVATION IS PROVED, NOT ASSUMED. The row is written by a trigger on
+  // `Work`, so the check below is the only thing that can tell "the trigger
+  // fires under the least-privilege principal" from "the trigger exists".
+  const libraryWorkId = randomUUID();
+  const librarySlug = `library-proof-${libraryWorkId.replaceAll('-', '')}`;
+  const libraryEditionId = randomUUID();
+  const librarySalePointId = randomUUID();
+
+  await expectAllowed(
+    app,
+    'Work INSERT',
+    `INSERT INTO [dbo].[Work] ([id],[slug],[primaryLocale],[state],[isFeatured],[version],[updatedAt]) VALUES (N'${libraryWorkId}',N'${librarySlug}',N'en',N'draft',0,1,SYSUTCDATETIME());`,
+    'Library aggregates are created by the runtime',
+  );
+
+  const [reserved] = await admin.query<{ total: number }>(
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[WorkSlugHistory] WHERE [slug]=N'${librarySlug}' AND [workId]=N'${libraryWorkId}';`,
+  );
+  if (Number(reserved?.total ?? 0) !== 1) {
+    fail(
+      'Work slug reserved by the database',
+      `expected exactly one reservation for the new Work, found ${reserved?.total ?? 0}`,
+    );
+  } else {
+    pass(
+      'Work slug reserved by the database',
+      'the trigger reserved the slug under the least-privilege principal',
+    );
+  }
+
+  await expectAllowed(
+    app,
+    'Work UPDATE',
+    `UPDATE [dbo].[Work] SET [state]=N'published',[version]=[version]+1 WHERE [id]=N'${libraryWorkId}';`,
+    'the publication lifecycle advances',
+  );
+  await expectAllowed(
+    app,
+    'WorkLabel INSERT',
+    `INSERT INTO [dbo].[WorkLabel] ([workId],[locale],[title],[description]) VALUES (N'${libraryWorkId}',N'en',N'Least-privilege proof work',N'');`,
+    'localized descriptive metadata is written',
+  );
+  await expectAllowed(
+    app,
+    'WorkContributor INSERT',
+    `INSERT INTO [dbo].[WorkContributor] ([workId],[personId],[role],[position]) VALUES (N'${libraryWorkId}',N'${editorialPeople.linkedPersonId}',N'author',0);`,
+    'attribution references People',
+  );
+  await expectAllowed(
+    app,
+    'WorkTopic INSERT',
+    `INSERT INTO [dbo].[WorkTopic] ([workId],[topicId]) VALUES (N'${libraryWorkId}',N'${editorialTopic.id}');`,
+    'classification references Taxonomy',
+  );
+  await expectAllowed(
+    app,
+    'Edition INSERT',
+    `INSERT INTO [dbo].[Edition] ([id],[workId],[languageCode],[label],[state],[reading],[download],[version],[updatedAt]) VALUES (N'${libraryEditionId}',N'${libraryWorkId}',N'en',N'Proof edition',N'draft',N'unavailable',N'denied',1,SYSUTCDATETIME());`,
+    'manifestations are created by the runtime',
+  );
+  await expectAllowed(
+    app,
+    'BookTranslation INSERT',
+    `INSERT INTO [dbo].[BookTranslation] ([editionId],[workId],[sourceEditionId]) VALUES (N'${libraryEditionId}',N'${libraryWorkId}',NULL);`,
+    'a translation relation is recorded',
+  );
+  await expectAllowed(
+    app,
+    'BookTranslator INSERT',
+    `INSERT INTO [dbo].[BookTranslator] ([editionId],[personId]) VALUES (N'${libraryEditionId}',N'${editorialPeople.historicalPersonId}');`,
+    'translators reference People',
+  );
+  await expectAllowed(
+    app,
+    'SalePoint INSERT',
+    `INSERT INTO [dbo].[SalePoint] ([id],[name],[address],[contact],[url],[state],[version]) VALUES (N'${librarySalePointId}',N'Proof sale point',N'',N'',NULL,N'draft',1);`,
+    'printed-book availability is recorded',
+  );
+  await expectAllowed(
+    app,
+    'WorkSalePoint INSERT',
+    `INSERT INTO [dbo].[WorkSalePoint] ([workId],[salePointId]) VALUES (N'${libraryWorkId}',N'${librarySalePointId}');`,
+    'a Work is linked to where it can be bought',
+  );
+
+  // The replacement half of "replaced wholesale": each set must be removable,
+  // in dependency order, so the save path is not relying on an UPDATE it does
+  // not hold.
+  for (const [table, where] of [
+    ['BookTranslator', `[editionId]=N'${libraryEditionId}'`],
+    ['BookTranslation', `[editionId]=N'${libraryEditionId}'`],
+    ['WorkSalePoint', `[workId]=N'${libraryWorkId}'`],
+    ['WorkTopic', `[workId]=N'${libraryWorkId}'`],
+    ['WorkContributor', `[workId]=N'${libraryWorkId}'`],
+    ['WorkLabel', `[workId]=N'${libraryWorkId}'`],
+  ] as const) {
+    await expectAllowed(
+      app,
+      `${table} DELETE`,
+      `DELETE FROM [dbo].[${table}] WHERE ${where};`,
+      'a replaceable relation set can be cleared before it is rewritten',
+    );
+  }
+
+  // The aggregates are not deletable, so a withdrawal cannot become an erasure.
+  for (const [table, where] of [
+    ['Work', `[id]=N'${libraryWorkId}'`],
+    ['Edition', `[id]=N'${libraryEditionId}'`],
+    ['SalePoint', `[id]=N'${librarySalePointId}'`],
+  ] as const) {
+    await expectDenied(
+      app,
+      `${table} DELETE denied`,
+      `DELETE FROM [dbo].[${table}] WHERE ${where};`,
+    );
+  }
+
+  // A membership row has no third state, so UPDATE is denied on every set.
+  for (const [table, column] of [
+    ['WorkLabel', 'title'],
+    ['WorkContributor', 'position'],
+    ['WorkTopic', 'topicId'],
+    ['WorkSalePoint', 'salePointId'],
+    ['BookTranslator', 'personId'],
+  ] as const) {
+    await expectDenied(
+      app,
+      `${table} UPDATE denied`,
+      `UPDATE [dbo].[${table}] SET [${column}]=[${column}];`,
+    );
+  }
+
+  // The slug namespace is append-only: a reservation cannot be moved or removed.
+  await expectDenied(
+    app,
+    'WorkSlugHistory UPDATE denied',
+    'UPDATE [dbo].[WorkSlugHistory] SET [workId]=[workId];',
+  );
+  await expectDenied(
+    app,
+    'WorkSlugHistory DELETE denied',
+    `DELETE FROM [dbo].[WorkSlugHistory] WHERE [slug]=N'${librarySlug}';`,
+  );
+
+  // No ALTER anywhere, so the availability and version CHECK constraints that
+  // make "reading allowed implies a readable source" true stay beyond reach.
+  await expectDenied(
+    app,
+    'Edition ALTER denied',
+    'ALTER TABLE [dbo].[Edition] DROP CONSTRAINT [Edition_reading_ck];',
+  );
+  await expectDenied(
+    app,
+    'Work ALTER denied',
+    'ALTER TABLE [dbo].[Work] DROP CONSTRAINT [Work_state_ck];',
   );
 
   // ---- the ungranted object was not merely unreadable, it is unchanged -----

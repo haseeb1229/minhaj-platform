@@ -285,3 +285,30 @@ p {
 .editorial-prose[contenteditable] {
   white-space: pre-wrap;
 }
+
+/*
+ * The Library long-form reader (Phase 8).
+ *
+ * THE DEFAULTS LIVE HERE, NOT IN A `style` ATTRIBUTE, because the platform's CSP
+ * is `style-src 'self'` and an inline style attribute is refused by it. The three
+ * custom properties are the reader's ONLY adjustable typography: the controls
+ * island changes them through the CSSOM (`element.style.setProperty`), which the
+ * policy permits, so a visitor's text size changes without any markup carrying a
+ * style and without the edition's text passing through the client.
+ *
+ * `--reader-measure` is in `ch`, relative to the font size, so enlarging the text
+ * narrows the column in characters rather than widening it past the viewport —
+ * which is what turns 200% zoom into reflow instead of a horizontal scrollbar.
+ * `max-inline-size` is the logical property, so the same rule is correct in Urdu
+ * and Arabic. `overflow-wrap: anywhere` stops one unbroken token from forcing
+ * horizontal scroll at the narrowest widths.
+ */
+.library-reader {
+  --reader-font-size: 1.125rem;
+  --reader-line-height: 1.75;
+  --reader-measure: 66ch;
+  font-size: var(--reader-font-size);
+  line-height: var(--reader-line-height);
+  max-inline-size: var(--reader-measure);
+  overflow-wrap: anywhere;
+}

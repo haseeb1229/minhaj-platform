@@ -213,6 +213,51 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     key: 'correspondence.administer',
     description: 'Triage private correspondence and dispose of expired submissions.',
   }),
+
+  /* ---- Phase 8 — Library ----------------------------------------------- */
+  //
+  // TWO KEYS, AND NEITHER OF THEM IS `content.*`.
+  //
+  // It would have been easy to reuse Editorial's vocabulary: both manage
+  // published material, and `content.publish` already exists. They are DIFFERENT
+  // AUTHORITIES over different aggregates with different owners — a person
+  // trusted to publish an Article has not thereby been trusted to change which
+  // edition of a book the platform offers for download, and an operator
+  // maintaining the book catalogue should not acquire the editorial workflow.
+  // One key covering both would be a grant nobody could reason about (§4).
+  //
+  // TWO, NOT FOUR. Library has no independent review step and no scheduling:
+  // ROUTE_MAP.md §7 gives it four administrative routes — works, editions,
+  // translations, sale-points — which are four VIEWS of one concern with one
+  // owner, and Phase 8 delivers no workflow that separates authoring from
+  // publishing. So there is no `library.author`, no `library.review` and no
+  // `library.publish`; minting them for symmetry with Editorial would be
+  // grantable authority over transitions that do not exist. They arrive with a
+  // workflow contract, if one is ever accepted.
+  //
+  // TWO, NOT ONE PER ENTITY EITHER. `library.works.administer` beside
+  // `library.editions.administer` would separate authority nobody asked to
+  // separate — an Edition without its Work is not an administrable thing.
+  //
+  // `library.administer` IS ALSO WHAT AUTHORISES A PRIVATE ASSET PREVIEW, and
+  // that is deliberate rather than convenient: previewing a file already attached
+  // to an Edition the holder may already edit is the same authority as editing
+  // it. The relation is still checked, so the permission never becomes a
+  // general-purpose file reader (SECURITY_BASELINE.md §10.1).
+  //
+  // WHAT IS DELIBERATELY ABSENT, and is most tempting at this phase:
+  // `research.*`, `publication.*` and `search.*`. Phases 9 and 17 own those
+  // surfaces, and seeding a key now would fix another phase's vocabulary and
+  // leave grantable authority over nothing.
+  Object.freeze({
+    key: 'library.read',
+    description: 'View Library works, editions, translations and sale points.',
+  }),
+  Object.freeze({
+    key: 'library.administer',
+    description:
+      'Create, edit, link and archive Library works, editions, translations and sale points.',
+  }),
 ]);
 
 /** Every catalogue key, as a union. Mistyping one is a compile error. */

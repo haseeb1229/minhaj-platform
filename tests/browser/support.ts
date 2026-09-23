@@ -43,6 +43,8 @@ interface BrowserEnvironment {
   readonly databaseUrl: string;
   readonly databaseName: string;
   readonly port: number;
+  /** The run's disposable storage root, removed with the database. */
+  readonly storageRoot: string;
   readonly AUTH_SECRETS: string;
   readonly RATE_LIMIT_DIGEST_KEY: string;
   readonly EMAIL_DIGEST_KEY: string;

@@ -162,6 +162,12 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/editorial/editor-island.tsx',
     'apps/web/src/components/editorial/editor.tsx',
     'apps/web/src/components/editorial/public-content.tsx',
+    // Phase 8. The Library components render on the anonymous public path;
+    // the ROUTES that use them are dynamic for data, never these modules.
+    'apps/web/src/components/library/facet-browse.tsx',
+    'apps/web/src/components/library/presentation.ts',
+    'apps/web/src/components/library/reader-controls.tsx',
+    'apps/web/src/components/library/reader.tsx',
     'apps/web/src/components/locale-switcher.tsx',
     'apps/web/src/components/locale-switcher-links.tsx',
     'apps/web/src/components/ui/index.tsx',

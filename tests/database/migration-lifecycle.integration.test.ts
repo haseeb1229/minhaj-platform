@@ -275,6 +275,17 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'ContactInquiry',
         'Feedback',
         'Asset',
+        // Phase 8 — Library.
+        'Work',
+        'WorkLabel',
+        'WorkSlugHistory',
+        'WorkContributor',
+        'WorkTopic',
+        'Edition',
+        'BookTranslation',
+        'BookTranslator',
+        'SalePoint',
+        'WorkSalePoint',
       ].sort(),
     );
   });

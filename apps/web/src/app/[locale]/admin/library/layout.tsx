@@ -1,0 +1,87 @@
+import type { ReactNode } from 'react';
+import { NextIntlClientProvider } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
+
+import { requireOwnSession } from '@/composition/authorization';
+import { identityRuntime } from '@/composition/identity';
+import { requireLocale } from '@/config/route-locale';
+import { TextLink } from '@/components/ui';
+
+/**
+ * The Library administration shell (ROUTE_MAP.md §7, and this phase's §17).
+ *
+ * FOUR SURFACES AND NO MORE. `works`, `editions`, `translations` and `sale-points`
+ * are what Phase 8 activates. ROUTE_MAP.md §7 also names `research`,
+ * `publications`, `magazines` and `encyclopedias` under `/admin/library/*` — those
+ * are Phase 9's, and they have no route, no navigation entry and no permission key
+ * here. "Do not activate Phase-9 route/admin families early" (§7, §17), and the
+ * strongest form of that is an absent directory rather than a hidden link.
+ *
+ * `noindex, nofollow` FOR THE WHOLE SUBTREE, inherited from the parent
+ * administrative layout and restated here because a privileged surface in a search
+ * index would disclose the platform's shape to everyone (ROUTE_MAP.md §7, §9.6).
+ *
+ * THE NAVIGATION IS FILTERED BY PERMISSION, AND THAT IS PRESENTATION ONLY. Hiding a
+ * link somebody cannot use is a kindness, not a control: every page beneath
+ * re-checks `library.read` server-side and every action re-checks
+ * `library.administer` again, so a hand-typed URL reaches the same refusal
+ * (SECURITY_BASELINE.md §3.4 rule 1).
+ *
+ * ONE NAV ENTRY PER SURFACE, ALL GATED ON THE SAME KEY, because `library.read`
+ * genuinely opens all four — four keys for one authority would be four links that
+ * appear and disappear together (see the permission catalogue's own note).
+ *
+ * THE CLIENT PROVIDER CARRIES THREE STRINGS. `error.tsx` and the form islands are
+ * Client Components and need their copy; handing them the whole catalogue would ship
+ * every locale's administrative messages to the browser for the sake of three
+ * labels.
+ */
+export const metadata = { robots: { index: false, follow: false } };
+
+/** PER REQUEST, always. Every page beneath reads a session and a permission set. */
+export const dynamic = 'force-dynamic';
+
+const SURFACES = ['works', 'editions', 'translations', 'sale-points'] as const;
+
+export default async function LibraryAdminLayout({
+  children,
+  params,
+}: {
+  readonly children: ReactNode;
+  readonly params: Promise<{ readonly locale: string }>;
+}) {
+  const locale = await requireLocale(params);
+  const t = await getTranslations({ locale, namespace: 'library' });
+
+  const active = await requireOwnSession(locale);
+  const held = active
+    ? (await identityRuntime().authorization.evaluate(active.session)).permissions
+    : new Set<string>();
+
+  return (
+    <>
+      {held.has('library.read') ? (
+        <nav className="flex flex-wrap gap-4" aria-label={t('title')}>
+          {SURFACES.map((surface) => (
+            <TextLink key={surface} href={`/${locale}/admin/library/${surface}`}>
+              {t(`admin.${surface}` as 'admin.works')}
+            </TextLink>
+          ))}
+        </nav>
+      ) : null}
+
+      <NextIntlClientProvider
+        locale={locale}
+        messages={{
+          library: {
+            unknown: t('unknown'),
+            reload: t('reload'),
+            loading: t('loading'),
+          },
+        }}
+      >
+        {children}
+      </NextIntlClientProvider>
+    </>
+  );
+}

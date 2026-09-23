@@ -98,13 +98,14 @@ describeLive('Phase 3B — typed topic assignment, proven on a disposable juncti
       expect(Number(rows[0]?.total)).toBe(0);
     });
 
-    it('reports exactly the two delivered Editorial typed assignment relationships', async () => {
+    it('reports exactly the delivered typed assignment relationships: two Editorial, one Library', async () => {
       // The honest answer, and the one the administrative surface shows. It is
       // read from the foreign-key catalogue, so it cannot say "none" while one
       // exists, or "one" while somebody merely intended it.
       const status = await harness.taxonomy.assignmentStatus();
       expect(status).toEqual({
-        enforcedRelationships: 2,
+        // ArticleTopic and PageTopic (Phase 6), and WorkTopic (Phase 8).
+        enforcedRelationships: 3,
         incompleteRelationships: 0,
       });
     });
@@ -210,7 +211,7 @@ describeLive('Phase 3B — typed topic assignment, proven on a disposable juncti
       // context's table, column or constraint names. The adapter derives this
       // status from the foreign-key catalogue rather than a declared registry.
       expect(await harness.taxonomy.assignmentStatus()).toEqual({
-        enforcedRelationships: 3,
+        enforcedRelationships: 4,
         incompleteRelationships: 0,
       });
     });
@@ -314,7 +315,7 @@ describeLive('Phase 3B — typed topic assignment, proven on a disposable juncti
         // The surface reports the defect semantically without exposing either
         // the half-typed table or the sound owner's physical schema.
         expect(await harness.taxonomy.assignmentStatus()).toEqual({
-          enforcedRelationships: 4,
+          enforcedRelationships: 5,
           incompleteRelationships: 1,
         });
       } finally {

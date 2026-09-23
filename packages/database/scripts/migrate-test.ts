@@ -113,6 +113,18 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
     'Feedback',
   ],
   '20260921000000_phase7_storage_foundation': ['Asset'],
+  '20260922000000_phase8_library': [
+    'Work',
+    'SalePoint',
+    'WorkLabel',
+    'WorkSlugHistory',
+    'WorkContributor',
+    'WorkTopic',
+    'Edition',
+    'BookTranslation',
+    'BookTranslator',
+    'WorkSalePoint',
+  ],
   '20260919000000_phase5_people_contributors': [
     'Person',
     'PersonTranslation',

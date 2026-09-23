@@ -29,7 +29,8 @@
       "default": "./src/env/server.ts"
     },
     "./editorial": "./src/editorial/index.ts",
-    "./editorial/editor": "./src/editorial/editor.ts"
+    "./editorial/editor": "./src/editorial/editor.ts",
+    "./library": "./src/library/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"

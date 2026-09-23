@@ -1306,10 +1306,12 @@ describeLive('Phase 5 — People & Contributors over a live database', () => {
       ]);
     });
 
-    it('allows only People tables and the two delivered typed Editorial contributor owners', async () => {
-      // §5.3 puts the relationship row in the context that owns the TARGET, and
-      // Editorial is the first delivered target owner. Read its two typed
-      // contributor tables alongside People's own relationships.
+    it('allows only People tables and the delivered typed Editorial and Library contributor owners', async () => {
+      // §5.3 puts the relationship row in the context that owns the TARGET.
+      // Editorial was the first delivered target owner (two typed tables); Library
+      // is the second (Phase 8): `WorkContributor` for attribution and
+      // `BookTranslator` for a genuine translation's translators. Each is a typed
+      // foreign key to Person, never a polymorphic pair.
       const referencing = await admin.query<{ tableName: string }>(`
         SELECT DISTINCT OBJECT_NAME(fk.parent_object_id) AS tableName
         FROM sys.foreign_keys fk
@@ -1320,12 +1322,14 @@ describeLive('Phase 5 — People & Contributors over a live database', () => {
       expect(referencing.map((row) => row.tableName)).toEqual([
         'ArticleContributor',
         'AuthorProfile',
+        'BookTranslator',
         'PageContributor',
         'PersonNameVariant',
         'PersonTranslation',
         'ScholarProfile',
         'SpeakerProfile',
         'TeacherProfile',
+        'WorkContributor',
       ]);
     });
 

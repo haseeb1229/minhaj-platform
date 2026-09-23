@@ -112,6 +112,18 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'ContactInquiry',
       'Feedback',
       'Asset',
+      // Phase 8 — Library. Work, its Editions, genuine BookTranslation relations
+      // and SalePoint, with typed relation sets and the permanent slug namespace.
+      'Work',
+      'WorkLabel',
+      'WorkSlugHistory',
+      'WorkContributor',
+      'WorkTopic',
+      'Edition',
+      'BookTranslation',
+      'BookTranslator',
+      'SalePoint',
+      'WorkSalePoint',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name
@@ -128,7 +140,19 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'Collection',
       'Quran',
       'Hadith',
+      // `Book` stays absent: Phase 8 models the Work/Edition split rather than a
+      // single Book row, which is the conflation DOMAIN_MODEL.md §10.1 corrects.
       'Book',
+      // Phase 9 and Phase 21 aggregates that must not arrive with Library.
+      'Research',
+      'ResearchPaper',
+      'Publication',
+      'Magazine',
+      'MagazineIssue',
+      'Encyclopedia',
+      'ReadingHistory',
+      'ReadingProgress',
+      'Bookmark',
     ]) {
       expect(models, `${domain} arrives with its owning slice`).not.toContain(domain);
     }

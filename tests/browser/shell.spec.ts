@@ -443,7 +443,14 @@ test.describe('navigation is honest about what exists', () => {
       '/quran',
       '/hadith',
       '/learn',
-      '/library',
+      // `/library` is delivered by Phase 8. Its Phase-9 and Phase-15 surfaces
+      // are still absent, and stay asserted absent.
+      '/library/research',
+      '/library/research-papers',
+      '/library/publications',
+      '/library/magazines',
+      '/library/encyclopedias',
+      '/library/collections',
       '/watch',
       '/listen',
       '/fatwa',
@@ -467,7 +474,14 @@ test.describe('navigation is honest about what exists', () => {
           links.map((link) => (link as HTMLAnchorElement).getAttribute('href') ?? ''),
         );
 
-      for (const delivered of ['/contact', '/help', '/feedback', '/library/articles']) {
+      for (const delivered of [
+        '/contact',
+        '/help',
+        '/feedback',
+        '/library/articles',
+        // Phase 8: the Library entry point is in the primary navigation.
+        '/library',
+      ]) {
         expect(hrefs, `${path} exposes delivered ${delivered}`).toContain(
           `/en${delivered}`,
         );

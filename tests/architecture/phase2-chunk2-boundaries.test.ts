@@ -530,6 +530,11 @@ const PERMISSION_MIGRATIONS = [
       'correspondence.read',
     ],
   },
+  {
+    phase: 'Phase 8',
+    id: '20260922000000_phase8_library',
+    keys: ['library.administer', 'library.read'],
+  },
 ] as const;
 
 describe('the permission catalogue is one definition, appended only by owners', () => {
@@ -589,7 +594,11 @@ describe('the permission catalogue is one definition, appended only by owners', 
       'teaching.',
       'editorial.',
       'media.',
-      'library.',
+      // Library shipped in Phase 8. What is still absent beside it is Phase 9's
+      // research and publications vocabulary and Phase 17's search.
+      'research.',
+      'publication.',
+      'search.',
       'messaging.',
     ]) {
       expect(declared.some((key) => key.startsWith(domain))).toBe(false);

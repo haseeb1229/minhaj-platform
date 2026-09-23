@@ -149,11 +149,22 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     placements: Object.freeze(['primary'] as const),
     availability: 'deferred' as const,
   }),
+  /**
+   * DELIVERED BY PHASE 8. The entry stops being `deferred` because the capability
+   * now exists: `/library` is a landing page listing the Library surfaces that are
+   * genuinely built, and nothing else (§18 — "parent landing must list only actual
+   * delivered capabilities"). Research, publications, magazines, encyclopedias and
+   * collections remain absent, which is why they have no registry entry at all
+   * rather than a `reserved` one.
+   */
   Object.freeze({
     key: 'library',
     label: 'nav.library',
+    path: '/library',
     placements: Object.freeze(['primary'] as const),
-    availability: 'deferred' as const,
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'eligible' as const,
   }),
   Object.freeze({
     key: 'watch',
@@ -308,6 +319,55 @@ const LEGAL: readonly ShellRoute[] = Object.freeze(
   ),
 );
 
+/**
+ * The Library's own surfaces — Phase 8.
+ *
+ * DERIVED FROM ONE LIST, so a surface cannot appear in the landing page and be
+ * missing from the sitemap, or the reverse. Each is a genuine page in all three
+ * interface locales, which is what makes `eligible` honest here: the Library
+ * chrome is fully translated, and the CONTENT each page lists carries its own
+ * language per row (ROUTE_MAP.md §1.5 — "`/ur/library/books` means Urdu UI
+ * chrome. It does NOT mean 'only Urdu books'").
+ *
+ * NO PLACEMENT, deliberately. They are reached from the Library landing page,
+ * which is a domain surface; putting eight Library links into the global footer
+ * would be the shell taking over a domain's own navigation. `/library` itself is
+ * in the primary navigation and is the single entry point.
+ *
+ * WHAT IS ABSENT IS ABSENT. `/library/research`, `/library/research-papers`,
+ * `/library/publications`, `/library/magazines`, `/library/encyclopedias` and
+ * `/library/collections` are named by ROUTE_MAP.md §5 and belong to Phases 9 and
+ * 15. They have no entry, so there is no string a link could be built from
+ * (§5.2), and `/library/articles` stays exactly where Phase 6 put it — Editorial
+ * owns it, and Layer 4 composes it (§10).
+ */
+const LIBRARY_SURFACES = Object.freeze([
+  'books',
+  'authors',
+  'topics',
+  'languages',
+  'downloads',
+  'sale-points',
+  'resources',
+] as const);
+
+const LIBRARY: readonly ShellRoute[] = Object.freeze(
+  LIBRARY_SURFACES.map((surface) =>
+    Object.freeze({
+      key: `library.${surface}`,
+      // Resolved in the `shell` namespace, like every other registry label, so
+      // the human sitemap and the administrative navigation status name each
+      // surface rather than printing "Library" seven times.
+      label: `library.${surface}`,
+      path: `/library/${surface}`,
+      placements: Object.freeze([] as const),
+      visibility: 'public' as const,
+      availability: 'delivered' as const,
+      indexing: 'eligible' as const,
+    }),
+  ),
+);
+
 /** The routes the shell itself delivers. */
 const SHELL: readonly ShellRoute[] = Object.freeze([
   Object.freeze({
@@ -371,6 +431,7 @@ export const SHELL_ROUTES: readonly ShellRoute[] = Object.freeze([
   ...SHELL,
   ...PRIMARY,
   ...UTILITY,
+  ...LIBRARY,
   ...exploreRoutes(),
   ...LEGAL,
 ]);

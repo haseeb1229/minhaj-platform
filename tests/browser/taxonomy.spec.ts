@@ -382,14 +382,16 @@ test.describe('the taxonomy editor', () => {
     await expect(main).toContainText(slug);
   });
 
-  test('shows typed editorial relationships without a generic assignment control', async ({
+  test('shows typed topic relationships without a generic assignment control', async ({
     page,
   }) => {
     await page.goto('/en/admin/taxonomy/mapping');
 
     const main = page.getByRole('main');
+    // Editorial's ArticleTopic and PageTopic (Phase 6) and Library's WorkTopic
+    // (Phase 8) — each enforced by real foreign keys at both ends.
     await expect(main).toContainText(
-      'The database enforces 2 typed topic-assignment relationships.',
+      'The database enforces 3 typed topic-assignment relationships.',
     );
     await expect(main).toContainText(
       'Every detected relationship has real foreign keys at both ends.',

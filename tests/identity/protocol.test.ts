@@ -187,15 +187,21 @@ describe('the mutation surface', () => {
         'apps/web/src/app/[locale]/(public)/authors/[slug]/route.ts',
         'apps/web/src/app/[locale]/(public)/library/authors/[slug]/route.ts',
         'apps/web/src/app/assets/[id]/route.ts',
+        // Phase 8: Library's own byte routes, beneath the same unprefixed
+        // `/assets` namespace. The public one imports no Identity; the preview
+        // one READS a session to re-check `library.administer` live, and
+        // neither authenticates anybody or changes anything.
+        'apps/web/src/app/assets/library/editions/[editionId]/[purpose]/[assetId]/route.ts',
+        'apps/web/src/app/assets/library/previews/[editionId]/[assetId]/route.ts',
       ].sort(),
     );
 
-    // And the five genuinely are read-only: a mutating verb on any of them
+    // And the seven genuinely are read-only: a mutating verb on any of them
     // would be a state-changing endpoint outside the Class-A controls.
     const { readFile } = await import('node:fs/promises');
 
     const readOnly = routes.filter((entry) => !entry.includes('webhooks'));
-    expect(readOnly).toHaveLength(5);
+    expect(readOnly).toHaveLength(7);
 
     for (const route of readOnly) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');

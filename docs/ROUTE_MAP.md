@@ -286,6 +286,7 @@ citation remains valid regardless of reading preferences.
 | `/legal/{privacy\|terms\|cookies\|accessibility}` | Compliance surfaces |
 | `/robots.txt` · `/sitemap.xml` · `/sitemaps/{segment}-{locale}.xml` | Unprefixed |
 | `/assets/{id}` | Unprefixed. Authorisation-checking asset serving, default deny (Phase 7) |
+| `/assets/library/editions/{editionId}/{read\|download}/{assetId}` · `/assets/library/previews/{editionId}/{assetId}` | Unprefixed. Library's Edition bytes under Library's own allow/deny policy **and** Storage's technical decision; preview requires live `library.administer` (Phase 8) |
 | `/rss` · `/rss/{feed}` | Feeds |
 
 ---
@@ -721,7 +722,10 @@ validation with no over-claiming · legacy 301 correctness with no chains.
    renders a page. **`/assets/{id}` is stored bytes, not a document**: an asset has no
    interface locale, and giving one object three localised URLs would give the same bytes
    three cache entries and three canonical addresses. It is the default-deny serving route
-   delivered in Phase 7, and it returns a file or a 404, never markup.
+   delivered in Phase 7, and it returns a file or a 404, never markup. **The whole `/assets/*`
+   namespace is excluded from locale routing** (Phase 8), and a consuming context serves its own
+   bytes beneath it on routes it owns — Library at `/assets/library/*` — supplying its business
+   policy there rather than weakening `/assets/{id}`'s default deny.
 7. **No state-changing GET.** Every browser-initiated mutation is a POST/action with
    Origin/Host validation and framework-appropriate CSRF controls. Signed machine callbacks and
    authentication callbacks establish authenticity by their own protocol instead

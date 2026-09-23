@@ -545,6 +545,23 @@ throw or a malformed answer — as a denial. It reads the asset identifier from 
 nothing else from the request, so no query parameter, header, cookie or filename can influence
 it. Each Identity-aware consuming phase supplies and tests its own policy.
 
+**Phase 8 (Library) is the first consumer.** It serves Edition bytes on its own routes and
+both halves must allow: Library's decision (public Work and Edition, the asset being the one
+recorded for that exact purpose, the reading or download decision permitting it) and
+Storage's technical decision (clean custody, matching checksum, bytes present). A privileged
+preview requires a live `library.administer` and still only serves an asset already recorded
+against that Edition.
+
+**Browser uploads are bounded by the Server Action transport.** A Server Action body is capped
+by the framework (1 MB by default) and that cap is **global** — it also bounds the anonymous
+correspondence action. It is **not** raised to admit large files: doing so would enlarge what
+every public action must accept before it can refuse. Browser-attached edition files are
+therefore limited accordingly, and large files enter through the authorised migration pipeline
+(Phase 30), which writes through `StorageService` directly. A dedicated streaming upload route
+with explicit Class-A anti-CSRF protection (§7.1 rule 6) is the path if a later phase needs
+large browser uploads; it is a decision for that phase, not a default. Uploads are rate
+limited per account (§15.2).
+
 ### 10.2 Imported HTML — the largest injection vector
 
 Legacy content is **untrusted input**, regardless of Minhaj owning the source site. Those

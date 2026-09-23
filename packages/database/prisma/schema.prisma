@@ -752,6 +752,7 @@ model IdentityBootstrap {
 /// worded in Urdu is editorial work and not a schema decision. The flag mirrors
 /// `Role.system`, and for the same reason.
 model Topic {
+  workTopics WorkTopic[]
   pageTopics PageTopic[]
 
   articleTopics ArticleTopic[]
@@ -862,6 +863,7 @@ model TopicTranslation {
 /// `direction` IS DOMAIN DATA. A title in Urdu renders right-to-left inside an
 /// English page, and only the content language can say so.
 model Language {
+  editions Edition[]
   pageTranslations PageRevisionTranslation[]
 
   articleTranslations ArticleRevisionTranslation[]
@@ -983,6 +985,8 @@ model Tag {
 /// exactly as it is on `Topic.slug`. A stable public URL is then a property of
 /// the grant rather than of a rule somebody remembered.
 model Person {
+  workContributions WorkContributor[]
+  bookTranslations BookTranslator[]
   pageContributions PageContributor[]
 
   articleContributions ArticleContributor[]
@@ -1589,6 +1593,8 @@ model Feedback {
 /// (DOMAIN_MODEL.md §10.1); this row holds only the technical facts about
 /// bytes that live on the filesystem.
 model Asset {
+  readableEditions Edition[] @relation("EditionReadableAsset")
+  downloadableEditions Edition[] @relation("EditionDownloadAsset")
   id String @id @db.NVarChar(36)
 
   /// Server-generated and opaque. Never derived from caller input.
@@ -1621,4 +1627,123 @@ model Asset {
   /// Serving reads by id and state; reconciliation sweeps by state and age.
   @@index([state, updatedAt, id])
   @@map("Asset")
+}
+
+// Phase 8. Library owns these relations; referenced owners retain their data.
+model Work {
+  id String @id @db.NVarChar(36)
+  slug String @unique @db.NVarChar(120)
+  primaryLocale String @db.NVarChar(8)
+  state String @db.NVarChar(16)
+  isFeatured Boolean @default(false)
+  version Int @default(1)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  labels WorkLabel[]
+  slugs WorkSlugHistory[]
+  contributors WorkContributor[]
+  topics WorkTopic[]
+  salePoints WorkSalePoint[]
+  editions Edition[]
+  @@index([state, slug])
+}
+model WorkLabel {
+  workId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(240)
+  description String @db.NVarChar(4000)
+  work Work @relation(fields: [workId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([workId, locale])
+}
+/// Includes the current slug: one namespace reserves every identity permanently.
+model WorkSlugHistory {
+  slug String @id @db.NVarChar(120)
+  workId String @db.NVarChar(36)
+  work Work @relation(fields: [workId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([workId])
+}
+model WorkContributor {
+  workId String @db.NVarChar(36)
+  personId String @db.NVarChar(36)
+  role String @db.NVarChar(24)
+  position Int
+  work Work @relation(fields: [workId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  person Person @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([workId, personId, role])
+  @@index([personId, workId])
+}
+model WorkTopic {
+  workId String @db.NVarChar(36)
+  topicId String @db.NVarChar(36)
+  work Work @relation(fields: [workId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([workId, topicId])
+  @@index([topicId, workId])
+}
+model Edition {
+  id String @id @db.NVarChar(36)
+  workId String @db.NVarChar(36)
+  languageCode String @db.NVarChar(16)
+  label String @db.NVarChar(160)
+  state String @db.NVarChar(16)
+  publisher String? @db.NVarChar(240)
+  publicationYear Int?
+  isbn String? @db.NVarChar(13)
+  pageCount Int?
+  reading String @db.NVarChar(16)
+  download String @db.NVarChar(16)
+  readableAssetId String? @db.NVarChar(36)
+  downloadAssetId String? @db.NVarChar(36)
+  /// Bounded semantic text; file bytes remain outside SQL in Storage.
+  document String? @db.NVarChar(Max)
+  contentVersion String? @db.NVarChar(64)
+  version Int @default(1)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  work Work @relation(fields: [workId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  language Language @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  readableAsset Asset? @relation("EditionReadableAsset", fields: [readableAssetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  downloadAsset Asset? @relation("EditionDownloadAsset", fields: [downloadAssetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  translation BookTranslation? @relation("TranslatedEdition")
+  sourcedTranslations BookTranslation[] @relation("SourceEdition")
+  @@unique([id, workId])
+  @@index([workId, state, id])
+  @@index([languageCode, publicationYear, workId])
+  @@index([readableAssetId])
+  @@index([downloadAssetId])
+}
+model BookTranslation {
+  editionId String @id @db.NVarChar(36)
+  workId String @db.NVarChar(36)
+  sourceEditionId String? @db.NVarChar(36)
+  edition Edition @relation("TranslatedEdition", fields: [editionId, workId], references: [id, workId], onDelete: NoAction, onUpdate: NoAction)
+  source Edition? @relation("SourceEdition", fields: [sourceEditionId, workId], references: [id, workId], onDelete: NoAction, onUpdate: NoAction)
+  translators BookTranslator[]
+  @@unique([editionId, workId])
+  @@index([sourceEditionId, workId])
+}
+model BookTranslator {
+  editionId String @db.NVarChar(36)
+  personId String @db.NVarChar(36)
+  translation BookTranslation @relation(fields: [editionId], references: [editionId], onDelete: NoAction, onUpdate: NoAction)
+  person Person @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([editionId, personId])
+  @@index([personId])
+}
+model SalePoint {
+  id String @id @db.NVarChar(36)
+  name String @db.NVarChar(200)
+  address String @db.NVarChar(1000)
+  contact String @db.NVarChar(200)
+  url String? @db.NVarChar(2000)
+  state String @db.NVarChar(16)
+  version Int @default(1)
+  works WorkSalePoint[]
+  @@index([state, name, id])
+}
+model WorkSalePoint {
+  workId String @db.NVarChar(36)
+  salePointId String @db.NVarChar(36)
+  work Work @relation(fields: [workId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  salePoint SalePoint @relation(fields: [salePointId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([workId, salePointId])
+  @@index([salePointId])
 }

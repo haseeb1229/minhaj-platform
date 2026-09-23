@@ -447,3 +447,15 @@ IF OBJECT_ID(N'[dbo].[Feedback]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, U
 -- crash left mid-upload. It never needs ALTER, and the state CHECK constraints
 -- are therefore beyond its reach: it cannot widen the lifecycle it is bound by.
 IF OBJECT_ID(N'[dbo].[Asset]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[Asset] TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[Asset] TO [$(app_login)]; END;
+
+-- Phase 8: Library aggregates, replaceable relation sets, permanent slug reservations.
+IF OBJECT_ID(N'[dbo].[Work]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Work] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Work] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Edition]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Edition] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Edition] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[SalePoint]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[SalePoint] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[SalePoint] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[WorkLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[WorkLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[WorkLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[WorkContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[WorkContributor] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[WorkContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[WorkTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[WorkTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[WorkTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[WorkSalePoint]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[WorkSalePoint] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[WorkSalePoint] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[BookTranslator]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[BookTranslator] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[BookTranslator] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[BookTranslation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[BookTranslation] TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[BookTranslation] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[WorkSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[WorkSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[WorkSlugHistory] TO [$(app_login)]; END;

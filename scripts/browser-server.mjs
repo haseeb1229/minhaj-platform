@@ -26,7 +26,8 @@
  */
 
 import { spawn } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -99,10 +100,21 @@ async function main() {
   await createDisposableDatabase(master, databaseName);
   await deployMigrations(databaseUrl);
 
+  /**
+   * A DISPOSABLE STORAGE ROOT, beside the disposable database (Phase 8).
+   *
+   * The Library serves Edition files through Storage, and Storage refuses to
+   * start without an absolute root. The run gets its own temporary directory, the
+   * specs may place synthetic files in it at generated keys, and cleanup removes it
+   * with the database — so no byte a proof wrote outlives the run, and no proof
+   * ever touches the persistent `minhaj-platform-storage-data` volume.
+   */
+  const storageRoot = mkdtempSync(path.join(tmpdir(), 'minhaj-browser-storage-'));
+
   mkdirSync(path.dirname(ENVIRONMENT_FILE), { recursive: true });
   writeFileSync(
     ENVIRONMENT_FILE,
-    `${JSON.stringify({ databaseUrl, databaseName, port, ...SECRETS }, null, 2)}\n`,
+    `${JSON.stringify({ databaseUrl, databaseName, port, storageRoot, ...SECRETS }, null, 2)}\n`,
     'utf8',
   );
 
@@ -130,6 +142,18 @@ async function main() {
       // Synthetic disposable correspondence fixtures only; not a production policy.
       CORRESPONDENCE_RETENTION_DAYS: '30',
 
+      // Phase 8. The run's own disposable storage root, and a scanner address
+      // that is DELIBERATELY UNREACHABLE. The browser proofs never need a scan to
+      // succeed: they serve files already recorded as clean, and they prove that
+      // an upload whose scan cannot complete is refused rather than attached. An
+      // unreachable scanner makes that outcome identical on a workstation running
+      // ClamAV and on a CI runner that is not — and the real scanner is proved
+      // where it belongs, in the Database foundation job.
+      STORAGE_ROOT: storageRoot,
+      CLAMAV_HOST: '127.0.0.1',
+      CLAMAV_PORT: '9',
+      CLAMAV_TIMEOUT_MS: '1000',
+
       // DELIBERATELY ABSENT: `RESEND_API_KEY` and `RESEND_WEBHOOK_SECRET`. No
       // real provider is contacted, the adapter reports itself unavailable and
       // refuses to send rather than pretending to, and the specs obtain their
@@ -151,6 +175,7 @@ async function main() {
     } finally {
       await master.close();
       rmSync(ENVIRONMENT_FILE, { force: true });
+      rmSync(storageRoot, { recursive: true, force: true });
     }
 
     process.exit(code);

@@ -551,6 +551,9 @@ describe('F1 — the production database package publishes no raw capability', (
       'people-contributors': { kind: 'context', slug: 'people-contributors' },
       taxonomy: { kind: 'context', slug: 'taxonomy' },
       editorial: { kind: 'context', slug: 'editorial' },
+      // Phase 8. Library is a bounded CONTEXT, and its adapter is physically
+      // hosted here without that transferring any ownership (ARCHITECTURE.md §4.1).
+      library: { kind: 'context', slug: 'library' },
       email: { kind: 'layer0', concern: 'email' },
       'rate-limiting': { kind: 'layer0', concern: 'rate-limiting' },
       auditing: { kind: 'layer0', concern: 'auditing' },

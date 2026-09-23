@@ -71,6 +71,17 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/people/[slug]/page.tsx',
   'apps/web/src/app/[locale]/(public)/authors/[slug]/route.ts',
   'apps/web/src/app/[locale]/(public)/library/authors/[slug]/route.ts',
+  // Phase 8. Every Library surface that reads Works, Editions, facets or sale
+  // points is data an administrator changes. The Library LANDING page reads no
+  // data at all and stays in the prerendered graph, deliberately absent here.
+  'apps/web/src/app/[locale]/(public)/library/books/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/books/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/authors/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/topics/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/languages/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/downloads/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/sale-points/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/resources/page.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [
@@ -542,6 +553,10 @@ describe('a public CONTENT route reads data, and still reads no session', () => 
       '@/composition/request',
       '@/composition/dispatch',
       '@/composition/people',
+      // Phase 8, for People's reason: the ADMINISTRATIVE Library runtime wires
+      // Identity in for its live permission checks. Public Library routes use
+      // `@/composition/library-read`, which reaches no Identity at all.
+      '@/composition/library',
       '@/contexts/identity-access',
       '@/config/server-env',
       '@minhaj/contracts/env/server',

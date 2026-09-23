@@ -313,6 +313,16 @@ export async function recordedPermissions(
  *     an attacker with the runtime's authority can delete.
  */
 const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
+  '[dbo].[work]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[edition]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[salepoint]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[worklabel]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[workcontributor]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[worktopic]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[worksalepoint]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[booktranslator]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[booktranslation]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[workslughistory]': ['SELECT', 'INSERT'],
   '[dbo].[article]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[page]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[articlerevision]': ['SELECT', 'INSERT'],

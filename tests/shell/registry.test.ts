@@ -138,15 +138,17 @@ describe('a deferred capability cannot be linked', () => {
     }
   });
 
-  it('records the nine deferred domains rather than forgetting them', () => {
+  it('records the eight deferred domains rather than forgetting them', () => {
     // Recording them is what lets the administrative status surface tell the
     // truth about the roadmap, and what lets the assertions above range over
     // the whole set instead of over whatever somebody remembered to add.
+    //
+    // `library` LEFT THIS LIST IN PHASE 8, when it was delivered. It is asserted
+    // delivered below rather than silently dropped.
     for (const key of [
       'quran',
       'hadith',
       'learn',
-      'library',
       'watch',
       'fatwa',
       'news-events',
@@ -159,6 +161,26 @@ describe('a deferred capability cannot be linked', () => {
       expect(route, key).not.toBeNull();
       expect(route?.availability, key).toBe('deferred');
     }
+  });
+
+  it('delivers Library with a path, and only the Phase-8 Library surfaces', () => {
+    expect(requireRoute('library').path).toBe('/library');
+
+    const surfaces = SHELL_ROUTES.filter((route) => route.key.startsWith('library.'))
+      .map((route) => route.key)
+      .sort();
+
+    // Phase 9 and Phase 15 surfaces are ABSENT, not reserved: research,
+    // publications, magazines, encyclopedias and collections have no entry.
+    expect(surfaces).toEqual([
+      'library.authors',
+      'library.books',
+      'library.downloads',
+      'library.languages',
+      'library.resources',
+      'library.sale-points',
+      'library.topics',
+    ]);
   });
 
   it('refuses to resolve a deferred route as a renderable one', () => {
@@ -236,7 +258,20 @@ describe('indexing eligibility is honest', () => {
       indexableRoutes()
         .map((route) => route.key)
         .sort(),
-    ).toEqual(['explore', 'home', 'sitemap']);
+    ).toEqual([
+      'explore',
+      'home',
+      // Phase 8: the Library landing page and its seven delivered surfaces.
+      'library',
+      'library.authors',
+      'library.books',
+      'library.downloads',
+      'library.languages',
+      'library.resources',
+      'library.sale-points',
+      'library.topics',
+      'sitemap',
+    ]);
   });
 
   it('keeps `/my` linked but excluded', () => {

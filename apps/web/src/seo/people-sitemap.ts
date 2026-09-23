@@ -1,4 +1,5 @@
 import { editorialSitemapPartitions, mergePagePartitions } from './editorial-sitemap';
+import { librarySitemapPartitions } from './library-sitemap';
 import 'server-only';
 
 import { localeSchema } from '@minhaj/contracts';
@@ -133,6 +134,10 @@ export async function allSitemapPartitions(): Promise<readonly SitemapPartition[
     ...sitemapPartitions(),
     ...(await peopleSitemapPartitions()),
     ...(await editorialSitemapPartitions()),
+    // Phase 8's `books` segment. It merges through the same function for the
+    // de-duplication and the 5,000-URL split, not because it shares a segment
+    // name with anything — `books` is its own (ROUTE_MAP.md §9.4).
+    ...(await librarySitemapPartitions()),
   ]);
 }
 

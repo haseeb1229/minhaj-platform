@@ -36,7 +36,7 @@ const localeMiddleware = createMiddleware(routing);
 
 export default async function proxy(request: NextRequest) {
   if (request.method === 'GET' || request.method === 'HEAD') {
-    const match = /^\/(en|ur|ar)\/(library\/articles|help)\/([^/]+)$/.exec(
+    const match = /^\/(en|ur|ar)\/(library\/articles|library\/books|help)\/([^/]+)$/.exec(
       request.nextUrl.pathname,
     );
     if (match?.[3]) {
@@ -47,11 +47,38 @@ export default async function proxy(request: NextRequest) {
         /* Invalid encoded input continues to the route's 404. */
       }
       if (slug !== null) {
-        const { editorialReadRuntime } = await import('@/composition/editorial-read');
+        /**
+         * PHASE 8 JOINS THE SAME MECHANISM, and does not build a second one.
+         *
+         * A Work's canonical slug is editable, so Library owns its slug history
+         * natively and in the phase that made it editable (DOMAIN_MODEL.md
+         * §19.7). What that history needs is a **301** from every former slug to
+         * the current one (ROUTE_MAP.md §1.4, §9.7) — and a page cannot emit one:
+         * `permanentRedirect()` produces 308. Editorial solved that here, so
+         * Library resolves through the same branch rather than adding a parallel
+         * redirect path that could stop being a 301 on its own.
+         *
+         * THE RESOLVER IS LIBRARY'S OWN, not Migration's. `LegacyMapping` maps
+         * LEGACY SOURCE URLs and is Migration-owned; using it for an ordinary
+         * rename would invert the dependency rules and leave every pre-migration
+         * rename with no redirect at all (§19.7, and this phase's §19).
+         *
+         * IMPORTED LAZILY, per branch, so a request for any other path pays for
+         * neither resolver.
+         */
         const record =
-          match[2] === 'help'
-            ? await editorialReadRuntime().pageCanonicalSlug('help-article', slug)
-            : await editorialReadRuntime().articleCanonicalSlug(slug);
+          match[2] === 'library/books'
+            ? await (async () => {
+                const { libraryReadRuntime } = await import('@/composition/library-read');
+                return libraryReadRuntime().canonicalSlug(slug);
+              })()
+            : await (async () => {
+                const { editorialReadRuntime } =
+                  await import('@/composition/editorial-read');
+                return match[2] === 'help'
+                  ? editorialReadRuntime().pageCanonicalSlug('help-article', slug)
+                  : editorialReadRuntime().articleCanonicalSlug(slug);
+              })();
         if (record && record !== slug) {
           const target = request.nextUrl.clone();
           target.pathname =
@@ -108,9 +135,27 @@ export default async function proxy(request: NextRequest) {
  *                forms are excluded, which is why this names `sitemap.xml`
  *                exactly rather than the `sitemap` prefix.
  *   favicon.ico — requested by browsers at a fixed unprefixed path.
+ *   assets     — `/assets/*`, the platform's BYTES.
+ *
+ * `assets` WAS MISSING, AND PHASE 8 IS WHERE THAT STOPPED BEING THEORETICAL.
+ *
+ * Phase 7 established `/assets/{id}` as the unprefixed serving route, on the
+ * reasoning ROUTE_MAP.md applies to every non-locale route: "an asset is bytes; it
+ * has no interface locale, and giving it three URLs would give one object three
+ * cache entries and three canonical addresses." But this matcher did not exclude
+ * the prefix, so the locale middleware redirected `/assets/{id}` to
+ * `/{locale}/assets/{id}` — an address no route answers. Phase 7's own proof is an
+ * architecture test over the route MODULE, so nothing exercised the path over HTTP
+ * and nothing reported it.
+ *
+ * It is corrected here, as the SMALLEST DIRECT FIX — one alternative added to the
+ * existing negative lookahead — because Phase 8 is the first phase that actually
+ * serves bytes and could not do so otherwise. No Phase-7 behaviour changes:
+ * `/assets/{id}` still ships a policy that never allows, and Library's own byte
+ * routes live beneath the same prefix so one exclusion covers the namespace.
  */
 export const config = {
   matcher: [
-    '/((?!api(?:$|/)|_next(?:$|/)|rss(?:$|/)|robots\\.txt$|sitemap\\.xml$|sitemaps(?:$|/)|favicon\\.ico$).*)',
+    '/((?!api(?:$|/)|_next(?:$|/)|assets(?:$|/)|rss(?:$|/)|robots\\.txt$|sitemap\\.xml$|sitemaps(?:$|/)|favicon\\.ico$).*)',
   ],
 };

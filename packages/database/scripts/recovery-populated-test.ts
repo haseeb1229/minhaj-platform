@@ -4,6 +4,12 @@ import {
   capturePhase6Fixture,
   verifyRestoredPhase6,
 } from '../src/lifecycle/phase6-fixture.ts';
+import {
+  capturePhase8Fixture,
+  newPhase8Fixture,
+  verifyRestoredPhase8,
+  writePhase8Fixture,
+} from '../src/lifecycle/phase8-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -120,6 +126,7 @@ const fixture = newPhase2Fixture();
 const taxonomyFixture = newPhase3bFixture();
 const peopleFixture = newPhase5Fixture();
 const editorialFixture = newPhase6Fixture();
+const libraryFixture = newPhase8Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -189,6 +196,17 @@ try {
   const editorialSnapshot = await capturePhase6Fixture(admin, editorialFixture);
   report('editorial fixture', '14 populated authoritative tables');
 
+  // Phase-8 Library: a renamed Work, two Editions in two content languages, a
+  // genuine translation relation and an Edition whose readable file is a Storage
+  // Asset — so the restore must bring back the RELATION as well as the rows.
+  await writePhase8Fixture(admin, libraryFixture, {
+    personId: peopleFixture.linkedPersonId,
+    translatorId: peopleFixture.historicalPersonId,
+    topicId: taxonomyFixture.childTopicId,
+  });
+  const librarySnapshot = await capturePhase8Fixture(admin, libraryFixture);
+  report('library fixture', `run ${libraryFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -247,6 +265,10 @@ try {
   report(
     'editorial recovery',
     await verifyRestoredPhase6(restored, editorialFixture, editorialSnapshot),
+  );
+  report(
+    'library recovery',
+    await verifyRestoredPhase8(restored, libraryFixture, librarySnapshot),
   );
 
   // ---- restored security posture -------------------------------------------
@@ -395,6 +417,7 @@ try {
       await verifyRestoredPhase3b(restored, taxonomyFixture);
       await verifyRestoredPhase5(restored, peopleFixture);
       await verifyRestoredPhase6(restored, editorialFixture, editorialSnapshot);
+      await verifyRestoredPhase8(restored, libraryFixture, librarySnapshot);
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
     } finally {
       await app?.close();
@@ -408,7 +431,7 @@ try {
 
   process.stdout.write(
     '\nPopulated recovery verified: representative rows in every Phase-2,\n' +
-      'Phase-3B and Phase-5 tables were backed up, restored into a separate\n' +
+      'Phase-3B, Phase-5, Phase-6 and Phase-8 tables were backed up, restored into a separate\n' +
       'database, and checked value by value — together with referential\n' +
       'integrity, the topic hierarchy, the four distinct contributor profile\n' +
       'aggregates and their independent lifecycles, the optional account link,\n' +
