@@ -1747,3 +1747,117 @@ model WorkSalePoint {
   @@id([workId, salePointId])
   @@index([salePointId])
 }
+
+// ===========================================================================
+// Phase 17 — Search Foundation (Layer 0 infrastructure, NOT a bounded context)
+// ===========================================================================
+//
+// DERIVED STATE ONLY. Nothing below is authoritative for any business fact:
+// publication, visibility, slugs, titles and topics belong to Taxonomy, People &
+// Contributors, Editorial and Library. The projection is rebuilt from those
+// owners' public reads and is never restored as truth (ARCHITECTURE.md §8.5).
+//
+// `scopeKind + scopeId` IS DELIBERATELY NOT A FOREIGN KEY. It names an owner's
+// resource inside a DERIVED index, which is outside the prohibition on
+// polymorphic relational domain references (DOMAIN_MODEL.md §6.2): no business
+// relation is expressed through it, no owner reads it, and deleting it loses
+// nothing a rebuild cannot recreate. A typed FK from here to every owner table
+// would instead make Search a dependant of every context it indexes.
+//
+// THE FULL-TEXT CATALOGUE AND INDEX are created by the migration's SQL, which
+// Prisma's schema language cannot express. They sit on
+// `SearchDocument.match*`, one column per word breaker.
+
+/// One owner's request that a scope be re-projected (ARCHITECTURE.md §8.5).
+///
+/// APPEND-ONLY, WRITTEN INSIDE THE OWNER'S OWN TRANSACTION. An owner commits its
+/// change and this row together, so indexing intent can never be lost between
+/// the two — and the owner's transaction does nothing to Search's working state,
+/// which the indexer folds these rows into later. An INSERT at the end of an
+/// identity key is the cheapest, least contended write an owner could be asked
+/// to add to its own transaction.
+model SearchIndexRequest {
+  id          BigInt   @id @default(autoincrement())
+  scopeKind   String   @db.NVarChar(16)
+  scopeId     String   @db.NVarChar(36)
+  requestedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  @@map("SearchIndexRequest")
+}
+
+/// The indexing state of one scope: pending, current or failed.
+///
+/// `generation` moves on every relayed request. A worker settles a scope as
+/// current only if the generation it projected is still the latest, so a change
+/// committed while a projection was being built is never marked done.
+model SearchIndexScope {
+  scopeKind       String    @db.NVarChar(16)
+  scopeId         String    @db.NVarChar(36)
+  /// pending | current | failed
+  status          String    @db.NVarChar(16)
+  generation      Int
+  attempts        Int
+  dueAt           DateTime  @db.DateTime2
+  /// When the oldest unprocessed request for this scope was made.
+  requestedAt     DateTime? @db.DateTime2
+  leaseToken      String?   @db.NVarChar(36)
+  leaseUntil      DateTime? @db.DateTime2
+  indexedAt       DateTime? @db.DateTime2
+  indexedStamp    String?   @db.NVarChar(64)
+  failureCategory String?   @db.NVarChar(32)
+  failedAt        DateTime? @db.DateTime2
+
+  documents SearchDocument[]
+
+  @@id([scopeKind, scopeId])
+  /// The claim reads due work oldest first; the operator view counts by status.
+  @@index([status, dueAt, scopeKind, scopeId])
+  @@map("SearchIndexScope")
+}
+
+/// One searchable document — one owner resource in one text language.
+///
+/// `id` is a narrow integer because SQL Server's full-text KEY INDEX must be a
+/// unique, single, non-nullable column, and a small key is what every full-text
+/// match is joined back through.
+model SearchDocument {
+  id              Int      @id @default(autoincrement())
+  scopeKind       String   @db.NVarChar(16)
+  scopeId         String   @db.NVarChar(36)
+  kind            String   @db.NVarChar(24)
+  resourceId      String   @db.NVarChar(36)
+  textLanguage    String   @db.NVarChar(16)
+  contentLanguage String?  @db.NVarChar(16)
+  title           String   @db.NVarChar(300)
+  summary         String   @db.NVarChar(600)
+  /// Exactly one of the four is set, chosen by `textLanguage` (CHECK constraint).
+  matchEnglish    String?  @db.NVarChar(Max)
+  matchArabic     String?  @db.NVarChar(Max)
+  matchUrdu       String?  @db.NVarChar(Max)
+  matchOther      String?  @db.NVarChar(Max)
+  year            Int?     @db.SmallInt
+  checksum        String   @db.Char(64)
+  indexedAt       DateTime @db.DateTime2
+
+  scope  SearchIndexScope      @relation(fields: [scopeKind, scopeId], references: [scopeKind, scopeId], onDelete: NoAction, onUpdate: NoAction)
+  topics SearchDocumentTopic[]
+
+  @@unique([kind, resourceId, textLanguage])
+  @@index([scopeKind, scopeId])
+  @@map("SearchDocument")
+}
+
+/// A document's canonical Topic identifiers, for the topic filter.
+///
+/// NO FOREIGN KEY TO `Topic`, for the reason the header gives: this is a derived
+/// copy of the owner's own typed assignment, rebuilt with the document.
+model SearchDocumentTopic {
+  documentId Int
+  topicId    String @db.NVarChar(36)
+
+  document SearchDocument @relation(fields: [documentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([documentId, topicId])
+  @@index([topicId, documentId])
+  @@map("SearchDocumentTopic")
+}

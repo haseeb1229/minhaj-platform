@@ -535,6 +535,11 @@ const PERMISSION_MIGRATIONS = [
     id: '20260922000000_phase8_library',
     keys: ['library.administer', 'library.read'],
   },
+  {
+    phase: 'Phase 17',
+    id: '20260923000000_phase17_search_foundation',
+    keys: ['search.operate', 'search.read'],
+  },
 ] as const;
 
 describe('the permission catalogue is one definition, appended only by owners', () => {
@@ -594,11 +599,10 @@ describe('the permission catalogue is one definition, appended only by owners', 
       'teaching.',
       'editorial.',
       'media.',
-      // Library shipped in Phase 8. What is still absent beside it is Phase 9's
-      // research and publications vocabulary and Phase 17's search.
+      // Library shipped in Phase 8 and Search in Phase 17. What is still absent
+      // beside them is Phase 9's research and publications vocabulary.
       'research.',
       'publication.',
-      'search.',
       'messaging.',
     ]) {
       expect(declared.some((key) => key.startsWith(domain))).toBe(false);

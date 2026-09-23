@@ -395,6 +395,8 @@ never mistaken for a delivered one.
 | `/newsletter` — subscribe and confirm | **Personalisation & Notifications** (DOMAIN_MODEL.md §14.5) | **Phase 21** |
 | `/rss`, `/rss/{feed}` | The publishing content contexts, composed at Layer 4 | With the domains they syndicate |
 | `/sitemap` — the human-readable one | Layer 4 composition | **Phase 4**, extended as domains ship |
+| `/search` — unified search; `/search/limited` — the throttled state it redirects to | **Search** Layer-0 infrastructure, composed at Layer 4 over each owner's public projection | **Phase 17** |
+| `/topics`, `/topics/{slug}` — the canonical taxonomy browser and topic hub | **Taxonomy** owns the Topic; Layer 4 composes the hub over owners that have shipped (Library books today; Search within the topic) | **Phase 17**, because Topic search results must be navigable into `/topics/{slug}`; each later domain adds its own section when it ships |
 | `/membership` — public information | **Membership** | **Phase 26** |
 | Public class and trial schedule | **Learning** | **Phase 22** catalogue; confirmed sessions **Phase 23** |
 | **Volunteer** (footer) | **Editorial** — a `Page` describing how to volunteer | **Phase 6**. **No volunteer-management software is introduced** |

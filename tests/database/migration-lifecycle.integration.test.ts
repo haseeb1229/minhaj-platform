@@ -286,6 +286,11 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'BookTranslator',
         'SalePoint',
         'WorkSalePoint',
+        // Phase 17 — the DERIVED search projection and its indexing intent.
+        'SearchIndexRequest',
+        'SearchIndexScope',
+        'SearchDocument',
+        'SearchDocumentTopic',
       ].sort(),
     );
   });

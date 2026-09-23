@@ -138,13 +138,14 @@ describe('a deferred capability cannot be linked', () => {
     }
   });
 
-  it('records the eight deferred domains rather than forgetting them', () => {
+  it('records the seven deferred domains rather than forgetting them', () => {
     // Recording them is what lets the administrative status surface tell the
     // truth about the roadmap, and what lets the assertions above range over
     // the whole set instead of over whatever somebody remembered to add.
     //
-    // `library` LEFT THIS LIST IN PHASE 8, when it was delivered. It is asserted
-    // delivered below rather than silently dropped.
+    // `library` LEFT THIS LIST IN PHASE 8 and `search` IN PHASE 17, when each
+    // was delivered. Both are asserted delivered below rather than silently
+    // dropped.
     for (const key of [
       'quran',
       'hadith',
@@ -153,7 +154,6 @@ describe('a deferred capability cannot be linked', () => {
       'fatwa',
       'news-events',
       'global',
-      'search',
       'donate',
     ]) {
       const route = routeByKey(key);
@@ -161,6 +161,26 @@ describe('a deferred capability cannot be linked', () => {
       expect(route, key).not.toBeNull();
       expect(route?.availability, key).toBe('deferred');
     }
+  });
+
+  it('delivers Search with a path, public and never indexable', () => {
+    // A results page is a view of a query, not a resource: `noindex` and never
+    // a sitemap entry, whatever the indexing posture (ROUTE_MAP.md §9.5).
+    const route = requireRoute('search');
+
+    expect(route.path).toBe('/search');
+    expect(route.visibility).toBe('public');
+    expect(route.indexing).toBe('excluded');
+    expect(route.placements).toContain('primary');
+  });
+
+  it('delivers the canonical Topics browser, public and eligible', () => {
+    // Phase 17: Topic search results must be navigable into `/topics/{slug}`.
+    const route = requireRoute('topics');
+
+    expect(route.path).toBe('/topics');
+    expect(route.visibility).toBe('public');
+    expect(route.indexing).toBe('eligible');
   });
 
   it('delivers Library with a path, and only the Phase-8 Library surfaces', () => {
@@ -271,6 +291,9 @@ describe('indexing eligibility is honest', () => {
       'library.sale-points',
       'library.topics',
       'sitemap',
+      // Phase 17: the canonical Topics browser. `search` is delivered too, and
+      // is deliberately NOT here.
+      'topics',
     ]);
   });
 

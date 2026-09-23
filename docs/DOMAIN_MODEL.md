@@ -467,6 +467,16 @@ or reassigned. A foreign key would make that impossible: it would either block a
 > **The existing Phase 1 `AuditLog` representation is therefore correct as it stands, carries
 > no foreign keys, and is not changed by this rule** (SECURITY_BASELINE.md §13).
 
+**The derived search projection is the second, equally narrow case (Phase 17).** Its
+`scopeKind + scopeId` and `kind + resourceId` name an owner's resource inside a **rebuildable,
+non-authoritative index** (ARCHITECTURE.md §8.5). They are not navigation between business
+records, no owner reads them, nothing joins from them into an owner table, and deleting every
+one of them loses nothing a rebuild from the owners cannot recreate. They carry **no foreign
+key into any owner**, deliberately: typed edges from a derived index into every table it
+reflects would make Search a relational dependant of every context. **This does not relax the
+rule for anything authoritative** — no business relation may be expressed through, or read
+from, the search projection, and a context's typed relationships stay typed.
+
 ### 6.3 Language
 
 The set of content languages. **Distinct from interface locale**: the UI may be English

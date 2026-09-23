@@ -18,6 +18,7 @@ import type { Prisma } from '@prisma/client';
 
 import { auditRow } from '../../audit-row.ts';
 import { getDatabaseClient } from '../../client.ts';
+import { requestSearchIndexing } from '../../search-intent.ts';
 import { taxonomyRefusalOf } from './refusals.ts';
 
 /**
@@ -474,6 +475,51 @@ export function createTaxonomyReader(): TaxonomyReaderPort {
       };
     },
 
+    /**
+     * SEARCH PROJECTION READS. The visibility predicate — active — is in the
+     * query, exactly as it is for every other public Topic read, so Search can
+     * never be handed an archived Topic to index.
+     */
+    async searchTopic(id) {
+      const row = await prisma.topic.findFirst({
+        where: { id, status: 'active' },
+        select: {
+          id: true,
+          slug: true,
+          updatedAt: true,
+          translations: {
+            select: { locale: true, name: true, description: true, updatedAt: true },
+            orderBy: { locale: 'asc' },
+          },
+        },
+      });
+      if (row === null) return null;
+      return {
+        id: row.id,
+        slug: row.slug,
+        stamp: topicStamp(row),
+        translations: row.translations.map((entry) => ({
+          locale: entry.locale as Locale,
+          name: entry.name,
+          description: entry.description,
+        })),
+      };
+    },
+
+    async searchTopics({ after, limit }) {
+      const rows = await prisma.topic.findMany({
+        where: { status: 'active', ...(after === null ? {} : { id: { gt: after } }) },
+        select: {
+          id: true,
+          updatedAt: true,
+          translations: { select: { locale: true, updatedAt: true } },
+        },
+        orderBy: { id: 'asc' },
+        take: boundedLimit(limit),
+      });
+      return rows.map((row) => ({ id: row.id, stamp: topicStamp(row) }));
+    },
+
     async topicAssignmentStatus(): Promise<TopicAssignmentStatus> {
       // READ FROM THE DATABASE'S OWN FOREIGN-KEY CATALOGUE.
       //
@@ -752,6 +798,8 @@ export function createTaxonomyPersistence(): TaxonomyPersistencePort {
             },
           });
 
+          await requestSearchIndexing(tx, 'topic', created.id);
+
           await recordAudit(tx, input, {
             targetType: 'topic',
             targetId: created.id,
@@ -808,6 +856,8 @@ export function createTaxonomyPersistence(): TaxonomyPersistencePort {
             },
           });
 
+          await requestSearchIndexing(tx, 'topic', input.topicId);
+
           await recordAudit(tx, input, {
             targetType: 'topic',
             targetId: input.topicId,
@@ -848,6 +898,7 @@ export function createTaxonomyPersistence(): TaxonomyPersistencePort {
           });
 
           if (removed.count > 0) {
+            await requestSearchIndexing(tx, 'topic', input.topicId);
             await recordAudit(tx, input, {
               targetType: 'topic',
               targetId: input.topicId,
@@ -1010,6 +1061,8 @@ export function createTaxonomyPersistence(): TaxonomyPersistencePort {
             where: { id: input.topicId },
             data: { status: input.status, updatedAt: new Date() },
           });
+
+          await requestSearchIndexing(tx, 'topic', input.topicId);
 
           await recordAudit(tx, input, {
             targetType: 'topic',
@@ -1200,4 +1253,23 @@ export function createTaxonomyPersistence(): TaxonomyPersistencePort {
       });
     },
   };
+}
+
+/**
+ * A Topic's staleness stamp for search reconciliation.
+ *
+ * A translation edit does not move `Topic.updatedAt`, so the stamp is the latest
+ * moment ANY part of the record changed, together with how many translations
+ * it has — removing one that was not the newest changes the count even when it
+ * leaves the newest moment where it was.
+ */
+function topicStamp(row: {
+  readonly updatedAt: Date;
+  readonly translations: readonly { readonly updatedAt: Date }[];
+}): string {
+  const latest = Math.max(
+    row.updatedAt.getTime(),
+    ...row.translations.map((entry) => entry.updatedAt.getTime()),
+  );
+  return `${String(latest)}:${String(row.translations.length)}`;
 }

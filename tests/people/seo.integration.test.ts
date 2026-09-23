@@ -368,7 +368,10 @@ describeLive('Phase 5 — the contributor profile SEO contract', () => {
       const partitions = await seo.allSitemapPartitions();
       const segments = [...new Set(partitions.map((partition) => partition.segment))];
 
-      expect(segments.sort()).toEqual(['pages', 'people']);
+      // Phase 17: the canonical topic hubs are delivered, and the nineteen seeded
+      // canonical topics are genuine public pages in every database — so the
+      // `topics` segment is present beside these two.
+      expect(segments.sort()).toEqual(['pages', 'people', 'topics']);
 
       const pages = partitions.filter((partition) => partition.segment === 'pages');
       expect(pages.length).toBe(3);

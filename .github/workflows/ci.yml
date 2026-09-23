@@ -345,6 +345,11 @@ jobs:
       # uses, started from the repository's own compose file so CI cannot drift
       # from what a developer runs. Only the database service is started; the
       # web service is not part of this gate.
+      #
+      # Since Phase 17 this BUILDS the repository's SQL Server image first
+      # (`docker/sqlserver/Dockerfile`): the official image with Full-Text Search
+      # added, pinned to one engine build, so CI proves search on the same engine
+      # a developer runs.
       - name: Start SQL Server 2022 Developer
         run: docker compose -f docker/compose.yaml up -d --wait sqlserver
 
@@ -490,6 +495,21 @@ jobs:
       - name: Stop the malware scanner
         if: always()
         run: docker rm -f minhaj-clamav-ci || true
+
+      # -----------------------------------------------------------------
+      # Phase 17 — the search foundation's live proofs.
+      #
+      # Real SQL Server Full-Text Search: the Arabic, Urdu, English and mixed-
+      # script tokenisation assessment, query-injection safety, the stale-index
+      # rule, failure, retry, crash recovery, rebuild and reconciliation. The
+      # SQL Server this job started is the repository's FTS-enabled image
+      # (`docker/sqlserver/Dockerfile`), so these run here and are NOT skipped
+      # — the assertion below fails the job if any of them did not run.
+      # -----------------------------------------------------------------
+      - name: Search foundation proof (real SQL Server Full-Text Search)
+        run: |
+          npm run test:search -- --reporter=json --outputFile=search-report.json
+          node scripts/assert-search-proofs.mjs search-report.json
 
       # Proves the rehearsal cleaned up after itself rather than trusting that
       # it said so. Also fails if a restore database survived a failure above.

@@ -1,6 +1,6 @@
 import { getLocale, getTranslations } from 'next-intl/server';
 
-import { Container, Prose } from '@/components/ui';
+import { Button, Container, Prose, TextInput } from '@/components/ui';
 import { directionOf, isSupportedLocale } from '@/config/locale';
 
 /**
@@ -50,6 +50,26 @@ export default async function PublicNotFound() {
             {t('notFound.body')}
           </p>
         </Prose>
+
+        {/*
+         * "404 with search and nearest-section links" (ROUTE_MAP.md §9.3). A
+         * plain GET to the public search page: it needs no JavaScript, and it
+         * sends the visitor somewhere that works rather than guessing for them.
+         */}
+        <form
+          method="get"
+          action={`/${locale}/search`}
+          role="search"
+          className="flex max-w-md flex-wrap items-end gap-3"
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <label htmlFor="not-found-search" className="text-sm font-medium">
+              {t('notFound.searchLabel')}
+            </label>
+            <TextInput id="not-found-search" type="search" name="q" maxLength={200} />
+          </div>
+          <Button>{t('notFound.searchSubmit')}</Button>
+        </form>
 
         <nav aria-label={t('notFound.title')}>
           <ul className="flex flex-col gap-2 text-sm">

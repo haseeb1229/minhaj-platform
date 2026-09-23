@@ -126,6 +126,37 @@ export interface PeopleReaderPort {
     limit: number,
     offset: number,
   ): Promise<readonly PersonSitemapEntry[]>;
+
+  /**
+   * One PUBLISHED Person's public search projection data, or `null`.
+   *
+   * Exactly what the public profile shows and nothing else: names, variants,
+   * biography and the prose of ACTIVE facets. Never the account link, never a
+   * draft or archived facet (DELIVERY_PLAN.md Phase 17 — People).
+   */
+  searchPerson(id: string): Promise<PersonSearchRecord | null>;
+
+  /** Published People in identifier order after `after`, bounded, with stamps. */
+  searchPeople(input: {
+    readonly after: string | null;
+    readonly limit: number;
+  }): Promise<readonly { readonly id: string; readonly stamp: string }[]>;
+}
+
+/** What Search may know about one published Person. */
+export interface PersonSearchRecord {
+  readonly id: string;
+  readonly slug: string;
+  /** `Person.updatedAt`, which every People mutation moves. */
+  readonly stamp: string;
+  readonly translations: readonly {
+    readonly locale: Locale;
+    readonly name: string;
+    readonly biography: string | null;
+  }[];
+  readonly nameVariants: readonly { readonly locale: Locale; readonly value: string }[];
+  /** Prose of ACTIVE facets only, per locale it was genuinely written in. */
+  readonly facetProse: readonly { readonly locale: Locale; readonly text: string }[];
 }
 
 /* ===========================================================================

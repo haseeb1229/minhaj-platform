@@ -1,5 +1,7 @@
 'use server';
 import { revalidatePath } from 'next/cache';
+
+import { indexAfterResponse } from '@/composition/search';
 import { redirect } from 'next/navigation';
 import { localeSchema } from '@minhaj/contracts';
 import {
@@ -68,6 +70,7 @@ export async function saveEditorial(
         );
     destination = `/${locale}/admin/editorial/${kind === 'article' ? 'articles' : 'pages'}/${saved.id}`;
     revalidatePath(`/${locale}/admin/editorial`, 'layout');
+    indexAfterResponse();
   } catch (error) {
     return rejected(error);
   }
@@ -101,6 +104,7 @@ export async function transitionEditorial(
       },
     );
     revalidatePath(`/${locale}/admin/editorial`, 'layout');
+    indexAfterResponse();
     return { status: 'success' };
   } catch (error) {
     return rejected(error);

@@ -17,7 +17,19 @@ name: minhaj-platform
 
 services:
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    # SQL Server 2022 Developer WITH Full-Text Search (Phase 17). The official
+    # images ship without the FTS component, and SQL Server FTS is the locked V1
+    # search engine (TECH_STACK.md §10). `sqlserver/Dockerfile` adds exactly
+    # `mssql-server-fts`, pinned to the same engine build as its pinned base, and
+    # its build context is that directory alone — nothing else in the repository,
+    # including the ignored `.env` beside this file, can enter the image.
+    #
+    # `pull_policy: build` because this image exists nowhere to pull: it is
+    # always produced from the reviewed Dockerfile, locally and in CI alike.
+    build:
+      context: ./sqlserver
+    image: minhaj-platform-sqlserver-fts:16.0.4265.3
+    pull_policy: build
     container_name: minhaj-sqlserver-2022
     environment:
       ACCEPT_EULA: 'Y'

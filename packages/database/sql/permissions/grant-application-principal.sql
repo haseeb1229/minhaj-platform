@@ -459,3 +459,18 @@ IF OBJECT_ID(N'[dbo].[WorkSalePoint]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSE
 IF OBJECT_ID(N'[dbo].[BookTranslator]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[BookTranslator] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[BookTranslator] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[BookTranslation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[BookTranslation] TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[BookTranslation] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[WorkSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[WorkSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[WorkSlugHistory] TO [$(app_login)]; END;
+
+-- Phase 17: the DERIVED search projection and its operational state.
+--
+-- `SearchIndexRequest` is append-only for the owners that write it inside their
+-- own transactions; the indexer consumes (DELETEs) a request once it has been
+-- folded into scope state, so UPDATE has no use and is denied.
+-- `SearchIndexScope` is never deleted: a scope's row is its indexing history,
+-- and a withdrawn resource keeps a row that says it holds no documents.
+-- `SearchDocument` is rewritten and removed as owners publish and withdraw.
+-- Full-text QUERYING needs SELECT and nothing more; the catalogue and index are
+-- migration-owned, and ALTER is denied throughout.
+IF OBJECT_ID(N'[dbo].[SearchIndexRequest]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[SearchIndexRequest] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[SearchIndexRequest] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[SearchIndexScope]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[SearchIndexScope] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[SearchIndexScope] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[SearchDocument]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[SearchDocument] TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[SearchDocument] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[SearchDocumentTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[SearchDocumentTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[SearchDocumentTopic] TO [$(app_login)]; END;

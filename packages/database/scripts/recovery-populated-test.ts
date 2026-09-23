@@ -419,6 +419,42 @@ try {
       await verifyRestoredPhase6(restored, editorialFixture, editorialSnapshot);
       await verifyRestoredPhase8(restored, libraryFixture, librarySnapshot);
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
+
+      // Phase 17. The full-text catalogue and index live INSIDE the database,
+      // so a restore must bring them back queryable — the projection itself is
+      // derived and is rebuilt from the restored owners, but the engine objects
+      // it is rebuilt into are schema. And the restored runtime must still be
+      // unable to switch the index off.
+      const [fullText] = await restored.query<{ catalogs: number; indexes: number }>(`
+        SELECT (SELECT COUNT(*) FROM sys.fulltext_catalogs WHERE [name] = N'SearchCatalog') AS catalogs,
+               (SELECT COUNT(*) FROM sys.fulltext_indexes
+                 WHERE [object_id] = OBJECT_ID(N'[dbo].[SearchDocument]')) AS indexes;
+      `);
+      if (Number(fullText?.catalogs) !== 1 || Number(fullText?.indexes) !== 1) {
+        fail('The full-text catalogue or index did not survive the restore.');
+      }
+      await app.query(
+        `SELECT COUNT_BIG(*) AS total FROM CONTAINSTABLE([dbo].[SearchDocument], [matchEnglish], N'"restored"', LANGUAGE 1033, 10);`,
+      );
+      try {
+        await app.query('DROP FULLTEXT INDEX ON [dbo].[SearchDocument];');
+        fail(
+          'Restored database PERMITTED the runtime principal to drop the full-text index.',
+        );
+      } catch (error) {
+        const number = (error as { number?: number }).number;
+        // 7658 is the engine's own refusal for full-text DDL; the successful
+        // query above proves the index exists, so it can only mean permission.
+        if (number !== 7658) {
+          fail(
+            `Restored full-text DROP was rejected for the WRONG reason (error ${number ?? 'unknown'}).`,
+          );
+        }
+      }
+      report(
+        'restored full-text search',
+        'catalogue and index restored, queryable, not droppable',
+      );
     } finally {
       await app?.close();
     }

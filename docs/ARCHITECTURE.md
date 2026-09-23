@@ -457,7 +457,40 @@ dedicated search or vector engine can arrive later without touching call sites.
 
 **Arabic and Urdu tokenisation quality under SQL Server FTS is an engineering validation
 risk**, proven with real content in the Search Foundation phase. It is a technical
-acceptance criterion — **not an external business decision**.
+acceptance criterion — **not an external business decision**. The measured result and its
+recorded limitations are in TECH_STACK.md §10.
+
+**As delivered in Phase 17** — Layer 0, never a seventeenth context:
+
+| Part | Where | Owns |
+|---|---|---|
+| `SearchService` | `packages/search` (Layer-0 workspace) | Query parsing and bounds, text folding, projection validation, indexing ticks, rebuild, reconciliation, status. **No engine, no owner, no route** |
+| `SearchIndexPort` adapter | `packages/database/src/adapters/search` (declared Layer-0 `search` concern) | **The only place the engine is named**: full-text grammar built from pre-validated terms and passed as a parameter, one `CONTAINSTABLE` per word breaker, leases, settlement |
+| Owner projections | each owner context (`search-projection.ts`) over its own public read | What is searchable and when it is public — **the owner's rule, the same one its public pages use** |
+| Wiring and routes | Layer 4 (`composition/search-wiring.ts`, `search-read.ts`, `search.ts`) | Which owner feeds which scope, and each result's current canonical path |
+
+- **Durable intent.** Every owner mutation that can change what it publishes appends one
+  `SearchIndexRequest` row **inside its own transaction** (the package-internal
+  `search-intent.ts`, as `audit-row.ts` is for audit). The indexer relays requests into
+  per-scope state with a **generation** counter; a projection is marked current only if no
+  newer request arrived while it was built. Claims are **leases**, so a crashed worker's scope
+  becomes due again and concurrent ticks never take the same scope. Failures are recorded by
+  **category**, retried with bounded backoff, and wait for an operator once exhausted.
+- **Ticks, not a worker platform.** An owner's administrative action indexes after its
+  response; a thirty-second in-process sweep (production only, `instrumentation.ts`) catches up
+  and retries. No queue product, no event bus.
+- **The stale-index rule is enforced per result page**: rows are grouped by kind and each
+  owner is asked **once per kind** which ids are public now and at what address. A row the
+  owner does not return is withheld; the page is shown short rather than refilled.
+- **Rebuild and reconciliation** enumerate each owner's public inventory in bounded pages
+  (ending only on an empty page) plus the index's own scopes, and request re-projection; they
+  never read the projection back as a source.
+- **Throttling happens at the request boundary.** The public results page is a content route
+  and may reach no request header and no secret (§8.1, §8.3.1.1), so `proxy.ts` admits or
+  throttles a `/search` query through the RateLimiter abstraction before the page renders —
+  GET and HEAD alike, failing closed when the limiter cannot answer.
+  The public runtime reports failures to standard error as identifiers only; the operator and
+  background runtime uses the structured logger. **No query text is ever logged or stored.**
 
 ### 4.4 Authentication and authorisation
 
@@ -953,6 +986,11 @@ touched during Phase 0A.**
 | **Pre-adoption / presentation** | The **same application** on a developer-controlled origin, before official adoption. **Non-indexable**, claims no official adoption, and is **not a reduced build** (PRODUCT_SCOPE.md, *Product status and acceptance*) |
 | Production | Live platform on the official origin |
 
+These four are the **complete environment model**, reached in the order Local →
+Pre-adoption/presentation → Staging (DELIVERY_PLAN.md Phase 28) → Production. There is **no
+separate generic "sandbox" environment or subsystem**; a provider's own sandbox account is
+adapter configuration within one of these environments, never a fifth one.
+
 **Staging is delivered as its own foundation milestone before any live-source migration**
 (DELIVERY_PLAN.md), not as part of final production hardening. Migration dry-runs and
 religious QA must never run against production.
@@ -1107,6 +1145,12 @@ clients**.
 
 The platform's presentation is an architectural concern, not a decoration applied at the end.
 This section is the contract every routed surface is built against.
+
+**Presentation is replaceable; it is never throw-away.** Routes, pages and components consume
+the semantic owners' public contracts and services (Layer 4, §6.1) and hold no domain rule,
+authorisation decision or persistence access of their own. A surface can therefore be
+redesigned or rebuilt without redesigning a domain, a security control or a schema — and no
+surface is built to be discarded.
 
 ### 13.1 Staged ownership — one system, delivered in stages
 

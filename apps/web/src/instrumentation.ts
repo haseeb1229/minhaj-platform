@@ -39,5 +39,9 @@ export async function register(): Promise<void> {
   if (process.env['NEXT_PHASE'] !== 'phase-production-build') {
     const { startEditorialSweep } = await import('@/composition/editorial-sweep');
     startEditorialSweep();
+    // Derived search work: retries, catch-up, and what the editorial sweep's
+    // scheduled publications committed (ARCHITECTURE.md §8.5).
+    const { startSearchSweep } = await import('@/composition/search');
+    startSearchSweep();
   }
 }

@@ -29,7 +29,8 @@
       "articles": "Articles",
       "contact": "Contact",
       "feedback": "Feedback",
-      "volunteer": "Volunteer"
+      "volunteer": "Volunteer",
+      "topics": "Topics"
     },
     "home": {
       "description": "A unified digital platform for the Quran, Hadith, learning, library and media resources of Minhaj-ul-Quran International.",
@@ -146,7 +147,9 @@
     },
     "notFound": {
       "title": "Page not found",
-      "body": "The address you followed does not match a page on this platform. It may have been mistyped, or it may belong to an area that has not been published yet."
+      "body": "The address you followed does not match a page on this platform. It may have been mistyped, or it may belong to an area that has not been published yet.",
+      "searchLabel": "Search the site",
+      "searchSubmit": "Search"
     },
     "error": {
       "title": "Something went wrong",
@@ -361,7 +364,8 @@
       "navigation": "Navigation",
       "editorial": "Editorial",
       "correspondence": "Correspondence",
-      "library": "Library"
+      "library": "Library",
+      "search": "Search"
     },
     "common": {
       "none": "Nothing to show.",
@@ -876,6 +880,52 @@
           "notice": "A teacher facet is a description, not an approval. Permission to teach comes from a role assignment made on the Identity screens."
         }
       }
+    },
+    "search": {
+      "title": "Search indexing",
+      "description": "Indexing lag and failures. Search is derived from what each owner publishes; nothing here changes content.",
+      "pending": "Waiting to be indexed",
+      "retrying": "Retrying automatically",
+      "failed": "Waiting for an operator",
+      "oldest": "Oldest waiting since",
+      "lastIndexed": "Last indexed",
+      "documents": "Searchable documents",
+      "engine": "Accepted, not yet searchable",
+      "never": "Never",
+      "nothingWaiting": "Nothing is waiting",
+      "healthy": "Indexing is up to date.",
+      "attention": "Some indexing needs attention.",
+      "failures": "Recent failures",
+      "kind": "Kind",
+      "record": "Record",
+      "failure": "Failure",
+      "attempts": "Attempts",
+      "when": "When",
+      "state": "State",
+      "exhausted": "Waiting for an operator",
+      "retryingState": "Retrying",
+      "kinds": {
+        "topic": "Topic",
+        "person": "Person",
+        "article": "Article",
+        "page": "Page",
+        "work": "Book"
+      },
+      "categories": {
+        "source-unavailable": "The owner could not be read",
+        "invalid-projection": "The owner record was not searchable as provided",
+        "index-write-failed": "The index could not be written"
+      },
+      "operations": "Operations",
+      "retry": "Retry failed indexing",
+      "retryHelp": "Puts every scope waiting for an operator back on the schedule.",
+      "retried": "Failed indexing was put back on the schedule.",
+      "reconcile": "Reconcile the index",
+      "reconcileHelp": "Compares the index with what each owner publishes now, and re-indexes only what is missing, stale or withdrawn.",
+      "reconciled": "Reconciliation has started. Anything it finds is indexed in the background; refresh this page to follow it.",
+      "rebuild": "Rebuild the index",
+      "rebuildHelp": "Re-reads everything each owner publishes. Search keeps answering while it runs.",
+      "rebuilt": "A full rebuild has started. It runs in the background; refresh this page to follow it."
     }
   },
   "people": {
@@ -1192,5 +1242,85 @@
     "workSalePointsHelp": "Enter the identifiers shown on the sale points screen.",
     "notCleared": "The file could not be cleared by the scanner, so it was not attached. Nothing was published. Try again later.",
     "rateLimited": "Too many uploads in a short time. Wait a few minutes and try again."
+  },
+  "search": {
+    "title": "Search",
+    "description": "Search topics, contributors, articles, pages and books across One Minhaj.",
+    "intro": "Find topics, contributors, articles, pages and books. Search works in English, Urdu and Arabic.",
+    "queryLabel": "Search for",
+    "queryHelp": "Every word you type must match. Use up to 8 words.",
+    "submit": "Search",
+    "clear": "Clear search",
+    "refine": "Refine results",
+    "type": "Type",
+    "typeAny": "All types",
+    "kinds": {
+      "topic": "Topic",
+      "person": "Person",
+      "article": "Article",
+      "page": "Page",
+      "work": "Book",
+      "edition": "Edition",
+      "book-translation": "Translation"
+    },
+    "topic": "Topic",
+    "topicAny": "Any topic",
+    "language": "Content language",
+    "languageAny": "Any language",
+    "languageHelp": "Applies to articles, pages, editions and translations.",
+    "from": "Published from (year)",
+    "to": "Published to (year)",
+    "yearHelp": "Applies to articles, pages, editions and translations.",
+    "apply": "Apply",
+    "clearFilters": "Clear filters",
+    "topicActive": "Topic: {name}",
+    "removeTopic": "Remove the topic filter",
+    "initialTitle": "What would you like to find?",
+    "initialBody": "Type a word or a phrase above. You can also browse by topic or visit the Library.",
+    "browseTopics": "Browse topics",
+    "browseLibrary": "Visit the Library",
+    "results": "{count, plural, one {# result} other {# results}} for “{query}”",
+    "resultsCapped": "More than {count} results for “{query}”. Add a word or a filter to narrow them.",
+    "resultsLabel": "Search results",
+    "noResults": "No results for “{query}”.",
+    "noResultsHelp": "Check the spelling, try fewer or different words, or remove a filter.",
+    "pageStatus": "Page {page} of {pages}",
+    "pagination": "Search result pages",
+    "previous": "Previous page",
+    "next": "Next page",
+    "pastEnd": "This page is past the end of the results.",
+    "firstPage": "Go to the first page",
+    "published": "Published {year}",
+    "invalidTitle": "Please check your search:",
+    "issues": {
+      "query-too-long": "Your search is too long. Use at most 200 characters.",
+      "too-many-terms": "Use at most 8 words.",
+      "term-too-long": "One of the words is too long.",
+      "no-terms": "Type at least one letter or number.",
+      "type": "Choose a type from the list.",
+      "topic": "That topic is not available. Choose one from the list.",
+      "language": "Choose a language from the list.",
+      "year": "Enter a year as a number, such as 2020.",
+      "year-range": "The first year must not be after the second.",
+      "page": "That page of results is not available. Start from the first page."
+    },
+    "rateLimited": "Search cannot take another query from you just now, usually because many were sent in a short time. Please wait a minute, then try again.",
+    "unavailable": "Search is temporarily unavailable. Please try again in a few minutes.",
+    "loading": "Searching…",
+    "limitedTitle": "Search paused",
+    "backToSearch": "Return to search"
+  },
+  "topics": {
+    "title": "Topics",
+    "description": "Browse every topic the platform organises its material by.",
+    "intro": "Every subject the platform organises its material by, in one place.",
+    "empty": "No topics are available yet.",
+    "subtopics": "Subtopics",
+    "books": "Books on this topic",
+    "allBooks": "All books on this topic",
+    "searchWithin": "Search within this topic",
+    "searchLabel": "Search this topic for",
+    "searchSubmit": "Search",
+    "fallback": "This topic has not been translated into this language yet, so it is shown in English."
   }
 }

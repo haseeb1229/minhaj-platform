@@ -190,11 +190,20 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     placements: Object.freeze(['primary'] as const),
     availability: 'deferred' as const,
   }),
+  /**
+   * DELIVERED BY PHASE 17. Unified search is a genuine public page in all three
+   * locales, and it is `excluded` for good: a results page is a view of a query,
+   * not a resource, so it is `noindex` and never a sitemap entry, whatever the
+   * indexing posture (ROUTE_MAP.md §9.5).
+   */
   Object.freeze({
     key: 'search',
     label: 'nav.search',
+    path: '/search',
     placements: Object.freeze(['primary'] as const),
-    availability: 'deferred' as const,
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'excluded' as const,
   }),
   /**
    * The ACCOUNT ENTRY POINT, delivered by Phase 2 and linked as a plain route.
@@ -411,6 +420,21 @@ const SHELL: readonly ShellRoute[] = Object.freeze([
     label: 'nav.home',
     path: '',
     placements: Object.freeze([] as const),
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'eligible' as const,
+  }),
+  /**
+   * The canonical taxonomy browser (ROUTE_MAP.md §3.1), delivered by Phase 17
+   * because Topic search results must be navigable into `/topics/{slug}`
+   * (DELIVERY_PLAN.md Phase 17) and a result that led nowhere would be the dead
+   * navigation §5.2 prohibits. It composes only owners that already exist.
+   */
+  Object.freeze({
+    key: 'topics',
+    label: 'nav.topics',
+    path: '/topics',
+    placements: Object.freeze(['footer-utility'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'eligible' as const,

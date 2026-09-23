@@ -67,3 +67,5 @@ export type {
 } from './application/people-service.ts';
 
 export { addableProfileKinds, missingTranslations } from './domain/person.ts';
+
+export { createPersonSearchSource } from './application/search-projection.ts';

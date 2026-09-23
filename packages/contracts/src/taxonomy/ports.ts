@@ -106,6 +106,33 @@ export interface TaxonomyReaderPort {
    * (DOMAIN_MODEL.md §6.2).
    */
   topicAssignmentStatus(): Promise<TopicAssignmentStatus>;
+
+  /**
+   * One ACTIVE Topic's public search projection data, or `null` when it is
+   * archived or absent (DELIVERY_PLAN.md Phase 17 — Topic names and
+   * descriptions per locale). Only genuinely stored translations, never a
+   * fallback presented as one.
+   */
+  searchTopic(id: string): Promise<TopicSearchRecord | null>;
+
+  /** Active Topics in identifier order after `after`, bounded, with stamps. */
+  searchTopics(input: {
+    readonly after: string | null;
+    readonly limit: number;
+  }): Promise<readonly { readonly id: string; readonly stamp: string }[]>;
+}
+
+/** What Search may know about one active Topic. */
+export interface TopicSearchRecord {
+  readonly id: string;
+  readonly slug: string;
+  /** Changes whenever anything this record carries changes. */
+  readonly stamp: string;
+  readonly translations: readonly {
+    readonly locale: Locale;
+    readonly name: string;
+    readonly description: string | null;
+  }[];
 }
 
 /* ===========================================================================

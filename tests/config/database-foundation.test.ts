@@ -124,6 +124,12 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'BookTranslator',
       'SalePoint',
       'WorkSalePoint',
+      // Phase 17 — the Layer-0 search concern's DERIVED state: indexing intent,
+      // per-scope indexing state, and the rebuildable projection.
+      'SearchIndexRequest',
+      'SearchIndexScope',
+      'SearchDocument',
+      'SearchDocumentTopic',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name
@@ -179,10 +185,14 @@ describe('Phase 1 Chunk 1 database foundation', () => {
     expect(publicContracts).not.toContain('DATABASE_MIGRATION_URL');
   });
 
-  it('defines the official SQL Server 2022 Developer service without a password', async () => {
+  it('defines the SQL Server 2022 Developer service without a password', async () => {
     const compose = await readFile(path.join(repoRoot, 'docker', 'compose.yaml'), 'utf8');
 
-    expect(compose).toContain('mcr.microsoft.com/mssql/server:2022-latest');
+    // Phase 17: the official image WITH Full-Text Search, built from the
+    // repository's own Dockerfile — never a floating tag.
+    expect(compose).toMatch(/build:\s*\n\s*context:\s*\.\/sqlserver/u);
+    expect(compose).toContain('image: minhaj-platform-sqlserver-fts:16.0.4265.3');
+    expect(compose).not.toContain('2022-latest');
     expect(compose).toMatch(/MSSQL_PID:\s*Developer/);
     expect(compose).toContain('14330}:1433');
     expect(compose).toContain('${MSSQL_SA_PASSWORD:');
@@ -190,5 +200,33 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       .split('\n')
       .find((line) => line.trim().startsWith('MSSQL_SA_PASSWORD:'));
     expect(passwordLine?.trim()).toMatch(/^MSSQL_SA_PASSWORD:\s*\$\{/);
+  });
+
+  it('pins the SQL Server image and its Full-Text Search to ONE engine build', async () => {
+    // An FTS package from a different build than the engine would move the
+    // engine forward underneath the persistent volume — a one-way upgrade — so
+    // the base digest, the engine package and the FTS package must agree.
+    const dockerfile = await readFile(
+      path.join(repoRoot, 'docker', 'sqlserver', 'Dockerfile'),
+      'utf8',
+    );
+
+    expect(dockerfile).toMatch(
+      /^FROM mcr\.microsoft\.com\/mssql\/server:2022-CU26-ubuntu-22\.04@sha256:[0-9a-f]{64}$/mu,
+    );
+    expect(dockerfile).toContain('mssql-server=16.0.4265.3-1');
+    expect(dockerfile).toContain('mssql-server-fts=16.0.4265.3-1');
+    // Executable lines only: the file's own comments explain why the floating
+    // tag was retired, and a comment naming it is not a use of it.
+    const instructions = dockerfile
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .join('\n');
+    expect(instructions).not.toMatch(/2022-latest/u);
+
+    // The build context is that directory alone, so nothing else — least of
+    // all the ignored `docker/.env` beside it — can enter the image.
+    const context = await readdir(path.join(repoRoot, 'docker', 'sqlserver'));
+    expect(context).toEqual(['Dockerfile']);
   });
 });

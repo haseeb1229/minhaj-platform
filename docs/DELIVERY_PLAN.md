@@ -161,6 +161,8 @@ Exit criteria for **all** feature phases, not a later sweep:
 | **Accessibility** | **WCAG 2.2 AA** for delivered surfaces. **Software conformance and content conformance are accepted separately** — where a source supplies no caption, transcript or alternative, the gap is recorded and never fabricated (SECURITY_BASELINE.md §16.3) |
 | **Design system** | Every routed surface uses the shared token, component and state contract of ARCHITECTURE.md §13. **No phase invents throw-away styling**, and no phase re-implements the design system |
 | **Responsive and motion** | Delivered surfaces work from small phone to wide desktop with **no horizontal overflow**, correct RTL at every breakpoint, and `prefers-reduced-motion` honoured (ARCHITECTURE.md §13.5–§13.6) |
+| **User-facing completeness** | A phase that promises a public, admin or user experience is **not complete with backend, API or schema alone**: it delivers a usable professional interface for that experience — responsive, keyboard- and focus-correct, localised with RTL, with its loading/pending, empty, success, error and unavailable states and validation feedback — and **no dead controls or demo-only UI**. An infrastructure-only phase owes no decorative UI |
+| **Professional microfeatures** | The plan does not rely on every small feature being enumerated in advance. A microfeature discovered during a phase is classified: a genuine One Minhaj need or an unnecessary generic-product feature; its **semantic owner**; whether the **current** phase or a named **later owning** phase delivers it; and any security, privacy, legal or religious gate. Genuine in-scope needs are delivered, later ones are recorded against their owner, and generic features are not added |
 | **Data scale** | Bounded queries and page sizes, deterministic ordering with tie-breakers, relevant indexes, no whole-corpus client filtering, bounded bulk actions (ARCHITECTURE.md §13.9). **A phase claims no scale it has not exercised** |
 | **Time and money** | Authoritative instants in UTC, IANA zones for user scheduling, exact non-floating money (DOMAIN_MODEL.md §19.5–§19.6) |
 | **Slug history** | A phase that delivers an **editable public canonical slug** delivers that resource's **native slug history and 301 behaviour in the same phase** (DOMAIN_MODEL.md §19.7). It never defers redirects to Migration |
@@ -814,6 +816,51 @@ reconsideration without rework.
 > when Search Foundation completes has its projection added here or in a recorded follow-on
 > step. Completeness is validated in Phase 31 — and **Search Foundation is never pulled earlier
 > merely because a consuming phase carries a higher number**.
+
+---
+
+**Phase-17 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+- **Engine.** SQL Server FTS runs on the repository's pinned image (`docker/sqlserver/`,
+  TECH_STACK.md §10, §18.3); the official images lack FTS. Local and CI build it; the migration
+  fails closed without FTS. The Arabic/Urdu tokenisation gate is **passed and recorded**
+  (TECH_STACK.md §10), including one known limitation (Arabic-yeh vs Urdu-yeh).
+- **Mechanism.** Durable intent, generation-checked settlement, leases, bounded retry,
+  rebuild, reconciliation and the per-page, per-kind visibility recheck are described in
+  ARCHITECTURE.md §4.3. The derived projection's `kind + id` pairs are the narrow exception
+  recorded in DOMAIN_MODEL.md §6.2.1.
+- **Topic hub delivered here.** `/topics` and `/topics/{slug}` had no delivering phase, and a
+  Topic result must be navigable (the inventory table above). The hub composes only owners
+  that exist — the Topic, its subtopics, Library books on it, and search within it — and
+  **each later domain adds its own section when it ships**; nothing renders for a domain that
+  has not (ROUTE_MAP.md §5.1, §5.2). Topic slugs are immutable, so no slug history is owed.
+- **Throttling.** `/search` is throttled by the request proxy, which sends a throttled client
+  to the static `/search/limited` state, because the results page is a public content route
+  and may reach no header or secret (SECURITY_BASELINE.md §15.2). GET and HEAD are metered
+  alike, and a limiter that cannot answer refuses the query (fail closed, as every other
+  limiter on the platform does).
+- **What the initial projections deliberately do not contain**, each with its owner if it is
+  ever wanted: **Edition reader text** (Library: in-book full-text search needs reader-position
+  deep links, a Library extension, not a Phase-17 deliverable); **contributor names inside Work
+  documents** (a person is found as a Person result; putting names into Works would make every
+  People edit re-project Library); **Articles listed by topic on the hub** (Editorial exposes
+  no by-topic listing; search within the topic covers them until Editorial adds one).
+- **Not delivered, and not owed by this phase:** `/api/search/*` suggestions and typeahead
+  (ROUTE_MAP.md §8 names the category; no delivered surface consumes it, so it arrives with
+  the first one that does); search analytics or history (none is authorised — PRODUCT_SCOPE.md
+  and Phase 21 own any personal history); multi-instance execution is safe by lease, but a
+  shared rate-limit strategy remains the §3.5.1 prerequisite for scaling out.
+- **Every later searchable domain** (Phases 9, 10, 11, 13, 18, 19, 20, 22, …) adds its own
+  kind, projection, intent in its own transactions, visibility resolver, filters and tests,
+  exactly as the four initial owners do — never a pre-created kind. **Phase 31** proves none is
+  missing.
+
+**Next scheduled activity after Phase 17 is remote-green:** a fresh, dedicated
+**whole-platform professional product / architecture / UX completeness audit**, before the
+searchable-domain fan-out (Phases 9, 10, 13, 18, 19, 20, 22) begins — so a systemic defect in
+this shared foundation is caught before those domains copy it. Phase 2G remains separately
+deferred.
 
 ---
 

@@ -194,6 +194,10 @@ export const prohibitedInContextPackages = Object.freeze({
     'scanner socket. A context receives a storage port from composition and ' +
     'never the implementation, exactly as with the database ' +
     '(DOMAIN_MODEL.md §2 rule 7, ARCHITECTURE.md §6.1)',
+  '@minhaj/search':
+    'the search foundation holds the index and every owner projection source. ' +
+    'A context supplies its own projection to Layer-4 composition and never ' +
+    'reaches the search implementation (DOMAIN_MODEL.md §2 rule 7, ARCHITECTURE.md §4.3)',
   '@prisma/client': 'no context depends on Prisma directly (DOMAIN_MODEL.md §2 rule 7)',
   prisma: 'no context depends on Prisma directly (DOMAIN_MODEL.md §2 rule 7)',
   ...providerSdkPackages,
@@ -396,18 +400,24 @@ export function persistenceAdapterPolicy(manifest) {
  * Layer-0 concerns that may legitimately OWN persistent state.
  *
  * A strict subset of `layerZeroModules`. `database` is the package this all
- * lives in and cannot own an adapter within itself; `storage`, `search` and
- * `logging` own no relational state in the approved architecture — storage
- * keeps files with its metadata owned by the consuming context, search holds a
- * rebuildable projection rather than authoritative state (ARCHITECTURE.md
- * §8.5), and logging writes a log. Listing only what genuinely owns rows keeps
- * this from becoming a back door into Layer 0 for anything that wants a table.
+ * lives in and cannot own an adapter within itself, and `logging` writes a log
+ * rather than rows. Listing only what genuinely owns rows keeps this from
+ * becoming a back door into Layer 0 for anything that wants a table.
+ *
+ * `storage` owns its custody metadata (Phase 7). `search` owns DERIVED rows
+ * (Phase 17): a rebuildable projection and the durable indexing intent that
+ * keeps it current (ARCHITECTURE.md §8.5). Neither is authoritative for any
+ * business fact — the owners are — but both are relational state that must be
+ * owned by something, and filing it under whichever context happened to be
+ * indexed first would make that context the owner of every other context's
+ * search projection.
  */
 export const layerZeroPersistentConcerns = Object.freeze([
   'email',
   'rate-limiting',
   'auditing',
   'storage',
+  'search',
 ]);
 
 /**
@@ -502,6 +512,11 @@ export const workspaceRoles = Object.freeze({
   // email, logging, auditing and rate limiting. It is infrastructure holding
   // untrusted bytes, not a bounded context, and it depends on none.
   '@minhaj/storage': ARCHITECTURAL_ROLES.PLATFORM,
+
+  // ARCHITECTURE.md §4.3 and §6.1 name `search` at Layer 0. It holds a derived,
+  // rebuildable projection and the SearchService over it; it is not a bounded
+  // context and depends on none — owners are supplied to it by composition.
+  '@minhaj/search': ARCHITECTURAL_ROLES.PLATFORM,
 
   // ARCHITECTURE.md §6.1: "(`packages/server-core` hosts context-owned
   // services; it is not a layer)".

@@ -125,6 +125,15 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
     'BookTranslator',
     'WorkSalePoint',
   ],
+  // DERIVED STATE: the projection and its operational state, nothing a business
+  // context owns (ARCHITECTURE.md §8.5). `assertSearchFoundation` proves the
+  // full-text objects Prisma's schema language cannot describe.
+  '20260923000000_phase17_search_foundation': [
+    'SearchIndexRequest',
+    'SearchIndexScope',
+    'SearchDocument',
+    'SearchDocumentTopic',
+  ],
   '20260919000000_phase5_people_contributors': [
     'Person',
     'PersonTranslation',
@@ -391,7 +400,39 @@ const EXPECTED_CHECK_CONSTRAINTS = [
   { table: 'SpeakerProfile', constraint: 'SpeakerProfile_status_ck' },
   { table: 'ScholarProfile', constraint: 'ScholarProfile_status_ck' },
   { table: 'TeacherProfile', constraint: 'TeacherProfile_status_ck' },
+  // Phase 17. The closed inventory, the lease pair, the exhausted-scope reason
+  // and the one-word-breaker-per-document rule are all refused by the database.
+  { table: 'SearchIndexRequest', constraint: 'SearchIndexRequest_scopeKind_ck' },
+  ...['scopeKind', 'status', 'generation', 'attempts', 'lease', 'failure', 'failed'].map(
+    (rule) => ({
+      table: 'SearchIndexScope',
+      constraint: 'SearchIndexScope_' + rule + '_ck',
+    }),
+  ),
+  ...['kind', 'scope', 'title', 'year', 'match', 'checksum'].map((rule) => ({
+    table: 'SearchDocument',
+    constraint: 'SearchDocument_' + rule + '_ck',
+  })),
 ];
+
+/**
+ * The full-text objects, exactly as Phase 17 defines them.
+ *
+ * Prisma's schema language cannot describe a full-text catalogue or index, so
+ * nothing else would notice one missing — or one built with the wrong word
+ * breaker, which would leave search working for English and silently worse for
+ * Arabic and Urdu. The breaker per column is the measured tokenisation decision
+ * (TECH_STACK.md §10), and it is asserted, not assumed.
+ */
+const EXPECTED_FULLTEXT_COLUMNS = [
+  { column: 'matchArabic', lcid: 1025 },
+  { column: 'matchEnglish', lcid: 1033 },
+  { column: 'matchOther', lcid: 0 },
+  { column: 'matchUrdu', lcid: 1056 },
+];
+
+/** The two permissions Phase 17 appends, and only these. */
+const SEARCH_PERMISSIONS = ['search.operate', 'search.read'];
 
 /**
  * The canonical top-level topics, exactly as DOMAIN_MODEL.md §6.1 names them.
@@ -706,6 +747,121 @@ async function assertNoPolymorphicAssignment(session: SqlSession): Promise<void>
     `no polymorphic pair, ${junctions.length} typed junction(s), ` +
       `aggregate edges: ${aggregateEdges.join(', ')}`,
   );
+}
+
+/**
+ * The Phase-17 search foundation: the full-text objects, their word breakers,
+ * the absence of any relational edge into an owner, and the two permissions.
+ *
+ * DERIVED MEANS UNRELATED. The only foreign keys a Search table may carry are
+ * its own internal ones; an edge from the projection into `Topic`, `Work` or any
+ * other owner table would make the derived index a relational dependant of the
+ * contexts it merely reflects (DOMAIN_MODEL.md §6.2, ARCHITECTURE.md §8.5).
+ */
+async function assertSearchFoundation(session: SqlSession): Promise<void> {
+  const catalogs = await session.query<{ name: string; accentSensitive: boolean }>(`
+    SELECT [name], CAST([is_accent_sensitivity_on] AS BIT) AS accentSensitive
+    FROM sys.fulltext_catalogs;
+  `);
+  if (catalogs.length !== 1 || catalogs[0]?.name !== 'SearchCatalog') {
+    fail(
+      `Expected exactly the SearchCatalog full-text catalogue; found ` +
+        `${catalogs.map((row) => row.name).join(', ') || '(none)'}.`,
+    );
+  }
+  if (catalogs[0]?.accentSensitive) fail('SearchCatalog must be accent insensitive.');
+
+  const indexes = await session.query<{
+    tableName: string;
+    keyIndex: string;
+    changeTracking: string;
+    stoplist: number | null;
+  }>(`
+    SELECT OBJECT_NAME(fi.[object_id]) AS tableName,
+           i.[name] AS keyIndex,
+           fi.[change_tracking_state_desc] AS changeTracking,
+           fi.[stoplist_id] AS stoplist
+    FROM sys.fulltext_indexes fi
+    JOIN sys.indexes i ON i.[object_id] = fi.[object_id] AND i.[index_id] = fi.[unique_index_id];
+  `);
+  const index = indexes[0];
+  if (indexes.length !== 1 || index?.tableName !== 'SearchDocument') {
+    fail(
+      `Expected exactly one full-text index, on SearchDocument; found ` +
+        `${indexes.map((row) => row.tableName).join(', ') || '(none)'}.`,
+    );
+  }
+  if (index.keyIndex !== 'SearchDocument_pkey') {
+    fail(`The full-text key index is ${index.keyIndex}, not SearchDocument_pkey.`);
+  }
+  if (index.changeTracking !== 'AUTO') {
+    fail(`Full-text change tracking is ${index.changeTracking}, not AUTO.`);
+  }
+  if (index.stoplist !== null)
+    fail('The full-text index must be built with STOPLIST OFF.');
+
+  const columns = await session.query<{ column: string; lcid: number }>(`
+    SELECT c.[name] AS [column], fic.[language_id] AS lcid
+    FROM sys.fulltext_index_columns fic
+    JOIN sys.columns c ON c.[object_id] = fic.[object_id] AND c.[column_id] = fic.[column_id]
+    WHERE fic.[object_id] = OBJECT_ID(N'[dbo].[SearchDocument]')
+    ORDER BY c.[name];
+  `);
+  const actual = columns.map((row) => `${row.column}:${String(row.lcid)}`).join(', ');
+  const expected = EXPECTED_FULLTEXT_COLUMNS.map(
+    (entry) => `${entry.column}:${String(entry.lcid)}`,
+  ).join(', ');
+  if (actual !== expected) {
+    fail(
+      `Full-text columns and word breakers differ.\n  expected: ${expected}\n  actual:   ${actual}`,
+    );
+  }
+
+  const edges = await session.query<{ parent: string; referenced: string }>(`
+    SELECT OBJECT_NAME(fk.[parent_object_id]) AS parent,
+           OBJECT_NAME(fk.[referenced_object_id]) AS referenced
+    FROM sys.foreign_keys fk
+    WHERE OBJECT_NAME(fk.[parent_object_id]) LIKE N'Search%'
+       OR OBJECT_NAME(fk.[referenced_object_id]) LIKE N'Search%'
+    ORDER BY parent, referenced;
+  `);
+  const edgeList = edges.map((row) => `${row.parent}->${row.referenced}`).join(', ');
+  if (
+    edgeList !== 'SearchDocument->SearchIndexScope, SearchDocumentTopic->SearchDocument'
+  ) {
+    fail(`Search tables must carry only their internal foreign keys; found ${edgeList}.`);
+  }
+
+  const permissions = await session.query<{ key: string }>(`
+    SELECT p.[key] FROM [Permission] p
+    JOIN [RolePermission] rp ON rp.[permissionKey] = p.[key]
+    JOIN [Role] r ON r.[id] = rp.[roleId]
+    WHERE r.[key] = N'platform-administrator' AND p.[key] LIKE N'search.%'
+    ORDER BY p.[key];
+  `);
+  if (permissions.map((row) => row.key).join(',') !== SEARCH_PERMISSIONS.join(',')) {
+    fail(
+      `Search permissions differ; found: ` +
+        (permissions.map((row) => row.key).join(', ') || '(none)'),
+    );
+  }
+
+  report(
+    'search foundation',
+    `SearchCatalog (accent insensitive), ${columns.length} word-breaker columns, ` +
+      `internal edges only, ${SEARCH_PERMISSIONS.length} permissions bundled`,
+  );
+}
+
+/** After the Phase-17 rollback, no full-text object survives. */
+async function assertSearchRemoved(session: SqlSession): Promise<void> {
+  const [row] = await session.query<{ catalogs: number; indexes: number }>(`
+    SELECT (SELECT COUNT(*) FROM sys.fulltext_catalogs) AS catalogs,
+           (SELECT COUNT(*) FROM sys.fulltext_indexes) AS indexes;
+  `);
+  if (Number(row?.catalogs) !== 0 || Number(row?.indexes) !== 0) {
+    fail('A full-text catalogue or index survived the Phase-17 rollback.');
+  }
 }
 
 /**
@@ -1201,6 +1357,7 @@ try {
   await assertTaxonomyFoundation(session);
   await assertNavigationPermission(session);
   await assertPeopleFoundation(session);
+  await assertSearchFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -1249,6 +1406,9 @@ try {
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
     }
+    if (migration.id === '20260923000000_phase17_search_foundation') {
+      await assertSearchRemoved(session);
+    }
   }
   report('rollback', `${migrations.length} reversed, history rows removed`);
 
@@ -1285,6 +1445,7 @@ try {
   await assertTaxonomyFoundation(session);
   await assertNavigationPermission(session);
   await assertPeopleFoundation(session);
+  await assertSearchFoundation(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

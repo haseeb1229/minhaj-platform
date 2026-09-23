@@ -1,0 +1,22 @@
+{
+  "name": "@minhaj/search",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Server-only Layer 0 search foundation: the engine-independent SearchService over a derived, rebuildable projection. Platform infrastructure, not a bounded business context.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "react-server": "./src/index.ts",
+      "node": "./src/index.ts",
+      "browser": "./src/client-import-error.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@minhaj/contracts": "*",
+    "server-only": "0.0.1"
+  }
+}

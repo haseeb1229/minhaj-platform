@@ -36,7 +36,11 @@
           "kind": "layer0",
           "concern": "storage"
         },
-        "library": "library"
+        "library": "library",
+        "search": {
+          "kind": "layer0",
+          "concern": "search"
+        }
       }
     }
   },

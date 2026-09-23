@@ -819,6 +819,22 @@ Progressive backoff on repeated failures; account lockout with a documented,
 administrator-assisted recovery path. **Rate-limit responses never leak whether an account
 exists.**
 
+**Search (Phase 17).** Expensive-query protection is layered rather than single:
+
+- **Bounded query shape** — at most 200 characters and 8 words, each word letters, marks and
+  digits only; a prefix match only for words of 3+ letters; 20 results a page and at most 50
+  pages, so the engine never ranks more than 1,000 results per word breaker.
+- **Grammar is never built from input.** The query box yields words; quotes, operators,
+  wildcards and SQL are separators. The engine adapter composes its own grammar from those
+  words and passes it as a parameter (tested with hostile input against the live engine).
+- **Per-client throttling at the request boundary** — thirty queries a minute per client
+  address, enforced by the request proxy through the existing RateLimiter, keyed by a **keyed
+  digest** so no raw address is stored. A request with nothing typed spends nothing.
+- **No search history, no analytics, no query text in any log.** A failure is logged as the
+  operation and the database's error class only.
+- **A stale index never discloses** (ARCHITECTURE.md §8.5): every result page is rechecked
+  against its owners' current public state before anything is returned.
+
 ---
 
 ## 16. Accessibility as a security-adjacent requirement

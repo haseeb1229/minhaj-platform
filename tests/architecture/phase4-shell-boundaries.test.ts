@@ -82,6 +82,13 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/library/downloads/page.tsx',
   'apps/web/src/app/[locale]/(public)/library/sale-points/page.tsx',
   'apps/web/src/app/[locale]/(public)/library/resources/page.tsx',
+  // Phase 17. Search results and the topic hub read published, mutable data
+  // through public readers — and the search page consumes rate-limit budget —
+  // so none of them can be prerendered. Each is proven below to reach no
+  // session, no identity service and no authentication library.
+  'apps/web/src/app/[locale]/(public)/search/page.tsx',
+  'apps/web/src/app/[locale]/(public)/topics/page.tsx',
+  'apps/web/src/app/[locale]/(public)/topics/[slug]/page.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [

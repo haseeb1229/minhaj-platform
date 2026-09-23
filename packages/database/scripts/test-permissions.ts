@@ -711,6 +711,7 @@ try {
     peopleProvisioned: number;
     editorialProvisioned: number;
     libraryProvisioned: number;
+    searchProvisioned: number;
   }>(`
     SELECT COUNT_BIG(*) AS total,
            SUM(CASE WHEN [action] = N'phase1.permission.probe' THEN 1 ELSE 0 END) AS probe,
@@ -729,17 +730,20 @@ try {
              AS editorialProvisioned,
            SUM(CASE WHEN [action] = N'library.permissions.provisioned'
                      AND [actorType] = N'migration' THEN 1 ELSE 0 END)
-             AS libraryProvisioned
+             AS libraryProvisioned,
+           SUM(CASE WHEN [action] = N'search.permissions.provisioned'
+                     AND [actorType] = N'migration' THEN 1 ELSE 0 END)
+             AS searchProvisioned
     FROM [dbo].[AuditLog];
   `);
 
-  // Exactly six rows: the Phase-3B through Phase-8 privilege extensions,
+  // Exactly seven rows: the Phase-3B through Phase-17 privilege extensions,
   // and this run's probe. Naming every migration action is load-bearing:
   // deriving the expected total from whatever provisioning rows happened to
   // survive would pass if a phase omitted its own audit, and each privilege
   // extension must be able to show that it paid for itself
   // (SECURITY_BASELINE.md §8.1).
-  const EXPECTED_AUDIT_ROWS = 6;
+  const EXPECTED_AUDIT_ROWS = 7;
 
   if (
     Number(survivor?.taxonomyProvisioned ?? 0) !== 1 ||
@@ -747,6 +751,7 @@ try {
     Number(survivor?.peopleProvisioned ?? 0) !== 1 ||
     Number(survivor?.editorialProvisioned ?? 0) !== 1 ||
     Number(survivor?.libraryProvisioned ?? 0) !== 1 ||
+    Number(survivor?.searchProvisioned ?? 0) !== 1 ||
     Number(survivor?.probe ?? 0) !== 1 ||
     Number(survivor?.tampered ?? -1) !== 0 ||
     Number(survivor?.total ?? 0) !== EXPECTED_AUDIT_ROWS
@@ -755,19 +760,20 @@ try {
       'audit rows unmodified',
       `expected ${EXPECTED_AUDIT_ROWS} rows with 1 taxonomy provisioning, ` +
         `1 navigation provisioning, 1 people provisioning, 1 editorial provisioning, ` +
-        `1 library provisioning, 1 probe and ` +
+        `1 library provisioning, 1 search provisioning, 1 probe and ` +
         `0 tampered; found ${survivor?.total ?? 0} rows, ` +
         `${survivor?.taxonomyProvisioned ?? 0} taxonomy provisioning, ` +
         `${survivor?.navigationProvisioned ?? 0} navigation provisioning, ` +
         `${survivor?.peopleProvisioned ?? 0} people provisioning, ` +
         `${survivor?.editorialProvisioned ?? 0} editorial provisioning, ` +
         `${survivor?.libraryProvisioned ?? 0} library provisioning, ` +
+        `${survivor?.searchProvisioned ?? 0} search provisioning, ` +
         `${survivor?.probe ?? 0} probe, ${survivor?.tampered ?? 0} tampered`,
     );
   } else {
     pass(
       'audit rows unmodified',
-      'the probe row and all five exact migration records are intact after ' +
+      'the probe row and all six exact migration records are intact after ' +
         'UPDATE/DELETE attempts',
     );
   }
@@ -1064,6 +1070,178 @@ try {
     app,
     'Work ALTER denied',
     'ALTER TABLE [dbo].[Work] DROP CONSTRAINT [Work_state_ck];',
+  );
+
+  // ---- Phase 17: the derived search projection ------------------------------
+  //
+  // FOUR POSTURES, one per table, and each is the operation the indexer
+  // genuinely performs:
+  //
+  //   - `SearchIndexRequest` is appended to by owners and CONSUMED by the
+  //     indexer, so INSERT and DELETE — never UPDATE: a request has no second
+  //     state to be moved into.
+  //   - `SearchIndexScope` is the per-scope indexing history, never deleted.
+  //   - `SearchDocument` is the rebuildable projection, rewritten and removed.
+  //   - `SearchDocumentTopic` is a membership set, like every other one here.
+  //
+  // THE ENGINE IS QUERIED, NEVER CONTROLLED. The runtime must be able to run a
+  // full-text query and read the population lag the operator view reports, and
+  // must NOT be able to disable, repopulate or drop the index: an index the
+  // runtime can switch off is a search a compromised runtime can blind.
+  const searchScopeId = randomUUID();
+
+  await expectAllowed(
+    app,
+    'SearchIndexRequest INSERT',
+    `INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'work',N'${searchScopeId}');`,
+    'an owner records indexing intent inside its own transaction',
+  );
+  await expectAllowed(
+    app,
+    'SearchIndexScope INSERT',
+    `INSERT INTO [dbo].[SearchIndexScope] ([scopeKind],[scopeId],[status],[generation],[attempts],[dueAt]) VALUES (N'work',N'${searchScopeId}',N'pending',1,0,SYSUTCDATETIME());`,
+    'the indexer folds requests into scope state',
+  );
+  await expectAllowed(
+    app,
+    'SearchIndexScope UPDATE',
+    `UPDATE [dbo].[SearchIndexScope] SET [status]=N'current',[generation]=[generation]+1 WHERE [scopeKind]=N'work' AND [scopeId]=N'${searchScopeId}';`,
+    'scope state advances',
+  );
+  await expectAllowed(
+    app,
+    'SearchDocument INSERT',
+    `INSERT INTO [dbo].[SearchDocument] ([scopeKind],[scopeId],[kind],[resourceId],[textLanguage],[title],[summary],[matchEnglish],[checksum],[indexedAt]) VALUES (N'work',N'${searchScopeId}',N'work',N'${searchScopeId}',N'en',N'Least-privilege proof document',N'',N'least privilege proof',REPLICATE(N'a',64),SYSUTCDATETIME());`,
+    'the projection is written',
+  );
+  await expectAllowed(
+    app,
+    'SearchDocumentTopic INSERT',
+    `INSERT INTO [dbo].[SearchDocumentTopic] ([documentId],[topicId]) SELECT [id], N'${editorialTopic.id}' FROM [dbo].[SearchDocument] WHERE [scopeId]=N'${searchScopeId}';`,
+    'a document carries its derived topic identifiers',
+  );
+  await expectAllowed(
+    app,
+    'SearchDocument UPDATE',
+    `UPDATE [dbo].[SearchDocument] SET [summary]=N'rewritten' WHERE [scopeId]=N'${searchScopeId}';`,
+    'a changed projection is rewritten',
+  );
+
+  // THE VISIBILITY HALF of every full-text denial below. SQL Server answers an
+  // unauthorised full-text DDL statement with error 7658 — "does not have a
+  // full-text index OR user does not have permission" — the same conflation the
+  // DDL probes above pair with `assertObjectVisible`. A CONTAINSTABLE query
+  // fails with 7601 on a table that is not full-text indexed, so its success
+  // through THIS connection proves the index exists, and 7658 afterwards can only
+  // mean the second half of that message. The catalogue's refusal, 7641, has the
+  // same conflated wording; a full-text index cannot exist outside a catalogue,
+  // so the same proof covers it.
+  let fullTextVisible = false;
+  try {
+    await app.query(
+      `SELECT COUNT_BIG(*) AS total FROM CONTAINSTABLE([dbo].[SearchDocument], [matchEnglish], N'"proof"', LANGUAGE 1033, 10);`,
+    );
+    fullTextVisible = true;
+    pass(
+      'full-text query as the runtime',
+      'CONTAINSTABLE is answerable with SELECT alone',
+    );
+  } catch (error) {
+    fail(
+      'full-text query as the runtime',
+      error instanceof Error ? error.message : 'refused',
+    );
+  }
+
+  const runtime = app;
+  async function expectFullTextDdlDenied(
+    label: string,
+    statement: string,
+  ): Promise<void> {
+    if (!fullTextVisible) {
+      fail(
+        label,
+        'the index was not proven visible, so a 7658 refusal would be ambiguous',
+      );
+      return;
+    }
+    try {
+      await runtime.query(statement);
+    } catch (error) {
+      const number = errorNumber(error);
+      if (
+        number === 7658 ||
+        number === 7641 ||
+        (number !== undefined && PERMISSION_DENIED.has(number))
+      ) {
+        pass(label, `denied, SQL Server error ${number}`);
+        return;
+      }
+      fail(label, `rejected for the WRONG reason (error ${number ?? 'unknown'})`);
+      return;
+    }
+    fail(label, 'statement SUCCEEDED but must be denied');
+  }
+
+  const [lag] = await app.query<{ pending: number | null }>(
+    `SELECT CAST(OBJECTPROPERTYEX(OBJECT_ID(N'[dbo].[SearchDocument]'), 'TableFulltextPendingChanges') AS INT) AS pending;`,
+  );
+  if (lag?.pending === null || lag?.pending === undefined) {
+    fail(
+      'full-text population lag readable',
+      'the runtime cannot read the pending-changes count the operator view reports',
+    );
+  } else {
+    pass('full-text population lag readable', `pending changes: ${String(lag.pending)}`);
+  }
+
+  await expectFullTextDdlDenied(
+    'full-text index DISABLE denied',
+    'ALTER FULLTEXT INDEX ON [dbo].[SearchDocument] DISABLE;',
+  );
+  await expectFullTextDdlDenied(
+    'full-text repopulation denied',
+    'ALTER FULLTEXT INDEX ON [dbo].[SearchDocument] START FULL POPULATION;',
+  );
+  await expectFullTextDdlDenied(
+    'full-text index DROP denied',
+    'DROP FULLTEXT INDEX ON [dbo].[SearchDocument];',
+  );
+  await expectFullTextDdlDenied(
+    'full-text catalogue DROP denied',
+    'DROP FULLTEXT CATALOG [SearchCatalog];',
+  );
+  await expectDenied(
+    app,
+    'SearchDocument ALTER denied',
+    'ALTER TABLE [dbo].[SearchDocument] DROP CONSTRAINT [SearchDocument_kind_ck];',
+  );
+  await expectDenied(
+    app,
+    'SearchIndexRequest UPDATE denied',
+    'UPDATE [dbo].[SearchIndexRequest] SET [scopeId]=[scopeId];',
+  );
+  await expectDenied(
+    app,
+    'SearchDocumentTopic UPDATE denied',
+    'UPDATE [dbo].[SearchDocumentTopic] SET [topicId]=[topicId];',
+  );
+  await expectDenied(
+    app,
+    'SearchIndexScope DELETE denied',
+    `DELETE FROM [dbo].[SearchIndexScope] WHERE [scopeId]=N'${searchScopeId}';`,
+  );
+  await expectAllowed(
+    app,
+    'SearchDocument DELETE',
+    `DELETE FROM [dbo].[SearchDocument] WHERE [scopeId]=N'${searchScopeId}';`,
+    'a withdrawn projection is removed (its topics cascade)',
+  );
+  await expectAllowed(
+    app,
+    'SearchIndexRequest DELETE',
+    `DELETE FROM [dbo].[SearchIndexRequest] WHERE [scopeId]=N'${searchScopeId}';`,
+    'a relayed request is consumed',
   );
 
   // ---- the ungranted object was not merely unreadable, it is unchanged -----

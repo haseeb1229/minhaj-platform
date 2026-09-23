@@ -1,5 +1,6 @@
 import { editorialSitemapPartitions, mergePagePartitions } from './editorial-sitemap';
 import { librarySitemapPartitions } from './library-sitemap';
+import { topicsSitemapPartitions } from './topics-sitemap';
 import 'server-only';
 
 import { localeSchema } from '@minhaj/contracts';
@@ -138,6 +139,8 @@ export async function allSitemapPartitions(): Promise<readonly SitemapPartition[
     // de-duplication and the 5,000-URL split, not because it shares a segment
     // name with anything — `books` is its own (ROUTE_MAP.md §9.4).
     ...(await librarySitemapPartitions()),
+    // Phase 17's `topics` segment: the canonical topic hubs.
+    ...(await topicsSitemapPartitions()),
   ]);
 }
 

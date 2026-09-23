@@ -1,6 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+
+import { indexAfterResponse } from '@/composition/search';
 import { redirect } from 'next/navigation';
 
 import { localeSchema } from '@minhaj/contracts';
@@ -133,6 +135,7 @@ export async function saveWork(
 
     destination = `/${locale}/admin/library/works/${saved.id}`;
     revalidatePath(`/${locale}/admin/library`, 'layout');
+    indexAfterResponse();
   } catch (error) {
     return rejected(error, 'library-save-work');
   }
@@ -161,6 +164,7 @@ export async function saveEdition(
 
     destination = `/${locale}/admin/library/editions/${saved.id}`;
     revalidatePath(`/${locale}/admin/library`, 'layout');
+    indexAfterResponse();
   } catch (error) {
     return rejected(error, 'library-save-edition');
   }
@@ -228,6 +232,7 @@ export async function saveTranslation(
     }
 
     revalidatePath(`/${locale}/admin/library`, 'layout');
+    indexAfterResponse();
     return { status: 'success' };
   } catch (error) {
     return rejected(error, 'library-save-translation');
@@ -258,6 +263,7 @@ export async function saveSalePoint(
     );
 
     revalidatePath(`/${locale}/admin/library/sale-points`);
+    indexAfterResponse();
     return { status: 'success' };
   } catch (error) {
     return rejected(error, 'library-save-sale-point');
@@ -384,6 +390,7 @@ export async function attachEditionAsset(
     );
 
     revalidatePath(`/${locale}/admin/library/editions/${id}`);
+    indexAfterResponse();
     return { status: 'success' };
   } catch (error) {
     return rejected(error, 'library-attach-edition-asset');

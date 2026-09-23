@@ -258,6 +258,28 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     description:
       'Create, edit, link and archive Library works, editions, translations and sale points.',
   }),
+
+  /* ---- Phase 17 — Search foundation ------------------------------------ */
+  //
+  // TWO KEYS, READ AND OPERATE, for the reason every pair here is split — and
+  // exactly the shape `delivery.read` and `delivery.operate` already have for
+  // the other derived-work surface. Seeing indexing lag and failures and
+  // changing what the indexer does next are different authorities.
+  //
+  // NEITHER CONFERS AUTHORITY OVER ANY CONTENT. Retrying, rebuilding and
+  // reconciling only re-project what the owners ALREADY publish; nothing reached
+  // through these keys can publish, withdraw or change a record. That is why no
+  // content owner's key is reused for them, and why there is no `search.*` key
+  // for anything a visitor does: public search needs no permission at all.
+  Object.freeze({
+    key: 'search.read',
+    description: 'View search indexing lag and failures.',
+  }),
+  Object.freeze({
+    key: 'search.operate',
+    description:
+      'Retry failed search indexing, and rebuild or reconcile the search index.',
+  }),
 ]);
 
 /** Every catalogue key, as a union. Mistyping one is a compile error. */

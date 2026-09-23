@@ -150,3 +150,7 @@ export {
   createLibraryPersistence,
   createLibraryPublicReader,
 } from './adapters/library/index.ts';
+
+/* ---- Layer-0: search ----------------------------------------------------- */
+
+export { createSearchIndex } from './adapters/search/index.ts';

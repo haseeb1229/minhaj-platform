@@ -91,6 +91,34 @@ export default async function proxy(request: NextRequest) {
       }
     }
   }
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    /**
+     * PHASE 17 — PUBLIC SEARCH ADMISSION.
+     *
+     * Only a request that will actually run a query spends budget: the search
+     * page with a non-empty `q`. HEAD is admitted exactly like GET, because a
+     * page answers HEAD by rendering — and so by querying. A throttled visitor
+     * is sent to a static page that says so and runs nothing; the results page
+     * itself never reads a header or a secret, which a public content route
+     * must not (ARCHITECTURE.md §8.1). Imported lazily, so no other path pays
+     * for it.
+     */
+    const search = /^\/(en|ur|ar)\/search$/.exec(request.nextUrl.pathname);
+    const query = request.nextUrl.searchParams.get('q');
+    if (search?.[1] && query !== null && query.trim() !== '') {
+      const { admitPublicSearch } = await import('@/composition/search-admission');
+      if (!(await admitPublicSearch(request.headers))) {
+        const target = request.nextUrl.clone();
+        target.pathname = `/${search[1]}/search/limited`;
+        target.search = '';
+        const throttled = NextResponse.redirect(target, 303);
+        throttled.headers.set('Cache-Control', 'no-store');
+        throttled.headers.set('X-Robots-Tag', 'noindex');
+        return throttled;
+      }
+    }
+  }
+
   const response = localeMiddleware(request);
   const pathname = request.nextUrl.pathname;
   const explicitlyPrefixed = routing.locales.some(

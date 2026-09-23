@@ -168,6 +168,9 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/library/presentation.ts',
     'apps/web/src/components/library/reader-controls.tsx',
     'apps/web/src/components/library/reader.tsx',
+    // Phase 17. A pure highlighter the dynamic search route renders with; the
+    // module itself reads no request state.
+    'apps/web/src/components/search/highlight.ts',
     'apps/web/src/components/locale-switcher.tsx',
     'apps/web/src/components/locale-switcher-links.tsx',
     'apps/web/src/components/ui/index.tsx',

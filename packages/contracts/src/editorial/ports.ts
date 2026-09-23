@@ -57,6 +57,57 @@ export interface EditorialPublicReaderPort {
     limit: number,
   ): Promise<readonly EditorialSitemapEntry[]>;
   pageSitemap(offset: number, limit: number): Promise<readonly EditorialSitemapEntry[]>;
+
+  /**
+   * Search projection reads (DELIVERY_PLAN.md Phase 17 — "Article and
+   * published Page records").
+   *
+   * PUBLISHED ONLY, AND THE PREDICATE IS IN THE QUERY, exactly as it is for the
+   * public article and page routes. A draft, in-review, approved, scheduled or
+   * archived record is `null` — including one that WAS published and has since
+   * been revised back to draft.
+   */
+  searchArticle(id: string): Promise<EditorialSearchRecord | null>;
+  searchPage(id: string): Promise<EditorialSearchRecord | null>;
+  searchArticles(input: {
+    readonly after: string | null;
+    readonly limit: number;
+  }): Promise<readonly { readonly id: string; readonly stamp: string }[]>;
+  searchPages(input: {
+    readonly after: string | null;
+    readonly limit: number;
+  }): Promise<readonly { readonly id: string; readonly stamp: string }[]>;
+
+  /**
+   * The CURRENT public address data of whichever ids are published right now.
+   * Bounded; one call per result page, never one per result.
+   */
+  publishedArticleTargets(
+    ids: readonly string[],
+  ): Promise<readonly { readonly id: string; readonly slug: string }[]>;
+  publishedPageTargets(ids: readonly string[]): Promise<
+    readonly {
+      readonly id: string;
+      readonly routeBinding: string;
+      readonly slug: string;
+    }[]
+  >;
+}
+
+/** What Search may know about one published Article or Page. */
+export interface EditorialSearchRecord {
+  readonly id: string;
+  /** The record's `version`, which every editorial mutation moves. */
+  readonly stamp: string;
+  readonly publishedAt: Date;
+  readonly topicIds: readonly string[];
+  readonly translations: readonly {
+    readonly languageCode: string;
+    readonly title: string;
+    readonly excerpt: string;
+    /** The stored, already-validated editor document. */
+    readonly document: string;
+  }[];
 }
 export interface EditorialPersistencePort {
   article(id: string): Promise<ArticleDetail | null>;

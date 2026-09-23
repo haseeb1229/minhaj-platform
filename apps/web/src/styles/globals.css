@@ -101,6 +101,12 @@
    * is not how Urdu is set, and a reader who has a Nastaliq face installed
    * should see it (ARCHITECTURE.md §13.3).
    * ---------------------------------------------------------------------- */
+  /* Phase 17 — the matched words in a search result. A quiet warm wash rather
+     than a saturated yellow: every text colour that sits on it (foreground,
+     muted foreground, action) keeps WCAG AA contrast, and it reads as emphasis
+     rather than as a warning. */
+  --color-highlight: #f6e8bf;
+
   --font-latin: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-urdu:
     'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Nafees Nastaleeq',

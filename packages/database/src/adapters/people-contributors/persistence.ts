@@ -29,6 +29,7 @@ import type { Prisma } from '@prisma/client';
 
 import { auditRow } from '../../audit-row.ts';
 import { getDatabaseClient } from '../../client.ts';
+import { requestSearchIndexing } from '../../search-intent.ts';
 import { peopleRefusalOf } from './refusals.ts';
 
 /**
@@ -626,6 +627,61 @@ export function createPeopleReader(): PeopleReaderPort {
       return row !== null;
     },
 
+    /**
+     * SEARCH PROJECTION READS, built from the SAME rows and the SAME active-facet
+     * rule as the public profile, so Search can hold nothing the profile page
+     * would not show. `userId` is loaded with the row and never read here.
+     */
+    async searchPerson(id) {
+      const row = await prisma.person.findFirst({
+        where: { id, status: 'published' },
+        include: PERSON_INCLUDE,
+      });
+      if (row === null) return null;
+
+      const facetProse = PROFILE_KINDS.flatMap((kind) => {
+        const profile = profileRowOf(row, kind);
+        if (profile === null || profile.status !== 'active') return [];
+        return (profile.translations ?? []).flatMap((entry) => {
+          const text = [
+            entry.qualifications,
+            entry.expertise,
+            entry.biography,
+            entry.subjects,
+          ]
+            .filter((value): value is string => typeof value === 'string' && value !== '')
+            .join('\n');
+          return text === '' ? [] : [{ locale: entry.locale as Locale, text }];
+        });
+      });
+
+      return {
+        id: row.id,
+        slug: row.slug,
+        stamp: row.updatedAt.toISOString(),
+        translations: row.translations.map((entry) => ({
+          locale: entry.locale as Locale,
+          name: entry.name,
+          biography: entry.biography,
+        })),
+        nameVariants: row.nameVariants.map((entry) => ({
+          locale: entry.locale as Locale,
+          value: entry.value,
+        })),
+        facetProse,
+      };
+    },
+
+    async searchPeople({ after, limit }) {
+      const rows = await prisma.person.findMany({
+        where: { status: 'published', ...(after === null ? {} : { id: { gt: after } }) },
+        select: { id: true, updatedAt: true },
+        orderBy: { id: 'asc' },
+        take: boundedLimit(limit),
+      });
+      return rows.map((row) => ({ id: row.id, stamp: row.updatedAt.toISOString() }));
+    },
+
     async listSitemapEntries(limit, offset) {
       const cap =
         Number.isFinite(limit) && limit > 0
@@ -726,6 +782,11 @@ export function createPeoplePersistence(): PeoplePersistencePort {
     at: Date,
   ): Promise<void> {
     await tx.person.update({ where: { id: personId }, data: { updatedAt: at } });
+    // THE SAME CHOKEPOINT, and for the same reason: whatever changed on the
+    // profile page must also change in its search projection, so every
+    // mutation that moves `updatedAt` records indexing intent in the same
+    // transaction (ARCHITECTURE.md §8.5).
+    await requestSearchIndexing(tx, 'person', personId);
   }
 
   async function detailOf(
@@ -943,6 +1004,11 @@ export function createPeoplePersistence(): PeoplePersistencePort {
             where: { id: input.personId },
             data: { status: input.status, updatedAt: now },
           });
+
+          // Publication and withdrawal are the transitions search exists to
+          // follow; this one moves `updatedAt` itself rather than through
+          // `touch`, so it records its own indexing intent.
+          await requestSearchIndexing(tx, 'person', input.personId);
 
           await recordAudit(tx, input, {
             targetType: 'person',

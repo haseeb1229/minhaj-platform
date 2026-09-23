@@ -457,10 +457,10 @@ test.describe('navigation is honest about what exists', () => {
       '/news',
       '/events',
       '/global',
-      '/search',
+      // `/search` and `/topics` are delivered by Phase 17, and are asserted
+      // present below.
       '/donate',
       '/membership',
-      '/topics',
       '/people',
       '/collections',
     ];
@@ -481,6 +481,10 @@ test.describe('navigation is honest about what exists', () => {
         '/library/articles',
         // Phase 8: the Library entry point is in the primary navigation.
         '/library',
+        // Phase 17: search in the primary navigation, the topic browser in the
+        // footer.
+        '/search',
+        '/topics',
       ]) {
         expect(hrefs, `${path} exposes delivered ${delivered}`).toContain(
           `/en${delivered}`,

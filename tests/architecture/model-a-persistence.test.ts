@@ -377,15 +377,16 @@ describe('F1 — adapter ownership is explicit and fails closed', () => {
       })?.owners,
     ).toMatchObject({ email: { kind: 'layer0', concern: 'email' } });
 
-    // `database` is where adapters live and cannot own one within itself;
-    // `search` and `logging` own no relational state in the approved
-    // architecture. An owner outside the enumerated set is unowned.
+    // `database` is where adapters live and cannot own one within itself, and
+    // `logging` owns no relational state. An owner outside the enumerated set
+    // is unowned.
     //
     // `storage` LEFT this list in Phase 7, when the storage foundation gained
-    // the Asset table and therefore genuinely owns relational state. It is
-    // enumerated above with email, rate limiting and auditing. The others stay:
-    // a concern joins this set when a phase gives it state, never in advance.
-    for (const concern of ['database', 'search', 'logging', 'invented']) {
+    // the Asset table, and `search` left it in Phase 17, when the search
+    // foundation gained its derived projection and durable indexing intent.
+    // Both are enumerated in `layerZeroPersistentConcerns`. The others stay: a
+    // concern joins that set when a phase gives it state, never in advance.
+    for (const concern of ['database', 'logging', 'invented']) {
       expect(
         persistenceAdapterPolicy({
           minhaj: {
@@ -558,6 +559,9 @@ describe('F1 — the production database package publishes no raw capability', (
       'rate-limiting': { kind: 'layer0', concern: 'rate-limiting' },
       auditing: { kind: 'layer0', concern: 'auditing' },
       storage: { kind: 'layer0', concern: 'storage' },
+      // Phase 17. Search's DERIVED projection and indexing intent: Layer-0
+      // state, not a bounded context and not any owner's business data.
+      search: { kind: 'layer0', concern: 'search' },
     });
 
     // Every declared owner is readable. An entry normalising to `null` would

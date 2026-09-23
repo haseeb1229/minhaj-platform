@@ -96,6 +96,48 @@ export function sanitizeEditorialHtml(html: string): string {
     },
   });
 }
+/**
+ * The plain text of a STORED editor document, for search matching.
+ *
+ * STRUCTURAL, NOT MARKUP. It walks the validated editor JSON and collects text
+ * nodes, one line per block, so no HTML — sanitised or otherwise — is ever
+ * parsed or carried into the index, and nothing it returns can be rendered as
+ * markup. The same node and depth bounds as rendering apply; a document outside
+ * them is refused rather than partially read.
+ */
+export function editorialPlainText(source: string): string {
+  if (source.length > 200_000) throw new EditorialRefusal('invalid');
+  const lines: string[] = [];
+  let current = '';
+  let count = 0;
+  function walk(value: unknown, depth: number): void {
+    if (++count > 4000 || depth > 12) throw new EditorialRefusal('invalid');
+    const node = nodeSchema.safeParse(value);
+    if (!node.success) throw new EditorialRefusal('invalid');
+    if (node.data.type === 'text') {
+      current += node.data.text ?? '';
+      return;
+    }
+    if (node.data.type === 'hardBreak') {
+      current += ' ';
+      return;
+    }
+    for (const child of node.data.content ?? []) walk(child, depth + 1);
+    if (['paragraph', 'heading', 'listItem', 'blockquote'].includes(node.data.type)) {
+      if (current.trim() !== '') lines.push(current.trim());
+      current = '';
+    }
+  }
+  try {
+    walk(JSON.parse(source), 0);
+  } catch (error) {
+    if (error instanceof EditorialRefusal) throw error;
+    throw new EditorialRefusal('invalid');
+  }
+  if (current.trim() !== '') lines.push(current.trim());
+  return lines.join('\n');
+}
+
 export function renderEditorialDocument(source: string): {
   document: string;
   html: string;

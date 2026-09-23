@@ -14,6 +14,7 @@ import {
 } from '@minhaj/contracts/library';
 import { getDatabaseClient } from '../../client.ts';
 import { auditRow } from '../../audit-row.ts';
+import { requestSearchIndexing } from '../../search-intent.ts';
 
 class LibraryDataError extends Error {
   constructor(readonly reason: string) {
@@ -332,6 +333,7 @@ export function createLibraryPersistence(): LibraryPersistencePort {
             where: { id: workId },
             include: workInclude,
           });
+          await requestSearchIndexing(tx, 'work', workId);
           await audit(
             tx,
             actorId,
@@ -398,6 +400,7 @@ export function createLibraryPersistence(): LibraryPersistencePort {
             where: { id: editionId },
             include: editionInclude,
           });
+          await requestSearchIndexing(tx, 'work', value.workId);
           await audit(
             tx,
             actorId,
@@ -465,6 +468,7 @@ export function createLibraryPersistence(): LibraryPersistencePort {
           await tx.bookTranslator.createMany({
             data: translatorIds.map((personId) => ({ editionId, personId })),
           });
+          await requestSearchIndexing(tx, 'work', target.workId);
           await audit(
             tx,
             actorId,
@@ -495,6 +499,7 @@ export function createLibraryPersistence(): LibraryPersistencePort {
           if (changed.count !== 1) throw new LibraryDataError('conflict');
           await tx.bookTranslator.deleteMany({ where: { editionId } });
           await tx.bookTranslation.deleteMany({ where: { editionId } });
+          await requestSearchIndexing(tx, 'work', target.workId);
           await audit(
             tx,
             actorId,
@@ -525,6 +530,16 @@ export function createLibraryPersistence(): LibraryPersistencePort {
             where: { salePoints: { some: { salePointId: saleId } } },
             data: { updatedAt: new Date(), version: { increment: 1 } },
           });
+          // A sale point is not searchable, but moving a Work's version moves its
+          // search stamp. Requesting the re-projection keeps "every stamp change
+          // is owed a projection" true, so reconciliation never reports a Work
+          // stale that nothing ever asked to have indexed.
+          const linked = await tx.workSalePoint.findMany({
+            where: { salePointId: saleId },
+            select: { workId: true },
+          });
+          for (const { workId } of linked)
+            await requestSearchIndexing(tx, 'work', workId);
           await audit(
             tx,
             actorId,
@@ -706,6 +721,83 @@ export function createLibraryPublicReader(): LibraryPublicReaderPort {
         updatedAt: r.updatedAt,
         locales: r.labels.map((l) => l.locale),
       }));
+    },
+    async searchWork(id) {
+      const row = await db.work.findFirst({
+        where: { id, ...PUBLIC_WORK },
+        select: {
+          id: true,
+          slug: true,
+          version: true,
+          primaryLocale: true,
+          labels: { orderBy: { locale: 'asc' } },
+          topics: { select: { topicId: true }, orderBy: { topicId: 'asc' } },
+          editions: {
+            where: { state: 'published' },
+            orderBy: { id: 'asc' },
+            take: 50,
+            select: {
+              id: true,
+              label: true,
+              languageCode: true,
+              publisher: true,
+              publicationYear: true,
+              isbn: true,
+              translation: { select: { editionId: true } },
+            },
+          },
+        },
+      });
+      if (!row) return null;
+      return {
+        id: row.id,
+        slug: row.slug,
+        stamp: String(row.version),
+        primaryLocale: row.primaryLocale,
+        topicIds: row.topics.map((t) => t.topicId),
+        labels: row.labels.map((l) => ({
+          locale: l.locale,
+          title: l.title,
+          description: l.description,
+        })),
+        editions: row.editions.map((e) => ({
+          id: e.id,
+          label: e.label,
+          languageCode: e.languageCode,
+          publisher: e.publisher,
+          publicationYear: e.publicationYear,
+          isbn: e.isbn,
+          isTranslation: e.translation !== null,
+        })),
+      };
+    },
+    async searchWorks({ after, limit }) {
+      const rows = await db.work.findMany({
+        where: { ...PUBLIC_WORK, ...(after === null ? {} : { id: { gt: after } }) },
+        select: { id: true, version: true },
+        orderBy: { id: 'asc' },
+        take: Math.min(500, Math.max(1, Math.trunc(limit) || 1)),
+      });
+      return rows.map((r) => ({ id: r.id, stamp: String(r.version) }));
+    },
+    async publicWorkTargets(ids) {
+      if (ids.length === 0) return [];
+      if (ids.length > 500) throw new Error('Library search batch exceeds its bound.');
+      return db.work.findMany({
+        where: { id: { in: [...ids] }, ...PUBLIC_WORK },
+        select: { id: true, slug: true },
+        orderBy: { id: 'asc' },
+      });
+    },
+    async publicEditionTargets(ids) {
+      if (ids.length === 0) return [];
+      if (ids.length > 500) throw new Error('Library search batch exceeds its bound.');
+      const rows = await db.edition.findMany({
+        where: { id: { in: [...ids] }, state: 'published', work: PUBLIC_WORK },
+        select: { id: true, work: { select: { slug: true } } },
+        orderBy: { id: 'asc' },
+      });
+      return rows.map((r) => ({ id: r.id, workSlug: r.work.slug }));
     },
     async assetRelation(editionId) {
       const row = await db.edition.findUnique({

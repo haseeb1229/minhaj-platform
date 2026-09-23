@@ -364,6 +364,43 @@ No new infrastructure, no new operational burden, no additional failure mode.
 
 The abstraction exists precisely so this decision stays reversible.
 
+> **Phase 17 — the engine and the tokenisation assessment, as measured.**
+>
+> **The engine.** The official `mcr.microsoft.com/mssql/server` images ship **without** the FTS
+> component (`SERVERPROPERTY('IsFullTextInstalled') = 0`). `docker/sqlserver/Dockerfile` adds
+> Microsoft's own `mssql-server-fts` package and nothing else, and pins **one engine build**:
+> the base by digest (2022 CU26, 16.0.4265.3) and `mssql-server` and `mssql-server-fts` at
+> `16.0.4265.3-1`. The floating `2022-latest` tag is gone: it had already moved past the build
+> the persistent local volume runs, so local and CI were running different engines. Moving to
+> a newer cumulative update is a deliberate edit of those pins, because an engine upgrade is
+> one-way for the databases on a persistent volume. Local and CI both build this image through
+> `docker/compose.yaml`; the migration refuses to run on an engine without FTS.
+>
+> **One column per word breaker.** Each search document's text is stored in exactly one of four
+> columns, chosen by its text language: English (LCID 1033), Arabic (1025), Urdu (1056) and
+> Neutral (0) for every other language. The catalogue is accent-insensitive and the index is
+> built with `STOPLIST OFF`. Matching text — never displayed text — is folded identically at
+> index and query time: NFC, Arabic-script harakat and Quranic annotation marks removed,
+> ZWNJ/ZWJ and tatweel removed, lower-cased.
+>
+> **What was measured, with controlled non-religious fixtures** (library and reading-room prose;
+> no Quran, Hadith or religious text), and is now a CI proof (`tests/search`):
+>
+> | Behaviour | Result |
+> |---|---|
+> | Arabic: definite article (`مكتبة` ↔ `المكتبة`), attached prepositions (`قراء` ↔ `للقراء`), ة/ه (`مكتبه`), harakat in text or query | **Matches — only under the Arabic breaker.** Every other breaker fails these, which is why Arabic text must be tokenised by it |
+> | Urdu: whole words, plurals by prefix (`کتاب` → `کتابیں`), izafat (`تعلیم` ↔ `تعلیمِ`, after folding), ZWNJ compounds, loanwords (`لائبریری`), multi-term AND | **Matches** |
+> | Urdu keheh/Arabic kaf (`کتاب` ↔ `كتاب`) | **Matches** (normalised by the engine) |
+> | Urdu yeh typed as Arabic yeh (`نئی` ↔ `نئي`) | **Does not match — a known V1 limitation**, recorded here and asserted by the proof so a change is noticed |
+> | English inflection (`library` ↔ `libraries`) and prefixes (`librar*`) | **Matches** |
+> | Mixed script: Urdu or Arabic words inside an English document | **Matches** |
+>
+> **Conclusion: V1 quality is acceptable** for the initial inventory. No stemming exists for
+> Urdu beyond prefix matching, and the yeh variant above is not folded; both are candidates for
+> reconsideration if Phase 31's completeness validation against the migrated corpus shows them to
+> matter. No search queries are recorded to find out — there is no search analytics. The
+> abstraction keeps that reconsideration an adapter change.
+
 **StorageService abstraction** — LOCKED. Local/company filesystem for V1; S3-compatible via
 adapter later. **No Azure dependency.** **Large PDFs and video files are never database
 BLOBs.** Untrusted uploads are **quarantined before publication**, with **malware scanning
@@ -578,3 +615,15 @@ compromised scanner cannot reach the corpus.
 **The storage volume is persistent state.** `minhaj-platform-storage-data` holds the
 authoritative bytes of every stored asset — bytes no SQL Server backup contains. It is protected
 from the moment it exists and is never a cleanup target; tests use disposable temporary roots.
+
+### 18.3 Phase-17 search foundation inventory
+
+| Tool | Exact version | Use and provenance |
+| --- | --- | --- |
+| SQL Server 2022 base image (`mcr.microsoft.com/mssql/server:2022-CU26-ubuntu-22.04`) | 16.0.4265.3, pinned by digest | Microsoft SQL Server 2022 licence, Developer edition for engineering use — the same engine and licence already locked in §2; only the pin changed, from the floating `2022-latest` to one build. |
+| `mssql-server`, `mssql-server-fts` (Microsoft `mssql-server-2022` apt repository for Ubuntu 22.04) | 16.0.4265.3-1 | Components of SQL Server itself, distributed by Microsoft under the same SQL Server 2022 licence. `mssql-server-fts` adds Full-Text Search (§10); `mssql-server` is reinstalled at the identical build only because the FTS package depends on it and the base image does not register it with the package manager. Installed by `docker/sqlserver/Dockerfile`, whose build context holds that file alone. |
+
+**No npm dependency, no external search engine, no vector store and no Redis were introduced.**
+The `@minhaj/search` workspace uses Node's `node:crypto` for projection checksums and the
+already-locked Zod through `@minhaj/contracts`. **No corpus or dataset was introduced**: the
+tokenisation fixtures are short synthetic, non-religious sentences written for the proof.

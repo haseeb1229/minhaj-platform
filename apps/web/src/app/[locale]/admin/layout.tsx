@@ -69,6 +69,9 @@ const SURFACES: readonly { key: string; permission: PermissionKey; path: string 
   { key: 'audit', permission: 'audit.read', path: 'system/audit' },
   { key: 'integrations', permission: 'integrations.read', path: 'system/integrations' },
   { key: 'delivery', permission: 'delivery.read', path: 'communications/delivery' },
+  // Phase 17. Indexing lag and failures; operating the indexer needs
+  // `search.operate` as well, re-checked by every action.
+  { key: 'search', permission: 'search.read', path: 'system/search' },
 ];
 
 export default async function AdminLayout({ children, params }: LayoutProps) {

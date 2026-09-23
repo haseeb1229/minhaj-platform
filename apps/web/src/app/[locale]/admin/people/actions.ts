@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 
+import { indexAfterResponse } from '@/composition/search';
+
 import { localeSchema } from '@minhaj/contracts';
 import {
   MAX_PROFILE_LANGUAGES,
@@ -103,6 +105,9 @@ function localeFrom(form: FormData): string {
  */
 function refresh(locale: string, slug?: string): void {
   revalidatePath(`/${locale}/admin`, 'layout');
+  // Whatever changed may change what is searchable; the owner already
+  // recorded that in its own transaction, and this indexes it promptly.
+  indexAfterResponse();
   if (slug !== undefined) revalidatePath(`/${locale}/people/${slug}`);
 }
 

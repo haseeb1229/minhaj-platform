@@ -15,12 +15,14 @@ import type {
   EditorialEdit,
   EditorialTransition,
   EditorialQuery,
+  EditorialSearchRecord,
   PublicEditorial,
   PublicPage,
 } from '@minhaj/contracts/editorial';
 import type { ContributionRole } from '@minhaj/contracts/people';
 import { getDatabaseClient } from '../../client.ts';
 import { auditRow } from '../../audit-row.ts';
+import { requestSearchIndexing } from '../../search-intent.ts';
 class EditorialDataError extends Error {
   constructor(readonly reason: string) {
     super(reason);
@@ -463,6 +465,9 @@ function articleOperations(): Pick<
             },
             include: detailInclude,
           });
+          // A revision takes a published article back to draft and a transition may
+          // publish or archive it, so both owe a re-projection (ARCHITECTURE.md §8.5).
+          await requestSearchIndexing(tx, 'article', row.id);
           await audit(tx, 'article', row.id, 'revised', input.actorId, next.version);
           if (row.slug !== next.slug)
             await audit(
@@ -553,6 +558,9 @@ function articleOperations(): Pick<
             data,
             include: detailInclude,
           });
+          // A revision takes a published article back to draft and a transition may
+          // publish or archive it, so both owe a re-projection (ARCHITECTURE.md §8.5).
+          await requestSearchIndexing(tx, 'article', row.id);
           await audit(tx, 'article', row.id, action, input.actorId, next.version);
           return articleDetail(next);
         });
@@ -890,6 +898,9 @@ function pageOperations(): Pick<
             },
             include: detailInclude,
           });
+          // A revision takes a published page back to draft and a transition may
+          // publish or archive it, so both owe a re-projection (ARCHITECTURE.md §8.5).
+          await requestSearchIndexing(tx, 'page', row.id);
           await audit(tx, 'page', row.id, 'revised', input.actorId, next.version);
           if (row.slug !== next.slug)
             await audit(tx, 'page', row.id, 'slug-changed', input.actorId, next.version);
@@ -973,6 +984,9 @@ function pageOperations(): Pick<
             data,
             include: detailInclude,
           });
+          // A revision takes a published page back to draft and a transition may
+          // publish or archive it, so both owe a re-projection (ARCHITECTURE.md §8.5).
+          await requestSearchIndexing(tx, 'page', row.id);
           await audit(tx, 'page', row.id, action, input.actorId, next.version);
           return pageDetail(next);
         });
@@ -1078,9 +1092,128 @@ function pageReads(): Pick<
   };
 }
 
+/**
+ * Search projection reads for Article and Page.
+ *
+ * `state = 'published'` IS IN EVERY QUERY, the same predicate the public routes
+ * use, so a record revised back to draft, archived or merely scheduled is not
+ * projected and not resolvable as a current result. The CURRENT revision is the
+ * published one while the record is published — a revision moves it to draft.
+ */
+const searchSelect = {
+  id: true,
+  version: true,
+  publishedAt: true,
+  current: {
+    select: {
+      translations: {
+        select: { languageCode: true, title: true, excerpt: true, document: true },
+        orderBy: { languageCode: 'asc' as const },
+      },
+      topics: { select: { topicId: true }, orderBy: { topicId: 'asc' as const } },
+    },
+  },
+} as const;
+
+interface SearchRow {
+  id: string;
+  version: number;
+  publishedAt: Date | null;
+  current: {
+    translations: {
+      languageCode: string;
+      title: string;
+      excerpt: string;
+      document: string;
+    }[];
+    topics: { topicId: string }[];
+  } | null;
+}
+
+function searchRecord(row: SearchRow | null): EditorialSearchRecord | null {
+  if (row === null || row.current === null || row.publishedAt === null) return null;
+  return {
+    id: row.id,
+    stamp: String(row.version),
+    publishedAt: row.publishedAt,
+    topicIds: row.current.topics.map((topic) => topic.topicId),
+    translations: row.current.translations,
+  };
+}
+
+/** Identifier batches for visibility rechecks and enumeration stay small. */
+const searchBatchOf = (ids: readonly string[]) => {
+  if (ids.length > 500) throw new Error('Editorial search batch exceeds its bound.');
+  return [...ids];
+};
+
+function searchReads(): Pick<
+  EditorialPublicReaderPort,
+  | 'searchArticle'
+  | 'searchPage'
+  | 'searchArticles'
+  | 'searchPages'
+  | 'publishedArticleTargets'
+  | 'publishedPageTargets'
+> {
+  const db = () => getDatabaseClient();
+  return {
+    async searchArticle(id) {
+      return searchRecord(
+        await db().article.findFirst({
+          where: { id, state: 'published' },
+          select: searchSelect,
+        }),
+      );
+    },
+    async searchPage(id) {
+      return searchRecord(
+        await db().page.findFirst({
+          where: { id, state: 'published' },
+          select: searchSelect,
+        }),
+      );
+    },
+    async searchArticles({ after, limit }) {
+      const rows = await db().article.findMany({
+        where: { state: 'published', ...(after === null ? {} : { id: { gt: after } }) },
+        select: { id: true, version: true },
+        orderBy: { id: 'asc' },
+        take: limitOf(limit, 500),
+      });
+      return rows.map((row) => ({ id: row.id, stamp: String(row.version) }));
+    },
+    async searchPages({ after, limit }) {
+      const rows = await db().page.findMany({
+        where: { state: 'published', ...(after === null ? {} : { id: { gt: after } }) },
+        select: { id: true, version: true },
+        orderBy: { id: 'asc' },
+        take: limitOf(limit, 500),
+      });
+      return rows.map((row) => ({ id: row.id, stamp: String(row.version) }));
+    },
+    async publishedArticleTargets(ids) {
+      if (ids.length === 0) return [];
+      return db().article.findMany({
+        where: { id: { in: searchBatchOf(ids) }, state: 'published' },
+        select: { id: true, slug: true },
+        orderBy: { id: 'asc' },
+      });
+    },
+    async publishedPageTargets(ids) {
+      if (ids.length === 0) return [];
+      return db().page.findMany({
+        where: { id: { in: searchBatchOf(ids) }, state: 'published' },
+        select: { id: true, routeBinding: true, slug: true },
+        orderBy: { id: 'asc' },
+      });
+    },
+  };
+}
+
 export function createEditorialPersistence(): EditorialPersistencePort {
   return { ...articleOperations(), ...pageOperations() };
 }
 export function createEditorialPublicReader(): EditorialPublicReaderPort {
-  return { ...articleReads(), ...pageReads() };
+  return { ...articleReads(), ...pageReads(), ...searchReads() };
 }

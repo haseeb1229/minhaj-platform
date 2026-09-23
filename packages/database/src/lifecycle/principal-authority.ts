@@ -344,6 +344,16 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   // No ALTER, so the lifecycle CHECK constraints stay beyond its reach.
   '[dbo].[asset]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
 
+  // Phase 17 — the derived search projection and its operational state.
+  // Requests are appended by owners and consumed by the indexer; scope rows are
+  // never deleted; documents are rewritten and removed as owners publish and
+  // withdraw. No ALTER, so neither the closed kind vocabulary nor the full-text
+  // index is within the runtime's reach.
+  '[dbo].[searchindexrequest]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[searchindexscope]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[searchdocument]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[searchdocumenttopic]': ['SELECT', 'INSERT', 'DELETE'],
+
   // Phase 1 — append-oriented audit (SECURITY_BASELINE.md §13.1).
   '[dbo].[auditlog]': ['INSERT', 'SELECT'],
 

@@ -101,6 +101,59 @@ export interface LibraryPublicReaderPort {
   contributorFacets(offset: number): Promise<LibraryFacetPage>;
   topicFacets(offset: number): Promise<LibraryFacetPage>;
   languageFacets(offset: number): Promise<LibraryFacetPage>;
+
+  /**
+   * Search projection reads (DELIVERY_PLAN.md Phase 17 — "Work, Edition and
+   * BookTranslation records").
+   *
+   * THE SAME PUBLIC PREDICATE as every other public Library read: a Work is
+   * public when it is published and has a published Edition, and only its
+   * published Editions are carried. Metadata only — no reader text, no file,
+   * no asset identifier, no availability internals.
+   */
+  searchWork(id: string): Promise<LibrarySearchRecord | null>;
+  searchWorks(input: {
+    readonly after: string | null;
+    readonly limit: number;
+  }): Promise<readonly { readonly id: string; readonly stamp: string }[]>;
+
+  /** Current public addresses of whichever Works are public now. Bounded. */
+  publicWorkTargets(
+    ids: readonly string[],
+  ): Promise<readonly { readonly id: string; readonly slug: string }[]>;
+
+  /**
+   * Current public addresses of whichever Editions are public now — published,
+   * within a public Work. Bounded.
+   */
+  publicEditionTargets(
+    ids: readonly string[],
+  ): Promise<readonly { readonly id: string; readonly workSlug: string }[]>;
+}
+
+/** What Search may know about one public Work and its published Editions. */
+export interface LibrarySearchRecord {
+  readonly id: string;
+  readonly slug: string;
+  /** `Work.version`, which every Library mutation touching the Work moves. */
+  readonly stamp: string;
+  readonly primaryLocale: string;
+  readonly topicIds: readonly string[];
+  readonly labels: readonly {
+    readonly locale: string;
+    readonly title: string;
+    readonly description: string;
+  }[];
+  readonly editions: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly languageCode: string;
+    readonly publisher: string | null;
+    readonly publicationYear: number | null;
+    readonly isbn: string | null;
+    /** A genuine BookTranslation of another Edition of this Work. */
+    readonly isTranslation: boolean;
+  }[];
 }
 export interface LibraryPersistencePort {
   works(offset: number): Promise<WorkPage>;

@@ -8,3 +8,4 @@ export {
   createCorrespondenceService,
   createCorrespondenceIntake,
 } from './application/correspondence-service.ts';
+export { createEditorialSearchSources } from './application/search-projection.ts';

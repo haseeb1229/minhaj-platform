@@ -49,8 +49,9 @@ what its adapter means.
 
 Two owner kinds exist because the architecture has two kinds of persistent
 state. A bounded context owns domain state; a **Layer-0 platform concern** —
-`email`, `rate-limiting`, `auditing` — owns infrastructure state such as
-delivery metadata, rate-limit windows and audit rows. DOMAIN_MODEL.md §1.1 is
+`email`, `rate-limiting`, `auditing`, `storage`, `search` — owns infrastructure state such as
+delivery metadata, rate-limit windows, audit rows, asset custody and the derived search
+projection. DOMAIN_MODEL.md §1.1 is
 explicit that those are not bounded contexts, so without the second kind their
 state could only have been filed under whichever context happened to need it
 first. A Layer-0 adapter also buys LESS: it may reach no bounded context at all,
@@ -442,3 +443,34 @@ The persistent engineering database and volumes are preserved. Two pre-existing 
 databases remain outside this phase's cleanup authority:
 `MinhajPhase1Test_452d390f683e46b8a882ceab04f1fbb2` and
 `MinhajPhase1Test_9d2356b6877143f18fafbcf7e39c2b33`.
+
+## Phase 17 derived search data
+
+`20260923000000_phase17_search_foundation` adds the Layer-0 `search` concern's state:
+`SearchIndexRequest` (owner-written indexing intent), `SearchIndexScope` (per-scope
+indexing state: pending, current or failed, with a generation counter and a lease),
+`SearchDocument` (the rebuildable projection, one row per resource and text language) and
+`SearchDocumentTopic`, plus the `SearchCatalog` full-text catalogue and the full-text index
+over one matching column per word breaker (TECH_STACK.md §10). It also seeds `search.read`
+and `search.operate` and extends the protected administrator bundle the way every earlier
+phase did. **The migration refuses to run on an engine without Full-Text Search**; the
+local and CI engine is the repository's pinned FTS image (`docker/sqlserver/Dockerfile`).
+
+Full-text DDL is refused inside a user transaction, so the migration creates the catalogue
+and index after its transaction, each statement guarded so a re-run completes rather than
+collides; the rollback drops them first, outside its transaction.
+
+**Owners write intent, never the projection.** An owner adapter records a request inside its
+own transaction through the package-internal `src/search-intent.ts` (not exported, like
+`src/audit-row.ts`). Only `src/adapters/search/` reads or writes the Search tables otherwise.
+
+**Least privilege.** The runtime may append and consume requests (no UPDATE), advance scope
+state (no DELETE — a scope row is its indexing history), and rewrite and remove documents.
+It can run a full-text query and read the engine's pending-change count for the operator
+view; it **cannot** disable, repopulate or drop the full-text index or catalogue, and holds
+no ALTER on any Search table (`db:test:permissions`).
+
+**Recovery.** The projection is DERIVED: after a restore it is rebuilt from the owners
+(`/admin/system/search` → Rebuild), never trusted as authoritative. The requests and scope
+states travel with an ordinary backup, so indexing owed at backup time is still owed after
+restore.

@@ -40,3 +40,5 @@ export type {
 } from './application/taxonomy-service.ts';
 
 export { missingTranslations, nextPosition, topicBreadcrumb } from './domain/topic.ts';
+
+export { createTopicSearchSource } from './application/search-projection.ts';

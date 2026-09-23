@@ -15,6 +15,7 @@
   "dependencies": {
     "@minhaj/contracts": "*",
     "@minhaj/database": "*",
+    "@minhaj/search": "*",
     "@minhaj/server-core": "*",
     "@minhaj/storage": "*",
     "@tiptap/core": "3.31.3",
