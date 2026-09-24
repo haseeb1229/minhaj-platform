@@ -1,6 +1,5 @@
 import 'server-only';
 
-import type { Locale } from '@minhaj/contracts';
 import type {
   LibraryAssetRequest,
   LibraryPublicReaderPort,
@@ -16,9 +15,7 @@ import {
 import { createLibraryAssetPolicy, createLibraryService } from '@/contexts/library';
 import { serverEnv } from '@/config/server-env';
 import { identityRuntime } from './identity';
-import { peopleRuntime } from './people';
-import { peopleReadRuntime } from './people-read';
-import { taxonomyRuntime } from './taxonomy';
+import { ownerReferences } from './owner-references';
 
 /**
  * The ADMINISTRATIVE Library composition root.
@@ -58,51 +55,9 @@ function buildLibraryRuntime() {
           identityRuntime().authorization.hasPermission(accountId, permission),
       },
 
-      references: {
-        /**
-         * EVERY identifier must resolve, and the count is how that is checked.
-         *
-         * `contributorReferences` returns a row per identifier it recognises, so
-         * a shorter answer means at least one was not a published contributor.
-         * Comparing counts rather than inspecting each row is what makes a
-         * partially valid list a refusal instead of a silent partial save.
-         *
-         * The locale is `'en'` because this asks about EXISTENCE, not about
-         * presentation: the answer is a yes or no about a Person, and reading it
-         * in the operator's interface language would make a reference valid in
-         * one locale and invalid in another.
-         */
-        async validPeople(ids) {
-          if (ids.length === 0) return true;
-          const unique = [...new Set(ids)];
-          const found = await peopleReadRuntime().people.contributorReferences(
-            unique,
-            'en',
-          );
-          return found.length === unique.length;
-        },
-
-        async validTopics(ids) {
-          if (ids.length === 0) return true;
-          const found = await taxonomyRuntime().taxonomy.topicReferences([...ids], 'en');
-          return found.length === ids.length;
-        },
-
-        /**
-         * A RETIRED language is not a valid language for a NEW Edition.
-         *
-         * Taxonomy owns the vocabulary and owns retirement; Library holds a typed
-         * reference and asks. The foreign key alone would accept a retired code,
-         * because retirement is a status rather than a deletion — which is why
-         * this question is asked of the owner rather than left to the database.
-         */
-        async validLanguage(code) {
-          const active = await taxonomyRuntime().taxonomy.listLanguages({
-            includeRetired: false,
-          });
-          return active.some((entry) => entry.code === code);
-        },
-      },
+      // Answered by the owners' public reads, through the ONE implementation
+      // Media shares (`./owner-references.ts`).
+      references: ownerReferences,
     }),
   };
 }
@@ -192,46 +147,8 @@ function previewRelations(): LibraryPublicReaderPort {
 }
 
 /**
- * Bounded owner-provided choices for the Library administration forms.
- *
- * THE OWNERS PRODUCE THE OPTIONS. A contributor picker that queried Library's
- * own tables would be a second, slowly diverging copy of People's directory;
- * asking People means a contributor archived this morning stops being offered
- * this afternoon, with no Library code involved.
- *
- * BOUNDED, and invoked only after the caller's Library permission has been
- * checked by the page that renders the form. The listing itself is capped by
- * People's own reader rather than by a number chosen here.
+ * Bounded owner-provided choices for the Library administration forms — the
+ * shared owner read (`./owner-references.ts`), invoked only after the page
+ * rendering the form has checked `library.read`.
  */
-export async function libraryReferenceChoices(
-  locale: Locale,
-  query: string,
-): Promise<{
-  people: { id: string; name: string }[];
-  topics: { id: string; name: string }[];
-  languages: { code: string; name: string }[];
-}> {
-  const [people, topics, languages] = await Promise.all([
-    peopleRuntime().people.listPeople({
-      query: query || null,
-      status: 'published',
-      profileKind: null,
-      locale,
-      offset: 0,
-    }),
-    taxonomyRuntime().taxonomy.listTree({ locale, includeArchived: false }),
-    taxonomyRuntime().taxonomy.listLanguages({ includeRetired: false }),
-  ]);
-
-  return {
-    people: people.items.map(({ id, label }) => ({ id, name: label.name })),
-    topics: topics.map(({ id, label }) => ({ id, name: label.name })),
-    languages: languages.map((entry) => ({
-      code: entry.code,
-      // The language's OWN name, not a translation of it. A list of content
-      // languages that renamed itself per interface locale would make "which
-      // language is this Edition in" a presentation question.
-      name: entry.nativeName,
-    })),
-  };
-}
+export { ownerReferenceChoices as libraryReferenceChoices } from './owner-references';

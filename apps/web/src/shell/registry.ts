@@ -115,7 +115,7 @@ export function pathFor(locale: string, route: AvailableRoute): string {
  * The primary navigation, in the canonical order of
  * INFORMATION_ARCHITECTURE.md §2.2.
  *
- * ALL TWELVE ARE RECORDED, and nine of them are `deferred`. Recording them is
+ * ALL TWELVE ARE RECORDED, and seven of them are `deferred`. Recording them is
  * not a promise to show them: it states the accepted final order in one place,
  * gives the administrative status surface something true to report, and makes
  * "a deferred domain renders no anchor" a property a test asserts over the
@@ -166,11 +166,19 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
   }),
+  /**
+   * DELIVERED BY PHASE 10 — Video, Series and Playlist. `/watch` lists only the
+   * Watch surfaces that genuinely exist; audio (`/listen`, Phase 11) and
+   * galleries (Phase 12) are absent rather than reserved.
+   */
   Object.freeze({
     key: 'watch',
     label: 'nav.watch',
+    path: '/watch',
     placements: Object.freeze(['primary'] as const),
-    availability: 'deferred' as const,
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'eligible' as const,
   }),
   Object.freeze({
     key: 'fatwa',
@@ -385,6 +393,43 @@ const LIBRARY: readonly ShellRoute[] = Object.freeze(
   ),
 );
 
+/**
+ * The Watch surfaces — Phase 10 (ROUTE_MAP.md §3.7).
+ *
+ * The all-videos listing, the five curated views, series, programmes,
+ * playlists and the speaker browse: each a genuine page in all three interface
+ * locales over delivered data, which is what makes `eligible` honest. NO
+ * PLACEMENT — they are reached from `/watch`, the single entry point in the
+ * primary navigation. `/watch/topics/{slug}` is a filtered view canonical to
+ * the topic hub and has no entry, and `/listen` belongs to Phase 11.
+ */
+const WATCH_SURFACES = Object.freeze([
+  'videos',
+  'lectures',
+  'events',
+  'highlights',
+  'interviews',
+  'documentaries',
+  'series',
+  'programs',
+  'playlists',
+  'speakers',
+] as const);
+
+const WATCH: readonly ShellRoute[] = Object.freeze(
+  WATCH_SURFACES.map((surface) =>
+    Object.freeze({
+      key: `watch.${surface}`,
+      label: `watch.${surface}`,
+      path: `/watch/${surface}`,
+      placements: Object.freeze([] as const),
+      visibility: 'public' as const,
+      availability: 'delivered' as const,
+      indexing: 'eligible' as const,
+    }),
+  ),
+);
+
 /** The routes the shell itself delivers. */
 const SHELL: readonly ShellRoute[] = Object.freeze([
   Object.freeze({
@@ -464,6 +509,7 @@ export const SHELL_ROUTES: readonly ShellRoute[] = Object.freeze([
   ...PRIMARY,
   ...UTILITY,
   ...LIBRARY,
+  ...WATCH,
   ...exploreRoutes(),
   ...LEGAL,
 ]);

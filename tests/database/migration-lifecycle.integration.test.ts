@@ -324,6 +324,19 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'EncyclopediaSlugHistory',
         'EncyclopediaContributor',
         'EncyclopediaTopic',
+        // Phase 10 — Media: Video, Series, Playlist and their typed relations.
+        'Video',
+        'VideoLabel',
+        'VideoSlugHistory',
+        'VideoSpeaker',
+        'VideoTopic',
+        'Series',
+        'SeriesLabel',
+        'SeriesSlugHistory',
+        'Playlist',
+        'PlaylistLabel',
+        'PlaylistSlugHistory',
+        'PlaylistVideo',
       ].sort(),
     );
   });

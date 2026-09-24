@@ -148,6 +148,54 @@ export default async function proxy(request: NextRequest) {
   }
   if (request.method === 'GET' || request.method === 'HEAD') {
     /**
+     * PHASE 10 — MEDIA'S OWN SLUG HISTORY, through the same single-301 mechanism.
+     *
+     * A Video, a Series and a Playlist each have an editable canonical slug, so
+     * each resolves a former one natively (DOMAIN_MODEL.md §19.7). A Series has
+     * ONE address whichever family it is requested under: its kind decides
+     * between `/watch/series` and `/watch/programs`, and Media resolves the kind
+     * and the slug TOGETHER, so a renamed series that has also become a
+     * programme is one hop to its current address, never two (ROUTE_MAP.md §9.7).
+     * The target is built from Media's answer, never from the request.
+     */
+    const watch =
+      /^\/(en|ur|ar)\/watch\/(videos|series|programs|playlists)\/([^/]+)$/.exec(
+        request.nextUrl.pathname,
+      );
+    if (watch?.[1] && watch[2] && watch[3]) {
+      const slug = decodedSegment(watch[3]);
+      if (slug !== null) {
+        const { mediaReadRuntime } = await import('@/composition/media-read');
+        const { seriesSegment } = await import('@/components/media/presentation');
+        const media = mediaReadRuntime();
+        const family = watch[2];
+        const current =
+          family === 'videos'
+            ? await media
+                .videoCanonicalSlug(slug)
+                .then((found) => (found === null ? null : { family, slug: found }))
+            : family === 'playlists'
+              ? await media
+                  .playlistCanonicalSlug(slug)
+                  .then((found) => (found === null ? null : { family, slug: found }))
+              : await media
+                  .seriesCanonical(slug)
+                  .then((found) =>
+                    found === null
+                      ? null
+                      : { family: seriesSegment(found.kind), slug: found.slug },
+                  );
+        if (current !== null && (current.family !== family || current.slug !== slug)) {
+          return permanent(
+            request,
+            `/${watch[1]}/watch/${current.family}/${encodeURIComponent(current.slug)}`,
+          );
+        }
+      }
+    }
+  }
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    /**
      * PHASE 17 — PUBLIC SEARCH ADMISSION.
      *
      * Only a request that will actually run a query spends budget: the search

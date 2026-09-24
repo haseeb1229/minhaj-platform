@@ -33,6 +33,10 @@ import { z } from 'zod';
  * PHASE 9 adds the six scholarly and periodical Library aggregates, each its own
  * kind — a research paper is not a research work, and a magazine issue is not
  * its magazine.
+ *
+ * PHASE 10 adds `video`, and only `video`. A Series or a Playlist is a grouping
+ * of Videos rather than a searchable resource of its own (DELIVERY_PLAN.md
+ * Phase 10), so neither is a kind.
  */
 export const SEARCH_KINDS = Object.freeze([
   'topic',
@@ -48,6 +52,7 @@ export const SEARCH_KINDS = Object.freeze([
   'magazine',
   'magazine-issue',
   'encyclopedia',
+  'video',
 ] as const);
 
 export type SearchKind = (typeof SEARCH_KINDS)[number];
@@ -81,6 +86,7 @@ export const SEARCH_SCOPE_KINDS = Object.freeze([
   'magazine',
   'magazine-issue',
   'encyclopedia',
+  'video',
 ] as const);
 
 export type SearchScopeKind = (typeof SEARCH_SCOPE_KINDS)[number];
@@ -101,6 +107,7 @@ export const SCOPE_OF_KIND: Readonly<Record<SearchKind, SearchScopeKind>> = Obje
     magazine: 'magazine',
     'magazine-issue': 'magazine-issue',
     encyclopedia: 'encyclopedia',
+    video: 'video',
   },
 );
 

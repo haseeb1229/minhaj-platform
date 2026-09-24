@@ -400,6 +400,13 @@ export interface ProfileFacetView {
 
 /** A Person with everything a PUBLIC profile page renders. */
 export interface PublicPersonProfile {
+  /**
+   * The PERSON's own identifier — never an account's. It is the typed reference
+   * later owners hold (a Video's speaker, a Work's contributor), so Layer 4 can
+   * compose "this person's videos" from Media's public read without Media ever
+   * reading People's tables.
+   */
+  readonly id: string;
   readonly slug: string;
   readonly label: PersonLabel;
   readonly nameVariants: readonly string[];

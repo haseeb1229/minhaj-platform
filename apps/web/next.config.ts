@@ -2,6 +2,7 @@ import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
 
 import { parsePrerenderEnv } from '@minhaj/contracts/env/prerender-build';
+import { PROVIDER_EMBED_ORIGINS, VIDEO_PROVIDERS } from '@minhaj/contracts/media';
 
 /**
  * Next.js configuration.
@@ -64,28 +65,56 @@ const buildPrerenderEnv = parsePrerenderEnv(process.env);
  *   - `default-src 'self'` means anything not named above is same-origin only,
  *     so a directive nobody thought of fails closed.
  *
- * NOTHING THIRD-PARTY IS PRE-ALLOWED. No YouTube, no Vimeo, no Google, no
- * analytics, no font CDN. Media providers arrive with the Media phase and its
- * embed privacy contract (ARCHITECTURE.md §4.7.1); allowlisting them now would
- * be permitting script from origins this build never contacts.
+ * NOTHING THIRD-PARTY IS PRE-ALLOWED SITE-WIDE. No analytics, no font CDN, and
+ * no media provider in the base policy: every page but the two below frames
+ * nothing at all (`frame-src 'none'`).
+ *
+ * THE PHASE-10 PLAYER EXCEPTION IS ONE DIRECTIVE ON TWO ROUTES. A Video's
+ * public page and its administrative editor are the only pages that render the
+ * privacy-gated player, so they alone receive a policy whose `frame-src` names
+ * the two privacy-enhanced provider hosts — exactly those origins, taken from
+ * the same contract the player derives its frame address from
+ * (`@minhaj/contracts/media`), and nothing broader. No provider SCRIPT is
+ * allowed anywhere: the player is an iframe, and the provider's own document
+ * runs under the provider's policy, not this one (ARCHITECTURE.md §4.7.1).
  */
-const CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  "base-uri 'self'",
-  "object-src 'none'",
-  "frame-ancestors 'none'",
-  "frame-src 'none'",
-  "form-action 'self'",
-  "script-src 'self' 'unsafe-inline'",
-  "style-src 'self'",
-  // `data:` for images only, and deliberately not for scripts or objects: it is
-  // how an inline SVG or a tiny placeholder is carried, and it grants no
-  // execution.
-  "img-src 'self' data:",
-  "font-src 'self'",
-  "connect-src 'self'",
-  "manifest-src 'self'",
-].join('; ');
+function contentSecurityPolicy(frameSources: readonly string[]): string {
+  return [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    frameSources.length === 0
+      ? "frame-src 'none'"
+      : `frame-src ${frameSources.join(' ')}`,
+    "form-action 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self'",
+    // `data:` for images only, and deliberately not for scripts or objects: it
+    // is how an inline SVG or a tiny placeholder is carried, and it grants no
+    // execution. No remote image host: a provider thumbnail would disclose the
+    // visitor before they chose to play anything.
+    "img-src 'self' data:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "manifest-src 'self'",
+  ].join('; ');
+}
+
+const CONTENT_SECURITY_POLICY = contentSecurityPolicy([]);
+
+const PLAYER_CONTENT_SECURITY_POLICY = contentSecurityPolicy(
+  VIDEO_PROVIDERS.map((provider) => PROVIDER_EMBED_ORIGINS[provider]),
+);
+
+/**
+ * The only routes that render the provider player. Matched by exact shape, so
+ * a Video listing, a topic view or any other page keeps `frame-src 'none'`.
+ */
+const PLAYER_ROUTES: readonly string[] = [
+  '/:locale(en|ur|ar)/watch/videos/:slug',
+  '/:locale(en|ur|ar)/admin/media/videos/:id',
+];
 
 /**
  * The security headers every response carries.
@@ -123,10 +152,13 @@ const SECURITY_HEADERS: readonly { key: string; value: string }[] = [
 
   // Browser capability policy. The platform asks for none of these, so it
   // declines all of them; `browsing-topics` additionally opts the site out of
-  // interest-based advertising inference it never wanted.
+  // interest-based advertising inference it never wanted. `autoplay` is refused
+  // for every frame the platform ever renders (Phase 10): a provider player
+  // plays only when the visitor presses play inside it, never on its own.
   {
     key: 'Permissions-Policy',
-    value: 'camera=(), microphone=(), geolocation=(), payment=(), browsing-topics=()',
+    value:
+      'camera=(), microphone=(), geolocation=(), payment=(), browsing-topics=(), autoplay=()',
   },
 
   { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
@@ -161,7 +193,18 @@ const nextConfig: NextConfig = {
    * here removes or relaxes those.
    */
   async headers() {
-    return [{ source: '/:path*', headers: [...SECURITY_HEADERS] }];
+    return [
+      { source: '/:path*', headers: [...SECURITY_HEADERS] },
+      // LATER ENTRIES OVERRIDE EARLIER ONES for the same header key, so a player
+      // route receives exactly ONE policy — the base policy with its one frame
+      // directive widened — never two policies intersecting.
+      ...PLAYER_ROUTES.map((source) => ({
+        source,
+        headers: [
+          { key: 'Content-Security-Policy', value: PLAYER_CONTENT_SECURITY_POLICY },
+        ],
+      })),
+    ];
   },
 };
 

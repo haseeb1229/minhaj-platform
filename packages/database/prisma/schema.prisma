@@ -760,6 +760,7 @@ model Topic {
   magazineTopics MagazineTopic[]
   magazineIssueTopics MagazineIssueTopic[]
   encyclopediaTopics EncyclopediaTopic[]
+  videoTopics VideoTopic[]
 
   articleTopics ArticleTopic[]
 
@@ -876,6 +877,7 @@ model Language {
   publications Publication[]
   magazineIssues MagazineIssue[]
   encyclopedias Encyclopedia[]
+  videos Video[]
 
   articleTranslations ArticleRevisionTranslation[]
 
@@ -1005,6 +1007,7 @@ model Person {
   magazineContributions MagazineContributor[]
   magazineIssueContributions MagazineIssueContributor[]
   encyclopediaContributions EncyclopediaContributor[]
+  videoSpeakers VideoSpeaker[]
 
   articleContributions ArticleContributor[]
 
@@ -2146,6 +2149,178 @@ model EncyclopediaTopic {
   topic Topic @relation(fields: [topicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   @@id([encyclopediaId, topicId])
   @@index([topicId, encyclopediaId])
+}
+
+// ===========================================================================
+// Phase 10 — Media: Video, Series, Playlist (DOMAIN_MODEL.md §11)
+// ===========================================================================
+//
+// THREE AGGREGATES, each with its own table and slug namespace. One Video
+// entity — no Program, Lecture or per-provider table: a programme is a Series
+// whose `kind` says so, and the curated Watch views are a Video's `format`.
+// Speakers are People's `Person`, topics Taxonomy's `Topic`, content languages
+// Taxonomy's `Language`, each by a real foreign key; Media copies none of it.
+//
+// NO FILE RELATION AND NO BYTES. A Video is provider metadata: the provider,
+// its identifier and descriptive facts. Nothing here references Storage, and
+// no column can hold an embed address, an iframe or HTML.
+
+/// One video, hosted by its provider and described here.
+model Video {
+  id String @id @db.NVarChar(36)
+  slug String @unique @db.NVarChar(120)
+  primaryLocale String @db.NVarChar(8)
+  state String @db.NVarChar(16)
+  isFeatured Boolean @default(false)
+  /// youtube | vimeo.
+  provider String @db.NVarChar(16)
+  /// The provider's own identifier, under a BINARY collation in SQL: YouTube
+  /// identifiers are case-sensitive, and two that differ only in case are two
+  /// different videos.
+  providerVideoId String @db.VarChar(16)
+  /// available | unavailable — orthogonal to publication.
+  availability String @db.NVarChar(16)
+  /// lecture | event | highlight | interview | documentary, or none.
+  format String? @db.NVarChar(16)
+  languageCode String @db.NVarChar(16)
+  durationSeconds Int?
+  /// The provider's publication date. A date, never an instant (DOMAIN_MODEL.md §19.5).
+  publishedOn DateTime? @db.Date
+  /// The provider's own image for this video. Never rendered before activation.
+  thumbnailUrl String? @db.NVarChar(2000)
+  captions Boolean @default(false)
+  /// A transcript the organisation holds. Plain text, never generated.
+  transcript String? @db.NVarChar(Max)
+  /// At most ONE Series. The episode position exists exactly when the Series
+  /// does (a CHECK), and is unique within it through a FILTERED unique index
+  /// the migration creates — `WHERE [seriesId] IS NOT NULL` — which Prisma's
+  /// schema language cannot express.
+  seriesId String? @db.NVarChar(36)
+  seriesPosition Int?
+  version Int @default(1)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  language Language @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  series Series? @relation(fields: [seriesId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  labels VideoLabel[]
+  slugs VideoSlugHistory[]
+  speakers VideoSpeaker[]
+  topics VideoTopic[]
+  playlists PlaylistVideo[]
+  @@unique([provider, providerVideoId])
+  @@index([state, publishedOn, slug])
+  @@index([state, isFeatured, publishedOn])
+  @@index([state, format, publishedOn])
+  @@index([languageCode, state])
+}
+
+model VideoLabel {
+  videoId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(240)
+  description String @db.NVarChar(4000)
+  video Video @relation(fields: [videoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([videoId, locale])
+}
+
+model VideoSlugHistory {
+  slug String @id @db.NVarChar(120)
+  videoId String @db.NVarChar(36)
+  video Video @relation(fields: [videoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([videoId])
+}
+
+/// A speaker on a video: a typed reference to People, in speaking order.
+model VideoSpeaker {
+  videoId String @db.NVarChar(36)
+  personId String @db.NVarChar(36)
+  position Int
+  video Video @relation(fields: [videoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  person Person @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([videoId, personId])
+  @@index([personId, videoId])
+}
+
+model VideoTopic {
+  videoId String @db.NVarChar(36)
+  topicId String @db.NVarChar(36)
+  video Video @relation(fields: [videoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([videoId, topicId])
+  @@index([topicId, videoId])
+}
+
+/// A series or a programme: an ordered grouping a Video belongs to at most once.
+model Series {
+  id String @id @db.NVarChar(36)
+  slug String @unique @db.NVarChar(120)
+  /// series | program — which decides the ONE canonical route family.
+  kind String @db.NVarChar(16)
+  primaryLocale String @db.NVarChar(8)
+  state String @db.NVarChar(16)
+  version Int @default(1)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  labels SeriesLabel[]
+  slugs SeriesSlugHistory[]
+  videos Video[]
+  @@index([state, kind, slug])
+}
+
+model SeriesLabel {
+  seriesId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(240)
+  description String @db.NVarChar(4000)
+  series Series @relation(fields: [seriesId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([seriesId, locale])
+}
+
+model SeriesSlugHistory {
+  slug String @id @db.NVarChar(120)
+  seriesId String @db.NVarChar(36)
+  series Series @relation(fields: [seriesId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([seriesId])
+}
+
+/// A curated, ordered list of Videos. Deleting a Playlist deletes no Video.
+model Playlist {
+  id String @id @db.NVarChar(36)
+  slug String @unique @db.NVarChar(120)
+  primaryLocale String @db.NVarChar(8)
+  state String @db.NVarChar(16)
+  version Int @default(1)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  labels PlaylistLabel[]
+  slugs PlaylistSlugHistory[]
+  videos PlaylistVideo[]
+  @@index([state, slug])
+}
+
+model PlaylistLabel {
+  playlistId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(240)
+  description String @db.NVarChar(4000)
+  playlist Playlist @relation(fields: [playlistId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([playlistId, locale])
+}
+
+model PlaylistSlugHistory {
+  slug String @id @db.NVarChar(120)
+  playlistId String @db.NVarChar(36)
+  playlist Playlist @relation(fields: [playlistId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([playlistId])
+}
+
+/// One Video's place in one Playlist. Unique per Playlist, and densely ordered.
+model PlaylistVideo {
+  playlistId String @db.NVarChar(36)
+  videoId String @db.NVarChar(36)
+  position Int
+  playlist Playlist @relation(fields: [playlistId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  video Video @relation(fields: [videoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([playlistId, videoId])
+  @@unique([playlistId, position])
+  @@index([videoId, playlistId])
 }
 
 // ===========================================================================

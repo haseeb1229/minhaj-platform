@@ -6,6 +6,7 @@ import type { Locale } from '@minhaj/contracts';
 import type { ProfileFacetView, PublicPersonProfile } from '@minhaj/contracts/people';
 
 import { peopleReadRuntime } from '@/composition/people-read';
+import { VideoPreview } from '@/components/media/watch';
 import { absoluteUrl } from '@/config/origin';
 import { requireLocale } from '@/config/route-locale';
 import { Alert, Breadcrumbs, Container, Prose } from '@/components/ui';
@@ -169,6 +170,21 @@ export default async function ContributorProfilePage({ params }: ProfileParams) 
             ))}
           </section>
         )}
+
+        {/* PHASE 10 — the published Videos this person speaks in, composed here
+            at Layer 4 from Media's PUBLIC read by the Person's own identifier.
+            People stores no Video and Media reads no People table; a speaker
+            credit grants nothing. Nothing renders when there are none. */}
+        <VideoPreview
+          locale={locale}
+          filter={{ speaker: profile.id }}
+          heading={t('videos')}
+          headingId="person-videos"
+          more={{
+            href: `/${locale}/watch/videos?speaker=${encodeURIComponent(profile.id)}`,
+            text: t('allVideos'),
+          }}
+        />
 
         <PersonStructuredData profile={profile} resolved={resolved} slug={slug} />
       </div>

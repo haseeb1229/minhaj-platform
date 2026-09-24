@@ -40,7 +40,7 @@ describe('parseSearchParams', () => {
   it('names every invalid parameter, and keeps what was typed for the form', () => {
     const parsed = parseSearchParams({
       q: 'book',
-      type: 'video',
+      type: 'news',
       topic: 'Not A Slug!',
       language: 'english language',
       from: '2020',
@@ -52,13 +52,15 @@ describe('parseSearchParams', () => {
     expect([...parsed.issues].sort()).toEqual(
       ['language', 'page', 'topic', 'type', 'year-range'].sort(),
     );
-    expect(parsed.form.type).toBe('video');
+    expect(parsed.form.type).toBe('news');
   });
 
   it('refuses a future or unknown result kind', () => {
     for (const type of [
       'news',
-      'video',
+      'audio',
+      'series',
+      'playlist',
       'fatwa',
       'quran',
       'hadith',
@@ -80,6 +82,10 @@ describe('parseSearchParams', () => {
     ]) {
       expect(parseSearchParams({ q: 'x1', type }).state, type).toBe('valid');
     }
+  });
+
+  it('accepts the video kind Phase 10 delivered, and only that Media kind', () => {
+    expect(parseSearchParams({ q: 'x1', type: 'video' }).state).toBe('valid');
   });
 
   it('reads a repeated parameter as its first value, never as a list', () => {

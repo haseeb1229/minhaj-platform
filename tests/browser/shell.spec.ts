@@ -447,8 +447,12 @@ test.describe('navigation is honest about what exists', () => {
       // surfaces by Phase 9. Phase 15's collections are still absent, and stay
       // asserted absent.
       '/library/collections',
-      '/watch',
+      // `/watch` is delivered by Phase 10 (Video, Series, Playlist) and asserted
+      // present below. Audio and galleries are not: `/listen` belongs to Phase
+      // 11 and stays asserted absent.
       '/listen',
+      '/watch/audio',
+      '/watch/galleries',
       '/fatwa',
       '/news',
       '/events',
@@ -481,6 +485,8 @@ test.describe('navigation is honest about what exists', () => {
         // footer.
         '/search',
         '/topics',
+        // Phase 10: Watch in the primary navigation.
+        '/watch',
       ]) {
         expect(hrefs, `${path} exposes delivered ${delivered}`).toContain(
           `/en${delivered}`,

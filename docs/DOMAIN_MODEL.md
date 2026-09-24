@@ -740,6 +740,22 @@ historical archive.
   relationships.
 - **Media does not author Quran recitations** (§8.1).
 
+As delivered (Phase 10) — Video, Series and Playlist only:
+
+| Aggregate | Carries |
+|---|---|
+| **Video** | `provider` + `providerVideoId` (unique together; nothing else about the player is stored), content language (Taxonomy), localized title and description, optional duration, provider publication date, provider thumbnail address, captions-offered flag, organisation-held transcript, an optional curated **format** (`lecture`, `event`, `highlight`, `interview`, `documentary`), ordered speakers (People), topics (Taxonomy), at most one Series with its episode position, featured flag, **availability** |
+| **Series** | Localized title and description and a **kind** — `series` or `program`. A programme is a Series kind, not an aggregate |
+| **Playlist** | Localized title and description and an ordered, duplicate-free membership of Videos (at most 200); removing a Playlist never removes a Video |
+
+Each has its own table, slug namespace and slug history; lifecycle is draft, published,
+archived. **Availability is orthogonal to publication**: an operator records that the provider
+no longer serves a published Video, and its page then offers the provider link instead of a
+player — nothing polls the provider, and a cross-origin frame's failure is not observable. The
+`event` format is event coverage, not a reference to an Event. A thumbnail must be this video's
+image on the provider's own image host, and a transcript is text the organisation holds —
+neither is fetched nor generated.
+
 ---
 
 ## 12. Fatwa

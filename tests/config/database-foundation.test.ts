@@ -158,6 +158,20 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'EncyclopediaSlugHistory',
       'EncyclopediaContributor',
       'EncyclopediaTopic',
+      // Phase 10 — Media: Video, Series and Playlist, each its own table with
+      // its own typed relation sets and permanent slug namespace.
+      'Video',
+      'VideoLabel',
+      'VideoSlugHistory',
+      'VideoSpeaker',
+      'VideoTopic',
+      'Series',
+      'SeriesLabel',
+      'SeriesSlugHistory',
+      'Playlist',
+      'PlaylistLabel',
+      'PlaylistSlugHistory',
+      'PlaylistVideo',
       // Phase 17 — the Layer-0 search concern's DERIVED state: indexing intent,
       // per-scope indexing state, and the rebuildable projection.
       'SearchIndexRequest',
@@ -191,6 +205,19 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'ReadingHistory',
       'ReadingProgress',
       'Bookmark',
+      // Media that Phase 10 does not deliver: audio and galleries (Phases 11
+      // and 12), a Program aggregate (a programme is a Series kind), per-kind
+      // or per-provider Video tables, and Phase 21's watch history.
+      'AudioTrack',
+      'AudioSeries',
+      'Photo',
+      'Gallery',
+      'GalleryItem',
+      'Program',
+      'MediaItem',
+      'YouTubeVideo',
+      'LectureVideo',
+      'WatchHistory',
     ]) {
       expect(models, `${domain} arrives with its owning slice`).not.toContain(domain);
     }

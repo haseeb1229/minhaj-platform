@@ -8,7 +8,7 @@ import { createProofAccount } from '../people/harness.ts';
  * The Search foundation, wired to REAL adapters over a disposable database.
  *
  * NOTHING ON THE PERSISTENCE SIDE IS SUBSTITUTED. The owners are the real
- * Taxonomy, People, Editorial and Library adapters and services; the index is
+ * Taxonomy, People, Editorial, Library and Media adapters and services; the index is
  * the real SQL Server Full-Text adapter; and the owners are wired to the Search
  * service by the SAME `searchWiring` Layer-4 composition uses — so a projection
  * is found because an owner genuinely committed it, through its own mutation,
@@ -33,6 +33,8 @@ export async function buildSearchHarness(admin: SqlSession) {
     await import('../../apps/web/src/contexts/editorial/index.ts');
   const { createLibraryService } =
     await import('../../apps/web/src/contexts/library/index.ts');
+  const { createMediaService } =
+    await import('../../apps/web/src/contexts/media/index.ts');
   const { searchWiring } =
     await import('../../apps/web/src/composition/search-wiring.ts');
   const { createSearchService } = await import('../../packages/search/src/index.ts');
@@ -42,6 +44,7 @@ export async function buildSearchHarness(admin: SqlSession) {
     people: database.createPeopleReader(),
     editorial: database.createEditorialPublicReader(),
     library: database.createLibraryPublicReader(),
+    media: database.createMediaPublicReader(),
   };
   const wiring = searchWiring(readers);
   const authorization = createAuthorizationService({
@@ -117,6 +120,21 @@ export async function buildSearchHarness(admin: SqlSession) {
     },
   });
 
+  const media = createMediaService({
+    persistence: database.createMediaPersistence(),
+    authority,
+    references: {
+      validPeople: async () => true,
+      validTopics: async (ids) =>
+        ids.length === 0 ||
+        (await readers.taxonomy.topicReferences(ids, 'en')).length === ids.length,
+      validLanguage: async (code) =>
+        (await readers.taxonomy.listLanguages({ includeRetired: false })).some(
+          (language) => language.code === code,
+        ),
+    },
+  });
+
   /** A synthetic account holding exactly `keys`. */
   async function account(keys: readonly string[]): Promise<{ accountId: string }> {
     const id = await createProofAccount(admin);
@@ -178,6 +196,7 @@ export async function buildSearchHarness(admin: SqlSession) {
     index: realIndex,
     editorial,
     library,
+    media,
     taxonomyStore,
     peopleStore,
     account,

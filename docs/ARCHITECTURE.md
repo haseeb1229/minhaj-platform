@@ -497,6 +497,7 @@ recorded limitations are in TECH_STACK.md §10.
   whose projection depends on another record (an issue on its Magazine) carries that record's
   version in its stamp, and the other record's change requests the dependent scopes in the same
   transaction, so neither a missed request nor reconciliation can leave them stale.
+  Phase 10 added `video` alone; a Series or Playlist is a grouping of Videos, not a kind.
 
 ### 4.4 Authentication and authorisation
 
@@ -631,6 +632,19 @@ must not silently introduce unmanaged non-essential tracking.**
 
 Captions and transcripts are surfaced **where the provider or source genuinely supplies them**,
 and are never fabricated (SECURITY_BASELINE.md §16.2).
+
+**As delivered for video (Phase 10).** A Video page first renders a first-party placeholder
+with a described provider link and a "load the video from YouTube/Vimeo" button; **no frame,
+image, script or preconnect reaches the provider until the visitor presses it.** Activation is
+local presentation state — nothing is stored or remembered, and it is an engineering gate, not a
+recorded consent. The frame address is derived in code from `provider + providerVideoId`, on
+the privacy-enhanced host (`www.youtube-nocookie.com`, `player.vimeo.com` with `dnt=1`), never
+from operator input, and carries an accessible title and no autoplay. Provider thumbnails are
+never painted; they appear only inside structured data, which browsers do not fetch. The CSP
+keeps `frame-src 'none'` site-wide and names exactly those two origins only on the public
+Video page and its administrative editor; no provider script is allowed anywhere, and
+`Permissions-Policy` refuses `autoplay`. No provider API is called: metadata is entered by an
+operator and a page never depends on provider uptime.
 
 ---
 

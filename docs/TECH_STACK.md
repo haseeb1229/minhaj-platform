@@ -347,7 +347,9 @@ provider/URL consistency and an **HTTPS `meet.google.com` allowlist** (SECURITY_
 **Excluded:** Jitsi, custom WebRTC, Azure Communication Services.
 
 **YouTube / Vimeo embeds** — LOCKED. Provider identifiers and metadata stored; provider player
-embedded. **No custom video hosting.** CSP allowlists embed frame sources explicitly.
+embedded. **No custom video hosting.** CSP allowlists embed frame sources explicitly — only the
+privacy-enhanced player origins, only on the routes that render the player (ARCHITECTURE.md
+§4.7.1).
 
 ---
 

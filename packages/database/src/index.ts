@@ -154,3 +154,10 @@ export {
 /* ---- Layer-0: search ----------------------------------------------------- */
 
 export { createSearchIndex } from './adapters/search/index.ts';
+
+/* ---- Media (context-owned) ---------------------------------------------- */
+
+export {
+  createMediaPersistence,
+  createMediaPublicReader,
+} from './adapters/media/index.ts';

@@ -118,6 +118,7 @@ function targets(
     magazine: make('magazine'),
     'magazine-issue': make('magazine-issue'),
     encyclopedia: make('encyclopedia'),
+    video: make('video'),
   };
 }
 
@@ -314,7 +315,7 @@ describe('processDue — derived work, recorded honestly', () => {
 
   it('refuses a projection outside the contract before writing anything', async () => {
     for (const bad of [
-      doc({ kind: 'video' }),
+      doc({ kind: 'audio-track' as never }),
       doc({ kind: 'work', resourceId: 'a1' }),
       doc({ resourceId: 'someone-else' }),
       doc({ title: '   ' }),

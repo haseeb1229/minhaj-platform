@@ -3,6 +3,7 @@ import 'server-only';
 import {
   createEditorialPublicReader,
   createLibraryPublicReader,
+  createMediaPublicReader,
   createPeopleReader,
   createSearchIndex,
   createTaxonomyReader,
@@ -43,6 +44,7 @@ export function buildSearchService(report: SearchReport): SearchService {
     people: createPeopleReader(),
     editorial: createEditorialPublicReader(),
     library: createLibraryPublicReader(),
+    media: createMediaPublicReader(),
   });
 
   return createSearchService({

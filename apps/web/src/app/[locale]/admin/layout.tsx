@@ -63,6 +63,10 @@ const SURFACES: readonly { key: string; permission: PermissionKey; path: string 
   // surfaces — Phase 9's included — so an entry per surface would be links that
   // appear and disappear together.
   { key: 'library', permission: 'library.read', path: 'library/works' },
+  // Phase 10. One entry for Media: `media.read` opens its three surfaces —
+  // videos, series and playlists — and every action re-checks
+  // `media.administer`.
+  { key: 'media', permission: 'media.read', path: 'media/videos' },
   // Phase 4. A READ-ONLY view of the public shell's effective navigation; the
   // registry behind it is code, so there is no editing surface to reach.
   { key: 'navigation', permission: 'navigation.read', path: 'system/navigation' },

@@ -3,6 +3,7 @@ import 'server-only';
 import type { EditorialPublicReaderPort } from '@minhaj/contracts/editorial';
 import { pagePath } from '@minhaj/contracts/editorial';
 import type { LibraryPublicReaderPort, ScholarlyKind } from '@minhaj/contracts/library';
+import type { MediaPublicReaderPort } from '@minhaj/contracts/media';
 import type { PeopleReaderPort } from '@minhaj/contracts/people';
 import type {
   SearchKind,
@@ -15,11 +16,13 @@ import type { SearchTopic } from '@minhaj/search';
 
 import { EDITION_PARAM } from '@/components/library/presentation';
 import { scholarlyPathOf } from '@/components/library/scholarly-presentation';
+import { videoPathOf } from '@/components/media/presentation';
 import { createEditorialSearchSources } from '@/contexts/editorial';
 import {
   createLibrarySearchSource,
   createScholarlySearchSource,
 } from '@/contexts/library';
+import { createVideoSearchSource } from '@/contexts/media';
 import { createPersonSearchSource } from '@/contexts/people-contributors';
 import { createTopicSearchSource } from '@/contexts/taxonomy';
 
@@ -43,8 +46,9 @@ import { createTopicSearchSource } from '@/contexts/taxonomy';
  * PATHS ARE LOCALE-FREE; the page prefixes the reader's interface locale. The
  * shapes are the owners' own public routes (ROUTE_MAP.md §3): `/topics/{slug}`,
  * `/people/{slug}`, `/library/articles/{slug}`, a Page's reserved binding, a
- * Work's page — with the Edition selected — under `/library/books/{slug}`, and
- * the Phase-9 Library routes, an issue beneath its Magazine's CURRENT slug.
+ * Work's page — with the Edition selected — under `/library/books/{slug}`, the
+ * Phase-9 Library routes, an issue beneath its Magazine's CURRENT slug, and a
+ * Phase-10 Video at `/watch/videos/{slug}`.
  */
 
 export interface SearchOwnerReaders {
@@ -52,6 +56,7 @@ export interface SearchOwnerReaders {
   readonly people: PeopleReaderPort;
   readonly editorial: EditorialPublicReaderPort;
   readonly library: LibraryPublicReaderPort;
+  readonly media: MediaPublicReaderPort;
 }
 
 const segment = (value: string) => encodeURIComponent(value);
@@ -104,6 +109,7 @@ export function searchWiring(readers: SearchOwnerReaders): {
       magazine: magazine.source,
       'magazine-issue': magazineIssue.source,
       encyclopedia: encyclopedia.source,
+      video: createVideoSearchSource(readers.media),
     },
 
     targets: {
@@ -141,6 +147,12 @@ export function searchWiring(readers: SearchOwnerReaders): {
       magazine: magazine.target,
       'magazine-issue': magazineIssue.target,
       encyclopedia: encyclopedia.target,
+      // Media's own public predicate answers which Videos are published NOW,
+      // and at what slug — a withdrawn Video's stale projection is withheld.
+      video: async (ids) =>
+        mapOf(await readers.media.publicVideoTargets(ids), (row) =>
+          videoPathOf(row.slug),
+        ),
     },
 
     async resolveTopic(slug, locale) {

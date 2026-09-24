@@ -499,6 +499,26 @@ IF OBJECT_ID(N'[dbo].[MagazineSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT
 IF OBJECT_ID(N'[dbo].[MagazineIssueSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[MagazineIssueSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[MagazineIssueSlugHistory] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[EncyclopediaSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[EncyclopediaSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[EncyclopediaSlugHistory] TO [$(app_login)]; END;
 
+-- Phase 10: Media — Video, Series and Playlist, by the SAME three postures as
+-- the Library. Aggregates are INSERT and UPDATE and never DELETE — a record is
+-- withdrawn by archiving it, so the row its slug reservations, audit entries,
+-- episodes and playlist places point at always exists. Relation sets (labels,
+-- speakers, topics, playlist membership) are replaced wholesale on save, so
+-- INSERT and DELETE and never UPDATE. Slug histories are APPEND ONLY. No
+-- Storage table is reached: a Video is provider metadata and has no bytes.
+IF OBJECT_ID(N'[dbo].[Video]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Video] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Video] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Series]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Series] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Series] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Playlist]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Playlist] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Playlist] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[VideoLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[VideoLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[VideoLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[VideoSpeaker]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[VideoSpeaker] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[VideoSpeaker] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[VideoTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[VideoTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[VideoTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[SeriesLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[SeriesLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[SeriesLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PlaylistLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[PlaylistLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[PlaylistLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PlaylistVideo]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[PlaylistVideo] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[PlaylistVideo] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[VideoSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[VideoSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[VideoSlugHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[SeriesSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[SeriesSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[SeriesSlugHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PlaylistSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[PlaylistSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[PlaylistSlugHistory] TO [$(app_login)]; END;
+
 -- Phase 17: the DERIVED search projection and its operational state.
 --
 -- `SearchIndexRequest` is append-only for the owners that write it inside their

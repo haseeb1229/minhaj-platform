@@ -12,6 +12,7 @@ import { libraryReadRuntime } from '@/composition/library-read';
 import { taxonomyRuntime } from '@/composition/taxonomy';
 import { labelFor, workPath } from '@/components/library/presentation';
 import { listingHref } from '@/components/library/scholarly';
+import { VideoPreview } from '@/components/media/watch';
 import {
   scholarlyLabel,
   scholarlyListPath,
@@ -42,9 +43,9 @@ import { contentMetadata } from '@/seo/metadata';
  * earlier phase delivered the route. It is Layer-4 composition over owners that
  * EXIST: Taxonomy for the topic and its place in the hierarchy, Library for the
  * books — and, since Phase 9, the research, research papers, publications,
- * encyclopedias, magazines and magazine issues — classified under it, and Search
- * for everything else classified under it. Each later domain adds its own
- * section when it ships; nothing here renders an empty frame for a domain that
+ * encyclopedias, magazines and magazine issues — classified under it, Media for
+ * the published Videos on it (Phase 10), and Search for everything else
+ * classified under it. Each later domain adds its own section when it ships; nothing here renders an empty frame for a domain that
  * has not, and a delivered section with nothing on this topic is not rendered
  * either (ROUTE_MAP.md §5.2).
  *
@@ -275,6 +276,20 @@ export default async function TopicPage({ params }: TopicParams) {
             </section>
           );
         })}
+
+        {/* PHASE 10 — Media adds its own section, read from Media's public
+            listing (never from the search index), and renders nothing when no
+            published Video is on this topic. */}
+        <VideoPreview
+          locale={locale}
+          filter={{ topic: topic.id }}
+          heading={t('videos')}
+          headingId="topic-videos"
+          more={{
+            href: `/${locale}/watch/topics/${encodeURIComponent(topic.slug)}`,
+            text: t('allVideos'),
+          }}
+        />
       </div>
     </Container>
   );

@@ -57,6 +57,10 @@ const REQUIRED = [
   // rebuild and reconciliation, and their rebuild after a real restore.
   'scholarly.integration',
   'scholarly-recovery.integration',
+  // Phase 10: the video kind, its stale-index rule, rebuild and reconciliation,
+  // and its rebuild after a real restore.
+  'media.integration',
+  'media-recovery.integration',
 ];
 
 const seen = files.map((file) => String(file.name ?? ''));

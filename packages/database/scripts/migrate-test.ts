@@ -137,6 +137,24 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // SIX DISTINCT AGGREGATES and their typed relation sets — never one content
   // table with a type column (DOMAIN_MODEL.md §10.2). Research and ResearchPaper
   // alone carry citations; an issue's slug history is keyed within its Magazine.
+  // THREE MEDIA AGGREGATES — Video, Series, Playlist — and their typed relation
+  // sets: no generic media table, no Program table, no audio or gallery table
+  // (DOMAIN_MODEL.md §11). A Video's Series is a nullable foreign key on the
+  // Video; a Playlist's membership is its own typed, ordered table.
+  '20260925000000_phase10_media_video': [
+    'Video',
+    'VideoLabel',
+    'VideoSlugHistory',
+    'VideoSpeaker',
+    'VideoTopic',
+    'Series',
+    'SeriesLabel',
+    'SeriesSlugHistory',
+    'Playlist',
+    'PlaylistLabel',
+    'PlaylistSlugHistory',
+    'PlaylistVideo',
+  ],
   '20260924000000_phase9_research_publications': [
     'Research',
     'ResearchLabel',
@@ -224,6 +242,16 @@ const PREMATURE_TABLES = [
   'PublicationIssue',
   'PeriodicalIssue',
   'EncyclopediaEntry',
+  // Phase 10 delivers Video, Series and Playlist and nothing else of Media's:
+  // audio and galleries are Phases 11 and 12, a programme is a Series kind,
+  // and watch history is Phase 21's per-user state.
+  'AudioTrack',
+  'AudioSeries',
+  'Photo',
+  'Gallery',
+  'GalleryItem',
+  'Program',
+  'WatchHistory',
 ];
 
 /**
@@ -273,6 +301,15 @@ const PROHIBITED_TABLES = [
   'ContentItem',
   'LibraryResource',
   'ScholarlyRecord',
+
+  // PHASE 10 — ONE Video entity. A generic media table with a type column, or a
+  // table per provider or per kind of video, would split one resource into
+  // several (DOMAIN_MODEL.md §11); a Video asset table would mean hosting bytes.
+  'MediaItem',
+  'YouTubeVideo',
+  'VimeoVideo',
+  'LectureVideo',
+  'VideoAsset',
 ];
 
 const EXPECTED_AUDIT_COLUMNS = [
@@ -369,6 +406,16 @@ const EXPECTED_COLUMN_SIZES: readonly {
   { table: 'Publication', column: 'languageCode', characters: 16 },
   { table: 'MagazineIssue', column: 'languageCode', characters: 16 },
   { table: 'Encyclopedia', column: 'languageCode', characters: 16 },
+  // Phase 10. Slugs are unique keys and slug-history primary keys; the content
+  // language is a foreign key into `Language.code`. The provider identifier is
+  // VARCHAR under a binary collation and is asserted by `assertMediaFoundation`.
+  { table: 'Video', column: 'slug', characters: 120 },
+  { table: 'VideoSlugHistory', column: 'slug', characters: 120 },
+  { table: 'Series', column: 'slug', characters: 120 },
+  { table: 'SeriesSlugHistory', column: 'slug', characters: 120 },
+  { table: 'Playlist', column: 'slug', characters: 120 },
+  { table: 'PlaylistSlugHistory', column: 'slug', characters: 120 },
+  { table: 'Video', column: 'languageCode', characters: 16 },
 ];
 
 /**
@@ -398,6 +445,13 @@ const EXPECTED_FILTERED_INDEXES: readonly {
     table: 'Person',
     index: 'Person_userId_key',
     why: 'one account could be linked to two different contributor records at once',
+  },
+  // Phase 10. Filtered because a Video in no Series has no episode position,
+  // and two standalone Videos are not duplicates of each other.
+  {
+    table: 'Video',
+    index: 'Video_seriesId_seriesPosition_key',
+    why: 'two episodes of one Series could claim the same position',
   },
   // Phase 9. Filtered because an issue without a printed volume and number is
   // ordinary, and two such issues are not duplicates of each other.
@@ -458,6 +512,10 @@ const EXPECTED_TRIGGERS = [
   'LibraryReserveMagazineSlug',
   'LibraryReserveMagazineIssueSlug',
   'LibraryReserveEncyclopediaSlug',
+  // Phase 10: the same permanent reservation for each Media aggregate.
+  'MediaReserveVideoSlug',
+  'MediaReserveSeriesSlug',
+  'MediaReservePlaylistSlug',
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
@@ -534,6 +592,30 @@ const EXPECTED_CHECK_CONSTRAINTS = [
   { table: 'Publication', constraint: 'Publication_publisher_ck' },
   { table: 'Encyclopedia', constraint: 'Encyclopedia_publisher_ck' },
   { table: 'MagazineIssue', constraint: 'MagazineIssue_numbers_ck' },
+  // Phase 10. Lifecycle, locale and slug for each Media aggregate; the provider
+  // and its identifier grammar; availability, format, duration and the
+  // provider-hosted thumbnail; an episode position exactly when there is a
+  // Series; a bounded speaker order and a bounded, dense playlist order.
+  ...['Video', 'Series', 'Playlist'].flatMap((table) => [
+    ...['state', 'version', 'locale', 'slug'].map((rule) => ({
+      table,
+      constraint: table + '_' + rule + '_ck',
+    })),
+    { table: table + 'Label', constraint: table + 'Label_locale_ck' },
+    { table: table + 'Label', constraint: table + 'Label_title_ck' },
+  ]),
+  ...[
+    'provider',
+    'availability',
+    'format',
+    'duration',
+    'thumbnail',
+    'series',
+    'transcript',
+  ].map((rule) => ({ table: 'Video', constraint: 'Video_' + rule + '_ck' })),
+  { table: 'Series', constraint: 'Series_kind_ck' },
+  { table: 'VideoSpeaker', constraint: 'VideoSpeaker_position_ck' },
+  { table: 'PlaylistVideo', constraint: 'PlaylistVideo_position_ck' },
 ];
 
 /**
@@ -1005,19 +1087,27 @@ const PHASE9_KINDS = [
   'research-paper',
 ];
 
+const PHASE10_KINDS = ['video'];
+
 /**
  * Phase 9 WIDENS the search vocabularies by exactly its six kinds, each its own
- * scope, and its rollback narrows them back to exactly Phase 17's. Asserted
- * against the catalogue in both directions, so a migration that pre-created a
- * later domain's kind, or a rollback that left one behind, fails here.
+ * scope, and Phase 10 by exactly `video`; each rollback narrows them back to
+ * exactly the previous phase's. Asserted against the catalogue in every
+ * direction, so a migration that pre-created a later domain's kind, or a
+ * rollback that left one behind, fails here.
  */
 async function assertSearchVocabulary(
   session: SqlSession,
-  phase9: boolean,
+  stage: 'phase17' | 'phase9' | 'phase10',
 ): Promise<void> {
   const sorted = (values: readonly string[]) => [...values].sort().join(',');
-  const scopes = sorted(phase9 ? [...PHASE17_SCOPES, ...PHASE9_KINDS] : PHASE17_SCOPES);
-  const kinds = sorted(phase9 ? [...PHASE17_KINDS, ...PHASE9_KINDS] : PHASE17_KINDS);
+  const added = {
+    phase17: [],
+    phase9: PHASE9_KINDS,
+    phase10: [...PHASE9_KINDS, ...PHASE10_KINDS],
+  }[stage];
+  const scopes = sorted([...PHASE17_SCOPES, ...added]);
+  const kinds = sorted([...PHASE17_KINDS, ...added]);
 
   for (const constraint of [
     'SearchIndexRequest_scopeKind_ck',
@@ -1032,7 +1122,82 @@ async function assertSearchVocabulary(
 
   report(
     'search vocabulary',
-    phase9 ? 'Phase 17 and the six Phase-9 kinds' : 'exactly Phase 17 after rollback',
+    {
+      phase17: 'exactly Phase 17 after rollback',
+      phase9: 'exactly Phase 17 and Phase 9 after the Phase-10 rollback',
+      phase10: 'Phase 17, the six Phase-9 kinds and video',
+    }[stage],
+  );
+}
+
+const MEDIA_PERMISSIONS = ['media.administer', 'media.read'];
+
+/**
+ * Phase 10 — what only the catalogue can prove about Media:
+ *
+ *   1. the provider identifier is CASE-SENSITIVE, because YouTube identifiers
+ *      are: a binary collation, so two videos whose identifiers differ only in
+ *      case are not refused as duplicates of each other;
+ *   2. the Media vocabulary is exactly two keys, bundled into the protected
+ *      Platform Administrator role by the migration and by nothing else;
+ *   3. a Video's Series is ONE nullable column — "at most one Series" is a
+ *      property of the schema, not of a check somebody remembered to write.
+ */
+async function assertMediaFoundation(session: SqlSession): Promise<void> {
+  const [column] = await session.query<{
+    type: string;
+    max_length: number;
+    collation: string | null;
+  }>(`
+    SELECT t.name AS type, c.max_length, c.collation_name AS collation
+    FROM sys.columns c JOIN sys.types t ON t.user_type_id = c.user_type_id
+    WHERE c.object_id = OBJECT_ID(N'[dbo].[Video]') AND c.name = N'providerVideoId';
+  `);
+  if (
+    column === undefined ||
+    column.type !== 'varchar' ||
+    column.max_length !== 16 ||
+    column.collation !== 'Latin1_General_100_BIN2'
+  ) {
+    fail(
+      `Video.providerVideoId must be VARCHAR(16) under Latin1_General_100_BIN2; ` +
+        `found ${JSON.stringify(column ?? null)}.`,
+    );
+  }
+
+  const permissions = await session.query<{ key: string }>(`
+    SELECT [key] FROM [dbo].[Permission] WHERE [key] LIKE N'media.%' ORDER BY [key];
+  `);
+  const bundled = await session.query<{ permissionKey: string }>(`
+    SELECT rp.[permissionKey]
+    FROM [dbo].[RolePermission] rp
+    INNER JOIN [dbo].[Role] r ON r.[id] = rp.[roleId]
+    WHERE r.[key] = N'platform-administrator' AND rp.[permissionKey] LIKE N'media.%'
+    ORDER BY rp.[permissionKey];
+  `);
+  if (
+    permissions.map((row) => row.key).join(',') !== MEDIA_PERMISSIONS.join(',') ||
+    bundled.map((row) => row.permissionKey).join(',') !== MEDIA_PERMISSIONS.join(',')
+  ) {
+    fail(
+      `Media permissions or their bundling differ; catalogue: ` +
+        `${permissions.map((row) => row.key).join(', ') || '(none)'}; bundle: ` +
+        `${bundled.map((row) => row.permissionKey).join(', ') || '(none)'}.`,
+    );
+  }
+
+  const [series] = await session.query<{ columns: number; nullable: number }>(`
+    SELECT COUNT(*) AS columns, SUM(CAST(c.is_nullable AS INT)) AS nullable
+    FROM sys.columns c
+    WHERE c.object_id = OBJECT_ID(N'[dbo].[Video]') AND c.name = N'seriesId';
+  `);
+  if (Number(series?.columns) !== 1 || Number(series?.nullable) !== 1) {
+    fail('A Video must carry exactly one nullable Series reference.');
+  }
+
+  report(
+    'media foundation',
+    'binary provider identifier, two bundled keys, at most one Series per Video',
   );
 }
 
@@ -1541,7 +1706,8 @@ try {
   await assertNavigationPermission(session);
   await assertPeopleFoundation(session);
   await assertSearchFoundation(session);
-  await assertSearchVocabulary(session, true);
+  await assertSearchVocabulary(session, 'phase10');
+  await assertMediaFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -1590,8 +1756,11 @@ try {
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
     }
+    if (migration.id === '20260925000000_phase10_media_video') {
+      await assertSearchVocabulary(session, 'phase9');
+    }
     if (migration.id === '20260924000000_phase9_research_publications') {
-      await assertSearchVocabulary(session, false);
+      await assertSearchVocabulary(session, 'phase17');
     }
     if (migration.id === '20260923000000_phase17_search_foundation') {
       await assertSearchRemoved(session);
@@ -1633,7 +1802,8 @@ try {
   await assertNavigationPermission(session);
   await assertPeopleFoundation(session);
   await assertSearchFoundation(session);
-  await assertSearchVocabulary(session, true);
+  await assertSearchVocabulary(session, 'phase10');
+  await assertMediaFoundation(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

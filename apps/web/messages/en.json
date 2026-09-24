@@ -15,7 +15,7 @@
       "hadith": "Hadith",
       "learn": "Learn",
       "library": "Library",
-      "watch": "Watch and Listen",
+      "watch": "Watch",
       "fatwa": "Fatwa",
       "newsEvents": "News and Events",
       "global": "Global Network",
@@ -169,6 +169,18 @@
       "publications": "Library publications",
       "magazines": "Library magazines and journals",
       "encyclopedias": "Library encyclopedias"
+    },
+    "watch": {
+      "videos": "All videos",
+      "lectures": "Video lectures",
+      "events": "Event videos",
+      "highlights": "Video highlights",
+      "interviews": "Video interviews",
+      "documentaries": "Documentaries",
+      "series": "Video series",
+      "programs": "Programmes",
+      "playlists": "Video playlists",
+      "speakers": "Video speakers"
     }
   },
   "localeSwitcher": {
@@ -370,7 +382,8 @@
       "editorial": "Editorial",
       "correspondence": "Correspondence",
       "library": "Library",
-      "search": "Search"
+      "search": "Search",
+      "media": "Media"
     },
     "common": {
       "none": "Nothing to show.",
@@ -920,7 +933,8 @@
         "publication": "Publication",
         "magazine": "Magazine",
         "magazine-issue": "Magazine issue",
-        "encyclopedia": "Encyclopedia"
+        "encyclopedia": "Encyclopedia",
+        "video": "Video"
       },
       "categories": {
         "source-unavailable": "The owner could not be read",
@@ -955,7 +969,9 @@
       "speaker": "Speaker",
       "scholar": "Scholar",
       "teacher": "Teacher"
-    }
+    },
+    "videos": "Videos",
+    "allVideos": "All videos with this speaker"
   },
   "editorial": {
     "title": "Editorial",
@@ -1399,7 +1415,8 @@
       "publication": "Publication",
       "magazine": "Magazine",
       "magazine-issue": "Magazine issue",
-      "encyclopedia": "Encyclopedia"
+      "encyclopedia": "Encyclopedia",
+      "video": "Video"
     },
     "topic": "Topic",
     "topicAny": "Any topic",
@@ -1474,6 +1491,255 @@
       "publication": "All publications on this topic",
       "magazine": "All magazines on this topic",
       "encyclopedia": "All encyclopedias on this topic"
+    },
+    "videos": "Videos on this topic",
+    "allVideos": "All videos on this topic"
+  },
+  "watch": {
+    "title": "Watch",
+    "description": "Lectures, programmes, interviews and documentaries, played from the services that host them.",
+    "sort": {
+      "label": "Show",
+      "featured": "Featured",
+      "latest": "Latest"
+    },
+    "featuredEmpty": "No videos are featured at the moment.",
+    "empty": "No videos have been published here yet.",
+    "allVideos": "All videos",
+    "browse": "Browse",
+    "sections": {
+      "videos": "Videos",
+      "lectures": "Lectures and speeches",
+      "events": "Events",
+      "highlights": "Highlights",
+      "interviews": "Interviews",
+      "documentaries": "Documentaries",
+      "series": "Series",
+      "programs": "Programmes",
+      "playlists": "Playlists",
+      "speakers": "Speakers",
+      "topics": "Topics"
+    },
+    "sectionBody": {
+      "videos": "Every published video, newest first, with filters by topic, speaker, series and language.",
+      "lectures": "Lectures and speeches.",
+      "events": "Recordings from events and gatherings.",
+      "highlights": "Short highlights and excerpts.",
+      "interviews": "Interviews and conversations.",
+      "documentaries": "Documentaries and features.",
+      "series": "Videos gathered into series, in episode order.",
+      "programs": "Programmes, in episode order.",
+      "playlists": "Curated lists of videos, in a chosen order.",
+      "speakers": "The people who speak in these videos.",
+      "topics": "Browse every topic, with its videos alongside books and research."
+    },
+    "filters": "Filter videos",
+    "filterTopic": "Topic",
+    "filterSpeaker": "Speaker",
+    "filterSeries": "Series or programme",
+    "filterLanguage": "Language of the video",
+    "filterAny": "Any",
+    "filterApply": "Apply filters",
+    "filterClear": "Clear all filters",
+    "emptyFiltered": "No published video matches these filters.",
+    "previous": "Previous page",
+    "next": "Next page",
+    "format": {
+      "lecture": "Lecture",
+      "event": "Event",
+      "highlight": "Highlight",
+      "interview": "Interview",
+      "documentary": "Documentary"
+    },
+    "provider": {
+      "youtube": "YouTube",
+      "vimeo": "Vimeo"
+    },
+    "unavailable": "Unavailable",
+    "speakers": "Speakers",
+    "facts": "Details",
+    "fact": {
+      "provider": "Played by",
+      "language": "Language of the video",
+      "duration": "Duration",
+      "published": "Published by the provider",
+      "partOf": {
+        "series": "Part of the series",
+        "program": "Part of the programme"
+      },
+      "episode": "Episode {number}",
+      "captions": "Captions",
+      "transcript": "Transcript"
+    },
+    "playerHeading": "Video player",
+    "player": {
+      "notice": "This video is played by {provider}. Nothing is loaded from {provider} until you choose to play it here: loading the player connects your browser to {provider}, which may collect data under its own terms.",
+      "load": "Load the video from {provider}",
+      "fallback": "Watch “{title}” on {provider}",
+      "frameTitle": "{title} — {provider} player",
+      "unavailable": "{provider} does not currently offer this video to be played here.",
+      "tryProvider": "Try opening it on {provider}"
+    },
+    "metadataNotice": "This title and description describe the video in your language. They are not a translation or a dubbed version of it; the language of the video itself is stated below.",
+    "captionsAvailable": "Captions are offered in the {provider} player.",
+    "captionsUnknown": "No captions are recorded for this video.",
+    "transcriptNone": "No transcript is available for this video.",
+    "transcriptBelow": "Available below.",
+    "transcriptShow": "Read the transcript",
+    "topics": "Topics",
+    "inPlaylists": "In playlists",
+    "moreFrom": {
+      "series": "More from this series",
+      "program": "More from this programme"
+    },
+    "allEpisodes": "See every episode",
+    "groupEmpty": {
+      "series": "No series have been published yet.",
+      "program": "No programmes have been published yet.",
+      "playlist": "No playlists have been published yet."
+    },
+    "episodes": "Episodes",
+    "episodesEmpty": "No episodes have been published yet.",
+    "playlistVideos": "Videos in this playlist",
+    "playlistEmpty": "No video in this playlist has been published yet.",
+    "speakersEmpty": "No speakers are named on a published video yet.",
+    "speakerVideos": "Videos: {count}",
+    "topicTitle": "Videos",
+    "topicHub": "Everything on this topic",
+    "topicEmpty": "No published video is on this topic yet."
+  },
+  "media": {
+    "title": "Media",
+    "surface": {
+      "videos": "Videos",
+      "series": "Series and programmes",
+      "playlists": "Playlists"
+    },
+    "unknown": "Something went wrong. Nothing was changed.",
+    "reload": "Try again",
+    "loading": "Loading…",
+    "saved": "Saved.",
+    "denied": "You do not have permission to change media.",
+    "invalid": "Some of the details are not valid. Check each field and try again.",
+    "conflict": "This record changed. Reload it before trying again.",
+    "notFound": "That record no longer exists.",
+    "duplicateSlug": "This slug is already reserved by another record.",
+    "duplicateVideo": "This video is already catalogued.",
+    "duplicatePosition": "Another episode of this series already has that number.",
+    "duplicateMember": "That video is already in this playlist.",
+    "limit": "This playlist holds as many videos as it can.",
+    "create": "Create",
+    "save": "Save",
+    "pending": "Saving…",
+    "stateName": {
+      "draft": "Draft",
+      "published": "Published",
+      "archived": "Archived"
+    },
+    "state": "State",
+    "stateHelp": "Only published records appear on the public site and in search.",
+    "allStates": "Every state",
+    "textFilter": "Title or slug contains",
+    "filterApply": "Apply",
+    "previous": "Previous page",
+    "next": "Next page",
+    "labelTitle": "Title",
+    "description": "Description",
+    "slug": "Slug",
+    "slugHelp": "Lowercase letters, digits and hyphens. Changing it keeps the old address working as a permanent redirect, and the old slug is never reused.",
+    "primaryLocale": "Original language of the description",
+    "primaryLocaleHelp": "The interface language this record is first described in.",
+    "labels": "Titles and descriptions",
+    "labelsHelp": "Describe the record in each interface language you have wording for. These describe it; they do not translate or dub it.",
+    "version": "Version",
+    "empty": "Nothing here yet.",
+    "none": "None",
+    "backToList": "Back to the list",
+    "viewPublic": "View the public page",
+    "referenceQuery": "Find speakers by name",
+    "findReferences": "Find",
+    "referenceHelp": "Narrows the speaker choices below. Only published contributors can be chosen.",
+    "video": {
+      "create": "Add a video",
+      "edit": "Edit this video",
+      "source": "Source",
+      "provider": "Provider",
+      "providerName": {
+        "youtube": "YouTube",
+        "vimeo": "Vimeo"
+      },
+      "providerReference": "Video identifier or address",
+      "providerReferenceHelp": "Paste the video's ordinary address on the provider, or just its identifier. Embed code and addresses on other sites are refused.",
+      "availability": "Availability",
+      "availabilityHelp": "Mark a video unavailable when the provider has removed or restricted it; its page then offers no player.",
+      "availabilityName": {
+        "available": "Available",
+        "unavailable": "Unavailable"
+      },
+      "format": "Kind of video",
+      "formatHelp": "Decides which Watch view lists it. Leave it empty when none applies.",
+      "formatName": {
+        "lecture": "Lecture or speech",
+        "event": "Event",
+        "highlight": "Highlight",
+        "interview": "Interview",
+        "documentary": "Documentary"
+      },
+      "featured": "Feature this video on the Watch page",
+      "facts": "Details",
+      "contentLanguage": "Language of the video",
+      "contentLanguageHelp": "The language spoken in the video — not the language of its titles.",
+      "duration": "Duration",
+      "durationHelp": "Hours, minutes and seconds (1:02:03), minutes and seconds (4:05), or seconds. Leave empty if unknown.",
+      "publishedOn": "Published by the provider on",
+      "publishedOnHelp": "The date the provider shows. Leave empty if unknown; it is never guessed.",
+      "thumbnailUrl": "Provider's thumbnail address",
+      "thumbnailUrlHelp": "Optional. Only this video's own image on i.ytimg.com or i.vimeocdn.com. It is used in search-engine data and is never loaded on the public page.",
+      "alternatives": "Captions and transcript",
+      "captions": "The provider's player offers captions for this video",
+      "captionsHelp": "Tick only after checking the player. Captions are never generated here.",
+      "transcript": "Transcript",
+      "transcriptHelp": "Only a transcript the organisation holds and may publish. Never generated and never copied from the provider.",
+      "grouping": "Series",
+      "series": "Series or programme",
+      "seriesHelp": "A video belongs to at most one. Give its episode number too.",
+      "seriesPosition": "Episode number",
+      "speakers": "Speakers",
+      "speakersHelp": "People who speak in the video, in order. Being named here grants nothing.",
+      "speaker": "Speaker {number}",
+      "topics": "Topics",
+      "topic": "Topic {number}",
+      "preview": "Preview",
+      "previewHelp": "The same privacy-gated player the public page shows. Nothing is loaded from the provider until you choose to."
+    },
+    "series": {
+      "create": "Add a series or programme",
+      "edit": "Edit this series",
+      "kind": "Kind",
+      "kindHelp": "A programme is listed under Programmes and a series under Series. Changing the kind moves its address, and the old one redirects.",
+      "kindName": {
+        "series": "Series",
+        "program": "Programme"
+      },
+      "episodes": "Episodes",
+      "episodesHelp": "Every video in this series, in episode order, whatever its state. Set a video’s series and episode number on the video itself."
+    },
+    "playlist": {
+      "create": "Add a playlist",
+      "edit": "Edit this playlist",
+      "videos": "Videos in this playlist",
+      "videosHelp": "Videos in order: {count}. Only published videos appear publicly.",
+      "videosEmpty": "This playlist has no videos yet.",
+      "position": "No. {number}",
+      "moveEarlier": "Move up",
+      "moveLater": "Move down",
+      "remove": "Remove",
+      "add": "Add a video",
+      "findLabel": "Find videos by title or slug",
+      "find": "Find",
+      "noCandidates": "No video matches, or every match is already in this playlist.",
+      "addSubmit": "Add to the playlist",
+      "addVideo": "Video to add"
     }
   }
 }

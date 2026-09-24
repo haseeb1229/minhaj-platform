@@ -318,6 +318,7 @@ describe.skipIf(!databaseConfigured)(
       ];
       const PHASE_8_KEYS = ['library.administer', 'library.read'];
       const PHASE_17_KEYS = ['search.operate', 'search.read'];
+      const PHASE_10_KEYS = ['media.administer', 'media.read'];
 
       /**
        * The four capability-projection sources, which MUST NOT be grantable.
@@ -349,6 +350,7 @@ describe.skipIf(!databaseConfigured)(
             ...PHASE_6_KEYS,
             ...PHASE_8_KEYS,
             ...PHASE_17_KEYS,
+            ...PHASE_10_KEYS,
           ].sort(),
         );
 
@@ -390,11 +392,15 @@ describe.skipIf(!databaseConfigured)(
           'migration.',
           'teaching.',
           'editorial.',
-          'media.',
-          // Library shipped in Phase 8 and Search in Phase 17; Phase 9's
-          // research/publication vocabulary is still absent.
+          // Library shipped in Phase 8, Search in Phase 17 and Media in Phase
+          // 10. Still absent: research and publication keys, per-aggregate
+          // Media keys, and audio and gallery vocabulary.
           'research.',
           'publication.',
+          'video.',
+          'playlist.',
+          'audio.',
+          'gallery.',
           'messaging.',
         ]) {
           expect(keys.some((key) => key.startsWith(domain))).toBe(false);

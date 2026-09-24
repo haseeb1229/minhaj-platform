@@ -260,6 +260,32 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
       'Create, edit, link and archive Library works, editions, translations, sale points, research, publications, magazines and encyclopedias.',
   }),
 
+  /* ---- Phase 10 — Media: Video, Series, Playlist ----------------------- */
+  //
+  // READ AND ADMINISTER, split for the reason every pair here is split: seeing
+  // the video catalogue and changing what the public Watch surfaces offer are
+  // different authorities.
+  //
+  // TWO KEYS, NOT SIX. `media.videos.administer` beside
+  // `media.playlists.administer` would separate authority nobody asked to
+  // separate: a Playlist is an ordering of Videos and a Series a grouping of
+  // them, with the same single owner and no workflow of their own. There is no
+  // `media.publish` because Media has no review step to separate publishing
+  // from editing. Audio and galleries arrive with Phases 11 and 12, which decide
+  // whether they need a key of their own; nothing is seeded for them here.
+  //
+  // A SPEAKER PROFILE GRANTS NOTHING. Being named on a Video is attribution and
+  // confers no Media authority; only a role holding these keys does.
+  Object.freeze({
+    key: 'media.read',
+    description: 'View Videos, Series and Playlists, including drafts.',
+  }),
+  Object.freeze({
+    key: 'media.administer',
+    description:
+      'Create, edit, publish and archive Videos, Series and Playlists, and order Playlists.',
+  }),
+
   /* ---- Phase 17 — Search foundation ------------------------------------ */
   //
   // TWO KEYS, READ AND OPERATE, for the reason every pair here is split — and

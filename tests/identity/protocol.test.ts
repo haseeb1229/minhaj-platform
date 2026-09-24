@@ -193,15 +193,18 @@ describe('the mutation surface', () => {
         // neither authenticates anybody or changes anything.
         'apps/web/src/app/assets/library/editions/[editionId]/[purpose]/[assetId]/route.ts',
         'apps/web/src/app/assets/library/previews/[editionId]/[assetId]/route.ts',
+        // Phase 10: the Watch speaker alias — the same shared, GET-only 301 to
+        // `/people/{slug}` the two author aliases are.
+        'apps/web/src/app/[locale]/(public)/watch/speakers/[slug]/route.ts',
       ].sort(),
     );
 
-    // And the seven genuinely are read-only: a mutating verb on any of them
+    // And the eight genuinely are read-only: a mutating verb on any of them
     // would be a state-changing endpoint outside the Class-A controls.
     const { readFile } = await import('node:fs/promises');
 
     const readOnly = routes.filter((entry) => !entry.includes('webhooks'));
-    expect(readOnly).toHaveLength(7);
+    expect(readOnly).toHaveLength(8);
 
     for (const route of readOnly) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');

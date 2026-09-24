@@ -765,6 +765,39 @@ route (§3). **Phase 12 enters from 7 and 10**, unchanged.
 > never fabricated** (SECURITY_BASELINE.md §16.2–§16.3). A missing transcript is recorded as
 > missing, not invented.
 
+**Phase-10 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+- **Three aggregates, no more.** Video, Series and Playlist (DOMAIN_MODEL.md §11). A
+  **programme is a Series of kind `program`**, not a Program aggregate; the curated Watch views
+  (`lectures`, `events`, `highlights`, `interviews`, `documentaries`) are a Video's optional
+  **format**, not Lecture/Interview/Documentary entities and not an Event reference.
+- **One canonical address per Series.** The kind picks `/watch/series/{slug}` or
+  `/watch/programs/{slug}`; the other family and every former slug answer one 301 to the current
+  address, across a kind change and a rename together.
+- **Provider input.** An operator supplies a provider and its video identifier or one of that
+  provider's ordinary HTTPS watch addresses, reduced to `provider + providerVideoId`; every
+  other scheme, host, credential, port, extra path and Vimeo private-link hash is refused. No
+  provider API or credential exists, and nothing fetches provider metadata at render.
+- **Availability** is an operator-recorded fact, orthogonal to publication: a known-unavailable
+  Video keeps its page and offers the provider link instead of a player.
+- **Embed privacy and CSP** as recorded in ARCHITECTURE.md §4.7.1 — click-to-load, privacy-enhanced
+  hosts, no painted provider thumbnail, frame allowance only on the two player routes.
+- **`VideoObject`** is emitted only when the title, the provider's thumbnail and the provider's
+  publication date are all known and the Video is available; otherwise none is emitted.
+- **Search** gains the `video` kind only. Its documents carry title, description, content
+  language, topics, year and — only in the content language — an organisation-held transcript;
+  no provider identifier, address, availability or speaker name.
+- **Permissions.** `media.read` and `media.administer`, bundled into Platform Administrator; no
+  per-entity or publish key. Admin surfaces delivered: `/admin/media/{videos|series|playlists}`.
+- **Composition.** Videos appear on `/topics/{slug}` and on a speaker's `/people/{slug}` through
+  Media's public reader; `/watch/speakers` browses People with public Videos and each detail
+  301s to the profile. The Explore lectures view remains reserved: no data identifies its
+  subject.
+- **Not delivered, and not owed by this phase:** audio, photos, galleries and `/listen`
+  (Phases 11–12); Quran, Hadith and Event relationships (their owners); watch history
+  (Phase 21); automatic provider availability or metadata refresh.
+
 ---
 
 ### Phases 13–15 — News, Events, Collections, split for verification

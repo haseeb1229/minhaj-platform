@@ -244,7 +244,7 @@ citation remains valid regardless of reading preferences.
 | `/watch` | Landing — `?sort=featured\|latest` |
 | `/watch/videos` · `/watch/videos/{slug}` | Videos — `?topic, speaker, series, language` |
 | `/watch/{lectures\|events\|highlights\|interviews\|documentaries}` | Filtered views |
-| `/watch/series` · `/{slug}` · `/watch/programs` · `/{slug}` · `/watch/playlists` · `/{slug}` | Groupings |
+| `/watch/series` · `/{slug}` · `/watch/programs` · `/{slug}` · `/watch/playlists` · `/{slug}` | Groupings — a programme is a Series of kind `program`; each Series is canonical under exactly one of the two families, and the other answers one 301 (Phase 10) |
 | `/watch/speakers` | Speaker listing — **details 301 → `/people/{slug}`** |
 | `/watch/topics/{slug}` | Filtered view, canonical → `/topics/{slug}` |
 | `/listen` · `/listen/lectures` · `/{slug}` · `/listen/series` · `/{slug}` | Audio — a **sibling** of `/watch`, not a child |
@@ -481,7 +481,7 @@ Prefixed `/{locale}/admin`.
 | Hadith | `/admin/hadith/{collections\|books\|chapters\|records\|commentary}` |
 | Fatwa | `/admin/fatwa/{questions\|assignment\|drafts\|review\|published}` |
 | Library | `/admin/library/{works\|editions\|translations\|research\|publications\|magazines\|encyclopedias\|sale-points}` — research papers at `research/papers`, and a Magazine's issues beneath it at `magazines/{id}/issues/{issueId}` (Phase 9) |
-| Media | `/admin/media/{videos\|audio\|photos\|galleries\|playlists\|series\|assets}` |
+| Media | `/admin/media/{videos\|audio\|photos\|galleries\|playlists\|series\|assets}` — `videos`, `series` and `playlists` delivered in Phase 10 |
 | People | `/admin/people/{persons\|authors\|speakers\|scholars\|teachers}` |
 | Identity | `/admin/identity/{users\|roles\|permissions\|assignments\|security}` \u2014 **security** covers second-factor state, bootstrap status and identity audit (SECURITY_BASELINE.md \u00a78) |
 | Taxonomy | `/admin/taxonomy/{topics\|mapping\|languages\|tags}` |

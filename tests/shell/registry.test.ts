@@ -143,14 +143,13 @@ describe('a deferred capability cannot be linked', () => {
     // truth about the roadmap, and what lets the assertions above range over
     // the whole set instead of over whatever somebody remembered to add.
     //
-    // `library` LEFT THIS LIST IN PHASE 8 and `search` IN PHASE 17, when each
-    // was delivered. Both are asserted delivered below rather than silently
-    // dropped.
+    // `library` LEFT THIS LIST IN PHASE 8, `search` IN PHASE 17 and `watch` IN
+    // PHASE 10, when each was delivered. Each is asserted delivered below
+    // rather than silently dropped.
     for (const key of [
       'quran',
       'hadith',
       'learn',
-      'watch',
       'fatwa',
       'news-events',
       'global',
@@ -207,6 +206,36 @@ describe('a deferred capability cannot be linked', () => {
       'library.topics',
     ]);
     expect(routeByKey('library.collections')).toBeNull();
+  });
+
+  it('delivers Watch with a path, and only the Phase-10 Watch surfaces', () => {
+    const watch = requireRoute('watch');
+    expect(watch.path).toBe('/watch');
+    expect(watch.placements).toContain('primary');
+    expect(watch.indexing).toBe('eligible');
+
+    const surfaces = SHELL_ROUTES.filter((route) => route.key.startsWith('watch.'))
+      .map((route) => route.key)
+      .sort();
+
+    // Video, Series and Playlist. Audio (`/listen`, Phase 11) and galleries
+    // (Phase 12) are ABSENT, not reserved, and a topic view is a filtered view
+    // canonical to the topic hub, so it has no entry either.
+    expect(surfaces).toEqual([
+      'watch.documentaries',
+      'watch.events',
+      'watch.highlights',
+      'watch.interviews',
+      'watch.lectures',
+      'watch.playlists',
+      'watch.programs',
+      'watch.series',
+      'watch.speakers',
+      'watch.videos',
+    ]);
+    for (const absent of ['listen', 'watch.audio', 'watch.galleries', 'watch.topics']) {
+      expect(routeByKey(absent), absent).toBeNull();
+    }
   });
 
   it('refuses to resolve a deferred route as a renderable one', () => {
@@ -306,6 +335,18 @@ describe('indexing eligibility is honest', () => {
       // Phase 17: the canonical Topics browser. `search` is delivered too, and
       // is deliberately NOT here.
       'topics',
+      // Phase 10: the Watch landing page and its ten delivered surfaces.
+      'watch',
+      'watch.documentaries',
+      'watch.events',
+      'watch.highlights',
+      'watch.interviews',
+      'watch.lectures',
+      'watch.playlists',
+      'watch.programs',
+      'watch.series',
+      'watch.speakers',
+      'watch.videos',
     ]);
   });
 

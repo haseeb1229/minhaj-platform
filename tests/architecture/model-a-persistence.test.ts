@@ -555,6 +555,9 @@ describe('F1 — the production database package publishes no raw capability', (
       // Phase 8. Library is a bounded CONTEXT, and its adapter is physically
       // hosted here without that transferring any ownership (ARCHITECTURE.md §4.1).
       library: { kind: 'context', slug: 'library' },
+      // Phase 10. Media is a bounded CONTEXT (#8); its adapter is hosted here
+      // and owned there.
+      media: { kind: 'context', slug: 'media' },
       email: { kind: 'layer0', concern: 'email' },
       'rate-limiting': { kind: 'layer0', concern: 'rate-limiting' },
       auditing: { kind: 'layer0', concern: 'auditing' },

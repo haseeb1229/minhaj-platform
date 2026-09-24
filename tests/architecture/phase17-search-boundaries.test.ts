@@ -79,7 +79,9 @@ describe('search is Layer 0, not a bounded context', () => {
   it('creates no bounded context', async () => {
     const contexts = await readdir(path.join(repoRoot, 'apps', 'web', 'src', 'contexts'));
     expect(contexts).not.toContain('search');
-    expect(contexts).toHaveLength(5);
+    // The delivered contexts — Media joined at Phase 10 — and never a
+    // seventeenth for Search.
+    expect(contexts).toHaveLength(6);
   });
 
   it('depends on no bounded context and holds no database capability', async () => {
@@ -163,8 +165,9 @@ describe('the engine stays behind its port', () => {
 });
 
 describe('the inventory is closed — the delivered searchable domains and nothing later', () => {
-  // Phase 17's initial seven, and Phase 9's six scholarly and periodical kinds.
-  // A later searchable domain adds its own in its own phase; none is pre-created.
+  // Phase 17's initial seven, Phase 9's six scholarly and periodical kinds, and
+  // Phase 10's `video` — a Series or Playlist is a grouping, not a kind. A later
+  // searchable domain adds its own in its own phase; none is pre-created.
   const EXPECTED = [
     'article',
     'book-translation',
@@ -178,6 +181,7 @@ describe('the inventory is closed — the delivered searchable domains and nothi
     'research',
     'research-paper',
     'topic',
+    'video',
     'work',
   ];
 
@@ -187,7 +191,7 @@ describe('the inventory is closed — the delivered searchable domains and nothi
 
   it('holds the same kinds in the database constraint the latest migration set', async () => {
     const migration = await read(
-      'packages/database/prisma/migrations/20260924000000_phase9_research_publications/migration.sql',
+      'packages/database/prisma/migrations/20260925000000_phase10_media_video/migration.sql',
     );
     const constraint = /SearchDocument_kind_ck\] CHECK \(\[kind\] IN \(([^)]*)\)\)/u.exec(
       migration,

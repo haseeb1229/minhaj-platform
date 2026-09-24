@@ -16,6 +16,12 @@ import {
   verifyRestoredPhase9,
   writePhase9Fixture,
 } from '../src/lifecycle/phase9-fixture.ts';
+import {
+  capturePhase10Fixture,
+  newPhase10Fixture,
+  verifyRestoredPhase10,
+  writePhase10Fixture,
+} from '../src/lifecycle/phase10-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -134,6 +140,7 @@ const peopleFixture = newPhase5Fixture();
 const editorialFixture = newPhase6Fixture();
 const libraryFixture = newPhase8Fixture();
 const scholarlyFixture = newPhase9Fixture();
+const mediaFixture = newPhase10Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -225,6 +232,16 @@ try {
   const scholarlySnapshot = await capturePhase9Fixture(admin, scholarlyFixture);
   report('scholarly fixture', `run ${scholarlyFixture.runId}`);
 
+  // Phase-10 Media: a renamed Video, a series renamed into a programme, an
+  // ordered playlist, an archived Video, case-distinct provider identifiers and
+  // a pending search intent. No video bytes exist to back up.
+  await writePhase10Fixture(admin, mediaFixture, {
+    personId: peopleFixture.linkedPersonId,
+    topicId: taxonomyFixture.childTopicId,
+  });
+  const mediaSnapshot = await capturePhase10Fixture(admin, mediaFixture);
+  report('media fixture', `run ${mediaFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -291,6 +308,10 @@ try {
   report(
     'scholarly recovery',
     await verifyRestoredPhase9(restored, scholarlyFixture, scholarlySnapshot),
+  );
+  report(
+    'media recovery',
+    await verifyRestoredPhase10(restored, mediaFixture, mediaSnapshot),
   );
 
   // ---- restored security posture -------------------------------------------
@@ -422,6 +443,14 @@ try {
           'MagazineIssueSlugHistory DELETE',
           'DELETE FROM [dbo].[MagazineIssueSlugHistory];',
         ],
+        // Phase 10. A restored runtime can neither erase a Video nor release a
+        // reserved Video slug, nor rewrite a Playlist's order in place.
+        ['Video DELETE', 'DELETE FROM [dbo].[Video];'],
+        ['VideoSlugHistory DELETE', 'DELETE FROM [dbo].[VideoSlugHistory];'],
+        [
+          'PlaylistVideo UPDATE',
+          'UPDATE [dbo].[PlaylistVideo] SET [position]=[position];',
+        ],
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -449,6 +478,7 @@ try {
       await verifyRestoredPhase6(restored, editorialFixture, editorialSnapshot);
       await verifyRestoredPhase8(restored, libraryFixture, librarySnapshot);
       await verifyRestoredPhase9(restored, scholarlyFixture, scholarlySnapshot);
+      await verifyRestoredPhase10(restored, mediaFixture, mediaSnapshot);
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 
       // Phase 17. The full-text catalogue and index live INSIDE the database,
@@ -498,7 +528,7 @@ try {
 
   process.stdout.write(
     '\nPopulated recovery verified: representative rows in every Phase-2,\n' +
-      'Phase-3B, Phase-5, Phase-6, Phase-8 and Phase-9 tables were backed up, restored into a separate\n' +
+      'Phase-3B, Phase-5, Phase-6, Phase-8, Phase-9 and Phase-10 tables were backed up, restored into a separate\n' +
       'database, and checked value by value — together with referential\n' +
       'integrity, the topic hierarchy, the four distinct contributor profile\n' +
       'aggregates and their independent lifecycles, the optional account link,\n' +

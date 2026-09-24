@@ -37,6 +37,7 @@
           "concern": "storage"
         },
         "library": "library",
+        "media": "media",
         "search": {
           "kind": "layer0",
           "concern": "search"

@@ -712,6 +712,7 @@ try {
     editorialProvisioned: number;
     libraryProvisioned: number;
     searchProvisioned: number;
+    mediaProvisioned: number;
   }>(`
     SELECT COUNT_BIG(*) AS total,
            SUM(CASE WHEN [action] = N'phase1.permission.probe' THEN 1 ELSE 0 END) AS probe,
@@ -733,17 +734,20 @@ try {
              AS libraryProvisioned,
            SUM(CASE WHEN [action] = N'search.permissions.provisioned'
                      AND [actorType] = N'migration' THEN 1 ELSE 0 END)
-             AS searchProvisioned
+             AS searchProvisioned,
+           SUM(CASE WHEN [action] = N'media.permissions.provisioned'
+                     AND [actorType] = N'migration' THEN 1 ELSE 0 END)
+             AS mediaProvisioned
     FROM [dbo].[AuditLog];
   `);
 
-  // Exactly seven rows: the Phase-3B through Phase-17 privilege extensions,
-  // and this run's probe. Naming every migration action is load-bearing:
+  // Exactly eight rows: the Phase-3B through Phase-17 privilege extensions
+  // (Phase 10's included), and this run's probe. Naming every migration action is load-bearing:
   // deriving the expected total from whatever provisioning rows happened to
   // survive would pass if a phase omitted its own audit, and each privilege
   // extension must be able to show that it paid for itself
   // (SECURITY_BASELINE.md §8.1).
-  const EXPECTED_AUDIT_ROWS = 7;
+  const EXPECTED_AUDIT_ROWS = 8;
 
   if (
     Number(survivor?.taxonomyProvisioned ?? 0) !== 1 ||
@@ -752,6 +756,7 @@ try {
     Number(survivor?.editorialProvisioned ?? 0) !== 1 ||
     Number(survivor?.libraryProvisioned ?? 0) !== 1 ||
     Number(survivor?.searchProvisioned ?? 0) !== 1 ||
+    Number(survivor?.mediaProvisioned ?? 0) !== 1 ||
     Number(survivor?.probe ?? 0) !== 1 ||
     Number(survivor?.tampered ?? -1) !== 0 ||
     Number(survivor?.total ?? 0) !== EXPECTED_AUDIT_ROWS
@@ -760,7 +765,8 @@ try {
       'audit rows unmodified',
       `expected ${EXPECTED_AUDIT_ROWS} rows with 1 taxonomy provisioning, ` +
         `1 navigation provisioning, 1 people provisioning, 1 editorial provisioning, ` +
-        `1 library provisioning, 1 search provisioning, 1 probe and ` +
+        `1 library provisioning, 1 search provisioning, 1 media provisioning, ` +
+        `1 probe and ` +
         `0 tampered; found ${survivor?.total ?? 0} rows, ` +
         `${survivor?.taxonomyProvisioned ?? 0} taxonomy provisioning, ` +
         `${survivor?.navigationProvisioned ?? 0} navigation provisioning, ` +
@@ -768,12 +774,13 @@ try {
         `${survivor?.editorialProvisioned ?? 0} editorial provisioning, ` +
         `${survivor?.libraryProvisioned ?? 0} library provisioning, ` +
         `${survivor?.searchProvisioned ?? 0} search provisioning, ` +
+        `${survivor?.mediaProvisioned ?? 0} media provisioning, ` +
         `${survivor?.probe ?? 0} probe, ${survivor?.tampered ?? 0} tampered`,
     );
   } else {
     pass(
       'audit rows unmodified',
-      'the probe row and all six exact migration records are intact after ' +
+      'the probe row and all seven exact migration records are intact after ' +
         'UPDATE/DELETE attempts',
     );
   }
@@ -1231,6 +1238,171 @@ try {
       app,
       `${table} UPDATE denied`,
       `UPDATE [dbo].[${table}] SET [text]=[text];`,
+    );
+  }
+
+  // ---- Phase 10: Media — Video, Series, Playlist ---------------------------
+  //
+  // THE SAME THREE POSTURES, across three more aggregates, each proved to WORK
+  // and to REFUSE. Four invariants are proved as refusals BY THE DATABASE rather
+  // than by a grant: a renamed Video keeps its former slug (the trigger), a
+  // provider identifier differing only in case is a DIFFERENT video (the binary
+  // collation), two episodes of one Series cannot share a position (the filtered
+  // unique index), and a Playlist's order is dense and bounded (its CHECK).
+  const mediaRun = randomUUID().replaceAll('-', '');
+  const seriesId = randomUUID();
+  const firstVideoId = randomUUID();
+  const secondVideoId = randomUUID();
+  const thirdVideoId = randomUUID();
+  const playlistId = randomUUID();
+  const videoSlug = `video-proof-${mediaRun}`;
+  const videoColumns =
+    '[id],[slug],[primaryLocale],[state],[isFeatured],[provider],[providerVideoId],[availability],[languageCode],[captions],[seriesId],[seriesPosition],[version],[updatedAt]';
+
+  await expectAllowed(
+    app,
+    'Series INSERT',
+    `INSERT INTO [dbo].[Series] ([id],[slug],[kind],[primaryLocale],[state],[version],[updatedAt]) VALUES (N'${seriesId}',N'series-proof-${mediaRun}',N'program',N'en',N'draft',1,SYSUTCDATETIME());`,
+    'a Series is created by the runtime',
+  );
+  await expectAllowed(
+    app,
+    'Video INSERT (case-distinct provider identifiers)',
+    `INSERT INTO [dbo].[Video] (${videoColumns}) VALUES
+       (N'${firstVideoId}',N'${videoSlug}',N'en',N'draft',0,N'youtube','abcDEF12345',N'available',N'en',0,N'${seriesId}',1,1,SYSUTCDATETIME()),
+       (N'${secondVideoId}',N'${videoSlug}-two',N'en',N'draft',0,N'youtube','ABCdef12345',N'available',N'en',0,NULL,NULL,1,SYSUTCDATETIME());`,
+    'two YouTube identifiers differing only in case are two videos',
+  );
+  await expectAllowed(
+    app,
+    'Video UPDATE (rename)',
+    `UPDATE [dbo].[Video] SET [slug]=N'${videoSlug}-renamed',[version]=[version]+1 WHERE [id]=N'${firstVideoId}';`,
+    'a Video is edited and its slug changed',
+  );
+
+  const [videoReservations] = await app.query<{ count: number }>(
+    `SELECT COUNT_BIG(*) AS count FROM [dbo].[VideoSlugHistory] WHERE [videoId]=N'${firstVideoId}';`,
+  );
+  if (Number(videoReservations?.count) === 2) {
+    pass('Video slugs reserved by the database', 'the former and the current slug');
+  } else {
+    fail(
+      'Video slugs reserved by the database',
+      `expected 2 reservations, found ${String(videoReservations?.count ?? 0)}`,
+    );
+  }
+
+  await expectRefusedByInvariant(
+    app,
+    'Video provider identifier is unique, exactly',
+    `INSERT INTO [dbo].[Video] (${videoColumns}) VALUES (N'${thirdVideoId}',N'${videoSlug}-three',N'en',N'draft',0,N'youtube','abcDEF12345',N'available',N'en',0,NULL,NULL,1,SYSUTCDATETIME());`,
+    2627,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Video episode position is unique within its Series',
+    `UPDATE [dbo].[Video] SET [seriesId]=N'${seriesId}',[seriesPosition]=1 WHERE [id]=N'${secondVideoId}';`,
+    2601,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Video provider identifier grammar',
+    `UPDATE [dbo].[Video] SET [providerVideoId]='javascript:1' WHERE [id]=N'${secondVideoId}';`,
+    547,
+  );
+
+  await expectAllowed(
+    app,
+    'Playlist INSERT',
+    `INSERT INTO [dbo].[Playlist] ([id],[slug],[primaryLocale],[state],[version],[updatedAt]) VALUES (N'${playlistId}',N'playlist-proof-${mediaRun}',N'en',N'draft',1,SYSUTCDATETIME());`,
+    'a Playlist is created by the runtime',
+  );
+  // A real Playlist and a real Video with no membership yet, so the ONLY rule a
+  // position of 200 can break is the order's bound.
+  await expectRefusedByInvariant(
+    app,
+    'PlaylistVideo order is bounded',
+    `INSERT INTO [dbo].[PlaylistVideo] ([playlistId],[videoId],[position]) VALUES (N'${playlistId}',N'${firstVideoId}',200);`,
+    547,
+  );
+
+  for (const [label, statement] of [
+    [
+      'VideoLabel INSERT',
+      `INSERT INTO [dbo].[VideoLabel] ([videoId],[locale],[title],[description]) VALUES (N'${firstVideoId}',N'en',N'Least-privilege proof video',N'');`,
+    ],
+    [
+      'VideoSpeaker INSERT',
+      `INSERT INTO [dbo].[VideoSpeaker] ([videoId],[personId],[position]) VALUES (N'${firstVideoId}',N'${editorialPeople.linkedPersonId}',0);`,
+    ],
+    [
+      'VideoTopic INSERT',
+      `INSERT INTO [dbo].[VideoTopic] ([videoId],[topicId]) VALUES (N'${firstVideoId}',N'${editorialTopic.id}');`,
+    ],
+    [
+      'SeriesLabel INSERT',
+      `INSERT INTO [dbo].[SeriesLabel] ([seriesId],[locale],[title],[description]) VALUES (N'${seriesId}',N'en',N'Least-privilege proof series',N'');`,
+    ],
+    [
+      'PlaylistLabel INSERT',
+      `INSERT INTO [dbo].[PlaylistLabel] ([playlistId],[locale],[title],[description]) VALUES (N'${playlistId}',N'en',N'Least-privilege proof playlist',N'');`,
+    ],
+    [
+      'PlaylistVideo INSERT',
+      `INSERT INTO [dbo].[PlaylistVideo] ([playlistId],[videoId],[position]) VALUES (N'${playlistId}',N'${firstVideoId}',0),(N'${playlistId}',N'${secondVideoId}',1);`,
+    ],
+    [
+      'SearchIndexRequest INSERT (video scope)',
+      `INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'video',N'${firstVideoId}');`,
+    ],
+  ] as const) {
+    await expectAllowed(app, label, statement, 'the save path writes its own rows');
+  }
+
+  for (const [table, where] of [
+    ['PlaylistVideo', `[playlistId]=N'${playlistId}'`],
+    ['VideoTopic', `[videoId]=N'${firstVideoId}'`],
+    ['VideoSpeaker', `[videoId]=N'${firstVideoId}'`],
+    ['VideoLabel', `[videoId]=N'${firstVideoId}'`],
+    ['SeriesLabel', `[seriesId]=N'${seriesId}'`],
+    ['PlaylistLabel', `[playlistId]=N'${playlistId}'`],
+  ] as const) {
+    await expectAllowed(
+      app,
+      `${table} DELETE`,
+      `DELETE FROM [dbo].[${table}] WHERE ${where};`,
+      'a replaceable relation set can be cleared before it is rewritten',
+    );
+  }
+
+  for (const table of ['Video', 'Series', 'Playlist']) {
+    await expectDenied(app, `${table} DELETE denied`, `DELETE FROM [dbo].[${table}];`);
+    await expectDenied(
+      app,
+      `${table}SlugHistory UPDATE denied`,
+      `UPDATE [dbo].[${table}SlugHistory] SET [slug]=[slug];`,
+    );
+    await expectDenied(
+      app,
+      `${table}SlugHistory DELETE denied`,
+      `DELETE FROM [dbo].[${table}SlugHistory];`,
+    );
+    await expectDenied(
+      app,
+      `${table}Label UPDATE denied`,
+      `UPDATE [dbo].[${table}Label] SET [title]=[title];`,
+    );
+    await expectDenied(
+      app,
+      `${table} ALTER denied`,
+      `ALTER TABLE [dbo].[${table}] DROP CONSTRAINT [${table}_state_ck];`,
+    );
+  }
+  for (const table of ['VideoSpeaker', 'VideoTopic', 'PlaylistVideo']) {
+    await expectDenied(
+      app,
+      `${table} UPDATE denied`,
+      `UPDATE [dbo].[${table}] SET [videoId]=[videoId];`,
     );
   }
 

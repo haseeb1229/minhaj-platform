@@ -103,6 +103,24 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/library/magazines/page.tsx',
   'apps/web/src/app/[locale]/(public)/library/magazines/[slug]/page.tsx',
   'apps/web/src/app/[locale]/(public)/library/magazines/[slug]/issues/[issueSlug]/page.tsx',
+  // Phase 10. Every Watch surface reads Videos, Series and Playlists an
+  // administrator publishes and withdraws, so none can be prerendered; each is
+  // proven below to reach no session, no identity service and no authentication
+  // library. The speaker alias shares People's alias behaviour.
+  'apps/web/src/app/[locale]/(public)/watch/page.tsx',
+  'apps/web/src/app/[locale]/(public)/watch/[view]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/watch/videos/page.tsx',
+  'apps/web/src/app/[locale]/(public)/watch/videos/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/watch/series-routes.tsx',
+  'apps/web/src/app/[locale]/(public)/watch/series/page.tsx',
+  'apps/web/src/app/[locale]/(public)/watch/series/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/watch/programs/page.tsx',
+  'apps/web/src/app/[locale]/(public)/watch/programs/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/watch/playlists/page.tsx',
+  'apps/web/src/app/[locale]/(public)/watch/playlists/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/watch/speakers/page.tsx',
+  'apps/web/src/app/[locale]/(public)/watch/speakers/[slug]/route.ts',
+  'apps/web/src/app/[locale]/(public)/watch/topics/[slug]/page.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [
@@ -522,7 +540,18 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     // every OTHER external origin is still refused, and the assertion below
     // additionally forbids the attributes that would actually fetch one — which
     // the original blanket regex never checked for directly.
+    //
+    // PHASE 10 — THE ONE FILE THAT MAY SET A FRAME SOURCE. The privacy-gated
+    // player (`components/media/player.tsx`) renders an `<iframe src=…>` — but
+    // only in the state a visitor's own click creates, and the address comes
+    // from `providerEmbedUrl` in `@minhaj/contracts/media`, never a literal.
+    // Its exception is `src=` and nothing else, and the test below pins what
+    // that `src` may be. Provider URL literals live in the contracts module,
+    // outside this app tree, so the external-origin rule still holds here.
+    const PLAYER = 'apps/web/src/components/media/player.tsx';
     const { modules } = await contentGraph();
+
+    expect([...modules.keys()].map(relative)).toContain(PLAYER);
 
     for (const [file, source] of modules) {
       if (!file.startsWith(APP_SRC)) continue;
@@ -535,8 +564,37 @@ describe('the public shell is server-rendered, with narrow client islands', () =
       expect(body, relative(file)).not.toContain('next/font');
 
       for (const fetching of ['<link', '<img', 'src=', 'srcSet', '@import']) {
+        if (fetching === 'src=' && relative(file) === PLAYER) continue;
         expect(code(source), `${relative(file)} ${fetching}`).not.toContain(fetching);
       }
+    }
+  });
+
+  it('lets the player frame ONLY the derived privacy-enhanced address, after a click', async () => {
+    const source = code(
+      await readFile(
+        path.join(repoRoot, 'apps/web/src/components/media/player.tsx'),
+        'utf8',
+      ),
+    );
+
+    // Exactly one frame source, and it is the contract's derivation.
+    expect(source.match(/src=/g) ?? []).toHaveLength(1);
+    expect(source).toContain('src={providerEmbedUrl(provider, providerVideoId)}');
+    // The frame exists only in the state the visitor's click sets.
+    expect(source).toMatch(/\{loaded \? \(/);
+    expect(source).toContain('onClick={() => setLoaded(true)}');
+    // No autoplay, no remote image, no script, no stored consent state.
+    for (const forbidden of [
+      'autoplay',
+      '<img',
+      '<script',
+      'localStorage',
+      'sessionStorage',
+      'document.cookie',
+      'dangerouslySetInnerHTML',
+    ]) {
+      expect(source, forbidden).not.toContain(forbidden);
     }
   });
 });
@@ -910,8 +968,19 @@ describe('the base security headers', () => {
 
     expect(config).not.toContain('unsafe-eval');
 
-    // Media providers, analytics and font CDNs arrive with the phases that own
-    // them and their embed privacy contract — not pre-emptively.
+    // Analytics and font CDNs arrive with the phases that own them — not
+    // pre-emptively. Media providers arrived with Phase 10, and they are NOT
+    // written here as literals: the two frame origins come from the one
+    // contract the player derives its frame address from, and they widen the
+    // `frame-src` of exactly the two player routes, never the base policy.
+    expect(config).toContain(
+      "import { PROVIDER_EMBED_ORIGINS, VIDEO_PROVIDERS } from '@minhaj/contracts/media';",
+    );
+    expect(config).toContain('"frame-src \'none\'"');
+    expect(config).toContain("'/:locale(en|ur|ar)/watch/videos/:slug'");
+    expect(config).toContain("'/:locale(en|ur|ar)/admin/media/videos/:id'");
+    expect(config.match(/'\/:locale\(en\|ur\|ar\)\//g) ?? []).toHaveLength(2);
+    expect(config).toContain('autoplay=()');
     for (const origin of [
       'youtube',
       'vimeo',

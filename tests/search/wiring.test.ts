@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { EditorialPublicReaderPort } from '../../packages/contracts/src/editorial/index.ts';
 import type { LibraryPublicReaderPort } from '../../packages/contracts/src/library/index.ts';
+import type { MediaPublicReaderPort } from '../../packages/contracts/src/media/index.ts';
 import type { PeopleReaderPort } from '../../packages/contracts/src/people/index.ts';
 import type { TaxonomyReaderPort } from '../../packages/contracts/src/taxonomy/index.ts';
 import { searchWiring } from '../../apps/web/src/composition/search-wiring.ts';
@@ -49,7 +50,11 @@ function readers() {
           magazineSlug: kind === 'magazine-issue' ? `magazine of ${id}` : null,
         })),
   } as unknown as LibraryPublicReaderPort;
-  return { taxonomy, people, editorial, library };
+  const media = {
+    publicVideoTargets: async (ids: readonly string[]) =>
+      ids.filter((id) => id !== 'withdrawn').map((id) => ({ id, slug: `video ${id}` })),
+  } as unknown as MediaPublicReaderPort;
+  return { taxonomy, people, editorial, library, media };
 }
 
 describe('searchWiring', () => {
@@ -89,6 +94,12 @@ describe('searchWiring', () => {
     expect((await targets['magazine-issue'](['6'])).get('6')).toBe(
       '/library/magazines/magazine%20of%206/issues/magazine-issue-6',
     );
+  });
+
+  it('addresses a Video at its Watch route, and omits one Media withdrew', async () => {
+    const { targets } = searchWiring(readers());
+    const found = await targets.video(['1', 'withdrawn']);
+    expect([...found.entries()]).toEqual([['1', '/watch/videos/video%201']]);
   });
 
   it('omits a Phase-9 record its owner no longer publishes', async () => {

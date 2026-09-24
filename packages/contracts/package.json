@@ -31,6 +31,7 @@
     "./editorial": "./src/editorial/index.ts",
     "./editorial/editor": "./src/editorial/editor.ts",
     "./library": "./src/library/index.ts",
+    "./media": "./src/media/index.ts",
     "./search": "./src/search/index.ts"
   },
   "scripts": {

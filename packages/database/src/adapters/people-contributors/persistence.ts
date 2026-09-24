@@ -488,6 +488,7 @@ function toPublicProfile(row: PersonRow, locale: Locale): PublicPersonProfile {
   });
 
   return {
+    id: row.id,
     slug: row.slug,
     label: labelFor(row, locale),
     // Variants for the locale being read, then the primary locale's — an Urdu
