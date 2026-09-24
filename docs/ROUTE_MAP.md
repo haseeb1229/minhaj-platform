@@ -247,8 +247,8 @@ citation remains valid regardless of reading preferences.
 | `/watch/series` · `/{slug}` · `/watch/programs` · `/{slug}` · `/watch/playlists` · `/{slug}` | Groupings — a programme is a Series of kind `program`; each Series is canonical under exactly one of the two families, and the other answers one 301 (Phase 10) |
 | `/watch/speakers` | Speaker listing — **details 301 → `/people/{slug}`** |
 | `/watch/topics/{slug}` | Filtered view, canonical → `/topics/{slug}` |
-| `/listen` · `/listen/lectures` · `/{slug}` · `/listen/series` · `/{slug}` | Audio — a **sibling** of `/watch`, not a child |
-| `/listen/recitations` | **Catalogue projection of Quran-owned recitations**, canonical → `/quran/recitations` |
+| `/listen` · `/listen/lectures` · `/{slug}` · `/listen/series` · `/{slug}` | Audio — a **sibling** of `/watch`, not a child. `/listen/lectures` takes `?topic, speaker, series, language`; each track and audio series is canonical at exactly one address (Phase 11) |
+| `/listen/recitations` | **Catalogue projection of Quran-owned recitations**, canonical → `/quran/recitations`. **Absent until Quran delivers it** — never filled by an AudioTrack |
 
 ### 3.8 Fatwa
 
@@ -481,7 +481,7 @@ Prefixed `/{locale}/admin`.
 | Hadith | `/admin/hadith/{collections\|books\|chapters\|records\|commentary}` |
 | Fatwa | `/admin/fatwa/{questions\|assignment\|drafts\|review\|published}` |
 | Library | `/admin/library/{works\|editions\|translations\|research\|publications\|magazines\|encyclopedias\|sale-points}` — research papers at `research/papers`, and a Magazine's issues beneath it at `magazines/{id}/issues/{issueId}` (Phase 9) |
-| Media | `/admin/media/{videos\|audio\|photos\|galleries\|playlists\|series\|assets}` — `videos`, `series` and `playlists` delivered in Phase 10 |
+| Media | `/admin/media/{videos\|audio\|photos\|galleries\|playlists\|series\|assets}` — `videos`, `series` and `playlists` delivered in Phase 10; `audio` in Phase 11, with audio series at `audio/series`. There is no generic `assets` file manager: a file is managed on the record it belongs to |
 | People | `/admin/people/{persons\|authors\|speakers\|scholars\|teachers}` |
 | Identity | `/admin/identity/{users\|roles\|permissions\|assignments\|security}` \u2014 **security** covers second-factor state, bootstrap status and identity audit (SECURITY_BASELINE.md \u00a78) |
 | Taxonomy | `/admin/taxonomy/{topics\|mapping\|languages\|tags}` |
@@ -515,6 +515,7 @@ Categories only; no endpoint contracts in this phase.
 | Teacher / Admin | `/api/teacher/*` · `/api/admin/*` | Role-gated operations |
 | Migration | `/api/admin/migration/*` | Import control and status |
 | Media | `/api/media/*` | Asset serving and signed downloads |
+| Media upload | `/api/admin/media/audio/{id}/asset` | Phase 11: one track's audio file, `POST` only, a streamed raw body — Class A with explicit anti-CSRF (SECURITY_BASELINE.md §7.1) |
 | Webhooks | `/api/webhooks/{provider}` | **Signature-verified, idempotent, replay-resistant** |
 | Health | `/api/health` · `/api/ready` | Unprefixed operational probes |
 
@@ -726,8 +727,9 @@ validation with no over-claiming · legacy 301 correctness with no chains.
    three cache entries and three canonical addresses. It is the default-deny serving route
    delivered in Phase 7, and it returns a file or a 404, never markup. **The whole `/assets/*`
    namespace is excluded from locale routing** (Phase 8), and a consuming context serves its own
-   bytes beneath it on routes it owns — Library at `/assets/library/*` — supplying its business
-   policy there rather than weakening `/assets/{id}`'s default deny.
+   bytes beneath it on routes it owns — Library at `/assets/library/*`, Media at
+   `/assets/media/*` (Phase 11) — supplying its business policy there rather than weakening
+   `/assets/{id}`'s default deny.
 7. **No state-changing GET.** Every browser-initiated mutation is a POST/action with
    Origin/Host validation and framework-appropriate CSRF controls. Signed machine callbacks and
    authentication callbacks establish authenticity by their own protocol instead

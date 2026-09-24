@@ -35,5 +35,8 @@ export {
 
 export { archiveOrExecutable, detectMediaType, SNIFF_PREFIX_BYTES } from './sniff.ts';
 
+export { parseByteRange } from './range.ts';
+export type { ByteRange } from './range.ts';
+
 export { storageEnvSchema } from './config.ts';
 export type { StorageEnvironment } from './config.ts';

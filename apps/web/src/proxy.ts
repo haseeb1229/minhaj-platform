@@ -196,6 +196,36 @@ export default async function proxy(request: NextRequest) {
   }
   if (request.method === 'GET' || request.method === 'HEAD') {
     /**
+     * PHASE 11 — AUDIO'S OWN SLUG HISTORY, through the same single-301 mechanism.
+     *
+     * An AudioTrack and an AudioSeries each have an editable canonical slug, so
+     * each resolves a former one natively (DOMAIN_MODEL.md §19.7): one hop to the
+     * current address, locale preserved, the target built from Media's answer and
+     * never from the request.
+     */
+    const listen = /^\/(en|ur|ar)\/listen\/(lectures|series)\/([^/]+)$/.exec(
+      request.nextUrl.pathname,
+    );
+    if (listen?.[1] && listen[2] && listen[3]) {
+      const slug = decodedSegment(listen[3]);
+      if (slug !== null) {
+        const { mediaReadRuntime } = await import('@/composition/media-read');
+        const media = mediaReadRuntime();
+        const current =
+          listen[2] === 'lectures'
+            ? await media.audioTrackCanonicalSlug(slug)
+            : await media.audioSeriesCanonicalSlug(slug);
+        if (current !== null && current !== slug) {
+          return permanent(
+            request,
+            `/${listen[1]}/listen/${listen[2]}/${encodeURIComponent(current)}`,
+          );
+        }
+      }
+    }
+  }
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    /**
      * PHASE 17 — PUBLIC SEARCH ADMISSION.
      *
      * Only a request that will actually run a query spends budget: the search

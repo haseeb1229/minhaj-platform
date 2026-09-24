@@ -98,7 +98,7 @@ describeLive('Phase 3B — typed topic assignment, proven on a disposable juncti
       expect(Number(rows[0]?.total)).toBe(0);
     });
 
-    it('reports exactly the delivered typed assignment relationships: two Editorial, seven Library, one Media', async () => {
+    it('reports exactly the delivered typed assignment relationships: two Editorial, seven Library, two Media', async () => {
       // The honest answer, and the one the administrative surface shows. It is
       // read from the foreign-key catalogue, so it cannot say "none" while one
       // exists, or "one" while somebody merely intended it.
@@ -107,8 +107,8 @@ describeLive('Phase 3B — typed topic assignment, proven on a disposable juncti
         // ArticleTopic and PageTopic (Phase 6), WorkTopic (Phase 8), one
         // junction per Phase-9 aggregate — Research, ResearchPaper, Publication,
         // Magazine, MagazineIssue and Encyclopedia — and Media's VideoTopic
-        // (Phase 10).
-        enforcedRelationships: 10,
+        // (Phase 10) and AudioTrackTopic (Phase 11).
+        enforcedRelationships: 11,
         incompleteRelationships: 0,
       });
     });
@@ -214,7 +214,7 @@ describeLive('Phase 3B — typed topic assignment, proven on a disposable juncti
       // context's table, column or constraint names. The adapter derives this
       // status from the foreign-key catalogue rather than a declared registry.
       expect(await harness.taxonomy.assignmentStatus()).toEqual({
-        enforcedRelationships: 11,
+        enforcedRelationships: 12,
         incompleteRelationships: 0,
       });
     });
@@ -318,7 +318,7 @@ describeLive('Phase 3B — typed topic assignment, proven on a disposable juncti
         // The surface reports the defect semantically without exposing either
         // the half-typed table or the sound owner's physical schema.
         expect(await harness.taxonomy.assignmentStatus()).toEqual({
-          enforcedRelationships: 12,
+          enforcedRelationships: 13,
           incompleteRelationships: 1,
         });
       } finally {

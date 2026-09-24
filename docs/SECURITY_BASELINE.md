@@ -272,7 +272,12 @@ Actions and Route Handler mutations alike. **This is where the blanket browser r
 5. **`SameSite` and session protections where relevant.** `SameSite` is necessary but not
    sufficient — one layer, not the policy.
 6. **Route Handler and REST mutations carry explicit anti-CSRF protection** — they do not
-   inherit Server Action protections.
+   inherit Server Action protections. As implemented (Phase 11), a Route Handler mutation
+   requires all of: `POST`; an `Origin` header present and **equal to the configured
+   application origin** (not to `Host`, which a proxy rewrites and DNS rebinding controls);
+   `Sec-Fetch-Site: same-origin` wherever the browser sends it; and a custom intent header,
+   which no HTML form can set and which a cross-origin page could send only after a CORS
+   preflight the platform never approves. These are checked before the session is consulted.
 7. **Cross-origin requests are rejected by default.**
 
 > **These seven rules are Class-A rules.** They are not blanket-applied to Class B, Class C or
@@ -558,9 +563,20 @@ correspondence action. It is **not** raised to admit large files: doing so would
 every public action must accept before it can refuse. Browser-attached edition files are
 therefore limited accordingly, and large files enter through the authorised migration pipeline
 (Phase 30), which writes through `StorageService` directly. A dedicated streaming upload route
-with explicit Class-A anti-CSRF protection (§7.1 rule 6) is the path if a later phase needs
-large browser uploads; it is a decision for that phase, not a default. Uploads are rate
-limited per account (§15.2).
+with explicit Class-A anti-CSRF protection (§7.1 rule 6) is the path when a phase needs large
+browser uploads; it is a decision for that phase, not a default. Uploads are rate limited per
+account (§15.2).
+
+**Phase 11 (Media audio) is the first such route**, `POST /api/admin/media/audio/{id}/asset`.
+It applies §7.1's checks, then a live `media.administer`, a per-account upload budget and a
+declared length bounded before any byte is read; the body is streamed into `StorageService`,
+which bounds it again while writing and never buffers it. The browser's declared type and
+filename can only refuse or display, never admit. Only a `clean` result is attached, under the
+track's expected version; anything the scanner could not clear stays quarantined and
+unreferenced. Both halves must allow before a track's bytes are served — Media's policy (the
+exact asset recorded on a published track, or a live administrator's preview) and Storage's
+custody — and a `Range` request is decided identically, after both. Responses are
+`private, no-store`, `nosniff` and `Cross-Origin-Resource-Policy: same-origin`.
 
 ### 10.2 Imported HTML — the largest injection vector
 

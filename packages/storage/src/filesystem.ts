@@ -50,7 +50,16 @@ export interface FilesystemStore {
    * other access, so it cannot be aimed by anything a caller supplied.
    */
   pathOf(key: string): string;
-  read(key: string): AsyncIterable<Uint8Array>;
+  /**
+   * The stored bytes — all of them, or only the inclusive `range`.
+   *
+   * A range is read with the file stream's own `start`/`end`, so seeking to the
+   * last minute of a long recording reads that minute and nothing before it.
+   */
+  read(
+    key: string,
+    range?: { readonly start: number; readonly end: number },
+  ): AsyncIterable<Uint8Array>;
   verify(key: string, expected: { byteSize: number; checksum: string }): Promise<boolean>;
   remove(key: string): Promise<void>;
   exists(key: string): Promise<boolean>;
@@ -162,12 +171,27 @@ export async function createFilesystemStore(root: string): Promise<FilesystemSto
       };
     },
 
-    read(key) {
+    read(key, range) {
       const absolute = pathFor(key);
+
+      if (
+        range !== undefined &&
+        !(
+          Number.isSafeInteger(range.start) &&
+          Number.isSafeInteger(range.end) &&
+          range.start >= 0 &&
+          range.end >= range.start
+        )
+      ) {
+        throw new RangeError('A byte range must be non-negative and in order.');
+      }
 
       return (async function* () {
         await assertRealContained(absolute);
-        yield* createReadStream(absolute);
+        yield* createReadStream(
+          absolute,
+          range === undefined ? undefined : { start: range.start, end: range.end },
+        );
       })();
     },
 

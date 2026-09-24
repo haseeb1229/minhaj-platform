@@ -61,6 +61,10 @@ const REQUIRED = [
   // and its rebuild after a real restore.
   'media.integration',
   'media-recovery.integration',
+  // Phase 11: the audio kind, its stale-index rule, rebuild and reconciliation.
+  // Its rebuild after a real restore runs with the storage proofs, because
+  // audio recovery restores bytes as well as rows.
+  'audio.integration',
 ];
 
 const seen = files.map((file) => String(file.name ?? ''));

@@ -249,4 +249,18 @@ export interface AssetStream {
   readonly checksum: string;
   readonly displayName: string | null;
   readonly body: AsyncIterable<Uint8Array>;
+  /**
+   * The inclusive byte range `[start, end]` of the SAME authorised bytes
+   * (Phase 11, for seeking in a player).
+   *
+   * NOT A SECOND DOOR. It exists only on a stream `open` already resolved — clean
+   * custody, bytes present, an explicit allow — so a range request is decided
+   * exactly as a whole-file request is, before a byte is read. It streams the
+   * range from disk and never reads the rest of the file. An invalid range
+   * (negative, reversed, or past the end) throws rather than being clamped: the
+   * HTTP layer decides what an unsatisfiable request means, not this port.
+   *
+   * Like `body`, it is lazy: nothing is opened until it is iterated.
+   */
+  range(start: number, end: number): AsyncIterable<Uint8Array>;
 }

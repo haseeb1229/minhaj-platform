@@ -121,6 +121,16 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/watch/speakers/page.tsx',
   'apps/web/src/app/[locale]/(public)/watch/speakers/[slug]/route.ts',
   'apps/web/src/app/[locale]/(public)/watch/topics/[slug]/page.tsx',
+  // Phase 11. Every Listen surface reads AudioTracks and AudioSeries an
+  // administrator publishes and withdraws, and a track's page asks Storage
+  // whether its file can be served now — so none can be prerendered, and each
+  // is proven below to reach no session, no identity service, no logger and no
+  // authentication library.
+  'apps/web/src/app/[locale]/(public)/listen/page.tsx',
+  'apps/web/src/app/[locale]/(public)/listen/lectures/page.tsx',
+  'apps/web/src/app/[locale]/(public)/listen/lectures/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/listen/series/page.tsx',
+  'apps/web/src/app/[locale]/(public)/listen/series/[slug]/page.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [
@@ -548,10 +558,18 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     // Its exception is `src=` and nothing else, and the test below pins what
     // that `src` may be. Provider URL literals live in the contracts module,
     // outside this app tree, so the external-origin rule still holds here.
+    //
+    // PHASE 11 — THE ONE FILE THAT MAY SET A MEDIA SOURCE. The audio player
+    // (`components/media/audio-player.tsx`) renders `<audio src=…>`, and that
+    // source is a FIRST-PARTY path it derives from the track and asset
+    // identifiers — the platform's own authorised byte route, never another
+    // origin — pinned by the test below.
     const PLAYER = 'apps/web/src/components/media/player.tsx';
+    const AUDIO_PLAYER = 'apps/web/src/components/media/audio-player.tsx';
     const { modules } = await contentGraph();
 
     expect([...modules.keys()].map(relative)).toContain(PLAYER);
+    expect([...modules.keys()].map(relative)).toContain(AUDIO_PLAYER);
 
     for (const [file, source] of modules) {
       if (!file.startsWith(APP_SRC)) continue;
@@ -564,9 +582,43 @@ describe('the public shell is server-rendered, with narrow client islands', () =
       expect(body, relative(file)).not.toContain('next/font');
 
       for (const fetching of ['<link', '<img', 'src=', 'srcSet', '@import']) {
-        if (fetching === 'src=' && relative(file) === PLAYER) continue;
+        if (fetching === 'src=' && [PLAYER, AUDIO_PLAYER].includes(relative(file)))
+          continue;
         expect(code(source), `${relative(file)} ${fetching}`).not.toContain(fetching);
       }
+    }
+  });
+
+  it('lets the audio player play ONLY its own first-party byte route, never on its own', async () => {
+    const source = code(
+      await readFile(
+        path.join(repoRoot, 'apps/web/src/components/media/audio-player.tsx'),
+        'utf8',
+      ),
+    );
+
+    // Exactly one media source, derived from the two first-party byte routes.
+    expect(source.match(/src=/g) ?? []).toHaveLength(1);
+    expect(source).toContain('src={source}');
+    expect(source).toMatch(
+      /mode === 'public'\s*\?\s*audioAssetPath\(trackId, assetId\)\s*:\s*audioPreviewPath\(trackId, assetId\)/,
+    );
+    // Nothing is fetched until the listener presses play, and nothing plays
+    // on its own.
+    expect(source).toContain('preload="none"');
+    for (const forbidden of [
+      'autoplay',
+      'autoPlay',
+      '.play(',
+      '<img',
+      '<script',
+      'download',
+      'localStorage',
+      'sessionStorage',
+      'document.cookie',
+      'dangerouslySetInnerHTML',
+    ]) {
+      expect(source, forbidden).not.toContain(forbidden);
     }
   });
 

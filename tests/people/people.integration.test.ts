@@ -1311,9 +1311,10 @@ describeLive('Phase 5 — People & Contributors over a live database', () => {
       // Editorial was the first delivered target owner (two typed tables); Library
       // is the second (Phase 8): `WorkContributor` for attribution and
       // `BookTranslator` for a genuine translation's translators. Phase 9 adds one
-      // typed credit table per scholarly and periodical aggregate, and Phase 10
-      // Media's `VideoSpeaker`. Each is a typed foreign key to Person, never a
-      // polymorphic pair — and none of them grants the Person anything.
+      // typed credit table per scholarly and periodical aggregate, Phase 10
+      // Media's `VideoSpeaker` and Phase 11 its `AudioTrackSpeaker`. Each is a
+      // typed foreign key to Person, never a polymorphic pair — and none of them
+      // grants the Person anything.
       const referencing = await admin.query<{ tableName: string }>(`
         SELECT DISTINCT OBJECT_NAME(fk.parent_object_id) AS tableName
         FROM sys.foreign_keys fk
@@ -1323,6 +1324,7 @@ describeLive('Phase 5 — People & Contributors over a live database', () => {
 
       expect(referencing.map((row) => row.tableName)).toEqual([
         'ArticleContributor',
+        'AudioTrackSpeaker',
         'AuthorProfile',
         'BookTranslator',
         'EncyclopediaContributor',

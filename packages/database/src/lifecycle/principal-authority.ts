@@ -370,6 +370,16 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[videoslughistory]': ['SELECT', 'INSERT'],
   '[dbo].[seriesslughistory]': ['SELECT', 'INSERT'],
   '[dbo].[playlistslughistory]': ['SELECT', 'INSERT'],
+  // Phase 11: audio, by the same three postures. The audio FILE is reached only
+  // through Storage's own `Asset` grant and the StorageService, never here.
+  '[dbo].[audiotrack]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[audioseries]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[audiotracklabel]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[audiotrackspeaker]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[audiotracktopic]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[audioserieslabel]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[audiotrackslughistory]': ['SELECT', 'INSERT'],
+  '[dbo].[audioseriesslughistory]': ['SELECT', 'INSERT'],
   '[dbo].[article]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[page]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[articlerevision]': ['SELECT', 'INSERT'],

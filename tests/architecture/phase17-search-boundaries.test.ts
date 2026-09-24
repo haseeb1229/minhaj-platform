@@ -165,11 +165,14 @@ describe('the engine stays behind its port', () => {
 });
 
 describe('the inventory is closed — the delivered searchable domains and nothing later', () => {
-  // Phase 17's initial seven, Phase 9's six scholarly and periodical kinds, and
-  // Phase 10's `video` — a Series or Playlist is a grouping, not a kind. A later
-  // searchable domain adds its own in its own phase; none is pre-created.
+  // Phase 17's initial seven, Phase 9's six scholarly and periodical kinds,
+  // Phase 10's `video` and Phase 11's `audio` — a Series, a Playlist or an
+  // AudioSeries is a grouping, not a kind, and a Quran recitation is Quran's to
+  // project. A later searchable domain adds its own in its own phase; none is
+  // pre-created.
   const EXPECTED = [
     'article',
+    'audio',
     'book-translation',
     'edition',
     'encyclopedia',
@@ -191,7 +194,7 @@ describe('the inventory is closed — the delivered searchable domains and nothi
 
   it('holds the same kinds in the database constraint the latest migration set', async () => {
     const migration = await read(
-      'packages/database/prisma/migrations/20260925000000_phase10_media_video/migration.sql',
+      'packages/database/prisma/migrations/20260926000000_phase11_media_audio/migration.sql',
     );
     const constraint = /SearchDocument_kind_ck\] CHECK \(\[kind\] IN \(([^)]*)\)\)/u.exec(
       migration,

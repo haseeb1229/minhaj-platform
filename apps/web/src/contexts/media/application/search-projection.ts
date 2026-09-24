@@ -1,4 +1,5 @@
 import type {
+  AudioSearchRecord,
   MediaLabel,
   MediaPublicReaderPort,
   VideoSearchRecord,
@@ -6,8 +7,9 @@ import type {
 import type { SearchDocumentSource, SearchScopeSource } from '@minhaj/contracts/search';
 
 /**
- * Media's search projection — one scope per public Video (DELIVERY_PLAN.md
- * Phase 10: "search projection and filters").
+ * Media's search projections — one scope per public Video (DELIVERY_PLAN.md
+ * Phase 10: "search projection and filters") and, from Phase 11, one per public
+ * AudioTrack, built by the SAME rules.
  *
  * ONE DOCUMENT PER DESCRIPTIVE LABEL, each tokenised in its own language and
  * every one carrying the Video's genuine CONTENT language, so "Urdu videos"
@@ -22,14 +24,19 @@ import type { SearchDocumentSource, SearchScopeSource } from '@minhaj/contracts/
  * WHAT IS NOT HERE. No provider identifier, no embed or watch address, no
  * availability and no speaker name: a speaker is found as a Person result, and
  * putting names into Videos would make every People edit re-project Media.
- * The result links to the Video's CURRENT address, resolved at query time.
+ * For an AudioTrack likewise no asset identifier, no storage key and nothing
+ * about its file. The result links to the CURRENT address, resolved at query
+ * time.
  */
 
 function primarySubtag(code: string): string {
   return (code.split('-')[0] ?? code).toLowerCase();
 }
 
-function videoDocuments(record: VideoSearchRecord): SearchDocumentSource[] {
+function documents(
+  kind: 'video' | 'audio',
+  record: VideoSearchRecord | AudioSearchRecord,
+): SearchDocumentSource[] {
   const contentSubtag = primarySubtag(record.languageCode);
   const transcript = record.transcript ?? '';
 
@@ -38,7 +45,7 @@ function videoDocuments(record: VideoSearchRecord): SearchDocumentSource[] {
     textLanguage: string,
     carriesTranscript: boolean,
   ): SearchDocumentSource => ({
-    kind: 'video',
+    kind,
     resourceId: record.id,
     textLanguage,
     contentLanguage: record.languageCode,
@@ -74,8 +81,22 @@ export function createVideoSearchSource(
       const record = await reader.searchVideo(id);
       return record === null
         ? null
-        : { stamp: record.stamp, documents: videoDocuments(record) };
+        : { stamp: record.stamp, documents: documents('video', record) };
     },
     list: (input) => reader.searchVideos(input),
+  };
+}
+
+export function createAudioSearchSource(
+  reader: MediaPublicReaderPort,
+): SearchScopeSource {
+  return {
+    async project(id) {
+      const record = await reader.searchAudio(id);
+      return record === null
+        ? null
+        : { stamp: record.stamp, documents: documents('audio', record) };
+    },
+    list: (input) => reader.searchAudioTracks(input),
   };
 }

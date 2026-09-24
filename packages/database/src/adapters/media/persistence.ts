@@ -8,7 +8,6 @@ import type { Locale } from '@minhaj/contracts';
 import {
   MEDIA_FACET_PAGE,
   MEDIA_PAGE,
-  type MediaLabel,
   type MediaPersistencePort,
   type MediaPublicReaderPort,
   type MediaState,
@@ -30,6 +29,24 @@ import {
 import { auditRow } from '../../audit-row.ts';
 import { getDatabaseClient } from '../../client.ts';
 import { requestSearchIndexing } from '../../search-intent.ts';
+import { audioPersistence, audioPublicReader } from './audio.ts';
+import {
+  bounded,
+  boundedOffset,
+  isoDate,
+  LABELS,
+  labelsOf,
+  MediaDataError,
+  PUBLISHED,
+  RECENTLY_CHANGED,
+  refuse,
+  TARGET_BATCH,
+  textMatch,
+  UNMATCHABLE_VERSION,
+  utcDate,
+  type Client,
+  type LabelRow,
+} from './shared.ts';
 
 /**
  * The Media persistence adapter — Video, Series and Playlist
@@ -37,7 +54,9 @@ import { requestSearchIndexing } from '../../search-intent.ts';
  *
  * OWNED BY THE MEDIA CONTEXT, hosted here (ARCHITECTURE.md §4.1). Two factories
  * leave this module, each typed by Media's own port, so no client, delegate or
- * transaction handle crosses the boundary.
+ * transaction handle crosses the boundary. The Phase-11 audio half
+ * (`./audio.ts`) is spread into both, so Media keeps one persistence port and
+ * one public reader.
  *
  * ONE PUBLIC PREDICATE PER AGGREGATE, applied IN THE QUERY: a Video, Series or
  * Playlist is public when it is `published`. A Video's Series is shown with it
@@ -51,58 +70,14 @@ import { requestSearchIndexing } from '../../search-intent.ts';
  * and — for a Video — its durable search intent commit together or not at all.
  */
 
-type Client = Prisma.TransactionClient;
-
-/* ===========================================================================
- * Refusals
- * ========================================================================= */
-
-class MediaDataError extends Error {
-  constructor(readonly reason: string) {
-    super(reason);
-  }
-}
-
-/** Unique keys whose violation means something other than "slug taken". */
-const KEY_REASONS: readonly (readonly [string, string])[] = [
-  ['Video_provider_providerVideoId_key', 'duplicate-video'],
-  ['Video_seriesId_seriesPosition_key', 'duplicate-position'],
-  ['PlaylistVideo_playlistId_position_key', 'conflict'],
-  ['PlaylistVideo_pkey', 'duplicate-member'],
-];
-
-/**
- * Structured database refusals, and ONLY those, become domain answers. A
- * duplicate provider identifier is its own answer — telling an operator their
- * slug is taken when it is the video that is already catalogued would send
- * them to fix the wrong field. Everything unrecognised is rethrown and reported
- * as unavailable, never as a rule that was not evaluated.
- */
-function refuse(error: unknown): never {
-  if (error instanceof MediaDataError) throw error;
-  const known = error as { code?: string; meta?: unknown; message?: string } | null;
-  const code = known?.code;
-  if (code === 'P2002') {
-    const detail = `${JSON.stringify(known?.meta ?? {})} ${known?.message ?? ''}`;
-    const reason = KEY_REASONS.find(([key]) => detail.includes(key))?.[1];
-    throw new MediaDataError(reason ?? 'duplicate-slug');
-  }
-  if (code === 'P2025') throw new MediaDataError('conflict');
-  if (code === 'P2003' || code === 'P2004') throw new MediaDataError('invalid');
-  throw error;
-}
-
 /* ===========================================================================
  * Query fragments
  * ========================================================================= */
 
-const LABELS = { orderBy: { locale: 'asc' } } as const;
 const SPEAKERS = {
   select: { personId: true },
   orderBy: [{ position: 'asc' }, { personId: 'asc' }],
 } satisfies Prisma.Video$speakersArgs;
-
-const PUBLISHED = { state: 'published' } as const;
 
 /** What a card needs: never the transcript. */
 const LISTING_SELECT = {
@@ -167,16 +142,6 @@ const PLAYLIST_SELECT = {
  */
 const LATEST = [{ publishedOn: 'desc' }, { slug: 'asc' }, { id: 'asc' }] as const;
 const EPISODES = [{ seriesPosition: 'asc' }, { id: 'asc' }] as const;
-const RECENTLY_CHANGED = [{ updatedAt: 'desc' }, { id: 'asc' }] as const;
-
-const boundedOffset = (value: number) =>
-  Math.max(0, Math.min(10_000_000, Math.trunc(value) || 0));
-
-const bounded = (value: number, max: number) =>
-  Math.min(max, Math.max(1, Math.trunc(value) || 1));
-
-/** A batch of identifiers a caller may ask about at once. */
-const TARGET_BATCH = 500;
 
 /** How many Playlists a Video's page names. */
 const APPEARANCES = 10;
@@ -184,21 +149,9 @@ const APPEARANCES = 10;
 /** How many Series the Video form offers. */
 const SERIES_CHOICES = 200;
 
-/**
- * A version no row can hold (`CHECK ([version] > 0)`). An edit that somehow
- * arrived without an expected version conflicts rather than overwriting.
- */
-const UNMATCHABLE_VERSION = 0;
-
 /* ===========================================================================
  * Mapping
  * ========================================================================= */
-
-interface LabelRow {
-  readonly locale: string;
-  readonly title: string;
-  readonly description: string;
-}
 
 interface ListingRow {
   readonly id: string;
@@ -243,23 +196,6 @@ interface GroupRow {
   readonly version: number;
   readonly updatedAt: Date;
   readonly labels: readonly LabelRow[];
-}
-
-/** A SQL `date` read back as the `YYYY-MM-DD` it is — never shifted by a zone. */
-function isoDate(value: Date | null): string | null {
-  return value === null ? null : value.toISOString().slice(0, 10);
-}
-
-function utcDate(value: string | null): Date | null {
-  return value === null ? null : new Date(`${value}T00:00:00.000Z`);
-}
-
-function labelsOf(rows: readonly LabelRow[]): MediaLabel[] {
-  return rows.map((row) => ({
-    locale: row.locale as Locale,
-    title: row.title,
-    description: row.description,
-  }));
 }
 
 function toListing(row: ListingRow): VideoListing {
@@ -374,18 +310,6 @@ function playlistPage(rows: readonly GroupRow[]): PlaylistPage {
   };
 }
 
-/** An administrative text match: the slug or any title. Bounded by the schema. */
-function textMatch(text: string | null): object {
-  return text === null
-    ? {}
-    : {
-        OR: [
-          { slug: { contains: text } },
-          { labels: { some: { title: { contains: text } } } },
-        ],
-      };
-}
-
 /* ===========================================================================
  * Writing
  * ========================================================================= */
@@ -465,6 +389,8 @@ export function createMediaPersistence(): MediaPersistencePort {
   const db = getDatabaseClient();
 
   return {
+    ...audioPersistence(),
+
     async videos(query) {
       const rows = await db.video.findMany({
         where: {
@@ -843,6 +769,8 @@ export function createMediaPublicReader(): MediaPublicReaderPort {
   const db = getDatabaseClient();
 
   return {
+    ...audioPublicReader(),
+
     async videos(query) {
       const rows = await db.video.findMany({
         where: {

@@ -12,12 +12,13 @@ import {
 } from '@minhaj/contracts/media';
 
 /**
- * Presentation decisions for the Watch surfaces — PURE and free of React.
+ * Presentation decisions for the Watch and Listen surfaces — PURE and free of
+ * React.
  *
  * Which address a record has, which label a page renders, which query a URL
  * means, and what structured data a Video may truthfully claim. Each has one
  * implementation: the pages, the sitemap, the redirect proxy and the search
- * result addresses all call these, so no two can spell a Video's address
+ * result addresses all call these, so no two can spell a record's address
  * differently.
  */
 
@@ -85,6 +86,41 @@ export function playlistPath(locale: string, slug: string): string {
   return `/${locale}${playlistPathOf(slug)}`;
 }
 
+/**
+ * Phase 11 — an AudioTrack's ONE canonical address, under `/listen/lectures`
+ * (ROUTE_MAP.md §3.7), and an AudioSeries' under `/listen/series`. Listen is a
+ * sibling of Watch, never a child of it.
+ */
+export function audioTrackPathOf(slug: string): string {
+  return `/listen/lectures/${part(slug)}`;
+}
+
+export function audioTrackPath(locale: string, slug: string): string {
+  return `/${locale}${audioTrackPathOf(slug)}`;
+}
+
+export function audioSeriesPathOf(slug: string): string {
+  return `/listen/series/${part(slug)}`;
+}
+
+export function audioSeriesPath(locale: string, slug: string): string {
+  return `/${locale}${audioSeriesPathOf(slug)}`;
+}
+
+/**
+ * A track's bytes: first-party, unprefixed, and addressed by BOTH the track and
+ * the asset, so a replaced file has a new address and the serving policy can
+ * refuse any asset that is not the one recorded against that track.
+ */
+export function audioAssetPath(trackId: string, assetId: string): string {
+  return `/assets/media/audio/${part(trackId)}/${part(assetId)}`;
+}
+
+/** The administrator's preview of the same bytes, behind a live permission. */
+export function audioPreviewPath(trackId: string, assetId: string): string {
+  return `/assets/media/previews/audio/${part(trackId)}/${part(assetId)}`;
+}
+
 /* ===========================================================================
  * Labels
  * ========================================================================= */
@@ -120,11 +156,12 @@ export function mediaLocales(record: {
 const uuid = z.uuid();
 
 /**
- * A URL's Video filters, TOLERATED and then re-validated by the read service.
- * A mistyped or repeated parameter is the unfiltered listing, never an error
- * page, and nothing here can widen what is public.
+ * A URL's listing filters — the Watch video listings' and, with the same four
+ * filters, the Listen track listing's — TOLERATED and then re-validated by the
+ * read service. A mistyped or repeated parameter is the unfiltered listing,
+ * never an error page, and nothing here can widen what is public.
  */
-export function readVideoQuery(
+export function readMediaQuery(
   query: Record<string, string | string[] | undefined>,
 ): Omit<VideoQuery, 'format' | 'featured'> {
   const text = (key: string, max: number): string | null => {
@@ -154,13 +191,13 @@ export function readVideoQuery(
   };
 }
 
-export type VideoFilters = ReturnType<typeof readVideoQuery>;
+export type MediaFilters = ReturnType<typeof readMediaQuery>;
 
 /** The listing address for a set of filters, neutral values omitted. */
-export function videoQueryPath(
+export function mediaQueryPath(
   base: string,
-  filters: VideoFilters,
-  overrides: Partial<VideoFilters> = {},
+  filters: MediaFilters,
+  overrides: Partial<MediaFilters> = {},
 ): string {
   const merged = { ...filters, ...overrides };
   const search = new URLSearchParams();

@@ -3,6 +3,7 @@ import 'server-only';
 import type { AssetAuthorizationPort } from '@minhaj/contracts/platform';
 
 import { storageRuntime } from '@/composition/storage';
+import { toWebStream } from '../web-stream';
 
 /**
  * Serving bytes for a Library Edition, once, for both routes beside this file.
@@ -104,37 +105,6 @@ export async function serveLibraryAsset(
 
       /** Bytes behind an authorisation decision are not indexable. */
       'X-Robots-Tag': 'noindex, nofollow',
-    },
-  });
-}
-
-/**
- * Bridges the service's async iterable onto the Web `ReadableStream` a `Response`
- * wants.
- *
- * STREAMED, NEVER BUFFERED. A scanned edition PDF can be tens of megabytes, and
- * reading one into memory to hand it back would put the whole file in the server's
- * heap per concurrent reader (§49: "Never buffer huge PDF into memory").
- *
- * A MID-FLIGHT FAILURE ERRORS THE STREAM rather than closing it. Closing would
- * deliver a shorter file that looks complete, which is a corrupt download the
- * reader has no way to detect.
- */
-function toWebStream(body: AsyncIterable<Uint8Array>): ReadableStream<Uint8Array> {
-  const iterator = body[Symbol.asyncIterator]();
-
-  return new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      try {
-        const { done, value } = await iterator.next();
-        if (done) controller.close();
-        else controller.enqueue(value);
-      } catch (error) {
-        controller.error(error);
-      }
-    },
-    async cancel() {
-      await iterator.return?.();
     },
   });
 }

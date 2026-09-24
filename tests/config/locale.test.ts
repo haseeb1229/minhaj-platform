@@ -177,6 +177,9 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/search/highlight.ts',
     // Phase 10. The Watch surfaces, their pure presentation decisions and the
     // privacy-gated player island, on the same anonymous public path.
+    'apps/web/src/components/media/audio-player.tsx',
+    'apps/web/src/components/media/listen.tsx',
+    'apps/web/src/components/media/parts.tsx',
     'apps/web/src/components/media/player.tsx',
     'apps/web/src/components/media/presentation.ts',
     'apps/web/src/components/media/watch.tsx',

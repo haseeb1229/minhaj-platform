@@ -16,13 +16,13 @@ import type { SearchTopic } from '@minhaj/search';
 
 import { EDITION_PARAM } from '@/components/library/presentation';
 import { scholarlyPathOf } from '@/components/library/scholarly-presentation';
-import { videoPathOf } from '@/components/media/presentation';
+import { audioTrackPathOf, videoPathOf } from '@/components/media/presentation';
 import { createEditorialSearchSources } from '@/contexts/editorial';
 import {
   createLibrarySearchSource,
   createScholarlySearchSource,
 } from '@/contexts/library';
-import { createVideoSearchSource } from '@/contexts/media';
+import { createAudioSearchSource, createVideoSearchSource } from '@/contexts/media';
 import { createPersonSearchSource } from '@/contexts/people-contributors';
 import { createTopicSearchSource } from '@/contexts/taxonomy';
 
@@ -47,8 +47,9 @@ import { createTopicSearchSource } from '@/contexts/taxonomy';
  * shapes are the owners' own public routes (ROUTE_MAP.md §3): `/topics/{slug}`,
  * `/people/{slug}`, `/library/articles/{slug}`, a Page's reserved binding, a
  * Work's page — with the Edition selected — under `/library/books/{slug}`, the
- * Phase-9 Library routes, an issue beneath its Magazine's CURRENT slug, and a
- * Phase-10 Video at `/watch/videos/{slug}`.
+ * Phase-9 Library routes, an issue beneath its Magazine's CURRENT slug, a
+ * Phase-10 Video at `/watch/videos/{slug}`, and a Phase-11 AudioTrack at
+ * `/listen/lectures/{slug}`.
  */
 
 export interface SearchOwnerReaders {
@@ -110,6 +111,7 @@ export function searchWiring(readers: SearchOwnerReaders): {
       'magazine-issue': magazineIssue.source,
       encyclopedia: encyclopedia.source,
       video: createVideoSearchSource(readers.media),
+      audio: createAudioSearchSource(readers.media),
     },
 
     targets: {
@@ -152,6 +154,11 @@ export function searchWiring(readers: SearchOwnerReaders): {
       video: async (ids) =>
         mapOf(await readers.media.publicVideoTargets(ids), (row) =>
           videoPathOf(row.slug),
+        ),
+      // The same for an AudioTrack: only published tracks, at their current slug.
+      audio: async (ids) =>
+        mapOf(await readers.media.publicAudioTargets(ids), (row) =>
+          audioTrackPathOf(row.slug),
         ),
     },
 

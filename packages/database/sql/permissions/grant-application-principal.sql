@@ -519,6 +519,21 @@ IF OBJECT_ID(N'[dbo].[VideoSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, I
 IF OBJECT_ID(N'[dbo].[SeriesSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[SeriesSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[SeriesSlugHistory] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[PlaylistSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[PlaylistSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[PlaylistSlugHistory] TO [$(app_login)]; END;
 
+-- Phase 11: Media — AudioTrack and AudioSeries, by the SAME three postures.
+-- Aggregates are INSERT and UPDATE and never DELETE; relation sets are replaced
+-- wholesale (INSERT and DELETE, never UPDATE); slug histories are APPEND ONLY.
+-- The audio FILE is reached only through Storage's own `Asset` grants above and
+-- the StorageService: a track holds a foreign key to an Asset and nothing here
+-- widens what the runtime may do to one.
+IF OBJECT_ID(N'[dbo].[AudioTrack]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[AudioTrack] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[AudioTrack] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[AudioSeries]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[AudioSeries] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[AudioSeries] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[AudioTrackLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[AudioTrackLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[AudioTrackLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[AudioTrackSpeaker]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[AudioTrackSpeaker] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[AudioTrackSpeaker] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[AudioTrackTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[AudioTrackTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[AudioTrackTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[AudioSeriesLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[AudioSeriesLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[AudioSeriesLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[AudioTrackSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[AudioTrackSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[AudioTrackSlugHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[AudioSeriesSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[AudioSeriesSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[AudioSeriesSlugHistory] TO [$(app_login)]; END;
+
 -- Phase 17: the DERIVED search projection and its operational state.
 --
 -- `SearchIndexRequest` is append-only for the owners that write it inside their

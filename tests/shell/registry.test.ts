@@ -218,9 +218,10 @@ describe('a deferred capability cannot be linked', () => {
       .map((route) => route.key)
       .sort();
 
-    // Video, Series and Playlist. Audio (`/listen`, Phase 11) and galleries
-    // (Phase 12) are ABSENT, not reserved, and a topic view is a filtered view
-    // canonical to the topic hub, so it has no entry either.
+    // Video, Series and Playlist. Audio is Listen's, a SIBLING family with its
+    // own entries (Phase 11), never a Watch surface; galleries (Phase 12) are
+    // ABSENT, not reserved, and a topic view is a filtered view canonical to
+    // the topic hub, so it has no entry either.
     expect(surfaces).toEqual([
       'watch.documentaries',
       'watch.events',
@@ -233,7 +234,30 @@ describe('a deferred capability cannot be linked', () => {
       'watch.speakers',
       'watch.videos',
     ]);
-    for (const absent of ['listen', 'watch.audio', 'watch.galleries', 'watch.topics']) {
+    for (const absent of ['watch.audio', 'watch.galleries', 'watch.topics']) {
+      expect(routeByKey(absent), absent).toBeNull();
+    }
+  });
+
+  it('delivers Listen beside Watch, and no recitation catalogue', () => {
+    // Phase 11: the landing, the track listing and audio series — reached from
+    // Watch, so none has a placement of its own. `/listen/recitations` is the
+    // Quran-owned catalogue projection, and Quran has not shipped: it has no
+    // entry of any kind, reserved or otherwise.
+    const listen = SHELL_ROUTES.filter(
+      (route) => route.key === 'listen' || route.key.startsWith('listen.'),
+    );
+    expect(listen.map((route) => route.key).sort()).toEqual([
+      'listen',
+      'listen.lectures',
+      'listen.series',
+    ]);
+    for (const route of listen) {
+      expect(isAvailable(route) && route.availability, route.key).toBe('delivered');
+      expect(route.placements, route.key).toEqual([]);
+    }
+    expect(routeByKey('listen')).toMatchObject({ path: '/listen' });
+    for (const absent of ['listen.recitations', 'listen.podcasts', 'listen.tracks']) {
       expect(routeByKey(absent), absent).toBeNull();
     }
   });
@@ -331,6 +355,10 @@ describe('indexing eligibility is honest', () => {
       'library.resources',
       'library.sale-points',
       'library.topics',
+      // Phase 11: the Listen landing and its two delivered surfaces.
+      'listen',
+      'listen.lectures',
+      'listen.series',
       'sitemap',
       // Phase 17: the canonical Topics browser. `search` is delivered too, and
       // is deliberately NOT here.

@@ -48,10 +48,13 @@ import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
 import { pageOffset, PAGE_SIZE, queryValue } from '../shared';
 import { changePlaylist, savePlaylist, saveSeries, saveVideo } from './actions';
-import { VIDEO_FORM_ROWS } from './rows';
+import { MEDIA_FORM_ROWS } from './rows';
 
 /**
  * The Media administration — Videos, Series and Playlists (ROUTE_MAP.md §7).
+ * Its shared parts — the copy, the directory filter, the label and lifecycle
+ * fields, the edit identity — are exported for the Phase-11 audio surfaces
+ * (`./audio-surfaces.tsx`), so both administer by one set of controls.
  *
  * `media.read` OPENS A SCREEN, `media.administer` IS WHAT EVERY ACTION
  * RE-CHECKS, live. Every screen is `noindex` and private through the
@@ -65,22 +68,22 @@ import { VIDEO_FORM_ROWS } from './rows';
  * time, never by editing a list of identifiers.
  */
 
-type Copy = Awaited<ReturnType<typeof mediaCopy>>;
-type Choices = Awaited<ReturnType<typeof ownerReferenceChoices>>;
+export type Copy = Awaited<ReturnType<typeof mediaCopy>>;
+export type Choices = Awaited<ReturnType<typeof ownerReferenceChoices>>;
 type Query = Record<string, string | string[] | undefined>;
 
-interface ListParams {
+export interface ListParams {
   readonly params: Promise<{ readonly locale: string }>;
   readonly searchParams: Promise<Query>;
 }
 
-interface EditorParams {
+export interface EditorParams {
   readonly params: Promise<{ readonly locale: string; readonly id: string }>;
   readonly searchParams: Promise<Query>;
 }
 
 /** The copy every Media screen needs, and a message for every failure. */
-async function mediaCopy(locale: Locale) {
+export async function mediaCopy(locale: Locale) {
   const t = await getTranslations({ locale, namespace: 'media' });
   return {
     t,
@@ -95,6 +98,11 @@ async function mediaCopy(locale: Locale) {
       'duplicate-position': t('duplicatePosition'),
       'duplicate-member': t('duplicateMember'),
       limit: t('limit'),
+      'no-audio': t('audio.noAudio'),
+      'too-large': t('audio.tooLarge'),
+      unsupported: t('audio.unsupported'),
+      'not-cleared': t('audio.notCleared'),
+      'rate-limited': t('audio.rateLimited'),
       unavailable: t('unknown'),
       unknown: t('unknown'),
     } as Readonly<Record<string, string>>,
@@ -105,7 +113,7 @@ async function mediaCopy(locale: Locale) {
  * Shared parts
  * ========================================================================= */
 
-function StateBadge({
+export function StateBadge({
   state,
   copy,
 }: {
@@ -119,7 +127,7 @@ function StateBadge({
   );
 }
 
-function Pager({
+export function Pager({
   offset,
   hasMore,
   hrefFor,
@@ -145,7 +153,7 @@ function Pager({
 }
 
 /** A narrowing GET form for a directory: a state and a title-or-slug match. */
-function DirectoryFilter({
+export function DirectoryFilter({
   base,
   state,
   text,
@@ -187,7 +195,7 @@ function DirectoryFilter({
 }
 
 /** The directory filter read back from the query, bounded. */
-function directoryQuery(query: Query) {
+export function directoryQuery(query: Query) {
   const state = mediaStateSchema.safeParse(queryValue(query, 'state'));
   return {
     offset: pageOffset(query, PAGE_SIZE),
@@ -196,7 +204,7 @@ function directoryQuery(query: Query) {
   };
 }
 
-function directoryHref(
+export function directoryHref(
   base: string,
   filter: ReturnType<typeof directoryQuery>,
 ): (page: number) => string {
@@ -211,7 +219,7 @@ function directoryHref(
 }
 
 /** The title of a record in its own language, for a table cell or a heading. */
-function Title({
+export function Title({
   record,
   locale,
 }: {
@@ -230,7 +238,7 @@ function Title({
 }
 
 /** A narrowing GET form for the speaker choices, beside — never inside — a save form. */
-function ReferenceSearch({
+export function ReferenceSearch({
   query,
   copy,
 }: {
@@ -261,7 +269,7 @@ function ReferenceSearch({
 }
 
 /** Enable, title and description for each interface locale. */
-function LabelFields({
+export function LabelFields({
   prefix,
   locale,
   record,
@@ -333,7 +341,7 @@ function LabelFields({
 }
 
 /** Slug, primary locale and lifecycle — the fields every Media aggregate has. */
-function CommonFields({
+export function CommonFields({
   prefix,
   locale,
   record,
@@ -400,7 +408,7 @@ function CommonFields({
 }
 
 /** The hidden fields that make an edit an edit: its record and expected version. */
-function EditIdentity({
+export function EditIdentity({
   locale,
   record,
 }: {
@@ -616,7 +624,7 @@ export async function VideoEditor({ params, searchParams }: EditorParams) {
 }
 
 /** The currently selected option stays offered even when off the first page. */
-function withSelected<T extends { readonly id: string }>(
+export function withSelected<T extends { readonly id: string }>(
   options: readonly T[],
   selected: string | undefined,
   make: (id: string) => T,
@@ -877,7 +885,7 @@ function VideoForm({
         {t('video.speakersHelp')}
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
-        {Array.from({ length: VIDEO_FORM_ROWS.speakers }, (_, index) => {
+        {Array.from({ length: MEDIA_FORM_ROWS.speakers }, (_, index) => {
           const selected = record?.speakerIds[index];
           return (
             <Field
@@ -908,7 +916,7 @@ function VideoForm({
 
       <SectionHeading>{t('video.topics')}</SectionHeading>
       <div className="grid gap-3 sm:grid-cols-2">
-        {Array.from({ length: VIDEO_FORM_ROWS.topics }, (_, index) => (
+        {Array.from({ length: MEDIA_FORM_ROWS.topics }, (_, index) => (
           <Field
             key={index}
             id={`${prefix}-topic-${String(index)}`}

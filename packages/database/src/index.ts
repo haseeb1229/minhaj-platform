@@ -158,6 +158,7 @@ export { createSearchIndex } from './adapters/search/index.ts';
 /* ---- Media (context-owned) ---------------------------------------------- */
 
 export {
+  createMediaAssetRelations,
   createMediaPersistence,
   createMediaPublicReader,
 } from './adapters/media/index.ts';

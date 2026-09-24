@@ -271,19 +271,27 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
   // separate: a Playlist is an ordering of Videos and a Series a grouping of
   // them, with the same single owner and no workflow of their own. There is no
   // `media.publish` because Media has no review step to separate publishing
-  // from editing. Audio and galleries arrive with Phases 11 and 12, which decide
-  // whether they need a key of their own; nothing is seeded for them here.
+  // from editing.
   //
-  // A SPEAKER PROFILE GRANTS NOTHING. Being named on a Video is attribution and
-  // confers no Media authority; only a role holding these keys does.
+  // PHASE 11 ADDS NO KEY. AudioTrack and AudioSeries are Media's, administered
+  // by the same operators with the same single owner and no workflow of their
+  // own, so these two keys govern them too and only their descriptions changed
+  // (migration 20260926000000). `audio.*` and `media.audio.*` would split one
+  // owner's authority nobody asked to split. Galleries (Phase 12) decide their
+  // own need; nothing is seeded for them here.
+  //
+  // A SPEAKER PROFILE GRANTS NOTHING. Being named on a Video or an audio track
+  // is attribution and confers no Media authority; only a role holding these
+  // keys does.
   Object.freeze({
     key: 'media.read',
-    description: 'View Videos, Series and Playlists, including drafts.',
+    description:
+      'View Videos, Series, Playlists, audio tracks and audio series, including drafts.',
   }),
   Object.freeze({
     key: 'media.administer',
     description:
-      'Create, edit, publish and archive Videos, Series and Playlists, and order Playlists.',
+      'Create, edit, publish and archive Videos, Series, Playlists, audio tracks and audio series, order Playlists, and upload audio files.',
   }),
 
   /* ---- Phase 17 — Search foundation ------------------------------------ */

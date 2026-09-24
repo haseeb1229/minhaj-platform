@@ -61,6 +61,22 @@ const SIGNATURES: readonly Signature[] = Object.freeze([
     offset: 0,
     magic: ASCII('ID3'),
   },
+  /**
+   * MPEG audio with NO ID3 tag — the file begins with its first frame.
+   *
+   * Phase 11. A recorder or encoder that writes no tag produces exactly this,
+   * and refusing it as "unreadable" would refuse ordinary lecture recordings. A
+   * one-byte magic would be far too weak, so it is CONFIRMED STRUCTURALLY: the
+   * frame header must be a valid Layer III header, and a second valid header of
+   * the same stream must begin exactly where the first frame's length says it
+   * does. Checked after JPEG (`FF D8`), which a frame header can never be.
+   */
+  {
+    mediaType: 'audio/mpeg',
+    offset: 0,
+    magic: [0xff],
+    confirm: (prefix) => mpegAudioFrames(prefix),
+  },
   {
     mediaType: 'video/mp4',
     offset: 4,
@@ -112,6 +128,77 @@ const NEVER_ALLOWED: ReadonlySet<string> = new Set([
 function matches(prefix: Uint8Array, offset: number, magic: readonly number[]): boolean {
   if (prefix.length < offset + magic.length) return false;
   return magic.every((byte, index) => prefix[offset + index] === byte);
+}
+
+/* ---------------------------------------------------------------------------
+ * MPEG audio (Layer III) frame headers — ISO/IEC 11172-3 and 13818-3
+ * ------------------------------------------------------------------------- */
+
+/** Kilobits per second by bitrate index; index 0 (free) and 15 (bad) are refused. */
+const MPEG1_LAYER3_KBPS = [
+  0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320,
+];
+const MPEG2_LAYER3_KBPS = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160];
+
+/** Sample rates by version bits (`11` MPEG-1, `10` MPEG-2, `00` MPEG-2.5). */
+const SAMPLE_RATES: Readonly<Record<number, readonly number[]>> = {
+  0b11: [44_100, 48_000, 32_000],
+  0b10: [22_050, 24_000, 16_000],
+  0b00: [11_025, 12_000, 8_000],
+};
+
+interface FrameHeader {
+  readonly version: number;
+  readonly sampleRate: number;
+  readonly length: number;
+}
+
+/** A valid Layer III frame header at `offset`, or `null`. */
+function frameHeader(prefix: Uint8Array, offset: number): FrameHeader | null {
+  if (prefix.length < offset + 4) return null;
+  const b1 = prefix[offset + 1] ?? 0;
+  const b2 = prefix[offset + 2] ?? 0;
+  const b3 = prefix[offset + 3] ?? 0;
+
+  if (prefix[offset] !== 0xff || (b1 & 0xe0) !== 0xe0) return null;
+
+  const version = (b1 >> 3) & 0b11;
+  const layer = (b1 >> 1) & 0b11;
+  const bitrateIndex = b2 >> 4;
+  const sampleIndex = (b2 >> 2) & 0b11;
+  const padding = (b2 >> 1) & 1;
+
+  // Reserved version, anything but Layer III, free or bad bitrate, reserved
+  // sample rate and reserved emphasis are all refusals.
+  const rates = SAMPLE_RATES[version];
+  if (rates === undefined || layer !== 0b01) return null;
+  if (bitrateIndex === 0 || bitrateIndex === 15 || sampleIndex === 3) return null;
+  if ((b3 & 0b11) === 0b10) return null;
+
+  const kbps = (version === 0b11 ? MPEG1_LAYER3_KBPS : MPEG2_LAYER3_KBPS)[bitrateIndex];
+  const sampleRate = rates[sampleIndex];
+  if (kbps === undefined || sampleRate === undefined) return null;
+
+  const coefficient = version === 0b11 ? 144 : 72;
+  const length = Math.floor((coefficient * kbps * 1000) / sampleRate) + padding;
+  return { version, sampleRate, length };
+}
+
+/**
+ * Two consecutive frames of one stream: a valid header, and a second valid
+ * header of the same version and sample rate exactly one frame later. The
+ * longest Layer III frame is 1,441 bytes, so both always fit in the sniffed
+ * prefix of a genuine recording.
+ */
+function mpegAudioFrames(prefix: Uint8Array): boolean {
+  const first = frameHeader(prefix, 0);
+  if (first === null) return false;
+  const second = frameHeader(prefix, first.length);
+  return (
+    second !== null &&
+    second.version === first.version &&
+    second.sampleRate === first.sampleRate
+  );
 }
 
 /**

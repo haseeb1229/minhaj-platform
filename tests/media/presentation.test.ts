@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  audioAssetPath,
+  audioPreviewPath,
+  audioSeriesPath,
+  audioSeriesPathOf,
+  audioTrackPath,
+  audioTrackPathOf,
   formatOfView,
   mediaLabel,
   playlistPathOf,
   readOffset,
-  readVideoQuery,
+  readMediaQuery,
   readWatchSort,
   seriesPathOf,
   videoPathOf,
-  videoQueryPath,
+  mediaQueryPath,
   videoStructuredData,
   viewOfFormat,
   WATCH_VIEWS,
@@ -56,7 +62,7 @@ describe('addresses', () => {
 describe('query state', () => {
   it('tolerates a malformed or repeated parameter as the unfiltered listing', () => {
     expect(
-      readVideoQuery({
+      readMediaQuery({
         topic: 'not-a-uuid',
         speaker: [UUID, UUID],
         series: '',
@@ -67,7 +73,7 @@ describe('query state', () => {
   });
 
   it('keeps valid filters and omits neutral values from the address', () => {
-    const filters = readVideoQuery({ topic: UUID, language: 'ur', offset: '24' });
+    const filters = readMediaQuery({ topic: UUID, language: 'ur', offset: '24' });
     expect(filters).toEqual({
       offset: 24,
       topic: UUID,
@@ -75,10 +81,10 @@ describe('query state', () => {
       series: null,
       language: 'ur',
     });
-    expect(videoQueryPath('/en/watch/videos', filters, { offset: 0 })).toBe(
+    expect(mediaQueryPath('/en/watch/videos', filters, { offset: 0 })).toBe(
       `/en/watch/videos?topic=${UUID}&language=ur`,
     );
-    expect(videoQueryPath('/en/watch/videos', readVideoQuery({}))).toBe(
+    expect(mediaQueryPath('/en/watch/videos', readMediaQuery({}))).toBe(
       '/en/watch/videos',
     );
   });
@@ -157,5 +163,33 @@ describe('VideoObject — only what is true', () => {
     expect(
       videoStructuredData(record, { ...label, title: '' }, 'https://x.test'),
     ).toBeNull();
+  });
+});
+
+describe('Listen addresses (Phase 11)', () => {
+  it('gives a track and an audio series ONE canonical address under /listen', () => {
+    expect(audioTrackPathOf('a-talk')).toBe('/listen/lectures/a-talk');
+    expect(audioTrackPath('ur', 'a-talk')).toBe('/ur/listen/lectures/a-talk');
+    expect(audioSeriesPathOf('a-run')).toBe('/listen/series/a-run');
+    expect(audioSeriesPath('ar', 'a-run')).toBe('/ar/listen/series/a-run');
+  });
+
+  it('derives the bytes route from BOTH identifiers, first-party and unprefixed', () => {
+    expect(audioAssetPath(UUID, 'b'.repeat(8))).toBe(
+      `/assets/media/audio/${UUID}/${'b'.repeat(8)}`,
+    );
+    expect(audioPreviewPath(UUID, 'b'.repeat(8))).toBe(
+      `/assets/media/previews/audio/${UUID}/${'b'.repeat(8)}`,
+    );
+    // An identifier cannot smuggle a path segment into either address.
+    expect(audioAssetPath('../x', 'y/z')).toBe('/assets/media/audio/..%2Fx/y%2Fz');
+  });
+
+  it('reads the Listen filters with the same tolerant rules as Watch', () => {
+    const filters = readMediaQuery({ series: UUID, language: 'ur', speaker: 'nope' });
+    expect(filters).toMatchObject({ series: UUID, language: 'ur', speaker: null });
+    expect(mediaQueryPath('/en/listen/lectures', filters)).toBe(
+      `/en/listen/lectures?series=${UUID}&language=ur`,
+    );
   });
 });

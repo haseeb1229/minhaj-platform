@@ -1406,6 +1406,159 @@ try {
     );
   }
 
+  // ---- Phase 11: Media — AudioTrack, AudioSeries ---------------------------
+  //
+  // THE SAME THREE POSTURES, across two more aggregates, each proved to WORK and
+  // to REFUSE. Five invariants are proved as refusals BY THE DATABASE rather
+  // than by a grant: a renamed track keeps its former slug (the trigger), a
+  // published track must have a file (its CHECK), one file serves one track and
+  // one place in a series holds one track (the filtered unique indexes), and an
+  // Asset a track names cannot be deleted out from under it (the foreign key).
+  // The Asset rows are written with Storage's OWN grant, as the storage service
+  // writes them; nothing here widens what the runtime may do to an Asset.
+  const audioRun = randomUUID().replaceAll('-', '');
+  const audioSeriesId = randomUUID();
+  const trackId = randomUUID();
+  const secondTrackId = randomUUID();
+  const audioAssetId = randomUUID();
+  const trackSlug = `audio-proof-${audioRun}`;
+  const trackColumns =
+    '[id],[slug],[primaryLocale],[state],[languageCode],[assetId],[seriesId],[seriesPosition],[version],[updatedAt]';
+
+  await expectAllowed(
+    app,
+    'Asset INSERT (a cleared audio file, as Storage records it)',
+    `INSERT INTO [dbo].[Asset] ([id],[storageKey],[mediaType],[byteSize],[checksum],[state],[updatedAt]) VALUES (N'${audioAssetId}',N'aa/bb/${audioRun}',N'audio/mpeg',834,N'${'e'.repeat(64)}',N'clean',SYSUTCDATETIME());`,
+    'Storage records the file it cleared',
+  );
+  await expectAllowed(
+    app,
+    'AudioSeries INSERT',
+    `INSERT INTO [dbo].[AudioSeries] ([id],[slug],[primaryLocale],[state],[version],[updatedAt]) VALUES (N'${audioSeriesId}',N'audio-series-proof-${audioRun}',N'en',N'draft',1,SYSUTCDATETIME());`,
+    'an AudioSeries is created by the runtime',
+  );
+  await expectAllowed(
+    app,
+    'AudioTrack INSERT',
+    `INSERT INTO [dbo].[AudioTrack] (${trackColumns}) VALUES
+       (N'${trackId}',N'${trackSlug}',N'en',N'draft',N'en',N'${audioAssetId}',N'${audioSeriesId}',1,1,SYSUTCDATETIME()),
+       (N'${secondTrackId}',N'${trackSlug}-two',N'en',N'draft',N'en',NULL,NULL,NULL,1,SYSUTCDATETIME());`,
+    'a track with its file and a track with none yet',
+  );
+  await expectAllowed(
+    app,
+    'AudioTrack UPDATE (rename and publish)',
+    `UPDATE [dbo].[AudioTrack] SET [slug]=N'${trackSlug}-renamed',[state]=N'published',[version]=[version]+1 WHERE [id]=N'${trackId}';`,
+    'a track with a file is renamed and published',
+  );
+
+  const [trackReservations] = await app.query<{ count: number }>(
+    `SELECT COUNT_BIG(*) AS count FROM [dbo].[AudioTrackSlugHistory] WHERE [trackId]=N'${trackId}';`,
+  );
+  if (Number(trackReservations?.count) === 2) {
+    pass('AudioTrack slugs reserved by the database', 'the former and the current slug');
+  } else {
+    fail(
+      'AudioTrack slugs reserved by the database',
+      `expected 2 reservations, found ${String(trackReservations?.count ?? 0)}`,
+    );
+  }
+
+  await expectRefusedByInvariant(
+    app,
+    'A published AudioTrack has a file',
+    `UPDATE [dbo].[AudioTrack] SET [state]=N'published' WHERE [id]=N'${secondTrackId}';`,
+    547,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'One audio file serves one track',
+    `UPDATE [dbo].[AudioTrack] SET [assetId]=N'${audioAssetId}' WHERE [id]=N'${secondTrackId}';`,
+    2601,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'A place in an AudioSeries holds one track',
+    `UPDATE [dbo].[AudioTrack] SET [seriesId]=N'${audioSeriesId}',[seriesPosition]=1 WHERE [id]=N'${secondTrackId}';`,
+    2601,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'An Asset a track names cannot be deleted',
+    `DELETE FROM [dbo].[Asset] WHERE [id]=N'${audioAssetId}';`,
+    547,
+  );
+
+  for (const [label, statement] of [
+    [
+      'AudioTrackLabel INSERT',
+      `INSERT INTO [dbo].[AudioTrackLabel] ([trackId],[locale],[title],[description]) VALUES (N'${trackId}',N'en',N'Least-privilege proof recording',N'');`,
+    ],
+    [
+      'AudioTrackSpeaker INSERT',
+      `INSERT INTO [dbo].[AudioTrackSpeaker] ([trackId],[personId],[position]) VALUES (N'${trackId}',N'${editorialPeople.linkedPersonId}',0);`,
+    ],
+    [
+      'AudioTrackTopic INSERT',
+      `INSERT INTO [dbo].[AudioTrackTopic] ([trackId],[topicId]) VALUES (N'${trackId}',N'${editorialTopic.id}');`,
+    ],
+    [
+      'AudioSeriesLabel INSERT',
+      `INSERT INTO [dbo].[AudioSeriesLabel] ([seriesId],[locale],[title],[description]) VALUES (N'${audioSeriesId}',N'en',N'Least-privilege proof audio series',N'');`,
+    ],
+    [
+      'SearchIndexRequest INSERT (audio scope)',
+      `INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'audio',N'${trackId}');`,
+    ],
+  ] as const) {
+    await expectAllowed(app, label, statement, 'the save path writes its own rows');
+  }
+
+  for (const [table, where] of [
+    ['AudioTrackTopic', `[trackId]=N'${trackId}'`],
+    ['AudioTrackSpeaker', `[trackId]=N'${trackId}'`],
+    ['AudioTrackLabel', `[trackId]=N'${trackId}'`],
+    ['AudioSeriesLabel', `[seriesId]=N'${audioSeriesId}'`],
+  ] as const) {
+    await expectAllowed(
+      app,
+      `${table} DELETE`,
+      `DELETE FROM [dbo].[${table}] WHERE ${where};`,
+      'a replaceable relation set can be cleared before it is rewritten',
+    );
+  }
+
+  for (const table of ['AudioTrack', 'AudioSeries']) {
+    await expectDenied(app, `${table} DELETE denied`, `DELETE FROM [dbo].[${table}];`);
+    await expectDenied(
+      app,
+      `${table}SlugHistory UPDATE denied`,
+      `UPDATE [dbo].[${table}SlugHistory] SET [slug]=[slug];`,
+    );
+    await expectDenied(
+      app,
+      `${table}SlugHistory DELETE denied`,
+      `DELETE FROM [dbo].[${table}SlugHistory];`,
+    );
+    await expectDenied(
+      app,
+      `${table}Label UPDATE denied`,
+      `UPDATE [dbo].[${table}Label] SET [title]=[title];`,
+    );
+    await expectDenied(
+      app,
+      `${table} ALTER denied`,
+      `ALTER TABLE [dbo].[${table}] DROP CONSTRAINT [${table}_state_ck];`,
+    );
+  }
+  for (const table of ['AudioTrackSpeaker', 'AudioTrackTopic']) {
+    await expectDenied(
+      app,
+      `${table} UPDATE denied`,
+      `UPDATE [dbo].[${table}] SET [trackId]=[trackId];`,
+    );
+  }
+
   // ---- Phase 17: the derived search projection ------------------------------
   //
   // FOUR POSTURES, one per table, and each is the operation the indexer

@@ -12,7 +12,7 @@ import { mediaRuntime } from '@/composition/media';
 import { indexAfterResponse } from '@/composition/search';
 import { mediaFailure } from '@/contexts/media';
 import type { FormActionState } from '../../(identity)/form-state';
-import { VIDEO_FORM_ROWS } from './rows';
+import { MEDIA_FORM_ROWS } from './rows';
 
 /**
  * The Media administrative mutations (ROUTE_MAP.md §7).
@@ -35,6 +35,11 @@ import { VIDEO_FORM_ROWS } from './rows';
  * FAILURES ARE LABELLED, NEVER ECHOED. `mediaFailure` maps a thrown value onto a
  * fixed vocabulary; an unrecognised failure is logged as an operation name and
  * nothing else (SECURITY_BASELINE.md §19.2).
+ *
+ * PHASE 11 — NO FILE TRAVELS THROUGH AN ACTION. A track's metadata and
+ * lifecycle are saved here; its audio file is uploaded through the dedicated
+ * streaming route (`/api/admin/media/audio/{id}/asset`), because the Server
+ * Action body cap is global and is not raised.
  */
 
 function rejected(error: unknown, operation: string): FormActionState {
@@ -117,10 +122,10 @@ export async function saveVideo(
         transcript: value(form, 'transcript'),
         seriesId: value(form, 'seriesId'),
         seriesPosition: integer(form, 'seriesPosition'),
-        speakerIds: rows(VIDEO_FORM_ROWS.speakers, (index) =>
+        speakerIds: rows(MEDIA_FORM_ROWS.speakers, (index) =>
           value(form, `speaker-${String(index)}`),
         ),
-        topicIds: rows(VIDEO_FORM_ROWS.topics, (index) =>
+        topicIds: rows(MEDIA_FORM_ROWS.topics, (index) =>
           value(form, `topic-${String(index)}`),
         ),
       },
@@ -197,6 +202,84 @@ export async function savePlaylist(
     revalidatePath(`/${locale}/admin/media`, 'layout');
   } catch (error) {
     return rejected(error, 'media-save-playlist');
+  }
+
+  redirect(destination);
+}
+
+export async function saveAudioTrack(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  let destination: string;
+
+  try {
+    const { locale, permitted } = await authorise(form);
+    if (permitted.state === 'denied') return { status: 'error', failure: 'denied' };
+
+    const id = value(form, 'id');
+    const saved = await mediaRuntime().media.saveAudioTrack(
+      { accountId: permitted.session.account.id },
+      id,
+      id === null ? null : integer(form, 'version'),
+      {
+        slug: form.get('slug'),
+        primaryLocale: form.get('primaryLocale'),
+        state: form.get('state'),
+        languageCode: form.get('languageCode'),
+        labels: labels(form),
+        durationSeconds: parseDuration(value(form, 'duration') ?? ''),
+        recordedOn: value(form, 'recordedOn'),
+        transcript: value(form, 'transcript'),
+        seriesId: value(form, 'seriesId'),
+        seriesPosition: integer(form, 'seriesPosition'),
+        speakerIds: rows(MEDIA_FORM_ROWS.speakers, (index) =>
+          value(form, `speaker-${String(index)}`),
+        ),
+        topicIds: rows(MEDIA_FORM_ROWS.topics, (index) =>
+          value(form, `topic-${String(index)}`),
+        ),
+      },
+    );
+
+    destination = `/${locale}/admin/media/audio/${saved.id}`;
+    revalidatePath(`/${locale}/admin/media`, 'layout');
+    // Durable intent is already committed; this only indexes it sooner.
+    indexAfterResponse();
+  } catch (error) {
+    return rejected(error, 'media-save-audio-track');
+  }
+
+  redirect(destination);
+}
+
+export async function saveAudioSeries(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  let destination: string;
+
+  try {
+    const { locale, permitted } = await authorise(form);
+    if (permitted.state === 'denied') return { status: 'error', failure: 'denied' };
+
+    const id = value(form, 'id');
+    const saved = await mediaRuntime().media.saveAudioSeries(
+      { accountId: permitted.session.account.id },
+      id,
+      id === null ? null : integer(form, 'version'),
+      {
+        slug: form.get('slug'),
+        primaryLocale: form.get('primaryLocale'),
+        state: form.get('state'),
+        labels: labels(form),
+      },
+    );
+
+    destination = `/${locale}/admin/media/audio/series/${saved.id}`;
+    revalidatePath(`/${locale}/admin/media`, 'layout');
+  } catch (error) {
+    return rejected(error, 'media-save-audio-series');
   }
 
   redirect(destination);

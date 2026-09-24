@@ -208,7 +208,10 @@ test.describe('an anonymous visitor browses Watch', () => {
     ]) {
       expect(hrefs).toContain(`/en/watch/${surface}`);
     }
-    for (const absent of ['/en/listen', '/en/watch/audio', '/en/watch/galleries']) {
+    // Phase 11: Listen, Watch's sibling for audio, is linked; audio is never a
+    // Watch surface, and galleries are not offered.
+    expect(hrefs).toContain('/en/listen');
+    for (const absent of ['/en/watch/audio', '/en/watch/galleries']) {
       expect(hrefs).not.toContain(absent);
     }
     // A card paints no remote image.

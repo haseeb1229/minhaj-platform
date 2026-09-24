@@ -22,6 +22,12 @@ import {
   verifyRestoredPhase10,
   writePhase10Fixture,
 } from '../src/lifecycle/phase10-fixture.ts';
+import {
+  capturePhase11Fixture,
+  newPhase11Fixture,
+  verifyRestoredPhase11,
+  writePhase11Fixture,
+} from '../src/lifecycle/phase11-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -141,6 +147,7 @@ const editorialFixture = newPhase6Fixture();
 const libraryFixture = newPhase8Fixture();
 const scholarlyFixture = newPhase9Fixture();
 const mediaFixture = newPhase10Fixture();
+const audioFixture = newPhase11Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -242,6 +249,18 @@ try {
   const mediaSnapshot = await capturePhase10Fixture(admin, mediaFixture);
   report('media fixture', `run ${mediaFixture.runId}`);
 
+  // Phase-11 audio: a renamed published track at its place in a renamed audio
+  // series, its typed Storage asset, a draft track with an asset of its own, an
+  // archived track and a pending search intent. The audio BYTES are the other
+  // half of this recovery and are rehearsed with the storage root by
+  // tests/storage/audio-recovery.integration.test.ts.
+  await writePhase11Fixture(admin, audioFixture, {
+    personId: peopleFixture.linkedPersonId,
+    topicId: taxonomyFixture.childTopicId,
+  });
+  const audioSnapshot = await capturePhase11Fixture(admin, audioFixture);
+  report('audio fixture', `run ${audioFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -312,6 +331,10 @@ try {
   report(
     'media recovery',
     await verifyRestoredPhase10(restored, mediaFixture, mediaSnapshot),
+  );
+  report(
+    'audio recovery',
+    await verifyRestoredPhase11(restored, audioFixture, audioSnapshot),
   );
 
   // ---- restored security posture -------------------------------------------
@@ -451,6 +474,10 @@ try {
           'PlaylistVideo UPDATE',
           'UPDATE [dbo].[PlaylistVideo] SET [position]=[position];',
         ],
+        // Phase 11. A restored runtime can neither erase a track nor release a
+        // reserved track slug.
+        ['AudioTrack DELETE', 'DELETE FROM [dbo].[AudioTrack];'],
+        ['AudioTrackSlugHistory DELETE', 'DELETE FROM [dbo].[AudioTrackSlugHistory];'],
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -479,6 +506,7 @@ try {
       await verifyRestoredPhase8(restored, libraryFixture, librarySnapshot);
       await verifyRestoredPhase9(restored, scholarlyFixture, scholarlySnapshot);
       await verifyRestoredPhase10(restored, mediaFixture, mediaSnapshot);
+      await verifyRestoredPhase11(restored, audioFixture, audioSnapshot);
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 
       // Phase 17. The full-text catalogue and index live INSIDE the database,

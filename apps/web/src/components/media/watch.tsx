@@ -2,8 +2,6 @@ import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
 import {
-  formatDuration,
-  isoDuration,
   MEDIA_FACET_PAGE,
   MEDIA_PAGE,
   providerWatchUrl,
@@ -43,6 +41,7 @@ import {
 import { absoluteUrl } from '@/config/origin';
 import { directionOf } from '@/config/locale';
 import { isContentIndexable, serializeStructuredData } from '@/seo/metadata';
+import { Duration, formatDate, Pagination as MediaPagination } from './parts';
 import { VideoPlayer } from './player';
 import {
   mediaLabel,
@@ -50,11 +49,11 @@ import {
   offsetPath,
   playlistPath,
   readOffset,
-  readVideoQuery,
+  readMediaQuery,
   seriesPath,
   seriesSegment,
   videoPath,
-  videoQueryPath,
+  mediaQueryPath,
   videoStructuredData,
   viewOfFormat,
   WATCH_VIEWS,
@@ -84,21 +83,6 @@ type NameMap = ReadonlyMap<string, { readonly slug: string; readonly name: strin
 /** A provider's name, for prose. */
 function providerName(t: WatchTranslator, provider: VideoRecord['provider']): string {
   return t(`provider.${provider}`);
-}
-
-/** A date-only fact, formatted in the interface locale and never shifted by a zone. */
-function formatDate(value: string, locale: Locale): string {
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }).format(
-    new Date(`${value}T00:00:00.000Z`),
-  );
-}
-
-function Duration({ seconds }: { readonly seconds: number }) {
-  return (
-    <time dateTime={isoDuration(seconds)} dir="ltr">
-      {formatDuration(seconds)}
-    </time>
-  );
 }
 
 /* ===========================================================================
@@ -261,12 +245,14 @@ function Pagination({
   readonly next: string | null;
   readonly t: WatchTranslator;
 }) {
-  if (previous === null && next === null) return null;
   return (
-    <nav className="flex flex-wrap gap-6" aria-label={label}>
-      {previous === null ? null : <TextLink href={previous}>{t('previous')}</TextLink>}
-      {next === null ? null : <TextLink href={next}>{t('next')}</TextLink>}
-    </nav>
+    <MediaPagination
+      label={label}
+      previous={previous}
+      next={next}
+      previousLabel={t('previous')}
+      nextLabel={t('next')}
+    />
   );
 }
 
@@ -306,7 +292,7 @@ export async function VideoListingPage({
 }) {
   const t = await getTranslations({ locale, namespace: 'watch' });
   const trail = await watchTrail(locale);
-  const filters = readVideoQuery(query);
+  const filters = readMediaQuery(query);
   const section = format === null ? 'videos' : viewOfFormat(format);
   const base = `/${locale}/watch/${section}`;
   const title = t(`sections.${section}` as 'sections.videos');
@@ -440,14 +426,14 @@ export async function VideoListingPage({
           label={title}
           previous={
             filters.offset > 0
-              ? videoQueryPath(base, filters, {
+              ? mediaQueryPath(base, filters, {
                   offset: Math.max(0, filters.offset - MEDIA_PAGE),
                 })
               : null
           }
           next={
             page.hasMore
-              ? videoQueryPath(base, filters, { offset: filters.offset + MEDIA_PAGE })
+              ? mediaQueryPath(base, filters, { offset: filters.offset + MEDIA_PAGE })
               : null
           }
           t={t}
@@ -1197,9 +1183,9 @@ export async function SpeakerBrowsePage({
                   </p>
                   <p className="text-sm">
                     <TextLink
-                      href={videoQueryPath(
+                      href={mediaQueryPath(
                         `/${locale}/watch/videos`,
-                        readVideoQuery({}),
+                        readMediaQuery({}),
                         {
                           speaker: row.id,
                         },
@@ -1352,8 +1338,9 @@ const SURFACES = [
  *
  * NO FAKE CURATION. "Featured" is the Videos an operator marked featured, and
  * when there are none the page says so and points at the latest instead of
- * relabelling the latest as featured. The browse list names only what this
- * phase delivers: no audio, no galleries, no "coming soon".
+ * relabelling the latest as featured. The browse list names only what exists:
+ * the Watch surfaces, topics, and — from Phase 11 — Listen, Watch's sibling for
+ * audio. No galleries, no "coming soon".
  */
 export async function WatchLandingPage({
   locale,
@@ -1453,6 +1440,16 @@ export async function WatchLandingPage({
                 </h3>
                 <p className="text-sm text-[color:var(--color-foreground-muted)]">
                   {t('sectionBody.topics')}
+                </p>
+              </div>
+            </Panel>
+            <Panel as="li">
+              <div className="flex flex-col gap-2">
+                <h3 className="text-lg font-semibold">
+                  <TextLink href={`/${locale}/listen`}>{t('sections.listen')}</TextLink>
+                </h3>
+                <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                  {t('sectionBody.listen')}
                 </p>
               </div>
             </Panel>

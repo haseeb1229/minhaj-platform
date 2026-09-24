@@ -12,6 +12,7 @@ import { libraryReadRuntime } from '@/composition/library-read';
 import { taxonomyRuntime } from '@/composition/taxonomy';
 import { labelFor, workPath } from '@/components/library/presentation';
 import { listingHref } from '@/components/library/scholarly';
+import { AudioPreview } from '@/components/media/listen';
 import { VideoPreview } from '@/components/media/watch';
 import {
   scholarlyLabel,
@@ -288,6 +289,19 @@ export default async function TopicPage({ params }: TopicParams) {
           more={{
             href: `/${locale}/watch/topics/${encodeURIComponent(topic.slug)}`,
             text: t('allVideos'),
+          }}
+        />
+
+        {/* PHASE 11 — the published non-Quran audio on this topic, from Media's
+            public listing, likewise nothing when there is none. */}
+        <AudioPreview
+          locale={locale}
+          filter={{ topic: topic.id }}
+          heading={t('audio')}
+          headingId="topic-audio"
+          more={{
+            href: `/${locale}/listen/lectures?topic=${encodeURIComponent(topic.id)}`,
+            text: t('allAudio'),
           }}
         />
       </div>

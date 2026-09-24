@@ -12,12 +12,13 @@ import {
  * Media — Video, Series and Playlist (DOMAIN_MODEL.md §11, DELIVERY_PLAN.md
  * Phase 10).
  *
- * THREE AGGREGATES AND NO MORE. One Video entity, whatever it is about or
+ * THREE VIDEO AGGREGATES AND NO MORE. One Video entity, whatever it is about or
  * wherever it is surfaced; a Series it may belong to (at most one); Playlists it
  * may appear in (any number). There is no Program, Lecture, Interview or
  * provider-specific video type: a "programme" is a Series whose `kind` says so,
- * and the five curated Watch views are a Video's `format`. Audio and galleries
- * belong to later phases and have no shape here.
+ * and the five curated Watch views are a Video's `format`. Audio has its own
+ * aggregates in `./audio.ts` (Phase 11); galleries belong to Phase 12 and have no
+ * shape here.
  *
  * NO FILE, NO FRAME, NO MARKUP. A Video is provider metadata: the provider, its
  * identifier, and descriptive facts an operator records. No byte of video is
@@ -159,6 +160,18 @@ function labelRules(
     });
   }
 }
+
+/**
+ * The field builders every Media aggregate shares, so AudioTrack and AudioSeries
+ * (`./audio.ts`) are bounded, labelled and deduplicated by the SAME rules as a
+ * Video rather than by a copy that could drift from them.
+ */
+export {
+  text as mediaText,
+  ids as mediaIds,
+  labelsSchema as mediaLabelsSchema,
+  labelRules as mediaLabelRules,
+};
 
 /* ===========================================================================
  * Video

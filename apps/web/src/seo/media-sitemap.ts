@@ -5,6 +5,8 @@ import type { MediaSitemapRow } from '@minhaj/contracts/media';
 
 import { mediaReadRuntime } from '@/composition/media-read';
 import {
+  audioSeriesPathOf,
+  audioTrackPathOf,
   playlistPathOf,
   seriesPathOf,
   videoPathOf,
@@ -42,33 +44,77 @@ const PATHS: Readonly<
   playlist: (row) => playlistPathOf(row.slug),
 };
 
+/** Per-locale URL buckets, one for each interface locale. */
+function localeBuckets(): Map<Locale, SitemapEntry[]> {
+  return new Map<Locale, SitemapEntry[]>(
+    localeSchema.options.map((locale) => [locale, []]),
+  );
+}
+
+/** Adds one record's URL in each locale it genuinely has metadata in. */
+function addRow(
+  buckets: Map<Locale, SitemapEntry[]>,
+  path: string,
+  row: MediaSitemapRow,
+): void {
+  for (const locale of row.locales) {
+    buckets.get(locale as Locale)?.push({
+      loc: absoluteUrl(`/${locale}${path}`),
+      lastmod: row.updatedAt.toISOString(),
+    });
+  }
+}
+
+/** Empty partitions are dropped: an empty segment would advertise nothing. */
+function partitionsOf(
+  segment: string,
+  buckets: Map<Locale, SitemapEntry[]>,
+): SitemapPartition[] {
+  const partitions: SitemapPartition[] = [];
+  for (const [locale, urls] of buckets) {
+    if (urls.length > 0) partitions.push({ segment, locale, urls });
+  }
+  return partitions;
+}
+
 export async function mediaSitemapPartitions(): Promise<readonly SitemapPartition[]> {
   if (!publicIndexingEnabled()) return [];
 
-  const buckets = new Map<Locale, SitemapEntry[]>(
-    localeSchema.options.map((locale) => [locale, []]),
-  );
+  const buckets = localeBuckets();
 
   for (const kind of ['video', 'series', 'playlist'] as const) {
     for (let offset = 0; ; offset += READ_BATCH) {
       const batch = await mediaReadRuntime().sitemap(kind, offset, READ_BATCH);
-      for (const row of batch) {
-        const path = PATHS[kind](row);
-        for (const locale of row.locales) {
-          buckets.get(locale as Locale)?.push({
-            loc: absoluteUrl(`/${locale}${path}`),
-            lastmod: row.updatedAt.toISOString(),
-          });
-        }
-      }
+      for (const row of batch) addRow(buckets, PATHS[kind](row), row);
       if (batch.length < READ_BATCH) break;
     }
   }
 
-  // Empty partitions are dropped: an empty segment would advertise nothing.
-  const partitions: SitemapPartition[] = [];
-  for (const [locale, urls] of buckets) {
-    if (urls.length > 0) partitions.push({ segment: SEGMENT, locale, urls });
+  return partitionsOf(SEGMENT, buckets);
+}
+
+/**
+ * The `audio` segment — Phase 11's canonical Listen URLs (ROUTE_MAP.md §9.4
+ * names the segment): each published AudioTrack at `/listen/lectures/{slug}` and
+ * each published AudioSeries at `/listen/series/{slug}`. Never a draft, an
+ * archived record, a former slug, a filtered listing or a byte route.
+ */
+export async function audioSitemapPartitions(): Promise<readonly SitemapPartition[]> {
+  if (!publicIndexingEnabled()) return [];
+
+  const buckets = localeBuckets();
+  const paths = {
+    track: (row: MediaSitemapRow) => audioTrackPathOf(row.slug),
+    series: (row: MediaSitemapRow) => audioSeriesPathOf(row.slug),
+  } as const;
+
+  for (const kind of ['track', 'series'] as const) {
+    for (let offset = 0; ; offset += READ_BATCH) {
+      const batch = await mediaReadRuntime().audioSitemap(kind, offset, READ_BATCH);
+      for (const row of batch) addRow(buckets, paths[kind](row), row);
+      if (batch.length < READ_BATCH) break;
+    }
   }
-  return partitions;
+
+  return partitionsOf('audio', buckets);
 }

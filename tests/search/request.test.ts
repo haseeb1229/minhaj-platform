@@ -58,7 +58,8 @@ describe('parseSearchParams', () => {
   it('refuses a future or unknown result kind', () => {
     for (const type of [
       'news',
-      'audio',
+      'audio-series',
+      'recitation',
       'series',
       'playlist',
       'fatwa',
@@ -86,6 +87,10 @@ describe('parseSearchParams', () => {
 
   it('accepts the video kind Phase 10 delivered, and only that Media kind', () => {
     expect(parseSearchParams({ q: 'x1', type: 'video' }).state).toBe('valid');
+  });
+
+  it('accepts the audio kind Phase 11 delivered', () => {
+    expect(parseSearchParams({ q: 'x1', type: 'audio' }).state).toBe('valid');
   });
 
   it('reads a repeated parameter as its first value, never as a list', () => {

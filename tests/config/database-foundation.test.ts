@@ -172,6 +172,17 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'PlaylistLabel',
       'PlaylistSlugHistory',
       'PlaylistVideo',
+      // Phase 11 — Media: AudioTrack and AudioSeries, their labels, slug
+      // histories and typed speaker and topic relations. No generic media or
+      // asset-link table: a track's file is its own foreign key to `Asset`.
+      'AudioTrack',
+      'AudioTrackLabel',
+      'AudioTrackSlugHistory',
+      'AudioTrackSpeaker',
+      'AudioTrackTopic',
+      'AudioSeries',
+      'AudioSeriesLabel',
+      'AudioSeriesSlugHistory',
       // Phase 17 — the Layer-0 search concern's DERIVED state: indexing intent,
       // per-scope indexing state, and the rebuildable projection.
       'SearchIndexRequest',
@@ -205,11 +216,9 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'ReadingHistory',
       'ReadingProgress',
       'Bookmark',
-      // Media that Phase 10 does not deliver: audio and galleries (Phases 11
-      // and 12), a Program aggregate (a programme is a Series kind), per-kind
-      // or per-provider Video tables, and Phase 21's watch history.
-      'AudioTrack',
-      'AudioSeries',
+      // Media still deferred after Phase 11: galleries (Phase 12), a Program
+      // aggregate (a programme is a Series kind), per-kind or per-provider
+      // Video tables, and Phase 21's watch history.
       'Photo',
       'Gallery',
       'GalleryItem',

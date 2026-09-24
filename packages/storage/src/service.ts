@@ -248,6 +248,19 @@ export function createStorageService(
         checksum: record.checksum,
         displayName: record.displayName,
         body: files.read(record.storageKey),
+        /**
+         * A range of the bytes this SAME decision released — so a range
+         * request is authorised exactly as a whole-file one, and there is no
+         * way to ask for a slice without first passing `open`. The bounds are
+         * checked against the recorded size: a range past the end is the
+         * caller's error, reported rather than silently shortened.
+         */
+        range: (start, end) => {
+          if (end >= record.byteSize) {
+            throw new RangeError('A byte range must end within the asset.');
+          }
+          return files.read(record.storageKey, { start, end });
+        },
       };
 
       return stream;

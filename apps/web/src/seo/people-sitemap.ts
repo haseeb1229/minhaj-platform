@@ -1,6 +1,6 @@
 import { editorialSitemapPartitions, mergePagePartitions } from './editorial-sitemap';
 import { librarySitemapPartitions } from './library-sitemap';
-import { mediaSitemapPartitions } from './media-sitemap';
+import { audioSitemapPartitions, mediaSitemapPartitions } from './media-sitemap';
 import { scholarlySitemapPartitions } from './scholarly-sitemap';
 import { topicsSitemapPartitions } from './topics-sitemap';
 import 'server-only';
@@ -149,6 +149,9 @@ export async function allSitemapPartitions(): Promise<readonly SitemapPartition[
     // Phase 10's `videos` segment: Videos, Series and programmes at their one
     // family, and Playlists.
     ...(await mediaSitemapPartitions()),
+    // Phase 11's `audio` segment: AudioTracks and AudioSeries at their one
+    // canonical address.
+    ...(await audioSitemapPartitions()),
   ]);
 }
 

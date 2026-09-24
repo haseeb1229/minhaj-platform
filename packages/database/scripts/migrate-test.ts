@@ -141,8 +141,21 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // sets: no generic media table, no Program table, no audio or gallery table
   // (DOMAIN_MODEL.md §11). A Video's Series is a nullable foreign key on the
   // Video; a Playlist's membership is its own typed, ordered table.
+  // TWO AUDIO AGGREGATES — AudioTrack and AudioSeries — and their typed relation
+  // sets. The file is ONE nullable foreign key from a track to a Storage Asset,
+  // never a generic asset-link table; an AudioSeries is its own table, never the
+  // Video `Series` (DOMAIN_MODEL.md §8.1, §11).
+  '20260926000000_phase11_media_audio': [
+    'AudioTrack',
+    'AudioTrackLabel',
+    'AudioTrackSlugHistory',
+    'AudioTrackSpeaker',
+    'AudioTrackTopic',
+    'AudioSeries',
+    'AudioSeriesLabel',
+    'AudioSeriesSlugHistory',
+  ],
   '20260925000000_phase10_media_video': [
-    'Video',
     'VideoLabel',
     'VideoSlugHistory',
     'VideoSpeaker',
@@ -243,15 +256,19 @@ const PREMATURE_TABLES = [
   'PeriodicalIssue',
   'EncyclopediaEntry',
   // Phase 10 delivers Video, Series and Playlist and nothing else of Media's:
-  // audio and galleries are Phases 11 and 12, a programme is a Series kind,
-  // and watch history is Phase 21's per-user state.
-  'AudioTrack',
-  'AudioSeries',
+  // galleries are Phase 12, a programme is a Series kind, and watch history is
+  // Phase 21's per-user state.
   'Photo',
   'Gallery',
   'GalleryItem',
   'Program',
   'WatchHistory',
+  // Phase 11 delivers non-Quran audio and nothing of Quran's: a Recitation and
+  // its verse mapping belong to Phase 18, and no listening history is authorised
+  // by any phase.
+  'Recitation',
+  'RecitationSegment',
+  'ListeningHistory',
 ];
 
 /**
@@ -310,6 +327,19 @@ const PROHIBITED_TABLES = [
   'VimeoVideo',
   'LectureVideo',
   'VideoAsset',
+
+  // PHASE 11 — TWO audio aggregates. A playlist, podcast, album or episode of
+  // audio would be a second grouping invented without a need, and a generic
+  // asset-link or asset-owner table would be the polymorphic reference §6.2
+  // refuses: a track's file is its own typed foreign key.
+  'AudioPlaylist',
+  'Podcast',
+  'Album',
+  'Episode',
+  'AudioTrackAsset',
+  'AssetLink',
+  'AssetOwner',
+  'MediaAsset',
 ];
 
 const EXPECTED_AUDIT_COLUMNS = [
@@ -416,6 +446,12 @@ const EXPECTED_COLUMN_SIZES: readonly {
   { table: 'Playlist', column: 'slug', characters: 120 },
   { table: 'PlaylistSlugHistory', column: 'slug', characters: 120 },
   { table: 'Video', column: 'languageCode', characters: 16 },
+  // Phase 11, by the same rules.
+  { table: 'AudioTrack', column: 'slug', characters: 120 },
+  { table: 'AudioTrackSlugHistory', column: 'slug', characters: 120 },
+  { table: 'AudioSeries', column: 'slug', characters: 120 },
+  { table: 'AudioSeriesSlugHistory', column: 'slug', characters: 120 },
+  { table: 'AudioTrack', column: 'languageCode', characters: 16 },
 ];
 
 /**
@@ -452,6 +488,18 @@ const EXPECTED_FILTERED_INDEXES: readonly {
     table: 'Video',
     index: 'Video_seriesId_seriesPosition_key',
     why: 'two episodes of one Series could claim the same position',
+  },
+  // Phase 11. Filtered because a standalone track has no position and a track
+  // with no file yet names no Asset — neither is a duplicate of another.
+  {
+    table: 'AudioTrack',
+    index: 'AudioTrack_seriesId_seriesPosition_key',
+    why: 'two tracks of one AudioSeries could claim the same place',
+  },
+  {
+    table: 'AudioTrack',
+    index: 'AudioTrack_assetId_key',
+    why: 'one audio file could be served as two different tracks',
   },
   // Phase 9. Filtered because an issue without a printed volume and number is
   // ordinary, and two such issues are not duplicates of each other.
@@ -516,6 +564,9 @@ const EXPECTED_TRIGGERS = [
   'MediaReserveVideoSlug',
   'MediaReserveSeriesSlug',
   'MediaReservePlaylistSlug',
+  // Phase 11: the same for each audio aggregate.
+  'MediaReserveAudioTrackSlug',
+  'MediaReserveAudioSeriesSlug',
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
@@ -616,6 +667,22 @@ const EXPECTED_CHECK_CONSTRAINTS = [
   { table: 'Series', constraint: 'Series_kind_ck' },
   { table: 'VideoSpeaker', constraint: 'VideoSpeaker_position_ck' },
   { table: 'PlaylistVideo', constraint: 'PlaylistVideo_position_ck' },
+  // Phase 11. Lifecycle, locale and slug for each audio aggregate; duration,
+  // series place and transcript bounds; a published track always has a file;
+  // a bounded speaker order.
+  ...['AudioTrack', 'AudioSeries'].flatMap((table) => [
+    ...['state', 'version', 'locale', 'slug'].map((rule) => ({
+      table,
+      constraint: table + '_' + rule + '_ck',
+    })),
+    { table: table + 'Label', constraint: table + 'Label_locale_ck' },
+    { table: table + 'Label', constraint: table + 'Label_title_ck' },
+  ]),
+  ...['duration', 'series', 'transcript', 'published'].map((rule) => ({
+    table: 'AudioTrack',
+    constraint: 'AudioTrack_' + rule + '_ck',
+  })),
+  { table: 'AudioTrackSpeaker', constraint: 'AudioTrackSpeaker_position_ck' },
 ];
 
 /**
@@ -1089,22 +1156,25 @@ const PHASE9_KINDS = [
 
 const PHASE10_KINDS = ['video'];
 
+const PHASE11_KINDS = ['audio'];
+
 /**
  * Phase 9 WIDENS the search vocabularies by exactly its six kinds, each its own
- * scope, and Phase 10 by exactly `video`; each rollback narrows them back to
- * exactly the previous phase's. Asserted against the catalogue in every
+ * scope, Phase 10 by exactly `video` and Phase 11 by exactly `audio`; each
+ * rollback narrows them back to exactly the previous phase's. Asserted against the catalogue in every
  * direction, so a migration that pre-created a later domain's kind, or a
  * rollback that left one behind, fails here.
  */
 async function assertSearchVocabulary(
   session: SqlSession,
-  stage: 'phase17' | 'phase9' | 'phase10',
+  stage: 'phase17' | 'phase9' | 'phase10' | 'phase11',
 ): Promise<void> {
   const sorted = (values: readonly string[]) => [...values].sort().join(',');
   const added = {
     phase17: [],
     phase9: PHASE9_KINDS,
     phase10: [...PHASE9_KINDS, ...PHASE10_KINDS],
+    phase11: [...PHASE9_KINDS, ...PHASE10_KINDS, ...PHASE11_KINDS],
   }[stage];
   const scopes = sorted([...PHASE17_SCOPES, ...added]);
   const kinds = sorted([...PHASE17_KINDS, ...added]);
@@ -1125,12 +1195,111 @@ async function assertSearchVocabulary(
     {
       phase17: 'exactly Phase 17 after rollback',
       phase9: 'exactly Phase 17 and Phase 9 after the Phase-10 rollback',
-      phase10: 'Phase 17, the six Phase-9 kinds and video',
+      phase10: 'exactly Phase 17, Phase 9 and video after the Phase-11 rollback',
+      phase11: 'Phase 17, the six Phase-9 kinds, video and audio',
     }[stage],
   );
 }
 
 const MEDIA_PERMISSIONS = ['media.administer', 'media.read'];
+
+/**
+ * Phase 11 — what only the catalogue can prove about audio:
+ *
+ *   1. a track's file is ONE nullable foreign key to Storage's `Asset`, which
+ *      never cascades — changing a track can never delete an Asset;
+ *   2. NO column of AudioTrack or AudioSeries can describe a Quran recitation —
+ *      no reciter, Surah, Ayah, Juz or recitation marker — so the schema itself
+ *      refuses to become a second authoring path for one (DOMAIN_MODEL.md §8.1);
+ *   3. the Media vocabulary is STILL exactly the two keys, now describing audio,
+ *      and no audio-specific key exists.
+ */
+async function assertAudioFoundation(session: SqlSession): Promise<void> {
+  const [asset] = await session.query<{
+    columns: number;
+    nullable: number;
+    deletes: string | null;
+    target: string | null;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.columns
+        WHERE object_id = OBJECT_ID(N'[dbo].[AudioTrack]') AND name = N'assetId') AS columns,
+      (SELECT SUM(CAST(is_nullable AS INT)) FROM sys.columns
+        WHERE object_id = OBJECT_ID(N'[dbo].[AudioTrack]') AND name = N'assetId') AS nullable,
+      (SELECT delete_referential_action_desc FROM sys.foreign_keys
+        WHERE name = N'AudioTrack_assetId_fkey') AS deletes,
+      (SELECT OBJECT_NAME(referenced_object_id) FROM sys.foreign_keys
+        WHERE name = N'AudioTrack_assetId_fkey') AS target;
+  `);
+  if (
+    Number(asset?.columns) !== 1 ||
+    Number(asset?.nullable) !== 1 ||
+    asset?.deletes !== 'NO_ACTION' ||
+    asset.target !== 'Asset'
+  ) {
+    fail(
+      `AudioTrack must carry exactly one nullable, non-cascading Asset reference; ` +
+        `found ${JSON.stringify(asset ?? null)}.`,
+    );
+  }
+
+  const quranShaped = await session.query<{ name: string }>(`
+    SELECT c.name FROM sys.columns c
+    WHERE c.object_id IN (OBJECT_ID(N'[dbo].[AudioTrack]'), OBJECT_ID(N'[dbo].[AudioSeries]'))
+      AND (c.name LIKE N'%surah%' OR c.name LIKE N'%ayah%' OR c.name LIKE N'%juz%'
+           OR c.name LIKE N'%recit%' OR c.name LIKE N'%quran%' OR c.name LIKE N'%kind%'
+           OR c.name LIKE N'%format%');
+  `);
+  if (quranShaped.length > 0) {
+    fail(
+      `Audio must not be able to describe a recitation or carry a type column; found ` +
+        `${quranShaped.map((row) => row.name).join(', ')}.`,
+    );
+  }
+
+  const permissions = await session.query<{ key: string; description: string }>(`
+    SELECT [key], [description] FROM [dbo].[Permission]
+    WHERE [key] LIKE N'media.%' OR [key] LIKE N'audio.%' ORDER BY [key];
+  `);
+  if (
+    permissions.map((row) => row.key).join(',') !== MEDIA_PERMISSIONS.join(',') ||
+    !permissions.every((row) => row.description.includes('audio'))
+  ) {
+    fail(
+      `The Media vocabulary must remain two keys that now name audio; found ` +
+        `${JSON.stringify(permissions)}.`,
+    );
+  }
+
+  report(
+    'audio foundation',
+    'one non-cascading Asset reference, no recitation shape, the same two keys',
+  );
+}
+
+/**
+ * The Phase-11 rollback restores the two Media keys' Phase-10 descriptions
+ * exactly, so a rolled-back catalogue never tells an administrator a key covers
+ * audio that no longer exists.
+ */
+async function assertMediaPermissionsDescribeVideoOnly(
+  session: SqlSession,
+): Promise<void> {
+  const permissions = await session.query<{ key: string; description: string }>(`
+    SELECT [key], [description] FROM [dbo].[Permission]
+    WHERE [key] LIKE N'media.%' ORDER BY [key];
+  `);
+  if (
+    permissions.map((row) => row.key).join(',') !== MEDIA_PERMISSIONS.join(',') ||
+    permissions.some((row) => row.description.includes('audio'))
+  ) {
+    fail(
+      `The Phase-11 rollback left Media descriptions naming audio: ` +
+        `${JSON.stringify(permissions)}.`,
+    );
+  }
+  report('media descriptions', 'Phase-10 wording restored after the Phase-11 rollback');
+}
 
 /**
  * Phase 10 — what only the catalogue can prove about Media:
@@ -1706,8 +1875,9 @@ try {
   await assertNavigationPermission(session);
   await assertPeopleFoundation(session);
   await assertSearchFoundation(session);
-  await assertSearchVocabulary(session, 'phase10');
+  await assertSearchVocabulary(session, 'phase11');
   await assertMediaFoundation(session);
+  await assertAudioFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -1756,6 +1926,10 @@ try {
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
     }
+    if (migration.id === '20260926000000_phase11_media_audio') {
+      await assertSearchVocabulary(session, 'phase10');
+      await assertMediaPermissionsDescribeVideoOnly(session);
+    }
     if (migration.id === '20260925000000_phase10_media_video') {
       await assertSearchVocabulary(session, 'phase9');
     }
@@ -1802,8 +1976,9 @@ try {
   await assertNavigationPermission(session);
   await assertPeopleFoundation(session);
   await assertSearchFoundation(session);
-  await assertSearchVocabulary(session, 'phase10');
+  await assertSearchVocabulary(session, 'phase11');
   await assertMediaFoundation(session);
+  await assertAudioFoundation(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

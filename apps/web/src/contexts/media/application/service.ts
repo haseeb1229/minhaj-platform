@@ -4,6 +4,8 @@ import { z } from 'zod';
 
 import {
   applyPlaylistChange,
+  audioSeriesInputSchema,
+  audioTrackInputSchema,
   mediaAdminQuerySchema,
   mediaIdSchema,
   mediaVersionSchema,
@@ -17,8 +19,11 @@ import {
   type MediaReferencesPort,
 } from '@minhaj/contracts/media';
 
+import { MediaRefusal } from './refusal.ts';
+
 /**
- * The Media administrative service — Video, Series and Playlist.
+ * The Media administrative service — Video, Series and Playlist, and (Phase 11)
+ * AudioTrack and AudioSeries.
  *
  * TWO AUTHORITIES, RE-CHECKED LIVE ON EVERY CALL. `media.read` opens a record;
  * `media.administer` is what every change requires. The check is a read of the
@@ -35,33 +40,12 @@ import {
  * contributor, a topic an active Taxonomy topic and a content language an active
  * Taxonomy language — answered through the references port at Layer 4, never by
  * a Media query against another context's tables.
+ *
+ * PHASE 11 — AUDIO BY THE SAME RULES. AudioTrack and AudioSeries use the same two
+ * keys, the same strict schemas and the same reference checks. A track's FILE is
+ * never set here: it arrives only through the upload (`./audio-upload.ts`),
+ * which records the relation after Storage has cleared the bytes.
  */
-
-class MediaRefusal extends Error {
-  constructor(readonly reason: string) {
-    super(reason);
-  }
-}
-
-/** Every answer a Media mutation can give that the interface has words for. */
-const FAILURES: ReadonlySet<string> = new Set([
-  'denied',
-  'invalid',
-  'conflict',
-  'not-found',
-  'duplicate-slug',
-  'duplicate-video',
-  'duplicate-position',
-  'duplicate-member',
-  'limit',
-]);
-
-/** A thrown value mapped onto that fixed vocabulary; anything else is `unavailable`. */
-export function mediaFailure(error: unknown): string {
-  if (error instanceof z.ZodError) return 'invalid';
-  const reason = (error as { reason?: unknown } | null)?.reason;
-  return typeof reason === 'string' && FAILURES.has(reason) ? reason : 'unavailable';
-}
 
 export function createMediaService(deps: {
   readonly persistence: MediaPersistencePort;
@@ -218,6 +202,91 @@ export function createMediaService(deps: {
         expectedVersion: version,
         videoIds: outcome.videoIds,
         change: change.op,
+      });
+    },
+
+    /* ---- Phase 11 — AudioTrack and AudioSeries ------------------------- */
+
+    async audioTracks(actor: MediaActor, raw: unknown = {}) {
+      await permit(actor, 'media.read');
+      return store.audioTracks(mediaAdminQuerySchema.parse(raw));
+    },
+
+    async audioTrack(actor: MediaActor, id: string) {
+      await permit(actor, 'media.read');
+      return store.audioTrack(mediaIdSchema.parse(id));
+    },
+
+    /**
+     * A track's metadata and lifecycle.
+     *
+     * A PUBLISHED TRACK HAS AUDIO. Publishing one with no attached file is
+     * refused as `no-audio` — here, so the operator is told what to do, and
+     * again by the adapter under the expected version and by a SQL CHECK, so no
+     * writer can publish a page with nothing to hear.
+     */
+    async saveAudioTrack(
+      actor: MediaActor,
+      id: string | null,
+      expectedVersion: number | null,
+      raw: unknown,
+    ) {
+      await permit(actor, 'media.administer');
+      edit(id, expectedVersion);
+      const value = audioTrackInputSchema.parse(raw);
+      const [people, topics, language, series, current] = await Promise.all([
+        deps.references.validPeople(value.speakerIds),
+        deps.references.validTopics(value.topicIds),
+        deps.references.validLanguage(value.languageCode),
+        value.seriesId === null
+          ? Promise.resolve(true)
+          : store.audioSeries(value.seriesId).then((found) => found !== null),
+        id === null ? Promise.resolve(null) : store.audioTrack(id),
+      ]);
+      if (!people || !topics || !language || !series) throw new MediaRefusal('invalid');
+      if (value.state === 'published' && (current?.assetId ?? null) === null)
+        throw new MediaRefusal('no-audio');
+      return store.saveAudioTrack({
+        actorId: actor.accountId,
+        id,
+        expectedVersion,
+        value,
+      });
+    },
+
+    async audioSeriesDirectory(actor: MediaActor, raw: unknown = {}) {
+      await permit(actor, 'media.read');
+      return store.audioSeriesDirectory(mediaAdminQuerySchema.parse(raw));
+    },
+
+    async audioSeries(actor: MediaActor, id: string) {
+      await permit(actor, 'media.read');
+      return store.audioSeries(mediaIdSchema.parse(id));
+    },
+
+    async audioSeriesTracks(actor: MediaActor, seriesId: string, start = 0) {
+      await permit(actor, 'media.read');
+      return store.audioSeriesTracks(mediaIdSchema.parse(seriesId), offset(start));
+    },
+
+    async audioSeriesChoices(actor: MediaActor) {
+      await permit(actor, 'media.read');
+      return store.audioSeriesChoices();
+    },
+
+    async saveAudioSeries(
+      actor: MediaActor,
+      id: string | null,
+      expectedVersion: number | null,
+      raw: unknown,
+    ) {
+      await permit(actor, 'media.administer');
+      edit(id, expectedVersion);
+      return store.saveAudioSeries({
+        actorId: actor.accountId,
+        id,
+        expectedVersion,
+        value: audioSeriesInputSchema.parse(raw),
       });
     },
   };

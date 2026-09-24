@@ -168,8 +168,8 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
   }),
   /**
    * DELIVERED BY PHASE 10 — Video, Series and Playlist. `/watch` lists only the
-   * Watch surfaces that genuinely exist; audio (`/listen`, Phase 11) and
-   * galleries (Phase 12) are absent rather than reserved.
+   * Watch surfaces that genuinely exist, and from Phase 11 links to Listen, its
+   * sibling; galleries (Phase 12) are absent rather than reserved.
    */
   Object.freeze({
     key: 'watch',
@@ -401,7 +401,7 @@ const LIBRARY: readonly ShellRoute[] = Object.freeze(
  * locales over delivered data, which is what makes `eligible` honest. NO
  * PLACEMENT — they are reached from `/watch`, the single entry point in the
  * primary navigation. `/watch/topics/{slug}` is a filtered view canonical to
- * the topic hub and has no entry, and `/listen` belongs to Phase 11.
+ * the topic hub and has no entry.
  */
 const WATCH_SURFACES = Object.freeze([
   'videos',
@@ -429,6 +429,43 @@ const WATCH: readonly ShellRoute[] = Object.freeze(
     }),
   ),
 );
+
+/**
+ * The Listen surfaces — Phase 11 (ROUTE_MAP.md §3.7).
+ *
+ * `/listen` is a SIBLING of `/watch`, not a child: the landing, every published
+ * non-Quran track under `/listen/lectures`, and audio series under
+ * `/listen/series`. NO PLACEMENT of its own — the primary navigation's "Watch"
+ * covers both video and audio (INFORMATION_ARCHITECTURE.md §2.2), and `/watch`
+ * links here.
+ *
+ * `/listen/recitations` HAS NO ENTRY AND NO ROUTE. It is the catalogue
+ * projection of Quran-owned recitations, and Quran has not shipped; an
+ * AudioTrack never fills it. A deferred capability is absent, never a dead
+ * link (ROUTE_MAP.md §5.2).
+ */
+const LISTEN: readonly ShellRoute[] = Object.freeze([
+  Object.freeze({
+    key: 'listen',
+    label: 'listen.home',
+    path: '/listen',
+    placements: Object.freeze([] as const),
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'eligible' as const,
+  }),
+  ...(['lectures', 'series'] as const).map((surface) =>
+    Object.freeze({
+      key: `listen.${surface}`,
+      label: `listen.${surface}`,
+      path: `/listen/${surface}`,
+      placements: Object.freeze([] as const),
+      visibility: 'public' as const,
+      availability: 'delivered' as const,
+      indexing: 'eligible' as const,
+    }),
+  ),
+]);
 
 /** The routes the shell itself delivers. */
 const SHELL: readonly ShellRoute[] = Object.freeze([
@@ -510,6 +547,7 @@ export const SHELL_ROUTES: readonly ShellRoute[] = Object.freeze([
   ...UTILITY,
   ...LIBRARY,
   ...WATCH,
+  ...LISTEN,
   ...exploreRoutes(),
   ...LEGAL,
 ]);

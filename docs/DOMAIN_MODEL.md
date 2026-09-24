@@ -756,6 +756,35 @@ player — nothing polls the provider, and a cross-origin frame's failure is not
 image on the provider's own image host, and a transcript is text the organisation holds —
 neither is fetched nor generated.
 
+As delivered (Phase 11) — AudioTrack and AudioSeries, **non-Quran audio only**:
+
+| Aggregate | Carries |
+|---|---|
+| **AudioTrack** | Content language (Taxonomy), localized title and description, optional duration, optional recording date (a date, never an instant), organisation-held transcript, ordered speakers (People), topics (Taxonomy), at most one AudioSeries with a unique place in it, and **one typed, nullable reference to the Storage `Asset` holding its audio** |
+| **AudioSeries** | Localized title and description. It is **not** the Video `Series`: its own table, its own members. Removing or archiving one never removes a track |
+
+**Rules:**
+- **No AudioTrack can describe a Quran recitation.** There is no reciter, Surah, Ayah, Juz,
+  range, recitation kind or `isQuran` field, and the input schemas are strict, so such a field
+  is refused rather than ignored. `/listen/recitations` stays absent until Quran delivers its
+  own catalogue; an AudioTrack never fills it (§8.1).
+- **The file is Storage's; its meaning is Media's.** A track names exactly one `Asset` by a
+  foreign key that never cascades, and one Asset serves at most one track. The asset
+  identifier is never accepted from a form: a file is attached only by uploading it to that
+  track, and only once Storage has cleared its exact bytes. Media reads nothing of the Asset
+  row — size, type and scan state are Storage's to report through `StorageServicePort`.
+- **A published track has audio** — enforced by the service and by a SQL CHECK. **Technical
+  availability is orthogonal to publication:** a published track whose bytes cannot be served
+  (missing after a restore, never cleared) keeps its page and says the recording is
+  unavailable; it is not thereby unpublished.
+- **Playback grants no copy.** There is no download purpose; none is offered until a rights
+  decision authorises one.
+- **Replacing a file never destroys the one it replaced.** The new relation is written under
+  the expected version and the previous Asset stays in Storage, unreferenced and unservable.
+- Lifecycle is draft, published, archived; each aggregate has its own slug namespace and
+  native slug history. No AudioPlaylist, Podcast, Album, Season or Episode aggregate exists,
+  and no listening history is recorded.
+
 ---
 
 ## 12. Fatwa

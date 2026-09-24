@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import {
+  audioTrackQuerySchema,
   mediaIdSchema,
   mediaSlugSchema,
   seriesKindSchema,
@@ -11,13 +12,13 @@ import {
 } from '@minhaj/contracts/media';
 
 /**
- * The PUBLIC Media reads — what every Watch page is built on.
+ * The PUBLIC Media reads — what every Watch and Listen page is built on.
  *
  * NO ACTOR, NO SESSION, NO PERMISSION, and the SHAPE is what makes that
  * structural: there is no parameter a viewer's identity could arrive through,
- * so no answer can vary with one (ARCHITECTURE.md §8.1). Watching is not
- * recorded here or anywhere — watch history is Phase 21's, and it needs an
- * account this surface never sees.
+ * so no answer can vary with one (ARCHITECTURE.md §8.1). Watching and listening
+ * are not recorded here or anywhere — watch history is Phase 21's, and it needs
+ * an account this surface never sees; no listening history is authorised.
  *
  * EVERY INPUT IS VALIDATED HERE, at the trust boundary. A slug from a URL
  * segment that does not match the grammar resolves to `null` — the page's own
@@ -107,6 +108,51 @@ export function createMediaReadService(reader: MediaPublicReaderPort) {
     sitemap(kind: 'video' | 'series' | 'playlist', offset: number, limit: number) {
       return reader.sitemap(
         z.enum(['video', 'series', 'playlist']).parse(kind),
+        z.number().int().min(0).max(10_000_000).parse(offset),
+        z.number().int().min(1).max(5000).parse(limit),
+      );
+    },
+
+    /* ---- Phase 11 — the public Listen reads ----------------------------- */
+
+    audioTracks(raw: unknown = {}) {
+      return reader.audioTracks(audioTrackQuerySchema.parse(raw));
+    },
+
+    audioTrack(slug: string) {
+      return validSlug(slug) ? reader.audioTrack(slug) : Promise.resolve(null);
+    },
+
+    audioTrackCanonicalSlug(slug: string) {
+      return validSlug(slug)
+        ? reader.audioTrackCanonicalSlug(slug)
+        : Promise.resolve(null);
+    },
+
+    audioSeriesList(offset = 0) {
+      return reader.audioSeriesList(browseOffset.parse(offset));
+    },
+
+    audioSeries(slug: string) {
+      return validSlug(slug) ? reader.audioSeries(slug) : Promise.resolve(null);
+    },
+
+    audioSeriesCanonicalSlug(slug: string) {
+      return validSlug(slug)
+        ? reader.audioSeriesCanonicalSlug(slug)
+        : Promise.resolve(null);
+    },
+
+    audioSeriesTracks(seriesId: string, offset = 0) {
+      return reader.audioSeriesTracks(
+        mediaIdSchema.parse(seriesId),
+        browseOffset.parse(offset),
+      );
+    },
+
+    audioSitemap(kind: 'track' | 'series', offset: number, limit: number) {
+      return reader.audioSitemap(
+        z.enum(['track', 'series']).parse(kind),
         z.number().int().min(0).max(10_000_000).parse(offset),
         z.number().int().min(1).max(5000).parse(limit),
       );

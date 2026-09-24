@@ -450,6 +450,21 @@ later. **No Azure dependency.** Large PDFs and video files are **never database 
 references, metadata and checksums only. Untrusted uploads are **quarantined before
 publication** (SECURITY_BASELINE.md §10).
 
+**Byte ranges (Phase 11).** A stream `open` has released — clean custody, bytes present, an
+explicit allow — also offers `range(start, end)`, read with the file stream's own bounds, so a
+player seeking into a long recording reads only that part. The serving route parses the HTTP
+`Range` header **only after** `open` has returned, so a range is authorised exactly as a whole
+file is: one well-formed `bytes=` range is `206`, one starting past the end is `416`, and
+anything malformed, multipart or conditional is served whole. Every byte route under `/assets`
+streams through one shared bridge and never buffers a file.
+
+**Large browser uploads (Phase 11).** A consuming context that needs a file larger than the
+global Server Action cap streams the raw request body into `StorageService.store` from its own
+Class-A Route Handler (SECURITY_BASELINE.md §7.1, §10.1); the cap itself is never raised.
+Storage alone generates the key, measures, hashes, sniffs, quarantines and scans. MPEG audio is
+recognised either by its ID3 tag or structurally — two consecutive valid Layer III frame
+headers — never by one byte, an extension or a declared type.
+
 ### 4.3 Search
 
 **SearchService** abstraction, implemented over **SQL Server Full-Text Search** for V1, so a
@@ -498,6 +513,8 @@ recorded limitations are in TECH_STACK.md §10.
   version in its stamp, and the other record's change requests the dependent scopes in the same
   transaction, so neither a missed request nor reconciliation can leave them stale.
   Phase 10 added `video` alone; a Series or Playlist is a grouping of Videos, not a kind.
+  Phase 11 added `audio` alone; an AudioSeries is a grouping, and a Quran recitation is Quran's
+  to project.
 
 ### 4.4 Authentication and authorisation
 

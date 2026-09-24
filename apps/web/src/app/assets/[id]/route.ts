@@ -1,6 +1,7 @@
 import type { AssetAuthorizationPort } from '@minhaj/contracts/platform';
 
 import { storageRuntime } from '@/composition/storage';
+import { toWebStream } from '../web-stream';
 
 /**
  * `/assets/{id}` — THE authorisation-checking serving route
@@ -104,28 +105,6 @@ export async function GET(
 
       /** Bytes behind an authorisation decision are not indexable. */
       'X-Robots-Tag': 'noindex, nofollow',
-    },
-  });
-}
-
-/** Bridge the service's async iterable onto the Web `ReadableStream` a Response wants. */
-function toWebStream(body: AsyncIterable<Uint8Array>): ReadableStream<Uint8Array> {
-  const iterator = body[Symbol.asyncIterator]();
-
-  return new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      try {
-        const { done, value } = await iterator.next();
-        if (done) controller.close();
-        else controller.enqueue(value);
-      } catch (error) {
-        // The bytes stopped mid-flight. Fail the stream rather than truncating
-        // it into what would look like a complete, shorter file.
-        controller.error(error);
-      }
-    },
-    async cancel() {
-      await iterator.return?.();
     },
   });
 }

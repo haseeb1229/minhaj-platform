@@ -543,3 +543,26 @@ describe('reconciliation is bounded and touches only its own resources', () => {
     expect(settledCount).toBeLessThanOrEqual(3);
   });
 });
+
+describe('a byte range is released by the same decision as the whole file (Phase 11)', () => {
+  it('offers a range only on a stream open already allowed', async () => {
+    const storage = await service(programmableScanner({ status: 'clean' }));
+    const stored = await storage.store(bytes(PNG), IMAGES);
+
+    // Denied: there is no stream, so there is no range to ask for.
+    expect(await storage.open(stored.id, deny)).toBeNull();
+
+    const opened = await storage.open(stored.id, allow);
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of opened!.range(1, 3)) chunks.push(chunk);
+    expect([...Buffer.concat(chunks)]).toEqual([...PNG.subarray(1, 4)]);
+  });
+
+  it('refuses a range that ends past the recorded size', async () => {
+    const storage = await service(programmableScanner({ status: 'clean' }));
+    const stored = await storage.store(bytes(PNG), IMAGES);
+    const opened = await storage.open(stored.id, allow);
+
+    expect(() => opened!.range(0, PNG.length)).toThrow(RangeError);
+  });
+});

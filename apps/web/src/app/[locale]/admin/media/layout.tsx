@@ -10,10 +10,13 @@ import { TextLink } from '@/components/ui';
 /**
  * The Media administration shell (ROUTE_MAP.md §7).
  *
- * THREE SURFACES, AND ONLY THREE. ROUTE_MAP.md §7 names
+ * ONLY WHAT EXISTS. ROUTE_MAP.md §7 names
  * `/admin/media/{videos|audio|photos|galleries|playlists|series|assets}`; Phase
- * 10 delivers videos, series and playlists. Audio, photos, galleries and the
- * asset library belong to Phases 11 and 12 and have no link here at all.
+ * 10 delivered videos, series and playlists, and Phase 11 delivers audio, with
+ * audio series beneath it at `audio/series` so they are never confused with the
+ * Video series screen. Photos and galleries belong to Phase 12, and there is no
+ * generic asset library — an audio file is managed on its own track — so none of
+ * those has a link here.
  *
  * `noindex, nofollow` for the whole subtree, and the navigation is filtered by
  * permission as presentation only: every page re-checks `media.read`
@@ -27,7 +30,13 @@ export const metadata = { robots: { index: false, follow: false } };
 
 export const dynamic = 'force-dynamic';
 
-const SURFACES = ['videos', 'series', 'playlists'] as const;
+const SURFACES = [
+  { key: 'videos', path: 'videos' },
+  { key: 'series', path: 'series' },
+  { key: 'playlists', path: 'playlists' },
+  { key: 'audio', path: 'audio' },
+  { key: 'audioSeries', path: 'audio/series' },
+] as const;
 
 export default async function MediaAdminLayout({
   children,
@@ -49,8 +58,8 @@ export default async function MediaAdminLayout({
       {held.has('media.read') ? (
         <nav className="flex flex-wrap gap-4" aria-label={t('title')}>
           {SURFACES.map((surface) => (
-            <TextLink key={surface} href={`/${locale}/admin/media/${surface}`}>
-              {t(`surface.${surface}`)}
+            <TextLink key={surface.key} href={`/${locale}/admin/media/${surface.path}`}>
+              {t(`surface.${surface.key}`)}
             </TextLink>
           ))}
         </nav>

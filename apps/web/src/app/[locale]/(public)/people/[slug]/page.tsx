@@ -6,6 +6,7 @@ import type { Locale } from '@minhaj/contracts';
 import type { ProfileFacetView, PublicPersonProfile } from '@minhaj/contracts/people';
 
 import { peopleReadRuntime } from '@/composition/people-read';
+import { AudioPreview } from '@/components/media/listen';
 import { VideoPreview } from '@/components/media/watch';
 import { absoluteUrl } from '@/config/origin';
 import { requireLocale } from '@/config/route-locale';
@@ -183,6 +184,19 @@ export default async function ContributorProfilePage({ params }: ProfileParams) 
           more={{
             href: `/${locale}/watch/videos?speaker=${encodeURIComponent(profile.id)}`,
             text: t('allVideos'),
+          }}
+        />
+
+        {/* PHASE 11 — the published audio this person speaks in, by the same
+            composition through Media's public read. Nothing when there is none. */}
+        <AudioPreview
+          locale={locale}
+          filter={{ speaker: profile.id }}
+          heading={t('audio')}
+          headingId="person-audio"
+          more={{
+            href: `/${locale}/listen/lectures?speaker=${encodeURIComponent(profile.id)}`,
+            text: t('allAudio'),
           }}
         />
 

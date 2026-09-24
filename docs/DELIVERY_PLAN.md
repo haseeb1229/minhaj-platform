@@ -798,6 +798,41 @@ review history:**
   (Phases 11–12); Quran, Hadith and Event relationships (their owners); watch history
   (Phase 21); automatic provider availability or metadata refresh.
 
+**Phase-11 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+- **Two aggregates, non-Quran only.** AudioTrack and AudioSeries (DOMAIN_MODEL.md §11); an
+  AudioSeries is not the Video `Series`. Nothing can describe a recitation, and
+  `/listen/recitations` has no route until Quran ships its catalogue.
+- **Two independent allows.** A track's bytes are served on `/assets/media/audio/{track}/{asset}`
+  only when Media's policy allows (the exact asset recorded on that track, the track
+  published) AND Storage's custody allows (clean, bytes present). The administrator's preview,
+  `/assets/media/previews/audio/{track}/{asset}`, needs a live `media.administer` and still only
+  serves the recorded asset. There is no download purpose.
+- **One large browser upload, and the global cap unchanged.** An audio file is uploaded as a
+  raw streamed body to `POST /api/admin/media/audio/{id}/asset` — a Class-A Route Handler with
+  explicit anti-CSRF (SECURITY_BASELINE.md §7.1, §10.1) — and never through a Server Action,
+  whose body cap stays global and unraised. MP3 (`audio/mpeg`) is the one accepted format,
+  recognised from its bytes; the per-file ceiling is a technical bound equal to Storage's
+  default (64 MiB). A file the scanner cannot clear is held in quarantine and not attached.
+- **Seeking is a single `bytes=` Range**, answered 206 or 416 only after both allows; anything
+  else is served whole (ARCHITECTURE.md §4.2).
+- **The player is the browser's own** `<audio controls preload="none">`: keyboard-operable, no
+  autoplay, nothing fetched before play. No cover art is invented; rows carry a first-party
+  audio mark. No `AudioObject` is claimed (ROUTE_MAP.md §9.6); pages carry `BreadcrumbList`.
+- **Search** gains the `audio` kind only; its documents carry what a Video's do and nothing
+  about the file. An AudioSeries is not a kind.
+- **Permissions.** No new key: `media.read` and `media.administer` govern audio, and their
+  descriptions now say so. Admin surfaces: `/admin/media/audio` and `/admin/media/audio/series`.
+- **Composition.** Audio appears on `/topics/{slug}` and on a speaker's `/people/{slug}` through
+  Media's public reader; the Watch landing links to Listen. There is no `/listen/speakers`.
+- **Recovery is SQL and bytes.** The populated SQL rehearsal carries audio rows; the storage
+  rehearsal restores the database and the storage root together and proves checksums, the
+  policy and the Search rebuild on the restored pair.
+- **Not delivered, and not owed by this phase:** photos and galleries (Phase 12); Quran
+  recitations (Phase 18); any listening history; transcoding, waveform, duration detection or
+  speech-to-text; audio downloads; a second audio format.
+
 ---
 
 ### Phases 13–15 — News, Events, Collections, split for verification

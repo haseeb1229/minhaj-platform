@@ -761,6 +761,7 @@ model Topic {
   magazineIssueTopics MagazineIssueTopic[]
   encyclopediaTopics EncyclopediaTopic[]
   videoTopics VideoTopic[]
+  audioTrackTopics AudioTrackTopic[]
 
   articleTopics ArticleTopic[]
 
@@ -878,6 +879,7 @@ model Language {
   magazineIssues MagazineIssue[]
   encyclopedias Encyclopedia[]
   videos Video[]
+  audioTracks AudioTrack[]
 
   articleTranslations ArticleRevisionTranslation[]
 
@@ -1008,6 +1010,7 @@ model Person {
   magazineIssueContributions MagazineIssueContributor[]
   encyclopediaContributions EncyclopediaContributor[]
   videoSpeakers VideoSpeaker[]
+  audioTrackSpeakers AudioTrackSpeaker[]
 
   articleContributions ArticleContributor[]
 
@@ -1615,6 +1618,7 @@ model Feedback {
 model Asset {
   readableEditions Edition[] @relation("EditionReadableAsset")
   downloadableEditions Edition[] @relation("EditionDownloadAsset")
+  audioTracks AudioTrack[] @relation("AudioTrackAsset")
   id String @id @db.NVarChar(36)
 
   /// Server-generated and opaque. Never derived from caller input.
@@ -2321,6 +2325,122 @@ model PlaylistVideo {
   @@id([playlistId, videoId])
   @@unique([playlistId, position])
   @@index([videoId, playlistId])
+}
+
+// ===========================================================================
+// Phase 11 — Media: AudioTrack, AudioSeries (DOMAIN_MODEL.md §8.1, §11)
+// ===========================================================================
+//
+// NON-QURAN AUDIO ONLY. Quran owns the logical Recitation and its Surah/Ayah
+// mapping; nothing below can describe one — no reciter, no Surah, Ayah or Juz,
+// no recitation kind — so an AudioTrack can never become a second authoring
+// path for a recitation.
+//
+// TWO AGGREGATES, each with its own table and slug namespace. An AudioSeries is
+// NOT the Phase-10 Video `Series`: different members, different player. No
+// AudioPlaylist, Podcast, Album or Episode table exists.
+//
+// THE FILE IS A STORAGE ASSET, reached by ONE typed, nullable foreign key. The
+// relation never cascades: changing or archiving a track leaves the Asset row
+// and its bytes exactly where Storage keeps them, and Storage cannot remove an
+// Asset a track still names.
+
+/// One non-Quran audio recording: a lecture, a talk, a speech.
+model AudioTrack {
+  id String @id @db.NVarChar(36)
+  slug String @unique @db.NVarChar(120)
+  primaryLocale String @db.NVarChar(8)
+  state String @db.NVarChar(16)
+  languageCode String @db.NVarChar(16)
+  durationSeconds Int?
+  /// When the talk was given or recorded. A date, never an instant.
+  recordedOn DateTime? @db.Date
+  /// A transcript the organisation holds. Plain text, never generated.
+  transcript String? @db.NVarChar(Max)
+  /// The ONE Storage asset this track serves, or none yet. A published track
+  /// must have one (a CHECK), and one asset serves at most one track (a
+  /// FILTERED unique index the migration creates).
+  assetId String? @db.NVarChar(36)
+  /// At most ONE AudioSeries, with a unique position within it (a filtered
+  /// unique index, as for a Video's episode).
+  seriesId String? @db.NVarChar(36)
+  seriesPosition Int?
+  version Int @default(1)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  language Language @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  asset Asset? @relation("AudioTrackAsset", fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  series AudioSeries? @relation(fields: [seriesId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  labels AudioTrackLabel[]
+  slugs AudioTrackSlugHistory[]
+  speakers AudioTrackSpeaker[]
+  topics AudioTrackTopic[]
+  @@index([state, recordedOn, slug])
+  @@index([languageCode, state])
+}
+
+model AudioTrackLabel {
+  trackId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(240)
+  description String @db.NVarChar(4000)
+  track AudioTrack @relation(fields: [trackId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([trackId, locale])
+}
+
+model AudioTrackSlugHistory {
+  slug String @id @db.NVarChar(120)
+  trackId String @db.NVarChar(36)
+  track AudioTrack @relation(fields: [trackId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([trackId])
+}
+
+model AudioTrackSpeaker {
+  trackId String @db.NVarChar(36)
+  personId String @db.NVarChar(36)
+  position Int
+  track AudioTrack @relation(fields: [trackId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  person Person @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([trackId, personId])
+  @@index([personId, trackId])
+}
+
+model AudioTrackTopic {
+  trackId String @db.NVarChar(36)
+  topicId String @db.NVarChar(36)
+  track AudioTrack @relation(fields: [trackId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([trackId, topicId])
+  @@index([topicId, trackId])
+}
+
+/// An ordered run of AudioTracks. Removing or archiving it removes no track.
+model AudioSeries {
+  id String @id @db.NVarChar(36)
+  slug String @unique @db.NVarChar(120)
+  primaryLocale String @db.NVarChar(8)
+  state String @db.NVarChar(16)
+  version Int @default(1)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  labels AudioSeriesLabel[]
+  slugs AudioSeriesSlugHistory[]
+  tracks AudioTrack[]
+  @@index([state, slug])
+}
+
+model AudioSeriesLabel {
+  seriesId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(240)
+  description String @db.NVarChar(4000)
+  series AudioSeries @relation(fields: [seriesId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([seriesId, locale])
+}
+
+model AudioSeriesSlugHistory {
+  slug String @id @db.NVarChar(120)
+  seriesId String @db.NVarChar(36)
+  series AudioSeries @relation(fields: [seriesId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([seriesId])
 }
 
 // ===========================================================================

@@ -1,4 +1,15 @@
 import type {
+  AudioAssetRelation,
+  AudioSearchRecord,
+  AudioSeriesPage,
+  AudioSeriesRecord,
+  AudioSeriesValue,
+  AudioTrackPage,
+  AudioTrackQuery,
+  AudioTrackRecord,
+  AudioTrackValue,
+} from './audio.ts';
+import type {
   MediaAdminQuery,
   MediaSitemapRow,
   PlaylistDetail,
@@ -112,6 +123,47 @@ export interface MediaPublicReaderPort {
   publicVideoTargets(
     ids: readonly string[],
   ): Promise<readonly { readonly id: string; readonly slug: string }[]>;
+
+  /* ---- Phase 11 — AudioTrack and AudioSeries --------------------------- */
+
+  /** One bounded page of PUBLISHED AudioTracks, most recently recorded first. */
+  audioTracks(query: AudioTrackQuery): Promise<AudioTrackPage>;
+  /** One published AudioTrack by its CURRENT slug. */
+  audioTrack(slug: string): Promise<AudioTrackRecord | null>;
+  /** The current slug a current or FORMER slug of a published AudioTrack resolves to. */
+  audioTrackCanonicalSlug(slug: string): Promise<string | null>;
+  audioSeriesList(offset: number): Promise<AudioSeriesPage>;
+  audioSeries(slug: string): Promise<AudioSeriesRecord | null>;
+  audioSeriesCanonicalSlug(slug: string): Promise<string | null>;
+  /** One page of a published AudioSeries' published tracks, in series order. */
+  audioSeriesTracks(seriesId: string, offset: number): Promise<AudioTrackPage>;
+  audioSitemap(
+    kind: 'track' | 'series',
+    offset: number,
+    limit: number,
+  ): Promise<readonly MediaSitemapRow[]>;
+  searchAudio(id: string): Promise<AudioSearchRecord | null>;
+  searchAudioTracks(input: {
+    readonly after: string | null;
+    readonly limit: number;
+  }): Promise<readonly { readonly id: string; readonly stamp: string }[]>;
+  publicAudioTargets(
+    ids: readonly string[],
+  ): Promise<readonly { readonly id: string; readonly slug: string }[]>;
+}
+
+/**
+ * The ONE question Media's audio serving policy asks: which asset is recorded
+ * against this track, and in what lifecycle state is the track?
+ *
+ * A PORT OF ITS OWN, AND THE SEPARATION IS THE POINT. It answers for ANY track —
+ * a draft's asset identifier included — so it is not on the public reader, where
+ * every public page could reach it. Its only consumer is the serving decision,
+ * which checks the state in the same breath (Library's `assetRelation` makes the
+ * same trade for Editions).
+ */
+export interface MediaAssetRelationPort {
+  audioAsset(trackId: string): Promise<AudioAssetRelation | null>;
 }
 
 /* ===========================================================================
@@ -165,4 +217,44 @@ export interface MediaPersistencePort {
     readonly videoIds: readonly string[];
     readonly change: 'add' | 'remove' | 'move';
   }): Promise<PlaylistDetail>;
+
+  /* ---- Phase 11 — AudioTrack and AudioSeries --------------------------- */
+
+  audioTracks(query: MediaAdminQuery): Promise<AudioTrackPage>;
+  audioTrack(id: string): Promise<AudioTrackRecord | null>;
+  /**
+   * Creates or updates one AudioTrack under its expected version — its labels,
+   * speakers and topics, slug reservation, audit entry and search intent in ONE
+   * transaction. The attached asset is NEVER changed here.
+   */
+  saveAudioTrack(input: {
+    readonly actorId: string;
+    readonly id: string | null;
+    readonly expectedVersion: number | null;
+    readonly value: AudioTrackValue;
+  }): Promise<AudioTrackRecord>;
+  /**
+   * Records `assetId` as the track's audio — ONLY if the track is still at
+   * `expectedVersion` — and audits the replacement. The previous asset is left
+   * untouched in Storage: it simply stops being the one this track serves.
+   */
+  attachAudioAsset(input: {
+    readonly actorId: string;
+    readonly trackId: string;
+    readonly expectedVersion: number;
+    readonly assetId: string;
+  }): Promise<AudioTrackRecord>;
+
+  audioSeriesDirectory(query: MediaAdminQuery): Promise<AudioSeriesPage>;
+  audioSeries(id: string): Promise<AudioSeriesRecord | null>;
+  /** Every track of one AudioSeries, any state, in series order. Bounded. */
+  audioSeriesTracks(seriesId: string, offset: number): Promise<AudioTrackPage>;
+  /** Every AudioSeries, any state, for the track form's choice. Bounded. */
+  audioSeriesChoices(): Promise<readonly AudioSeriesRecord[]>;
+  saveAudioSeries(input: {
+    readonly actorId: string;
+    readonly id: string | null;
+    readonly expectedVersion: number | null;
+    readonly value: AudioSeriesValue;
+  }): Promise<AudioSeriesRecord>;
 }

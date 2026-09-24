@@ -1,17 +1,55 @@
-import { readFile, rm } from 'node:fs/promises';
+import { lstat, readFile, realpath, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * Runner-owned cleanup for the disposable browser database.
+ * Runner-owned cleanup for the disposable browser database and storage root.
  *
  * `scripts/browser-server.mjs` also cleans up on SIGTERM/SIGINT. Playwright's
  * Windows process-tree termination does not reliably deliver either signal,
  * however, so server-owned cleanup alone can leave a completed run's database
- * behind. Global teardown runs in Playwright's own process and closes that
- * platform gap. Both paths call the same exact-name-guarded, residue-checking
- * helper, and that helper is deliberately idempotent.
+ * behind. The same applies to its temporary storage root. Global teardown runs
+ * in Playwright's own process and closes both gaps. The database helper checks
+ * its exact disposable name; the storage path is checked below before removal.
  */
+async function removeBrowserStorageRoot(value: unknown): Promise<void> {
+  if (typeof value !== 'string') {
+    throw new Error('Browser environment does not identify its disposable storage root.');
+  }
+
+  const root = path.resolve(value);
+  const name = path.basename(root);
+  const temp = await realpath(tmpdir());
+  const parent = await realpath(path.dirname(root));
+  if (
+    !/^minhaj-browser-storage-[A-Za-z0-9]{6}$/u.test(name) ||
+    parent.toLowerCase() !== temp.toLowerCase()
+  ) {
+    throw new Error('Browser storage root is outside the generated temporary namespace.');
+  }
+
+  let info;
+  try {
+    info = await lstat(root);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+    throw error;
+  }
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new Error('Browser storage root is not a real directory.');
+  }
+  const actual = await realpath(root);
+  if (
+    path.dirname(actual).toLowerCase() !== temp.toLowerCase() ||
+    path.basename(actual) !== name
+  ) {
+    throw new Error('Browser storage root resolves outside the generated namespace.');
+  }
+
+  await rm(root, { recursive: true, force: true });
+}
+
 export default async function globalTeardown(): Promise<void> {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const repoRoot = path.resolve(here, '..', '..');
@@ -25,7 +63,10 @@ export default async function globalTeardown(): Promise<void> {
     throw error;
   }
 
-  const environment = JSON.parse(source) as { databaseName?: unknown };
+  const environment = JSON.parse(source) as {
+    databaseName?: unknown;
+    storageRoot?: unknown;
+  };
   if (typeof environment.databaseName !== 'string') {
     throw new Error('Browser environment does not identify its disposable database.');
   }
@@ -53,5 +94,6 @@ export default async function globalTeardown(): Promise<void> {
     await master.close();
   }
 
+  await removeBrowserStorageRoot(environment.storageRoot);
   await rm(environmentFile, { force: true });
 }

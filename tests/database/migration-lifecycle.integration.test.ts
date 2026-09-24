@@ -337,6 +337,15 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'PlaylistLabel',
         'PlaylistSlugHistory',
         'PlaylistVideo',
+        // Phase 11 — Media: AudioTrack, AudioSeries and their typed relations.
+        'AudioTrack',
+        'AudioTrackLabel',
+        'AudioTrackSlugHistory',
+        'AudioTrackSpeaker',
+        'AudioTrackTopic',
+        'AudioSeries',
+        'AudioSeriesLabel',
+        'AudioSeriesSlugHistory',
       ].sort(),
     );
   });

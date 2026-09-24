@@ -181,6 +181,11 @@
       "programs": "Programmes",
       "playlists": "Video playlists",
       "speakers": "Video speakers"
+    },
+    "listen": {
+      "home": "Listen",
+      "lectures": "Audio lectures",
+      "series": "Audio series"
     }
   },
   "localeSwitcher": {
@@ -934,7 +939,8 @@
         "magazine": "Magazine",
         "magazine-issue": "Magazine issue",
         "encyclopedia": "Encyclopedia",
-        "video": "Video"
+        "video": "Video",
+        "audio": "Audio"
       },
       "categories": {
         "source-unavailable": "The owner could not be read",
@@ -971,7 +977,9 @@
       "teacher": "Teacher"
     },
     "videos": "Videos",
-    "allVideos": "All videos with this speaker"
+    "allVideos": "All videos with this speaker",
+    "audio": "Audio",
+    "allAudio": "All audio with this speaker"
   },
   "editorial": {
     "title": "Editorial",
@@ -1416,7 +1424,8 @@
       "magazine": "Magazine",
       "magazine-issue": "Magazine issue",
       "encyclopedia": "Encyclopedia",
-      "video": "Video"
+      "video": "Video",
+      "audio": "Audio"
     },
     "topic": "Topic",
     "topicAny": "Any topic",
@@ -1493,7 +1502,9 @@
       "encyclopedia": "All encyclopedias on this topic"
     },
     "videos": "Videos on this topic",
-    "allVideos": "All videos on this topic"
+    "allVideos": "All videos on this topic",
+    "audio": "Audio on this topic",
+    "allAudio": "All audio on this topic"
   },
   "watch": {
     "title": "Watch",
@@ -1518,7 +1529,8 @@
       "programs": "Programmes",
       "playlists": "Playlists",
       "speakers": "Speakers",
-      "topics": "Topics"
+      "topics": "Topics",
+      "listen": "Listen"
     },
     "sectionBody": {
       "videos": "Every published video, newest first, with filters by topic, speaker, series and language.",
@@ -1531,7 +1543,8 @@
       "programs": "Programmes, in episode order.",
       "playlists": "Curated lists of videos, in a chosen order.",
       "speakers": "The people who speak in these videos.",
-      "topics": "Browse every topic, with its videos alongside books and research."
+      "topics": "Browse every topic, with its videos alongside books and research.",
+      "listen": "Lectures, talks and speeches to listen to."
     },
     "filters": "Filter videos",
     "filterTopic": "Topic",
@@ -1608,12 +1621,73 @@
     "topicHub": "Everything on this topic",
     "topicEmpty": "No published video is on this topic yet."
   },
+  "listen": {
+    "title": "Listen",
+    "description": "Lectures, talks and speeches to listen to, played here from the organisation’s own recordings.",
+    "latest": "Latest recordings",
+    "allTracks": "All audio lectures",
+    "empty": "No audio has been published here yet.",
+    "emptyFiltered": "No published recording matches these filters.",
+    "browse": "Browse",
+    "sections": {
+      "lectures": "Audio lectures",
+      "series": "Audio series",
+      "topics": "Topics",
+      "watch": "Watch"
+    },
+    "sectionBody": {
+      "lectures": "Every published recording, most recently recorded first, with filters by topic, series and language.",
+      "series": "Recordings gathered into series, in order.",
+      "topics": "Browse every topic, with its recordings alongside books, research and videos.",
+      "watch": "Lectures, programmes and documentaries on video."
+    },
+    "filters": "Filter recordings",
+    "filterTopic": "Topic",
+    "filterSeries": "Audio series",
+    "filterLanguage": "Language of the recording",
+    "filterAny": "Any",
+    "filterApply": "Apply filters",
+    "filterClear": "Clear all filters",
+    "speakerActive": "Showing recordings with",
+    "speakerClear": "Show every speaker",
+    "previous": "Previous page",
+    "next": "Next page",
+    "speakers": "Speakers",
+    "playerHeading": "Listen to this recording",
+    "player": {
+      "name": "{title} — audio recording",
+      "unsupported": "Your browser cannot play audio here.",
+      "failed": "This recording could not be played right now. Please try again later.",
+      "unavailable": "This recording is not available to play right now."
+    },
+    "metadataNotice": "This title and description describe the recording in your language. They are not a translation of it; the language spoken in the recording is stated below.",
+    "facts": "Details",
+    "fact": {
+      "language": "Language of the recording",
+      "duration": "Duration",
+      "recorded": "Recorded",
+      "partOf": "Part of the series",
+      "position": "Part {number}",
+      "transcript": "Transcript"
+    },
+    "transcriptNone": "No transcript is available for this recording.",
+    "transcriptBelow": "Available below.",
+    "transcriptShow": "Read the transcript",
+    "topics": "Topics",
+    "moreFromSeries": "More from this series",
+    "allInSeries": "Every recording in this series",
+    "seriesTracks": "Recordings",
+    "seriesEmpty": "No recording in this series has been published yet.",
+    "seriesListEmpty": "No audio series has been published yet."
+  },
   "media": {
     "title": "Media",
     "surface": {
       "videos": "Videos",
       "series": "Series and programmes",
-      "playlists": "Playlists"
+      "playlists": "Playlists",
+      "audio": "Audio",
+      "audioSeries": "Audio series"
     },
     "unknown": "Something went wrong. Nothing was changed.",
     "reload": "Try again",
@@ -1740,6 +1814,59 @@
       "noCandidates": "No video matches, or every match is already in this playlist.",
       "addSubmit": "Add to the playlist",
       "addVideo": "Video to add"
+    },
+    "audio": {
+      "scope": "Lectures, talks and speeches the organisation holds as recordings. Quran recitations are not catalogued here: they belong to the Quran section.",
+      "create": "Add an audio track",
+      "createHelp": "Save the track as a draft first, then upload its recording on the track’s own page. A track can be published once it has a recording.",
+      "edit": "Edit this audio track",
+      "publishHelp": "A track can be published only once its recording has been uploaded and cleared.",
+      "facts": "Details",
+      "contentLanguage": "Language of the recording",
+      "contentLanguageHelp": "The language spoken in the recording — not the language of its titles.",
+      "duration": "Duration",
+      "durationHelp": "Hours, minutes and seconds (1:02:03), minutes and seconds (4:05), or seconds. Leave empty if unknown.",
+      "recordedOn": "Recorded on",
+      "recordedOnHelp": "The date the talk was given or recorded. Leave empty if unknown; it is never guessed.",
+      "transcript": "Transcript",
+      "transcriptHelp": "Only a transcript the organisation holds and may publish. Never generated.",
+      "grouping": "Audio series",
+      "series": "Audio series",
+      "seriesHelp": "A track belongs to at most one audio series. Give its place in the series too.",
+      "seriesPosition": "Place in the series",
+      "speakers": "Speakers",
+      "speakersHelp": "People who speak in the recording, in order. Being named here grants nothing.",
+      "speaker": "Speaker {number}",
+      "topics": "Topics",
+      "topic": "Topic {number}",
+      "file": "Recording",
+      "fileAttached": "Attached",
+      "fileNone": "None yet",
+      "fileNoneHelp": "No recording has been uploaded for this track yet.",
+      "filePlayable": "Ready to play",
+      "fileUnavailable": "The attached recording cannot be played right now. Upload it again if the problem continues.",
+      "previewHelp": "Listen before publishing. This preview is visible only to administrators.",
+      "previewName": "{title} — preview",
+      "previewUnsupported": "This browser cannot play audio here.",
+      "upload": "Recording to upload (MP3)",
+      "replace": "Replacement recording (MP3)",
+      "uploadHelp": "An MP3 file of up to {size}. It is checked and scanned before it is attached; the file’s name and type are never trusted.",
+      "uploadSubmit": "Upload the recording",
+      "replaceSubmit": "Replace the recording",
+      "uploading": "Uploading…",
+      "progress": "Upload progress",
+      "uploaded": "The recording was uploaded, checked and attached.",
+      "noAudio": "Upload a recording before publishing this track.",
+      "tooLarge": "This file is larger than the upload limit.",
+      "unsupported": "This file is not an MP3 recording, or does not match its stated type.",
+      "notCleared": "The file could not be cleared by the safety scan, so it was not attached. Try again later.",
+      "rateLimited": "Too many uploads in a short time. Wait a few minutes and try again."
+    },
+    "audioSeries": {
+      "create": "Add an audio series",
+      "edit": "Edit this audio series",
+      "tracks": "Tracks",
+      "tracksHelp": "Every track in this series, in order, whatever its state. Set a track’s series and place on the track itself."
     }
   }
 }

@@ -53,6 +53,11 @@ const REQUIRED = [
   'storage.integration',
   'recovery.integration',
   'clamav.integration',
+  // Phase 11: the single-range parser, audio upload, serving and Range through
+  // the real scanner and filesystem, and audio recovery of SQL AND bytes.
+  'range',
+  'media-audio.integration',
+  'audio-recovery.integration',
 ];
 
 const seen = files.map((file) => String(file.name ?? ''));

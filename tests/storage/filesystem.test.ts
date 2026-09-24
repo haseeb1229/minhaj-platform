@@ -206,3 +206,22 @@ describe('integrity is verifiable after the fact', () => {
     expect(await store.exists(generateStorageKey())).toBe(false);
   });
 });
+
+describe('a byte range reads that range and nothing else (Phase 11)', () => {
+  it('returns exactly the inclusive range from disk', async () => {
+    const key = generateStorageKey();
+    await store.write(key, stream(ascii('0123456789abcdef')), 1024);
+
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of store.read(key, { start: 3, end: 7 })) chunks.push(chunk);
+
+    expect(Buffer.concat(chunks).toString('utf8')).toBe('34567');
+  });
+
+  it('refuses a negative or reversed range instead of guessing', () => {
+    const key = generateStorageKey();
+    expect(() => store.read(key, { start: -1, end: 4 })).toThrow(RangeError);
+    expect(() => store.read(key, { start: 5, end: 4 })).toThrow(RangeError);
+    expect(() => store.read(key, { start: 0.5, end: 4 })).toThrow(RangeError);
+  });
+});
