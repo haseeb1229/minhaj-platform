@@ -5,6 +5,7 @@ import {
   AUDIO_UPLOAD_MAX_BYTES,
   formatDuration,
   MEDIA_LIMITS,
+  MEDIA_PAGE,
   type AudioSeriesRecord,
   type AudioTrackListing,
   type AudioTrackRecord,
@@ -37,7 +38,7 @@ import {
 } from '@/components/ui';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
-import { pageOffset, PAGE_SIZE, queryValue } from '../shared';
+import { pageOffset, queryValue } from '../shared';
 import { saveAudioSeries, saveAudioTrack } from './actions';
 import { AudioUploader } from './audio-uploader';
 import { MEDIA_FORM_ROWS } from './rows';
@@ -702,7 +703,7 @@ export async function AudioSeriesEditor({ params, searchParams }: EditorParams) 
     .catch(() => null);
   if (record === null) notFound();
 
-  const offset = pageOffset(query, PAGE_SIZE);
+  const offset = pageOffset(query, MEDIA_PAGE);
   const tracks = await mediaRuntime().media.audioSeriesTracks(actor, record.id, offset);
   const label = mediaLabel(record, locale);
 

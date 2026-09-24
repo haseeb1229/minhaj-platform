@@ -9,8 +9,9 @@
  *
  * PHASE 10 DELIVERED VIDEO, SERIES AND PLAYLIST; PHASE 11 DELIVERS NON-QURAN
  * AUDIO — AudioTrack and AudioSeries, their file upload through Storage, and
- * the policy that decides when a track's bytes may be heard. Galleries are
- * Media's too and arrive with Phase 12; nothing here anticipates them.
+ * the policy that decides when a track's bytes may be heard. PHASE 12 DELIVERS
+ * PHOTOGRAPHS AND GALLERIES — Photo, Gallery and GalleryItem, the image upload
+ * through Storage, and the same two-allow policy for a Photo's image.
  */
 export { createMediaService } from './application/service.ts';
 export { mediaFailure } from './application/refusal.ts';
@@ -20,4 +21,8 @@ export {
   createVideoSearchSource,
 } from './application/search-projection.ts';
 export { createAudioUpload } from './application/audio-upload.ts';
-export { createAudioAssetPolicy } from './application/asset-policy.ts';
+export { createPhotoUpload } from './application/photo-upload.ts';
+export {
+  createAudioAssetPolicy,
+  createPhotoAssetPolicy,
+} from './application/asset-policy.ts';

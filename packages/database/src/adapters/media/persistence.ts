@@ -30,6 +30,7 @@ import { auditRow } from '../../audit-row.ts';
 import { getDatabaseClient } from '../../client.ts';
 import { requestSearchIndexing } from '../../search-intent.ts';
 import { audioPersistence, audioPublicReader } from './audio.ts';
+import { photoPersistence, photoPublicReader } from './photo.ts';
 import {
   bounded,
   boundedOffset,
@@ -55,8 +56,8 @@ import {
  * OWNED BY THE MEDIA CONTEXT, hosted here (ARCHITECTURE.md §4.1). Two factories
  * leave this module, each typed by Media's own port, so no client, delegate or
  * transaction handle crosses the boundary. The Phase-11 audio half
- * (`./audio.ts`) is spread into both, so Media keeps one persistence port and
- * one public reader.
+ * (`./audio.ts`) and the Phase-12 photograph half (`./photo.ts`) are spread
+ * into both, so Media keeps one persistence port and one public reader.
  *
  * ONE PUBLIC PREDICATE PER AGGREGATE, applied IN THE QUERY: a Video, Series or
  * Playlist is public when it is `published`. A Video's Series is shown with it
@@ -390,6 +391,7 @@ export function createMediaPersistence(): MediaPersistencePort {
 
   return {
     ...audioPersistence(),
+    ...photoPersistence(),
 
     async videos(query) {
       const rows = await db.video.findMany({
@@ -770,6 +772,7 @@ export function createMediaPublicReader(): MediaPublicReaderPort {
 
   return {
     ...audioPublicReader(),
+    ...photoPublicReader(),
 
     async videos(query) {
       const rows = await db.video.findMany({

@@ -3,13 +3,18 @@ import 'server-only';
 import { z } from 'zod';
 
 import {
+  applyGalleryChange,
   applyPlaylistChange,
   audioSeriesInputSchema,
   audioTrackInputSchema,
+  galleryChangeSchema,
+  galleryInputSchema,
   mediaAdminQuerySchema,
   mediaIdSchema,
   mediaVersionSchema,
   playlistChangeSchema,
+  photoAdminQuerySchema,
+  photoInputSchema,
   playlistInputSchema,
   seriesInputSchema,
   videoInputSchema,
@@ -45,6 +50,11 @@ import { MediaRefusal } from './refusal.ts';
  * keys, the same strict schemas and the same reference checks. A track's FILE is
  * never set here: it arrives only through the upload (`./audio-upload.ts`),
  * which records the relation after Storage has cleared the bytes.
+ *
+ * PHASE 12 — PHOTOGRAPHS AND GALLERIES BY THE SAME RULES. The same two keys, the
+ * same strict schemas, the same expected versions. A Photo's image arrives only
+ * through its upload (`./photo-upload.ts`); a Gallery's membership changes only
+ * by named changes applied to the version the operator was shown.
  */
 
 export function createMediaService(deps: {
@@ -287,6 +297,108 @@ export function createMediaService(deps: {
         id,
         expectedVersion,
         value: audioSeriesInputSchema.parse(raw),
+      });
+    },
+
+    /* ---- Phase 12 — Photo and Gallery ---------------------------------- */
+
+    async photos(actor: MediaActor, raw: unknown = {}) {
+      await permit(actor, 'media.read');
+      return store.photos(photoAdminQuerySchema.parse(raw));
+    },
+
+    async photo(actor: MediaActor, id: string) {
+      await permit(actor, 'media.read');
+      return store.photo(mediaIdSchema.parse(id));
+    },
+
+    async photoGalleries(actor: MediaActor, photoId: string) {
+      await permit(actor, 'media.read');
+      return store.photoGalleries(mediaIdSchema.parse(photoId));
+    },
+
+    /**
+     * A Photo's words, credit, date and lifecycle.
+     *
+     * A PUBLISHED PHOTO HAS AN IMAGE. Publishing one with none is refused as
+     * `no-image` — here, so the operator is told what to do, and again by the
+     * adapter under the expected version and by a SQL CHECK.
+     */
+    async savePhoto(
+      actor: MediaActor,
+      id: string | null,
+      expectedVersion: number | null,
+      raw: unknown,
+    ) {
+      await permit(actor, 'media.administer');
+      edit(id, expectedVersion);
+      const value = photoInputSchema.parse(raw);
+      const current = id === null ? null : await store.photo(id);
+      if (id !== null && current === null) throw new MediaRefusal('not-found');
+      if (value.state === 'published' && (current?.assetId ?? null) === null)
+        throw new MediaRefusal('no-image');
+      return store.savePhoto({ actorId: actor.accountId, id, expectedVersion, value });
+    },
+
+    async galleries(actor: MediaActor, raw: unknown = {}) {
+      await permit(actor, 'media.read');
+      return store.galleries(mediaAdminQuerySchema.parse(raw));
+    },
+
+    async gallery(actor: MediaActor, id: string) {
+      await permit(actor, 'media.read');
+      return store.gallery(mediaIdSchema.parse(id));
+    },
+
+    async saveGallery(
+      actor: MediaActor,
+      id: string | null,
+      expectedVersion: number | null,
+      raw: unknown,
+    ) {
+      await permit(actor, 'media.administer');
+      edit(id, expectedVersion);
+      return store.saveGallery({
+        actorId: actor.accountId,
+        id,
+        expectedVersion,
+        value: galleryInputSchema.parse(raw),
+      });
+    },
+
+    /**
+     * One named change to a Gallery's membership, applied to the membership
+     * the operator was shown — computed from current state, only if that state
+     * is the expected version, which the adapter then claims atomically. A
+     * Photo that does not exist is refused by its foreign key.
+     */
+    async changeGallery(
+      actor: MediaActor,
+      galleryId: string,
+      expectedVersion: number,
+      raw: unknown,
+    ) {
+      await permit(actor, 'media.administer');
+      const id = mediaIdSchema.parse(galleryId);
+      const version = mediaVersionSchema.parse(expectedVersion);
+      const change = galleryChangeSchema.parse(raw);
+
+      const current = await store.gallery(id);
+      if (current === null) throw new MediaRefusal('not-found');
+      if (current.version !== version) throw new MediaRefusal('conflict');
+
+      const outcome = applyGalleryChange(
+        current.photos.map((photo) => photo.id),
+        change,
+      );
+      if ('refusal' in outcome) throw new MediaRefusal(outcome.refusal);
+
+      return store.setGalleryPhotos({
+        actorId: actor.accountId,
+        galleryId: id,
+        expectedVersion: version,
+        photoIds: outcome.photoIds,
+        change: change.op,
       });
     },
   };

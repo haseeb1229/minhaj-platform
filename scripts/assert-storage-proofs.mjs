@@ -58,6 +58,12 @@ const REQUIRED = [
   'range',
   'media-audio.integration',
   'audio-recovery.integration',
+  // Phase 12: still-image validation and metadata removal, photograph upload,
+  // serving and withdrawal through the real scanner and filesystem, and
+  // photograph recovery of SQL AND bytes.
+  'image',
+  'media-photo.integration',
+  'photo-recovery.integration',
 ];
 
 const seen = files.map((file) => String(file.name ?? ''));

@@ -183,6 +183,15 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'AudioSeries',
       'AudioSeriesLabel',
       'AudioSeriesSlugHistory',
+      // Phase 12 — Media: Photo, Gallery and GalleryItem. A Photo's image is its
+      // own foreign key to `Asset`; a Gallery's membership is its own typed,
+      // ordered table; no Event, Album or generic media table.
+      'Photo',
+      'PhotoLabel',
+      'Gallery',
+      'GalleryLabel',
+      'GallerySlugHistory',
+      'GalleryItem',
       // Phase 17 — the Layer-0 search concern's DERIVED state: indexing intent,
       // per-scope indexing state, and the rebuildable projection.
       'SearchIndexRequest',
@@ -216,13 +225,16 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'ReadingHistory',
       'ReadingProgress',
       'Bookmark',
-      // Media still deferred after Phase 11: galleries (Phase 12), a Program
-      // aggregate (a programme is a Series kind), per-kind or per-provider
-      // Video tables, and Phase 21's watch history.
-      'Photo',
-      'Gallery',
-      'GalleryItem',
+      // Shapes Media never delivers or has not yet: a Program aggregate (a
+      // programme is a Series kind), per-kind or per-provider Video tables,
+      // Phase 21's watch history — and, for Phase 12, an Album, an image or
+      // asset-link table, or an Event-owned gallery join, which is Phase 14's.
       'Program',
+      'Album',
+      'Image',
+      'AssetLink',
+      'EventGallery',
+      'GalleryEvent',
       'MediaItem',
       'YouTubeVideo',
       'LectureVideo',

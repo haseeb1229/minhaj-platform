@@ -16,6 +16,13 @@ import type {
 } from '../../packages/contracts/src/platform/storage.ts';
 import { createFilesystemStore } from '../../packages/storage/src/filesystem.ts';
 import { createStorageService } from '../../packages/storage/src/service.ts';
+import {
+  containsText,
+  exifSegment,
+  jpegWith,
+  SYNTHETIC_JPEG,
+  syntheticPng,
+} from '../../packages/database/src/lifecycle/phase12-fixture.ts';
 
 /**
  * The upload pipeline and the default-deny serving decision.
@@ -96,6 +103,12 @@ function memoryAssets(): AssetPersistencePort & { rows: Map<string, AssetRecord>
     },
     async find(id) {
       return rows.get(id) ?? null;
+    },
+    async findMany(ids) {
+      return ids.flatMap((id) => {
+        const row = rows.get(id);
+        return row === undefined ? [] : [row];
+      });
     },
     async staleBefore(cutoff, limit) {
       return [...rows.values()]
@@ -564,5 +577,113 @@ describe('a byte range is released by the same decision as the whole file (Phase
     const opened = await storage.open(stored.id, allow);
 
     expect(() => opened!.range(0, PNG.length)).toThrow(RangeError);
+  });
+});
+
+describe('an image policy admits only whole, bounded, cleaned images (Phase 12)', () => {
+  const PHOTOS: UploadPolicy = {
+    allowedMediaTypes: ['image/jpeg', 'image/png'],
+    maxBytes: 1024 * 1024,
+    image: { maxPixels: 40_000_000, maxEdge: 16_384 },
+  };
+
+  it('stores the image without its hidden metadata, and reports its displayed size', async () => {
+    const storage = await service(programmableScanner({ status: 'clean' }));
+    const input = jpegWith([exifSegment({ orientation: 8, sentinel: 'SENTINEL-OWNER' })]);
+
+    const stored = await storage.store(bytes(input), PHOTOS);
+
+    expect(stored).toMatchObject({
+      state: 'clean',
+      mediaType: 'image/jpeg',
+      image: { width: 32, height: 48 },
+    });
+    // What was measured, hashed and scanned is the CLEANED image.
+    expect(stored.byteSize).toBeLessThan(input.length);
+    const opened = await storage.open(stored.id, allow);
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of opened!.body) chunks.push(chunk);
+    const kept = Uint8Array.from(Buffer.concat(chunks));
+    expect(containsText(kept, 'SENTINEL')).toBe(false);
+    expect(kept.length).toBe(stored.byteSize);
+  });
+
+  it('refuses a malformed image, an oversized canvas and a bare magic number — and names why', async () => {
+    const scanner = programmableScanner({ status: 'clean' });
+    const storage = await service(scanner);
+
+    const truncated = await storage.store(bytes(SYNTHETIC_JPEG.subarray(0, 200)), PHOTOS);
+    expect(truncated).toMatchObject({ state: 'rejected', rejection: 'unreadable' });
+
+    const bomb = await storage.store(bytes(syntheticPng(50, 50)), {
+      ...PHOTOS,
+      image: { maxPixels: 1000, maxEdge: 16_384 },
+    });
+    expect(bomb).toMatchObject({ state: 'rejected', rejection: 'dimensions-too-large' });
+
+    // Seven bytes of a PNG signature: forwarded unmeasured, so refused.
+    const stub = await storage.store(
+      bytes(Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a])),
+      PHOTOS,
+    );
+    expect(stub.state).toBe('rejected');
+
+    // Nothing refused was ever scanned, and no refused bytes remain servable.
+    expect(scanner.calls).toBe(0);
+    for (const refused of [truncated, bomb, stub]) {
+      expect(await storage.open(refused.id, allow)).toBeNull();
+      expect(assets.rows.get(refused.id)?.state).toBe('rejected');
+    }
+  });
+
+  it('still refuses a PDF or an archive sent under an image policy', async () => {
+    const storage = await service(programmableScanner({ status: 'clean' }));
+    expect((await storage.store(bytes(PDF), PHOTOS)).state).toBe('rejected');
+    expect((await storage.store(bytes(ZIP), PHOTOS)).state).toBe('rejected');
+  });
+
+  it('will not validate a type it cannot, rather than admit it blind', async () => {
+    const storage = await service(programmableScanner({ status: 'clean' }));
+    await expect(
+      storage.store(bytes(PDF), {
+        ...PHOTOS,
+        allowedMediaTypes: ['image/png', 'application/pdf'],
+      }),
+    ).rejects.toThrow(/only JPEG and PNG/u);
+  });
+});
+
+describe('servability is one bounded technical question for a page (Phase 12)', () => {
+  it('answers clean-and-present only, and serves nothing', async () => {
+    const storage = await service(
+      programmableScanner(
+        { status: 'clean' },
+        { status: 'clean' },
+        { status: 'unavailable' },
+      ),
+    );
+    const clean = await storage.store(bytes(PNG), IMAGES);
+    const gone = await storage.store(bytes(PNG), IMAGES);
+    const held = await storage.store(bytes(PNG), IMAGES);
+    expect(held.state).toBe('quarantined');
+
+    // The second clean asset's bytes vanish, as after a partial restore.
+    const row = assets.rows.get(gone.id);
+    if (row === undefined) throw new Error('missing row');
+    const { rm } = await import('node:fs/promises');
+    const files = (await import('node:fs')).readdirSync(base, { recursive: true });
+    for (const entry of files) {
+      if (String(entry).endsWith(row.storageKey.split('/').at(-1) ?? '#'))
+        await rm(path.join(base, String(entry)));
+    }
+
+    const answer = await storage.servable([clean.id, gone.id, held.id, 'no-such-asset']);
+    expect([...answer]).toEqual([clean.id]);
+    expect(await storage.servable([])).toEqual(new Set());
+    await expect(
+      storage.servable(
+        Array.from({ length: 101 }, (_, index) => `asset-${String(index)}`),
+      ),
+    ).rejects.toThrow(RangeError);
   });
 });

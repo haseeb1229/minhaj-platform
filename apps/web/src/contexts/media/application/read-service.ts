@@ -4,6 +4,8 @@ import {
   audioTrackQuerySchema,
   mediaIdSchema,
   mediaSlugSchema,
+  PHOTO_LIMITS,
+  photoArchiveQuerySchema,
   seriesKindSchema,
   videoQuerySchema,
   type MediaPublicReaderPort,
@@ -12,7 +14,8 @@ import {
 } from '@minhaj/contracts/media';
 
 /**
- * The PUBLIC Media reads — what every Watch and Listen page is built on.
+ * The PUBLIC Media reads — what every Watch, Listen and photograph page is
+ * built on.
  *
  * NO ACTOR, NO SESSION, NO PERMISSION, and the SHAPE is what makes that
  * structural: there is no parameter a viewer's identity could arrive through,
@@ -153,6 +156,52 @@ export function createMediaReadService(reader: MediaPublicReaderPort) {
     audioSitemap(kind: 'track' | 'series', offset: number, limit: number) {
       return reader.audioSitemap(
         z.enum(['track', 'series']).parse(kind),
+        z.number().int().min(0).max(10_000_000).parse(offset),
+        z.number().int().min(1).max(5000).parse(limit),
+      );
+    },
+
+    /* ---- Phase 12 — photographs, galleries and the archive -------------- */
+
+    photos(offset = 0) {
+      return reader.photos(browseOffset.parse(offset));
+    },
+
+    archivePhotos(raw: unknown = {}) {
+      return reader.archivePhotos(photoArchiveQuerySchema.parse(raw));
+    },
+
+    archiveYears() {
+      return reader.archiveYears();
+    },
+
+    archiveMonths(year: number) {
+      return reader.archiveMonths(
+        z.number().int().min(PHOTO_LIMITS.earliestYear).max(9999).parse(year),
+      );
+    },
+
+    galleries(offset = 0) {
+      return reader.galleries(browseOffset.parse(offset));
+    },
+
+    gallery(slug: string) {
+      return validSlug(slug) ? reader.gallery(slug) : Promise.resolve(null);
+    },
+
+    galleryCanonicalSlug(slug: string) {
+      return validSlug(slug) ? reader.galleryCanonicalSlug(slug) : Promise.resolve(null);
+    },
+
+    galleryPhotos(galleryId: string, offset = 0) {
+      return reader.galleryPhotos(
+        mediaIdSchema.parse(galleryId),
+        browseOffset.parse(offset),
+      );
+    },
+
+    gallerySitemap(offset: number, limit: number) {
+      return reader.gallerySitemap(
         z.number().int().min(0).max(10_000_000).parse(offset),
         z.number().int().min(1).max(5000).parse(limit),
       );

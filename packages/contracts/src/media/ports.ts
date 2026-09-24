@@ -10,6 +10,22 @@ import type {
   AudioTrackValue,
 } from './audio.ts';
 import type {
+  ArchiveMonth,
+  ArchiveYear,
+  GalleryDetail,
+  GalleryPage,
+  GalleryRecord,
+  GalleryValue,
+  PhotoAdminQuery,
+  PhotoArchiveQuery,
+  PhotoAssetRelation,
+  PhotoPage,
+  PhotoRecord,
+  PhotoValue,
+  PublicGallery,
+  PublicGalleryPage,
+} from './photo.ts';
+import type {
   MediaAdminQuery,
   MediaSitemapRow,
   PlaylistDetail,
@@ -150,6 +166,33 @@ export interface MediaPublicReaderPort {
   publicAudioTargets(
     ids: readonly string[],
   ): Promise<readonly { readonly id: string; readonly slug: string }[]>;
+
+  /* ---- Phase 12 — Photo, Gallery and the historical archive ------------ */
+
+  /** One bounded page of PUBLISHED Photos with an image, most recently added first. */
+  photos(offset: number): Promise<PhotoPage>;
+  /**
+   * One bounded page of the historical archive: published Photos whose date
+   * is KNOWN, latest first, narrowed to a year and a month when given.
+   */
+  archivePhotos(query: PhotoArchiveQuery): Promise<PhotoPage>;
+  /** The years the archive holds public Photos in, with counts. Bounded. */
+  archiveYears(): Promise<readonly ArchiveYear[]>;
+  /** The known months of one archive year, with counts. */
+  archiveMonths(year: number): Promise<readonly ArchiveMonth[]>;
+  /**
+   * One bounded page of published Galleries that hold at least one public
+   * Photo, most recently created first, each with its count and cover.
+   */
+  galleries(offset: number): Promise<PublicGalleryPage>;
+  /** One published Gallery by its CURRENT slug, with its count and cover. */
+  gallery(slug: string): Promise<PublicGallery | null>;
+  /** The current slug a current or FORMER slug of a published Gallery resolves to. */
+  galleryCanonicalSlug(slug: string): Promise<string | null>;
+  /** One page of a published Gallery's published Photos, in its order. */
+  galleryPhotos(galleryId: string, offset: number): Promise<PhotoPage>;
+  /** Canonical sitemap rows: published Galleries holding a public Photo. */
+  gallerySitemap(offset: number, limit: number): Promise<readonly MediaSitemapRow[]>;
 }
 
 /**
@@ -164,6 +207,8 @@ export interface MediaPublicReaderPort {
  */
 export interface MediaAssetRelationPort {
   audioAsset(trackId: string): Promise<AudioAssetRelation | null>;
+  /** Phase 12 — the same question for a Photo's image. */
+  photoAsset(photoId: string): Promise<PhotoAssetRelation | null>;
 }
 
 /* ===========================================================================
@@ -257,4 +302,55 @@ export interface MediaPersistencePort {
     readonly expectedVersion: number | null;
     readonly value: AudioSeriesValue;
   }): Promise<AudioSeriesRecord>;
+
+  /* ---- Phase 12 — Photo and Gallery ------------------------------------- */
+
+  photos(query: PhotoAdminQuery): Promise<PhotoPage>;
+  photo(id: string): Promise<PhotoRecord | null>;
+  /** The Galleries, any state, a Photo appears in. Bounded. */
+  photoGalleries(photoId: string): Promise<readonly GalleryRecord[]>;
+  /**
+   * Creates or updates one Photo's metadata and lifecycle under its expected
+   * version — its labels and its audit entry — in ONE transaction. The attached image
+   * is NEVER changed here.
+   */
+  savePhoto(input: {
+    readonly actorId: string;
+    readonly id: string | null;
+    readonly expectedVersion: number | null;
+    readonly value: PhotoValue;
+  }): Promise<PhotoRecord>;
+  /**
+   * Records `assetId` — with the dimensions Storage measured — as the Photo's
+   * image, ONLY if the Photo is still at `expectedVersion`, and audits the
+   * replacement. The previous asset is left untouched in Storage.
+   */
+  attachPhotoAsset(input: {
+    readonly actorId: string;
+    readonly photoId: string;
+    readonly expectedVersion: number;
+    readonly assetId: string;
+    readonly width: number;
+    readonly height: number;
+  }): Promise<PhotoRecord>;
+
+  galleries(query: MediaAdminQuery): Promise<GalleryPage>;
+  gallery(id: string): Promise<GalleryDetail | null>;
+  saveGallery(input: {
+    readonly actorId: string;
+    readonly id: string | null;
+    readonly expectedVersion: number | null;
+    readonly value: GalleryValue;
+  }): Promise<GalleryRecord>;
+  /**
+   * Replaces a Gallery's ordered membership with `photoIds` — ONLY if the
+   * Gallery is still at `expectedVersion` — and audits the named change.
+   */
+  setGalleryPhotos(input: {
+    readonly actorId: string;
+    readonly galleryId: string;
+    readonly expectedVersion: number;
+    readonly photoIds: readonly string[];
+    readonly change: 'add' | 'remove' | 'move';
+  }): Promise<GalleryDetail>;
 }

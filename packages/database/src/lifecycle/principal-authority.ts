@@ -380,6 +380,14 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[audioserieslabel]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[audiotrackslughistory]': ['SELECT', 'INSERT'],
   '[dbo].[audioseriesslughistory]': ['SELECT', 'INSERT'],
+  // Phase 12: photographs and galleries, by the same three postures. The image
+  // is reached only through Storage's own `Asset` grant, never here.
+  '[dbo].[photo]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[gallery]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[photolabel]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[gallerylabel]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[galleryitem]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[galleryslughistory]': ['SELECT', 'INSERT'],
   '[dbo].[article]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[page]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[articlerevision]': ['SELECT', 'INSERT'],

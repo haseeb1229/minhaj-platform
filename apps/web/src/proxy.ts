@@ -226,6 +226,30 @@ export default async function proxy(request: NextRequest) {
   }
   if (request.method === 'GET' || request.method === 'HEAD') {
     /**
+     * PHASE 12 — A GALLERY'S OWN SLUG HISTORY, through the same single-301
+     * mechanism: one hop to the current address, locale preserved, the target
+     * built from Media's answer and never from the request. A Photo has no
+     * slug, so nothing else under `/media` redirects.
+     */
+    const gallery = /^\/(en|ur|ar)\/media\/galleries\/([^/]+)$/.exec(
+      request.nextUrl.pathname,
+    );
+    if (gallery?.[1] && gallery[2]) {
+      const slug = decodedSegment(gallery[2]);
+      if (slug !== null) {
+        const { mediaReadRuntime } = await import('@/composition/media-read');
+        const current = await mediaReadRuntime().galleryCanonicalSlug(slug);
+        if (current !== null && current !== slug) {
+          return permanent(
+            request,
+            `/${gallery[1]}/media/galleries/${encodeURIComponent(current)}`,
+          );
+        }
+      }
+    }
+  }
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    /**
      * PHASE 17 — PUBLIC SEARCH ADMISSION.
      *
      * Only a request that will actually run a query spends budget: the search

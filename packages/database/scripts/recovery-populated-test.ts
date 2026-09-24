@@ -28,6 +28,12 @@ import {
   verifyRestoredPhase11,
   writePhase11Fixture,
 } from '../src/lifecycle/phase11-fixture.ts';
+import {
+  capturePhase12Fixture,
+  newPhase12Fixture,
+  verifyRestoredPhase12,
+  writePhase12Fixture,
+} from '../src/lifecycle/phase12-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -148,6 +154,7 @@ const libraryFixture = newPhase8Fixture();
 const scholarlyFixture = newPhase9Fixture();
 const mediaFixture = newPhase10Fixture();
 const audioFixture = newPhase11Fixture();
+const photoFixture = newPhase12Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -261,6 +268,15 @@ try {
   const audioSnapshot = await capturePhase11Fixture(admin, audioFixture);
   report('audio fixture', `run ${audioFixture.runId}`);
 
+  // Phase-12 photographs: a published Photo with its typed asset, dimensions, a
+  // partial date and an Urdu caption; a draft Photo with an asset of its own;
+  // an archived Photo; and a renamed Gallery holding all three in a deliberate
+  // order. The image BYTES are rehearsed with the storage root by
+  // tests/storage/photo-recovery.integration.test.ts.
+  await writePhase12Fixture(admin, photoFixture);
+  const photoSnapshot = await capturePhase12Fixture(admin, photoFixture);
+  report('photo fixture', `run ${photoFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -335,6 +351,10 @@ try {
   report(
     'audio recovery',
     await verifyRestoredPhase11(restored, audioFixture, audioSnapshot),
+  );
+  report(
+    'photo recovery',
+    await verifyRestoredPhase12(restored, photoFixture, photoSnapshot),
   );
 
   // ---- restored security posture -------------------------------------------
@@ -478,6 +498,12 @@ try {
         // reserved track slug.
         ['AudioTrack DELETE', 'DELETE FROM [dbo].[AudioTrack];'],
         ['AudioTrackSlugHistory DELETE', 'DELETE FROM [dbo].[AudioTrackSlugHistory];'],
+        // Phase 12. A restored runtime can neither erase a Photo or a Gallery,
+        // release a reserved Gallery slug, nor rewrite a Gallery's order.
+        ['Photo DELETE', 'DELETE FROM [dbo].[Photo];'],
+        ['Gallery DELETE', 'DELETE FROM [dbo].[Gallery];'],
+        ['GallerySlugHistory DELETE', 'DELETE FROM [dbo].[GallerySlugHistory];'],
+        ['GalleryItem UPDATE', 'UPDATE [dbo].[GalleryItem] SET [position]=[position];'],
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -507,6 +533,7 @@ try {
       await verifyRestoredPhase9(restored, scholarlyFixture, scholarlySnapshot);
       await verifyRestoredPhase10(restored, mediaFixture, mediaSnapshot);
       await verifyRestoredPhase11(restored, audioFixture, audioSnapshot);
+      await verifyRestoredPhase12(restored, photoFixture, photoSnapshot);
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 
       // Phase 17. The full-text catalogue and index live INSIDE the database,

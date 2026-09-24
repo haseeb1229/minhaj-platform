@@ -7,6 +7,7 @@ import { mediaReadRuntime } from '@/composition/media-read';
 import {
   audioSeriesPathOf,
   audioTrackPathOf,
+  galleryPathOf,
   playlistPathOf,
   seriesPathOf,
   videoPathOf,
@@ -117,4 +118,24 @@ export async function audioSitemapPartitions(): Promise<readonly SitemapPartitio
   }
 
   return partitionsOf('audio', buckets);
+}
+
+/**
+ * The `galleries` segment — Phase 12's canonical Gallery URLs (ROUTE_MAP.md
+ * §9.4 names the segment): each published Gallery that holds at least one
+ * public photograph, at `/media/galleries/{slug}`. Never a draft, an archived
+ * or empty Gallery, a former slug, a byte route — and never a Photo, which has
+ * no page of its own.
+ */
+export async function gallerySitemapPartitions(): Promise<readonly SitemapPartition[]> {
+  if (!publicIndexingEnabled()) return [];
+
+  const buckets = localeBuckets();
+  for (let offset = 0; ; offset += READ_BATCH) {
+    const batch = await mediaReadRuntime().gallerySitemap(offset, READ_BATCH);
+    for (const row of batch) addRow(buckets, galleryPathOf(row.slug), row);
+    if (batch.length < READ_BATCH) break;
+  }
+
+  return partitionsOf('galleries', buckets);
 }

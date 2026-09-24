@@ -1,6 +1,10 @@
 import { editorialSitemapPartitions, mergePagePartitions } from './editorial-sitemap';
 import { librarySitemapPartitions } from './library-sitemap';
-import { audioSitemapPartitions, mediaSitemapPartitions } from './media-sitemap';
+import {
+  audioSitemapPartitions,
+  gallerySitemapPartitions,
+  mediaSitemapPartitions,
+} from './media-sitemap';
 import { scholarlySitemapPartitions } from './scholarly-sitemap';
 import { topicsSitemapPartitions } from './topics-sitemap';
 import 'server-only';
@@ -152,6 +156,9 @@ export async function allSitemapPartitions(): Promise<readonly SitemapPartition[
     // Phase 11's `audio` segment: AudioTracks and AudioSeries at their one
     // canonical address.
     ...(await audioSitemapPartitions()),
+    // Phase 12's `galleries` segment: published Galleries that hold a public
+    // photograph. A Photo has no page, so it has no URL here.
+    ...(await gallerySitemapPartitions()),
   ]);
 }
 

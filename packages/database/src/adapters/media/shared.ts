@@ -6,7 +6,7 @@ import type { Locale } from '@minhaj/contracts';
 import type { MediaLabel } from '@minhaj/contracts/media';
 
 /**
- * What the Media adapter's Video and Audio halves share — refusal mapping,
+ * What the Media adapter's Video, Audio and Photo halves share — refusal mapping,
  * label mapping, date handling and bounds — so the two cannot disagree about
  * what a duplicate slug, a stale version or a SQL `date` means.
  *
@@ -32,6 +32,12 @@ const KEY_REASONS: readonly (readonly [string, string])[] = [
   // A fresh asset is attached to exactly the track it was uploaded for, so
   // meeting this key means two writers raced; neither silently wins.
   ['AudioTrack_assetId_key', 'conflict'],
+  // Phase 12, by the same reasoning: a fresh image attaches to exactly the
+  // Photo it was uploaded for, and a Gallery's places are rewritten under its
+  // claimed version — meeting either key means two writers raced.
+  ['Photo_assetId_key', 'conflict'],
+  ['GalleryItem_galleryId_position_key', 'conflict'],
+  ['GalleryItem_pkey', 'duplicate-member'],
 ];
 
 /**

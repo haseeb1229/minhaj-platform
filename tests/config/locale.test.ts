@@ -180,6 +180,9 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/media/audio-player.tsx',
     'apps/web/src/components/media/listen.tsx',
     'apps/web/src/components/media/parts.tsx',
+    // Phase 12. The photograph surfaces and their viewer island.
+    'apps/web/src/components/media/photo-viewer.tsx',
+    'apps/web/src/components/media/photos.tsx',
     'apps/web/src/components/media/player.tsx',
     'apps/web/src/components/media/presentation.ts',
     'apps/web/src/components/media/watch.tsx',

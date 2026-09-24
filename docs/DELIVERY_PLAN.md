@@ -833,6 +833,57 @@ review history:**
   recitations (Phase 18); any listening history; transcoding, waveform, duration detection or
   speech-to-text; audio downloads; a second audio format.
 
+**Phase-12 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+- **Three shapes and no Event.** Photo, Gallery and GalleryItem (DOMAIN_MODEL.md §11). A
+  Gallery exists independently; no column, table or code path references an Event, Centre or
+  Collection, and no Gallery has a kind. The typed Event↔Gallery association is Phase 14's.
+  People and Topics are not attached to photographs: no current contract needs them, and no
+  person is ever inferred from an image.
+- **A Photo has no page.** ROUTE_MAP.md §3.9 names none, so a Photo has no slug and no sitemap
+  URL; it is seen in `/media/photos`, the archive and its Galleries, and opens in an accessible
+  viewer — the browser's own modal `<dialog>`, labelled previous and next, arrow keys that
+  follow the reading direction, focus returned on close, nothing that moves on its own.
+- **Two independent allows, as for audio.** An image is served on
+  `/assets/media/photos/{photo}/{asset}` only when Media's policy allows (the exact asset
+  recorded on that Photo, the Photo published) AND Storage's custody allows. The preview,
+  `/assets/media/previews/photos/{photo}/{asset}`, needs a live `media.administer`. There is no
+  download purpose, and `/media/downloads` has no route.
+- **Withdrawal is immediate.** Public images are `private, no-cache` with the stored checksum as
+  their validator; a `304` is sent only after both decisions, so an archived Photo stops being
+  shown even by a browser that holds it. No image optimiser or remote image host is used.
+- **Still images only, validated and cleaned by Storage.** JPEG and PNG, recognised from their
+  bytes, structurally whole, within 40 megapixels and 16,384 pixels a side, at most 16 MiB; the
+  stored and served bytes carry no EXIF, XMP, IPTC, comment, embedded thumbnail or trailing
+  data — only the orientation survives (ARCHITECTURE.md §4.2). The pixels are never decoded on
+  the server and never re-encoded. The upload is `POST /api/admin/media/photos/{id}/asset`, on
+  the Phase-11 pattern, with its own per-account budget; the global Server Action cap is
+  unchanged.
+- **No derivatives.** The image an operator uploads is the image a visitor receives: grids load
+  it lazily, bounded to one page of twenty-four, with its recorded dimensions so nothing shifts.
+  A smaller display rendition would need a server-side image decoder, a dependency review and a
+  derived-work lifecycle; it is a performance decision recorded against Phase 34.
+- **Words are never generated.** Alternative text and a caption per locale, a credit and a date
+  are what an operator writes; a missing alternative is shown as missing, never invented or
+  passed off as decorative, and the administration filters for it. A date is a year, a month and
+  year, or a full date — never a record's creation time.
+- **Galleries.** At most 240 Photos, ordered, duplicate-free, changed by named changes under the
+  expected version; the cover is the first public Photo in the order; a published Gallery is
+  listed, and in the `galleries` sitemap segment, only while it holds a public Photo. Removing
+  membership never removes a Photo, and nothing deletes a Photo or its Asset.
+- **The archive** is `/media/archive?year=&month=` over published Photos whose date is known.
+- **Search is unchanged.** No `photo` or `gallery` kind: Phase 12 does not carry Phase 17 in its
+  dependency path, and Phase 31 reconciles the final searchable inventory.
+- **Permissions.** No new key: `media.read` and `media.administer`, re-described. Admin
+  surfaces: `/admin/media/photos` and `/admin/media/galleries`. Until News & Events and
+  Collections ship their entry points (INFORMATION_ARCHITECTURE.md §2.2), the Watch landing links
+  the photograph surfaces.
+- **Recovery is SQL and bytes**, rehearsed together; no derived image exists to rebuild.
+- **Not delivered, and not owed by this phase:** Event galleries (Phase 14); photo downloads;
+  display derivatives (Phase 34's decision); any other image format; face, object or location
+  recognition; generated captions or alternative text; legacy photograph migration (Phase 30).
+
 ---
 
 ### Phases 13–15 — News, Events, Collections, split for verification

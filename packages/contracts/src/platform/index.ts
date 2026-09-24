@@ -48,6 +48,8 @@ export type {
   AssetRejection,
   AssetState,
   AssetStream,
+  ImageDimensions,
+  ImageLimits,
   MalwareScannerPort,
   ScanOutcome,
   StorageServicePort,

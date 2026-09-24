@@ -17,8 +17,8 @@ import {
  * may appear in (any number). There is no Program, Lecture, Interview or
  * provider-specific video type: a "programme" is a Series whose `kind` says so,
  * and the five curated Watch views are a Video's `format`. Audio has its own
- * aggregates in `./audio.ts` (Phase 11); galleries belong to Phase 12 and have no
- * shape here.
+ * aggregates in `./audio.ts` (Phase 11), and photographs and galleries theirs in
+ * `./photo.ts` (Phase 12).
  *
  * NO FILE, NO FRAME, NO MARKUP. A Video is provider metadata: the provider, its
  * identifier, and descriptive facts an operator records. No byte of video is

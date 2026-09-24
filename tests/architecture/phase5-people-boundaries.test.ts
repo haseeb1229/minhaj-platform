@@ -281,7 +281,15 @@ describe('nothing in People can grant, store or fabricate a capability', () => {
     // and its three siblings are projections which must never be stored, and
     // matching raw text would report that explanation as the violation.
     const schema = code(await sourceOf('packages/database/prisma/schema.prisma'));
-    const people = schema.slice(schema.indexOf('model Person {'));
+    // The People models only — Person and its profiles, up to the Editorial
+    // models that follow them. A later domain's own image relation (Phase 12's
+    // GalleryItem names its Photo) is not a People field.
+    const start = schema.indexOf('model Person {');
+    const end = schema.indexOf('model Article {');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const people = schema.slice(start, end);
+    expect(people).toContain('model TeacherProfileLanguage {');
 
     expect(people.length).toBeGreaterThan(0);
     for (const capability of Object.keys(CONTRIBUTOR_CAPABILITY_SOURCES)) {
@@ -513,7 +521,15 @@ describe('the contribution-role vocabulary has nothing to hang on', () => {
 
   it('introduces no image, asset or external URL field', async () => {
     const schema = await sourceOf('packages/database/prisma/schema.prisma');
-    const people = schema.slice(schema.indexOf('model Person {'));
+    // The People models only — Person and its profiles, up to the Editorial
+    // models that follow them. A later domain's own image relation (Phase 12's
+    // GalleryItem names its Photo) is not a People field.
+    const start = schema.indexOf('model Person {');
+    const end = schema.indexOf('model Article {');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const people = schema.slice(start, end);
+    expect(people).toContain('model TeacherProfileLanguage {');
 
     for (const forbidden of ['image', 'avatar', 'photo', 'portrait', 'imageUrl']) {
       expect(people, forbidden).not.toMatch(new RegExp(`^\\s+${forbidden}\\b`, 'mi'));

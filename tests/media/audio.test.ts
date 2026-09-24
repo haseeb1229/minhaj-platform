@@ -282,6 +282,7 @@ function uploadHarness(
       );
     },
     open: async () => null,
+    servable: async () => new Set<string>(),
     reconcile: async () => 0,
   };
   const upload = createAudioUpload({
@@ -399,7 +400,13 @@ function policyFor(
   preview?: boolean,
 ) {
   return createAudioAssetPolicy({
-    relations: { audioAsset: async () => relation },
+    relations: {
+      audioAsset: async () => relation,
+      // A photo relation is never consulted for a track's recording.
+      photoAsset: async () => {
+        throw new Error('The audio policy asked about a Photo.');
+      },
+    },
     request,
     ...(preview === undefined
       ? {}

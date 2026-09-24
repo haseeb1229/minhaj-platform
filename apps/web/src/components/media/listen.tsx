@@ -33,11 +33,9 @@ import {
   StatusBadge,
   TextLink,
 } from '@/components/ui';
-import { absoluteUrl } from '@/config/origin';
 import { directionOf } from '@/config/locale';
-import { isContentIndexable, serializeStructuredData } from '@/seo/metadata';
 import { AudioPlayer } from './audio-player';
-import { Duration, formatDate, Pagination } from './parts';
+import { BreadcrumbData, Duration, formatDate, Pagination } from './parts';
 import {
   audioSeriesPath,
   audioTrackPath,
@@ -419,39 +417,6 @@ function trackTrail(
     { name: labels.lectures, path: `/${locale}/listen/lectures` },
     { name: mediaLabel(record, locale).title, path: audioTrackPath(locale, record.slug) },
   ];
-}
-
-/**
- * JSON-LD, ONLY WHAT IS TRUE and only when the page may be indexed at all: a
- * `BreadcrumbList`. No `AudioObject` is claimed — ROUTE_MAP.md §9.6 lists none
- * for audio, and its content address would be a byte route behind an
- * authorisation decision, which is not a public, stable media URL to advertise.
- */
-function BreadcrumbData({
-  contentLocales,
-  trail,
-}: {
-  readonly contentLocales: readonly Locale[];
-  readonly trail: readonly { readonly name: string; readonly path: string }[];
-}) {
-  if (!isContentIndexable({ contentLocales })) return null;
-  return (
-    <script
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{
-        __html: serializeStructuredData({
-          '@context': 'https://schema.org',
-          '@type': 'BreadcrumbList',
-          itemListElement: trail.map((entry, index) => ({
-            '@type': 'ListItem',
-            position: index + 1,
-            name: entry.name,
-            item: absoluteUrl(entry.path),
-          })),
-        }),
-      }}
-    />
-  );
 }
 
 /** How many other tracks of the same series a track's page previews. */

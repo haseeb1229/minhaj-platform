@@ -12,8 +12,12 @@ import type {
 } from '@minhaj/contracts/platform';
 
 import { ByteLimitExceeded, type FilesystemStore } from './filesystem.ts';
+import { ImageRefused, sanitiseImage, SANITISABLE_IMAGE_TYPES } from './image.ts';
 import { displayNameFrom, generateStorageKey } from './keys.ts';
 import { archiveOrExecutable, detectMediaType } from './sniff.ts';
+
+/** How many assets one `servable` question may name. */
+const SERVABLE_BATCH = 100;
 
 /**
  * THE storage service (DELIVERY_PLAN.md Phase 7).
@@ -35,6 +39,12 @@ import { archiveOrExecutable, detectMediaType } from './sniff.ts';
  *
  * There is no ordering that makes a half-finished upload servable, because the
  * servable state is written last and names the exact bytes it cleared.
+ *
+ * STILL IMAGES (Phase 12). A policy that carries `image` limits admits only a
+ * structurally whole JPEG or PNG within them, and the bytes WRITTEN — and so
+ * measured, hashed, sniffed, scanned and later served — are the image with its
+ * hidden metadata removed (`./image.ts`). The validation runs as the upload
+ * streams to disk, so it adds no buffering and no second pass.
  */
 
 export interface StorageDependencies {
@@ -78,9 +88,20 @@ export function createStorageService(
 
   return {
     async store(bytes, policy) {
+      // An image policy is a promise to validate every type it admits; a type
+      // this foundation cannot structurally validate would be admitted blind.
+      if (
+        policy.image !== undefined &&
+        !policy.allowedMediaTypes.every((type) => SANITISABLE_IMAGE_TYPES.includes(type))
+      ) {
+        throw new Error('An image upload policy may admit only JPEG and PNG.');
+      }
+
       const id = randomUUID();
       const key = generateStorageKey();
       const ceiling = Math.min(policy.maxBytes, dependencies.maxBytes);
+      const image =
+        policy.image === undefined ? null : sanitiseImage(bytes, policy.image, ceiling);
 
       await assets.begin({
         id,
@@ -90,9 +111,24 @@ export function createStorageService(
 
       let written;
       try {
-        written = await files.write(key, bytes, ceiling);
+        written = await files.write(key, image?.bytes ?? bytes, ceiling);
       } catch (error) {
         await files.remove(key).catch(() => undefined);
+
+        // The image's own structure refused it — malformed, truncated, or a
+        // header asking for more pixels than the policy allows. A judgement on
+        // the content, so `rejected`, never `failed`.
+        if (error instanceof ImageRefused) {
+          await assets.reject({ id, rejection: error.rejection });
+          return {
+            id,
+            state: 'rejected',
+            mediaType: 'application/octet-stream',
+            byteSize: 0,
+            checksum: '',
+            rejection: error.rejection,
+          };
+        }
 
         if (error instanceof ByteLimitExceeded) {
           await assets.reject({ id, rejection: 'too-large' });
@@ -139,6 +175,13 @@ export function createStorageService(
         return refuse(id, key, 'declared-type-mismatch');
       }
 
+      // An image policy admits only what the image module actually VALIDATED.
+      // Bytes it forwarded unrecognised — too short to be an image, say, yet
+      // carrying a JPEG's three magic bytes — never pass on their magic alone.
+      const dimensions = image?.dimensions() ?? null;
+      if (image !== null && dimensions === null) return refuse(id, key, 'unreadable');
+      const facts = dimensions === null ? {} : { image: dimensions };
+
       await assets.quarantine({
         id,
         mediaType: detected,
@@ -181,6 +224,7 @@ export function createStorageService(
           byteSize: written.byteSize,
           checksum: written.checksum,
           rejection: null,
+          ...facts,
         };
       }
 
@@ -199,6 +243,7 @@ export function createStorageService(
         byteSize: written.byteSize,
         checksum: written.checksum,
         rejection: null,
+        ...facts,
       };
     },
 
@@ -264,6 +309,33 @@ export function createStorageService(
       };
 
       return stream;
+    },
+
+    /**
+     * Which assets could be served now, technically — ONE metadata read and one
+     * existence check per clean asset, for a whole page at once.
+     *
+     * The same two technical conditions `open` applies before it consults a
+     * policy: `clean` custody and bytes present. No policy is consulted because
+     * nothing is released; the caller already holds authorised records naming
+     * these assets, and the byte route decides again, fully, per request.
+     */
+    async servable(assetIds) {
+      const unique = [...new Set(assetIds)];
+      if (unique.length === 0) return new Set<string>();
+      if (unique.length > SERVABLE_BATCH) {
+        throw new RangeError('A servability question names too many assets.');
+      }
+
+      const records = await assets.findMany(unique);
+      const present = await Promise.all(
+        records
+          .filter((record) => record.state === 'clean')
+          .map(async (record) =>
+            (await files.exists(record.storageKey)) ? record.id : null,
+          ),
+      );
+      return new Set(present.filter((id): id is string => id !== null));
     },
 
     /**

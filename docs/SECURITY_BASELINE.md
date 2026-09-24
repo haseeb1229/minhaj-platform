@@ -578,6 +578,15 @@ exact asset recorded on a published track, or a live administrator's preview) an
 custody — and a `Range` request is decided identically, after both. Responses are
 `private, no-store`, `nosniff` and `Cross-Origin-Resource-Policy: same-origin`.
 
+**Phase 12 (Media photographs) uses the same route pattern**,
+`POST /api/admin/media/photos/{id}/asset`, with its own upload budget. Its policy admits only
+JPEG and PNG — never SVG, an active document — and Storage refuses a malformed or truncated
+image and a header declaring more than the pixel bound, and removes hidden metadata (location,
+device, owner, embedded thumbnails, trailing data) before the bytes are measured, scanned or
+served (ARCHITECTURE.md §4.2). Public images are `private, no-cache` with the checksum as their
+validator, and a `304` is sent only after both allows, so withdrawal takes effect for a browser
+that already holds the image; previews are `private, no-store`.
+
 ### 10.2 Imported HTML — the largest injection vector
 
 Legacy content is **untrusted input**, regardless of Minhaj owning the source site. Those

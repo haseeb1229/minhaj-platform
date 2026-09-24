@@ -14,9 +14,9 @@ import { TextLink } from '@/components/ui';
  * `/admin/media/{videos|audio|photos|galleries|playlists|series|assets}`; Phase
  * 10 delivered videos, series and playlists, and Phase 11 delivers audio, with
  * audio series beneath it at `audio/series` so they are never confused with the
- * Video series screen. Photos and galleries belong to Phase 12, and there is no
- * generic asset library — an audio file is managed on its own track — so none of
- * those has a link here.
+ * Video series screen; Phase 12 delivers photos and galleries. There is no
+ * generic asset library — a file is managed on the record it belongs to — so
+ * `assets` has no link here.
  *
  * `noindex, nofollow` for the whole subtree, and the navigation is filtered by
  * permission as presentation only: every page re-checks `media.read`
@@ -36,6 +36,8 @@ const SURFACES = [
   { key: 'playlists', path: 'playlists' },
   { key: 'audio', path: 'audio' },
   { key: 'audioSeries', path: 'audio/series' },
+  { key: 'photos', path: 'photos' },
+  { key: 'galleries', path: 'galleries' },
 ] as const;
 
 export default async function MediaAdminLayout({

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import { localeSchema } from '@minhaj/contracts';
-import { parseDuration } from '@minhaj/contracts/media';
+import { parseDuration, PHOTO_LIMITS } from '@minhaj/contracts/media';
 
 import { requirePermittedAction } from '@/composition/authorization';
 import { appLogger } from '@/composition/logging';
@@ -40,6 +40,12 @@ import { MEDIA_FORM_ROWS } from './rows';
  * lifecycle are saved here; its audio file is uploaded through the dedicated
  * streaming route (`/api/admin/media/audio/{id}/asset`), because the Server
  * Action body cap is global and is not raised.
+ *
+ * PHASE 12 — THE SAME FOR PHOTOGRAPHS. A Photo's words, credit, date and
+ * lifecycle are saved here, and an empty draft is created here for each file
+ * the batch uploader sends; the image itself goes to
+ * `/api/admin/media/photos/{id}/asset`. A Gallery's membership changes one
+ * named change at a time, never as a list the browser supplies.
  */
 
 function rejected(error: unknown, operation: string): FormActionState {
@@ -314,6 +320,175 @@ export async function changePlaylist(
     revalidatePath(`/${locale}/admin/media`, 'layout');
   } catch (error) {
     return rejected(error, 'media-change-playlist');
+  }
+
+  redirect(destination);
+}
+
+/* ===========================================================================
+ * Phase 12 — Photo and Gallery
+ * ========================================================================= */
+
+/** A Photo's labels: each enabled locale's alternative text and caption. */
+function photoLabels(form: FormData) {
+  return localeSchema.options
+    .filter((language) => form.get(`${language}-enabled`) === 'on')
+    .map((language) => ({
+      locale: language,
+      altText: value(form, `${language}-altText`),
+      caption: value(form, `${language}-caption`),
+    }));
+}
+
+/**
+ * The date a photograph was taken, as precisely as the operator states it. An
+ * empty year is an honest "unknown"; a month or day without what precedes it is
+ * refused by the schema rather than dropped.
+ */
+function takenDate(form: FormData) {
+  const year = integer(form, 'takenYear');
+  const month = integer(form, 'takenMonth');
+  const day = integer(form, 'takenDay');
+  if (year === null && month === null && day === null) return null;
+  return { year, month, day };
+}
+
+export async function savePhoto(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  let destination: string;
+
+  try {
+    const { locale, permitted } = await authorise(form);
+    if (permitted.state === 'denied') return { status: 'error', failure: 'denied' };
+
+    const id = value(form, 'id');
+    const saved = await mediaRuntime().media.savePhoto(
+      { accountId: permitted.session.account.id },
+      id,
+      id === null ? null : integer(form, 'version'),
+      {
+        primaryLocale: form.get('primaryLocale'),
+        state: form.get('state'),
+        labels: photoLabels(form),
+        credit: value(form, 'credit'),
+        taken: takenDate(form),
+      },
+    );
+
+    destination = `/${locale}/admin/media/photos/${saved.id}`;
+    revalidatePath(`/${locale}/admin/media`, 'layout');
+  } catch (error) {
+    return rejected(error, 'media-save-photo');
+  }
+
+  redirect(destination);
+}
+
+/**
+ * An empty DRAFT Photo for one file the batch uploader is about to send — so
+ * the file has a record, and a version, to be attached to. It has no words and
+ * no image yet, and a draft is never public.
+ */
+export async function createPhotoDraft(
+  locale: string,
+): Promise<
+  | { readonly status: 'success'; readonly id: string; readonly version: number }
+  | { readonly status: 'error'; readonly failure: string }
+> {
+  try {
+    const language = localeSchema.parse(locale);
+    const permitted = await requirePermittedAction(language, 'media.administer');
+    if (permitted.state === 'denied') return { status: 'error', failure: 'denied' };
+
+    const saved = await mediaRuntime().media.savePhoto(
+      { accountId: permitted.session.account.id },
+      null,
+      null,
+      { primaryLocale: language, state: 'draft', labels: [], credit: null, taken: null },
+    );
+    return { status: 'success', id: saved.id, version: saved.version };
+  } catch (error) {
+    return {
+      status: 'error',
+      failure: rejected(error, 'media-create-photo').failure ?? 'unknown',
+    };
+  }
+}
+
+export async function saveGallery(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  let destination: string;
+
+  try {
+    const { locale, permitted } = await authorise(form);
+    if (permitted.state === 'denied') return { status: 'error', failure: 'denied' };
+
+    const id = value(form, 'id');
+    const saved = await mediaRuntime().media.saveGallery(
+      { accountId: permitted.session.account.id },
+      id,
+      id === null ? null : integer(form, 'version'),
+      {
+        slug: form.get('slug'),
+        primaryLocale: form.get('primaryLocale'),
+        state: form.get('state'),
+        labels: labels(form),
+      },
+    );
+
+    destination = `/${locale}/admin/media/galleries/${saved.id}`;
+    revalidatePath(`/${locale}/admin/media`, 'layout');
+  } catch (error) {
+    return rejected(error, 'media-save-gallery');
+  }
+
+  redirect(destination);
+}
+
+/**
+ * One named change to a Gallery's membership — add the chosen Photos (at most
+ * one page of them), remove one, or move one — against the version the
+ * operator was looking at.
+ */
+export async function changeGallery(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  let destination: string;
+
+  try {
+    const { locale, permitted } = await authorise(form);
+    if (permitted.state === 'denied') return { status: 'error', failure: 'denied' };
+
+    const galleryId = String(form.get('galleryId') ?? '');
+    const op = form.get('op');
+    await mediaRuntime().media.changeGallery(
+      { accountId: permitted.session.account.id },
+      galleryId,
+      integer(form, 'version') ?? Number.NaN,
+      op === 'add'
+        ? {
+            op,
+            // A fixed ceiling read from the form, never a count it supplies:
+            // the schema refuses more than one page.
+            photoIds: form
+              .getAll('photoId')
+              .slice(0, PHOTO_LIMITS.galleryAdd + 1)
+              .map(String),
+          }
+        : op === 'move'
+          ? { op, photoId: form.get('photoId'), direction: form.get('direction') }
+          : { op, photoId: form.get('photoId') },
+    );
+
+    destination = `/${locale}/admin/media/galleries/${encodeURIComponent(galleryId)}`;
+    revalidatePath(`/${locale}/admin/media`, 'layout');
+  } catch (error) {
+    return rejected(error, 'media-change-gallery');
   }
 
   redirect(destination);

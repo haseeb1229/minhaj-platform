@@ -3,8 +3,10 @@ import { z } from 'zod';
 import type { Locale } from '@minhaj/contracts';
 import {
   isoDuration,
+  PHOTO_LIMITS,
   providerEmbedUrl,
   type MediaLabel,
+  type PartialDate,
   type SeriesKind,
   type VideoFormat,
   type VideoQuery,
@@ -12,8 +14,8 @@ import {
 } from '@minhaj/contracts/media';
 
 /**
- * Presentation decisions for the Watch and Listen surfaces — PURE and free of
- * React.
+ * Presentation decisions for the Watch, Listen and photograph surfaces — PURE
+ * and free of React.
  *
  * Which address a record has, which label a page renders, which query a URL
  * means, and what structured data a Video may truthfully claim. Each has one
@@ -119,6 +121,32 @@ export function audioAssetPath(trackId: string, assetId: string): string {
 /** The administrator's preview of the same bytes, behind a live permission. */
 export function audioPreviewPath(trackId: string, assetId: string): string {
   return `/assets/media/previews/audio/${part(trackId)}/${part(assetId)}`;
+}
+
+/**
+ * Phase 12 — a Gallery's ONE canonical address (ROUTE_MAP.md §3.9). A Photo has
+ * no page of its own, so it has no address here.
+ */
+export function galleryPathOf(slug: string): string {
+  return `/media/galleries/${part(slug)}`;
+}
+
+export function galleryPath(locale: string, slug: string): string {
+  return `/${locale}${galleryPathOf(slug)}`;
+}
+
+/**
+ * A Photo's image: first-party, unprefixed, addressed by BOTH the Photo and the
+ * asset, so a replaced image has a new address and the policy can refuse any
+ * asset that is not the one recorded against that Photo.
+ */
+export function photoAssetPath(photoId: string, assetId: string): string {
+  return `/assets/media/photos/${part(photoId)}/${part(assetId)}`;
+}
+
+/** The administrator's preview of the same image, behind a live permission. */
+export function photoPreviewPath(photoId: string, assetId: string): string {
+  return `/assets/media/previews/photos/${part(photoId)}/${part(assetId)}`;
 }
 
 /* ===========================================================================
@@ -227,6 +255,75 @@ export function readOffset(query: Record<string, string | string[] | undefined>)
     .max(25_000)
     .catch(0)
     .parse(typeof raw === 'string' && raw.length <= 8 ? raw : 0);
+}
+
+/**
+ * The archive's `?year=` and `?month=`, TOLERATED: a malformed or impossible
+ * value is simply absent, and a month without a year means nothing. The read
+ * service validates again.
+ */
+export function readArchiveQuery(query: Record<string, string | string[] | undefined>): {
+  readonly year: number | null;
+  readonly month: number | null;
+  readonly offset: number;
+} {
+  const whole = (key: string, pattern: RegExp): number | null => {
+    const raw = query[key];
+    return typeof raw === 'string' && pattern.test(raw) ? Number(raw) : null;
+  };
+  const rawYear = whole('year', /^\d{4}$/);
+  const year = rawYear !== null && rawYear >= PHOTO_LIMITS.earliestYear ? rawYear : null;
+  const rawMonth = whole('month', /^\d{1,2}$/);
+  const month =
+    year !== null && rawMonth !== null && rawMonth >= 1 && rawMonth <= 12
+      ? rawMonth
+      : null;
+  return { year, month, offset: readOffset(query) };
+}
+
+/** The archive's address for a year, a month and an offset, neutral values omitted. */
+export function archivePath(
+  locale: string,
+  filter: { readonly year: number | null; readonly month: number | null },
+  offset = 0,
+): string {
+  const search = new URLSearchParams();
+  if (filter.year !== null) search.set('year', String(filter.year));
+  if (filter.year !== null && filter.month !== null)
+    search.set('month', String(filter.month));
+  if (offset > 0) search.set('offset', String(offset));
+  const encoded = search.toString();
+  return `/${locale}/media/archive${encoded === '' ? '' : `?${encoded}`}`;
+}
+
+/**
+ * A partial date as it was recorded — a year, a month and year, or a full date
+ * — in the interface locale, never padded to a precision nobody has, and never
+ * shifted by a timezone. The machine form (`1995`, `1995-03`, `1995-03-12`) is
+ * what a `<time>` element carries.
+ */
+export function partialDate(
+  taken: PartialDate,
+  locale: string,
+): { readonly text: string; readonly machine: string } {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const instant = new Date(Date.UTC(taken.year, (taken.month ?? 1) - 1, taken.day ?? 1));
+  // Years before 100 would be misread by `Date.UTC`; the earliest is 1826.
+  const options: Intl.DateTimeFormatOptions =
+    taken.month === null
+      ? { year: 'numeric', timeZone: 'UTC' }
+      : taken.day === null
+        ? { year: 'numeric', month: 'long', timeZone: 'UTC' }
+        : { dateStyle: 'long', timeZone: 'UTC' };
+  return {
+    text: new Intl.DateTimeFormat(locale, options).format(instant),
+    machine:
+      taken.month === null
+        ? String(taken.year)
+        : taken.day === null
+          ? `${String(taken.year)}-${pad(taken.month)}`
+          : `${String(taken.year)}-${pad(taken.month)}-${pad(taken.day)}`,
+  };
 }
 
 /** A grouping page's address at an offset. The first page is the bare address. */

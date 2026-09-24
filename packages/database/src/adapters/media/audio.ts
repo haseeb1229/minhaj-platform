@@ -13,7 +13,6 @@ import {
   type AudioTrackPage,
   type AudioTrackRecord,
   type AudioTrackValue,
-  type MediaAssetRelationPort,
   type MediaPersistencePort,
   type MediaPublicReaderPort,
   type MediaState,
@@ -48,7 +47,7 @@ import {
  * are spread into the same two factories as the Video half
  * (`./persistence.ts`), so Media still has one persistence port and one public
  * reader, and a third, narrow factory answers the serving policy's one
- * question (`createMediaAssetRelations`).
+ * question (`./relations.ts`).
  *
  * ONE PUBLIC PREDICATE PER AGGREGATE, applied IN THE QUERY: an AudioTrack or an
  * AudioSeries is public when it is `published`. A track's AudioSeries is shown
@@ -770,31 +769,6 @@ export function audioPublicReader(): AudioPublicReader {
         select: { id: true, slug: true },
         orderBy: { id: 'asc' },
       });
-    },
-  };
-}
-
-/* ===========================================================================
- * The serving policy's relation read
- * ========================================================================= */
-
-/**
- * Which asset a track records, and the track's state — for ANY track.
- *
- * Its own factory, typed by its own port, so no public page's module graph
- * holds a read that answers for drafts (`MediaAssetRelationPort`).
- */
-export function createMediaAssetRelations(): MediaAssetRelationPort {
-  const db = getDatabaseClient();
-  return {
-    async audioAsset(trackId) {
-      const row = await db.audioTrack.findUnique({
-        where: { id: trackId },
-        select: { state: true, assetId: true },
-      });
-      return row === null
-        ? null
-        : { state: row.state as MediaState, assetId: row.assetId };
     },
   };
 }

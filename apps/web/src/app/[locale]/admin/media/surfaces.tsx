@@ -5,6 +5,7 @@ import { localeSchema, type Locale } from '@minhaj/contracts';
 import {
   formatDuration,
   MEDIA_LIMITS,
+  MEDIA_PAGE,
   mediaStateSchema,
   SERIES_KINDS,
   VIDEO_AVAILABILITY,
@@ -46,7 +47,7 @@ import {
 } from '@/components/ui';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../(identity)/form-state';
-import { pageOffset, PAGE_SIZE, queryValue } from '../shared';
+import { pageOffset, queryValue } from '../shared';
 import { changePlaylist, savePlaylist, saveSeries, saveVideo } from './actions';
 import { MEDIA_FORM_ROWS } from './rows';
 
@@ -103,6 +104,8 @@ export async function mediaCopy(locale: Locale) {
       unsupported: t('audio.unsupported'),
       'not-cleared': t('audio.notCleared'),
       'rate-limited': t('audio.rateLimited'),
+      'no-image': t('photo.noImage'),
+      dimensions: t('photo.dimensions'),
       unavailable: t('unknown'),
       unknown: t('unknown'),
     } as Readonly<Record<string, string>>,
@@ -141,7 +144,7 @@ export function Pager({
   readonly copy: Copy;
 }) {
   if (offset === 0 && !hasMore) return null;
-  const current = offset / PAGE_SIZE + 1;
+  const current = offset / MEDIA_PAGE + 1;
   return (
     <nav className="flex gap-6" aria-label={label}>
       {offset > 0 ? (
@@ -152,17 +155,22 @@ export function Pager({
   );
 }
 
-/** A narrowing GET form for a directory: a state and a title-or-slug match. */
+/**
+ * A narrowing GET form for a directory: a state and a text match — a title or
+ * slug by default, or whatever `textLabel` says the directory matches.
+ */
 export function DirectoryFilter({
   base,
   state,
   text,
   copy,
+  textLabel,
 }: {
   readonly base: string;
   readonly state: MediaState | null;
   readonly text: string;
   readonly copy: Copy;
+  readonly textLabel?: string;
 }) {
   const { t } = copy;
   return (
@@ -179,7 +187,7 @@ export function DirectoryFilter({
           </Select>
         )}
       </Field>
-      <Field id="text-filter" label={t('textFilter')}>
+      <Field id="text-filter" label={textLabel ?? t('textFilter')}>
         {(props) => (
           <TextInput {...props} name="text" defaultValue={text} maxLength={200} />
         )}
@@ -198,7 +206,7 @@ export function DirectoryFilter({
 export function directoryQuery(query: Query) {
   const state = mediaStateSchema.safeParse(queryValue(query, 'state'));
   return {
-    offset: pageOffset(query, PAGE_SIZE),
+    offset: pageOffset(query, MEDIA_PAGE),
     state: state.success ? state.data : null,
     text: queryValue(query, 'text'),
   };
@@ -1094,7 +1102,7 @@ export async function SeriesEditor({ params, searchParams }: EditorParams) {
     .catch(() => null);
   if (record === null) notFound();
 
-  const offset = pageOffset(query, PAGE_SIZE);
+  const offset = pageOffset(query, MEDIA_PAGE);
   const episodes = await mediaRuntime().media.seriesEpisodes(actor, record.id, offset);
   const label = mediaLabel(record, locale);
 

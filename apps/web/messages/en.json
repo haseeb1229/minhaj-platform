@@ -186,6 +186,11 @@
       "home": "Listen",
       "lectures": "Audio lectures",
       "series": "Audio series"
+    },
+    "media": {
+      "photos": "Photographs",
+      "galleries": "Photo galleries",
+      "archive": "Photo archive"
     }
   },
   "localeSwitcher": {
@@ -1530,7 +1535,8 @@
       "playlists": "Playlists",
       "speakers": "Speakers",
       "topics": "Topics",
-      "listen": "Listen"
+      "listen": "Listen",
+      "photos": "Photographs and galleries"
     },
     "sectionBody": {
       "videos": "Every published video, newest first, with filters by topic, speaker, series and language.",
@@ -1544,7 +1550,8 @@
       "playlists": "Curated lists of videos, in a chosen order.",
       "speakers": "The people who speak in these videos.",
       "topics": "Browse every topic, with its videos alongside books and research.",
-      "listen": "Lectures, talks and speeches to listen to."
+      "listen": "Lectures, talks and speeches to listen to.",
+      "photos": "Photo galleries, every published photograph, and the historical archive."
     },
     "filters": "Filter videos",
     "filterTopic": "Topic",
@@ -1687,7 +1694,9 @@
       "series": "Series and programmes",
       "playlists": "Playlists",
       "audio": "Audio",
-      "audioSeries": "Audio series"
+      "audioSeries": "Audio series",
+      "photos": "Photos",
+      "galleries": "Galleries"
     },
     "unknown": "Something went wrong. Nothing was changed.",
     "reload": "Try again",
@@ -1867,6 +1876,130 @@
       "edit": "Edit this audio series",
       "tracks": "Tracks",
       "tracksHelp": "Every track in this series, in order, whatever its state. Set a track’s series and place on the track itself."
+    },
+    "photo": {
+      "scope": "Photographs the organisation holds and may publish. Each is uploaded as a file, checked, cleaned of hidden camera data, scanned, and then described here.",
+      "create": "Upload photographs",
+      "createHelp": "Each file becomes its own draft photograph. Add its alternative text, caption, credit and date on its own page, then publish it.",
+      "uploadMany": "Photographs to upload (JPEG or PNG)",
+      "replace": "Replacement image (JPEG or PNG)",
+      "uploadHelp": "JPEG or PNG files of up to {size}, at most {megapixels} megapixels and {edge} pixels on a side. Hidden camera data such as location is removed before the image is kept; the file’s name and type are never trusted.",
+      "uploadSubmit": "Upload the photographs",
+      "replaceSubmit": "Replace the image",
+      "uploading": "Uploading…",
+      "progress": "Upload progress",
+      "uploaded": "The image was uploaded, checked and attached.",
+      "uploadedMany": "Every photograph was uploaded, checked and attached as a draft.",
+      "fileDone": "{name} was uploaded and attached.",
+      "fileFailed": "{name} was not attached.",
+      "openDraft": "Open this draft",
+      "unsupported": "This file is not a JPEG or PNG image, is damaged, or does not match its stated type.",
+      "tooLarge": "This file is larger than the upload limit.",
+      "dimensions": "This image has more pixels than the limit allows. Export a smaller version and upload that.",
+      "notCleared": "The image could not be cleared by the safety scan, so it was not attached. Try again later.",
+      "noImage": "Upload an image before publishing this photograph.",
+      "untitled": "Photograph without a caption",
+      "altMissing": "Photograph without a description",
+      "altMissingShort": "No alternative text.",
+      "imageNone": "No image has been uploaded yet.",
+      "imageUnavailable": "The image cannot be shown right now. Upload it again if the problem continues.",
+      "previewRestricted": "Only media administrators can preview an image that is not published.",
+      "gapImage": "No image",
+      "gapAlt": "No alternative text",
+      "gapLabel": "Show photographs by what they lack",
+      "gapFilter": {
+        "all": "All photographs",
+        "image": "Without an image",
+        "alt": "Without alternative text"
+      },
+      "image": "Image",
+      "dimensionsShown": "{width} × {height} pixels, as displayed.",
+      "privacyNote": "Location, device and other hidden camera data were removed when the image was uploaded. Only the image and its orientation are kept.",
+      "edit": "Describe and publish this photograph",
+      "galleries": "Galleries with this photograph",
+      "galleriesNone": "This photograph is not in any gallery.",
+      "words": "Alternative text and caption",
+      "wordsNone": "No alternative text or caption has been written yet.",
+      "wordsHelp": "Write them for each language you can. Nothing is ever generated; a missing description stays missing and is listed so it can be written.",
+      "credit": "Credit",
+      "creditHelp": "How the photograph should be credited, if known. This describes; it is not a licence.",
+      "taken": "Date taken",
+      "takenHelp": "As precisely as it is known: a year alone, a month and year, or a full date. Leave empty if unknown — it is never guessed.",
+      "takenUnknown": "Unknown",
+      "year": "Year",
+      "month": "Month",
+      "day": "Day",
+      "unknownPart": "Unknown",
+      "publishHelp": "A photograph can be published only once its image has been uploaded and cleared.",
+      "facts": "Details",
+      "altText": "Alternative text",
+      "altTextHelp": "What the photograph shows, for someone who cannot see it. Short and specific.",
+      "caption": "Caption",
+      "captionHelp": "What a reader is told beside the photograph.",
+      "textFilter": "Caption, alternative text or credit contains"
+    },
+    "gallery": {
+      "scope": "Curated, ordered sets of photographs. Removing or archiving a gallery never removes a photograph.",
+      "create": "Add a gallery",
+      "edit": "Edit this gallery",
+      "publishHelp": "A published gallery is listed once at least one of its photographs is published.",
+      "photos": "Photographs in this gallery",
+      "photosHelp": "{count} of at most {limit}. The first published photograph is the gallery’s cover.",
+      "photosEmpty": "This gallery has no photographs yet.",
+      "cover": "Cover",
+      "position": "Place {number}",
+      "moveFirst": "Make it the cover",
+      "moveEarlier": "Move earlier",
+      "moveLater": "Move later",
+      "moveLast": "Move to the end",
+      "remove": "Remove from the gallery",
+      "add": "Add photographs",
+      "addHelp": "Choose up to one page of photographs to add at the end. Room for {room} more.",
+      "addNone": "No other photograph matches these filters.",
+      "addSubmit": "Add the chosen photographs",
+      "choose": "Add this photograph"
     }
+  },
+  "photos": {
+    "sections": {
+      "photos": "Photographs",
+      "galleries": "Photo galleries",
+      "archive": "Photo archive"
+    },
+    "sectionBody": {
+      "photos": "Every published photograph, most recently added first.",
+      "galleries": "Photographs gathered into galleries, in the order they were arranged.",
+      "archive": "Photographs by the year they were taken, where that is known."
+    },
+    "sectionsLabel": "Photographs",
+    "previous": "Previous page",
+    "next": "Next page",
+    "credit": "Credit: {name}",
+    "altMissing": "Photograph without a description",
+    "unavailable": "This image is not available right now.",
+    "enlarge": "View larger",
+    "viewer": {
+      "dialog": "Photograph viewer",
+      "close": "Close",
+      "previous": "Previous photograph",
+      "next": "Next photograph",
+      "position": "Photograph {position} of {total}"
+    },
+    "photosEmpty": "No photographs have been published here yet.",
+    "pageEmpty": "There is nothing on this page.",
+    "galleriesEmpty": "No photo galleries have been published here yet.",
+    "coverUnavailable": "Cover image not available right now",
+    "count": "{count, plural, one {# photograph} other {# photographs}}",
+    "countShort": "{count, number}",
+    "galleryPhotos": "Photographs",
+    "galleryEmpty": "None of this gallery’s photographs is available yet.",
+    "archiveAll": "Every dated photograph",
+    "archiveYear": "Photographs from {year}",
+    "archiveMonth": "Photographs from {month} {year}",
+    "archiveYears": "Years",
+    "archiveMonths": "Months",
+    "archiveEveryYear": "Every year",
+    "archiveEmpty": "The archive has no dated photographs yet.",
+    "archiveFilteredEmpty": "No published photograph is dated to this period."
   }
 }

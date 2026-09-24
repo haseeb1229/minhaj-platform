@@ -534,6 +534,21 @@ IF OBJECT_ID(N'[dbo].[AudioSeriesLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, I
 IF OBJECT_ID(N'[dbo].[AudioTrackSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[AudioTrackSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[AudioTrackSlugHistory] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[AudioSeriesSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[AudioSeriesSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[AudioSeriesSlugHistory] TO [$(app_login)]; END;
 
+-- Phase 12: Media — Photo, Gallery and GalleryItem, by the SAME three postures.
+-- Aggregates are INSERT and UPDATE and never DELETE — a Photo or a Gallery is
+-- withdrawn by archiving it, so no removal can take a Gallery's Photos or a
+-- Photo's image with it. Labels and Gallery membership are replaced wholesale
+-- (INSERT and DELETE, never UPDATE); the Gallery slug history is APPEND ONLY.
+-- The image is reached only through Storage's own `Asset` grants above and the
+-- StorageService: a Photo holds a foreign key to an Asset and nothing here
+-- widens what the runtime may do to one.
+IF OBJECT_ID(N'[dbo].[Photo]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Photo] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Photo] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Gallery]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Gallery] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Gallery] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PhotoLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[PhotoLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[PhotoLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[GalleryLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[GalleryLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[GalleryLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[GalleryItem]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[GalleryItem] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[GalleryItem] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[GallerySlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[GallerySlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[GallerySlugHistory] TO [$(app_login)]; END;
+
 -- Phase 17: the DERIVED search projection and its operational state.
 --
 -- `SearchIndexRequest` is append-only for the owners that write it inside their

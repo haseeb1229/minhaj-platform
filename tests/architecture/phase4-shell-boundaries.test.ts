@@ -131,6 +131,15 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/listen/lectures/[slug]/page.tsx',
   'apps/web/src/app/[locale]/(public)/listen/series/page.tsx',
   'apps/web/src/app/[locale]/(public)/listen/series/[slug]/page.tsx',
+  // Phase 12. Every photograph surface reads Photos and Galleries an
+  // administrator publishes and withdraws, and asks Storage whether each image
+  // can be served now — so none can be prerendered, and each is proven below to
+  // reach no session, no identity service, no logger and no authentication
+  // library.
+  'apps/web/src/app/[locale]/(public)/media/photos/page.tsx',
+  'apps/web/src/app/[locale]/(public)/media/galleries/page.tsx',
+  'apps/web/src/app/[locale]/(public)/media/galleries/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/media/archive/page.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [
@@ -564,12 +573,22 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     // source is a FIRST-PARTY path it derives from the track and asset
     // identifiers — the platform's own authorised byte route, never another
     // origin — pinned by the test below.
+    //
+    // PHASE 12 — THE TWO FILES THAT MAY SHOW AN IMAGE. The photograph surfaces
+    // (`components/media/photos.tsx`) and their viewer
+    // (`components/media/photo-viewer.tsx`) render `<img src=…>`, and every
+    // source is the platform's OWN two-allow photo route, derived from the Photo
+    // and asset identifiers — never another origin, never a literal. They are
+    // excepted from `<img` and `src=` and nothing else, pinned below.
     const PLAYER = 'apps/web/src/components/media/player.tsx';
     const AUDIO_PLAYER = 'apps/web/src/components/media/audio-player.tsx';
+    const PHOTOS = 'apps/web/src/components/media/photos.tsx';
+    const VIEWER = 'apps/web/src/components/media/photo-viewer.tsx';
     const { modules } = await contentGraph();
 
-    expect([...modules.keys()].map(relative)).toContain(PLAYER);
-    expect([...modules.keys()].map(relative)).toContain(AUDIO_PLAYER);
+    for (const expected of [PLAYER, AUDIO_PLAYER, PHOTOS, VIEWER]) {
+      expect([...modules.keys()].map(relative)).toContain(expected);
+    }
 
     for (const [file, source] of modules) {
       if (!file.startsWith(APP_SRC)) continue;
@@ -584,9 +603,60 @@ describe('the public shell is server-rendered, with narrow client islands', () =
       for (const fetching of ['<link', '<img', 'src=', 'srcSet', '@import']) {
         if (fetching === 'src=' && [PLAYER, AUDIO_PLAYER].includes(relative(file)))
           continue;
+        if (
+          (fetching === 'src=' || fetching === '<img') &&
+          [PHOTOS, VIEWER].includes(relative(file))
+        )
+          continue;
         expect(code(source), `${relative(file)} ${fetching}`).not.toContain(fetching);
       }
     }
+  });
+
+  it('shows ONLY first-party photo routes as images, and moves nothing on its own', async () => {
+    const photos = code(
+      await readFile(
+        path.join(repoRoot, 'apps/web/src/components/media/photos.tsx'),
+        'utf8',
+      ),
+    );
+    const viewer = code(
+      await readFile(
+        path.join(repoRoot, 'apps/web/src/components/media/photo-viewer.tsx'),
+        'utf8',
+      ),
+    );
+
+    // Every image source on the surfaces is the two-allow photo route, and the
+    // viewer shows exactly the source the server handed it — which the
+    // surfaces build from the same route.
+    const sources = photos.match(/src=\{[^}]*\}/g) ?? [];
+    expect(sources.length).toBeGreaterThan(0);
+    for (const source of sources) {
+      expect(source).toMatch(/^src=\{photoAssetPath\(photo\.id, photo\.assetId\)\}$/);
+    }
+    expect(photos).toContain('src: photoAssetPath(photo.id, photo.assetId)');
+    expect(viewer.match(/src=/g) ?? []).toEqual(['src=']);
+    expect(viewer).toContain('src={photo.src}');
+
+    // No slideshow, no timer, no storage, no markup injection, no other origin.
+    for (const forbidden of [
+      'setInterval',
+      'setTimeout',
+      'autoplay',
+      'autoPlay',
+      'localStorage',
+      'sessionStorage',
+      'document.cookie',
+      'dangerouslySetInnerHTML',
+      'srcSet',
+      'next/image',
+    ]) {
+      expect(viewer, forbidden).not.toContain(forbidden);
+      expect(photos, forbidden).not.toContain(forbidden);
+    }
+    // The browser's own modal dialog, opened modally.
+    expect(viewer).toContain('showModal()');
   });
 
   it('lets the audio player play ONLY its own first-party byte route, never on its own', async () => {

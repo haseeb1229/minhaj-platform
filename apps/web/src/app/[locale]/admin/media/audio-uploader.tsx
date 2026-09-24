@@ -1,26 +1,16 @@
 'use client';
 
-import { useId, useState, useSyncExternalStore } from 'react';
+import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Alert, Button } from '@/components/ui';
+import { sendFile, useHydrated } from './upload-client';
 
 /**
  * Uploading one audio file to one track (Phase 11).
  *
- * WHY NOT A FORM POST. An audio file is larger than the Server Action body cap,
- * which is global and is not raised; the file is sent to the dedicated streaming
- * route instead, as the raw request body, with an `XMLHttpRequest` so the
- * operator sees real upload progress for a file that can take a while.
- *
- * WHAT IT SENDS, AND WHY EACH MATTERS TO THE SERVER:
- *   - `Content-Type: application/octet-stream` — the body is the file's bytes,
- *     nothing else; the server refuses any other type;
- *   - `X-Minhaj-Intent` — the custom header no cross-origin form can set;
- *   - `X-Expected-Version` — the version this page showed, so a file uploaded
- *     against a track somebody else has since changed is a conflict;
- *   - the browser's type and the file's name, which the server can use only to
- *     REFUSE a mismatch and to display — never to decide what the file is.
+ * The file goes to the track's dedicated streaming route through the shared
+ * uploader transport (`./upload-client.ts`), which says what is sent and why.
  *
  * NO DEAD CONTROL. The file picker and the button appear only once hydrated;
  * before that the help text says what the control will do. A size the server
@@ -44,24 +34,6 @@ type Outcome =
   | { readonly state: 'success' }
   | { readonly state: 'error'; readonly failure: string };
 
-/** The route's JSON answer, or `null` when the body is not one (a proxy error page). */
-function parsed(text: string): { status?: unknown; failure?: unknown } | null {
-  try {
-    const value: unknown = JSON.parse(text);
-    return typeof value === 'object' && value !== null ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-function useHydrated(): boolean {
-  return useSyncExternalStore(
-    () => () => undefined,
-    () => true,
-    () => false,
-  );
-}
-
 export function AudioUploader({
   trackId,
   version,
@@ -83,46 +55,28 @@ export function AudioUploader({
   const message = (failure: string) =>
     labels.failures[failure] ?? labels.failures['unknown'] ?? '';
 
-  function send() {
+  async function send() {
     if (file === null) return;
     if (file.size === 0 || file.size > maxBytes) {
       setOutcome({ state: 'error', failure: file.size === 0 ? 'invalid' : 'too-large' });
       return;
     }
 
-    const request = new XMLHttpRequest();
-    request.open('POST', `/api/admin/media/audio/${encodeURIComponent(trackId)}/asset`);
-    request.setRequestHeader('Content-Type', 'application/octet-stream');
-    request.setRequestHeader('X-Minhaj-Intent', 'media-audio-upload');
-    request.setRequestHeader('X-Expected-Version', String(version));
-    request.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
-    if (file.type !== '') request.setRequestHeader('X-File-Type', file.type);
-
-    request.upload.onprogress = (event) => {
-      if (event.lengthComputable)
-        setOutcome({
-          state: 'sending',
-          percent: Math.round((event.loaded / event.total) * 100),
-        });
-    };
-    request.onload = () => {
-      const body = parsed(request.responseText);
-      if (request.status === 200 && body?.status === 'success') {
-        setOutcome({ state: 'success' });
-        setFile(null);
-        // The page's version, preview and file state all changed.
-        router.refresh();
-        return;
-      }
-      setOutcome({
-        state: 'error',
-        failure: typeof body?.failure === 'string' ? body.failure : 'unknown',
-      });
-    };
-    request.onerror = () => setOutcome({ state: 'error', failure: 'unknown' });
-
-    setOutcome({ state: 'sending', percent: 0 });
-    request.send(file);
+    const result = await sendFile({
+      url: `/api/admin/media/audio/${encodeURIComponent(trackId)}/asset`,
+      intent: 'media-audio-upload',
+      version,
+      file,
+      onProgress: (percent) => setOutcome({ state: 'sending', percent }),
+    });
+    if (result.state === 'success') {
+      setOutcome({ state: 'success' });
+      setFile(null);
+      // The page's version, preview and file state all changed.
+      router.refresh();
+      return;
+    }
+    setOutcome(result);
   }
 
   const sending = outcome.state === 'sending';
@@ -177,7 +131,7 @@ export function AudioUploader({
         <div>
           <Button
             type="button"
-            onClick={send}
+            onClick={() => void send()}
             disabled={file === null || sending}
             aria-busy={sending}
           >

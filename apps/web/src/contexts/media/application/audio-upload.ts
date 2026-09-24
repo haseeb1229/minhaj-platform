@@ -10,9 +10,9 @@ import {
   type MediaAuthorityPort,
   type MediaPersistencePort,
 } from '@minhaj/contracts/media';
-import type { AssetRejection, StorageServicePort } from '@minhaj/contracts/platform';
+import type { StorageServicePort } from '@minhaj/contracts/platform';
 
-import { MediaRefusal } from './refusal.ts';
+import { MediaRefusal, storageRefusal } from './refusal.ts';
 
 /**
  * Uploading a track's audio file — Media's half of a two-owner operation
@@ -46,15 +46,6 @@ import { MediaRefusal } from './refusal.ts';
  * stored (so a stale form costs no storage and no scan), and the attachment
  * re-checks the version inside its own transaction.
  */
-
-/** Storage's refusal, in the words the operator's screen has. */
-function refusalOf(rejection: AssetRejection | null): string {
-  if (rejection === 'too-large') return 'too-large';
-  // A scanner's verdict is Storage's to record, not this screen's to display: an
-  // infected or unscannable file is "not cleared", like one still in quarantine.
-  if (rejection === 'infected' || rejection === 'unscannable') return 'not-cleared';
-  return 'unsupported';
-}
 
 export interface AudioFileDescription {
   /** What the browser SAID the type was. It can only refuse, never admit. */
@@ -98,7 +89,7 @@ export function createAudioUpload(deps: {
       });
 
       if (stored.state === 'rejected')
-        throw new MediaRefusal(refusalOf(stored.rejection));
+        throw new MediaRefusal(storageRefusal(stored.rejection));
 
       // ONLY A CLEAN ASSET IS ATTACHED. A file still in quarantine — the scanner
       // unreachable, or not yet done — is not a file this track has, and the

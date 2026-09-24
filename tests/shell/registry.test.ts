@@ -359,6 +359,10 @@ describe('indexing eligibility is honest', () => {
       'listen',
       'listen.lectures',
       'listen.series',
+      // Phase 12: photographs, galleries and the historical archive.
+      'media.archive',
+      'media.galleries',
+      'media.photos',
       'sitemap',
       // Phase 17: the canonical Topics browser. `search` is delivered too, and
       // is deliberately NOT here.

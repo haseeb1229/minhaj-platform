@@ -1,6 +1,10 @@
 import 'server-only';
 
-import type { AudioAssetRequest, MediaAssetRelationPort } from '@minhaj/contracts/media';
+import type {
+  AudioAssetRequest,
+  MediaAssetRelationPort,
+  PhotoAssetRequest,
+} from '@minhaj/contracts/media';
 import type { AssetAuthorizationPort } from '@minhaj/contracts/platform';
 import {
   createMediaAssetRelations,
@@ -13,6 +17,8 @@ import {
   createAudioAssetPolicy,
   createAudioUpload,
   createMediaService,
+  createPhotoAssetPolicy,
+  createPhotoUpload,
 } from '@/contexts/media';
 import { serverEnv } from '@/config/server-env';
 import { identityRuntime } from './identity';
@@ -36,8 +42,9 @@ import { storageRuntime } from './storage';
  * Taxonomy for topics and content languages — through the one implementation
  * the Library shares (`./owner-references.ts`).
  *
- * PHASE 11 — THE AUDIO UPLOAD is handed Storage's narrow service and nothing
- * else of Storage: no root, no path, no Asset table.
+ * PHASE 11 — THE AUDIO UPLOAD, and PHASE 12 — THE PHOTO UPLOAD, are handed
+ * Storage's narrow service and nothing else of Storage: no root, no path, no
+ * Asset table.
  *
  * IT DOES NOT SERVE PUBLIC PAGES. `./media-read.ts` and `./media-assets.ts` are
  * the roots for those, and they reach no Identity at all.
@@ -56,6 +63,7 @@ function buildMediaRuntime() {
       references: ownerReferences,
     }),
     audioUpload: createAudioUpload({ persistence, authority, storage: storageRuntime }),
+    photoUpload: createPhotoUpload({ persistence, authority, storage: storageRuntime }),
   };
 }
 
@@ -83,6 +91,23 @@ export function mediaPreviewAudioPolicy(
   accountId: string,
 ): AssetAuthorizationPort {
   return createAudioAssetPolicy({
+    relations: (previewRelations ??= createMediaAssetRelations()),
+    request,
+    preview: { accountId, authority },
+  });
+}
+
+/**
+ * The PRIVILEGED image policy (Phase 12), by the same rule as the audio one: a
+ * live `media.administer`, and only the image ALREADY RECORDED against that
+ * exact Photo. It is how an operator sees a draft's image before publishing it,
+ * instead of publishing it to look.
+ */
+export function mediaPreviewPhotoPolicy(
+  request: PhotoAssetRequest,
+  accountId: string,
+): AssetAuthorizationPort {
+  return createPhotoAssetPolicy({
     relations: (previewRelations ??= createMediaAssetRelations()),
     request,
     preview: { accountId, authority },
@@ -121,9 +146,25 @@ export async function audioAssetStatus(
  */
 const UPLOAD_RULE = { window: 900, max: 10 } as const;
 
+/**
+ * The PHOTOGRAPH upload budget (Phase 12) — its own purpose, so cataloguing an
+ * event's photographs neither spends nor is starved by the audio budget.
+ *
+ * SIXTY IN FIFTEEN MINUTES. A photograph is at most 16 MiB — a quarter of an
+ * audio file — and an operator uploading one event's pictures sends dozens in a
+ * sitting; sixty covers that while bounding what one account can push through
+ * the scanner and onto the disk (under a gigabyte per window). A ceiling on
+ * abuse, not a workflow control.
+ */
+const PHOTO_UPLOAD_RULE = { window: 900, max: 60 } as const;
+
 let uploadLimiter: ReturnType<typeof createRateLimiter> | null = null;
 
-export async function consumeMediaUpload(accountId: string): Promise<boolean> {
+async function consumeUploadBudget(
+  purpose: 'media-upload' | 'media-photo-upload',
+  accountId: string,
+  rule: { readonly window: number; readonly max: number },
+): Promise<boolean> {
   const environment = serverEnv();
   const configuration = {
     digestKey: environment.RATE_LIMIT_DIGEST_KEY,
@@ -131,8 +172,16 @@ export async function consumeMediaUpload(accountId: string): Promise<boolean> {
   };
   const limiter = (uploadLimiter ??= createRateLimiter(configuration));
   const decision = await limiter.consume(
-    rateLimitKey({ purpose: 'media-upload', subject: accountId, configuration }),
-    UPLOAD_RULE,
+    rateLimitKey({ purpose, subject: accountId, configuration }),
+    rule,
   );
   return decision.allowed;
+}
+
+export function consumeMediaUpload(accountId: string): Promise<boolean> {
+  return consumeUploadBudget('media-upload', accountId, UPLOAD_RULE);
+}
+
+export function consumePhotoUpload(accountId: string): Promise<boolean> {
+  return consumeUploadBudget('media-photo-upload', accountId, PHOTO_UPLOAD_RULE);
 }

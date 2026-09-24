@@ -145,6 +145,18 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // sets. The file is ONE nullable foreign key from a track to a Storage Asset,
   // never a generic asset-link table; an AudioSeries is its own table, never the
   // Video `Series` (DOMAIN_MODEL.md §8.1, §11).
+  // THREE PHOTOGRAPH SHAPES — Photo, Gallery, GalleryItem — and their labels and
+  // the Gallery's slug history. A Photo's image is ONE nullable foreign key to a
+  // Storage Asset; a Gallery's membership is its own typed, ordered table; no
+  // Album, image, asset-link or Event-owned join exists (DOMAIN_MODEL.md §11).
+  '20260927000000_phase12_media_galleries': [
+    'Photo',
+    'PhotoLabel',
+    'Gallery',
+    'GalleryLabel',
+    'GallerySlugHistory',
+    'GalleryItem',
+  ],
   '20260926000000_phase11_media_audio': [
     'AudioTrack',
     'AudioTrackLabel',
@@ -255,12 +267,9 @@ const PREMATURE_TABLES = [
   'PublicationIssue',
   'PeriodicalIssue',
   'EncyclopediaEntry',
-  // Phase 10 delivers Video, Series and Playlist and nothing else of Media's:
-  // galleries are Phase 12, a programme is a Series kind, and watch history is
+  // Phase 10 delivers Video, Series and Playlist and nothing else of Media's
+  // that is not its own: a programme is a Series kind, and watch history is
   // Phase 21's per-user state.
-  'Photo',
-  'Gallery',
-  'GalleryItem',
   'Program',
   'WatchHistory',
   // Phase 11 delivers non-Quran audio and nothing of Quran's: a Recitation and
@@ -269,6 +278,13 @@ const PREMATURE_TABLES = [
   'Recitation',
   'RecitationSegment',
   'ListeningHistory',
+  // Phase 12 delivers galleries with NO Event relationship: the typed
+  // Event↔Gallery association is Phase 14's, created once both ends exist.
+  'EventGallery',
+  'GalleryEvent',
+  'EventPhoto',
+  'PhotoPerson',
+  'PhotoTopic',
 ];
 
 /**
@@ -340,6 +356,16 @@ const PROHIBITED_TABLES = [
   'AssetLink',
   'AssetOwner',
   'MediaAsset',
+
+  // PHASE 12 — THREE photograph shapes. An Album, a generic Image or a second
+  // cover relation would be groupings invented without a need, and a
+  // gallery-target table would be the polymorphic reference §6.2 refuses.
+  'Album',
+  'AlbumPhoto',
+  'Image',
+  'PhotoAsset',
+  'GalleryTarget',
+  'GalleryCover',
 ];
 
 const EXPECTED_AUDIT_COLUMNS = [
@@ -452,6 +478,9 @@ const EXPECTED_COLUMN_SIZES: readonly {
   { table: 'AudioSeries', column: 'slug', characters: 120 },
   { table: 'AudioSeriesSlugHistory', column: 'slug', characters: 120 },
   { table: 'AudioTrack', column: 'languageCode', characters: 16 },
+  // Phase 12, by the same rules.
+  { table: 'Gallery', column: 'slug', characters: 120 },
+  { table: 'GallerySlugHistory', column: 'slug', characters: 120 },
 ];
 
 /**
@@ -500,6 +529,12 @@ const EXPECTED_FILTERED_INDEXES: readonly {
     table: 'AudioTrack',
     index: 'AudioTrack_assetId_key',
     why: 'one audio file could be served as two different tracks',
+  },
+  // Phase 12. Filtered because a Photo with no image yet names no Asset.
+  {
+    table: 'Photo',
+    index: 'Photo_assetId_key',
+    why: 'one image could be served as two different photographs',
   },
   // Phase 9. Filtered because an issue without a printed volume and number is
   // ordinary, and two such issues are not duplicates of each other.
@@ -567,6 +602,8 @@ const EXPECTED_TRIGGERS = [
   // Phase 11: the same for each audio aggregate.
   'MediaReserveAudioTrackSlug',
   'MediaReserveAudioSeriesSlug',
+  // Phase 12: the same for a Gallery. A Photo has no slug.
+  'MediaReserveGallerySlug',
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
@@ -683,6 +720,21 @@ const EXPECTED_CHECK_CONSTRAINTS = [
     constraint: 'AudioTrack_' + rule + '_ck',
   })),
   { table: 'AudioTrackSpeaker', constraint: 'AudioTrackSpeaker_position_ck' },
+  // Phase 12. Lifecycle, version and locale for both aggregates; a published
+  // Photo has an image; dimensions exactly with an image and within bounds; a
+  // real partial date; a label that says something; a Gallery slug; 240 places.
+  ...['state', 'version', 'locale', 'credit', 'published', 'image', 'taken'].map(
+    (rule) => ({ table: 'Photo', constraint: 'Photo_' + rule + '_ck' }),
+  ),
+  { table: 'PhotoLabel', constraint: 'PhotoLabel_locale_ck' },
+  { table: 'PhotoLabel', constraint: 'PhotoLabel_text_ck' },
+  ...['state', 'version', 'locale', 'slug'].map((rule) => ({
+    table: 'Gallery',
+    constraint: 'Gallery_' + rule + '_ck',
+  })),
+  { table: 'GalleryLabel', constraint: 'GalleryLabel_locale_ck' },
+  { table: 'GalleryLabel', constraint: 'GalleryLabel_title_ck' },
+  { table: 'GalleryItem', constraint: 'GalleryItem_position_ck' },
 ];
 
 /**
@@ -1275,6 +1327,123 @@ async function assertAudioFoundation(session: SqlSession): Promise<void> {
     'audio foundation',
     'one non-cascading Asset reference, no recitation shape, the same two keys',
   );
+}
+
+/**
+ * Phase 12 — what only the catalogue can prove about photographs:
+ *
+ *   1. a Photo's image is ONE nullable foreign key to Storage's `Asset`, which
+ *      never cascades, and every Phase-12 foreign key is NO ACTION — removing a
+ *      Gallery's membership can never remove a Photo, nor a Photo an Asset;
+ *   2. NO column of Photo, Gallery or GalleryItem references an Event, a Centre,
+ *      a Collection, a person or a topic, and no Gallery has a kind — the
+ *      Event↔Gallery association is Phase 14's (DELIVERY_PLAN.md Phases 13–15);
+ *   3. the Media vocabulary is STILL exactly the two keys, now describing
+ *      photographs and galleries too, and no photograph-specific key exists.
+ */
+async function assertPhotoFoundation(session: SqlSession): Promise<void> {
+  const [asset] = await session.query<{
+    columns: number;
+    nullable: number;
+    deletes: string | null;
+    target: string | null;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.columns
+        WHERE object_id = OBJECT_ID(N'[dbo].[Photo]') AND name = N'assetId') AS columns,
+      (SELECT SUM(CAST(is_nullable AS INT)) FROM sys.columns
+        WHERE object_id = OBJECT_ID(N'[dbo].[Photo]') AND name = N'assetId') AS nullable,
+      (SELECT delete_referential_action_desc FROM sys.foreign_keys
+        WHERE name = N'Photo_assetId_fkey') AS deletes,
+      (SELECT OBJECT_NAME(referenced_object_id) FROM sys.foreign_keys
+        WHERE name = N'Photo_assetId_fkey') AS target;
+  `);
+  if (
+    Number(asset?.columns) !== 1 ||
+    Number(asset?.nullable) !== 1 ||
+    asset?.deletes !== 'NO_ACTION' ||
+    asset.target !== 'Asset'
+  ) {
+    fail(
+      `Photo must carry exactly one nullable, non-cascading Asset reference; ` +
+        `found ${JSON.stringify(asset ?? null)}.`,
+    );
+  }
+
+  const cascading = await session.query<{ name: string }>(`
+    SELECT name FROM sys.foreign_keys
+    WHERE parent_object_id IN (OBJECT_ID(N'[dbo].[Photo]'), OBJECT_ID(N'[dbo].[PhotoLabel]'),
+                               OBJECT_ID(N'[dbo].[Gallery]'), OBJECT_ID(N'[dbo].[GalleryLabel]'),
+                               OBJECT_ID(N'[dbo].[GallerySlugHistory]'), OBJECT_ID(N'[dbo].[GalleryItem]'))
+      AND (delete_referential_action <> 0 OR update_referential_action <> 0);
+  `);
+  if (cascading.length > 0) {
+    fail(
+      `Phase-12 foreign keys must not cascade; found ${cascading.map((row) => row.name).join(', ')}.`,
+    );
+  }
+
+  const forward = await session.query<{ name: string }>(`
+    SELECT c.name FROM sys.columns c
+    WHERE c.object_id IN (OBJECT_ID(N'[dbo].[Photo]'), OBJECT_ID(N'[dbo].[Gallery]'),
+                          OBJECT_ID(N'[dbo].[GalleryItem]'))
+      AND (c.name LIKE N'%event%' OR c.name LIKE N'%centre%' OR c.name LIKE N'%center%'
+           OR c.name LIKE N'%collection%' OR c.name LIKE N'%person%' OR c.name LIKE N'%topic%'
+           OR c.name LIKE N'%kind%' OR c.name LIKE N'%type%' OR c.name LIKE N'%target%'
+           OR c.name LIKE N'%slug%' AND c.object_id <> OBJECT_ID(N'[dbo].[Gallery]'));
+  `);
+  if (forward.length > 0) {
+    fail(
+      `Photographs must reference no Event, Centre, Collection, person or topic, ` +
+        `carry no type, and a Photo no slug; found ${forward.map((row) => row.name).join(', ')}.`,
+    );
+  }
+
+  const permissions = await session.query<{ key: string; description: string }>(`
+    SELECT [key], [description] FROM [dbo].[Permission]
+    WHERE [key] LIKE N'media.%' OR [key] LIKE N'photo%' OR [key] LIKE N'gallery%' ORDER BY [key];
+  `);
+  if (
+    permissions.map((row) => row.key).join(',') !== MEDIA_PERMISSIONS.join(',') ||
+    !permissions.every(
+      (row) =>
+        row.description.includes('photographs') && row.description.includes('galleries'),
+    )
+  ) {
+    fail(
+      `The Media vocabulary must remain two keys that now name photographs and galleries; ` +
+        `found ${JSON.stringify(permissions)}.`,
+    );
+  }
+
+  report(
+    'photo foundation',
+    'one non-cascading Asset reference, no cascade, no forward Event reference, the same two keys',
+  );
+}
+
+/**
+ * The Phase-12 rollback restores the two Media keys' Phase-11 descriptions
+ * exactly — audio, and no photographs.
+ */
+async function assertMediaPermissionsDescribeAudioOnly(
+  session: SqlSession,
+): Promise<void> {
+  const permissions = await session.query<{ key: string; description: string }>(`
+    SELECT [key], [description] FROM [dbo].[Permission]
+    WHERE [key] LIKE N'media.%' ORDER BY [key];
+  `);
+  if (
+    permissions.map((row) => row.key).join(',') !== MEDIA_PERMISSIONS.join(',') ||
+    permissions.some((row) => row.description.includes('photograph')) ||
+    !permissions.every((row) => row.description.includes('audio'))
+  ) {
+    fail(
+      `The Phase-12 rollback did not restore the Phase-11 Media descriptions: ` +
+        `${JSON.stringify(permissions)}.`,
+    );
+  }
+  report('media descriptions', 'Phase-11 wording restored after the Phase-12 rollback');
 }
 
 /**
@@ -1878,6 +2047,7 @@ try {
   await assertSearchVocabulary(session, 'phase11');
   await assertMediaFoundation(session);
   await assertAudioFoundation(session);
+  await assertPhotoFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -1925,6 +2095,11 @@ try {
     }
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
+    }
+    if (migration.id === '20260927000000_phase12_media_galleries') {
+      // Phase 12 widened no search vocabulary, so none narrows here.
+      await assertSearchVocabulary(session, 'phase11');
+      await assertMediaPermissionsDescribeAudioOnly(session);
     }
     if (migration.id === '20260926000000_phase11_media_audio') {
       await assertSearchVocabulary(session, 'phase10');
@@ -1979,6 +2154,7 @@ try {
   await assertSearchVocabulary(session, 'phase11');
   await assertMediaFoundation(session);
   await assertAudioFoundation(session);
+  await assertPhotoFoundation(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

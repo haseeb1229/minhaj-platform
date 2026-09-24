@@ -9,7 +9,8 @@ import { parseByteRange } from '@minhaj/storage';
 import { toWebStream } from '../web-stream';
 
 /**
- * Serving an AudioTrack's bytes, for both routes beside this file (Phase 11).
+ * Serving Media's bytes — an AudioTrack's recording (Phase 11) and a Photo's
+ * image (Phase 12) — for every route beneath this directory.
  *
  * BOTH OWNERS MUST PERMIT, INDEPENDENTLY. `StorageServicePort.open` applies the
  * TECHNICAL decision — clean custody, the bytes actually present — and consults
@@ -33,7 +34,7 @@ import { toWebStream } from '../web-stream';
  */
 
 /** The refusal. Identical for every cause, deliberately. */
-export function refuseAudio(): Response {
+export function refuseMediaBytes(): Response {
   return new Response('Not found', {
     status: 404,
     headers: {
@@ -52,7 +53,7 @@ export async function serveAudio(
   request: { readonly range: string | null; readonly ifRange: string | null },
 ): Promise<Response> {
   const asset = await storage.open(assetId, policy);
-  if (asset === null) return refuseAudio();
+  if (asset === null) return refuseMediaBytes();
 
   const headers = {
     /** The VERIFIED type, from the bytes. Never a declared or client value. */
@@ -96,6 +97,65 @@ export async function serveAudio(
         'Content-Length': String(range.end - range.start + 1),
       },
     });
+  }
+
+  return new Response(toWebStream(asset.body), {
+    status: 200,
+    headers: { ...headers, 'Content-Length': String(asset.byteSize) },
+  });
+}
+
+/**
+ * Serving a Photo's image (Phase 12) — the same two independent allows, and a
+ * cache posture chosen so that WITHDRAWAL IS IMMEDIATE.
+ *
+ * `private, no-cache` with a strong validator. A browser may keep the image it
+ * was shown, but must ask again before every reuse; no shared cache may store
+ * it. The asking is decided in full: `open` — Storage's custody AND Media's
+ * policy — runs BEFORE the validator is compared, so a `304 Not Modified` is
+ * sent only for an image both owners would serve right now. A Photo archived a
+ * moment ago answers its visitor's next revalidation with the same 404 as a
+ * guess, and the browser stops showing it. What a gallery page gets for this is
+ * one small round trip per image instead of the bytes.
+ *
+ * The validator is the checksum of the stored bytes — the bytes Storage
+ * cleared — so it can never match a different image. Replacing a Photo's image
+ * changes its address anyway, because the address names the asset.
+ *
+ * `preview` serves `private, no-store`: an administrator looking at a draft
+ * leaves nothing behind.
+ */
+export async function servePhoto(
+  storage: StorageServicePort,
+  assetId: string,
+  policy: AssetAuthorizationPort,
+  request: { readonly ifNoneMatch: string | null; readonly preview: boolean },
+): Promise<Response> {
+  const asset = await storage.open(assetId, policy);
+  if (asset === null) return refuseMediaBytes();
+
+  const etag = `"${asset.checksum}"`;
+  const headers = {
+    'Content-Type': asset.mediaType,
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Disposition': 'inline',
+    'Cache-Control': request.preview ? 'private, no-store' : 'private, no-cache',
+    'Cross-Origin-Resource-Policy': 'same-origin',
+    'X-Robots-Tag': 'noindex, nofollow',
+    ...(request.preview ? {} : { ETag: etag }),
+  };
+
+  // Both owners have allowed; only now may an unchanged copy be confirmed. The
+  // lazy stream is dropped unopened.
+  if (
+    !request.preview &&
+    request.ifNoneMatch !== null &&
+    request.ifNoneMatch
+      .split(',')
+      .map((candidate) => candidate.trim())
+      .includes(etag)
+  ) {
+    return new Response(null, { status: 304, headers });
   }
 
   return new Response(toWebStream(asset.body), {

@@ -346,6 +346,14 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'AudioSeries',
         'AudioSeriesLabel',
         'AudioSeriesSlugHistory',
+        // Phase 12 — Media: Photo, Gallery, GalleryItem and their labels and
+        // the Gallery's slug history.
+        'Photo',
+        'PhotoLabel',
+        'Gallery',
+        'GalleryLabel',
+        'GallerySlugHistory',
+        'GalleryItem',
       ].sort(),
     );
   });

@@ -1,7 +1,7 @@
 import { requirePermittedAction } from '@/composition/authorization';
 import { mediaPreviewAudioPolicy } from '@/composition/media';
 import { storageRuntime } from '@/composition/storage';
-import { refuseAudio, serveAudio } from '../../../../serve';
+import { refuseMediaBytes, serveAudio } from '../../../../serve';
 
 /**
  * `/assets/media/previews/audio/{trackId}/{assetId}` — an ADMINISTRATIVE preview
@@ -40,7 +40,7 @@ export async function GET(
   // The locale only shapes a sign-in redirect a PAGE would follow; this is not
   // a page, and a refusal here is a 404, never a redirect.
   const permitted = await requirePermittedAction('en', 'media.administer');
-  if (permitted.state === 'denied') return refuseAudio();
+  if (permitted.state === 'denied') return refuseMediaBytes();
 
   return serveAudio(
     await storageRuntime(),

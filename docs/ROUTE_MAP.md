@@ -273,7 +273,7 @@ citation remains valid regardless of reading preferences.
 | `/news/archive` | `?year, month` |
 | `/newsletter` | Subscription |
 | `/events` · `/events/{slug}` · `/events/{slug}/gallery` | Events — `?upcoming, past, country, city, centre` |
-| `/media/photos` · `/media/galleries` · `/{slug}` · `/media/archive` · `/media/downloads` | Media |
+| `/media/photos` · `/media/galleries` · `/{slug}` · `/media/archive` · `/media/downloads` | Media — Phase 12 delivers photos, galleries, each Gallery at `/media/galleries/{slug}`, and the archive (`?year, month`). A Photo has no page of its own. `/media/downloads` has **no route** until a rights decision authorises downloads |
 | `/global` · `/global/find-a-centre` | World network and centre finder |
 | `/global/countries` · `/{slug}` · `/{slug}/regions/{regionSlug}` · `/{slug}/cities/{citySlug}` | Geography — intermediate levels may be absent (DOMAIN_MODEL.md §17.1) |
 | `/global/centres` · `/{slug}` · `/{slug}/{news\|events\|contact}` | Centres |
@@ -481,7 +481,7 @@ Prefixed `/{locale}/admin`.
 | Hadith | `/admin/hadith/{collections\|books\|chapters\|records\|commentary}` |
 | Fatwa | `/admin/fatwa/{questions\|assignment\|drafts\|review\|published}` |
 | Library | `/admin/library/{works\|editions\|translations\|research\|publications\|magazines\|encyclopedias\|sale-points}` — research papers at `research/papers`, and a Magazine's issues beneath it at `magazines/{id}/issues/{issueId}` (Phase 9) |
-| Media | `/admin/media/{videos\|audio\|photos\|galleries\|playlists\|series\|assets}` — `videos`, `series` and `playlists` delivered in Phase 10; `audio` in Phase 11, with audio series at `audio/series`. There is no generic `assets` file manager: a file is managed on the record it belongs to |
+| Media | `/admin/media/{videos\|audio\|photos\|galleries\|playlists\|series\|assets}` — `videos`, `series` and `playlists` delivered in Phase 10; `audio` in Phase 11, with audio series at `audio/series`; `photos` and `galleries` in Phase 12. There is no generic `assets` file manager: a file is managed on the record it belongs to |
 | People | `/admin/people/{persons\|authors\|speakers\|scholars\|teachers}` |
 | Identity | `/admin/identity/{users\|roles\|permissions\|assignments\|security}` \u2014 **security** covers second-factor state, bootstrap status and identity audit (SECURITY_BASELINE.md \u00a78) |
 | Taxonomy | `/admin/taxonomy/{topics\|mapping\|languages\|tags}` |
@@ -515,7 +515,7 @@ Categories only; no endpoint contracts in this phase.
 | Teacher / Admin | `/api/teacher/*` · `/api/admin/*` | Role-gated operations |
 | Migration | `/api/admin/migration/*` | Import control and status |
 | Media | `/api/media/*` | Asset serving and signed downloads |
-| Media upload | `/api/admin/media/audio/{id}/asset` | Phase 11: one track's audio file, `POST` only, a streamed raw body — Class A with explicit anti-CSRF (SECURITY_BASELINE.md §7.1) |
+| Media upload | `/api/admin/media/audio/{id}/asset` · `/api/admin/media/photos/{id}/asset` | Phase 11: one track's audio file; Phase 12: one Photo's image. `POST` only, a streamed raw body — Class A with explicit anti-CSRF (SECURITY_BASELINE.md §7.1) |
 | Webhooks | `/api/webhooks/{provider}` | **Signature-verified, idempotent, replay-resistant** |
 | Health | `/api/health` · `/api/ready` | Unprefixed operational probes |
 

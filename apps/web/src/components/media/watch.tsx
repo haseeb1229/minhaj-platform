@@ -1453,6 +1453,18 @@ export async function WatchLandingPage({
                 </p>
               </div>
             </Panel>
+            <Panel as="li">
+              <div className="flex flex-col gap-2">
+                <h3 className="text-lg font-semibold">
+                  <TextLink href={`/${locale}/media/galleries`}>
+                    {t('sections.photos')}
+                  </TextLink>
+                </h3>
+                <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                  {t('sectionBody.photos')}
+                </p>
+              </div>
+            </Panel>
           </ul>
         </section>
       </div>

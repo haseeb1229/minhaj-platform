@@ -5,6 +5,7 @@ import { appLogger } from '@/composition/logging';
 import { consumeMediaUpload, mediaRuntime } from '@/composition/media';
 import { isSameOriginMutation } from '@/composition/same-origin';
 import { mediaFailure } from '@/contexts/media';
+import { answer, chunks, decodedHeader, failed } from '../../../upload-transport';
 
 /**
  * `POST /api/admin/media/audio/{trackId}/asset` — uploads a track's audio file
@@ -49,58 +50,6 @@ export const dynamic = 'force-dynamic';
 
 /** The custom header the admin uploader sends. No HTML form can set it. */
 const INTENT = { header: 'x-minhaj-intent', value: 'media-audio-upload' } as const;
-
-function answer(status: number, body: Record<string, unknown>): Response {
-  return Response.json(body, {
-    status,
-    headers: {
-      'Cache-Control': 'private, no-store',
-      'X-Content-Type-Options': 'nosniff',
-      'X-Robots-Tag': 'noindex, nofollow',
-    },
-  });
-}
-
-/** Each refusal's HTTP status; the body always carries the reason. */
-const STATUS: Readonly<Record<string, number>> = {
-  denied: 403,
-  invalid: 400,
-  'not-found': 404,
-  conflict: 409,
-  'too-large': 413,
-  unsupported: 415,
-  'not-cleared': 422,
-  'rate-limited': 429,
-};
-
-const failed = (failure: string) =>
-  answer(STATUS[failure] ?? 500, { status: 'error', failure });
-
-/** A header value decoded from the browser's percent-encoding, or `null`. */
-function decodedHeader(value: string | null, max: number): string | null {
-  if (value === null || value === '' || value.length > max * 3) return null;
-  try {
-    const decoded = decodeURIComponent(value);
-    return decoded.length > max ? decoded.slice(0, max) : decoded;
-  } catch {
-    // Undecodable display text is simply not shown; it can refuse nothing.
-    return null;
-  }
-}
-
-/** The request body as chunks, straight from the socket. */
-async function* chunks(body: ReadableStream<Uint8Array>): AsyncIterable<Uint8Array> {
-  const reader = body.getReader();
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) return;
-      yield value;
-    }
-  } finally {
-    reader.releaseLock();
-  }
-}
 
 export async function POST(
   request: Request,

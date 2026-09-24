@@ -57,7 +57,13 @@ export type AssetRejection =
   | 'empty'
   | 'unreadable'
   | 'infected'
-  | 'unscannable';
+  | 'unscannable'
+  /**
+   * Phase 12. A still image whose header declares more pixels, or a longer
+   * side, than the upload's image policy permits — the decompression-bomb
+   * guard. Distinct from `too-large`, which is about bytes.
+   */
+  | 'dimensions-too-large';
 
 /**
  * The technical record of one stored object.
@@ -116,6 +122,32 @@ export interface UploadPolicy {
   readonly declaredMediaType?: string | null;
   /** Original filename for display. Bounded and sanitised before storage. */
   readonly displayName?: string | null;
+  /**
+   * Phase 12. Present when the caller accepts STILL IMAGES ONLY: the upload
+   * must then be a structurally whole JPEG or PNG within these bounds, and what
+   * is stored is that image with its hidden metadata removed (EXIF, XMP, IPTC,
+   * comments, embedded thumbnails and trailing data), its pixels untouched.
+   * Every allowed media type must be one the foundation can validate this way.
+   */
+  readonly image?: ImageLimits;
+}
+
+/**
+ * Bounds on a still image's DECLARED size, checked from its header before the
+ * image data is read — so a small file that asks a decoder for an enormous
+ * canvas is refused on arrival.
+ */
+export interface ImageLimits {
+  /** Width × height. */
+  readonly maxPixels: number;
+  /** The longer side. */
+  readonly maxEdge: number;
+}
+
+/** A still image's size as it is DISPLAYED, orientation applied. */
+export interface ImageDimensions {
+  readonly width: number;
+  readonly height: number;
 }
 
 /* ===========================================================================
@@ -203,6 +235,11 @@ export interface AssetPersistencePort {
   fail(id: string): Promise<void>;
   countScanAttempt(id: string): Promise<number>;
   find(id: string): Promise<AssetRecord | null>;
+  /**
+   * Phase 12. The records of whichever of `ids` exist, in no particular order —
+   * ONE bounded read for a page of assets rather than one per asset.
+   */
+  findMany(ids: readonly string[]): Promise<readonly AssetRecord[]>;
   /** Bounded sweep of records a crash left mid-lifecycle. */
   staleBefore(cutoff: Date, limit: number): Promise<readonly AssetRecord[]>;
   remove(id: string): Promise<void>;
@@ -216,6 +253,8 @@ export interface StoredAsset {
   readonly byteSize: number;
   readonly checksum: string;
   readonly rejection: AssetRejection | null;
+  /** Phase 12. The displayed dimensions of a stored still image. */
+  readonly image?: ImageDimensions;
 }
 
 /**
@@ -238,6 +277,17 @@ export interface StorageServicePort {
     assetId: string,
     authorization: AssetAuthorizationPort,
   ): Promise<AssetStream | null>;
+  /**
+   * Phase 12. Which of `assetIds` could be served RIGHT NOW on TECHNICAL grounds
+   * alone — clean custody and bytes present — in one bounded pass.
+   *
+   * IT SERVES NOTHING AND DECIDES NOTHING ABOUT VISIBILITY. A consumer asks it
+   * only about assets its OWN authorised records already name, so that a page of
+   * images can offer a picture only where fetching it can work, instead of a
+   * broken image box. The byte route still makes both decisions per request.
+   * Bounded: a question naming more than one hundred identifiers is refused.
+   */
+  servable(assetIds: readonly string[]): Promise<ReadonlySet<string>>;
   /** Bounded, idempotent reconciliation of Storage-owned resources only. */
   reconcile(now: Date, limit: number): Promise<number>;
 }

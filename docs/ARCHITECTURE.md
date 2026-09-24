@@ -465,6 +465,19 @@ Storage alone generates the key, measures, hashes, sniffs, quarantines and scans
 recognised either by its ID3 tag or structurally — two consecutive valid Layer III frame
 headers — never by one byte, an extension or a declared type.
 
+**Still images (Phase 12).** An upload policy may carry image limits (pixels and longest side).
+Storage then admits only a structurally whole JPEG or PNG within them — checked from the frame
+header or `IHDR` before the image data is read, so a small file declaring an enormous canvas is
+refused on arrival — and what it WRITES, and so measures, hashes, sniffs, scans and serves, is
+that image with its hidden metadata removed: EXIF, XMP, IPTC, comments, embedded thumbnails,
+unknown segments and chunks, and anything after the end marker. Colour profiles are kept, and a
+JPEG's orientation is re-emitted as the only EXIF entry. It is a streaming transform over the
+container structure; no pixel is decoded on the server and nothing is re-encoded. The byte
+ceiling counts what ARRIVES, discarded metadata included. `servable(ids)` answers, for one
+bounded page, which assets are technically servable (clean, bytes present) — a question a
+consumer asks only about assets its own authorised records name, so a page offers an image only
+where fetching it can work; the byte route still makes both decisions per request.
+
 ### 4.3 Search
 
 **SearchService** abstraction, implemented over **SQL Server Full-Text Search** for V1, so a

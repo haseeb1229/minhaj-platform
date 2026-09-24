@@ -139,6 +139,17 @@ export function createAssetPersistence(): AssetPersistencePort {
       return row === null ? null : toRecord(row);
     },
 
+    /**
+     * Bounded by the caller's question — Storage asks about one page at a time,
+     * never more than a hundred — so the IN list stays far below SQL Server's
+     * parameter ceiling.
+     */
+    async findMany(ids) {
+      if (ids.length === 0) return [];
+      const rows = await database.asset.findMany({ where: { id: { in: [...ids] } } });
+      return rows.map(toRecord);
+    },
+
     /** Bounded sweep of rows a crash or an outage left mid-lifecycle. */
     async staleBefore(cutoff, limit) {
       const rows = await database.asset.findMany({

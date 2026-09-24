@@ -168,8 +168,8 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
   }),
   /**
    * DELIVERED BY PHASE 10 — Video, Series and Playlist. `/watch` lists only the
-   * Watch surfaces that genuinely exist, and from Phase 11 links to Listen, its
-   * sibling; galleries (Phase 12) are absent rather than reserved.
+   * Watch surfaces that genuinely exist, and links to Listen (Phase 11) and to
+   * the photograph surfaces (Phase 12).
    */
   Object.freeze({
     key: 'watch',
@@ -467,6 +467,34 @@ const LISTEN: readonly ShellRoute[] = Object.freeze([
   ),
 ]);
 
+/**
+ * The photograph surfaces — Phase 12 (ROUTE_MAP.md §3.9).
+ *
+ * Photographs, galleries and the historical archive: each a genuine page in all
+ * three interface locales over delivered data. NO PLACEMENT — Media is a content
+ * domain, not a primary navigation item (INFORMATION_ARCHITECTURE.md §2.2). Its
+ * designed entry points are News & Events and Collections, which have not
+ * shipped, so until they do these are reached from the Watch landing, from one
+ * another and from the human sitemap.
+ *
+ * `/media/downloads` HAS NO ENTRY AND NO ROUTE: a download needs a rights
+ * decision no phase has made. Neither does `/events/{slug}/gallery`, which is
+ * Phase 14's.
+ */
+const MEDIA: readonly ShellRoute[] = Object.freeze(
+  (['photos', 'galleries', 'archive'] as const).map((surface) =>
+    Object.freeze({
+      key: `media.${surface}`,
+      label: `media.${surface}`,
+      path: `/media/${surface}`,
+      placements: Object.freeze([] as const),
+      visibility: 'public' as const,
+      availability: 'delivered' as const,
+      indexing: 'eligible' as const,
+    }),
+  ),
+);
+
 /** The routes the shell itself delivers. */
 const SHELL: readonly ShellRoute[] = Object.freeze([
   Object.freeze({
@@ -548,6 +576,7 @@ export const SHELL_ROUTES: readonly ShellRoute[] = Object.freeze([
   ...LIBRARY,
   ...WATCH,
   ...LISTEN,
+  ...MEDIA,
   ...exploreRoutes(),
   ...LEGAL,
 ]);

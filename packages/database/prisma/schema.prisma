@@ -1619,6 +1619,7 @@ model Asset {
   readableEditions Edition[] @relation("EditionReadableAsset")
   downloadableEditions Edition[] @relation("EditionDownloadAsset")
   audioTracks AudioTrack[] @relation("AudioTrackAsset")
+  photos Photo[] @relation("PhotoAsset")
   id String @id @db.NVarChar(36)
 
   /// Server-generated and opaque. Never derived from caller input.
@@ -2441,6 +2442,108 @@ model AudioSeriesSlugHistory {
   seriesId String @db.NVarChar(36)
   series AudioSeries @relation(fields: [seriesId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   @@index([seriesId])
+}
+
+// ===========================================================================
+// Phase 12 — Media: Photo, Gallery, GalleryItem (DOMAIN_MODEL.md §11)
+// ===========================================================================
+//
+// THREE SHAPES. A Photo is one logical photograph whose image is a Storage
+// Asset, reached by ONE typed, nullable foreign key that never cascades. A
+// Gallery is a curated grouping with its own slug namespace and history. A
+// GalleryItem is a Photo's place in a Gallery: typed, ordered, duplicate-free
+// and bounded, with no lifecycle of its own.
+//
+// NO EVENT, NO CENTRE, NO COLLECTION. Nothing below references an Event or
+// reserves a column for one: Phase 14 owns the typed Event↔Gallery association
+// once both exist. No generic media item, image, album or asset-link table, and
+// no `targetType + targetId` pair.
+//
+// A PHOTO HAS NO SLUG. It has no public page of its own (ROUTE_MAP.md §3.9).
+
+/// One logical photograph. Its bytes are Storage's; its meaning is Media's.
+model Photo {
+  id String @id @db.NVarChar(36)
+  primaryLocale String @db.NVarChar(8)
+  state String @db.NVarChar(16)
+  /// How the photograph is credited. Descriptive text, never a licence.
+  credit String? @db.NVarChar(200)
+  /// When it was taken, as precisely as it is KNOWN: a year, optionally a
+  /// month, optionally a day. Never derived from `createdAt`.
+  takenYear Int?
+  takenMonth Int?
+  takenDay Int?
+  /// The ONE Storage asset holding the image, or none yet. A published Photo
+  /// must have one (a CHECK), and one asset serves at most one Photo (a
+  /// FILTERED unique index the migration creates).
+  assetId String? @db.NVarChar(36)
+  /// The image's DISPLAYED size, recorded with the asset and only with it.
+  width Int?
+  height Int?
+  version Int @default(1)
+  /// When the RECORD was created — the order of "recently added", never a
+  /// historical date.
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  asset Asset? @relation("PhotoAsset", fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  labels PhotoLabel[]
+  galleries GalleryItem[]
+  @@index([state, createdAt, id])
+  @@index([state, takenYear, takenMonth, takenDay])
+}
+
+/// A Photo's alternative text and caption in one interface locale.
+model PhotoLabel {
+  photoId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  altText String? @db.NVarChar(500)
+  caption String? @db.NVarChar(1000)
+  photo Photo @relation(fields: [photoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([photoId, locale])
+}
+
+/// A curated, ordered grouping of Photos. Removing one removes no Photo.
+model Gallery {
+  id String @id @db.NVarChar(36)
+  slug String @unique @db.NVarChar(120)
+  primaryLocale String @db.NVarChar(8)
+  state String @db.NVarChar(16)
+  version Int @default(1)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  labels GalleryLabel[]
+  slugs GallerySlugHistory[]
+  items GalleryItem[]
+  @@index([state, createdAt, id])
+}
+
+model GalleryLabel {
+  galleryId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(240)
+  description String @db.NVarChar(4000)
+  gallery Gallery @relation(fields: [galleryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([galleryId, locale])
+}
+
+model GallerySlugHistory {
+  slug String @id @db.NVarChar(120)
+  galleryId String @db.NVarChar(36)
+  gallery Gallery @relation(fields: [galleryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([galleryId])
+}
+
+/// One Photo's place in one Gallery. Unique per Gallery, densely ordered, and
+/// bounded to 240 places by a CHECK on the position.
+model GalleryItem {
+  galleryId String @db.NVarChar(36)
+  photoId String @db.NVarChar(36)
+  position Int
+  gallery Gallery @relation(fields: [galleryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  photo Photo @relation(fields: [photoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([galleryId, photoId])
+  @@unique([galleryId, position])
+  @@index([photoId, galleryId])
 }
 
 // ===========================================================================

@@ -785,6 +785,28 @@ As delivered (Phase 11) — AudioTrack and AudioSeries, **non-Quran audio only**
   native slug history. No AudioPlaylist, Podcast, Album, Season or Episode aggregate exists,
   and no listening history is recorded.
 
+As delivered (Phase 12) — Photo, Gallery and GalleryItem, **with no Event relationship**:
+
+| Aggregate | Carries |
+|---|---|
+| **Photo** | Primary locale, lifecycle, per-locale **alternative text** and **caption** (each optional, never generated), an optional credit (descriptive, not a licence), an optional **date taken as precisely as it is known** — a year, a month and year, or a day — and **one typed, nullable reference to the Storage `Asset`** holding its image, with the image's displayed width and height recorded with it. **No slug**: a Photo has no page of its own |
+| **Gallery** | Localized title and description, its own slug namespace and native slug history, lifecycle |
+| **GalleryItem** | One Photo's place in one Gallery — typed foreign keys to both, a unique position, duplicate-free, at most 240 per Gallery. No page, slug or lifecycle of its own |
+
+**Rules:**
+- **No forward reference.** Nothing here names an Event, Centre or Collection, and a Gallery has
+  no kind: the Event↔Gallery association is Phase 14's, owned there once both ends exist.
+- **The image is Storage's; its meaning is Media's**, exactly as for audio: one never-cascading
+  foreign key, one Asset per Photo, the identifier never accepted from a form, and **a published
+  Photo has an image** (service and SQL CHECK). Technical availability is orthogonal to
+  publication: a Photo whose bytes cannot be served is shown as unavailable, not unpublished.
+- **A Photo may appear in many Galleries.** A Gallery owns its membership and order, never its
+  Photos: removing membership removes no Photo, and neither Photo nor Gallery is ever deleted.
+- **The cover is derived** — the first public Photo in the Gallery's order — never a second
+  relation that could disagree with it.
+- **A date taken is never a record's creation time**, and a year stays a year (§19.5).
+- **Nothing is inferred from an image**: no person, place, topic, caption or description.
+
 ---
 
 ## 12. Fatwa

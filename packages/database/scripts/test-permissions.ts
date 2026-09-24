@@ -1559,6 +1559,226 @@ try {
     );
   }
 
+  // ---- Phase 12: Media — Photo, Gallery, GalleryItem ------------------------
+  //
+  // THE SAME THREE POSTURES, across the photograph shapes, each proved to WORK
+  // and to REFUSE. The invariants are proved as refusals BY THE DATABASE rather
+  // than by a grant: a renamed Gallery keeps its former slug (the trigger); a
+  // published Photo must have an image, recorded dimensions exist exactly with
+  // an image and within bounds, and a date is a real partial date (the CHECKs);
+  // one image serves one Photo and one place in a Gallery holds one Photo (the
+  // unique indexes); a Gallery holds at most 240 (the position CHECK); and
+  // neither an Asset a Photo names nor a Photo a Gallery holds can be deleted
+  // out from under it (the foreign keys). Removing a Gallery's membership
+  // leaves its Photos exactly where they were.
+  const photoRun = randomUUID().replaceAll('-', '');
+  const photoId = randomUUID();
+  const secondPhotoId = randomUUID();
+  const thirdPhotoId = randomUUID();
+  const imageAssetId = randomUUID();
+  const galleryId = randomUUID();
+  const gallerySlug = `gallery-proof-${photoRun}`;
+
+  await expectAllowed(
+    app,
+    'Asset INSERT (a cleared image, as Storage records it)',
+    `INSERT INTO [dbo].[Asset] ([id],[storageKey],[mediaType],[byteSize],[checksum],[state],[updatedAt]) VALUES (N'${imageAssetId}',N'cc/dd/${photoRun}',N'image/png',361,N'${'f'.repeat(64)}',N'clean',SYSUTCDATETIME());`,
+    'Storage records the image it cleared',
+  );
+  await expectAllowed(
+    app,
+    'Photo INSERT',
+    `INSERT INTO [dbo].[Photo] ([id],[primaryLocale],[state],[takenYear],[takenMonth],[assetId],[width],[height]) VALUES
+       (N'${photoId}',N'en',N'draft',1995,3,N'${imageAssetId}',48,32),
+       (N'${secondPhotoId}',N'en',N'draft',NULL,NULL,NULL,NULL,NULL),
+       (N'${thirdPhotoId}',N'en',N'draft',NULL,NULL,NULL,NULL,NULL);`,
+    'a Photo with its image and two with none yet',
+  );
+  await expectAllowed(
+    app,
+    'Photo UPDATE (publish)',
+    `UPDATE [dbo].[Photo] SET [state]=N'published',[version]=[version]+1 WHERE [id]=N'${photoId}';`,
+    'a Photo with an image is published',
+  );
+  await expectAllowed(
+    app,
+    'Gallery INSERT and rename',
+    `INSERT INTO [dbo].[Gallery] ([id],[slug],[primaryLocale],[state]) VALUES (N'${galleryId}',N'${gallerySlug}',N'en',N'draft');
+     UPDATE [dbo].[Gallery] SET [slug]=N'${gallerySlug}-renamed',[version]=[version]+1 WHERE [id]=N'${galleryId}';`,
+    'a Gallery is created and renamed by the runtime',
+  );
+
+  const [galleryReservations] = await app.query<{ count: number }>(
+    `SELECT COUNT_BIG(*) AS count FROM [dbo].[GallerySlugHistory] WHERE [galleryId]=N'${galleryId}';`,
+  );
+  if (Number(galleryReservations?.count) === 2) {
+    pass('Gallery slugs reserved by the database', 'the former and the current slug');
+  } else {
+    fail(
+      'Gallery slugs reserved by the database',
+      `expected 2 reservations, found ${String(galleryReservations?.count ?? 0)}`,
+    );
+  }
+
+  for (const [label, statement] of [
+    [
+      'PhotoLabel INSERT',
+      `INSERT INTO [dbo].[PhotoLabel] ([photoId],[locale],[altText],[caption]) VALUES (N'${photoId}',N'en',N'Least-privilege proof alternative text',NULL);`,
+    ],
+    [
+      'GalleryLabel INSERT',
+      `INSERT INTO [dbo].[GalleryLabel] ([galleryId],[locale],[title],[description]) VALUES (N'${galleryId}',N'en',N'Least-privilege proof gallery',N'');`,
+    ],
+    [
+      'GalleryItem INSERT',
+      `INSERT INTO [dbo].[GalleryItem] ([galleryId],[photoId],[position]) VALUES (N'${galleryId}',N'${photoId}',0),(N'${galleryId}',N'${secondPhotoId}',1);`,
+    ],
+  ] as const) {
+    await expectAllowed(app, label, statement, 'the save path writes its own rows');
+  }
+
+  await expectRefusedByInvariant(
+    app,
+    'A published Photo has an image',
+    `UPDATE [dbo].[Photo] SET [state]=N'published' WHERE [id]=N'${secondPhotoId}';`,
+    547,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Dimensions exist only with an image',
+    `UPDATE [dbo].[Photo] SET [width]=10,[height]=10 WHERE [id]=N'${secondPhotoId}';`,
+    547,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Recorded dimensions stay within the admission bound',
+    `UPDATE [dbo].[Photo] SET [width]=16384,[height]=16384 WHERE [id]=N'${photoId}';`,
+    547,
+  );
+  for (const [label, columns] of [
+    [
+      'A date is a real day of its month',
+      '[takenYear]=2023,[takenMonth]=2,[takenDay]=29',
+    ],
+    [
+      'A day never stands without its month',
+      '[takenYear]=1989,[takenMonth]=NULL,[takenDay]=4',
+    ],
+    ['A month is one of twelve', '[takenYear]=1989,[takenMonth]=13,[takenDay]=NULL'],
+    [
+      'A year is not before photography',
+      '[takenYear]=1700,[takenMonth]=NULL,[takenDay]=NULL',
+    ],
+  ] as const) {
+    await expectRefusedByInvariant(
+      app,
+      label,
+      `UPDATE [dbo].[Photo] SET ${columns} WHERE [id]=N'${secondPhotoId}';`,
+      547,
+    );
+  }
+  await expectRefusedByInvariant(
+    app,
+    'A label says something',
+    `INSERT INTO [dbo].[PhotoLabel] ([photoId],[locale],[altText],[caption]) VALUES (N'${secondPhotoId}',N'en',NULL,NULL);`,
+    547,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'One image serves one Photo',
+    `UPDATE [dbo].[Photo] SET [assetId]=N'${imageAssetId}',[width]=48,[height]=32 WHERE [id]=N'${secondPhotoId}';`,
+    2601,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'A Photo is in a Gallery once',
+    `INSERT INTO [dbo].[GalleryItem] ([galleryId],[photoId],[position]) VALUES (N'${galleryId}',N'${photoId}',5);`,
+    2627,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'A place in a Gallery holds one Photo',
+    `INSERT INTO [dbo].[GalleryItem] ([galleryId],[photoId],[position]) VALUES (N'${galleryId}',N'${thirdPhotoId}',0);`,
+    2627,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'A Gallery holds at most 240 Photos',
+    `INSERT INTO [dbo].[GalleryItem] ([galleryId],[photoId],[position]) VALUES (N'${galleryId}',N'${thirdPhotoId}',240);`,
+    547,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'A Photo a Gallery holds exists',
+    `INSERT INTO [dbo].[GalleryItem] ([galleryId],[photoId],[position]) VALUES (N'${galleryId}',N'${randomUUID()}',7);`,
+    547,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'An Asset a Photo names cannot be deleted',
+    `DELETE FROM [dbo].[Asset] WHERE [id]=N'${imageAssetId}';`,
+    547,
+  );
+
+  // Membership is replaceable, and removing it removes no Photo.
+  await expectAllowed(
+    app,
+    'GalleryItem DELETE',
+    `DELETE FROM [dbo].[GalleryItem] WHERE [galleryId]=N'${galleryId}';`,
+    'a membership is cleared before it is rewritten',
+  );
+  const [photosLeft] = await app.query<{ count: number }>(
+    `SELECT COUNT_BIG(*) AS count FROM [dbo].[Photo] WHERE [id] IN (N'${photoId}',N'${secondPhotoId}',N'${thirdPhotoId}');`,
+  );
+  if (Number(photosLeft?.count) === 3) {
+    pass('Clearing a Gallery removes no Photo', 'every Photo remains');
+  } else {
+    fail(
+      'Clearing a Gallery removes no Photo',
+      `found ${String(photosLeft?.count ?? 0)}`,
+    );
+  }
+  for (const [table, where] of [
+    ['PhotoLabel', `[photoId]=N'${photoId}'`],
+    ['GalleryLabel', `[galleryId]=N'${galleryId}'`],
+  ] as const) {
+    await expectAllowed(
+      app,
+      `${table} DELETE`,
+      `DELETE FROM [dbo].[${table}] WHERE ${where};`,
+      'a replaceable label set can be cleared before it is rewritten',
+    );
+  }
+
+  for (const table of ['Photo', 'Gallery']) {
+    await expectDenied(app, `${table} DELETE denied`, `DELETE FROM [dbo].[${table}];`);
+    await expectDenied(
+      app,
+      `${table}Label UPDATE denied`,
+      `UPDATE [dbo].[${table}Label] SET [locale]=[locale];`,
+    );
+    await expectDenied(
+      app,
+      `${table} ALTER denied`,
+      `ALTER TABLE [dbo].[${table}] DROP CONSTRAINT [${table}_state_ck];`,
+    );
+  }
+  await expectDenied(
+    app,
+    'GallerySlugHistory UPDATE denied',
+    'UPDATE [dbo].[GallerySlugHistory] SET [slug]=[slug];',
+  );
+  await expectDenied(
+    app,
+    'GallerySlugHistory DELETE denied',
+    'DELETE FROM [dbo].[GallerySlugHistory];',
+  );
+  await expectDenied(
+    app,
+    'GalleryItem UPDATE denied',
+    'UPDATE [dbo].[GalleryItem] SET [photoId]=[photoId];',
+  );
+
   // ---- Phase 17: the derived search projection ------------------------------
   //
   // FOUR POSTURES, one per table, and each is the operation the indexer
