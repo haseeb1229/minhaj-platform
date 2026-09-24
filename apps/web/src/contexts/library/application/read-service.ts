@@ -1,9 +1,16 @@
 import { z } from 'zod';
 import {
+  libraryIdSchema,
   libraryQuerySchema,
-  workSlugSchema,
+  librarySlugSchema,
+  scholarlyKindSchema,
+  scholarlyQuerySchema,
   type LibraryFacetPage,
   type LibraryPublicReaderPort,
+  type ScholarlyKind,
+  type ScholarlyRecord,
+  type ScholarlyRecordOf,
+  type StandaloneScholarlyKind,
 } from '@minhaj/contracts/library';
 
 /**
@@ -28,6 +35,11 @@ import {
 /** Offsets are bounded at BOTH ends: negative is nonsense, unbounded is a walk. */
 const browseOffset = z.number().int().min(0).max(25_000);
 
+/** A well-formed slug, or `null` — which every caller treats as "no such record". */
+const validSlug = (slug: string): boolean => librarySlugSchema.safeParse(slug).success;
+
+const standalone = scholarlyKindSchema.exclude(['magazine-issue']);
+
 export function createLibraryReadService(reader: LibraryPublicReaderPort) {
   return {
     works(raw: unknown = {}) {
@@ -35,13 +47,13 @@ export function createLibraryReadService(reader: LibraryPublicReaderPort) {
     },
 
     work(slug: string) {
-      return workSlugSchema.safeParse(slug).success
+      return librarySlugSchema.safeParse(slug).success
         ? reader.work(slug)
         : Promise.resolve(null);
     },
 
     canonicalSlug(slug: string) {
-      return workSlugSchema.safeParse(slug).success
+      return librarySlugSchema.safeParse(slug).success
         ? reader.canonicalSlug(slug)
         : Promise.resolve(null);
     },
@@ -79,6 +91,72 @@ export function createLibraryReadService(reader: LibraryPublicReaderPort) {
      */
     sitemap(offset: number, limit: number) {
       return reader.sitemap(
+        z.number().int().min(0).max(10_000_000).parse(offset),
+        z.number().int().min(1).max(5000).parse(limit),
+      );
+    },
+
+    /* -----------------------------------------------------------------------
+     * Phase 9 — the scholarly and periodical records, under the same rules:
+     * every input parsed here, a malformed slug is `null` (the page's 404), and
+     * the public predicate lives in the query rather than in a filter.
+     * -------------------------------------------------------------------- */
+
+    scholarlyList(kind: ScholarlyKind, raw: unknown = {}) {
+      return reader.scholarlyList(
+        scholarlyKindSchema.parse(kind),
+        scholarlyQuerySchema.parse(raw),
+      );
+    },
+
+    async scholarlyRecord<K extends StandaloneScholarlyKind>(
+      kind: K,
+      slug: string,
+    ): Promise<ScholarlyRecordOf<K> | null> {
+      if (!validSlug(slug)) return null;
+      const record: ScholarlyRecord | null = await reader.scholarlyRecord(
+        standalone.parse(kind),
+        slug,
+      );
+      // A record read by kind is that kind's record — checked, never assumed.
+      return record !== null && record.kind === kind
+        ? (record as ScholarlyRecordOf<K>)
+        : null;
+    },
+
+    scholarlyCanonicalSlug(kind: StandaloneScholarlyKind, slug: string) {
+      return validSlug(slug)
+        ? reader.scholarlyCanonicalSlug(standalone.parse(kind), slug)
+        : Promise.resolve(null);
+    },
+
+    magazineIssues(magazineId: string, offset = 0) {
+      return reader.magazineIssues(
+        libraryIdSchema.parse(magazineId),
+        browseOffset.parse(offset),
+      );
+    },
+
+    magazineIssue(magazineSlug: string, issueSlug: string) {
+      return validSlug(magazineSlug) && validSlug(issueSlug)
+        ? reader.magazineIssue(magazineSlug, issueSlug)
+        : Promise.resolve(null);
+    },
+
+    magazineIssueCanonical(magazineSlug: string, issueSlug: string) {
+      return validSlug(magazineSlug) && validSlug(issueSlug)
+        ? reader.magazineIssueCanonical(magazineSlug, issueSlug)
+        : Promise.resolve(null);
+    },
+
+    magazineIssueNeighbours(issueId: string) {
+      return reader.magazineIssueNeighbours(libraryIdSchema.parse(issueId));
+    },
+
+    /** The machine sitemap's reads, with the same wide bound as the Work sitemap. */
+    scholarlySitemap(kind: ScholarlyKind, offset: number, limit: number) {
+      return reader.scholarlySitemap(
+        scholarlyKindSchema.parse(kind),
         z.number().int().min(0).max(10_000_000).parse(offset),
         z.number().int().min(1).max(5000).parse(limit),
       );

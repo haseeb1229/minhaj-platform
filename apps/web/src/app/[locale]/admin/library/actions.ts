@@ -6,7 +6,12 @@ import { indexAfterResponse } from '@/composition/search';
 import { redirect } from 'next/navigation';
 
 import { localeSchema } from '@minhaj/contracts';
-import { parseReaderDocument } from '@minhaj/contracts/library';
+import {
+  parseReaderDocument,
+  SCHOLARLY_LIMITS,
+  scholarlyKindSchema,
+  type ScholarlyKind,
+} from '@minhaj/contracts/library';
 
 import { requirePermittedAction } from '@/composition/authorization';
 import { consumeLibraryUpload, libraryRuntime } from '@/composition/library';
@@ -268,6 +273,147 @@ export async function saveSalePoint(
   } catch (error) {
     return rejected(error, 'library-save-sale-point');
   }
+}
+
+/* ===========================================================================
+ * Phase 9 — Research, ResearchPaper, Publication, Magazine, MagazineIssue and
+ * Encyclopedia
+ * ========================================================================= */
+
+/** Where each aggregate's editor lives, beneath `/{locale}/admin/library/`. */
+function editorPath(kind: ScholarlyKind, id: string, magazineId: string | null): string {
+  switch (kind) {
+    case 'research':
+      return `research/${id}`;
+    case 'research-paper':
+      return `research/papers/${id}`;
+    case 'publication':
+      return `publications/${id}`;
+    case 'encyclopedia':
+      return `encyclopedias/${id}`;
+    case 'magazine':
+      return `magazines/${id}`;
+    case 'magazine-issue':
+      return `magazines/${magazineId ?? ''}/issues/${id}`;
+  }
+}
+
+/**
+ * The fields of one Phase-9 record, named once.
+ *
+ * NO MASS ASSIGNMENT: every field is read by name, and fields an aggregate does
+ * not have are simply not read for it — so the domain schema, which is strict,
+ * refuses anything that should not be there instead of a form deciding it.
+ * Empty optional text is ABSENT (`null`), never an empty fact.
+ */
+function scholarlyInput(kind: ScholarlyKind, form: FormData): Record<string, unknown> {
+  const document = value(form, 'document');
+  const described = {
+    slug: form.get('slug'),
+    primaryLocale: form.get('primaryLocale'),
+    state: form.get('state'),
+    labels: localeSchema.options
+      .filter((language) => form.get(`${language}-enabled`) === 'on')
+      .map((language) => ({
+        locale: language,
+        title: form.get(`${language}-title`),
+        summary: form.get(`${language}-summary`) ?? '',
+      })),
+    contributors: rows((index) => {
+      const personId = value(form, `person-${String(index)}`);
+      const role = value(form, `role-${String(index)}`);
+      return personId === null || role === null ? null : { personId, role };
+    }),
+    topicIds: rows((index) => value(form, `topic-${String(index)}`)),
+  };
+  if (kind === 'magazine') return described;
+
+  const dated = {
+    ...described,
+    languageCode: form.get('languageCode'),
+    publicationYear: integer(form, 'publicationYear'),
+    publishedOn: value(form, 'publishedOn'),
+    // Text that does not parse into titled sections is passed through AS TEXT,
+    // which the strict schema refuses — so the operator is told to check the
+    // field, rather than their text being silently saved as "no document".
+    document: document === null ? null : (parseReaderDocument(document) ?? document),
+  };
+
+  switch (kind) {
+    case 'research':
+    case 'research-paper':
+      return {
+        ...dated,
+        institutionalContext: value(form, 'institutionalContext'),
+        abstract: value(form, 'abstract'),
+        citations: Array.from({ length: SCHOLARLY_LIMITS.citations }, (_, index) => {
+          const text = value(form, `citation-${String(index)}-text`);
+          return text === null
+            ? null
+            : {
+                text,
+                url: value(form, `citation-${String(index)}-url`),
+                doi: value(form, `citation-${String(index)}-doi`),
+              };
+        }).filter((entry) => entry !== null),
+        ...(kind === 'research-paper'
+          ? { venue: value(form, 'venue'), doi: value(form, 'doi') }
+          : {}),
+      };
+    case 'publication':
+    case 'encyclopedia':
+      return { ...dated, publisher: value(form, 'publisher') };
+    case 'magazine-issue':
+      return {
+        ...dated,
+        magazineId: form.get('magazineId'),
+        volume: integer(form, 'volume'),
+        issueNumber: integer(form, 'issueNumber'),
+      };
+  }
+}
+
+/**
+ * Creates or updates one Phase-9 record.
+ *
+ * THE KIND IS VALIDATED, NOT TRUSTED: it selects which strict schema the domain
+ * applies and which table is written, and every kind requires the same live
+ * `library.administer` — so naming another kind reaches nothing an operator could
+ * not already do, and an unknown kind is refused before anything is read.
+ */
+export async function saveScholarly(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  let destination: string;
+
+  try {
+    const locale = localeSchema.parse(form.get('locale'));
+    const permitted = await requirePermittedAction(locale, 'library.administer');
+    if (permitted.state === 'denied') return { status: 'error', failure: 'denied' };
+
+    const kind = scholarlyKindSchema.parse(form.get('kind'));
+    const id = value(form, 'id');
+    const saved = await libraryRuntime().library.saveScholarly(
+      { accountId: permitted.session.account.id },
+      kind,
+      id,
+      id === null ? null : integer(form, 'version'),
+      scholarlyInput(kind, form),
+    );
+
+    destination = `/${locale}/admin/library/${editorPath(
+      kind,
+      saved.id,
+      saved.kind === 'magazine-issue' ? saved.magazineId : null,
+    )}`;
+    revalidatePath(`/${locale}/admin/library`, 'layout');
+    indexAfterResponse();
+  } catch (error) {
+    return rejected(error, 'library-save-scholarly');
+  }
+
+  redirect(destination);
 }
 
 /* ===========================================================================

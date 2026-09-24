@@ -98,6 +98,7 @@ export async function libraryCopy(locale: Locale) {
       conflict: t('conflict'),
       'not-found': t('notFound'),
       'duplicate-slug': t('duplicateSlug'),
+      'duplicate-number': t('scholarlyAdmin.duplicateNumber'),
       limit: t('limitReached'),
       'not-cleared': t('notCleared'),
       'rate-limited': t('rateLimited'),

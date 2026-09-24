@@ -6,6 +6,20 @@ import type {
   LibraryQuery,
   AssetPurpose,
 } from './values.ts';
+import type {
+  MagazineIssueRecord,
+  ScholarlyAdminQuery,
+  ScholarlyKind,
+  ScholarlyListing,
+  ScholarlyListingPage,
+  ScholarlyQuery,
+  ScholarlyRecord,
+  ScholarlySearchRecord,
+  ScholarlySitemapRow,
+  ScholarlyTarget,
+  ScholarlyValue,
+  StandaloneScholarlyKind,
+} from './scholarly.ts';
 
 export interface LibraryActor {
   readonly accountId: string;
@@ -129,6 +143,84 @@ export interface LibraryPublicReaderPort {
   publicEditionTargets(
     ids: readonly string[],
   ): Promise<readonly { readonly id: string; readonly workSlug: string }[]>;
+
+  /* -------------------------------------------------------------------------
+   * Phase 9 — Research, ResearchPaper, Publication, Magazine, MagazineIssue and
+   * Encyclopedia (DOMAIN_MODEL.md §10.2).
+   *
+   * ONE PUBLIC PREDICATE PER AGGREGATE, applied in the query: a record is public
+   * when it is `published`, and an issue additionally only while its Magazine is.
+   * Every read below — listing, detail, redirect, sitemap, search — composes the
+   * same predicate, so no two of them can disagree about what exists.
+   * ---------------------------------------------------------------------- */
+
+  /** One bounded page of public records of one kind, in a deterministic order. */
+  scholarlyList(
+    kind: ScholarlyKind,
+    query: ScholarlyQuery,
+  ): Promise<ScholarlyListingPage>;
+
+  /** One public record of `kind` by its CURRENT slug. */
+  scholarlyRecord(
+    kind: StandaloneScholarlyKind,
+    slug: string,
+  ): Promise<ScholarlyRecord | null>;
+
+  /** The current slug a current or FORMER slug of a public record resolves to. */
+  scholarlyCanonicalSlug(
+    kind: StandaloneScholarlyKind,
+    slug: string,
+  ): Promise<string | null>;
+
+  /** One bounded page of a public Magazine's public issues, newest first. */
+  magazineIssues(magazineId: string, offset: number): Promise<ScholarlyListingPage>;
+
+  /** One public issue by its Magazine's CURRENT slug and its own CURRENT slug. */
+  magazineIssue(
+    magazineSlug: string,
+    issueSlug: string,
+  ): Promise<MagazineIssueRecord | null>;
+
+  /**
+   * The current address a current or former Magazine slug and a current or
+   * former issue slug resolve to — both halves at once, so an old periodical
+   * address redirects in ONE hop.
+   */
+  magazineIssueCanonical(
+    magazineSlug: string,
+    issueSlug: string,
+  ): Promise<{ readonly magazineSlug: string; readonly issueSlug: string } | null>;
+
+  /**
+   * The adjacent public issues by volume and number, where that order is
+   * unambiguous — both numbers known. Two indexed reads, never a scan.
+   */
+  magazineIssueNeighbours(issueId: string): Promise<{
+    readonly previous: ScholarlyListing | null;
+    readonly next: ScholarlyListing | null;
+  }>;
+
+  scholarlySitemap(
+    kind: ScholarlyKind,
+    offset: number,
+    limit: number,
+  ): Promise<readonly ScholarlySitemapRow[]>;
+
+  /** Search projection reads, under the same public predicate. */
+  scholarlySearchRecord(
+    kind: ScholarlyKind,
+    id: string,
+  ): Promise<ScholarlySearchRecord | null>;
+  scholarlySearchList(
+    kind: ScholarlyKind,
+    input: { readonly after: string | null; readonly limit: number },
+  ): Promise<readonly { readonly id: string; readonly stamp: string }[]>;
+
+  /** Current public addresses of whichever of `ids` are public now. Bounded. */
+  scholarlyTargets(
+    kind: ScholarlyKind,
+    ids: readonly string[],
+  ): Promise<readonly ScholarlyTarget[]>;
 }
 
 /** What Search may know about one public Work and its published Editions. */
@@ -186,6 +278,24 @@ export interface LibraryPersistencePort {
     expectedVersion: number | null;
     value: SalePointInput;
   }): Promise<SalePointRecord>;
+
+  /** Phase 9: the administrative directory of one aggregate, any state. */
+  scholarlyRecords(
+    kind: ScholarlyKind,
+    query: ScholarlyAdminQuery,
+  ): Promise<ScholarlyListingPage>;
+  scholarlyRecordById(kind: ScholarlyKind, id: string): Promise<ScholarlyRecord | null>;
+  /**
+   * Creates (`id === null`) or updates one record under its expected version,
+   * replacing its label, contributor, topic and citation sets, reserving its
+   * slug, recording its audit entry and its search intent — in ONE transaction.
+   */
+  saveScholarly(input: {
+    actorId: string;
+    id: string | null;
+    expectedVersion: number | null;
+    save: ScholarlyValue;
+  }): Promise<ScholarlyRecord>;
 }
 export interface LibraryAssetRequest {
   editionId: string;

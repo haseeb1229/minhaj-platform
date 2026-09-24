@@ -460,6 +460,45 @@ IF OBJECT_ID(N'[dbo].[BookTranslator]',N'U') IS NOT NULL BEGIN GRANT SELECT, INS
 IF OBJECT_ID(N'[dbo].[BookTranslation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[BookTranslation] TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[BookTranslation] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[WorkSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[WorkSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[WorkSlugHistory] TO [$(app_login)]; END;
 
+-- Phase 9: the scholarly and periodical Library aggregates, by the SAME three
+-- postures as Phase 8. Aggregates are INSERT and UPDATE and never DELETE — a
+-- record is withdrawn by archiving it, so the row its slug reservations, audit
+-- entries and contributor credits point at always exists. Relation sets are
+-- replaced wholesale on save, so INSERT and DELETE and never UPDATE. Slug
+-- histories are APPEND ONLY. No Storage table is reached: Phase 9 has no files.
+IF OBJECT_ID(N'[dbo].[Research]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Research] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Research] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ResearchPaper]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[ResearchPaper] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[ResearchPaper] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Publication]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Publication] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Publication] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Magazine]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Magazine] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Magazine] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[MagazineIssue]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[MagazineIssue] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[MagazineIssue] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Encyclopedia]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Encyclopedia] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Encyclopedia] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ResearchLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[ResearchLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[ResearchLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ResearchContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[ResearchContributor] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[ResearchContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ResearchTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[ResearchTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[ResearchTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ResearchPaperLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[ResearchPaperLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[ResearchPaperLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ResearchPaperContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[ResearchPaperContributor] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[ResearchPaperContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ResearchPaperTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[ResearchPaperTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[ResearchPaperTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PublicationLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[PublicationLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[PublicationLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PublicationContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[PublicationContributor] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[PublicationContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PublicationTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[PublicationTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[PublicationTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[MagazineLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[MagazineLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[MagazineLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[MagazineContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[MagazineContributor] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[MagazineContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[MagazineTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[MagazineTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[MagazineTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[MagazineIssueLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[MagazineIssueLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[MagazineIssueLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[MagazineIssueContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[MagazineIssueContributor] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[MagazineIssueContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[MagazineIssueTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[MagazineIssueTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[MagazineIssueTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[EncyclopediaLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[EncyclopediaLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[EncyclopediaLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[EncyclopediaContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[EncyclopediaContributor] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[EncyclopediaContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[EncyclopediaTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[EncyclopediaTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[EncyclopediaTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ResearchCitation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[ResearchCitation] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[ResearchCitation] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ResearchPaperCitation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[ResearchPaperCitation] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[ResearchPaperCitation] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ResearchSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[ResearchSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[ResearchSlugHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ResearchPaperSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[ResearchPaperSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[ResearchPaperSlugHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PublicationSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[PublicationSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[PublicationSlugHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[MagazineSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[MagazineSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[MagazineSlugHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[MagazineIssueSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[MagazineIssueSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[MagazineIssueSlugHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[EncyclopediaSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[EncyclopediaSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[EncyclopediaSlugHistory] TO [$(app_login)]; END;
+
 -- Phase 17: the DERIVED search projection and its operational state.
 --
 -- `SearchIndexRequest` is append-only for the owners that write it inside their

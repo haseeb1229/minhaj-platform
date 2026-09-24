@@ -443,13 +443,9 @@ test.describe('navigation is honest about what exists', () => {
       '/quran',
       '/hadith',
       '/learn',
-      // `/library` is delivered by Phase 8. Its Phase-9 and Phase-15 surfaces
-      // are still absent, and stay asserted absent.
-      '/library/research',
-      '/library/research-papers',
-      '/library/publications',
-      '/library/magazines',
-      '/library/encyclopedias',
+      // `/library` is delivered by Phase 8 and its scholarly and periodical
+      // surfaces by Phase 9. Phase 15's collections are still absent, and stay
+      // asserted absent.
       '/library/collections',
       '/watch',
       '/listen',

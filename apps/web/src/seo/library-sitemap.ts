@@ -40,8 +40,9 @@ import type { SitemapEntry, SitemapPartition } from './sitemap';
  *   - DRAFT, ARCHIVED, AND EDITION-LESS WORKS. The reader's public predicate
  *     excludes them, and it is not re-applied here — so a change to what "public"
  *     means cannot be missed by this module.
- *   - PHASE-9 RESOURCES. Research, publications, magazines and encyclopedias do
- *     not exist, so they are absent rather than listed as empty promises.
+ *   - PHASE-9 RESOURCES. Research, publications, magazines and encyclopedias
+ *     have their own `research` and `publications` segments
+ *     (`./scholarly-sitemap.ts`).
  *
  * A LOCALE VERSION IS LISTED ONLY WHERE IT GENUINELY EXISTS. A Work described only
  * in Urdu contributes a `ur` URL and no `en` one: "untranslated content is never

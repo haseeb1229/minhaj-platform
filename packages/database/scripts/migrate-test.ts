@@ -134,6 +134,43 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
     'SearchDocument',
     'SearchDocumentTopic',
   ],
+  // SIX DISTINCT AGGREGATES and their typed relation sets — never one content
+  // table with a type column (DOMAIN_MODEL.md §10.2). Research and ResearchPaper
+  // alone carry citations; an issue's slug history is keyed within its Magazine.
+  '20260924000000_phase9_research_publications': [
+    'Research',
+    'ResearchLabel',
+    'ResearchSlugHistory',
+    'ResearchContributor',
+    'ResearchTopic',
+    'ResearchCitation',
+    'ResearchPaper',
+    'ResearchPaperLabel',
+    'ResearchPaperSlugHistory',
+    'ResearchPaperContributor',
+    'ResearchPaperTopic',
+    'ResearchPaperCitation',
+    'Publication',
+    'PublicationLabel',
+    'PublicationSlugHistory',
+    'PublicationContributor',
+    'PublicationTopic',
+    'Magazine',
+    'MagazineLabel',
+    'MagazineSlugHistory',
+    'MagazineContributor',
+    'MagazineTopic',
+    'MagazineIssue',
+    'MagazineIssueLabel',
+    'MagazineIssueSlugHistory',
+    'MagazineIssueContributor',
+    'MagazineIssueTopic',
+    'Encyclopedia',
+    'EncyclopediaLabel',
+    'EncyclopediaSlugHistory',
+    'EncyclopediaContributor',
+    'EncyclopediaTopic',
+  ],
   '20260919000000_phase5_people_contributors': [
     'Person',
     'PersonTranslation',
@@ -180,6 +217,13 @@ const PREMATURE_TABLES = [
   'Membership',
   'Donation',
   'MigrationProvenance',
+  // Phase 9 delivers the six scholarly and periodical aggregates and invents no
+  // sub-aggregate beside them: an issue is not a set of articles, a publication
+  // has no issues, and an encyclopedia's structure is its readable document.
+  'MagazineArticle',
+  'PublicationIssue',
+  'PeriodicalIssue',
+  'EncyclopediaEntry',
 ];
 
 /**
@@ -222,6 +266,13 @@ const PROHIBITED_TABLES = [
   'ContributorTarget',
   'ContributionTarget',
   'PersonContribution',
+
+  // PHASE 9 — one generic content table with a type column would collapse six
+  // aggregates into one lifecycle and one slug namespace (DOMAIN_MODEL.md §10.2).
+  'Content',
+  'ContentItem',
+  'LibraryResource',
+  'ScholarlyRecord',
 ];
 
 const EXPECTED_AUDIT_COLUMNS = [
@@ -299,6 +350,25 @@ const EXPECTED_COLUMN_SIZES: readonly {
   { table: 'PersonNameVariant', column: 'normalised', characters: 200 },
   { table: 'ScholarProfileLanguage', column: 'languageCode', characters: 16 },
   { table: 'TeacherProfileLanguage', column: 'languageCode', characters: 16 },
+  // Phase 9. Each slug is a UNIQUE key and a slug-history primary key; each
+  // content language is a foreign key into `Language.code`.
+  { table: 'Research', column: 'slug', characters: 120 },
+  { table: 'ResearchSlugHistory', column: 'slug', characters: 120 },
+  { table: 'ResearchPaper', column: 'slug', characters: 120 },
+  { table: 'ResearchPaperSlugHistory', column: 'slug', characters: 120 },
+  { table: 'Publication', column: 'slug', characters: 120 },
+  { table: 'PublicationSlugHistory', column: 'slug', characters: 120 },
+  { table: 'Magazine', column: 'slug', characters: 120 },
+  { table: 'MagazineSlugHistory', column: 'slug', characters: 120 },
+  { table: 'MagazineIssue', column: 'slug', characters: 120 },
+  { table: 'MagazineIssueSlugHistory', column: 'slug', characters: 120 },
+  { table: 'Encyclopedia', column: 'slug', characters: 120 },
+  { table: 'EncyclopediaSlugHistory', column: 'slug', characters: 120 },
+  { table: 'Research', column: 'languageCode', characters: 16 },
+  { table: 'ResearchPaper', column: 'languageCode', characters: 16 },
+  { table: 'Publication', column: 'languageCode', characters: 16 },
+  { table: 'MagazineIssue', column: 'languageCode', characters: 16 },
+  { table: 'Encyclopedia', column: 'languageCode', characters: 16 },
 ];
 
 /**
@@ -328,6 +398,13 @@ const EXPECTED_FILTERED_INDEXES: readonly {
     table: 'Person',
     index: 'Person_userId_key',
     why: 'one account could be linked to two different contributor records at once',
+  },
+  // Phase 9. Filtered because an issue without a printed volume and number is
+  // ordinary, and two such issues are not duplicates of each other.
+  {
+    table: 'MagazineIssue',
+    index: 'MagazineIssue_magazineId_volume_issueNumber_key',
+    why: 'two issues of one Magazine could claim the same volume and number',
   },
 ];
 
@@ -372,6 +449,15 @@ const EXPECTED_TRIGGERS = [
   'PeoplePersonPrimaryName',
   'PeoplePersonPrimaryLocale',
   'PeopleNameVariantBound',
+  // Phases 8 and 9: the permanent slug reservations, made by the database so no
+  // writer can skip them — and, for an issue, the refusal to leave its Magazine.
+  'LibraryReserveWorkSlug',
+  'LibraryReserveResearchSlug',
+  'LibraryReserveResearchPaperSlug',
+  'LibraryReservePublicationSlug',
+  'LibraryReserveMagazineSlug',
+  'LibraryReserveMagazineIssueSlug',
+  'LibraryReserveEncyclopediaSlug',
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
@@ -413,6 +499,41 @@ const EXPECTED_CHECK_CONSTRAINTS = [
     table: 'SearchDocument',
     constraint: 'SearchDocument_' + rule + '_ck',
   })),
+  // Phase 9. Lifecycle, locale, bounds and date-only facts for each aggregate;
+  // citations HTTPS- and DOI-shaped; issue numbers positive and bounded.
+  ...(
+    [
+      ['Research', true],
+      ['ResearchPaper', true],
+      ['Publication', true],
+      ['Magazine', false],
+      ['MagazineIssue', true],
+      ['Encyclopedia', true],
+    ] as const
+  ).flatMap(([table, dated]) => [
+    ...[
+      'state',
+      'version',
+      'locale',
+      'slug',
+      ...(dated ? ['year', 'date', 'document'] : []),
+    ].map((rule) => ({ table, constraint: table + '_' + rule + '_ck' })),
+    { table: table + 'Label', constraint: table + 'Label_locale_ck' },
+    { table: table + 'Label', constraint: table + 'Label_title_ck' },
+    { table: table + 'Contributor', constraint: table + 'Contributor_role_ck' },
+    { table: table + 'Contributor', constraint: table + 'Contributor_position_ck' },
+  ]),
+  ...['Research', 'ResearchPaper'].flatMap((table) => [
+    { table, constraint: table + '_text_ck' },
+    ...['position', 'text', 'url', 'doi'].map((rule) => ({
+      table: table + 'Citation',
+      constraint: table + 'Citation_' + rule + '_ck',
+    })),
+  ]),
+  { table: 'ResearchPaper', constraint: 'ResearchPaper_venue_ck' },
+  { table: 'Publication', constraint: 'Publication_publisher_ck' },
+  { table: 'Encyclopedia', constraint: 'Encyclopedia_publisher_ck' },
+  { table: 'MagazineIssue', constraint: 'MagazineIssue_numbers_ck' },
 ];
 
 /**
@@ -850,6 +971,68 @@ async function assertSearchFoundation(session: SqlSession): Promise<void> {
     'search foundation',
     `SearchCatalog (accent insensitive), ${columns.length} word-breaker columns, ` +
       `internal edges only, ${SEARCH_PERMISSIONS.length} permissions bundled`,
+  );
+}
+
+/**
+ * The vocabulary a CHECK constraint holds, sorted.
+ *
+ * Read from the catalogue's own definition, so what is proved is what the
+ * database will enforce rather than what a migration file says.
+ */
+async function searchVocabulary(
+  session: SqlSession,
+  constraint: string,
+): Promise<string> {
+  const [row] = await session.query<{ definition: string }>(
+    `SELECT [definition] FROM sys.check_constraints WHERE [name] = N'${constraint}';`,
+  );
+  if (row === undefined) fail(`The CHECK constraint ${constraint} is missing.`);
+  return [...row.definition.matchAll(/N'([a-z-]+)'/gu)]
+    .map((match) => match[1])
+    .sort()
+    .join(',');
+}
+
+const PHASE17_SCOPES = ['article', 'page', 'person', 'topic', 'work'];
+const PHASE17_KINDS = [...PHASE17_SCOPES, 'book-translation', 'edition'];
+const PHASE9_KINDS = [
+  'encyclopedia',
+  'magazine',
+  'magazine-issue',
+  'publication',
+  'research',
+  'research-paper',
+];
+
+/**
+ * Phase 9 WIDENS the search vocabularies by exactly its six kinds, each its own
+ * scope, and its rollback narrows them back to exactly Phase 17's. Asserted
+ * against the catalogue in both directions, so a migration that pre-created a
+ * later domain's kind, or a rollback that left one behind, fails here.
+ */
+async function assertSearchVocabulary(
+  session: SqlSession,
+  phase9: boolean,
+): Promise<void> {
+  const sorted = (values: readonly string[]) => [...values].sort().join(',');
+  const scopes = sorted(phase9 ? [...PHASE17_SCOPES, ...PHASE9_KINDS] : PHASE17_SCOPES);
+  const kinds = sorted(phase9 ? [...PHASE17_KINDS, ...PHASE9_KINDS] : PHASE17_KINDS);
+
+  for (const constraint of [
+    'SearchIndexRequest_scopeKind_ck',
+    'SearchIndexScope_scopeKind_ck',
+  ]) {
+    const actual = await searchVocabulary(session, constraint);
+    if (actual !== scopes) fail(`${constraint} holds ${actual}; expected ${scopes}.`);
+  }
+  const actual = await searchVocabulary(session, 'SearchDocument_kind_ck');
+  if (actual !== kinds)
+    fail(`SearchDocument_kind_ck holds ${actual}; expected ${kinds}.`);
+
+  report(
+    'search vocabulary',
+    phase9 ? 'Phase 17 and the six Phase-9 kinds' : 'exactly Phase 17 after rollback',
   );
 }
 
@@ -1358,6 +1541,7 @@ try {
   await assertNavigationPermission(session);
   await assertPeopleFoundation(session);
   await assertSearchFoundation(session);
+  await assertSearchVocabulary(session, true);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -1406,6 +1590,9 @@ try {
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
     }
+    if (migration.id === '20260924000000_phase9_research_publications') {
+      await assertSearchVocabulary(session, false);
+    }
     if (migration.id === '20260923000000_phase17_search_foundation') {
       await assertSearchRemoved(session);
     }
@@ -1446,6 +1633,7 @@ try {
   await assertNavigationPermission(session);
   await assertPeopleFoundation(session);
   await assertSearchFoundation(session);
+  await assertSearchVocabulary(session, true);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

@@ -491,6 +491,12 @@ recorded limitations are in TECH_STACK.md §10.
   GET and HEAD alike, failing closed when the limiter cannot answer.
   The public runtime reports failures to standard error as identifiers only; the operator and
   background runtime uses the structured logger. **No query text is ever logged or stored.**
+- **A later domain adds its kinds in its own migration**, by replacing the vocabulary CHECK
+  constraints — never by pre-creation. Phase 9 added `research`, `research-paper`,
+  `publication`, `magazine`, `magazine-issue` and `encyclopedia`, each its own scope. A scope
+  whose projection depends on another record (an issue on its Magazine) carries that record's
+  version in its stamp, and the other record's change requests the dependent scopes in the same
+  transaction, so neither a missed request nor reconciliation can leave them stale.
 
 ### 4.4 Authentication and authorisation
 

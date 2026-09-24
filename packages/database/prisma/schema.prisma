@@ -754,6 +754,12 @@ model IdentityBootstrap {
 model Topic {
   workTopics WorkTopic[]
   pageTopics PageTopic[]
+  researchTopics ResearchTopic[]
+  researchPaperTopics ResearchPaperTopic[]
+  publicationTopics PublicationTopic[]
+  magazineTopics MagazineTopic[]
+  magazineIssueTopics MagazineIssueTopic[]
+  encyclopediaTopics EncyclopediaTopic[]
 
   articleTopics ArticleTopic[]
 
@@ -865,6 +871,11 @@ model TopicTranslation {
 model Language {
   editions Edition[]
   pageTranslations PageRevisionTranslation[]
+  researches Research[]
+  researchPapers ResearchPaper[]
+  publications Publication[]
+  magazineIssues MagazineIssue[]
+  encyclopedias Encyclopedia[]
 
   articleTranslations ArticleRevisionTranslation[]
 
@@ -988,6 +999,12 @@ model Person {
   workContributions WorkContributor[]
   bookTranslations BookTranslator[]
   pageContributions PageContributor[]
+  researchContributions ResearchContributor[]
+  researchPaperContributions ResearchPaperContributor[]
+  publicationContributions PublicationContributor[]
+  magazineContributions MagazineContributor[]
+  magazineIssueContributions MagazineIssueContributor[]
+  encyclopediaContributions EncyclopediaContributor[]
 
   articleContributions ArticleContributor[]
 
@@ -1746,6 +1763,389 @@ model WorkSalePoint {
   salePoint SalePoint @relation(fields: [salePointId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   @@id([workId, salePointId])
   @@index([salePointId])
+}
+
+// ===========================================================================
+// Phase 9 — Research & Publications (Library, DOMAIN_MODEL.md §10.2)
+// ===========================================================================
+//
+// SIX DISTINCT AGGREGATES, each with its own table, slug namespace and typed
+// relation sets — never one content table with a type column, and never a
+// polymorphic `targetType + targetId` (DOMAIN_MODEL.md §6.2). Contributors are
+// People's `Person`, topics Taxonomy's `Topic`, content languages Taxonomy's
+// `Language`, each by a real foreign key; Library copies none of their data.
+//
+// NO FILE RELATION. Phase 9 delivers readable semantic text, not downloads; a
+// Storage asset arrives with the owner that genuinely needs one.
+/// A research work: abstract, citations and institutional context, with a
+/// lifecycle of its own rather than a book's.
+model Research {
+  id String @id @db.NVarChar(36)
+  slug String @unique @db.NVarChar(120)
+  primaryLocale String @db.NVarChar(8)
+  languageCode String @db.NVarChar(16)
+  state String @db.NVarChar(16)
+  publicationYear Int?
+  /// A date, never an instant (DOMAIN_MODEL.md §19.5).
+  publishedOn DateTime? @db.Date
+  /// Bounded descriptive text: never a fabricated institution or affiliation.
+  institutionalContext String? @db.NVarChar(500)
+  abstract String? @db.NVarChar(4000)
+  /// Bounded semantic text (a `ReaderDocument`), never markup.
+  document String? @db.NVarChar(Max)
+  version Int @default(1)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  language Language @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  labels ResearchLabel[]
+  slugs ResearchSlugHistory[]
+  contributors ResearchContributor[]
+  topics ResearchTopic[]
+  citations ResearchCitation[]
+  @@index([state, publicationYear, slug])
+  @@index([languageCode, publicationYear, id])
+}
+model ResearchLabel {
+  researchId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(240)
+  summary String @db.NVarChar(1000)
+  research Research @relation(fields: [researchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([researchId, locale])
+}
+/// Includes the current slug: one namespace reserves every identity permanently.
+model ResearchSlugHistory {
+  slug String @id @db.NVarChar(120)
+  researchId String @db.NVarChar(36)
+  research Research @relation(fields: [researchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([researchId])
+}
+model ResearchContributor {
+  researchId String @db.NVarChar(36)
+  personId String @db.NVarChar(36)
+  role String @db.NVarChar(24)
+  position Int
+  research Research @relation(fields: [researchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  person Person @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([researchId, personId, role])
+  @@index([personId, researchId])
+}
+model ResearchTopic {
+  researchId String @db.NVarChar(36)
+  topicId String @db.NVarChar(36)
+  research Research @relation(fields: [researchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([researchId, topicId])
+  @@index([topicId, researchId])
+}
+/// Ordered, bounded, plain text. A DOI and an HTTPS address only where genuinely known.
+model ResearchCitation {
+  researchId String @db.NVarChar(36)
+  position Int
+  text String @db.NVarChar(1000)
+  url String? @db.NVarChar(2000)
+  doi String? @db.NVarChar(200)
+  research Research @relation(fields: [researchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([researchId, position])
+}
+/// A research paper. Distinct from Research, never its child.
+model ResearchPaper {
+  id String @id @db.NVarChar(36)
+  slug String @unique @db.NVarChar(120)
+  primaryLocale String @db.NVarChar(8)
+  languageCode String @db.NVarChar(16)
+  state String @db.NVarChar(16)
+  publicationYear Int?
+  /// A date, never an instant (DOMAIN_MODEL.md §19.5).
+  publishedOn DateTime? @db.Date
+  institutionalContext String? @db.NVarChar(500)
+  abstract String? @db.NVarChar(4000)
+  /// Where the paper appeared, only when genuinely known.
+  venue String? @db.NVarChar(300)
+  doi String? @db.NVarChar(200)
+  /// Bounded semantic text (a `ReaderDocument`), never markup.
+  document String? @db.NVarChar(Max)
+  version Int @default(1)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  language Language @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  labels ResearchPaperLabel[]
+  slugs ResearchPaperSlugHistory[]
+  contributors ResearchPaperContributor[]
+  topics ResearchPaperTopic[]
+  citations ResearchPaperCitation[]
+  @@index([state, publicationYear, slug])
+  @@index([languageCode, publicationYear, id])
+}
+model ResearchPaperLabel {
+  researchPaperId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(240)
+  summary String @db.NVarChar(1000)
+  researchPaper ResearchPaper @relation(fields: [researchPaperId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([researchPaperId, locale])
+}
+/// Includes the current slug: one namespace reserves every identity permanently.
+model ResearchPaperSlugHistory {
+  slug String @id @db.NVarChar(120)
+  researchPaperId String @db.NVarChar(36)
+  researchPaper ResearchPaper @relation(fields: [researchPaperId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([researchPaperId])
+}
+model ResearchPaperContributor {
+  researchPaperId String @db.NVarChar(36)
+  personId String @db.NVarChar(36)
+  role String @db.NVarChar(24)
+  position Int
+  researchPaper ResearchPaper @relation(fields: [researchPaperId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  person Person @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([researchPaperId, personId, role])
+  @@index([personId, researchPaperId])
+}
+model ResearchPaperTopic {
+  researchPaperId String @db.NVarChar(36)
+  topicId String @db.NVarChar(36)
+  researchPaper ResearchPaper @relation(fields: [researchPaperId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([researchPaperId, topicId])
+  @@index([topicId, researchPaperId])
+}
+/// Ordered, bounded, plain text. A DOI and an HTTPS address only where genuinely known.
+model ResearchPaperCitation {
+  researchPaperId String @db.NVarChar(36)
+  position Int
+  text String @db.NVarChar(1000)
+  url String? @db.NVarChar(2000)
+  doi String? @db.NVarChar(200)
+  researchPaper ResearchPaper @relation(fields: [researchPaperId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([researchPaperId, position])
+}
+/// A standalone publication. Not a Magazine, not an issue, not a Work.
+model Publication {
+  id String @id @db.NVarChar(36)
+  slug String @unique @db.NVarChar(120)
+  primaryLocale String @db.NVarChar(8)
+  languageCode String @db.NVarChar(16)
+  state String @db.NVarChar(16)
+  publicationYear Int?
+  /// A date, never an instant (DOMAIN_MODEL.md §19.5).
+  publishedOn DateTime? @db.Date
+  publisher String? @db.NVarChar(240)
+  /// Bounded semantic text (a `ReaderDocument`), never markup.
+  document String? @db.NVarChar(Max)
+  version Int @default(1)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  language Language @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  labels PublicationLabel[]
+  slugs PublicationSlugHistory[]
+  contributors PublicationContributor[]
+  topics PublicationTopic[]
+  @@index([state, publicationYear, slug])
+  @@index([languageCode, publicationYear, id])
+}
+model PublicationLabel {
+  publicationId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(240)
+  summary String @db.NVarChar(1000)
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([publicationId, locale])
+}
+/// Includes the current slug: one namespace reserves every identity permanently.
+model PublicationSlugHistory {
+  slug String @id @db.NVarChar(120)
+  publicationId String @db.NVarChar(36)
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([publicationId])
+}
+model PublicationContributor {
+  publicationId String @db.NVarChar(36)
+  personId String @db.NVarChar(36)
+  role String @db.NVarChar(24)
+  position Int
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  person Person @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([publicationId, personId, role])
+  @@index([personId, publicationId])
+}
+model PublicationTopic {
+  publicationId String @db.NVarChar(36)
+  topicId String @db.NVarChar(36)
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([publicationId, topicId])
+  @@index([topicId, publicationId])
+}
+/// The periodical itself: no content language and no date of its own.
+model Magazine {
+  id String @id @db.NVarChar(36)
+  slug String @unique @db.NVarChar(120)
+  primaryLocale String @db.NVarChar(8)
+  state String @db.NVarChar(16)
+  version Int @default(1)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  labels MagazineLabel[]
+  slugs MagazineSlugHistory[]
+  contributors MagazineContributor[]
+  topics MagazineTopic[]
+  issues MagazineIssue[]
+  @@index([state, slug])
+}
+model MagazineLabel {
+  magazineId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(240)
+  summary String @db.NVarChar(1000)
+  magazine Magazine @relation(fields: [magazineId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([magazineId, locale])
+}
+/// Includes the current slug: one namespace reserves every identity permanently.
+model MagazineSlugHistory {
+  slug String @id @db.NVarChar(120)
+  magazineId String @db.NVarChar(36)
+  magazine Magazine @relation(fields: [magazineId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([magazineId])
+}
+model MagazineContributor {
+  magazineId String @db.NVarChar(36)
+  personId String @db.NVarChar(36)
+  role String @db.NVarChar(24)
+  position Int
+  magazine Magazine @relation(fields: [magazineId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  person Person @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([magazineId, personId, role])
+  @@index([personId, magazineId])
+}
+model MagazineTopic {
+  magazineId String @db.NVarChar(36)
+  topicId String @db.NVarChar(36)
+  magazine Magazine @relation(fields: [magazineId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([magazineId, topicId])
+  @@index([topicId, magazineId])
+}
+/// One issue of exactly one Magazine. Volume, number and date only where genuine.
+///
+/// The slug is unique WITHIN the Magazine, and the Magazine never changes: the
+/// composite foreign key from its slug reservations refuses a move, so an issue's
+/// address and its slug history cannot drift to another periodical.
+model MagazineIssue {
+  id String @id @db.NVarChar(36)
+  magazineId String @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+  primaryLocale String @db.NVarChar(8)
+  languageCode String @db.NVarChar(16)
+  state String @db.NVarChar(16)
+  volume Int?
+  issueNumber Int?
+  publicationYear Int?
+  /// A date, never an instant (DOMAIN_MODEL.md §19.5).
+  publishedOn DateTime? @db.Date
+  /// Bounded semantic text (a `ReaderDocument`), never markup.
+  document String? @db.NVarChar(Max)
+  version Int @default(1)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  magazine Magazine @relation(fields: [magazineId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  language Language @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  labels MagazineIssueLabel[]
+  slugs MagazineIssueSlugHistory[]
+  contributors MagazineIssueContributor[]
+  topics MagazineIssueTopic[]
+  @@unique([magazineId, slug])
+  @@unique([id, magazineId])
+  @@index([magazineId, state, publicationYear, id])
+  @@index([state, publicationYear, slug])
+  @@index([languageCode, publicationYear, id])
+}
+model MagazineIssueLabel {
+  magazineIssueId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(240)
+  summary String @db.NVarChar(1000)
+  magazineIssue MagazineIssue @relation(fields: [magazineIssueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([magazineIssueId, locale])
+}
+model MagazineIssueContributor {
+  magazineIssueId String @db.NVarChar(36)
+  personId String @db.NVarChar(36)
+  role String @db.NVarChar(24)
+  position Int
+  magazineIssue MagazineIssue @relation(fields: [magazineIssueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  person Person @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([magazineIssueId, personId, role])
+  @@index([personId, magazineIssueId])
+}
+model MagazineIssueTopic {
+  magazineIssueId String @db.NVarChar(36)
+  topicId String @db.NVarChar(36)
+  magazineIssue MagazineIssue @relation(fields: [magazineIssueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([magazineIssueId, topicId])
+  @@index([topicId, magazineIssueId])
+}
+/// An issue's slugs, reserved within its Magazine's namespace for ever. The
+/// composite key ties each reservation to the issue's own (immutable) Magazine.
+model MagazineIssueSlugHistory {
+  magazineId String @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+  magazineIssueId String @db.NVarChar(36)
+  magazineIssue MagazineIssue @relation(fields: [magazineIssueId, magazineId], references: [id, magazineId], onDelete: NoAction, onUpdate: NoAction)
+  @@id([magazineId, slug])
+  @@index([magazineIssueId, magazineId])
+}
+/// An encyclopedia, readable through its own sections. No entry subsystem.
+model Encyclopedia {
+  id String @id @db.NVarChar(36)
+  slug String @unique @db.NVarChar(120)
+  primaryLocale String @db.NVarChar(8)
+  languageCode String @db.NVarChar(16)
+  state String @db.NVarChar(16)
+  publicationYear Int?
+  /// A date, never an instant (DOMAIN_MODEL.md §19.5).
+  publishedOn DateTime? @db.Date
+  publisher String? @db.NVarChar(240)
+  /// Bounded semantic text (a `ReaderDocument`), never markup.
+  document String? @db.NVarChar(Max)
+  version Int @default(1)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  language Language @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  labels EncyclopediaLabel[]
+  slugs EncyclopediaSlugHistory[]
+  contributors EncyclopediaContributor[]
+  topics EncyclopediaTopic[]
+  @@index([state, publicationYear, slug])
+  @@index([languageCode, publicationYear, id])
+}
+model EncyclopediaLabel {
+  encyclopediaId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(240)
+  summary String @db.NVarChar(1000)
+  encyclopedia Encyclopedia @relation(fields: [encyclopediaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([encyclopediaId, locale])
+}
+/// Includes the current slug: one namespace reserves every identity permanently.
+model EncyclopediaSlugHistory {
+  slug String @id @db.NVarChar(120)
+  encyclopediaId String @db.NVarChar(36)
+  encyclopedia Encyclopedia @relation(fields: [encyclopediaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([encyclopediaId])
+}
+model EncyclopediaContributor {
+  encyclopediaId String @db.NVarChar(36)
+  personId String @db.NVarChar(36)
+  role String @db.NVarChar(24)
+  position Int
+  encyclopedia Encyclopedia @relation(fields: [encyclopediaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  person Person @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([encyclopediaId, personId, role])
+  @@index([personId, encyclopediaId])
+}
+model EncyclopediaTopic {
+  encyclopediaId String @db.NVarChar(36)
+  topicId String @db.NVarChar(36)
+  encyclopedia Encyclopedia @relation(fields: [encyclopediaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([encyclopediaId, topicId])
+  @@index([topicId, encyclopediaId])
 }
 
 // ===========================================================================

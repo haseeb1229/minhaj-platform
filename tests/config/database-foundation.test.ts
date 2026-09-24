@@ -124,6 +124,40 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'BookTranslator',
       'SalePoint',
       'WorkSalePoint',
+      // Phase 9 — six distinct scholarly and periodical Library aggregates, each
+      // with its own typed relation sets and permanent slug namespace.
+      'Research',
+      'ResearchLabel',
+      'ResearchSlugHistory',
+      'ResearchContributor',
+      'ResearchTopic',
+      'ResearchCitation',
+      'ResearchPaper',
+      'ResearchPaperLabel',
+      'ResearchPaperSlugHistory',
+      'ResearchPaperContributor',
+      'ResearchPaperTopic',
+      'ResearchPaperCitation',
+      'Publication',
+      'PublicationLabel',
+      'PublicationSlugHistory',
+      'PublicationContributor',
+      'PublicationTopic',
+      'Magazine',
+      'MagazineLabel',
+      'MagazineSlugHistory',
+      'MagazineContributor',
+      'MagazineTopic',
+      'MagazineIssue',
+      'MagazineIssueLabel',
+      'MagazineIssueContributor',
+      'MagazineIssueTopic',
+      'MagazineIssueSlugHistory',
+      'Encyclopedia',
+      'EncyclopediaLabel',
+      'EncyclopediaSlugHistory',
+      'EncyclopediaContributor',
+      'EncyclopediaTopic',
       // Phase 17 — the Layer-0 search concern's DERIVED state: indexing intent,
       // per-scope indexing state, and the rebuildable projection.
       'SearchIndexRequest',
@@ -149,13 +183,11 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       // `Book` stays absent: Phase 8 models the Work/Edition split rather than a
       // single Book row, which is the conflation DOMAIN_MODEL.md §10.1 corrects.
       'Book',
-      // Phase 9 and Phase 21 aggregates that must not arrive with Library.
-      'Research',
-      'ResearchPaper',
-      'Publication',
-      'Magazine',
-      'MagazineIssue',
-      'Encyclopedia',
+      // Sub-aggregates Phase 9 deliberately does not invent, and Phase 21's
+      // per-user reading state, which must not arrive with Library.
+      'MagazineArticle',
+      'PublicationIssue',
+      'EncyclopediaEntry',
       'ReadingHistory',
       'ReadingProgress',
       'Bookmark',
@@ -168,7 +200,14 @@ describe('Phase 1 Chunk 1 database foundation', () => {
     // merge; a generic `Contribution` would be §6.2's polymorphic pair one
     // boundary along, with a real foreign key to the contributor and a type
     // string for the work.
-    for (const merged of ['Profile', 'ContributorProfile', 'Contribution']) {
+    for (const merged of [
+      'Profile',
+      'ContributorProfile',
+      'Contribution',
+      // Phase 9: one generic content table would collapse six aggregates.
+      'Content',
+      'LibraryResource',
+    ]) {
       expect(models, `${merged} is a shape the model prohibits`).not.toContain(merged);
     }
 

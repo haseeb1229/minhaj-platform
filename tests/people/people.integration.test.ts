@@ -1310,7 +1310,8 @@ describeLive('Phase 5 — People & Contributors over a live database', () => {
       // §5.3 puts the relationship row in the context that owns the TARGET.
       // Editorial was the first delivered target owner (two typed tables); Library
       // is the second (Phase 8): `WorkContributor` for attribution and
-      // `BookTranslator` for a genuine translation's translators. Each is a typed
+      // `BookTranslator` for a genuine translation's translators. Phase 9 adds one
+      // typed credit table per scholarly and periodical aggregate. Each is a typed
       // foreign key to Person, never a polymorphic pair.
       const referencing = await admin.query<{ tableName: string }>(`
         SELECT DISTINCT OBJECT_NAME(fk.parent_object_id) AS tableName
@@ -1323,9 +1324,15 @@ describeLive('Phase 5 — People & Contributors over a live database', () => {
         'ArticleContributor',
         'AuthorProfile',
         'BookTranslator',
+        'EncyclopediaContributor',
+        'MagazineContributor',
+        'MagazineIssueContributor',
         'PageContributor',
         'PersonNameVariant',
         'PersonTranslation',
+        'PublicationContributor',
+        'ResearchContributor',
+        'ResearchPaperContributor',
         'ScholarProfile',
         'SpeakerProfile',
         'TeacherProfile',

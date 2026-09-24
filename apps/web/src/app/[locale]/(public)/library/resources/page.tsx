@@ -17,19 +17,24 @@ import {
   TextLink,
 } from '@/components/ui';
 import { labelFor, workPath } from '@/components/library/presentation';
+import { listingHref, sectionTitle } from '@/components/library/scholarly';
+import {
+  scholarlyLabel,
+  scholarlyListPath,
+} from '@/components/library/scholarly-presentation';
 import { shellMetadata } from '@/seo/metadata';
 import { requireRoute } from '@/shell/registry';
 
 /**
  * `/{locale}/library/resources` — every resource type the Library area ACTUALLY
- * delivers (ROUTE_MAP.md §5, and this phase's §18 and §31).
+ * delivers (ROUTE_MAP.md §5).
  *
- * TWO TYPES, BECAUSE TWO EXIST. Works, which this phase delivers, and Articles,
- * which Phase 6 delivered at a Library address. Research, research papers,
- * publications, magazines, encyclopedias and collections are Phases 9 and 15; they
- * are absent from this page entirely rather than listed as empty sections, because
- * "future resources remain absent/unavailable" (§31) and a resources page with six
- * empty headings advertises six capabilities that do not exist.
+ * SEVEN TYPES, BECAUSE SEVEN EXIST. Works (Phase 8), Articles (Phase 6, at a
+ * Library address), and Phase 9's research, research papers, publications,
+ * encyclopedias and magazines. Collections are Phase 15's and are absent rather
+ * than listed as an empty section, because a heading for a capability that does
+ * not exist advertises something untrue. A DELIVERED type with nothing published
+ * yet says so in its own section — that is an honest state, not a promise.
  *
  * THIS IS THE LAYER-4 COMPOSITION THE ARCHITECTURE NAMES, and it is worth being
  * precise about why it is allowed. Library does NOT depend on Editorial: it has no
@@ -49,6 +54,15 @@ export const dynamic = 'force-dynamic';
 
 /** A deliberately short preview of each type. The full listings are one click away. */
 const PREVIEW = 10;
+
+/** Phase 9's types, in the Library's information-architecture order. */
+const SCHOLARLY = [
+  'research',
+  'research-paper',
+  'publication',
+  'encyclopedia',
+  'magazine',
+] as const;
 
 export async function generateMetadata({
   params,
@@ -76,9 +90,10 @@ export default async function ResourcesPage({
   const t = await getTranslations({ locale, namespace: 'library' });
   const shell = await getTranslations({ locale, namespace: 'shell' });
 
-  const [works, articles] = await Promise.all([
+  const [works, articles, ...scholarly] = await Promise.all([
     libraryReadRuntime().works({ offset: 0 }),
     editorialReadRuntime().articles(0),
+    ...SCHOLARLY.map((kind) => libraryReadRuntime().scholarlyList(kind, {})),
   ]);
 
   return (
@@ -156,6 +171,41 @@ export default async function ResourcesPage({
             <TextLink href={`/${locale}/library/articles`}>{t('allArticles')}</TextLink>
           </p>
         </section>
+
+        {SCHOLARLY.map((kind, index) => {
+          const page = scholarly[index];
+          const title = sectionTitle(t, kind);
+          return (
+            <section key={kind} className="flex flex-col gap-4">
+              <SectionHeading>{title}</SectionHeading>
+
+              {page === undefined || page.items.length === 0 ? (
+                <EmptyState>{t(`scholarly.empty.${kind}`)}</EmptyState>
+              ) : (
+                <ul aria-label={title} className="flex flex-col gap-3">
+                  {page.items.slice(0, PREVIEW).map((row) => {
+                    const label = scholarlyLabel(row, locale);
+                    return (
+                      <Panel key={row.id} as="li">
+                        <p lang={label.locale} dir={directionOf(label.locale)}>
+                          <TextLink href={listingHref(locale, row)}>
+                            {label.title}
+                          </TextLink>
+                        </p>
+                      </Panel>
+                    );
+                  })}
+                </ul>
+              )}
+
+              <p className="text-sm">
+                <TextLink href={scholarlyListPath(locale, kind)}>
+                  {t(`scholarly.viewAll.${kind}`)}
+                </TextLink>
+              </p>
+            </section>
+          );
+        })}
       </div>
     </Container>
   );

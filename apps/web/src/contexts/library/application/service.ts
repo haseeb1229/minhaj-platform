@@ -8,10 +8,17 @@ import {
   salePointInputSchema,
   libraryIdSchema,
   libraryVersionSchema,
+  scholarlyAdminQuerySchema,
+  scholarlyKindSchema,
+  SCHOLARLY_INPUT_SCHEMAS,
   type LibraryActor,
   type LibraryAuthorityPort,
   type LibraryReferencesPort,
   type LibraryPersistencePort,
+  type ScholarlyKind,
+  type ScholarlyRecord,
+  type ScholarlyRecordOf,
+  type ScholarlyValue,
 } from '@minhaj/contracts/library';
 
 class LibraryRefusal extends Error {
@@ -23,12 +30,26 @@ export function libraryFailure(error: unknown): string {
   if (error instanceof z.ZodError) return 'invalid';
   const reason = (error as { reason?: unknown } | null)?.reason;
   return typeof reason === 'string' &&
-    ['denied', 'invalid', 'conflict', 'not-found', 'duplicate-slug', 'limit'].includes(
-      reason,
-    )
+    [
+      'denied',
+      'invalid',
+      'conflict',
+      'not-found',
+      'duplicate-slug',
+      'duplicate-number',
+      'limit',
+    ].includes(reason)
     ? reason
     : 'unavailable';
 }
+/** A record read by kind is that kind's record — checked, never assumed. */
+function isKind<K extends ScholarlyKind>(
+  record: ScholarlyRecord | null,
+  kind: K,
+): record is ScholarlyRecordOf<K> {
+  return record !== null && record.kind === kind;
+}
+
 export function createLibraryService(deps: {
   persistence: LibraryPersistencePort;
   authority: LibraryAuthorityPort;
@@ -140,6 +161,73 @@ export function createLibraryService(deps: {
         expectedVersion,
         value: salePointInputSchema.parse(raw),
       });
+    },
+
+    /* -----------------------------------------------------------------------
+     * Phase 9 — Research, ResearchPaper, Publication, Magazine, MagazineIssue
+     * and Encyclopedia. The same two authorities as every Library record: no
+     * `research.*` or `magazine.*` key exists, because none would open or
+     * close anything `library.read` and `library.administer` do not.
+     * -------------------------------------------------------------------- */
+
+    async scholarlyRecords(actor: LibraryActor, kind: ScholarlyKind, raw: unknown = {}) {
+      await permit(actor, 'library.read');
+      return store.scholarlyRecords(
+        scholarlyKindSchema.parse(kind),
+        scholarlyAdminQuerySchema.parse(raw),
+      );
+    },
+
+    async scholarlyRecord<K extends ScholarlyKind>(
+      actor: LibraryActor,
+      kind: K,
+      id: string,
+    ): Promise<ScholarlyRecordOf<K> | null> {
+      await permit(actor, 'library.read');
+      const record = await store.scholarlyRecordById(
+        scholarlyKindSchema.parse(kind),
+        libraryIdSchema.parse(id),
+      );
+      return isKind(record, kind) ? record : null;
+    },
+
+    /**
+     * Validates, checks every cross-context reference with its OWNER, and saves.
+     *
+     * THE REFERENCES ARE ASKED, NOT JOINED. A contributor must be a published
+     * People contributor, a topic an active Taxonomy topic and a content
+     * language an active Taxonomy language — answered by those owners' public
+     * reads through the references port, never by a Library query against their
+     * tables. A contributor credit grants nothing: it is attribution.
+     */
+    async saveScholarly<K extends ScholarlyKind>(
+      actor: LibraryActor,
+      kind: K,
+      id: string | null,
+      expectedVersion: number | null,
+      raw: unknown,
+    ) {
+      await permit(actor, 'library.administer');
+      scholarlyKindSchema.parse(kind);
+      edit(id, expectedVersion);
+      // The schema is chosen BY the kind, so the pair is correlated here, once.
+      const save = {
+        kind,
+        value: SCHOLARLY_INPUT_SCHEMAS[kind].parse(raw),
+      } as ScholarlyValue;
+      const { value } = save;
+      const checks = [
+        deps.references.validPeople([
+          ...new Set(value.contributors.map((entry) => entry.personId)),
+        ]),
+        deps.references.validTopics(value.topicIds),
+        ...('languageCode' in value
+          ? [deps.references.validLanguage(value.languageCode)]
+          : []),
+      ];
+      if ((await Promise.all(checks)).includes(false))
+        throw new LibraryRefusal('invalid');
+      return store.saveScholarly({ actorId: actor.accountId, id, expectedVersion, save });
     },
   };
 }

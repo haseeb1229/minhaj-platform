@@ -53,6 +53,10 @@ const REQUIRED = [
   'wiring',
   'admission',
   'search.integration',
+  // Phase 9: the scholarly and periodical kinds, their stale-index rule,
+  // rebuild and reconciliation, and their rebuild after a real restore.
+  'scholarly.integration',
+  'scholarly-recovery.integration',
 ];
 
 const seen = files.map((file) => String(file.name ?? ''));

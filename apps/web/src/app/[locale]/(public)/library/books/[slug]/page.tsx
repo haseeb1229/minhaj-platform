@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
 import type { EditionRecord, WorkDetail } from '@minhaj/contracts/library';
+import { readerPosition } from '@minhaj/contracts/library';
 
 import {
   libraryContentLanguages,
@@ -476,6 +477,7 @@ function EditionAccessPanel({
 }) {
   const access = editionAccess(edition);
   const language = languages.get(edition.languageCode);
+  const contentVersion = edition.contentVersion;
   const positionTemplate = t('sectionPosition', {
     current: '{current}',
     total: '{total}',
@@ -526,12 +528,9 @@ function EditionAccessPanel({
        * position identifier built from an empty digest would be a stable name
        * for nothing.
        */}
-      {access.reflowable &&
-      edition.document !== null &&
-      edition.contentVersion !== null ? (
+      {access.reflowable && edition.document !== null && contentVersion !== null ? (
         <Reader
-          editionId={edition.id}
-          contentVersion={edition.contentVersion}
+          anchorFor={(key) => readerPosition(edition.id, contentVersion, key)}
           languageCode={edition.languageCode}
           direction={language?.direction ?? 'ltr'}
           interfaceLocale={locale}

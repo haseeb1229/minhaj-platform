@@ -21,14 +21,18 @@ import { z } from 'zod';
  * ========================================================================= */
 
 /**
- * EXACTLY the Phase-17 initial inventory (DELIVERY_PLAN.md Phase 17), and
- * nothing a later phase will add. Research, Video, News, Quran, Hadith, Fatwa,
- * Learning, Events and Collections each add their own kind WITH their own
- * projection, filters and tests, in their own phase (DELIVERY_PLAN.md §3).
+ * The Phase-17 initial inventory (DELIVERY_PLAN.md Phase 17), extended by each
+ * searchable domain in its OWN phase and nothing more. Video, News, Quran,
+ * Hadith, Fatwa, Learning, Events and Collections each add their own kind WITH
+ * their own projection, filters and tests, when they ship (DELIVERY_PLAN.md §3).
  *
  * `book-translation` is an Edition that IS a genuine translation of another
  * Edition of the same Work (DOMAIN_MODEL.md §10.1). It is indexed as that kind
  * INSTEAD of `edition`, never beside it, so one manifestation is one result.
+ *
+ * PHASE 9 adds the six scholarly and periodical Library aggregates, each its own
+ * kind — a research paper is not a research work, and a magazine issue is not
+ * its magazine.
  */
 export const SEARCH_KINDS = Object.freeze([
   'topic',
@@ -38,6 +42,12 @@ export const SEARCH_KINDS = Object.freeze([
   'work',
   'edition',
   'book-translation',
+  'research',
+  'research-paper',
+  'publication',
+  'magazine',
+  'magazine-issue',
+  'encyclopedia',
 ] as const);
 
 export type SearchKind = (typeof SEARCH_KINDS)[number];
@@ -53,6 +63,11 @@ export const searchKindSchema = z.enum(SEARCH_KINDS);
  * and everything that hangs off it" as one scope, and a withdrawn Work removes
  * its Editions in the same step rather than leaving them to a second request
  * that might fail independently.
+ *
+ * A MAGAZINE ISSUE IS ITS OWN SCOPE, deliberately unlike an Edition. A periodical
+ * accumulates issues without bound, and one scope per Magazine would carry more
+ * documents than a scope may; instead a Magazine's own change requests each of
+ * its issues in the same transaction (DELIVERY_PLAN.md Phase 9).
  */
 export const SEARCH_SCOPE_KINDS = Object.freeze([
   'topic',
@@ -60,6 +75,12 @@ export const SEARCH_SCOPE_KINDS = Object.freeze([
   'article',
   'page',
   'work',
+  'research',
+  'research-paper',
+  'publication',
+  'magazine',
+  'magazine-issue',
+  'encyclopedia',
 ] as const);
 
 export type SearchScopeKind = (typeof SEARCH_SCOPE_KINDS)[number];
@@ -74,6 +95,12 @@ export const SCOPE_OF_KIND: Readonly<Record<SearchKind, SearchScopeKind>> = Obje
     work: 'work',
     edition: 'work',
     'book-translation': 'work',
+    research: 'research',
+    'research-paper': 'research-paper',
+    publication: 'publication',
+    magazine: 'magazine',
+    'magazine-issue': 'magazine-issue',
+    encyclopedia: 'encyclopedia',
   },
 );
 

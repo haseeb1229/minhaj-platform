@@ -36,3 +36,21 @@ export async function requestSearchIndexing(
 ): Promise<void> {
   await tx.searchIndexRequest.create({ data: { scopeKind: kind, scopeId: id } });
 }
+
+/**
+ * The same intent for a bounded SET of scopes, in one statement.
+ *
+ * For a change that alters what several scopes project — a Magazine's own
+ * change reaches every issue's address, title and visibility — so each of them
+ * is owed a re-projection, committed with the change that caused it.
+ */
+export async function requestSearchIndexingMany(
+  tx: Prisma.TransactionClient,
+  kind: SearchScopeKind,
+  ids: readonly string[],
+): Promise<void> {
+  if (ids.length === 0) return;
+  await tx.searchIndexRequest.createMany({
+    data: ids.map((id) => ({ scopeKind: kind, scopeId: id })),
+  });
+}

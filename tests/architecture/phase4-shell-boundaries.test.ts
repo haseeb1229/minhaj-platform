@@ -89,6 +89,20 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/search/page.tsx',
   'apps/web/src/app/[locale]/(public)/topics/page.tsx',
   'apps/web/src/app/[locale]/(public)/topics/[slug]/page.tsx',
+  // Phase 9. The scholarly and periodical listings, records, Magazines and their
+  // issues are published data an administrator changes; each is proven below to
+  // reach no session, no identity service and no authentication library.
+  'apps/web/src/app/[locale]/(public)/library/research/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/research/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/research-papers/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/research-papers/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/publications/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/publications/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/encyclopedias/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/encyclopedias/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/magazines/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/magazines/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/library/magazines/[slug]/issues/[issueSlug]/page.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [
@@ -499,7 +513,12 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     // privacy exposure, which is what this rule exists to prevent
     // (ARCHITECTURE.md §4.7.1).
     //
-    // Allowing one exact string rather than loosening the pattern is the point:
+    // `https://doi.org/` (Phase 9) is the DOI resolver, used ONLY as the target
+    // of an outbound hyperlink beside a citation. A link is fetched when a
+    // visitor chooses to follow it, never when the page renders — so it, too,
+    // creates no request and no exposure on its own.
+    //
+    // Allowing exact strings rather than loosening the pattern is the point:
     // every OTHER external origin is still refused, and the assertion below
     // additionally forbids the attributes that would actually fetch one — which
     // the original blanket regex never checked for directly.
@@ -508,7 +527,9 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     for (const [file, source] of modules) {
       if (!file.startsWith(APP_SRC)) continue;
 
-      const body = code(source).replaceAll('https://schema.org', '');
+      const body = code(source)
+        .replaceAll('https://schema.org', '')
+        .replaceAll('https://doi.org/', '');
 
       expect(body, relative(file)).not.toMatch(/https?:\/\/(?!127\.0\.0\.1)/);
       expect(body, relative(file)).not.toContain('next/font');

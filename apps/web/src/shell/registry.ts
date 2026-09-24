@@ -153,9 +153,9 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
    * DELIVERED BY PHASE 8. The entry stops being `deferred` because the capability
    * now exists: `/library` is a landing page listing the Library surfaces that are
    * genuinely built, and nothing else (§18 — "parent landing must list only actual
-   * delivered capabilities"). Research, publications, magazines, encyclopedias and
-   * collections remain absent, which is why they have no registry entry at all
-   * rather than a `reserved` one.
+   * delivered capabilities"). Phase 9 added research, research papers,
+   * publications, magazines and encyclopedias; collections remain absent, which is
+   * why they have no registry entry at all rather than a `reserved` one.
    */
   Object.freeze({
     key: 'library',
@@ -343,12 +343,15 @@ const LEGAL: readonly ShellRoute[] = Object.freeze(
  * would be the shell taking over a domain's own navigation. `/library` itself is
  * in the primary navigation and is the single entry point.
  *
- * WHAT IS ABSENT IS ABSENT. `/library/research`, `/library/research-papers`,
- * `/library/publications`, `/library/magazines`, `/library/encyclopedias` and
- * `/library/collections` are named by ROUTE_MAP.md §5 and belong to Phases 9 and
- * 15. They have no entry, so there is no string a link could be built from
- * (§5.2), and `/library/articles` stays exactly where Phase 6 put it — Editorial
- * owns it, and Layer 4 composes it (§10).
+ * PHASE 9 ADDS FIVE LISTINGS — research, research papers, publications,
+ * magazines and encyclopedias — each a genuine page over its own delivered
+ * aggregate. A Magazine's issues are reached from the Magazine, so they have no
+ * listing of their own here.
+ *
+ * WHAT IS ABSENT IS ABSENT. `/library/collections` is named by ROUTE_MAP.md §5
+ * and belongs to Phase 15. It has no entry, so there is no string a link could be
+ * built from (§5.2), and `/library/articles` stays exactly where Phase 6 put it —
+ * Editorial owns it, and Layer 4 composes it (§10).
  */
 const LIBRARY_SURFACES = Object.freeze([
   'books',
@@ -358,6 +361,11 @@ const LIBRARY_SURFACES = Object.freeze([
   'downloads',
   'sale-points',
   'resources',
+  'research',
+  'research-papers',
+  'publications',
+  'magazines',
+  'encyclopedias',
 ] as const);
 
 const LIBRARY: readonly ShellRoute[] = Object.freeze(
@@ -366,7 +374,7 @@ const LIBRARY: readonly ShellRoute[] = Object.freeze(
       key: `library.${surface}`,
       // Resolved in the `shell` namespace, like every other registry label, so
       // the human sitemap and the administrative navigation status name each
-      // surface rather than printing "Library" seven times.
+      // surface rather than printing "Library" twelve times.
       label: `library.${surface}`,
       path: `/library/${surface}`,
       placements: Object.freeze([] as const),

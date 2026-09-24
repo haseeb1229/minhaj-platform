@@ -6,9 +6,17 @@ import type { Locale } from '@minhaj/contracts';
 import type { TopicView } from '@minhaj/contracts/taxonomy';
 import { topicSlugSchema } from '@minhaj/contracts/taxonomy';
 
+import type { ScholarlyKind } from '@minhaj/contracts/library';
+
 import { libraryReadRuntime } from '@/composition/library-read';
 import { taxonomyRuntime } from '@/composition/taxonomy';
 import { labelFor, workPath } from '@/components/library/presentation';
+import { listingHref } from '@/components/library/scholarly';
+import {
+  scholarlyLabel,
+  scholarlyListPath,
+  scholarlyQueryPath,
+} from '@/components/library/scholarly-presentation';
 import {
   Alert,
   Breadcrumbs,
@@ -33,9 +41,15 @@ import { contentMetadata } from '@/seo/metadata';
  * "navigable results into `/topics/{slug}`" (DELIVERY_PLAN.md Phase 17), and no
  * earlier phase delivered the route. It is Layer-4 composition over owners that
  * EXIST: Taxonomy for the topic and its place in the hierarchy, Library for the
- * books classified under it, and Search for everything else classified under
- * it. Each later domain adds its own section when it ships; nothing here renders
- * an empty frame for a domain that has not (ROUTE_MAP.md §5.2).
+ * books — and, since Phase 9, the research, research papers, publications,
+ * encyclopedias, magazines and magazine issues — classified under it, and Search
+ * for everything else classified under it. Each later domain adds its own
+ * section when it ships; nothing here renders an empty frame for a domain that
+ * has not, and a delivered section with nothing on this topic is not rendered
+ * either (ROUTE_MAP.md §5.2).
+ *
+ * LIBRARY'S PUBLIC READS ARE THE AUTHORITY, never the search index: each section
+ * is one bounded, topic-filtered page of that owner's own public listing.
  *
  * TAXONOMY OWNS THE TOPIC. This page decides nothing about it: an archived topic
  * is a 404, and the slug is immutable, so there is no history to redirect.
@@ -76,6 +90,19 @@ export async function generateMetadata({ params }: TopicParams): Promise<Metadat
 /** How many books the hub previews before linking to the full filtered list. */
 const BOOK_PREVIEW = 6;
 
+/**
+ * Phase 9's sections, in the Library's order. An issue has no listing of its
+ * own, so its section previews and the topic search below covers the rest.
+ */
+const SCHOLARLY_SECTIONS: readonly ScholarlyKind[] = [
+  'research',
+  'research-paper',
+  'publication',
+  'encyclopedia',
+  'magazine',
+  'magazine-issue',
+];
+
 export default async function TopicPage({ params }: TopicParams) {
   const locale = await requireLocale(params);
   const { slug } = await params;
@@ -86,9 +113,12 @@ export default async function TopicPage({ params }: TopicParams) {
   const t = await getTranslations({ locale, namespace: 'topics' });
   const shell = await getTranslations({ locale, namespace: 'shell' });
 
-  const [tree, books] = await Promise.all([
+  const [tree, books, ...scholarly] = await Promise.all([
     taxonomyRuntime().taxonomy.listTree({ locale, includeArchived: false }),
     libraryReadRuntime().works({ topic: topic.id }),
+    ...SCHOLARLY_SECTIONS.map((kind) =>
+      libraryReadRuntime().scholarlyList(kind, { topic: topic.id }),
+    ),
   ]);
 
   const ancestors = topicBreadcrumb(topic, tree);
@@ -197,6 +227,54 @@ export default async function TopicPage({ params }: TopicParams) {
             </p>
           </section>
         )}
+
+        {SCHOLARLY_SECTIONS.map((kind, index) => {
+          const page = scholarly[index];
+          if (page === undefined || page.items.length === 0) return null;
+          const headingId = `topic-${kind}`;
+          return (
+            <section
+              key={kind}
+              className="flex flex-col gap-4"
+              aria-labelledby={headingId}
+            >
+              <h2 id={headingId} className="text-lg font-semibold">
+                {t(`sections.${kind}`)}
+              </h2>
+              <ul className="grid gap-4 sm:grid-cols-2">
+                {page.items.slice(0, BOOK_PREVIEW).map((row) => {
+                  const label = scholarlyLabel(row, locale);
+                  return (
+                    <Panel as="li" key={row.id}>
+                      <p
+                        className="font-semibold break-words"
+                        lang={label.locale}
+                        dir={directionOf(label.locale)}
+                      >
+                        <TextLink href={listingHref(locale, row)}>{label.title}</TextLink>
+                      </p>
+                    </Panel>
+                  );
+                })}
+              </ul>
+              {kind === 'magazine-issue' ? null : (
+                <p>
+                  <TextLink
+                    href={scholarlyQueryPath(scholarlyListPath(locale, kind), {
+                      offset: 0,
+                      language: null,
+                      topic: topic.id,
+                      from: null,
+                      to: null,
+                    })}
+                  >
+                    {t(`all.${kind}`)}
+                  </TextLink>
+                </p>
+              )}
+            </section>
+          );
+        })}
       </div>
     </Container>
   );

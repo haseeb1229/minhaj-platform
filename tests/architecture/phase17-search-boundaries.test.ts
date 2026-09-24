@@ -162,24 +162,32 @@ describe('the engine stays behind its port', () => {
   });
 });
 
-describe('the inventory is closed — exactly Phase 17 and nothing later', () => {
+describe('the inventory is closed — the delivered searchable domains and nothing later', () => {
+  // Phase 17's initial seven, and Phase 9's six scholarly and periodical kinds.
+  // A later searchable domain adds its own in its own phase; none is pre-created.
   const EXPECTED = [
     'article',
     'book-translation',
     'edition',
+    'encyclopedia',
+    'magazine',
+    'magazine-issue',
     'page',
     'person',
+    'publication',
+    'research',
+    'research-paper',
     'topic',
     'work',
   ];
 
-  it('declares exactly the seven initial kinds', () => {
+  it('declares exactly the delivered kinds', () => {
     expect([...SEARCH_KINDS].sort()).toEqual(EXPECTED);
   });
 
-  it('holds the same kinds in the database constraint', async () => {
+  it('holds the same kinds in the database constraint the latest migration set', async () => {
     const migration = await read(
-      'packages/database/prisma/migrations/20260923000000_phase17_search_foundation/migration.sql',
+      'packages/database/prisma/migrations/20260924000000_phase9_research_publications/migration.sql',
     );
     const constraint = /SearchDocument_kind_ck\] CHECK \(\[kind\] IN \(([^)]*)\)\)/u.exec(
       migration,

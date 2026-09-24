@@ -716,6 +716,36 @@ records never appear in search** · **a withdrawn record leaves the index and th
 standing requirements.
 **Exit:** Scholarly and periodical content complete **and searchable**.
 
+**Phase-9 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+- **Six aggregates, six tables.** Each has its own slug namespace and typed label, contributor
+  and topic relations; Research and ResearchPaper also own ordered citations. They share value
+  shapes (a label, a credit, a citation, date facts), never a table. Research and ResearchPaper
+  are independent — neither is the other's parent — and a paper alone records where it appeared
+  and its own DOI. No MagazineArticle, PublicationIssue or EncyclopediaEntry exists: an
+  encyclopedia's structure is its readable document (DOMAIN_MODEL.md §10.2).
+- **Content.** Titles and summaries are localized descriptive metadata; the text's own language
+  is a Taxonomy reference. Abstracts, institutional context, venues and citations are bounded
+  plain text; long-form text is the Library's existing semantic reader document. A citation is
+  its text plus, only where known, an HTTPS address and a DOI — nothing is looked up. Publication
+  dates are SQL `date` values that agree with their year.
+- **Lifecycle and visibility.** Draft, published, archived. An issue is public only while its
+  Magazine is; a published Magazine with no published issue says so.
+- **Slugs.** An issue's slug and (volume, number) are unique within its Magazine, and an issue
+  cannot move to another Magazine — the composite key of its slug reservations refuses it. A
+  former Magazine slug with a former issue slug resolves to the current address in one 301.
+- **Search.** Each aggregate is its own kind and scope. A Magazine's change requests each of its
+  issues in the same transaction, and an issue's stamp includes its Magazine's version. A
+  record's own text is matched only in its content language; citations are not matched.
+- **Permissions.** `library.read` and `library.administer` cover the six; there is no
+  `research.*` or `magazine.*` key.
+- **Not delivered, and not owed by this phase:** files and downloads for these aggregates
+  (Phase-9 records are read as text; a file relation arrives with the owner that needs one, through
+  Storage); a contributor filter on the Phase-9 listings (no surface consumes one); cross-type
+  facets on `/library/topics`, `/library/languages` and `/library/authors`, which remain Work
+  browses and say so, while `/library/resources` and `/topics/{slug}` include every delivered type.
+
 ---
 
 ### Phases 10–12 — Media, split into three slices
@@ -856,11 +886,8 @@ review history:**
   exactly as the four initial owners do — never a pre-created kind. **Phase 31** proves none is
   missing.
 
-**Next scheduled activity after Phase 17 is remote-green:** a fresh, dedicated
-**whole-platform professional product / architecture / UX completeness audit**, before the
-searchable-domain fan-out (Phases 9, 10, 13, 18, 19, 20, 22) begins — so a systemic defect in
-this shared foundation is caught before those domains copy it. Phase 2G remains separately
-deferred.
+**After Search Foundation**, implementation continues in the order the dependency graph (§2)
+and the current gates allow. Phase 2G remains separately deferred.
 
 ---
 

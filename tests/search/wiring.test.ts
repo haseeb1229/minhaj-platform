@@ -40,6 +40,14 @@ function readers() {
       ids.map((id) => ({ id, slug: `work-${id}` })),
     publicEditionTargets: async (ids: readonly string[]) =>
       ids.map((id) => ({ id, workSlug: `work-${id}` })),
+    scholarlyTargets: async (kind: string, ids: readonly string[]) =>
+      ids
+        .filter((id) => id !== 'withdrawn')
+        .map((id) => ({
+          id,
+          slug: `${kind}-${id}`,
+          magazineSlug: kind === 'magazine-issue' ? `magazine of ${id}` : null,
+        })),
   } as unknown as LibraryPublicReaderPort;
   return { taxonomy, people, editorial, library };
 }
@@ -59,6 +67,34 @@ describe('searchWiring', () => {
     expect((await targets['book-translation'](['7'])).get('7')).toBe(
       '/library/books/work-7?edition=7',
     );
+  });
+
+  it('addresses every Phase-9 kind at the Library route the route map names', async () => {
+    const { targets } = searchWiring(readers());
+
+    expect((await targets.research(['1'])).get('1')).toBe('/library/research/research-1');
+    expect((await targets['research-paper'](['2'])).get('2')).toBe(
+      '/library/research-papers/research-paper-2',
+    );
+    expect((await targets.publication(['3'])).get('3')).toBe(
+      '/library/publications/publication-3',
+    );
+    expect((await targets.magazine(['4'])).get('4')).toBe(
+      '/library/magazines/magazine-4',
+    );
+    expect((await targets.encyclopedia(['5'])).get('5')).toBe(
+      '/library/encyclopedias/encyclopedia-5',
+    );
+    // An issue lives beneath its Magazine's CURRENT slug, each segment encoded.
+    expect((await targets['magazine-issue'](['6'])).get('6')).toBe(
+      '/library/magazines/magazine%20of%206/issues/magazine-issue-6',
+    );
+  });
+
+  it('omits a Phase-9 record its owner no longer publishes', async () => {
+    const { targets } = searchWiring(readers());
+    const found = await targets['research-paper'](['1', 'withdrawn']);
+    expect([...found.keys()]).toEqual(['1']);
   });
 
   it('omits what the owner does not currently publish', async () => {

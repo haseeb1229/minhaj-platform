@@ -15,6 +15,7 @@ import {
 import { getDatabaseClient } from '../../client.ts';
 import { auditRow } from '../../audit-row.ts';
 import { requestSearchIndexing } from '../../search-intent.ts';
+import { createScholarlyPersistence, createScholarlyPublicReader } from './scholarly.ts';
 
 class LibraryDataError extends Error {
   constructor(readonly reason: string) {
@@ -261,6 +262,8 @@ async function salePoints(
 export function createLibraryPersistence(): LibraryPersistencePort {
   const db = getDatabaseClient();
   return {
+    // Phase 9's aggregates, written by their own module over their own tables.
+    ...createScholarlyPersistence(),
     async works(offset) {
       const rows = await db.work.findMany({
         orderBy: { slug: 'asc' },
@@ -623,6 +626,7 @@ const FACET_PAGE = 50;
 export function createLibraryPublicReader(): LibraryPublicReaderPort {
   const db = getDatabaseClient();
   return {
+    ...createScholarlyPublicReader(),
     async contributorFacets(offset) {
       const rows = await db.workContributor.groupBy({
         by: ['personId'],

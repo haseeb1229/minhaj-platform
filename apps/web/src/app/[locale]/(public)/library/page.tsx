@@ -17,13 +17,11 @@ import { requireRoute } from '@/shell/registry';
 /**
  * `/{locale}/library` — the Library landing page (ROUTE_MAP.md §5).
  *
- * IT LISTS WHAT EXISTS AND NOTHING ELSE. ROUTE_MAP.md §5 gives the Library area
- * research, research papers, publications, magazines, encyclopedias and
- * collections as well — and those belong to Phases 9 and 15. None of them appears
- * here, not even as a greyed-out heading or a "coming soon" line, because "a
- * deferred capability is never linked as dead navigation" (§5.2) and a landing
- * page advertising six absent sections tells a visitor six things that are not
- * true (§18).
+ * IT LISTS WHAT EXISTS AND NOTHING ELSE. Phase 9 delivered research, research
+ * papers, publications, magazines and encyclopedias, so they are listed. ROUTE_MAP.md
+ * §5 also gives the Library area collections, which belong to Phase 15; they do not
+ * appear here, not even as a greyed-out heading or a "coming soon" line, because
+ * "a deferred capability is never linked as dead navigation" (§5.2).
  *
  * THE ONE ENTRY THIS PAGE DOES NOT OWN is Articles. `/library/articles` is
  * Editorial's content at a Library address, delivered by Phase 6; this page links
@@ -65,6 +63,11 @@ const SECTIONS: readonly {
   { key: 'books', path: '/library/books' },
   { key: 'resources', path: '/library/resources' },
   { key: 'articles', path: '/library/articles' },
+  { key: 'research', path: '/library/research' },
+  { key: 'research-papers', path: '/library/research-papers' },
+  { key: 'publications', path: '/library/publications' },
+  { key: 'encyclopedias', path: '/library/encyclopedias' },
+  { key: 'magazines', path: '/library/magazines' },
   { key: 'authors', path: '/library/authors' },
   { key: 'topics', path: '/library/topics' },
   { key: 'languages', path: '/library/languages' },

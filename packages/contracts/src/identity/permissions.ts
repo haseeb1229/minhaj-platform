@@ -245,18 +245,19 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
   // it. The relation is still checked, so the permission never becomes a
   // general-purpose file reader (SECURITY_BASELINE.md §10.1).
   //
-  // WHAT IS DELIBERATELY ABSENT, and is most tempting at this phase:
-  // `research.*`, `publication.*` and `search.*`. Phases 9 and 17 own those
-  // surfaces, and seeding a key now would fix another phase's vocabulary and
-  // leave grantable authority over nothing.
+  // PHASE 9 ADDED NO KEY. Research, research papers, publications, magazines,
+  // their issues and encyclopedias are Library aggregates with the same single
+  // owner and no workflow of their own, so these two keys cover them; a
+  // `research.*` or `magazine.*` key would be authority nobody asked to separate.
   Object.freeze({
     key: 'library.read',
-    description: 'View Library works, editions, translations and sale points.',
+    description:
+      'View Library works, editions, translations, sale points, research, publications, magazines and encyclopedias.',
   }),
   Object.freeze({
     key: 'library.administer',
     description:
-      'Create, edit, link and archive Library works, editions, translations and sale points.',
+      'Create, edit, link and archive Library works, editions, translations, sale points, research, publications, magazines and encyclopedias.',
   }),
 
   /* ---- Phase 17 — Search foundation ------------------------------------ */

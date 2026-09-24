@@ -442,13 +442,6 @@ test.describe('Library administration', () => {
     }
   });
 
-  test('activates no Phase-9 administration surface', async () => {
-    for (const surface of ['research', 'publications', 'magazines', 'encyclopedias']) {
-      const response = await admin.goto(`/en/admin/library/${surface}`);
-      expect(response?.status(), surface).toBe(404);
-    }
-  });
-
   let createdWorkId = '';
   let createdEditionId = '';
   const adminSlug = `browser-admin-work-${run}`;

@@ -10,12 +10,12 @@ import { TextLink } from '@/components/ui';
 /**
  * The Library administration shell (ROUTE_MAP.md §7, and this phase's §17).
  *
- * FOUR SURFACES AND NO MORE. `works`, `editions`, `translations` and `sale-points`
- * are what Phase 8 activates. ROUTE_MAP.md §7 also names `research`,
- * `publications`, `magazines` and `encyclopedias` under `/admin/library/*` — those
- * are Phase 9's, and they have no route, no navigation entry and no permission key
- * here. "Do not activate Phase-9 route/admin families early" (§7, §17), and the
- * strongest form of that is an absent directory rather than a hidden link.
+ * THE ROUTE MAP'S LIBRARY FAMILIES (ROUTE_MAP.md §7). `works`, `editions`,
+ * `translations` and `sale-points` are Phase 8's; `research` (with research papers
+ * beneath it), `publications`, `magazines` (with their issues beneath each) and
+ * `encyclopedias` are Phase 9's. No family has a permission key of its own:
+ * `library.read` opens every one and `library.administer` is what each action
+ * re-checks.
  *
  * `noindex, nofollow` FOR THE WHOLE SUBTREE, inherited from the parent
  * administrative layout and restated here because a privileged surface in a search
@@ -28,8 +28,8 @@ import { TextLink } from '@/components/ui';
  * (SECURITY_BASELINE.md §3.4 rule 1).
  *
  * ONE NAV ENTRY PER SURFACE, ALL GATED ON THE SAME KEY, because `library.read`
- * genuinely opens all four — four keys for one authority would be four links that
- * appear and disappear together (see the permission catalogue's own note).
+ * genuinely opens all of them — a key per family for one authority would be links
+ * that appear and disappear together (see the permission catalogue's own note).
  *
  * THE CLIENT PROVIDER CARRIES THREE STRINGS. `error.tsx` and the form islands are
  * Client Components and need their copy; handing them the whole catalogue would ship
@@ -41,7 +41,16 @@ export const metadata = { robots: { index: false, follow: false } };
 /** PER REQUEST, always. Every page beneath reads a session and a permission set. */
 export const dynamic = 'force-dynamic';
 
-const SURFACES = ['works', 'editions', 'translations', 'sale-points'] as const;
+const SURFACES = [
+  'works',
+  'editions',
+  'translations',
+  'sale-points',
+  'research',
+  'publications',
+  'magazines',
+  'encyclopedias',
+] as const;
 
 export default async function LibraryAdminLayout({
   children,
@@ -64,7 +73,7 @@ export default async function LibraryAdminLayout({
         <nav className="flex flex-wrap gap-4" aria-label={t('title')}>
           {SURFACES.map((surface) => (
             <TextLink key={surface} href={`/${locale}/admin/library/${surface}`}>
-              {t(`admin.${surface}` as 'admin.works')}
+              {t(`admin.${surface}`)}
             </TextLink>
           ))}
         </nav>

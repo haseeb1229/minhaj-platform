@@ -12,6 +12,7 @@ import type {
   SearchScopeSource,
   SearchTargetResolver,
 } from '../../packages/contracts/src/search/index.ts';
+import { SEARCH_SCOPE_KINDS } from '../../packages/contracts/src/search/index.ts';
 import { createSearchService } from '../../packages/search/src/service.ts';
 
 /**
@@ -25,7 +26,8 @@ import { createSearchService } from '../../packages/search/src/service.ts';
  * `search.integration.test.ts`.
  */
 
-const KINDS: readonly SearchScopeKind[] = ['topic', 'person', 'article', 'page', 'work'];
+/** Every scope kind the contract declares, so each has a stub owner source. */
+const KINDS: readonly SearchScopeKind[] = SEARCH_SCOPE_KINDS;
 
 function row(kind: SearchKind, resourceId: string): IndexRow {
   return {
@@ -110,6 +112,12 @@ function targets(
     work: make('work'),
     edition: make('edition'),
     'book-translation': make('book-translation'),
+    research: make('research'),
+    'research-paper': make('research-paper'),
+    publication: make('publication'),
+    magazine: make('magazine'),
+    'magazine-issue': make('magazine-issue'),
+    encyclopedia: make('encyclopedia'),
   };
 }
 

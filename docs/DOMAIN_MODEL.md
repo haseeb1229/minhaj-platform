@@ -706,6 +706,23 @@ periodicals modelled with an issue hierarchy, because volume, issue and date are
 access paths for a magazine and meaningless for a book. **SalePoint** — printed-book
 availability.
 
+As delivered (Phase 9):
+
+| Aggregate | Carries |
+|---|---|
+| **Research** | Content language, date facts, abstract, institutional context, ordered citations, readable text |
+| **ResearchPaper** | The same, plus where it appeared and its own DOI — an independent aggregate, never Research's child |
+| **Publication** | Content language, date facts, publisher, readable text — not a Work, not a Magazine, and it has no issues |
+| **Encyclopedia** | Content language, date facts, publisher, readable text — its structure is its document; there is no entry subsystem |
+| **Magazine** | The periodical itself: no content language and no date of its own |
+| **MagazineIssue** | Belongs to exactly one Magazine for ever; content language, optional volume, number and date, readable text |
+
+Each has its own table, slug namespace and typed label, contributor (People) and topic
+(Taxonomy) relations; no type column and no polymorphic reference joins them. Labels are
+localized descriptive metadata, never a translation of the text. A citation is bounded plain
+text with an HTTPS address and a DOI only where genuinely known. An issue's slug and (volume,
+number) are unique within its Magazine, and an issue is public only while its Magazine is.
+
 ---
 
 ## 11. Media

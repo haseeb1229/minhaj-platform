@@ -1072,6 +1072,168 @@ try {
     'ALTER TABLE [dbo].[Work] DROP CONSTRAINT [Work_state_ck];',
   );
 
+  // ---- Phase 9: the scholarly and periodical aggregates --------------------
+  //
+  // THE SAME THREE POSTURES AS PHASE 8, across six more aggregates: records are
+  // INSERT and UPDATE and never DELETE; relation sets are INSERT and DELETE and
+  // never UPDATE; slug histories are append-only. Each is proved to WORK and to
+  // REFUSE, and two invariants are proved as refusals BY THE DATABASE rather than
+  // by a grant: a renamed record keeps its former slug (the trigger), and an issue
+  // can never move to another Magazine (its reservations' composite foreign key).
+  const magazineId = randomUUID();
+  const otherMagazineId = randomUUID();
+  const issueId = randomUUID();
+  const researchId = randomUUID();
+  const scholarlyRun = researchId.replaceAll('-', '');
+  const magazineSlug = `magazine-proof-${scholarlyRun}`;
+  const researchSlug = `research-proof-${scholarlyRun}`;
+
+  await expectAllowed(
+    app,
+    'Magazine INSERT',
+    `INSERT INTO [dbo].[Magazine] ([id],[slug],[primaryLocale],[state],[version],[updatedAt]) VALUES (N'${magazineId}',N'${magazineSlug}',N'en',N'draft',1,SYSUTCDATETIME()),(N'${otherMagazineId}',N'${magazineSlug}-other',N'en',N'draft',1,SYSUTCDATETIME());`,
+    'Phase-9 aggregates are created by the runtime',
+  );
+  await expectAllowed(
+    app,
+    'Magazine issue serialisation lock',
+    `BEGIN TRAN; SELECT [id] FROM [dbo].[Magazine] WITH (UPDLOCK, HOLDLOCK) WHERE [id]=N'${magazineId}'; COMMIT TRAN;`,
+    'an issue write serialises at its Magazine with SELECT alone',
+  );
+  await expectAllowed(
+    app,
+    'MagazineIssue INSERT',
+    `INSERT INTO [dbo].[MagazineIssue] ([id],[magazineId],[slug],[primaryLocale],[languageCode],[state],[volume],[issueNumber],[version],[updatedAt]) VALUES (N'${issueId}',N'${magazineId}',N'issue-proof',N'en',N'en',N'draft',1,1,1,SYSUTCDATETIME());`,
+    'an issue is created beneath its Magazine',
+  );
+  await expectAllowed(
+    app,
+    'Research INSERT',
+    `INSERT INTO [dbo].[Research] ([id],[slug],[primaryLocale],[languageCode],[state],[version],[updatedAt]) VALUES (N'${researchId}',N'${researchSlug}',N'en',N'en',N'draft',1,SYSUTCDATETIME());`,
+    'a research record is created',
+  );
+  await expectAllowed(
+    app,
+    'Research UPDATE (rename)',
+    `UPDATE [dbo].[Research] SET [slug]=N'${researchSlug}-renamed',[version]=[version]+1 WHERE [id]=N'${researchId}';`,
+    'a record is edited and its slug changed',
+  );
+
+  const [reservations] = await app.query<{ research: number; issue: number }>(
+    `SELECT (SELECT COUNT_BIG(*) FROM [dbo].[ResearchSlugHistory] WHERE [researchId]=N'${researchId}') AS research,
+            (SELECT COUNT_BIG(*) FROM [dbo].[MagazineIssueSlugHistory] WHERE [magazineIssueId]=N'${issueId}' AND [magazineId]=N'${magazineId}') AS issue;`,
+  );
+  if (Number(reservations?.research) === 2 && Number(reservations?.issue) === 1) {
+    pass(
+      'Phase-9 slugs reserved by the database',
+      'the former and current research slug, and the issue slug within its Magazine',
+    );
+  } else {
+    fail(
+      'Phase-9 slugs reserved by the database',
+      `expected 2 research and 1 issue reservation, found ${String(reservations?.research ?? 0)} and ${String(reservations?.issue ?? 0)}`,
+    );
+  }
+
+  await expectRefusedByInvariant(
+    app,
+    'MagazineIssue cannot change Magazine',
+    `UPDATE [dbo].[MagazineIssue] SET [magazineId]=N'${otherMagazineId}' WHERE [id]=N'${issueId}';`,
+    547,
+  );
+
+  for (const [label, statement] of [
+    [
+      'ResearchLabel INSERT',
+      `INSERT INTO [dbo].[ResearchLabel] ([researchId],[locale],[title],[summary]) VALUES (N'${researchId}',N'en',N'Least-privilege proof research',N'');`,
+    ],
+    [
+      'ResearchContributor INSERT',
+      `INSERT INTO [dbo].[ResearchContributor] ([researchId],[personId],[role],[position]) VALUES (N'${researchId}',N'${editorialPeople.linkedPersonId}',N'author',0);`,
+    ],
+    [
+      'ResearchTopic INSERT',
+      `INSERT INTO [dbo].[ResearchTopic] ([researchId],[topicId]) VALUES (N'${researchId}',N'${editorialTopic.id}');`,
+    ],
+    [
+      'ResearchCitation INSERT',
+      `INSERT INTO [dbo].[ResearchCitation] ([researchId],[position],[text],[url],[doi]) VALUES (N'${researchId}',0,N'Synthetic proof citation',N'https://example.org/proof',N'10.1234/proof');`,
+    ],
+    [
+      'MagazineIssueLabel INSERT',
+      `INSERT INTO [dbo].[MagazineIssueLabel] ([magazineIssueId],[locale],[title],[summary]) VALUES (N'${issueId}',N'en',N'Least-privilege proof issue',N'');`,
+    ],
+    [
+      'SearchIndexRequest INSERT (issue scope)',
+      `INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'magazine-issue',N'${issueId}');`,
+    ],
+  ] as const) {
+    await expectAllowed(app, label, statement, 'the save path writes its own rows');
+  }
+
+  for (const [table, where] of [
+    ['ResearchCitation', `[researchId]=N'${researchId}'`],
+    ['ResearchTopic', `[researchId]=N'${researchId}'`],
+    ['ResearchContributor', `[researchId]=N'${researchId}'`],
+    ['ResearchLabel', `[researchId]=N'${researchId}'`],
+    ['MagazineIssueLabel', `[magazineIssueId]=N'${issueId}'`],
+  ] as const) {
+    await expectAllowed(
+      app,
+      `${table} DELETE`,
+      `DELETE FROM [dbo].[${table}] WHERE ${where};`,
+      'a replaceable relation set can be cleared before it is rewritten',
+    );
+  }
+
+  for (const table of [
+    'Research',
+    'ResearchPaper',
+    'Publication',
+    'Magazine',
+    'MagazineIssue',
+    'Encyclopedia',
+  ]) {
+    await expectDenied(app, `${table} DELETE denied`, `DELETE FROM [dbo].[${table}];`);
+    await expectDenied(
+      app,
+      `${table}SlugHistory UPDATE denied`,
+      `UPDATE [dbo].[${table}SlugHistory] SET [slug]=[slug];`,
+    );
+    await expectDenied(
+      app,
+      `${table}SlugHistory DELETE denied`,
+      `DELETE FROM [dbo].[${table}SlugHistory];`,
+    );
+    await expectDenied(
+      app,
+      `${table}Label UPDATE denied`,
+      `UPDATE [dbo].[${table}Label] SET [title]=[title];`,
+    );
+    await expectDenied(
+      app,
+      `${table}Contributor UPDATE denied`,
+      `UPDATE [dbo].[${table}Contributor] SET [position]=[position];`,
+    );
+    await expectDenied(
+      app,
+      `${table}Topic UPDATE denied`,
+      `UPDATE [dbo].[${table}Topic] SET [topicId]=[topicId];`,
+    );
+    await expectDenied(
+      app,
+      `${table} ALTER denied`,
+      `ALTER TABLE [dbo].[${table}] DROP CONSTRAINT [${table}_state_ck];`,
+    );
+  }
+  for (const table of ['ResearchCitation', 'ResearchPaperCitation']) {
+    await expectDenied(
+      app,
+      `${table} UPDATE denied`,
+      `UPDATE [dbo].[${table}] SET [text]=[text];`,
+    );
+  }
+
   // ---- Phase 17: the derived search projection ------------------------------
   //
   // FOUR POSTURES, one per table, and each is the operation the indexer

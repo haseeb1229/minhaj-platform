@@ -3,13 +3,30 @@ import { localeSchema } from '../env/shared.ts';
 import { CONTRIBUTION_ROLES } from '../people/values.ts';
 
 export const libraryIdSchema = z.uuid();
-export const workSlugSchema = z
+/** One slug grammar for every Library aggregate with a public address. */
+export const librarySlugSchema = z
   .string()
   .trim()
   .min(2)
   .max(120)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
-export const libraryStateSchema = z.enum(['draft', 'published', 'archived']);
+/**
+ * Stated as a literal type rather than inferred from the schema, because Library
+ * records carry it across the persistence boundary and that boundary's contract
+ * must be explicit; `satisfies` keeps the two from drifting.
+ */
+export type LibraryState = 'draft' | 'published' | 'archived';
+export const libraryStateSchema = z.enum([
+  'draft',
+  'published',
+  'archived',
+]) satisfies z.ZodType<LibraryState>;
+/** A content-language reference, in the shape Taxonomy's `Language.code` takes. */
+export const libraryLanguageCodeSchema = z
+  .string()
+  .min(2)
+  .max(16)
+  .regex(/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/);
 export const libraryVersionSchema = z.number().int().positive().max(2_147_483_646);
 const text = (max: number) => z.string().trim().max(max);
 const ids = (max: number) =>
@@ -19,7 +36,7 @@ const ids = (max: number) =>
     .refine((v) => new Set(v).size === v.length);
 export const workInputSchema = z
   .object({
-    slug: workSlugSchema,
+    slug: librarySlugSchema,
     primaryLocale: localeSchema,
     state: libraryStateSchema,
     isFeatured: z.boolean(),
@@ -233,11 +250,7 @@ export const editionInputSchema = z
   .object({
     workId: libraryIdSchema,
     label: text(160).min(1),
-    languageCode: z
-      .string()
-      .min(2)
-      .max(16)
-      .regex(/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/),
+    languageCode: libraryLanguageCodeSchema,
     state: libraryStateSchema,
     publisher: text(240).nullable(),
     publicationYear: z.number().int().min(1).max(9999).nullable(),

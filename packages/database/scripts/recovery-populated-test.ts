@@ -10,6 +10,12 @@ import {
   verifyRestoredPhase8,
   writePhase8Fixture,
 } from '../src/lifecycle/phase8-fixture.ts';
+import {
+  capturePhase9Fixture,
+  newPhase9Fixture,
+  verifyRestoredPhase9,
+  writePhase9Fixture,
+} from '../src/lifecycle/phase9-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -127,6 +133,7 @@ const taxonomyFixture = newPhase3bFixture();
 const peopleFixture = newPhase5Fixture();
 const editorialFixture = newPhase6Fixture();
 const libraryFixture = newPhase8Fixture();
+const scholarlyFixture = newPhase9Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -207,6 +214,17 @@ try {
   const librarySnapshot = await capturePhase8Fixture(admin, libraryFixture);
   report('library fixture', `run ${libraryFixture.runId}`);
 
+  // Phase-9 scholarly and periodical records: renamed slugs in both namespaces
+  // of a Magazine and its issue, an archived paper, a draft issue, a citation and
+  // a pending search intent — so the restore must bring back relations,
+  // invariants and owed derived work, not merely rows.
+  await writePhase9Fixture(admin, scholarlyFixture, {
+    personId: peopleFixture.linkedPersonId,
+    topicId: taxonomyFixture.childTopicId,
+  });
+  const scholarlySnapshot = await capturePhase9Fixture(admin, scholarlyFixture);
+  report('scholarly fixture', `run ${scholarlyFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -269,6 +287,10 @@ try {
   report(
     'library recovery',
     await verifyRestoredPhase8(restored, libraryFixture, librarySnapshot),
+  );
+  report(
+    'scholarly recovery',
+    await verifyRestoredPhase9(restored, scholarlyFixture, scholarlySnapshot),
   );
 
   // ---- restored security posture -------------------------------------------
@@ -392,6 +414,14 @@ try {
           'Person slug UPDATE',
           "UPDATE [dbo].[Person] SET [slug] = N'restored-rename-attempt';",
         ],
+        // Phase 9. A restored runtime can neither erase a record nor release a
+        // reserved slug in either of a periodical's two namespaces.
+        ['Research DELETE', 'DELETE FROM [dbo].[Research];'],
+        ['MagazineIssue DELETE', 'DELETE FROM [dbo].[MagazineIssue];'],
+        [
+          'MagazineIssueSlugHistory DELETE',
+          'DELETE FROM [dbo].[MagazineIssueSlugHistory];',
+        ],
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -418,6 +448,7 @@ try {
       await verifyRestoredPhase5(restored, peopleFixture);
       await verifyRestoredPhase6(restored, editorialFixture, editorialSnapshot);
       await verifyRestoredPhase8(restored, libraryFixture, librarySnapshot);
+      await verifyRestoredPhase9(restored, scholarlyFixture, scholarlySnapshot);
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 
       // Phase 17. The full-text catalogue and index live INSIDE the database,
@@ -467,7 +498,7 @@ try {
 
   process.stdout.write(
     '\nPopulated recovery verified: representative rows in every Phase-2,\n' +
-      'Phase-3B, Phase-5, Phase-6 and Phase-8 tables were backed up, restored into a separate\n' +
+      'Phase-3B, Phase-5, Phase-6, Phase-8 and Phase-9 tables were backed up, restored into a separate\n' +
       'database, and checked value by value — together with referential\n' +
       'integrity, the topic hierarchy, the four distinct contributor profile\n' +
       'aggregates and their independent lifecycles, the optional account link,\n' +

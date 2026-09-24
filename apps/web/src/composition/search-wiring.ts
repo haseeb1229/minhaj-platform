@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { EditorialPublicReaderPort } from '@minhaj/contracts/editorial';
 import { pagePath } from '@minhaj/contracts/editorial';
-import type { LibraryPublicReaderPort } from '@minhaj/contracts/library';
+import type { LibraryPublicReaderPort, ScholarlyKind } from '@minhaj/contracts/library';
 import type { PeopleReaderPort } from '@minhaj/contracts/people';
 import type {
   SearchKind,
@@ -14,8 +14,12 @@ import type { TaxonomyReaderPort } from '@minhaj/contracts/taxonomy';
 import type { SearchTopic } from '@minhaj/search';
 
 import { EDITION_PARAM } from '@/components/library/presentation';
+import { scholarlyPathOf } from '@/components/library/scholarly-presentation';
 import { createEditorialSearchSources } from '@/contexts/editorial';
-import { createLibrarySearchSource } from '@/contexts/library';
+import {
+  createLibrarySearchSource,
+  createScholarlySearchSource,
+} from '@/contexts/library';
 import { createPersonSearchSource } from '@/contexts/people-contributors';
 import { createTopicSearchSource } from '@/contexts/taxonomy';
 
@@ -38,8 +42,9 @@ import { createTopicSearchSource } from '@/contexts/taxonomy';
  *
  * PATHS ARE LOCALE-FREE; the page prefixes the reader's interface locale. The
  * shapes are the owners' own public routes (ROUTE_MAP.md §3): `/topics/{slug}`,
- * `/people/{slug}`, `/library/articles/{slug}`, a Page's reserved binding, and a
- * Work's page — with the Edition selected — under `/library/books/{slug}`.
+ * `/people/{slug}`, `/library/articles/{slug}`, a Page's reserved binding, a
+ * Work's page — with the Edition selected — under `/library/books/{slug}`, and
+ * the Phase-9 Library routes, an issue beneath its Magazine's CURRENT slug.
  */
 
 export interface SearchOwnerReaders {
@@ -72,6 +77,20 @@ export function searchWiring(readers: SearchOwnerReaders): {
         `/library/books/${segment(row.workSlug)}?${EDITION_PARAM}=${segment(row.id)}`,
     );
 
+  const scholarly = (kind: ScholarlyKind) => ({
+    source: createScholarlySearchSource(readers.library, kind),
+    target: (async (ids) =>
+      mapOf(await readers.library.scholarlyTargets(kind, ids), (row) =>
+        scholarlyPathOf(kind, row.slug, row.magazineSlug),
+      )) satisfies SearchTargetResolver,
+  });
+  const research = scholarly('research');
+  const researchPaper = scholarly('research-paper');
+  const publication = scholarly('publication');
+  const magazine = scholarly('magazine');
+  const magazineIssue = scholarly('magazine-issue');
+  const encyclopedia = scholarly('encyclopedia');
+
   return {
     sources: {
       topic: createTopicSearchSource(readers.taxonomy),
@@ -79,6 +98,12 @@ export function searchWiring(readers: SearchOwnerReaders): {
       article: editorial.article,
       page: editorial.page,
       work: createLibrarySearchSource(readers.library),
+      research: research.source,
+      'research-paper': researchPaper.source,
+      publication: publication.source,
+      magazine: magazine.source,
+      'magazine-issue': magazineIssue.source,
+      encyclopedia: encyclopedia.source,
     },
 
     targets: {
@@ -110,6 +135,12 @@ export function searchWiring(readers: SearchOwnerReaders): {
         ),
       edition: editions,
       'book-translation': editions,
+      research: research.target,
+      'research-paper': researchPaper.target,
+      publication: publication.target,
+      magazine: magazine.target,
+      'magazine-issue': magazineIssue.target,
+      encyclopedia: encyclopedia.target,
     },
 
     async resolveTopic(slug, locale) {

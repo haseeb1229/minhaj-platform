@@ -1,5 +1,4 @@
 import type { ReaderDocument } from '@minhaj/contracts/library';
-import { readerPosition } from '@minhaj/contracts/library';
 
 import { SectionHeading } from '@/components/ui';
 import { ReaderControls, type ReaderControlLabels } from './reader-controls';
@@ -44,36 +43,6 @@ import { ReaderControls, type ReaderControlLabels } from './reader-controls';
  *     `style-src 'self'` CSP.
  */
 
-/**
- * THE STABLE POSITION IDENTIFIER — the seam Phase 21 attaches to.
- *
- * It is `readerPosition(editionId, contentVersion, sectionKey)` and it is
- * deliberately built from exactly those three things:
- *
- *   - the EDITION, because a position in an Urdu translation is not a position in
- *     the Arabic original;
- *   - the CONTENT VERSION — a digest of the document — because a position in text
- *     that has since been re-cut should not silently resolve into different
- *     words;
- *   - the SECTION KEY, which is authored structure.
- *
- * NOTHING ELSE IS IN IT. No pixel offset, no scroll position, no viewport width,
- * no font size, no theme, no user identifier. So the same section in the same
- * edition is the same identifier at 100% and 200% zoom, at every type size this
- * reader offers, before and after a reload, and for a signed-out visitor — which
- * is what makes it safe to put in a URL fragment and safe for Phase 21 to store
- * later (DOMAIN_MODEL.md §14.1).
- *
- * Phase 8 stores NO reading position anywhere. It defines the name for one.
- */
-function positionIdFor(
-  editionId: string,
-  contentVersion: string,
-  sectionKey: string,
-): string {
-  return readerPosition(editionId, contentVersion, sectionKey);
-}
-
 interface ReaderLabels extends ReaderControlLabels {
   readonly contents: string;
   readonly readerHeading: string;
@@ -88,8 +57,7 @@ const CONTENTS_ID = 'library-reader-contents';
 const READER_ID = 'library-reader';
 
 export function Reader({
-  editionId,
-  contentVersion,
+  anchorFor,
   languageCode,
   direction,
   interfaceLocale,
@@ -97,9 +65,24 @@ export function Reader({
   document,
   labels,
 }: {
-  readonly editionId: string;
-  readonly contentVersion: string;
-  /** The edition's CONTENT language, from Taxonomy. Never the interface locale. */
+  /**
+   * The in-page address of one section, from its authored key.
+   *
+   * FOR AN EDITION THIS IS THE STABLE POSITION IDENTIFIER — the seam Phase 21
+   * attaches to: `readerPosition(editionId, contentVersion, sectionKey)`, built
+   * from exactly those three things and nothing else. The EDITION, because a
+   * position in an Urdu translation is not a position in the Arabic original;
+   * the CONTENT VERSION, because a position in text that has since been re-cut
+   * should not silently resolve into different words; the SECTION KEY, which is
+   * authored structure. No pixel offset, no viewport, no font size and no user —
+   * so it is the same at every zoom and type size, before and after a reload,
+   * and safe for Phase 21 to store later (DOMAIN_MODEL.md §14.1).
+   *
+   * A Phase-9 document names its sections by key alone: it offers stable
+   * in-page links, and no reading-position seam is owed for it.
+   */
+  readonly anchorFor: (sectionKey: string) => string;
+  /** The document's CONTENT language, from Taxonomy. Never the interface locale. */
   readonly languageCode: string;
   readonly direction: 'ltr' | 'rtl';
   readonly interfaceLocale: string;
@@ -112,7 +95,7 @@ export function Reader({
   const sections = document.sections.map((section, index) => ({
     ...section,
     index: index + 1,
-    id: positionIdFor(editionId, contentVersion, section.key),
+    id: anchorFor(section.key),
   }));
 
   return (

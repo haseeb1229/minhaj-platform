@@ -183,24 +183,30 @@ describe('a deferred capability cannot be linked', () => {
     expect(route.indexing).toBe('eligible');
   });
 
-  it('delivers Library with a path, and only the Phase-8 Library surfaces', () => {
+  it('delivers Library with a path, and only the delivered Library surfaces', () => {
     expect(requireRoute('library').path).toBe('/library');
 
     const surfaces = SHELL_ROUTES.filter((route) => route.key.startsWith('library.'))
       .map((route) => route.key)
       .sort();
 
-    // Phase 9 and Phase 15 surfaces are ABSENT, not reserved: research,
-    // publications, magazines, encyclopedias and collections have no entry.
+    // Phases 8 and 9. Phase 15's collections are ABSENT, not reserved: they have
+    // no entry, so no link to them can be built.
     expect(surfaces).toEqual([
       'library.authors',
       'library.books',
       'library.downloads',
+      'library.encyclopedias',
       'library.languages',
+      'library.magazines',
+      'library.publications',
+      'library.research',
+      'library.research-papers',
       'library.resources',
       'library.sale-points',
       'library.topics',
     ]);
+    expect(routeByKey('library.collections')).toBeNull();
   });
 
   it('refuses to resolve a deferred route as a renderable one', () => {
@@ -281,12 +287,18 @@ describe('indexing eligibility is honest', () => {
     ).toEqual([
       'explore',
       'home',
-      // Phase 8: the Library landing page and its seven delivered surfaces.
+      // Phase 8: the Library landing page and its seven delivered surfaces;
+      // Phase 9: five scholarly and periodical listings.
       'library',
       'library.authors',
       'library.books',
       'library.downloads',
+      'library.encyclopedias',
       'library.languages',
+      'library.magazines',
+      'library.publications',
+      'library.research',
+      'library.research-papers',
       'library.resources',
       'library.sale-points',
       'library.topics',

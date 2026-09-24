@@ -59,9 +59,9 @@ const SURFACES: readonly { key: string; permission: PermissionKey; path: string 
   // has one: `people.read` opens all five of its surfaces, and five entries for
   // one permission would be five links that appear and disappear together.
   { key: 'people', permission: 'people.read', path: 'people/persons' },
-  // Phase 8. One entry for the Library area: `library.read` opens all four of its
-  // surfaces, so four entries would be four links that appear and disappear
-  // together.
+  // Phase 8. One entry for the Library area: `library.read` opens all of its
+  // surfaces — Phase 9's included — so an entry per surface would be links that
+  // appear and disappear together.
   { key: 'library', permission: 'library.read', path: 'library/works' },
   // Phase 4. A READ-ONLY view of the public shell's effective navigation; the
   // registry behind it is code, so there is no editing surface to reach.

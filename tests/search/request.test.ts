@@ -56,8 +56,29 @@ describe('parseSearchParams', () => {
   });
 
   it('refuses a future or unknown result kind', () => {
-    for (const type of ['research', 'video', 'fatwa', 'quran', 'hadith', 'event']) {
+    for (const type of [
+      'news',
+      'video',
+      'fatwa',
+      'quran',
+      'hadith',
+      'event',
+      'journal',
+    ]) {
       expect(parseSearchParams({ q: 'x1', type }).state, type).toBe('invalid');
+    }
+  });
+
+  it('accepts the scholarly and periodical kinds Phase 9 delivered', () => {
+    for (const type of [
+      'research',
+      'research-paper',
+      'publication',
+      'magazine',
+      'magazine-issue',
+      'encyclopedia',
+    ]) {
+      expect(parseSearchParams({ q: 'x1', type }).state, type).toBe('valid');
     }
   });
 

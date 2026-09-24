@@ -1,5 +1,6 @@
 import { editorialSitemapPartitions, mergePagePartitions } from './editorial-sitemap';
 import { librarySitemapPartitions } from './library-sitemap';
+import { scholarlySitemapPartitions } from './scholarly-sitemap';
 import { topicsSitemapPartitions } from './topics-sitemap';
 import 'server-only';
 
@@ -141,6 +142,9 @@ export async function allSitemapPartitions(): Promise<readonly SitemapPartition[
     ...(await librarySitemapPartitions()),
     // Phase 17's `topics` segment: the canonical topic hubs.
     ...(await topicsSitemapPartitions()),
+    // Phase 9's `research` and `publications` segments, split at 5,000 URLs by
+    // the same merge.
+    ...(await scholarlySitemapPartitions()),
   ]);
 }
 

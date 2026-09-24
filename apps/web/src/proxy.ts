@@ -1,6 +1,7 @@
 import createMiddleware from 'next-intl/middleware';
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { standaloneKindOfSegment } from '@/components/library/scholarly-presentation';
 import { routing } from '@/i18n/routing';
 
 /**
@@ -34,18 +35,66 @@ import { routing } from '@/i18n/routing';
  */
 const localeMiddleware = createMiddleware(routing);
 
+/** One path segment, decoded, or `null` when it is not valid encoding. */
+function decodedSegment(raw: string): string | null {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    // Invalid encoded input continues to the route's 404.
+    return null;
+  }
+}
+
+/** A single permanent hop to a current canonical address. */
+function permanent(request: NextRequest, pathname: string): NextResponse {
+  const target = request.nextUrl.clone();
+  target.pathname = pathname;
+  const redirect = NextResponse.redirect(target, 301);
+  redirect.headers.set('Cache-Control', 'no-store');
+  redirect.headers.set('X-Robots-Tag', 'noindex');
+  return redirect;
+}
+
 export default async function proxy(request: NextRequest) {
   if (request.method === 'GET' || request.method === 'HEAD') {
-    const match = /^\/(en|ur|ar)\/(library\/articles|library\/books|help)\/([^/]+)$/.exec(
+    /**
+     * PHASE 9 — A MAGAZINE ISSUE HAS A TWO-PART ADDRESS, and either part may be
+     * a former slug. Library resolves BOTH to their current values before
+     * anything redirects, so an old Magazine slug with an old issue slug is ONE
+     * 301 to the current full address, never a Magazine hop followed by an issue
+     * hop (ROUTE_MAP.md §9.7).
+     */
+    const issue = /^\/(en|ur|ar)\/library\/magazines\/([^/]+)\/issues\/([^/]+)$/.exec(
       request.nextUrl.pathname,
     );
-    if (match?.[3]) {
-      let slug: string | null = null;
-      try {
-        slug = decodeURIComponent(match[3]);
-      } catch {
-        /* Invalid encoded input continues to the route's 404. */
+    if (issue?.[1] && issue[2] && issue[3]) {
+      const magazineSlug = decodedSegment(issue[2]);
+      const issueSlug = decodedSegment(issue[3]);
+      if (magazineSlug !== null && issueSlug !== null) {
+        const { libraryReadRuntime } = await import('@/composition/library-read');
+        const current = await libraryReadRuntime().magazineIssueCanonical(
+          magazineSlug,
+          issueSlug,
+        );
+        if (
+          current !== null &&
+          (current.magazineSlug !== magazineSlug || current.issueSlug !== issueSlug)
+        ) {
+          return permanent(
+            request,
+            `/${issue[1]}/library/magazines/${encodeURIComponent(current.magazineSlug)}/issues/${encodeURIComponent(current.issueSlug)}`,
+          );
+        }
       }
+    }
+  }
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    const match =
+      /^\/(en|ur|ar)\/(library\/articles|library\/books|library\/research|library\/research-papers|library\/publications|library\/magazines|library\/encyclopedias|help)\/([^/]+)$/.exec(
+        request.nextUrl.pathname,
+      );
+    if (match?.[3]) {
+      const slug = decodedSegment(match[3]);
       if (slug !== null) {
         /**
          * PHASE 8 JOINS THE SAME MECHANISM, and does not build a second one.
@@ -66,27 +115,33 @@ export default async function proxy(request: NextRequest) {
          * IMPORTED LAZILY, per branch, so a request for any other path pays for
          * neither resolver.
          */
+        const area = match[2] ?? '';
+        const scholarly = area.startsWith('library/')
+          ? standaloneKindOfSegment(area.slice('library/'.length))
+          : null;
         const record =
-          match[2] === 'library/books'
+          area === 'library/books'
             ? await (async () => {
                 const { libraryReadRuntime } = await import('@/composition/library-read');
                 return libraryReadRuntime().canonicalSlug(slug);
               })()
-            : await (async () => {
-                const { editorialReadRuntime } =
-                  await import('@/composition/editorial-read');
-                return match[2] === 'help'
-                  ? editorialReadRuntime().pageCanonicalSlug('help-article', slug)
-                  : editorialReadRuntime().articleCanonicalSlug(slug);
-              })();
+            : scholarly !== null
+              ? await (async () => {
+                  // PHASE 9 joins the same branch: Library's own slug history for
+                  // each of its five standalone aggregates, never LegacyMapping.
+                  const { libraryReadRuntime } =
+                    await import('@/composition/library-read');
+                  return libraryReadRuntime().scholarlyCanonicalSlug(scholarly, slug);
+                })()
+              : await (async () => {
+                  const { editorialReadRuntime } =
+                    await import('@/composition/editorial-read');
+                  return area === 'help'
+                    ? editorialReadRuntime().pageCanonicalSlug('help-article', slug)
+                    : editorialReadRuntime().articleCanonicalSlug(slug);
+                })();
         if (record && record !== slug) {
-          const target = request.nextUrl.clone();
-          target.pathname =
-            '/' + match[1] + '/' + match[2] + '/' + encodeURIComponent(record);
-          const redirect = NextResponse.redirect(target, 301);
-          redirect.headers.set('Cache-Control', 'no-store');
-          redirect.headers.set('X-Robots-Tag', 'noindex');
-          return redirect;
+          return permanent(request, `/${match[1]}/${area}/${encodeURIComponent(record)}`);
         }
       }
     }

@@ -168,6 +168,10 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/library/presentation.ts',
     'apps/web/src/components/library/reader-controls.tsx',
     'apps/web/src/components/library/reader.tsx',
+    // Phase 9. The scholarly and periodical surfaces and their pure
+    // presentation decisions, on the same anonymous public path.
+    'apps/web/src/components/library/scholarly.tsx',
+    'apps/web/src/components/library/scholarly-presentation.ts',
     // Phase 17. A pure highlighter the dynamic search route renders with; the
     // module itself reads no request state.
     'apps/web/src/components/search/highlight.ts',

@@ -163,7 +163,12 @@
       "languages": "Library content languages",
       "downloads": "Library downloads",
       "sale-points": "Where to buy printed books",
-      "resources": "All Library resources"
+      "resources": "All Library resources",
+      "research": "Library research",
+      "research-papers": "Library research papers",
+      "publications": "Library publications",
+      "magazines": "Library magazines and journals",
+      "encyclopedias": "Library encyclopedias"
     }
   },
   "localeSwitcher": {
@@ -909,7 +914,13 @@
         "person": "Person",
         "article": "Article",
         "page": "Page",
-        "work": "Book"
+        "work": "Book",
+        "research": "Research",
+        "research-paper": "Research paper",
+        "publication": "Publication",
+        "magazine": "Magazine",
+        "magazine-issue": "Magazine issue",
+        "encyclopedia": "Encyclopedia"
       },
       "categories": {
         "source-unavailable": "The owner could not be read",
@@ -1064,7 +1075,12 @@
       "topics": "Topics",
       "languages": "Content languages",
       "downloads": "Downloads",
-      "sale-points": "Where to buy"
+      "sale-points": "Where to buy",
+      "research": "Research",
+      "research-papers": "Research papers",
+      "publications": "Publications",
+      "magazines": "Magazines and journals",
+      "encyclopedias": "Encyclopedias"
     },
     "sectionBody": {
       "books": "Every published work, with its editions and translations.",
@@ -1074,7 +1090,12 @@
       "topics": "Works grouped by topic.",
       "languages": "Works grouped by the language their editions are written in.",
       "downloads": "Works with at least one edition that may be downloaded.",
-      "sale-points": "Places where printed copies can be obtained."
+      "sale-points": "Places where printed copies can be obtained.",
+      "research": "Published research, with abstracts, institutional context and citations.",
+      "research-papers": "Research papers, with where they appeared, abstracts and citations.",
+      "publications": "Reports, booklets and other standalone publications.",
+      "magazines": "Magazines and journals, each with its published issues.",
+      "encyclopedias": "Encyclopedias, readable in full where the text is available."
     },
     "empty": "No books are published yet.",
     "emptyFacet": "Nothing is published under this heading yet.",
@@ -1153,7 +1174,12 @@
       "works": "Works",
       "editions": "Editions",
       "translations": "Translations",
-      "sale-points": "Sale points"
+      "sale-points": "Sale points",
+      "research": "Research",
+      "research-papers": "Research papers",
+      "publications": "Publications",
+      "magazines": "Magazines",
+      "encyclopedias": "Encyclopedias"
     },
     "adminBackToList": "Back to all editions",
     "adminEmpty": "No records yet.",
@@ -1168,7 +1194,7 @@
     "denied": "You do not have permission for this action.",
     "invalid": "Check the fields and try again.",
     "notFound": "This record no longer exists.",
-    "duplicateSlug": "This slug is already reserved by another work.",
+    "duplicateSlug": "This slug is already reserved by another record.",
     "limitReached": "This work already has the maximum number of editions.",
     "unknown": "This operation could not be completed. Please try again.",
     "saved": "Saved.",
@@ -1241,7 +1267,113 @@
     "workHelp": "The work this edition is a manifestation of.",
     "workSalePointsHelp": "Enter the identifiers shown on the sale points screen.",
     "notCleared": "The file could not be cleared by the scanner, so it was not attached. Nothing was published. Try again later.",
-    "rateLimited": "Too many uploads in a short time. Wait a few minutes and try again."
+    "rateLimited": "Too many uploads in a short time. Wait a few minutes and try again.",
+    "scholarly": {
+      "kind": {
+        "research": "Research",
+        "research-paper": "Research paper",
+        "publication": "Publication",
+        "magazine": "Magazine",
+        "magazine-issue": "Magazine issue",
+        "encyclopedia": "Encyclopedia"
+      },
+      "filters": "Filter this list",
+      "emptyFiltered": "Nothing published matches these filters.",
+      "empty": {
+        "research": "No research is published yet.",
+        "research-paper": "No research papers are published yet.",
+        "publication": "No publications are published yet.",
+        "magazine": "No magazines are published yet.",
+        "encyclopedia": "No encyclopedias are published yet."
+      },
+      "viewAll": {
+        "research": "All research",
+        "research-paper": "All research papers",
+        "publication": "All publications",
+        "magazine": "All magazines and journals",
+        "encyclopedia": "All encyclopedias"
+      },
+      "metadataNotice": "Titles and summaries are shown in your interface language where they have been written. They describe this record; they are not a translation of it. The language of the text itself is stated below.",
+      "facts": "Details",
+      "fact": {
+        "contentLanguage": "Language of the text",
+        "published": "Published",
+        "publicationYear": "Year of publication",
+        "publisher": "Publisher",
+        "venue": "Appeared in",
+        "doi": "DOI",
+        "institutionalContext": "Institutional context",
+        "magazine": "Magazine",
+        "numbering": "Issue"
+      },
+      "numbering": {
+        "both": "Volume {volume}, issue {number}",
+        "volume": "Volume {volume}",
+        "number": "Issue {number}"
+      },
+      "abstract": "Abstract",
+      "fullText": "Full text",
+      "noFullText": "The full text is not available on this platform.",
+      "citations": "Citations",
+      "citationDoi": "DOI {doi}",
+      "citationSource": "Source",
+      "issues": "Issues",
+      "noIssues": "No issue of this magazine is published yet.",
+      "issueNavigation": "Other issues of this magazine",
+      "previousIssue": "Previous issue",
+      "nextIssue": "Next issue"
+    },
+    "scholarlyAdmin": {
+      "create": {
+        "research": "Create research",
+        "research-paper": "Create a research paper",
+        "publication": "Create a publication",
+        "magazine": "Create a magazine",
+        "magazine-issue": "Create an issue of this magazine",
+        "encyclopedia": "Create an encyclopedia"
+      },
+      "edit": {
+        "research": "Edit this research",
+        "research-paper": "Edit this research paper",
+        "publication": "Edit this publication",
+        "magazine": "Edit this magazine",
+        "magazine-issue": "Edit this issue",
+        "encyclopedia": "Edit this encyclopedia"
+      },
+      "allStates": "All states",
+      "updated": "Last changed",
+      "backToList": "Back to the list",
+      "backToMagazine": "Back to the magazine",
+      "viewPublic": "View the public page",
+      "slugHelp": "Lowercase letters, numbers and hyphens. A former slug stays reserved and redirects here.",
+      "stateHelp": "Only a published record appears publicly, in search and in the sitemap. Archiving withdraws it.",
+      "labelsHelp": "A descriptive title and summary in each interface language. They describe the record; they are not a translation of its text, whose language is chosen below.",
+      "summary": "Summary",
+      "facts": "Facts",
+      "contentLanguageHelp": "The language the text itself is written in — not the interface language.",
+      "publicationYear": "Year of publication",
+      "publicationYearHelp": "Only a year that is genuinely known.",
+      "publishedOn": "Date of publication",
+      "publishedOnHelp": "Only a date that is genuinely known. It sets the year.",
+      "volume": "Volume",
+      "issueNumber": "Issue number",
+      "numbersHelp": "Only numbers printed on the issue. Leave empty when there are none.",
+      "publisher": "Publisher",
+      "publisherHelp": "Only a publisher that is genuinely known.",
+      "venue": "Appeared in",
+      "venueHelp": "The journal, proceedings or collection, only when genuinely known.",
+      "doi": "DOI",
+      "doiHelp": "Only a DOI printed on the source, for example 10.1234/abcd. Nothing is looked up.",
+      "institutionalContext": "Institutional context",
+      "institutionalContextHelp": "A short statement exactly as the source gives it.",
+      "abstract": "Abstract",
+      "abstractHelp": "Plain text. Separate paragraphs with a blank line.",
+      "document": "Text",
+      "citationsHelp": "One citation per row, in the source's order. Empty rows are ignored; more appear after saving.",
+      "citationText": "Citation {number}",
+      "citationUrl": "Address (https)",
+      "duplicateNumber": "Another issue of this magazine already has this volume and number."
+    }
   },
   "search": {
     "title": "Search",
@@ -1261,7 +1393,13 @@
       "page": "Page",
       "work": "Book",
       "edition": "Edition",
-      "book-translation": "Translation"
+      "book-translation": "Translation",
+      "research": "Research",
+      "research-paper": "Research paper",
+      "publication": "Publication",
+      "magazine": "Magazine",
+      "magazine-issue": "Magazine issue",
+      "encyclopedia": "Encyclopedia"
     },
     "topic": "Topic",
     "topicAny": "Any topic",
@@ -1321,6 +1459,21 @@
     "searchWithin": "Search within this topic",
     "searchLabel": "Search this topic for",
     "searchSubmit": "Search",
-    "fallback": "This topic has not been translated into this language yet, so it is shown in English."
+    "fallback": "This topic has not been translated into this language yet, so it is shown in English.",
+    "sections": {
+      "research": "Research on this topic",
+      "research-paper": "Research papers on this topic",
+      "publication": "Publications on this topic",
+      "magazine": "Magazines on this topic",
+      "magazine-issue": "Magazine issues on this topic",
+      "encyclopedia": "Encyclopedias on this topic"
+    },
+    "all": {
+      "research": "All research on this topic",
+      "research-paper": "All research papers on this topic",
+      "publication": "All publications on this topic",
+      "magazine": "All magazines on this topic",
+      "encyclopedia": "All encyclopedias on this topic"
+    }
   }
 }
