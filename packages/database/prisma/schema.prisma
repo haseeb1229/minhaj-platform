@@ -101,6 +101,26 @@ model User {
   articleSchedules Article[] @relation("ArticleScheduler")
   articleRevisions ArticleRevision[]
 
+  newsArticleCreations NewsArticle[] @relation("NewsArticleCreator")
+  newsArticleApprovals NewsArticle[] @relation("NewsArticleReviewer")
+  newsArticleSchedules NewsArticle[] @relation("NewsArticleScheduler")
+  newsArticleRevisions NewsArticleRevision[]
+
+  pressReleaseCreations PressRelease[] @relation("PressReleaseCreator")
+  pressReleaseApprovals PressRelease[] @relation("PressReleaseReviewer")
+  pressReleaseSchedules PressRelease[] @relation("PressReleaseScheduler")
+  pressReleaseRevisions PressReleaseRevision[]
+
+  statementCreations Statement[] @relation("StatementCreator")
+  statementApprovals Statement[] @relation("StatementReviewer")
+  statementSchedules Statement[] @relation("StatementScheduler")
+  statementRevisions StatementRevision[]
+
+  mediaCoverageCreations MediaCoverage[] @relation("MediaCoverageCreator")
+  mediaCoverageApprovals MediaCoverage[] @relation("MediaCoverageReviewer")
+  mediaCoverageSchedules MediaCoverage[] @relation("MediaCoverageScheduler")
+  mediaCoverageRevisions MediaCoverageRevision[]
+
   id String @id @db.NVarChar(36)
 
   // ---- Better Auth core -------------------------------------------------
@@ -764,6 +784,10 @@ model Topic {
   audioTrackTopics AudioTrackTopic[]
 
   articleTopics ArticleTopic[]
+  newsArticleTopics NewsArticleTopic[]
+  pressReleaseTopics PressReleaseTopic[]
+  statementTopics StatementTopic[]
+  mediaCoverageTopics MediaCoverageTopic[]
 
   id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
 
@@ -882,6 +906,10 @@ model Language {
   audioTracks AudioTrack[]
 
   articleTranslations ArticleRevisionTranslation[]
+  newsArticleTranslations NewsArticleRevisionTranslation[]
+  pressReleaseTranslations PressReleaseRevisionTranslation[]
+  statementTranslations StatementRevisionTranslation[]
+  mediaCoverageTranslations MediaCoverageRevisionTranslation[]
 
   code String @id @db.NVarChar(16)
 
@@ -1013,6 +1041,10 @@ model Person {
   audioTrackSpeakers AudioTrackSpeaker[]
 
   articleContributions ArticleContributor[]
+  newsArticleContributions NewsArticleContributor[]
+  pressReleaseContributions PressReleaseContributor[]
+  statementContributions StatementContributor[]
+  mediaCoverageContributions MediaCoverageContributor[]
 
   id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
 
@@ -1572,6 +1604,382 @@ model PageSlugHistory {
   createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
   owner Page @relation(fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
   @@id([routeBinding,slug])
+  @@index([ownerId])
+}
+
+// Phase 13 — NewsArticle: its own aggregate, revisions, typed references and permanent
+// slug reservations, governed by the shared editorial workflow.
+model NewsArticle {
+  id String @id @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+  state String @db.NVarChar(16)
+  version Int
+  currentRevision Int?
+  approvedRevision Int?
+  approvedById String? @db.NVarChar(36)
+  creatorId String @db.NVarChar(36)
+  scheduledRevision Int?
+  scheduledAt DateTime? @db.DateTime2
+  scheduledTimezone String? @db.NVarChar(64)
+  scheduledById String? @db.NVarChar(36)
+  scheduleStatus String? @db.NVarChar(32)
+  publishedAt DateTime? @db.DateTime2
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @db.DateTime2
+  creator User @relation("NewsArticleCreator", fields:[creatorId], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  reviewer User? @relation("NewsArticleReviewer", fields:[approvedById], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  scheduler User? @relation("NewsArticleScheduler", fields:[scheduledById], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  current NewsArticleRevision? @relation("NewsArticleCurrent", fields:[id,currentRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  approval NewsArticleRevision? @relation("NewsArticleApproval", fields:[id,approvedRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  scheduled NewsArticleRevision? @relation("NewsArticleScheduled", fields:[id,scheduledRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  revisions NewsArticleRevision[] @relation("NewsArticleHistory")
+  slugs NewsArticleSlugHistory[]
+  @@unique([slug])
+  @@index([state,updatedAt,id])
+  @@index([state,publishedAt(sort: Desc),id])
+  @@index([scheduleStatus,scheduledAt,id])
+}
+model NewsArticleRevision {
+  ownerId String @db.NVarChar(36)
+  number Int
+  editorId String @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+  primaryLanguage String @db.NVarChar(16)
+  schemaVersion Int @default(1)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  owner NewsArticle @relation("NewsArticleHistory",fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  editor User @relation(fields:[editorId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  currentFor NewsArticle[] @relation("NewsArticleCurrent")
+  approvedFor NewsArticle[] @relation("NewsArticleApproval")
+  scheduledFor NewsArticle[] @relation("NewsArticleScheduled")
+  translations NewsArticleRevisionTranslation[]
+  topics NewsArticleTopic[]
+  contributors NewsArticleContributor[]
+  @@id([ownerId,number])
+}
+model NewsArticleRevisionTranslation {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  languageCode String @db.NVarChar(16)
+  title String @db.NVarChar(200)
+  excerpt String @db.NVarChar(600)
+  seoTitle String @db.NVarChar(200)
+  seoDescription String @db.NVarChar(300)
+  document String @db.NVarChar(Max)
+  html String @db.NVarChar(Max)
+  revision NewsArticleRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  language Language @relation(fields:[languageCode],references:[code],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,languageCode])
+}
+model NewsArticleTopic {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  topicId String @db.NVarChar(36)
+  revision NewsArticleRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  topic Topic @relation(fields:[topicId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,topicId])
+  @@index([topicId,ownerId])
+}
+model NewsArticleContributor {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  personId String @db.NVarChar(36)
+  role String @db.NVarChar(32)
+  position Int
+  revision NewsArticleRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  person Person @relation(fields:[personId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,personId,role])
+  @@index([personId,ownerId])
+}
+model NewsArticleSlugHistory {
+  slug String @db.NVarChar(120)
+  ownerId String @db.NVarChar(36)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  owner NewsArticle @relation(fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([slug])
+  @@index([ownerId])
+}
+
+// Phase 13 — PressRelease: its own aggregate, revisions, typed references and permanent
+// slug reservations, governed by the shared editorial workflow.
+model PressRelease {
+  id String @id @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+  state String @db.NVarChar(16)
+  version Int
+  currentRevision Int?
+  approvedRevision Int?
+  approvedById String? @db.NVarChar(36)
+  creatorId String @db.NVarChar(36)
+  scheduledRevision Int?
+  scheduledAt DateTime? @db.DateTime2
+  scheduledTimezone String? @db.NVarChar(64)
+  scheduledById String? @db.NVarChar(36)
+  scheduleStatus String? @db.NVarChar(32)
+  publishedAt DateTime? @db.DateTime2
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @db.DateTime2
+  creator User @relation("PressReleaseCreator", fields:[creatorId], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  reviewer User? @relation("PressReleaseReviewer", fields:[approvedById], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  scheduler User? @relation("PressReleaseScheduler", fields:[scheduledById], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  current PressReleaseRevision? @relation("PressReleaseCurrent", fields:[id,currentRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  approval PressReleaseRevision? @relation("PressReleaseApproval", fields:[id,approvedRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  scheduled PressReleaseRevision? @relation("PressReleaseScheduled", fields:[id,scheduledRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  revisions PressReleaseRevision[] @relation("PressReleaseHistory")
+  slugs PressReleaseSlugHistory[]
+  @@unique([slug])
+  @@index([state,updatedAt,id])
+  @@index([state,publishedAt(sort: Desc),id])
+  @@index([scheduleStatus,scheduledAt,id])
+}
+model PressReleaseRevision {
+  ownerId String @db.NVarChar(36)
+  number Int
+  editorId String @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+  primaryLanguage String @db.NVarChar(16)
+  schemaVersion Int @default(1)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  owner PressRelease @relation("PressReleaseHistory",fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  editor User @relation(fields:[editorId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  currentFor PressRelease[] @relation("PressReleaseCurrent")
+  approvedFor PressRelease[] @relation("PressReleaseApproval")
+  scheduledFor PressRelease[] @relation("PressReleaseScheduled")
+  translations PressReleaseRevisionTranslation[]
+  topics PressReleaseTopic[]
+  contributors PressReleaseContributor[]
+  @@id([ownerId,number])
+}
+model PressReleaseRevisionTranslation {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  languageCode String @db.NVarChar(16)
+  title String @db.NVarChar(200)
+  excerpt String @db.NVarChar(600)
+  seoTitle String @db.NVarChar(200)
+  seoDescription String @db.NVarChar(300)
+  document String @db.NVarChar(Max)
+  html String @db.NVarChar(Max)
+  revision PressReleaseRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  language Language @relation(fields:[languageCode],references:[code],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,languageCode])
+}
+model PressReleaseTopic {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  topicId String @db.NVarChar(36)
+  revision PressReleaseRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  topic Topic @relation(fields:[topicId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,topicId])
+  @@index([topicId,ownerId])
+}
+model PressReleaseContributor {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  personId String @db.NVarChar(36)
+  role String @db.NVarChar(32)
+  position Int
+  revision PressReleaseRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  person Person @relation(fields:[personId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,personId,role])
+  @@index([personId,ownerId])
+}
+model PressReleaseSlugHistory {
+  slug String @db.NVarChar(120)
+  ownerId String @db.NVarChar(36)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  owner PressRelease @relation(fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([slug])
+  @@index([ownerId])
+}
+
+// Phase 13 — Statement: its own aggregate, revisions, typed references and permanent
+// slug reservations, governed by the shared editorial workflow.
+model Statement {
+  id String @id @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+  state String @db.NVarChar(16)
+  version Int
+  currentRevision Int?
+  approvedRevision Int?
+  approvedById String? @db.NVarChar(36)
+  creatorId String @db.NVarChar(36)
+  scheduledRevision Int?
+  scheduledAt DateTime? @db.DateTime2
+  scheduledTimezone String? @db.NVarChar(64)
+  scheduledById String? @db.NVarChar(36)
+  scheduleStatus String? @db.NVarChar(32)
+  publishedAt DateTime? @db.DateTime2
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @db.DateTime2
+  creator User @relation("StatementCreator", fields:[creatorId], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  reviewer User? @relation("StatementReviewer", fields:[approvedById], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  scheduler User? @relation("StatementScheduler", fields:[scheduledById], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  current StatementRevision? @relation("StatementCurrent", fields:[id,currentRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  approval StatementRevision? @relation("StatementApproval", fields:[id,approvedRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  scheduled StatementRevision? @relation("StatementScheduled", fields:[id,scheduledRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  revisions StatementRevision[] @relation("StatementHistory")
+  slugs StatementSlugHistory[]
+  @@unique([slug])
+  @@index([state,updatedAt,id])
+  @@index([state,publishedAt(sort: Desc),id])
+  @@index([scheduleStatus,scheduledAt,id])
+}
+model StatementRevision {
+  ownerId String @db.NVarChar(36)
+  number Int
+  editorId String @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+  primaryLanguage String @db.NVarChar(16)
+  schemaVersion Int @default(1)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  owner Statement @relation("StatementHistory",fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  editor User @relation(fields:[editorId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  currentFor Statement[] @relation("StatementCurrent")
+  approvedFor Statement[] @relation("StatementApproval")
+  scheduledFor Statement[] @relation("StatementScheduled")
+  translations StatementRevisionTranslation[]
+  topics StatementTopic[]
+  contributors StatementContributor[]
+  @@id([ownerId,number])
+}
+model StatementRevisionTranslation {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  languageCode String @db.NVarChar(16)
+  title String @db.NVarChar(200)
+  excerpt String @db.NVarChar(600)
+  issuer String @db.NVarChar(200)
+  seoTitle String @db.NVarChar(200)
+  seoDescription String @db.NVarChar(300)
+  document String @db.NVarChar(Max)
+  html String @db.NVarChar(Max)
+  revision StatementRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  language Language @relation(fields:[languageCode],references:[code],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,languageCode])
+}
+model StatementTopic {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  topicId String @db.NVarChar(36)
+  revision StatementRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  topic Topic @relation(fields:[topicId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,topicId])
+  @@index([topicId,ownerId])
+}
+model StatementContributor {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  personId String @db.NVarChar(36)
+  role String @db.NVarChar(32)
+  position Int
+  revision StatementRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  person Person @relation(fields:[personId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,personId,role])
+  @@index([personId,ownerId])
+}
+model StatementSlugHistory {
+  slug String @db.NVarChar(120)
+  ownerId String @db.NVarChar(36)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  owner Statement @relation(fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([slug])
+  @@index([ownerId])
+}
+
+// Phase 13 — MediaCoverage: its own aggregate, revisions, typed references and permanent
+// slug reservations, governed by the shared editorial workflow.
+model MediaCoverage {
+  id String @id @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+  state String @db.NVarChar(16)
+  version Int
+  currentRevision Int?
+  approvedRevision Int?
+  approvedById String? @db.NVarChar(36)
+  creatorId String @db.NVarChar(36)
+  scheduledRevision Int?
+  scheduledAt DateTime? @db.DateTime2
+  scheduledTimezone String? @db.NVarChar(64)
+  scheduledById String? @db.NVarChar(36)
+  scheduleStatus String? @db.NVarChar(32)
+  publishedAt DateTime? @db.DateTime2
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @db.DateTime2
+  creator User @relation("MediaCoverageCreator", fields:[creatorId], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  reviewer User? @relation("MediaCoverageReviewer", fields:[approvedById], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  scheduler User? @relation("MediaCoverageScheduler", fields:[scheduledById], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  current MediaCoverageRevision? @relation("MediaCoverageCurrent", fields:[id,currentRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  approval MediaCoverageRevision? @relation("MediaCoverageApproval", fields:[id,approvedRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  scheduled MediaCoverageRevision? @relation("MediaCoverageScheduled", fields:[id,scheduledRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  revisions MediaCoverageRevision[] @relation("MediaCoverageHistory")
+  slugs MediaCoverageSlugHistory[]
+  @@unique([slug])
+  @@index([state,updatedAt,id])
+  @@index([state,publishedAt(sort: Desc),id])
+  @@index([scheduleStatus,scheduledAt,id])
+}
+model MediaCoverageRevision {
+  ownerId String @db.NVarChar(36)
+  number Int
+  editorId String @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+  primaryLanguage String @db.NVarChar(16)
+  outletName String @db.NVarChar(200)
+  sourceUrl String? @db.NVarChar(2048)
+  sourcePublishedOn DateTime? @db.Date
+  schemaVersion Int @default(1)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  owner MediaCoverage @relation("MediaCoverageHistory",fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  editor User @relation(fields:[editorId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  currentFor MediaCoverage[] @relation("MediaCoverageCurrent")
+  approvedFor MediaCoverage[] @relation("MediaCoverageApproval")
+  scheduledFor MediaCoverage[] @relation("MediaCoverageScheduled")
+  translations MediaCoverageRevisionTranslation[]
+  topics MediaCoverageTopic[]
+  contributors MediaCoverageContributor[]
+  @@id([ownerId,number])
+}
+model MediaCoverageRevisionTranslation {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  languageCode String @db.NVarChar(16)
+  title String @db.NVarChar(200)
+  excerpt String @db.NVarChar(600)
+  seoTitle String @db.NVarChar(200)
+  seoDescription String @db.NVarChar(300)
+  document String @db.NVarChar(Max)
+  html String @db.NVarChar(Max)
+  revision MediaCoverageRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  language Language @relation(fields:[languageCode],references:[code],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,languageCode])
+}
+model MediaCoverageTopic {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  topicId String @db.NVarChar(36)
+  revision MediaCoverageRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  topic Topic @relation(fields:[topicId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,topicId])
+  @@index([topicId,ownerId])
+}
+model MediaCoverageContributor {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  personId String @db.NVarChar(36)
+  role String @db.NVarChar(32)
+  position Int
+  revision MediaCoverageRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  person Person @relation(fields:[personId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,personId,role])
+  @@index([personId,ownerId])
+}
+model MediaCoverageSlugHistory {
+  slug String @db.NVarChar(120)
+  ownerId String @db.NVarChar(36)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  owner MediaCoverage @relation(fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([slug])
   @@index([ownerId])
 }
 

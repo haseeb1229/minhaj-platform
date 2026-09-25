@@ -20,7 +20,18 @@ export default async function Layout({
   return (
     <>
       <nav className="flex flex-wrap gap-4" aria-label={t('title')}>
-        {(['articles', 'pages', 'queue', 'correspondence'] as const)
+        {(
+          [
+            'articles',
+            'pages',
+            'news',
+            'press-releases',
+            'statements',
+            'media-coverage',
+            'queue',
+            'correspondence',
+          ] as const
+        )
           .filter((section) =>
             held.has(
               section === 'correspondence' ? 'correspondence.read' : 'content.read',

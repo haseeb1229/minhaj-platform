@@ -149,6 +149,37 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // the Gallery's slug history. A Photo's image is ONE nullable foreign key to a
   // Storage Asset; a Gallery's membership is its own typed, ordered table; no
   // Album, image, asset-link or Event-owned join exists (DOMAIN_MODEL.md §11).
+  // FOUR EDITORIAL AGGREGATES — NewsArticle, PressRelease, Statement and
+  // MediaCoverage — each with the Article's own shape of tables: record,
+  // immutable revisions, translations, typed Topic and Person references and a
+  // permanent slug reservation. Never one News table with a type column, and no
+  // image, Event, Centre or newsletter table (DOMAIN_MODEL.md §7.1).
+  '20260928000000_phase13_news': [
+    'NewsArticle',
+    'NewsArticleRevision',
+    'NewsArticleRevisionTranslation',
+    'NewsArticleTopic',
+    'NewsArticleContributor',
+    'NewsArticleSlugHistory',
+    'PressRelease',
+    'PressReleaseRevision',
+    'PressReleaseRevisionTranslation',
+    'PressReleaseTopic',
+    'PressReleaseContributor',
+    'PressReleaseSlugHistory',
+    'Statement',
+    'StatementRevision',
+    'StatementRevisionTranslation',
+    'StatementTopic',
+    'StatementContributor',
+    'StatementSlugHistory',
+    'MediaCoverage',
+    'MediaCoverageRevision',
+    'MediaCoverageRevisionTranslation',
+    'MediaCoverageTopic',
+    'MediaCoverageContributor',
+    'MediaCoverageSlugHistory',
+  ],
   '20260927000000_phase12_media_galleries': [
     'Photo',
     'PhotoLabel',
@@ -240,7 +271,6 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
  * when Chunk 2 delivered authorisation and the privileged second factor.
  */
 const PREMATURE_TABLES = [
-  'NewsArticle',
   'Event',
   'Collection',
   'Quran',
@@ -285,6 +315,16 @@ const PREMATURE_TABLES = [
   'EventPhoto',
   'PhotoPerson',
   'PhotoTopic',
+  // Phase 13 delivers News with NO Centre, Event or newsletter relationship:
+  // centre-scoped News is Phase 16's reference, the newsletter Phase 21's
+  // consent record, and a News lead image would need a Storage or Media
+  // dependency no phase has decided.
+  'Centre',
+  'NewsArticleCentre',
+  'NewsletterSubscriber',
+  'NewsArticleImage',
+  'NewsArticleAsset',
+  'NewsArticlePhoto',
 ];
 
 /**
@@ -366,6 +406,15 @@ const PROHIBITED_TABLES = [
   'PhotoAsset',
   'GalleryTarget',
   'GalleryCover',
+
+  // PHASE 13 — FOUR News aggregates. One generic editorial or News table with a
+  // type column would collapse four lifecycles and four slug namespaces into
+  // one, and a generic revision table would do the same to their histories.
+  'EditorialContent',
+  'NewsItem',
+  'NewsContent',
+  'ContentRevision',
+  'EditorialRevision',
 ];
 
 const EXPECTED_AUDIT_COLUMNS = [
@@ -481,6 +530,23 @@ const EXPECTED_COLUMN_SIZES: readonly {
   // Phase 12, by the same rules.
   { table: 'Gallery', column: 'slug', characters: 120 },
   { table: 'GallerySlugHistory', column: 'slug', characters: 120 },
+  // Phase 13, by the Article's rules: each slug is a unique key and a slug-history
+  // primary key; each translation language is a foreign key into `Language.code`.
+  { table: 'NewsArticle', column: 'slug', characters: 120 },
+  { table: 'NewsArticleSlugHistory', column: 'slug', characters: 120 },
+  { table: 'PressRelease', column: 'slug', characters: 120 },
+  { table: 'PressReleaseSlugHistory', column: 'slug', characters: 120 },
+  { table: 'Statement', column: 'slug', characters: 120 },
+  { table: 'StatementSlugHistory', column: 'slug', characters: 120 },
+  { table: 'MediaCoverage', column: 'slug', characters: 120 },
+  { table: 'MediaCoverageSlugHistory', column: 'slug', characters: 120 },
+  { table: 'NewsArticleRevisionTranslation', column: 'languageCode', characters: 16 },
+  { table: 'PressReleaseRevisionTranslation', column: 'languageCode', characters: 16 },
+  { table: 'StatementRevisionTranslation', column: 'languageCode', characters: 16 },
+  { table: 'MediaCoverageRevisionTranslation', column: 'languageCode', characters: 16 },
+  { table: 'StatementRevisionTranslation', column: 'issuer', characters: 200 },
+  { table: 'MediaCoverageRevision', column: 'outletName', characters: 200 },
+  { table: 'MediaCoverageRevision', column: 'sourceUrl', characters: 2048 },
 ];
 
 /**
@@ -560,7 +626,15 @@ const EXPECTED_PROCEDURES = [
  * and silently dropped one would leave a gate that looks present and is not.
  */
 const EXPECTED_TRIGGERS = [
-  ...['Article', 'Page'].flatMap((kind) => [
+  ...[
+    'Article',
+    'Page',
+    // Phase 13: the same eleven editorial invariants for each News family.
+    'NewsArticle',
+    'PressRelease',
+    'Statement',
+    'MediaCoverage',
+  ].flatMap((kind) => [
     kind + 'RevisionImmutable',
     kind + 'RevisionTranslationImmutable',
     kind + 'TopicImmutable',
@@ -735,6 +809,26 @@ const EXPECTED_CHECK_CONSTRAINTS = [
   { table: 'GalleryLabel', constraint: 'GalleryLabel_locale_ck' },
   { table: 'GalleryLabel', constraint: 'GalleryLabel_title_ck' },
   { table: 'GalleryItem', constraint: 'GalleryItem_position_ck' },
+  // Phase 13. The Article's six workflow rules, a revision's schema, a bounded
+  // translation and a closed contributor vocabulary for each News family; the
+  // reserved NewsArticle slugs, a Statement's issuer and a coverage source.
+  ...['NewsArticle', 'PressRelease', 'Statement', 'MediaCoverage'].flatMap((table) => [
+    ...['state', 'version', 'approval', 'publication', 'published_date', 'schedule'].map(
+      (rule) => ({ table, constraint: table + '_' + rule + '_ck' }),
+    ),
+    { table: table + 'Revision', constraint: table + 'Revision_schema_ck' },
+    { table: table + 'RevisionTranslation', constraint: table + 'Translation_size_ck' },
+    { table: table + 'Contributor', constraint: table + 'Contributor_role_ck' },
+    { table: table + 'Contributor', constraint: table + 'Contributor_position_ck' },
+  ]),
+  { table: 'NewsArticle', constraint: 'NewsArticle_slug_ck' },
+  { table: 'NewsArticleSlugHistory', constraint: 'NewsArticleSlugHistory_slug_ck' },
+  {
+    table: 'StatementRevisionTranslation',
+    constraint: 'StatementRevisionTranslation_issuer_ck',
+  },
+  { table: 'MediaCoverageRevision', constraint: 'MediaCoverageRevision_outlet_ck' },
+  { table: 'MediaCoverageRevision', constraint: 'MediaCoverageRevision_source_ck' },
 ];
 
 /**
@@ -1210,6 +1304,8 @@ const PHASE10_KINDS = ['video'];
 
 const PHASE11_KINDS = ['audio'];
 
+const PHASE13_KINDS = ['media-coverage', 'news-article', 'press-release', 'statement'];
+
 /**
  * Phase 9 WIDENS the search vocabularies by exactly its six kinds, each its own
  * scope, Phase 10 by exactly `video` and Phase 11 by exactly `audio`; each
@@ -1219,7 +1315,7 @@ const PHASE11_KINDS = ['audio'];
  */
 async function assertSearchVocabulary(
   session: SqlSession,
-  stage: 'phase17' | 'phase9' | 'phase10' | 'phase11',
+  stage: 'phase17' | 'phase9' | 'phase10' | 'phase11' | 'phase13',
 ): Promise<void> {
   const sorted = (values: readonly string[]) => [...values].sort().join(',');
   const added = {
@@ -1227,6 +1323,7 @@ async function assertSearchVocabulary(
     phase9: PHASE9_KINDS,
     phase10: [...PHASE9_KINDS, ...PHASE10_KINDS],
     phase11: [...PHASE9_KINDS, ...PHASE10_KINDS, ...PHASE11_KINDS],
+    phase13: [...PHASE9_KINDS, ...PHASE10_KINDS, ...PHASE11_KINDS, ...PHASE13_KINDS],
   }[stage];
   const scopes = sorted([...PHASE17_SCOPES, ...added]);
   const kinds = sorted([...PHASE17_KINDS, ...added]);
@@ -1248,7 +1345,8 @@ async function assertSearchVocabulary(
       phase17: 'exactly Phase 17 after rollback',
       phase9: 'exactly Phase 17 and Phase 9 after the Phase-10 rollback',
       phase10: 'exactly Phase 17, Phase 9 and video after the Phase-11 rollback',
-      phase11: 'Phase 17, the six Phase-9 kinds, video and audio',
+      phase11: 'exactly Phase 17, Phase 9, video and audio',
+      phase13: 'Phase 17, the six Phase-9 kinds, video, audio and the four News kinds',
     }[stage],
   );
 }
@@ -1419,6 +1517,110 @@ async function assertPhotoFoundation(session: SqlSession): Promise<void> {
   report(
     'photo foundation',
     'one non-cascading Asset reference, no cascade, no forward Event reference, the same two keys',
+  );
+}
+
+const EDITORIAL_PERMISSIONS = [
+  'content.author',
+  'content.publish',
+  'content.read',
+  'content.review',
+];
+
+/**
+ * Phase 13 — what only the catalogue can prove about News:
+ *
+ *   1. no Phase-13 foreign key cascades, so no removal of a Topic, a Person, a
+ *      User or a revision can take News history with it;
+ *   2. NO column of a News table references an image, an Asset, a Photo, a
+ *      Gallery, an Event, a Centre, a Collection or a newsletter, and none holds
+ *      a view count, a popularity score or a featured flag;
+ *   3. the editorial vocabulary is still exactly the four `content.*` keys — no
+ *      `news.*`, `press.*` or `statement.*` key exists — and the two that named
+ *      Article and Page now name the News families.
+ */
+async function assertNewsFoundation(session: SqlSession): Promise<void> {
+  const tables = ['NewsArticle', 'PressRelease', 'Statement', 'MediaCoverage']
+    .flatMap((family) =>
+      ['', 'Revision', 'RevisionTranslation', 'Topic', 'Contributor', 'SlugHistory'].map(
+        (suffix) => `OBJECT_ID(N'[dbo].[${family}${suffix}]')`,
+      ),
+    )
+    .join(',');
+  const cascading = await session.query<{ name: string }>(`
+    SELECT name FROM sys.foreign_keys
+    WHERE parent_object_id IN (${tables})
+      AND (delete_referential_action <> 0 OR update_referential_action <> 0);
+  `);
+  if (cascading.length > 0)
+    fail(
+      `Phase-13 foreign keys must not cascade; found ${cascading.map((row) => row.name).join(', ')}.`,
+    );
+
+  const forward = await session.query<{ name: string }>(`
+    SELECT c.name FROM sys.columns c
+    WHERE c.object_id IN (${tables})
+      AND (c.name LIKE N'%image%' OR c.name LIKE N'%asset%' OR c.name LIKE N'%photo%'
+           OR c.name LIKE N'%gallery%' OR c.name LIKE N'%event%' OR c.name LIKE N'%centre%'
+           OR c.name LIKE N'%center%' OR c.name LIKE N'%collection%' OR c.name LIKE N'%newsletter%'
+           OR c.name LIKE N'%view%' OR c.name LIKE N'%popular%' OR c.name LIKE N'%featured%'
+           OR c.name LIKE N'%type%' OR c.name LIKE N'%kind%' OR c.name LIKE N'%target%');
+  `);
+  if (forward.length > 0)
+    fail(
+      `News must reference no image, Event, Centre, Collection or newsletter and carry ` +
+        `no type or engagement column; found ${forward.map((row) => row.name).join(', ')}.`,
+    );
+
+  const permissions = await session.query<{ key: string; description: string }>(`
+    SELECT [key], [description] FROM [dbo].[Permission]
+    WHERE [key] LIKE N'content.%' OR [key] LIKE N'news%' OR [key] LIKE N'press%'
+       OR [key] LIKE N'statement%' OR [key] LIKE N'mediaCoverage%' ORDER BY [key];
+  `);
+  const described = permissions.filter((row) =>
+    ['content.read', 'content.author'].includes(row.key),
+  );
+  if (
+    permissions.map((row) => row.key).join(',') !== EDITORIAL_PERMISSIONS.join(',') ||
+    described.length !== 2 ||
+    !described.every(
+      (row) => row.description.includes('news') && row.description.includes('statement'),
+    )
+  )
+    fail(
+      `The editorial vocabulary must remain the four content keys, naming the News ` +
+        `families; found ${JSON.stringify(permissions)}.`,
+    );
+
+  report(
+    'news foundation',
+    'no cascade, no image, Event, Centre or newsletter reference, the same four keys',
+  );
+}
+
+/**
+ * The Phase-13 rollback restores the two editorial keys' Phase-6 descriptions
+ * exactly — Article and Page, and no News family.
+ */
+async function assertEditorialPermissionsDescribeArticleAndPageOnly(
+  session: SqlSession,
+): Promise<void> {
+  const permissions = await session.query<{ key: string; description: string }>(`
+    SELECT [key], [description] FROM [dbo].[Permission]
+    WHERE [key] IN (N'content.read', N'content.author') ORDER BY [key];
+  `);
+  if (
+    permissions.length !== 2 ||
+    permissions.some((row) => row.description.includes('news')) ||
+    !permissions.every((row) => row.description.includes('Article and Page'))
+  )
+    fail(
+      `The Phase-13 rollback did not restore the Phase-6 editorial descriptions: ` +
+        `${JSON.stringify(permissions)}.`,
+    );
+  report(
+    'editorial descriptions',
+    'Phase-6 wording restored after the Phase-13 rollback',
   );
 }
 
@@ -2044,10 +2246,11 @@ try {
   await assertNavigationPermission(session);
   await assertPeopleFoundation(session);
   await assertSearchFoundation(session);
-  await assertSearchVocabulary(session, 'phase11');
+  await assertSearchVocabulary(session, 'phase13');
   await assertMediaFoundation(session);
   await assertAudioFoundation(session);
   await assertPhotoFoundation(session);
+  await assertNewsFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -2095,6 +2298,10 @@ try {
     }
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
+    }
+    if (migration.id === '20260928000000_phase13_news') {
+      await assertSearchVocabulary(session, 'phase11');
+      await assertEditorialPermissionsDescribeArticleAndPageOnly(session);
     }
     if (migration.id === '20260927000000_phase12_media_galleries') {
       // Phase 12 widened no search vocabulary, so none narrows here.
@@ -2151,10 +2358,11 @@ try {
   await assertNavigationPermission(session);
   await assertPeopleFoundation(session);
   await assertSearchFoundation(session);
-  await assertSearchVocabulary(session, 'phase11');
+  await assertSearchVocabulary(session, 'phase13');
   await assertMediaFoundation(session);
   await assertAudioFoundation(session);
   await assertPhotoFoundation(session);
+  await assertNewsFoundation(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

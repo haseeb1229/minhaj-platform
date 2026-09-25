@@ -511,6 +511,13 @@ and protocol-relative URLs (`//evil.example`) are rejected; only same-origin rel
 are permitted; invalid values fall back to a safe default. **Legacy 301 targets resolve only
 from the internal mapping table**, never from user input.
 
+**Stored outbound addresses** (Phase 9 citations, Phase 13 media-coverage sources) are parsed
+on write by the platform's URL parser and kept only when absolute HTTPS without credentials, in
+their normalised form, with a database CHECK behind the validator. They render as described
+links a visitor chooses to follow (`rel="external noopener noreferrer"`, marked as leaving the
+site) — never a redirect through the platform, an embed, a preload or a server-side fetch — so
+an outlet's downtime never breaks the page that names it.
+
 ---
 
 ## 10. Uploads, attachments and imported binaries

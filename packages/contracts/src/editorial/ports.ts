@@ -16,7 +16,9 @@ import type {
   ContactDirectory,
   FeedbackDirectory,
   CorrespondenceState,
+  PublicNews,
 } from './values.ts';
+import type { NewsArchivePeriod, NewsKind, NewsPage, NewsTimelineQuery } from './news.ts';
 
 export interface EditorialActor {
   readonly accountId: string;
@@ -92,6 +94,34 @@ export interface EditorialPublicReaderPort {
       readonly slug: string;
     }[]
   >;
+
+  /**
+   * PHASE 13 — the four News families, by the same rules: PUBLISHED ONLY, the
+   * predicate in every query, bounded pages with deterministic tie-breakers,
+   * and a former slug resolving to the current one only while the record is
+   * published.
+   */
+  newsCanonicalSlug(kind: NewsKind, slug: string): Promise<string | null>;
+  publicNews(kind: NewsKind, slug: string): Promise<PublicNews | null>;
+  publishedNews(kind: NewsKind, offset: number, limit: number): Promise<NewsPage>;
+  /** All four families as one timeline, newest first; see `NewsTimelineQuery`. */
+  newsTimeline(query: NewsTimelineQuery): Promise<NewsPage>;
+  /** The UTC year and month of every published News record, counted. */
+  newsArchivePeriods(): Promise<readonly NewsArchivePeriod[]>;
+  newsSitemap(
+    kind: NewsKind,
+    offset: number,
+    limit: number,
+  ): Promise<readonly EditorialSitemapEntry[]>;
+  searchNews(kind: NewsKind, id: string): Promise<EditorialSearchRecord | null>;
+  searchNewsList(
+    kind: NewsKind,
+    input: { readonly after: string | null; readonly limit: number },
+  ): Promise<readonly { readonly id: string; readonly stamp: string }[]>;
+  publishedNewsTargets(
+    kind: NewsKind,
+    ids: readonly string[],
+  ): Promise<readonly { readonly id: string; readonly slug: string }[]>;
 }
 
 /** What Search may know about one published Article or Page. */
@@ -107,7 +137,11 @@ export interface EditorialSearchRecord {
     readonly excerpt: string;
     /** The stored, already-validated editor document. */
     readonly document: string;
+    /** A Statement's issuing authority in this language. */
+    readonly issuer?: string;
   }[];
+  /** A MediaCoverage record's outlet name. */
+  readonly outlet?: string;
 }
 export interface EditorialPersistencePort {
   article(id: string): Promise<ArticleDetail | null>;
@@ -132,6 +166,31 @@ export interface EditorialPersistencePort {
     reason: 'authority-revoked' | 'execution-failed',
   ): Promise<void>;
   failPageSchedule(
+    id: string,
+    expectedVersion: number,
+    reason: 'authority-revoked' | 'execution-failed',
+  ): Promise<void>;
+
+  /**
+   * PHASE 13 — the four News families through ONE set of operations, each
+   * reading and writing only its own family's tables. The workflow rules are
+   * the Article's exactly: expected versions, immutable revisions, approval of
+   * the exact current revision by someone other than its creator or editor, and
+   * a schedule bound to that revision.
+   */
+  news(kind: NewsKind, id: string): Promise<ArticleDetail | null>;
+  newsDirectory(kind: NewsKind, query: EditorialQuery): Promise<EditorialDirectory>;
+  newsRevisions(kind: NewsKind, id: string, offset: number): Promise<RevisionDirectory>;
+  createNews(kind: NewsKind, input: EditorialWrite): Promise<ArticleDetail>;
+  reviseNews(kind: NewsKind, input: EditorialEdit): Promise<ArticleDetail>;
+  transitionNews(kind: NewsKind, input: EditorialTransition): Promise<ArticleDetail>;
+  dueNews(
+    kind: NewsKind,
+    now: Date,
+    limit: number,
+  ): Promise<readonly EditorialScheduleCandidate[]>;
+  failNewsSchedule(
+    kind: NewsKind,
     id: string,
     expectedVersion: number,
     reason: 'authority-revoked' | 'execution-failed',

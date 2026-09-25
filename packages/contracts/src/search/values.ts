@@ -41,6 +41,11 @@ import { z } from 'zod';
  * PHASE 11 adds `audio` — a non-Quran AudioTrack — and only `audio`. An
  * AudioSeries is a grouping, as a Video Series is, and a Quran recitation is
  * Quran's to project when Quran ships, never Media's.
+ *
+ * PHASE 13 adds Editorial's four News families, each its own kind — a press
+ * release is not a news article, a statement is not a press release, and a
+ * record of media coverage is none of them — so the type filter can tell them
+ * apart and each result links to its own canonical family.
  */
 export const SEARCH_KINDS = Object.freeze([
   'topic',
@@ -58,6 +63,10 @@ export const SEARCH_KINDS = Object.freeze([
   'encyclopedia',
   'video',
   'audio',
+  'news-article',
+  'press-release',
+  'statement',
+  'media-coverage',
 ] as const);
 
 export type SearchKind = (typeof SEARCH_KINDS)[number];
@@ -93,6 +102,10 @@ export const SEARCH_SCOPE_KINDS = Object.freeze([
   'encyclopedia',
   'video',
   'audio',
+  'news-article',
+  'press-release',
+  'statement',
+  'media-coverage',
 ] as const);
 
 export type SearchScopeKind = (typeof SEARCH_SCOPE_KINDS)[number];
@@ -115,6 +128,10 @@ export const SCOPE_OF_KIND: Readonly<Record<SearchKind, SearchScopeKind>> = Obje
     encyclopedia: 'encyclopedia',
     video: 'video',
     audio: 'audio',
+    'news-article': 'news-article',
+    'press-release': 'press-release',
+    statement: 'statement',
+    'media-coverage': 'media-coverage',
   },
 );
 

@@ -17,6 +17,7 @@ import {
   privilegedSession,
   registerAndSignIn,
   test,
+  grantRole,
 } from './support';
 
 /**
@@ -79,15 +80,7 @@ async function seedCleanAsset(id: string): Promise<void> {
 }
 
 async function grant(id: string, keys: readonly string[]): Promise<void> {
-  const role = randomUUID();
-  await sql.query(
-    `INSERT INTO [Role] ([id],[key],[name],[description],[system]) VALUES (N'${role}',N'proof-${role}',N'Library browser proof',N'Synthetic fixture',0); INSERT INTO [RoleAssignment] ([userId],[roleId]) VALUES (N'${id}',N'${role}');`,
-  );
-  for (const key of keys) {
-    await sql.query(
-      `INSERT INTO [RolePermission] ([roleId],[permissionKey]) VALUES (N'${role}',N'${key}');`,
-    );
-  }
+  await grantRole(sql, id, keys, 'Library browser proof');
 }
 
 test.beforeAll(async () => {

@@ -140,6 +140,19 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/media/galleries/page.tsx',
   'apps/web/src/app/[locale]/(public)/media/galleries/[slug]/page.tsx',
   'apps/web/src/app/[locale]/(public)/media/archive/page.tsx',
+  // Phase 13. Every News surface reads records an editor publishes and
+  // withdraws, so none can be prerendered; each is proven below to reach no
+  // session, no identity service, no logger and no authentication library.
+  'apps/web/src/app/[locale]/(public)/news/page.tsx',
+  'apps/web/src/app/[locale]/(public)/news/news-routes.tsx',
+  'apps/web/src/app/[locale]/(public)/news/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/news/archive/page.tsx',
+  'apps/web/src/app/[locale]/(public)/news/press-releases/page.tsx',
+  'apps/web/src/app/[locale]/(public)/news/press-releases/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/news/statements/page.tsx',
+  'apps/web/src/app/[locale]/(public)/news/statements/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/news/media-coverage/page.tsx',
+  'apps/web/src/app/[locale]/(public)/news/media-coverage/[slug]/page.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [

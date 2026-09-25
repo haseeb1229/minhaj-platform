@@ -191,6 +191,12 @@
       "photos": "Photographs",
       "galleries": "Photo galleries",
       "archive": "Photo archive"
+    },
+    "news": {
+      "press-releases": "Press releases",
+      "statements": "Statements",
+      "media-coverage": "Media coverage",
+      "archive": "News archive"
     }
   },
   "localeSwitcher": {
@@ -945,7 +951,11 @@
         "magazine-issue": "Magazine issue",
         "encyclopedia": "Encyclopedia",
         "video": "Video",
-        "audio": "Audio"
+        "audio": "Audio",
+        "news-article": "News",
+        "press-release": "Press release",
+        "statement": "Statement",
+        "media-coverage": "Media coverage"
       },
       "categories": {
         "source-unavailable": "The owner could not be read",
@@ -1088,7 +1098,19 @@
     "execution-failed": "Scheduled publication failed. Reload, check the revision, and schedule it again.",
     "referenceQuery": "Contributor name",
     "findReferences": "Find contributors",
-    "referenceHelp": "Choose a named suggestion or paste an existing identifier. Search before editing; searching reloads the form. Results are limited to 25 contributors."
+    "referenceHelp": "Choose a named suggestion or paste an existing identifier. Search before editing; searching reloads the form. Results are limited to 25 contributors.",
+    "news": "News",
+    "press-releases": "Press releases",
+    "statements": "Statements",
+    "media-coverage": "Media coverage",
+    "issuer": "Issuing authority",
+    "issuerHelp": "The body the statement is issued in the name of, written in this translation’s language. Required for every translation.",
+    "coverage": "Coverage source",
+    "outlet": "Outlet",
+    "sourceUrl": "Source address (HTTPS, optional)",
+    "sourceDate": "Date of coverage (optional)",
+    "sourceHelp": "Record only what is known. The address must be HTTPS and is shown as an outbound link; nothing is fetched from it. Summarise the coverage in your own words rather than pasting the outlet’s article.",
+    "slugReserved": "A news slug cannot be archive, press-releases, statements or media-coverage."
   },
   "library": {
     "title": "Library",
@@ -1430,7 +1452,11 @@
       "magazine-issue": "Magazine issue",
       "encyclopedia": "Encyclopedia",
       "video": "Video",
-      "audio": "Audio"
+      "audio": "Audio",
+      "news-article": "News",
+      "press-release": "Press release",
+      "statement": "Statement",
+      "media-coverage": "Media coverage"
     },
     "topic": "Topic",
     "topicAny": "Any topic",
@@ -1509,7 +1535,8 @@
     "videos": "Videos on this topic",
     "allVideos": "All videos on this topic",
     "audio": "Audio on this topic",
-    "allAudio": "All audio on this topic"
+    "allAudio": "All audio on this topic",
+    "news": "News on this topic"
   },
   "watch": {
     "title": "Watch",
@@ -1535,8 +1562,7 @@
       "playlists": "Playlists",
       "speakers": "Speakers",
       "topics": "Topics",
-      "listen": "Listen",
-      "photos": "Photographs and galleries"
+      "listen": "Listen"
     },
     "sectionBody": {
       "videos": "Every published video, newest first, with filters by topic, speaker, series and language.",
@@ -1550,8 +1576,7 @@
       "playlists": "Curated lists of videos, in a chosen order.",
       "speakers": "The people who speak in these videos.",
       "topics": "Browse every topic, with its videos alongside books and research.",
-      "listen": "Lectures, talks and speeches to listen to.",
-      "photos": "Photo galleries, every published photograph, and the historical archive."
+      "listen": "Lectures, talks and speeches to listen to."
     },
     "filters": "Filter videos",
     "filterTopic": "Topic",
@@ -2001,5 +2026,74 @@
     "archiveEveryYear": "Every year",
     "archiveEmpty": "The archive has no dated photographs yet.",
     "archiveFilteredEmpty": "No published photograph is dated to this period."
+  },
+  "news": {
+    "title": "News and Events",
+    "description": "The latest news, press releases, statements and media coverage, alongside photographs and galleries.",
+    "latest": "Latest news",
+    "families": {
+      "news-article": "News",
+      "press-release": "Press releases",
+      "statement": "Statements",
+      "media-coverage": "Media coverage"
+    },
+    "familyBody": {
+      "news-article": "Reports and updates, most recently published first.",
+      "press-release": "Announcements released to the press, most recently published first.",
+      "statement": "Statements, each naming the authority it is issued by.",
+      "media-coverage": "Summaries of coverage published by other outlets, with a link to each original where it is known."
+    },
+    "type": {
+      "news-article": "News",
+      "press-release": "Press release",
+      "statement": "Statement",
+      "media-coverage": "Media coverage"
+    },
+    "all": {
+      "news-article": "All news",
+      "press-release": "All press releases",
+      "statement": "All statements",
+      "media-coverage": "All media coverage"
+    },
+    "empty": {
+      "news-article": "No news has been published yet.",
+      "press-release": "No press release has been published yet.",
+      "statement": "No statement has been published yet.",
+      "media-coverage": "No media coverage has been published yet."
+    },
+    "pageEmpty": "There is nothing on this page.",
+    "firstPage": "Back to the first page",
+    "sectionsLabel": "News sections",
+    "browse": "Browse News and Events",
+    "archive": "News archive",
+    "archiveBody": "Everything published in News, by the year and month it was published.",
+    "archiveAll": "Everything published",
+    "archiveYear": "Published in {year}",
+    "archiveMonth": "Published in {month} {year}",
+    "archiveYears": "Years",
+    "archiveMonths": "Months",
+    "archiveEveryYear": "Every year",
+    "countShort": "{count, number}",
+    "archiveEmpty": "Nothing has been published in News yet.",
+    "archiveFilteredEmpty": "Nothing was published in this period.",
+    "published": "Published",
+    "contributors": "Contributors",
+    "topics": "Topics",
+    "facts": "About this record",
+    "issuedBy": "Issued by {issuer}",
+    "issuer": "Issuing authority",
+    "outlet": "Outlet",
+    "coverageOf": "Coverage by {outlet}",
+    "coverageDate": "Date of coverage",
+    "source": "Original coverage",
+    "sourceLink": "Read the original at {outlet}",
+    "sourceExternal": "(opens an external site)",
+    "sourceUnknown": "The address of the original coverage is not recorded.",
+    "coverageNotice": "This page summarises coverage published by {outlet}. The original article belongs to its publisher.",
+    "fallback": "Shown in {language} because it has not been translated into this language.",
+    "media": "Photographs and galleries",
+    "mediaBody": "Photographs, photo galleries and the photograph archive.",
+    "previous": "Previous page",
+    "next": "Next page"
   }
 }

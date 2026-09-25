@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -433,6 +433,49 @@ export async function signOut(page: Page): Promise<void> {
 export async function privilegedSession(): Promise<SqlSession> {
   const { databaseUrl } = browserEnvironment();
   return openSession(parseSqlServerUrl(databaseUrl));
+}
+
+/**
+ * Grants a synthetic role holding exactly `keys` to one account — the fixture
+ * every privileged spec needs, written ONCE.
+ *
+ * ONE TRANSACTION. The role, its assignment and its permissions are written
+ * together, so the account never holds a role with half its keys, and a retry
+ * can never leave a partial grant behind.
+ *
+ * A DEADLOCK VICTIM IS RETRIED, AND NOTHING ELSE. Specs run in parallel beside
+ * the application's own sign-up and authorisation transactions, and SQL Server
+ * resolves a lock cycle among them by choosing a victim and asking for the
+ * transaction to be rerun (error 1205). A failure to serialise is transient
+ * and is retried within a bound (DOMAIN_MODEL.md §19.8); every other error —
+ * and a third deadlock — fails the spec. No assertion is ever retried here.
+ */
+export async function grantRole(
+  sql: SqlSession,
+  accountId: string,
+  keys: readonly string[],
+  name: string,
+): Promise<void> {
+  const role = randomUUID();
+  const permissions = keys
+    .map(
+      (key) =>
+        `INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES (N'${role}',N'${key}');`,
+    )
+    .join('\n');
+  const statement = `BEGIN TRY BEGIN TRAN;
+    INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system]) VALUES (N'${role}',N'proof-${role}',N'${name}',N'Synthetic fixture',0);
+    INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId]) VALUES (N'${accountId}',N'${role}');
+    ${permissions}
+    COMMIT TRAN; END TRY BEGIN CATCH IF @@TRANCOUNT > 0 ROLLBACK TRAN; THROW; END CATCH;`;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await sql.query(statement);
+      return;
+    } catch (error) {
+      if ((error as { number?: number }).number !== 1205 || attempt === 3) throw error;
+    }
+  }
 }
 
 /** The internal identifier for an address. Never guessed from the address. */

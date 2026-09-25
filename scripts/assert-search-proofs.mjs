@@ -65,6 +65,10 @@ const REQUIRED = [
   // Its rebuild after a real restore runs with the storage proofs, because
   // audio recovery restores bytes as well as rows.
   'audio.integration',
+  // Phase 13: the four News kinds, their stale-index rule, rebuild and
+  // reconciliation, and their rebuild after a real restore.
+  'news.integration',
+  'news-recovery.integration',
 ];
 
 const seen = files.map((file) => String(file.name ?? ''));

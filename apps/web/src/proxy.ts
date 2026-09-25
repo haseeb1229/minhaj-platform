@@ -250,6 +250,39 @@ export default async function proxy(request: NextRequest) {
   }
   if (request.method === 'GET' || request.method === 'HEAD') {
     /**
+     * PHASE 13 — EACH NEWS FAMILY'S OWN SLUG HISTORY, through the same single-301
+     * mechanism: one hop to the current address, locale preserved, the target
+     * built from Editorial's answer and never from the request.
+     *
+     * THE STATIC SIBLINGS ARE NEVER SHADOWED. `/news/archive` and the three
+     * family listings are reserved words no NewsArticle slug can hold — the
+     * contract and the database both refuse one — and they are passed over here
+     * before any lookup, so a slug history can never redirect a current route.
+     */
+    const news =
+      /^\/(en|ur|ar)\/news\/(?:(press-releases|statements|media-coverage)\/)?([^/]+)$/.exec(
+        request.nextUrl.pathname,
+      );
+    if (news?.[1] && news[3]) {
+      const slug = decodedSegment(news[3]);
+      const { isReservedNewsSlug, newsKindOfSegment, newsPathOf } =
+        await import('@minhaj/contracts/editorial');
+      const kind = news[2] === undefined ? 'news-article' : newsKindOfSegment(news[2]);
+      if (
+        slug !== null &&
+        kind !== null &&
+        !(kind === 'news-article' && isReservedNewsSlug(slug))
+      ) {
+        const { editorialReadRuntime } = await import('@/composition/editorial-read');
+        const current = await editorialReadRuntime().newsCanonicalSlug(kind, slug);
+        if (current !== null && current !== slug) {
+          return permanent(request, `/${news[1]}${newsPathOf(kind, current)}`);
+        }
+      }
+    }
+  }
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    /**
      * PHASE 17 — PUBLIC SEARCH ADMISSION.
      *
      * Only a request that will actually run a query spends budget: the search

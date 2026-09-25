@@ -14,6 +14,7 @@ import {
   registerAndSignIn,
   statusIn,
   test,
+  grantRole,
 } from './support';
 
 /**
@@ -54,20 +55,6 @@ const OPERATOR_STATE = path.join(
 );
 const OPERATOR_CLIENT = '100.64.250.17';
 const OUTSIDER_CLIENT = '100.64.250.18';
-
-async function grantRole(accountId: string, keys: readonly string[]): Promise<void> {
-  const role = randomUUID();
-  await sql.query(`
-    INSERT INTO [dbo].[Role] ([id], [key], [name], [description], [system])
-    VALUES (N'${role}', N'search-proof-${role}', N'Synthetic search role', N'Browser proof', 0);
-    INSERT INTO [dbo].[RoleAssignment] ([userId], [roleId]) VALUES (N'${accountId}', N'${role}');
-  `);
-  for (const key of keys) {
-    await sql.query(
-      `INSERT INTO [dbo].[RolePermission] ([roleId], [permissionKey]) VALUES (N'${role}', N'${key}');`,
-    );
-  }
-}
 
 /** Waits for DERIVED work — the index is asynchronous by design (§8.5). */
 async function eventuallyFound(page: Page, query: string, text: string): Promise<void> {
@@ -118,7 +105,12 @@ test.beforeAll(async ({ browser }) => {
   });
   const page = await context.newPage();
   const { email } = await registerAndSignIn(page, 'search-operator');
-  await grantRole(await accountIdFor(sql, email), ['search.read', 'search.operate']);
+  await grantRole(
+    sql,
+    await accountIdFor(sql, email),
+    ['search.read', 'search.operate'],
+    'Synthetic search role',
+  );
   expect((await page.goto('/en/admin/system/search'))?.status()).toBe(200);
   await context.storageState({ path: OPERATOR_STATE });
   await context.close();

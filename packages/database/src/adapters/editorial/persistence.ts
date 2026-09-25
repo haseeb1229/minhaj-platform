@@ -23,14 +23,16 @@ import type { ContributionRole } from '@minhaj/contracts/people';
 import { getDatabaseClient } from '../../client.ts';
 import { auditRow } from '../../audit-row.ts';
 import { requestSearchIndexing } from '../../search-intent.ts';
-class EditorialDataError extends Error {
-  constructor(readonly reason: string) {
-    super(reason);
-  }
-}
-const limitOf = (n: number, max = 50) => Math.max(1, Math.min(max, Math.trunc(n) || 1));
-const offsetOf = (n: number) =>
-  Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Math.trunc(n) || 0));
+import { newsOperations, newsReads } from './news.ts';
+import {
+  EditorialDataError,
+  authorisingSource,
+  limitOf,
+  offsetOf,
+  refuse,
+  revisionReset,
+  transitionUpdate,
+} from './workflow.ts';
 const revisionInclude = {
   translations: { orderBy: { languageCode: 'asc' as const } },
   topics: { orderBy: { topicId: 'asc' as const } },
@@ -157,13 +159,6 @@ function privateSummary(row: {
       )?.title ?? row.slug,
   };
 }
-function refuse(error: unknown): never {
-  const code = (error as { code?: string })?.code;
-  if (code === 'P2002') throw new EditorialDataError('duplicate-slug');
-  if (code === 'P2034' || code === 'P2025') throw new EditorialDataError('conflict');
-  if (code === 'P2003' || code === 'P2004') throw new EditorialDataError('invalid');
-  throw error;
-}
 async function audit(
   tx: Prisma.TransactionClient,
   kind: string,
@@ -201,14 +196,7 @@ async function audit(
         scheduledAt: snapshot.scheduledAt?.toISOString() ?? '',
         scheduleStatus: snapshot.scheduleStatus ?? '',
       },
-      authorisingSource:
-        actorId === null
-          ? 'editorial-scheduler'
-          : ['approve', 'reject'].includes(action)
-            ? 'content.review'
-            : ['publish', 'schedule', 'cancel', 'archive'].includes(action)
-              ? 'content.publish'
-              : 'content.author',
+      authorisingSource: authorisingSource(action, actorId),
     }),
   });
 }
@@ -453,15 +441,7 @@ function articleOperations(): Pick<
             data: {
               slug: input.content.slug,
               currentRevision: number,
-              state: 'draft',
-              approvedRevision: null,
-              approvedById: null,
-              scheduledRevision: null,
-              scheduledAt: null,
-              scheduledTimezone: null,
-              scheduledById: null,
-              scheduleStatus: row.scheduledAt ? 'cancelled' : null,
-              updatedAt: new Date(),
+              ...revisionReset(row),
             },
             include: detailInclude,
           });
@@ -489,70 +469,7 @@ function articleOperations(): Pick<
         return await getDatabaseClient().$transaction(async (tx) => {
           const row = await articleLocked(tx, input.id, input.expectedVersion);
           const action = input.action;
-          const data: Prisma.ArticleUncheckedUpdateInput = { updatedAt: input.now };
-          if (action === 'submit' && row.state === 'draft') data.state = 'in-review';
-          else if (
-            (action === 'approve' || action === 'reject') &&
-            row.state === 'in-review'
-          ) {
-            if (action === 'approve') {
-              if (
-                row.creatorId === input.actorId ||
-                row.current?.editorId === input.actorId
-              )
-                throw new EditorialDataError('self-approval');
-              data.approvedRevision = row.currentRevision;
-              data.approvedById = input.actorId;
-            } else {
-              data.state = 'draft';
-              data.approvedRevision = null;
-              data.approvedById = null;
-            }
-          } else if (action === 'archive' && row.state !== 'archived') {
-            data.state = 'archived';
-            data.scheduleStatus = row.scheduledAt ? 'cancelled' : null;
-          } else if (action === 'cancel' && row.state === 'scheduled') {
-            data.state = 'in-review';
-            data.scheduleStatus = 'cancelled';
-          } else if (
-            (action === 'publish' || action === 'schedule') &&
-            ['in-review', 'scheduled'].includes(row.state)
-          ) {
-            if (
-              row.approvedRevision === null ||
-              row.approvedRevision !== row.currentRevision ||
-              !row.approvedById
-            )
-              throw new EditorialDataError('approval-required');
-            if (
-              input.scheduledExecution &&
-              (row.state !== 'scheduled' ||
-                row.scheduleStatus !== 'pending' ||
-                row.scheduledRevision !== row.currentRevision ||
-                !row.scheduledAt ||
-                row.scheduledAt > input.now ||
-                row.scheduledById !== input.actorId)
-            )
-              throw new EditorialDataError('conflict');
-            if (action === 'publish') {
-              data.state = 'published';
-              data.publishedAt = row.publishedAt ?? input.now;
-              data.scheduleStatus = row.scheduledAt ? 'completed' : null;
-            } else {
-              if (
-                !input.scheduledAt ||
-                !input.timezone ||
-                new Date(input.scheduledAt) <= input.now
-              )
-                throw new EditorialDataError('invalid');
-              data.state = 'scheduled';
-              data.scheduledAt = new Date(input.scheduledAt);
-              data.scheduledTimezone = input.timezone;
-              data.scheduledById = input.actorId;
-              data.scheduledRevision = row.currentRevision;
-              data.scheduleStatus = 'pending';
-            }
-          } else throw new EditorialDataError('invalid-state');
+          const data: Prisma.ArticleUncheckedUpdateInput = transitionUpdate(row, input);
           const next = await tx.article.update({
             where: { id: row.id },
             data,
@@ -886,15 +803,7 @@ function pageOperations(): Pick<
             data: {
               slug: input.content.slug,
               currentRevision: number,
-              state: 'draft',
-              approvedRevision: null,
-              approvedById: null,
-              scheduledRevision: null,
-              scheduledAt: null,
-              scheduledTimezone: null,
-              scheduledById: null,
-              scheduleStatus: row.scheduledAt ? 'cancelled' : null,
-              updatedAt: new Date(),
+              ...revisionReset(row),
             },
             include: detailInclude,
           });
@@ -915,70 +824,7 @@ function pageOperations(): Pick<
         return await getDatabaseClient().$transaction(async (tx) => {
           const row = await pageLocked(tx, input.id, input.expectedVersion);
           const action = input.action;
-          const data: Prisma.PageUncheckedUpdateInput = { updatedAt: input.now };
-          if (action === 'submit' && row.state === 'draft') data.state = 'in-review';
-          else if (
-            (action === 'approve' || action === 'reject') &&
-            row.state === 'in-review'
-          ) {
-            if (action === 'approve') {
-              if (
-                row.creatorId === input.actorId ||
-                row.current?.editorId === input.actorId
-              )
-                throw new EditorialDataError('self-approval');
-              data.approvedRevision = row.currentRevision;
-              data.approvedById = input.actorId;
-            } else {
-              data.state = 'draft';
-              data.approvedRevision = null;
-              data.approvedById = null;
-            }
-          } else if (action === 'archive' && row.state !== 'archived') {
-            data.state = 'archived';
-            data.scheduleStatus = row.scheduledAt ? 'cancelled' : null;
-          } else if (action === 'cancel' && row.state === 'scheduled') {
-            data.state = 'in-review';
-            data.scheduleStatus = 'cancelled';
-          } else if (
-            (action === 'publish' || action === 'schedule') &&
-            ['in-review', 'scheduled'].includes(row.state)
-          ) {
-            if (
-              row.approvedRevision === null ||
-              row.approvedRevision !== row.currentRevision ||
-              !row.approvedById
-            )
-              throw new EditorialDataError('approval-required');
-            if (
-              input.scheduledExecution &&
-              (row.state !== 'scheduled' ||
-                row.scheduleStatus !== 'pending' ||
-                row.scheduledRevision !== row.currentRevision ||
-                !row.scheduledAt ||
-                row.scheduledAt > input.now ||
-                row.scheduledById !== input.actorId)
-            )
-              throw new EditorialDataError('conflict');
-            if (action === 'publish') {
-              data.state = 'published';
-              data.publishedAt = row.publishedAt ?? input.now;
-              data.scheduleStatus = row.scheduledAt ? 'completed' : null;
-            } else {
-              if (
-                !input.scheduledAt ||
-                !input.timezone ||
-                new Date(input.scheduledAt) <= input.now
-              )
-                throw new EditorialDataError('invalid');
-              data.state = 'scheduled';
-              data.scheduledAt = new Date(input.scheduledAt);
-              data.scheduledTimezone = input.timezone;
-              data.scheduledById = input.actorId;
-              data.scheduledRevision = row.currentRevision;
-              data.scheduleStatus = 'pending';
-            }
-          } else throw new EditorialDataError('invalid-state');
+          const data: Prisma.PageUncheckedUpdateInput = transitionUpdate(row, input);
           const next = await tx.page.update({
             where: { id: row.id },
             data,
@@ -1212,8 +1058,8 @@ function searchReads(): Pick<
 }
 
 export function createEditorialPersistence(): EditorialPersistencePort {
-  return { ...articleOperations(), ...pageOperations() };
+  return { ...articleOperations(), ...pageOperations(), ...newsOperations() };
 }
 export function createEditorialPublicReader(): EditorialPublicReaderPort {
-  return { ...articleReads(), ...pageReads(), ...searchReads() };
+  return { ...articleReads(), ...pageReads(), ...searchReads(), ...newsReads() };
 }

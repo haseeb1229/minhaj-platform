@@ -452,8 +452,10 @@ test.describe('navigation is honest about what exists', () => {
       '/watch/audio',
       '/watch/galleries',
       '/fatwa',
-      '/news',
+      // `/news` is delivered by Phase 13; Events and the newsletter are not,
+      // and stay asserted absent.
       '/events',
+      '/newsletter',
       '/global',
       // `/search` and `/topics` are delivered by Phase 17, and are asserted
       // present below.

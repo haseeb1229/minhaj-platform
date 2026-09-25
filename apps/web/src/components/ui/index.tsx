@@ -341,6 +341,39 @@ export function TextLink({
   );
 }
 
+/**
+ * A filter or section choice: a link with a 44-pixel target, marked when it is
+ * the current view. `partial` marks the parent of the current view — the year
+ * of the month being shown — highlighted but still a link. The state is carried
+ * by `aria-current` and weight as well as by the border colour, never by colour
+ * alone.
+ */
+export function FilterLink({
+  href,
+  current,
+  partial = false,
+  children,
+}: {
+  readonly href: string;
+  readonly current: boolean;
+  readonly partial?: boolean;
+  readonly children: ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      {...(current ? { 'aria-current': 'page' as const } : {})}
+      className={`inline-flex min-h-11 items-center rounded-[var(--radius-control)] border px-3 text-sm ${
+        current || partial
+          ? 'border-[color:var(--color-action)] font-semibold'
+          : 'border-[color:var(--color-border)]'
+      }`}
+    >
+      {children}
+    </a>
+  );
+}
+
 /* ===========================================================================
  * Lists
  * ========================================================================= */

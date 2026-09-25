@@ -12,6 +12,7 @@ import { libraryReadRuntime } from '@/composition/library-read';
 import { taxonomyRuntime } from '@/composition/taxonomy';
 import { labelFor, workPath } from '@/components/library/presentation';
 import { listingHref } from '@/components/library/scholarly';
+import { NewsTopicSection } from '@/components/editorial/news';
 import { AudioPreview } from '@/components/media/listen';
 import { VideoPreview } from '@/components/media/watch';
 import {
@@ -45,7 +46,8 @@ import { contentMetadata } from '@/seo/metadata';
  * EXIST: Taxonomy for the topic and its place in the hierarchy, Library for the
  * books — and, since Phase 9, the research, research papers, publications,
  * encyclopedias, magazines and magazine issues — classified under it, Media for
- * the published Videos on it (Phase 10), and Search for everything else
+ * the published Videos on it (Phase 10), Editorial for the published News of
+ * every family on it (Phase 13), and Search for everything else
  * classified under it. Each later domain adds its own section when it ships; nothing here renders an empty frame for a domain that
  * has not, and a delivered section with nothing on this topic is not rendered
  * either (ROUTE_MAP.md §5.2).
@@ -303,6 +305,16 @@ export default async function TopicPage({ params }: TopicParams) {
             href: `/${locale}/listen/lectures?topic=${encodeURIComponent(topic.id)}`,
             text: t('allAudio'),
           }}
+        />
+
+        {/* PHASE 13 — the most recent published News of all four families on
+            this topic, from Editorial's own public read, likewise nothing when
+            there is none. The search form above reaches the rest. */}
+        <NewsTopicSection
+          locale={locale}
+          topicId={topic.id}
+          heading={t('news')}
+          headingId="topic-news"
         />
       </div>
     </Container>

@@ -189,13 +189,21 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     key: 'people.administer',
     description: 'Create, edit, link and archive contributor records and their profiles.',
   }),
+  // PHASE 13 ADDS NO KEY. NewsArticle, PressRelease, Statement and
+  // MediaCoverage follow the same editorial workflow with the same separated
+  // author, reviewer and publisher authority, so these keys govern them and
+  // only the two descriptions that named Article and Page changed (migration
+  // 20260928000000). `news.*` beside `content.*` would split one workflow's
+  // authority nobody asked to split.
   Object.freeze({
     key: 'content.read',
-    description: 'Read private Article and Page drafts and revisions.',
+    description:
+      'Read private Article, Page, news, press release, statement and media coverage drafts and revisions.',
   }),
   Object.freeze({
     key: 'content.author',
-    description: 'Create and revise Article and Page drafts and submit them for review.',
+    description:
+      'Create and revise Article, Page, news, press release, statement and media coverage drafts and submit them for review.',
   }),
   Object.freeze({
     key: 'content.review',

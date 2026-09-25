@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
@@ -17,6 +16,7 @@ import {
   Breadcrumbs,
   Container,
   EmptyState,
+  FilterLink,
   PageHeading,
   Prose,
   SectionHeading,
@@ -597,16 +597,16 @@ export async function ArchivePage({
               <h2 className="text-sm font-semibold">{t('archiveYears')}</h2>
               <ul className="flex flex-wrap gap-2">
                 <li>
-                  <ArchiveLink
+                  <FilterLink
                     href={archivePath(locale, { year: null, month: null })}
                     current={filter.year === null}
                   >
                     {t('archiveEveryYear')}
-                  </ArchiveLink>
+                  </FilterLink>
                 </li>
                 {years.map((entry) => (
                   <li key={entry.year}>
-                    <ArchiveLink
+                    <FilterLink
                       href={archivePath(locale, { year: entry.year, month: null })}
                       current={filter.year === entry.year && filter.month === null}
                       partial={filter.year === entry.year && filter.month !== null}
@@ -616,7 +616,7 @@ export async function ArchivePage({
                         {' '}
                         ({t('countShort', { count: entry.photos })})
                       </span>
-                    </ArchiveLink>
+                    </FilterLink>
                   </li>
                 ))}
               </ul>
@@ -628,7 +628,7 @@ export async function ArchivePage({
                 <ul className="flex flex-wrap gap-2">
                   {months.map((entry) => (
                     <li key={entry.month}>
-                      <ArchiveLink
+                      <FilterLink
                         href={archivePath(locale, {
                           year: filter.year,
                           month: entry.month,
@@ -640,7 +640,7 @@ export async function ArchivePage({
                           {' '}
                           ({t('countShort', { count: entry.photos })})
                         </span>
-                      </ArchiveLink>
+                      </FilterLink>
                     </li>
                   ))}
                 </ul>
@@ -682,33 +682,5 @@ export async function ArchivePage({
         )}
       </div>
     </Container>
-  );
-}
-
-/** One archive filter link, a 44-pixel target, marked when it is the current view. */
-function ArchiveLink({
-  href,
-  current,
-  partial = false,
-  children,
-}: {
-  readonly href: string;
-  readonly current: boolean;
-  /** The year of the month being shown: highlighted, but still a link. */
-  readonly partial?: boolean;
-  readonly children: ReactNode;
-}) {
-  return (
-    <a
-      href={href}
-      {...(current ? { 'aria-current': 'page' as const } : {})}
-      className={`inline-flex min-h-11 items-center rounded-[var(--radius-control)] border px-3 text-sm ${
-        current || partial
-          ? 'border-[color:var(--color-action)] font-semibold'
-          : 'border-[color:var(--color-border)]'
-      }`}
-    >
-      {children}
-    </a>
   );
 }

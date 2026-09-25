@@ -8,6 +8,7 @@ import {
   privilegedSession,
   registerAndSignIn,
   test,
+  grantRole,
 } from './support';
 
 test.describe.configure({ mode: 'serial' });
@@ -20,14 +21,7 @@ const slug = 'browser-editorial-' + randomUUID().slice(0, 8);
 const renamed = slug + '-renamed';
 const title = 'Synthetic editorial browser proof';
 async function grant(id: string, keys: readonly string[]) {
-  const role = randomUUID();
-  await sql.query(
-    `INSERT INTO [Role] ([id],[key],[name],[description],[system]) VALUES (N'${role}',N'proof-${role}',N'Editorial browser proof',N'Synthetic fixture',0); INSERT INTO [RoleAssignment] ([userId],[roleId]) VALUES (N'${id}',N'${role}');`,
-  );
-  for (const key of keys)
-    await sql.query(
-      `INSERT INTO [RolePermission] ([roleId],[permissionKey]) VALUES (N'${role}',N'${key}');`,
-    );
+  await grantRole(sql, id, keys, 'Editorial browser proof');
 }
 async function clickSaved(page: Page, name: string) {
   if (name === 'Save triage') {

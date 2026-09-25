@@ -36,6 +36,7 @@ export function ActionForm<State extends FormActionState>({
   messages,
   children,
   tone = 'primary',
+  preserveInput = false,
 }: {
   readonly action: (state: State, form: FormData) => Promise<State>;
   readonly submitLabel: string;
@@ -44,6 +45,14 @@ export function ActionForm<State extends FormActionState>({
   readonly messages: Readonly<Record<string, string>>;
   readonly children: React.ReactNode;
   readonly tone?: 'primary' | 'secondary' | 'destructive';
+  /**
+   * Keep what was typed when the action returns. React resets an action form's
+   * uncontrolled fields once the action settles, which is right for a form
+   * that succeeds by navigating away — and wrong for a long editorial form a
+   * refusal sends back: the reason would appear above empty fields. Opting in
+   * cancels that reset, so the author corrects the one field and saves again.
+   */
+  readonly preserveInput?: boolean;
 }) {
   const [state, submit, pending] = useActionState<State, FormData>(action, {
     status: 'idle',
@@ -57,7 +66,12 @@ export function ActionForm<State extends FormActionState>({
         : undefined;
 
   return (
-    <form action={submit} className="flex flex-col gap-4" noValidate>
+    <form
+      action={submit}
+      className="flex flex-col gap-4"
+      noValidate
+      {...(preserveInput ? { onReset: (event) => event.preventDefault() } : {})}
+    >
       {message === undefined ? null : (
         <Alert tone={state.status === 'success' ? 'success' : 'error'}>{message}</Alert>
       )}

@@ -535,11 +535,43 @@ legal and utility Page destinations are an allowlist, immutable after creation, 
 internal slug `page`. They cannot claim another context's route.
 
 The stored schedule binds UTC time, an IANA display zone, revision and scheduling actor.
-A single-instance executor processes at most 25 Articles and 25 Pages per sweep, rechecking
+A single-instance executor processes at most 25 due records of each workflow-governed
+aggregate per sweep (Article, Page and, since Phase 13, the four News families), rechecking
 reviewer and publisher authority. Failed authority or execution leaves a visible stopped
 schedule; an authorised publisher may reschedule after review. Expected-version transactions
 make duplicate execution harmless. Restart resumes pending due work; multi-instance hosting
 still requires the leasing gate in ARCHITECTURE §3.5.1.
+
+#### 7.2.2 News — as delivered (Phase 13)
+
+NewsArticle, PressRelease, Statement and MediaCoverage are four Editorial aggregates, **not a
+News context and not one content table with a type column**. Each owns the Article's shape of
+tables — record, immutable revisions, revision translations, typed Topic and Person
+references and permanent slug reservations — and is governed by the same workflow, through one
+shared set of workflow rules: the same lifecycle, the same approval of the exact current
+revision by someone other than its creator or editor (no administrator exception), the same
+edit-invalidates-approval-and-schedule rule and the same durable, re-checked schedule. The four
+editorial keys `content.read/author/review/publish` govern them; no `news.*` key exists.
+
+| Aggregate | What genuinely distinguishes it |
+|---|---|
+| **NewsArticle** | Canonical at `/news/{slug}`. Its slug can never be `archive`, `press-releases`, `statements` or `media-coverage` — refused by the contract and by SQL CHECKs on the record and its slug history |
+| **PressRelease** | Its own family and route; no extra metadata is invented for it |
+| **Statement** | Every translation names its **issuing authority** — a bounded, human-facing text, because the authority may be institutional and no Organization entity exists; it is not a Person reference |
+| **MediaCoverage** | The revision names the **outlet**, and only where known an **HTTPS source address** (normalised; no credentials, no other scheme) and the **date of the coverage**. Title, summary and body are the organisation's own words about the coverage — nothing of the third party's article is copied, mirrored, embedded or fetched |
+
+**Rules:**
+- **No image.** News depends on Editorial and Search, not on Storage or Media, so no lead
+  image, Asset, Photo, Gallery or remote image address exists. A future lead image is an
+  explicit dependency decision.
+- **No forward reference.** No Event, Centre, Collection or newsletter relation; centre-scoped
+  News is Phase 16's Centre reference on these records.
+- **No engagement state.** No view count, popularity score or featured flag; "latest" is the
+  publication-instant order.
+- **The archive and topic timelines read genuine publication instants** (UTC year and month),
+  never a record's creation time, across all four families.
+- **Issuer and source changes are audited as their own events**, and no audit row carries a
+  title, body, authoring document, issuer or source address.
 
 ### 7.3 Collection — typed membership
 

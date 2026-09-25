@@ -442,6 +442,35 @@ IF OBJECT_ID(N'[dbo].[PageSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, IN
 IF OBJECT_ID(N'[dbo].[ContactInquiry]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[ContactInquiry] TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[ContactInquiry] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[Feedback]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[Feedback] TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[Feedback] TO [$(app_login)]; END;
 
+-- Phase 13: the four News families, by the Phase-6 postures exactly — records
+-- inserted and moved through the workflow but never deleted; revisions, their
+-- translations and typed references appended and never changed; slug
+-- reservations appended and never released.
+IF OBJECT_ID(N'[dbo].[NewsArticle]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[NewsArticle] TO [$(app_login)]; DENY ALTER, DELETE ON OBJECT::[dbo].[NewsArticle] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[NewsArticleRevision]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[NewsArticleRevision] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[NewsArticleRevision] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[NewsArticleRevisionTranslation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[NewsArticleRevisionTranslation] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[NewsArticleRevisionTranslation] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[NewsArticleTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[NewsArticleTopic] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[NewsArticleTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[NewsArticleContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[NewsArticleContributor] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[NewsArticleContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[NewsArticleSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[NewsArticleSlugHistory] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[NewsArticleSlugHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PressRelease]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[PressRelease] TO [$(app_login)]; DENY ALTER, DELETE ON OBJECT::[dbo].[PressRelease] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PressReleaseRevision]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[PressReleaseRevision] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[PressReleaseRevision] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PressReleaseRevisionTranslation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[PressReleaseRevisionTranslation] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[PressReleaseRevisionTranslation] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PressReleaseTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[PressReleaseTopic] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[PressReleaseTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PressReleaseContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[PressReleaseContributor] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[PressReleaseContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PressReleaseSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[PressReleaseSlugHistory] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[PressReleaseSlugHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Statement]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Statement] TO [$(app_login)]; DENY ALTER, DELETE ON OBJECT::[dbo].[Statement] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[StatementRevision]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[StatementRevision] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[StatementRevision] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[StatementRevisionTranslation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[StatementRevisionTranslation] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[StatementRevisionTranslation] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[StatementTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[StatementTopic] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[StatementTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[StatementContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[StatementContributor] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[StatementContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[StatementSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[StatementSlugHistory] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[StatementSlugHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[MediaCoverage]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[MediaCoverage] TO [$(app_login)]; DENY ALTER, DELETE ON OBJECT::[dbo].[MediaCoverage] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[MediaCoverageRevision]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[MediaCoverageRevision] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[MediaCoverageRevision] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[MediaCoverageRevisionTranslation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[MediaCoverageRevisionTranslation] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[MediaCoverageRevisionTranslation] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[MediaCoverageTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[MediaCoverageTopic] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[MediaCoverageTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[MediaCoverageContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[MediaCoverageContributor] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[MediaCoverageContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[MediaCoverageSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[MediaCoverageSlugHistory] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[MediaCoverageSlugHistory] TO [$(app_login)]; END;
+
 -- Phase 7: storage custody metadata. The runtime creates, measures, clears and
 -- reconciles assets, so it needs DELETE here — reconciliation removes rows a
 -- crash left mid-upload. It never needs ALTER, and the state CHECK constraints

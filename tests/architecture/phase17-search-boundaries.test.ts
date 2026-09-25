@@ -10,7 +10,10 @@ import {
   prohibitedInContextPackages,
   workspaceRoles,
 } from '../../packages/config/eslint/contexts.js';
-import { SEARCH_KINDS } from '../../packages/contracts/src/search/values.ts';
+import {
+  SEARCH_KINDS,
+  SEARCH_SCOPE_KINDS,
+} from '../../packages/contracts/src/search/values.ts';
 
 /**
  * Phase 17 boundaries — Search is Layer-0 infrastructure, and it stays there.
@@ -166,10 +169,10 @@ describe('the engine stays behind its port', () => {
 
 describe('the inventory is closed — the delivered searchable domains and nothing later', () => {
   // Phase 17's initial seven, Phase 9's six scholarly and periodical kinds,
-  // Phase 10's `video` and Phase 11's `audio` — a Series, a Playlist or an
-  // AudioSeries is a grouping, not a kind, and a Quran recitation is Quran's to
-  // project. A later searchable domain adds its own in its own phase; none is
-  // pre-created.
+  // Phase 10's `video`, Phase 11's `audio` and Phase 13's four News families —
+  // a Series, a Playlist or an AudioSeries is a grouping, not a kind, and a
+  // Quran recitation is Quran's to project. A later searchable domain adds its
+  // own in its own phase; none is pre-created.
   const EXPECTED = [
     'article',
     'audio',
@@ -178,15 +181,23 @@ describe('the inventory is closed — the delivered searchable domains and nothi
     'encyclopedia',
     'magazine',
     'magazine-issue',
+    'media-coverage',
+    'news-article',
     'page',
     'person',
+    'press-release',
     'publication',
     'research',
     'research-paper',
+    'statement',
     'topic',
     'video',
     'work',
   ];
+  /** An Edition and a translation are projected within their Work's scope. */
+  const SCOPES = EXPECTED.filter(
+    (kind) => kind !== 'edition' && kind !== 'book-translation',
+  );
 
   it('declares exactly the delivered kinds', () => {
     expect([...SEARCH_KINDS].sort()).toEqual(EXPECTED);
@@ -194,7 +205,7 @@ describe('the inventory is closed — the delivered searchable domains and nothi
 
   it('holds the same kinds in the database constraint the latest migration set', async () => {
     const migration = await read(
-      'packages/database/prisma/migrations/20260926000000_phase11_media_audio/migration.sql',
+      'packages/database/prisma/migrations/20260928000000_phase13_news/migration.sql',
     );
     const constraint = /SearchDocument_kind_ck\] CHECK \(\[kind\] IN \(([^)]*)\)\)/u.exec(
       migration,
@@ -208,8 +219,12 @@ describe('the inventory is closed — the delivered searchable domains and nothi
     for (const locale of ['en', 'ur', 'ar']) {
       const catalogue = JSON.parse(await read(`apps/web/messages/${locale}.json`)) as {
         search: { kinds: Record<string, string> };
+        admin: { search: { kinds: Record<string, string> } };
       };
       expect(Object.keys(catalogue.search.kinds).sort(), locale).toEqual(EXPECTED);
+      // The operator view labels each SCOPE kind a failure can belong to.
+      expect(Object.keys(catalogue.admin.search.kinds).sort(), locale).toEqual(SCOPES);
+      expect([...SEARCH_SCOPE_KINDS].sort()).toEqual(SCOPES);
     }
   });
 });

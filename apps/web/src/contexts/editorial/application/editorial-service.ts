@@ -1,17 +1,26 @@
 import 'server-only';
 import { z } from 'zod';
 import {
-  editorialContentSchema,
+  editorialContentSchemaFor,
   editorialIdSchema,
   editorialKindSchema,
   editorialStateSchema,
+  isNewsKind,
   workflowCommandSchema,
   validPageBinding,
+  type ArticleDetail,
   type EditorialActor,
   type EditorialAuthorityPort,
+  type EditorialDirectory,
+  type EditorialEdit,
+  type EditorialQuery,
   type EditorialReferencesPort,
   type EditorialPersistencePort,
   type EditorialKind,
+  type EditorialScheduleCandidate,
+  type EditorialTransition,
+  type EditorialWrite,
+  type RevisionDirectory,
   type SafeEditorialContent,
 } from '@minhaj/contracts/editorial';
 import {
@@ -20,6 +29,28 @@ import {
   workflowPermission,
 } from '../domain/workflow.ts';
 import { renderEditorialDocument } from './rich-text.ts';
+
+/** The persistence operations of ONE aggregate, whatever its tables. */
+interface KindOperations {
+  detail(id: string): Promise<ArticleDetail | null>;
+  directory(query: EditorialQuery): Promise<EditorialDirectory>;
+  revisions(id: string, offset: number): Promise<RevisionDirectory>;
+  revise(input: EditorialEdit): Promise<ArticleDetail>;
+  transition(input: EditorialTransition): Promise<ArticleDetail>;
+  due(now: Date, limit: number): Promise<readonly EditorialScheduleCandidate[]>;
+  fail(
+    id: string,
+    expectedVersion: number,
+    reason: 'authority-revoked' | 'execution-failed',
+  ): Promise<void>;
+}
+
+/**
+ * At most this many due records of EACH kind are executed per sweep: six kinds,
+ * so a sweep's total work stays bounded at 150 and the remainder is caught up by
+ * the next one.
+ */
+const DUE_PER_KIND = 25;
 
 export function createEditorialService(dependencies: {
   persistence: EditorialPersistencePort;
@@ -30,12 +61,50 @@ export function createEditorialService(dependencies: {
 }) {
   const { persistence: store, authority, references } = dependencies;
   const now = dependencies.now ?? (() => new Date());
+
+  /** One table of dispatch, so no branch can route a kind to another's tables. */
+  function operations(kind: EditorialKind): KindOperations {
+    if (kind === 'article')
+      return {
+        detail: (id) => store.article(id),
+        directory: (query) => store.articles(query),
+        revisions: (id, offset) => store.articleRevisions(id, offset),
+        revise: (input) => store.reviseArticle(input),
+        transition: (input) => store.transitionArticle(input),
+        due: (at, limit) => store.dueArticles(at, limit),
+        fail: (id, version, reason) => store.failArticleSchedule(id, version, reason),
+      };
+    if (kind === 'page')
+      return {
+        detail: (id) => store.page(id),
+        directory: (query) => store.pages(query),
+        revisions: (id, offset) => store.pageRevisions(id, offset),
+        revise: (input) => store.revisePage(input),
+        transition: (input) => store.transitionPage(input),
+        due: (at, limit) => store.duePages(at, limit),
+        fail: (id, version, reason) => store.failPageSchedule(id, version, reason),
+      };
+    if (!isNewsKind(kind)) throw new EditorialRefusal('invalid');
+    return {
+      detail: (id) => store.news(kind, id),
+      directory: (query) => store.newsDirectory(kind, query),
+      revisions: (id, offset) => store.newsRevisions(kind, id, offset),
+      revise: (input) => store.reviseNews(kind, input),
+      transition: (input) => store.transitionNews(kind, input),
+      due: (at, limit) => store.dueNews(kind, at, limit),
+      fail: (id, version, reason) => store.failNewsSchedule(kind, id, version, reason),
+    };
+  }
+
   async function requirePermission(actor: EditorialActor, permission: string) {
     if (!actor?.accountId || !(await authority.permits(actor.accountId, permission)))
       throw new EditorialRefusal('denied');
   }
-  async function contentOf(value: unknown): Promise<SafeEditorialContent> {
-    const result = editorialContentSchema.safeParse(value);
+  async function contentOf(
+    kind: EditorialKind,
+    value: unknown,
+  ): Promise<SafeEditorialContent> {
+    const result = editorialContentSchemaFor(kind).safeParse(value);
     if (!result.success) throw new EditorialRefusal('invalid');
     const content = result.data;
     const valid = await Promise.all([
@@ -53,7 +122,7 @@ export function createEditorialService(dependencies: {
     };
   }
   async function detail(kind: EditorialKind, id: string) {
-    const record = await (kind === 'article' ? store.article(id) : store.page(id));
+    const record = await operations(kind).detail(id);
     if (!record) throw new EditorialRefusal('not-found');
     return record;
   }
@@ -70,9 +139,7 @@ export function createEditorialService(dependencies: {
         limit: 25,
         state: editorialStateSchema.nullable().parse(state),
       };
-      return editorialKindSchema.parse(kind) === 'article'
-        ? store.articles(query)
-        : store.pages(query);
+      return operations(editorialKindSchema.parse(kind)).directory(query);
     },
     async detail(actor: EditorialActor, kind: EditorialKind, id: string) {
       await requirePermission(actor, 'content.read');
@@ -82,9 +149,7 @@ export function createEditorialService(dependencies: {
       await requirePermission(actor, 'content.read');
       editorialIdSchema.parse(id);
       z.number().int().min(0).max(10_000_000).parse(offset);
-      return editorialKindSchema.parse(kind) === 'article'
-        ? store.articleRevisions(id, offset)
-        : store.pageRevisions(id, offset);
+      return operations(editorialKindSchema.parse(kind)).revisions(id, offset);
     },
     async create(
       actor: EditorialActor,
@@ -94,13 +159,17 @@ export function createEditorialService(dependencies: {
     ) {
       await requirePermission(actor, 'content.author');
       editorialKindSchema.parse(kind);
-      const content = await contentOf(value);
+      const content = await contentOf(kind, value);
+      const input: EditorialWrite = { actorId: actor.accountId, content };
       if (kind === 'page') {
         if (routeBinding === null || !validPageBinding(routeBinding, content.slug))
           throw new EditorialRefusal('invalid');
-        return store.createPage({ actorId: actor.accountId, content, routeBinding });
+        return store.createPage({ ...input, routeBinding });
       }
-      return store.createArticle({ actorId: actor.accountId, content });
+      if (routeBinding !== null) throw new EditorialRefusal('invalid');
+      if (kind === 'article') return store.createArticle(input);
+      if (!isNewsKind(kind)) throw new EditorialRefusal('invalid');
+      return store.createNews(kind, input);
     },
     async revise(
       actor: EditorialActor,
@@ -113,19 +182,13 @@ export function createEditorialService(dependencies: {
       editorialKindSchema.parse(kind);
       editorialIdSchema.parse(id);
       z.number().int().positive().parse(expectedVersion);
-      const content = await contentOf(value);
+      const content = await contentOf(kind, value);
       if (kind === 'page') {
         const page = await store.page(id);
         if (!page || !validPageBinding(page.routeBinding, content.slug))
           throw new EditorialRefusal('invalid');
-        return store.revisePage({
-          actorId: actor.accountId,
-          id,
-          expectedVersion,
-          content,
-        });
       }
-      return store.reviseArticle({
+      return operations(kind).revise({
         actorId: actor.accountId,
         id,
         expectedVersion,
@@ -167,24 +230,18 @@ export function createEditorialService(dependencies: {
         )
           throw new EditorialRefusal('approval-required');
       }
-      const input = {
+      return operations(kind).transition({
         ...command,
         actorId: actor.accountId,
         now: now(),
         scheduledExecution,
-      };
-      return kind === 'article'
-        ? store.transitionArticle(input)
-        : store.transitionPage(input);
+      });
     },
     async runDue() {
       const at = now();
-      const groups = [
-        { kind: 'article' as const, records: await store.dueArticles(at, 25) },
-        { kind: 'page' as const, records: await store.duePages(at, 25) },
-      ];
       let published = 0;
-      for (const { kind, records } of groups)
+      for (const kind of editorialKindSchema.options) {
+        const records = await operations(kind).due(at, DUE_PER_KIND);
         for (const record of records) {
           try {
             if (
@@ -193,18 +250,7 @@ export function createEditorialService(dependencies: {
               !(await authority.permits(record.scheduledById, 'content.publish')) ||
               !(await authority.permits(record.approvedById, 'content.review'))
             ) {
-              if (kind === 'article')
-                await store.failArticleSchedule(
-                  record.id,
-                  record.version,
-                  'authority-revoked',
-                );
-              else
-                await store.failPageSchedule(
-                  record.id,
-                  record.version,
-                  'authority-revoked',
-                );
+              await operations(kind).fail(record.id, record.version, 'authority-revoked');
               continue;
             }
             await service.transition(
@@ -225,16 +271,10 @@ export function createEditorialService(dependencies: {
             // A competing edit/cancel/runner already advanced the expected version.
             if (reason === 'conflict') continue;
             dependencies.reportFailure('scheduled-publication');
-            if (kind === 'article')
-              await store.failArticleSchedule(
-                record.id,
-                record.version,
-                'execution-failed',
-              );
-            else
-              await store.failPageSchedule(record.id, record.version, 'execution-failed');
+            await operations(kind).fail(record.id, record.version, 'execution-failed');
           }
         }
+      }
       return published;
     },
   };

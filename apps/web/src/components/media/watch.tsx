@@ -1340,7 +1340,8 @@ const SURFACES = [
  * when there are none the page says so and points at the latest instead of
  * relabelling the latest as featured. The browse list names only what exists:
  * the Watch surfaces, topics, and — from Phase 11 — Listen, Watch's sibling for
- * audio. No galleries, no "coming soon".
+ * audio. Photographs are reached from News and Events (Phase 13), their designed
+ * entry point, not from here. No "coming soon".
  */
 export async function WatchLandingPage({
   locale,
@@ -1450,18 +1451,6 @@ export async function WatchLandingPage({
                 </h3>
                 <p className="text-sm text-[color:var(--color-foreground-muted)]">
                   {t('sectionBody.listen')}
-                </p>
-              </div>
-            </Panel>
-            <Panel as="li">
-              <div className="flex flex-col gap-2">
-                <h3 className="text-lg font-semibold">
-                  <TextLink href={`/${locale}/media/galleries`}>
-                    {t('sections.photos')}
-                  </TextLink>
-                </h3>
-                <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                  {t('sectionBody.photos')}
                 </p>
               </div>
             </Panel>

@@ -1,7 +1,19 @@
 import { z } from 'zod';
-import { CONTRIBUTION_ROLES } from '../people/values.ts';
+import { CONTRIBUTION_ROLES, type ContributionRole } from '../people/values.ts';
+import {
+  NEWS_KINDS,
+  isReservedNewsSlug,
+  mediaCoverageSourceSchema,
+  statementIssuerSchema,
+  type MediaCoverageSource,
+  type NewsKind,
+} from './news.ts';
 
-export const editorialKindSchema = z.enum(['article', 'page']);
+/**
+ * Every aggregate the shared editorial workflow governs: Phase 6's Article and
+ * Page, and Phase 13's four News families. One workflow, six sets of tables.
+ */
+export const editorialKindSchema = z.enum(['article', 'page', ...NEWS_KINDS]);
 export type EditorialKind = z.infer<typeof editorialKindSchema>;
 export const editorialStateSchema = z.enum([
   'draft',
@@ -30,40 +42,116 @@ export const editorialTranslationSchema = z.strictObject({
   seoDescription: z.string().trim().max(300),
   document: z.string().min(2).max(200_000),
 });
+const contributorsSchema = z
+  .array(
+    z.strictObject({
+      personId: editorialIdSchema,
+      role: z.enum(CONTRIBUTION_ROLES),
+    }),
+  )
+  .max(12);
+
+function referencesAreUnique(
+  value: {
+    readonly primaryLanguage: string;
+    readonly translations: readonly { readonly languageCode: string }[];
+    readonly topicIds: readonly string[];
+    readonly contributors: readonly {
+      readonly personId: string;
+      readonly role: string;
+    }[];
+  },
+  context: z.RefinementCtx,
+): void {
+  const codes = value.translations.map((translation) => translation.languageCode);
+  if (
+    !codes.includes(value.primaryLanguage) ||
+    new Set(codes).size !== codes.length ||
+    new Set(value.topicIds).size !== value.topicIds.length ||
+    new Set(value.contributors.map((entry) => `${entry.personId}:${entry.role}`)).size !==
+      value.contributors.length
+  ) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Primary translation and unique references are required.',
+    });
+  }
+}
+
 export const editorialContentSchema = z
   .strictObject({
     slug: editorialSlugSchema,
     primaryLanguage: editorialLanguageSchema,
     translations: z.array(editorialTranslationSchema).min(1).max(3),
     topicIds: z.array(editorialIdSchema).max(12),
-    contributors: z
-      .array(
-        z.strictObject({
-          personId: editorialIdSchema,
-          role: z.enum(CONTRIBUTION_ROLES),
-        }),
-      )
-      .max(12),
+    contributors: contributorsSchema,
   })
-  .superRefine((value, context) => {
-    const codes = value.translations.map((translation) => translation.languageCode);
-    if (
-      !codes.includes(value.primaryLanguage) ||
-      new Set(codes).size !== codes.length ||
-      new Set(value.topicIds).size !== value.topicIds.length ||
-      new Set(value.contributors.map((entry) => `${entry.personId}:${entry.role}`))
-        .size !== value.contributors.length
-    ) {
-      context.addIssue({
-        code: 'custom',
-        message: 'Primary translation and unique references are required.',
-      });
-    }
-  });
-export type EditorialContent = z.infer<typeof editorialContentSchema>;
-export interface SafeEditorialTranslation extends z.infer<
-  typeof editorialTranslationSchema
-> {
+  .superRefine(referencesAreUnique);
+
+/** A Statement's translation names its issuing authority in that language. */
+const statementTranslationSchema = z.strictObject({
+  ...editorialTranslationSchema.shape,
+  issuer: statementIssuerSchema,
+});
+
+const statementContentSchema = z
+  .strictObject({
+    slug: editorialSlugSchema,
+    primaryLanguage: editorialLanguageSchema,
+    translations: z.array(statementTranslationSchema).min(1).max(3),
+    topicIds: z.array(editorialIdSchema).max(12),
+    contributors: contributorsSchema,
+  })
+  .superRefine(referencesAreUnique);
+
+const mediaCoverageContentSchema = z
+  .strictObject({
+    slug: editorialSlugSchema,
+    primaryLanguage: editorialLanguageSchema,
+    translations: z.array(editorialTranslationSchema).min(1).max(3),
+    topicIds: z.array(editorialIdSchema).max(12),
+    contributors: contributorsSchema,
+    coverage: mediaCoverageSourceSchema,
+  })
+  .superRefine(referencesAreUnique);
+
+/** A NewsArticle slug may not name a static sibling of `/news/{slug}`. */
+const newsArticleContentSchema = editorialContentSchema.refine(
+  (value) => !isReservedNewsSlug(value.slug),
+  { message: 'This slug names a reserved News route.', path: ['slug'] },
+);
+
+/**
+ * THE content schema of one aggregate. Each is strict, so a field another family
+ * owns — an issuer on an Article, an outlet on a Statement — is refused rather
+ * than silently stored or silently dropped.
+ */
+export function editorialContentSchemaFor(
+  kind: EditorialKind,
+): z.ZodType<EditorialContent> {
+  if (kind === 'statement') return statementContentSchema;
+  if (kind === 'media-coverage') return mediaCoverageContentSchema;
+  if (kind === 'news-article') return newsArticleContentSchema;
+  return editorialContentSchema;
+}
+
+export interface EditorialTranslation extends z.infer<typeof editorialTranslationSchema> {
+  /** A Statement's issuing authority; absent for every other family. */
+  readonly issuer?: string;
+}
+export interface EditorialContent {
+  readonly slug: string;
+  readonly primaryLanguage: EditorialLanguage;
+  readonly translations: readonly EditorialTranslation[];
+  readonly topicIds: readonly string[];
+  readonly contributors: readonly {
+    readonly personId: string;
+    readonly role: ContributionRole;
+  }[];
+  /** A MediaCoverage record's source; absent for every other family. */
+  readonly coverage?: MediaCoverageSource;
+}
+export interface SafeEditorialTranslation extends EditorialTranslation {
   readonly html: string;
 }
 export interface SafeEditorialContent extends Omit<EditorialContent, 'translations'> {
@@ -135,6 +223,14 @@ export interface PublicEditorial {
 }
 export interface PublicPage extends PublicEditorial {
   readonly routeBinding: string;
+}
+/**
+ * One published News record, as a visitor may see it. Like every public
+ * editorial DTO it carries no authoring document and no workflow actor.
+ */
+export interface PublicNews extends PublicEditorial {
+  readonly kind: NewsKind;
+  readonly coverage: MediaCoverageSource | null;
 }
 export interface EditorialSitemapEntry {
   readonly id: string;

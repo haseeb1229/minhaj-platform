@@ -120,7 +120,11 @@ export default async function SearchOperationsPage({
             >
               {status.failures.map((failure) => (
                 <DataRow key={`${failure.kind}:${failure.id}`}>
-                  <DataCell>{t(`search.kinds.${failure.kind}`)}</DataCell>
+                  <DataCell>
+                    {/* Every scope kind is labelled in every locale; the Phase-17
+                        boundary test proves the catalogue matches the vocabulary. */}
+                    {t(`search.kinds.${failure.kind}` as 'search.kinds.topic')}
+                  </DataCell>
                   <DataCell wrap>
                     <code className="text-xs">{failure.id}</code>
                   </DataCell>

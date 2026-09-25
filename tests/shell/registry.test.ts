@@ -138,28 +138,34 @@ describe('a deferred capability cannot be linked', () => {
     }
   });
 
-  it('records the seven deferred domains rather than forgetting them', () => {
+  it('records the six deferred domains rather than forgetting them', () => {
     // Recording them is what lets the administrative status surface tell the
     // truth about the roadmap, and what lets the assertions above range over
     // the whole set instead of over whatever somebody remembered to add.
     //
-    // `library` LEFT THIS LIST IN PHASE 8, `search` IN PHASE 17 and `watch` IN
-    // PHASE 10, when each was delivered. Each is asserted delivered below
-    // rather than silently dropped.
-    for (const key of [
-      'quran',
-      'hadith',
-      'learn',
-      'fatwa',
-      'news-events',
-      'global',
-      'donate',
-    ]) {
+    // `library` LEFT THIS LIST IN PHASE 8, `search` IN PHASE 17, `watch` IN
+    // PHASE 10 and `news-events` IN PHASE 13, when each was delivered. Each is
+    // asserted delivered below rather than silently dropped.
+    for (const key of ['quran', 'hadith', 'learn', 'fatwa', 'global', 'donate']) {
       const route = routeByKey(key);
 
       expect(route, key).not.toBeNull();
       expect(route?.availability, key).toBe('deferred');
     }
+  });
+
+  it('delivers News and Events at /news, public, eligible and in the primary navigation', () => {
+    // Phase 13: the News families, the News archive and the photograph surfaces
+    // are reached from here. Events and the newsletter are not delivered, so no
+    // route of theirs exists to be linked.
+    const route = requireRoute('news-events');
+
+    expect(route.path).toBe('/news');
+    expect(route.visibility).toBe('public');
+    expect(route.indexing).toBe('eligible');
+    expect(route.placements).toContain('primary');
+    for (const key of ['events', 'newsletter', 'news.latest', 'news.popular'])
+      expect(routeByKey(key), key).toBeNull();
   });
 
   it('delivers Search with a path, public and never indexable', () => {
@@ -363,6 +369,13 @@ describe('indexing eligibility is honest', () => {
       'media.archive',
       'media.galleries',
       'media.photos',
+      // Phase 13: News and Events, the three other News families and the News
+      // archive. `?sort=latest` and the archive's queries are not routes.
+      'news-events',
+      'news.archive',
+      'news.media-coverage',
+      'news.press-releases',
+      'news.statements',
       'sitemap',
       // Phase 17: the canonical Topics browser. `search` is delivered too, and
       // is deliberately NOT here.

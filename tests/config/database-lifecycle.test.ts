@@ -109,13 +109,37 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'ContactInquiry',
       'Feedback',
       'Asset',
+      // Phase 13 — Editorial's four News families, each with its own tables.
+      'NewsArticle',
+      'NewsArticleRevision',
+      'NewsArticleRevisionTranslation',
+      'NewsArticleTopic',
+      'NewsArticleContributor',
+      'NewsArticleSlugHistory',
+      'PressRelease',
+      'PressReleaseRevision',
+      'PressReleaseRevisionTranslation',
+      'PressReleaseTopic',
+      'PressReleaseContributor',
+      'PressReleaseSlugHistory',
+      'Statement',
+      'StatementRevision',
+      'StatementRevisionTranslation',
+      'StatementTopic',
+      'StatementContributor',
+      'StatementSlugHistory',
+      'MediaCoverage',
+      'MediaCoverageRevision',
+      'MediaCoverageRevisionTranslation',
+      'MediaCoverageTopic',
+      'MediaCoverageContributor',
+      'MediaCoverageSlugHistory',
     ]) {
       expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }
 
     // Every LATER phase still arrives with the slice that owns it.
     for (const table of [
-      'NewsArticle',
       'Event',
       'Collection',
       'Quran',

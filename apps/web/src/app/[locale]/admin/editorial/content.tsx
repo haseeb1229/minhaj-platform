@@ -25,6 +25,7 @@ import {
 import { EditorIsland } from '@/components/editorial/editor-island';
 import { ActionForm } from '../../(identity)/form-state';
 import { saveEditorial, transitionEditorial } from './actions';
+import { EDITORIAL_SEGMENTS } from './segments';
 
 const blank = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] });
 export async function ContentDirectory({
@@ -41,7 +42,8 @@ export async function ContentDirectory({
   state?: string | null;
 }) {
   if (state && !editorialStateSchema.safeParse(state).success) notFound();
-  const path = `/${locale}/admin/editorial/${queue ? 'queue' : kind === 'article' ? 'articles' : 'pages'}`;
+  const segment = EDITORIAL_SEGMENTS[kind];
+  const path = `/${locale}/admin/editorial/${queue ? 'queue' : segment}`;
   const context = await requireAdminPage(locale, 'content.read', path);
   const t = await getTranslations({ locale, namespace: 'editorial' });
   const data = await editorialRuntime().editorial.directory(
@@ -52,7 +54,7 @@ export async function ContentDirectory({
   );
   return (
     <Panel>
-      <SectionHeading>{t(kind === 'article' ? 'articles' : 'pages')}</SectionHeading>
+      <SectionHeading>{t(segment)}</SectionHeading>
       {!queue && context.authorization.can('content.author') ? (
         <TextLink href={`${path}/new`}>{t('create')}</TextLink>
       ) : null}
@@ -76,9 +78,7 @@ export async function ContentDirectory({
         <ul className="flex flex-col gap-4">
           {data.items.map((row) => (
             <li key={row.id} className="flex flex-wrap gap-3">
-              <TextLink
-                href={`/${locale}/admin/editorial/${kind === 'article' ? 'articles' : 'pages'}/${row.id}`}
-              >
+              <TextLink href={`/${locale}/admin/editorial/${segment}/${row.id}`}>
                 {row.title}
               </TextLink>
               <span>{t(row.state)}</span>
@@ -133,7 +133,7 @@ export async function ContentEditor({
   revisionOffset?: number;
   referenceQuery?: string;
 }) {
-  const path = `/${locale}/admin/editorial/${kind === 'article' ? 'articles' : 'pages'}/${id}`;
+  const path = `/${locale}/admin/editorial/${EDITORIAL_SEGMENTS[kind]}/${id}`;
   const context = await requireAdminPage(locale, 'content.read', path);
   const actor = { accountId: context.session.account.id };
   const t = await getTranslations({ locale, namespace: 'editorial' });
@@ -224,6 +224,7 @@ export async function ContentEditor({
             submitLabel={t('save')}
             pendingLabel={t('pending')}
             messages={messages}
+            preserveInput
           >
             {hidden}
             {record ? <Alert tone="info">{t('revisionWarning')}</Alert> : null}
@@ -245,6 +246,48 @@ export async function ContentEditor({
               120,
               true,
             )}
+            {kind === 'news-article' ? (
+              <p className="text-xs text-[color:var(--color-foreground-muted)]">
+                {t('slugReserved')}
+              </p>
+            ) : null}
+            {kind === 'media-coverage' ? (
+              <fieldset className="flex flex-col gap-4 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-4">
+                <legend className="px-1 text-sm font-semibold">{t('coverage')}</legend>
+                <p className="text-xs text-[color:var(--color-foreground-muted)]">
+                  {t('sourceHelp')}
+                </p>
+                {input(
+                  'coverage-outlet',
+                  t('outlet'),
+                  revision?.coverage?.outlet ?? '',
+                  200,
+                  true,
+                )}
+                <Field id="coverage-sourceUrl" label={t('sourceUrl')}>
+                  {(props) => (
+                    <TextInput
+                      {...props}
+                      type="url"
+                      name="coverage-sourceUrl"
+                      defaultValue={revision?.coverage?.sourceUrl ?? ''}
+                      maxLength={2048}
+                      dir="ltr"
+                    />
+                  )}
+                </Field>
+                <Field id="coverage-sourceDate" label={t('sourceDate')}>
+                  {(props) => (
+                    <TextInput
+                      {...props}
+                      type="date"
+                      name="coverage-sourceDate"
+                      defaultValue={revision?.coverage?.sourceDate ?? ''}
+                    />
+                  )}
+                </Field>
+              </fieldset>
+            ) : null}
             <Field id="primaryLanguage" label={t('primaryLanguage')}>
               {(props) => (
                 <Select
@@ -285,6 +328,24 @@ export async function ContentEditor({
                       translation?.title ?? '',
                       200,
                     )}
+                    {kind === 'statement' ? (
+                      <Field
+                        id={`${language}-issuer`}
+                        label={t('issuer')}
+                        help={t('issuerHelp')}
+                      >
+                        {(props) => (
+                          <TextInput
+                            {...props}
+                            name={`${language}-issuer`}
+                            defaultValue={translation?.issuer ?? ''}
+                            maxLength={200}
+                            lang={language}
+                            dir={language === 'en' ? 'ltr' : 'rtl'}
+                          />
+                        )}
+                      </Field>
+                    ) : null}
                     {input(
                       `${language}-excerpt`,
                       t('excerpt'),
@@ -415,6 +476,26 @@ export async function ContentEditor({
               <summary className="min-h-11 cursor-pointer py-2">
                 {t('version')} {item.number} · {item.createdAt.toISOString()}
               </summary>
+              {item.coverage ? (
+                <dl className="text-sm">
+                  <dt>{t('outlet')}</dt>
+                  <dd dir="auto">{item.coverage.outlet}</dd>
+                  {item.coverage.sourceUrl ? (
+                    <>
+                      <dt>{t('sourceUrl')}</dt>
+                      <dd dir="ltr" className="break-all">
+                        {item.coverage.sourceUrl}
+                      </dd>
+                    </>
+                  ) : null}
+                  {item.coverage.sourceDate ? (
+                    <>
+                      <dt>{t('sourceDate')}</dt>
+                      <dd>{item.coverage.sourceDate}</dd>
+                    </>
+                  ) : null}
+                </dl>
+              ) : null}
               {item.translations.map((translation) => (
                 <article
                   key={translation.languageCode}
@@ -422,6 +503,11 @@ export async function ContentEditor({
                   dir={translation.languageCode === 'en' ? 'ltr' : 'rtl'}
                 >
                   <h3>{translation.title}</h3>
+                  {translation.issuer ? (
+                    <p>
+                      {t('issuer')}: {translation.issuer}
+                    </p>
+                  ) : null}
                   <div
                     className="editorial-prose"
                     dangerouslySetInnerHTML={{ __html: translation.html }}

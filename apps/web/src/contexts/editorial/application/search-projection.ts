@@ -1,16 +1,18 @@
 import 'server-only';
 
-import type {
-  EditorialPublicReaderPort,
-  EditorialSearchRecord,
+import {
+  NEWS_KINDS,
+  type EditorialPublicReaderPort,
+  type EditorialSearchRecord,
+  type NewsKind,
 } from '@minhaj/contracts/editorial';
 import type { SearchScopeSource } from '@minhaj/contracts/search';
 
 import { editorialPlainText } from './rich-text.ts';
 
 /**
- * Editorial's search projections — PUBLISHED Articles and Pages only
- * (DELIVERY_PLAN.md Phase 17).
+ * Editorial's search projections — PUBLISHED Articles, Pages and, since Phase
+ * 13, the four News families (DELIVERY_PLAN.md Phases 13 and 17).
  *
  * WHAT IS NEVER HERE: drafts, records in review, approved-but-unpublished and
  * scheduled revisions, archived records, and the private correspondence area
@@ -23,8 +25,13 @@ import { editorialPlainText } from './rich-text.ts';
  * what the content-language filter selects.
  *
  * THE YEAR IS THE GENUINE PUBLICATION YEAR, taken from `publishedAt` in UTC.
+ *
+ * A NEWS RECORD'S OWN WORDS ONLY. A Statement's issuing authority and a
+ * MediaCoverage record's outlet name are matched with its body because a
+ * visitor searches for them; a coverage record's source ADDRESS is not, and
+ * nothing of the third party's article is ever projected — none is stored.
  */
-function documentsOf(kind: 'article' | 'page', record: EditorialSearchRecord) {
+function documentsOf(kind: 'article' | 'page' | NewsKind, record: EditorialSearchRecord) {
   const year = record.publishedAt.getUTCFullYear();
   return record.translations.map((translation) => ({
     kind,
@@ -33,7 +40,9 @@ function documentsOf(kind: 'article' | 'page', record: EditorialSearchRecord) {
     contentLanguage: translation.languageCode,
     title: translation.title,
     summary: translation.excerpt,
-    body: editorialPlainText(translation.document),
+    body: [translation.issuer, record.outlet, editorialPlainText(translation.document)]
+      .filter((part): part is string => part !== undefined && part !== '')
+      .join('\n'),
     year,
     topicIds: [...record.topicIds],
   }));
@@ -42,7 +51,17 @@ function documentsOf(kind: 'article' | 'page', record: EditorialSearchRecord) {
 export function createEditorialSearchSources(reader: EditorialPublicReaderPort): {
   readonly article: SearchScopeSource;
   readonly page: SearchScopeSource;
+  readonly news: Readonly<Record<NewsKind, SearchScopeSource>>;
 } {
+  const newsSource = (kind: NewsKind): SearchScopeSource => ({
+    async project(id) {
+      const record = await reader.searchNews(kind, id);
+      return record === null
+        ? null
+        : { stamp: record.stamp, documents: documentsOf(kind, record) };
+    },
+    list: (input) => reader.searchNewsList(kind, input),
+  });
   return {
     article: {
       async project(id) {
@@ -62,5 +81,8 @@ export function createEditorialSearchSources(reader: EditorialPublicReaderPort):
       },
       list: (input) => reader.searchPages(input),
     },
+    news: Object.fromEntries(
+      NEWS_KINDS.map((kind) => [kind, newsSource(kind)]),
+    ) as Record<NewsKind, SearchScopeSource>,
   };
 }

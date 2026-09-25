@@ -1,5 +1,6 @@
 import { editorialSitemapPartitions, mergePagePartitions } from './editorial-sitemap';
 import { librarySitemapPartitions } from './library-sitemap';
+import { newsSitemapPartitions } from './news-sitemap';
 import {
   audioSitemapPartitions,
   gallerySitemapPartitions,
@@ -159,6 +160,9 @@ export async function allSitemapPartitions(): Promise<readonly SitemapPartition[
     // Phase 12's `galleries` segment: published Galleries that hold a public
     // photograph. A Photo has no page, so it has no URL here.
     ...(await gallerySitemapPartitions()),
+    // Phase 13's `news` segment: the published records of all four News
+    // families at their canonical detail addresses.
+    ...(await newsSitemapPartitions()),
   ]);
 }
 

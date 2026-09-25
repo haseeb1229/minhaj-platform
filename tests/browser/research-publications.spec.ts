@@ -14,6 +14,7 @@ import {
   privilegedSession,
   registerAndSignIn,
   test,
+  grantRole,
 } from './support';
 
 /**
@@ -64,15 +65,7 @@ const RESEARCH_TITLE = `Synthetic browser research ${WORD}`;
 const MAGAZINE_TITLE = `Synthetic browser monthly ${WORD}`;
 
 async function grant(accountId: string, keys: readonly string[]): Promise<void> {
-  const role = randomUUID();
-  await sql.query(
-    `INSERT INTO [Role] ([id],[key],[name],[description],[system]) VALUES (N'${role}',N'proof-${role}',N'Scholarly browser proof',N'Synthetic fixture',0); INSERT INTO [RoleAssignment] ([userId],[roleId]) VALUES (N'${accountId}',N'${role}');`,
-  );
-  for (const key of keys) {
-    await sql.query(
-      `INSERT INTO [RolePermission] ([roleId],[permissionKey]) VALUES (N'${role}',N'${key}');`,
-    );
-  }
+  await grantRole(sql, accountId, keys, 'Scholarly browser proof');
 }
 
 /** Waits for DERIVED work — the running sweep indexes asynchronously (§8.5). */

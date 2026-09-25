@@ -13,6 +13,7 @@ import { editorialRuntime } from '@/composition/editorial';
 import { editorialFailure } from '@/contexts/editorial';
 import { appLogger } from '@/composition/logging';
 import type { FormActionState } from '../../(identity)/form-state';
+import { EDITORIAL_SEGMENTS } from './segments';
 
 function rejected(error: unknown): FormActionState {
   const failure = editorialFailure(error);
@@ -35,6 +36,13 @@ export async function saveEditorial(
       personId: form.get(`person-${index}`),
       role: form.get(`role-${index}`),
     })).filter((entry) => entry.personId);
+    // Only the fields this kind owns are sent: an issuer only for a Statement
+    // and a coverage source only for MediaCoverage. The content schema of each
+    // kind is strict, so anything else would be refused, never stored.
+    const optional = (name: string) => {
+      const value = String(form.get(name) ?? '').trim();
+      return value === '' ? null : value;
+    };
     const content = {
       slug: form.get('slug'),
       primaryLanguage: form.get('primaryLanguage'),
@@ -48,10 +56,20 @@ export async function saveEditorial(
           languageCode,
           title: form.get(`${languageCode}-title`),
           excerpt: form.get(`${languageCode}-excerpt`),
+          ...(kind === 'statement' ? { issuer: form.get(`${languageCode}-issuer`) } : {}),
           seoTitle: form.get(`${languageCode}-seoTitle`),
           seoDescription: form.get(`${languageCode}-seoDescription`),
           document: form.get(`${languageCode}-document`),
         })),
+      ...(kind === 'media-coverage'
+        ? {
+            coverage: {
+              outlet: form.get('coverage-outlet'),
+              sourceUrl: optional('coverage-sourceUrl'),
+              sourceDate: optional('coverage-sourceDate'),
+            },
+          }
+        : {}),
     };
     const id = String(form.get('id') ?? '');
     const saved = id
@@ -68,7 +86,7 @@ export async function saveEditorial(
           content,
           kind === 'page' ? String(form.get('routeBinding')) : null,
         );
-    destination = `/${locale}/admin/editorial/${kind === 'article' ? 'articles' : 'pages'}/${saved.id}`;
+    destination = `/${locale}/admin/editorial/${EDITORIAL_SEGMENTS[kind]}/${saved.id}`;
     revalidatePath(`/${locale}/admin/editorial`, 'layout');
     indexAfterResponse();
   } catch (error) {

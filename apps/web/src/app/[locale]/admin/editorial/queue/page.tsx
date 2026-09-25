@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { editorialKindSchema } from '@minhaj/contracts/editorial';
 import { requireLocale } from '@/config/route-locale';
 import { ContentDirectory } from '../content';
 export default async function Page({
@@ -16,10 +17,13 @@ export default async function Page({
     .max(10000000)
     .catch(0)
     .parse((await searchParams).offset);
+  // ONE queue across every aggregate the shared workflow governs: the records
+  // awaiting an independent review, each list bounded and paged on its own.
   return (
     <>
-      <ContentDirectory locale={locale} kind="article" offset={offset} queue />
-      <ContentDirectory locale={locale} kind="page" offset={offset} queue />
+      {editorialKindSchema.options.map((kind) => (
+        <ContentDirectory key={kind} locale={locale} kind={kind} offset={offset} queue />
+      ))}
     </>
   );
 }

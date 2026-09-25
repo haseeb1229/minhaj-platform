@@ -34,6 +34,12 @@ import {
   verifyRestoredPhase12,
   writePhase12Fixture,
 } from '../src/lifecycle/phase12-fixture.ts';
+import {
+  capturePhase13Fixture,
+  newPhase13Fixture,
+  verifyRestoredPhase13,
+  writePhase13Fixture,
+} from '../src/lifecycle/phase13-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -155,6 +161,7 @@ const scholarlyFixture = newPhase9Fixture();
 const mediaFixture = newPhase10Fixture();
 const audioFixture = newPhase11Fixture();
 const photoFixture = newPhase12Fixture();
+const newsFixture = newPhase13Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -277,6 +284,19 @@ try {
   const photoSnapshot = await capturePhase12Fixture(admin, photoFixture);
   report('photo fixture', `run ${photoFixture.runId}`);
 
+  // Phase-13 News: one published record of each of the four families, renamed
+  // once and approved independently, in Urdu and English with typed topics and
+  // contributors, a Statement issuer and a coverage source; an archived
+  // NewsArticle; a scheduled press release; and the search intent still owed.
+  await writePhase13Fixture(admin, newsFixture, {
+    authorId: fixture.accountId,
+    reviewerId: peopleFixture.accountId,
+    personId: peopleFixture.linkedPersonId,
+    topicId: taxonomyFixture.childTopicId,
+  });
+  const newsSnapshot = await capturePhase13Fixture(admin, newsFixture);
+  report('news fixture', `run ${newsFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -355,6 +375,10 @@ try {
   report(
     'photo recovery',
     await verifyRestoredPhase12(restored, photoFixture, photoSnapshot),
+  );
+  report(
+    'news recovery',
+    await verifyRestoredPhase13(restored, newsFixture, newsSnapshot),
   );
 
   // ---- restored security posture -------------------------------------------
@@ -504,6 +528,22 @@ try {
         ['Gallery DELETE', 'DELETE FROM [dbo].[Gallery];'],
         ['GallerySlugHistory DELETE', 'DELETE FROM [dbo].[GallerySlugHistory];'],
         ['GalleryItem UPDATE', 'UPDATE [dbo].[GalleryItem] SET [position]=[position];'],
+        // Phase 13. A restored runtime can neither erase a News record, rewrite
+        // an immutable revision, nor release a reserved slug of any family.
+        ['NewsArticle DELETE', 'DELETE FROM [dbo].[NewsArticle];'],
+        ['Statement DELETE', 'DELETE FROM [dbo].[Statement];'],
+        [
+          'StatementRevisionTranslation UPDATE',
+          'UPDATE [dbo].[StatementRevisionTranslation] SET [issuer]=[issuer];',
+        ],
+        [
+          'MediaCoverageRevision UPDATE',
+          'UPDATE [dbo].[MediaCoverageRevision] SET [sourceUrl]=[sourceUrl];',
+        ],
+        [
+          'PressReleaseSlugHistory DELETE',
+          'DELETE FROM [dbo].[PressReleaseSlugHistory];',
+        ],
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -534,6 +574,7 @@ try {
       await verifyRestoredPhase10(restored, mediaFixture, mediaSnapshot);
       await verifyRestoredPhase11(restored, audioFixture, audioSnapshot);
       await verifyRestoredPhase12(restored, photoFixture, photoSnapshot);
+      await verifyRestoredPhase13(restored, newsFixture, newsSnapshot);
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 
       // Phase 17. The full-text catalogue and index live INSIDE the database,

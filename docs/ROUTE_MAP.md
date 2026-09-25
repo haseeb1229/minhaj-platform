@@ -268,9 +268,9 @@ citation remains valid regardless of reading preferences.
 
 | Route | Purpose |
 |---|---|
-| `/news` · `/news/{slug}` | News — `?sort=latest` |
-| `/news/{press-releases\|statements\|media-coverage}` · `/{slug}` | Editorial types |
-| `/news/archive` | `?year, month` |
+| `/news` · `/news/{slug}` | News — `?sort=latest`. Phase 13: `/news` is the News and Events entry point, listing the latest NewsArticles; `latest` is a query canonical to `/news`, never a path |
+| `/news/{press-releases\|statements\|media-coverage}` · `/{slug}` | Editorial types — delivered in Phase 13, each family with its own slug history. The three segments and `archive` are reserved: no NewsArticle slug can hold them |
+| `/news/archive` | `?year, month` — every published News record by the UTC year and month of its publication (Phase 13) |
 | `/newsletter` | Subscription |
 | `/events` · `/events/{slug}` · `/events/{slug}/gallery` | Events — `?upcoming, past, country, city, centre` |
 | `/media/photos` · `/media/galleries` · `/{slug}` · `/media/archive` · `/media/downloads` | Media — Phase 12 delivers photos, galleries, each Gallery at `/media/galleries/{slug}`, and the archive (`?year, month`). A Photo has no page of its own. `/media/downloads` has **no route** until a rights decision authorises downloads |
@@ -476,7 +476,7 @@ Prefixed `/{locale}/admin`.
 | Area | Routes |
 |---|---|
 | Dashboard | `/admin` |
-| Editorial | `/admin/editorial/{articles\|pages\|news\|press-releases\|statements\|media-coverage\|events\|collections\|queue\|correspondence}` \u2014 **correspondence** covers private ContactInquiry and Feedback triage (DOMAIN_MODEL.md \u00a77.5) |
+| Editorial | `/admin/editorial/{articles\|pages\|news\|press-releases\|statements\|media-coverage\|events\|collections\|queue\|correspondence}` \u2014 **correspondence** covers private ContactInquiry and Feedback triage (DOMAIN_MODEL.md \u00a77.5); `news`, `press-releases`, `statements` and `media-coverage` delivered in Phase 13, and `queue` lists every workflow-governed aggregate |
 | Quran | `/admin/quran/{surahs\|ayat\|translations\|tafsir\|transliterations\|recitations}` |
 | Hadith | `/admin/hadith/{collections\|books\|chapters\|records\|commentary}` |
 | Fatwa | `/admin/fatwa/{questions\|assignment\|drafts\|review\|published}` |
@@ -669,7 +669,7 @@ structured data invites manual action penalties.
 | `Person` | `/people/{slug}` |
 | `Book` | Library works and editions — with genuine ISBN, author and language only |
 | `Article` | Articles and research |
-| `NewsArticle` | News, press releases, statements |
+| `NewsArticle` | News, press releases, statements — never media coverage, whose article is a third party's (Phase 13) |
 | `Event` | Events — with genuine date and location |
 | `VideoObject` | Video pages — title, description, thumbnail, upload date, embed URL |
 | `BreadcrumbList` | Every page with a hierarchical path |

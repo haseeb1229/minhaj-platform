@@ -528,6 +528,9 @@ recorded limitations are in TECH_STACK.md §10.
   Phase 10 added `video` alone; a Series or Playlist is a grouping of Videos, not a kind.
   Phase 11 added `audio` alone; an AudioSeries is a grouping, and a Quran recitation is Quran's
   to project.
+  Phase 13 added Editorial's four News families — `news-article`, `press-release`,
+  `statement` and `media-coverage` — each its own kind and scope, resolved to its own canonical
+  family by Editorial's published predicate.
 
 ### 4.4 Authentication and authorisation
 

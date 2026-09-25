@@ -186,11 +186,20 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     placements: Object.freeze(['primary'] as const),
     availability: 'deferred' as const,
   }),
+  /**
+   * DELIVERED BY PHASE 13 — News. `/news` is the News and Events entry point:
+   * the latest NewsArticles, the three other News families, the News archive
+   * and the photograph surfaces Phase 12 delivered. Events are Phase 14's and
+   * the newsletter Phase 21's, so neither is linked from it.
+   */
   Object.freeze({
     key: 'news-events',
     label: 'nav.newsEvents',
+    path: '/news',
     placements: Object.freeze(['primary'] as const),
-    availability: 'deferred' as const,
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'eligible' as const,
   }),
   Object.freeze({
     key: 'global',
@@ -473,9 +482,9 @@ const LISTEN: readonly ShellRoute[] = Object.freeze([
  * Photographs, galleries and the historical archive: each a genuine page in all
  * three interface locales over delivered data. NO PLACEMENT — Media is a content
  * domain, not a primary navigation item (INFORMATION_ARCHITECTURE.md §2.2). Its
- * designed entry points are News & Events and Collections, which have not
- * shipped, so until they do these are reached from the Watch landing, from one
- * another and from the human sitemap.
+ * designed entry points are News & Events — delivered by Phase 13, which links
+ * all three from `/news` — and Collections, which has not shipped; they are
+ * also reached from one another and from the human sitemap.
  *
  * `/media/downloads` HAS NO ENTRY AND NO ROUTE: a download needs a rights
  * decision no phase has made. Neither does `/events/{slug}/gallery`, which is
@@ -492,6 +501,30 @@ const MEDIA: readonly ShellRoute[] = Object.freeze(
       availability: 'delivered' as const,
       indexing: 'eligible' as const,
     }),
+  ),
+);
+
+/**
+ * The News families' listings and the News archive — Phase 13 (ROUTE_MAP.md
+ * §3.9). Each is an intentional navigational view the information architecture
+ * curates, a genuine page in all three interface locales over delivered data,
+ * and so `eligible`. NO PLACEMENT — they are reached from `/news`, the single
+ * entry point in the primary navigation. `?sort=latest` and the archive's
+ * `?year=` and `?month=` are queries on these, canonical to them, and never
+ * entries of their own; there is no `/news/latest`.
+ */
+const NEWS: readonly ShellRoute[] = Object.freeze(
+  (['press-releases', 'statements', 'media-coverage', 'archive'] as const).map(
+    (surface) =>
+      Object.freeze({
+        key: `news.${surface}`,
+        label: `news.${surface}`,
+        path: `/news/${surface}`,
+        placements: Object.freeze([] as const),
+        visibility: 'public' as const,
+        availability: 'delivered' as const,
+        indexing: 'eligible' as const,
+      }),
   ),
 );
 
@@ -577,6 +610,7 @@ export const SHELL_ROUTES: readonly ShellRoute[] = Object.freeze([
   ...WATCH,
   ...LISTEN,
   ...MEDIA,
+  ...NEWS,
   ...exploreRoutes(),
   ...LEGAL,
 ]);

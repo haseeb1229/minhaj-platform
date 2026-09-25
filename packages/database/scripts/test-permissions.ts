@@ -6,6 +6,13 @@ import {
   capturePhase6Fixture,
   verifyRestoredPhase6,
 } from '../src/lifecycle/phase6-fixture.ts';
+import {
+  capturePhase13Fixture,
+  newPhase13Fixture,
+  PHASE13_FAMILIES,
+  verifyRestoredPhase13,
+  writePhase13Fixture,
+} from '../src/lifecycle/phase13-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -865,6 +872,59 @@ try {
       'expired data disposition remains possible',
     );
   }
+
+  // ---- Phase 13: the four News families, by the Phase-6 postures -----------
+  //
+  // Written through the RUNTIME login — create, revise, rename, approve,
+  // publish, archive and schedule, with the search intent each owes — so the
+  // grants the application relies on are proven sufficient. Then every removal
+  // and every rewrite of history is refused: no News record, revision,
+  // translation, typed reference or slug reservation can be deleted, and none
+  // but the record itself can be updated.
+  const newsFixture = newPhase13Fixture();
+  await writePhase13Fixture(app, newsFixture, {
+    authorId: editorialPeople.accountId,
+    reviewerId: editorialReviewer,
+    personId: editorialPeople.linkedPersonId,
+    topicId: editorialTopic.id,
+  });
+  const newsSnapshot = await capturePhase13Fixture(app, newsFixture);
+  pass(
+    'News runtime writes',
+    '24 tables written and read through the actual application principal',
+  );
+  for (const family of PHASE13_FAMILIES) {
+    for (const suffix of [
+      '',
+      'Revision',
+      'RevisionTranslation',
+      'Topic',
+      'Contributor',
+      'SlugHistory',
+    ]) {
+      const table = family + suffix;
+      await expectDenied(app, table + ' DELETE denied', `DELETE FROM [dbo].[${table}];`);
+      await expectDenied(
+        app,
+        table + ' ALTER denied',
+        `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+      );
+      if (suffix !== '') {
+        const column =
+          suffix === 'RevisionTranslation'
+            ? 'title'
+            : suffix === 'Revision' || suffix === 'SlugHistory'
+              ? 'slug'
+              : 'ownerId';
+        await expectDenied(
+          app,
+          table + ' UPDATE denied',
+          `UPDATE [dbo].[${table}] SET [${column}]=[${column}];`,
+        );
+      }
+    }
+  }
+  await verifyRestoredPhase13(admin, newsFixture, newsSnapshot);
 
   // ---- Phase 7: storage custody metadata -----------------------------------
   //

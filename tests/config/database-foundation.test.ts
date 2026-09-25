@@ -109,6 +109,32 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'PageTopic',
       'PageContributor',
       'PageSlugHistory',
+      // Phase 13 — Editorial: NewsArticle, PressRelease, Statement and
+      // MediaCoverage, each with the Article's own tables — never one News table.
+      'NewsArticle',
+      'NewsArticleRevision',
+      'NewsArticleRevisionTranslation',
+      'NewsArticleTopic',
+      'NewsArticleContributor',
+      'NewsArticleSlugHistory',
+      'PressRelease',
+      'PressReleaseRevision',
+      'PressReleaseRevisionTranslation',
+      'PressReleaseTopic',
+      'PressReleaseContributor',
+      'PressReleaseSlugHistory',
+      'Statement',
+      'StatementRevision',
+      'StatementRevisionTranslation',
+      'StatementTopic',
+      'StatementContributor',
+      'StatementSlugHistory',
+      'MediaCoverage',
+      'MediaCoverageRevision',
+      'MediaCoverageRevisionTranslation',
+      'MediaCoverageTopic',
+      'MediaCoverageContributor',
+      'MediaCoverageSlugHistory',
       'ContactInquiry',
       'Feedback',
       'Asset',
@@ -209,7 +235,6 @@ describe('Phase 1 Chunk 1 database foundation', () => {
     // enforcement that gives them meaning. Everything remaining belongs to a
     // later phase entirely.
     for (const domain of [
-      'NewsArticle',
       'Event',
       'Collection',
       'Quran',
@@ -239,6 +264,14 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'YouTubeVideo',
       'LectureVideo',
       'WatchHistory',
+      // Phase 13 invents no generic News or editorial table, no lead image and
+      // no newsletter or Centre relation: those are Phase 16's, Phase 21's, or
+      // an architecture decision no phase has made.
+      'NewsItem',
+      'EditorialContent',
+      'NewsArticleImage',
+      'NewsletterSubscriber',
+      'Centre',
     ]) {
       expect(models, `${domain} arrives with its owning slice`).not.toContain(domain);
     }

@@ -8,6 +8,7 @@ import {
   editorialPublicReferences,
 } from '@/composition/editorial-read';
 import { Alert, Breadcrumbs, Container, Prose, TextLink } from '@/components/ui';
+import { translationFor } from './presentation';
 import { absoluteUrl } from '@/config/origin';
 import {
   contentMetadata,
@@ -20,16 +21,7 @@ export const readArticle = cache((slug: string) => editorialReadRuntime().articl
 export const readPage = cache((binding: string, slug = 'page') =>
   editorialReadRuntime().page(binding, slug),
 );
-export function translationFor<T extends { readonly languageCode: Locale }>(
-  record: { readonly translations: readonly T[]; readonly primaryLanguage: Locale },
-  locale: Locale,
-): T {
-  const translation =
-    record.translations.find((row) => row.languageCode === locale) ??
-    record.translations.find((row) => row.languageCode === record.primaryLanguage);
-  if (!translation) throw new Error('Published editorial translation is missing.');
-  return translation;
-}
+export { translationFor };
 export function editorialMetadata(record: PublicEditorial, locale: Locale, path: string) {
   const translation = translationFor(record, locale);
   return contentMetadata({

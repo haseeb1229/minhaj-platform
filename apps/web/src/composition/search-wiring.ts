@@ -1,7 +1,7 @@
 import 'server-only';
 
-import type { EditorialPublicReaderPort } from '@minhaj/contracts/editorial';
-import { pagePath } from '@minhaj/contracts/editorial';
+import type { EditorialPublicReaderPort, NewsKind } from '@minhaj/contracts/editorial';
+import { newsPathOf, pagePath } from '@minhaj/contracts/editorial';
 import type { LibraryPublicReaderPort, ScholarlyKind } from '@minhaj/contracts/library';
 import type { MediaPublicReaderPort } from '@minhaj/contracts/media';
 import type { PeopleReaderPort } from '@minhaj/contracts/people';
@@ -48,8 +48,9 @@ import { createTopicSearchSource } from '@/contexts/taxonomy';
  * `/people/{slug}`, `/library/articles/{slug}`, a Page's reserved binding, a
  * Work's page — with the Edition selected — under `/library/books/{slug}`, the
  * Phase-9 Library routes, an issue beneath its Magazine's CURRENT slug, a
- * Phase-10 Video at `/watch/videos/{slug}`, and a Phase-11 AudioTrack at
- * `/listen/lectures/{slug}`.
+ * Phase-10 Video at `/watch/videos/{slug}`, a Phase-11 AudioTrack at
+ * `/listen/lectures/{slug}`, and each Phase-13 News family at its own
+ * canonical address beneath `/news`.
  */
 
 export interface SearchOwnerReaders {
@@ -90,6 +91,16 @@ export function searchWiring(readers: SearchOwnerReaders): {
         scholarlyPathOf(kind, row.slug, row.magazineSlug),
       )) satisfies SearchTargetResolver,
   });
+  // Editorial's own public predicate answers which News records are published
+  // NOW, and at what slug — a withdrawn record's stale projection is withheld,
+  // and a renamed one resolves to its current address.
+  const news =
+    (kind: NewsKind): SearchTargetResolver =>
+    async (ids) =>
+      mapOf(await readers.editorial.publishedNewsTargets(kind, ids), (row) =>
+        newsPathOf(kind, row.slug),
+      );
+
   const research = scholarly('research');
   const researchPaper = scholarly('research-paper');
   const publication = scholarly('publication');
@@ -112,6 +123,10 @@ export function searchWiring(readers: SearchOwnerReaders): {
       encyclopedia: encyclopedia.source,
       video: createVideoSearchSource(readers.media),
       audio: createAudioSearchSource(readers.media),
+      'news-article': editorial.news['news-article'],
+      'press-release': editorial.news['press-release'],
+      statement: editorial.news.statement,
+      'media-coverage': editorial.news['media-coverage'],
     },
 
     targets: {
@@ -160,6 +175,10 @@ export function searchWiring(readers: SearchOwnerReaders): {
         mapOf(await readers.media.publicAudioTargets(ids), (row) =>
           audioTrackPathOf(row.slug),
         ),
+      'news-article': news('news-article'),
+      'press-release': news('press-release'),
+      statement: news('statement'),
+      'media-coverage': news('media-coverage'),
     },
 
     async resolveTopic(slug, locale) {

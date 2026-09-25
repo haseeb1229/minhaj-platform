@@ -894,6 +894,47 @@ review history:**
 | **14 Events** | Event, EventSchedule; **typed Centre references — Global Network (16) is already delivered**; **the typed Event↔Gallery association, owned here because both targets now exist** | `Event` structured data with genuine date and location; **the Centre reference is a real foreign key, not a placeholder**; **Events owns no Gallery schema and Galleries owns no Event schema**; **no polymorphic placeholder is used to dodge ownership** |
 | **15 Collections** | Collection with **typed item membership**; curated mixed-type sets. **Membership types cover only the content types delivered by this phase's prerequisites**; a later domain adds its own membership type when it arrives | **Deleting a Collection deletes no content**; **no polymorphic references**; item integrity enforced; **no membership type is pre-created for a domain that does not yet exist** |
 
+**Phase-13 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+- **Four Editorial aggregates, one workflow.** NewsArticle, PressRelease, Statement and
+  MediaCoverage each have the Article's own tables (DOMAIN_MODEL.md §7.2.2); Article, Page and
+  News share one set of workflow persistence rules and one service, so no second News workflow
+  exists. A Statement names its issuing authority per translation; a MediaCoverage record its
+  outlet and, where known, an HTTPS source and date.
+- **Permissions.** No new key: `content.read` and `content.author` are re-described to name the
+  News families. Admin surfaces: `/admin/editorial/{news|press-releases|statements|media-coverage}`,
+  and the shared review queue lists all six workflow-governed aggregates.
+- **Scheduling.** The Phase-6 executor, extended: at most 25 due records of each of the six
+  aggregates per sweep, authority re-checked, catch-up after downtime, duplicate execution
+  harmless.
+- **Public.** `/news` is the News and Events entry point — the latest NewsArticles
+  (`?sort=latest` is the only order and canonical to `/news`), the other three families, the News
+  archive and the Phase-12 photograph surfaces, which the Watch landing no longer links. The
+  archive is `/news/archive?year=&month=` over all four families by UTC publication instant.
+  Cards are text — type, date, headline, summary, byline, topics — with no image. A coverage
+  record's source is a described outbound link, never an embed or a redirect.
+- **Slugs.** Each family its own history, one-hop 301 through the request proxy, locale kept.
+  The static `/news` siblings are reserved words a NewsArticle slug can never hold, and the proxy
+  passes over them before any lookup.
+- **Search.** Four kinds and scopes — `news-article`, `press-release`, `statement`,
+  `media-coverage` — so the type filter tells them apart. Documents carry title, summary, body
+  text, a Statement's issuer and a coverage record's outlet, never its source address; each
+  family's current target is resolved from Editorial's published predicate.
+- **SEO.** `NewsArticle` JSON-LD for a NewsArticle, a press release and a statement — headline,
+  language, address, genuine dates and, except for a statement, credited People; never an image,
+  publisher or logo. MediaCoverage claims no article (BreadcrumbList only). The `news` sitemap
+  segment lists published detail URLs in the languages each genuinely has.
+- **Topic hub.** `/topics/{slug}` shows the latest published News of every family on the topic
+  from Editorial's own read. A People profile shows no News panel: Editorial exposes no
+  contributor facet for Articles either.
+- **Recovery is SQL.** The populated rehearsal and a Search-after-restore proof cover all four
+  families; Search rebuilds from the restored Editorial owner.
+- **Not delivered, and not owed by this phase:** Centre-scoped News (Phase 16); Events and
+  Event↔Gallery (Phase 14); Collections (Phase 15); the newsletter (Phase 21); RSS (no accepted
+  feed composition exists yet); News images (an explicit Storage/Media dependency decision);
+  popularity, view counts or featured News.
+
 ---
 
 ### Phase 16 — Global Network

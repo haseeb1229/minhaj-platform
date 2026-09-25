@@ -1312,7 +1312,8 @@ describeLive('Phase 5 — People & Contributors over a live database', () => {
       // is the second (Phase 8): `WorkContributor` for attribution and
       // `BookTranslator` for a genuine translation's translators. Phase 9 adds one
       // typed credit table per scholarly and periodical aggregate, Phase 10
-      // Media's `VideoSpeaker` and Phase 11 its `AudioTrackSpeaker`. Each is a
+      // Media's `VideoSpeaker`, Phase 11 its `AudioTrackSpeaker` and Phase 13 one
+      // typed credit table per News family. Each is a
       // typed foreign key to Person, never a polymorphic pair — and none of them
       // grants the Person anything.
       const referencing = await admin.query<{ tableName: string }>(`
@@ -1330,14 +1331,18 @@ describeLive('Phase 5 — People & Contributors over a live database', () => {
         'EncyclopediaContributor',
         'MagazineContributor',
         'MagazineIssueContributor',
+        'MediaCoverageContributor',
+        'NewsArticleContributor',
         'PageContributor',
         'PersonNameVariant',
         'PersonTranslation',
+        'PressReleaseContributor',
         'PublicationContributor',
         'ResearchContributor',
         'ResearchPaperContributor',
         'ScholarProfile',
         'SpeakerProfile',
+        'StatementContributor',
         'TeacherProfile',
         'VideoSpeaker',
         'WorkContributor',
