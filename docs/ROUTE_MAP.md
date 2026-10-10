@@ -274,10 +274,10 @@ citation remains valid regardless of reading preferences.
 | `/newsletter` | Subscription |
 | `/events` · `/events/{slug}` · `/events/{slug}/gallery` | Events — `?upcoming, past, country, city, centre` |
 | `/media/photos` · `/media/galleries` · `/{slug}` · `/media/archive` · `/media/downloads` | Media — Phase 12 delivers photos, galleries, each Gallery at `/media/galleries/{slug}`, and the archive (`?year, month`). A Photo has no page of its own. `/media/downloads` has **no route** until a rights decision authorises downloads |
-| `/global` · `/global/find-a-centre` | World network and centre finder |
-| `/global/countries` · `/{slug}` · `/{slug}/regions/{regionSlug}` · `/{slug}/cities/{citySlug}` | Geography — intermediate levels may be absent (DOMAIN_MODEL.md §17.1) |
-| `/global/centres` · `/{slug}` · `/{slug}/{news\|events\|contact}` | Centres |
-| `/global/pakistan` | Pakistan structure entry point |
+| `/global` · `/global/find-a-centre` | World network and centre finder — Phase 16. The finder's `?country, region, city` are queries canonical to it |
+| `/global/countries` · `/{slug}` · `/{slug}/regions/{regionSlug}` · `/{slug}/cities/{citySlug}` | Geography — intermediate levels may be absent (DOMAIN_MODEL.md §17.1). Delivered in Phase 16; a Region or City address is scoped by its Country, and a former slug at either level answers one 301 |
+| `/global/centres` · `/{slug}` · `/{slug}/{news\|events\|contact}` | Centres — `news` and the display-only `contact` delivered in Phase 16; `events` has **no route** until Phase 14 |
+| `/global/pakistan` | Pakistan structure entry point — a view of the Pakistan Country, canonical to its Country page and never a sitemap entry (Phase 16) |
 
 ### 3.10 Legal and machine-readable
 
@@ -486,7 +486,7 @@ Prefixed `/{locale}/admin`.
 | Identity | `/admin/identity/{users\|roles\|permissions\|assignments\|security}` \u2014 **security** covers second-factor state, bootstrap status and identity audit (SECURITY_BASELINE.md \u00a78) |
 | Taxonomy | `/admin/taxonomy/{topics\|mapping\|languages\|tags}` |
 | Learning | `/admin/learning/{courses\|paths\|classes\|enrolments\|trials}` |
-| Global | `/admin/global/{countries\|regions\|cities\|centres}` |
+| Global | `/admin/global/{countries\|regions\|cities\|centres}` — delivered in Phase 16; a Centre's contacts and served Cities are managed on the Centre |
 | Membership | `/admin/membership` · `/applications` |
 | Donations | `/admin/donations` · `/campaigns` |
 | Messaging | `/admin/messaging/{support\|moderation\|reports}` |

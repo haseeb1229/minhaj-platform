@@ -138,15 +138,15 @@ describe('a deferred capability cannot be linked', () => {
     }
   });
 
-  it('records the six deferred domains rather than forgetting them', () => {
+  it('records the five deferred domains rather than forgetting them', () => {
     // Recording them is what lets the administrative status surface tell the
     // truth about the roadmap, and what lets the assertions above range over
     // the whole set instead of over whatever somebody remembered to add.
     //
     // `library` LEFT THIS LIST IN PHASE 8, `search` IN PHASE 17, `watch` IN
-    // PHASE 10 and `news-events` IN PHASE 13, when each was delivered. Each is
-    // asserted delivered below rather than silently dropped.
-    for (const key of ['quran', 'hadith', 'learn', 'fatwa', 'global', 'donate']) {
+    // PHASE 10, `news-events` IN PHASE 13 and `global` IN PHASE 16, when each was
+    // delivered. Each is asserted delivered below rather than silently dropped.
+    for (const key of ['quran', 'hadith', 'learn', 'fatwa', 'donate']) {
       const route = routeByKey(key);
 
       expect(route, key).not.toBeNull();
@@ -165,6 +165,35 @@ describe('a deferred capability cannot be linked', () => {
     expect(route.indexing).toBe('eligible');
     expect(route.placements).toContain('primary');
     for (const key of ['events', 'newsletter', 'news.latest', 'news.popular'])
+      expect(routeByKey(key), key).toBeNull();
+  });
+
+  it('delivers the Global Network at /global and Find a Centre in the utility navigation', () => {
+    // Phase 16: Countries and Centres are reached from /global; the Pakistan
+    // structure is a view of the Pakistan Country, canonical to it, so it is
+    // never indexable on its own. Events are Phase 14's, so no Centre Events
+    // route or Local Events entry exists to be linked.
+    const global = requireRoute('global');
+    expect(global.path).toBe('/global');
+    expect(global.visibility).toBe('public');
+    expect(global.indexing).toBe('eligible');
+    expect(global.placements).toContain('primary');
+
+    const finder = requireRoute('find-a-centre');
+    expect(finder.path).toBe('/global/find-a-centre');
+    expect(finder.placements).toContain('utility');
+    expect(finder.indexing).toBe('eligible');
+
+    expect(requireRoute('global.countries').path).toBe('/global/countries');
+    expect(requireRoute('global.centres').path).toBe('/global/centres');
+    expect(requireRoute('global.pakistan').indexing).toBe('excluded');
+    for (const key of [
+      'events',
+      'global.events',
+      'global.local-events',
+      'global.regions',
+      'global.cities',
+    ])
       expect(routeByKey(key), key).toBeNull();
   });
 
@@ -345,6 +374,12 @@ describe('indexing eligibility is honest', () => {
         .sort(),
     ).toEqual([
       'explore',
+      // Phase 16: the World Network landing, Find a Centre, Countries and
+      // Centres. The Pakistan structure is canonical to its Country, so absent.
+      'find-a-centre',
+      'global',
+      'global.centres',
+      'global.countries',
       'home',
       // Phase 8: the Library landing page and its seven delivered surfaces;
       // Phase 9: five scholarly and periodical listings.

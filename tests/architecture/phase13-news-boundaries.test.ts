@@ -22,8 +22,9 @@ import { repoRoot } from './architecture-harness.ts';
  *     arriving in place of four Editorial aggregates;
  *   - a lead image, an Asset or Photo relation, or a remote image address —
  *     a Storage or Media dependency Phase 13 does not have;
- *   - an Event, Centre, Collection or newsletter relation arriving before the
- *     phase that owns it;
+ *   - an Event, Collection or newsletter relation arriving before the phase
+ *     that owns it — and, since Phase 16, a Centre reference anywhere but the
+ *     ONE typed `centreId` on the NewsArticle revision;
  *   - `/news/latest`, `/news/popular` or `/news/featured` as paths, or a
  *     `/newsletter` or `/rss` route nothing delivers;
  *   - a `news.*` permission minted for symmetry beside the `content.*` keys;
@@ -76,7 +77,7 @@ const MIGRATION =
   'packages/database/prisma/migrations/20260928000000_phase13_news/migration.sql';
 
 describe('four Editorial aggregates, and nothing generic', () => {
-  it('models each family with its own tables and no image, Event, Centre or engagement field', async () => {
+  it('models each family with its own tables and no image, Event or engagement field — and a Centre only on the NewsArticle revision', async () => {
     const schema = await read('packages/database/prisma/schema.prisma');
     for (const family of FAMILIES)
       for (const suffix of SUFFIXES) {
@@ -87,18 +88,26 @@ describe('four Editorial aggregates, and nothing generic', () => {
           .map((line) => line.trim())
           .filter((line) => /^[a-z]\w*\s/u.test(line))
           .map((line) => `${line.split(/\s+/u)[0] ?? ''} ${line.split(/\s+/u)[1] ?? ''}`);
-        for (const field of fields)
+        for (const field of fields) {
+          // Phase 16: the ONE Centre reference is the NewsArticle revision's
+          // typed `centreId` and its relation (DOMAIN_MODEL.md §17.1).
+          if (
+            family + suffix === 'NewsArticleRevision' &&
+            /^(centreId String\?|centre Centre\?)$/u.test(field)
+          )
+            continue;
           expect(field, `${family}${suffix}.${field}`).not.toMatch(
             /image|asset|photo|gallery|event|centre|center|collection|newsletter|featured|popular|views?\b|kind|type|target/iu,
           );
+        }
       }
+    expect(modelBody(schema, 'NewsArticleRevision')).toMatch(/^\s*centreId String\?/mu);
     for (const absent of [
       'News',
       'NewsItem',
       'EditorialContent',
       'ContentRevision',
       'Event',
-      'Centre',
       'NewsletterSubscriber',
     ])
       expect(schema, absent).not.toMatch(new RegExp(`^model ${absent} \\{`, 'mu'));

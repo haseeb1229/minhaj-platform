@@ -285,8 +285,11 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
   // by the same operators with the same single owner and no workflow of their
   // own, so these two keys govern them too and only their descriptions changed
   // (migration 20260926000000). `audio.*` and `media.audio.*` would split one
-  // owner's authority nobody asked to split. Galleries (Phase 12) decide their
-  // own need; nothing is seeded for them here.
+  // owner's authority nobody asked to split.
+  //
+  // PHASE 12 ADDS NO KEY EITHER. Photographs and galleries are Media's, with the
+  // same single owner and no workflow of their own, so these two keys govern
+  // them and only their descriptions changed (migration 20260927000000).
   //
   // A SPEAKER PROFILE GRANTS NOTHING. Being named on a Video or an audio track
   // is attribution and confers no Media authority; only a role holding these
@@ -294,12 +297,12 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
   Object.freeze({
     key: 'media.read',
     description:
-      'View Videos, Series, Playlists, audio tracks and audio series, including drafts.',
+      'View Videos, Series, Playlists, audio tracks, audio series, photographs and galleries, including drafts.',
   }),
   Object.freeze({
     key: 'media.administer',
     description:
-      'Create, edit, publish and archive Videos, Series, Playlists, audio tracks and audio series, order Playlists, and upload audio files.',
+      'Create, edit, publish and archive Videos, Series, Playlists, audio tracks, audio series, photographs and galleries, order Playlists and galleries, and upload audio files and photographs.',
   }),
 
   /* ---- Phase 17 — Search foundation ------------------------------------ */
@@ -322,6 +325,33 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     key: 'search.operate',
     description:
       'Retry failed search indexing, and rebuild or reconcile the search index.',
+  }),
+
+  /* ---- Phase 16 — Global Network --------------------------------------- */
+  //
+  // READ AND ADMINISTER, split for the reason every pair here is split: seeing
+  // the directory's drafts and archived records and changing what the public
+  // directory says are different authorities.
+  //
+  // TWO KEYS, NOT TWELVE. `country.*`, `region.*`, `city.*` and `centre.*` would
+  // separate authority nobody asked to separate: the four levels are one owner's
+  // one directory. There is no `global.publish` because Global has no review
+  // step, and no contact or import key — contacts belong to their Centre, and no
+  // import exists.
+  //
+  // NEITHER CONFERS EDITORIAL AUTHORITY. Scoping a NewsArticle to a Centre is an
+  // Editorial revision under the `content.*` keys; these keys cannot author,
+  // review or publish News, and the `content.*` keys cannot change a Centre.
+  // Public directory reads need no permission at all.
+  Object.freeze({
+    key: 'global.read',
+    description:
+      'View Global Network countries, regions, cities and centres, including drafts and archived records.',
+  }),
+  Object.freeze({
+    key: 'global.administer',
+    description:
+      'Create, edit, localise, publish and archive Global Network countries, regions, cities and centres, and manage centre contacts and the cities a centre serves.',
   }),
 ]);
 

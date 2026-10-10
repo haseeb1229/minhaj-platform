@@ -14,8 +14,10 @@ import {
   type NewsSummary,
   type PublicNews,
 } from '@minhaj/contracts/editorial';
+import { globalPaths, labelFor, type CentreReference } from '@minhaj/contracts/global';
 
 import { editorialReadRuntime } from '@/composition/editorial-read';
+import { globalReadRuntime } from '@/composition/global-read';
 import {
   contentLanguages,
   referenceNames,
@@ -282,8 +284,8 @@ function NewsCard({
   );
 }
 
-/** A grid of cards, with its names resolved once. */
-async function NewsGrid({
+/** A grid of cards, with its names resolved once. Also composed by a Centre page. */
+export async function NewsGrid({
   locale,
   items,
   label,
@@ -552,6 +554,21 @@ export async function NewsFamilyPage({
  * Detail pages
  * ========================================================================= */
 
+/**
+ * The Centre a NewsArticle is scoped to, ONLY while Global says it is public —
+ * asked of Global's public read at Layer 4, never joined. A Centre since
+ * archived or withheld, or a Global read that fails, simply leaves the
+ * attribution out: the News itself stays Editorial's and stays published.
+ */
+async function publicCentre(centreId: string | null): Promise<CentreReference | null> {
+  if (centreId === null) return null;
+  try {
+    return (await globalReadRuntime().centreReferences([centreId]))[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** The locales the record genuinely exists in — never widened by a fallback. */
 function newsLocales(record: PublicNews): Locale[] {
   return record.translations.map((row) => row.languageCode);
@@ -590,7 +607,7 @@ export async function NewsDetailPage({
   const trail = await newsTrail(locale);
   const translation = translationFor(record, locale);
   const direction = directionOf(translation.languageCode);
-  const [names, languages] = await Promise.all([
+  const [names, languages, centre] = await Promise.all([
     referenceNames(
       {
         personIds: record.contributors.map((c) => c.personId),
@@ -601,7 +618,9 @@ export async function NewsDetailPage({
     translation.languageCode === locale
       ? Promise.resolve(new Map<string, ContentLanguage>())
       : contentLanguages(),
+    publicCentre(record.centreId),
   ]);
+  const centreLabel = centre === null ? null : labelFor(centre, locale);
   const date = publishedDate(record.publishedAt, locale);
   const familyTitle = t(`families.${record.kind}`);
   const familyPath = newsListPathOf(record.kind);
@@ -763,6 +782,15 @@ export async function NewsDetailPage({
                   </li>
                 ))}
               </ul>
+            </DetailRow>
+          )}
+          {centre === null || centreLabel === null ? null : (
+            <DetailRow term={t('centre')}>
+              <TextLink href={globalPaths.centre(locale, centre.slug)}>
+                <span lang={centreLabel.locale} dir={directionOf(centreLabel.locale)}>
+                  {centreLabel.name}
+                </span>
+              </TextLink>
             </DetailRow>
           )}
         </Facts>

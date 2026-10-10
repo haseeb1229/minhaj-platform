@@ -134,6 +134,21 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'MediaCoverageTopic',
       'MediaCoverageContributor',
       'MediaCoverageSlugHistory',
+      // Phase 16 — the Global Network directory and its Country-scoped slugs.
+      'Country',
+      'CountryLabel',
+      'CountrySlugHistory',
+      'Region',
+      'RegionLabel',
+      'RegionSlugHistory',
+      'City',
+      'CityLabel',
+      'CitySlugHistory',
+      'Centre',
+      'CentreLabel',
+      'CentreSlugHistory',
+      'CentreServiceCity',
+      'CentreContact',
     ]) {
       expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }

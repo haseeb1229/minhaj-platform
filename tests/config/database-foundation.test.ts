@@ -224,6 +224,23 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'SearchIndexScope',
       'SearchDocument',
       'SearchDocumentTopic',
+      // Phase 16 — Global Network: Country, Region, City and Centre, their
+      // labels and Country-scoped slug histories, the Cities a Centre serves
+      // and its ordered contacts. No Event, schedule, map or import table.
+      'Country',
+      'CountryLabel',
+      'CountrySlugHistory',
+      'Region',
+      'RegionLabel',
+      'RegionSlugHistory',
+      'City',
+      'CityLabel',
+      'CitySlugHistory',
+      'Centre',
+      'CentreLabel',
+      'CentreSlugHistory',
+      'CentreServiceCity',
+      'CentreContact',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name
@@ -265,13 +282,23 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'LectureVideo',
       'WatchHistory',
       // Phase 13 invents no generic News or editorial table, no lead image and
-      // no newsletter or Centre relation: those are Phase 16's, Phase 21's, or
-      // an architecture decision no phase has made.
+      // no newsletter: those are Phase 21's, or an architecture decision no
+      // phase has made. (Phase 16's Centre is a column on the News revision,
+      // never a per-centre content table.)
       'NewsItem',
       'EditorialContent',
       'NewsArticleImage',
       'NewsletterSubscriber',
-      'Centre',
+      'CentreNews',
+      'CentreContent',
+      // Phase 16 has no generic location table, no Event or schedule, and no
+      // map, geocoder or import state.
+      'Location',
+      'Place',
+      'CentreEvent',
+      'CentreSchedule',
+      'GeocodeCache',
+      'CentreImport',
     ]) {
       expect(models, `${domain} arrives with its owning slice`).not.toContain(domain);
     }

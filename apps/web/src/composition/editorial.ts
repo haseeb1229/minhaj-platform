@@ -11,6 +11,7 @@ import {
   createEditorialService,
   createCorrespondenceService,
 } from '@/contexts/editorial';
+import { centreReferences } from './global';
 import { identityRuntime } from './identity';
 import { peopleReadRuntime } from './people-read';
 import { taxonomyRuntime } from './taxonomy';
@@ -51,6 +52,9 @@ function buildEditorialRuntime() {
           });
           return codes.every((code) => active.some((entry) => entry.code === code));
         },
+        // Phase 16: Global's reference interface answers; Editorial reads no
+        // Global table (DOMAIN_MODEL.md §3.2, Editorial → Global Network).
+        selectableCentre: (id) => centreReferences().centreSelectable(id),
       },
       reportFailure: (operation) =>
         appLogger().error({ operation }, 'Editorial operation failed.'),
@@ -72,7 +76,7 @@ export function editorialRuntime() {
 
 /** Bounded owner-provided choices; invoked only after the editor's permission check. */
 export async function editorialReferenceChoices(locale: Locale, query: string) {
-  const [people, topics] = await Promise.all([
+  const [people, topics, centres] = await Promise.all([
     peopleRuntime().people.listPeople({
       query: query || null,
       status: 'published',
@@ -81,9 +85,22 @@ export async function editorialReferenceChoices(locale: Locale, query: string) {
       offset: 0,
     }),
     taxonomyRuntime().taxonomy.listTree({ locale, includeArchived: false }),
+    centreReferences().centreChoices(query || null),
   ]);
   return {
     people: people.items.map(({ id, label }) => ({ id, name: label.name })),
     topics: topics.map(({ id, label }) => ({ id, name: label.name })),
+    centres,
   };
+}
+
+/**
+ * The Centre a NewsArticle revision already names, WHATEVER its state now — so
+ * the editor shows an archived Centre truthfully instead of silently clearing
+ * it. Invoked only after the editor's permission check.
+ */
+export function editorialCentreChoice(id: string) {
+  return centreReferences()
+    .centresByIds([id])
+    .then((found) => found[0] ?? null);
 }

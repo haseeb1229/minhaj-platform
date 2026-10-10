@@ -67,6 +67,10 @@ const SURFACES: readonly { key: string; permission: PermissionKey; path: string 
   // videos, series and playlists — and every action re-checks
   // `media.administer`.
   { key: 'media', permission: 'media.read', path: 'media/videos' },
+  // Phase 16. One entry for the Global Network: `global.read` opens its four
+  // surfaces — Countries, Regions, Cities and Centres — and every action
+  // re-checks `global.administer`.
+  { key: 'global', permission: 'global.read', path: 'global/countries' },
   // Phase 4. A READ-ONLY view of the public shell's effective navigation; the
   // registry behind it is code, so there is no editing surface to reach.
   { key: 'navigation', permission: 'navigation.read', path: 'system/navigation' },

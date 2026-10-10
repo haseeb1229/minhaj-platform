@@ -170,7 +170,7 @@ describe('B1 — a GENUINELY referenced project uses its own options', () => {
   it('permits the allowlisted edge inside the referenced project', async () => {
     const violations = await validateFixtureWorkspace(fixture);
 
-    // messaging -> learning is the one permitted same-level edge (§3.2).
+    // messaging -> learning is a permitted same-level edge (§3.2).
     expect(forFile(violations, 'uses-own-alias.ts')).toEqual([]);
   });
 

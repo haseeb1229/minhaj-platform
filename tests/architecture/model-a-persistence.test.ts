@@ -558,6 +558,9 @@ describe('F1 — the production database package publishes no raw capability', (
       // Phase 10. Media is a bounded CONTEXT (#8); its adapter is hosted here
       // and owned there.
       media: { kind: 'context', slug: 'media' },
+      // Phase 16. Global Network is a bounded CONTEXT (#13); its adapter is
+      // hosted here and owned there.
+      'global-network': { kind: 'context', slug: 'global-network' },
       email: { kind: 'layer0', concern: 'email' },
       'rate-limiting': { kind: 'layer0', concern: 'rate-limiting' },
       auditing: { kind: 'layer0', concern: 'auditing' },

@@ -38,6 +38,7 @@
         },
         "library": "library",
         "media": "media",
+        "global-network": "global-network",
         "search": {
           "kind": "layer0",
           "concern": "search"

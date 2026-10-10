@@ -545,6 +545,11 @@ const PERMISSION_MIGRATIONS = [
     id: '20260925000000_phase10_media_video',
     keys: ['media.administer', 'media.read'],
   },
+  {
+    phase: 'Phase 16',
+    id: '20260929000000_phase16_global_network',
+    keys: ['global.administer', 'global.read'],
+  },
 ] as const;
 
 describe('the permission catalogue is one definition, appended only by owners', () => {
@@ -603,15 +608,20 @@ describe('the permission catalogue is one definition, appended only by owners', 
       'migration.',
       'teaching.',
       'editorial.',
-      // Library shipped in Phase 8, Search in Phase 17 and Media in Phase 10.
-      // Still absent: research and publication keys (Phase 9 uses Library's),
-      // any per-aggregate Media key, and audio and gallery vocabulary.
+      // Library shipped in Phase 8, Search in Phase 17, Media in Phase 10 and
+      // Global in Phase 16. Still absent: research and publication keys
+      // (Phase 9 uses Library's), any per-aggregate Media key, audio and
+      // gallery vocabulary, and any per-level Global key (Global has two).
       'research.',
       'publication.',
       'video.',
       'playlist.',
       'audio.',
       'gallery.',
+      'country.',
+      'region.',
+      'city.',
+      'centre.',
       'messaging.',
     ]) {
       expect(declared.some((key) => key.startsWith(domain))).toBe(false);

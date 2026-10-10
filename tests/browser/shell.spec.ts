@@ -456,7 +456,9 @@ test.describe('navigation is honest about what exists', () => {
       // and stay asserted absent.
       '/events',
       '/newsletter',
-      '/global',
+      // `/global` is delivered by Phase 16; a Centre's Events are Phase 14's
+      // and stay asserted absent.
+      '/global/events',
       // `/search` and `/topics` are delivered by Phase 17, and are asserted
       // present below.
       '/donate',
@@ -487,6 +489,10 @@ test.describe('navigation is honest about what exists', () => {
         '/topics',
         // Watch covers both video and audio in the primary navigation.
         '/watch',
+        // Phase 16: the Global Network in the primary navigation and Find a
+        // Centre in the utility navigation.
+        '/global',
+        '/global/find-a-centre',
       ]) {
         expect(hrefs, `${path} exposes delivered ${delivered}`).toContain(
           `/en${delivered}`,

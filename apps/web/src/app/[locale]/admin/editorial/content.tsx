@@ -8,9 +8,14 @@ import {
   type EditorialKind,
   type WorkflowAction,
 } from '@minhaj/contracts/editorial';
+import { labelFor } from '@minhaj/contracts/global';
 import { CONTRIBUTION_ROLES } from '@minhaj/contracts/people';
 import { requireAdminPage } from '@/composition/authorization';
-import { editorialRuntime, editorialReferenceChoices } from '@/composition/editorial';
+import {
+  editorialCentreChoice,
+  editorialRuntime,
+  editorialReferenceChoices,
+} from '@/composition/editorial';
 import {
   Alert,
   EmptyState,
@@ -144,7 +149,19 @@ export async function ContentEditor({
   const canAuthor = context.authorization.can('content.author');
   const choices = canAuthor
     ? await editorialReferenceChoices(locale, referenceQuery)
-    : { people: [], topics: [] };
+    : { people: [], topics: [], centres: [] };
+  // A NewsArticle's Centre (Phase 16). The one its revision already names is
+  // offered WHATEVER its state now, so an archived Centre is shown truthfully
+  // rather than silently cleared by the next save.
+  const centreId = kind === 'news-article' ? (revision?.centreId ?? null) : null;
+  const keptCentre =
+    canAuthor &&
+    centreId !== null &&
+    !choices.centres.some((centre) => centre.id === centreId)
+      ? await editorialCentreChoice(centreId)
+      : null;
+  const centres =
+    keptCentre === null ? choices.centres : [keptCentre, ...choices.centres];
   const hidden = (
     <>
       <input type="hidden" name="locale" value={locale} />
@@ -250,6 +267,32 @@ export async function ContentEditor({
               <p className="text-xs text-[color:var(--color-foreground-muted)]">
                 {t('slugReserved')}
               </p>
+            ) : null}
+            {kind === 'news-article' ? (
+              <fieldset className="flex flex-col gap-4 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-4">
+                <legend className="px-1 text-sm font-semibold">{t('centre')}</legend>
+                <p
+                  id="centreId-help"
+                  className="text-xs text-[color:var(--color-foreground-muted)]"
+                >
+                  {t('centreHelp')}
+                </p>
+                <Select
+                  id="centreId"
+                  name="centreId"
+                  aria-label={t('centre')}
+                  aria-describedby="centreId-help"
+                  defaultValue={centreId ?? ''}
+                >
+                  <option value="">{t('centreNone')}</option>
+                  {centres.map((centre) => (
+                    <option key={centre.id} value={centre.id}>
+                      {labelFor(centre, locale)?.name ?? centre.slug}
+                      {centre.state === 'published' ? '' : ` (${t(centre.state)})`}
+                    </option>
+                  ))}
+                </Select>
+              </fieldset>
             ) : null}
             {kind === 'media-coverage' ? (
               <fieldset className="flex flex-col gap-4 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-4">

@@ -154,6 +154,27 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // immutable revisions, translations, typed Topic and Person references and a
   // permanent slug reservation. Never one News table with a type column, and no
   // image, Event, Centre or newsletter table (DOMAIN_MODEL.md §7.1).
+  // THE GLOBAL NETWORK — Country, Region, City, Centre and CentreContact, their
+  // labels and permanent slug reservations, and the typed same-Country
+  // relation of a Centre to the further Cities it serves. No Event, map,
+  // geocoder, import or search table; centre-scoped News is a column on the
+  // existing NewsArticle revision, asserted by `assertGlobalFoundation`.
+  '20260929000000_phase16_global_network': [
+    'Country',
+    'CountryLabel',
+    'CountrySlugHistory',
+    'Region',
+    'RegionLabel',
+    'RegionSlugHistory',
+    'City',
+    'CityLabel',
+    'CitySlugHistory',
+    'Centre',
+    'CentreLabel',
+    'CentreSlugHistory',
+    'CentreServiceCity',
+    'CentreContact',
+  ],
   '20260928000000_phase13_news': [
     'NewsArticle',
     'NewsArticleRevision',
@@ -315,16 +336,19 @@ const PREMATURE_TABLES = [
   'EventPhoto',
   'PhotoPerson',
   'PhotoTopic',
-  // Phase 13 delivers News with NO Centre, Event or newsletter relationship:
-  // centre-scoped News is Phase 16's reference, the newsletter Phase 21's
-  // consent record, and a News lead image would need a Storage or Media
-  // dependency no phase has decided.
-  'Centre',
-  'NewsArticleCentre',
+  // Phase 13 delivers News with NO Event or newsletter relationship: the
+  // newsletter is Phase 21's consent record, and a News lead image would need a
+  // Storage or Media dependency no phase has decided. `Centre` left this list
+  // when Phase 16 delivered it.
   'NewsletterSubscriber',
   'NewsArticleImage',
   'NewsArticleAsset',
   'NewsArticlePhoto',
+  // Phase 16 delivers the Global Network with NO Event relationship: the typed
+  // Event→Centre reference is Phase 14's, created there once Event exists.
+  'CentreEvent',
+  'EventCentre',
+  'EventSchedule',
 ];
 
 /**
@@ -415,6 +439,23 @@ const PROHIBITED_TABLES = [
   'NewsContent',
   'ContentRevision',
   'EditorialRevision',
+
+  // PHASE 16 — ONE News model with a Centre reference (DOMAIN_MODEL.md §18).
+  // A per-centre content system, a News-to-Centre join beside the revision's
+  // own reference, or a generic location target would each be the parallel or
+  // polymorphic shape the domain model refuses; a second Pakistan hierarchy or
+  // a separate geography context would duplicate the Global Network's own.
+  'CentreNews',
+  'LocalNews',
+  'CentreArticle',
+  'GlobalNews',
+  'NewsArticleCentre',
+  'LocationTarget',
+  'GeoTarget',
+  'Location',
+  'Geography',
+  'PakistanCity',
+  'PakistanRegion',
 ];
 
 const EXPECTED_AUDIT_COLUMNS = [
@@ -547,6 +588,24 @@ const EXPECTED_COLUMN_SIZES: readonly {
   { table: 'StatementRevisionTranslation', column: 'issuer', characters: 200 },
   { table: 'MediaCoverageRevision', column: 'outletName', characters: 200 },
   { table: 'MediaCoverageRevision', column: 'sourceUrl', characters: 2048 },
+  // Phase 16. Slugs are unique keys and slug-history primary keys; names, words
+  // and contacts are bounded exactly as the Global contract bounds them.
+  { table: 'Country', column: 'code', characters: 2 },
+  { table: 'Country', column: 'slug', characters: 120 },
+  { table: 'CountrySlugHistory', column: 'slug', characters: 120 },
+  { table: 'Region', column: 'slug', characters: 120 },
+  { table: 'RegionSlugHistory', column: 'slug', characters: 120 },
+  { table: 'City', column: 'slug', characters: 120 },
+  { table: 'CitySlugHistory', column: 'slug', characters: 120 },
+  { table: 'Centre', column: 'slug', characters: 120 },
+  { table: 'CentreSlugHistory', column: 'slug', characters: 120 },
+  { table: 'CountryLabel', column: 'name', characters: 160 },
+  { table: 'RegionLabel', column: 'name', characters: 160 },
+  { table: 'CityLabel', column: 'name', characters: 160 },
+  { table: 'CentreLabel', column: 'name', characters: 200 },
+  { table: 'CentreLabel', column: 'description', characters: 2000 },
+  { table: 'CentreLabel', column: 'address', characters: 500 },
+  { table: 'CentreContact', column: 'value', characters: 320 },
 ];
 
 /**
@@ -678,6 +737,12 @@ const EXPECTED_TRIGGERS = [
   'MediaReserveAudioSeriesSlug',
   // Phase 12: the same for a Gallery. A Photo has no slug.
   'MediaReserveGallerySlug',
+  // Phase 16: the same for each Global Network level — Region and City slugs
+  // reserved within their Country.
+  'GlobalReserveCountrySlug',
+  'GlobalReserveRegionSlug',
+  'GlobalReserveCitySlug',
+  'GlobalReserveCentreSlug',
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
@@ -829,6 +894,29 @@ const EXPECTED_CHECK_CONSTRAINTS = [
   },
   { table: 'MediaCoverageRevision', constraint: 'MediaCoverageRevision_outlet_ck' },
   { table: 'MediaCoverageRevision', constraint: 'MediaCoverageRevision_source_ck' },
+  // Phase 16. Lifecycle, version, locale and slug grammar for every level; an
+  // ISO country code; ONE locality fact per Centre and none for a virtual one;
+  // coordinates both-or-neither and in range; real words; a closed, validated
+  // contact vocabulary in twelve places.
+  ...['Country', 'Region', 'City', 'Centre'].flatMap((table) =>
+    ['state', 'version', 'locale', 'slug'].map((rule) => ({
+      table,
+      constraint: table + '_' + rule + '_ck',
+    })),
+  ),
+  { table: 'Country', constraint: 'Country_code_ck' },
+  { table: 'Centre', constraint: 'Centre_locality_ck' },
+  { table: 'Centre', constraint: 'Centre_virtual_ck' },
+  { table: 'Centre', constraint: 'Centre_coordinates_ck' },
+  ...['CountryLabel', 'RegionLabel', 'CityLabel'].flatMap((table) => [
+    { table, constraint: table + '_locale_ck' },
+    { table, constraint: table + '_name_ck' },
+  ]),
+  { table: 'CentreLabel', constraint: 'CentreLabel_locale_ck' },
+  { table: 'CentreLabel', constraint: 'CentreLabel_text_ck' },
+  { table: 'CentreContact', constraint: 'CentreContact_position_ck' },
+  { table: 'CentreContact', constraint: 'CentreContact_value_ck' },
+  { table: 'CentreContact', constraint: 'CentreContact_channel_ck' },
 ];
 
 /**
@@ -1533,8 +1621,10 @@ const EDITORIAL_PERMISSIONS = [
  *   1. no Phase-13 foreign key cascades, so no removal of a Topic, a Person, a
  *      User or a revision can take News history with it;
  *   2. NO column of a News table references an image, an Asset, a Photo, a
- *      Gallery, an Event, a Centre, a Collection or a newsletter, and none holds
- *      a view count, a popularity score or a featured flag;
+ *      Gallery, an Event, a Collection or a newsletter, and none holds a view
+ *      count, a popularity score or a featured flag. The ONE Centre column is
+ *      Phase 16's `NewsArticleRevision.centreId`, exempted here by exact name
+ *      and asserted by `assertGlobalFoundation`; no other family has one;
  *   3. the editorial vocabulary is still exactly the four `content.*` keys — no
  *      `news.*`, `press.*` or `statement.*` key exists — and the two that named
  *      Article and Page now name the News families.
@@ -1564,7 +1654,8 @@ async function assertNewsFoundation(session: SqlSession): Promise<void> {
            OR c.name LIKE N'%gallery%' OR c.name LIKE N'%event%' OR c.name LIKE N'%centre%'
            OR c.name LIKE N'%center%' OR c.name LIKE N'%collection%' OR c.name LIKE N'%newsletter%'
            OR c.name LIKE N'%view%' OR c.name LIKE N'%popular%' OR c.name LIKE N'%featured%'
-           OR c.name LIKE N'%type%' OR c.name LIKE N'%kind%' OR c.name LIKE N'%target%');
+           OR c.name LIKE N'%type%' OR c.name LIKE N'%kind%' OR c.name LIKE N'%target%')
+      AND NOT (c.object_id = OBJECT_ID(N'[dbo].[NewsArticleRevision]') AND c.name = N'centreId');
   `);
   if (forward.length > 0)
     fail(
@@ -1594,8 +1685,180 @@ async function assertNewsFoundation(session: SqlSession): Promise<void> {
 
   report(
     'news foundation',
-    'no cascade, no image, Event, Centre or newsletter reference, the same four keys',
+    'no cascade, no image, Event or newsletter reference, the same four keys',
   );
+}
+
+const GLOBAL_PERMISSIONS = ['global.administer', 'global.read'];
+
+const GLOBAL_TABLES = [
+  'Country',
+  'CountryLabel',
+  'CountrySlugHistory',
+  'Region',
+  'RegionLabel',
+  'RegionSlugHistory',
+  'City',
+  'CityLabel',
+  'CitySlugHistory',
+  'Centre',
+  'CentreLabel',
+  'CentreSlugHistory',
+  'CentreServiceCity',
+  'CentreContact',
+];
+
+/**
+ * The parent references the SAME-COUNTRY rule rests on: each is a composite
+ * foreign key on (id, countryId), so a child cannot name another Country's
+ * parent whoever writes. A plain single-column key here would let a City point
+ * at another Country's Region — exactly the drift this gate exists to catch.
+ */
+const GLOBAL_COMPOSITE_KEYS = [
+  { name: 'City_regionId_countryId_fkey', target: 'Region' },
+  { name: 'Centre_regionId_countryId_fkey', target: 'Region' },
+  { name: 'Centre_cityId_countryId_fkey', target: 'City' },
+  { name: 'CentreServiceCity_centreId_countryId_fkey', target: 'Centre' },
+  { name: 'CentreServiceCity_cityId_countryId_fkey', target: 'City' },
+  { name: 'RegionSlugHistory_regionId_countryId_fkey', target: 'Region' },
+  { name: 'CitySlugHistory_cityId_countryId_fkey', target: 'City' },
+];
+
+/**
+ * Phase 16 — what only the catalogue can prove about the Global Network:
+ *
+ *   1. no Global foreign key cascades, and the News revision's Centre key does
+ *      not either — nothing done to a Centre can take News with it;
+ *   2. every same-Country relation is a COMPOSITE key on two columns;
+ *   3. coordinates are exact `decimal(9,6)`, never binary floating point;
+ *   4. ONE nullable Centre column exists outside Global — on
+ *      `NewsArticleRevision` — and none on any other News family or table;
+ *   5. no Global table names an Event, News, a search kind or a target type;
+ *   6. the Global vocabulary is exactly two keys, both in the protected bundle.
+ */
+async function assertGlobalFoundation(session: SqlSession): Promise<void> {
+  const tables = GLOBAL_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',');
+  const cascading = await session.query<{ name: string }>(`
+    SELECT name FROM sys.foreign_keys
+    WHERE (parent_object_id IN (${tables}) OR name = N'NewsArticleRevision_centreId_fkey')
+      AND (delete_referential_action <> 0 OR update_referential_action <> 0);
+  `);
+  if (cascading.length > 0)
+    fail(
+      `Phase-16 foreign keys must not cascade; found ${cascading.map((row) => row.name).join(', ')}.`,
+    );
+
+  for (const key of GLOBAL_COMPOSITE_KEYS) {
+    const [row] = await session.query<{ columns: number; target: string | null }>(`
+      SELECT COUNT(*) AS columns, MAX(OBJECT_NAME(fk.referenced_object_id)) AS target
+      FROM sys.foreign_keys fk
+      JOIN sys.foreign_key_columns c ON c.constraint_object_id = fk.object_id
+      WHERE fk.name = N'${key.name}';
+    `);
+    if (Number(row?.columns) !== 2 || row?.target !== key.target)
+      fail(
+        `${key.name} must be a two-column same-Country key to ${key.target}; ` +
+          `found ${JSON.stringify(row ?? null)}.`,
+      );
+  }
+
+  const coordinates = await session.query<{
+    name: string;
+    type: string;
+    precision: number;
+    scale: number;
+  }>(`
+    SELECT c.name, TYPE_NAME(c.user_type_id) AS type, c.precision, c.scale FROM sys.columns c
+    WHERE c.object_id = OBJECT_ID(N'[dbo].[Centre]') AND c.name IN (N'latitude', N'longitude')
+    ORDER BY c.name;
+  `);
+  if (
+    coordinates.length !== 2 ||
+    !coordinates.every(
+      (row) =>
+        row.type === 'decimal' && Number(row.precision) === 9 && Number(row.scale) === 6,
+    )
+  )
+    fail(
+      `Centre coordinates must be exact decimal(9,6); found ${JSON.stringify(coordinates)}.`,
+    );
+
+  const centreColumns = await session.query<{
+    tableName: string;
+    name: string;
+    nullable: boolean;
+  }>(`
+    SELECT OBJECT_NAME(c.object_id) AS tableName, c.name, c.is_nullable AS nullable
+    FROM sys.columns c
+    WHERE (c.name LIKE N'%centre%' OR c.name LIKE N'%center%')
+      AND OBJECT_NAME(c.object_id) NOT IN (${GLOBAL_TABLES.map((table) => `N'${table}'`).join(',')})
+      AND OBJECTPROPERTY(c.object_id, 'IsUserTable') = 1;
+  `);
+  const [newsKey] = await session.query<{ target: string | null }>(`
+    SELECT OBJECT_NAME(referenced_object_id) AS target FROM sys.foreign_keys
+    WHERE name = N'NewsArticleRevision_centreId_fkey';
+  `);
+  if (
+    centreColumns.length !== 1 ||
+    centreColumns[0]?.tableName !== 'NewsArticleRevision' ||
+    centreColumns[0].name !== 'centreId' ||
+    !centreColumns[0].nullable ||
+    newsKey?.target !== 'Centre'
+  )
+    fail(
+      `Exactly one nullable Centre reference may exist outside Global — ` +
+        `NewsArticleRevision.centreId to Centre; found ${JSON.stringify(centreColumns)}.`,
+    );
+
+  const forward = await session.query<{ name: string }>(`
+    SELECT c.name FROM sys.columns c
+    WHERE c.object_id IN (${tables})
+      AND (c.name LIKE N'%event%' OR c.name LIKE N'%search%' OR c.name LIKE N'%kind%'
+           OR c.name LIKE N'%type%' OR c.name LIKE N'%target%' OR c.name LIKE N'%news%'
+           OR c.name LIKE N'%geocod%' OR c.name LIKE N'%map%');
+  `);
+  if (forward.length > 0)
+    fail(
+      `Global must reference no Event, News, search or map and carry no type column; ` +
+        `found ${forward.map((row) => row.name).join(', ')}.`,
+    );
+
+  const permissions = await session.query<{ key: string; bundled: number }>(`
+    SELECT p.[key],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp JOIN [dbo].[Role] r ON r.[id] = rp.[roleId]
+       WHERE r.[key] = N'platform-administrator' AND rp.[permissionKey] = p.[key]) AS bundled
+    FROM [dbo].[Permission] p
+    WHERE p.[key] LIKE N'global.%' OR p.[key] LIKE N'country%' OR p.[key] LIKE N'region%'
+       OR p.[key] LIKE N'city%' OR p.[key] LIKE N'centre%' ORDER BY p.[key];
+  `);
+  if (
+    permissions.map((row) => row.key).join(',') !== GLOBAL_PERMISSIONS.join(',') ||
+    !permissions.every((row) => Number(row.bundled) === 1)
+  )
+    fail(
+      `The Global vocabulary must be exactly global.read and global.administer, both in ` +
+        `the protected bundle; found ${JSON.stringify(permissions)}.`,
+    );
+
+  report(
+    'global foundation',
+    'no cascade, composite same-Country keys, exact coordinates, one News Centre column, two bundled keys',
+  );
+}
+
+/** After the Phase-16 rollback, News carries no Centre and no Global key survives. */
+async function assertGlobalRemoved(session: SqlSession): Promise<void> {
+  const [row] = await session.query<{ columns: number; permissions: number }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.columns
+        WHERE object_id = OBJECT_ID(N'[dbo].[NewsArticleRevision]') AND name = N'centreId') AS columns,
+      (SELECT COUNT(*) FROM [dbo].[Permission] WHERE [key] LIKE N'global.%') AS permissions;
+  `);
+  if (Number(row?.columns) !== 0 || Number(row?.permissions) !== 0)
+    fail(
+      `The Phase-16 rollback left a Centre column or a Global key: ${JSON.stringify(row)}.`,
+    );
+  report('global rollback', 'News Centre column and both Global keys removed');
 }
 
 /**
@@ -2251,6 +2514,7 @@ try {
   await assertAudioFoundation(session);
   await assertPhotoFoundation(session);
   await assertNewsFoundation(session);
+  await assertGlobalFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -2298,6 +2562,11 @@ try {
     }
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
+    }
+    if (migration.id === '20260929000000_phase16_global_network') {
+      // Phase 16 widened no search vocabulary, so none narrows here.
+      await assertSearchVocabulary(session, 'phase13');
+      await assertGlobalRemoved(session);
     }
     if (migration.id === '20260928000000_phase13_news') {
       await assertSearchVocabulary(session, 'phase11');
@@ -2363,6 +2632,7 @@ try {
   await assertAudioFoundation(session);
   await assertPhotoFoundation(session);
   await assertNewsFoundation(session);
+  await assertGlobalFoundation(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

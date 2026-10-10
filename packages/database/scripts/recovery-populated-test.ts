@@ -40,6 +40,12 @@ import {
   verifyRestoredPhase13,
   writePhase13Fixture,
 } from '../src/lifecycle/phase13-fixture.ts';
+import {
+  capturePhase16Fixture,
+  newPhase16Fixture,
+  verifyRestoredPhase16,
+  writePhase16Fixture,
+} from '../src/lifecycle/phase16-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -162,6 +168,7 @@ const mediaFixture = newPhase10Fixture();
 const audioFixture = newPhase11Fixture();
 const photoFixture = newPhase12Fixture();
 const newsFixture = newPhase13Fixture();
+const globalFixture = newPhase16Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -297,6 +304,20 @@ try {
   const newsSnapshot = await capturePhase13Fixture(admin, newsFixture);
   report('news fixture', `run ${newsFixture.runId}`);
 
+  // Phase-16 Global Network: a Country with no Region and one with a renamed
+  // Region, Cities under each, a renamed physical Centre with exact
+  // coordinates, ordered contacts and two served Cities, a virtual Centre, an
+  // archived Centre placed in a Region, and a published NewsArticle whose
+  // current revision names the physical Centre.
+  await writePhase16Fixture(admin, globalFixture, {
+    authorId: fixture.accountId,
+    reviewerId: peopleFixture.accountId,
+    personId: peopleFixture.linkedPersonId,
+    topicId: taxonomyFixture.childTopicId,
+  });
+  const globalSnapshot = await capturePhase16Fixture(admin, globalFixture);
+  report('global fixture', `run ${globalFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -379,6 +400,10 @@ try {
   report(
     'news recovery',
     await verifyRestoredPhase13(restored, newsFixture, newsSnapshot),
+  );
+  report(
+    'global recovery',
+    await verifyRestoredPhase16(restored, globalFixture, globalSnapshot),
   );
 
   // ---- restored security posture -------------------------------------------
@@ -544,6 +569,21 @@ try {
           'PressReleaseSlugHistory DELETE',
           'DELETE FROM [dbo].[PressReleaseSlugHistory];',
         ],
+        // Phase 16. A restored runtime can neither erase a directory record,
+        // release a reserved Country-scoped or Centre slug, nor rewrite a
+        // Centre's contacts or served Cities in place.
+        ['Country DELETE', 'DELETE FROM [dbo].[Country];'],
+        ['Centre DELETE', 'DELETE FROM [dbo].[Centre];'],
+        ['RegionSlugHistory DELETE', 'DELETE FROM [dbo].[RegionSlugHistory];'],
+        [
+          'CentreSlugHistory UPDATE',
+          'UPDATE [dbo].[CentreSlugHistory] SET [slug]=[slug];',
+        ],
+        ['CentreContact UPDATE', 'UPDATE [dbo].[CentreContact] SET [value]=[value];'],
+        [
+          'CentreServiceCity UPDATE',
+          'UPDATE [dbo].[CentreServiceCity] SET [cityId]=[cityId];',
+        ],
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -575,6 +615,7 @@ try {
       await verifyRestoredPhase11(restored, audioFixture, audioSnapshot);
       await verifyRestoredPhase12(restored, photoFixture, photoSnapshot);
       await verifyRestoredPhase13(restored, newsFixture, newsSnapshot);
+      await verifyRestoredPhase16(restored, globalFixture, globalSnapshot);
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 
       // Phase 17. The full-text catalogue and index live INSIDE the database,

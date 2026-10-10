@@ -162,3 +162,11 @@ export {
   createMediaPersistence,
   createMediaPublicReader,
 } from './adapters/media/index.ts';
+
+/* ---- Global Network (context-owned) ------------------------------------- */
+
+export {
+  createGlobalPersistence,
+  createGlobalPublicReader,
+  createGlobalReferences,
+} from './adapters/global-network/index.ts';

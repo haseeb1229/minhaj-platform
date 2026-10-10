@@ -122,7 +122,7 @@ interpretation. **An edge not listed here does not exist.**
 | Identity & Access | Layer 0 only |
 | People & Contributors | Layer 0; Identity & Access *(to link a Person to an optional User)* |
 | Taxonomy | Layer 0 only |
-| Editorial | Layer 0; Identity & Access; People & Contributors; Taxonomy |
+| Editorial | Layer 0; Identity & Access; People & Contributors; Taxonomy; **Global Network** *(same-level edge — see §3.2)* |
 | Quran | Layer 0; Identity & Access; People & Contributors; Taxonomy |
 | Hadith | Layer 0; Identity & Access; People & Contributors; Taxonomy |
 | Library | Layer 0; Identity & Access; People & Contributors; Taxonomy |
@@ -148,6 +148,10 @@ interpretation. **An edge not listed here does not exist.**
 - **Messaging depends on Learning** because relationship authorisation must ask whether an
   enrolment or teaching assignment is *currently* valid (§15.3). This is an explicitly
   allowlisted same-level edge (§3.2), **not** an implicit lateral import.
+- **Editorial depends on Global Network** because a centre-scoped NewsArticle names a
+  Global-owned Centre by typed identity (§17.1), and Events will do the same (Phase 14). Editorial
+  asks only Global's public reference interface; Global never imports Editorial, and a Centre
+  page composing both is Layer 4 (§3.3).
 - **Layer 0 `database` is infrastructure, never an owner.** A context's persistence adapter may
   be physically implemented inside `packages/database` while remaining owned by that context
   (ARCHITECTURE.md §3.1.1). Physical placement grants no cross-context access and creates no
@@ -164,12 +168,13 @@ neither implied nor permitted.**
 | Permitted edge | Why it is legitimate | Reverse |
 |---|---|---|
 | **Messaging → Learning** | Message authorisation must verify a **current** teaching assignment or enrolment (§15.3). That knowledge belongs to Learning, and duplicating it inside Messaging would create two sources of truth for who may speak to whom | **`Learning → Messaging` is prohibited** |
+| **Editorial → Global Network** | A NewsArticle revision — and, from Phase 14, an Event — carries a typed reference to a **Centre**, which Global Network owns (§17.1). Editorial asks Global's public reference interface whether a Centre may be chosen; it never reads Global's tables, and no Global data is copied into Editorial | **`Global Network → Editorial` is prohibited**: Global persistence never reads Editorial tables, and a Centre page composes Global's Centre with Editorial's own bounded centre-News read at Layer 4 |
 
 **Rules:**
 - **No implicit lateral imports.** A same-level dependency exists only if listed here, and
   only in the listed direction.
-- **Acyclicity is preserved** by directedness: because `Learning → Messaging` is prohibited,
-  the pair cannot form a cycle.
+- **Acyclicity is preserved** by directedness: because `Learning → Messaging` and
+  `Global Network → Editorial` are prohibited, neither pair can form a cycle.
 - **Adding an edge is an architecture decision** requiring review — never a convenience taken
   during feature work.
 - The architecture is **not reorganised merely to make layer numbering look uniform**.
@@ -1236,6 +1241,36 @@ special case.
 
 A Centre's news and events are ordinary Editorial records carrying a Centre reference —
 **not** a separate per-centre content system.
+
+#### 17.1.1 As delivered (Phase 16)
+
+- **One Country per record, refused across Countries by the database.** A Region belongs to
+  one Country; a City to one Country and, optionally, one Region **of that Country**; a Centre
+  to one Country. Every parent reference below Country is a **composite foreign key on
+  `(id, countryId)`**, so a cross-Country parent is impossible whoever writes. A Region or City
+  **never leaves its Country** (its Country-scoped slug reservations pin it); a City may move
+  between Regions of its Country.
+- **One locality fact per Centre.** A Centre names a physical City — whose Region is then the
+  Centre's — or, with no City, a Region directly, or neither; never both. **Virtual is an
+  explicit fact** (`isVirtual`), never inferred, and a virtual Centre has no physical City,
+  Region, coordinates or address.
+- **Served Cities** are a typed, same-Country relation (`CentreServiceCity`), never a list of
+  names or identifiers. Address words are localised per locale; **coordinates** are optional,
+  exact `decimal(9,6)`, both or neither, never geocoded.
+- **CentreContact** is public directory contact data — phone, email, HTTPS website — in twelve
+  ordered places; it is not correspondence, messaging or a staff directory.
+- **Lifecycle** is Global's own `draft → published → archived`; no review step and no hard
+  deletion. **A record is public only under public ancestors** — a withheld Country, Region or
+  City hides everything beneath it.
+- **Slugs are editable with native history**: Country and Centre slugs are global; Region and
+  City slugs are scoped by Country, as their addresses are.
+- **Centre-scoped News** is the existing `NewsArticle`: its **revision** carries one nullable,
+  non-cascading `centreId`, so choosing or changing a Centre is an ordinary edit that needs
+  fresh review. No other News family carries a Centre. Archiving a Centre changes no News; a
+  News page shows the Centre only while it is public.
+- **Not searchable yet.** Phase 16 enters from 6 and 13, not 17; Find a Centre is Global's own
+  owner query. A Global search projection, if wanted, is a recorded later step, and Phase 31
+  proves completeness (DELIVERY_PLAN.md §3).
 
 ### 17.2 Membership
 

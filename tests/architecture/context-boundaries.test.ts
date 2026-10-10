@@ -49,7 +49,7 @@ describe('production source satisfies the architecture', () => {
 });
 
 describe('A — permitted dependencies pass in every import form', () => {
-  it('accepts the allowlisted messaging -> learning edge as import, re-export and dynamic import', async () => {
+  it('accepts the allowlisted messaging -> learning and editorial -> global-network edges as import, re-export and dynamic import', async () => {
     const violations = await check(ALLOWED);
 
     expect(violations).toEqual([]);
@@ -118,6 +118,28 @@ describe('E — the reverse same-level edge remains prohibited', () => {
   it('does not list messaging on the learning row of the allowlist', () => {
     expect(contextAllowlist.learning).not.toContain('messaging');
   });
+
+  // Phase 16: Editorial names a Global-owned Centre; Global never reads News.
+  it('rejects global-network -> editorial even as a dynamic import', async () => {
+    const violations = await violationsFor(BYPASS, 'reverse-editorial-bypass.ts');
+
+    expect(violations.length).toBeGreaterThan(0);
+    expect(violations[0]?.message).toContain(
+      "'global-network' may not depend on 'editorial'",
+    );
+  });
+
+  it('rejects editorial reaching global-network internals through a relative path', async () => {
+    const violations = await violationsFor(BYPASS, 'global-internal-bypass.ts');
+
+    expect(violations.map((violation) => violation.rule)).toContain(
+      'context-internal-import',
+    );
+  });
+
+  it('does not list editorial on the global-network row of the allowlist', () => {
+    expect(contextAllowlist['global-network']).not.toContain('editorial');
+  });
 });
 
 describe('B3 — Layer 0 rules are enforced against real source', () => {
@@ -169,9 +191,15 @@ describe('B6 — production JavaScript cannot bypass the rules', () => {
 });
 
 describe('D — the allowlist itself matches DOMAIN_MODEL.md §3.1', () => {
-  it('records messaging -> learning as the one permitted same-level edge', () => {
-    expect(permittedSameLevelEdges).toEqual([{ from: 'messaging', to: 'learning' }]);
-    expect(contextAllowlist.messaging).toContain('learning');
+  it('records exactly the two permitted same-level edges, each in its allowlist row', () => {
+    expect(permittedSameLevelEdges).toEqual([
+      { from: 'messaging', to: 'learning' },
+      { from: 'editorial', to: 'global-network' },
+    ]);
+    for (const edge of permittedSameLevelEdges) {
+      expect(contextAllowlist[edge.from]).toContain(edge.to);
+      expect(contextAllowlist[edge.to]).not.toContain(edge.from);
+    }
   });
 
   it('has an allowlist row for every one of the 16 contexts', () => {

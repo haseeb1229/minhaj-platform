@@ -321,6 +321,12 @@ describe.skipIf(!databaseConfigured)(
       const PHASE_10_KEYS = ['media.administer', 'media.read'];
 
       /**
+       * The keys the Phase-16 migration appended, and the only ones: Global has
+       * no review step, so no `global.publish`, and no key per level.
+       */
+      const PHASE_16_KEYS = ['global.administer', 'global.read'];
+
+      /**
        * The four capability-projection sources, which MUST NOT be grantable.
        *
        * DOMAIN_MODEL.md §4.5 derives `canTeach`, `canReceiveQuestions`,
@@ -351,6 +357,7 @@ describe.skipIf(!databaseConfigured)(
             ...PHASE_8_KEYS,
             ...PHASE_17_KEYS,
             ...PHASE_10_KEYS,
+            ...PHASE_16_KEYS,
           ].sort(),
         );
 
@@ -392,15 +399,20 @@ describe.skipIf(!databaseConfigured)(
           'migration.',
           'teaching.',
           'editorial.',
-          // Library shipped in Phase 8, Search in Phase 17 and Media in Phase
-          // 10. Still absent: research and publication keys, per-aggregate
-          // Media keys, and audio and gallery vocabulary.
+          // Library shipped in Phase 8, Search in Phase 17, Media in Phase 10
+          // and Global in Phase 16. Still absent: research and publication
+          // keys, per-aggregate Media keys, audio and gallery vocabulary, and
+          // per-level Global keys.
           'research.',
           'publication.',
           'video.',
           'playlist.',
           'audio.',
           'gallery.',
+          'country.',
+          'region.',
+          'city.',
+          'centre.',
           'messaging.',
         ]) {
           expect(keys.some((key) => key.startsWith(domain))).toBe(false);

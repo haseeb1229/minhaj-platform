@@ -578,6 +578,28 @@ IF OBJECT_ID(N'[dbo].[GalleryLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSER
 IF OBJECT_ID(N'[dbo].[GalleryItem]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[GalleryItem] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[GalleryItem] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[GallerySlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[GallerySlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[GallerySlugHistory] TO [$(app_login)]; END;
 
+-- Phase 16: Global Network, by the SAME three postures. Country, Region, City
+-- and Centre are INSERT and UPDATE and never DELETE — a directory record is
+-- withdrawn by archiving it, so the row its slugs, children, contacts, served
+-- Cities, audit entries and centre-scoped News point at always exists. Labels,
+-- served Cities and contacts are replaced wholesale under the Centre's version
+-- (INSERT and DELETE, never UPDATE). Slug histories are APPEND ONLY. The News
+-- revision's Centre column needs no grant of its own: revisions stay INSERT-only.
+IF OBJECT_ID(N'[dbo].[Country]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Country] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Country] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Region]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Region] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Region] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[City]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[City] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[City] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Centre]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Centre] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Centre] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CountryLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[CountryLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[CountryLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[RegionLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[RegionLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[RegionLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CityLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[CityLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[CityLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CentreLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[CentreLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[CentreLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CentreServiceCity]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[CentreServiceCity] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[CentreServiceCity] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CentreContact]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[CentreContact] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[CentreContact] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CountrySlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[CountrySlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[CountrySlugHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[RegionSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[RegionSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[RegionSlugHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CitySlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[CitySlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[CitySlugHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CentreSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[CentreSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[CentreSlugHistory] TO [$(app_login)]; END;
+
 -- Phase 17: the DERIVED search projection and its operational state.
 --
 -- `SearchIndexRequest` is append-only for the owners that write it inside their

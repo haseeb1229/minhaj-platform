@@ -584,7 +584,7 @@ following **is decided**:
 | Decided | Where |
 |---|---|
 | 16 bounded contexts; infrastructure is not a domain | DOMAIN_MODEL.md §1 |
-| Explicit acyclic dependency allowlist, incl. `Messaging → Learning` | ARCHITECTURE.md §6 (canonical); DOMAIN_MODEL.md §3.1–3.2 |
+| Explicit acyclic dependency allowlist, incl. `Messaging → Learning` and `Editorial → Global Network` | ARCHITECTURE.md §6 (canonical); DOMAIN_MODEL.md §3.1–3.2 |
 | Personalisation deletion integrity: archive by default, transactional purge for hard deletes | DOMAIN_MODEL.md §14.3 |
 | Conditional `x-default` resolution | ROUTE_MAP.md §9.2.1 |
 | Realtime as a transport adapter; `server-core` hosts context-owned services and owns nothing | ARCHITECTURE.md §3.1 |

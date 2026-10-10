@@ -96,7 +96,7 @@ describe('§27 — controls that MUST pass', () => {
   it('Messaging -> Learning passes in every import form', async () => {
     const violations = await validateFixtureWorkspace('tests/fixtures/allowed');
 
-    // The one permitted same-level edge (DOMAIN_MODEL.md §3.1).
+    // A permitted same-level edge (DOMAIN_MODEL.md §3.1).
     expect(violations).toEqual([]);
   });
 

@@ -100,17 +100,31 @@ export function createEditorialService(dependencies: {
     if (!actor?.accountId || !(await authority.permits(actor.accountId, permission)))
       throw new EditorialRefusal('denied');
   }
+  /**
+   * One aggregate's content, parsed and with every reference asked of its owner.
+   *
+   * A NewsArticle's Centre (Phase 16) must be one Global would offer an editor
+   * NOW — it exists and is not archived — unless it is the Centre the current
+   * revision already names (`keptCentre`): re-saving an article about a Centre
+   * that has since closed keeps that true attribution rather than forcing an
+   * editor to erase it.
+   */
   async function contentOf(
     kind: EditorialKind,
     value: unknown,
+    keptCentre: string | null = null,
   ): Promise<SafeEditorialContent> {
     const result = editorialContentSchemaFor(kind).safeParse(value);
     if (!result.success) throw new EditorialRefusal('invalid');
     const content = result.data;
+    const centreId = content.centreId ?? null;
     const valid = await Promise.all([
       references.validTopics(content.topicIds),
       references.validContributors(content.contributors.map((entry) => entry.personId)),
       references.validLanguages(content.translations.map((entry) => entry.languageCode)),
+      centreId === null || centreId === keptCentre
+        ? Promise.resolve(true)
+        : references.selectableCentre(centreId),
     ]);
     if (valid.some((value) => !value)) throw new EditorialRefusal('invalid');
     return {
@@ -182,7 +196,11 @@ export function createEditorialService(dependencies: {
       editorialKindSchema.parse(kind);
       editorialIdSchema.parse(id);
       z.number().int().positive().parse(expectedVersion);
-      const content = await contentOf(kind, value);
+      const kept =
+        kind === 'news-article'
+          ? ((await store.news(kind, id))?.revision.centreId ?? null)
+          : null;
+      const content = await contentOf(kind, value, kept);
       if (kind === 'page') {
         const page = await store.page(id);
         if (!page || !validPageBinding(page.routeBinding, content.slug))

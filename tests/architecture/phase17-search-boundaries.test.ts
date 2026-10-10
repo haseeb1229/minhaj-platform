@@ -82,9 +82,9 @@ describe('search is Layer 0, not a bounded context', () => {
   it('creates no bounded context', async () => {
     const contexts = await readdir(path.join(repoRoot, 'apps', 'web', 'src', 'contexts'));
     expect(contexts).not.toContain('search');
-    // The delivered contexts — Media joined at Phase 10 — and never a
-    // seventeenth for Search.
-    expect(contexts).toHaveLength(6);
+    // The delivered contexts — Media joined at Phase 10, Global Network at
+    // Phase 16 — and never a seventeenth for Search.
+    expect(contexts).toHaveLength(7);
   });
 
   it('depends on no bounded context and holds no database capability', async () => {

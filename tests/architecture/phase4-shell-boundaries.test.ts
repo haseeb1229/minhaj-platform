@@ -153,6 +153,21 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/news/statements/[slug]/page.tsx',
   'apps/web/src/app/[locale]/(public)/news/media-coverage/page.tsx',
   'apps/web/src/app/[locale]/(public)/news/media-coverage/[slug]/page.tsx',
+  // Phase 16. Every Global Network surface reads directory records an operator
+  // publishes and withdraws — and a Centre page composes Editorial's News — so
+  // none can be prerendered; each is proven below to reach no session, no
+  // identity service, no logger and no authentication library.
+  'apps/web/src/app/[locale]/(public)/global/page.tsx',
+  'apps/web/src/app/[locale]/(public)/global/find-a-centre/page.tsx',
+  'apps/web/src/app/[locale]/(public)/global/countries/page.tsx',
+  'apps/web/src/app/[locale]/(public)/global/countries/[country]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/global/countries/[country]/regions/[region]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/global/countries/[country]/cities/[city]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/global/centres/page.tsx',
+  'apps/web/src/app/[locale]/(public)/global/centres/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/global/centres/[slug]/news/page.tsx',
+  'apps/web/src/app/[locale]/(public)/global/centres/[slug]/contact/page.tsx',
+  'apps/web/src/app/[locale]/(public)/global/pakistan/page.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [
@@ -778,6 +793,9 @@ describe('a public CONTENT route reads data, and still reads no session', () => 
       // Identity in for its live permission checks. Public Library routes use
       // `@/composition/library-read`, which reaches no Identity at all.
       '@/composition/library',
+      // Phase 16, for the same reason: the ADMINISTRATIVE Global runtime wires
+      // Identity in. Public Global routes use `@/composition/global-read`.
+      '@/composition/global',
       '@/contexts/identity-access',
       '@/config/server-env',
       '@minhaj/contracts/env/server',

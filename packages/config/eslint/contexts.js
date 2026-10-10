@@ -65,8 +65,17 @@ export const contextAllowlist = Object.freeze({
   // | Taxonomy | Layer 0 only |
   taxonomy: Object.freeze([]),
 
-  // | Editorial | Layer 0; Identity & Access; People & Contributors; Taxonomy |
-  editorial: Object.freeze(['identity-access', 'people-contributors', 'taxonomy']),
+  // | Editorial | Layer 0; Identity & Access; People & Contributors; Taxonomy; Global Network |
+  // `editorial -> global-network` is a permitted same-level edge (§3.2, Phase
+  // 16): a NewsArticle names a Global-owned Centre by typed identity. The
+  // reverse is prohibited; its absence from the `global-network` row below is
+  // what keeps the pair acyclic.
+  editorial: Object.freeze([
+    'identity-access',
+    'people-contributors',
+    'taxonomy',
+    'global-network',
+  ]),
 
   // | Quran | Layer 0; Identity & Access; People & Contributors; Taxonomy |
   quran: Object.freeze(['identity-access', 'people-contributors', 'taxonomy']),
@@ -101,9 +110,9 @@ export const contextAllowlist = Object.freeze({
   'personalisation-notifications': Object.freeze(['identity-access']),
 
   // | Messaging | Layer 0; Identity & Access; People & Contributors; Learning |
-  // `messaging -> learning` is the ONLY permitted same-level edge (§3.2).
-  // The reverse, `learning -> messaging`, is prohibited and its absence from
-  // the `learning` row above is what keeps the graph acyclic.
+  // `messaging -> learning` is a permitted same-level edge (§3.2). The
+  // reverse, `learning -> messaging`, is prohibited and its absence from the
+  // `learning` row above is what keeps the graph acyclic.
   messaging: Object.freeze(['identity-access', 'people-contributors', 'learning']),
 
   // | Membership | Layer 0; Identity & Access; People & Contributors; Global Network |
@@ -117,12 +126,13 @@ export const contextAllowlist = Object.freeze({
 });
 
 /**
- * The single permitted same-level edge (DOMAIN_MODEL.md §3.2), recorded
- * separately so tests can assert both its presence and the prohibition of its
- * reverse without re-deriving them from the table above.
+ * The permitted same-level edges (DOMAIN_MODEL.md §3.2), recorded separately so
+ * tests can assert both their presence and the prohibition of their reverse
+ * without re-deriving them from the table above.
  */
 export const permittedSameLevelEdges = Object.freeze([
   Object.freeze({ from: 'messaging', to: 'learning' }),
+  Object.freeze({ from: 'editorial', to: 'global-network' }),
 ]);
 
 /**

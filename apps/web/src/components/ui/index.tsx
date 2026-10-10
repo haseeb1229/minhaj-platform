@@ -106,7 +106,7 @@ export function Breadcrumbs({
     <nav aria-label={label}>
       <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[color:var(--color-foreground-muted)]">
         {trail.map((crumb, index) => (
-          <li key={crumb.text} className="flex items-center gap-2">
+          <li key={crumb.text} className="flex min-w-0 items-center gap-2">
             {index === 0 ? null : (
               <span
                 aria-hidden="true"
@@ -118,12 +118,15 @@ export function Breadcrumbs({
             {crumb.href === undefined ? (
               <span
                 aria-current="page"
-                className="font-medium text-[color:var(--color-foreground)]"
+                className="min-w-0 font-medium wrap-anywhere text-[color:var(--color-foreground)]"
               >
                 {crumb.text}
               </span>
             ) : (
-              <a href={crumb.href} className="underline underline-offset-2">
+              <a
+                href={crumb.href}
+                className="min-w-0 wrap-anywhere underline underline-offset-2"
+              >
                 {crumb.text}
               </a>
             )}
@@ -387,9 +390,9 @@ export function DetailRow({
   readonly children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-0.5 py-2">
+    <div className="flex min-w-0 flex-col gap-0.5 py-2">
       <dt className="text-xs text-[color:var(--color-foreground-muted)]">{term}</dt>
-      <dd className="text-sm">{children}</dd>
+      <dd className="min-w-0 text-sm wrap-anywhere">{children}</dd>
     </div>
   );
 }

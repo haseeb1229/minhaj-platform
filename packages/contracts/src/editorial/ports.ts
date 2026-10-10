@@ -122,6 +122,14 @@ export interface EditorialPublicReaderPort {
     kind: NewsKind,
     ids: readonly string[],
   ): Promise<readonly { readonly id: string; readonly slug: string }[]>;
+
+  /**
+   * PHASE 16 — one bounded page of the published NewsArticles whose current
+   * revision names this Centre, newest first. Editorial's own tables only: the
+   * Centre is an identifier here, and whether it is public is Global's answer,
+   * asked at Layer 4.
+   */
+  centreNews(centreId: string, offset: number, limit: number): Promise<NewsPage>;
 }
 
 /** What Search may know about one published Article or Page. */
@@ -203,6 +211,11 @@ export interface EditorialReferencesPort {
   validTopics(ids: readonly string[]): Promise<boolean>;
   validContributors(ids: readonly string[]): Promise<boolean>;
   validLanguages(codes: readonly string[]): Promise<boolean>;
+  /**
+   * May an editor newly choose this Global Network Centre? Answered by Global's
+   * reference interface at Layer 4 — Editorial never reads Global's tables.
+   */
+  selectableCentre(id: string): Promise<boolean>;
 }
 export interface CorrespondencePersistencePort {
   submitContact(input: {

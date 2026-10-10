@@ -100,7 +100,7 @@ describe('B2 — a workspace resolves by its OWN tsconfig, not a hard-coded alia
   });
 
   it('PERMITS a legitimate aliased dependency', async () => {
-    // `messaging -> learning` is the one permitted same-level edge (§3.2). A
+    // `messaging -> learning` is a permitted same-level edge (§3.2). A
     // checker that rejected this would be a wrong checker, not a strict one.
     const violations = await validateFixtureWorkspace(fixture);
 

@@ -425,6 +425,22 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[mediacoveragetopic]': ['SELECT', 'INSERT'],
   '[dbo].[mediacoveragecontributor]': ['SELECT', 'INSERT'],
   '[dbo].[mediacoverageslughistory]': ['SELECT', 'INSERT'],
+  // Phase 16: Global Network, by the same three postures. No DELETE on any
+  // directory aggregate; slug histories append only.
+  '[dbo].[country]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[region]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[city]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[centre]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[countrylabel]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[regionlabel]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[citylabel]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[centrelabel]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[centreservicecity]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[centrecontact]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[countryslughistory]': ['SELECT', 'INSERT'],
+  '[dbo].[regionslughistory]': ['SELECT', 'INSERT'],
+  '[dbo].[cityslughistory]': ['SELECT', 'INSERT'],
+  '[dbo].[centreslughistory]': ['SELECT', 'INSERT'],
   '[dbo].[contactinquiry]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[feedback]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
 

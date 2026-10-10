@@ -379,6 +379,22 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'MediaCoverageTopic',
         'MediaCoverageContributor',
         'MediaCoverageSlugHistory',
+        // Phase 16 — Global Network: the four directory levels, their labels and
+        // slug histories, the Cities a Centre serves and its contacts.
+        'Country',
+        'CountryLabel',
+        'CountrySlugHistory',
+        'Region',
+        'RegionLabel',
+        'RegionSlugHistory',
+        'City',
+        'CityLabel',
+        'CitySlugHistory',
+        'Centre',
+        'CentreLabel',
+        'CentreSlugHistory',
+        'CentreServiceCity',
+        'CentreContact',
       ].sort(),
     );
   });

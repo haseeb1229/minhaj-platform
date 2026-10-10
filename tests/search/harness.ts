@@ -102,6 +102,7 @@ export async function buildSearchHarness(admin: SqlSession) {
           languages.some((language) => language.code === code),
         );
       },
+      selectableCentre: (id) => database.createGlobalReferences().centreSelectable(id),
     },
   });
 

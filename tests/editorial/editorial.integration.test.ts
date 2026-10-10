@@ -114,6 +114,8 @@ live('Phase 6 real SQL Editorial workflow and correspondence', () => {
             languages.some((language) => language.code === code),
           );
         },
+        // Articles and Pages carry no Centre; a NewsArticle's is proved in news tests.
+        selectableCentre: async () => false,
       },
     });
     const configuration = {

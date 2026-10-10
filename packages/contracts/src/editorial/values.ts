@@ -115,11 +115,24 @@ const mediaCoverageContentSchema = z
   })
   .superRefine(referencesAreUnique);
 
-/** A NewsArticle slug may not name a static sibling of `/news/{slug}`. */
-const newsArticleContentSchema = editorialContentSchema.refine(
-  (value) => !isReservedNewsSlug(value.slug),
-  { message: 'This slug names a reserved News route.', path: ['slug'] },
-);
+/**
+ * A NewsArticle slug may not name a static sibling of `/news/{slug}`.
+ *
+ * PHASE 16 — CENTRE-SCOPED NEWS. A NewsArticle revision may name ONE Global
+ * Network Centre, or none for general News. It is part of the revision, so
+ * choosing or changing it is an ordinary edit: it returns the record to draft
+ * and needs fresh review. No other family carries a Centre.
+ */
+const newsArticleContentSchema = z
+  .strictObject({
+    ...editorialContentSchema.shape,
+    centreId: editorialIdSchema.nullable().default(null),
+  })
+  .superRefine(referencesAreUnique)
+  .refine((value) => !isReservedNewsSlug(value.slug), {
+    message: 'This slug names a reserved News route.',
+    path: ['slug'],
+  });
 
 /**
  * THE content schema of one aggregate. Each is strict, so a field another family
@@ -150,6 +163,8 @@ export interface EditorialContent {
   }[];
   /** A MediaCoverage record's source; absent for every other family. */
   readonly coverage?: MediaCoverageSource;
+  /** A NewsArticle's Global Network Centre, or `null`; absent for every other family. */
+  readonly centreId?: string | null;
 }
 export interface SafeEditorialTranslation extends EditorialTranslation {
   readonly html: string;
@@ -231,6 +246,12 @@ export interface PublicPage extends PublicEditorial {
 export interface PublicNews extends PublicEditorial {
   readonly kind: NewsKind;
   readonly coverage: MediaCoverageSource | null;
+  /**
+   * The Centre a NewsArticle is scoped to, as an IDENTIFIER only. Whether and how
+   * it is shown is decided at Layer 4 by asking Global whether that Centre is
+   * public now; Editorial holds no Centre name and reads no Global table.
+   */
+  readonly centreId: string | null;
 }
 export interface EditorialSitemapEntry {
   readonly id: string;

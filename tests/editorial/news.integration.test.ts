@@ -127,6 +127,8 @@ live('Phase 13 real SQL News workflow', () => {
       await import('../../packages/database/src/adapters/taxonomy/index.ts');
     const { createPeopleReader } =
       await import('../../packages/database/src/adapters/people-contributors/index.ts');
+    const { createGlobalReferences } =
+      await import('../../packages/database/src/adapters/global-network/index.ts');
     const authorization = createAuthorizationService({
       reader: createAuthorizationReader(),
     });
@@ -152,6 +154,7 @@ live('Phase 13 real SQL News workflow', () => {
             languages.some((language) => language.code === code),
           );
         },
+        selectableCentre: (id) => createGlobalReferences().centreSelectable(id),
       },
     });
     author = await account(['content.read', 'content.author', 'content.review']);

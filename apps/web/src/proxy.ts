@@ -283,6 +283,70 @@ export default async function proxy(request: NextRequest) {
   }
   if (request.method === 'GET' || request.method === 'HEAD') {
     /**
+     * PHASE 16 — THE GLOBAL NETWORK'S OWN SLUG HISTORIES, through the same
+     * single-301 mechanism: one hop to the current address, locale preserved,
+     * the target built from Global's answer and never from the request.
+     *
+     * NESTED ADDRESSES RESOLVE WHOLE. A Region or City is addressed under its
+     * Country, so a former Country slug, a former Region or City slug, or both,
+     * are resolved TOGETHER and answered with ONE redirect to the current full
+     * address — never a chain through an intermediate one. A Centre's `news`
+     * and `contact` pages keep their suffix. Only public records resolve: a
+     * withheld record's former slug falls through to the route's 404.
+     */
+    const place =
+      /^\/(en|ur|ar)\/global\/countries\/([^/]+)(?:\/(regions|cities)\/([^/]+))?$/.exec(
+        request.nextUrl.pathname,
+      );
+    if (place?.[1] && place[2]) {
+      const country = decodedSegment(place[2]);
+      const child = place[4] === undefined ? undefined : decodedSegment(place[4]);
+      if (country !== null && child !== null) {
+        const { globalReadRuntime } = await import('@/composition/global-read');
+        const { globalPaths } = await import('@minhaj/contracts/global');
+        const locale = place[1] as 'en' | 'ur' | 'ar';
+        if (child === undefined) {
+          const current = await globalReadRuntime().countryCanonicalSlug(country);
+          if (current !== null && current !== country)
+            return permanent(request, globalPaths.country(locale, current));
+        } else if (place[3] === 'regions') {
+          const current = await globalReadRuntime().regionCanonical(country, child);
+          if (
+            current !== null &&
+            (current.country !== country || current.region !== child)
+          )
+            return permanent(
+              request,
+              globalPaths.region(locale, current.country, current.region),
+            );
+        } else {
+          const current = await globalReadRuntime().cityCanonical(country, child);
+          if (current !== null && (current.country !== country || current.city !== child))
+            return permanent(
+              request,
+              globalPaths.city(locale, current.country, current.city),
+            );
+        }
+      }
+    }
+    const centre = /^\/(en|ur|ar)\/global\/centres\/([^/]+)(\/news|\/contact)?$/.exec(
+      request.nextUrl.pathname,
+    );
+    if (centre?.[1] && centre[2]) {
+      const slug = decodedSegment(centre[2]);
+      if (slug !== null) {
+        const { globalReadRuntime } = await import('@/composition/global-read');
+        const current = await globalReadRuntime().centreCanonicalSlug(slug);
+        if (current !== null && current !== slug)
+          return permanent(
+            request,
+            `/${centre[1]}/global/centres/${encodeURIComponent(current)}${centre[3] ?? ''}`,
+          );
+      }
+    }
+  }
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    /**
      * PHASE 17 — PUBLIC SEARCH ADMISSION.
      *
      * Only a request that will actually run a query spends budget: the search

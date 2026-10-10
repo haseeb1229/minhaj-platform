@@ -10,6 +10,7 @@ import {
   capturePhase13Fixture,
   newPhase13Fixture,
   PHASE13_FAMILIES,
+  phase13Slugs,
   verifyRestoredPhase13,
   writePhase13Fixture,
 } from '../src/lifecycle/phase13-fixture.ts';
@@ -175,6 +176,48 @@ async function expectRefusedByInvariant(
   }
   fail(label, 'statement SUCCEEDED but the invariant must refuse it');
 }
+
+/**
+ * Asserts a statement is refused by ONE NAMED schema constraint.
+ *
+ * A SIBLING OF `expectRefusedByInvariant`, stricter rather than looser. Every
+ * foreign key and every CHECK in SQL Server raises the same 547, so the number
+ * alone cannot tell a composite same-Country key from a plain parent key, or
+ * one CHECK from another on the same table — and a proof meant for one would
+ * pass on the other. This one requires an expected number AND the constraint's
+ * own name in the engine's message, and fails on anything else, including an
+ * access denial.
+ */
+async function expectRefusedByConstraint(
+  session: SqlSession,
+  label: string,
+  statement: string,
+  expected: ReadonlySet<number>,
+  constraint: string,
+): Promise<void> {
+  try {
+    await session.query(statement);
+  } catch (error) {
+    const number = errorNumber(error);
+    const message = (error as Error).message;
+    if (number !== undefined && expected.has(number) && message.includes(constraint)) {
+      pass(label, `refused by ${constraint}, SQL Server error ${number}`);
+      return;
+    }
+    fail(
+      label,
+      `rejected for the WRONG reason (error ${number ?? 'unknown'}): ` +
+        `${message.split('\n')[0]}`,
+    );
+    return;
+  }
+  fail(label, `statement SUCCEEDED but ${constraint} must refuse it`);
+}
+
+/** Foreign-key and CHECK violations. */
+const CONSTRAINT_VIOLATION = new Set([547]);
+/** Primary-key, unique-constraint and unique-index violations. */
+const DUPLICATE_KEY = new Set([2627, 2601]);
 
 async function expectAllowed(
   session: SqlSession,
@@ -720,6 +763,7 @@ try {
     libraryProvisioned: number;
     searchProvisioned: number;
     mediaProvisioned: number;
+    globalProvisioned: number;
   }>(`
     SELECT COUNT_BIG(*) AS total,
            SUM(CASE WHEN [action] = N'phase1.permission.probe' THEN 1 ELSE 0 END) AS probe,
@@ -744,17 +788,20 @@ try {
              AS searchProvisioned,
            SUM(CASE WHEN [action] = N'media.permissions.provisioned'
                      AND [actorType] = N'migration' THEN 1 ELSE 0 END)
-             AS mediaProvisioned
+             AS mediaProvisioned,
+           SUM(CASE WHEN [action] = N'global.permissions.provisioned'
+                     AND [actorType] = N'migration' THEN 1 ELSE 0 END)
+             AS globalProvisioned
     FROM [dbo].[AuditLog];
   `);
 
-  // Exactly eight rows: the Phase-3B through Phase-17 privilege extensions
-  // (Phase 10's included), and this run's probe. Naming every migration action is load-bearing:
+  // Exactly nine rows: the Phase-3B through Phase-17 privilege extensions
+  // (Phase 10's and Phase 16's included), and this run's probe. Naming every migration action is load-bearing:
   // deriving the expected total from whatever provisioning rows happened to
   // survive would pass if a phase omitted its own audit, and each privilege
   // extension must be able to show that it paid for itself
   // (SECURITY_BASELINE.md §8.1).
-  const EXPECTED_AUDIT_ROWS = 8;
+  const EXPECTED_AUDIT_ROWS = 9;
 
   if (
     Number(survivor?.taxonomyProvisioned ?? 0) !== 1 ||
@@ -764,6 +811,7 @@ try {
     Number(survivor?.libraryProvisioned ?? 0) !== 1 ||
     Number(survivor?.searchProvisioned ?? 0) !== 1 ||
     Number(survivor?.mediaProvisioned ?? 0) !== 1 ||
+    Number(survivor?.globalProvisioned ?? 0) !== 1 ||
     Number(survivor?.probe ?? 0) !== 1 ||
     Number(survivor?.tampered ?? -1) !== 0 ||
     Number(survivor?.total ?? 0) !== EXPECTED_AUDIT_ROWS
@@ -773,7 +821,7 @@ try {
       `expected ${EXPECTED_AUDIT_ROWS} rows with 1 taxonomy provisioning, ` +
         `1 navigation provisioning, 1 people provisioning, 1 editorial provisioning, ` +
         `1 library provisioning, 1 search provisioning, 1 media provisioning, ` +
-        `1 probe and ` +
+        `1 global provisioning, 1 probe and ` +
         `0 tampered; found ${survivor?.total ?? 0} rows, ` +
         `${survivor?.taxonomyProvisioned ?? 0} taxonomy provisioning, ` +
         `${survivor?.navigationProvisioned ?? 0} navigation provisioning, ` +
@@ -782,12 +830,13 @@ try {
         `${survivor?.libraryProvisioned ?? 0} library provisioning, ` +
         `${survivor?.searchProvisioned ?? 0} search provisioning, ` +
         `${survivor?.mediaProvisioned ?? 0} media provisioning, ` +
+        `${survivor?.globalProvisioned ?? 0} global provisioning, ` +
         `${survivor?.probe ?? 0} probe, ${survivor?.tampered ?? 0} tampered`,
     );
   } else {
     pass(
       'audit rows unmodified',
-      'the probe row and all seven exact migration records are intact after ' +
+      'the probe row and all eight exact migration records are intact after ' +
         'UPDATE/DELETE attempts',
     );
   }
@@ -1837,6 +1886,422 @@ try {
     app,
     'GalleryItem UPDATE denied',
     'UPDATE [dbo].[GalleryItem] SET [photoId]=[photoId];',
+  );
+
+  // ---- Phase 16: Global Network — Country, Region, City, Centre -------------
+  //
+  // THE SAME THREE POSTURES, each proved to WORK and to REFUSE, through the
+  // RUNTIME login. The directory's integrity is proved as refusals BY THE
+  // DATABASE, each by the ONE constraint that owns it, so a proof of the
+  // composite same-Country key cannot pass on a plain parent key:
+  //
+  //   - every reference below Country names a parent OF THE SAME Country (the
+  //     composite foreign keys), and no Region or City can leave its Country
+  //     (the slug histories reference (id, countryId));
+  //   - a Centre holds at most one locality fact, a virtual Centre none and no
+  //     coordinates, and coordinates are both-or-neither and in range (CHECKs);
+  //   - a former slug stays reserved — globally for a Country and a Centre, per
+  //     Country for a Region — and the same Region slug in ANOTHER Country is
+  //     lawful (the triggers and the history primary keys);
+  //   - a contact is a phone, an email or an HTTPS website, in one of twelve
+  //     places, listed once; a City is served once (CHECKs and keys);
+  //   - a News revision names a Centre that exists (the foreign key).
+  //
+  // Synthetic throughout: user-assigned ISO codes (QM, QN), `lp-proof-` slugs,
+  // a placeholder telephone number and `.invalid` addresses.
+  const globalRun = randomUUID().replaceAll('-', '').slice(0, 16);
+  const g = (name: string): string => `lp-proof-${name}-${globalRun}`;
+  const countryA = randomUUID();
+  const countryB = randomUUID();
+  const regionA1 = randomUUID();
+  const regionA2 = randomUUID();
+  const regionA3 = randomUUID();
+  const regionB1 = randomUUID();
+  const cityA1 = randomUUID();
+  const cityA2 = randomUUID();
+  const cityA3 = randomUUID();
+  const cityB1 = randomUUID();
+  const centreA = randomUUID();
+  const centreRegional = randomUUID();
+  const centreVirtual = randomUUID();
+
+  const globalRuntime = app;
+  async function globalReservations(
+    label: string,
+    table: string,
+    column: string,
+    id: string,
+    expected: number,
+  ): Promise<void> {
+    const [row] = await globalRuntime.query<{ count: number }>(
+      `SELECT COUNT_BIG(*) AS count FROM [dbo].[${table}] WHERE [${column}]=N'${id}';`,
+    );
+    if (Number(row?.count) === expected) {
+      pass(label, `${String(expected)} reservation(s), written by the database`);
+    } else {
+      fail(label, `expected ${String(expected)}, found ${String(row?.count ?? 0)}`);
+    }
+  }
+
+  await expectAllowed(
+    app,
+    'Country INSERT and rename',
+    `INSERT INTO [dbo].[Country] ([id],[code],[slug],[primaryLocale],[state]) VALUES
+       (N'${countryA}',N'QM',N'${g('country-a')}',N'en',N'draft'),
+       (N'${countryB}',N'QN',N'${g('country-b')}',N'en',N'draft');
+     UPDATE [dbo].[Country] SET [slug]=N'${g('country-a-renamed')}',[state]=N'published',[version]=[version]+1 WHERE [id]=N'${countryA}';`,
+    'two Countries are created, and one renamed and published',
+  );
+  await globalReservations(
+    'Country slugs reserved',
+    'CountrySlugHistory',
+    'countryId',
+    countryA,
+    2,
+  );
+  await expectAllowed(
+    app,
+    'Region INSERT and rename',
+    `INSERT INTO [dbo].[Region] ([id],[countryId],[slug],[primaryLocale],[state]) VALUES
+       (N'${regionA1}',N'${countryA}',N'${g('region')}',N'en',N'draft'),
+       (N'${regionA2}',N'${countryA}',N'${g('region-two')}',N'en',N'draft'),
+       (N'${regionA3}',N'${countryA}',N'${g('region-three')}',N'en',N'draft');
+     UPDATE [dbo].[Region] SET [slug]=N'${g('region-renamed')}',[version]=[version]+1 WHERE [id]=N'${regionA1}';`,
+    'three Regions of one Country, one renamed',
+  );
+  await globalReservations(
+    'Region slugs reserved',
+    'RegionSlugHistory',
+    'regionId',
+    regionA1,
+    2,
+  );
+  await expectAllowed(
+    app,
+    'Same Region slug in another Country',
+    `INSERT INTO [dbo].[Region] ([id],[countryId],[slug],[primaryLocale],[state]) VALUES (N'${regionB1}',N'${countryB}',N'${g('region-renamed')}',N'en',N'draft');`,
+    'Region slugs are scoped by their Country',
+  );
+  await expectAllowed(
+    app,
+    'City INSERT and rename',
+    `INSERT INTO [dbo].[City] ([id],[countryId],[regionId],[slug],[primaryLocale],[state]) VALUES
+       (N'${cityA1}',N'${countryA}',N'${regionA1}',N'${g('city')}',N'en',N'draft'),
+       (N'${cityA2}',N'${countryA}',NULL,N'${g('city-two')}',N'en',N'draft'),
+       (N'${cityA3}',N'${countryA}',NULL,N'${g('city-three')}',N'en',N'draft'),
+       (N'${cityB1}',N'${countryB}',N'${regionB1}',N'${g('city')}',N'en',N'draft');
+     UPDATE [dbo].[City] SET [slug]=N'${g('city-renamed')}',[version]=[version]+1 WHERE [id]=N'${cityA1}';`,
+    'Cities with and without a Region, one renamed',
+  );
+  await globalReservations('City slugs reserved', 'CitySlugHistory', 'cityId', cityA1, 2);
+  await expectAllowed(
+    app,
+    'City moves between its Country Regions',
+    `UPDATE [dbo].[City] SET [regionId]=N'${regionA2}',[version]=[version]+1 WHERE [id]=N'${cityA1}';`,
+    'a City changes Region within its own Country',
+  );
+  await expectAllowed(
+    app,
+    'Centre INSERT, rename and return',
+    `INSERT INTO [dbo].[Centre] ([id],[slug],[countryId],[regionId],[cityId],[isVirtual],[latitude],[longitude],[primaryLocale],[state]) VALUES
+       (N'${centreA}',N'${g('centre')}',N'${countryA}',NULL,N'${cityA1}',0,24.860700,67.001100,N'en',N'draft'),
+       (N'${centreRegional}',N'${g('centre-regional')}',N'${countryA}',N'${regionA2}',NULL,0,NULL,NULL,N'en',N'draft'),
+       (N'${centreVirtual}',N'${g('centre-virtual')}',N'${countryA}',NULL,NULL,1,NULL,NULL,N'en',N'draft');
+     UPDATE [dbo].[Centre] SET [slug]=N'${g('centre-renamed')}',[version]=[version]+1 WHERE [id]=N'${centreA}';
+     UPDATE [dbo].[Centre] SET [slug]=N'${g('centre')}',[state]=N'published',[version]=[version]+1 WHERE [id]=N'${centreA}';`,
+    'physical, regional and virtual Centres; a slug returning to its own Centre',
+  );
+  await globalReservations(
+    'Centre slugs reserved',
+    'CentreSlugHistory',
+    'centreId',
+    centreA,
+    2,
+  );
+
+  for (const [label, statement] of [
+    [
+      'CountryLabel INSERT',
+      `INSERT INTO [dbo].[CountryLabel] ([countryId],[locale],[name]) VALUES (N'${countryA}',N'en',N'Least-privilege proof country');`,
+    ],
+    [
+      'RegionLabel INSERT',
+      `INSERT INTO [dbo].[RegionLabel] ([regionId],[locale],[name]) VALUES (N'${regionA1}',N'en',N'Least-privilege proof region');`,
+    ],
+    [
+      'CityLabel INSERT',
+      `INSERT INTO [dbo].[CityLabel] ([cityId],[locale],[name]) VALUES (N'${cityA1}',N'en',N'Least-privilege proof city');`,
+    ],
+    [
+      'CentreLabel INSERT',
+      `INSERT INTO [dbo].[CentreLabel] ([centreId],[locale],[name],[description],[address]) VALUES (N'${centreA}',N'en',N'Least-privilege proof centre',NULL,N'Least-privilege proof address');`,
+    ],
+    [
+      'CentreServiceCity INSERT',
+      `INSERT INTO [dbo].[CentreServiceCity] ([centreId],[cityId],[countryId]) VALUES
+         (N'${centreA}',N'${cityA2}',N'${countryA}'),
+         (N'${centreA}',N'${cityA3}',N'${countryA}'),
+         (N'${centreVirtual}',N'${cityA1}',N'${countryA}');`,
+    ],
+    [
+      'CentreContact INSERT',
+      `INSERT INTO [dbo].[CentreContact] ([centreId],[position],[channel],[value]) VALUES
+         (N'${centreA}',0,N'phone',N'+00 000 0000'),
+         (N'${centreA}',1,N'email',N'proof@example.invalid'),
+         (N'${centreA}',2,N'website',N'https://proof.example.invalid/');`,
+    ],
+  ] as const) {
+    await expectAllowed(app, label, statement, 'the save path writes its own rows');
+  }
+  await expectAllowed(
+    app,
+    'CentreServiceCity DELETE',
+    `DELETE FROM [dbo].[CentreServiceCity] WHERE [centreId]=N'${centreA}' AND [cityId]=N'${cityA3}';`,
+    'a served-City set is replaced wholesale',
+  );
+  await expectAllowed(
+    app,
+    'CentreContact DELETE',
+    `DELETE FROM [dbo].[CentreContact] WHERE [centreId]=N'${centreA}' AND [position]=1;`,
+    'a contact list is replaced wholesale',
+  );
+
+  // Refused by the database, each by its own constraint.
+  const centreColumns =
+    '[id],[slug],[countryId],[regionId],[cityId],[isVirtual],[latitude],[longitude],[primaryLocale],[state]';
+  for (const [label, statement, numbers, constraint] of [
+    [
+      'A Region belongs to a real Country',
+      `INSERT INTO [dbo].[Region] ([id],[countryId],[slug],[primaryLocale],[state]) VALUES (N'${randomUUID()}',N'${randomUUID()}',N'${g('orphan')}',N'en',N'draft');`,
+      CONSTRAINT_VIOLATION,
+      'Region_countryId_fkey',
+    ],
+    [
+      'A City names its own Country Region',
+      `INSERT INTO [dbo].[City] ([id],[countryId],[regionId],[slug],[primaryLocale],[state]) VALUES (N'${randomUUID()}',N'${countryA}',N'${regionB1}',N'${g('cross-city')}',N'en',N'draft');`,
+      CONSTRAINT_VIOLATION,
+      'City_regionId_countryId_fkey',
+    ],
+    [
+      'A Centre names its own Country City',
+      `INSERT INTO [dbo].[Centre] (${centreColumns}) VALUES (N'${randomUUID()}',N'${g('cross-centre')}',N'${countryA}',NULL,N'${cityB1}',0,NULL,NULL,N'en',N'draft');`,
+      CONSTRAINT_VIOLATION,
+      'Centre_cityId_countryId_fkey',
+    ],
+    [
+      'A Centre names its own Country Region',
+      `INSERT INTO [dbo].[Centre] (${centreColumns}) VALUES (N'${randomUUID()}',N'${g('cross-centre')}',N'${countryA}',N'${regionB1}',NULL,0,NULL,NULL,N'en',N'draft');`,
+      CONSTRAINT_VIOLATION,
+      'Centre_regionId_countryId_fkey',
+    ],
+    [
+      'A Centre holds one locality fact',
+      `INSERT INTO [dbo].[Centre] (${centreColumns}) VALUES (N'${randomUUID()}',N'${g('two-facts')}',N'${countryA}',N'${regionA2}',N'${cityA2}',0,NULL,NULL,N'en',N'draft');`,
+      CONSTRAINT_VIOLATION,
+      'Centre_locality_ck',
+    ],
+    [
+      'A virtual Centre has no City',
+      `INSERT INTO [dbo].[Centre] (${centreColumns}) VALUES (N'${randomUUID()}',N'${g('virtual-city')}',N'${countryA}',NULL,N'${cityA2}',1,NULL,NULL,N'en',N'draft');`,
+      CONSTRAINT_VIOLATION,
+      'Centre_virtual_ck',
+    ],
+    [
+      'A virtual Centre has no coordinates',
+      `UPDATE [dbo].[Centre] SET [latitude]=1,[longitude]=1 WHERE [id]=N'${centreVirtual}';`,
+      CONSTRAINT_VIOLATION,
+      'Centre_virtual_ck',
+    ],
+    [
+      'Latitude stays within -90..90',
+      `UPDATE [dbo].[Centre] SET [latitude]=91 WHERE [id]=N'${centreA}';`,
+      CONSTRAINT_VIOLATION,
+      'Centre_coordinates_ck',
+    ],
+    [
+      'Longitude stays within -180..180',
+      `UPDATE [dbo].[Centre] SET [longitude]=-181 WHERE [id]=N'${centreA}';`,
+      CONSTRAINT_VIOLATION,
+      'Centre_coordinates_ck',
+    ],
+    [
+      'Coordinates are both or neither',
+      `UPDATE [dbo].[Centre] SET [longitude]=NULL WHERE [id]=N'${centreA}';`,
+      CONSTRAINT_VIOLATION,
+      'Centre_coordinates_ck',
+    ],
+    [
+      'A served City is of its Country',
+      `INSERT INTO [dbo].[CentreServiceCity] ([centreId],[cityId],[countryId]) VALUES (N'${centreA}',N'${cityB1}',N'${countryA}');`,
+      CONSTRAINT_VIOLATION,
+      'CentreServiceCity_cityId_countryId_fkey',
+    ],
+    [
+      'A served Country is the Centre one',
+      `INSERT INTO [dbo].[CentreServiceCity] ([centreId],[cityId],[countryId]) VALUES (N'${centreA}',N'${cityB1}',N'${countryB}');`,
+      CONSTRAINT_VIOLATION,
+      'CentreServiceCity_centreId_countryId_fkey',
+    ],
+    [
+      'A City is served once',
+      `INSERT INTO [dbo].[CentreServiceCity] ([centreId],[cityId],[countryId]) VALUES (N'${centreA}',N'${cityA2}',N'${countryA}');`,
+      DUPLICATE_KEY,
+      'CentreServiceCity_pkey',
+    ],
+    [
+      'A contact is listed once',
+      `INSERT INTO [dbo].[CentreContact] ([centreId],[position],[channel],[value]) VALUES (N'${centreA}',5,N'phone',N'+00 000 0000');`,
+      DUPLICATE_KEY,
+      'CentreContact_centreId_channel_value_key',
+    ],
+    [
+      'A website is HTTPS',
+      `INSERT INTO [dbo].[CentreContact] ([centreId],[position],[channel],[value]) VALUES (N'${centreA}',6,N'website',N'http://proof.example.invalid/');`,
+      CONSTRAINT_VIOLATION,
+      'CentreContact_channel_ck',
+    ],
+    [
+      'A website is never a script',
+      `INSERT INTO [dbo].[CentreContact] ([centreId],[position],[channel],[value]) VALUES (N'${centreA}',7,N'website',N'javascript:void(0)');`,
+      CONSTRAINT_VIOLATION,
+      'CentreContact_channel_ck',
+    ],
+    [
+      'A Centre lists at most twelve contacts',
+      `INSERT INTO [dbo].[CentreContact] ([centreId],[position],[channel],[value]) VALUES (N'${centreA}',12,N'email',N'twelve@example.invalid');`,
+      CONSTRAINT_VIOLATION,
+      'CentreContact_position_ck',
+    ],
+    [
+      'A Country code is upper-case ISO',
+      `INSERT INTO [dbo].[Country] ([id],[code],[slug],[primaryLocale],[state]) VALUES (N'${randomUUID()}',N'pk',N'${g('lower-code')}',N'en',N'draft');`,
+      CONSTRAINT_VIOLATION,
+      'Country_code_ck',
+    ],
+    [
+      'A Region never leaves its Country',
+      `UPDATE [dbo].[Region] SET [countryId]=N'${countryB}' WHERE [id]=N'${regionA3}';`,
+      CONSTRAINT_VIOLATION,
+      'RegionSlugHistory_regionId_countryId_fkey',
+    ],
+    [
+      'A City never leaves its Country',
+      `UPDATE [dbo].[City] SET [countryId]=N'${countryB}' WHERE [id]=N'${cityA3}';`,
+      CONSTRAINT_VIOLATION,
+      'CitySlugHistory_cityId_countryId_fkey',
+    ],
+    [
+      'A former Region slug stays reserved',
+      `INSERT INTO [dbo].[Region] ([id],[countryId],[slug],[primaryLocale],[state]) VALUES (N'${randomUUID()}',N'${countryA}',N'${g('region')}',N'en',N'draft');`,
+      DUPLICATE_KEY,
+      'RegionSlugHistory_pkey',
+    ],
+    [
+      'A former Country slug stays reserved',
+      `INSERT INTO [dbo].[Country] ([id],[code],[slug],[primaryLocale],[state]) VALUES (N'${randomUUID()}',N'QO',N'${g('country-a')}',N'en',N'draft');`,
+      DUPLICATE_KEY,
+      'CountrySlugHistory_pkey',
+    ],
+    [
+      'A former Centre slug stays reserved',
+      `INSERT INTO [dbo].[Centre] (${centreColumns}) VALUES (N'${randomUUID()}',N'${g('centre-renamed')}',N'${countryA}',NULL,NULL,1,NULL,NULL,N'en',N'draft');`,
+      DUPLICATE_KEY,
+      'CentreSlugHistory_pkey',
+    ],
+    [
+      'A News revision names a real Centre',
+      `INSERT INTO [dbo].[NewsArticleRevision] ([ownerId],[number],[editorId],[slug],[primaryLanguage],[centreId]) VALUES (N'${newsFixture.ids.NewsArticle}',3,N'${editorialPeople.accountId}',N'${phase13Slugs(newsFixture, 'NewsArticle').current}',N'en',N'${randomUUID()}');`,
+      CONSTRAINT_VIOLATION,
+      'NewsArticleRevision_centreId_fkey',
+    ],
+  ] as const) {
+    await expectRefusedByConstraint(app, label, statement, numbers, constraint);
+  }
+
+  // Centre-scoped News is the ordinary revision write: no grant of its own.
+  await expectAllowed(
+    app,
+    'NewsArticleRevision naming a Centre',
+    `INSERT INTO [dbo].[NewsArticleRevision] ([ownerId],[number],[editorId],[slug],[primaryLanguage],[centreId]) VALUES (N'${newsFixture.ids.NewsArticle}',3,N'${editorialPeople.accountId}',N'${phase13Slugs(newsFixture, 'NewsArticle').current}',N'en',N'${centreA}');`,
+    'a new revision names an existing Centre',
+  );
+  await expectDenied(
+    app,
+    'NewsArticleRevision Centre UPDATE denied',
+    'UPDATE [dbo].[NewsArticleRevision] SET [centreId]=NULL;',
+  );
+
+  for (const [table, where] of [
+    ['CountryLabel', `[countryId]=N'${countryA}'`],
+    ['RegionLabel', `[regionId]=N'${regionA1}'`],
+    ['CityLabel', `[cityId]=N'${cityA1}'`],
+    ['CentreLabel', `[centreId]=N'${centreA}'`],
+  ] as const) {
+    await expectAllowed(
+      app,
+      `${table} DELETE`,
+      `DELETE FROM [dbo].[${table}] WHERE ${where};`,
+      'a replaceable label set can be cleared before it is rewritten',
+    );
+  }
+
+  // Denied by the grants: no directory record is ever removed, no reservation
+  // is rewritten or released, and replaceable sets are never edited in place.
+  for (const table of ['Country', 'Region', 'City', 'Centre']) {
+    await expectDenied(app, `${table} DELETE denied`, `DELETE FROM [dbo].[${table}];`);
+    await expectDenied(
+      app,
+      `${table}SlugHistory UPDATE denied`,
+      `UPDATE [dbo].[${table}SlugHistory] SET [slug]=[slug];`,
+    );
+    await expectDenied(
+      app,
+      `${table}SlugHistory DELETE denied`,
+      `DELETE FROM [dbo].[${table}SlugHistory];`,
+    );
+    await expectDenied(
+      app,
+      `${table}Label UPDATE denied`,
+      `UPDATE [dbo].[${table}Label] SET [name]=[name];`,
+    );
+  }
+  await expectDenied(
+    app,
+    'CentreServiceCity UPDATE denied',
+    'UPDATE [dbo].[CentreServiceCity] SET [cityId]=[cityId];',
+  );
+  await expectDenied(
+    app,
+    'CentreContact UPDATE denied',
+    'UPDATE [dbo].[CentreContact] SET [value]=[value];',
+  );
+  for (const table of [
+    'Country',
+    'CountryLabel',
+    'CountrySlugHistory',
+    'Region',
+    'RegionLabel',
+    'RegionSlugHistory',
+    'City',
+    'CityLabel',
+    'CitySlugHistory',
+    'Centre',
+    'CentreLabel',
+    'CentreSlugHistory',
+    'CentreServiceCity',
+    'CentreContact',
+  ]) {
+    await assertObjectVisible(app, table);
+    await expectDenied(
+      app,
+      `${table} ALTER denied`,
+      `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+    );
+  }
+  await expectDenied(
+    app,
+    'Centre CHECK DROP denied',
+    'ALTER TABLE [dbo].[Centre] DROP CONSTRAINT [Centre_virtual_ck];',
   );
 
   // ---- Phase 17: the derived search projection ------------------------------

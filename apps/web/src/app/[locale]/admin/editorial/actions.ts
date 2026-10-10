@@ -70,6 +70,8 @@ export async function saveEditorial(
             },
           }
         : {}),
+      // A NewsArticle's optional Centre (Phase 16); no other kind sends the key.
+      ...(kind === 'news-article' ? { centreId: optional('centreId') } : {}),
     };
     const id = String(form.get('id') ?? '');
     const saved = id

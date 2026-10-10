@@ -961,6 +961,53 @@ owns a relational Centre reference**.
 
 ---
 
+**Phase-16 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+- **One new same-level edge, Editorial → Global Network** (DOMAIN_MODEL.md §3.2; ARCHITECTURE.md
+  §6.1.1), because a NewsArticle — and in Phase 14 an Event — names a Global-owned Centre. The
+  reverse is prohibited and mechanically refused; Editorial asks Global's reference interface
+  and reads no Global table, and Global reads no Editorial table.
+- **Model.** Country (ISO 3166-1 alpha-2 code as its canonical identity), Region, City,
+  Centre, CentreContact and the typed served-City relation, with localised name rows. The
+  same-Country rule is composite foreign keys; one locality fact per Centre; explicit virtual
+  Centres; exact optional coordinates; a Region or City never changes Country, while a City may
+  move between Regions of its Country and its Centres follow (DOMAIN_MODEL.md §17.1.1).
+- **Permissions.** `global.read` and `global.administer`, in the protected bundle with the
+  same session and step-up revocation every bundle extension performs. No per-level, publish,
+  contact or import key. The Media keys' TypeScript descriptions were re-aligned with the
+  Phase-12 migration's wording (photographs and galleries); no Media key or behaviour changed.
+- **Public.** `/global`, Find a Centre (Country, then a Region or a City — a City includes the
+  Centres serving it, once each), Countries, a Country's Regions and direct Cities, Region and
+  City pages, Centres, a Centre with its facts, contacts and latest centre-scoped News, its
+  `news` and display-only `contact` pages, and the Pakistan structure — a view of the Pakistan
+  Country (ISO `PK`) canonical to that Country's page, never a second Pakistan model. Everything
+  public sits under public ancestors only; an empty directory says so. No map, geolocation,
+  distance sort or Events link.
+- **Slugs.** Every level is renamable with native history and one-hop 301s through the request
+  proxy; a nested Region or City address with a former Country slug, a former child slug or
+  both resolves in ONE hop. The `centres` sitemap segment lists public Centres; Country,
+  Region and City pages are reached by links and §9.4 names no segment for them.
+- **Centre-scoped News.** The NewsArticle **revision** carries one nullable, non-cascading
+  `centreId`; existing revisions name none. Choosing or changing it is an ordinary edit that
+  returns the record to draft, clears approval and schedule, and is audited
+  (`editorial.news-article.centre-changed`). An editor may choose a Centre that is not archived;
+  an already-named Centre is kept truthfully if it is archived later. Archiving a Centre changes
+  no News, and a News page shows the Centre only while Global says it is public.
+- **Search unchanged.** Phase 16 enters from 6 and 13, not 17: no Global kind, scope or filter,
+  and no Centre words in News documents. A Global projection, if ever wanted, is a recorded
+  later step; Phase 31 proves completeness.
+- **Recovery is SQL.** The populated rehearsal covers a Country with and without Regions,
+  direct and regional Cities, a physical and a virtual Centre with contacts and served Cities,
+  renamed slugs, exact coordinates and a centre-scoped NewsArticle.
+- **Content gate open.** OPEN_DECISIONS.md §6.2 is unchanged: no real Country, Centre or contact
+  is seeded, and engineering completion is not authoritative directory acceptance.
+- **Not delivered, and not owed by this phase:** Centre Events and Local Events (Phase 14); a
+  Global search projection; bulk or legacy import (Phase 30, under written authorisation); maps,
+  geocoding or geolocation; opening hours, bookings, staff directories or per-centre forms.
+
+---
+
 ### Phase 17 — Search Foundation
 **Entry:** Phases 6 and 8 complete.
 

@@ -1647,6 +1647,10 @@ model NewsArticleRevision {
   primaryLanguage String @db.NVarChar(16)
   schemaVersion Int @default(1)
   createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  /// Phase 16: the ONE Global Network Centre this revision is scoped to, or
+  /// none for general News. Revisioned, so a change goes through review.
+  centreId String? @db.NVarChar(36)
+  centre Centre? @relation(fields:[centreId],references:[id],onDelete:NoAction,onUpdate:NoAction)
   owner NewsArticle @relation("NewsArticleHistory",fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
   editor User @relation(fields:[editorId],references:[id],onDelete:NoAction,onUpdate:NoAction)
   currentFor NewsArticle[] @relation("NewsArticleCurrent")
@@ -1656,6 +1660,7 @@ model NewsArticleRevision {
   topics NewsArticleTopic[]
   contributors NewsArticleContributor[]
   @@id([ownerId,number])
+  @@index([centreId,ownerId,number])
 }
 model NewsArticleRevisionTranslation {
   ownerId String @db.NVarChar(36)
@@ -3066,4 +3071,221 @@ model SearchDocumentTopic {
   @@id([documentId, topicId])
   @@index([topicId, documentId])
   @@map("SearchDocumentTopic")
+}
+
+// =============================================================================
+// Phase 16 — Global Network: Country, Region, City, Centre, CentreContact
+// =============================================================================
+//
+// FLEXIBLE PARENTAGE (DOMAIN_MODEL.md §17.1). A Region belongs to a Country; a
+// City belongs to a Country and, only where one is meaningful, to a Region of
+// THAT Country; a Centre belongs to a Country and, where it has one, to a
+// physical City or — with no City — directly to a Region. The SAME-COUNTRY rule
+// is carried by every relation: each parent reference is a composite foreign
+// key on `(id, countryId)`, so a child can never name a parent in another
+// Country, whoever writes.
+//
+// ONE LOCALITY FACT. A Centre with a City takes its Region from that City and
+// stores none of its own, so the two can never disagree.
+//
+// A Centre SERVES further Cities through a typed, same-Country relation, and
+// carries its own optional address words and coordinates. Contacts are public
+// directory facts. No Event, map, geocoder or search table exists here.
+
+/// A Country: the one level every place belongs to.
+model Country {
+  id            String               @id @db.NVarChar(36)
+  /// ISO 3166-1 alpha-2, upper case: the Country's canonical identity.
+  code          String               @unique @db.NVarChar(2)
+  slug          String               @unique @db.NVarChar(120)
+  primaryLocale String               @db.NVarChar(8)
+  state         String               @db.NVarChar(16)
+  version       Int                  @default(1)
+  createdAt     DateTime             @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt     DateTime             @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  labels        CountryLabel[]
+  slugs         CountrySlugHistory[]
+  regions       Region[]
+  cities        City[]
+  centres       Centre[]
+
+  @@index([state, slug, id])
+}
+
+model CountryLabel {
+  countryId String  @db.NVarChar(36)
+  locale    String  @db.NVarChar(8)
+  name      String  @db.NVarChar(160)
+  country   Country @relation(fields: [countryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([countryId, locale])
+}
+
+model CountrySlugHistory {
+  slug      String  @id @db.NVarChar(120)
+  countryId String  @db.NVarChar(36)
+  country   Country @relation(fields: [countryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([countryId])
+}
+
+/// A Region of one Country. Its Country never changes after creation.
+model Region {
+  id            String              @id @db.NVarChar(36)
+  countryId     String              @db.NVarChar(36)
+  slug          String              @db.NVarChar(120)
+  primaryLocale String              @db.NVarChar(8)
+  state         String              @db.NVarChar(16)
+  version       Int                 @default(1)
+  createdAt     DateTime            @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt     DateTime            @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  country       Country             @relation(fields: [countryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  labels        RegionLabel[]
+  slugs         RegionSlugHistory[]
+  cities        City[]
+  centres       Centre[]
+
+  @@unique([countryId, slug])
+  @@unique([id, countryId])
+  @@index([countryId, state, slug, id])
+}
+
+model RegionLabel {
+  regionId String @db.NVarChar(36)
+  locale   String @db.NVarChar(8)
+  name     String @db.NVarChar(160)
+  region   Region @relation(fields: [regionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([regionId, locale])
+}
+
+/// A Region's slugs, reserved within its Country for good.
+model RegionSlugHistory {
+  countryId String @db.NVarChar(36)
+  slug      String @db.NVarChar(120)
+  regionId  String @db.NVarChar(36)
+  region    Region @relation(fields: [regionId, countryId], references: [id, countryId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([countryId, slug])
+  @@index([regionId])
+}
+
+/// A City of one Country and, where meaningful, of one Region of that Country.
+/// Its Country never changes after creation; its Region may, within it.
+model City {
+  id            String              @id @db.NVarChar(36)
+  countryId     String              @db.NVarChar(36)
+  regionId      String?             @db.NVarChar(36)
+  slug          String              @db.NVarChar(120)
+  primaryLocale String              @db.NVarChar(8)
+  state         String              @db.NVarChar(16)
+  version       Int                 @default(1)
+  createdAt     DateTime            @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt     DateTime            @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  country       Country             @relation(fields: [countryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  region        Region?             @relation(fields: [regionId, countryId], references: [id, countryId], onDelete: NoAction, onUpdate: NoAction)
+  labels        CityLabel[]
+  slugs         CitySlugHistory[]
+  centres       Centre[]
+  servedBy      CentreServiceCity[]
+
+  @@unique([countryId, slug])
+  @@unique([id, countryId])
+  @@index([countryId, state, slug, id])
+  @@index([regionId, state, slug, id])
+}
+
+model CityLabel {
+  cityId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  name   String @db.NVarChar(160)
+  city   City   @relation(fields: [cityId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([cityId, locale])
+}
+
+/// A City's slugs, reserved within its Country for good.
+model CitySlugHistory {
+  countryId String @db.NVarChar(36)
+  slug      String @db.NVarChar(120)
+  cityId    String @db.NVarChar(36)
+  city      City   @relation(fields: [cityId, countryId], references: [id, countryId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([countryId, slug])
+  @@index([cityId])
+}
+
+/// A Centre: physical or explicitly virtual, with its own address words and
+/// optional genuine coordinates (exact decimals, never binary floating point).
+model Centre {
+  id            String                @id @db.NVarChar(36)
+  slug          String                @unique @db.NVarChar(120)
+  countryId     String                @db.NVarChar(36)
+  regionId      String?               @db.NVarChar(36)
+  cityId        String?               @db.NVarChar(36)
+  isVirtual     Boolean               @default(false)
+  latitude      Decimal?              @db.Decimal(9, 6)
+  longitude     Decimal?              @db.Decimal(9, 6)
+  primaryLocale String                @db.NVarChar(8)
+  state         String                @db.NVarChar(16)
+  version       Int                   @default(1)
+  createdAt     DateTime              @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt     DateTime              @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  country       Country               @relation(fields: [countryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  region        Region?               @relation(fields: [regionId, countryId], references: [id, countryId], onDelete: NoAction, onUpdate: NoAction)
+  city          City?                 @relation(fields: [cityId, countryId], references: [id, countryId], onDelete: NoAction, onUpdate: NoAction)
+  labels        CentreLabel[]
+  slugs         CentreSlugHistory[]
+  serves        CentreServiceCity[]
+  contacts      CentreContact[]
+  newsRevisions NewsArticleRevision[]
+
+  @@unique([id, countryId])
+  @@index([countryId, state, slug, id])
+  @@index([cityId, state])
+  @@index([regionId, state])
+  @@index([state, slug, id])
+}
+
+model CentreLabel {
+  centreId    String  @db.NVarChar(36)
+  locale      String  @db.NVarChar(8)
+  name        String  @db.NVarChar(200)
+  description String? @db.NVarChar(2000)
+  address     String? @db.NVarChar(500)
+  centre      Centre  @relation(fields: [centreId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([centreId, locale])
+}
+
+model CentreSlugHistory {
+  slug     String @id @db.NVarChar(120)
+  centreId String @db.NVarChar(36)
+  centre   Centre @relation(fields: [centreId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([centreId])
+}
+
+/// A further City a Centre serves: typed, same-Country, once per pair.
+model CentreServiceCity {
+  centreId  String @db.NVarChar(36)
+  cityId    String @db.NVarChar(36)
+  countryId String @db.NVarChar(36)
+  centre    Centre @relation(fields: [centreId, countryId], references: [id, countryId], onDelete: NoAction, onUpdate: NoAction)
+  city      City   @relation(fields: [cityId, countryId], references: [id, countryId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([centreId, cityId])
+  @@index([cityId, centreId])
+}
+
+/// One public directory contact of a Centre: a phone, an email or a website.
+model CentreContact {
+  centreId String @db.NVarChar(36)
+  position Int
+  channel  String @db.NVarChar(16)
+  value    String @db.NVarChar(320)
+  centre   Centre @relation(fields: [centreId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([centreId, position])
+  @@unique([centreId, channel, value])
 }

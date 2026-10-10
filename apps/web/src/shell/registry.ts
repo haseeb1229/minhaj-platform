@@ -201,11 +201,20 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
   }),
+  /**
+   * DELIVERED BY PHASE 16 — the Global Network. `/global` is the World Network
+   * landing: Find a Centre, Countries, Centres and the Pakistan structure, and a
+   * plain statement while the directory holds nothing yet. Local Events are
+   * Phase 14's, so nothing links to them.
+   */
   Object.freeze({
     key: 'global',
     label: 'nav.global',
+    path: '/global',
     placements: Object.freeze(['primary'] as const),
-    availability: 'deferred' as const,
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'eligible' as const,
   }),
   /**
    * DELIVERED BY PHASE 17. Unified search is a genuine public page in all three
@@ -254,11 +263,19 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
  * that rewrites the current one, and the header renders it directly. Other utility routes become visible when their owning phase delivers them.
  */
 const UTILITY: readonly ShellRoute[] = Object.freeze([
+  /**
+   * DELIVERED BY PHASE 16. Find a Centre is a genuine page in all three locales;
+   * its `?country=`, `?region=` and `?city=` are queries canonical to it, never
+   * entries of their own.
+   */
   Object.freeze({
     key: 'find-a-centre',
     label: 'nav.findACentre',
+    path: '/global/find-a-centre',
     placements: Object.freeze(['utility'] as const),
-    availability: 'deferred' as const,
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'eligible' as const,
   }),
   Object.freeze({
     key: 'membership',
@@ -528,6 +545,41 @@ const NEWS: readonly ShellRoute[] = Object.freeze(
   ),
 );
 
+/**
+ * The Global Network surfaces — Phase 16 (ROUTE_MAP.md §3.9).
+ *
+ * Countries and Centres are genuine listings in all three interface locales
+ * over delivered data, and so `eligible`. The PAKISTAN STRUCTURE is a view of
+ * the ordinary Pakistan Country, canonical to that Country's page, so it is
+ * `excluded`: never a sitemap entry, never a second indexable Pakistan page.
+ * NO PLACEMENT — they are reached from `/global`, the single entry point in the
+ * primary navigation. A Region, a City and a Centre are reached through their
+ * Country and the finder, and `/global/centres/{slug}/events` has no route:
+ * Events are Phase 14's.
+ */
+const GLOBAL: readonly ShellRoute[] = Object.freeze([
+  ...(['countries', 'centres'] as const).map((surface) =>
+    Object.freeze({
+      key: `global.${surface}`,
+      label: `global.${surface}`,
+      path: `/global/${surface}`,
+      placements: Object.freeze([] as const),
+      visibility: 'public' as const,
+      availability: 'delivered' as const,
+      indexing: 'eligible' as const,
+    }),
+  ),
+  Object.freeze({
+    key: 'global.pakistan',
+    label: 'global.pakistan',
+    path: '/global/pakistan',
+    placements: Object.freeze([] as const),
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'excluded' as const,
+  }),
+]);
+
 /** The routes the shell itself delivers. */
 const SHELL: readonly ShellRoute[] = Object.freeze([
   Object.freeze({
@@ -611,6 +663,7 @@ export const SHELL_ROUTES: readonly ShellRoute[] = Object.freeze([
   ...LISTEN,
   ...MEDIA,
   ...NEWS,
+  ...GLOBAL,
   ...exploreRoutes(),
   ...LEGAL,
 ]);

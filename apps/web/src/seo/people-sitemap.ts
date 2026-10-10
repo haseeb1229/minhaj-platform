@@ -1,6 +1,7 @@
 import { editorialSitemapPartitions, mergePagePartitions } from './editorial-sitemap';
 import { librarySitemapPartitions } from './library-sitemap';
 import { newsSitemapPartitions } from './news-sitemap';
+import { centreSitemapPartitions } from './centres-sitemap';
 import {
   audioSitemapPartitions,
   gallerySitemapPartitions,
@@ -163,6 +164,8 @@ export async function allSitemapPartitions(): Promise<readonly SitemapPartition[
     // Phase 13's `news` segment: the published records of all four News
     // families at their canonical detail addresses.
     ...(await newsSitemapPartitions()),
+    // Phase 16's `centres` segment: public Centres at their canonical address.
+    ...(await centreSitemapPartitions()),
   ]);
 }
 

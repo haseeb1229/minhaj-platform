@@ -84,6 +84,7 @@ interface RevisionRow {
   readonly outletName?: string;
   readonly sourceUrl?: string | null;
   readonly sourcePublishedOn?: Date | null;
+  readonly centreId?: string | null;
   readonly translations: readonly TranslationRow[];
   readonly topics: readonly { readonly topicId: string }[];
   readonly contributors: readonly {
@@ -123,6 +124,7 @@ interface PublicRow {
     readonly outletName?: string;
     readonly sourceUrl?: string | null;
     readonly sourcePublishedOn?: Date | null;
+    readonly centreId?: string | null;
     readonly translations: readonly {
       readonly languageCode: string;
       readonly title: string;
@@ -185,6 +187,8 @@ interface Shape {
   readonly issuer: boolean;
   /** The revision names an outlet, a source address and a source date. */
   readonly coverage: boolean;
+  /** The revision may name one Global Network Centre (Phase 16). */
+  readonly centre: boolean;
 }
 
 interface Family extends Shape {
@@ -204,6 +208,7 @@ const FAMILIES: Readonly<Record<NewsKind, Family>> = {
     topicTable: Prisma.sql`[dbo].[NewsArticleTopic]`,
     issuer: false,
     coverage: false,
+    centre: true,
     delegates: (c) => ({
       record: narrow(c.newsArticle),
       revision: narrow(c.newsArticleRevision),
@@ -216,6 +221,7 @@ const FAMILIES: Readonly<Record<NewsKind, Family>> = {
     topicTable: Prisma.sql`[dbo].[PressReleaseTopic]`,
     issuer: false,
     coverage: false,
+    centre: false,
     delegates: (c) => ({
       record: narrow(c.pressRelease),
       revision: narrow(c.pressReleaseRevision),
@@ -228,6 +234,7 @@ const FAMILIES: Readonly<Record<NewsKind, Family>> = {
     topicTable: Prisma.sql`[dbo].[StatementTopic]`,
     issuer: true,
     coverage: false,
+    centre: false,
     delegates: (c) => ({
       record: narrow(c.statement),
       revision: narrow(c.statementRevision),
@@ -240,6 +247,7 @@ const FAMILIES: Readonly<Record<NewsKind, Family>> = {
     topicTable: Prisma.sql`[dbo].[MediaCoverageTopic]`,
     issuer: false,
     coverage: true,
+    centre: false,
     delegates: (c) => ({
       record: narrow(c.mediaCoverage),
       revision: narrow(c.mediaCoverageRevision),
@@ -270,6 +278,7 @@ const detailInclude = { current: { include: revisionInclude } };
 const sourceSelect = (family: Family) =>
   family.coverage ? { outletName: true, sourceUrl: true, sourcePublishedOn: true } : {};
 const issuerSelect = (family: Family) => (family.issuer ? { issuer: true } : {});
+const centreSelect = (family: Family) => (family.centre ? { centreId: true } : {});
 
 const publicSelect = (family: Family) => ({
   id: true,
@@ -281,6 +290,7 @@ const publicSelect = (family: Family) => ({
     select: {
       primaryLanguage: true,
       ...sourceSelect(family),
+      ...centreSelect(family),
       translations: {
         select: {
           languageCode: true,
@@ -391,6 +401,7 @@ function revisionOf(family: Shape, row: RevisionRow): EditorialRevision {
           },
         }
       : {}),
+    ...(family.centre ? { centreId: row.centreId ?? null } : {}),
   };
 }
 
@@ -454,6 +465,7 @@ function publicOf(family: Shape, row: PublicRow): PublicNews {
           sourceDate: dateOnly(row.current.sourcePublishedOn),
         }
       : null,
+    centreId: family.centre ? (row.current.centreId ?? null) : null,
     publishedAt: row.publishedAt,
     updatedAt: row.updatedAt,
   };
@@ -507,6 +519,10 @@ async function writeRevision(
       : content.translations.some((t) => t.issuer !== undefined)
   )
     throw new EditorialDataError('invalid');
+  // Only a NewsArticle has a place for a Centre; any other family naming one is
+  // refused rather than silently dropped.
+  if (!family.centre && content.centreId !== undefined && content.centreId !== null)
+    throw new EditorialDataError('invalid');
   // Every column is named: nothing the caller supplied reaches the table unless
   // this family genuinely has a place for it.
   await family.delegates(tx).revision.create({
@@ -526,6 +542,7 @@ async function writeRevision(
                 ? null
                 : new Date(`${coverage.sourceDate}T00:00:00.000Z`),
           }),
+      ...(family.centre ? { centreId: content.centreId ?? null } : {}),
       translations: {
         create: content.translations.map((t) => ({
           languageCode: t.languageCode,
@@ -610,6 +627,22 @@ async function locked(
   });
   if (claim.count !== 1) throw new EditorialDataError('conflict');
   return records.findUniqueOrThrow({ where: { id }, include: detailInclude });
+}
+
+/**
+ * Did this revision change a NewsArticle's Centre? Audited as its own event —
+ * the action names the fact; no Centre name or address enters the audit row.
+ */
+function centreChange(
+  family: Family,
+  before: RevisionRow | null,
+  after: EditorialWrite['content'],
+): boolean {
+  return (
+    family.centre &&
+    before !== null &&
+    (before.centreId ?? null) !== (after.centreId ?? null)
+  );
 }
 
 /** Did this revision change a Statement's issuers or a MediaCoverage's source? */
@@ -787,6 +820,15 @@ export function newsOperations(): Pick<
           const change = metadataChange(family, row.current, input.content);
           if (change !== null)
             await audit(tx, family, row.id, change, input.actorId, next.version);
+          if (centreChange(family, row.current, input.content))
+            await audit(
+              tx,
+              family,
+              row.id,
+              'centre-changed',
+              input.actorId,
+              next.version,
+            );
           return detailOf(family, next);
         });
       } catch (error) {
@@ -919,6 +961,7 @@ export function newsReads(): Pick<
   | 'searchNews'
   | 'searchNewsList'
   | 'publishedNewsTargets'
+  | 'centreNews'
 > {
   return {
     async newsCanonicalSlug(kind, slug) {
@@ -1085,6 +1128,28 @@ export function newsReads(): Pick<
           take: limitOf(limit, 500),
         })) as { id: string; version: number }[];
       return rows.map((row) => ({ id: row.id, stamp: String(row.version) }));
+    },
+
+    /**
+     * NewsArticle only, and only while PUBLISHED: a record revised back to draft
+     * — including one whose Centre is being changed — leaves this list until it
+     * is published again. The Centre is matched as an identifier; no Global
+     * table is joined or read.
+     */
+    async centreNews(centreId, offset, limit) {
+      const family = FAMILIES['news-article'];
+      const take = limitOf(limit, NEWS_PAGE);
+      const rows = (await family.delegates(db()).record.findMany({
+        where: { state: 'published', current: { is: { centreId } } },
+        select: summarySelect(family),
+        orderBy: [{ publishedAt: 'desc' }, { id: 'asc' }],
+        skip: offsetOf(offset),
+        take: take + 1,
+      })) as PublicRow[];
+      return {
+        items: rows.slice(0, take).map((row) => summaryOf(family, row)),
+        more: rows.length > take,
+      };
     },
 
     async publishedNewsTargets(kind, ids) {

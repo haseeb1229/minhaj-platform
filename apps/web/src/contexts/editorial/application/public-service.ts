@@ -114,5 +114,20 @@ export function createEditorialReadService(reader: EditorialPublicReaderPort) {
     newsSitemap(kind: NewsKind, offset: number, limit: number) {
       return reader.newsSitemap(kind, offset, limit);
     },
+
+    /* ---- Phase 16: centre-scoped News ----------------------------------- */
+
+    /**
+     * One page of the published NewsArticles scoped to a Centre, by its
+     * IDENTIFIER. Whether that Centre may be shown at all is Global's question,
+     * asked by the page that composes the two — never by Editorial.
+     */
+    async centreNews(centreId: string, offset = 0, limit = NEWS_PAGE): Promise<NewsPage> {
+      return reader.centreNews(
+        editorialIdSchema.parse(centreId),
+        newsOffsetSchema.parse(offset),
+        z.number().int().min(1).max(NEWS_PAGE).parse(limit),
+      );
+    },
   };
 }
