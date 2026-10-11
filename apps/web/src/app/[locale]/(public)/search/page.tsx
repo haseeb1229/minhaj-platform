@@ -12,7 +12,9 @@ import type { SearchFormState, SearchOutcome } from '@minhaj/search';
 
 import { searchReadRuntime } from '@/composition/search-read';
 import { taxonomyRuntime } from '@/composition/taxonomy';
-import { highlightSegments } from '@/components/search/highlight';
+import { Highlighted } from '@/components/search/highlighted';
+import { quranHitKey, type QuranHitDisplay } from '@/components/search/quran-hit';
+import { currentQuranHitText } from '@/components/search/quran-hit-text';
 import {
   Alert,
   Breadcrumbs,
@@ -118,6 +120,12 @@ export default async function SearchPage({ params, searchParams }: SearchParams)
   ]);
 
   const { form } = outcome;
+  // A Quran result shows its Ayah's CURRENT text, read once for the whole page —
+  // never its indexed summary, which may lag a withdrawn or corrected text.
+  const quranText =
+    outcome.state === 'results'
+      ? await currentQuranHitText(outcome.results.hits)
+      : new Map<string, QuranHitDisplay>();
   const issues =
     outcome.state === 'invalid' ? new Set(outcome.issues) : new Set<string>();
   /** A field's error, passed only when it has one. */
@@ -294,6 +302,7 @@ export default async function SearchPage({ params, searchParams }: SearchParams)
           outcome={outcome}
           locale={locale}
           languageNames={languageNames}
+          quranText={quranText}
           t={t}
           href={(overrides) => searchHref(locale, form, overrides)}
         />
@@ -308,12 +317,14 @@ function SearchResults({
   outcome,
   locale,
   languageNames,
+  quranText,
   t,
   href,
 }: {
   readonly outcome: SearchOutcome;
   readonly locale: Locale;
   readonly languageNames: ReadonlyMap<string, { name: string; direction: 'ltr' | 'rtl' }>;
+  readonly quranText: ReadonlyMap<string, QuranHitDisplay>;
   readonly t: Translate;
   readonly href: (overrides: Partial<SearchFormState> & { page?: number }) => string;
 }) {
@@ -402,6 +413,7 @@ function SearchResults({
                   locale={locale}
                   query={query}
                   languageNames={languageNames}
+                  quranText={quranText}
                   t={t}
                 />
               ))}
@@ -447,30 +459,50 @@ function ResultItem({
   locale,
   query,
   languageNames,
+  quranText,
   t,
 }: {
   readonly hit: SearchHit;
   readonly locale: Locale;
   readonly query: string;
   readonly languageNames: ReadonlyMap<string, { name: string; direction: 'ltr' | 'rtl' }>;
+  readonly quranText: ReadonlyMap<string, QuranHitDisplay>;
   readonly t: Translate;
 }) {
-  const language = languageNames.get(hit.textLanguage);
+  // A Quran result shows its Ayah's CURRENT text in the language that text is
+  // in — never the indexed summary. One with no current record is not public
+  // now and is not shown at all.
+  const quran = hit.kind === 'quran-ayah' ? quranText.get(quranHitKey(hit)) : undefined;
+  if (hit.kind === 'quran-ayah' && quran === undefined) return null;
+
+  const textLanguage = quran?.language ?? hit.textLanguage;
+  const summary = quran?.text ?? hit.summary;
+  const language = languageNames.get(textLanguage);
   const direction =
     language?.direction ??
-    (isSupportedLocale(hit.textLanguage) ? directionOf(hit.textLanguage) : 'ltr');
+    (isSupportedLocale(textLanguage) ? directionOf(textLanguage) : 'ltr');
+  const contentLanguageCode = quran === undefined ? hit.contentLanguage : quran.language;
   const contentLanguage =
-    hit.contentLanguage === null
+    contentLanguageCode === null
       ? null
-      : (languageNames.get(hit.contentLanguage) ?? null);
+      : (languageNames.get(contentLanguageCode) ?? null);
 
   return (
     <Panel as="li">
       <article className="flex min-w-0 flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--color-foreground-muted)]">
           <StatusBadge tone="neutral">{t(`kinds.${hit.kind}`)}</StatusBadge>
+          {quran === undefined ? null : (
+            // A translation's words are never presented as the Arabic: only the
+            // canonical text is labelled as it (Phase 18 §4).
+            <span>
+              {quran.layer === 'arabic'
+                ? t('quranArabic')
+                : t('quranLayer', { language: language?.name ?? textLanguage })}
+            </span>
+          )}
           {contentLanguage === null ? null : (
-            <span lang={hit.contentLanguage ?? undefined}>{contentLanguage.name}</span>
+            <span lang={contentLanguageCode ?? undefined}>{contentLanguage.name}</span>
           )}
           {hit.year === null ? null : (
             <span>{t('published', { year: String(hit.year) })}</span>
@@ -478,7 +510,7 @@ function ResultItem({
         </div>
         <h3
           className="text-lg font-semibold break-words"
-          lang={hit.textLanguage}
+          lang={textLanguage}
           dir={direction}
         >
           <a
@@ -488,35 +520,16 @@ function ResultItem({
             <Highlighted text={hit.title} query={query} />
           </a>
         </h3>
-        {hit.summary === '' ? null : (
+        {summary === '' ? null : (
           <p
             className="text-sm break-words text-[color:var(--color-foreground-muted)]"
-            lang={hit.textLanguage}
+            lang={textLanguage}
             dir={direction}
           >
-            <Highlighted text={hit.summary} query={query} />
+            <Highlighted text={summary} query={query} />
           </p>
         )}
       </article>
     </Panel>
-  );
-}
-
-function Highlighted({ text, query }: { readonly text: string; readonly query: string }) {
-  return (
-    <>
-      {highlightSegments(text, query).map((segment, index) =>
-        segment.match ? (
-          <mark
-            key={index}
-            className="rounded-sm bg-[color:var(--color-highlight)] px-0.5 text-inherit"
-          >
-            {segment.text}
-          </mark>
-        ) : (
-          <span key={index}>{segment.text}</span>
-        ),
-      )}
-    </>
   );
 }

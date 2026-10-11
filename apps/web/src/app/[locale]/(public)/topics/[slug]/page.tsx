@@ -17,6 +17,7 @@ import { EventTopicSection } from '@/components/editorial/events';
 import { NewsTopicSection } from '@/components/editorial/news';
 import { AudioPreview } from '@/components/media/listen';
 import { VideoPreview } from '@/components/media/watch';
+import { QuranTopicSection } from '@/components/quran/topics';
 import {
   scholarlyLabel,
   scholarlyListPath,
@@ -49,7 +50,8 @@ import { contentMetadata } from '@/seo/metadata';
  * books — and, since Phase 9, the research, research papers, publications,
  * encyclopedias, magazines and magazine issues — classified under it, Media for
  * the published Videos on it (Phase 10), Editorial for the published News of
- * every family on it (Phase 13), and Search for everything else
+ * every family on it (Phase 13), Quran for the public ayat on it (Phase 18), and
+ * Search for everything else
  * classified under it. Each later domain adds its own section when it ships; nothing here renders an empty frame for a domain that
  * has not, and a delivered section with nothing on this topic is not rendered
  * either (ROUTE_MAP.md §5.2).
@@ -200,6 +202,17 @@ export default async function TopicPage({ params }: TopicParams) {
             </ul>
           </section>
         )}
+
+        {/* PHASE 18 — the public ayat assigned to this topic, from Quran's own
+            public reader, each linked to its canonical citation; nothing while
+            no corpus is active or the topic has no public Ayah. Fixture text
+            carries the fixture banner. */}
+        <QuranTopicSection
+          locale={locale}
+          topic={topic}
+          heading={t('quran')}
+          headingId="topic-quran"
+        />
 
         {books.items.length === 0 ? null : (
           <section className="flex flex-col gap-4" aria-labelledby="topic-books">

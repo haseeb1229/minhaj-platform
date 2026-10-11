@@ -5,6 +5,7 @@ import {
   createLibraryPublicReader,
   createMediaPublicReader,
   createPeopleReader,
+  createQuranPublicReader,
   createSearchIndex,
   createTaxonomyReader,
 } from '@minhaj/database';
@@ -45,6 +46,7 @@ export function buildSearchService(report: SearchReport): SearchService {
     editorial: createEditorialPublicReader(),
     library: createLibraryPublicReader(),
     media: createMediaPublicReader(),
+    quran: createQuranPublicReader(),
   });
 
   return createSearchService({

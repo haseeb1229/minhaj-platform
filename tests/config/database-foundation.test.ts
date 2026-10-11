@@ -262,6 +262,32 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'CollectionContributor',
       'CollectionItem',
       'CollectionSlugHistory',
+      // Phase 18 — Quran: the operator-registered sources and the activation,
+      // the canonical store keyed by its citation with its immutable history and
+      // verification evidence, the layered works, and typed topic assignment.
+      'QuranSource',
+      'QuranSourceSurah',
+      'QuranSourceAyah',
+      'QuranActivation',
+      'Juz',
+      'Surah',
+      'Ayah',
+      'QuranVerificationRun',
+      'QuranAyahRevision',
+      'SurahName',
+      'QuranTranslation',
+      'QuranTranslationContributor',
+      'QuranTranslationText',
+      'QuranTransliteration',
+      'QuranTransliterationText',
+      'QuranTafsir',
+      'QuranTafsirContributor',
+      'QuranTafsirText',
+      'QuranRecitation',
+      'QuranRecitationSegment',
+      'QuranTajweedRule',
+      'QuranTajweedRuleText',
+      'QuranTopic',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name
@@ -274,7 +300,8 @@ describe('Phase 1 Chunk 1 database foundation', () => {
     // later phase entirely.
     for (const domain of [
       // `Event` left this list when Phase 14 delivered it, and `Collection`
-      // when Phase 15 did.
+      // when Phase 15 did. Phase 18 delivers the Quran as its own tables, so a
+      // single generic `Quran` model stays absent.
       'Quran',
       'Hadith',
       // `Book` stays absent: Phase 8 models the Work/Edition split rather than a
@@ -351,6 +378,20 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'CollectionGallery',
       'CollectionPage',
       'CollectionImage',
+      // Phase 18 has ONE canonical identity and separate layered works: no
+      // second verse or chapter model, no generic layer, work or target model,
+      // no per-user reading state (Phase 21's), and no slug history for a slug
+      // that never changes.
+      'Verse',
+      'Chapter',
+      'QuranVerse',
+      'QuranWork',
+      'QuranLayer',
+      'QuranTarget',
+      'AyahTarget',
+      'QuranBookmark',
+      'QuranReadingProgress',
+      'QuranTranslationSlugHistory',
     ]) {
       expect(models, `${domain} arrives with its owning slice`).not.toContain(domain);
     }

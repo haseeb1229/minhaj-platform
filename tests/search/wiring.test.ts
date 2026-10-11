@@ -4,6 +4,7 @@ import type { EditorialPublicReaderPort } from '../../packages/contracts/src/edi
 import type { LibraryPublicReaderPort } from '../../packages/contracts/src/library/index.ts';
 import type { MediaPublicReaderPort } from '../../packages/contracts/src/media/index.ts';
 import type { PeopleReaderPort } from '../../packages/contracts/src/people/index.ts';
+import type { QuranPublicReaderPort } from '../../packages/contracts/src/quran/index.ts';
 import type { TaxonomyReaderPort } from '../../packages/contracts/src/taxonomy/index.ts';
 import { searchWiring } from '../../apps/web/src/composition/search-wiring.ts';
 
@@ -54,7 +55,13 @@ function readers() {
     publicVideoTargets: async (ids: readonly string[]) =>
       ids.filter((id) => id !== 'withdrawn').map((id) => ({ id, slug: `video ${id}` })),
   } as unknown as MediaPublicReaderPort;
-  return { taxonomy, people, editorial, library, media };
+  const quran = {
+    // Only 2:3 is public now; 2:4 is absent from the corpus or the corpus is
+    // not active — the owner simply does not return it.
+    publicAyahTargets: async (refs: readonly { surah: number; ayah: number }[]) =>
+      refs.filter((ref) => ref.surah === 2 && ref.ayah === 3),
+  } as unknown as QuranPublicReaderPort;
+  return { taxonomy, people, editorial, library, media, quran };
 }
 
 describe('searchWiring', () => {
@@ -100,6 +107,12 @@ describe('searchWiring', () => {
     const { targets } = searchWiring(readers());
     const found = await targets.video(['1', 'withdrawn']);
     expect([...found.entries()]).toEqual([['1', '/watch/videos/video%201']]);
+  });
+
+  it('addresses an Ayah at its permanent citation, and omits one Quran withholds', async () => {
+    const { targets } = searchWiring(readers());
+    const found = await targets['quran-ayah'](['2:3', '2:4', 'not-a-citation']);
+    expect([...found.entries()]).toEqual([['2:3', '/quran/surah/2/3']]);
   });
 
   it('omits a Phase-9 record its owner no longer publishes', async () => {

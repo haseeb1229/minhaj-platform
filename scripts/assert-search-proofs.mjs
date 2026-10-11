@@ -69,6 +69,12 @@ const REQUIRED = [
   // reconciliation, and their rebuild after a real restore.
   'news.integration',
   'news-recovery.integration',
+  // Phase 18: the Quran Ayah kind — one result per citation, the layer
+  // languages, withholding a deactivated corpus, unpublication and correction
+  // intent, the measured Arabic/Urdu tokenisation, rebuild and reconciliation —
+  // and its rebuild after a real restore.
+  'quran.integration',
+  'quran-recovery.integration',
 ];
 
 const seen = files.map((file) => String(file.name ?? ''));

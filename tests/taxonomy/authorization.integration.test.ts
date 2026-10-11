@@ -335,9 +335,10 @@ describeLive('Phase 3B — taxonomy administration is permission-checked', () =>
     it('is not among the operations the security baseline gives a step-up scope', async () => {
       // SECURITY_BASELINE.md §8.1 names the operations that cost a step-up
       // grant; §8.2 says the requirement is "deliberately not universal". The
-      // Phase-2 vocabulary is closed at three purposes, and none of them is
-      // "editing the subject taxonomy" — so requiring one here would mean
-      // stretching a scope past what it names.
+      // vocabulary names exactly the operations §8.1 lists — Phase 2's three
+      // and Phase 18's canonical Quran edit — and none of them is "editing the
+      // subject taxonomy", so requiring one here would mean stretching a scope
+      // past what it names.
       const { STEP_UP_PURPOSES } =
         await import('../../packages/contracts/src/identity/index.ts');
 
@@ -345,6 +346,7 @@ describeLive('Phase 3B — taxonomy administration is permission-checked', () =>
         'privilege-administration',
         'account-administration',
         'second-factor',
+        'quran-canonical-edit',
       ]);
     });
 

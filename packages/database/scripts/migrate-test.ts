@@ -173,6 +173,38 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // and never a user's private collection (DOMAIN_MODEL.md §7.1, §6.2),
   // asserted by `assertCollectionFoundation` and proved as behaviour by
   // `assertCollectionMembership`.
+  // THE QURAN CONTEXT in four postures: the operator-registered SOURCE and its
+  // activation; the CANONICAL structure, text, history and verification
+  // evidence, written only by three procedures; the LAYERED works over it; and
+  // typed topic assignment. The canonical citation `(surah, ayah)` IS the Ayah's
+  // identity, and NOT ONE ROW of content is seeded (DOMAIN_MODEL.md §8),
+  // asserted by `assertQuranFoundation` and proved as behaviour by
+  // `assertQuranCanonicalRules`.
+  '20261002000000_phase18_quran': [
+    'QuranSource',
+    'QuranSourceSurah',
+    'QuranSourceAyah',
+    'QuranActivation',
+    'Juz',
+    'Surah',
+    'Ayah',
+    'QuranVerificationRun',
+    'QuranAyahRevision',
+    'SurahName',
+    'QuranTranslation',
+    'QuranTranslationContributor',
+    'QuranTranslationText',
+    'QuranTransliteration',
+    'QuranTransliterationText',
+    'QuranTafsir',
+    'QuranTafsirContributor',
+    'QuranTafsirText',
+    'QuranRecitation',
+    'QuranRecitationSegment',
+    'QuranTajweedRule',
+    'QuranTajweedRuleText',
+    'QuranTopic',
+  ],
   '20261001000000_phase15_collections': [
     'Collection',
     'CollectionRevision',
@@ -360,11 +392,21 @@ const PREMATURE_TABLES = [
   'Program',
   'WatchHistory',
   // Phase 11 delivers non-Quran audio and nothing of Quran's: a Recitation and
-  // its verse mapping belong to Phase 18, and no listening history is authorised
-  // by any phase.
+  // its verse mapping belong to Phase 18, which delivers them as Quran's own
+  // `QuranRecitation` and `QuranRecitationSegment` — so a bare, context-less
+  // `Recitation` stays absent. No listening history is authorised by any phase.
   'Recitation',
   'RecitationSegment',
   'ListeningHistory',
+  // Phase 18 delivers the Quran with NO per-user reading state — bookmarks and
+  // progress are Phase 21's — and with slugs that never change, so no layered
+  // work owes a slug history.
+  'QuranBookmark',
+  'QuranReadingProgress',
+  'QuranListeningHistory',
+  'QuranTranslationSlugHistory',
+  'QuranTafsirSlugHistory',
+  'QuranRecitationSlugHistory',
   // Phase 12 delivers galleries with NO Event relationship: the typed
   // Event↔Gallery association is Phase 14's `EventGallery`, which left this list
   // when Phase 14 delivered it on the Event revision. A Media-owned reverse join
@@ -532,6 +574,24 @@ const PROHIBITED_TABLES = [
   'CollectionWork',
   'CollectionVideo',
   'CollectionNews',
+
+  // PHASE 18 — ONE canonical identity and SEPARATE layered works (DOMAIN_MODEL.md
+  // §8). A second verse or chapter table beside `Ayah` and `Surah` would be a
+  // second notion of the canonical citation that could drift from it; a generic
+  // layer or work table with a type column would merge translations, tafsir and
+  // recitations into one lifecycle; and an Ayah target or assignment table
+  // would be the polymorphic reference §6.2 refuses.
+  'Verse',
+  'Chapter',
+  'QuranVerse',
+  'QuranChapter',
+  'QuranWork',
+  'QuranLayer',
+  'QuranLayerText',
+  'QuranContent',
+  'QuranTarget',
+  'AyahTarget',
+  'QuranAssignment',
 ];
 
 const EXPECTED_AUDIT_COLUMNS = [
@@ -706,6 +766,31 @@ const EXPECTED_COLUMN_SIZES: readonly {
     'workId',
     'videoId',
   ].map((column) => ({ table: 'CollectionItem', column, characters: 36 })),
+  // Phase 18. Each layered work's slug is a unique key; each content language a
+  // foreign key into `Language.code`; a source code a unique key. Canonical text
+  // is NVARCHAR(4000) in all three places it lives, because exact comparison
+  // casts it to VARBINARY(8000): a wider column could hold text the comparison
+  // would silently truncate.
+  ...[
+    'QuranTranslation',
+    'QuranTransliteration',
+    'QuranTafsir',
+    'QuranRecitation',
+    'QuranTajweedRule',
+  ].map((table) => ({ table, column: 'slug', characters: 120 })),
+  ...[
+    'QuranTranslation',
+    'QuranTransliteration',
+    'QuranTafsir',
+    'QuranTajweedRuleText',
+  ].map((table) => ({ table, column: 'languageCode', characters: 16 })),
+  { table: 'QuranSource', column: 'code', characters: 64 },
+  { table: 'SurahName', column: 'locale', characters: 8 },
+  ...['QuranSourceAyah', 'Ayah', 'QuranAyahRevision'].map((table) => ({
+    table,
+    column: 'text',
+    characters: 4000,
+  })),
 ];
 
 /**
@@ -784,7 +869,67 @@ const EXPECTED_FILTERED_INDEXES: readonly {
     index: `CollectionItem_${member}_key`,
     why: `one ${member} could be a member of one Collection revision twice`,
   })),
+  // Phase 18. Filtered because a segment with no audio yet names no Asset.
+  {
+    table: 'QuranRecitationSegment',
+    index: 'QuranRecitationSegment_assetId_key',
+    why: 'one audio file could be served as two different recitation segments',
+  },
 ];
+
+/** The twenty-three Phase-18 tables, in the migration's order. */
+const QURAN_TABLES = MIGRATION_EXPECTATIONS['20261002000000_phase18_quran'] ?? [];
+
+/**
+ * Each Quran trigger, the table it guards and the refusal numbers its body
+ * raises: 51180 an immutable registered source, 51181 immutable canonical
+ * structure, 51182 a canonical change that is a recorded, one-step correction,
+ * 51183 immutable history and evidence, 51184 a frozen active corpus, 51185
+ * activation integrity, 51186 and 51187 no overlapping tafsir entry or audio
+ * segment, 51188 a published recitation keeps audio, 51189 a published work
+ * keeps text.
+ */
+const QURAN_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, string]>> = {
+  QuranSourceImmutable: ['QuranSource', '51180'],
+  QuranSourceSurahImmutable: ['QuranSourceSurah', '51180'],
+  QuranSourceAyahImmutable: ['QuranSourceAyah', '51180'],
+  QuranSourceAyahWithinSurah: ['QuranSourceAyah', '51180'],
+  JuzImmutable: ['Juz', '51181'],
+  SurahImmutable: ['Surah', '51181'],
+  AyahCanonicalChange: ['Ayah', '51181+51182'],
+  QuranAyahRevisionImmutable: ['QuranAyahRevision', '51183'],
+  QuranVerificationRunImmutable: ['QuranVerificationRun', '51183'],
+  QuranCorpusFrozen: ['Ayah', '51184'],
+  QuranSurahFrozen: ['Surah', '51184'],
+  QuranJuzFrozen: ['Juz', '51184'],
+  QuranActivationIntegrity: ['QuranActivation', '51185'],
+  QuranTafsirTextNoOverlap: ['QuranTafsirText', '51186'],
+  QuranRecitationSegmentNoOverlap: ['QuranRecitationSegment', '51187'],
+  QuranRecitationPublishedAudio: ['QuranRecitation', '51188'],
+  QuranRecitationSegmentKeepsAudio: ['QuranRecitationSegment', '51188'],
+  QuranTranslationPublishedText: ['QuranTranslation', '51189'],
+  QuranTransliterationPublishedText: ['QuranTransliteration', '51189'],
+  QuranTafsirPublishedText: ['QuranTafsir', '51189'],
+  QuranTajweedPublishedText: ['QuranTajweedRule', '51189'],
+  QuranTranslationTextKept: ['QuranTranslationText', '51189'],
+  QuranTransliterationTextKept: ['QuranTransliterationText', '51189'],
+  QuranTafsirTextKept: ['QuranTafsirText', '51189'],
+  QuranTajweedTextKept: ['QuranTajweedRuleText', '51189'],
+};
+
+/**
+ * THE canonical write path, and the refusals each procedure raises: 51190 the
+ * live authority, 51191 one corpus, 51192 a registered source, 51193 an exact
+ * match, 51194 a complete source, 51195–51199 a correction's existence,
+ * version, source, authority class and substance. A failure record raises
+ * nothing of its own: it can record a failure and never a pass.
+ */
+const QURAN_PROCEDURE_NUMBERS: Readonly<Record<string, string>> = {
+  QuranAssertCanonicalAuthority: '51190',
+  QuranAcceptCorpus: '51191+51192+51193+51194',
+  QuranCorrectAyah: '51193+51195+51196+51197+51198+51199',
+  QuranRecordVerificationFailure: '',
+};
 
 const EXPECTED_PROCEDURES = [
   'IdentityBootstrapPlatformAdministrator',
@@ -873,6 +1018,9 @@ const EXPECTED_TRIGGERS = [
   // and never added to a revision once it is current.
   'CollectionItemImmutable',
   'CollectionItemAppend',
+  // Phase 18: every Quran invariant no constraint can express — each listed,
+  // with the refusal it raises, in `QURAN_TRIGGER_NUMBERS`.
+  ...Object.keys(QURAN_TRIGGER_NUMBERS),
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
@@ -1076,6 +1224,56 @@ const EXPECTED_CHECK_CONSTRAINTS = [
   { table: 'CollectionContributor', constraint: 'CollectionContributor_position_ck' },
   { table: 'CollectionItem', constraint: 'CollectionItem_position_ck' },
   { table: 'CollectionItem', constraint: 'CollectionItem_one_member_ck' },
+  // Phase 18. A source's authority, evidence and transport encoding; bounded
+  // structure everywhere a Surah, Ayah or Juz number is stored; non-empty text;
+  // ONE activation; a correction carries its actor, step-up grant and reason;
+  // verification evidence that is a pass or a classified failure; a layered work
+  // published only with a registered source; closed contributor roles; bounded
+  // texts; a range that starts before it ends.
+  ...['authority', 'evidence', 'encoding', 'code'].map((rule) => ({
+    table: 'QuranSource',
+    constraint: 'QuranSource_' + rule + '_ck',
+  })),
+  { table: 'QuranSourceSurah', constraint: 'QuranSourceSurah_number_ck' },
+  { table: 'QuranSourceSurah', constraint: 'QuranSourceSurah_revelation_ck' },
+  ...['structure', 'sajdah', 'text'].map((rule) => ({
+    table: 'QuranSourceAyah',
+    constraint: 'QuranSourceAyah_' + rule + '_ck',
+  })),
+  { table: 'QuranActivation', constraint: 'QuranActivation_singleton_ck' },
+  { table: 'Juz', constraint: 'Juz_number_ck' },
+  { table: 'Surah', constraint: 'Surah_number_ck' },
+  { table: 'Surah', constraint: 'Surah_revelation_ck' },
+  ...['structure', 'sajdah', 'text'].map((rule) => ({
+    table: 'Ayah',
+    constraint: 'Ayah_' + rule + '_ck',
+  })),
+  { table: 'QuranAyahRevision', constraint: 'QuranAyahRevision_ck' },
+  ...['kind', 'outcome', 'counts', 'reason'].map((rule) => ({
+    table: 'QuranVerificationRun',
+    constraint: 'QuranVerificationRun_' + rule + '_ck',
+  })),
+  { table: 'SurahName', constraint: 'SurahName_ck' },
+  ...[
+    'QuranTranslation',
+    'QuranTransliteration',
+    'QuranTafsir',
+    'QuranRecitation',
+    'QuranTajweedRule',
+  ].flatMap((table) => [
+    { table, constraint: table + '_state_ck' },
+    // A public address chosen once, so its grammar is the database's to keep.
+    { table, constraint: table + '_slug_ck' },
+  ]),
+  ...[
+    'QuranTranslationContributor',
+    'QuranTafsirContributor',
+    'QuranTranslationText',
+    'QuranTransliterationText',
+    'QuranTafsirText',
+    'QuranRecitationSegment',
+    'QuranTajweedRuleText',
+  ].map((table) => ({ table, constraint: table + '_ck' })),
 ];
 
 /**
@@ -1553,24 +1751,30 @@ const PHASE11_KINDS = ['audio'];
 
 const PHASE13_KINDS = ['media-coverage', 'news-article', 'press-release', 'statement'];
 
+/** The canonical citation is the result unit; its scope is one Ayah. */
+const PHASE18_KINDS = ['quran-ayah'];
+
 /**
  * Phase 9 WIDENS the search vocabularies by exactly its six kinds, each its own
- * scope, Phase 10 by exactly `video` and Phase 11 by exactly `audio`; each
- * rollback narrows them back to exactly the previous phase's. Asserted against the catalogue in every
+ * scope, Phase 10 by exactly `video`, Phase 11 by exactly `audio` and Phase 18
+ * by exactly `quran-ayah`; each rollback narrows them back to exactly the
+ * previous phase's. Asserted against the catalogue in every
  * direction, so a migration that pre-created a later domain's kind, or a
  * rollback that left one behind, fails here.
  */
 async function assertSearchVocabulary(
   session: SqlSession,
-  stage: 'phase17' | 'phase9' | 'phase10' | 'phase11' | 'phase13',
+  stage: 'phase17' | 'phase9' | 'phase10' | 'phase11' | 'phase13' | 'phase18',
 ): Promise<void> {
   const sorted = (values: readonly string[]) => [...values].sort().join(',');
+  const phase13 = [...PHASE9_KINDS, ...PHASE10_KINDS, ...PHASE11_KINDS, ...PHASE13_KINDS];
   const added = {
     phase17: [],
     phase9: PHASE9_KINDS,
     phase10: [...PHASE9_KINDS, ...PHASE10_KINDS],
     phase11: [...PHASE9_KINDS, ...PHASE10_KINDS, ...PHASE11_KINDS],
-    phase13: [...PHASE9_KINDS, ...PHASE10_KINDS, ...PHASE11_KINDS, ...PHASE13_KINDS],
+    phase13,
+    phase18: [...phase13, ...PHASE18_KINDS],
   }[stage];
   const scopes = sorted([...PHASE17_SCOPES, ...added]);
   const kinds = sorted([...PHASE17_KINDS, ...added]);
@@ -1594,6 +1798,8 @@ async function assertSearchVocabulary(
       phase10: 'exactly Phase 17, Phase 9 and video after the Phase-11 rollback',
       phase11: 'exactly Phase 17, Phase 9, video and audio',
       phase13: 'Phase 17, the six Phase-9 kinds, video, audio and the four News kinds',
+      phase18:
+        'Phase 17, the six Phase-9 kinds, video, audio, the four News kinds and quran-ayah',
     }[stage],
   );
 }
@@ -3045,12 +3251,45 @@ async function assertCollectionMembership(session: SqlSession): Promise<void> {
   );
   if ((await targetRows()) !== targetsBefore)
     fail('Removing a member or archiving a Collection changed a target row.');
-  for (const member of COLLECTION_MEMBERS)
-    await refuse(
-      `A ${member.table} that is a member is never deleted`,
-      `DELETE FROM [dbo].[${member.table}] WHERE [id]=N'${first(member)}';`,
-      [547],
-      `CollectionItem_${member.column}_fkey`,
+  // A Work and a Video also hold their owner's permanent slug reservation, so
+  // deleting one conflicts with TWO keys, and SQL Server names whichever its
+  // plan checks first — an order that follows object identifiers, which shift
+  // whenever a later migration creates objects, never the schema itself. Every
+  // OTHER key into the target's table is therefore set aside for that one
+  // statement, so the refusal can only be the member key's, and is restored
+  // WITH CHECK — re-validated and trusted — whatever the statement did.
+  for (const member of COLLECTION_MEMBERS) {
+    const competitors = await session.query<{ name: string; parent: string }>(`
+      SELECT fk.[name], OBJECT_NAME(fk.[parent_object_id]) AS [parent] FROM sys.foreign_keys fk
+      WHERE fk.[referenced_object_id] = OBJECT_ID(N'[dbo].[${member.table}]')
+        AND fk.[name] <> N'CollectionItem_${member.column}_fkey';
+    `);
+    const toggle = (mode: 'NOCHECK' | 'WITH CHECK CHECK'): string =>
+      competitors
+        .map(
+          (key) => `ALTER TABLE [dbo].[${key.parent}] ${mode} CONSTRAINT [${key.name}];`,
+        )
+        .join('\n');
+    try {
+      if (competitors.length > 0) await session.query(toggle('NOCHECK'));
+      await refuse(
+        `A ${member.table} that is a member is never deleted`,
+        `DELETE FROM [dbo].[${member.table}] WHERE [id]=N'${first(member)}';`,
+        [547],
+        `CollectionItem_${member.column}_fkey`,
+      );
+    } finally {
+      if (competitors.length > 0) await session.query(toggle('WITH CHECK CHECK'));
+    }
+  }
+  const untrusted = await session.query<{ name: string }>(`
+    SELECT [name] FROM sys.foreign_keys
+    WHERE [referenced_object_id] IN (${COLLECTION_MEMBERS.map((member) => `OBJECT_ID(N'[dbo].[${member.table}]')`).join(',')})
+      AND ([is_disabled] = 1 OR [is_not_trusted] = 1);
+  `);
+  if (untrusted.length > 0)
+    fail(
+      `A key set aside for a member proof was not restored: ${untrusted.map((row) => row.name).join(', ')}.`,
     );
   if ((await targetRows()) !== targetsBefore)
     fail('A refused target deletion changed a target row.');
@@ -3079,6 +3318,1410 @@ async function assertCollectionMembership(session: SqlSession): Promise<void> {
     'collection membership',
     `seven types in one mixed order, reordered by revision; ${String(refusals)} refusals ` +
       'by name; no cascade either way',
+  );
+}
+
+const QURAN_PERMISSIONS = ['quran.administer', 'quran.editCanonical', 'quran.read'];
+
+/**
+ * EVERY foreign key from a Quran table to another owner's table, exactly: the
+ * content languages, the contributors and the reciter, the Topic and the audio
+ * file. None names a User — a canonical revision's actor and step-up grant are
+ * HISTORICAL identifiers that must outlive the rows they name (DOMAIN_MODEL.md
+ * §6.2.1) — and none names Media, Library, Editorial or Hadith.
+ */
+const QURAN_EXTERNAL_KEYS = [
+  'QuranRecitationSegment_assetId_fkey>Asset',
+  'QuranRecitation_personId_fkey>Person',
+  'QuranTafsirContributor_personId_fkey>Person',
+  'QuranTafsir_languageCode_fkey>Language',
+  'QuranTajweedRuleText_languageCode_fkey>Language',
+  'QuranTopic_topicId_fkey>Topic',
+  'QuranTranslationContributor_personId_fkey>Person',
+  'QuranTranslation_languageCode_fkey>Language',
+  'QuranTransliteration_languageCode_fkey>Language',
+].sort();
+
+/**
+ * Every reference to an Ayah, and the only ones: each the canonical citation
+ * itself, `(surahNumber, ayahNumber)`, never a surrogate that could drift.
+ */
+const QURAN_AYAH_KEYS = [
+  'QuranAyahRevision_ayah_fkey',
+  'QuranRecitationSegment_end_fkey',
+  'QuranRecitationSegment_start_fkey',
+  'QuranTafsirText_end_fkey',
+  'QuranTafsirText_start_fkey',
+  'QuranTopic_ayah_fkey',
+  'QuranTranslationText_ayah_fkey',
+  'QuranTransliterationText_ayah_fkey',
+].sort();
+
+/** The numbers a trigger or procedure body raises, sorted and joined. */
+function raisedNumbers(definition: string | null): string {
+  return [...new Set((definition ?? '').match(/\b5\d{4}\b/gu) ?? [])].sort().join('+');
+}
+
+/**
+ * Phase 18 — what only the catalogue can prove about the Quran:
+ *
+ *   1. NOTHING IS SEEDED: all twenty-three tables are empty after deploy. The
+ *      authoritative source is an open external decision (OPEN_DECISIONS.md
+ *      §1.1, §1.2), so a migrated database holds an EMPTY corpus;
+ *   2. the canonical citation IS the identity: Ayah's key is exactly
+ *      `(surahNumber, ayahNumber)`, its history's key adds only the version, no
+ *      canonical table has a surrogate `id`, and every reference to an Ayah —
+ *      exactly eight — is that two-column citation;
+ *   3. no Quran foreign key cascades, its references into other owners are
+ *      EXACTLY the nine above, no other owner references a Quran table or
+ *      holds a Surah, Ayah, Juz, tafsir or tajweed column, and no Quran table
+ *      carries a type or target column (the evidence's own `kind` aside);
+ *   4. canonical text is NVARCHAR in all three places it lives, and every
+ *      layered text is NVARCHAR(MAX);
+ *   5. each of the twenty-five triggers and four procedures raises exactly its
+ *      own numbers from 51180–51199, on the table it guards;
+ *   6. the Quran vocabulary is exactly three keys, all in the protected bundle.
+ *
+ * The rules themselves are proved as BEHAVIOUR by `assertQuranCanonicalRules`,
+ * and through the runtime login by `db:test:permissions`.
+ */
+async function assertQuranFoundation(session: SqlSession): Promise<void> {
+  const tables = QURAN_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',');
+  const names = QURAN_TABLES.map((table) => `N'${table}'`).join(',');
+
+  // ---- 1. an EMPTY corpus ---------------------------------------------------
+  const counts = await session.query<{ name: string; total: number }>(
+    QURAN_TABLES.map(
+      (table) =>
+        `SELECT N'${table}' AS [name], COUNT_BIG(*) AS [total] FROM [dbo].[${table}]`,
+    ).join(' UNION ALL ') + ';',
+  );
+  const seeded = counts.filter((row) => Number(row.total) !== 0);
+  if (QURAN_TABLES.length !== 23 || counts.length !== 23 || seeded.length > 0)
+    fail(
+      `The Quran migration must create twenty-three empty tables and seed no content; ` +
+        `found ${String(counts.length)} tables, seeded: ${JSON.stringify(seeded)}.`,
+    );
+
+  // ---- 2. the canonical citation is the identity -----------------------------
+  const keys = await session.query<{ name: string; columns: string }>(`
+    SELECT kc.[name], STRING_AGG(COL_NAME(ic.[object_id], ic.[column_id]), N',')
+      WITHIN GROUP (ORDER BY ic.[key_ordinal]) AS [columns]
+    FROM sys.key_constraints kc
+    JOIN sys.index_columns ic ON ic.[object_id] = kc.[parent_object_id] AND ic.[index_id] = kc.[unique_index_id]
+    WHERE kc.[type] = 'PK' AND ic.[key_ordinal] > 0
+      AND kc.[name] IN (N'Juz_pkey', N'Surah_pkey', N'Ayah_pkey', N'QuranAyahRevision_pkey',
+                        N'QuranSourceAyah_pkey', N'QuranTopic_pkey')
+    GROUP BY kc.[name];
+  `);
+  const describedKeys = keys
+    .map((row) => `${row.name}(${row.columns})`)
+    .sort()
+    .join(',');
+  const expectedKeys = [
+    'Ayah_pkey(surahNumber,ayahNumber)',
+    'Juz_pkey(number)',
+    'QuranAyahRevision_pkey(surahNumber,ayahNumber,version)',
+    'QuranSourceAyah_pkey(sourceId,surahNumber,ayahNumber)',
+    'QuranTopic_pkey(surahNumber,ayahNumber,topicId)',
+    'Surah_pkey(number)',
+  ].join(',');
+  if (describedKeys !== expectedKeys)
+    fail(`The canonical citation must be the identity; found ${describedKeys}.`);
+
+  const surrogates = await session.query<{ name: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] AS [name] FROM sys.columns c
+    WHERE c.[name] = N'id' AND c.[object_id] IN (OBJECT_ID(N'[dbo].[Juz]'), OBJECT_ID(N'[dbo].[Surah]'),
+      OBJECT_ID(N'[dbo].[Ayah]'), OBJECT_ID(N'[dbo].[QuranAyahRevision]'), OBJECT_ID(N'[dbo].[QuranTopic]'));
+  `);
+  if (surrogates.length > 0)
+    fail(
+      `No canonical table may carry a surrogate identity; found ${JSON.stringify(surrogates)}.`,
+    );
+
+  const ayahKeys = await session.query<{ name: string; columns: number }>(`
+    SELECT fk.[name], COUNT_BIG(*) AS [columns]
+    FROM sys.foreign_keys fk
+    JOIN sys.foreign_key_columns c ON c.[constraint_object_id] = fk.[object_id]
+    WHERE fk.[referenced_object_id] = OBJECT_ID(N'[dbo].[Ayah]')
+    GROUP BY fk.[name];
+  `);
+  if (
+    ayahKeys
+      .map((row) => row.name)
+      .sort()
+      .join(',') !== QURAN_AYAH_KEYS.join(',') ||
+    ayahKeys.some((row) => Number(row.columns) !== 2)
+  )
+    fail(
+      `Every Ayah reference must be the two-column citation, exactly ${QURAN_AYAH_KEYS.join(', ')}; ` +
+        `found ${JSON.stringify(ayahKeys)}.`,
+    );
+
+  // ---- 3. no cascade, exact external edges, no foreign Quran schema ----------
+  const cascading = await session.query<{ name: string }>(`
+    SELECT [name] FROM sys.foreign_keys
+    WHERE [parent_object_id] IN (${tables})
+      AND ([delete_referential_action] <> 0 OR [update_referential_action] <> 0);
+  `);
+  if (cascading.length > 0)
+    fail(
+      `Phase-18 foreign keys must not cascade; found ${cascading.map((row) => row.name).join(', ')}.`,
+    );
+
+  const external = await session.query<{ edge: string }>(`
+    SELECT fk.[name] + N'>' + OBJECT_NAME(fk.[referenced_object_id]) AS [edge]
+    FROM sys.foreign_keys fk
+    WHERE fk.[parent_object_id] IN (${tables}) AND fk.[referenced_object_id] NOT IN (${tables});
+  `);
+  const edges = external.map((row) => row.edge).sort();
+  if (edges.join(',') !== QURAN_EXTERNAL_KEYS.join(','))
+    fail(
+      `Quran's references into other owners must be exactly ${QURAN_EXTERNAL_KEYS.join(', ')}; ` +
+        `found ${edges.join(', ')}.`,
+    );
+
+  const [ownership] = await session.query<{ inbound: number; columns: string | null }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE [referenced_object_id] IN (${tables}) AND [parent_object_id] NOT IN (${tables})) AS [inbound],
+      (SELECT STRING_AGG(OBJECT_NAME(c.[object_id]) + N'.' + c.[name], N',') FROM sys.columns c
+        WHERE (c.[name] LIKE N'%surah%' OR c.[name] LIKE N'%ayah%' OR c.[name] LIKE N'%juz%'
+               OR c.[name] LIKE N'%quran%' OR c.[name] LIKE N'%tafsir%' OR c.[name] LIKE N'%tajweed%')
+          AND OBJECT_NAME(c.[object_id]) NOT IN (${names})
+          AND OBJECTPROPERTY(c.[object_id], 'IsUserTable') = 1) AS [columns];
+  `);
+  if (Number(ownership?.inbound) !== 0 || (ownership?.columns ?? null) !== null)
+    fail(
+      `No other owner may hold Quran schema; found ${JSON.stringify(ownership ?? null)}.`,
+    );
+
+  const generic = await session.query<{ name: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] AS [name] FROM sys.columns c
+    WHERE c.[object_id] IN (${tables})
+      AND (c.[name] LIKE N'%type%' OR c.[name] LIKE N'%target%' OR c.[name] LIKE N'%kind%'
+           OR c.[name] LIKE N'%media%' OR c.[name] LIKE N'%hadith%' OR c.[name] LIKE N'%work%');
+  `);
+  if (generic.map((row) => row.name).join(',') !== 'QuranVerificationRun.kind')
+    fail(
+      `Quran tables may carry no type, target or foreign-context column beside the ` +
+        `evidence's own kind; found ${JSON.stringify(generic)}.`,
+    );
+
+  // ---- 4. Unicode text everywhere it lives -----------------------------------
+  const texts = await session.query<{ name: string; type: string; size: number }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] AS [name], TYPE_NAME(c.[user_type_id]) AS [type],
+      c.[max_length] AS [size]
+    FROM sys.columns c
+    WHERE (c.[name] = N'text' AND c.[object_id] IN (${tables})) OR (c.[name] = N'body'
+      AND c.[object_id] = OBJECT_ID(N'[dbo].[QuranTajweedRuleText]'));
+  `);
+  const describedTexts = texts
+    .map((row) => `${row.name}:${row.type}(${String(row.size)})`)
+    .sort()
+    .join(',');
+  const expectedTexts = [
+    'Ayah.text:nvarchar(8000)',
+    'QuranAyahRevision.text:nvarchar(8000)',
+    'QuranSourceAyah.text:nvarchar(8000)',
+    'QuranTafsirText.text:nvarchar(-1)',
+    'QuranTajweedRuleText.body:nvarchar(-1)',
+    'QuranTranslationText.text:nvarchar(-1)',
+    'QuranTransliterationText.text:nvarchar(-1)',
+  ].join(',');
+  if (describedTexts !== expectedTexts)
+    fail(`Quran text columns differ: ${describedTexts}.`);
+
+  // ---- 5. every refusal in its own place -------------------------------------
+  const triggers = await session.query<{
+    name: string;
+    tableName: string;
+    definition: string | null;
+  }>(`
+    SELECT t.[name], OBJECT_NAME(t.[parent_id]) AS [tableName], OBJECT_DEFINITION(t.[object_id]) AS [definition]
+    FROM sys.triggers t WHERE t.[parent_id] IN (${tables});
+  `);
+  const describedTriggers = triggers
+    .map((row) => `${row.name}@${row.tableName}:${raisedNumbers(row.definition)}`)
+    .sort()
+    .join(',');
+  const expectedTriggers = Object.entries(QURAN_TRIGGER_NUMBERS)
+    .map(([name, [table, numbers]]) => `${name}@${table}:${numbers}`)
+    .sort()
+    .join(',');
+  if (describedTriggers !== expectedTriggers)
+    fail(
+      `Quran triggers must raise exactly their own 5118x numbers; found ${describedTriggers}.`,
+    );
+
+  const procedures = await session.query<{ name: string; definition: string | null }>(`
+    SELECT p.[name], OBJECT_DEFINITION(p.[object_id]) AS [definition]
+    FROM sys.procedures p WHERE p.[name] LIKE N'Quran%';
+  `);
+  const describedProcedures = procedures
+    .map((row) => `${row.name}:${raisedNumbers(row.definition)}`)
+    .sort()
+    .join(',');
+  const expectedProcedures = Object.entries(QURAN_PROCEDURE_NUMBERS)
+    .map(([name, numbers]) => `${name}:${numbers}`)
+    .sort()
+    .join(',');
+  if (describedProcedures !== expectedProcedures)
+    fail(
+      `The canonical write path must be exactly four procedures raising their own ` +
+        `5119x numbers; found ${describedProcedures}.`,
+    );
+
+  // ---- 6. three keys, all bundled -------------------------------------------
+  const permissions = await session.query<{ key: string; bundled: number }>(`
+    SELECT p.[key],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp JOIN [dbo].[Role] r ON r.[id] = rp.[roleId]
+       WHERE r.[key] = N'platform-administrator' AND rp.[permissionKey] = p.[key]) AS [bundled]
+    FROM [dbo].[Permission] p
+    WHERE p.[key] LIKE N'quran%' OR p.[key] LIKE N'surah%' OR p.[key] LIKE N'ayah%'
+       OR p.[key] LIKE N'tafsir%' OR p.[key] LIKE N'recitation%';
+  `);
+  if (
+    permissions
+      .map((row) => row.key)
+      .sort()
+      .join(',') !== QURAN_PERMISSIONS.join(',') ||
+    !permissions.every((row) => Number(row.bundled) === 1)
+  )
+    fail(
+      `The Quran vocabulary must be exactly ${QURAN_PERMISSIONS.join(', ')}, all in the ` +
+        `protected bundle; found ${JSON.stringify(permissions)}.`,
+    );
+
+  report(
+    'quran foundation',
+    'twenty-three empty tables, citation identity, eight Ayah keys, nine ' +
+      'non-cascading external keys, 25 triggers and 4 procedures by number, three bundled keys',
+  );
+}
+
+/**
+ * After the Phase-18 rollback: no Quran table, trigger, procedure or key, no
+ * `quran.*` permission or bundle entry, and no provisioning record. The caller
+ * then proves the vocabulary and the earlier owners it referenced are back.
+ */
+async function assertQuranRemoved(session: SqlSession): Promise<void> {
+  const [row] = await session.query<{
+    tables: number;
+    triggers: number;
+    procedures: number;
+    keys: number;
+    permissions: number;
+    bundled: number;
+    audit: number;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables
+        WHERE [name] LIKE N'Quran%' OR [name] IN (N'Juz', N'Surah', N'Ayah', N'SurahName')) AS [tables],
+      (SELECT COUNT(*) FROM sys.triggers
+        WHERE [name] LIKE N'Quran%' OR [name] IN (N'JuzImmutable', N'SurahImmutable', N'AyahCanonicalChange')) AS [triggers],
+      (SELECT COUNT(*) FROM sys.procedures WHERE [name] LIKE N'Quran%') AS [procedures],
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE [name] LIKE N'Quran%' OR [name] LIKE N'Ayah%' OR [name] LIKE N'Surah%' OR [name] LIKE N'Juz%') AS [keys],
+      (SELECT COUNT(*) FROM [dbo].[Permission] WHERE [key] LIKE N'quran.%') AS [permissions],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] WHERE [permissionKey] LIKE N'quran.%') AS [bundled],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action] = N'quran.permissions.provisioned') AS [audit];
+  `);
+  if (Object.values(row ?? { missing: 1 }).some((value) => Number(value) !== 0))
+    fail(`The Phase-18 rollback left a Quran object: ${JSON.stringify(row ?? null)}.`);
+  report(
+    'quran rollback',
+    'every Quran table, trigger, procedure, key, permission and provisioning record removed',
+  );
+}
+
+/**
+ * Sentinel suffix for every Quran proof text. The Arabic reads "non-Quranic
+ * test text": no proof here, or anywhere, carries scripture.
+ */
+const NON_QURAN_SUFFIX = ' نص اختبار غير قرآني';
+
+/**
+ * The FICTIONAL structure the Quran proofs verify: two Surahs of three and two
+ * ayat across two Juz. Not a real count and not a real boundary — a shape that
+ * exists only so the database has something to compare.
+ */
+const QURAN_PROOF_AYAT = [
+  [1, 1, 1],
+  [1, 2, 1],
+  [1, 3, 1],
+  [2, 1, 1],
+  [2, 2, 2],
+] as const;
+
+interface ProofAyah {
+  readonly surah: number;
+  readonly ayah: number;
+  readonly juz: number;
+  readonly text: string;
+}
+
+function proofText(label: string, surah: number, ayah: number): string {
+  return `NON_QURAN_FIXTURE_${label}_${String(surah)}_${String(ayah)}${NON_QURAN_SUFFIX}`;
+}
+
+/** The body of a SQL string literal. */
+function literal(text: string): string {
+  return text.replaceAll("'", "''");
+}
+
+/**
+ * Phase 18 — THE CANONICAL RULES, proved as behaviour against the re-deployed
+ * schema with sentinel, NON-QURAN text only, through the migration login (the
+ * runtime's own posture is `db:test:permissions`'s):
+ *
+ *   - a registered source is immutable and keeps every Ayah inside its Surah
+ *     (51180); an approved source carries its evidence; one encoding;
+ *   - the procedures refuse a caller without the live authority (51190) — no
+ *     role, the wrong purpose, an expired grant, another session's grant;
+ *   - acceptance refuses an unregistered source (51192), any candidate that is
+ *     not EXACTLY the source — a missing, duplicated or re-Juz'd Ayah, a
+ *     different vowel mark, a different yeh, one trailing space (51193) — and
+ *     an incomplete or non-contiguous source (51194), writing nothing; then
+ *     materialises the source's own text byte for byte with version-1 history,
+ *     passed evidence and a content-free audit, and refuses a second corpus
+ *     (51191);
+ *   - the citation is the key, and Surah, Juz, range, source and Topic are
+ *     real constraints; structure is immutable (51181) and a canonical change
+ *     is a one-step, recorded correction or nothing (51182); history and
+ *     evidence are immutable (51183), and a failure record cannot pass;
+ *   - activation refuses an empty corpus, a corpus that is not the activating
+ *     source's, fixture text under an approved activation and an edit (51185);
+ *     an active corpus is frozen (51184);
+ *   - a correction refuses an absent Ayah (51195), a stale version (51196), a
+ *     source that does not carry the Ayah in its Juz (51197), text that is not
+ *     the source's (51193), no change or no reason (51199), and a fixture
+ *     displacing approved text (51198); a valid one appends version 2;
+ *   - tafsir entries and audio segments never overlap (51186, 51187), a
+ *     segment's range is fixed, one Asset serves one segment; a published
+ *     recitation keeps audio (51188) and a published work keeps text (51189);
+ *   - `quran-ayah` intent is admitted and an invented Quran kind is not.
+ */
+async function assertQuranCanonicalRules(session: SqlSession): Promise<void> {
+  const run = randomUUID().replaceAll('-', '').slice(0, 16);
+  const at = '2026-10-02T00:00:00';
+  let refusals = 0;
+  const refuse = async (
+    label: string,
+    statement: string,
+    numbers: readonly number[],
+    rule: string,
+  ): Promise<void> => {
+    await expectRefusal(session, label, statement, numbers, rule);
+    refusals += 1;
+  };
+  const count = async (statement: string): Promise<number> => {
+    const [row] = await session.query<{ total: number }>(statement);
+    return Number(row?.total ?? -1);
+  };
+
+  // ---- the identities the procedures check, as authoritative rows ------------
+  const holder = randomUUID();
+  const outsider = randomUUID();
+  const role = randomUUID();
+  const holderSession = randomUUID();
+  const otherSession = randomUUID();
+  const outsiderSession = randomUUID();
+  const grant = randomUUID();
+  const wrongPurpose = randomUUID();
+  const expired = randomUUID();
+  const otherSessionGrant = randomUUID();
+  const outsiderGrant = randomUUID();
+  const user = (id: string): string =>
+    `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled]) VALUES (N'${id}',N'Synthetic Quran proof user',N'${id}@proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);`;
+  const sessionRow = (id: string, userId: string): string =>
+    `INSERT INTO [dbo].[Session] ([id],[token],[userId],[expiresAt],[createdAt],[updatedAt]) VALUES (N'${id}',N'proof-quran-${id}',N'${userId}',DATEADD(hour,1,SYSUTCDATETIME()),SYSUTCDATETIME(),SYSUTCDATETIME());`;
+  const grantRow = (
+    id: string,
+    userId: string,
+    sessionId: string,
+    purpose: string,
+    minutes: number,
+  ): string =>
+    `INSERT INTO [dbo].[StepUpGrant] ([id],[userId],[sessionId],[purpose],[expiresAt]) VALUES (N'${id}',N'${userId}',N'${sessionId}',N'${purpose}',DATEADD(minute,${String(minutes)},SYSUTCDATETIME()));`;
+  await expectAccepted(
+    session,
+    'A synthetic canonical authority',
+    `${user(holder)}
+     ${user(outsider)}
+     INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system]) VALUES (N'${role}',N'proof-quran-canonical-${run}',N'Synthetic Quran canonical proof role',N'Holds quran.editCanonical for the migration proof only.',0);
+     INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES (N'${role}',N'quran.editCanonical');
+     INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId]) VALUES (N'${holder}',N'${role}');
+     ${sessionRow(holderSession, holder)}
+     ${sessionRow(otherSession, holder)}
+     ${sessionRow(outsiderSession, outsider)}
+     ${grantRow(grant, holder, holderSession, 'quran-canonical-edit', 30)}
+     ${grantRow(wrongPurpose, holder, holderSession, 'privilege-administration', 30)}
+     ${grantRow(expired, holder, holderSession, 'quran-canonical-edit', -1)}
+     ${grantRow(otherSessionGrant, holder, otherSession, 'quran-canonical-edit', 30)}
+     ${grantRow(outsiderGrant, outsider, outsiderSession, 'quran-canonical-edit', 30)}`,
+  );
+
+  interface Authority {
+    readonly actor: string;
+    readonly session: string;
+    readonly grant: string;
+  }
+  const authorised: Authority = { actor: holder, session: holderSession, grant };
+  const unauthorised: readonly (readonly [string, Authority])[] = [
+    ['no role', { actor: outsider, session: outsiderSession, grant: outsiderGrant }],
+    ['the wrong purpose', { actor: holder, session: holderSession, grant: wrongPurpose }],
+    ['an expired grant', { actor: holder, session: holderSession, grant: expired }],
+    [
+      "another session's grant",
+      { actor: holder, session: holderSession, grant: otherSessionGrant },
+    ],
+    ['an unknown grant', { actor: holder, session: holderSession, grant: randomUUID() }],
+  ];
+  const NO_AUTHORITY = 'Canonical Quran authority is not held now.';
+
+  const optional = (text: string | null): string =>
+    text === null ? 'NULL' : `N'${literal(text)}'`;
+  const candidate = (ayat: readonly ProofAyah[]): string =>
+    JSON.stringify(
+      ayat.map(({ surah, ayah, juz, text }) => ({ surah, ayah, juz, text })),
+    );
+  const accept = (authority: Authority, sourceId: string, json: string): string =>
+    `EXEC [dbo].[QuranAcceptCorpus] @runId=N'${randomUUID()}', @sourceId=N'${sourceId}', @candidate=N'${literal(json)}', @actorId=N'${authority.actor}', @sessionId=N'${authority.session}', @stepUpGrantId=N'${authority.grant}', @at='${at}';`;
+  const correct = (
+    authority: Authority,
+    [surah, ayah]: readonly [number, number],
+    expectedVersion: number,
+    sourceId: string,
+    reviewed: string | null,
+    reason: string | null,
+  ): string =>
+    `EXEC [dbo].[QuranCorrectAyah] @runId=N'${randomUUID()}', @surah=${String(surah)}, @ayah=${String(ayah)}, @expectedVersion=${String(expectedVersion)}, @sourceId=N'${sourceId}', @reviewedText=${optional(reviewed)}, @reason=${optional(reason)}, @actorId=N'${authority.actor}', @sessionId=N'${authority.session}', @stepUpGrantId=N'${authority.grant}', @at='${at}';`;
+  const register = (
+    id: string,
+    code: string,
+    authority: 'fixture' | 'approved',
+    surahs: readonly (readonly [number, number])[],
+    ayat: readonly ProofAyah[],
+  ): string =>
+    `INSERT INTO [dbo].[QuranSource] ([id],[code],[authority],[title],[version],[encoding],[reference]) VALUES (N'${id}',N'${code}',N'${authority}',N'NON_QURAN_FIXTURE source ${code}',N'proof-1',N'utf-8',${authority === 'approved' ? "N'urn:example:non-quran-fixture-evidence'" : 'NULL'});
+     INSERT INTO [dbo].[QuranSourceSurah] ([sourceId],[number],[ayahCount]) VALUES ${surahs.map(([number, ayat]) => `(N'${id}',${String(number)},${String(ayat)})`).join(',')};
+     ${ayat.length === 0 ? '' : `INSERT INTO [dbo].[QuranSourceAyah] ([sourceId],[surahNumber],[ayahNumber],[juzNumber],[text]) VALUES ${ayat.map((a) => `(N'${id}',${String(a.surah)},${String(a.ayah)},${String(a.juz)},N'${literal(a.text)}')`).join(',')};`}`;
+
+  // ---- the sources, registered by the owner -----------------------------------
+  //
+  // Ayah 1:3 carries a letter with a FATHA and an Arabic YEH, so the code-point
+  // refusals below differ from it by one mark or one letter, never by meaning.
+  const marked = `${proofText('CANONICAL', 1, 3)} بَ ي`;
+  const fixtureAyat: ProofAyah[] = QURAN_PROOF_AYAT.map(([surah, ayah, juz]) => ({
+    surah,
+    ayah,
+    juz,
+    text: surah === 1 && ayah === 3 ? marked : proofText('CANONICAL', surah, ayah),
+  }));
+  const structure = [
+    [1, 3],
+    [2, 2],
+  ] as const;
+  const fixture = randomUUID();
+  const correction = randomUUID();
+  const elsewhere = randomUUID();
+  const incomplete = randomUUID();
+  const decreasing = randomUUID();
+  const approved = randomUUID();
+  const bare = randomUUID();
+  const corrected = proofText('CORRECTED', 1, 2);
+  const approvedAyat = fixtureAyat.map((a) => ({
+    ...a,
+    text: proofText('APPROVED_PROBE', a.surah, a.ayah),
+  }));
+  await expectAccepted(
+    session,
+    'Sources registered by the owner',
+    `${register(fixture, `NON_QURAN_FIXTURE_${run}`, 'fixture', structure, fixtureAyat)}
+     ${register(correction, `NON_QURAN_FIXTURE_CORRECTION_${run}`, 'fixture', [[1, 3]], [{ surah: 1, ayah: 2, juz: 1, text: corrected }])}
+     ${register(elsewhere, `NON_QURAN_FIXTURE_JUZ_${run}`, 'fixture', [[1, 3]], [{ surah: 1, ayah: 2, juz: 2, text: corrected }])}
+     ${register(
+       incomplete,
+       `NON_QURAN_FIXTURE_INCOMPLETE_${run}`,
+       'fixture',
+       [[1, 3]],
+       fixtureAyat.filter((a) => a.surah === 1 && a.ayah < 3),
+     )}
+     ${register(
+       decreasing,
+       `NON_QURAN_FIXTURE_DECREASING_${run}`,
+       'fixture',
+       [[1, 2]],
+       [
+         { surah: 1, ayah: 1, juz: 2, text: proofText('DECREASING', 1, 1) },
+         { surah: 1, ayah: 2, juz: 1, text: proofText('DECREASING', 1, 2) },
+       ],
+     )}
+     ${register(approved, `NON_QURAN_FIXTURE_APPROVED_PROBE_${run}`, 'approved', structure, approvedAyat)}
+     INSERT INTO [dbo].[QuranSource] ([id],[code],[authority],[title],[version],[encoding]) VALUES (N'${bare}',N'NON_QURAN_FIXTURE_BARE_${run}',N'fixture',N'NON_QURAN_FIXTURE bare source',N'proof-1',N'utf-8');`,
+  );
+
+  // ---- 51180: a registered source is a fact, never edited ---------------------
+  const IMMUTABLE_SOURCE = 'A registered Quran source is immutable.';
+  await refuse(
+    'A source is never edited',
+    `UPDATE [dbo].[QuranSource] SET [title]=[title] WHERE [id]=N'${fixture}';`,
+    [51180],
+    IMMUTABLE_SOURCE,
+  );
+  await refuse(
+    'A source is never removed',
+    `DELETE FROM [dbo].[QuranSource] WHERE [id]=N'${bare}';`,
+    [51180],
+    IMMUTABLE_SOURCE,
+  );
+  await refuse(
+    "A source Surah's count never changes",
+    `UPDATE [dbo].[QuranSourceSurah] SET [ayahCount]=[ayahCount]+1 WHERE [sourceId]=N'${fixture}';`,
+    [51180],
+    IMMUTABLE_SOURCE,
+  );
+  await refuse(
+    "A source's text never changes",
+    `UPDATE [dbo].[QuranSourceAyah] SET [text]=N'${literal(proofText('TAMPERED', 1, 1))}' WHERE [sourceId]=N'${fixture}' AND [surahNumber]=1 AND [ayahNumber]=1;`,
+    [51180],
+    IMMUTABLE_SOURCE,
+  );
+  await refuse(
+    'A source Ayah is never removed',
+    `DELETE FROM [dbo].[QuranSourceAyah] WHERE [sourceId]=N'${fixture}';`,
+    [51180],
+    IMMUTABLE_SOURCE,
+  );
+  await refuse(
+    'A source Ayah lies inside its Surah',
+    `INSERT INTO [dbo].[QuranSourceAyah] ([sourceId],[surahNumber],[ayahNumber],[juzNumber],[text]) VALUES (N'${correction}',1,4,1,N'${literal(proofText('OUTSIDE', 1, 4))}');`,
+    [51180],
+    'A source Ayah lies outside its Surah.',
+  );
+  await refuse(
+    'An approved source carries its evidence',
+    `INSERT INTO [dbo].[QuranSource] ([id],[code],[authority],[title],[version],[encoding]) VALUES (N'${randomUUID()}',N'NON_QURAN_FIXTURE_NO_EVIDENCE_${run}',N'approved',N'NON_QURAN_FIXTURE',N'proof-1',N'utf-8');`,
+    [547],
+    'QuranSource_evidence_ck',
+  );
+  await refuse(
+    'A source is UTF-8',
+    `INSERT INTO [dbo].[QuranSource] ([id],[code],[authority],[title],[version],[encoding]) VALUES (N'${randomUUID()}',N'NON_QURAN_FIXTURE_UTF16_${run}',N'fixture',N'NON_QURAN_FIXTURE',N'proof-1',N'utf-16');`,
+    [547],
+    'QuranSource_encoding_ck',
+  );
+
+  // ---- 51185: an EMPTY corpus is never activated -------------------------------
+  const activate = (sourceId: string): string =>
+    `INSERT INTO [dbo].[QuranActivation] ([id],[sourceId],[authorisedBy]) VALUES (1,N'${sourceId}',N'Synthetic migration proof operator');`;
+  await refuse(
+    'An empty corpus is never activated',
+    activate(fixture),
+    [51185],
+    'An empty Quran corpus cannot be activated.',
+  );
+
+  // ---- acceptance: the live authority, then the exact source, or nothing -------
+  const fullCandidate = candidate(fixtureAyat);
+  for (const [why, authority] of unauthorised)
+    await refuse(
+      `Acceptance refused with ${why}`,
+      accept(authority, fixture, fullCandidate),
+      [51190],
+      NO_AUTHORITY,
+    );
+  await expectAccepted(
+    session,
+    'The authority check itself, held',
+    `EXEC [dbo].[QuranAssertCanonicalAuthority] @actorId=N'${holder}', @sessionId=N'${holderSession}', @stepUpGrantId=N'${grant}';`,
+  );
+  await refuse(
+    'The authority check itself, not held',
+    `EXEC [dbo].[QuranAssertCanonicalAuthority] @actorId=N'${outsider}', @sessionId=N'${outsiderSession}', @stepUpGrantId=N'${outsiderGrant}';`,
+    [51190],
+    NO_AUTHORITY,
+  );
+  await refuse(
+    'Acceptance names a registered source',
+    accept(authorised, randomUUID(), fullCandidate),
+    [51192],
+    'The Quran source is not registered.',
+  );
+  const MISMATCH = 'The candidate does not match the source.';
+  const variant = (ayah: ProofAyah): ProofAyah[] =>
+    fixtureAyat.map((a) => (a.surah === ayah.surah && a.ayah === ayah.ayah ? ayah : a));
+  const ayahOneThree = fixtureAyat[2];
+  if (ayahOneThree === undefined) fail('The proof structure is empty.');
+  for (const [why, json] of [
+    ['not JSON', 'NON_QURAN_FIXTURE not json'],
+    ['missing an Ayah', candidate(fixtureAyat.slice(1))],
+    ['repeating an Ayah', candidate([...fixtureAyat, ayahOneThree])],
+    ['an Ayah in another Juz', candidate(variant({ ...ayahOneThree, juz: 2 }))],
+    [
+      'a different vowel mark',
+      candidate(variant({ ...ayahOneThree, text: marked.replace('َ', 'ِ') })),
+    ],
+    [
+      'a different yeh',
+      candidate(variant({ ...ayahOneThree, text: marked.replace('ي', 'ی') })),
+    ],
+    ['one trailing space', candidate(variant({ ...ayahOneThree, text: `${marked} ` }))],
+  ] as const)
+    await refuse(
+      `A candidate with ${why} is refused`,
+      accept(authorised, fixture, json),
+      [51193],
+      MISMATCH,
+    );
+  const INCOMPLETE = 'The Quran source is not a complete structure.';
+  await refuse(
+    'An incomplete source is never accepted',
+    accept(
+      authorised,
+      incomplete,
+      candidate(fixtureAyat.filter((a) => a.surah === 1 && a.ayah < 3)),
+    ),
+    [51194],
+    INCOMPLETE,
+  );
+  await refuse(
+    'A source whose Juz run backwards is never accepted',
+    accept(
+      authorised,
+      decreasing,
+      candidate([
+        { surah: 1, ayah: 1, juz: 2, text: proofText('DECREASING', 1, 1) },
+        { surah: 1, ayah: 2, juz: 1, text: proofText('DECREASING', 1, 2) },
+      ]),
+    ),
+    [51194],
+    INCOMPLETE,
+  );
+  const written = await count(`
+    SELECT (SELECT COUNT_BIG(*) FROM [dbo].[Juz]) + (SELECT COUNT_BIG(*) FROM [dbo].[Surah])
+      + (SELECT COUNT_BIG(*) FROM [dbo].[Ayah]) + (SELECT COUNT_BIG(*) FROM [dbo].[QuranAyahRevision])
+      + (SELECT COUNT_BIG(*) FROM [dbo].[QuranVerificationRun])
+      + (SELECT COUNT_BIG(*) FROM [dbo].[AuditLog] WHERE [action] LIKE N'quran.corpus.%') AS [total];
+  `);
+  if (written !== 0) fail(`A refused acceptance wrote ${String(written)} row(s).`);
+
+  // ---- the corpus, materialised from the SOURCE's own text -----------------------
+  await expectAccepted(
+    session,
+    'The exact candidate is accepted',
+    accept(authorised, fixture, fullCandidate),
+  );
+  const [materialised] = await session.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[Juz] WHERE [sourceId]=N'${fixture}') AS [juz],
+      (SELECT COUNT(*) FROM [dbo].[Surah] WHERE [sourceId]=N'${fixture}' AND [namesVersion]=1) AS [surahs],
+      (SELECT COUNT(*) FROM [dbo].[Ayah] a
+         JOIN [dbo].[QuranSourceAyah] s ON s.[sourceId]=N'${fixture}' AND s.[surahNumber]=a.[surahNumber]
+           AND s.[ayahNumber]=a.[ayahNumber] AND s.[juzNumber]=a.[juzNumber]
+         JOIN [dbo].[QuranAyahRevision] r ON r.[surahNumber]=a.[surahNumber] AND r.[ayahNumber]=a.[ayahNumber]
+           AND r.[version]=1 AND r.[sourceId]=N'${fixture}' AND r.[actorId]=N'${holder}'
+           AND r.[stepUpGrantId]=N'${grant}' AND r.[reason] IS NULL
+         WHERE a.[version]=1 AND a.[sourceId]=N'${fixture}'
+           AND CAST(a.[text] AS VARBINARY(8000))=CAST(s.[text] AS VARBINARY(8000))
+           AND CAST(r.[text] AS VARBINARY(8000))=CAST(s.[text] AS VARBINARY(8000))) AS [exact],
+      (SELECT COUNT(*) FROM [dbo].[Ayah]) AS [ayat],
+      (SELECT COUNT(*) FROM [dbo].[QuranVerificationRun] WHERE [kind]=N'corpus-acceptance'
+         AND [outcome]=N'passed' AND [checked]=5 AND [mismatches]=0 AND [sourceId]=N'${fixture}'
+         AND [actorId]=N'${holder}') AS [runs],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action]=N'quran.corpus.accepted'
+         AND [actorId]=N'${holder}' AND [targetId]=N'${fixture}'
+         AND [authorisingSource]=N'step-up:${grant}') AS [audit];
+  `);
+  if (
+    JSON.stringify(materialised) !==
+    '{"juz":2,"surahs":2,"exact":5,"ayat":5,"runs":1,"audit":1}'
+  )
+    fail(
+      `The accepted corpus is not the source's exact text: ${JSON.stringify(materialised)}.`,
+    );
+  await refuse(
+    'A second corpus is never accepted',
+    accept(authorised, fixture, fullCandidate),
+    [51191],
+    'A canonical Quran corpus already exists.',
+  );
+
+  // ---- the citation is the key; structure and ranges are constraints -------------
+  const ayahRow = (
+    surah: number,
+    ayah: number,
+    juz: number,
+    sourceId = fixture,
+  ): string =>
+    `INSERT INTO [dbo].[Ayah] ([surahNumber],[ayahNumber],[juzNumber],[text],[sourceId],[version]) VALUES (${String(surah)},${String(ayah)},${String(juz)},N'${literal(proofText('DIRECT', surah, ayah))}',N'${sourceId}',1);`;
+  for (const [label, statement, numbers, rule] of [
+    ['One Ayah per citation', ayahRow(1, 1, 1), [2627], 'Ayah_pkey'],
+    ['An Ayah is in a real Surah', ayahRow(3, 1, 1), [547], 'Ayah_surahNumber_fkey'],
+    ['An Ayah is in a real Juz', ayahRow(1, 9, 3), [547], 'Ayah_juzNumber_fkey'],
+    [
+      'An Ayah names a registered source',
+      ayahRow(1, 9, 1, randomUUID()),
+      [547],
+      'Ayah_sourceId_fkey',
+    ],
+    ['An Ayah number starts at one', ayahRow(1, 0, 1), [547], 'Ayah_structure_ck'],
+    [
+      'A Juz is one of thirty',
+      `INSERT INTO [dbo].[Juz] ([number],[sourceId]) VALUES (31,N'${fixture}');`,
+      [547],
+      'Juz_number_ck',
+    ],
+    [
+      'A Surah is one of one hundred and fourteen',
+      `INSERT INTO [dbo].[Surah] ([number],[ayahCount],[sourceId]) VALUES (115,1,N'${fixture}');`,
+      [547],
+      'Surah_number_ck',
+    ],
+    [
+      'A correction revision carries actor, grant and reason',
+      `INSERT INTO [dbo].[QuranAyahRevision] ([surahNumber],[ayahNumber],[version],[text],[sourceId],[verificationRunId]) SELECT 1,1,2,N'${literal(proofText('DIRECT', 1, 1))}',N'${fixture}',[id] FROM [dbo].[QuranVerificationRun];`,
+      [547],
+      'QuranAyahRevision_ck',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, rule);
+
+  // ---- 51181 and 51182: structure is fixed; a change is a recorded correction ----
+  const STRUCTURE = 'Canonical Quran structure is immutable.';
+  const ADVANCE = 'A canonical change must advance the version by one.';
+  const RECORDED = 'A canonical change must be recorded in its history.';
+  for (const [label, statement, numbers, rule] of [
+    [
+      "An Ayah's Juz never changes",
+      'UPDATE [dbo].[Ayah] SET [juzNumber]=2 WHERE [surahNumber]=1 AND [ayahNumber]=1;',
+      [51181],
+      STRUCTURE,
+    ],
+    [
+      "An Ayah's markers never change",
+      'UPDATE [dbo].[Ayah] SET [hizb]=1 WHERE [surahNumber]=1 AND [ayahNumber]=1;',
+      [51181],
+      STRUCTURE,
+    ],
+    [
+      'An Ayah with history is never removed',
+      'DELETE FROM [dbo].[Ayah] WHERE [surahNumber]=1 AND [ayahNumber]=1;',
+      [547],
+      'QuranAyahRevision_ayah_fkey',
+    ],
+    [
+      'Text never changes without a version',
+      `UPDATE [dbo].[Ayah] SET [text]=N'${literal(proofText('TAMPERED', 1, 1))}' WHERE [surahNumber]=1 AND [ayahNumber]=1;`,
+      [51182],
+      ADVANCE,
+    ],
+    [
+      'A version never skips',
+      `UPDATE [dbo].[Ayah] SET [text]=N'${literal(proofText('TAMPERED', 1, 1))}',[version]=[version]+2 WHERE [surahNumber]=1 AND [ayahNumber]=1;`,
+      [51182],
+      ADVANCE,
+    ],
+    [
+      'A change is recorded before it is made',
+      `UPDATE [dbo].[Ayah] SET [text]=N'${literal(proofText('TAMPERED', 1, 1))}',[version]=[version]+1 WHERE [surahNumber]=1 AND [ayahNumber]=1;`,
+      [51182],
+      RECORDED,
+    ],
+    [
+      "A Surah's count never changes",
+      'UPDATE [dbo].[Surah] SET [ayahCount]=[ayahCount]+1,[namesVersion]=[namesVersion]+1 WHERE [number]=1;',
+      [51181],
+      STRUCTURE,
+    ],
+    [
+      "A Surah's Arabic name never changes",
+      `UPDATE [dbo].[Surah] SET [nameArabic]=N'${literal(proofText('NAME', 1, 0))}',[namesVersion]=[namesVersion]+1 WHERE [number]=1;`,
+      [51181],
+      STRUCTURE,
+    ],
+    [
+      "A Surah's names version advances by one",
+      'UPDATE [dbo].[Surah] SET [namesVersion]=[namesVersion]+2 WHERE [number]=1;',
+      [51181],
+      STRUCTURE,
+    ],
+    [
+      'A Surah with ayat is never removed',
+      'DELETE FROM [dbo].[Surah] WHERE [number]=2;',
+      [547],
+      'Ayah_surahNumber_fkey',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, rule);
+  await expectAccepted(
+    session,
+    "A Surah's display names advance",
+    'UPDATE [dbo].[Surah] SET [namesVersion]=[namesVersion]+1,[updatedAt]=SYSUTCDATETIME() WHERE [number]=1;',
+  );
+  // A Juz no Ayah references, so its own trigger — not a foreign key — answers.
+  await expectAccepted(
+    session,
+    'A Juz with no ayat',
+    `INSERT INTO [dbo].[Juz] ([number],[sourceId]) VALUES (30,N'${fixture}');`,
+  );
+  await refuse(
+    'A Juz never changes',
+    `UPDATE [dbo].[Juz] SET [sourceId]=N'${correction}' WHERE [number]=30;`,
+    [51181],
+    STRUCTURE,
+  );
+  await refuse(
+    'A Juz is never removed',
+    'DELETE FROM [dbo].[Juz] WHERE [number]=30;',
+    [51181],
+    STRUCTURE,
+  );
+
+  // ---- 51183: history and evidence are immutable; a failure cannot pass ----------
+  const HISTORY = 'Canonical Quran history is immutable.';
+  const failedRun = randomUUID();
+  const failure = (id: string, mismatches: number, reason: string | null): string =>
+    `EXEC [dbo].[QuranRecordVerificationFailure] @runId=N'${id}', @kind=N'corpus-acceptance', @sourceId=N'${fixture}', @checked=5, @mismatches=${String(mismatches)}, @firstSurah=1, @firstAyah=3, @firstOffset=33, @firstReason=${optional(reason)}, @actorId=N'${holder}', @at='${at}';`;
+  await expectAccepted(
+    session,
+    'A failed verification is recorded',
+    failure(failedRun, 1, 'text-mismatch'),
+  );
+  for (const [label, statement, numbers, rule] of [
+    [
+      'A failure record cannot claim a pass',
+      failure(randomUUID(), 0, null),
+      [547],
+      'QuranVerificationRun_outcome_ck',
+    ],
+    [
+      'A failure names a known reason',
+      failure(randomUUID(), 1, 'invented-reason'),
+      [547],
+      'QuranVerificationRun_reason_ck',
+    ],
+    [
+      'A revision is never rewritten',
+      `UPDATE [dbo].[QuranAyahRevision] SET [text]=N'${literal(proofText('TAMPERED', 1, 1))}' WHERE [surahNumber]=1 AND [ayahNumber]=1;`,
+      [51183],
+      HISTORY,
+    ],
+    [
+      'A revision is never removed',
+      'DELETE FROM [dbo].[QuranAyahRevision] WHERE [surahNumber]=1 AND [ayahNumber]=1;',
+      [51183],
+      HISTORY,
+    ],
+    [
+      'Evidence is never rewritten',
+      `UPDATE [dbo].[QuranVerificationRun] SET [checked]=[checked]+1 WHERE [outcome]=N'passed';`,
+      [51183],
+      HISTORY,
+    ],
+    [
+      'Evidence is never removed',
+      `DELETE FROM [dbo].[QuranVerificationRun] WHERE [id]=N'${failedRun}';`,
+      [51183],
+      HISTORY,
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, rule);
+
+  // ---- 51185 and 51184: activation integrity; an active corpus is frozen ---------
+  const NOT_THE_SOURCE = 'The canonical corpus does not match the activating source.';
+  await refuse(
+    "A corpus is activated only as its own source's",
+    activate(correction),
+    [51185],
+    NOT_THE_SOURCE,
+  );
+  await refuse(
+    'An approved activation carries no fixture text',
+    activate(approved),
+    [51185],
+    'An approved corpus cannot carry fixture text.',
+  );
+  await expectAccepted(session, 'Fixture-mode activation', activate(fixture));
+  for (const [label, statement, numbers, rule] of [
+    [
+      'An activation is replaced, never edited',
+      `UPDATE [dbo].[QuranActivation] SET [sourceId]=N'${approved}';`,
+      [51185],
+      'Activation is replaced, never edited.',
+    ],
+    [
+      'There is one activation',
+      `INSERT INTO [dbo].[QuranActivation] ([id],[sourceId],[authorisedBy]) VALUES (2,N'${fixture}',N'Synthetic');`,
+      [547],
+      'QuranActivation_singleton_ck',
+    ],
+    [
+      'An active corpus gains no Ayah',
+      ayahRow(2, 3, 2),
+      [51184],
+      'An active Quran corpus cannot be extended.',
+    ],
+    [
+      'An active corpus gains no Surah',
+      `INSERT INTO [dbo].[Surah] ([number],[ayahCount],[sourceId]) VALUES (3,1,N'${fixture}');`,
+      [51184],
+      'An active Quran corpus cannot be extended.',
+    ],
+    [
+      'An active corpus gains no Juz',
+      `INSERT INTO [dbo].[Juz] ([number],[sourceId]) VALUES (3,N'${fixture}');`,
+      [51184],
+      'An active Quran corpus cannot be extended.',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, rule);
+
+  // ---- corrections: authority, existence, version, source, text, substance -------
+  const reason = 'Synthetic correction proof against a registered fixture source.';
+  for (const [label, statement, numbers, rule] of [
+    [
+      'A correction needs the live authority',
+      correct(
+        unauthorised[0]?.[1] ?? authorised,
+        [1, 2],
+        1,
+        correction,
+        corrected,
+        reason,
+      ),
+      [51190],
+      NO_AUTHORITY,
+    ],
+    [
+      'A correction names an existing Ayah',
+      correct(authorised, [2, 9], 1, correction, corrected, reason),
+      [51195],
+      'The Ayah does not exist.',
+    ],
+    [
+      'A correction names the current version',
+      correct(authorised, [1, 2], 2, correction, corrected, reason),
+      [51196],
+      'The Ayah changed since it was reviewed.',
+    ],
+    [
+      'A correction source carries the Ayah',
+      correct(authorised, [1, 1], 1, correction, corrected, reason),
+      [51197],
+      'The source does not carry this Ayah.',
+    ],
+    [
+      'A correction source keeps the Juz',
+      correct(authorised, [1, 2], 1, elsewhere, corrected, reason),
+      [51197],
+      'The source does not carry this Ayah.',
+    ],
+    [
+      "The reviewed text is the source's, exactly",
+      correct(authorised, [1, 2], 1, correction, `${corrected} `, reason),
+      [51193],
+      MISMATCH,
+    ],
+    [
+      'A correction carries reviewed text',
+      correct(authorised, [1, 2], 1, correction, null, reason),
+      [51193],
+      MISMATCH,
+    ],
+    [
+      'A correction changes something',
+      correct(authorised, [1, 1], 1, fixture, proofText('CANONICAL', 1, 1), reason),
+      [51199],
+      'The correction changes nothing.',
+    ],
+    [
+      'A correction states its reason',
+      correct(authorised, [1, 2], 1, correction, corrected, ''),
+      [51199],
+      'A correction states its reason.',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, rule);
+  await expectAccepted(
+    session,
+    'A valid correction',
+    correct(authorised, [1, 2], 1, correction, corrected, reason),
+  );
+  const [history] = await session.query<Record<string, number | string>>(`
+    SELECT a.[version], a.[sourceId],
+      CASE WHEN CAST(a.[text] AS VARBINARY(8000))=CAST(s.[text] AS VARBINARY(8000)) THEN 1 ELSE 0 END AS [exact],
+      (SELECT COUNT(*) FROM [dbo].[QuranAyahRevision] r JOIN [dbo].[QuranSourceAyah] f
+         ON f.[sourceId]=N'${fixture}' AND f.[surahNumber]=1 AND f.[ayahNumber]=2
+         WHERE r.[surahNumber]=1 AND r.[ayahNumber]=2 AND r.[version]=1
+           AND CAST(r.[text] AS VARBINARY(8000))=CAST(f.[text] AS VARBINARY(8000))) AS [original],
+      (SELECT COUNT(*) FROM [dbo].[QuranAyahRevision] r WHERE r.[surahNumber]=1 AND r.[ayahNumber]=2
+         AND r.[version]=2 AND r.[sourceId]=N'${correction}' AND r.[actorId]=N'${holder}'
+         AND r.[stepUpGrantId]=N'${grant}' AND r.[reason]=N'${literal(reason)}'
+         AND CAST(r.[text] AS VARBINARY(8000))=CAST(s.[text] AS VARBINARY(8000))) AS [revision],
+      (SELECT COUNT(*) FROM [dbo].[QuranVerificationRun] WHERE [kind]=N'ayah-correction'
+         AND [outcome]=N'passed' AND [checked]=1 AND [sourceId]=N'${correction}') AS [runs],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action]=N'quran.ayah.corrected'
+         AND [targetId]=N'1:2' AND [actorId]=N'${holder}') AS [audit]
+    FROM [dbo].[Ayah] a
+    JOIN [dbo].[QuranSourceAyah] s ON s.[sourceId]=N'${correction}' AND s.[surahNumber]=1 AND s.[ayahNumber]=2
+    WHERE a.[surahNumber]=1 AND a.[ayahNumber]=2;
+  `);
+  if (
+    JSON.stringify(history) !==
+    JSON.stringify({
+      version: 2,
+      sourceId: correction,
+      exact: 1,
+      original: 1,
+      revision: 1,
+      runs: 1,
+      audit: 1,
+    })
+  )
+    fail(`The correction is not a recorded version 2: ${JSON.stringify(history)}.`);
+  await refuse(
+    'A correction against a superseded version is refused',
+    correct(authorised, [1, 2], 1, correction, corrected, reason),
+    [51196],
+    'The Ayah changed since it was reviewed.',
+  );
+  const approvedOneThree = approvedAyat[2]?.text ?? '';
+  await expectAccepted(
+    session,
+    'Approved text displaces fixture text',
+    correct(authorised, [1, 3], 1, approved, approvedOneThree, reason),
+  );
+  await refuse(
+    'Fixture text never displaces approved text',
+    correct(authorised, [1, 3], 2, fixture, marked, reason),
+    [51198],
+    'A fixture source cannot change approved canonical text.',
+  );
+  const leaked = await count(`
+    SELECT COUNT_BIG(*) AS [total] FROM [dbo].[AuditLog]
+    WHERE [action] LIKE N'quran.%'
+      AND (ISNULL([beforeState], N'') + ISNULL([afterState], N'')) LIKE N'%NON[_]QURAN%';
+  `);
+  if (leaked !== 0) fail('A Quran audit record carries canonical text.');
+
+  // ---- layered works: overlap, fixed ranges, audio and text kept ------------------
+  const [topic] = await session.query<{ id: string }>(
+    `SELECT [id] FROM [dbo].[Topic] WHERE [slug]=N'quran';`,
+  );
+  if (topic === undefined) fail('The canonical quran Topic is missing.');
+  const reciter = randomUUID();
+  const translation = randomUUID();
+  const transliteration = randomUUID();
+  const tafsir = randomUUID();
+  const emptyTafsir = randomUUID();
+  const recitation = randomUUID();
+  const rule = randomUUID();
+  const firstAsset = randomUUID();
+  const secondAsset = randomUUID();
+  const entry = (id: string, owner: string, start: number, end: number): string =>
+    `INSERT INTO [dbo].[QuranTafsirText] ([id],[tafsirId],[surahNumber],[startAyah],[endAyah],[text]) VALUES (N'${id}',N'${owner}',1,${String(start)},${String(end)},N'${literal(proofText('TAFSIR', 1, start))}');`;
+  const segment = (
+    id: string,
+    surah: number,
+    start: number,
+    end: number,
+    asset: string | null,
+  ): string =>
+    `INSERT INTO [dbo].[QuranRecitationSegment] ([id],[recitationId],[surahNumber],[startAyah],[endAyah],[assetId]) VALUES (N'${id}',N'${recitation}',${String(surah)},${String(start)},${String(end)},${asset === null ? 'NULL' : `N'${asset}'`});`;
+  const publish = (table: string, id: string): string =>
+    `UPDATE [dbo].[${table}] SET [state]=N'published',[sourceId]=N'${fixture}',[publishedAt]=SYSUTCDATETIME(),[version]=[version]+1,[updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${id}';`;
+  await expectAccepted(
+    session,
+    'Draft layered works, a reciter and two files',
+    `INSERT INTO [dbo].[Person] ([id],[slug],[primaryLocale],[status]) VALUES (N'${reciter}',N'proof-quran-reciter-${run}',N'en',N'published');
+     INSERT INTO [dbo].[PersonTranslation] ([personId],[locale],[name]) VALUES (N'${reciter}',N'en',N'Fixture Reciter One');
+     INSERT INTO [dbo].[Asset] ([id],[storageKey],[state],[updatedAt]) VALUES (N'${firstAsset}',N'proof/quran/${run}/1',N'uploading',SYSUTCDATETIME()),(N'${secondAsset}',N'proof/quran/${run}/2',N'uploading',SYSUTCDATETIME());
+     INSERT INTO [dbo].[QuranTranslation] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${translation}',N'proof-quran-translation-${run}',N'en',N'NON_QURAN_FIXTURE translation',N'draft',1,SYSUTCDATETIME());
+     INSERT INTO [dbo].[QuranTransliteration] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${transliteration}',N'proof-quran-transliteration-${run}',N'en',N'NON_QURAN_FIXTURE transliteration',N'draft',1,SYSUTCDATETIME());
+     INSERT INTO [dbo].[QuranTafsir] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${tafsir}',N'proof-quran-tafsir-${run}',N'en',N'NON_QURAN_FIXTURE tafsir',N'draft',1,SYSUTCDATETIME()),(N'${emptyTafsir}',N'proof-quran-tafsir-empty-${run}',N'en',N'NON_QURAN_FIXTURE empty tafsir',N'draft',1,SYSUTCDATETIME());
+     INSERT INTO [dbo].[QuranRecitation] ([id],[slug],[personId],[name],[state],[version],[updatedAt]) VALUES (N'${recitation}',N'proof-quran-recitation-${run}',N'${reciter}',N'NON_QURAN_FIXTURE recitation',N'draft',1,SYSUTCDATETIME());
+     INSERT INTO [dbo].[QuranTajweedRule] ([id],[slug],[position],[state],[version],[updatedAt]) VALUES (N'${rule}',N'proof-quran-tajweed-${run}',0,N'draft',1,SYSUTCDATETIME());`,
+  );
+  const firstEntry = randomUUID();
+  const thirdEntry = randomUUID();
+  const firstSegment = randomUUID();
+  const secondSegment = randomUUID();
+  await expectAccepted(
+    session,
+    'Non-overlapping entries and segments',
+    `${entry(firstEntry, tafsir, 1, 2)}
+     ${entry(thirdEntry, tafsir, 3, 3)}
+     ${segment(firstSegment, 1, 1, 2, null)}
+     ${segment(secondSegment, 2, 1, 2, null)}`,
+  );
+  const OVERLAP_SEGMENT = 'Segments of one recitation may not overlap.';
+  const NEEDS_AUDIO = 'A published recitation needs audio.';
+  const NEEDS_TEXT = 'A published work needs text.';
+  for (const [label, statement, numbers, ruleName] of [
+    [
+      'Tafsir entries never overlap',
+      entry(randomUUID(), tafsir, 2, 3),
+      [51186],
+      'Tafsir entries of one work may not overlap.',
+    ],
+    [
+      'A tafsir entry is never moved over another',
+      `UPDATE [dbo].[QuranTafsirText] SET [startAyah]=2 WHERE [id]=N'${thirdEntry}';`,
+      [51186],
+      'Tafsir entries of one work may not overlap.',
+    ],
+    [
+      'A tafsir entry starts before it ends',
+      entry(randomUUID(), tafsir, 2, 1),
+      [547],
+      'QuranTafsirText_ck',
+    ],
+    [
+      'A tafsir entry ends at a real Ayah',
+      entry(randomUUID(), emptyTafsir, 3, 9),
+      [547],
+      'QuranTafsirText_end_fkey',
+    ],
+    [
+      'Segments never overlap',
+      segment(randomUUID(), 1, 2, 3, null),
+      [51187],
+      OVERLAP_SEGMENT,
+    ],
+    [
+      "A segment's range is fixed",
+      `UPDATE [dbo].[QuranRecitationSegment] SET [endAyah]=3 WHERE [id]=N'${firstSegment}';`,
+      [51187],
+      'A segment range is fixed once created.',
+    ],
+    [
+      'A recitation without audio is never published',
+      publish('QuranRecitation', recitation),
+      [51188],
+      NEEDS_AUDIO,
+    ],
+    [
+      'A translation without text is never published',
+      publish('QuranTranslation', translation),
+      [51189],
+      NEEDS_TEXT,
+    ],
+    [
+      'A transliteration without text is never published',
+      publish('QuranTransliteration', transliteration),
+      [51189],
+      NEEDS_TEXT,
+    ],
+    [
+      'A tafsir without entries is never published',
+      publish('QuranTafsir', emptyTafsir),
+      [51189],
+      NEEDS_TEXT,
+    ],
+    [
+      'A tajweed rule without text is never published',
+      publish('QuranTajweedRule', rule),
+      [51189],
+      NEEDS_TEXT,
+    ],
+    [
+      'A published work names a registered source',
+      `UPDATE [dbo].[QuranTafsir] SET [state]=N'published',[publishedAt]=SYSUTCDATETIME() WHERE [id]=N'${tafsir}';`,
+      [547],
+      'QuranTafsir_state_ck',
+    ],
+    [
+      'A translation text belongs to a real Ayah',
+      `INSERT INTO [dbo].[QuranTranslationText] ([translationId],[surahNumber],[ayahNumber],[text]) VALUES (N'${translation}',1,9,N'${literal(proofText('TRANSLATION', 1, 9))}');`,
+      [547],
+      'QuranTranslationText_ayah_fkey',
+    ],
+    [
+      'A topic assignment names a real Topic',
+      `INSERT INTO [dbo].[QuranTopic] ([surahNumber],[ayahNumber],[topicId]) VALUES (1,1,N'${randomUUID()}');`,
+      [547],
+      'QuranTopic_topicId_fkey',
+    ],
+    [
+      'A topic assignment names a real Ayah',
+      `INSERT INTO [dbo].[QuranTopic] ([surahNumber],[ayahNumber],[topicId]) VALUES (1,9,N'${topic.id}');`,
+      [547],
+      'QuranTopic_ayah_fkey',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, ruleName);
+  await expectAccepted(
+    session,
+    'Audio, texts and a topic, then publication',
+    `UPDATE [dbo].[QuranRecitationSegment] SET [assetId]=N'${firstAsset}' WHERE [id]=N'${secondSegment}';
+     ${publish('QuranRecitation', recitation)}
+     INSERT INTO [dbo].[QuranTranslationText] ([translationId],[surahNumber],[ayahNumber],[text]) VALUES (N'${translation}',1,1,N'${literal(proofText('TRANSLATION', 1, 1))}');
+     ${publish('QuranTranslation', translation)}
+     ${publish('QuranTafsir', tafsir)}
+     INSERT INTO [dbo].[QuranTransliterationText] ([transliterationId],[surahNumber],[ayahNumber],[text]) VALUES (N'${transliteration}',1,1,N'NON_QURAN_FIXTURE_TRANSLITERATION_1_1');
+     ${publish('QuranTransliteration', transliteration)}
+     INSERT INTO [dbo].[QuranTajweedRuleText] ([ruleId],[languageCode],[title],[body]) VALUES (N'${rule}',N'en',N'NON_QURAN_FIXTURE rule',N'NON_QURAN_FIXTURE rule body');
+     ${publish('QuranTajweedRule', rule)}
+     INSERT INTO [dbo].[QuranTopic] ([surahNumber],[ayahNumber],[topicId]) VALUES (1,1,N'${topic.id}');`,
+  );
+
+  // ---- a published work keeps its text against a MOVE as well as a delete -------
+  //
+  // Re-parenting a work's last text to another work empties the published one
+  // exactly as deleting it would, so the keep-text rule answers an UPDATE of
+  // the parent key too — for each of the four text tables, through the owner.
+  const draftTranslation = randomUUID();
+  const draftTransliteration = randomUUID();
+  const draftRule = randomUUID();
+  await expectAccepted(
+    session,
+    'Draft works to move texts into',
+    `INSERT INTO [dbo].[QuranTranslation] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${draftTranslation}',N'proof-quran-translation-draft-${run}',N'en',N'NON_QURAN_FIXTURE draft translation',N'draft',1,SYSUTCDATETIME());
+     INSERT INTO [dbo].[QuranTransliteration] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${draftTransliteration}',N'proof-quran-transliteration-draft-${run}',N'en',N'NON_QURAN_FIXTURE draft transliteration',N'draft',1,SYSUTCDATETIME());
+     INSERT INTO [dbo].[QuranTajweedRule] ([id],[slug],[position],[state],[version],[updatedAt]) VALUES (N'${draftRule}',N'proof-quran-tajweed-draft-${run}',1,N'draft',1,SYSUTCDATETIME());`,
+  );
+  for (const [label, statement] of [
+    [
+      "A published translation's last text is never moved away",
+      `UPDATE [dbo].[QuranTranslationText] SET [translationId]=N'${draftTranslation}' WHERE [translationId]=N'${translation}';`,
+    ],
+    [
+      "A published transliteration's last text is never moved away",
+      `UPDATE [dbo].[QuranTransliterationText] SET [transliterationId]=N'${draftTransliteration}' WHERE [transliterationId]=N'${transliteration}';`,
+    ],
+    [
+      "A published tafsir's entries are never moved away",
+      `UPDATE [dbo].[QuranTafsirText] SET [tafsirId]=N'${emptyTafsir}' WHERE [tafsirId]=N'${tafsir}';`,
+    ],
+    [
+      "A published tajweed rule's last text is never moved away",
+      `UPDATE [dbo].[QuranTajweedRuleText] SET [ruleId]=N'${draftRule}' WHERE [ruleId]=N'${rule}';`,
+    ],
+  ] as const)
+    await refuse(label, statement, [51189], NEEDS_TEXT);
+
+  // ---- a slug is a public address in one grammar ---------------------------------
+  const work = (table: string, slug: string): string => {
+    const id = randomUUID();
+    if (table === 'QuranRecitation')
+      return `INSERT INTO [dbo].[QuranRecitation] ([id],[slug],[personId],[name],[state],[version],[updatedAt]) VALUES (N'${id}',N'${slug}',N'${reciter}',N'NON_QURAN_FIXTURE',N'draft',1,SYSUTCDATETIME());`;
+    if (table === 'QuranTajweedRule')
+      return `INSERT INTO [dbo].[QuranTajweedRule] ([id],[slug],[position],[state],[version],[updatedAt]) VALUES (N'${id}',N'${slug}',2,N'draft',1,SYSUTCDATETIME());`;
+    return `INSERT INTO [dbo].[${table}] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${id}',N'${slug}',N'en',N'NON_QURAN_FIXTURE',N'draft',1,SYSUTCDATETIME());`;
+  };
+  for (const table of [
+    'QuranTranslation',
+    'QuranTransliteration',
+    'QuranTafsir',
+    'QuranRecitation',
+    'QuranTajweedRule',
+  ])
+    for (const [why, slug] of [
+      ['an uppercase letter', `Proof-upper-${run}`],
+      ['a leading hyphen', `-proof-leading-${run}`],
+      ['a double hyphen', `proof--double-${run}`],
+    ] as const)
+      await refuse(
+        `A ${table} slug with ${why} is refused`,
+        work(table, slug),
+        [547],
+        `${table}_slug_ck`,
+      );
+  for (const [label, statement, numbers, ruleName] of [
+    [
+      'One file serves one segment',
+      `UPDATE [dbo].[QuranRecitationSegment] SET [assetId]=N'${firstAsset}' WHERE [id]=N'${firstSegment}';`,
+      [2601],
+      'QuranRecitationSegment_assetId_key',
+    ],
+    [
+      'A published recitation keeps its audio',
+      `UPDATE [dbo].[QuranRecitationSegment] SET [assetId]=NULL WHERE [id]=N'${secondSegment}';`,
+      [51188],
+      NEEDS_AUDIO,
+    ],
+    [
+      'A published recitation keeps its audible segment',
+      `DELETE FROM [dbo].[QuranRecitationSegment] WHERE [id]=N'${secondSegment}';`,
+      [51188],
+      NEEDS_AUDIO,
+    ],
+    [
+      'A published translation keeps its text',
+      `DELETE FROM [dbo].[QuranTranslationText] WHERE [translationId]=N'${translation}';`,
+      [51189],
+      NEEDS_TEXT,
+    ],
+    [
+      'A published tafsir keeps its entries',
+      `DELETE FROM [dbo].[QuranTafsirText] WHERE [tafsirId]=N'${tafsir}';`,
+      [51189],
+      NEEDS_TEXT,
+    ],
+    [
+      'An Ayah is assigned a Topic once',
+      `INSERT INTO [dbo].[QuranTopic] ([surahNumber],[ayahNumber],[topicId]) VALUES (1,1,N'${topic.id}');`,
+      [2627],
+      'QuranTopic_pkey',
+    ],
+    [
+      'An invented Quran search kind is refused',
+      `INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'quran-surah',N'1');`,
+      [547],
+      'SearchIndexRequest_scopeKind_ck',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, ruleName);
+  await expectAccepted(
+    session,
+    'A second file replaces the first',
+    `UPDATE [dbo].[QuranRecitationSegment] SET [assetId]=N'${secondAsset}' WHERE [id]=N'${secondSegment}';`,
+  );
+  await expectAccepted(
+    session,
+    'Ayah search intent',
+    `INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'quran-ayah',N'1:2');`,
+  );
+
+  // ---- deactivation: an Ayah without history is still never removed -------------
+  //
+  // The structure trigger, not a foreign key, answers here: this Ayah has no
+  // revision. Its presence then keeps the corpus from ever matching its source
+  // again, which is the activation rule refusing a corpus nobody verified.
+  await expectAccepted(
+    session,
+    'The operator withdraws the corpus, then a direct Ayah',
+    `DELETE FROM [dbo].[QuranActivation];
+     ${ayahRow(2, 3, 2)}`,
+  );
+  for (const [label, statement, numbers, ruleName] of [
+    [
+      'An Ayah is never removed',
+      'DELETE FROM [dbo].[Ayah] WHERE [surahNumber]=2 AND [ayahNumber]=3;',
+      [51181],
+      STRUCTURE,
+    ],
+    [
+      "An Ayah's citation never changes",
+      'UPDATE [dbo].[Ayah] SET [ayahNumber]=4 WHERE [surahNumber]=2 AND [ayahNumber]=3;',
+      [51181],
+      STRUCTURE,
+    ],
+    [
+      'An unverified Ayah keeps the corpus inactive',
+      activate(fixture),
+      [51185],
+      NOT_THE_SOURCE,
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, ruleName);
+
+  report(
+    'quran canonical rules',
+    `exact acceptance and correction, frozen active corpus, layered works; ` +
+      `${String(refusals)} refusals by name, every text a NON_QURAN_FIXTURE sentinel`,
   );
 }
 
@@ -3730,7 +5373,7 @@ try {
   await assertNavigationPermission(session);
   await assertPeopleFoundation(session);
   await assertSearchFoundation(session);
-  await assertSearchVocabulary(session, 'phase13');
+  await assertSearchVocabulary(session, 'phase18');
   await assertMediaFoundation(session);
   await assertAudioFoundation(session);
   await assertPhotoFoundation(session);
@@ -3738,6 +5381,7 @@ try {
   await assertGlobalFoundation(session);
   await assertEventFoundation(session);
   await assertCollectionFoundation(session);
+  await assertQuranFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -3785,6 +5429,19 @@ try {
     }
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
+    }
+    if (migration.id === '20261002000000_phase18_quran') {
+      // Phase 18 widened the vocabulary by `quran-ayah` alone, so it narrows
+      // back to exactly Phase 13's — and the whole Phase-15 state it was applied
+      // on is back: the owners a Quran key once named (Language, Topic, Person
+      // and Storage's Asset) untouched by the drop, and Collections intact.
+      await assertSearchVocabulary(session, 'phase13');
+      await assertQuranRemoved(session);
+      await assertTaxonomyFoundation(session);
+      await assertPeopleFoundation(session);
+      await assertAudioFoundation(session);
+      await assertPhotoFoundation(session);
+      await assertCollectionFoundation(session);
     }
     if (migration.id === '20261001000000_phase15_collections') {
       // Phase 15 widened no search vocabulary, so none narrows here — and the
@@ -3872,7 +5529,7 @@ try {
   await assertNavigationPermission(session);
   await assertPeopleFoundation(session);
   await assertSearchFoundation(session);
-  await assertSearchVocabulary(session, 'phase13');
+  await assertSearchVocabulary(session, 'phase18');
   await assertMediaFoundation(session);
   await assertAudioFoundation(session);
   await assertPhotoFoundation(session);
@@ -3880,9 +5537,14 @@ try {
   await assertGlobalFoundation(session);
   await assertEventFoundation(session);
   await assertCollectionFoundation(session);
+  await assertQuranFoundation(session);
   // The membership rules as BEHAVIOUR, on the re-deployed schema: what was
   // rolled back and re-applied enforces exactly what the first deploy did.
   await assertCollectionMembership(session);
+  // And the canonical Quran rules, with sentinel text only. The rows they write
+  // are never removed — canonical history cannot be — and die with this
+  // disposable database.
+  await assertQuranCanonicalRules(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

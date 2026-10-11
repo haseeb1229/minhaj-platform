@@ -112,6 +112,8 @@ describe('the catalogues agree on their keys', () => {
       'shell.footer.preAdoption',
       'shell.notFound.body',
       'localeSwitcher.label',
+      'quran.fixture',
+      'quran.unavailable.body',
     ]) {
       const value = (locale: Catalogue) =>
         Object.fromEntries(leaves(locale))[key] as string;
@@ -135,6 +137,12 @@ describe('the catalogues agree on their keys', () => {
         'shell.nav.myMinhaj',
         'admin.navigation.title',
         'localeSwitcher.label',
+        // Phase 18: the statements a Quran reader must be able to read in their
+        // own language — that no corpus is available, that the text on a proof
+        // deployment is not the Quran, and which text is the Arabic.
+        'quran.unavailable.body',
+        'quran.fixture',
+        'quran.layer.arabic',
       ]) {
         expect(String(prose[key]), `${locale} ${key}`).toMatch(/\p{Script=Arabic}/u);
       }

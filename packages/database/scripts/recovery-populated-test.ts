@@ -58,6 +58,12 @@ import {
   verifyRestoredPhase16,
   writePhase16Fixture,
 } from '../src/lifecycle/phase16-fixture.ts';
+import {
+  capturePhase18Fixture,
+  newPhase18Fixture,
+  verifyRestoredPhase18,
+  writePhase18Fixture,
+} from '../src/lifecycle/phase18-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -183,6 +189,7 @@ const newsFixture = newPhase13Fixture();
 const globalFixture = newPhase16Fixture();
 const eventFixture = newPhase14Fixture();
 const collectionFixture = newPhase15Fixture();
+const quranFixture = newPhase18Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -377,6 +384,21 @@ try {
   const collectionSnapshot = await capturePhase15Fixture(admin, collectionFixture);
   report('collection fixture', `run ${collectionFixture.runId}`);
 
+  // Phase-18 Quran, with sentinel NON-QURAN text only: two registered fixture
+  // sources, a fictional two-Surah corpus materialised with version-1 history
+  // under a passed acceptance run, a failed run, a recorded version-2
+  // correction, fixture-mode activation, Surah display names, published
+  // translation, tafsir, recitation (a fictional reciter, a Storage Asset) and
+  // tajweed rule, a draft transliteration, an Ayah topic and Ayah search intent.
+  const quranReferences = {
+    actorId: fixture.accountId,
+    personId: peopleFixture.linkedPersonId,
+    topicId: taxonomyFixture.childTopicId,
+  };
+  await writePhase18Fixture(admin, quranFixture, quranReferences);
+  const quranSnapshot = await capturePhase18Fixture(admin, quranFixture);
+  report('quran fixture', `run ${quranFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -476,6 +498,10 @@ try {
       collectionSnapshot,
       collectionReferences,
     ),
+  );
+  report(
+    'quran recovery',
+    await verifyRestoredPhase18(restored, quranFixture, quranSnapshot, quranReferences),
   );
 
   // ---- restored security posture -------------------------------------------
@@ -684,6 +710,41 @@ try {
           'UPDATE [dbo].[CollectionRevision] SET [slug]=[slug];',
         ],
         ['CollectionSlugHistory DELETE', 'DELETE FROM [dbo].[CollectionSlugHistory];'],
+        // Phase 18. A restored runtime can neither register, edit or remove a
+        // source, switch the corpus on or off, write canonical text or history
+        // directly, call the authority check, rename a work's public address,
+        // erase a work, move a segment's range, nor re-parent a text.
+        [
+          'QuranSource UPDATE',
+          "UPDATE [dbo].[QuranSource] SET [authority]=N'approved',[reference]=N'urn:example:forged';",
+        ],
+        ['QuranSourceAyah DELETE', 'DELETE FROM [dbo].[QuranSourceAyah];'],
+        ['QuranActivation DELETE', 'DELETE FROM [dbo].[QuranActivation];'],
+        ['Ayah text UPDATE', 'UPDATE [dbo].[Ayah] SET [text]=[text];'],
+        ['Surah ayahCount UPDATE', 'UPDATE [dbo].[Surah] SET [ayahCount]=[ayahCount];'],
+        ['QuranAyahRevision DELETE', 'DELETE FROM [dbo].[QuranAyahRevision];'],
+        [
+          'QuranVerificationRun UPDATE',
+          'UPDATE [dbo].[QuranVerificationRun] SET [outcome]=[outcome];',
+        ],
+        [
+          'QuranAssertCanonicalAuthority EXECUTE',
+          `EXEC [dbo].[QuranAssertCanonicalAuthority] @actorId=N'${fixture.accountId}', @sessionId=N'none', @stepUpGrantId=N'none';`,
+        ],
+        [
+          'QuranTranslation slug UPDATE',
+          'UPDATE [dbo].[QuranTranslation] SET [slug]=[slug];',
+        ],
+        ['QuranRecitation DELETE', 'DELETE FROM [dbo].[QuranRecitation];'],
+        [
+          'QuranRecitationSegment UPDATE',
+          'UPDATE [dbo].[QuranRecitationSegment] SET [startAyah]=[startAyah];',
+        ],
+        ['QuranTopic UPDATE', 'UPDATE [dbo].[QuranTopic] SET [topicId]=[topicId];'],
+        [
+          'QuranTranslationText re-parent UPDATE',
+          'UPDATE [dbo].[QuranTranslationText] SET [translationId]=[translationId];',
+        ],
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -723,6 +784,7 @@ try {
         collectionSnapshot,
         collectionReferences,
       );
+      await verifyRestoredPhase18(restored, quranFixture, quranSnapshot, quranReferences);
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 
       // Phase 17. The full-text catalogue and index live INSIDE the database,

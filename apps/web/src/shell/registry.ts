@@ -131,11 +131,26 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
   }),
+  /**
+   * DELIVERED BY PHASE 18. `/quran` is the Quran landing: a genuine page in all
+   * three locales that says honestly when no corpus is active, and otherwise
+   * leads into the reader, the study aids and the recitations.
+   *
+   * `excluded` FROM THE BUILD-BOUND SITEMAP, deliberately. Whether a Quran page
+   * may be indexed is a RUNTIME fact of the corpus — inactive, engineering
+   * fixture text, or approved — which code cannot know when the artifact is
+   * built. Each Quran page decides its own robots and canonical from the
+   * corpus's availability, and the `quran` sitemap segment lists canonical
+   * Ayah citations only while an approved corpus is active.
+   */
   Object.freeze({
     key: 'quran',
     label: 'nav.quran',
+    path: '/quran',
     placements: Object.freeze(['primary'] as const),
-    availability: 'deferred' as const,
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'excluded' as const,
   }),
   Object.freeze({
     key: 'hadith',
@@ -472,10 +487,10 @@ const WATCH: readonly ShellRoute[] = Object.freeze(
  * covers both video and audio (INFORMATION_ARCHITECTURE.md §2.2), and `/watch`
  * links here.
  *
- * `/listen/recitations` HAS NO ENTRY AND NO ROUTE. It is the catalogue
- * projection of Quran-owned recitations, and Quran has not shipped; an
- * AudioTrack never fills it. A deferred capability is absent, never a dead
- * link (ROUTE_MAP.md §5.2).
+ * `/listen/recitations` HAS NO ENTRY. Phase 18 delivered it as the catalogue
+ * projection of Quran-owned recitations, canonical to `/quran/recitations`; it
+ * exists only while a Quran corpus is active, so `/listen` links it at runtime
+ * rather than through a static entry. An AudioTrack never fills it.
  */
 const LISTEN: readonly ShellRoute[] = Object.freeze([
   Object.freeze({
@@ -499,6 +514,55 @@ const LISTEN: readonly ShellRoute[] = Object.freeze([
     }),
   ),
 ]);
+
+/**
+ * The Quran surfaces — Phase 18 (ROUTE_MAP.md §3.3).
+ *
+ * The reader entry, the Surah and Juz indexes, Quran search, the four study
+ * aids, the recitations, and the three related-material views whose owners
+ * expose a public by-topic read (Library's Works and Research, Media's Videos).
+ * NO PLACEMENT — they are reached from `/quran`, the single entry point in the
+ * primary navigation. Every one is `excluded` for the reason the `quran` entry
+ * gives; search is excluded for good.
+ *
+ * WHAT IS ABSENT IS ABSENT. `/quran/articles` has no entry because Editorial
+ * exposes no public by-topic Article read; `/quran/courses` and
+ * `/quran/teachers` belong to Learning, which has not shipped. A numbered
+ * Surah, Ayah or Juz, a work, a reciter and a topic view are resources and
+ * views reached through these, never registry entries.
+ *
+ * `/listen/recitations` IS NOT HERE EITHER. It is the Listen projection of the
+ * Quran-owned catalogue and exists only while a corpus is active, so it cannot
+ * be a static link; `/listen` links it when, and only when, it exists.
+ */
+const QURAN_SURFACES = Object.freeze([
+  'read',
+  'surah',
+  'juz',
+  'search',
+  'translations',
+  'tafsir',
+  'transliteration',
+  'tajweed',
+  'recitations',
+  'books',
+  'videos',
+  'research',
+] as const);
+
+const QURAN: readonly ShellRoute[] = Object.freeze(
+  QURAN_SURFACES.map((surface) =>
+    Object.freeze({
+      key: `quran.${surface}`,
+      label: `quran.${surface}`,
+      path: `/quran/${surface}`,
+      placements: Object.freeze([] as const),
+      visibility: 'public' as const,
+      availability: 'delivered' as const,
+      indexing: 'excluded' as const,
+    }),
+  ),
+);
 
 /**
  * The photograph surfaces — Phase 12 (ROUTE_MAP.md §3.9).
@@ -709,6 +773,7 @@ export const SHELL_ROUTES: readonly ShellRoute[] = Object.freeze([
   ...LIBRARY,
   ...WATCH,
   ...LISTEN,
+  ...QURAN,
   ...MEDIA,
   ...NEWS,
   ...EVENTS,

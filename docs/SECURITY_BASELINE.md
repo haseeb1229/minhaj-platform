@@ -197,6 +197,20 @@ for practical administration, their use is audited.
    **character-level mismatch blocks import**.
 5. **Quran owns Recitation** (DOMAIN_MODEL.md §8.1); Media cannot author a competing record.
 
+**As delivered (Phase 18, engineering — DOMAIN_MODEL.md §8.3).** Rule 1 is a database property,
+not only an application check: the application principal holds no INSERT, UPDATE or DELETE on
+canonical structure, text, history or verification evidence, and the only canonical writes are
+two procedures that re-check — from the authoritative rows, after the service has verified the
+Identity-minted actor — a current `quran.editCanonical` assignment of an active role held by an
+active account, and an unexpired step-up grant for the dedicated `quran-canonical-edit` purpose
+bound to a live session of that account (§8.1). A grant earned for any other purpose authorises
+nothing here. The "documented authoritative source" is a registered `QuranSource` that only the
+owner/operator principal can create, so the external approval of rule 4 is never equivalent to an
+application permission. Rule 4's mismatch blocking is exact: code points in the verifier, UTF-16
+bytes in the database, and canonical text is copied from the registered source's own rows only
+after the candidate matched them. Layered works carry `quran.administer`, isolated from canonical
+text; no `content.*`, `library.*` or `media.*` key confers Quran authority, and no profile does.
+
 ### 5.2 Hadith
 
 1. **Text, reference numbers, narrator chains and gradings are sourced data — never inferred,

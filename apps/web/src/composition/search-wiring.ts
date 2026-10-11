@@ -5,6 +5,7 @@ import { newsPathOf, pagePath } from '@minhaj/contracts/editorial';
 import type { LibraryPublicReaderPort, ScholarlyKind } from '@minhaj/contracts/library';
 import type { MediaPublicReaderPort } from '@minhaj/contracts/media';
 import type { PeopleReaderPort } from '@minhaj/contracts/people';
+import type { QuranPublicReaderPort } from '@minhaj/contracts/quran';
 import type {
   SearchKind,
   SearchScopeKind,
@@ -24,6 +25,7 @@ import {
 } from '@/contexts/library';
 import { createAudioSearchSource, createVideoSearchSource } from '@/contexts/media';
 import { createPersonSearchSource } from '@/contexts/people-contributors';
+import { createQuranSearchProjection } from '@/contexts/quran';
 import { createTopicSearchSource } from '@/contexts/taxonomy';
 
 /**
@@ -50,7 +52,8 @@ import { createTopicSearchSource } from '@/contexts/taxonomy';
  * Phase-9 Library routes, an issue beneath its Magazine's CURRENT slug, a
  * Phase-10 Video at `/watch/videos/{slug}`, a Phase-11 AudioTrack at
  * `/listen/lectures/{slug}`, and each Phase-13 News family at its own
- * canonical address beneath `/news`.
+ * canonical address beneath `/news`, and a Phase-18 Ayah at its permanent
+ * citation address `/quran/surah/{surah}/{ayah}`.
  */
 
 export interface SearchOwnerReaders {
@@ -59,6 +62,7 @@ export interface SearchOwnerReaders {
   readonly editorial: EditorialPublicReaderPort;
   readonly library: LibraryPublicReaderPort;
   readonly media: MediaPublicReaderPort;
+  readonly quran: QuranPublicReaderPort;
 }
 
 const segment = (value: string) => encodeURIComponent(value);
@@ -76,6 +80,7 @@ export function searchWiring(readers: SearchOwnerReaders): {
   readonly resolveTopic: (slug: string, locale: string) => Promise<SearchTopic | null>;
 } {
   const editorial = createEditorialSearchSources(readers.editorial);
+  const quran = createQuranSearchProjection(readers.quran);
 
   const editions: SearchTargetResolver = async (ids) =>
     mapOf(
@@ -127,6 +132,7 @@ export function searchWiring(readers: SearchOwnerReaders): {
       'press-release': editorial.news['press-release'],
       statement: editorial.news.statement,
       'media-coverage': editorial.news['media-coverage'],
+      'quran-ayah': quran.source,
     },
 
     targets: {
@@ -179,6 +185,9 @@ export function searchWiring(readers: SearchOwnerReaders): {
       'press-release': news('press-release'),
       statement: news('statement'),
       'media-coverage': news('media-coverage'),
+      // Quran's own public predicate answers which Ayat are public NOW — the
+      // corpus active and the Ayah present — at their permanent citation.
+      'quran-ayah': quran.target,
     },
 
     async resolveTopic(slug, locale) {

@@ -462,6 +462,43 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[collectioncontributor]': ['SELECT', 'INSERT'],
   '[dbo].[collectionitem]': ['SELECT', 'INSERT'],
   '[dbo].[collectionslughistory]': ['SELECT', 'INSERT'],
+  // Phase 18: Quran, in four postures. The registered SOURCE, its activation
+  // and the CANONICAL tables are SELECT only: canonical rows are written by the
+  // three procedures below alone, through ownership chaining, and the authority
+  // check they call is DENIED to the runtime outright. A Surah's UPDATE and a
+  // segment's UPDATE are COLUMN grants — the display-name version and the audio
+  // relation — recorded against the object as UPDATE; every layered work's slug
+  // carries a column DENY, and so does every text's identity (its work, and its
+  // Ayah or language), so no text is ever re-parented away from a published
+  // work. None of that can be expressed here, so the probe suite proves it
+  // column by column. LAYERED works are never deleted; their texts,
+  // contributors, segments, display names and topic assignments are child rows.
+  '[dbo].[quransource]': ['SELECT'],
+  '[dbo].[quransourcesurah]': ['SELECT'],
+  '[dbo].[quransourceayah]': ['SELECT'],
+  '[dbo].[quranactivation]': ['SELECT'],
+  '[dbo].[juz]': ['SELECT'],
+  '[dbo].[surah]': ['SELECT', 'UPDATE'],
+  '[dbo].[ayah]': ['SELECT'],
+  '[dbo].[quranayahrevision]': ['SELECT'],
+  '[dbo].[quranverificationrun]': ['SELECT'],
+  '[dbo].[quranacceptcorpus]': ['EXECUTE'],
+  '[dbo].[qurancorrectayah]': ['EXECUTE'],
+  '[dbo].[quranrecordverificationfailure]': ['EXECUTE'],
+  '[dbo].[surahname]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[qurantranslation]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[qurantransliteration]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[qurantafsir]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[quranrecitation]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[qurantajweedrule]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[qurantranslationcontributor]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[qurantafsircontributor]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[qurantranslationtext]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[qurantransliterationtext]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[qurantafsirtext]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[qurantajweedruletext]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[quranrecitationsegment]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[qurantopic]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[contactinquiry]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[feedback]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
 

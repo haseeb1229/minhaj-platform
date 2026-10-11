@@ -225,7 +225,9 @@ describe.skipIf(!databaseConfigured)(
         const session = await sessionOf(harness, administrator);
         const evaluated = await harness.authorization.evaluate(session);
 
-        expect(evaluated.can('quran.editCanonical' as 'users.read')).toBe(false);
+        // `hadith.editCanonical` is named by DOMAIN_MODEL.md §4.4 and belongs
+        // to Hadith, which has not shipped (Quran's key now exists, Phase 18).
+        expect(evaluated.can('hadith.editCanonical' as 'users.read')).toBe(false);
       });
 
       it('denies every non-active status, whatever the account may hold', async () => {
@@ -328,6 +330,13 @@ describe.skipIf(!databaseConfigured)(
       const PHASE_16_KEYS = ['global.administer', 'global.read'];
 
       /**
+       * The keys the Phase-18 migration appended, and the only ones: the
+       * canonical authority the accepted documents name, and the read and
+       * administer pair for the layered works. No per-work and no publish key.
+       */
+      const PHASE_18_KEYS = ['quran.administer', 'quran.editCanonical', 'quran.read'];
+
+      /**
        * The four capability-projection sources, which MUST NOT be grantable.
        *
        * DOMAIN_MODEL.md §4.5 derives `canTeach`, `canReceiveQuestions`,
@@ -359,6 +368,7 @@ describe.skipIf(!databaseConfigured)(
             ...PHASE_17_KEYS,
             ...PHASE_10_KEYS,
             ...PHASE_16_KEYS,
+            ...PHASE_18_KEYS,
           ].sort(),
         );
 
@@ -391,7 +401,6 @@ describe.skipIf(!databaseConfigured)(
         // Taxonomy HAS shipped — which is the whole rule: a domain leaves it at
         // its owning phase and not before.
         for (const domain of [
-          'quran.',
           'hadith.',
           'fatwa.',
           'learning.',
@@ -599,7 +608,7 @@ describe.skipIf(!databaseConfigured)(
 
         const outcome = await harness.administration.setRolePermissions(actor, {
           roleId: role.id,
-          permissions: ['quran.editCanonical'],
+          permissions: ['hadith.editCanonical'],
         });
 
         expect(outcome.ok).toBe(false);

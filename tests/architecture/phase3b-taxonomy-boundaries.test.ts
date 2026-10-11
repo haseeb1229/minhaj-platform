@@ -471,9 +471,10 @@ describe('Phase 3B — every taxonomy surface passes the gate', () => {
 
   it('requires no step-up, and invents no new step-up purpose', async () => {
     // SECURITY_BASELINE.md §8.1 does not list taxonomy administration, and §8.2
-    // says the requirement is "deliberately not universal". The Phase-2
-    // vocabulary is closed at three purposes; a fourth invented here would be a
-    // scope with no operation behind it.
+    // says the requirement is "deliberately not universal". The vocabulary
+    // names only operations §8.1 lists — Phase 2's three and Phase 18's
+    // canonical Quran edit; one invented here would be a scope with no
+    // operation behind it.
     const actions = code(await sourceOf(`${TAXONOMY_ROUTES}/actions.ts`));
     const permissions = await sourceOf('packages/contracts/src/identity/permissions.ts');
 
@@ -487,7 +488,12 @@ describe('Phase 3B — every taxonomy surface passes the gate', () => {
     expect(purposes).toBeDefined();
     expect(
       [...(purposes ?? '').matchAll(/'([a-z-]+)'/g)].map((match) => match[1]),
-    ).toEqual(['privilege-administration', 'account-administration', 'second-factor']);
+    ).toEqual([
+      'privilege-administration',
+      'account-administration',
+      'second-factor',
+      'quran-canonical-edit',
+    ]);
   });
 
   it('reaches no database capability from a route or an action', async () => {

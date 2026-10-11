@@ -803,6 +803,103 @@ General non-Quran audio (lectures, talks) remains owned by Media.
 - Every Ayah has a stable canonical reference (surah:ayah) that never changes.
 - **Quran is never merged into Library.** Books *about* the Quran are Works; the Quran is not.
 
+### 8.3 Quran — as delivered (Phase 18, engineering)
+
+**Engineering implementation only.** No Quran text, translation, tafsir, transliteration,
+recitation, Surah name, ayah count or Juz boundary is seeded or written anywhere in the
+repository; the authoritative source, the approved layered works and their rights remain open
+(OPEN_DECISIONS.md §1.1, §1.2, §2.4). Mechanisms are proven against controlled, unmistakably
+non-authoritative fixtures.
+
+**The citation is the identity.** A Surah is its number (1–114), a Juz its number (1–30) and an
+Ayah the pair `(surahNumber, ayahNumber)` — the primary key, with no surrogate that could drift
+from the citation. An Ayah names its Juz directly; a Juz's range is **derived** from its ayat and
+never stored beside them. Hizb, page and sajdah markers are nullable and come only from a source.
+Surah display names (`SurahName`, per interface locale) are presentation, not identity, and carry
+their own version; no Surah, Ayah or Juz has a slug.
+
+**Sources are registered, never chosen at runtime.** `QuranSource` (with `QuranSourceSurah` and
+`QuranSourceAyah`, the source's own structure and exact text) records a source's code, title,
+version, encoding (`utf-8`, the one the verifier implements), script and — for an `approved`
+source, mandatorily — the external authority's evidence reference. `authority` is `fixture` or
+`approved`. Sources are immutable and are written only by the owner/operator principal; the
+application principal can read them and nothing else, so **no permission, label or checkbox can
+create an authority or turn a fixture into one**.
+
+**Activation is an operator act.** The corpus is public if and only if the single
+`QuranActivation` row exists. Its trigger refuses an empty or incomplete corpus — the canonical
+ayat must be exactly the activating source's, and every Surah's count must match — and refuses an
+`approved` activation while any Ayah's text came from a fixture source. An active corpus is
+frozen: no structure is added beneath it. A **fixture** activation exists for disposable proof
+environments only: every public Quran page then says it shows non-authoritative engineering
+fixture text, is `noindex`, and no sitemap lists it.
+
+**Canonical text has one write path.** The application principal holds SELECT and nothing else
+on `Juz`, `Surah` (except its display-name version), `Ayah`, `QuranAyahRevision` and
+`QuranVerificationRun`. Canonical writes are two procedures, each of which re-checks in SQL that
+the actor holds `quran.editCanonical` through a current assignment of an active role, is active,
+and holds an unexpired step-up grant for the `quran-canonical-edit` purpose bound to a live
+session of the same account — after the Quran service has already verified the Identity-minted
+`PrivilegedActor`:
+
+- **Corpus acceptance** materialises an empty canonical store **by copying the registered
+  source's own rows**, after the database compares the candidate corpus to them byte for byte —
+  exactly the source's ayat, once each, in the source's Juz, with identical text — and checks the
+  source is a complete, contiguous structure. It never replaces or merges into an existing corpus.
+- **Ayah correction** replaces one Ayah's text with a registered source's text for that Ayah, under
+  the expected version, only if the operator's reviewed text is that source text exactly; a
+  fixture source can never displace approved text or enter an approved public corpus.
+
+Every canonical version, version 1 included, is an immutable `QuranAyahRevision` (text, source,
+verification run, actor, step-up grant, reason); an Ayah update is refused unless its revision for
+the new version exists and the version advances by exactly one. Every verification, passed or
+failed, is immutable, content-free `QuranVerificationRun` evidence (counts, first mismatch
+reference, code-point offset and reason). The generic audit record names the Ayah, versions,
+source and run — never the text, which is held as the domain's own revision record
+(SECURITY_BASELINE.md §13.4). There is no bulk canonical edit, no import UI and no automated
+publication path.
+
+**Exact comparison.** Verification compares Unicode code points, and the database compares UTF-16
+bytes: no trimming, case or accent folding, normalisation form, tashkeel removal, letter or yeh
+substitution, or collation equivalence can make two different texts equal. Transport decoding is
+fatal UTF-8 that keeps a byte-order mark as a difference; malformed bytes and an undeclared encoding
+are refused.
+
+**Layered works are separate aggregates**, each with its own identity, immutable slug, content
+Language (Taxonomy), lifecycle (draft, published, archived), version and optional registered
+source: `QuranTranslation` + `QuranTranslationText` (one text per work and Ayah) +
+`QuranTranslationContributor` (People: translator, editor); `QuranTransliteration` +
+`QuranTransliterationText` (sourced text only — never derived from the Arabic); `QuranTafsir` +
+`QuranTafsirText` (an entry over one Surah's contiguous range — the Surah is a single column
+shared by both ends' foreign keys, so a cross-Surah range is unrepresentable; entries of one work
+never overlap) + `QuranTafsirContributor` (author, translator, editor, compiler);
+`QuranTajweedRule` + `QuranTajweedRuleText` (plain-text guidance per language — nothing is
+annotated onto canonical text). Several coexist and **none is privileged**; a reader chooses.
+**A layered work is public only while the corpus is active, it is published, and it names a
+registered source** — and beside an approved corpus only an approved source will do. Publishing
+therefore needs a source the operator registered, which is why `quran.administer` is not religious
+approval. A published work keeps at least one text.
+
+**Recitation is Quran's** (§8.1). `QuranRecitation` names its reciter as a People Person — which
+grants nothing — with a style and attribution only where a source supplies them;
+`QuranRecitationSegment` is one Storage `Asset` over one Surah's contiguous range (no overlap within
+a recitation, a range fixed once created, one Asset per segment, a never-cascading key). A
+published recitation always has audio. Media holds no recitation column, table or code;
+`/listen/recitations` is a Layer-4 projection of Quran's public reader. Nothing is downloadable.
+
+**Typed topic assignment.** `QuranTopic` targets the **Ayah** — the canonical citation unit —
+with real foreign keys to the Ayah and the Topic. Surah-level assignment would be a separate typed
+relation if ever needed; none is invented.
+
+**Search.** One kind, `quran-ayah`, one scope per Ayah (a Surah can hold more ayat than a scope
+may hold documents), identity `"{surah}:{ayah}"`. An Ayah's documents are its canonical Arabic and
+one document per language of its public translation and transliteration texts, so several works
+matching never multiply the canonical result and a translation is never presented as the Arabic.
+Tafsir bodies are not indexed. Nothing is indexed while the corpus is inactive.
+
+**No Personalisation state.** Reading progress, bookmarks and notes are Phase 21's; nothing here
+anticipates them.
+
 ---
 
 ## 9. Hadith

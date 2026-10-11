@@ -171,3 +171,11 @@ export {
   createGlobalPublicReader,
   createGlobalReferences,
 } from './adapters/global-network/index.ts';
+
+/* ---- Quran (context-owned) ---------------------------------------------- */
+
+export {
+  createQuranCanonical,
+  createQuranPersistence,
+  createQuranPublicReader,
+} from './adapters/quran/index.ts';

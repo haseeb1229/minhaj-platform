@@ -202,6 +202,20 @@ and contributors for one topic. It sits at root level because it serves every co
 Translation, tafsir and reciter selections are **query parameters, not path segments**, so a
 citation remains valid regardless of reading preferences.
 
+**Delivered in Phase 18 (engineering — no authoritative corpus is supplied; DELIVERY_PLAN.md
+Phase-18 continuity).** Every route above except the three related views named below. Surah, Ayah
+and Juz addresses are numbers; `?translation`, `?transliteration` and `?tafsir` name a public work's
+slug, `?reciter` a public Recitation's slug and `?size` a reading size — each validated, an unknown
+value reported rather than broadened, and the canonical URL always the bare citation. `/quran/read`
+is an anonymous entry form; signed-in progress arrives with Phase 21. `/quran/recitations/{reciter}`
+is the reciter's People slug. **Corpus states:** while no corpus is active, section pages render an
+honest unavailable state and named resources answer 404; a fixture-mode corpus carries a visible
+non-authoritative notice on every page and is `noindex`; only an approved corpus is indexable.
+Related views: `/quran/books`, `/quran/videos` and `/quran/research` are delivered — each the
+owner's own public listing for the seeded `quran` topic, canonical to the owner's collection;
+`/quran/articles`, `/quran/courses` and `/quran/teachers` stay absent and unlinked until an owner
+exposes a deterministic by-topic read.
+
 ### 3.4 Hadith
 
 | Route | Purpose |
@@ -248,7 +262,7 @@ citation remains valid regardless of reading preferences.
 | `/watch/speakers` | Speaker listing — **details 301 → `/people/{slug}`** |
 | `/watch/topics/{slug}` | Filtered view, canonical → `/topics/{slug}` |
 | `/listen` · `/listen/lectures` · `/{slug}` · `/listen/series` · `/{slug}` | Audio — a **sibling** of `/watch`, not a child. `/listen/lectures` takes `?topic, speaker, series, language`; each track and audio series is canonical at exactly one address (Phase 11) |
-| `/listen/recitations` | **Catalogue projection of Quran-owned recitations**, canonical → `/quran/recitations`. **Absent until Quran delivers it** — never filled by an AudioTrack |
+| `/listen/recitations` | **Catalogue projection of Quran-owned recitations**, canonical → `/quran/recitations`. Delivered in Phase 18 as a Layer-4 page over Quran's public reader, present only while a corpus is active — never filled by an AudioTrack |
 
 ### 3.8 Fatwa
 
@@ -477,7 +491,7 @@ Prefixed `/{locale}/admin`.
 |---|---|
 | Dashboard | `/admin` |
 | Editorial | `/admin/editorial/{articles\|pages\|news\|press-releases\|statements\|media-coverage\|events\|collections\|queue\|correspondence}` \u2014 **correspondence** covers private ContactInquiry and Feedback triage (DOMAIN_MODEL.md \u00a77.5); `news`, `press-releases`, `statements` and `media-coverage` delivered in Phase 13, `events` in Phase 14, `collections` in Phase 15, and `queue` lists every workflow-governed aggregate |
-| Quran | `/admin/quran/{surahs\|ayat\|translations\|tafsir\|transliterations\|recitations}` |
+| Quran | `/admin/quran/{surahs\|ayat\|translations\|tafsir\|transliterations\|recitations\|tajweed}` — delivered in Phase 18; `tajweed` holds TajweedRule guidance. Canonical text is read-only; the correction flow on an Ayah appears only to `quran.editCanonical` holders after a `quran-canonical-edit` step-up. No corpus import surface exists |
 | Hadith | `/admin/hadith/{collections\|books\|chapters\|records\|commentary}` |
 | Fatwa | `/admin/fatwa/{questions\|assignment\|drafts\|review\|published}` |
 | Library | `/admin/library/{works\|editions\|translations\|research\|publications\|magazines\|encyclopedias\|sale-points}` — research papers at `research/papers`, and a Magazine's issues beneath it at `magazines/{id}/issues/{issueId}` (Phase 9) |
@@ -516,6 +530,7 @@ Categories only; no endpoint contracts in this phase.
 | Migration | `/api/admin/migration/*` | Import control and status |
 | Media | `/api/media/*` | Asset serving and signed downloads |
 | Media upload | `/api/admin/media/audio/{id}/asset` · `/api/admin/media/photos/{id}/asset` | Phase 11: one track's audio file; Phase 12: one Photo's image. `POST` only, a streamed raw body — Class A with explicit anti-CSRF (SECURITY_BASELINE.md §7.1) |
+| Quran upload | `/api/admin/quran/recitations/{id}/segments/{segmentId}/asset` | Phase 18: one recitation segment's audio file, by the same streamed Class-A pattern. Its bytes are served at `/assets/quran/recitations/…` and previewed at `/assets/quran/previews/recitations/…`; nothing is offered as a download |
 | Webhooks | `/api/webhooks/{provider}` | **Signature-verified, idempotent, replay-resistant** |
 | Health | `/api/health` · `/api/ready` | Unprefixed operational probes |
 

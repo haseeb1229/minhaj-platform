@@ -10,6 +10,7 @@ import {
 
 import { audioPlayable } from '@/composition/media-assets';
 import { mediaReadRuntime } from '@/composition/media-read';
+import { quranReadRuntime } from '@/composition/quran-read';
 import {
   contentLanguages,
   referenceNames,
@@ -64,8 +65,9 @@ import {
  * is absent, never a dash — and a missing transcript is said to be missing.
  *
  * NO RECITATION IS HERE. Everything on these pages is non-Quran audio; Quran
- * recitations are Quran's, and `/listen/recitations` does not exist until Quran
- * ships its catalogue.
+ * recitations are Quran's. `/listen/recitations` is Quran's catalogue projected
+ * into Listen (Phase 18), and the landing links it only while a Quran corpus is
+ * active — the one question it asks of Quran's public reader.
  */
 
 type ListenTranslator = Awaited<ReturnType<typeof getTranslations<'listen'>>>;
@@ -846,21 +848,26 @@ const LANDING_SERIES = 4;
 
 /**
  * `/listen` — the newest recordings, the audio series, and the ways in. The
- * browse list names only what exists: lectures, series and topics, and Watch
- * for video. No recitations, no "coming soon".
+ * browse list names only what exists: lectures, series and topics, Watch for
+ * video, and — only while a Quran corpus is active — the recitation catalogue
+ * Quran owns. No "coming soon".
  */
 export async function ListenLandingPage({ locale }: { readonly locale: Locale }) {
   const t = await getTranslations({ locale, namespace: 'listen' });
   const trail = await listenTrail(locale);
   const reads = mediaReadRuntime();
-  const [latest, series] = await Promise.all([
+  const [latest, series, quran] = await Promise.all([
     reads.audioTracks({}),
     reads.audioSeriesList(0),
+    quranReadRuntime().reader.availability(),
   ]);
 
   const browse = [
     { href: `/${locale}/listen/lectures`, key: 'lectures' },
     { href: `/${locale}/listen/series`, key: 'series' },
+    ...(quran.active
+      ? [{ href: `/${locale}/listen/recitations`, key: 'recitations' } as const]
+      : []),
     { href: `/${locale}/topics`, key: 'topics' },
     { href: `/${locale}/watch`, key: 'watch' },
   ] as const;

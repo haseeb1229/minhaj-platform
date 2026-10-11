@@ -129,6 +129,41 @@ function thirdPartyRequests(page: Page): Request[] {
 const bytesRoute = (trackId: string, assetId: string) =>
   `/assets/media/audio/${trackId}/${assetId}`;
 
+/**
+ * Is a Quran corpus active in this run's database?
+ *
+ * PHASE 18 MADE `/listen/recitations` CONDITIONAL. It is Quran's recitation
+ * catalogue projected into Listen: absent (404) and unlinked while no corpus is
+ * active, present once one is. The corpus is a database singleton that
+ * `quran.spec.ts` activates part-way through its own journey, and spec files
+ * run in parallel against one database, so this file cannot choose the state —
+ * it reads it, and holds the page to the contract for the state it finds. The
+ * deterministic proof of BOTH states, in order, is `quran.spec.ts`.
+ */
+async function quranCorpusActive(): Promise<boolean> {
+  const [row] = await sql.query<{ total: number }>(
+    'SELECT COUNT_BIG(*) AS [total] FROM [dbo].[QuranActivation];',
+  );
+  if (row === undefined) throw new Error('The Quran activation could not be read.');
+  return Number(row.total) > 0;
+}
+
+/**
+ * Observes something in a Quran state that did NOT change while it was
+ * observed. Activation is one-way within a run, so a pass that straddled it is
+ * simply repeated, and the next one is stable.
+ */
+async function inStableQuranState<T>(
+  observe: () => Promise<T>,
+): Promise<{ active: boolean; observed: T }> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const before = await quranCorpusActive();
+    const observed = await observe();
+    if ((await quranCorpusActive()) === before) return { active: before, observed };
+  }
+  throw new Error('The Quran corpus changed state during every observation.');
+}
+
 test.beforeAll(async () => {
   test.setTimeout(120_000);
   sql = await privilegedSession();
@@ -200,14 +235,21 @@ test.describe('an anonymous visitor listens', () => {
     await expect(page.getByRole('link', { name: LECTURE_TITLE })).toBeVisible();
     await expect(page.getByText('Synthetic hidden draft recording')).toHaveCount(0);
 
-    const hrefs = await page
-      .getByRole('main')
-      .getByRole('link')
-      .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
+    const { active, observed: hrefs } = await inStableQuranState(async () => {
+      await page.goto('/en/listen');
+      return page
+        .getByRole('main')
+        .getByRole('link')
+        .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
+    });
     for (const surface of ['/en/listen/lectures', '/en/listen/series', '/en/watch']) {
       expect(hrefs).toContain(surface);
     }
-    expect(hrefs.some((href) => href.includes('recitation'))).toBe(false);
+    // The recitation catalogue is linked exactly when Quran has one to show,
+    // and only at its Listen address — never anything else "recitation".
+    expect(hrefs.filter((href) => href.includes('recitation'))).toEqual(
+      active ? ['/en/listen/recitations'] : [],
+    );
     // No cover art is invented: a row paints no image at all.
     await expect(page.locator('main img')).toHaveCount(0);
   });
@@ -361,17 +403,39 @@ test.describe('an anonymous visitor listens', () => {
     }
   });
 
-  test('never serves a draft page, and has no recitation catalogue', async ({
+  test('never serves a draft page, and serves a recitation catalogue only from Quran', async ({
     request,
   }) => {
-    for (const missing of [
-      `/en/listen/lectures/${draftSlug}`,
-      '/en/listen/recitations',
-      '/en/listen/podcasts',
-    ]) {
+    for (const missing of [`/en/listen/lectures/${draftSlug}`, '/en/listen/podcasts']) {
       const response = await request.get(missing, { maxRedirects: 0 });
       expect(response.status(), missing).toBe(404);
     }
+
+    const { active, observed } = await inStableQuranState(async () => {
+      const response = await request.get('/en/listen/recitations', { maxRedirects: 0 });
+      return {
+        status: response.status(),
+        cookie: response.headers()['set-cookie'],
+        body: await response.text(),
+      };
+    });
+    expect(observed.cookie).toBeUndefined();
+    if (!active) {
+      // No corpus, no catalogue: absent, not an empty frame.
+      expect(observed.status).toBe(404);
+      return;
+    }
+    // A corpus is active: Quran's catalogue, projected — pointing at its home in
+    // the Quran section, never indexable on this deployment, and holding none
+    // of Media's recordings.
+    expect(observed.status).toBe(200);
+    expect(observed.body).toContain('href="/en/quran/recitations"');
+    expect(observed.body).toMatch(/<meta name="robots" content="noindex/);
+    expect(observed.body).not.toContain('rel="canonical"');
+    for (const title of [LECTURE_TITLE, URDU_TITLE, WITHDRAWN_TITLE])
+      expect(observed.body).not.toContain(title);
+    expect(observed.body).not.toContain('/listen/lectures/');
+    expect(observed.body).not.toContain('/assets/media/');
   });
 
   test('lists an audio series in its own order', async ({ page }) => {

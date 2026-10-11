@@ -355,8 +355,9 @@ describe('Phase 2 Chunk 2 — what the delivered code does NOT contain', () => {
     for (const file of migrations) {
       const source = (await sourceOf(file)).toLowerCase();
 
+      // Quran left this list when Phase 18 shipped it, as every earlier domain
+      // left it at its own owning phase.
       for (const domain of [
-        'quran.',
         'hadith.',
         'fatwa.',
         'learning.',
@@ -448,7 +449,9 @@ async function permissionsSeededBy(migrationId: string): Promise<string[]> {
   const insert = /INSERT INTO \[dbo\]\.\[Permission\][\s\S]*?;/.exec(migration);
   if (insert === null) return [];
 
-  return [...insert[0].matchAll(/\(N'([a-z.]+)',\s*N'/g)]
+  // A key may be camelCase after its dot: `quran.editCanonical` is named by
+  // DOMAIN_MODEL.md §4.4 and SECURITY_BASELINE.md §8.1 themselves.
+  return [...insert[0].matchAll(/\(N'([a-z]+\.[a-zA-Z.]+)',\s*N'/g)]
     .map((match) => match[1])
     .filter((key): key is string => key !== undefined)
     .sort();
@@ -465,7 +468,7 @@ async function declaredPermissions(): Promise<string[]> {
   expect(grant).toBeDefined();
 
   return [
-    ...[...contract.matchAll(/key: '([a-z.]+)'/g)]
+    ...[...contract.matchAll(/key: '([a-z]+\.[a-zA-Z.]+)'/g)]
       .map((match) => match[1])
       .filter((key): key is string => key !== undefined),
     grant as string,
@@ -550,6 +553,11 @@ const PERMISSION_MIGRATIONS = [
     id: '20260929000000_phase16_global_network',
     keys: ['global.administer', 'global.read'],
   },
+  {
+    phase: 'Phase 18',
+    id: '20261002000000_phase18_quran',
+    keys: ['quran.administer', 'quran.editCanonical', 'quran.read'],
+  },
 ] as const;
 
 describe('the permission catalogue is one definition, appended only by owners', () => {
@@ -599,7 +607,6 @@ describe('the permission catalogue is one definition, appended only by owners', 
     const declared = await declaredPermissions();
 
     for (const domain of [
-      'quran.',
       'hadith.',
       'fatwa.',
       'learning.',
@@ -608,8 +615,8 @@ describe('the permission catalogue is one definition, appended only by owners', 
       'migration.',
       'teaching.',
       'editorial.',
-      // Library shipped in Phase 8, Search in Phase 17, Media in Phase 10 and
-      // Global in Phase 16. Still absent: research and publication keys
+      // Library shipped in Phase 8, Search in Phase 17, Media in Phase 10,
+      // Global in Phase 16 and Quran in Phase 18. Still absent: research and publication keys
       // (Phase 9 uses Library's), any per-aggregate Media key, audio and
       // gallery vocabulary, and any per-level Global key (Global has two).
       'research.',

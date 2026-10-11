@@ -390,8 +390,8 @@ describe('Phase 2 — what the delivered code does NOT contain', () => {
     for (const file of migrations) {
       const source = (await sourceOf(file)).toLowerCase();
 
+      // Quran left this list when Phase 18, its owning phase, seeded its keys.
       for (const domain of [
-        'quran.',
         'hadith.',
         'fatwa.',
         'learning.',

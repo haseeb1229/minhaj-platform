@@ -71,6 +71,10 @@ const SURFACES: readonly { key: string; permission: PermissionKey; path: string 
   // surfaces — Countries, Regions, Cities and Centres — and every action
   // re-checks `global.administer`.
   { key: 'global', permission: 'global.read', path: 'global/countries' },
+  // Phase 18. One entry for the Quran area: `quran.read` opens all of its
+  // surfaces, every layered-work action re-checks `quran.administer`, and the
+  // one canonical correction needs `quran.editCanonical` with its own step-up.
+  { key: 'quran', permission: 'quran.read', path: 'quran/surahs' },
   // Phase 4. A READ-ONLY view of the public shell's effective navigation; the
   // registry behind it is code, so there is no editing surface to reach.
   { key: 'navigation', permission: 'navigation.read', path: 'system/navigation' },

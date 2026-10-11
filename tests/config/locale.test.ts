@@ -185,6 +185,27 @@ describe('the render and routing tree stays statically renderable', () => {
     // Phase 17. A pure highlighter the dynamic search route renders with; the
     // module itself reads no request state.
     'apps/web/src/components/search/highlight.ts',
+    // Phase 18. The shared highlighted-text renderer and the pure Quran-result
+    // labels, used by the unified and the Quran search pages.
+    'apps/web/src/components/search/highlighted.tsx',
+    'apps/web/src/components/search/quran-hit.ts',
+    // Phase 18. The one batched current-text read both search pages share; a
+    // request-time owner read, never reached from a static render.
+    'apps/web/src/components/search/quran-hit-text.ts',
+    // Phase 18. The public Quran surfaces, their pure presentation decisions,
+    // their request-cached reads and the recitation player island. The ROUTES
+    // that use them are dynamic for data, never these modules.
+    'apps/web/src/components/quran/landing.tsx',
+    'apps/web/src/components/quran/parts.tsx',
+    'apps/web/src/components/quran/presentation.ts',
+    'apps/web/src/components/quran/read.ts',
+    'apps/web/src/components/quran/reader.tsx',
+    'apps/web/src/components/quran/recitation-player.tsx',
+    'apps/web/src/components/quran/recitations.tsx',
+    'apps/web/src/components/quran/related.tsx',
+    'apps/web/src/components/quran/search.tsx',
+    'apps/web/src/components/quran/topics.tsx',
+    'apps/web/src/components/quran/works.tsx',
     // Phase 10. The Watch surfaces, their pure presentation decisions and the
     // privacy-gated player island, on the same anonymous public path.
     'apps/web/src/components/media/audio-player.tsx',

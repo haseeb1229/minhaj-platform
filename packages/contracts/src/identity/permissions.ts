@@ -19,10 +19,10 @@
  * APPENDED ONLY BY AN OWNING PHASE. Phase 2 seeded the Identity and system
  * surfaces' vocabulary; Phase 3B appended Taxonomy's two keys with the
  * migration that delivered those surfaces; Phase 4 appended the one read key
- * its navigation status surface needs. `quran.editCanonical`,
- * `fatwa.publish`, `teaching.perform` and the rest are named by
- * DOMAIN_MODEL.md §4.4 as INDICATIVE examples of the shape; they belong to
- * contexts that do not exist yet. Seeding one now would fix another owner's
+ * its navigation status surface needs; Phase 18 appended Quran's three,
+ * `quran.editCanonical` among them. `fatwa.publish`, `teaching.perform` and the
+ * rest are named by DOMAIN_MODEL.md §4.4 as INDICATIVE examples of the shape;
+ * they belong to contexts that do not exist yet. Seeding one now would fix another owner's
  * vocabulary before that owner can have an opinion about it, and would leave
  * grantable authority over nothing (DELIVERY_PLAN.md).
  *
@@ -357,6 +357,54 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     description:
       'Create, edit, localise, publish and archive Global Network countries, regions, cities and centres, and manage centre contacts and the cities a centre serves.',
   }),
+
+  /* ---- Phase 18 — Quran -------------------------------------------------- */
+  //
+  // THREE KEYS, AND THE THIRD IS NAMED BY THE ACCEPTED DOCUMENTS THEMSELVES.
+  // DOMAIN_MODEL.md §4.4 and §8.2 and SECURITY_BASELINE.md §5.1 and §8.1 name
+  // `quran.editCanonical` as the authority over canonical Arabic, so the key is
+  // not this implementation's to rename.
+  //
+  // READ AND ADMINISTER, split for the reason every pair here is split. Seeing
+  // canonical history, verification evidence and draft layered works is not
+  // changing what the public reader offers.
+  //
+  // `quran.administer` IS DELIBERATELY NARROW. It governs the LAYERED works —
+  // translations, transliterations, tafsir, recitations and their audio,
+  // tajweed guidance — plus Surah display names and Ayah topic assignments. It
+  // can never reach canonical Arabic or canonical structure: there is no
+  // persistence method behind it that writes either, and the application
+  // principal holds no INSERT, UPDATE or DELETE on those tables at all.
+  // "Separate works with their own permissions" (SECURITY_BASELINE.md §5.1)
+  // means isolated from canonical text and from the general CMS — not one key
+  // per work; `quran.translations.administer` beside `quran.tafsir.administer`
+  // would separate authority nobody asked to separate.
+  //
+  // `quran.editCanonical` IS NEVER EXERCISED ALONE. Every use also costs a
+  // complete second-factor posture and a step-up grant for the dedicated
+  // `quran-canonical-edit` purpose, and the database procedure behind it checks
+  // that grant again before it writes.
+  //
+  // NONE OF THE THREE IS RELIGIOUS APPROVAL. Whether a corpus, a translation, a
+  // tafsir or a reciter is authoritative is the external authority's decision
+  // (OPEN_DECISIONS.md §1.1, §1.2), recorded as a registered source that only
+  // the operator can create. No permission here can register one. Neither
+  // `content.*`, `library.*` nor `media.*` confers anything over the Quran.
+  Object.freeze({
+    key: 'quran.read',
+    description:
+      'View Quran administration: canonical text and history, verification evidence, sources and draft layered works.',
+  }),
+  Object.freeze({
+    key: 'quran.administer',
+    description:
+      'Manage Quran translations, transliterations, tafsir, recitations and audio, tajweed guidance, Surah display names and Ayah topics. Never canonical text.',
+  }),
+  Object.freeze({
+    key: 'quran.editCanonical',
+    description:
+      'Accept a verified canonical Quran corpus and correct canonical Ayah text against a registered source, with step-up.',
+  }),
 ]);
 
 /** Every catalogue key, as a union. Mistyping one is a compile error. */
@@ -410,8 +458,17 @@ export const PLATFORM_ADMINISTRATOR_PERMISSIONS: readonly PermissionKey[] = Obje
  * second factor must not silently also authorise granting somebody else the
  * administrator role.
  *
- * Three classes, matching the three kinds of consequence this phase actually
- * has. A fourth invented now would be a scope with no operation behind it.
+ * Phase 2 closed the vocabulary at three classes, matching the three kinds of
+ * consequence it had, so that no scope could be invented for an operation that
+ * matched none of them.
+ *
+ * PHASE 18 ADDS THE FOURTH, AND ONLY FOR THE OPERATION THE BASELINE NAMES.
+ * SECURITY_BASELINE.md §8.1 lists canonical Quran edits as their own step-up
+ * operation under `quran.editCanonical`. Reusing `privilege-administration`
+ * would let a grant earned to change a role bundle also authorise rewriting
+ * scripture, which is exactly the universal elevation this vocabulary exists to
+ * refuse; so the canonical Quran authority has its own purpose, and no other
+ * purpose authorises it.
  */
 export const STEP_UP_PURPOSES = Object.freeze([
   /** Role lifecycle, permission bundles, assignment grant and revoke. */
@@ -420,6 +477,8 @@ export const STEP_UP_PURPOSES = Object.freeze([
   'account-administration',
   /** Second-factor and recovery-code administration of one's own account. */
   'second-factor',
+  /** Canonical Quran corpus acceptance and Ayah correction (Phase 18). */
+  'quran-canonical-edit',
 ] as const);
 
 export type StepUpPurpose = (typeof STEP_UP_PURPOSES)[number];

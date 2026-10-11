@@ -39,6 +39,7 @@
         "library": "library",
         "media": "media",
         "global-network": "global-network",
+        "quran": "quran",
         "search": {
           "kind": "layer0",
           "concern": "search"

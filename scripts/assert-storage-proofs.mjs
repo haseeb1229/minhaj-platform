@@ -64,6 +64,9 @@ const REQUIRED = [
   'image',
   'media-photo.integration',
   'photo-recovery.integration',
+  // Phase 18: recitation segment audio upload, public and preview serving, Range
+  // and replacement through the real scanner and filesystem — never an AudioTrack.
+  'quran-recitation.integration',
 ];
 
 const seen = files.map((file) => String(file.name ?? ''));

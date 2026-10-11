@@ -301,6 +301,33 @@ try {
     );
   }
 
+  // Phase 18 gives the operator ROLE nothing over the Quran: registering a
+  // source and activating a corpus are acts of the database OWNER, and the
+  // canonical write path is the runtime's, under the live canonical authority.
+  // A recovery principal that could read or write either would be a second,
+  // unaudited route to the canonical text.
+  for (const table of ['QuranSource', 'QuranSourceAyah', 'QuranActivation', 'Ayah']) {
+    await expectDenied(operatorSession, `operator SELECT on ${table} denied`, () =>
+      operatorSession.query(`SELECT TOP 1 1 AS probe FROM [dbo].[${table}];`),
+    );
+  }
+  await expectDenied(operatorSession, 'operator INSERT on QuranActivation denied', () =>
+    operatorSession.query(`
+      INSERT INTO [dbo].[QuranActivation] ([id], [sourceId], [authorisedBy])
+      VALUES (1, N'injected', N'injected');
+    `),
+  );
+  await expectDenied(
+    operatorSession,
+    'operator EXECUTE on QuranAcceptCorpus denied',
+    () =>
+      operatorSession.query(`
+      EXEC [dbo].[QuranAcceptCorpus] @runId=N'injected', @sourceId=N'injected',
+        @candidate=N'[]', @actorId=N'injected', @sessionId=N'injected',
+        @stepUpGrantId=N'injected', @at='2026-10-02T00:00:00';
+    `),
+  );
+
   await expectDenied(operatorSession, 'operator INSERT on RoleAssignment denied', () =>
     operatorSession.query(`
       INSERT INTO [dbo].[RoleAssignment] ([userId], [roleId])

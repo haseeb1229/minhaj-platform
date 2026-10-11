@@ -11,6 +11,7 @@ import {
 } from './media-sitemap';
 import { scholarlySitemapPartitions } from './scholarly-sitemap';
 import { topicsSitemapPartitions } from './topics-sitemap';
+import { quranSitemapPartitions } from './quran-sitemap';
 import 'server-only';
 
 import { localeSchema } from '@minhaj/contracts';
@@ -173,6 +174,9 @@ export async function allSitemapPartitions(): Promise<readonly SitemapPartition[
     ...(await collectionSitemapPartitions()),
     // Phase 16's `centres` segment: public Centres at their canonical address.
     ...(await centreSitemapPartitions()),
+    // Phase 18's `quran` segment: canonical Ayah citations, and only while an
+    // APPROVED corpus is active — a fixture corpus is never advertised.
+    ...(await quranSitemapPartitions()),
   ]);
 }
 

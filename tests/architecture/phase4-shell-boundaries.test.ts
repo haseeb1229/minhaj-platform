@@ -185,6 +185,34 @@ const CONTENT_ROUTE_FILES = [
   // service, no logger and no authentication library.
   'apps/web/src/app/[locale]/(public)/collections/page.tsx',
   'apps/web/src/app/[locale]/(public)/collections/[slug]/page.tsx',
+  // Phase 18. Every Quran surface reads whether a corpus is active, and what is
+  // public beside it, through Quran's PUBLIC reader — and the related views
+  // compose Library's and Media's public readers — so none can be prerendered;
+  // each is proven below to reach no session, no identity service, no logger
+  // and no authentication library. `/listen/recitations` is the Listen
+  // projection of the same Quran-owned catalogue.
+  'apps/web/src/app/[locale]/(public)/quran/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/read/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/surah/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/surah/[surahNumber]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/surah/[surahNumber]/[ayahNumber]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/juz/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/juz/[juzNumber]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/search/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/translations/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/translations/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/tafsir/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/tafsir/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/transliteration/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/tajweed/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/tajweed/[rule]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/recitations/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/recitations/[reciter]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/topics/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/books/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/videos/page.tsx',
+  'apps/web/src/app/[locale]/(public)/quran/research/page.tsx',
+  'apps/web/src/app/[locale]/(public)/listen/recitations/page.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [
@@ -629,9 +657,14 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     const AUDIO_PLAYER = 'apps/web/src/components/media/audio-player.tsx';
     const PHOTOS = 'apps/web/src/components/media/photos.tsx';
     const VIEWER = 'apps/web/src/components/media/photo-viewer.tsx';
+    // PHASE 18 — THE QURAN RECITATION PLAYER, for the audio player's reason: a
+    // native `<audio src=…>` whose source is the FIRST-PARTY recitation byte
+    // route it derives from the recitation, segment and asset identifiers —
+    // pinned by its own test below.
+    const RECITATION_PLAYER = 'apps/web/src/components/quran/recitation-player.tsx';
     const { modules } = await contentGraph();
 
-    for (const expected of [PLAYER, AUDIO_PLAYER, PHOTOS, VIEWER]) {
+    for (const expected of [PLAYER, AUDIO_PLAYER, PHOTOS, VIEWER, RECITATION_PLAYER]) {
       expect([...modules.keys()].map(relative)).toContain(expected);
     }
 
@@ -646,7 +679,10 @@ describe('the public shell is server-rendered, with narrow client islands', () =
       expect(body, relative(file)).not.toContain('next/font');
 
       for (const fetching of ['<link', '<img', 'src=', 'srcSet', '@import']) {
-        if (fetching === 'src=' && [PLAYER, AUDIO_PLAYER].includes(relative(file)))
+        if (
+          fetching === 'src=' &&
+          [PLAYER, AUDIO_PLAYER, RECITATION_PLAYER].includes(relative(file))
+        )
           continue;
         if (
           (fetching === 'src=' || fetching === '<img') &&
@@ -720,6 +756,38 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     );
     // Nothing is fetched until the listener presses play, and nothing plays
     // on its own.
+    expect(source).toContain('preload="none"');
+    for (const forbidden of [
+      'autoplay',
+      'autoPlay',
+      '.play(',
+      '<img',
+      '<script',
+      'download',
+      'localStorage',
+      'sessionStorage',
+      'document.cookie',
+      'dangerouslySetInnerHTML',
+    ]) {
+      expect(source, forbidden).not.toContain(forbidden);
+    }
+  });
+
+  it('lets the recitation player play ONLY its own first-party byte route, never on its own', async () => {
+    const source = code(
+      await readFile(
+        path.join(repoRoot, 'apps/web/src/components/quran/recitation-player.tsx'),
+        'utf8',
+      ),
+    );
+
+    // Exactly one media source, derived from the first-party recitation route.
+    expect(source.match(/src=/g) ?? []).toHaveLength(1);
+    expect(source).toContain(
+      'src={recitationAssetPath({ recitationId, segmentId, assetId })}',
+    );
+    // Nothing is fetched until the listener presses play, nothing plays on its
+    // own, and nothing offers a copy to keep.
     expect(source).toContain('preload="none"');
     for (const forbidden of [
       'autoplay',
@@ -818,6 +886,9 @@ describe('a public CONTENT route reads data, and still reads no session', () => 
       // `@/composition/editorial-read` and `@/composition/media-read`.
       '@/composition/editorial',
       '@/composition/media',
+      // Phase 18, for the same reason: the ADMINISTRATIVE Quran runtime wires
+      // Identity in. Public Quran routes use `@/composition/quran-read`.
+      '@/composition/quran',
       '@/contexts/identity-access',
       '@/config/server-env',
       '@minhaj/contracts/env/server',

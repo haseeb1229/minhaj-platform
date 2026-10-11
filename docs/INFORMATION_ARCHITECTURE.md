@@ -159,6 +159,14 @@ Digital Resources heading on the Explore landing page.*
 Signed-in additions surfaced in-context (not in the menu): bookmarks, notes, reading
 progress, continue reading.
 
+Since Phase 18 the Quran item is delivered (engineering only — no authoritative corpus is supplied,
+OPEN_DECISIONS.md §1.1). Read, Study and Search entries, Recitations and Quran Topics are available,
+as are Quran Books, Quran Videos and Quran Research (each the owner's own listing for the `quran`
+topic). Quran Articles, Quran Courses and Quran Teachers are not yet offered and are not linked
+(ROUTE_MAP.md §3.3). While no corpus is active the section says so plainly instead of showing
+empty structure, and Listen's Quran Recitations appear only once a corpus is active. The
+signed-in additions remain Phase 21's.
+
 ### 3.3 Hadith
 
 | Browse | Study | Explore | Learn |
@@ -428,7 +436,8 @@ Admin
 │   │   ├── Translations
 │   │   ├── Transliterations
 │   │   ├── Tafsir
-│   │   └── Recitations
+│   │   ├── Recitations
+│   │   └── Tajweed
 │   ├── Hadith
 │   │   ├── Collections, Books & Chapters
 │   │   ├── Hadith Records

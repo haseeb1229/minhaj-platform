@@ -110,8 +110,9 @@ describeLive('Phase 3B — typed topic assignment, proven on a disposable juncti
         // (Phase 10) and AudioTrackTopic (Phase 11) — and one per Phase-13 News
         // family: NewsArticleTopic, PressReleaseTopic, StatementTopic and
         // MediaCoverageTopic — and Phase 14's EventTopic and Phase 15's
-        // CollectionTopic.
-        enforcedRelationships: 17,
+        // CollectionTopic — and Phase 18's QuranTopic, typed on the Ayah's
+        // canonical citation.
+        enforcedRelationships: 18,
         incompleteRelationships: 0,
       });
     });
@@ -217,7 +218,7 @@ describeLive('Phase 3B — typed topic assignment, proven on a disposable juncti
       // context's table, column or constraint names. The adapter derives this
       // status from the foreign-key catalogue rather than a declared registry.
       expect(await harness.taxonomy.assignmentStatus()).toEqual({
-        enforcedRelationships: 18,
+        enforcedRelationships: 19,
         incompleteRelationships: 0,
       });
     });
@@ -321,7 +322,7 @@ describeLive('Phase 3B — typed topic assignment, proven on a disposable juncti
         // The surface reports the defect semantically without exposing either
         // the half-typed table or the sound owner's physical schema.
         expect(await harness.taxonomy.assignmentStatus()).toEqual({
-          enforcedRelationships: 19,
+          enforcedRelationships: 20,
           incompleteRelationships: 1,
         });
       } finally {

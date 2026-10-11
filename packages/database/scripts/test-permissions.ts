@@ -777,6 +777,7 @@ try {
     searchProvisioned: number;
     mediaProvisioned: number;
     globalProvisioned: number;
+    quranProvisioned: number;
   }>(`
     SELECT COUNT_BIG(*) AS total,
            SUM(CASE WHEN [action] = N'phase1.permission.probe' THEN 1 ELSE 0 END) AS probe,
@@ -804,17 +805,20 @@ try {
              AS mediaProvisioned,
            SUM(CASE WHEN [action] = N'global.permissions.provisioned'
                      AND [actorType] = N'migration' THEN 1 ELSE 0 END)
-             AS globalProvisioned
+             AS globalProvisioned,
+           SUM(CASE WHEN [action] = N'quran.permissions.provisioned'
+                     AND [actorType] = N'migration' THEN 1 ELSE 0 END)
+             AS quranProvisioned
     FROM [dbo].[AuditLog];
   `);
 
-  // Exactly nine rows: the Phase-3B through Phase-17 privilege extensions
+  // Exactly ten rows: the Phase-3B through Phase-18 privilege extensions
   // (Phase 10's and Phase 16's included), and this run's probe. Naming every migration action is load-bearing:
   // deriving the expected total from whatever provisioning rows happened to
   // survive would pass if a phase omitted its own audit, and each privilege
   // extension must be able to show that it paid for itself
   // (SECURITY_BASELINE.md §8.1).
-  const EXPECTED_AUDIT_ROWS = 9;
+  const EXPECTED_AUDIT_ROWS = 10;
 
   if (
     Number(survivor?.taxonomyProvisioned ?? 0) !== 1 ||
@@ -825,6 +829,7 @@ try {
     Number(survivor?.searchProvisioned ?? 0) !== 1 ||
     Number(survivor?.mediaProvisioned ?? 0) !== 1 ||
     Number(survivor?.globalProvisioned ?? 0) !== 1 ||
+    Number(survivor?.quranProvisioned ?? 0) !== 1 ||
     Number(survivor?.probe ?? 0) !== 1 ||
     Number(survivor?.tampered ?? -1) !== 0 ||
     Number(survivor?.total ?? 0) !== EXPECTED_AUDIT_ROWS
@@ -834,7 +839,7 @@ try {
       `expected ${EXPECTED_AUDIT_ROWS} rows with 1 taxonomy provisioning, ` +
         `1 navigation provisioning, 1 people provisioning, 1 editorial provisioning, ` +
         `1 library provisioning, 1 search provisioning, 1 media provisioning, ` +
-        `1 global provisioning, 1 probe and ` +
+        `1 global provisioning, 1 quran provisioning, 1 probe and ` +
         `0 tampered; found ${survivor?.total ?? 0} rows, ` +
         `${survivor?.taxonomyProvisioned ?? 0} taxonomy provisioning, ` +
         `${survivor?.navigationProvisioned ?? 0} navigation provisioning, ` +
@@ -844,12 +849,13 @@ try {
         `${survivor?.searchProvisioned ?? 0} search provisioning, ` +
         `${survivor?.mediaProvisioned ?? 0} media provisioning, ` +
         `${survivor?.globalProvisioned ?? 0} global provisioning, ` +
+        `${survivor?.quranProvisioned ?? 0} quran provisioning, ` +
         `${survivor?.probe ?? 0} probe, ${survivor?.tampered ?? 0} tampered`,
     );
   } else {
     pass(
       'audit rows unmodified',
-      'the probe row and all eight exact migration records are intact after ' +
+      'the probe row and all nine exact migration records are intact after ' +
         'UPDATE/DELETE attempts',
     );
   }
@@ -3355,6 +3361,480 @@ try {
     `DELETE FROM [dbo].[SearchIndexRequest] WHERE [scopeId]=N'${searchScopeId}';`,
     'a relayed request is consumed',
   );
+
+  // ---- Phase 18: Quran, in four postures ------------------------------------
+  //
+  // THE SOURCE AND ITS ACTIVATION are the owner's. The runtime reads them and
+  // writes nothing, so no permission it carries can register an authority, turn
+  // a fixture into one or switch a corpus on.
+  //
+  // THE CANONICAL TABLES are read-only to it as well. It reaches them ONLY by
+  // executing the canonical procedures, which re-check the live
+  // `quran.editCanonical` grant and purpose-bound step-up grant in SQL — proved
+  // here by the runtime naming an account that holds nothing, and a grant that
+  // does not exist, and being refused (51190) — and the authority check itself
+  // is denied to it outright. A Surah's display-name version is the one
+  // canonical column it may advance.
+  //
+  // LAYERED WORKS by the Library postures: inserted and updated, never deleted,
+  // a slug chosen once; texts, contributors, segments, display names and topic
+  // assignments are child rows. Naming a Person, a Topic, a Language or an Asset
+  // grants nothing on those owners' tables beyond their own postures.
+  //
+  // Every statement below is REAL SQL as the runtime principal, over sentinel
+  // NON-QURAN text and a fictional two-Surah structure; the sources and the
+  // canonical authority are the owner's rows, written first.
+  const quranRun = randomUUID().replaceAll('-', '').slice(0, 16);
+  const quranText = (label: string, surah: number, ayah: number): string =>
+    `NON_QURAN_FIXTURE_${label}_${String(surah)}_${String(ayah)} نص اختبار غير قرآني`;
+  const quranAyat = [
+    [1, 1, 1],
+    [1, 2, 1],
+    [1, 3, 1],
+    [2, 1, 1],
+    [2, 2, 2],
+  ] as const;
+  const quranSource = randomUUID();
+  const quranCorrection = randomUUID();
+  const quranHolder = randomUUID();
+  const quranRole = randomUUID();
+  const quranSession = randomUUID();
+  const quranGrant = randomUUID();
+  const quranCorrected = quranText('CORRECTED', 1, 2);
+  await admin.query(`
+    INSERT INTO [dbo].[QuranSource] ([id],[code],[authority],[title],[version],[encoding]) VALUES
+      (N'${quranSource}',N'NON_QURAN_FIXTURE_LP_${quranRun}',N'fixture',N'NON_QURAN_FIXTURE least-privilege source',N'proof-1',N'utf-8'),
+      (N'${quranCorrection}',N'NON_QURAN_FIXTURE_LP_CORRECTION_${quranRun}',N'fixture',N'NON_QURAN_FIXTURE least-privilege correction',N'proof-1',N'utf-8');
+    INSERT INTO [dbo].[QuranSourceSurah] ([sourceId],[number],[ayahCount]) VALUES
+      (N'${quranSource}',1,3),(N'${quranSource}',2,2),(N'${quranCorrection}',1,3);
+    INSERT INTO [dbo].[QuranSourceAyah] ([sourceId],[surahNumber],[ayahNumber],[juzNumber],[text]) VALUES
+      ${quranAyat.map(([surah, ayah, juz]) => `(N'${quranSource}',${String(surah)},${String(ayah)},${String(juz)},N'${quranText('CANONICAL', surah, ayah)}')`).join(',')},
+      (N'${quranCorrection}',1,2,1,N'${quranCorrected}');
+    INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled])
+      VALUES (N'${quranHolder}',N'Synthetic Quran canonical holder',N'${quranHolder}@proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);
+    INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system])
+      VALUES (N'${quranRole}',N'lp-quran-canonical-${quranRun}',N'Synthetic Quran canonical role',N'Least-privilege proof only.',0);
+    INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES (N'${quranRole}',N'quran.editCanonical');
+    INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId]) VALUES (N'${quranHolder}',N'${quranRole}');
+    INSERT INTO [dbo].[Session] ([id],[token],[userId],[expiresAt],[createdAt],[updatedAt])
+      VALUES (N'${quranSession}',N'lp-quran-${quranSession}',N'${quranHolder}',DATEADD(hour,1,SYSUTCDATETIME()),SYSUTCDATETIME(),SYSUTCDATETIME());
+    INSERT INTO [dbo].[StepUpGrant] ([id],[userId],[sessionId],[purpose],[expiresAt])
+      VALUES (N'${quranGrant}',N'${quranHolder}',N'${quranSession}',N'quran-canonical-edit',DATEADD(minute,30,SYSUTCDATETIME()));
+  `);
+  const quranCandidate = JSON.stringify(
+    quranAyat.map(([surah, ayah, juz]) => ({
+      surah,
+      ayah,
+      juz,
+      text: quranText('CANONICAL', surah, ayah),
+    })),
+  );
+  const quranAccept = (actor: string, grantId: string): string =>
+    `EXEC [dbo].[QuranAcceptCorpus] @runId=N'${randomUUID()}', @sourceId=N'${quranSource}', @candidate=N'${quranCandidate}', @actorId=N'${actor}', @sessionId=N'${quranSession}', @stepUpGrantId=N'${grantId}', @at='2026-10-02T00:00:00';`;
+
+  // The runtime cannot borrow an authority it does not hold, nor forge a grant.
+  await expectRefusedByInvariant(
+    app,
+    'Quran acceptance naming an account without authority',
+    quranAccept(editorialReviewer, quranGrant),
+    51190,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Quran acceptance with a forged step-up grant',
+    quranAccept(quranHolder, randomUUID()),
+    51190,
+  );
+  await expectDenied(
+    app,
+    'QuranAssertCanonicalAuthority EXECUTE denied',
+    `EXEC [dbo].[QuranAssertCanonicalAuthority] @actorId=N'${quranHolder}', @sessionId=N'${quranSession}', @stepUpGrantId=N'${quranGrant}';`,
+  );
+  await expectAllowed(
+    app,
+    'QuranAcceptCorpus EXECUTE',
+    quranAccept(quranHolder, quranGrant),
+    'the canonical corpus is written by the procedure, under the live authority',
+  );
+  await expectAllowed(
+    app,
+    'QuranCorrectAyah EXECUTE',
+    `EXEC [dbo].[QuranCorrectAyah] @runId=N'${randomUUID()}', @surah=1, @ayah=2, @expectedVersion=1, @sourceId=N'${quranCorrection}', @reviewedText=N'${quranCorrected}', @reason=N'Least-privilege proof correction.', @actorId=N'${quranHolder}', @sessionId=N'${quranSession}', @stepUpGrantId=N'${quranGrant}', @at='2026-10-02T00:00:00';`,
+    'a correction appends version 2 through the procedure alone',
+  );
+  await expectAllowed(
+    app,
+    'QuranRecordVerificationFailure EXECUTE',
+    `EXEC [dbo].[QuranRecordVerificationFailure] @runId=N'${randomUUID()}', @kind=N'ayah-correction', @sourceId=N'${quranCorrection}', @checked=1, @mismatches=1, @firstSurah=1, @firstAyah=2, @firstOffset=0, @firstReason=N'text-mismatch', @actorId=N'${quranHolder}', @at='2026-10-02T00:00:00';`,
+    'a failed verification is recorded as evidence',
+  );
+
+  const QURAN_READ_ONLY = [
+    'QuranSource',
+    'QuranSourceSurah',
+    'QuranSourceAyah',
+    'QuranActivation',
+    'Juz',
+    'Surah',
+    'Ayah',
+    'QuranAyahRevision',
+    'QuranVerificationRun',
+  ] as const;
+  for (const table of QURAN_READ_ONLY)
+    await expectAllowed(
+      app,
+      `${table} SELECT`,
+      `SELECT COUNT_BIG(*) AS [total] FROM [dbo].[${table}];`,
+      'the runtime reads it',
+    );
+  for (const [label, statement] of [
+    [
+      'QuranSource INSERT denied',
+      `INSERT INTO [dbo].[QuranSource] ([id],[code],[authority],[title],[version],[encoding],[reference]) VALUES (N'${randomUUID()}',N'NON_QURAN_FIXTURE_LP_FORGED_${quranRun}',N'approved',N'NON_QURAN_FIXTURE forged',N'proof-1',N'utf-8',N'urn:example:forged');`,
+    ],
+    [
+      'QuranSource UPDATE denied',
+      `UPDATE [dbo].[QuranSource] SET [authority]=N'approved',[reference]=N'urn:example:forged' WHERE [id]=N'${quranSource}';`,
+    ],
+    [
+      'QuranSource DELETE denied',
+      `DELETE FROM [dbo].[QuranSource] WHERE [id]=N'${quranSource}';`,
+    ],
+    [
+      'QuranSourceSurah INSERT denied',
+      `INSERT INTO [dbo].[QuranSourceSurah] ([sourceId],[number],[ayahCount]) VALUES (N'${quranSource}',3,1);`,
+    ],
+    [
+      'QuranSourceAyah UPDATE denied',
+      `UPDATE [dbo].[QuranSourceAyah] SET [text]=N'${quranText('TAMPERED', 1, 1)}' WHERE [sourceId]=N'${quranSource}';`,
+    ],
+    ['QuranSourceAyah DELETE denied', 'DELETE FROM [dbo].[QuranSourceAyah];'],
+    [
+      'QuranActivation INSERT denied',
+      `INSERT INTO [dbo].[QuranActivation] ([id],[sourceId],[authorisedBy]) VALUES (1,N'${quranSource}',N'runtime');`,
+    ],
+    ['QuranActivation DELETE denied', 'DELETE FROM [dbo].[QuranActivation];'],
+    [
+      'Juz INSERT denied',
+      `INSERT INTO [dbo].[Juz] ([number],[sourceId]) VALUES (3,N'${quranSource}');`,
+    ],
+    ['Juz DELETE denied', 'DELETE FROM [dbo].[Juz];'],
+    [
+      'Surah INSERT denied',
+      `INSERT INTO [dbo].[Surah] ([number],[ayahCount],[sourceId]) VALUES (3,1,N'${quranSource}');`,
+    ],
+    [
+      'Surah ayahCount UPDATE denied',
+      'UPDATE [dbo].[Surah] SET [ayahCount]=[ayahCount];',
+    ],
+    [
+      'Surah nameArabic UPDATE denied',
+      'UPDATE [dbo].[Surah] SET [nameArabic]=[nameArabic];',
+    ],
+    ['Surah DELETE denied', 'DELETE FROM [dbo].[Surah];'],
+    [
+      'Ayah INSERT denied',
+      `INSERT INTO [dbo].[Ayah] ([surahNumber],[ayahNumber],[juzNumber],[text],[sourceId],[version]) VALUES (2,3,2,N'${quranText('DIRECT', 2, 3)}',N'${quranSource}',1);`,
+    ],
+    [
+      'Ayah text UPDATE denied',
+      `UPDATE [dbo].[Ayah] SET [text]=N'${quranText('TAMPERED', 1, 1)}' WHERE [surahNumber]=1 AND [ayahNumber]=1;`,
+    ],
+    ['Ayah DELETE denied', 'DELETE FROM [dbo].[Ayah];'],
+    [
+      'QuranAyahRevision INSERT denied',
+      `INSERT INTO [dbo].[QuranAyahRevision] ([surahNumber],[ayahNumber],[version],[text],[sourceId],[verificationRunId],[actorId],[stepUpGrantId],[reason]) SELECT 1,1,2,N'${quranText('FORGED', 1, 1)}',N'${quranSource}',[id],N'${quranHolder}',N'${quranGrant}',N'forged' FROM [dbo].[QuranVerificationRun] WHERE [kind]=N'corpus-acceptance';`,
+    ],
+    [
+      'QuranAyahRevision UPDATE denied',
+      `UPDATE [dbo].[QuranAyahRevision] SET [text]=N'${quranText('TAMPERED', 1, 1)}';`,
+    ],
+    ['QuranAyahRevision DELETE denied', 'DELETE FROM [dbo].[QuranAyahRevision];'],
+    [
+      'QuranVerificationRun INSERT denied',
+      `INSERT INTO [dbo].[QuranVerificationRun] ([id],[kind],[outcome],[sourceId],[checked],[mismatches]) VALUES (N'${randomUUID()}',N'corpus-acceptance',N'passed',N'${quranSource}',5,0);`,
+    ],
+    [
+      'QuranVerificationRun UPDATE denied',
+      `UPDATE [dbo].[QuranVerificationRun] SET [outcome]=[outcome];`,
+    ],
+    ['QuranVerificationRun DELETE denied', 'DELETE FROM [dbo].[QuranVerificationRun];'],
+  ] as const)
+    await expectDenied(app, label, statement);
+  await expectAllowed(
+    app,
+    'Surah display-name version UPDATE',
+    'UPDATE [dbo].[Surah] SET [namesVersion]=[namesVersion]+1,[updatedAt]=SYSUTCDATETIME() WHERE [number]=1;',
+    'the one canonical column the application may advance',
+  );
+
+  // The canonical store is exactly what the procedures wrote, after every
+  // refused direct write: five ayat, six revisions, the corrected Ayah at
+  // version 2, the sources untouched and no activation.
+  const [canonicalState] = await admin.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[Ayah]) AS [ayat],
+      (SELECT COUNT(*) FROM [dbo].[QuranAyahRevision]) AS [revisions],
+      (SELECT COUNT(*) FROM [dbo].[Ayah] a JOIN [dbo].[QuranSourceAyah] s
+         ON s.[sourceId]=a.[sourceId] AND s.[surahNumber]=a.[surahNumber] AND s.[ayahNumber]=a.[ayahNumber]
+        WHERE CAST(a.[text] AS VARBINARY(8000))=CAST(s.[text] AS VARBINARY(8000))) AS [exact],
+      (SELECT [version] FROM [dbo].[Ayah] WHERE [surahNumber]=1 AND [ayahNumber]=2) AS [corrected],
+      (SELECT COUNT(*) FROM [dbo].[QuranSource] WHERE [authority]=N'fixture' AND [reference] IS NULL) AS [sources],
+      (SELECT COUNT(*) FROM [dbo].[QuranActivation]) AS [activations];
+  `);
+  if (
+    JSON.stringify(canonicalState) ===
+    '{"ayat":5,"revisions":6,"exact":5,"corrected":2,"sources":2,"activations":0}'
+  ) {
+    pass(
+      'Quran canonical state intact',
+      'only the procedures wrote it; every direct write was refused',
+    );
+  } else {
+    fail('Quran canonical state intact', JSON.stringify(canonicalState));
+  }
+
+  // ---- the layered works, through the runtime login --------------------------
+  const quranTranslation = randomUUID();
+  const quranTransliteration = randomUUID();
+  const quranTafsir = randomUUID();
+  const quranRecitation = randomUUID();
+  const quranRule = randomUUID();
+  const quranEntry = randomUUID();
+  const quranSegment = randomUUID();
+  const quranAsset = randomUUID();
+  const quranPerson = editorialPeople.linkedPersonId;
+  await expectAllowed(
+    app,
+    'Quran layered works INSERT',
+    `INSERT INTO [dbo].[QuranTranslation] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${quranTranslation}',N'lp-quran-translation-${quranRun}',N'en',N'NON_QURAN_FIXTURE translation',N'draft',1,SYSUTCDATETIME());
+     INSERT INTO [dbo].[QuranTransliteration] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${quranTransliteration}',N'lp-quran-transliteration-${quranRun}',N'en',N'NON_QURAN_FIXTURE transliteration',N'draft',1,SYSUTCDATETIME());
+     INSERT INTO [dbo].[QuranTafsir] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${quranTafsir}',N'lp-quran-tafsir-${quranRun}',N'en',N'NON_QURAN_FIXTURE tafsir',N'draft',1,SYSUTCDATETIME());
+     INSERT INTO [dbo].[QuranRecitation] ([id],[slug],[personId],[name],[state],[version],[updatedAt]) VALUES (N'${quranRecitation}',N'lp-quran-recitation-${quranRun}',N'${quranPerson}',N'NON_QURAN_FIXTURE recitation',N'draft',1,SYSUTCDATETIME());
+     INSERT INTO [dbo].[QuranTajweedRule] ([id],[slug],[position],[state],[version],[updatedAt]) VALUES (N'${quranRule}',N'lp-quran-tajweed-${quranRun}',0,N'draft',1,SYSUTCDATETIME());`,
+    'five draft works with a registered language and a typed reciter',
+  );
+  await expectAllowed(
+    app,
+    'Quran child rows INSERT',
+    `INSERT INTO [dbo].[QuranTranslationText] ([translationId],[surahNumber],[ayahNumber],[text]) VALUES (N'${quranTranslation}',1,1,N'${quranText('TRANSLATION', 1, 1)}'),(N'${quranTranslation}',1,2,N'${quranText('TRANSLATION', 1, 2)}');
+     INSERT INTO [dbo].[QuranTranslationContributor] ([translationId],[personId],[role],[position]) VALUES (N'${quranTranslation}',N'${quranPerson}',N'translator',0);
+     INSERT INTO [dbo].[QuranTransliterationText] ([transliterationId],[surahNumber],[ayahNumber],[text]) VALUES (N'${quranTransliteration}',1,1,N'NON_QURAN_FIXTURE_TRANSLITERATION_1_1');
+     INSERT INTO [dbo].[QuranTafsirText] ([id],[tafsirId],[surahNumber],[startAyah],[endAyah],[text]) VALUES (N'${quranEntry}',N'${quranTafsir}',1,1,2,N'${quranText('TAFSIR', 1, 1)}');
+     INSERT INTO [dbo].[QuranTafsirContributor] ([tafsirId],[personId],[role],[position]) VALUES (N'${quranTafsir}',N'${quranPerson}',N'author',0);
+     INSERT INTO [dbo].[Asset] ([id],[storageKey],[state],[updatedAt]) VALUES (N'${quranAsset}',N'ab/cd/${quranRun}',N'uploading',SYSUTCDATETIME());
+     INSERT INTO [dbo].[QuranRecitationSegment] ([id],[recitationId],[surahNumber],[startAyah],[endAyah]) VALUES (N'${quranSegment}',N'${quranRecitation}',1,1,3);
+     INSERT INTO [dbo].[QuranTajweedRuleText] ([ruleId],[languageCode],[title],[body]) VALUES (N'${quranRule}',N'en',N'NON_QURAN_FIXTURE rule',N'NON_QURAN_FIXTURE rule body');
+     INSERT INTO [dbo].[SurahName] ([surahNumber],[locale],[name]) VALUES (1,N'en',N'NON_QURAN_FIXTURE name'),(1,N'ur',N'NON_QURAN_FIXTURE name ur');
+     INSERT INTO [dbo].[QuranTopic] ([surahNumber],[ayahNumber],[topicId]) VALUES (1,1,N'${editorialTopic.id}');
+     INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'quran-ayah',N'1:1');`,
+    'texts, entries, contributors, a segment, display names, a topic and Ayah search intent',
+  );
+  await expectAllowed(
+    app,
+    'Quran layered works UPDATE',
+    `UPDATE [dbo].[QuranTranslation] SET [name]=N'NON_QURAN_FIXTURE translation renamed',[version]=[version]+1,[updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${quranTranslation}';
+     UPDATE [dbo].[QuranTranslationText] SET [text]=N'${quranText('TRANSLATION_REVISED', 1, 1)}' WHERE [translationId]=N'${quranTranslation}' AND [ayahNumber]=1;
+     UPDATE [dbo].[QuranTransliterationText] SET [text]=N'NON_QURAN_FIXTURE_TRANSLITERATION_REVISED_1_1' WHERE [transliterationId]=N'${quranTransliteration}';
+     UPDATE [dbo].[QuranTafsirText] SET [text]=N'${quranText('TAFSIR_REVISED', 1, 1)}' WHERE [id]=N'${quranEntry}';
+     UPDATE [dbo].[QuranTajweedRuleText] SET [body]=N'NON_QURAN_FIXTURE rule body revised' WHERE [ruleId]=N'${quranRule}';
+     UPDATE [dbo].[QuranRecitationSegment] SET [assetId]=N'${quranAsset}' WHERE [id]=N'${quranSegment}';
+     UPDATE [dbo].[SurahName] SET [name]=N'NON_QURAN_FIXTURE name revised' WHERE [surahNumber]=1 AND [locale]=N'en';
+     UPDATE [dbo].[QuranTranslation] SET [state]=N'published',[sourceId]=N'${quranSource}',[publishedAt]=SYSUTCDATETIME(),[version]=[version]+1 WHERE [id]=N'${quranTranslation}';`,
+    'names, texts, the audio relation and publication against a registered source',
+  );
+  await expectAllowed(
+    app,
+    'Quran child rows DELETE',
+    `DELETE FROM [dbo].[QuranTranslationText] WHERE [translationId]=N'${quranTranslation}' AND [ayahNumber]=2;
+     DELETE FROM [dbo].[QuranTranslationContributor] WHERE [translationId]=N'${quranTranslation}';
+     DELETE FROM [dbo].[QuranTransliterationText] WHERE [transliterationId]=N'${quranTransliteration}';
+     DELETE FROM [dbo].[QuranTafsirContributor] WHERE [tafsirId]=N'${quranTafsir}';
+     DELETE FROM [dbo].[QuranTafsirText] WHERE [id]=N'${quranEntry}';
+     DELETE FROM [dbo].[QuranTajweedRuleText] WHERE [ruleId]=N'${quranRule}';
+     DELETE FROM [dbo].[QuranRecitationSegment] WHERE [id]=N'${quranSegment}';
+     DELETE FROM [dbo].[SurahName] WHERE [surahNumber]=1 AND [locale]=N'ur';
+     DELETE FROM [dbo].[QuranTopic] WHERE [surahNumber]=1 AND [ayahNumber]=1;`,
+    'child rows of draft works are replaced',
+  );
+  for (const table of [
+    'QuranTranslation',
+    'QuranTransliteration',
+    'QuranTafsir',
+    'QuranRecitation',
+    'QuranTajweedRule',
+  ]) {
+    await expectDenied(
+      app,
+      `${table} slug UPDATE denied`,
+      `UPDATE [dbo].[${table}] SET [slug]=[slug];`,
+    );
+    await expectDenied(app, `${table} DELETE denied`, `DELETE FROM [dbo].[${table}];`);
+  }
+  for (const [label, statement] of [
+    [
+      'QuranTranslationContributor UPDATE denied',
+      'UPDATE [dbo].[QuranTranslationContributor] SET [position]=[position];',
+    ],
+    [
+      'QuranTafsirContributor UPDATE denied',
+      'UPDATE [dbo].[QuranTafsirContributor] SET [position]=[position];',
+    ],
+    [
+      'QuranRecitationSegment range UPDATE denied',
+      'UPDATE [dbo].[QuranRecitationSegment] SET [startAyah]=[startAyah];',
+    ],
+    [
+      'QuranRecitationSegment owner UPDATE denied',
+      'UPDATE [dbo].[QuranRecitationSegment] SET [recitationId]=[recitationId];',
+    ],
+    ['QuranTopic UPDATE denied', 'UPDATE [dbo].[QuranTopic] SET [topicId]=[topicId];'],
+    // A text is never re-parented: moving a published work's last text to
+    // another work would empty it as surely as deleting it.
+    [
+      'QuranTranslationText work UPDATE denied',
+      `UPDATE [dbo].[QuranTranslationText] SET [translationId]=N'${quranTranslation}';`,
+    ],
+    [
+      'QuranTranslationText Ayah UPDATE denied',
+      'UPDATE [dbo].[QuranTranslationText] SET [ayahNumber]=[ayahNumber];',
+    ],
+    [
+      'QuranTransliterationText work UPDATE denied',
+      `UPDATE [dbo].[QuranTransliterationText] SET [transliterationId]=N'${quranTransliteration}';`,
+    ],
+    [
+      'QuranTafsirText work UPDATE denied',
+      `UPDATE [dbo].[QuranTafsirText] SET [tafsirId]=N'${quranTafsir}';`,
+    ],
+    [
+      'QuranTajweedRuleText rule UPDATE denied',
+      `UPDATE [dbo].[QuranTajweedRuleText] SET [ruleId]=N'${quranRule}';`,
+    ],
+    [
+      'QuranTajweedRuleText language UPDATE denied',
+      'UPDATE [dbo].[QuranTajweedRuleText] SET [languageCode]=[languageCode];',
+    ],
+  ] as const)
+    await expectDenied(app, label, statement);
+
+  // No Quran table is alterable, each proved visible first so a DDL denial can
+  // only mean permission.
+  for (const table of [
+    ...QURAN_READ_ONLY,
+    'SurahName',
+    'QuranTranslation',
+    'QuranTranslationContributor',
+    'QuranTranslationText',
+    'QuranTransliteration',
+    'QuranTransliterationText',
+    'QuranTafsir',
+    'QuranTafsirContributor',
+    'QuranTafsirText',
+    'QuranRecitation',
+    'QuranRecitationSegment',
+    'QuranTajweedRule',
+    'QuranTajweedRuleText',
+    'QuranTopic',
+  ]) {
+    await assertObjectVisible(app, table);
+    await expectDenied(
+      app,
+      `${table} ALTER denied`,
+      `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+    );
+  }
+  await expectDenied(
+    app,
+    'Ayah trigger DISABLE denied',
+    'DISABLE TRIGGER [dbo].[AyahCanonicalChange] ON [dbo].[Ayah];',
+  );
+
+  // THE EXACT EFFECTIVE POSTURE, table by table and column by column. Object
+  // verbs other than UPDATE are probed on the object; UPDATE is probed on every
+  // column, because the canonical exceptions and the slug denials are column
+  // rules an object-level answer would blur.
+  const QURAN_POSTURE: Readonly<Record<string, readonly [string, string]>> = {
+    ...Object.fromEntries(
+      QURAN_READ_ONLY.map((table) => [table, ['SELECT', ''] as const]),
+    ),
+    Surah: ['SELECT', 'namesVersion,updatedAt'],
+    QuranTranslation: ['INSERT,SELECT', 'all but slug'],
+    QuranTransliteration: ['INSERT,SELECT', 'all but slug'],
+    QuranTafsir: ['INSERT,SELECT', 'all but slug'],
+    QuranRecitation: ['INSERT,SELECT', 'all but slug'],
+    QuranTajweedRule: ['INSERT,SELECT', 'all but slug'],
+    SurahName: ['DELETE,INSERT,SELECT', 'all'],
+    // A text's identity — its work, and its Ayah or language — is fixed; only
+    // what it says (and a tafsir entry's range) is edited in place.
+    QuranTranslationText: ['DELETE,INSERT,SELECT', 'text'],
+    QuranTransliterationText: ['DELETE,INSERT,SELECT', 'text'],
+    QuranTafsirText: ['DELETE,INSERT,SELECT', 'surahNumber,startAyah,endAyah,text'],
+    QuranTajweedRuleText: ['DELETE,INSERT,SELECT', 'title,body'],
+    QuranTranslationContributor: ['DELETE,INSERT,SELECT', ''],
+    QuranTafsirContributor: ['DELETE,INSERT,SELECT', ''],
+    QuranRecitationSegment: ['DELETE,INSERT,SELECT', 'assetId'],
+    QuranTopic: ['DELETE,INSERT,SELECT', ''],
+  };
+  const posture = await app.query<{
+    name: string;
+    held: string | null;
+    updatable: string | null;
+    columns: string | null;
+  }>(`
+    SELECT t.[name],
+      (SELECT STRING_AGG(p.[permission], N',') WITHIN GROUP (ORDER BY p.[permission])
+         FROM (VALUES (N'ALTER'),(N'CONTROL'),(N'DELETE'),(N'INSERT'),(N'REFERENCES'),
+                      (N'SELECT'),(N'TAKE OWNERSHIP')) AS p([permission])
+        WHERE HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', p.[permission]) = 1) AS [held],
+      (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+         FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])
+          AND HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', N'UPDATE', c.[name], N'COLUMN') = 1) AS [updatable],
+      (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+         FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])) AS [columns]
+    FROM (VALUES ${Object.keys(QURAN_POSTURE)
+      .map((table) => `(N'${table}')`)
+      .join(',')}) AS t([name]);
+  `);
+  const postureFindings = posture.flatMap((row) => {
+    const [verbs, scope] = QURAN_POSTURE[row.name] ?? ['?', '?'];
+    const columns = (row.columns ?? '').split(',');
+    const expectedColumns =
+      scope === 'all'
+        ? columns.join(',')
+        : scope === 'all but slug'
+          ? columns.filter((column) => column !== 'slug').join(',')
+          : scope;
+    return (row.held ?? '') === verbs && (row.updatable ?? '') === expectedColumns
+      ? []
+      : [`${row.name}: ${row.held ?? '(none)'} / UPDATE ${row.updatable ?? '(none)'}`];
+  });
+  if (
+    posture.length === Object.keys(QURAN_POSTURE).length &&
+    postureFindings.length === 0
+  ) {
+    pass(
+      'Quran effective posture exact',
+      `${String(posture.length)} tables, object verbs and UPDATE columns as granted`,
+    );
+  } else {
+    fail('Quran effective posture exact', postureFindings.join('; ') || 'tables missing');
+  }
+  const [quranExecute] = await app.query<{ granted: number; denied: number }>(`
+    SELECT
+      HAS_PERMS_BY_NAME(N'dbo.QuranAcceptCorpus', N'OBJECT', N'EXECUTE')
+        + HAS_PERMS_BY_NAME(N'dbo.QuranCorrectAyah', N'OBJECT', N'EXECUTE')
+        + HAS_PERMS_BY_NAME(N'dbo.QuranRecordVerificationFailure', N'OBJECT', N'EXECUTE') AS [granted],
+      HAS_PERMS_BY_NAME(N'dbo.QuranAssertCanonicalAuthority', N'OBJECT', N'EXECUTE') AS [denied];
+  `);
+  if (Number(quranExecute?.granted) === 3 && Number(quranExecute?.denied) === 0) {
+    pass(
+      'Quran procedures EXECUTE exact',
+      'three canonical procedures executable; the authority check is not',
+    );
+  } else {
+    fail('Quran procedures EXECUTE exact', JSON.stringify(quranExecute ?? null));
+  }
 
   // ---- the ungranted object was not merely unreadable, it is unchanged -----
   await assertSentinelIntact(admin);

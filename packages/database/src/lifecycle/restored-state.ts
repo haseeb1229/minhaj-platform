@@ -77,7 +77,10 @@ const FUTURE_DOMAIN_TABLES = [
   'EntityTopic',
   // `NewsArticle` left this list in Phase 13, `Event` in Phase 14 and
   // `Collection` in Phase 15, which deliver them; their restored rows are proved
-  // by the Phase-13, Phase-14 and Phase-15 recovery fixtures instead.
+  // by the Phase-13, Phase-14 and Phase-15 recovery fixtures instead. Phase 18
+  // delivers the Quran as `Surah`, `Ayah`, `Juz` and the `Quran*` tables, proved
+  // by the Phase-18 recovery fixture; a single generic `Quran` table is still
+  // no phase's, so it stays here.
   'Quran',
   'Hadith',
   'Book',
@@ -132,6 +135,39 @@ export const PHASE2_TABLES = [
  * every later context classifies its content by.
  */
 export const PHASE3B_TABLES = ['Topic', 'TopicTranslation', 'Language', 'Tag'];
+
+/**
+ * Tables the Phase-18 migration creates: the registered sources and the
+ * activation, the canonical store and its evidence, and the layered works.
+ *
+ * Checked as REQUIRED whenever the Phase-18 migration is among those the caller
+ * expects.
+ */
+export const PHASE18_TABLES = [
+  'QuranSource',
+  'QuranSourceSurah',
+  'QuranSourceAyah',
+  'QuranActivation',
+  'Juz',
+  'Surah',
+  'Ayah',
+  'QuranVerificationRun',
+  'QuranAyahRevision',
+  'SurahName',
+  'QuranTranslation',
+  'QuranTranslationContributor',
+  'QuranTranslationText',
+  'QuranTransliteration',
+  'QuranTransliterationText',
+  'QuranTafsir',
+  'QuranTafsirContributor',
+  'QuranTafsirText',
+  'QuranRecitation',
+  'QuranRecitationSegment',
+  'QuranTajweedRule',
+  'QuranTajweedRuleText',
+  'QuranTopic',
+];
 
 async function userTables(session: SqlSession): Promise<string[]> {
   const rows = await session.query<{ name: string }>(`
@@ -254,6 +290,18 @@ export async function verifyRestoredSchema(
     if (missing.length)
       throw new Error(
         'Restored database is missing Phase 6 tables: ' + missing.join(', '),
+      );
+  }
+
+  // Phase 18. A restore that carried the Quran migration's history row but not
+  // its canonical store, its registered sources or its layered works would
+  // report an applied migration over a database that has lost the citation
+  // identity every Quran reference rests on.
+  if (expectedMigrationIds.some((id) => id.includes('phase18'))) {
+    const missing = PHASE18_TABLES.filter((table) => !tables.includes(table));
+    if (missing.length > 0)
+      throw new Error(
+        `Restored database is missing Phase-18 Quran tables: ${missing.join(', ')}`,
       );
   }
   const columns = await auditColumns(restored);

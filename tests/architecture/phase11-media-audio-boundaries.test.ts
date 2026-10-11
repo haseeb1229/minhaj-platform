@@ -93,16 +93,28 @@ describe('audio can never become a second Quran recitation authoring path', () =
     }
   });
 
-  it('delivers no /listen/recitations route — the Quran-owned catalogue is absent', async () => {
+  it('fills /listen/recitations only from Quran, never from an AudioTrack', async () => {
+    // Phase 11 delivered no recitation catalogue; Phase 18 delivered it as a
+    // Layer-4 projection of Quran's PUBLIC reader (DOMAIN_MODEL.md §8.1). The
+    // route is the only Listen page that names a recitation, and it reaches no
+    // Media composition, context or contract — so an AudioTrack can never fill it.
     const listen = await walk('apps/web/src/app/[locale]/(public)/listen');
-    expect(listen.some((entry) => entry.includes('recitation'))).toBe(false);
     expect(listen.filter((entry) => entry.endsWith('page.tsx')).sort()).toEqual([
       'apps/web/src/app/[locale]/(public)/listen/lectures/[slug]/page.tsx',
       'apps/web/src/app/[locale]/(public)/listen/lectures/page.tsx',
       'apps/web/src/app/[locale]/(public)/listen/page.tsx',
+      'apps/web/src/app/[locale]/(public)/listen/recitations/page.tsx',
       'apps/web/src/app/[locale]/(public)/listen/series/[slug]/page.tsx',
       'apps/web/src/app/[locale]/(public)/listen/series/page.tsx',
     ]);
+
+    const recitations = uncommented(
+      await read('apps/web/src/app/[locale]/(public)/listen/recitations/page.tsx'),
+    );
+    expect(recitations).toMatch(/composition\/quran-read/u);
+    expect(recitations).not.toMatch(
+      /composition\/media|contexts\/media|contracts\/media|components\/media\/listen/u,
+    );
   });
 });
 

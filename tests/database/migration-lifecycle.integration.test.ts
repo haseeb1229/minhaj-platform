@@ -416,6 +416,32 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'CollectionContributor',
         'CollectionItem',
         'CollectionSlugHistory',
+        // Phase 18 — Quran: registered sources and the activation; Juz, Surah
+        // and Ayah keyed by the canonical citation with immutable history and
+        // verification evidence; the layered works; typed topic assignment.
+        'QuranSource',
+        'QuranSourceSurah',
+        'QuranSourceAyah',
+        'QuranActivation',
+        'Juz',
+        'Surah',
+        'Ayah',
+        'QuranVerificationRun',
+        'QuranAyahRevision',
+        'SurahName',
+        'QuranTranslation',
+        'QuranTranslationContributor',
+        'QuranTranslationText',
+        'QuranTransliteration',
+        'QuranTransliterationText',
+        'QuranTafsir',
+        'QuranTafsirContributor',
+        'QuranTafsirText',
+        'QuranRecitation',
+        'QuranRecitationSegment',
+        'QuranTajweedRule',
+        'QuranTajweedRuleText',
+        'QuranTopic',
       ].sort(),
     );
   });

@@ -46,6 +46,14 @@ import { z } from 'zod';
  * release is not a news article, a statement is not a press release, and a
  * record of media coverage is none of them — so the type filter can tell them
  * apart and each result links to its own canonical family.
+ *
+ * PHASE 18 adds `quran-ayah`, and only that. The canonical citation is the
+ * result unit: an Ayah's canonical Arabic and each public translation or
+ * transliteration of it are documents of ONE result — one per text language —
+ * so several layered works matching never multiply the canonical result, and a
+ * translation's words are never presented as the Arabic. A Surah, a Juz and a
+ * layered work are navigated, not searched. Its scope is one Ayah, because a
+ * Surah can hold more ayat than a scope may hold documents.
  */
 export const SEARCH_KINDS = Object.freeze([
   'topic',
@@ -67,6 +75,7 @@ export const SEARCH_KINDS = Object.freeze([
   'press-release',
   'statement',
   'media-coverage',
+  'quran-ayah',
 ] as const);
 
 export type SearchKind = (typeof SEARCH_KINDS)[number];
@@ -106,6 +115,7 @@ export const SEARCH_SCOPE_KINDS = Object.freeze([
   'press-release',
   'statement',
   'media-coverage',
+  'quran-ayah',
 ] as const);
 
 export type SearchScopeKind = (typeof SEARCH_SCOPE_KINDS)[number];
@@ -132,10 +142,14 @@ export const SCOPE_OF_KIND: Readonly<Record<SearchKind, SearchScopeKind>> = Obje
     'press-release': 'press-release',
     statement: 'statement',
     'media-coverage': 'media-coverage',
+    'quran-ayah': 'quran-ayah',
   },
 );
 
-/** Owner identifiers are GUID strings everywhere in this inventory. */
+/**
+ * Owner identifiers: GUID strings, except a Quran Ayah, whose identity is its
+ * canonical citation `"{surah}:{ayah}"` (Phase 18) — the owner's own key.
+ */
 export const searchResourceIdSchema = z.string().min(1).max(36);
 
 /** One owner resource whose projection should be recomputed. */

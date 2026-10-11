@@ -644,3 +644,58 @@ IF OBJECT_ID(N'[dbo].[SearchIndexRequest]',N'U') IS NOT NULL BEGIN GRANT SELECT,
 IF OBJECT_ID(N'[dbo].[SearchIndexScope]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[SearchIndexScope] TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[SearchIndexScope] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[SearchDocument]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[SearchDocument] TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[SearchDocument] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[SearchDocumentTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[SearchDocumentTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[SearchDocumentTopic] TO [$(app_login)]; END;
+
+-- Phase 18: Quran.
+--
+-- SOURCE AND ACTIVATION ARE READ-ONLY. A registered source, its text and the
+-- corpus activation are the owner/operator's acts; the runtime can read them and
+-- nothing else, so no permission held through this principal can create an
+-- authority, turn a fixture into one, or switch a corpus on.
+IF OBJECT_ID(N'[dbo].[QuranSource]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[QuranSource] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[QuranSource] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranSourceSurah]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[QuranSourceSurah] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[QuranSourceSurah] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranSourceAyah]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[QuranSourceAyah] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[QuranSourceAyah] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranActivation]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[QuranActivation] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[QuranActivation] TO [$(app_login)]; END;
+--
+-- CANONICAL TABLES ARE READ-ONLY TOO. Juz, Surah, Ayah, their history and the
+-- verification evidence are written ONLY by the procedures granted below, which
+-- re-check the actor's live `quran.editCanonical` grant and purpose-bound
+-- step-up grant, the source, the expected version and the exact text in SQL.
+-- This principal holds no UPDATE on Ayah, so ordinary administration has no path
+-- to canonical Arabic at all, and no DELETE on the history. A Surah's
+-- DISPLAY-NAME version is the one column it may advance.
+IF OBJECT_ID(N'[dbo].[Juz]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[Juz] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[Juz] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Surah]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[Surah] TO [$(app_login)]; GRANT UPDATE ON OBJECT::[dbo].[Surah] ([namesVersion], [updatedAt]) TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[Surah] ([number], [ayahCount], [revelation], [nameArabic], [sourceId], [createdAt]) TO [$(app_login)]; DENY INSERT, DELETE, ALTER ON OBJECT::[dbo].[Surah] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Ayah]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[Ayah] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[Ayah] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranAyahRevision]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[QuranAyahRevision] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[QuranAyahRevision] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranVerificationRun]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[QuranVerificationRun] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[QuranVerificationRun] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranAcceptCorpus]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[QuranAcceptCorpus] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[QuranCorrectAyah]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[QuranCorrectAyah] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[QuranRecordVerificationFailure]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[QuranRecordVerificationFailure] TO [$(app_login)];
+-- The authority check is reached only from inside the two writing procedures.
+IF OBJECT_ID(N'[dbo].[QuranAssertCanonicalAuthority]',N'P') IS NOT NULL DENY EXECUTE ON OBJECT::[dbo].[QuranAssertCanonicalAuthority] TO [$(app_login)];
+--
+-- LAYERED WORKS, by the Library postures. Records are inserted and updated but
+-- never deleted — archive is the lifecycle — and a slug is chosen once: the
+-- column refuses UPDATE, so a public address never changes and no slug history
+-- is owed. Texts, entries, contributors, segments, display names and topic
+-- assignments are child rows and may be replaced. Naming a Person, a Topic, a
+-- Language or an Asset grants NOTHING on those owners' tables beyond their own
+-- postures.
+IF OBJECT_ID(N'[dbo].[SurahName]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[SurahName] TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[SurahName] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranTranslation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[QuranTranslation] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranTranslation] ([slug]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[QuranTranslation] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranTransliteration]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[QuranTransliteration] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranTransliteration] ([slug]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[QuranTransliteration] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranTafsir]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[QuranTafsir] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranTafsir] ([slug]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[QuranTafsir] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranRecitation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[QuranRecitation] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranRecitation] ([slug]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[QuranRecitation] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranTajweedRule]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[QuranTajweedRule] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranTajweedRule] ([slug]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[QuranTajweedRule] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranTranslationContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranTranslationContributor] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[QuranTranslationContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranTafsirContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranTafsirContributor] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[QuranTafsirContributor] TO [$(app_login)]; END;
+-- A text row belongs to its work and its place for ever: UPDATE reaches only
+-- the words, so no published work can lose its last text by having it moved.
+IF OBJECT_ID(N'[dbo].[QuranTranslationText]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[QuranTranslationText] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranTranslationText] ([translationId], [surahNumber], [ayahNumber]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[QuranTranslationText] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranTransliterationText]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[QuranTransliterationText] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranTransliterationText] ([transliterationId], [surahNumber], [ayahNumber]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[QuranTransliterationText] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranTafsirText]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[QuranTafsirText] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranTafsirText] ([id], [tafsirId]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[QuranTafsirText] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranTajweedRuleText]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[QuranTajweedRuleText] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranTajweedRuleText] ([ruleId], [languageCode]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[QuranTajweedRuleText] TO [$(app_login)]; END;
+-- A segment's range is fixed once created; only its audio relation is updated,
+-- and replacing a file never deletes the one it replaced.
+IF OBJECT_ID(N'[dbo].[QuranRecitationSegment]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranRecitationSegment] TO [$(app_login)]; GRANT UPDATE ON OBJECT::[dbo].[QuranRecitationSegment] ([assetId]) TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranRecitationSegment] ([id], [recitationId], [surahNumber], [startAyah], [endAyah], [createdAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[QuranRecitationSegment] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[QuranTopic] TO [$(app_login)]; END;

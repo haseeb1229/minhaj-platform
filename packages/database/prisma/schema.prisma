@@ -799,6 +799,7 @@ model Topic {
   pressReleaseTopics PressReleaseTopic[]
   statementTopics StatementTopic[]
   mediaCoverageTopics MediaCoverageTopic[]
+  quranTopics QuranTopic[]
 
   id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
 
@@ -923,6 +924,10 @@ model Language {
   pressReleaseTranslations PressReleaseRevisionTranslation[]
   statementTranslations StatementRevisionTranslation[]
   mediaCoverageTranslations MediaCoverageRevisionTranslation[]
+  quranTranslations QuranTranslation[]
+  quranTransliterations QuranTransliteration[]
+  quranTafsirs QuranTafsir[]
+  quranTajweedTexts QuranTajweedRuleText[]
 
   code String @id @db.NVarChar(16)
 
@@ -1060,6 +1065,9 @@ model Person {
   pressReleaseContributions PressReleaseContributor[]
   statementContributions StatementContributor[]
   mediaCoverageContributions MediaCoverageContributor[]
+  quranTranslationContributions QuranTranslationContributor[]
+  quranTafsirContributions QuranTafsirContributor[]
+  quranRecitations QuranRecitation[]
 
   id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
 
@@ -2053,6 +2061,7 @@ model Asset {
   downloadableEditions Edition[] @relation("EditionDownloadAsset")
   audioTracks AudioTrack[] @relation("AudioTrackAsset")
   photos Photo[] @relation("PhotoAsset")
+  quranRecitationSegments QuranRecitationSegment[] @relation("QuranRecitationSegmentAsset")
   id String @id @db.NVarChar(36)
 
   /// Server-generated and opaque. Never derived from caller input.
@@ -3571,4 +3580,448 @@ model CollectionSlugHistory {
   owner Collection @relation(fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
   @@id([slug])
   @@index([ownerId])
+}
+
+// =============================================================================
+// Phase 18 — Quran
+// =============================================================================
+//
+// THE CANONICAL CITATION IS THE IDENTITY. An Ayah is `(surahNumber,
+// ayahNumber)`; a Surah and a Juz are their numbers. No surrogate key can drift
+// from the citation, and a Juz's range is derived from its ayat.
+//
+// FOUR POSTURES (the migration's header and the runtime grants): sources and
+// activation are owner/operator-only; canonical tables are written ONLY by the
+// `QuranAcceptCorpus` and `QuranCorrectAyah` procedures; layered works are
+// administered under `quran.administer`; Search's vocabulary gains
+// `quran-ayah`. No Quran content is seeded.
+
+/// A registered source of Quran text, `fixture` or `approved`. Immutable. The
+/// application principal can read it and nothing more.
+model QuranSource {
+  id        String   @id @db.NVarChar(36)
+  code      String   @unique @db.NVarChar(64)
+  /// fixture | approved
+  authority String   @db.NVarChar(16)
+  title     String   @db.NVarChar(200)
+  version   String   @db.NVarChar(64)
+  /// utf-8: the one transport encoding the verifier implements.
+  encoding  String   @db.NVarChar(32)
+  script    String?  @db.NVarChar(64)
+  /// The external authority's evidence reference; required when approved.
+  reference String?  @db.NVarChar(400)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  surahs           QuranSourceSurah[]
+  activations      QuranActivation[]
+  juz              Juz[]
+  canonicalSurahs  Surah[]
+  ayat             Ayah[]
+  revisions        QuranAyahRevision[]
+  verificationRuns QuranVerificationRun[]
+  translations     QuranTranslation[]
+  transliterations QuranTransliteration[]
+  tafsirs          QuranTafsir[]
+  recitations      QuranRecitation[]
+  tajweedRules     QuranTajweedRule[]
+
+  @@map("QuranSource")
+}
+
+model QuranSourceSurah {
+  sourceId   String  @db.NVarChar(36)
+  number     Int
+  ayahCount  Int
+  revelation String? @db.NVarChar(16)
+  nameArabic String? @db.NVarChar(100)
+
+  source QuranSource       @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ayat   QuranSourceAyah[]
+
+  @@id([sourceId, number])
+  @@map("QuranSourceSurah")
+}
+
+/// The source's own text and structure for one Ayah, exactly as registered.
+model QuranSourceAyah {
+  sourceId    String  @db.NVarChar(36)
+  surahNumber Int
+  ayahNumber  Int
+  juzNumber   Int
+  hizb        Int?
+  page        Int?
+  sajdah      String? @db.NVarChar(16)
+  text        String  @db.NVarChar(4000)
+
+  surah QuranSourceSurah @relation(fields: [sourceId, surahNumber], references: [sourceId, number], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([sourceId, surahNumber, ayahNumber])
+  @@map("QuranSourceAyah")
+}
+
+/// The corpus is public if and only if this single row exists.
+model QuranActivation {
+  id           Int      @id
+  sourceId     String   @db.NVarChar(36)
+  activatedAt  DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  authorisedBy String   @db.NVarChar(200)
+
+  source QuranSource @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("QuranActivation")
+}
+
+model Juz {
+  number    Int      @id
+  sourceId  String   @db.NVarChar(36)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  source QuranSource @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ayat   Ayah[]
+
+  @@map("Juz")
+}
+
+model Surah {
+  number       Int
+  ayahCount    Int
+  revelation   String?  @db.NVarChar(16)
+  nameArabic   String?  @db.NVarChar(100)
+  sourceId     String   @db.NVarChar(36)
+  /// The version of the DISPLAY NAMES, the only thing about a Surah that changes.
+  namesVersion Int      @default(1)
+  createdAt    DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt    DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  source QuranSource @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ayat   Ayah[]
+  names  SurahName[]
+
+  @@id([number])
+  @@map("Surah")
+}
+
+/// One Ayah. Changed only by `QuranCorrectAyah`, which appends its revision.
+model Ayah {
+  surahNumber Int
+  ayahNumber  Int
+  juzNumber   Int
+  hizb        Int?
+  page        Int?
+  sajdah      String?  @db.NVarChar(16)
+  text        String   @db.NVarChar(4000)
+  sourceId    String   @db.NVarChar(36)
+  version     Int
+  createdAt   DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt   DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  surah                Surah                      @relation(fields: [surahNumber], references: [number], onDelete: NoAction, onUpdate: NoAction)
+  juz                  Juz                        @relation(fields: [juzNumber], references: [number], onDelete: NoAction, onUpdate: NoAction)
+  source               QuranSource                @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  revisions            QuranAyahRevision[]
+  translationTexts     QuranTranslationText[]
+  transliterationTexts QuranTransliterationText[]
+  tafsirStarts         QuranTafsirText[]          @relation("QuranTafsirTextStart")
+  tafsirEnds           QuranTafsirText[]          @relation("QuranTafsirTextEnd")
+  segmentStarts        QuranRecitationSegment[]   @relation("QuranRecitationSegmentStart")
+  segmentEnds          QuranRecitationSegment[]   @relation("QuranRecitationSegmentEnd")
+  topics               QuranTopic[]
+
+  @@id([surahNumber, ayahNumber])
+  @@index([juzNumber, surahNumber, ayahNumber])
+  @@map("Ayah")
+}
+
+/// Immutable, content-free evidence of every verification, passed or failed.
+model QuranVerificationRun {
+  id          String   @id @db.NVarChar(36)
+  /// corpus-acceptance | ayah-correction
+  kind        String   @db.NVarChar(24)
+  /// passed | failed
+  outcome     String   @db.NVarChar(16)
+  sourceId    String   @db.NVarChar(36)
+  checked     Int
+  mismatches  Int
+  firstSurah  Int?
+  firstAyah   Int?
+  firstOffset Int?
+  firstReason String?  @db.NVarChar(32)
+  actorId     String?  @db.NVarChar(36)
+  createdAt   DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  source    QuranSource         @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  revisions QuranAyahRevision[]
+
+  @@index([createdAt(sort: Desc), id])
+  @@map("QuranVerificationRun")
+}
+
+/// Every canonical version of every Ayah. The actor and grant are HISTORICAL
+/// identifiers and carry no foreign key (DOMAIN_MODEL.md §6.2.1).
+model QuranAyahRevision {
+  surahNumber       Int
+  ayahNumber        Int
+  version           Int
+  text              String   @db.NVarChar(4000)
+  sourceId          String   @db.NVarChar(36)
+  verificationRunId String   @db.NVarChar(36)
+  actorId           String?  @db.NVarChar(36)
+  stepUpGrantId     String?  @db.NVarChar(36)
+  reason            String?  @db.NVarChar(500)
+  createdAt         DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  ayah   Ayah                 @relation(fields: [surahNumber, ayahNumber], references: [surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction)
+  source QuranSource          @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  run    QuranVerificationRun @relation(fields: [verificationRunId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([surahNumber, ayahNumber, version])
+  @@map("QuranAyahRevision")
+}
+
+/// A Surah's display name in one interface locale: presentation, not identity.
+model SurahName {
+  surahNumber Int
+  locale      String @db.NVarChar(8)
+  name        String @db.NVarChar(100)
+
+  surah Surah @relation(fields: [surahNumber], references: [number], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([surahNumber, locale])
+  @@map("SurahName")
+}
+
+model QuranTranslation {
+  id           String    @id @db.NVarChar(36)
+  /// Immutable once chosen: the runtime holds no UPDATE on it.
+  slug         String    @unique @db.NVarChar(120)
+  languageCode String    @db.NVarChar(16)
+  name         String    @db.NVarChar(200)
+  description  String?   @db.NVarChar(2000)
+  attribution  String?   @db.NVarChar(400)
+  sourceId     String?   @db.NVarChar(36)
+  /// draft | published | archived
+  state        String    @db.NVarChar(16)
+  version      Int
+  createdAt    DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt    DateTime  @db.DateTime2
+  publishedAt  DateTime? @db.DateTime2
+
+  language     Language                      @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  source       QuranSource?                  @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contributors QuranTranslationContributor[]
+  texts        QuranTranslationText[]
+
+  @@index([state, slug])
+  @@map("QuranTranslation")
+}
+
+model QuranTranslationContributor {
+  translationId String @db.NVarChar(36)
+  personId      String @db.NVarChar(36)
+  role          String @db.NVarChar(32)
+  position      Int
+
+  translation QuranTranslation @relation(fields: [translationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  person      Person           @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([translationId, personId, role])
+  @@index([personId])
+  @@map("QuranTranslationContributor")
+}
+
+model QuranTranslationText {
+  translationId String @db.NVarChar(36)
+  surahNumber   Int
+  ayahNumber    Int
+  text          String @db.NVarChar(Max)
+
+  translation QuranTranslation @relation(fields: [translationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ayah        Ayah             @relation(fields: [surahNumber, ayahNumber], references: [surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([translationId, surahNumber, ayahNumber])
+  @@index([surahNumber, ayahNumber], map: "QuranTranslationText_ayah_idx")
+  @@map("QuranTranslationText")
+}
+
+model QuranTransliteration {
+  id           String    @id @db.NVarChar(36)
+  slug         String    @unique @db.NVarChar(120)
+  languageCode String    @db.NVarChar(16)
+  name         String    @db.NVarChar(200)
+  description  String?   @db.NVarChar(2000)
+  scheme       String?   @db.NVarChar(2000)
+  attribution  String?   @db.NVarChar(400)
+  sourceId     String?   @db.NVarChar(36)
+  state        String    @db.NVarChar(16)
+  version      Int
+  createdAt    DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt    DateTime  @db.DateTime2
+  publishedAt  DateTime? @db.DateTime2
+
+  language Language                   @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  source   QuranSource?               @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  texts    QuranTransliterationText[]
+
+  @@index([state, slug])
+  @@map("QuranTransliteration")
+}
+
+model QuranTransliterationText {
+  transliterationId String @db.NVarChar(36)
+  surahNumber       Int
+  ayahNumber        Int
+  text              String @db.NVarChar(Max)
+
+  transliteration QuranTransliteration @relation(fields: [transliterationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ayah            Ayah                 @relation(fields: [surahNumber, ayahNumber], references: [surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([transliterationId, surahNumber, ayahNumber])
+  @@index([surahNumber, ayahNumber], map: "QuranTransliterationText_ayah_idx")
+  @@map("QuranTransliterationText")
+}
+
+model QuranTafsir {
+  id           String    @id @db.NVarChar(36)
+  slug         String    @unique @db.NVarChar(120)
+  languageCode String    @db.NVarChar(16)
+  name         String    @db.NVarChar(200)
+  description  String?   @db.NVarChar(2000)
+  attribution  String?   @db.NVarChar(400)
+  sourceId     String?   @db.NVarChar(36)
+  state        String    @db.NVarChar(16)
+  version      Int
+  createdAt    DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt    DateTime  @db.DateTime2
+  publishedAt  DateTime? @db.DateTime2
+
+  language     Language                 @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  source       QuranSource?             @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contributors QuranTafsirContributor[]
+  entries      QuranTafsirText[]
+
+  @@index([state, slug])
+  @@map("QuranTafsir")
+}
+
+model QuranTafsirContributor {
+  tafsirId String @db.NVarChar(36)
+  personId String @db.NVarChar(36)
+  role     String @db.NVarChar(32)
+  position Int
+
+  tafsir QuranTafsir @relation(fields: [tafsirId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  person Person      @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([tafsirId, personId, role])
+  @@index([personId])
+  @@map("QuranTafsirContributor")
+}
+
+/// One Tafsir entry over ONE Surah's contiguous range; entries never overlap.
+model QuranTafsirText {
+  id          String @id @db.NVarChar(36)
+  tafsirId    String @db.NVarChar(36)
+  surahNumber Int
+  startAyah   Int
+  endAyah     Int
+  text        String @db.NVarChar(Max)
+
+  tafsir QuranTafsir @relation(fields: [tafsirId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  start  Ayah        @relation("QuranTafsirTextStart", fields: [surahNumber, startAyah], references: [surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction)
+  end    Ayah        @relation("QuranTafsirTextEnd", fields: [surahNumber, endAyah], references: [surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([tafsirId, surahNumber, startAyah], map: "QuranTafsirText_start_key")
+  @@index([surahNumber, startAyah, endAyah], map: "QuranTafsirText_ayah_idx")
+  @@map("QuranTafsirText")
+}
+
+/// A reciter's recitation work. The reciter is a People Person, which grants nothing.
+model QuranRecitation {
+  id          String    @id @db.NVarChar(36)
+  slug        String    @unique @db.NVarChar(120)
+  personId    String    @db.NVarChar(36)
+  name        String    @db.NVarChar(200)
+  style       String?   @db.NVarChar(100)
+  attribution String?   @db.NVarChar(400)
+  sourceId    String?   @db.NVarChar(36)
+  state       String    @db.NVarChar(16)
+  version     Int
+  createdAt   DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt   DateTime  @db.DateTime2
+  publishedAt DateTime? @db.DateTime2
+
+  person   Person                   @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  source   QuranSource?             @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  segments QuranRecitationSegment[]
+
+  @@index([state, slug])
+  @@index([personId, state])
+  @@map("QuranRecitation")
+}
+
+/// One audio file over ONE Surah's contiguous range. The bytes are Storage's;
+/// one Asset serves at most one segment, and the key never cascades.
+model QuranRecitationSegment {
+  id           String   @id @db.NVarChar(36)
+  recitationId String   @db.NVarChar(36)
+  surahNumber  Int
+  startAyah    Int
+  endAyah      Int
+  assetId      String?  @db.NVarChar(36)
+  createdAt    DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  recitation QuranRecitation @relation(fields: [recitationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  start      Ayah            @relation("QuranRecitationSegmentStart", fields: [surahNumber, startAyah], references: [surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction)
+  end        Ayah            @relation("QuranRecitationSegmentEnd", fields: [surahNumber, endAyah], references: [surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction)
+  asset      Asset?          @relation("QuranRecitationSegmentAsset", fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([recitationId, surahNumber, startAyah], map: "QuranRecitationSegment_start_key")
+  @@map("QuranRecitationSegment")
+}
+
+model QuranTajweedRule {
+  id          String    @id @db.NVarChar(36)
+  slug        String    @unique @db.NVarChar(120)
+  position    Int
+  attribution String?   @db.NVarChar(400)
+  sourceId    String?   @db.NVarChar(36)
+  state       String    @db.NVarChar(16)
+  version     Int
+  createdAt   DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt   DateTime  @db.DateTime2
+  publishedAt DateTime? @db.DateTime2
+
+  source QuranSource?           @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  texts  QuranTajweedRuleText[]
+
+  @@index([state, position, slug])
+  @@map("QuranTajweedRule")
+}
+
+model QuranTajweedRuleText {
+  ruleId       String @db.NVarChar(36)
+  languageCode String @db.NVarChar(16)
+  title        String @db.NVarChar(200)
+  body         String @db.NVarChar(Max)
+
+  rule     QuranTajweedRule @relation(fields: [ruleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  language Language         @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([ruleId, languageCode])
+  @@map("QuranTajweedRuleText")
+}
+
+/// Typed topic assignment: real foreign keys to the Ayah and to the Topic.
+model QuranTopic {
+  surahNumber Int
+  ayahNumber  Int
+  topicId     String   @db.NVarChar(36)
+  createdAt   DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  ayah  Ayah  @relation(fields: [surahNumber, ayahNumber], references: [surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction)
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([surahNumber, ayahNumber, topicId])
+  @@index([topicId, surahNumber, ayahNumber], map: "QuranTopic_topicId_idx")
+  @@map("QuranTopic")
 }

@@ -138,20 +138,67 @@ describe('a deferred capability cannot be linked', () => {
     }
   });
 
-  it('records the five deferred domains rather than forgetting them', () => {
+  it('records the four deferred domains rather than forgetting them', () => {
     // Recording them is what lets the administrative status surface tell the
     // truth about the roadmap, and what lets the assertions above range over
     // the whole set instead of over whatever somebody remembered to add.
     //
     // `library` LEFT THIS LIST IN PHASE 8, `search` IN PHASE 17, `watch` IN
-    // PHASE 10, `news-events` IN PHASE 13 and `global` IN PHASE 16, when each was
-    // delivered. Each is asserted delivered below rather than silently dropped.
-    for (const key of ['quran', 'hadith', 'learn', 'fatwa', 'donate']) {
+    // PHASE 10, `news-events` IN PHASE 13, `global` IN PHASE 16 and `quran` IN
+    // PHASE 18, when each was delivered. Each is asserted delivered below rather
+    // than silently dropped.
+    for (const key of ['hadith', 'learn', 'fatwa', 'donate']) {
       const route = routeByKey(key);
 
       expect(route, key).not.toBeNull();
       expect(route?.availability, key).toBe('deferred');
     }
+  });
+
+  it('delivers the Quran at /quran, public, linked, and excluded from the build-bound sitemap', () => {
+    // Phase 18: whether a Quran page may be indexed is a RUNTIME fact of the
+    // corpus (inactive, fixture or approved), so no Quran route is eligible for
+    // the build-bound `pages` segment; each page decides its own robots, and
+    // the `quran` content segment lists approved citations only.
+    const route = requireRoute('quran');
+    expect(route.path).toBe('/quran');
+    expect(route.visibility).toBe('public');
+    expect(route.availability).toBe('delivered');
+    expect(route.indexing).toBe('excluded');
+    expect(route.placements).toContain('primary');
+
+    const quran = SHELL_ROUTES.filter((entry) => entry.key.startsWith('quran.'));
+    expect(quran.map((entry) => entry.key).sort()).toEqual([
+      'quran.books',
+      'quran.juz',
+      'quran.read',
+      'quran.recitations',
+      'quran.research',
+      'quran.search',
+      'quran.surah',
+      'quran.tafsir',
+      'quran.tajweed',
+      'quran.translations',
+      'quran.transliteration',
+      'quran.videos',
+    ]);
+    for (const entry of quran) {
+      expect(isAvailable(entry) && entry.availability, entry.key).toBe('delivered');
+      expect(isAvailable(entry) && entry.indexing, entry.key).toBe('excluded');
+      expect(isAvailable(entry) && entry.path, entry.key).toBe(
+        `/quran/${entry.key.slice('quran.'.length)}`,
+      );
+      expect(entry.placements, entry.key).toEqual([]);
+    }
+    // No owner exposes a public by-topic Article read, and Learning has not
+    // shipped: these related views have no route to link (ROUTE_MAP.md §5.2).
+    for (const key of ['quran.articles', 'quran.courses', 'quran.teachers'])
+      expect(routeByKey(key), key).toBeNull();
+    for (const path of ['/quran/articles', '/quran/courses', '/quran/teachers'])
+      expect(
+        SHELL_ROUTES.some((entry) => isAvailable(entry) && entry.path === path),
+        path,
+      ).toBe(false);
   });
 
   it('delivers News and Events at /news, public, eligible and in the primary navigation', () => {
@@ -319,11 +366,12 @@ describe('a deferred capability cannot be linked', () => {
     }
   });
 
-  it('delivers Listen beside Watch, and no recitation catalogue', () => {
+  it('delivers Listen beside Watch, with no static recitation entry', () => {
     // Phase 11: the landing, the track listing and audio series — reached from
     // Watch, so none has a placement of its own. `/listen/recitations` is the
-    // Quran-owned catalogue projection, and Quran has not shipped: it has no
-    // entry of any kind, reserved or otherwise.
+    // Quran-owned catalogue projection Phase 18 delivered; it exists only while
+    // a Quran corpus is active, so `/listen` links it at runtime and it has no
+    // static entry of any kind, reserved or otherwise.
     const listen = SHELL_ROUTES.filter(
       (route) => route.key === 'listen' || route.key.startsWith('listen.'),
     );
@@ -343,7 +391,7 @@ describe('a deferred capability cannot be linked', () => {
   });
 
   it('refuses to resolve a deferred route as a renderable one', () => {
-    expect(() => requireRoute('quran')).toThrow(/deferred/);
+    expect(() => requireRoute('hadith')).toThrow(/deferred/);
     expect(() => requireRoute('no-such-route')).toThrow(/registered/);
   });
 

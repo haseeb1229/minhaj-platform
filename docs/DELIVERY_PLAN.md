@@ -1261,6 +1261,92 @@ assumed correct**, and engineering completion never substitutes for that accepta
 
 ---
 
+**Phase-18 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+```
+ENGINEERING IMPLEMENTATION   COMPLETE (this phase)
+AUTHORITATIVE CORPUS         NOT SUPPLIED — OPEN_DECISIONS.md §1.1
+APPROVED LAYERED WORKS       NOT SUPPLIED — §1.2
+RIGHTS / ATTRIBUTION         OPEN — §2.4
+PRODUCTION ACTIVATION        BLOCKED until those close
+```
+
+- **No Quran content exists in the repository or in any migrated database.** No Surah, Ayah,
+  name, count, Juz boundary, translation, tafsir, transliteration or recitation is seeded, and no
+  text was generated. Every proof uses controlled, unmistakably non-authoritative sentinel
+  fixtures (`NON_QURAN_FIXTURE_…`), and every page that shows one says so.
+- **Model** (DOMAIN_MODEL.md §8.3). The citation is the identity: `(surahNumber, ayahNumber)`;
+  Surah and Juz are numbers; a Juz's range is derived. Registered sources (`fixture` or
+  `approved`, immutable, owner/operator-only) carry their own exact text; the corpus is public
+  only while the operator's single `QuranActivation` row exists, which refuses an incomplete
+  corpus and an approved activation over fixture text. Layered works — Translation,
+  Transliteration, Tafsir (same-Surah ranges, never overlapping), Recitation (a People reciter,
+  Storage-backed segments) and TajweedRule — are separate aggregates, public only while the corpus
+  is active, the work is published and it names a registered source.
+- **One canonical write path.** The application principal holds no write on canonical, source or
+  activation tables. Corpus acceptance copies the registered source's own rows after the database
+  compares the candidate byte for byte; correction replaces one Ayah with a source's text under
+  the expected version, only when the operator's reviewed text is that text exactly. Both are
+  procedures that re-check, in SQL, a live `quran.editCanonical` assignment and an unexpired
+  `quran-canonical-edit` step-up grant bound to a live session. Every version (1 included) is an
+  immutable revision; every verification, passed or failed, is immutable content-free evidence;
+  the generic audit never holds text. No bulk edit, no import UI and no automated publication path
+  exist. The import interface Phase 30 will call is `acceptCorpus`; Phase 18 contacts no source.
+- **Verification is exact**: code points in the verifier, UTF-16 bytes in the database; no
+  trimming, normalisation form, folding, tashkeel removal or yeh substitution; fatal UTF-8
+  transport decoding that keeps a byte-order mark as a difference; bounded, content-free reports.
+- **Permissions.** `quran.read`, `quran.administer` (layered works, recitation audio, tajweed,
+  Surah display names, Ayah topics — never canonical text) and `quran.editCanonical`, in the
+  protected bundle with the same session and step-up revocation every bundle extension performs.
+  **One new step-up purpose, `quran-canonical-edit`** (SECURITY_BASELINE.md §8.1 names canonical
+  Quran edits as their own operation); no other purpose authorises it. No per-work, publish or
+  import key; no `content.*`, `library.*`, `media.*` key or profile confers Quran authority.
+- **Slugs are immutable.** Translation, Transliteration, Tafsir, Recitation and TajweedRule slugs
+  are chosen once (the column refuses UPDATE; a CHECK fixes their grammar), so no slug history is
+  owed (DOMAIN_MODEL.md §19.7). Surah, Ayah and Juz addresses are numbers.
+- **Public.** `/quran`, `/quran/read` (an anonymous entry form — no session and no progress;
+  Phase 21 owns reading progress), Surah index and view, the canonical Ayah citation, Juz index and
+  paged view, `/quran/search` (`noindex`, throttled like `/search`), translations, tafsir,
+  transliteration, tajweed, recitations and a reciter's recitations (the Person slug), the
+  `/quran/topics/{slug}` filtered view (canonical → `/topics/{slug}`), and `/listen/recitations`
+  — a Layer-4 projection of Quran's public reader, canonical → `/quran/recitations`, absent while
+  no corpus is active. Reading preferences (`translation`, `transliteration`, `tafsir`,
+  `reciter`, `size`) are validated query parameters: an unknown value is reported, never
+  broadened, and canonical URLs exclude them. Players are native, never autoplay, offer no download
+  and appear only for segments Storage can serve. **States:** inactive → an honest unavailable
+  state on section pages and 404 for named resources; fixture mode → a banner on every page,
+  `noindex`, no sitemap; approved mode → canonical, indexable routes and the `quran` sitemap segment
+  of Ayah citations. Structured data is `BreadcrumbList` only.
+- **Related material.** `/quran/books`, `/quran/videos` and `/quran/research` are activated:
+  each is the owner's own public by-topic read for the migration-seeded `quran` topic, canonical to
+  the owner's collection. `/quran/articles` stays absent (Editorial exposes no by-topic Article
+  read), and `/quran/courses` and `/quran/teachers` stay absent and unlinked (Learning has not
+  shipped; no deterministic teacher relation exists). The topic hub gains a bounded Quran section.
+- **Admin.** `/admin/quran/{surahs,ayat,translations,transliterations,tafsir,recitations,tajweed}`
+  — `tajweed` is added to ROUTE_MAP.md §7. Canonical text is read-only; the purpose-built correction
+  flow (plain right-to-left text field, never Tiptap) appears only to `quran.editCanonical` holders
+  after a `quran-canonical-edit` step-up. Recitation audio uploads through
+  `POST /api/admin/quran/recitations/{id}/segments/{segmentId}/asset`, the streamed Class-A pattern
+  of Phase 11.
+- **Search.** Kind and scope `quran-ayah`, one scope per Ayah (identity `"{surah}:{ayah}"`): the
+  canonical Arabic and one document per language of public translation and transliteration text,
+  so one Ayah is one result and a translation is never labelled as the Arabic. Tafsir bodies are
+  not indexed. Nothing is indexed while the corpus is inactive; activation is an operator act, so
+  its projection arrives through reconciliation. The Arabic-yeh vs Urdu-yeh limitation recorded in
+  TECH_STACK.md §10 applies unchanged.
+- **Recovery is SQL plus bytes.** The populated rehearsal covers fixture sources, a canonical corpus
+  with history and evidence, a correction, every layered work, a recitation segment's Asset
+  relation, topics, display names and search intent.
+- **Content gate open.** OPEN_DECISIONS.md §1.1, §1.2 and §2.4 are unchanged. Engineering
+  completion is never "Quran corpus approved", and Phase 21's software dependency on Phase 18 is
+  satisfied by this engineering exit alone (§3.1).
+- **Not delivered, and not owed by this phase:** a real corpus or layered work (external gates);
+  source adapters and live import (Phase 30); downloads (§2.4); reading progress, bookmarks and
+  notes (Phase 21); Surah-level topic assignment; tafsir search; time-offset recitation segments.
+
+---
+
 ### Phase 19 — Hadith
 
 **Entry — implementation gate (§3.1):** Phases 3B, 5 and **17** complete.

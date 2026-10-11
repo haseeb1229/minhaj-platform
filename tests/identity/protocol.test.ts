@@ -176,9 +176,9 @@ describe('the mutation surface', () => {
     // locale (ROUTE_MAP.md §10 rule 6). It imports NO Identity at all — the
     // decision port is injected, and Phase 7 ships no policy that ever allows.
     //
-    // Every non-webhook handler but two is GET-only and mutates nothing. The
-    // two exceptions are Media's uploads — Phase 11's audio file and Phase 12's
-    // photograph — Class-A BROWSER mutations that cannot be Server Actions
+    // Every non-webhook handler but three is GET-only and mutates nothing. The
+    // three exceptions are the uploads — Phase 11's audio file, Phase 12's
+    // photograph and Phase 18's recitation segment — Class-A BROWSER mutations that cannot be Server Actions
     // because the Server Action body cap is global and is not raised. Each
     // carries explicit Origin, Fetch-Metadata and custom-header anti-CSRF
     // checks and a live permission; neither authenticates anybody. None of these is an authentication endpoint, which is what this
@@ -211,17 +211,23 @@ describe('the mutation surface', () => {
         'apps/web/src/app/assets/media/photos/[photoId]/[assetId]/route.ts',
         'apps/web/src/app/assets/media/previews/photos/[photoId]/[assetId]/route.ts',
         'apps/web/src/app/api/admin/media/photos/[photoId]/asset/route.ts',
+        // Phase 18: the same three for a Quran recitation segment's audio —
+        // public playback, the preview that READS a session to re-check
+        // `quran.read` live, and the one segment upload.
+        'apps/web/src/app/assets/quran/recitations/[recitationId]/[segmentId]/[assetId]/route.ts',
+        'apps/web/src/app/assets/quran/previews/recitations/[recitationId]/[segmentId]/[assetId]/route.ts',
+        'apps/web/src/app/api/admin/quran/recitations/[recitationId]/segments/[segmentId]/asset/route.ts',
       ].sort(),
     );
 
-    // And the twelve others genuinely are read-only: a mutating verb on any of
+    // And the fourteen others genuinely are read-only: a mutating verb on any of
     // them would be a state-changing endpoint outside the Class-A controls.
     const { readFile } = await import('node:fs/promises');
 
     const readOnly = routes.filter(
       (entry) => !entry.includes('webhooks') && !entry.includes('/api/admin/'),
     );
-    expect(readOnly).toHaveLength(12);
+    expect(readOnly).toHaveLength(14);
 
     for (const route of readOnly) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');

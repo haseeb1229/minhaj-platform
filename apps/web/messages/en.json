@@ -187,6 +187,20 @@
       "lectures": "Audio lectures",
       "series": "Audio series"
     },
+    "quran": {
+      "read": "Quran: start reading",
+      "surah": "Quran: Surahs",
+      "juz": "Quran: Juz",
+      "search": "Quran search",
+      "translations": "Quran translations",
+      "tafsir": "Tafsir",
+      "transliteration": "Quran transliteration",
+      "tajweed": "Tajweed",
+      "recitations": "Quran recitations",
+      "books": "Books on the Quran",
+      "videos": "Videos on the Quran",
+      "research": "Research on the Quran"
+    },
     "media": {
       "photos": "Photographs",
       "galleries": "Photo galleries",
@@ -407,7 +421,8 @@
       "library": "Library",
       "search": "Search",
       "media": "Media",
-      "global": "Global Network"
+      "global": "Global Network",
+      "quran": "Quran"
     },
     "global": {
       "title": "Global Network",
@@ -593,7 +608,8 @@
       "granted": "Confirmed. You can make administrative changes for the next few minutes.",
       "invalidCredentials": "That password was not accepted.",
       "invalidCode": "That code was not accepted.",
-      "rateLimited": "Too many attempts. Wait a little and try again."
+      "rateLimited": "Too many attempts. Wait a little and try again.",
+      "quranCanonicalEdit": "Correcting canonical Quran text needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app."
     },
     "users": {
       "title": "Accounts",
@@ -1108,7 +1124,8 @@
         "news-article": "News",
         "press-release": "Press release",
         "statement": "Statement",
-        "media-coverage": "Media coverage"
+        "media-coverage": "Media coverage",
+        "quran-ayah": "Quran ayah"
       },
       "categories": {
         "source-unavailable": "The owner could not be read",
@@ -1671,7 +1688,8 @@
       "news-article": "News",
       "press-release": "Press release",
       "statement": "Statement",
-      "media-coverage": "Media coverage"
+      "media-coverage": "Media coverage",
+      "quran-ayah": "Quran ayah"
     },
     "topic": "Topic",
     "topicAny": "Any topic",
@@ -1718,7 +1736,9 @@
     "unavailable": "Search is temporarily unavailable. Please try again in a few minutes.",
     "loading": "Searching…",
     "limitedTitle": "Search paused",
-    "backToSearch": "Return to search"
+    "backToSearch": "Return to search",
+    "quranArabic": "Arabic text",
+    "quranLayer": "Translation or transliteration · {language}"
   },
   "topics": {
     "title": "Topics",
@@ -1753,7 +1773,8 @@
     "allAudio": "All audio on this topic",
     "news": "News on this topic",
     "events": "Events on this topic",
-    "collections": "Collections on this topic"
+    "collections": "Collections on this topic",
+    "quran": "Ayat on this topic"
   },
   "watch": {
     "title": "Watch",
@@ -1882,11 +1903,13 @@
       "lectures": "Audio lectures",
       "series": "Audio series",
       "topics": "Topics",
-      "watch": "Watch"
+      "watch": "Watch",
+      "recitations": "Quran recitations"
     },
     "sectionBody": {
       "lectures": "Every published recording, most recently recorded first, with filters by topic, series and language.",
       "series": "Recordings gathered into series, in order.",
+      "recitations": "Recitations of the Quran by reciters, from the Quran section.",
       "topics": "Browse every topic, with its recordings alongside books, research and videos.",
       "watch": "Lectures, programmes and documentaries on video."
     },
@@ -2416,6 +2439,524 @@
     "galleryTitle": "Event photographs",
     "galleryIntro": "Photo galleries of this event. Each opens on its own gallery page.",
     "backToEvent": "Back to the event"
+  },
+  "quran": {
+    "title": "Quran",
+    "description": "Read the Quran by Surah, by Juz and by Ayah, with translations, tafsir, transliteration, tajweed guidance and recitations.",
+    "intro": "Read the Quran by Surah, by Juz or by citation, and study it alongside translations, tafsir, transliteration, tajweed guidance and recitations. Every Ayah has one permanent address you can cite.",
+    "fixture": "Test fixture — this deployment shows non-authoritative engineering fixture text. It is not the Quran.",
+    "unavailable": {
+      "body": "The Quran corpus is not yet available on this site.",
+      "home": "Return to the home page"
+    },
+    "empty": "Nothing has been published here yet.",
+    "previous": "Previous page",
+    "next": "Next page",
+    "landing": {
+      "read": "Read",
+      "study": "Study",
+      "listen": "Listen",
+      "related": "Related material"
+    },
+    "sections": {
+      "read": "Start reading",
+      "surah": "Surahs",
+      "juz": "Juz",
+      "search": "Search the Quran",
+      "translations": "Translations",
+      "tafsir": "Tafsir",
+      "transliteration": "Transliteration",
+      "tajweed": "Tajweed",
+      "recitations": "Recitations",
+      "books": "Books on the Quran",
+      "videos": "Videos on the Quran",
+      "research": "Research on the Quran",
+      "topics": "The Quran as a topic"
+    },
+    "sectionBody": {
+      "read": "Choose a Surah, or go straight to an Ayah by its number.",
+      "surah": "Every Surah in order, with the number of its ayat.",
+      "juz": "Every Juz in order, with the range of ayat it covers.",
+      "search": "Search the Arabic text and every published translation and transliteration.",
+      "translations": "Published translations of the Quran, each its own work with its own translators and source.",
+      "tafsir": "Published works of tafsir, with commentary arranged by Ayah.",
+      "transliteration": "Published transliterations, each read alongside the Arabic text.",
+      "tajweed": "Guidance on the rules of recitation.",
+      "recitations": "Recitations by reciters, played Surah by Surah alongside the text.",
+      "books": "Books from the Library classified under the Quran.",
+      "videos": "Videos classified under the Quran.",
+      "research": "Research from the Library classified under the Quran.",
+      "topics": "Everything on the platform classified under the Quran, in one place."
+    },
+    "surahName": "Surah {number}",
+    "ayahName": "Surah {surah}, Ayah {ayah}",
+    "rangeName": "Surah {surah}, ayat {start}–{end}",
+    "juzName": "Juz {number}",
+    "juzRange": "From {start} to {end}",
+    "ayahCount": "{count, plural, one {# ayah} other {# ayat}}",
+    "ayatOf": "Ayat of Surah {number}",
+    "revelation": {
+      "meccan": "Meccan",
+      "medinan": "Medinan"
+    },
+    "sajdah": {
+      "recommended": "Place of prostration (recommended)",
+      "obligatory": "Place of prostration (obligatory)"
+    },
+    "layer": {
+      "arabic": "Arabic text",
+      "translation": "Translation: {name}",
+      "transliteration": "Transliteration: {name}",
+      "tafsir": "Tafsir: {name}"
+    },
+    "layerMissing": {
+      "translation": "{name} has no translation of this Ayah.",
+      "transliteration": "{name} has no transliteration of this Ayah.",
+      "tafsir": "{name} has no commentary on this Ayah."
+    },
+    "tafsirOne": "{name} — commentary on Ayah {ayah}",
+    "tafsirRange": "{name} — commentary on ayat {start}–{end}",
+    "notice": {
+      "translation": "The translation you asked for is not available, so no translation is shown.",
+      "transliteration": "The transliteration you asked for is not available, so no transliteration is shown.",
+      "tafsir": "The tafsir you asked for is not available, so no tafsir is shown.",
+      "reciter": "The recitation you asked for is not available, so no recitation is offered."
+    },
+    "reading": {
+      "heading": "Reading options",
+      "translation": "Translation",
+      "transliteration": "Transliteration",
+      "tafsir": "Tafsir",
+      "reciter": "Recitation",
+      "size": "Text size",
+      "none": "None",
+      "apply": "Apply",
+      "reset": "Reset reading options"
+    },
+    "size": {
+      "small": "Small",
+      "medium": "Medium",
+      "large": "Large",
+      "larger": "Larger"
+    },
+    "recitationOf": "Recitation: {name}",
+    "recitationNone": "This recitation has no audio for this Surah.",
+    "recitationNoneForAyah": "This recitation has no audio covering this Ayah.",
+    "player": {
+      "name": "{name} — {range}",
+      "unsupported": "Your browser cannot play audio here.",
+      "failed": "This recitation could not be played right now. Please try again later."
+    },
+    "facts": "Details",
+    "fact": {
+      "citation": "Citation",
+      "juz": "Juz",
+      "sajdah": "Prostration"
+    },
+    "surahNavigation": "Previous and next Surah",
+    "ayahNavigation": "Previous and next Ayah",
+    "previousSurah": "Previous: Surah {number}",
+    "nextSurah": "Next: Surah {number}",
+    "previousAyah": "Previous Ayah ({citation})",
+    "nextAyah": "Next Ayah ({citation})",
+    "goTo": {
+      "heading": "Go to an Ayah",
+      "surah": "Surah",
+      "ayah": "Ayah number",
+      "ayahOptional": "Ayah number (optional)",
+      "submit": "Go",
+      "surahMissing": "That Surah is not available. Choose one from the list.",
+      "ayahMissing": "That Surah has no Ayah with that number."
+    },
+    "readIntro": "Choose where to begin. Nothing about your reading is stored: the address of the page you are on is all there is to come back to.",
+    "beginAt": "Begin at Surah {number}",
+    "reciter": "Reciter",
+    "style": "Style",
+    "listenWithReader": "Listen alongside the text",
+    "recitationsHome": "All recitations in the Quran section",
+    "reciterProfile": "Profile",
+    "recitationEmpty": "No audio of this recitation has been published yet.",
+    "segmentsShow": "{count, plural, one {Play # recording} other {Play # recordings}}",
+    "role": {
+      "translator": "translator",
+      "editor": "editor",
+      "author": "author",
+      "compiler": "compiler"
+    },
+    "work": {
+      "language": "Language",
+      "published": "Published",
+      "attribution": "Attribution",
+      "scheme": "Scheme",
+      "readWith": "Read with this work",
+      "readWithName": "Read with {name}",
+      "entries": "Commentary",
+      "entriesEmpty": "No commentary from this work has been published yet.",
+      "readEntry": "Read the commentary"
+    },
+    "worksEmpty": {
+      "translations": "No translation has been published yet.",
+      "tafsir": "No tafsir has been published yet.",
+      "transliteration": "No transliteration has been published yet.",
+      "tajweed": "No tajweed guidance has been published yet.",
+      "recitations": "No recitation has been published yet."
+    },
+    "tajweedFallback": "This guidance is not available in your language, so it is shown in {language}.",
+    "topicTitle": "Quran",
+    "topicHub": "Everything on this topic",
+    "topicEmpty": "No Ayah has been assigned to this topic yet.",
+    "topicAll": "All ayat on this topic",
+    "relatedEmpty": {
+      "books": "No book on the Quran has been published in the Library yet.",
+      "videos": "No video on the Quran has been published yet.",
+      "research": "No research on the Quran has been published yet."
+    },
+    "relatedOwner": {
+      "books": "Browse these books in the Library",
+      "videos": "Browse these videos in Watch",
+      "research": "Browse this research in the Library"
+    },
+    "search": {
+      "intro": "Search the Arabic text and every published translation and transliteration. Each result is one Ayah, labelled with the text that matched.",
+      "label": "Search the Quran for",
+      "help": "Every word you type must match. Use up to 8 words.",
+      "submit": "Search",
+      "clear": "Clear search",
+      "results": "Quran search results",
+      "count": "{count, plural, one {# result} other {# results}} for “{query}”",
+      "capped": "More than {count} results for “{query}”. Add a word to narrow them.",
+      "none": "No Ayah matches “{query}”.",
+      "pages": "Quran search result pages",
+      "pageStatus": "Page {page} of {pages}",
+      "layer": "Translation or transliteration · {language}"
+    }
+  },
+  "quranAdmin": {
+    "title": "Quran",
+    "surface": {
+      "surahs": "Surahs",
+      "ayat": "Ayat",
+      "translations": "Translations",
+      "transliterations": "Transliterations",
+      "tafsir": "Tafsir",
+      "recitations": "Recitations",
+      "tajweed": "Tajweed"
+    },
+    "scope": {
+      "surahs": "The corpus status, the registered sources and the recent verification runs — evidence only — and each Surah's display names. Sources are registered and a corpus accepted by the operator, never from this screen.",
+      "ayat": "Choose a Surah to read its canonical ayat. The text is read-only here; a correction is made one Ayah at a time from that Ayah's own page, with its own permission and confirmation.",
+      "translations": "Translation works layered over the canonical text. Each is a separate work with its own source, contributors and lifecycle; editing one never changes the Arabic.",
+      "transliterations": "Transliteration works layered over the canonical text, each with its own scheme, source and lifecycle. Nothing is transliterated automatically.",
+      "tafsir": "Tafsir works, each made of entries that cover a range of ayat within one Surah. Editing a tafsir never changes the Arabic.",
+      "recitations": "Recitation works: a reciter, and audio segments that each cover a range of ayat within one Surah.",
+      "tajweed": "Tajweed rules: sourced, plain-text study aids with a title and a body in each language."
+    },
+    "create": {
+      "translations": "New translation",
+      "transliterations": "New transliteration",
+      "tafsir": "New tafsir",
+      "recitations": "New recitation",
+      "tajweed": "New tajweed rule"
+    },
+    "createHelp": "A new work starts as a draft. It can be published only once it names a registered source and has something to show.",
+    "createSubmit": "Create",
+    "save": "Save",
+    "pending": "Saving…",
+    "loading": "Loading…",
+    "unknown": "Something went wrong. Nothing was changed.",
+    "reload": "Try again",
+    "saved": "Saved.",
+    "denied": "You do not have the permission this change requires.",
+    "invalid": "Some of the details are not valid. Check each field and try again. Text may not begin or end with spaces or line breaks — nothing is trimmed for you.",
+    "conflict": "This record changed since you opened it. Reload the page to see the current version, then make your change again.",
+    "notFound": "That record no longer exists.",
+    "duplicateSlug": "Another work already uses this slug.",
+    "sourceRequired": "This work cannot be published until it names a registered source.",
+    "textRequired": "This work cannot be published until it has text to show.",
+    "audioRequired": "This recitation cannot be published until it has segments and every segment has cleared audio.",
+    "overlap": "That range overlaps an existing entry or segment of this work.",
+    "outsideSurah": "That range is outside the Surah. Check the first and last ayah.",
+    "notCleared": "The file was not cleared for use. Upload a different file.",
+    "tooLarge": "That file is larger than the upload limit.",
+    "typeNotAllowed": "That kind of file is not accepted. Upload an MP3 audio file.",
+    "corpusExists": "A canonical corpus already exists.",
+    "unchanged": "Nothing changed, so nothing was saved.",
+    "fixtureOverApproved": "A work with a test fixture source cannot be published while the corpus comes from an approved source.",
+    "rateLimited": "Too many uploads in a short time. Wait a few minutes and try again.",
+    "noSession": "Sign in again to continue.",
+    "secondFactorRequired": "Set up two-step verification and confirm your recovery codes before using this.",
+    "stepUpRequired": "Confirm it is you with the form above, then submit the correction again.",
+    "accountInactive": "This account cannot act.",
+    "stateName": {
+      "draft": "Draft",
+      "published": "Published",
+      "archived": "Archived"
+    },
+    "stateTitle": "Lifecycle",
+    "stateHelp": "Draft is private. Published is public only while the corpus is active and the work names a registered source — and a test fixture source is never public beside an approved corpus. Archived withdraws it without deleting it.",
+    "stateAction": {
+      "published": "Publish",
+      "draft": "Return to draft",
+      "archived": "Archive"
+    },
+    "authority": {
+      "fixture": "Test fixture — not authoritative",
+      "approved": "Approved source"
+    },
+    "revelation": {
+      "meccan": "Meccan",
+      "medinan": "Medinan"
+    },
+    "sajdah": {
+      "recommended": "Recommended prostration",
+      "obligatory": "Obligatory prostration"
+    },
+    "language": {
+      "label": "Content language",
+      "help": "The language the work is written in, from the Taxonomy language list.",
+      "choose": "Choose a language",
+      "en": "English",
+      "ur": "Urdu",
+      "ar": "Arabic"
+    },
+    "people": {
+      "search": "Find a person by name",
+      "searchSubmit": "Find",
+      "searchHelp": "Narrows the person lists below to matching published contributors. People this record already names are always offered."
+    },
+    "personUnavailable": "A person who is not currently published",
+    "previous": "Previous page",
+    "next": "Next page",
+    "backToList": "Back to the list",
+    "empty": "Nothing here yet.",
+    "none": "None",
+    "version": "Version",
+    "updated": "Updated",
+    "state": "State",
+    "name": "Name",
+    "nameIn": "Name in {language}",
+    "slug": "Slug",
+    "slugHelp": "Lowercase letters, digits and hyphens. It forms the public address and cannot be changed once the work is created.",
+    "slugFixed": "Fixed when the work was created; it never changes.",
+    "description": "Description (optional)",
+    "attribution": "Attribution (optional)",
+    "attributionHelp": "As the source supplies it. Nothing is inferred.",
+    "details": "Details",
+    "source": "Source",
+    "sourceNone": "No registered source",
+    "sourceHelp": "Choose one of the registered sources. Sources are registered by the operator and cannot be created here. Publication requires one.",
+    "chooseSource": "Choose a source",
+    "surah": "Surah",
+    "chooseSurah": "Choose a Surah",
+    "chooseSurahSubmit": "Show",
+    "surahNumber": "Surah {number}",
+    "surahNamed": "Surah {number} — {name}",
+    "ayahName": "Surah {surah}, Ayah {ayah}",
+    "scheme": "Scheme (optional)",
+    "schemeHelp": "The transliteration conventions this work follows, in your own words.",
+    "exactTextHelp": "Saved exactly as entered. It may not begin or end with spaces or line breaks; nothing is trimmed or changed for you.",
+    "corpus": {
+      "title": "Corpus status",
+      "inactive": "No corpus is active. The public Quran pages say the corpus is not yet available.",
+      "fixture": "Fixture mode. The active corpus is non-authoritative engineering fixture text: public pages carry a test-fixture banner, are not indexed and are left out of the sitemap.",
+      "approved": "An approved source is active. The public Quran pages show its text.",
+      "activeSource": "Active source",
+      "activatedAt": "Activated",
+      "authorisedBy": "Authorised by",
+      "surahs": "Surahs",
+      "ayat": "Ayat",
+      "juz": "Juz",
+      "operatorOnly": "Sources are registered, and a corpus accepted, by the operator on the host. Nothing on these screens can register a source, import text or change which source is active."
+    },
+    "sources": {
+      "title": "Registered sources",
+      "titleColumn": "Title",
+      "code": "Code and version",
+      "authority": "Authority",
+      "encoding": "Encoding",
+      "reference": "Evidence reference",
+      "ayat": "Ayat",
+      "registered": "Registered",
+      "empty": "No source has been registered."
+    },
+    "runs": {
+      "title": "Recent verification runs",
+      "help": "Every corpus acceptance and every Ayah correction is verified character by character against its source, and every run — passed or failed — is kept as evidence. A failure says where the first difference is, never what the text says.",
+      "empty": "No verification has run yet.",
+      "when": "When",
+      "kind": "Kind",
+      "outcome": "Outcome",
+      "source": "Source",
+      "checked": "Checked",
+      "mismatches": "Mismatches",
+      "first": "First mismatch",
+      "kindName": {
+        "corpus-acceptance": "Corpus acceptance",
+        "ayah-correction": "Ayah correction"
+      },
+      "outcomeName": {
+        "passed": "Passed",
+        "failed": "Failed"
+      }
+    },
+    "surahs": {
+      "title": "Surahs",
+      "help": "Numbers, ayah counts and the source's own names come from the source and cannot be changed here. Only the display names shown to readers are edited on this screen.",
+      "empty": "No canonical corpus has been accepted yet, so there is nothing to show.",
+      "number": "Number",
+      "sourceName": "Name from the source",
+      "displayNames": "Display names",
+      "ayahCount": "Ayat",
+      "revelation": "Revelation",
+      "actions": "Actions",
+      "editNames": "Edit display names",
+      "namesTitle": "Display names — {name}",
+      "namesHelp": "The name shown to readers in each interface language. Leave a language empty to give no display name in it."
+    },
+    "ayah": {
+      "canonical": "Canonical text",
+      "readOnly": "Read-only. This text changes only through the protected correction below, one Ayah at a time, to a registered source's text.",
+      "juz": "Juz",
+      "hizb": "Hizb",
+      "page": "Page",
+      "sajdah": "Prostration"
+    },
+    "history": {
+      "title": "History",
+      "help": "Every version of this Ayah's text, kept for ever. Versions are never edited or removed.",
+      "empty": "No history has been recorded.",
+      "version": "Version {version}",
+      "reason": "Reason",
+      "initial": "Accepted with the corpus"
+    },
+    "topics": {
+      "title": "Topics",
+      "help": "Topics from the Taxonomy that this Ayah is filed under. {count} of {limit}.",
+      "empty": "This Ayah is not filed under any topic.",
+      "unavailable": "A topic that is no longer available",
+      "remove": "Remove",
+      "add": "Add topic",
+      "choose": "Topic",
+      "placeholder": "Choose a topic",
+      "full": "This Ayah has as many topics as it can hold. Remove one to add another.",
+      "none": "Every available topic is already assigned."
+    },
+    "correction": {
+      "title": "Canonical correction",
+      "intro": "Corrects this Ayah's text to the text of a registered source. It needs the canonical-edit permission, a fresh confirmation that it is you, and the exact text you reviewed.",
+      "begin": "Begin a correction",
+      "warning": "You are about to change canonical Quran text. Nothing changes until you confirm the exact text you reviewed against the source, and every attempt is recorded.",
+      "leave": "Leave the correction",
+      "sourceHelp": "Only registered sources are offered.",
+      "compare": "Compare with this source",
+      "sourceUnknown": "That source is not registered. Choose another.",
+      "previewTitle": "Comparison",
+      "current": "Current canonical text (version {version})",
+      "sourceText": "The source's text",
+      "sourceMissing": "This source has no text for this Ayah, so nothing can be corrected from it.",
+      "same": "The current text is identical to this source's text.",
+      "firstDifference": "The texts first differ at code point {offset} (counting from 0).",
+      "confirmRequired": "Tick the confirmation before submitting the correction.",
+      "failed": "The text you entered does not match the source, so nothing was changed. The failed check has been recorded.",
+      "corrected": "Corrected. The Ayah now has the source's text, and a new version and verification record were added to its history.",
+      "identical": "There is nothing to correct: the current text already matches this source.",
+      "reportTitle": "Verification report",
+      "reportSummary": "{checked, plural, one {# ayah checked} other {# ayat checked}}; {mismatches, plural, one {# mismatch} other {# mismatches}}.",
+      "reportTruncated": "Only the first mismatches are listed.",
+      "reference": "{surah}:{ayah}",
+      "offset": "first difference at code point {offset}",
+      "reviewedText": "The exact text you reviewed",
+      "reviewedTextHelp": "Enter the source's text exactly as you reviewed it. It must match character for character; nothing is trimmed, corrected or normalised for you.",
+      "reasonHelp": "Why this correction is being made, for the permanent record.",
+      "confirm": "I have compared this text with the registered source, and I understand this changes canonical Quran text and is recorded permanently.",
+      "pending": "Verifying…",
+      "submit": "Correct this Ayah",
+      "reason": {
+        "label": "Reason",
+        "other": "Other mismatch",
+        "malformedEncoding": "Not valid in the source's encoding",
+        "unsupportedEncoding": "The source's encoding is not supported",
+        "unknownReference": "An Ayah the source does not have",
+        "duplicateReference": "The same Ayah given twice",
+        "missingReference": "An Ayah missing from the candidate",
+        "juzMismatch": "A different Juz from the source",
+        "textMismatch": "The text differs from the source"
+      }
+    },
+    "texts": {
+      "title": "Texts",
+      "count": "Ayat with text",
+      "help": "Choose a Surah, then edit the text for each Ayah. Only the ayat you change are saved; empty a field to remove that Ayah's text. The Arabic shown above each field is read-only.",
+      "missing": "No text",
+      "noCorpus": "Texts can be added once a canonical corpus has been accepted.",
+      "save": "Save changed texts"
+    },
+    "contributors": {
+      "title": "Contributors",
+      "help": "People credited for this work, each with a role, in the order shown. Up to {limit}. Being credited grants nobody any permission.",
+      "person": "Person {number}",
+      "role": "Role {number}",
+      "roleName": {
+        "translator": "Translator",
+        "editor": "Editor",
+        "author": "Author",
+        "compiler": "Compiler"
+      }
+    },
+    "tafsir": {
+      "entries": "Entries",
+      "help": "Each entry covers a range of ayat within this Surah, from 1 to {count}. Ranges in one tafsir may not overlap.",
+      "empty": "No entries for this Surah yet.",
+      "range": "Surah {surah}, ayat {start}–{end}",
+      "remove": "Remove entry",
+      "add": "Add an entry",
+      "addSubmit": "Add entry",
+      "replace": "Save entry",
+      "start": "First ayah",
+      "end": "Last ayah",
+      "text": "Text"
+    },
+    "recitation": {
+      "reciter": "Reciter",
+      "reciterHelp": "A published contributor from People. Being named as reciter grants no permission.",
+      "chooseReciter": "Choose a reciter",
+      "style": "Style (optional)",
+      "styleHelp": "As the source names it. Nothing is inferred.",
+      "segments": "Segments",
+      "segmentsHelp": "Each segment is one audio file covering a range of ayat within one Surah. {count} of {limit}.",
+      "segmentsEmpty": "No segments yet. Add one below, then upload its audio.",
+      "range": "Surah {surah}, ayat {start}–{end}",
+      "audioNone": "No audio",
+      "audioAttached": "Audio attached",
+      "previewName": "Preview of {range}",
+      "previewUnsupported": "This browser cannot play audio.",
+      "previewFailed": "This audio cannot be played right now. It may still be being checked, or it was not cleared for use.",
+      "upload": "Audio file",
+      "replace": "Replacement audio file",
+      "uploadHelp": "One MP3 file, up to {size}. It is checked before it can be played or published.",
+      "uploadSubmit": "Upload audio",
+      "replaceSubmit": "Replace audio",
+      "uploading": "Uploading…",
+      "progress": "Uploaded",
+      "uploaded": "Uploaded. The audio is being checked before it can be played.",
+      "removeSegment": "Remove segment",
+      "addSegment": "Add a segment",
+      "addSegmentSubmit": "Add segment",
+      "start": "First ayah",
+      "end": "Last ayah",
+      "rangeHelp": "The range must lie within the Surah and may not overlap another segment of this recitation."
+    },
+    "tajweed": {
+      "position": "Position",
+      "positionHelp": "Rules are listed in this order, lowest first.",
+      "title": "Title",
+      "full": "The most tajweed rules there can be already exist.",
+      "texts": "Texts",
+      "textsHelp": "A title and a plain-text body in each language you have. Leave a row entirely empty to give no text in it; a partly filled row is refused.",
+      "textLanguage": "Language {number}",
+      "textTitle": "Title {number}",
+      "textBody": "Body {number}"
+    }
   },
   "global": {
     "title": "Global Network",

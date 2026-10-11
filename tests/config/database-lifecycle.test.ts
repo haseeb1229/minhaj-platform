@@ -168,13 +168,39 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'CollectionContributor',
       'CollectionItem',
       'CollectionSlugHistory',
+      // Phase 18 — Quran's sources, canonical store and evidence, layered works
+      // and typed topic assignment.
+      'QuranSource',
+      'QuranSourceSurah',
+      'QuranSourceAyah',
+      'QuranActivation',
+      'Juz',
+      'Surah',
+      'Ayah',
+      'QuranVerificationRun',
+      'QuranAyahRevision',
+      'SurahName',
+      'QuranTranslation',
+      'QuranTranslationContributor',
+      'QuranTranslationText',
+      'QuranTransliteration',
+      'QuranTransliterationText',
+      'QuranTafsir',
+      'QuranTafsirContributor',
+      'QuranTafsirText',
+      'QuranRecitation',
+      'QuranRecitationSegment',
+      'QuranTajweedRule',
+      'QuranTajweedRuleText',
+      'QuranTopic',
     ]) {
       expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }
 
     // Every LATER phase still arrives with the slice that owns it. (`Event`
     // left this list when Phase 14 delivered it, and `Collection` when Phase 15
-    // did.)
+    // did; Phase 18 delivers the Quran as its own tables, never one generic
+    // `Quran` table.)
     for (const table of [
       'PrivateCollection',
       'Quran',

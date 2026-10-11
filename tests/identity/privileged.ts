@@ -265,7 +265,11 @@ export async function actorFor(
   permission: Parameters<
     typeof harness.authorization.requirePrivilegedAction
   >[0]['permission'],
-  purpose: 'privilege-administration' | 'account-administration' | 'second-factor',
+  purpose:
+    | 'privilege-administration'
+    | 'account-administration'
+    | 'second-factor'
+    | 'quran-canonical-edit',
 ): Promise<PrivilegedActor> {
   const session = await sessionOf(harness, account);
 
