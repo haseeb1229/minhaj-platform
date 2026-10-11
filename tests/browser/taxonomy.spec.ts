@@ -392,10 +392,10 @@ test.describe('the taxonomy editor', () => {
     // (Phase 8), and one junction per Phase-9 aggregate: Research,
     // ResearchPaper, Publication, Magazine, MagazineIssue and Encyclopedia —
     // Media's VideoTopic and AudioTrackTopic (Phases 10 and 11), one per
-    // Phase-13 News family and Phase 14's EventTopic, each enforced by real
-    // foreign keys at both ends.
+    // Phase-13 News family, Phase 14's EventTopic and Phase 15's
+    // CollectionTopic, each enforced by real foreign keys at both ends.
     await expect(main).toContainText(
-      'The database enforces 16 typed topic-assignment relationships.',
+      'The database enforces 17 typed topic-assignment relationships.',
     );
     await expect(main).toContainText(
       'Every detected relationship has real foreign keys at both ends.',

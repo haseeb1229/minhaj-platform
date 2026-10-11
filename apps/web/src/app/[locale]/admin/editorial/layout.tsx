@@ -29,6 +29,7 @@ export default async function Layout({
             'statements',
             'media-coverage',
             'events',
+            'collections',
             'queue',
             'correspondence',
           ] as const

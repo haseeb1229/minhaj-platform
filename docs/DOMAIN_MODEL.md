@@ -122,7 +122,7 @@ interpretation. **An edge not listed here does not exist.**
 | Identity & Access | Layer 0 only |
 | People & Contributors | Layer 0; Identity & Access *(to link a Person to an optional User)* |
 | Taxonomy | Layer 0 only |
-| Editorial | Layer 0; Identity & Access; People & Contributors; Taxonomy; **Global Network**; **Media** *(same-level edges — see §3.2)* |
+| Editorial | Layer 0; Identity & Access; People & Contributors; Taxonomy; **Global Network**; **Media**; **Library** *(same-level edges — see §3.2)* |
 | Quran | Layer 0; Identity & Access; People & Contributors; Taxonomy |
 | Hadith | Layer 0; Identity & Access; People & Contributors; Taxonomy |
 | Library | Layer 0; Identity & Access; People & Contributors; Taxonomy |
@@ -153,9 +153,14 @@ interpretation. **An edge not listed here does not exist.**
   Editorial asks only Global's public reference interface; Global never imports Editorial, and a
   Centre page composing both is Layer 4 (§3.3).
 - **Editorial depends on Media** because an Event owns its typed association to Media-owned
-  Galleries (§7.2.3, Phase 14). Editorial asks only Media's public reference interface; Media
-  never imports Editorial and holds no Event schema, and an Event's gallery view composing both
+  Galleries (§7.2.3, Phase 14) and, since Phase 15, a Collection holds typed Video members
+  (§7.3). Editorial asks only Media's public interfaces; Media never imports Editorial and holds
+  no Event or Collection schema, and an Event's gallery view or a Collection page composing both
   is Layer 4 (§3.3).
+- **Editorial depends on Library** because a Collection holds typed Work members (§7.3, Phase
+  15). Editorial asks only Library's public Work reference reads whether a Work is public and
+  what it is called now; Library never imports Editorial and holds no Collection schema, and a
+  Collection page composing both is Layer 4 (§3.3).
 - **Layer 0 `database` is infrastructure, never an owner.** A context's persistence adapter may
   be physically implemented inside `packages/database` while remaining owned by that context
   (ARCHITECTURE.md §3.1.1). Physical placement grants no cross-context access and creates no
@@ -173,13 +178,15 @@ neither implied nor permitted.**
 |---|---|---|
 | **Messaging → Learning** | Message authorisation must verify a **current** teaching assignment or enrolment (§15.3). That knowledge belongs to Learning, and duplicating it inside Messaging would create two sources of truth for who may speak to whom | **`Learning → Messaging` is prohibited** |
 | **Editorial → Global Network** | A NewsArticle revision — and, since Phase 14, an Event revision — carries a typed reference to a **Centre**, which Global Network owns (§17.1). Editorial asks Global's public reference interface whether a Centre may be chosen; it never reads Global's tables, and no Global data is copied into Editorial | **`Global Network → Editorial` is prohibited**: Global persistence never reads Editorial tables, and a Centre page composes Global's Centre with Editorial's own bounded centre-News and centre-Event reads at Layer 4 |
-| **Editorial → Media** | Phase 14: an Event revision owns its typed, ordered association to **Galleries**, which Media owns (§7.2.3, §11). Editorial asks Media's public reference interface whether a Gallery may be associated; it never reads Media's tables, and no Gallery data is copied into Editorial | **`Media → Editorial` is prohibited**: Media holds no Event column, table or code, and an Event's gallery view composes Editorial's Event with Media's listed Galleries at Layer 4 |
+| **Editorial → Media** | Phase 14: an Event revision owns its typed, ordered association to **Galleries**, which Media owns (§7.2.3, §11). Since Phase 15 a Collection revision also holds typed **Video** members (§7.3). Editorial asks Media's public interfaces whether a Gallery may be associated or a Video is published and what it is called now; it never reads Media's tables, and no Gallery or Video data is copied into Editorial | **`Media → Editorial` is prohibited**: Media holds no Event or Collection column, table or code; an Event's gallery view and a Collection page compose Editorial's record with Media's public answers at Layer 4 |
+| **Editorial → Library** | Phase 15: a Collection revision holds typed **Work** members, which Library owns (§7.3, §10.1). Editorial asks Library's public Work reference reads whether a Work is public now and what it is called; it never reads Library's tables, and no Work data is copied into Editorial | **`Library → Editorial` is prohibited**: Library holds no Collection column, table or code, and a Collection page composes Editorial's Collection with Library's public Works at Layer 4 |
 
 **Rules:**
 - **No implicit lateral imports.** A same-level dependency exists only if listed here, and
   only in the listed direction.
 - **Acyclicity is preserved** by directedness: because `Learning → Messaging`,
-  `Global Network → Editorial` and `Media → Editorial` are prohibited, no pair can form a cycle.
+  `Global Network → Editorial`, `Media → Editorial` and `Library → Editorial` are prohibited,
+  no pair can form a cycle.
 - **Adding an edge is an architecture decision** requiring review — never a convenience taken
   during feature work.
 - The architecture is **not reorganised merely to make layer numbering look uniform**.
@@ -546,8 +553,8 @@ internal slug `page`. They cannot claim another context's route.
 
 The stored schedule binds UTC time, an IANA display zone, revision and scheduling actor.
 A single-instance executor processes at most 25 due records of each workflow-governed
-aggregate per sweep (Article, Page, since Phase 13 the four News families, and since Phase 14
-Event), rechecking
+aggregate per sweep (Article, Page, since Phase 13 the four News families, since Phase 14
+Event and since Phase 15 Collection), rechecking
 reviewer and publisher authority. Failed authority or execution leaves a visible stopped
 schedule; an authorised publisher may reschedule after review. Expected-version transactions
 make duplicate execution harmless. Restart resumes pending due work; multi-instance hosting
@@ -648,6 +655,71 @@ exactly the reason given in §6.2.
 - A Collection **never owns content**; it references existing records. Deleting a Collection
   never deletes the material it curated.
 - Editorial Collections are **distinct from a user's private saved collections** (§11).
+
+#### 7.3.1 Collection — as delivered (Phase 15)
+
+Collection is an Editorial aggregate of its own with the Article's shape of tables — record,
+immutable revisions, revision translations (title, summary, SEO words and a sanitised body
+describing the set), typed Topic (`CollectionTopic`) and Person (`CollectionContributor`)
+references and permanent slug reservations — and the same workflow, keys and
+edit-invalidates-approval rule as every other workflow-governed aggregate. No `collection.*`
+permission exists, and no table, flag or code path is shared with Personalisation's future
+`PrivateCollection`.
+
+**The member inventory is exactly the prerequisites' content records** (DELIVERY_PLAN.md Phase
+15: 6, 8, 10 and 13):
+
+| Member type | Owner | Why it is a member |
+|---|---|---|
+| **Article** | Editorial (Phase 6) | Long-form written material — letters, essays, campaign writing |
+| **NewsArticle · PressRelease · Statement · MediaCoverage** | Editorial (Phase 13) | The campaign, conference and statement archives §7.3 names are made of exactly these four families; each is a distinct aggregate with its own canonical page, so each has its own column |
+| **Work** | Library (Phase 8) | The canonical book (`/library/books/{slug}`) |
+| **Video** | Media (Phase 10) | The canonical watchable unit (`/watch/videos/{slug}`) |
+
+**Deliberately not members:** a **Page** (organisational, legal and utility destinations, not
+curated material); an **Edition** or **BookTranslation** (a manifestation of the Work that is the
+canonical book); a **Series** or **Playlist** (already groupings of Videos); and every type no
+prerequisite delivered — Event, Photo, Gallery, audio, the Phase-9 research and publication
+families, Quran, Hadith, Fatwa, Learning, Centres, People and private collections. **A later
+domain adds its own member column when it arrives** (DELIVERY_PLAN.md Phase 15); nothing is
+reserved for it now.
+
+**One place, one typed member, one order.** Each `CollectionItem` is one place in a revision's
+single mixed order — its primary key is (Collection, revision, position) — and holds exactly one
+member in one of seven nullable typed columns (`articleId`, `newsArticleId`, `pressReleaseId`,
+`statementId`, `mediaCoverageId`, `workId`, `videoId`), each a real foreign key to its
+owner's table with **NO ACTION**. The database refuses a place with no member or two (a CHECK
+counting the seven), a second member at the same position whatever the types, the same record
+twice in one revision (a filtered unique index per column), a position outside 0–99 (so at most
+**100 members** — a Collection is read as one page and resolved with one bounded owner read per
+type), and a current revision with **no member at all** (51156): an empty set is never reviewed,
+scheduled or published. There is no `targetType + targetId`: a type with no column cannot be a
+member.
+
+**Membership is revision state.** Adding, removing or reordering a member is an ordinary edit — a
+new revision, back to draft, approval and any schedule cleared — and is audited as its own fact
+(`members-changed` for a different set, `members-reordered` for the same set in a new order, with
+only the member count; `topics-changed`, `contributors-changed`). No audit row carries a title,
+body or member title.
+
+**Choosing a member is asking its owner.** A newly added member must be **public now** —
+Editorial's own published predicate for Articles and News, Library's public Work predicate, Media's
+published Video predicate — so an author never sees, learns of or links another owner's draft, and
+`content.author` is no route into Library or Media drafts. A member the current revision already
+holds may be kept on re-save whatever its owner says of it now. Editors pick members from bounded,
+server-searched, human-labelled choices; the database, not the form, is the final word on order,
+duplicates and the bound.
+
+**Independent lifecycles.** Publishing or archiving a Collection publishes or archives nothing it
+names; a target's withdrawal changes no Collection. A published Collection whose member is
+withdrawn **stays published**: the member is **omitted** from the page — never its title,
+summary or address — and the rest keep their order; when none is public any more the page says so
+plainly. Nothing auto-archives and nothing is invented. Removing a member, revising or archiving
+a Collection deletes and changes no target.
+
+**Not searchable yet.** Phase 15 enters from 6, 8, 10 and 13, not 17, and its deliverables
+promise no projection — the same posture as Phases 12, 14 and 16 — so Collections have no Search
+kind, scope, filter or indexing intent; Phase 31 reconciles the final searchable inventory.
 
 ### 7.4 Derived views are not entities
 

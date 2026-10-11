@@ -93,6 +93,13 @@ export interface LibraryFacetPage {
   readonly hasMore: boolean;
 }
 
+/** One public Work as another context may name it: identity, address, titles. */
+export interface WorkReference {
+  readonly id: string;
+  readonly slug: string;
+  readonly labels: readonly { readonly locale: string; readonly title: string }[];
+}
+
 export interface LibraryPublicReaderPort {
   works(query: LibraryQuery): Promise<WorkPage>;
   work(slug: string): Promise<WorkDetail | null>;
@@ -143,6 +150,18 @@ export interface LibraryPublicReaderPort {
   publicEditionTargets(
     ids: readonly string[],
   ): Promise<readonly { readonly id: string; readonly workSlug: string }[]>;
+
+  /**
+   * PHASE 15 — THE WORK REFERENCE SURFACE an Editorial Collection is composed
+   * from (Editorial → Library). PUBLIC WORKS ONLY, under the same predicate as
+   * every public Library read: a Work that is not public now is simply absent,
+   * so no caller learns a draft's title. Identity, current slug and titles —
+   * no Edition, file, asset or availability detail. Bounded; one call per
+   * batch, never one per Work.
+   */
+  workReferences(ids: readonly string[]): Promise<readonly WorkReference[]>;
+  /** Public Works an editor may choose, narrowed by title text. Bounded. */
+  workChoices(text: string | null, limit: number): Promise<readonly WorkReference[]>;
 
   /* -------------------------------------------------------------------------
    * Phase 9 — Research, ResearchPaper, Publication, Magazine, MagazineIssue and

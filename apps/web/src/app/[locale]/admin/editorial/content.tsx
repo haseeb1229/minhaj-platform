@@ -3,12 +3,17 @@ import { getMessages, getTranslations } from 'next-intl/server';
 import type { Locale } from '@minhaj/contracts';
 import { localeSchema } from '@minhaj/contracts';
 import {
+  COLLECTION_LIMITS,
+  COLLECTION_MEMBER_KINDS,
   EVENT_LIMITS,
   PAGE_BINDINGS,
   canonicalTimeZone,
   editorialStateSchema,
   eventTimeZones,
   foldOf,
+  memberToken,
+  type CollectionMember,
+  type CollectionMemberTarget,
   type EditorialKind,
   type WorkflowAction,
 } from '@minhaj/contracts/editorial';
@@ -23,6 +28,10 @@ import {
   editorialReferenceChoices,
 } from '@/composition/editorial';
 import {
+  collectionMemberChoices,
+  resolveCollectionMembers,
+} from '@/composition/collection-members';
+import {
   Alert,
   EmptyState,
   Field,
@@ -34,6 +43,10 @@ import {
   TextLink,
 } from '@/components/ui';
 import { EditorIsland } from '@/components/editorial/editor-island';
+import {
+  CollectionMembersIsland,
+  type CollectionMemberEntry,
+} from '@/components/editorial/collection-members-island';
 import { ActionForm } from '../../(identity)/form-state';
 import { saveEditorial, transitionEditorial } from './actions';
 import { EDITORIAL_SEGMENTS } from './segments';
@@ -137,12 +150,18 @@ export async function ContentEditor({
   id,
   revisionOffset = 0,
   referenceQuery = '',
+  pendingMembers = null,
 }: {
   locale: Locale;
   kind: EditorialKind;
   id: string;
   revisionOffset?: number;
   referenceQuery?: string;
+  /** A Collection editor's unsaved member list, carried through a search. */
+  pendingMembers?: {
+    readonly version: number;
+    readonly members: readonly CollectionMember[];
+  } | null;
 }) {
   const path = `/${locale}/admin/editorial/${EDITORIAL_SEGMENTS[kind]}/${id}`;
   const context = await requireAdminPage(locale, 'content.read', path);
@@ -188,6 +207,58 @@ export async function ContentEditor({
     Math.max(3, (schedule?.occurrences.length ?? 0) + 1),
   );
   const galleryRows = Math.min(EVENT_LIMITS.galleries, galleryIds.length + 3);
+  // A Collection's members (Phase 15). The choices are bounded PUBLIC records
+  // of every member type, narrowed by the search above. The current
+  // revision's members are named by their owners as they are now: one its
+  // owner no longer publishes is shown by its type and a generic label, never
+  // by a private title and never by its identifier. An unsaved list the
+  // editor carried through the search re-seeds the editor, but only against
+  // the version it was edited from, and is resolved by the same public-only
+  // rule; the saved list stays what "unsaved" is measured against.
+  const savedMembers = kind === 'collection' ? (revision?.members ?? []) : [];
+  const members =
+    kind === 'collection' &&
+    pendingMembers !== null &&
+    pendingMembers.version === (record?.version ?? 0)
+      ? pendingMembers.members
+      : savedMembers;
+  const [memberChoices, resolvedMembers] =
+    kind === 'collection' && canAuthor
+      ? await Promise.all([
+          collectionMemberChoices(referenceQuery),
+          members.length === 0 ? null : resolveCollectionMembers(members),
+        ])
+      : [[], null];
+  const titleOf = (target: CollectionMemberTarget) => {
+    const label =
+      target.titles.find((entry) => entry.languageCode === locale) ?? target.titles[0];
+    return label === undefined
+      ? { title: target.slug, language: null }
+      : { title: label.title, language: label.languageCode };
+  };
+  const memberEntries: CollectionMemberEntry[] = members.map((member) => {
+    const token = memberToken(member);
+    const target = resolvedMembers?.targets.get(token);
+    return {
+      token,
+      kind: member.kind,
+      ...(target === undefined
+        ? {
+            title: t(
+              resolvedMembers?.unavailable.has(member.kind)
+                ? 'memberUnresolved'
+                : 'memberNotPublic',
+            ),
+            language: null,
+          }
+        : titleOf(target)),
+    };
+  });
+  const memberChoiceEntries: CollectionMemberEntry[] = memberChoices.map((choice) => ({
+    token: memberToken({ kind: choice.kind, id: choice.target.id }),
+    kind: choice.kind,
+    ...titleOf(choice.target),
+  }));
   const foldSelect = (name: string, value: 'earlier' | 'later' | null) => (
     <Field id={name} label={t('fold')} help={t('foldHelp')}>
       {(props) => (
@@ -268,11 +339,23 @@ export async function ContentEditor({
       <TextLink href={path}>{t('reload')}</TextLink>
       {canAuthor ? (
         <Panel>
-          <form className="flex flex-wrap items-end gap-3" action={path}>
-            {input('referenceQuery', t('referenceQuery'), referenceQuery, 100)}
-            <Button>{t('findReferences')}</Button>
+          <form
+            id="reference-search"
+            className="flex flex-wrap items-end gap-3"
+            action={path}
+          >
+            {input(
+              'referenceQuery',
+              t(kind === 'collection' ? 'collectionReferenceQuery' : 'referenceQuery'),
+              referenceQuery,
+              100,
+            )}
+            <Button>
+              {t(kind === 'collection' ? 'collectionFindReferences' : 'findReferences')}
+            </Button>
           </form>
           <p>{t('referenceHelp')}</p>
+          {kind === 'collection' ? <p>{t('collectionReferenceHelp')}</p> : null}
           <datalist id="editorial-people">
             {choices.people.map((person) => (
               <option key={person.id} value={person.id}>
@@ -503,6 +586,36 @@ export async function ContentEditor({
                 </Field>
               </fieldset>
             ) : null}
+            {kind === 'collection' ? (
+              <fieldset
+                className="flex flex-col gap-4 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-4"
+                aria-describedby="collection-members-help"
+              >
+                <legend className="px-1 text-sm font-semibold">
+                  {t('collectionMembers')}
+                </legend>
+                <p
+                  id="collection-members-help"
+                  className="text-xs text-[color:var(--color-foreground-muted)]"
+                >
+                  {t('collectionMembersHelp')}
+                </p>
+                <CollectionMembersIsland
+                  key={`${record?.id ?? 'new'}:${record?.version ?? 0}`}
+                  initial={memberEntries}
+                  saved={savedMembers.map(memberToken)}
+                  version={record?.version ?? 0}
+                  searchForm="reference-search"
+                  choices={memberChoiceEntries}
+                  types={COLLECTION_MEMBER_KINDS.map((memberKind) => ({
+                    kind: memberKind,
+                    label: t(`memberType-${memberKind}`),
+                  }))}
+                  limit={COLLECTION_LIMITS.members}
+                  labels={messages}
+                />
+              </fieldset>
+            ) : null}
             <Field id="primaryLanguage" label={t('primaryLanguage')}>
               {(props) => (
                 <Select
@@ -709,6 +822,19 @@ export async function ContentEditor({
                   ))}
                   <dt>{t('eventGalleries')}</dt>
                   <dd>{item.galleryIds?.length ?? 0}</dd>
+                </dl>
+              ) : null}
+              {item.members ? (
+                <dl className="text-sm">
+                  <dt>{t('collectionMembers')}</dt>
+                  <dd>
+                    {item.members.length}
+                    <ol className="list-decimal ps-6">
+                      {item.members.map((member, index) => (
+                        <li key={index}>{t(`memberType-${member.kind}`)}</li>
+                      ))}
+                    </ol>
+                  </dd>
                 </dl>
               ) : null}
               {item.coverage ? (

@@ -25,6 +25,7 @@ import {
   type EventScheduleRefusal,
   type RevisionDirectory,
   type SafeEditorialContent,
+  type CollectionMember,
 } from '@minhaj/contracts/editorial';
 import {
   assertTransition,
@@ -49,8 +50,8 @@ interface KindOperations {
 }
 
 /**
- * At most this many due records of EACH kind are executed per sweep: seven
- * kinds, so a sweep's total work stays bounded at 175 and the remainder is
+ * At most this many due records of EACH kind are executed per sweep: eight
+ * kinds, so a sweep's total work stays bounded at 200 and the remainder is
  * caught up by the next one.
  */
 const DUE_PER_KIND = 25;
@@ -59,8 +60,9 @@ const DUE_PER_KIND = 25;
 interface Kept {
   readonly centreId: string | null;
   readonly galleryIds: readonly string[];
+  readonly members: readonly CollectionMember[];
 }
-const NOTHING_KEPT: Kept = Object.freeze({ centreId: null, galleryIds: [] });
+const NOTHING_KEPT: Kept = Object.freeze({ centreId: null, galleryIds: [], members: [] });
 
 export function createEditorialService(dependencies: {
   persistence: EditorialPersistencePort;
@@ -93,6 +95,16 @@ export function createEditorialService(dependencies: {
         transition: (input) => store.transitionPage(input),
         due: (at, limit) => store.duePages(at, limit),
         fail: (id, version, reason) => store.failPageSchedule(id, version, reason),
+      };
+    if (kind === 'collection')
+      return {
+        detail: (id) => store.collection(id),
+        directory: (query) => store.collectionDirectory(query),
+        revisions: (id, offset) => store.collectionRevisions(id, offset),
+        revise: (input) => store.reviseCollection(input),
+        transition: (input) => store.transitionCollection(input),
+        due: (at, limit) => store.dueCollections(at, limit),
+        fail: (id, version, reason) => store.failCollectionSchedule(id, version, reason),
       };
     if (kind === 'event')
       return {
@@ -131,6 +143,14 @@ export function createEditorialService(dependencies: {
    * same rule against Media (Phase 14): a newly associated Gallery must be one
    * Media would offer now; one the current revision already associates is kept.
    *
+   * A Collection's members follow it too (Phase 15), each asked of its OWNER in
+   * one grouped read: a newly added member must be public now — Editorial's own
+   * published Article or News record, Library's public Work, Media's published
+   * Video — so an author never learns of, or links, another owner's draft. A
+   * member the current revision already holds is kept, whatever its owner
+   * says of it now, so withdrawing one target never forces an editor to erase
+   * a Collection's history to change its words.
+   *
    * A SCHEDULE THAT CANNOT BE STORED SAYS WHY. A local time a daylight-saving
    * change skips or repeats, an end not after its start, or one occurrence
    * written twice is refused with that reason, never as a generic one.
@@ -152,6 +172,10 @@ export function createEditorialService(dependencies: {
     const newGalleries = (content.galleryIds ?? []).filter(
       (id) => !kept.galleryIds.includes(id),
     );
+    const keptMembers = new Set(kept.members.map((m) => `${m.kind}:${m.id}`));
+    const newMembers = (content.members ?? []).filter(
+      (m) => !keptMembers.has(`${m.kind}:${m.id}`),
+    );
     const valid = await Promise.all([
       references.validTopics(content.topicIds),
       references.validContributors(content.contributors.map((entry) => entry.personId)),
@@ -160,6 +184,9 @@ export function createEditorialService(dependencies: {
         ? Promise.resolve(true)
         : references.selectableCentre(centreId),
       ...newGalleries.map((id) => references.selectableGallery(id)),
+      newMembers.length === 0
+        ? Promise.resolve(true)
+        : references.selectableMembers(newMembers),
     ]);
     if (valid.some((value) => !value)) throw new EditorialRefusal('invalid');
     return {
@@ -172,11 +199,16 @@ export function createEditorialService(dependencies: {
   }
   /** What the current revision already names, which a re-save may keep. */
   async function keptOf(kind: EditorialKind, id: string): Promise<Kept> {
+    if (kind === 'collection') {
+      const record = await store.collection(id);
+      return { ...NOTHING_KEPT, members: record?.revision.members ?? [] };
+    }
     if (kind !== 'news-article' && kind !== 'event') return NOTHING_KEPT;
     const record = kind === 'event' ? await store.event(id) : await store.news(kind, id);
     return {
       centreId: record?.revision.centreId ?? null,
       galleryIds: record?.revision.galleryIds ?? [],
+      members: [],
     };
   }
   async function detail(kind: EditorialKind, id: string) {
@@ -227,6 +259,7 @@ export function createEditorialService(dependencies: {
       if (routeBinding !== null) throw new EditorialRefusal('invalid');
       if (kind === 'article') return store.createArticle(input);
       if (kind === 'event') return store.createEvent(input);
+      if (kind === 'collection') return store.createCollection(input);
       if (!isNewsKind(kind)) throw new EditorialRefusal('invalid');
       return store.createNews(kind, input);
     },

@@ -118,6 +118,9 @@ live('Phase 6 real SQL Editorial workflow and correspondence', () => {
         selectableCentre: async () => false,
         // Nor any Gallery; an Event's are proved in `events.integration.test.ts`.
         selectableGallery: async () => false,
+        // Nor any Collection member; those are proved in
+        // `collections.integration.test.ts`.
+        selectableMembers: async () => false,
       },
     });
     const configuration = {

@@ -161,7 +161,7 @@ All prefixed with `/{locale}`.
 | `/sitemap` | Human-readable sitemap |
 | `/topics` · `/topics/{slug}` | **Canonical taxonomy browser and topic hub** |
 | `/people/{slug}` | **Canonical contributor profile** |
-| `/collections` · `/collections/{slug}` | Editorial collections |
+| `/collections` · `/collections/{slug}` | Editorial collections. Delivered in Phase 15: `/collections` lists published Collections newest first (`?offset=` is a page of it, canonical to it); a Collection page lists its currently public members in their one order, each linking to its OWNER's canonical address — there is no second member address under `/collections`. There is no `/collections/latest`, `/popular` or `/featured`. A former Collection slug answers one 301; the `collections` sitemap segment lists published Collections at their current slug in the languages they genuinely have |
 | `/membership` · `/contact` · `/help` · `/help/{article}` · `/feedback` | Utility destinations |
 
 `/topics/{slug}` is among the most important routes on the platform — the realisation of the
@@ -176,7 +176,7 @@ and contributors for one topic. It sits at root level because it serves every co
 | `/explore/about` · `/explore/about/{page}` | introduction · vision · mission · values · objectives · history · timeline · global-impact |
 | `/explore/leadership` | Leadership |
 | `/explore/shaykh-ul-islam` · `/{page}` | biography · early-life · education · academic-work · achievements · works · isnad · views-of-dignitaries |
-| `/explore/shaykh-ul-islam/{books\|articles\|lectures\|collections}` | Filtered listings, canonical to their domain collections |
+| `/explore/shaykh-ul-islam/{books\|articles\|lectures\|collections}` | Filtered listings, canonical to their domain collections. `collections` stays a reserved shell after Phase 15: no accepted contract identifies a Person–Collection relation deterministically, and none is hard-coded |
 | `/explore/organization` · `/{page}` | governance · departments · forums · wings · institutions · annual-reports · un-recognition · awards |
 | `/explore/our-work` · `/{area}` | education · research · welfare · women · youth · students · interfaith · human-rights · peace |
 | `/explore/community` | Community |
@@ -232,7 +232,7 @@ citation remains valid regardless of reading preferences.
 | `/library` · `/library/resources` | Landing and all resources — `?type, topic, language, contributor, from, to` |
 | `/library/books` · `/library/books/{slug}` | **Works**, with editions and translations presented on the work page |
 | `/library/authors` | Contributor listing — **details 301 → `/people/{slug}`** |
-| `/library/topics` · `/library/languages` · `/library/collections` | Filtered browse |
+| `/library/topics` · `/library/languages` · `/library/collections` | Filtered browse. `/library/collections` has **no route** after Phase 15: Collections remain Editorial-owned at `/collections`, and a "Collections holding a public Work" view would need Library's current public predicate inside Editorial's bounded page, which neither context may read — so no truthful deterministic filter exists yet, and nothing links to it |
 | `/library/articles` · `/library/research` · `/library/research-papers` · `/library/publications` · `/library/encyclopedias` (+ `/{slug}`) | Written works |
 | `/library/magazines` · `/{slug}` · `/{slug}/issues/{issueSlug}` | Periodicals |
 | `/library/downloads` · `/library/sale-points` | Access |
@@ -476,7 +476,7 @@ Prefixed `/{locale}/admin`.
 | Area | Routes |
 |---|---|
 | Dashboard | `/admin` |
-| Editorial | `/admin/editorial/{articles\|pages\|news\|press-releases\|statements\|media-coverage\|events\|collections\|queue\|correspondence}` \u2014 **correspondence** covers private ContactInquiry and Feedback triage (DOMAIN_MODEL.md \u00a77.5); `news`, `press-releases`, `statements` and `media-coverage` delivered in Phase 13, `events` in Phase 14, and `queue` lists every workflow-governed aggregate |
+| Editorial | `/admin/editorial/{articles\|pages\|news\|press-releases\|statements\|media-coverage\|events\|collections\|queue\|correspondence}` \u2014 **correspondence** covers private ContactInquiry and Feedback triage (DOMAIN_MODEL.md \u00a77.5); `news`, `press-releases`, `statements` and `media-coverage` delivered in Phase 13, `events` in Phase 14, `collections` in Phase 15, and `queue` lists every workflow-governed aggregate |
 | Quran | `/admin/quran/{surahs\|ayat\|translations\|tafsir\|transliterations\|recitations}` |
 | Hadith | `/admin/hadith/{collections\|books\|chapters\|records\|commentary}` |
 | Fatwa | `/admin/fatwa/{questions\|assignment\|drafts\|review\|published}` |
@@ -677,7 +677,9 @@ structured data invites manual action penalties.
 **Deliberately not claimed:** `Course` structured data without genuine pricing and provider
 completeness · `FAQPage` on Fatwa (a scholarly ruling is not an FAQ entry, and misrepresenting
 it would be both an SEO and a religious misstatement) · `Review` or `Rating` of any kind ·
-`Product` for donations.
+`Product` for donations · any `ItemList`, `CollectionPage` or `CreativeWork` for an editorial
+Collection (Phase 15): a Collection page carries `BreadcrumbList` only, and each member keeps
+its own owner's structured data on its own canonical page.
 
 Quran and Hadith pages use `Article`/`BreadcrumbList` with accurate citation metadata. **No
 structured-data type is invented for religious text**, and none is used that implies

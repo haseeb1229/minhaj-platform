@@ -5,9 +5,11 @@ import { indexAfterResponse } from '@/composition/search';
 import { redirect } from 'next/navigation';
 import { localeSchema } from '@minhaj/contracts';
 import {
+  COLLECTION_LIMITS,
   EVENT_LIMITS,
   editorialKindSchema,
   correspondenceKindSchema,
+  memberOfToken,
 } from '@minhaj/contracts/editorial';
 import { requirePermittedAction } from '@/composition/authorization';
 import { editorialRuntime } from '@/composition/editorial';
@@ -21,6 +23,24 @@ function rejected(error: unknown): FormActionState {
   if (failure === 'unavailable')
     appLogger().error({ operation: 'editorial-mutation' }, 'Editorial mutation failed.');
   return { status: 'error', failure };
+}
+/**
+ * A Collection's members as posted: `member-0`, `member-1`, … in order, each a
+ * `kind:id` token. Nothing posted is ever dropped. A token naming no member is
+ * sent on as it came, and a member field outside `member-0`…`member-99` adds an
+ * entry no member can be, so the strict content contract refuses the whole
+ * save rather than storing a list the editor did not submit.
+ */
+function postedMembers(form: FormData): unknown[] {
+  const fields = [...form.keys()].filter((name) => name.startsWith('member-'));
+  const members = Array.from({ length: COLLECTION_LIMITS.members }, (_, index) =>
+    form.getAll(`member-${index}`),
+  )
+    .flat()
+    .map((token) =>
+      typeof token === 'string' ? (memberOfToken(token) ?? token) : token,
+    );
+  return members.length === fields.length ? members : [...members, null];
 }
 export async function saveEditorial(
   _state: FormActionState,
@@ -95,6 +115,8 @@ export async function saveEditorial(
             ).filter((id) => id !== null),
           }
         : {}),
+      // A Collection's ordered members (Phase 15); no other kind sends the key.
+      ...(kind === 'collection' ? { members: postedMembers(form) } : {}),
     };
     const id = String(form.get('id') ?? '');
     const saved = id

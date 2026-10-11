@@ -444,8 +444,9 @@ test.describe('navigation is honest about what exists', () => {
       '/hadith',
       '/learn',
       // `/library` is delivered by Phase 8 and its scholarly and periodical
-      // surfaces by Phase 9. Phase 15's collections are still absent, and stay
-      // asserted absent.
+      // surfaces by Phase 9. Phase 15 delivers `/collections` but deliberately
+      // no Library-filtered view, so `/library/collections` stays asserted
+      // absent.
       '/library/collections',
       // `/watch` and `/listen` are delivered by Phases 10 and 11; galleries
       // remain deferred to Phase 12.
@@ -463,7 +464,6 @@ test.describe('navigation is honest about what exists', () => {
       '/donate',
       '/membership',
       '/people',
-      '/collections',
     ];
 
     for (const path of ['/en', '/en/explore', '/en/sitemap', '/en/legal/terms']) {
@@ -500,6 +500,9 @@ test.describe('navigation is honest about what exists', () => {
 
       if (path === '/en/sitemap') {
         expect(hrefs, 'sitemap exposes Listen').toContain('/en/listen');
+        // Phase 15: editorial Collections are delivered, with no placement of
+        // their own; the human sitemap lists them.
+        expect(hrefs, 'sitemap exposes Collections').toContain('/en/collections');
       }
 
       for (const href of hrefs) {

@@ -361,6 +361,9 @@ live('Phase 14 Events against real SQL Server', () => {
         },
         selectableCentre: (id) => centres.centreSelectable(id),
         selectableGallery: (id) => galleries.gallerySelectable(id),
+        // This suite writes Events alone; Collection members are proved in
+        // `collections.integration.test.ts`.
+        selectableMembers: async () => false,
       },
     });
     global = createGlobalService({

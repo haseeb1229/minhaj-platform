@@ -623,6 +623,16 @@ function facetPage(
 /** How many facet rows one browse page shows. */
 const FACET_PAGE = 50;
 
+/** At most one Collection's worth of Works is described in one read. */
+const REFERENCE_BATCH = 100;
+/** How many Works an editor's selector offers at once. */
+const REFERENCE_CHOICES = 25;
+const REFERENCE_SELECT = {
+  id: true,
+  slug: true,
+  labels: { select: { locale: true, title: true }, orderBy: { locale: 'asc' as const } },
+} satisfies Prisma.WorkSelect;
+
 export function createLibraryPublicReader(): LibraryPublicReaderPort {
   const db = getDatabaseClient();
   return {
@@ -791,6 +801,37 @@ export function createLibraryPublicReader(): LibraryPublicReaderPort {
         where: { id: { in: [...ids] }, ...PUBLIC_WORK },
         select: { id: true, slug: true },
         orderBy: { id: 'asc' },
+      });
+    },
+    // Phase 15 — the Work reference surface an Editorial Collection is
+    // composed from. PUBLIC WORKS ONLY, so no caller learns a draft's title;
+    // identity, current slug and titles, and nothing about Editions or files.
+    async workReferences(ids) {
+      if (ids.length === 0) return [];
+      if (ids.length > REFERENCE_BATCH)
+        throw new Error('Library reference batch exceeds its bound.');
+      return db.work.findMany({
+        where: { id: { in: [...new Set(ids)] }, ...PUBLIC_WORK },
+        select: REFERENCE_SELECT,
+        orderBy: { id: 'asc' },
+      });
+    },
+    async workChoices(text, limit) {
+      return db.work.findMany({
+        where: {
+          ...PUBLIC_WORK,
+          ...(text === null
+            ? {}
+            : {
+                OR: [
+                  { slug: { contains: text } },
+                  { labels: { some: { title: { contains: text } } } },
+                ],
+              }),
+        },
+        select: REFERENCE_SELECT,
+        orderBy: [{ slug: 'asc' }, { id: 'asc' }],
+        take: Math.min(REFERENCE_CHOICES, Math.max(1, Math.trunc(limit) || 1)),
       });
     },
     async publicEditionTargets(ids) {

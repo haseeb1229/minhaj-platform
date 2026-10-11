@@ -1,5 +1,17 @@
 import { z } from 'zod';
 import {
+  COLLECTION_MAX_OFFSET,
+  COLLECTION_MEMBER_CHOICES,
+  COLLECTION_PAGE,
+  COLLECTION_PREVIEW,
+  collectionMemberKindSchema,
+  collectionMemberSchema,
+  isEditorialMemberKind,
+  memberToken,
+  type CollectionMember,
+  type CollectionMemberTarget,
+  type CollectionPage,
+  type EditorialMemberKind,
   EVENT_GEOGRAPHY_CENTRES,
   EVENT_MAX_OFFSET,
   EVENT_PAGE,
@@ -36,6 +48,10 @@ const archiveFilterSchema = z
   .refine((value) => value.month === null || value.year !== null);
 
 const eventOffsetSchema = z.number().int().min(0).max(EVENT_MAX_OFFSET);
+
+const collectionOffsetSchema = z.number().int().min(0).max(COLLECTION_MAX_OFFSET);
+/** One Collection's members at most; anything longer is not one Collection's. */
+const membersSchema = z.array(collectionMemberSchema).max(100);
 
 /**
  * An Event listing's query, validated again here whatever the page tolerated.
@@ -221,6 +237,72 @@ export function createEditorialReadService(
     },
     eventSitemap(offset: number, limit: number) {
       return reader.eventSitemap(offset, limit);
+    },
+
+    /* ---- Phase 15: Collections ------------------------------------------ */
+
+    async collectionCanonicalSlug(slug: string) {
+      if (!editorialSlugSchema.safeParse(slug).success) return null;
+      return reader.collectionCanonicalSlug(slug);
+    },
+    async collection(slug: string) {
+      if (!editorialSlugSchema.safeParse(slug).success) return null;
+      return reader.publicCollection(slug);
+    },
+    /** One page of `/collections`, newest publication first. */
+    collections(offset = 0): Promise<CollectionPage> {
+      return reader.collections({
+        offset: collectionOffsetSchema.parse(offset),
+        limit: COLLECTION_PAGE,
+        topicId: null,
+      });
+    },
+    /** A topic hub's Collections: the most recently published on the topic. */
+    collectionsOnTopic(topicId: string): Promise<CollectionPage> {
+      return reader.collections({
+        offset: 0,
+        limit: COLLECTION_PREVIEW,
+        topicId: editorialIdSchema.parse(topicId),
+      });
+    },
+    collectionSitemap(offset: number, limit: number) {
+      return reader.collectionSitemap(offset, limit);
+    },
+    /**
+     * Editorial's OWN members among these — Articles and the four News families
+     * — resolved under the published predicate, ONE bounded read per type and
+     * never one per member, keyed `kind:id`. A member that is not published now
+     * is simply absent; Works and Videos are not Editorial's and are ignored.
+     */
+    async memberTargets(
+      members: readonly CollectionMember[],
+    ): Promise<ReadonlyMap<string, CollectionMemberTarget>> {
+      const grouped = new Map<EditorialMemberKind, string[]>();
+      for (const member of membersSchema.parse(members))
+        if (isEditorialMemberKind(member.kind))
+          grouped.set(member.kind, [...(grouped.get(member.kind) ?? []), member.id]);
+      const found = await Promise.all(
+        [...grouped].map(async ([kind, ids]) =>
+          (await reader.memberTargets(kind, ids)).map(
+            (target) => [memberToken({ kind, id: target.id }), target] as const,
+          ),
+        ),
+      );
+      return new Map(found.flat());
+    },
+    /**
+     * Published records of one Editorial member type an editor may choose,
+     * narrowed by title text. Bounded; never a draft.
+     */
+    async memberChoices(kind: EditorialMemberKind, text: string | null) {
+      const parsed = collectionMemberKindSchema.parse(kind);
+      if (!isEditorialMemberKind(parsed)) return [];
+      const query = z.string().trim().min(1).max(120).safeParse(text);
+      return reader.memberChoices(
+        parsed,
+        query.success ? query.data : null,
+        COLLECTION_MEMBER_CHOICES,
+      );
     },
   };
 }

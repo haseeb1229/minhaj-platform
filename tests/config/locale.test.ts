@@ -167,6 +167,11 @@ describe('the render and routing tree stays statically renderable', () => {
     // Phase 14: the Event pages and their pure presentation rules.
     'apps/web/src/components/editorial/events.tsx',
     'apps/web/src/components/editorial/event-presentation.ts',
+    // Phase 15: the public Collection pages and their pure presentation rules.
+    'apps/web/src/components/editorial/collections.tsx',
+    'apps/web/src/components/editorial/collection-presentation.ts',
+    // Phase 15: the editor's ordered Collection member list island.
+    'apps/web/src/components/editorial/collection-members-island.tsx',
     // Phase 8. The Library components render on the anonymous public path;
     // the ROUTES that use them are dynamic for data, never these modules.
     'apps/web/src/components/library/facet-browse.tsx',

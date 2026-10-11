@@ -197,7 +197,8 @@
       "statements": "Statements",
       "media-coverage": "Media coverage",
       "archive": "News archive",
-      "events": "Events"
+      "events": "Events",
+      "collections": "Collections"
     },
     "global": {
       "countries": "Countries",
@@ -1267,6 +1268,7 @@
     "centreNone": "General News — no centre",
     "centreHelp": "Choosing or changing the Centre is an ordinary edit: it returns the article to draft and needs fresh review. An archived Centre stays named only while it is left unchanged.",
     "events": "Events",
+    "collections": "Collections",
     "eventCentreNone": "No centre — a general event",
     "eventCentreHelp": "The Centre the event is held at, if any. Its address and place are shown from the Centre's own public record, never copied. Choosing or changing it is an ordinary edit: it returns the event to draft and needs fresh review. An archived Centre stays named only while it is left unchanged.",
     "eventSchedule": "When the event takes place",
@@ -1289,7 +1291,41 @@
     "nonexistent-time": "A start or end time does not exist in the event's time zone, because the clocks move forward then. Choose a time that exists.",
     "ambiguous-time": "A start or end time happens twice in the event's time zone, because the clocks go back then. Choose whether you mean the first or the second time.",
     "schedule-order": "Each occurrence must end after it starts.",
-    "duplicate-occurrence": "Two occurrences start at the same time. Remove the duplicate."
+    "duplicate-occurrence": "Two occurrences start at the same time. Remove the duplicate.",
+    "collectionMembers": "Items in this collection",
+    "collectionMembersHelp": "Add only items that are public now. Changing the items or their order is an ordinary edit: it returns the collection to draft and needs fresh review. An item its owner later withdraws is hidden from visitors, but may be kept here.",
+    "collectionReferenceQuery": "Contributor name or item title",
+    "collectionFindReferences": "Find contributors and items",
+    "collectionReferenceHelp": "Searching narrows the contributors and the public items offered, up to ten items of each type. Your item list and its order are kept when you search; other unsaved changes, such as text fields, still need saving first.",
+    "memberListEmpty": "No items yet. A collection needs at least one item before it can be saved.",
+    "memberUnsaved": "Item changes are not saved yet.",
+    "memberNotPublic": "No longer public",
+    "memberUnresolved": "Title unavailable just now",
+    "memberMoveUp": "Move up",
+    "memberMoveDown": "Move down",
+    "memberRemove": "Remove",
+    "memberMoveUpLabel": "Move up: {title}, position {position} of {count}",
+    "memberMoveDownLabel": "Move down: {title}, position {position} of {count}",
+    "memberRemoveLabel": "Remove: {title}, position {position} of {count}",
+    "memberMoved": "Moved {title} to position {position} of {count}.",
+    "memberRemoved": "Removed {title}.",
+    "memberAdded": "Added {title} at position {position} of {count}.",
+    "memberAddGroup": "Add an item",
+    "memberType": "Item type",
+    "memberTarget": "Item",
+    "memberTargetNone": "Choose an item",
+    "memberNoChoices": "No public items of this type match the search",
+    "memberAdd": "Add",
+    "memberChooseFirst": "Choose an item to add first.",
+    "memberDuplicate": "{title} is already in this collection.",
+    "memberLimit": "A collection holds at most {limit} items. Remove one before adding another.",
+    "memberType-article": "Article",
+    "memberType-news-article": "News article",
+    "memberType-press-release": "Press release",
+    "memberType-statement": "Statement",
+    "memberType-media-coverage": "Media coverage",
+    "memberType-work": "Book",
+    "memberType-video": "Video"
   },
   "library": {
     "title": "Library",
@@ -1716,7 +1752,8 @@
     "audio": "Audio on this topic",
     "allAudio": "All audio on this topic",
     "news": "News on this topic",
-    "events": "Events on this topic"
+    "events": "Events on this topic",
+    "collections": "Collections on this topic"
   },
   "watch": {
     "title": "Watch",
@@ -2277,7 +2314,36 @@
     "next": "Next page",
     "centre": "Centre",
     "events": "Events",
-    "eventsBody": "Upcoming and past gatherings, with when and where each is held."
+    "eventsBody": "Upcoming and past gatherings, with when and where each is held.",
+    "collections": "Collections",
+    "collectionsBody": "Curated sets of articles, news, books and videos, each gathered around one theme."
+  },
+  "collections": {
+    "title": "Collections",
+    "description": "Curated sets of articles, news, books and videos, each gathered around a theme and arranged in a deliberate order.",
+    "type": "Collection",
+    "topics": "Topics",
+    "empty": "No collections have been published yet.",
+    "pageEmpty": "There are no more collections on this page.",
+    "firstPage": "Back to the first page",
+    "previous": "Previous page",
+    "next": "Next page",
+    "fallback": "This collection is shown in {language}; it has not been translated into this language.",
+    "itemsHeading": "In this collection",
+    "itemsUnavailable": "Some items in this collection cannot be shown right now. Please try again shortly.",
+    "itemsNone": "None of the items in this collection is available at the moment.",
+    "facts": "About this collection",
+    "contributors": "Contributors",
+    "all": "All collections",
+    "kinds": {
+      "article": "Article",
+      "news-article": "News",
+      "press-release": "Press release",
+      "statement": "Statement",
+      "media-coverage": "Media coverage",
+      "work": "Book",
+      "video": "Video"
+    }
   },
   "events": {
     "title": "Events",

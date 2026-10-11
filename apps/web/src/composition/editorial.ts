@@ -11,8 +11,10 @@ import {
   createEditorialService,
   createCorrespondenceService,
 } from '@/contexts/editorial';
+import { memberToken } from '@minhaj/contracts/editorial';
 import { centreReferences } from './global';
 import { galleryReferences } from './media';
+import { resolveCollectionMembers } from './collection-members';
 import { identityRuntime } from './identity';
 import { peopleReadRuntime } from './people-read';
 import { taxonomyRuntime } from './taxonomy';
@@ -59,6 +61,14 @@ function buildEditorialRuntime() {
         // Phase 14: Media's reference interface answers; Editorial reads no
         // Media table (DOMAIN_MODEL.md §3.2, Editorial → Media).
         selectableGallery: (id) => galleryReferences().gallerySelectable(id),
+        // Phase 15: each member's OWNER answers whether it is public now —
+        // Editorial's own published predicate, Library's (Editorial → Library)
+        // and Media's (Editorial → Media) — one grouped read per owner, and an
+        // owner that cannot be asked is an error, never a "no".
+        async selectableMembers(members) {
+          const { targets } = await resolveCollectionMembers(members, { strict: true });
+          return members.every((member) => targets.has(memberToken(member)));
+        },
       },
       reportFailure: (operation) =>
         appLogger().error({ operation }, 'Editorial operation failed.'),

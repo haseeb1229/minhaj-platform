@@ -14,4 +14,5 @@ export const EDITORIAL_SEGMENTS = Object.freeze({
   statement: 'statements',
   'media-coverage': 'media-coverage',
   event: 'events',
+  collection: 'collections',
 } as const satisfies Record<EditorialKind, string>);

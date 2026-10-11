@@ -161,5 +161,21 @@ export function createLibraryReadService(reader: LibraryPublicReaderPort) {
         z.number().int().min(1).max(5000).parse(limit),
       );
     },
+
+    /**
+     * Phase 15 — THE WORK REFERENCE SURFACE an Editorial Collection is
+     * composed from (Editorial → Library, DOMAIN_MODEL.md §3.2). Public Works
+     * only, at most one Collection's worth per call; a Work that is not public
+     * now is simply absent. Identity, current slug and titles — nothing else.
+     */
+    workReferences(ids: readonly string[]) {
+      return reader.workReferences(z.array(libraryIdSchema).max(100).parse(ids));
+    },
+
+    /** Public Works an editor may choose, narrowed by title text. Bounded. */
+    workChoices(text: string | null) {
+      const query = z.string().trim().min(1).max(120).safeParse(text);
+      return reader.workChoices(query.success ? query.data : null, 25);
+    },
   };
 }

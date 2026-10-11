@@ -96,6 +96,11 @@ describe('four Editorial aggregates, and nothing generic', () => {
             /^(centreId String\?|centre Centre\?)$/u.test(field)
           )
             continue;
+          // Phase 15: the ONE Collection field is Prisma's back-relation of the
+          // Collection-owned typed member column (`CollectionItem.<family>Id`)
+          // on the family's root record — no column on any News table, and
+          // News code reads none of it.
+          if (suffix === '' && field === 'collectionItems CollectionItem[]') continue;
           expect(field, `${family}${suffix}.${field}`).not.toMatch(
             /image|asset|photo|gallery|event|centre|center|collection|newsletter|featured|popular|views?\b|kind|type|target/iu,
           );

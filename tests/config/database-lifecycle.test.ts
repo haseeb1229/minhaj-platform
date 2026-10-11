@@ -159,14 +159,24 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'EventSchedule',
       'EventGallery',
       'EventSlugHistory',
+      // Phase 15 — Editorial's Collection and its revision-owned, ordered,
+      // typed members.
+      'Collection',
+      'CollectionRevision',
+      'CollectionRevisionTranslation',
+      'CollectionTopic',
+      'CollectionContributor',
+      'CollectionItem',
+      'CollectionSlugHistory',
     ]) {
       expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }
 
     // Every LATER phase still arrives with the slice that owns it. (`Event`
-    // left this list when Phase 14 delivered it.)
+    // left this list when Phase 14 delivered it, and `Collection` when Phase 15
+    // did.)
     for (const table of [
-      'Collection',
+      'PrivateCollection',
       'Quran',
       'Hadith',
       'Book',

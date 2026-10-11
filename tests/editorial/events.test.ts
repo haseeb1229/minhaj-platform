@@ -52,7 +52,7 @@ const base = () => ({
 const schema = editorialContentSchemaFor('event');
 
 describe('the Event kind', () => {
-  it('is the seventh kind of the shared workflow', () => {
+  it('is the seventh kind of the shared workflow, followed only by Phase 15’s Collection', () => {
     expect(editorialKindSchema.options).toEqual([
       'article',
       'page',
@@ -61,7 +61,9 @@ describe('the Event kind', () => {
       'statement',
       'media-coverage',
       'event',
+      'collection',
     ]);
+    expect(editorialKindSchema.options.indexOf('event')).toBe(6);
   });
 
   it('has its canonical address and its gallery view beneath it', () => {

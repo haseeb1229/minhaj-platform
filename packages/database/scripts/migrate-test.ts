@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
+
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
 import { provisionApplicationPrincipal } from '../src/lifecycle/application-principal.ts';
 import {
@@ -164,6 +166,22 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // Its Centre is ONE nullable column on the revision, never a join table; no
   // registration, ticket, venue, recurrence, image or generic attachment table
   // exists (DOMAIN_MODEL.md §7.1), asserted by `assertEventFoundation`.
+  // ONE EDITORIAL COLLECTION AGGREGATE with the Article's own shape of tables,
+  // and ONE revision-owned ordered membership: a single mixed order whose every
+  // place holds exactly one of seven typed, non-cascading member references.
+  // Never a `targetType + targetId` pair, never a join table per member type,
+  // and never a user's private collection (DOMAIN_MODEL.md §7.1, §6.2),
+  // asserted by `assertCollectionFoundation` and proved as behaviour by
+  // `assertCollectionMembership`.
+  '20261001000000_phase15_collections': [
+    'Collection',
+    'CollectionRevision',
+    'CollectionRevisionTranslation',
+    'CollectionTopic',
+    'CollectionContributor',
+    'CollectionItem',
+    'CollectionSlugHistory',
+  ],
   '20260930000000_phase14_events': [
     'Event',
     'EventRevision',
@@ -307,8 +325,11 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
  * when Chunk 2 delivered authorisation and the privileged second factor.
  */
 const PREMATURE_TABLES = [
-  // `Event` left this list when Phase 14 delivered it.
-  'Collection',
+  // `Event` left this list when Phase 14 delivered it, and `Collection` when
+  // Phase 15 delivered it as Editorial's public, curated aggregate. A user's
+  // private saved list is Personalisation's and arrives with its own phase; it
+  // shares no table with the editorial Collection.
+  'PrivateCollection',
   'Quran',
   'Hadith',
   'Book',
@@ -495,6 +516,22 @@ const PROHIBITED_TABLES = [
   'EventAsset',
   'CentreEventLink',
   'Attachment',
+
+  // PHASE 15 — ONE ordered membership table with seven typed member columns
+  // (DOMAIN_MODEL.md §7.1, §6.2). A generic member or target table would be the
+  // polymorphic reference §6.2 refuses; a join table PER member type would
+  // split the Collection's single mixed order into seven orders no constraint
+  // could keep consistent; and a generic content-collection table would merge
+  // Editorial's curated sets with Personalisation's private lists.
+  'CollectionTarget',
+  'CollectionMember',
+  'CollectionEntry',
+  'CollectionContent',
+  'ContentCollection',
+  'CollectionArticle',
+  'CollectionWork',
+  'CollectionVideo',
+  'CollectionNews',
 ];
 
 const EXPECTED_AUDIT_COLUMNS = [
@@ -653,6 +690,22 @@ const EXPECTED_COLUMN_SIZES: readonly {
   { table: 'EventRevision', column: 'timezone', characters: 64 },
   { table: 'Event', column: 'scheduledTimezone', characters: 64 },
   { table: 'EventRevisionTranslation', column: 'languageCode', characters: 16 },
+  // Phase 15, by the Article's rules; every member column holds an owner's
+  // 36-character identifier.
+  { table: 'Collection', column: 'slug', characters: 120 },
+  { table: 'CollectionSlugHistory', column: 'slug', characters: 120 },
+  { table: 'CollectionRevision', column: 'slug', characters: 120 },
+  { table: 'Collection', column: 'scheduledTimezone', characters: 64 },
+  { table: 'CollectionRevisionTranslation', column: 'languageCode', characters: 16 },
+  ...[
+    'articleId',
+    'newsArticleId',
+    'pressReleaseId',
+    'statementId',
+    'mediaCoverageId',
+    'workId',
+    'videoId',
+  ].map((column) => ({ table: 'CollectionItem', column, characters: 36 })),
 ];
 
 /**
@@ -715,6 +768,22 @@ const EXPECTED_FILTERED_INDEXES: readonly {
     index: 'MagazineIssue_magazineId_volume_issueNumber_key',
     why: 'two issues of one Magazine could claim the same volume and number',
   },
+  // Phase 15. Filtered because each place names ONE of seven member types, so
+  // every other type's column is NULL there — and an unfiltered index would
+  // treat those NULLs as one repeated value and refuse a second member.
+  ...[
+    'article',
+    'newsArticle',
+    'pressRelease',
+    'statement',
+    'mediaCoverage',
+    'work',
+    'video',
+  ].map((member) => ({
+    table: 'CollectionItem',
+    index: `CollectionItem_${member}_key`,
+    why: `one ${member} could be a member of one Collection revision twice`,
+  })),
 ];
 
 const EXPECTED_PROCEDURES = [
@@ -742,6 +811,8 @@ const EXPECTED_TRIGGERS = [
     'MediaCoverage',
     // Phase 14: the same eleven for an Event, and four more below.
     'Event',
+    // Phase 15: the same eleven for a Collection, and two more below.
+    'Collection',
   ].flatMap((kind) => [
     kind + 'RevisionImmutable',
     kind + 'RevisionTranslationImmutable',
@@ -798,6 +869,10 @@ const EXPECTED_TRIGGERS = [
   'EventGalleryImmutable',
   'EventScheduleAppend',
   'EventGalleryAppend',
+  // Phase 15: a Collection's ordered members are revision state — immutable,
+  // and never added to a revision once it is current.
+  'CollectionItemImmutable',
+  'CollectionItemAppend',
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
@@ -989,6 +1064,18 @@ const EXPECTED_CHECK_CONSTRAINTS = [
     constraint: 'EventSchedule_' + rule + '_ck',
   })),
   { table: 'EventGallery', constraint: 'EventGallery_position_ck' },
+  // Phase 15. The Article's six workflow rules, a revision's schema, a bounded
+  // translation and a closed contributor vocabulary; members in one hundred
+  // places, and exactly one typed member in each.
+  ...['state', 'version', 'approval', 'publication', 'published_date', 'schedule'].map(
+    (rule) => ({ table: 'Collection', constraint: 'Collection_' + rule + '_ck' }),
+  ),
+  { table: 'CollectionRevision', constraint: 'CollectionRevision_schema_ck' },
+  { table: 'CollectionRevisionTranslation', constraint: 'CollectionTranslation_size_ck' },
+  { table: 'CollectionContributor', constraint: 'CollectionContributor_role_ck' },
+  { table: 'CollectionContributor', constraint: 'CollectionContributor_position_ck' },
+  { table: 'CollectionItem', constraint: 'CollectionItem_position_ck' },
+  { table: 'CollectionItem', constraint: 'CollectionItem_one_member_ck' },
 ];
 
 /**
@@ -1985,7 +2072,10 @@ const EVENT_EXTERNAL_KEYS = [
   'Event_scheduledById_fkey>User',
 ];
 
-/** The two editorial descriptions as Phase 13 left them and Phase 14 restates them. */
+/**
+ * The two editorial descriptions as Phase 13 left them, as Phase 14 restated
+ * them, and as Phase 15 restates them again.
+ */
 const EDITORIAL_DESCRIPTIONS = {
   phase13: {
     'content.author':
@@ -1999,9 +2089,18 @@ const EDITORIAL_DESCRIPTIONS = {
     'content.read':
       'Read private Article, Page, news, press release, statement, media coverage and event drafts and revisions.',
   },
+  phase15: {
+    'content.author':
+      'Create and revise Article, Page, news, press release, statement, media coverage, event and collection drafts and submit them for review.',
+    'content.read':
+      'Read private Article, Page, news, press release, statement, media coverage, event and collection drafts and revisions.',
+  },
 } as const;
 
-/** The two editorial descriptions are EXACTLY a phase's wording, and no `event.*` key exists. */
+/**
+ * The two editorial descriptions are EXACTLY a phase's wording, and no
+ * `event.*`, `collection.*` or membership key exists.
+ */
 async function assertEditorialDescriptions(
   session: SqlSession,
   stage: keyof typeof EDITORIAL_DESCRIPTIONS,
@@ -2010,6 +2109,7 @@ async function assertEditorialDescriptions(
     SELECT [key], [description] FROM [dbo].[Permission]
     WHERE [key] IN (N'content.read', N'content.author') OR [key] LIKE N'event%'
        OR [key] LIKE N'schedule%' OR [key] LIKE N'occurrence%'
+       OR [key] LIKE N'collection%' OR [key] LIKE N'member%'
     ORDER BY [key];
   `);
   const expected = EDITORIAL_DESCRIPTIONS[stage];
@@ -2018,10 +2118,13 @@ async function assertEditorialDescriptions(
     JSON.stringify(Object.entries(expected))
   )
     fail(
-      `The editorial descriptions must be exactly the ${stage} wording, with no Event key; ` +
-        `found ${JSON.stringify(rows)}.`,
+      `The editorial descriptions must be exactly the ${stage} wording, with no Event ` +
+        `or Collection key; found ${JSON.stringify(rows)}.`,
     );
-  report('editorial descriptions', `exactly the ${stage} wording, no event.* key`);
+  report(
+    'editorial descriptions',
+    `exactly the ${stage} wording, no event.* or collection.* key`,
+  );
 }
 
 /**
@@ -2046,13 +2149,17 @@ async function assertEditorialDescriptions(
  *   5. the 51146 rule — a current revision has an occurrence — is in the
  *      integrity trigger, beside 51142 and 51143;
  *   6. no search vocabulary names an event: Events are not searchable yet;
- *   7. the two editorial descriptions name events, exactly, and no `event.*`
+ *   7. the two editorial descriptions name events, exactly — in Phase 14's
+ *      wording or, once Phase 15 is applied, its own — and no `event.*`
  *      permission exists.
  *
  * The refusals themselves are proved as BEHAVIOUR, through the runtime login,
  * by `db:test:permissions`; this gate proves they are present in the catalogue.
  */
-async function assertEventFoundation(session: SqlSession): Promise<void> {
+async function assertEventFoundation(
+  session: SqlSession,
+  descriptions: 'phase14' | 'phase15' = 'phase15',
+): Promise<void> {
   const tables = EVENT_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',');
 
   const shapes = await session.query<{ tableName: string; name: string }>(`
@@ -2185,7 +2292,9 @@ async function assertEventFoundation(session: SqlSession): Promise<void> {
       `Events are not searchable in Phase 14; ${vocabularies.map((row) => row.name).join(', ')} names one.`,
     );
 
-  await assertEditorialDescriptions(session, 'phase14');
+  // Phase 15 restates the same two descriptions once more; before it is
+  // applied, and after its rollback, they are exactly Phase 14's.
+  await assertEditorialDescriptions(session, descriptions);
 
   report(
     'event foundation',
@@ -2220,6 +2329,757 @@ async function assertEventRemoved(session: SqlSession): Promise<void> {
     fail(`The Phase-14 rollback left an Event object: ${JSON.stringify(row)}.`);
   await assertEditorialDescriptions(session, 'phase13');
   report('event rollback', 'every Event table, trigger and Gallery reference removed');
+}
+
+const COLLECTION_TABLES = [
+  'Collection',
+  'CollectionRevision',
+  'CollectionRevisionTranslation',
+  'CollectionTopic',
+  'CollectionContributor',
+  'CollectionItem',
+  'CollectionSlugHistory',
+];
+
+/**
+ * The seven member types of a Collection place: each its OWN nullable column,
+ * its own non-cascading foreign key to its owner's table and its own filtered
+ * unique index. The list is the whole of it — a type with no column here cannot
+ * be a member at all.
+ */
+const COLLECTION_MEMBERS = [
+  { column: 'articleId', table: 'Article', key: 'article' },
+  { column: 'newsArticleId', table: 'NewsArticle', key: 'newsArticle' },
+  { column: 'pressReleaseId', table: 'PressRelease', key: 'pressRelease' },
+  { column: 'statementId', table: 'Statement', key: 'statement' },
+  { column: 'mediaCoverageId', table: 'MediaCoverage', key: 'mediaCoverage' },
+  { column: 'workId', table: 'Work', key: 'work' },
+  { column: 'videoId', table: 'Video', key: 'video' },
+] as const;
+
+type CollectionMember = (typeof COLLECTION_MEMBERS)[number];
+
+/**
+ * EVERY foreign key from a Collection table to another owner's table, exactly:
+ * the Article's seven editorial edges and the seven typed members. A fifteenth
+ * edge — an image, a Page, an Event, a second reference to anything — fails.
+ */
+const COLLECTION_EXTERNAL_KEYS = [
+  'CollectionContributor_personId_fkey>Person',
+  'CollectionRevisionTranslation_languageCode_fkey>Language',
+  'CollectionRevision_editorId_fkey>User',
+  'CollectionTopic_topicId_fkey>Topic',
+  'Collection_approvedById_fkey>User',
+  'Collection_creatorId_fkey>User',
+  'Collection_scheduledById_fkey>User',
+  ...COLLECTION_MEMBERS.map(
+    (member) => `CollectionItem_${member.column}_fkey>${member.table}`,
+  ),
+].sort();
+
+/**
+ * Each Collection trigger, the table it guards and the refusal numbers its body
+ * raises: 51150 immutable history, 51151 no extension of a current or
+ * historical revision, 51152 a valid current revision without self-approval,
+ * 51153 a reserved canonical slug, 51154 revision sequence, 51155 no rewind and
+ * 51156 a current revision with at least one member.
+ */
+const COLLECTION_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, string]>> = {
+  CollectionRevisionImmutable: ['CollectionRevision', '51150'],
+  CollectionRevisionTranslationImmutable: ['CollectionRevisionTranslation', '51150'],
+  CollectionTopicImmutable: ['CollectionTopic', '51150'],
+  CollectionContributorImmutable: ['CollectionContributor', '51150'],
+  CollectionItemImmutable: ['CollectionItem', '51150'],
+  CollectionSlugHistoryImmutable: ['CollectionSlugHistory', '51150'],
+  CollectionRevisionTranslationAppend: ['CollectionRevisionTranslation', '51151'],
+  CollectionTopicAppend: ['CollectionTopic', '51151'],
+  CollectionContributorAppend: ['CollectionContributor', '51151'],
+  CollectionItemAppend: ['CollectionItem', '51151'],
+  CollectionCurrentIntegrity: ['Collection', '51152+51153+51156'],
+  CollectionRevisionSequence: ['CollectionRevision', '51154'],
+  CollectionRevisionForward: ['Collection', '51155'],
+};
+
+/**
+ * Phase 15 — what only the catalogue can prove about Collections:
+ *
+ *   1. SEVEN DISTINCT TABLES, none generic: a place is exactly `ownerId`,
+ *      `revisionNumber`, `position` and the seven typed, nullable member
+ *      columns — no type, kind or target column, and no column for any type
+ *      that is not a member (Page, Event, Gallery, Photo, Edition, Series,
+ *      Playlist, audio, research, Quran, Hadith, Fatwa, Course, Centre) nor for
+ *      a private list;
+ *   2. no Phase-15 foreign key cascades, and the external edges are EXACTLY the
+ *      fourteen above, each member key a single typed column — so no Collection
+ *      write can delete, archive or change another owner's record;
+ *   3. Library, Media and the News families own NO Collection schema: no
+ *      foreign key from outside the Collection tables references one, and no
+ *      column outside them names a collection;
+ *   4. each member's filtered unique index keys (ownerId, revisionNumber,
+ *      member) and filters on exactly that member being present;
+ *   5. the position CHECK bounds one hundred places and the member CHECK
+ *      counts all seven columns to exactly one;
+ *   6. the 51156 rule — a current revision has a member — is in the integrity
+ *      trigger, beside 51152 and 51153, and each of the thirteen triggers
+ *      raises exactly its own numbers from 51150–51156;
+ *   7. no search vocabulary names a collection: Collections are not searchable;
+ *   8. the two editorial descriptions name collections, exactly, and no
+ *      `collection.*` permission exists.
+ *
+ * The refusals themselves are proved as BEHAVIOUR by
+ * `assertCollectionMembership`, and through the runtime login by
+ * `db:test:permissions`.
+ */
+async function assertCollectionFoundation(session: SqlSession): Promise<void> {
+  const tables = COLLECTION_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
+    ',',
+  );
+
+  const shapes = await session.query<{ tableName: string; name: string }>(`
+    SELECT OBJECT_NAME(c.object_id) AS tableName, c.name FROM sys.columns c
+    WHERE c.object_id IN (${tables})
+      AND (c.name LIKE N'%type%' OR c.name LIKE N'%kind%' OR c.name LIKE N'%target%'
+           OR c.name LIKE N'%page%' OR c.name LIKE N'%event%' OR c.name LIKE N'%gallery%'
+           OR c.name LIKE N'%photo%' OR c.name LIKE N'%image%' OR c.name LIKE N'%asset%'
+           OR c.name LIKE N'%edition%' OR c.name LIKE N'%booktranslation%'
+           OR c.name LIKE N'%series%' OR c.name LIKE N'%playlist%' OR c.name LIKE N'%audio%'
+           OR c.name LIKE N'%research%' OR c.name LIKE N'%publication%' OR c.name LIKE N'%magazine%'
+           OR c.name LIKE N'%encyclopedia%' OR c.name LIKE N'%quran%' OR c.name LIKE N'%hadith%'
+           OR c.name LIKE N'%fatwa%' OR c.name LIKE N'%course%' OR c.name LIKE N'%centre%'
+           OR c.name LIKE N'%center%' OR c.name LIKE N'%private%' OR c.name LIKE N'%featured%'
+           OR c.name LIKE N'%popular%' OR c.name LIKE N'%count%')
+    ORDER BY tableName, c.name;
+  `);
+  if (shapes.length > 0)
+    fail(
+      `Collection tables may hold no generic, untyped or non-member reference column; ` +
+        `found ${JSON.stringify(shapes)}.`,
+    );
+
+  const placeColumns = await session.query<{
+    name: string;
+    type: string;
+    nullable: boolean;
+  }>(`
+    SELECT c.name, TYPE_NAME(c.user_type_id) AS type, c.is_nullable AS nullable
+    FROM sys.columns c WHERE c.object_id = OBJECT_ID(N'[dbo].[CollectionItem]')
+    ORDER BY c.column_id;
+  `);
+  const describedPlace = placeColumns
+    .map((row) => `${row.name}:${row.type}:${row.nullable ? 'null' : 'required'}`)
+    .join(',');
+  const expectedPlace = [
+    'ownerId:nvarchar:required',
+    'revisionNumber:int:required',
+    'position:int:required',
+    ...COLLECTION_MEMBERS.map((member) => `${member.column}:nvarchar:null`),
+  ].join(',');
+  if (describedPlace !== expectedPlace)
+    fail(
+      `A Collection place must be exactly its key and seven typed members; found ${describedPlace}.`,
+    );
+
+  const cascading = await session.query<{ name: string }>(`
+    SELECT name FROM sys.foreign_keys
+    WHERE parent_object_id IN (${tables})
+      AND (delete_referential_action <> 0 OR update_referential_action <> 0);
+  `);
+  if (cascading.length > 0)
+    fail(
+      `Phase-15 foreign keys must not cascade; found ${cascading.map((row) => row.name).join(', ')}.`,
+    );
+
+  const external = await session.query<{ edge: string; columns: number }>(`
+    SELECT fk.name + N'>' + OBJECT_NAME(fk.referenced_object_id) AS edge,
+      (SELECT COUNT(*) FROM sys.foreign_key_columns c WHERE c.constraint_object_id = fk.object_id) AS columns
+    FROM sys.foreign_keys fk
+    WHERE fk.parent_object_id IN (${tables}) AND fk.referenced_object_id NOT IN (${tables});
+  `);
+  const edges = external.map((row) => row.edge).sort();
+  if (edges.join(',') !== COLLECTION_EXTERNAL_KEYS.join(','))
+    fail(
+      `Collection's references into other owners must be exactly ${COLLECTION_EXTERNAL_KEYS.join(', ')}; ` +
+        `found ${edges.join(', ')}.`,
+    );
+  if (external.some((row) => Number(row.columns) !== 1))
+    fail(
+      `Every Collection reference into another owner must be ONE typed column; found ${JSON.stringify(external)}.`,
+    );
+
+  const [ownership] = await session.query<{ inbound: number; columns: string | null }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE referenced_object_id IN (${tables}) AND parent_object_id NOT IN (${tables})) AS inbound,
+      (SELECT STRING_AGG(OBJECT_NAME(c.object_id) + N'.' + c.name, N',') FROM sys.columns c
+        WHERE c.name LIKE N'%collection%' AND c.object_id NOT IN (${tables})
+          AND OBJECTPROPERTY(c.object_id, 'IsUserTable') = 1) AS columns;
+  `);
+  if (Number(ownership?.inbound) !== 0 || (ownership?.columns ?? null) !== null)
+    fail(
+      `No other owner may hold Collection schema; found ${JSON.stringify(ownership ?? null)}.`,
+    );
+
+  const indexes = await session.query<{
+    name: string;
+    filter: string | null;
+    keys: string | null;
+  }>(`
+    SELECT i.name, i.filter_definition AS filter,
+      (SELECT STRING_AGG(COL_NAME(ic.object_id, ic.column_id), N',') WITHIN GROUP (ORDER BY ic.key_ordinal)
+        FROM sys.index_columns ic
+        WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.key_ordinal > 0) AS keys
+    FROM sys.indexes i
+    WHERE i.object_id = OBJECT_ID(N'[dbo].[CollectionItem]') AND i.is_unique = 1
+      AND i.has_filter = 1
+    ORDER BY i.name;
+  `);
+  const describedIndexes = indexes
+    .map((row) => `${row.name}(${row.keys ?? ''})${row.filter ?? ''}`)
+    .sort()
+    .join(',');
+  const expectedIndexes = COLLECTION_MEMBERS.map(
+    (member) =>
+      `CollectionItem_${member.key}_key(ownerId,revisionNumber,${member.column})` +
+      `([${member.column}] IS NOT NULL)`,
+  )
+    .sort()
+    .join(',');
+  if (describedIndexes !== expectedIndexes)
+    fail(
+      `Each member must be unique per revision through its own filtered index; ` +
+        `found ${describedIndexes}.`,
+    );
+
+  const checks = await session.query<{ name: string; definition: string }>(`
+    SELECT name, definition FROM sys.check_constraints
+    WHERE parent_object_id = OBJECT_ID(N'[dbo].[CollectionItem]') ORDER BY name;
+  `);
+  const position = checks.find((row) => row.name === 'CollectionItem_position_ck');
+  const member = checks.find((row) => row.name === 'CollectionItem_one_member_ck');
+  if (
+    checks.length !== 2 ||
+    !position?.definition.includes('>=(0)') ||
+    !position.definition.includes('<=(99)') ||
+    !member?.definition.endsWith('=(1))') ||
+    !COLLECTION_MEMBERS.every((entry) => member.definition.includes(`[${entry.column}]`))
+  )
+    fail(
+      `A place must be bounded to 0..99 and hold exactly one of the seven members; ` +
+        `found ${JSON.stringify(checks)}.`,
+    );
+
+  const [integrity] = await session.query<{ definition: string | null }>(`
+    SELECT OBJECT_DEFINITION(OBJECT_ID(N'[dbo].[CollectionCurrentIntegrity]')) AS definition;
+  `);
+  const body = integrity?.definition ?? '';
+  if (
+    !['51152', '51153', '51156', '[dbo].[CollectionItem]'].every((word) =>
+      body.includes(word),
+    )
+  )
+    fail(
+      'CollectionCurrentIntegrity does not refuse a current revision without a member.',
+    );
+
+  // Every Collection trigger raises exactly ITS OWN numbers from 51150–51156 —
+  // never another aggregate's — and the thirteen are the whole set, each on the
+  // table it guards.
+  const triggers = await session.query<{
+    name: string;
+    tableName: string;
+    definition: string | null;
+  }>(`
+    SELECT t.name, OBJECT_NAME(t.parent_id) AS tableName,
+      OBJECT_DEFINITION(t.object_id) AS definition
+    FROM sys.triggers t WHERE t.parent_id IN (${tables}) ORDER BY t.name;
+  `);
+  const describedTriggers = triggers
+    .map((row) => {
+      const numbers = [...new Set((row.definition ?? '').match(/\b5\d{4}\b/gu) ?? [])]
+        .sort()
+        .join('+');
+      return `${row.name}@${row.tableName}:${numbers}`;
+    })
+    .join(',');
+  const expectedTriggers = Object.entries(COLLECTION_TRIGGER_NUMBERS)
+    .map(([name, [table, numbers]]) => `${name}@${table}:${numbers}`)
+    .sort()
+    .join(',');
+  if (describedTriggers !== expectedTriggers)
+    fail(
+      `Collection triggers must raise exactly their own 5115x numbers; found ${describedTriggers}.`,
+    );
+
+  const vocabularies = await session.query<{ name: string }>(`
+    SELECT name FROM sys.check_constraints
+    WHERE name IN (N'SearchIndexRequest_scopeKind_ck', N'SearchIndexScope_scopeKind_ck',
+                   N'SearchDocument_kind_ck')
+      AND [definition] LIKE N'%collection%';
+  `);
+  if (vocabularies.length > 0)
+    fail(
+      `Collections are not searchable in Phase 15; ${vocabularies.map((row) => row.name).join(', ')} names one.`,
+    );
+
+  await assertEditorialDescriptions(session, 'phase15');
+
+  report(
+    'collection foundation',
+    'seven typed tables, one place of seven typed members, fourteen non-cascading ' +
+      'external keys, seven filtered member keys, 51156, no search kind',
+  );
+}
+
+/**
+ * After the Phase-15 rollback: no Collection object and no member reference
+ * into an Article, a News record, a Work or a Video, and the editorial
+ * descriptions exactly as Phase 14 left them. The caller then proves the whole
+ * Phase-14 state is back.
+ */
+async function assertCollectionRemoved(session: SqlSession): Promise<void> {
+  const [row] = await session.query<{
+    tables: number;
+    triggers: number;
+    memberKeys: number;
+    memberIndexes: number;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables WHERE name LIKE N'Collection%') AS tables,
+      (SELECT COUNT(*) FROM sys.triggers WHERE name LIKE N'Collection%') AS triggers,
+      (SELECT COUNT(*) FROM sys.foreign_keys WHERE name LIKE N'Collection%') AS memberKeys,
+      (SELECT COUNT(*) FROM sys.indexes WHERE name LIKE N'Collection%') AS memberIndexes;
+  `);
+  if (
+    Number(row?.tables) !== 0 ||
+    Number(row?.triggers) !== 0 ||
+    Number(row?.memberKeys) !== 0 ||
+    Number(row?.memberIndexes) !== 0
+  )
+    fail(`The Phase-15 rollback left a Collection object: ${JSON.stringify(row)}.`);
+  await assertEditorialDescriptions(session, 'phase14');
+  report(
+    'collection rollback',
+    'every Collection table, trigger, index and member key removed',
+  );
+}
+
+interface SqlFailure {
+  readonly number: number | undefined;
+  readonly message: string;
+}
+
+/** Runs a statement; returns how SQL Server refused it, or null if it succeeded. */
+async function attempt(
+  session: SqlSession,
+  statement: string,
+): Promise<SqlFailure | null> {
+  try {
+    await session.query(statement);
+    return null;
+  } catch (error) {
+    return {
+      number: (error as { number?: number }).number,
+      message: (error as Error).message,
+    };
+  }
+}
+
+/**
+ * Asserts a statement is refused by ONE named rule: an expected error number
+ * AND the rule's own name (a constraint, an index, a column, or a trigger's
+ * message) in the engine's text. Every foreign key and CHECK raises 547, so the
+ * number alone could not tell the member key from the position bound.
+ */
+async function expectRefusal(
+  session: SqlSession,
+  label: string,
+  statement: string,
+  numbers: readonly number[],
+  rule: string,
+): Promise<void> {
+  const failure = await attempt(session, statement);
+  if (failure === null)
+    fail(`${label}: the statement SUCCEEDED but ${rule} must refuse it.`);
+  if (
+    failure.number === undefined ||
+    !numbers.includes(failure.number) ||
+    !failure.message.includes(rule)
+  )
+    fail(
+      `${label}: refused for the WRONG reason (error ${String(failure.number ?? 'unknown')}): ` +
+        `${failure.message.split('\n')[0] ?? ''}`,
+    );
+}
+
+async function expectAccepted(
+  session: SqlSession,
+  label: string,
+  statement: string,
+): Promise<void> {
+  const failure = await attempt(session, statement);
+  if (failure !== null)
+    fail(
+      `${label}: must be accepted but failed: ${failure.message.split('\n')[0] ?? ''}`,
+    );
+}
+
+/**
+ * Phase 15 — MIXED, ORDERED, TYPED MEMBERSHIP, proved as behaviour against the
+ * re-deployed schema, with synthetic rows only.
+ *
+ *   - one Collection gathers all seven member types in ONE mixed order, which
+ *     reads back exactly, and a later revision reorders them while the earlier
+ *     revision's order stays as it was;
+ *   - two members of ANY types never share a place; one record is never a
+ *     member of one revision twice, for every type; a place with no member or
+ *     with two is refused; an identifier that exists only in ANOTHER owner's
+ *     table is refused by the column's own foreign key; place 100 and place -1
+ *     are refused and place 99 is accepted; a type with no column — Page,
+ *     Event, Gallery, Photo, Edition, Series, Playlist, audio, research, Fatwa,
+ *     or a `targetType`/`targetId` pair — cannot even be named;
+ *   - 51150: a place is never updated or deleted, 51151: a current or
+ *     historical revision gains no member, 51156: a revision with no member
+ *     never becomes current;
+ *   - removing a member (a new revision without it) and archiving the
+ *     Collection change no target row; deleting a target that is or was a
+ *     member is refused by its member key; and withdrawing targets changes no
+ *     Collection row.
+ */
+async function assertCollectionMembership(session: SqlSession): Promise<void> {
+  const run = randomUUID().replaceAll('-', '').slice(0, 16);
+  const creator = randomUUID();
+  const reviewer = randomUUID();
+  for (const user of [creator, reviewer])
+    await session.query(
+      `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled]) VALUES (N'${user}',N'Synthetic collection proof user',N'${user}@proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);`,
+    );
+
+  // TWO synthetic targets of each member type, written as their owners write
+  // them: editorial records as drafts with no revision, a Work and a Video
+  // published (their slugs reserved by their owners' own triggers).
+  const targets = Object.fromEntries(
+    COLLECTION_MEMBERS.map((member) => [member.key, [randomUUID(), randomUUID()]]),
+  ) as Record<CollectionMember['key'], [string, string]>;
+  for (const member of COLLECTION_MEMBERS)
+    for (const [index, id] of targets[member.key].entries()) {
+      const slug = `proof-collection-${member.key.toLowerCase()}-${String(index)}-${run}`;
+      const statement =
+        member.table === 'Work'
+          ? `INSERT INTO [dbo].[Work] ([id],[slug],[primaryLocale],[state]) VALUES (N'${id}',N'${slug}',N'en',N'published');`
+          : member.table === 'Video'
+            ? `INSERT INTO [dbo].[Video] ([id],[slug],[primaryLocale],[state],[provider],[providerVideoId],[availability],[languageCode]) VALUES (N'${id}',N'${slug}',N'en',N'published',N'youtube','proofVideo${index === 0 ? 'A' : 'B'}',N'available',N'en');`
+            : `INSERT INTO [dbo].[${member.table}] ([id],[slug],[state],[version],[creatorId],[updatedAt]) VALUES (N'${id}',N'${slug}',N'draft',1,N'${creator}',SYSUTCDATETIME());`;
+      await expectAccepted(session, `${member.table} synthetic target`, statement);
+    }
+  const first = (member: CollectionMember): string => targets[member.key][0];
+  const second = (member: CollectionMember): string => targets[member.key][1];
+
+  const targetRows = async (): Promise<string> => {
+    const rows: unknown[] = [];
+    for (const member of COLLECTION_MEMBERS)
+      rows.push(
+        await session.query(
+          `SELECT * FROM [dbo].[${member.table}] WHERE [id] IN (N'${first(member)}',N'${second(member)}') ORDER BY [id];`,
+        ),
+      );
+    return JSON.stringify(rows);
+  };
+
+  const collection = randomUUID();
+  const slug = `proof-collection-${run}`;
+  const revision = (number: number, editor: string): string =>
+    `INSERT INTO [dbo].[CollectionRevision] ([ownerId],[number],[editorId],[slug],[primaryLanguage]) VALUES (N'${collection}',${number},N'${editor}',N'${slug}',N'en');
+     INSERT INTO [dbo].[CollectionRevisionTranslation] ([ownerId],[revisionNumber],[languageCode],[title],[excerpt],[seoTitle],[seoDescription],[document],[html]) VALUES (N'${collection}',${number},N'en',N'Synthetic collection proof',N'',N'',N'',N'{"type":"doc","content":[]}',N'<p></p>');`;
+  const place = (
+    number: number,
+    position: number,
+    members: Partial<Record<string, string>>,
+    owner = collection,
+  ): string => {
+    const columns = Object.keys(members);
+    const values = Object.values(members).map((value) => `N'${value ?? ''}'`);
+    return `INSERT INTO [dbo].[CollectionItem] ([ownerId],[revisionNumber],[position]${columns.map((column) => `,[${column}]`).join('')}) VALUES (N'${owner}',${number},${position}${values.map((value) => `,${value}`).join('')});`;
+  };
+  const moveTo = (number: number, extra = ''): string =>
+    `UPDATE [dbo].[Collection] SET [currentRevision]=${number},[version]=[version]+1,[updatedAt]=SYSUTCDATETIME()${extra} WHERE [id]=N'${collection}';`;
+  const order = async (number: number): Promise<string> => {
+    const rows = await session.query<{ position: number; member: string }>(`
+      SELECT [position], ${COLLECTION_MEMBERS.map(
+        (member) =>
+          `CASE WHEN [${member.column}] IS NOT NULL THEN N'${member.key}:' + [${member.column}] ELSE N'' END`,
+      ).join(' + ')} AS [member]
+      FROM [dbo].[CollectionItem] WHERE [ownerId]=N'${collection}' AND [revisionNumber]=${number}
+      ORDER BY [position];
+    `);
+    return rows.map((row) => `${String(row.position)}=${row.member}`).join(',');
+  };
+  const expectedOrder = (
+    members: readonly (readonly [number, CollectionMember, string])[],
+  ) =>
+    members
+      .map(([position, member, id]) => `${String(position)}=${member.key}:${id}`)
+      .join(',');
+
+  // ---- ONE mixed order across all seven types --------------------------------
+  const [
+    article,
+    newsArticle,
+    pressRelease,
+    statementFamily,
+    mediaCoverage,
+    work,
+    video,
+  ] = COLLECTION_MEMBERS;
+  const firstOrder = [
+    [0, video, first(video)],
+    [1, article, first(article)],
+    [2, work, first(work)],
+    [3, statementFamily, first(statementFamily)],
+    [4, newsArticle, first(newsArticle)],
+    [5, mediaCoverage, first(mediaCoverage)],
+    [6, pressRelease, first(pressRelease)],
+  ] as const;
+  await expectAccepted(
+    session,
+    'A Collection with seven member types in one order',
+    `INSERT INTO [dbo].[Collection] ([id],[slug],[state],[version],[creatorId],[updatedAt]) VALUES (N'${collection}',N'${slug}',N'draft',1,N'${creator}',SYSUTCDATETIME());
+     INSERT INTO [dbo].[CollectionSlugHistory] ([ownerId],[slug]) VALUES (N'${collection}',N'${slug}');
+     ${revision(1, creator)}
+     ${firstOrder.map(([position, member, id]) => place(1, position, { [member.column]: id })).join('\n')}
+     ${moveTo(1)}`,
+  );
+  if ((await order(1)) !== expectedOrder(firstOrder))
+    fail(`The mixed order did not read back exactly: ${await order(1)}.`);
+
+  // ---- a current revision is history -----------------------------------------
+  let refusals = 0;
+  const refuse = async (
+    label: string,
+    statement: string,
+    numbers: readonly number[],
+    rule: string,
+  ): Promise<void> => {
+    await expectRefusal(session, label, statement, numbers, rule);
+    refusals += 1;
+  };
+  const IMMUTABLE = 'Editorial history is immutable.';
+  const HISTORICAL = 'A historical revision cannot be extended.';
+  await refuse(
+    'A current revision gains no member',
+    place(1, 7, { articleId: second(article) }),
+    [51151],
+    HISTORICAL,
+  );
+  await refuse(
+    'A place is never reordered in place',
+    `UPDATE [dbo].[CollectionItem] SET [position]=[position]+10 WHERE [ownerId]=N'${collection}';`,
+    [51150],
+    IMMUTABLE,
+  );
+  await refuse(
+    'A place never changes its member',
+    `UPDATE [dbo].[CollectionItem] SET [articleId]=N'${second(article)}' WHERE [ownerId]=N'${collection}' AND [position]=1;`,
+    [51150],
+    IMMUTABLE,
+  );
+  await refuse(
+    'A member is never deleted from a revision',
+    `DELETE FROM [dbo].[CollectionItem] WHERE [ownerId]=N'${collection}' AND [position]=2;`,
+    [51150],
+    IMMUTABLE,
+  );
+
+  // ---- the next revision: every rule of a place ------------------------------
+  await expectAccepted(session, 'The next Collection revision', revision(2, creator));
+  const secondOrder = [...firstOrder]
+    .reverse()
+    .map(([, member, id], position) => [position, member, id] as const);
+  await expectAccepted(
+    session,
+    'The same seven members, reordered',
+    secondOrder
+      .map(([position, member, id]) => place(2, position, { [member.column]: id }))
+      .join('\n'),
+  );
+  await refuse(
+    'Two members never share a place',
+    place(2, 0, { articleId: second(article) }),
+    [2627],
+    'CollectionItem_pkey',
+  );
+  for (const [index, member] of COLLECTION_MEMBERS.entries()) {
+    await refuse(
+      `One ${member.table} is a member once`,
+      place(2, 10 + index, { [member.column]: first(member) }),
+      [2601],
+      `CollectionItem_${member.key}_key`,
+    );
+    // An identifier that exists — in ANOTHER owner's table. The column's own
+    // key refuses it, so a member is always a row of its own type.
+    const other = COLLECTION_MEMBERS[(index + 1) % COLLECTION_MEMBERS.length];
+    if (other === undefined) fail('The member inventory is empty.');
+    await refuse(
+      `A ${member.table} member is a ${member.table}`,
+      place(2, 30 + index, { [member.column]: second(other) }),
+      [547],
+      `CollectionItem_${member.column}_fkey`,
+    );
+  }
+  await refuse(
+    'A place holds a member',
+    place(2, 20, {}),
+    [547],
+    'CollectionItem_one_member_ck',
+  );
+  await refuse(
+    'A place holds one member',
+    place(2, 21, { articleId: second(article), workId: second(work) }),
+    [547],
+    'CollectionItem_one_member_ck',
+  );
+  await refuse(
+    'A Collection holds at most one hundred places',
+    place(2, 100, { articleId: second(article) }),
+    [547],
+    'CollectionItem_position_ck',
+  );
+  await refuse(
+    'A place is never negative',
+    place(2, -1, { articleId: second(article) }),
+    [547],
+    'CollectionItem_position_ck',
+  );
+  await refuse(
+    'A place belongs to a real revision',
+    place(9, 0, { articleId: second(article) }),
+    [547],
+    'CollectionItem_ownerId_revisionNumber_fkey',
+  );
+  for (const column of [
+    'pageId',
+    'eventId',
+    'galleryId',
+    'photoId',
+    'editionId',
+    'bookTranslationId',
+    'seriesId',
+    'playlistId',
+    'audioTrackId',
+    'audioSeriesId',
+    'researchId',
+    'fatwaId',
+    'targetType',
+    'targetId',
+  ])
+    await refuse(
+      `No ${column} member exists`,
+      `INSERT INTO [dbo].[CollectionItem] ([ownerId],[revisionNumber],[position],[${column}]) VALUES (N'${collection}',2,40,N'${randomUUID()}');`,
+      [207],
+      column,
+    );
+  await expectAccepted(
+    session,
+    'The hundredth place',
+    place(2, 99, { articleId: second(article) }),
+  );
+  await expectAccepted(session, 'The reordered revision becomes current', moveTo(2));
+  const expectedSecond = expectedOrder([
+    ...secondOrder,
+    [99, article, second(article)] as const,
+  ]);
+  if ((await order(2)) !== expectedSecond)
+    fail(`The reordered revision did not read back exactly: ${await order(2)}.`);
+  if ((await order(1)) !== expectedOrder(firstOrder))
+    fail('Reordering in a new revision changed the earlier revision.');
+  await refuse(
+    'A historical revision gains no member',
+    place(1, 8, { articleId: second(article) }),
+    [51151],
+    HISTORICAL,
+  );
+  await expectAccepted(
+    session,
+    'Independent approval and publication',
+    `UPDATE [dbo].[Collection] SET [approvedRevision]=2,[approvedById]=N'${reviewer}',[state]=N'published',[publishedAt]=SYSUTCDATETIME(),[version]=[version]+1 WHERE [id]=N'${collection}';`,
+  );
+
+  // ---- 51156: an empty set never becomes current -----------------------------
+  const empty = randomUUID();
+  const emptySlug = `proof-collection-empty-${run}`;
+  await expectAccepted(
+    session,
+    'A Collection revision with no member yet',
+    `INSERT INTO [dbo].[Collection] ([id],[slug],[state],[version],[creatorId],[updatedAt]) VALUES (N'${empty}',N'${emptySlug}',N'draft',1,N'${creator}',SYSUTCDATETIME());
+     INSERT INTO [dbo].[CollectionSlugHistory] ([ownerId],[slug]) VALUES (N'${empty}',N'${emptySlug}');
+     INSERT INTO [dbo].[CollectionRevision] ([ownerId],[number],[editorId],[slug],[primaryLanguage]) VALUES (N'${empty}',1,N'${creator}',N'${emptySlug}',N'en');
+     INSERT INTO [dbo].[CollectionRevisionTranslation] ([ownerId],[revisionNumber],[languageCode],[title],[excerpt],[seoTitle],[seoDescription],[document],[html]) VALUES (N'${empty}',1,N'en',N'Synthetic empty collection proof',N'',N'',N'',N'{"type":"doc","content":[]}',N'<p></p>');`,
+  );
+  const moveEmpty = `UPDATE [dbo].[Collection] SET [currentRevision]=1,[version]=2 WHERE [id]=N'${empty}';`;
+  await refuse(
+    'A current Collection revision has a member',
+    moveEmpty,
+    [51156],
+    'A Collection revision must have a member.',
+  );
+  await expectAccepted(
+    session,
+    'One member, then current',
+    `${place(1, 0, { workId: first(work) }, empty)}
+     ${moveEmpty}`,
+  );
+
+  // ---- membership and archive never reach a target ---------------------------
+  const targetsBefore = await targetRows();
+  await expectAccepted(
+    session,
+    'A member removed by a new revision',
+    `${revision(3, creator)}
+     ${place(3, 0, { articleId: first(article) })}
+     ${place(3, 1, { videoId: first(video) })}
+     ${moveTo(3, ",[approvedRevision]=NULL,[approvedById]=NULL,[state]=N'draft'")}`,
+  );
+  await expectAccepted(
+    session,
+    'The Collection archived',
+    `UPDATE [dbo].[Collection] SET [state]=N'archived',[version]=[version]+1 WHERE [id]=N'${collection}';`,
+  );
+  if ((await targetRows()) !== targetsBefore)
+    fail('Removing a member or archiving a Collection changed a target row.');
+  for (const member of COLLECTION_MEMBERS)
+    await refuse(
+      `A ${member.table} that is a member is never deleted`,
+      `DELETE FROM [dbo].[${member.table}] WHERE [id]=N'${first(member)}';`,
+      [547],
+      `CollectionItem_${member.column}_fkey`,
+    );
+  if ((await targetRows()) !== targetsBefore)
+    fail('A refused target deletion changed a target row.');
+
+  const collectionRows = async (): Promise<string> =>
+    JSON.stringify([
+      await session.query(
+        `SELECT * FROM [dbo].[Collection] WHERE [id] IN (N'${collection}',N'${empty}') ORDER BY [id];`,
+      ),
+      await session.query(
+        `SELECT * FROM [dbo].[CollectionItem] WHERE [ownerId] IN (N'${collection}',N'${empty}') ORDER BY [ownerId],[revisionNumber],[position];`,
+      ),
+    ]);
+  const collectionsBefore = await collectionRows();
+  await expectAccepted(
+    session,
+    'Targets withdrawn by their owners',
+    `UPDATE [dbo].[Work] SET [state]=N'archived',[version]=[version]+1 WHERE [id]=N'${first(work)}';
+     UPDATE [dbo].[Video] SET [state]=N'archived',[version]=[version]+1 WHERE [id]=N'${first(video)}';
+     UPDATE [dbo].[Article] SET [state]=N'archived',[version]=[version]+1 WHERE [id]=N'${first(article)}';`,
+  );
+  if ((await collectionRows()) !== collectionsBefore)
+    fail('Withdrawing a target changed a Collection row.');
+
+  report(
+    'collection membership',
+    `seven types in one mixed order, reordered by revision; ${String(refusals)} refusals ` +
+      'by name; no cascade either way',
+  );
 }
 
 /**
@@ -2877,6 +3737,7 @@ try {
   await assertNewsFoundation(session);
   await assertGlobalFoundation(session);
   await assertEventFoundation(session);
+  await assertCollectionFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -2924,6 +3785,18 @@ try {
     }
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
+    }
+    if (migration.id === '20261001000000_phase15_collections') {
+      // Phase 15 widened no search vocabulary, so none narrows here — and the
+      // whole Phase-14 state it was applied on is back exactly: the Event
+      // foundation with Phase 14's own descriptions, and the News, Library and
+      // Media records a member key once named, untouched by the drop.
+      await assertSearchVocabulary(session, 'phase13');
+      await assertCollectionRemoved(session);
+      await assertEventFoundation(session, 'phase14');
+      await assertGlobalFoundation(session);
+      await assertNewsFoundation(session);
+      await assertMediaFoundation(session);
     }
     if (migration.id === '20260930000000_phase14_events') {
       // Phase 14 widened no search vocabulary, so none narrows here — and the
@@ -3006,6 +3879,10 @@ try {
   await assertNewsFoundation(session);
   await assertGlobalFoundation(session);
   await assertEventFoundation(session);
+  await assertCollectionFoundation(session);
+  // The membership rules as BEHAVIOUR, on the re-deployed schema: what was
+  // rolled back and re-applied enforces exactly what the first deploy did.
+  await assertCollectionMembership(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

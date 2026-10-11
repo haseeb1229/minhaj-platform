@@ -985,6 +985,65 @@ review history:**
   image (an explicit Storage/Media decision); an Events panel on People profiles (Editorial
   exposes no contributor facet, as for News).
 
+**Phase-15 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+- **One new same-level edge, Editorial → Library** (DOMAIN_MODEL.md §3.2; ARCHITECTURE.md
+  §6.1.1), because a Collection holds typed Work members; and the Phase-14 **Editorial → Media**
+  edge now also serves Collection → Video. Both reverses are prohibited and mechanically
+  refused. Editorial's own code imports neither owner: Layer 4 asks Library's and Media's public
+  reference reads (`workReferences`/`workChoices`, `videoReferences`/`videoChoices` — public
+  records only, identity, slug and titles) and reads none of their tables.
+- **Model.** Collection is its own Editorial aggregate with the Article's shape of tables and the
+  shared workflow; it is not Personalisation's `PrivateCollection` and shares nothing with it.
+  Its ordered members are immutable revision state (`CollectionItem`), so changing membership or
+  order is an ordinary edit that needs fresh review and is audited as its own fact
+  (DOMAIN_MODEL.md §7.3.1).
+- **Member inventory — exactly the prerequisites' content records:** Article (6); NewsArticle,
+  PressRelease, Statement and MediaCoverage (13); Work (8); Video (10). Not members: Page,
+  Edition, BookTranslation, Series, Playlist, and every type outside the dependency path —
+  Event, Photo, Gallery, audio, Phase-9 research and publications, Quran, Hadith, Fatwa,
+  Learning, Centres, People and private collections. No column is reserved for any of them.
+- **One typed member per place, one order for all types.** Seven nullable, non-cascading,
+  foreign-keyed columns; a CHECK that exactly one is set; the position as the primary key, so
+  no two members of any types share a place; a filtered unique index per column so no record
+  appears twice; positions 0–99, so at most **100 members** (one page, one bounded owner read per
+  type); and 51156 — a current revision always has a member, so an empty set is never reviewed,
+  scheduled or published. No `targetType + targetId` exists.
+- **Choosing is asking the owner.** A newly added member must be public now under its owner's
+  predicate; a member the current revision already holds may be kept. No author learns of
+  another owner's draft through a Collection, and `content.author` is no route into Library or
+  Media drafts.
+- **Withdrawal.** Target and Collection lifecycles are independent: a withdrawn member is
+  omitted from the public page with nothing of it shown, the rest keep their order, and a
+  Collection with no public member left says so; nothing auto-archives. Archiving a Collection
+  or removing a member changes no target.
+- **Permissions.** No new key: `content.read` and `content.author` are re-described to name
+  Collections. Admin surface: `/admin/editorial/collections`, with keyboard-operable move
+  controls and server-bounded, human-labelled choices; the shared review queue and the scheduled
+  executor (25 due records of each of the eight aggregates per sweep) include Collections.
+- **Public.** `/collections` (newest published first, bounded pages) and `/collections/{slug}`,
+  whose members are resolved in one bounded read per owner and link to their owners' canonical
+  addresses. `/news` links Collections and the topic hub lists a topic's Collections. Cards
+  carry the Collection's own words only — no image, count or popularity.
+- **Not activated, deliberately:** `/library/collections` (no truthful deterministic filter
+  exists without reading across owners) and `/explore/shaykh-ul-islam/collections` (no
+  deterministic, non-hard-coded Person association); both stay unlinked.
+- **Slugs.** Native Collection slug history, one-hop 301 through the request proxy, locale kept.
+- **SEO.** Canonical, genuine `hreflang` and `BreadcrumbList` only — no `ItemList`,
+  `CollectionPage` or other invented type. The `collections` sitemap segment lists published
+  Collections at their current slug in their genuine languages.
+- **Search unchanged.** Phase 15 enters from 6, 8, 10 and 13, not 17: no Collection kind, scope,
+  filter or indexing intent. Phase 31 reconciles the final searchable inventory.
+- **Recovery is SQL.** The populated rehearsal covers a published Collection with translations,
+  topics, contributors, a renamed slug and mixed members in a defined order, and a Collection in
+  the workflow; Collections own no bytes and no search projection.
+- **Content gate open.** Engineering completion is not authoritative Collection content; no real
+  or legacy Collection is seeded or imported (Phase 30, under written authorisation).
+- **Not delivered, and not owed by this phase:** Collection search (Phase 31 proves
+  completeness); members of later domains (each adds its own column when it arrives); private
+  saved collections (Phase 21); featured or popular Collections; Collection images.
+
 ---
 
 ### Phase 16 — Global Network

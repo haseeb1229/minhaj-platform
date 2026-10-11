@@ -24,6 +24,7 @@ import { getDatabaseClient } from '../../client.ts';
 import { auditRow } from '../../audit-row.ts';
 import { requestSearchIndexing } from '../../search-intent.ts';
 import { eventOperations, eventReads } from './event.ts';
+import { collectionOperations, collectionReads } from './collection.ts';
 import { newsOperations, newsReads } from './news.ts';
 import {
   EditorialDataError,
@@ -1064,6 +1065,7 @@ export function createEditorialPersistence(): EditorialPersistencePort {
     ...pageOperations(),
     ...newsOperations(),
     ...eventOperations(),
+    ...collectionOperations(),
   };
 }
 export function createEditorialPublicReader(): EditorialPublicReaderPort {
@@ -1073,5 +1075,6 @@ export function createEditorialPublicReader(): EditorialPublicReaderPort {
     ...searchReads(),
     ...newsReads(),
     ...eventReads(),
+    ...collectionReads(),
   };
 }

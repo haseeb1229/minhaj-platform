@@ -110,6 +110,10 @@ model User {
   eventApprovals Event[] @relation("EventReviewer")
   eventSchedules Event[] @relation("EventScheduler")
   eventRevisions EventRevision[]
+  collectionCreations Collection[] @relation("CollectionCreator")
+  collectionApprovals Collection[] @relation("CollectionReviewer")
+  collectionSchedules Collection[] @relation("CollectionScheduler")
+  collectionRevisions CollectionRevision[]
 
   pressReleaseCreations PressRelease[] @relation("PressReleaseCreator")
   pressReleaseApprovals PressRelease[] @relation("PressReleaseReviewer")
@@ -791,6 +795,7 @@ model Topic {
   articleTopics ArticleTopic[]
   newsArticleTopics NewsArticleTopic[]
   eventTopics EventTopic[]
+  collectionTopics CollectionTopic[]
   pressReleaseTopics PressReleaseTopic[]
   statementTopics StatementTopic[]
   mediaCoverageTopics MediaCoverageTopic[]
@@ -914,6 +919,7 @@ model Language {
   articleTranslations ArticleRevisionTranslation[]
   newsArticleTranslations NewsArticleRevisionTranslation[]
   eventTranslations EventRevisionTranslation[]
+  collectionTranslations CollectionRevisionTranslation[]
   pressReleaseTranslations PressReleaseRevisionTranslation[]
   statementTranslations StatementRevisionTranslation[]
   mediaCoverageTranslations MediaCoverageRevisionTranslation[]
@@ -1050,6 +1056,7 @@ model Person {
   articleContributions ArticleContributor[]
   newsArticleContributions NewsArticleContributor[]
   eventContributions EventContributor[]
+  collectionContributions CollectionContributor[]
   pressReleaseContributions PressReleaseContributor[]
   statementContributions StatementContributor[]
   mediaCoverageContributions MediaCoverageContributor[]
@@ -1455,6 +1462,7 @@ model Article {
   scheduled ArticleRevision? @relation("ArticleScheduled", fields:[id,scheduledRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
   revisions ArticleRevision[] @relation("ArticleHistory")
   slugs ArticleSlugHistory[]
+  collectionItems CollectionItem[]
   @@unique([slug])
   @@index([state,updatedAt,id])
   @@index([state,publishedAt(sort: Desc),id])
@@ -1642,6 +1650,7 @@ model NewsArticle {
   scheduled NewsArticleRevision? @relation("NewsArticleScheduled", fields:[id,scheduledRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
   revisions NewsArticleRevision[] @relation("NewsArticleHistory")
   slugs NewsArticleSlugHistory[]
+  collectionItems CollectionItem[]
   @@unique([slug])
   @@index([state,updatedAt,id])
   @@index([state,publishedAt(sort: Desc),id])
@@ -1740,6 +1749,7 @@ model PressRelease {
   scheduled PressReleaseRevision? @relation("PressReleaseScheduled", fields:[id,scheduledRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
   revisions PressReleaseRevision[] @relation("PressReleaseHistory")
   slugs PressReleaseSlugHistory[]
+  collectionItems CollectionItem[]
   @@unique([slug])
   @@index([state,updatedAt,id])
   @@index([state,publishedAt(sort: Desc),id])
@@ -1833,6 +1843,7 @@ model Statement {
   scheduled StatementRevision? @relation("StatementScheduled", fields:[id,scheduledRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
   revisions StatementRevision[] @relation("StatementHistory")
   slugs StatementSlugHistory[]
+  collectionItems CollectionItem[]
   @@unique([slug])
   @@index([state,updatedAt,id])
   @@index([state,publishedAt(sort: Desc),id])
@@ -1927,6 +1938,7 @@ model MediaCoverage {
   scheduled MediaCoverageRevision? @relation("MediaCoverageScheduled", fields:[id,scheduledRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
   revisions MediaCoverageRevision[] @relation("MediaCoverageHistory")
   slugs MediaCoverageSlugHistory[]
+  collectionItems CollectionItem[]
   @@unique([slug])
   @@index([state,updatedAt,id])
   @@index([state,publishedAt(sort: Desc),id])
@@ -2090,6 +2102,7 @@ model Work {
   topics WorkTopic[]
   salePoints WorkSalePoint[]
   editions Edition[]
+  collectionItems CollectionItem[]
   @@index([state, slug])
 }
 model WorkLabel {
@@ -2632,6 +2645,7 @@ model Video {
   speakers VideoSpeaker[]
   topics VideoTopic[]
   playlists PlaylistVideo[]
+  collectionItems CollectionItem[]
   @@unique([provider, providerVideoId])
   @@index([state, publishedOn, slug])
   @@index([state, isFeatured, publishedOn])
@@ -3428,6 +3442,133 @@ model EventSlugHistory {
   ownerId String @db.NVarChar(36)
   createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
   owner Event @relation(fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([slug])
+  @@index([ownerId])
+}
+
+// Phase 15 — Collection: an Editorial aggregate of its own, governed by the
+// shared editorial workflow. A public, curated, ordered set that REFERENCES
+// existing content and owns none of it. Its ordered, typed members are REVISION
+// state, so nothing changes what a published Collection gathers, or in what
+// order, except a new revision that goes back through independent review. It is
+// not a user's private collection, which is Personalisation's.
+model Collection {
+  id String @id @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+  state String @db.NVarChar(16)
+  version Int
+  currentRevision Int?
+  approvedRevision Int?
+  approvedById String? @db.NVarChar(36)
+  creatorId String @db.NVarChar(36)
+  scheduledRevision Int?
+  scheduledAt DateTime? @db.DateTime2
+  scheduledTimezone String? @db.NVarChar(64)
+  scheduledById String? @db.NVarChar(36)
+  scheduleStatus String? @db.NVarChar(32)
+  publishedAt DateTime? @db.DateTime2
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @db.DateTime2
+  creator User @relation("CollectionCreator", fields:[creatorId], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  reviewer User? @relation("CollectionReviewer", fields:[approvedById], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  scheduler User? @relation("CollectionScheduler", fields:[scheduledById], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  current CollectionRevision? @relation("CollectionCurrent", fields:[id,currentRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  approval CollectionRevision? @relation("CollectionApproval", fields:[id,approvedRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  scheduled CollectionRevision? @relation("CollectionScheduled", fields:[id,scheduledRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  revisions CollectionRevision[] @relation("CollectionHistory")
+  slugs CollectionSlugHistory[]
+  @@unique([slug])
+  @@index([state,updatedAt,id])
+  @@index([state,publishedAt(sort: Desc),id])
+  @@index([scheduleStatus,scheduledAt,id])
+}
+model CollectionRevision {
+  ownerId String @db.NVarChar(36)
+  number Int
+  editorId String @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+  primaryLanguage String @db.NVarChar(16)
+  schemaVersion Int @default(1)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  owner Collection @relation("CollectionHistory",fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  editor User @relation(fields:[editorId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  currentFor Collection[] @relation("CollectionCurrent")
+  approvedFor Collection[] @relation("CollectionApproval")
+  scheduledFor Collection[] @relation("CollectionScheduled")
+  translations CollectionRevisionTranslation[]
+  topics CollectionTopic[]
+  contributors CollectionContributor[]
+  items CollectionItem[]
+  @@id([ownerId,number])
+}
+model CollectionRevisionTranslation {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  languageCode String @db.NVarChar(16)
+  title String @db.NVarChar(200)
+  excerpt String @db.NVarChar(600)
+  seoTitle String @db.NVarChar(200)
+  seoDescription String @db.NVarChar(300)
+  document String @db.NVarChar(Max)
+  html String @db.NVarChar(Max)
+  revision CollectionRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  language Language @relation(fields:[languageCode],references:[code],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,languageCode])
+}
+model CollectionTopic {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  topicId String @db.NVarChar(36)
+  revision CollectionRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  topic Topic @relation(fields:[topicId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,topicId])
+  @@index([topicId,ownerId])
+}
+model CollectionContributor {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  personId String @db.NVarChar(36)
+  role String @db.NVarChar(32)
+  position Int
+  revision CollectionRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  person Person @relation(fields:[personId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,personId,role])
+  @@index([personId,ownerId])
+}
+/// One place in one Collection revision's SINGLE mixed order, holding EXACTLY
+/// ONE typed member — a SQL CHECK counts the seven nullable references, and each
+/// is a real, non-cascading foreign key to its owner's table. There is no
+/// `targetType + targetId`: a type with no column cannot be a member at all. A
+/// record is a member at most once per revision, through FILTERED unique indexes
+/// the migration creates (`WHERE [xId] IS NOT NULL`), which Prisma's schema
+/// language cannot express. Removing a member removes no content; archiving its
+/// target changes no Collection. Immutable with its revision.
+model CollectionItem {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  position Int
+  articleId String? @db.NVarChar(36)
+  newsArticleId String? @db.NVarChar(36)
+  pressReleaseId String? @db.NVarChar(36)
+  statementId String? @db.NVarChar(36)
+  mediaCoverageId String? @db.NVarChar(36)
+  workId String? @db.NVarChar(36)
+  videoId String? @db.NVarChar(36)
+  revision CollectionRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  article Article? @relation(fields:[articleId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  newsArticle NewsArticle? @relation(fields:[newsArticleId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  pressRelease PressRelease? @relation(fields:[pressReleaseId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  statement Statement? @relation(fields:[statementId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  mediaCoverage MediaCoverage? @relation(fields:[mediaCoverageId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  work Work? @relation(fields:[workId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  video Video? @relation(fields:[videoId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,position])
+}
+model CollectionSlugHistory {
+  slug String @db.NVarChar(120)
+  ownerId String @db.NVarChar(36)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  owner Collection @relation(fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
   @@id([slug])
   @@index([ownerId])
 }

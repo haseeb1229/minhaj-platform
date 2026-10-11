@@ -252,6 +252,16 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'EventSchedule',
       'EventGallery',
       'EventSlugHistory',
+      // Phase 15 — Editorial: Collection with the Article's own shape of tables,
+      // and ONE revision-owned ordered list of typed members (`CollectionItem`,
+      // one nullable foreign-keyed column per member type).
+      'Collection',
+      'CollectionRevision',
+      'CollectionRevisionTranslation',
+      'CollectionTopic',
+      'CollectionContributor',
+      'CollectionItem',
+      'CollectionSlugHistory',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name
@@ -263,8 +273,8 @@ describe('Phase 1 Chunk 1 database foundation', () => {
     // enforcement that gives them meaning. Everything remaining belongs to a
     // later phase entirely.
     for (const domain of [
-      // `Event` left this list when Phase 14 delivered it.
-      'Collection',
+      // `Event` left this list when Phase 14 delivered it, and `Collection`
+      // when Phase 15 did.
       'Quran',
       'Hadith',
       // `Book` stays absent: Phase 8 models the Work/Edition split rather than a
@@ -328,6 +338,19 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'EventCentre',
       'EventPhoto',
       'Attachment',
+      // Phase 15 has one EDITORIAL Collection: no visitor-owned private list
+      // (Personalisation's, later), no join per member type, no member type a
+      // prerequisite did not deliver, and no generic target table.
+      'PrivateCollection',
+      'CollectionMember',
+      'CollectionTarget',
+      'CollectionArticle',
+      'CollectionWork',
+      'CollectionVideo',
+      'CollectionEvent',
+      'CollectionGallery',
+      'CollectionPage',
+      'CollectionImage',
     ]) {
       expect(models, `${domain} arrives with its owning slice`).not.toContain(domain);
     }

@@ -12,6 +12,7 @@ import { libraryReadRuntime } from '@/composition/library-read';
 import { taxonomyRuntime } from '@/composition/taxonomy';
 import { labelFor, workPath } from '@/components/library/presentation';
 import { listingHref } from '@/components/library/scholarly';
+import { CollectionTopicSection } from '@/components/editorial/collections';
 import { EventTopicSection } from '@/components/editorial/events';
 import { NewsTopicSection } from '@/components/editorial/news';
 import { AudioPreview } from '@/components/media/listen';
@@ -326,6 +327,17 @@ export default async function TopicPage({ params }: TopicParams) {
           topicId={topic.id}
           heading={t('events')}
           headingId="topic-events"
+        />
+
+        {/* PHASE 15 — the most recently published Collections on this topic, a
+            bounded preview from Editorial's own public read with a link to
+            every Collection; nothing when the topic has none. Collections are
+            not searchable. */}
+        <CollectionTopicSection
+          locale={locale}
+          topicId={topic.id}
+          heading={t('collections')}
+          headingId="topic-collections"
         />
       </div>
     </Container>

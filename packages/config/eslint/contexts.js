@@ -65,19 +65,23 @@ export const contextAllowlist = Object.freeze({
   // | Taxonomy | Layer 0 only |
   taxonomy: Object.freeze([]),
 
-  // | Editorial | Layer 0; Identity & Access; People & Contributors; Taxonomy; Global Network; Media |
+  // | Editorial | Layer 0; Identity & Access; People & Contributors; Taxonomy; Global Network; Media; Library |
   // `editorial -> global-network` is a permitted same-level edge (§3.2, Phase
   // 16): a NewsArticle — and from Phase 14 an Event — names a Global-owned
   // Centre by typed identity. `editorial -> media` is the second (§3.2, Phase
-  // 14): an Event owns its typed association to Media-owned Galleries. Both
-  // reverses are prohibited; their absence from the `global-network` and
-  // `media` rows below is what keeps each pair acyclic.
+  // 14): an Event owns its typed association to Media-owned Galleries, and from
+  // Phase 15 a Collection also holds typed Video members. `editorial -> library`
+  // is the third (§3.2, Phase 15): a Collection holds typed Library-owned Work
+  // members. Every reverse is prohibited; their absence from the
+  // `global-network`, `media` and `library` rows below is what keeps each pair
+  // acyclic.
   editorial: Object.freeze([
     'identity-access',
     'people-contributors',
     'taxonomy',
     'global-network',
     'media',
+    'library',
   ]),
 
   // | Quran | Layer 0; Identity & Access; People & Contributors; Taxonomy |
@@ -137,6 +141,7 @@ export const permittedSameLevelEdges = Object.freeze([
   Object.freeze({ from: 'messaging', to: 'learning' }),
   Object.freeze({ from: 'editorial', to: 'global-network' }),
   Object.freeze({ from: 'editorial', to: 'media' }),
+  Object.freeze({ from: 'editorial', to: 'library' }),
 ]);
 
 /**

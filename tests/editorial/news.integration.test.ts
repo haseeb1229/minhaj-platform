@@ -157,6 +157,8 @@ live('Phase 13 real SQL News workflow', () => {
         selectableCentre: (id) => createGlobalReferences().centreSelectable(id),
         // No News family associates a Gallery; only an Event does (Phase 14).
         selectableGallery: async () => false,
+        // No News family holds Collection members; only a Collection does (Phase 15).
+        selectableMembers: async () => false,
       },
     });
     author = await account(['content.read', 'content.author', 'content.review']);

@@ -208,6 +208,22 @@ export function createMediaReadService(reader: MediaPublicReaderPort) {
       return reader.publicGalleries(z.array(mediaIdSchema).max(50).parse(ids));
     },
 
+    /**
+     * Phase 15 — THE VIDEO REFERENCE SURFACE an Editorial Collection is
+     * composed from (Editorial → Media, DOMAIN_MODEL.md §3.2). Published Videos
+     * only, at most one Collection's worth per call; anything else is simply
+     * absent. Identity, current slug and titles — nothing else.
+     */
+    videoReferences(ids: readonly string[]) {
+      return reader.videoReferences(z.array(mediaIdSchema).max(100).parse(ids));
+    },
+
+    /** Published Videos an editor may choose, narrowed by title text. Bounded. */
+    videoChoices(text: string | null) {
+      const query = z.string().trim().min(1).max(120).safeParse(text);
+      return reader.videoChoices(query.success ? query.data : null, 25);
+    },
+
     gallerySitemap(offset: number, limit: number) {
       return reader.gallerySitemap(
         z.number().int().min(0).max(10_000_000).parse(offset),

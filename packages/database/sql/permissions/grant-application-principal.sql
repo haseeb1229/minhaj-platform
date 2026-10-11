@@ -615,6 +615,21 @@ IF OBJECT_ID(N'[dbo].[EventSchedule]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSE
 IF OBJECT_ID(N'[dbo].[EventGallery]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[EventGallery] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[EventGallery] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[EventSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[EventSlugHistory] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[EventSlugHistory] TO [$(app_login)]; END;
 
+-- Phase 15: Collection, by the Phase-6 postures exactly — the record inserted
+-- and moved through the workflow but never deleted; revisions, their
+-- translations, typed Topic and Person references and ordered members appended
+-- and never changed; slug reservations appended and never released. Naming an
+-- Article, a News record, a Work or a Video as a member grants NOTHING on its
+-- owner's table beyond what that owner's own posture already gives this
+-- principal.
+IF OBJECT_ID(N'[dbo].[Collection]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Collection] TO [$(app_login)]; DENY ALTER, DELETE ON OBJECT::[dbo].[Collection] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CollectionRevision]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[CollectionRevision] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[CollectionRevision] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CollectionRevisionTranslation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[CollectionRevisionTranslation] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[CollectionRevisionTranslation] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CollectionTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[CollectionTopic] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[CollectionTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CollectionContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[CollectionContributor] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[CollectionContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CollectionItem]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[CollectionItem] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[CollectionItem] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CollectionSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[CollectionSlugHistory] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[CollectionSlugHistory] TO [$(app_login)]; END;
+
 -- Phase 17: the DERIVED search projection and its operational state.
 --
 -- `SearchIndexRequest` is append-only for the owners that write it inside their

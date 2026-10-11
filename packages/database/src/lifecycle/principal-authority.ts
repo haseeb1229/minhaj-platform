@@ -452,6 +452,16 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[eventschedule]': ['SELECT', 'INSERT'],
   '[dbo].[eventgallery]': ['SELECT', 'INSERT'],
   '[dbo].[eventslughistory]': ['SELECT', 'INSERT'],
+  // Phase 15: Collection, by the same postures. Its ordered, typed members are
+  // revision state, appended and never changed, so no member can be removed or
+  // reordered in place.
+  '[dbo].[collection]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[collectionrevision]': ['SELECT', 'INSERT'],
+  '[dbo].[collectionrevisiontranslation]': ['SELECT', 'INSERT'],
+  '[dbo].[collectiontopic]': ['SELECT', 'INSERT'],
+  '[dbo].[collectioncontributor]': ['SELECT', 'INSERT'],
+  '[dbo].[collectionitem]': ['SELECT', 'INSERT'],
+  '[dbo].[collectionslughistory]': ['SELECT', 'INSERT'],
   '[dbo].[contactinquiry]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[feedback]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
 

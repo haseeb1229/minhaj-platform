@@ -185,6 +185,34 @@ describe('a deferred capability cannot be linked', () => {
       expect(routeByKey(key), key).toBeNull();
   });
 
+  it('delivers Collections at /collections, public and eligible, with no placement', () => {
+    // Phase 15: `/collections` is a genuine listing over delivered data,
+    // reached from /news and from topic hubs, so it has NO placement of its
+    // own; `?offset=` is a query canonical to it, never a route. There is no
+    // latest, popular or featured view, and `/library/collections` stays
+    // absent: no truthful, deterministic Library filter exists to list by.
+    const route = requireRoute('collections');
+
+    expect(route.path).toBe('/collections');
+    expect(route.label).toBe('news.collections');
+    expect(route.visibility).toBe('public');
+    expect(route.availability).toBe('delivered');
+    expect(route.indexing).toBe('eligible');
+    expect(route.placements).toEqual([]);
+    for (const key of [
+      'library.collections',
+      'collections.latest',
+      'collections.popular',
+      'collections.featured',
+    ])
+      expect(routeByKey(key), key).toBeNull();
+    for (const path of ['/library/collections', '/collections/latest'])
+      expect(
+        SHELL_ROUTES.some((entry) => entry.path === path),
+        path,
+      ).toBe(false);
+  });
+
   it('delivers the Global Network at /global and Find a Centre in the utility navigation', () => {
     // Phase 16: Countries and Centres are reached from /global; the Pakistan
     // structure is a view of the Pakistan Country, canonical to it, so it is
@@ -240,8 +268,9 @@ describe('a deferred capability cannot be linked', () => {
       .map((route) => route.key)
       .sort();
 
-    // Phases 8 and 9. Phase 15's collections are ABSENT, not reserved: they have
-    // no entry, so no link to them can be built.
+    // Phases 8 and 9. `/library/collections` is ABSENT, not reserved — Phase 15
+    // delivered Collections at `/collections` instead — so it has no entry and
+    // no link to it can be built.
     expect(surfaces).toEqual([
       'library.authors',
       'library.books',
@@ -389,6 +418,8 @@ describe('indexing eligibility is honest', () => {
         .map((route) => route.key)
         .sort(),
     ).toEqual([
+      // Phase 15: the Collections listing. Its `?offset=` pages are not routes.
+      'collections',
       // Phase 14: the Events listing. Its queries and each Event's gallery
       // view are not routes.
       'events',

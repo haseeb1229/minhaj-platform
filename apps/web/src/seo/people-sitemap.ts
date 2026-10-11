@@ -2,6 +2,7 @@ import { editorialSitemapPartitions, mergePagePartitions } from './editorial-sit
 import { librarySitemapPartitions } from './library-sitemap';
 import { newsSitemapPartitions } from './news-sitemap';
 import { eventSitemapPartitions } from './events-sitemap';
+import { collectionSitemapPartitions } from './collections-sitemap';
 import { centreSitemapPartitions } from './centres-sitemap';
 import {
   audioSitemapPartitions,
@@ -167,6 +168,9 @@ export async function allSitemapPartitions(): Promise<readonly SitemapPartition[
     ...(await newsSitemapPartitions()),
     // Phase 14's `events` segment: published Events at their canonical address.
     ...(await eventSitemapPartitions()),
+    // Phase 15's `collections` segment: published Collections at their
+    // canonical address. Their members are listed in their owners' segments.
+    ...(await collectionSitemapPartitions()),
     // Phase 16's `centres` segment: public Centres at their canonical address.
     ...(await centreSitemapPartitions()),
   ]);

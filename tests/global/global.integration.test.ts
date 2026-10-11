@@ -230,6 +230,8 @@ live('Phase 16 Global Network against real SQL Server', () => {
         selectableCentre: (id) => centres.centreSelectable(id),
         // Only an Event associates a Gallery; this suite writes News alone.
         selectableGallery: async () => false,
+        // Nor Collection members; this suite writes News alone.
+        selectableMembers: async () => false,
       },
     });
     newsReads = createEditorialReadService(database.createEditorialPublicReader());

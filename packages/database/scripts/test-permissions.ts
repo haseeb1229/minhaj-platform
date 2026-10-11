@@ -20,6 +20,13 @@ import {
   verifyRestoredPhase14,
   writePhase14Fixture,
 } from '../src/lifecycle/phase14-fixture.ts';
+import {
+  capturePhase15Fixture,
+  newPhase15Fixture,
+  PHASE15_MEMBERS,
+  verifyRestoredPhase15,
+  writePhase15Fixture,
+} from '../src/lifecycle/phase15-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -2853,6 +2860,328 @@ try {
   pass(
     'Event fixture intact',
     await verifyRestoredPhase14(admin, eventFixture, eventSnapshot, eventReferences),
+  );
+
+  // ---- Phase 15: Collection, by the Phase-6 postures -------------------------
+  //
+  // FIRST THE WRITE PATH, through the RUNTIME login: the populated recovery
+  // fixture — a renamed, independently approved, published Collection whose
+  // current revision gathers all seven member types in one mixed order, and a
+  // second Collection scheduled for later — over the Article, News records,
+  // Work and Video written above, so the grants the application relies on are
+  // proven sufficient.
+  //
+  // THEN THE MEMBERSHIP INVARIANTS AS REFUSALS BY THE DATABASE, still through
+  // the runtime login, each by the constraint, index or trigger that owns it:
+  // a place holds exactly one member, in one of one hundred places, of a record
+  // that exists in ITS type's table, once per revision; nothing is added to a
+  // current revision (51151); an empty revision never becomes current (51156).
+  // 51150 — immutable history — is BELOW the grants, so it is proved through
+  // the migration login, which the trigger refuses too.
+  //
+  // LAST, LEAST PRIVILEGE: no Collection row can be deleted, no revision-side
+  // row updated or deleted (so no member can be removed, moved or retargeted in
+  // place), no Collection table altered; and naming an Article, a News record,
+  // a Work or a Video as a member grants nothing on its owner's table, whose
+  // rows no Collection write touched.
+  const collectionMembers = {
+    article: editorialFixture.articleId,
+    'news-article': newsFixture.ids.NewsArticle,
+    'press-release': newsFixture.ids.PressRelease,
+    statement: newsFixture.ids.Statement,
+    'media-coverage': newsFixture.ids.MediaCoverage,
+    work: libraryWorkId,
+    video: firstVideoId,
+  } as const;
+  const memberOwnerRows = async (): Promise<string> => {
+    const rows: unknown[] = [];
+    for (const member of PHASE15_MEMBERS)
+      rows.push(
+        await ownerSession.query(
+          `SELECT * FROM [dbo].[${member.table}] WHERE [id]=N'${collectionMembers[member.kind]}';`,
+        ),
+      );
+    return JSON.stringify(rows);
+  };
+  const memberOwnersBefore = await memberOwnerRows();
+
+  const collectionFixture = newPhase15Fixture();
+  const collectionReferences = {
+    authorId: editorialPeople.accountId,
+    reviewerId: editorialReviewer,
+    personId: editorialPeople.linkedPersonId,
+    topicId: editorialTopic.id,
+    members: collectionMembers,
+  };
+  await writePhase15Fixture(app, collectionFixture, collectionReferences);
+  const collectionSnapshot = await capturePhase15Fixture(app, collectionFixture);
+  pass(
+    'Collection runtime writes',
+    '7 tables and the audit trail written and read through the actual application principal',
+  );
+
+  const collectionRun = randomUUID().replaceAll('-', '').slice(0, 16);
+  const proofCollection = randomUUID();
+  const proofCollectionSlug = `lp-proof-collection-${collectionRun}`;
+  const collectionRevision = (number: number): string =>
+    `INSERT INTO [dbo].[CollectionRevision] ([ownerId],[number],[editorId],[slug],[primaryLanguage]) VALUES (N'${proofCollection}',${number},N'${author}',N'${proofCollectionSlug}',N'en');
+     INSERT INTO [dbo].[CollectionRevisionTranslation] ([ownerId],[revisionNumber],[languageCode],[title],[excerpt],[seoTitle],[seoDescription],[document],[html]) VALUES (N'${proofCollection}',${number},N'en',N'Least-privilege proof collection',N'',N'',N'',N'{"type":"doc","content":[]}',N'<p></p>');`;
+  const collectionPlace = (
+    number: number,
+    position: number,
+    members: Readonly<Record<string, string>>,
+  ): string =>
+    `INSERT INTO [dbo].[CollectionItem] ([ownerId],[revisionNumber],[position]${Object.keys(
+      members,
+    )
+      .map((column) => `,[${column}]`)
+      .join('')}) VALUES (N'${proofCollection}',${number},${position}${Object.values(
+      members,
+    )
+      .map((id) => `,N'${id}'`)
+      .join('')});`;
+  const moveCollection = (number: number): string =>
+    `UPDATE [dbo].[Collection] SET [currentRevision]=${number},[version]=[version]+1 WHERE [id]=N'${proofCollection}';`;
+
+  await expectAllowed(
+    app,
+    'Collection INSERT and a first revision',
+    `INSERT INTO [dbo].[Collection] ([id],[slug],[state],[version],[creatorId],[updatedAt]) VALUES (N'${proofCollection}',N'${proofCollectionSlug}',N'draft',1,N'${author}',SYSUTCDATETIME());
+     INSERT INTO [dbo].[CollectionSlugHistory] ([ownerId],[slug]) VALUES (N'${proofCollection}',N'${proofCollectionSlug}');
+     ${collectionRevision(1)}`,
+    'a draft Collection with a revision and no member yet',
+  );
+  await expectRefusedByInvariant(
+    app,
+    'A current Collection revision has a member',
+    moveCollection(1),
+    51156,
+  );
+  await expectAllowed(
+    app,
+    'CollectionItem INSERT (a mixed order)',
+    `${collectionPlace(1, 0, { workId: libraryWorkId })}
+     ${collectionPlace(1, 1, { articleId: editorialFixture.articleId })}
+     ${collectionPlace(1, 2, { videoId: firstVideoId })}`,
+    'a Work, an Article and a Video share one order',
+  );
+  for (const [label, statement, numbers, constraint] of [
+    [
+      'Two Collection members never share a place',
+      collectionPlace(1, 0, { statementId: newsFixture.ids.Statement }),
+      DUPLICATE_KEY,
+      'CollectionItem_pkey',
+    ],
+    [
+      'A record is a member of a revision once',
+      collectionPlace(1, 3, { workId: libraryWorkId }),
+      DUPLICATE_KEY,
+      'CollectionItem_work_key',
+    ],
+    [
+      'A Collection place holds a member',
+      `INSERT INTO [dbo].[CollectionItem] ([ownerId],[revisionNumber],[position]) VALUES (N'${proofCollection}',1,4);`,
+      CONSTRAINT_VIOLATION,
+      'CollectionItem_one_member_ck',
+    ],
+    [
+      'A Collection place holds one member',
+      collectionPlace(1, 4, {
+        statementId: newsFixture.ids.Statement,
+        mediaCoverageId: newsFixture.ids.MediaCoverage,
+      }),
+      CONSTRAINT_VIOLATION,
+      'CollectionItem_one_member_ck',
+    ],
+    [
+      'A Collection holds at most one hundred places',
+      collectionPlace(1, 100, { statementId: newsFixture.ids.Statement }),
+      CONSTRAINT_VIOLATION,
+      'CollectionItem_position_ck',
+    ],
+    [
+      'An Article member is an Article',
+      collectionPlace(1, 5, { articleId: libraryWorkId }),
+      CONSTRAINT_VIOLATION,
+      'CollectionItem_articleId_fkey',
+    ],
+    [
+      'A Video member is a Video',
+      collectionPlace(1, 5, { videoId: newsFixture.ids.NewsArticle }),
+      CONSTRAINT_VIOLATION,
+      'CollectionItem_videoId_fkey',
+    ],
+  ] as const) {
+    await expectRefusedByConstraint(app, label, statement, numbers, constraint);
+  }
+  await expectAllowed(
+    app,
+    'Collection moves to a revision with members',
+    moveCollection(1),
+    'a revision with three members becomes current',
+  );
+  await expectRefusedByInvariant(
+    app,
+    'A current Collection revision gains no member',
+    collectionPlace(1, 3, { statementId: newsFixture.ids.Statement }),
+    51151,
+  );
+  await expectRefusedByConstraint(
+    app,
+    'Collections are not searchable in Phase 15',
+    `INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'collection',N'${proofCollection}');`,
+    CONSTRAINT_VIOLATION,
+    'SearchIndexRequest_scopeKind_ck',
+  );
+
+  // 51150 is beneath the grants: the MIGRATION login cannot rewrite a
+  // Collection's history either, so a published order is history, not data.
+  for (const [label, statement] of [
+    [
+      'CollectionItem is never reordered',
+      `UPDATE [dbo].[CollectionItem] SET [position]=[position]+10 WHERE [ownerId]=N'${proofCollection}';`,
+    ],
+    [
+      'CollectionItem is never retargeted',
+      `UPDATE [dbo].[CollectionItem] SET [workId]=NULL,[statementId]=N'${newsFixture.ids.Statement}' WHERE [ownerId]=N'${proofCollection}' AND [position]=0;`,
+    ],
+    [
+      'CollectionItem rows are never deleted',
+      `DELETE FROM [dbo].[CollectionItem] WHERE [ownerId]=N'${collectionFixture.collectionId}';`,
+    ],
+    [
+      'CollectionRevision is immutable',
+      `UPDATE [dbo].[CollectionRevision] SET [slug]=[slug] WHERE [ownerId]=N'${proofCollection}';`,
+    ],
+    [
+      'CollectionRevisionTranslation rows are never deleted',
+      `DELETE FROM [dbo].[CollectionRevisionTranslation] WHERE [ownerId]=N'${collectionFixture.collectionId}';`,
+    ],
+    [
+      'CollectionTopic rows are never deleted',
+      `DELETE FROM [dbo].[CollectionTopic] WHERE [ownerId]=N'${collectionFixture.collectionId}';`,
+    ],
+    [
+      'CollectionContributor rows are never deleted',
+      `DELETE FROM [dbo].[CollectionContributor] WHERE [ownerId]=N'${collectionFixture.collectionId}';`,
+    ],
+    [
+      'CollectionSlugHistory rows are never deleted',
+      `DELETE FROM [dbo].[CollectionSlugHistory] WHERE [ownerId]=N'${proofCollection}';`,
+    ],
+  ] as const) {
+    await expectRefusedByInvariant(admin, `${label} (migration login)`, statement, 51150);
+  }
+
+  // Denied by the grants.
+  for (const table of [
+    'Collection',
+    'CollectionRevision',
+    'CollectionRevisionTranslation',
+    'CollectionTopic',
+    'CollectionContributor',
+    'CollectionItem',
+    'CollectionSlugHistory',
+  ]) {
+    await expectDenied(app, `${table} DELETE denied`, `DELETE FROM [dbo].[${table}];`);
+    if (table !== 'Collection') {
+      const column =
+        table === 'CollectionRevisionTranslation'
+          ? 'title'
+          : table === 'CollectionRevision' || table === 'CollectionSlugHistory'
+            ? 'slug'
+            : table === 'CollectionItem'
+              ? 'position'
+              : 'ownerId';
+      await expectDenied(
+        app,
+        `${table} UPDATE denied`,
+        `UPDATE [dbo].[${table}] SET [${column}]=[${column}];`,
+      );
+    }
+    await assertObjectVisible(app, table);
+    await expectDenied(
+      app,
+      `${table} ALTER denied`,
+      `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+    );
+  }
+  await expectDenied(
+    app,
+    'Collection member removal denied',
+    `DELETE FROM [dbo].[CollectionItem] WHERE [ownerId]=N'${collectionFixture.collectionId}' AND [workId]=N'${libraryWorkId}';`,
+  );
+  await expectDenied(
+    app,
+    'Collection member retarget denied',
+    `UPDATE [dbo].[CollectionItem] SET [videoId]=[videoId] WHERE [ownerId]=N'${collectionFixture.collectionId}';`,
+  );
+  await expectDenied(
+    app,
+    'CollectionItem CHECK DROP denied',
+    'ALTER TABLE [dbo].[CollectionItem] DROP CONSTRAINT [CollectionItem_one_member_ck];',
+  );
+  await expectDenied(
+    app,
+    'CollectionItem member key DROP denied',
+    'ALTER TABLE [dbo].[CollectionItem] DROP CONSTRAINT [CollectionItem_workId_fkey];',
+  );
+  await expectDenied(
+    app,
+    'CollectionItem member index DROP denied',
+    'DROP INDEX [CollectionItem_article_key] ON [dbo].[CollectionItem];',
+  );
+
+  // Naming a record as a member grants nothing on its owner's table: the
+  // runtime's effective rights on each of the seven are exactly the owner's own
+  // posture — SELECT, INSERT and UPDATE — and never DELETE, ALTER, REFERENCES,
+  // CONTROL or TAKE OWNERSHIP.
+  const memberRights = await app.query<{ name: string; held: string | null }>(`
+    SELECT t.name,
+      (SELECT STRING_AGG(p.permission, N',') WITHIN GROUP (ORDER BY p.permission)
+         FROM (VALUES (N'ALTER'),(N'CONTROL'),(N'DELETE'),(N'INSERT'),(N'REFERENCES'),
+                      (N'SELECT'),(N'TAKE OWNERSHIP'),(N'UPDATE')) AS p(permission)
+        WHERE HAS_PERMS_BY_NAME(N'dbo.' + t.name, N'OBJECT', p.permission) = 1) AS held
+    FROM (VALUES ${PHASE15_MEMBERS.map((member) => `(N'${member.table}')`).join(',')}) AS t(name)
+    ORDER BY t.name;
+  `);
+  const unexpectedRights = memberRights.filter(
+    (row) => row.held !== 'INSERT,SELECT,UPDATE',
+  );
+  if (memberRights.length === PHASE15_MEMBERS.length && unexpectedRights.length === 0) {
+    pass(
+      'Collection members grant no owner rights',
+      `exactly SELECT, INSERT and UPDATE on ${memberRights.map((row) => row.name).join(', ')}`,
+    );
+  } else {
+    fail(
+      'Collection members grant no owner rights',
+      `unexpected effective rights: ${JSON.stringify(unexpectedRights)} of ${String(memberRights.length)}`,
+    );
+  }
+  for (const member of PHASE15_MEMBERS)
+    await expectDenied(
+      app,
+      `${member.table} DELETE denied to a Collection writer`,
+      `DELETE FROM [dbo].[${member.table}] WHERE [id]=N'${collectionMembers[member.kind]}';`,
+    );
+  if ((await memberOwnerRows()) === memberOwnersBefore) {
+    pass(
+      'Members untouched by Collections',
+      'the Article, News records, Work and Video are exactly as before',
+    );
+  } else {
+    fail('Members untouched by Collections', 'a Collection write changed a member row');
+  }
+  // The populated fixture is exactly as written after every refusal above.
+  pass(
+    'Collection fixture intact',
+    await verifyRestoredPhase15(
+      admin,
+      collectionFixture,
+      collectionSnapshot,
+      collectionReferences,
+    ),
   );
 
   // ---- Phase 17: the derived search projection ------------------------------

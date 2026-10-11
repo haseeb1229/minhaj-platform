@@ -178,6 +178,13 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/events/[slug]/page.tsx',
   'apps/web/src/app/[locale]/(public)/events/[slug]/gallery/page.tsx',
   'apps/web/src/app/[locale]/(public)/global/centres/[slug]/events/page.tsx',
+  // Phase 15. Every Collection surface reads records an editor publishes and
+  // withdraws, and resolves each member through its OWNER's public reader —
+  // Editorial's, Library's and Media's — at request time, so none can be
+  // prerendered; each is proven below to reach no session, no identity
+  // service, no logger and no authentication library.
+  'apps/web/src/app/[locale]/(public)/collections/page.tsx',
+  'apps/web/src/app/[locale]/(public)/collections/[slug]/page.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [

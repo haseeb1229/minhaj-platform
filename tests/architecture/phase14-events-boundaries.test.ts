@@ -415,7 +415,8 @@ describe('Event persistence names other owners and never reads them', () => {
 describe('Events are not searchable in Phase 14', () => {
   it('adds no Event search kind or scope, while Event is an Editorial kind', () => {
     expect(editorialKindSchema.options).toContain('event');
-    expect(editorialKindSchema.options).toHaveLength(7);
+    // Eight since Phase 15 added Collection to the same shared workflow.
+    expect(editorialKindSchema.options).toHaveLength(8);
     expect(SEARCH_KINDS.length).toBeGreaterThan(0);
     for (const kind of [
       ...SEARCH_KINDS,

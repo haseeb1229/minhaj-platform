@@ -18,9 +18,16 @@ import type {
   CorrespondenceState,
   PublicNews,
   PublicEvent,
+  PublicCollection,
 } from './values.ts';
 import type { NewsArchivePeriod, NewsKind, NewsPage, NewsTimelineQuery } from './news.ts';
 import type { EventListQuery, EventPage } from './event.ts';
+import type {
+  CollectionMember,
+  CollectionMemberTarget,
+  CollectionPage,
+  EditorialMemberKind,
+} from './collection.ts';
 
 export interface EditorialActor {
   readonly accountId: string;
@@ -146,6 +153,44 @@ export interface EditorialPublicReaderPort {
   /** Is any Event published at all? Distinguishes an empty inventory from no match. */
   hasPublishedEvents(): Promise<boolean>;
   eventSitemap(offset: number, limit: number): Promise<readonly EditorialSitemapEntry[]>;
+
+  /**
+   * PHASE 15 — Collections, by the same rules: PUBLISHED ONLY, the predicate in
+   * every query, bounded pages with deterministic tie-breakers, and a former
+   * slug resolving to the current one only while the Collection is published.
+   * A member is a typed identifier here; what it is called is its owner's
+   * answer, asked at Layer 4 for Works and Videos and below for Editorial's own.
+   */
+  collectionCanonicalSlug(slug: string): Promise<string | null>;
+  publicCollection(slug: string): Promise<PublicCollection | null>;
+  /** Newest publication first; `topicId` narrows to the current revision's topic. */
+  collections(query: {
+    readonly offset: number;
+    readonly limit: number;
+    readonly topicId: string | null;
+  }): Promise<CollectionPage>;
+  collectionSitemap(
+    offset: number,
+    limit: number,
+  ): Promise<readonly EditorialSitemapEntry[]>;
+  /**
+   * The PUBLISHED records of one Editorial member type among these
+   * identifiers, with their current slug and titles. One bounded read per type,
+   * never one per member; anything unpublished is simply absent.
+   */
+  memberTargets(
+    kind: EditorialMemberKind,
+    ids: readonly string[],
+  ): Promise<readonly CollectionMemberTarget[]>;
+  /**
+   * PUBLISHED records of one Editorial member type an editor may choose,
+   * newest first, narrowed by title text. Bounded; never a draft.
+   */
+  memberChoices(
+    kind: EditorialMemberKind,
+    text: string | null,
+    limit: number,
+  ): Promise<readonly CollectionMemberTarget[]>;
 }
 
 /** What Search may know about one published Article or Page. */
@@ -237,6 +282,27 @@ export interface EditorialPersistencePort {
     expectedVersion: number,
     reason: 'authority-revoked' | 'execution-failed',
   ): Promise<void>;
+
+  /**
+   * PHASE 15 — Collection, through the same workflow rules. A revision writes
+   * its ordered, typed members with it, immutably; nothing changes membership
+   * or order except a new revision.
+   */
+  collection(id: string): Promise<ArticleDetail | null>;
+  collectionDirectory(query: EditorialQuery): Promise<EditorialDirectory>;
+  collectionRevisions(id: string, offset: number): Promise<RevisionDirectory>;
+  createCollection(input: EditorialWrite): Promise<ArticleDetail>;
+  reviseCollection(input: EditorialEdit): Promise<ArticleDetail>;
+  transitionCollection(input: EditorialTransition): Promise<ArticleDetail>;
+  dueCollections(
+    now: Date,
+    limit: number,
+  ): Promise<readonly EditorialScheduleCandidate[]>;
+  failCollectionSchedule(
+    id: string,
+    expectedVersion: number,
+    reason: 'authority-revoked' | 'execution-failed',
+  ): Promise<void>;
 }
 export interface EditorialAuthorityPort {
   permits(accountId: string, permission: string): Promise<boolean>;
@@ -256,6 +322,15 @@ export interface EditorialReferencesPort {
    * Media's tables (DOMAIN_MODEL.md §3.2, Editorial → Media).
    */
   selectableGallery(id: string): Promise<boolean>;
+  /**
+   * PHASE 15 — may an editor newly add ALL of these members to a Collection?
+   * Each is asked of its OWNER, grouped by type in one bounded read per type:
+   * Editorial's own published predicate for Articles and News, Library's for
+   * Works and Media's for Videos (DOMAIN_MODEL.md §3.2, Editorial → Library and
+   * Editorial → Media). Only a currently public record may be newly chosen, so
+   * no author learns of another owner's drafts.
+   */
+  selectableMembers(members: readonly CollectionMember[]): Promise<boolean>;
 }
 export interface CorrespondencePersistencePort {
   submitContact(input: {

@@ -87,6 +87,13 @@ export interface MediaReferencesPort {
  * Public reads
  * ========================================================================= */
 
+/** One published Video as another context may name it: identity, address, titles. */
+export interface VideoReference {
+  readonly id: string;
+  readonly slug: string;
+  readonly labels: readonly { readonly locale: string; readonly title: string }[];
+}
+
 export interface MediaPublicReaderPort {
   /** One bounded page of PUBLISHED Videos, newest provider date first. */
   videos(query: VideoQuery): Promise<VideoPage>;
@@ -139,6 +146,15 @@ export interface MediaPublicReaderPort {
   publicVideoTargets(
     ids: readonly string[],
   ): Promise<readonly { readonly id: string; readonly slug: string }[]>;
+  /**
+   * PHASE 15 — THE VIDEO REFERENCE SURFACE an Editorial Collection is composed
+   * from (Editorial → Media). PUBLISHED VIDEOS ONLY: an unpublished one is
+   * simply absent, so no caller learns a draft's title. Identity, current slug
+   * and titles — no provider, file, Series or Playlist detail. Bounded.
+   */
+  videoReferences(ids: readonly string[]): Promise<readonly VideoReference[]>;
+  /** Published Videos an editor may choose, narrowed by title text. Bounded. */
+  videoChoices(text: string | null, limit: number): Promise<readonly VideoReference[]>;
 
   /* ---- Phase 11 — AudioTrack and AudioSeries --------------------------- */
 

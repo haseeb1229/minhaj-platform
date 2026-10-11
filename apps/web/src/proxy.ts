@@ -309,6 +309,28 @@ export default async function proxy(request: NextRequest) {
   }
   if (request.method === 'GET' || request.method === 'HEAD') {
     /**
+     * PHASE 15 — A COLLECTION'S OWN SLUG HISTORY, through the same single-301
+     * mechanism: one hop to the current address, locale preserved, the target
+     * built from Editorial's answer and never from the request. Only a published
+     * Collection resolves; a withheld one's former slug falls through to the 404.
+     */
+    const collection = /^\/(en|ur|ar)\/collections\/([^/]+)$/.exec(
+      request.nextUrl.pathname,
+    );
+    if (collection?.[1] && collection[2]) {
+      const slug = decodedSegment(collection[2]);
+      if (slug !== null) {
+        const { editorialReadRuntime } = await import('@/composition/editorial-read');
+        const current = await editorialReadRuntime().collectionCanonicalSlug(slug);
+        if (current !== null && current !== slug) {
+          const { collectionPathOf } = await import('@minhaj/contracts/editorial');
+          return permanent(request, `/${collection[1]}${collectionPathOf(current)}`);
+        }
+      }
+    }
+  }
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    /**
      * PHASE 16 — THE GLOBAL NETWORK'S OWN SLUG HISTORIES, through the same
      * single-301 mechanism: one hop to the current address, locale preserved,
      * the target built from Global's answer and never from the request.

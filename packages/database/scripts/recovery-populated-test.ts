@@ -47,6 +47,12 @@ import {
   writePhase14Fixture,
 } from '../src/lifecycle/phase14-fixture.ts';
 import {
+  capturePhase15Fixture,
+  newPhase15Fixture,
+  verifyRestoredPhase15,
+  writePhase15Fixture,
+} from '../src/lifecycle/phase15-fixture.ts';
+import {
   capturePhase16Fixture,
   newPhase16Fixture,
   verifyRestoredPhase16,
@@ -176,6 +182,7 @@ const photoFixture = newPhase12Fixture();
 const newsFixture = newPhase13Fixture();
 const globalFixture = newPhase16Fixture();
 const eventFixture = newPhase14Fixture();
+const collectionFixture = newPhase15Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -345,6 +352,31 @@ try {
   const eventSnapshot = await capturePhase14Fixture(admin, eventFixture);
   report('event fixture', `run ${eventFixture.runId}`);
 
+  // Phase-15 Collections: a published Collection renamed once and approved
+  // independently, in English, Urdu and Arabic with a typed Topic and compiler,
+  // whose current revision gathers ALL SEVEN member types — the Phase-6
+  // Article, the four Phase-13 News records, the Phase-8 Work and the Phase-10
+  // Video — in one deliberate mixed order beside its smaller first revision; a
+  // second Collection scheduled for later; and both workflows' audit trails.
+  const collectionReferences = {
+    authorId: fixture.accountId,
+    reviewerId: peopleFixture.accountId,
+    personId: peopleFixture.linkedPersonId,
+    topicId: taxonomyFixture.childTopicId,
+    members: {
+      article: editorialFixture.articleId,
+      'news-article': newsFixture.ids.NewsArticle,
+      'press-release': newsFixture.ids.PressRelease,
+      statement: newsFixture.ids.Statement,
+      'media-coverage': newsFixture.ids.MediaCoverage,
+      work: libraryFixture.workId,
+      video: mediaFixture.videoId,
+    },
+  };
+  await writePhase15Fixture(admin, collectionFixture, collectionReferences);
+  const collectionSnapshot = await capturePhase15Fixture(admin, collectionFixture);
+  report('collection fixture', `run ${collectionFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -435,6 +467,15 @@ try {
   report(
     'event recovery',
     await verifyRestoredPhase14(restored, eventFixture, eventSnapshot, eventReferences),
+  );
+  report(
+    'collection recovery',
+    await verifyRestoredPhase15(
+      restored,
+      collectionFixture,
+      collectionSnapshot,
+      collectionReferences,
+    ),
   );
 
   // ---- restored security posture -------------------------------------------
@@ -629,6 +670,20 @@ try {
         ],
         ['EventGallery DELETE', 'DELETE FROM [dbo].[EventGallery];'],
         ['EventSlugHistory DELETE', 'DELETE FROM [dbo].[EventSlugHistory];'],
+        // Phase 15. A restored runtime can neither erase a Collection, remove,
+        // move or retarget a member in place, rewrite a revision, nor release a
+        // reserved slug.
+        ['Collection DELETE', 'DELETE FROM [dbo].[Collection];'],
+        ['CollectionItem DELETE', 'DELETE FROM [dbo].[CollectionItem];'],
+        [
+          'CollectionItem UPDATE',
+          'UPDATE [dbo].[CollectionItem] SET [position]=[position];',
+        ],
+        [
+          'CollectionRevision UPDATE',
+          'UPDATE [dbo].[CollectionRevision] SET [slug]=[slug];',
+        ],
+        ['CollectionSlugHistory DELETE', 'DELETE FROM [dbo].[CollectionSlugHistory];'],
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -662,6 +717,12 @@ try {
       await verifyRestoredPhase13(restored, newsFixture, newsSnapshot);
       await verifyRestoredPhase16(restored, globalFixture, globalSnapshot);
       await verifyRestoredPhase14(restored, eventFixture, eventSnapshot, eventReferences);
+      await verifyRestoredPhase15(
+        restored,
+        collectionFixture,
+        collectionSnapshot,
+        collectionReferences,
+      );
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 
       // Phase 17. The full-text catalogue and index live INSIDE the database,

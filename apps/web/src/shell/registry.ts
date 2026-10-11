@@ -154,8 +154,9 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
    * now exists: `/library` is a landing page listing the Library surfaces that are
    * genuinely built, and nothing else (§18 — "parent landing must list only actual
    * delivered capabilities"). Phase 9 added research, research papers,
-   * publications, magazines and encyclopedias; collections remain absent, which is
-   * why they have no registry entry at all rather than a `reserved` one.
+   * publications, magazines and encyclopedias. `/library/collections` remains
+   * absent — see LIBRARY_SURFACES — which is why it has no registry entry at all
+   * rather than a `reserved` one.
    */
   Object.freeze({
     key: 'library',
@@ -189,8 +190,9 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
   /**
    * DELIVERED BY PHASE 13 — News. `/news` is the News and Events entry point:
    * the latest NewsArticles, the three other News families, the News archive,
-   * the photograph surfaces Phase 12 delivered and — since Phase 14 — Events.
-   * The newsletter is Phase 21's, so it is not linked from it.
+   * the photograph surfaces Phase 12 delivered, Events (Phase 14) and
+   * Collections (Phase 15). The newsletter is Phase 21's, so it is not linked
+   * from it.
    */
   Object.freeze({
     key: 'news-events',
@@ -382,10 +384,15 @@ const LEGAL: readonly ShellRoute[] = Object.freeze(
  * aggregate. A Magazine's issues are reached from the Magazine, so they have no
  * listing of their own here.
  *
- * WHAT IS ABSENT IS ABSENT. `/library/collections` is named by ROUTE_MAP.md §5
- * and belongs to Phase 15. It has no entry, so there is no string a link could be
- * built from (§5.2), and `/library/articles` stays exactly where Phase 6 put it —
- * Editorial owns it, and Layer 4 composes it (§10).
+ * WHAT IS ABSENT IS ABSENT. `/library/collections` is named by ROUTE_MAP.md §5,
+ * and Phase 15 delivered Collections at `/collections` without activating it: a
+ * Library view of Collections would have to hold only those whose members
+ * Library publishes now, and Editorial cannot apply Library's current public
+ * predicate inside its own bounded page — a Layer-4 post-filter would break
+ * deterministic paging — so there is no truthful, deterministic filter to list
+ * by. It has no entry, so there is no string a link could be built from (§5.2),
+ * and `/library/articles` stays exactly where Phase 6 put it — Editorial owns
+ * it, and Layer 4 composes it (§10).
  */
 const LIBRARY_SURFACES = Object.freeze([
   'books',
@@ -500,8 +507,9 @@ const LISTEN: readonly ShellRoute[] = Object.freeze([
  * three interface locales over delivered data. NO PLACEMENT — Media is a content
  * domain, not a primary navigation item (INFORMATION_ARCHITECTURE.md §2.2). Its
  * designed entry points are News & Events — delivered by Phase 13, which links
- * all three from `/news` — and Collections, which has not shipped; they are
- * also reached from one another and from the human sitemap.
+ * all three from `/news` — and Collections. Phase 15 delivered Collections, but
+ * a Photo or Gallery is not one of their member types, so no Collection links
+ * here; these are also reached from one another and from the human sitemap.
  *
  * `/media/downloads` HAS NO ENTRY AND NO ROUTE: a download needs a rights
  * decision no phase has made. An Event's gallery view, `/events/{slug}/gallery`
@@ -599,6 +607,27 @@ const EVENTS: readonly ShellRoute[] = Object.freeze([
   }),
 ]);
 
+/**
+ * Collections — Phase 15 (ROUTE_MAP.md §3.8). `/collections` is a genuine
+ * listing in all three interface locales over delivered data, and so
+ * `eligible`. NO PLACEMENT — there is no new primary navigation item: `/news`
+ * links here, and each topic hub previews its own Collections. `?offset=` is a
+ * query canonical to it, never an entry of its own; there is no
+ * `/collections/latest`, `popular` or `featured`, and `/library/collections`
+ * stays absent (see LIBRARY_SURFACES).
+ */
+const COLLECTIONS: readonly ShellRoute[] = Object.freeze([
+  Object.freeze({
+    key: 'collections',
+    label: 'news.collections',
+    path: '/collections',
+    placements: Object.freeze([] as const),
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'eligible' as const,
+  }),
+]);
+
 /** The routes the shell itself delivers. */
 const SHELL: readonly ShellRoute[] = Object.freeze([
   Object.freeze({
@@ -683,6 +712,7 @@ export const SHELL_ROUTES: readonly ShellRoute[] = Object.freeze([
   ...MEDIA,
   ...NEWS,
   ...EVENTS,
+  ...COLLECTIONS,
   ...GLOBAL,
   ...exploreRoutes(),
   ...LEGAL,

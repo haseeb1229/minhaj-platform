@@ -406,6 +406,16 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'EventSchedule',
         'EventGallery',
         'EventSlugHistory',
+        // Phase 15 — Editorial's Collection: record, immutable revisions, their
+        // translations, typed Topic and Person references, the ordered typed
+        // members and the permanent slug reservation.
+        'Collection',
+        'CollectionRevision',
+        'CollectionRevisionTranslation',
+        'CollectionTopic',
+        'CollectionContributor',
+        'CollectionItem',
+        'CollectionSlugHistory',
       ].sort(),
     );
   });

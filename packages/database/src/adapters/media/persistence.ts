@@ -767,6 +767,16 @@ export function createMediaPersistence(): MediaPersistencePort {
  * Public reads
  * ========================================================================= */
 
+/** At most one Collection's worth of Videos is described in one read. */
+const REFERENCE_BATCH = 100;
+/** How many Videos an editor's selector offers at once. */
+const REFERENCE_CHOICES = 25;
+const REFERENCE_SELECT = {
+  id: true,
+  slug: true,
+  labels: { select: { locale: true, title: true }, orderBy: { locale: 'asc' as const } },
+} satisfies Prisma.VideoSelect;
+
 export function createMediaPublicReader(): MediaPublicReaderPort {
   const db = getDatabaseClient();
 
@@ -999,6 +1009,29 @@ export function createMediaPublicReader(): MediaPublicReaderPort {
         take: bounded(limit, 500),
       });
       return rows.map((row) => ({ id: row.id, stamp: String(row.version) }));
+    },
+
+    // Phase 15 — the Video reference surface an Editorial Collection is
+    // composed from. PUBLISHED VIDEOS ONLY, so no caller learns a draft's
+    // title; identity, current slug and titles, nothing about the provider.
+    async videoReferences(ids) {
+      if (ids.length === 0) return [];
+      if (ids.length > REFERENCE_BATCH)
+        throw new Error('Media reference batch exceeds its bound.');
+      return db.video.findMany({
+        where: { id: { in: [...new Set(ids)] }, ...PUBLISHED },
+        select: REFERENCE_SELECT,
+        orderBy: { id: 'asc' },
+      });
+    },
+
+    async videoChoices(text, limit) {
+      return db.video.findMany({
+        where: { ...PUBLISHED, ...textMatch(text) },
+        select: REFERENCE_SELECT,
+        orderBy: [{ publishedOn: 'desc' }, { id: 'asc' }],
+        take: bounded(limit, REFERENCE_CHOICES),
+      });
     },
 
     async publicVideoTargets(ids) {

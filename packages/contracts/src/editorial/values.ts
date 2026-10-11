@@ -15,13 +15,20 @@ import {
   resolveEventSchedule,
   type EventSchedule,
 } from './event.ts';
+import { collectionMembersSchema, type CollectionMember } from './collection.ts';
 
 /**
  * Every aggregate the shared editorial workflow governs: Phase 6's Article and
- * Page, Phase 13's four News families and Phase 14's Event. One workflow, seven
- * sets of tables.
+ * Page, Phase 13's four News families, Phase 14's Event and Phase 15's
+ * Collection. One workflow, eight sets of tables.
  */
-export const editorialKindSchema = z.enum(['article', 'page', ...NEWS_KINDS, 'event']);
+export const editorialKindSchema = z.enum([
+  'article',
+  'page',
+  ...NEWS_KINDS,
+  'event',
+  'collection',
+]);
 export type EditorialKind = z.infer<typeof editorialKindSchema>;
 export const editorialStateSchema = z.enum([
   'draft',
@@ -173,6 +180,20 @@ const eventContentSchema = z
   })
   .superRefine(referencesAreUnique);
 
+/**
+ * PHASE 15 — a Collection's content: the shared editorial content and its ONE
+ * ordered list of typed members. The members are revision state, so adding,
+ * removing or reordering one is an ordinary edit that returns the Collection to
+ * draft and needs fresh review. Whether each member may be newly chosen is its
+ * owner's answer, asked by the service — never this schema's.
+ */
+const collectionContentSchema = z
+  .strictObject({
+    ...editorialContentSchema.shape,
+    members: collectionMembersSchema,
+  })
+  .superRefine(referencesAreUnique);
+
 /** The schedule refusal a failed Event parse carries, if that is why it failed. */
 export function eventScheduleRefusalOf(error: z.ZodError): string | null {
   return (
@@ -194,6 +215,7 @@ export function editorialContentSchemaFor(
   if (kind === 'media-coverage') return mediaCoverageContentSchema;
   if (kind === 'news-article') return newsArticleContentSchema;
   if (kind === 'event') return eventContentSchema;
+  if (kind === 'collection') return collectionContentSchema;
   return editorialContentSchema;
 }
 
@@ -221,6 +243,8 @@ export interface EditorialContent {
   readonly schedule?: EventSchedule;
   /** An Event's ordered Media Galleries; absent for every other family. */
   readonly galleryIds?: readonly string[];
+  /** A Collection's ordered, typed members; absent for every other family. */
+  readonly members?: readonly CollectionMember[];
 }
 export interface SafeEditorialTranslation extends EditorialTranslation {
   readonly html: string;
@@ -319,6 +343,16 @@ export interface PublicEvent extends PublicEditorial {
   readonly schedule: EventSchedule;
   readonly centreId: string | null;
   readonly galleryIds: readonly string[];
+}
+/**
+ * One published Collection, as a visitor may see it: its words and its members
+ * as TYPED IDENTIFIERS in their one order. What each member is called and where
+ * it lives is its owner's answer at render time — Editorial for Articles and
+ * News, Library for Works, Media for Videos — and a member its owner no longer
+ * publishes is simply not shown.
+ */
+export interface PublicCollection extends PublicEditorial {
+  readonly members: readonly CollectionMember[];
 }
 export interface EditorialSitemapEntry {
   readonly id: string;
