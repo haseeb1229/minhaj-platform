@@ -68,7 +68,10 @@ import {
  * `tests/seo/quran.test.ts`.
  */
 
-test.describe.configure({ mode: 'serial' });
+// NO RETRY. The journey accepts and activates a corpus — singletons for the
+// life of the run's database — so a retry could only meet its own corpus and
+// refuse. A failure here is reported once, as itself, never re-run until lucky.
+test.describe.configure({ mode: 'serial', retries: 0 });
 
 let sql: SqlSession;
 const contexts: BrowserContext[] = [];

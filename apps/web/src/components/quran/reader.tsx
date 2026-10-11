@@ -119,7 +119,9 @@ function SurahTitle({
 function ArabicName({ surah }: { readonly surah: PublicSurah }) {
   if (surah.nameArabic === null) return null;
   return (
-    <span lang="ar" dir="rtl" className="text-xl">
+    // Whatever a source supplies must wrap at the narrowest width rather than
+    // widen the page; `break-words` breaks only a word too long for its line.
+    <span lang="ar" dir="rtl" className="text-xl break-words">
       {surah.nameArabic}
     </span>
   );
