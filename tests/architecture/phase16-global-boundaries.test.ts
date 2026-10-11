@@ -17,8 +17,9 @@ import { repoRoot } from './architecture-harness.ts';
  *     tables — the edge runs Editorial → Global only, and composition is Layer 4;
  *   - a per-centre News system, or a Centre on a News family other than
  *     NewsArticle;
- *   - an Event, a schedule, a map, a geocoder or a Global search kind arriving
- *     ahead of the phase that owns it;
+ *   - a map, a geocoder or a Global search kind arriving ahead of the phase
+ *     that owns it — and, since Phase 14, an Event anywhere but Editorial's own
+ *     Event aggregate, which names its ONE Centre by typed identity;
  *   - a per-level permission minted for symmetry beside the two Global keys;
  *   - the Media permission descriptions drifting again from what the migration
  *     recorded;
@@ -95,7 +96,7 @@ describe('Global Network owns its directory and reads nothing of Editorial', () 
 });
 
 describe('centre-scoped News is the existing NewsArticle, and only it', () => {
-  it('puts the one Centre reference on the NewsArticle revision', async () => {
+  it('puts the one Centre reference on the NewsArticle revision — and, since Phase 14, the Event revision', async () => {
     const schema = await read('packages/database/prisma/schema.prisma');
     const models = [...schema.matchAll(/^model (\w+) \{([\s\S]*?)\n\}/gmu)];
     const withCentre = models
@@ -107,6 +108,9 @@ describe('centre-scoped News is the existing NewsArticle, and only it', () => {
         'CentreLabel',
         'CentreServiceCity',
         'CentreSlugHistory',
+        // Phase 14: an Event revision names the ONE Centre it is held at,
+        // over the Editorial -> Global Network edge Phase 16 admitted.
+        'EventRevision',
         'NewsArticleRevision',
       ].sort(),
     );
@@ -132,9 +136,12 @@ describe('centre-scoped News is the existing NewsArticle, and only it', () => {
 });
 
 describe('nothing the phase does not own', () => {
-  it('creates no Event, schedule, map, geocoder or search vocabulary', async () => {
+  it('creates no Global-owned Event, map, geocoder or search vocabulary', async () => {
     const schema = await read('packages/database/prisma/schema.prisma');
-    for (const absent of ['Event', 'EventSchedule', 'CentreEvent', 'GeocodeCache'])
+    // `Event` and `EventSchedule` arrived in Phase 14 as EDITORIAL's aggregate,
+    // proven in phase14-events-boundaries.test.ts. A Centre-owned Event table
+    // never arrives.
+    for (const absent of ['CentreEvent', 'EventCentre', 'GlobalEvent', 'GeocodeCache'])
       expect(schema, absent).not.toMatch(new RegExp(`^model ${absent} \\{`, 'mu'));
     const sql = uncommented(await read(MIGRATION))
       .split('\n')
@@ -159,7 +166,7 @@ describe('nothing the phase does not own', () => {
     }
   });
 
-  it('delivers the reserved Global routes and no Centre Events route', async () => {
+  it('delivers the reserved Global routes, the Centre Events route among them since Phase 14', async () => {
     const base = 'apps/web/src/app/[locale]/(public)/global';
     for (const route of [
       'page.tsx',
@@ -173,12 +180,12 @@ describe('nothing the phase does not own', () => {
       'centres/[slug]/news/page.tsx',
       'centres/[slug]/contact/page.tsx',
       'pakistan/page.tsx',
+      // Phase 14: a Centre's Events, composed at Layer 4 from Editorial's read.
+      'centres/[slug]/events/page.tsx',
     ])
       expect(await exists(`${base}/${route}`), route).toBe(true);
-    for (const absent of ['centres/[slug]/events', 'regions', 'cities', 'events'])
+    for (const absent of ['regions', 'cities', 'events'])
       expect(await exists(`${base}/${absent}`), absent).toBe(false);
-    for (const file of await walk('apps/web/src/components/global'))
-      expect(uncommented(await read(file)), file).not.toMatch(/\/events\b/u);
   });
 
   it('keeps the Centre contact page display-only', async () => {

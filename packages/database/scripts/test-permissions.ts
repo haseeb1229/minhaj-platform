@@ -14,6 +14,12 @@ import {
   verifyRestoredPhase13,
   writePhase13Fixture,
 } from '../src/lifecycle/phase13-fixture.ts';
+import {
+  capturePhase14Fixture,
+  newPhase14Fixture,
+  verifyRestoredPhase14,
+  writePhase14Fixture,
+} from '../src/lifecycle/phase14-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -2302,6 +2308,551 @@ try {
     app,
     'Centre CHECK DROP denied',
     'ALTER TABLE [dbo].[Centre] DROP CONSTRAINT [Centre_virtual_ck];',
+  );
+
+  // ---- Phase 14: Event, by the Phase-6 postures ------------------------------
+  //
+  // FIRST THE WRITE PATH, through the RUNTIME login: the populated recovery
+  // fixture — a renamed, independently approved, published Event whose
+  // occurrences in a daylight-saving zone store local time and UTC instant,
+  // held at the Centre above and associated with the Gallery above — so the
+  // grants the application relies on are proven sufficient.
+  //
+  // THEN EVERY INVARIANT AS A REFUSAL BY THE DATABASE, each by the one
+  // constraint or trigger number that owns it, on a second synthetic Event
+  // built step by step: an IANA zone name and never an offset; an occurrence in
+  // whole minutes, with an end that is both-or-neither and strictly after its
+  // start, one start and one place per revision, twelve places and an offset no
+  // zone exceeds; a Gallery associated once per revision, in twelve places,
+  // that exists; a Centre that exists; and the editorial workflow's 51141–51146
+  // and approval CHECKs. 51140 — immutable history — is BELOW the grants, so it
+  // is proved through the migration login, which the trigger refuses too.
+  //
+  // LAST, LEAST PRIVILEGE: no Event row can be deleted, no revision-side row
+  // updated or deleted (so no Gallery association can be removed), no Event
+  // table altered; and holding a Centre or a Gallery reference grants nothing
+  // on Global's or Media's tables, whose rows no Event write touched.
+  const ownerSession: SqlSession = admin;
+  const ownerRows = async (): Promise<string> =>
+    JSON.stringify([
+      await ownerSession.query(`SELECT * FROM [dbo].[Centre] WHERE [id]=N'${centreA}';`),
+      await ownerSession.query(
+        `SELECT * FROM [dbo].[CentreSlugHistory] WHERE [centreId]=N'${centreA}' ORDER BY [slug];`,
+      ),
+      await ownerSession.query(
+        `SELECT * FROM [dbo].[Gallery] WHERE [id]=N'${galleryId}';`,
+      ),
+      await ownerSession.query(
+        `SELECT * FROM [dbo].[GalleryItem] WHERE [galleryId]=N'${galleryId}' ORDER BY [position];`,
+      ),
+      await ownerSession.query(
+        `SELECT * FROM [dbo].[GallerySlugHistory] WHERE [galleryId]=N'${galleryId}' ORDER BY [slug];`,
+      ),
+    ]);
+  const ownerRowsBefore = await ownerRows();
+
+  const eventFixture = newPhase14Fixture();
+  const eventReferences = { centreId: centreA, galleryId };
+  await writePhase14Fixture(app, eventFixture, {
+    authorId: editorialPeople.accountId,
+    reviewerId: editorialReviewer,
+    personId: editorialPeople.linkedPersonId,
+    topicId: editorialTopic.id,
+    ...eventReferences,
+  });
+  const eventSnapshot = await capturePhase14Fixture(app, eventFixture);
+  pass(
+    'Event runtime writes',
+    '8 tables and the audit trail written and read through the actual application principal',
+  );
+
+  const eventRun = randomUUID().replaceAll('-', '').slice(0, 16);
+  const proofEvent = randomUUID();
+  const proofSlug = `lp-proof-event-${eventRun}`;
+  const proofRenamed = `lp-proof-event-renamed-${eventRun}`;
+  const secondGallery = randomUUID();
+  const author = editorialPeople.accountId;
+  const eventRevision = (
+    number: number,
+    editor: string,
+    slug: string,
+    timezone: string,
+    centre: string | null,
+  ): string =>
+    `INSERT INTO [dbo].[EventRevision] ([ownerId],[number],[editorId],[slug],[primaryLanguage],[timezone],[centreId]) VALUES (N'${proofEvent}',${number},N'${editor}',N'${slug}',N'en',N'${timezone}',${centre === null ? 'NULL' : `N'${centre}'`});`;
+  const eventTranslation = (number: number, language = 'en'): string =>
+    `INSERT INTO [dbo].[EventRevisionTranslation] ([ownerId],[revisionNumber],[languageCode],[title],[excerpt],[seoTitle],[seoDescription],[document],[html]) VALUES (N'${proofEvent}',${number},N'${language}',N'Least-privilege proof event',N'',N'',N'',N'{"type":"doc","content":[]}',N'<p></p>');`;
+  const occurrence = (
+    number: number,
+    position: number,
+    startsLocal: string,
+    startsAt: string,
+    endsLocal: string | null = null,
+    endsAt: string | null = null,
+  ): string =>
+    `INSERT INTO [dbo].[EventSchedule] ([ownerId],[revisionNumber],[position],[startsLocal],[startsAt],[endsLocal],[endsAt]) VALUES (N'${proofEvent}',${number},${position},'${startsLocal}','${startsAt}',${endsLocal === null ? 'NULL' : `'${endsLocal}'`},${endsAt === null ? 'NULL' : `'${endsAt}'`});`;
+  const association = (number: number, position: number, gallery: string): string =>
+    `INSERT INTO [dbo].[EventGallery] ([ownerId],[revisionNumber],[position],[galleryId]) VALUES (N'${proofEvent}',${number},${position},N'${gallery}');`;
+  const moveTo = (number: number, extra = ''): string =>
+    `UPDATE [dbo].[Event] SET [currentRevision]=${number}${extra},[version]=[version]+1 WHERE [id]=N'${proofEvent}';`;
+
+  await expectAllowed(
+    app,
+    'Event INSERT, first revision and move',
+    `INSERT INTO [dbo].[Event] ([id],[slug],[state],[version],[creatorId],[updatedAt]) VALUES (N'${proofEvent}',N'${proofSlug}',N'draft',1,N'${author}',SYSUTCDATETIME());
+     INSERT INTO [dbo].[EventSlugHistory] ([ownerId],[slug]) VALUES (N'${proofEvent}',N'${proofSlug}');
+     ${eventRevision(1, author, proofSlug, 'America/New_York', centreA)}
+     ${eventTranslation(1)}
+     ${occurrence(1, 0, '2034-03-04T18:00:00', '2034-03-04T23:00:00', '2034-03-04T19:30:00', '2034-03-05T00:30:00')}
+     ${association(1, 0, galleryId)}
+     ${moveTo(1)}`,
+    'a draft Event with a zone, a Centre, an occurrence and a Gallery',
+  );
+  await expectAllowed(
+    app,
+    'Gallery INSERT (a second, for Event proofs)',
+    `INSERT INTO [dbo].[Gallery] ([id],[slug],[primaryLocale],[state]) VALUES (N'${secondGallery}',N'lp-proof-event-gallery-${eventRun}',N'en',N'draft');`,
+    'Media creates its own Gallery',
+  );
+
+  // A revision's zone is a NAME, its Centre real, its number the next one.
+  for (const [label, timezone] of [
+    ['A zone is never a numeric offset', '+05:00'],
+    ['A zone is never a GMT offset', 'GMT+5'],
+    ['A zone is never an Etc offset alias', 'Etc/GMT+5'],
+    ['A zone is never a bare abbreviation', 'PKT'],
+  ] as const) {
+    await expectRefusedByConstraint(
+      app,
+      label,
+      eventRevision(2, editorialReviewer, proofSlug, timezone, null),
+      CONSTRAINT_VIOLATION,
+      'EventRevision_timezone_ck',
+    );
+  }
+  await expectRefusedByConstraint(
+    app,
+    'An Event revision names a real Centre',
+    eventRevision(2, editorialReviewer, proofSlug, 'Asia/Karachi', randomUUID()),
+    CONSTRAINT_VIOLATION,
+    'EventRevision_centreId_fkey',
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Event revisions follow in sequence',
+    eventRevision(3, editorialReviewer, proofSlug, 'Asia/Karachi', null),
+    51144,
+  );
+  // Revision 2 is edited by the REVIEWER, so its own approval is self-approval.
+  await expectAllowed(
+    app,
+    'EventRevision INSERT (the next revision)',
+    `${eventRevision(2, editorialReviewer, proofSlug, 'Asia/Karachi', null)}
+     ${eventTranslation(2)}`,
+    'a second revision in another zone with no Centre',
+  );
+  await expectRefusedByInvariant(
+    app,
+    'A current Event revision has an occurrence',
+    moveTo(2),
+    51146,
+  );
+
+  // Occurrences of revision 2 (Asia/Karachi, UTC+5): every rule by its CHECK.
+  for (const [label, statement, constraint] of [
+    [
+      'An end is never before its start',
+      occurrence(
+        2,
+        0,
+        '2034-03-01T19:00:00',
+        '2034-03-01T14:00:00',
+        '2034-03-01T18:00:00',
+        '2034-03-01T13:00:00',
+      ),
+      'EventSchedule_end_ck',
+    ],
+    [
+      'An end is never equal to its start',
+      occurrence(
+        2,
+        0,
+        '2034-03-01T19:00:00',
+        '2034-03-01T14:00:00',
+        '2034-03-01T19:00:00',
+        '2034-03-01T14:00:00',
+      ),
+      'EventSchedule_end_ck',
+    ],
+    [
+      'An end has its instant',
+      occurrence(
+        2,
+        0,
+        '2034-03-01T19:00:00',
+        '2034-03-01T14:00:00',
+        '2034-03-01T20:00:00',
+      ),
+      'EventSchedule_end_ck',
+    ],
+    [
+      'An end instant has its local time',
+      occurrence(
+        2,
+        0,
+        '2034-03-01T19:00:00',
+        '2034-03-01T14:00:00',
+        null,
+        '2034-03-01T15:00:00',
+      ),
+      'EventSchedule_end_ck',
+    ],
+    [
+      'An occurrence is in whole minutes',
+      occurrence(2, 0, '2034-03-01T19:00:30', '2034-03-01T14:00:30'),
+      'EventSchedule_minute_ck',
+    ],
+    [
+      'An occurrence has at most twelve places',
+      occurrence(2, 12, '2034-03-01T19:00:00', '2034-03-01T14:00:00'),
+      'EventSchedule_position_ck',
+    ],
+    [
+      'An occurrence place is never negative',
+      occurrence(2, -1, '2034-03-01T19:00:00', '2034-03-01T14:00:00'),
+      'EventSchedule_position_ck',
+    ],
+    [
+      'Local and UTC differ by no more than a zone',
+      occurrence(2, 0, '2034-03-01T19:00:00', '2034-03-02T14:00:00'),
+      'EventSchedule_offset_ck',
+    ],
+    [
+      'An occurrence belongs to a real revision',
+      occurrence(9, 0, '2034-03-01T19:00:00', '2034-03-01T14:00:00'),
+      'EventSchedule_ownerId_revisionNumber_fkey',
+    ],
+  ] as const) {
+    await expectRefusedByConstraint(
+      app,
+      label,
+      statement,
+      CONSTRAINT_VIOLATION,
+      constraint,
+    );
+  }
+  await expectAllowed(
+    app,
+    'EventSchedule INSERT (two occurrences)',
+    `${occurrence(2, 0, '2034-03-01T19:00:00', '2034-03-01T14:00:00', '2034-03-01T21:00:00', '2034-03-01T16:00:00')}
+     ${occurrence(2, 1, '2034-03-02T19:00:00', '2034-03-02T14:00:00')}`,
+    'occurrences with and without an end',
+  );
+  for (const [label, statement, constraint] of [
+    [
+      'One revision never starts twice at once',
+      occurrence(2, 2, '2034-03-01T19:00:00', '2034-03-01T14:00:00'),
+      'EventSchedule_ownerId_revisionNumber_startsAt_key',
+    ],
+    [
+      'An occurrence place holds one occurrence',
+      occurrence(2, 0, '2034-03-03T19:00:00', '2034-03-03T14:00:00'),
+      'EventSchedule_pkey',
+    ],
+  ] as const) {
+    await expectRefusedByConstraint(app, label, statement, DUPLICATE_KEY, constraint);
+  }
+
+  // Galleries of revision 2: once each, twelve places, real Galleries.
+  await expectAllowed(
+    app,
+    'EventGallery INSERT',
+    association(2, 0, galleryId),
+    'a Gallery is associated with the revision',
+  );
+  await expectRefusedByConstraint(
+    app,
+    'A Gallery is associated once per revision',
+    association(2, 1, galleryId),
+    DUPLICATE_KEY,
+    'EventGallery_ownerId_revisionNumber_galleryId_key',
+  );
+  await expectRefusedByConstraint(
+    app,
+    'A Gallery place holds one Gallery',
+    association(2, 0, secondGallery),
+    DUPLICATE_KEY,
+    'EventGallery_pkey',
+  );
+  await expectRefusedByConstraint(
+    app,
+    'An Event has at most twelve Galleries',
+    association(2, 12, secondGallery),
+    CONSTRAINT_VIOLATION,
+    'EventGallery_position_ck',
+  );
+  await expectRefusedByConstraint(
+    app,
+    'An Event names a real Gallery',
+    association(2, 1, randomUUID()),
+    CONSTRAINT_VIOLATION,
+    'EventGallery_galleryId_fkey',
+  );
+
+  // The workflow, refused by the database whoever writes.
+  await expectAllowed(
+    app,
+    'Event moves to a complete revision',
+    moveTo(2),
+    'a revision with an occurrence becomes current',
+  );
+  for (const [label, statement, number] of [
+    [
+      'A historical occurrence is never added',
+      occurrence(1, 1, '2034-03-05T18:00:00', '2034-03-05T23:00:00'),
+      51141,
+    ],
+    [
+      'A current revision gains no occurrence',
+      occurrence(2, 2, '2034-03-06T19:00:00', '2034-03-06T14:00:00'),
+      51141,
+    ],
+    ['A current revision gains no Gallery', association(2, 1, secondGallery), 51141],
+    ['A historical revision gains no translation', eventTranslation(1, 'ur'), 51141],
+    [
+      'A historical revision gains no Topic',
+      `INSERT INTO [dbo].[EventTopic] ([ownerId],[revisionNumber],[topicId]) VALUES (N'${proofEvent}',1,N'${editorialTopic.id}');`,
+      51141,
+    ],
+    [
+      'A historical revision gains no speaker',
+      `INSERT INTO [dbo].[EventContributor] ([ownerId],[revisionNumber],[personId],[role],[position]) VALUES (N'${proofEvent}',1,N'${editorialPeople.linkedPersonId}',N'speaker',0);`,
+      51141,
+    ],
+    ['Revision history never rewinds', moveTo(1), 51145],
+    [
+      'An Event is approved by someone other than its editor',
+      `UPDATE [dbo].[Event] SET [approvedRevision]=2,[approvedById]=N'${editorialReviewer}' WHERE [id]=N'${proofEvent}';`,
+      51142,
+    ],
+  ] as const) {
+    await expectRefusedByInvariant(app, label, statement, number);
+  }
+  for (const [label, statement] of [
+    [
+      'An Event is never published unapproved',
+      `UPDATE [dbo].[Event] SET [state]=N'published',[publishedAt]=SYSUTCDATETIME() WHERE [id]=N'${proofEvent}';`,
+    ],
+    [
+      'An Event is never approved by its creator',
+      `UPDATE [dbo].[Event] SET [approvedRevision]=2,[approvedById]=N'${author}' WHERE [id]=N'${proofEvent}';`,
+    ],
+    [
+      'Approval names the current revision',
+      `UPDATE [dbo].[Event] SET [approvedRevision]=1,[approvedById]=N'${editorialReviewer}' WHERE [id]=N'${proofEvent}';`,
+    ],
+    [
+      'An Event is never scheduled unapproved',
+      `UPDATE [dbo].[Event] SET [state]=N'scheduled',[scheduledRevision]=2,[scheduledAt]='2099-01-01T00:00:00',[scheduledTimezone]=N'Asia/Karachi',[scheduledById]=N'${editorialReviewer}',[scheduleStatus]=N'pending' WHERE [id]=N'${proofEvent}';`,
+    ],
+  ] as const) {
+    await expectRefusedByConstraint(
+      app,
+      label,
+      statement,
+      CONSTRAINT_VIOLATION,
+      label === 'An Event is never published unapproved' ||
+        label === 'An Event is never scheduled unapproved'
+        ? 'Event_publication_ck'
+        : 'Event_approval_ck',
+    );
+  }
+
+  // A rename: the revision's slug must be the record's, and must be reserved.
+  await expectAllowed(
+    app,
+    'EventRevision INSERT (a renamed revision)',
+    `${eventRevision(3, author, proofRenamed, 'UTC', centreA)}
+     ${eventTranslation(3)}
+     ${occurrence(3, 0, '2034-04-01T09:00:00', '2034-04-01T09:00:00')}`,
+    'a third revision under a new slug, in UTC',
+  );
+  await expectRefusedByInvariant(
+    app,
+    'A current revision carries the record slug',
+    moveTo(3),
+    51142,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'A renamed Event slug is reserved first',
+    moveTo(3, `,[slug]=N'${proofRenamed}'`),
+    51143,
+  );
+  await expectAllowed(
+    app,
+    'Event rename, approval and publication',
+    `INSERT INTO [dbo].[EventSlugHistory] ([ownerId],[slug]) VALUES (N'${proofEvent}',N'${proofRenamed}');
+     ${moveTo(3, `,[slug]=N'${proofRenamed}'`)}
+     UPDATE [dbo].[Event] SET [approvedRevision]=3,[approvedById]=N'${editorialReviewer}',[state]=N'published',[publishedAt]=SYSUTCDATETIME(),[version]=[version]+1 WHERE [id]=N'${proofEvent}';`,
+    'reserved, moved, approved independently and published',
+  );
+  await expectRefusedByConstraint(
+    app,
+    'A former Event slug stays reserved',
+    `INSERT INTO [dbo].[EventSlugHistory] ([ownerId],[slug]) VALUES (N'${eventFixture.eventId}',N'${proofSlug}');`,
+    DUPLICATE_KEY,
+    'EventSlugHistory_pkey',
+  );
+  await expectRefusedByConstraint(
+    app,
+    'Events are not searchable in Phase 14',
+    `INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'event',N'${proofEvent}');`,
+    CONSTRAINT_VIOLATION,
+    'SearchIndexRequest_scopeKind_ck',
+  );
+
+  // 51140 is beneath the grants: the MIGRATION login cannot rewrite history
+  // either, so an Event's past occurrences and Galleries are history, not data.
+  for (const [label, statement] of [
+    [
+      'EventSchedule is immutable',
+      `UPDATE [dbo].[EventSchedule] SET [startsAt]=[startsAt] WHERE [ownerId]=N'${proofEvent}';`,
+    ],
+    [
+      'EventSchedule rows are never deleted',
+      `DELETE FROM [dbo].[EventSchedule] WHERE [ownerId]=N'${proofEvent}';`,
+    ],
+    [
+      'EventGallery is immutable',
+      `UPDATE [dbo].[EventGallery] SET [position]=[position] WHERE [ownerId]=N'${proofEvent}';`,
+    ],
+    [
+      'EventGallery rows are never deleted',
+      `DELETE FROM [dbo].[EventGallery] WHERE [ownerId]=N'${proofEvent}';`,
+    ],
+    [
+      'EventRevision is immutable',
+      `UPDATE [dbo].[EventRevision] SET [timezone]=[timezone] WHERE [ownerId]=N'${proofEvent}';`,
+    ],
+    [
+      'EventRevisionTranslation rows are never deleted',
+      `DELETE FROM [dbo].[EventRevisionTranslation] WHERE [ownerId]=N'${proofEvent}';`,
+    ],
+    [
+      'EventTopic rows are never deleted',
+      `DELETE FROM [dbo].[EventTopic] WHERE [ownerId]=N'${eventFixture.eventId}';`,
+    ],
+    [
+      'EventContributor rows are never deleted',
+      `DELETE FROM [dbo].[EventContributor] WHERE [ownerId]=N'${eventFixture.eventId}';`,
+    ],
+    [
+      'EventSlugHistory rows are never deleted',
+      `DELETE FROM [dbo].[EventSlugHistory] WHERE [ownerId]=N'${proofEvent}';`,
+    ],
+  ] as const) {
+    await expectRefusedByInvariant(admin, `${label} (migration login)`, statement, 51140);
+  }
+
+  // Denied by the grants.
+  for (const table of [
+    'Event',
+    'EventRevision',
+    'EventRevisionTranslation',
+    'EventTopic',
+    'EventContributor',
+    'EventSchedule',
+    'EventGallery',
+    'EventSlugHistory',
+  ]) {
+    await expectDenied(app, `${table} DELETE denied`, `DELETE FROM [dbo].[${table}];`);
+    if (table !== 'Event') {
+      const column =
+        table === 'EventRevisionTranslation'
+          ? 'title'
+          : table === 'EventRevision' || table === 'EventSlugHistory'
+            ? 'slug'
+            : 'ownerId';
+      await expectDenied(
+        app,
+        `${table} UPDATE denied`,
+        `UPDATE [dbo].[${table}] SET [${column}]=[${column}];`,
+      );
+    }
+    await assertObjectVisible(app, table);
+    await expectDenied(
+      app,
+      `${table} ALTER denied`,
+      `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+    );
+  }
+  await expectDenied(
+    app,
+    'EventGallery association removal denied',
+    `DELETE FROM [dbo].[EventGallery] WHERE [ownerId]=N'${eventFixture.eventId}' AND [galleryId]=N'${galleryId}';`,
+  );
+  await expectDenied(
+    app,
+    'EventSchedule CHECK DROP denied',
+    'ALTER TABLE [dbo].[EventSchedule] DROP CONSTRAINT [EventSchedule_end_ck];',
+  );
+  await expectDenied(
+    app,
+    'EventGallery Gallery key DROP denied',
+    'ALTER TABLE [dbo].[EventGallery] DROP CONSTRAINT [EventGallery_galleryId_fkey];',
+  );
+
+  // Holding a reference grants nothing on the referenced owner's tables.
+  const [ownerAuthority] = await app.query<{ held: number }>(`
+    SELECT
+      ISNULL(HAS_PERMS_BY_NAME(N'dbo.Centre', N'OBJECT', N'DELETE'), 0)
+      + ISNULL(HAS_PERMS_BY_NAME(N'dbo.Centre', N'OBJECT', N'ALTER'), 0)
+      + ISNULL(HAS_PERMS_BY_NAME(N'dbo.Centre', N'OBJECT', N'REFERENCES'), 0)
+      + ISNULL(HAS_PERMS_BY_NAME(N'dbo.Centre', N'OBJECT', N'CONTROL'), 0)
+      + ISNULL(HAS_PERMS_BY_NAME(N'dbo.Centre', N'OBJECT', N'TAKE OWNERSHIP'), 0)
+      + ISNULL(HAS_PERMS_BY_NAME(N'dbo.Gallery', N'OBJECT', N'DELETE'), 0)
+      + ISNULL(HAS_PERMS_BY_NAME(N'dbo.Gallery', N'OBJECT', N'ALTER'), 0)
+      + ISNULL(HAS_PERMS_BY_NAME(N'dbo.Gallery', N'OBJECT', N'REFERENCES'), 0)
+      + ISNULL(HAS_PERMS_BY_NAME(N'dbo.Gallery', N'OBJECT', N'CONTROL'), 0)
+      + ISNULL(HAS_PERMS_BY_NAME(N'dbo.Gallery', N'OBJECT', N'TAKE OWNERSHIP'), 0) AS held;
+  `);
+  if (Number(ownerAuthority?.held ?? -1) === 0) {
+    pass(
+      'Event references grant no owner rights',
+      'no DELETE, ALTER, REFERENCES, CONTROL or TAKE OWNERSHIP on Centre or Gallery',
+    );
+  } else {
+    fail(
+      'Event references grant no owner rights',
+      `${String(ownerAuthority?.held ?? 'unknown')} broad right(s) held on Centre or Gallery`,
+    );
+  }
+  await expectDenied(
+    app,
+    'Centre DELETE denied to an Event writer',
+    `DELETE FROM [dbo].[Centre] WHERE [id]=N'${centreA}';`,
+  );
+  await expectDenied(
+    app,
+    'Gallery DELETE denied to an Event writer',
+    `DELETE FROM [dbo].[Gallery] WHERE [id]=N'${galleryId}';`,
+  );
+  if ((await ownerRows()) === ownerRowsBefore) {
+    pass(
+      'Centre and Gallery untouched by Events',
+      'the referenced Centre, Gallery, their slugs and items are exactly as before',
+    );
+  } else {
+    fail(
+      'Centre and Gallery untouched by Events',
+      'an Event write changed a row Global or Media owns',
+    );
+  }
+  // The populated fixture is exactly as written after every refusal above.
+  pass(
+    'Event fixture intact',
+    await verifyRestoredPhase14(admin, eventFixture, eventSnapshot, eventReferences),
   );
 
   // ---- Phase 17: the derived search projection ------------------------------

@@ -12,6 +12,7 @@ import { libraryReadRuntime } from '@/composition/library-read';
 import { taxonomyRuntime } from '@/composition/taxonomy';
 import { labelFor, workPath } from '@/components/library/presentation';
 import { listingHref } from '@/components/library/scholarly';
+import { EventTopicSection } from '@/components/editorial/events';
 import { NewsTopicSection } from '@/components/editorial/news';
 import { AudioPreview } from '@/components/media/listen';
 import { VideoPreview } from '@/components/media/watch';
@@ -315,6 +316,16 @@ export default async function TopicPage({ params }: TopicParams) {
           topicId={topic.id}
           heading={t('news')}
           headingId="topic-news"
+        />
+
+        {/* PHASE 14 — the upcoming Events on this topic, or the most recent past
+            ones when none is ahead, from Editorial's own public read; nothing
+            when the topic has no Event. Events are not searchable yet. */}
+        <EventTopicSection
+          locale={locale}
+          topicId={topic.id}
+          heading={t('events')}
+          headingId="topic-events"
         />
       </div>
     </Container>

@@ -935,6 +935,56 @@ review history:**
   feed composition exists yet); News images (an explicit Storage/Media dependency decision);
   popularity, view counts or featured News.
 
+**Phase-14 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+- **One new same-level edge, Editorial → Media** (DOMAIN_MODEL.md §3.2; ARCHITECTURE.md
+  §6.1.1), because an Event owns its typed association to Media-owned Galleries. The reverse is
+  prohibited and mechanically refused; Editorial asks Media's reference interface and reads no
+  Media table, Media holds no Event schema, and Editorial → Global Network now also serves
+  Events.
+- **Model.** Event is its own Editorial aggregate with the Article's shape of tables. Its zone,
+  occurrences (`EventSchedule`), optional Centre and ordered Galleries (`EventGallery`, at most
+  twelve) are immutable revision state, so retiming, moving or re-photographing an Event is an
+  ordinary edit that needs fresh review and is audited as its own fact (DOMAIN_MODEL.md §7.2.3).
+  Contributors and Topics follow the shared pattern; no venue text, coordinates, image,
+  organiser, price, registration, recurrence rule or livestream exists.
+- **Time.** One to twelve occurrences, each the intended local wall-clock time in one IANA zone
+  plus the UTC instant the server derived from it. A skipped local time is refused; a repeated
+  one is refused until the editor chooses the earlier or later instant; an end is strictly after
+  its start. The occurrence schedule is never the publication schedule.
+- **Permissions.** No new key: `content.read` and `content.author` are re-described to name
+  Events. Admin surface: `/admin/editorial/events`; the shared review queue and the scheduled
+  executor (25 due records of each of the seven aggregates per sweep) include Events.
+- **Public.** `/events` lists upcoming Events by default (ongoing ones first) and `?when=past`
+  the held ones; `?country=`, `?city=` and `?centre=` narrow through Global to Centres
+  physically there and never widen; an unknown filter is refused, an over-broad one reported.
+  All are canonical to `/events` and absent from sitemaps. An Event page shows its occurrences
+  in their local time and zone, its public Centre and locality, its topics and contributors, and
+  links its photographs. `/events/{slug}/gallery` is a `noindex` navigational view over the
+  Event's listed Galleries, each linking to its own canonical `/media/galleries/{slug}`. Local
+  Events are `/global/centres/{slug}/events` and a section on each Centre page; `/news` links
+  Events; the topic hub shows a topic's upcoming (else past) Events.
+- **Slugs.** Native Event slug history, one-hop 301 through the request proxy, locale kept; a
+  former slug with the `/gallery` suffix resolves to the current gallery view in one hop.
+- **SEO.** `Event` JSON-LD only with a genuine location — a public physical Centre with a City
+  or an address — one `Event` per occurrence, local times with offsets; otherwise
+  BreadcrumbList alone. The `events` sitemap segment lists published Events in their genuine
+  languages.
+- **Search unchanged.** Phase 14 enters from 6, 12, 13 and 16, not 17: no Event kind, scope,
+  filter or indexing intent. Phase 31 reconciles the final searchable inventory.
+- **Recovery is SQL.** The populated rehearsal covers a published Event with translations,
+  a renamed slug, occurrences across a daylight-saving change, a Centre reference and a Gallery
+  association.
+- **Content gate open.** Engineering completion is not authoritative Event content; no real
+  Event is seeded, and OPEN_DECISIONS.md §6.2 still governs real Centre data.
+- **Not delivered, and not owed by this phase:** Collections (Phase 15); Event search (a recorded
+  later step; Phase 31 proves completeness); registration, RSVP, ticketing, booking, attendance,
+  reminders, calendar export or integration, maps, geocoding and livestream links (no accepted
+  decision); real or legacy Event import (Phase 30, under written authorisation); an Event lead
+  image (an explicit Storage/Media decision); an Events panel on People profiles (Editorial
+  exposes no contributor facet, as for News).
+
 ---
 
 ### Phase 16 — Global Network

@@ -21,6 +21,7 @@ import type {
   PublicPlacePage,
   RegionPage,
   PublicCentre,
+  PublicCentreSummary,
   PublicCity,
   PublicCityChoice,
   PublicCountry,
@@ -127,6 +128,22 @@ export interface GlobalPublicReaderPort {
   centreCanonicalSlug(slug: string): Promise<string | null>;
   /** The public Centres among these identifiers — attribution for News. Bounded. */
   centreReferences(ids: readonly string[]): Promise<readonly CentreReference[]>;
+  /**
+   * PHASE 14 — the public Centres among these identifiers with where they are:
+   * what an Event card and an Event page say about the Centre it is held at.
+   * Bounded.
+   */
+  centreSummaries(ids: readonly string[]): Promise<readonly PublicCentreSummary[]>;
+  /**
+   * PHASE 14 — the identifiers of the public Centres PHYSICALLY in a Country
+   * or a City — never those merely serving it, and never a virtual Centre — at
+   * most `limit + 1` of them, so a caller can tell a complete answer from one
+   * it must refuse rather than truncate.
+   */
+  physicalCentreIds(
+    scope: { readonly countryId: string; readonly cityId: string | null },
+    limit: number,
+  ): Promise<readonly string[]>;
   centreSitemap(offset: number, limit: number): Promise<readonly CentreSitemapRow[]>;
 }
 

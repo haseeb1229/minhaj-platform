@@ -106,6 +106,11 @@ model User {
   newsArticleSchedules NewsArticle[] @relation("NewsArticleScheduler")
   newsArticleRevisions NewsArticleRevision[]
 
+  eventCreations Event[] @relation("EventCreator")
+  eventApprovals Event[] @relation("EventReviewer")
+  eventSchedules Event[] @relation("EventScheduler")
+  eventRevisions EventRevision[]
+
   pressReleaseCreations PressRelease[] @relation("PressReleaseCreator")
   pressReleaseApprovals PressRelease[] @relation("PressReleaseReviewer")
   pressReleaseSchedules PressRelease[] @relation("PressReleaseScheduler")
@@ -785,6 +790,7 @@ model Topic {
 
   articleTopics ArticleTopic[]
   newsArticleTopics NewsArticleTopic[]
+  eventTopics EventTopic[]
   pressReleaseTopics PressReleaseTopic[]
   statementTopics StatementTopic[]
   mediaCoverageTopics MediaCoverageTopic[]
@@ -907,6 +913,7 @@ model Language {
 
   articleTranslations ArticleRevisionTranslation[]
   newsArticleTranslations NewsArticleRevisionTranslation[]
+  eventTranslations EventRevisionTranslation[]
   pressReleaseTranslations PressReleaseRevisionTranslation[]
   statementTranslations StatementRevisionTranslation[]
   mediaCoverageTranslations MediaCoverageRevisionTranslation[]
@@ -1042,6 +1049,7 @@ model Person {
 
   articleContributions ArticleContributor[]
   newsArticleContributions NewsArticleContributor[]
+  eventContributions EventContributor[]
   pressReleaseContributions PressReleaseContributor[]
   statementContributions StatementContributor[]
   mediaCoverageContributions MediaCoverageContributor[]
@@ -2927,6 +2935,7 @@ model Gallery {
   labels GalleryLabel[]
   slugs GallerySlugHistory[]
   items GalleryItem[]
+  eventAssociations EventGallery[]
   @@index([state, createdAt, id])
 }
 
@@ -3239,6 +3248,7 @@ model Centre {
   serves        CentreServiceCity[]
   contacts      CentreContact[]
   newsRevisions NewsArticleRevision[]
+  eventRevisions EventRevision[]
 
   @@unique([id, countryId])
   @@index([countryId, state, slug, id])
@@ -3288,4 +3298,136 @@ model CentreContact {
 
   @@id([centreId, position])
   @@unique([centreId, channel, value])
+}
+
+// Phase 14 — Event: an Editorial aggregate of its own, governed by the shared
+// editorial workflow. Its schedule, its Centre and its Galleries are REVISION
+// state, so nothing changes when or where a published Event happens except a
+// new revision that goes back through independent review.
+model Event {
+  id String @id @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+  state String @db.NVarChar(16)
+  version Int
+  currentRevision Int?
+  approvedRevision Int?
+  approvedById String? @db.NVarChar(36)
+  creatorId String @db.NVarChar(36)
+  scheduledRevision Int?
+  scheduledAt DateTime? @db.DateTime2
+  scheduledTimezone String? @db.NVarChar(64)
+  scheduledById String? @db.NVarChar(36)
+  scheduleStatus String? @db.NVarChar(32)
+  publishedAt DateTime? @db.DateTime2
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @db.DateTime2
+  creator User @relation("EventCreator", fields:[creatorId], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  reviewer User? @relation("EventReviewer", fields:[approvedById], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  scheduler User? @relation("EventScheduler", fields:[scheduledById], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  current EventRevision? @relation("EventCurrent", fields:[id,currentRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  approval EventRevision? @relation("EventApproval", fields:[id,approvedRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  scheduled EventRevision? @relation("EventScheduled", fields:[id,scheduledRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
+  revisions EventRevision[] @relation("EventHistory")
+  slugs EventSlugHistory[]
+  @@unique([slug])
+  @@index([state,updatedAt,id])
+  @@index([state,publishedAt(sort: Desc),id])
+  @@index([scheduleStatus,scheduledAt,id])
+}
+model EventRevision {
+  ownerId String @db.NVarChar(36)
+  number Int
+  editorId String @db.NVarChar(36)
+  slug String @db.NVarChar(120)
+  primaryLanguage String @db.NVarChar(16)
+  schemaVersion Int @default(1)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  /// The IANA zone the Event is held in — never an offset.
+  timezone String @db.NVarChar(64)
+  /// The ONE Global Network Centre it is held at, or none. Never cascades.
+  centreId String? @db.NVarChar(36)
+  centre Centre? @relation(fields:[centreId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  owner Event @relation("EventHistory",fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  editor User @relation(fields:[editorId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  currentFor Event[] @relation("EventCurrent")
+  approvedFor Event[] @relation("EventApproval")
+  scheduledFor Event[] @relation("EventScheduled")
+  translations EventRevisionTranslation[]
+  topics EventTopic[]
+  contributors EventContributor[]
+  occurrences EventSchedule[]
+  galleries EventGallery[]
+  @@id([ownerId,number])
+  @@index([centreId,ownerId,number])
+}
+model EventRevisionTranslation {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  languageCode String @db.NVarChar(16)
+  title String @db.NVarChar(200)
+  excerpt String @db.NVarChar(600)
+  seoTitle String @db.NVarChar(200)
+  seoDescription String @db.NVarChar(300)
+  document String @db.NVarChar(Max)
+  html String @db.NVarChar(Max)
+  revision EventRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  language Language @relation(fields:[languageCode],references:[code],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,languageCode])
+}
+model EventTopic {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  topicId String @db.NVarChar(36)
+  revision EventRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  topic Topic @relation(fields:[topicId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,topicId])
+  @@index([topicId,ownerId])
+}
+model EventContributor {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  personId String @db.NVarChar(36)
+  role String @db.NVarChar(32)
+  position Int
+  revision EventRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  person Person @relation(fields:[personId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,personId,role])
+  @@index([personId,ownerId])
+}
+/// One occurrence of an Event revision: the intended LOCAL wall-clock times in
+/// the revision's zone — the fact — and the UTC instants derived from them.
+/// Immutable with its revision.
+model EventSchedule {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  position Int
+  startsLocal DateTime @db.DateTime2
+  startsAt DateTime @db.DateTime2
+  endsLocal DateTime? @db.DateTime2
+  endsAt DateTime? @db.DateTime2
+  revision EventRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,position])
+  @@unique([ownerId,revisionNumber,startsAt])
+}
+/// The typed Event↔Gallery association, OWNED BY EDITORIAL: one Media Gallery's
+/// place in one Event revision. Removing it removes no Gallery; archiving a
+/// Gallery changes no Event.
+model EventGallery {
+  ownerId String @db.NVarChar(36)
+  revisionNumber Int
+  position Int
+  galleryId String @db.NVarChar(36)
+  revision EventRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
+  gallery Gallery @relation(fields:[galleryId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([ownerId,revisionNumber,position])
+  @@unique([ownerId,revisionNumber,galleryId])
+  @@index([galleryId,ownerId])
+}
+model EventSlugHistory {
+  slug String @db.NVarChar(120)
+  ownerId String @db.NVarChar(36)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  owner Event @relation(fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
+  @@id([slug])
+  @@index([ownerId])
 }

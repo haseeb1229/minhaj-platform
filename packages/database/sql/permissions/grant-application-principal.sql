@@ -600,6 +600,21 @@ IF OBJECT_ID(N'[dbo].[RegionSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, 
 IF OBJECT_ID(N'[dbo].[CitySlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[CitySlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[CitySlugHistory] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[CentreSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[CentreSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[CentreSlugHistory] TO [$(app_login)]; END;
 
+-- Phase 14: Event, by the Phase-6 postures exactly — the record inserted and
+-- moved through the workflow but never deleted; revisions, their translations,
+-- typed Topic and Person references, occurrences and Gallery associations
+-- appended and never changed; slug reservations appended and never released.
+-- Referencing a Centre or a Gallery grants NOTHING on Global's or Media's tables
+-- beyond what those owners' own postures already give this principal.
+IF OBJECT_ID(N'[dbo].[Event]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Event] TO [$(app_login)]; DENY ALTER, DELETE ON OBJECT::[dbo].[Event] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[EventRevision]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[EventRevision] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[EventRevision] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[EventRevisionTranslation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[EventRevisionTranslation] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[EventRevisionTranslation] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[EventTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[EventTopic] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[EventTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[EventContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[EventContributor] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[EventContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[EventSchedule]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[EventSchedule] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[EventSchedule] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[EventGallery]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[EventGallery] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[EventGallery] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[EventSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[EventSlugHistory] TO [$(app_login)]; DENY ALTER, UPDATE, DELETE ON OBJECT::[dbo].[EventSlugHistory] TO [$(app_login)]; END;
+
 -- Phase 17: the DERIVED search projection and its operational state.
 --
 -- `SearchIndexRequest` is append-only for the owners that write it inside their

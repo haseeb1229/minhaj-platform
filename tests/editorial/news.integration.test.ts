@@ -155,6 +155,8 @@ live('Phase 13 real SQL News workflow', () => {
           );
         },
         selectableCentre: (id) => createGlobalReferences().centreSelectable(id),
+        // No News family associates a Gallery; only an Event does (Phase 14).
+        selectableGallery: async () => false,
       },
     });
     author = await account(['content.read', 'content.author', 'content.review']);
@@ -430,6 +432,19 @@ live('Phase 13 real SQL News workflow', () => {
         await expect(
           create(kind, { ...base, heroImage: 'https://images.example.invalid/a.jpg' }),
         ).rejects.toMatchObject({ reason: 'invalid' });
+        // An Event's own fields (Phase 14) belong to no News family.
+        for (const eventField of [
+          {
+            schedule: {
+              timezone: 'Asia/Karachi',
+              occurrences: [{ start: '2041-11-14T19:00' }],
+            },
+          },
+          { galleryIds: [randomUUID()] },
+        ])
+          await expect(create(kind, { ...base, ...eventField })).rejects.toMatchObject({
+            reason: 'invalid',
+          });
         if (kind !== 'statement')
           await expect(
             create(kind, {

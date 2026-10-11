@@ -193,6 +193,28 @@ export interface MediaPublicReaderPort {
   galleryPhotos(galleryId: string, offset: number): Promise<PhotoPage>;
   /** Canonical sitemap rows: published Galleries holding a public Photo. */
   gallerySitemap(offset: number, limit: number): Promise<readonly MediaSitemapRow[]>;
+  /**
+   * PHASE 14 — the LISTED Galleries among these identifiers (published, holding
+   * a public Photo), each with its count and cover, in the order given. What an
+   * Event's gallery view composes; anything else among the identifiers is simply
+   * absent. Bounded.
+   */
+  publicGalleries(ids: readonly string[]): Promise<readonly PublicGallery[]>;
+}
+
+/**
+ * THE REFERENCE SURFACE ANOTHER CONTEXT'S COMPOSITION MAY USE — Editorial asking
+ * which Galleries an editor may associate with an Event (Phase 14, Editorial →
+ * Media). Identity, words and lifecycle state only; no Photo, no asset, no
+ * membership, no write. The caller has already checked its own permission.
+ */
+export interface MediaReferencePort {
+  /** Galleries in any state but archived, bounded, optionally narrowed by text. */
+  galleryChoices(text: string | null): Promise<readonly GalleryRecord[]>;
+  /** The Galleries among these identifiers, whatever their state — to show truthfully. */
+  galleriesByIds(ids: readonly string[]): Promise<readonly GalleryRecord[]>;
+  /** Is this Gallery one an editor may newly associate (it exists, not archived)? */
+  gallerySelectable(id: string): Promise<boolean>;
 }
 
 /**

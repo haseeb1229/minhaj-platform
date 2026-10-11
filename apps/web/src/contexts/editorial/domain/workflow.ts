@@ -1,6 +1,7 @@
 import type {
   ArticleDetail,
   EditorialState,
+  EventScheduleRefusal,
   WorkflowAction,
 } from '@minhaj/contracts/editorial';
 
@@ -15,7 +16,8 @@ export class EditorialRefusal extends Error {
       | 'invalid-state'
       | 'self-approval'
       | 'approval-required'
-      | 'unavailable',
+      | 'unavailable'
+      | EventScheduleRefusal,
   ) {
     super(reason);
   }

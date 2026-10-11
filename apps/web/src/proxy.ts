@@ -283,6 +283,32 @@ export default async function proxy(request: NextRequest) {
   }
   if (request.method === 'GET' || request.method === 'HEAD') {
     /**
+     * PHASE 14 — AN EVENT'S OWN SLUG HISTORY, through the same single-301
+     * mechanism: one hop to the current address, locale preserved, the target
+     * built from Editorial's answer and never from the request. A former slug
+     * with the gallery view's suffix resolves straight to the current gallery
+     * view — ONE hop, never a chain through the Event page.
+     */
+    const event = /^\/(en|ur|ar)\/events\/([^/]+)(\/gallery)?$/.exec(
+      request.nextUrl.pathname,
+    );
+    if (event?.[1] && event[2]) {
+      const slug = decodedSegment(event[2]);
+      if (slug !== null) {
+        const { editorialReadRuntime } = await import('@/composition/editorial-read');
+        const current = await editorialReadRuntime().eventCanonicalSlug(slug);
+        if (current !== null && current !== slug) {
+          const { eventPathOf } = await import('@minhaj/contracts/editorial');
+          return permanent(
+            request,
+            `/${event[1]}${eventPathOf(current)}${event[3] ?? ''}`,
+          );
+        }
+      }
+    }
+  }
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    /**
      * PHASE 16 — THE GLOBAL NETWORK'S OWN SLUG HISTORIES, through the same
      * single-301 mechanism: one hop to the current address, locale preserved,
      * the target built from Global's answer and never from the request.
@@ -290,8 +316,8 @@ export default async function proxy(request: NextRequest) {
      * NESTED ADDRESSES RESOLVE WHOLE. A Region or City is addressed under its
      * Country, so a former Country slug, a former Region or City slug, or both,
      * are resolved TOGETHER and answered with ONE redirect to the current full
-     * address — never a chain through an intermediate one. A Centre's `news`
-     * and `contact` pages keep their suffix. Only public records resolve: a
+     * address — never a chain through an intermediate one. A Centre's `news`,
+     * `events` and `contact` pages keep their suffix. Only public records resolve: a
      * withheld record's former slug falls through to the route's 404.
      */
     const place =
@@ -329,9 +355,10 @@ export default async function proxy(request: NextRequest) {
         }
       }
     }
-    const centre = /^\/(en|ur|ar)\/global\/centres\/([^/]+)(\/news|\/contact)?$/.exec(
-      request.nextUrl.pathname,
-    );
+    const centre =
+      /^\/(en|ur|ar)\/global\/centres\/([^/]+)(\/news|\/events|\/contact)?$/.exec(
+        request.nextUrl.pathname,
+      );
     if (centre?.[1] && centre[2]) {
       const slug = decodedSegment(centre[2]);
       if (slug !== null) {

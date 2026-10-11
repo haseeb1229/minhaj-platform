@@ -1,7 +1,9 @@
 import 'server-only';
 import { z } from 'zod';
 import {
+  EVENT_SCHEDULE_REFUSALS,
   editorialContentSchemaFor,
+  eventScheduleRefusalOf,
   editorialIdSchema,
   editorialKindSchema,
   editorialStateSchema,
@@ -20,6 +22,7 @@ import {
   type EditorialScheduleCandidate,
   type EditorialTransition,
   type EditorialWrite,
+  type EventScheduleRefusal,
   type RevisionDirectory,
   type SafeEditorialContent,
 } from '@minhaj/contracts/editorial';
@@ -46,11 +49,18 @@ interface KindOperations {
 }
 
 /**
- * At most this many due records of EACH kind are executed per sweep: six kinds,
- * so a sweep's total work stays bounded at 150 and the remainder is caught up by
- * the next one.
+ * At most this many due records of EACH kind are executed per sweep: seven
+ * kinds, so a sweep's total work stays bounded at 175 and the remainder is
+ * caught up by the next one.
  */
 const DUE_PER_KIND = 25;
+
+/** References a re-save may keep although their owner would no longer offer them. */
+interface Kept {
+  readonly centreId: string | null;
+  readonly galleryIds: readonly string[];
+}
+const NOTHING_KEPT: Kept = Object.freeze({ centreId: null, galleryIds: [] });
 
 export function createEditorialService(dependencies: {
   persistence: EditorialPersistencePort;
@@ -84,6 +94,16 @@ export function createEditorialService(dependencies: {
         due: (at, limit) => store.duePages(at, limit),
         fail: (id, version, reason) => store.failPageSchedule(id, version, reason),
       };
+    if (kind === 'event')
+      return {
+        detail: (id) => store.event(id),
+        directory: (query) => store.eventDirectory(query),
+        revisions: (id, offset) => store.eventRevisions(id, offset),
+        revise: (input) => store.reviseEvent(input),
+        transition: (input) => store.transitionEvent(input),
+        due: (at, limit) => store.dueEvents(at, limit),
+        fail: (id, version, reason) => store.failEventSchedule(id, version, reason),
+      };
     if (!isNewsKind(kind)) throw new EditorialRefusal('invalid');
     return {
       detail: (id) => store.news(kind, id),
@@ -103,28 +123,43 @@ export function createEditorialService(dependencies: {
   /**
    * One aggregate's content, parsed and with every reference asked of its owner.
    *
-   * A NewsArticle's Centre (Phase 16) must be one Global would offer an editor
-   * NOW — it exists and is not archived — unless it is the Centre the current
-   * revision already names (`keptCentre`): re-saving an article about a Centre
-   * that has since closed keeps that true attribution rather than forcing an
-   * editor to erase it.
+   * A NewsArticle's or an Event's Centre (Phases 16 and 14) must be one Global
+   * would offer an editor NOW — it exists and is not archived — unless it is the
+   * Centre the current revision already names (`kept.centreId`): re-saving an
+   * article about a Centre that has since closed keeps that true attribution
+   * rather than forcing an editor to erase it. An Event's Galleries follow the
+   * same rule against Media (Phase 14): a newly associated Gallery must be one
+   * Media would offer now; one the current revision already associates is kept.
+   *
+   * A SCHEDULE THAT CANNOT BE STORED SAYS WHY. A local time a daylight-saving
+   * change skips or repeats, an end not after its start, or one occurrence
+   * written twice is refused with that reason, never as a generic one.
    */
   async function contentOf(
     kind: EditorialKind,
     value: unknown,
-    keptCentre: string | null = null,
+    kept: Kept = NOTHING_KEPT,
   ): Promise<SafeEditorialContent> {
     const result = editorialContentSchemaFor(kind).safeParse(value);
-    if (!result.success) throw new EditorialRefusal('invalid');
+    if (!result.success) {
+      const refusal = kind === 'event' ? eventScheduleRefusalOf(result.error) : null;
+      throw new EditorialRefusal(
+        refusal === null ? 'invalid' : (refusal as EventScheduleRefusal),
+      );
+    }
     const content = result.data;
     const centreId = content.centreId ?? null;
+    const newGalleries = (content.galleryIds ?? []).filter(
+      (id) => !kept.galleryIds.includes(id),
+    );
     const valid = await Promise.all([
       references.validTopics(content.topicIds),
       references.validContributors(content.contributors.map((entry) => entry.personId)),
       references.validLanguages(content.translations.map((entry) => entry.languageCode)),
-      centreId === null || centreId === keptCentre
+      centreId === null || centreId === kept.centreId
         ? Promise.resolve(true)
         : references.selectableCentre(centreId),
+      ...newGalleries.map((id) => references.selectableGallery(id)),
     ]);
     if (valid.some((value) => !value)) throw new EditorialRefusal('invalid');
     return {
@@ -133,6 +168,15 @@ export function createEditorialService(dependencies: {
         ...entry,
         ...renderEditorialDocument(entry.document),
       })),
+    };
+  }
+  /** What the current revision already names, which a re-save may keep. */
+  async function keptOf(kind: EditorialKind, id: string): Promise<Kept> {
+    if (kind !== 'news-article' && kind !== 'event') return NOTHING_KEPT;
+    const record = kind === 'event' ? await store.event(id) : await store.news(kind, id);
+    return {
+      centreId: record?.revision.centreId ?? null,
+      galleryIds: record?.revision.galleryIds ?? [],
     };
   }
   async function detail(kind: EditorialKind, id: string) {
@@ -182,6 +226,7 @@ export function createEditorialService(dependencies: {
       }
       if (routeBinding !== null) throw new EditorialRefusal('invalid');
       if (kind === 'article') return store.createArticle(input);
+      if (kind === 'event') return store.createEvent(input);
       if (!isNewsKind(kind)) throw new EditorialRefusal('invalid');
       return store.createNews(kind, input);
     },
@@ -196,11 +241,7 @@ export function createEditorialService(dependencies: {
       editorialKindSchema.parse(kind);
       editorialIdSchema.parse(id);
       z.number().int().positive().parse(expectedVersion);
-      const kept =
-        kind === 'news-article'
-          ? ((await store.news(kind, id))?.revision.centreId ?? null)
-          : null;
-      const content = await contentOf(kind, value, kept);
+      const content = await contentOf(kind, value, await keptOf(kind, id));
       if (kind === 'page') {
         const page = await store.page(id);
         if (!page || !validPageBinding(page.routeBinding, content.slug))
@@ -303,6 +344,7 @@ export function editorialFailure(error: unknown): string {
   const reason = (error as { reason?: unknown } | null)?.reason;
   return typeof reason === 'string' &&
     [
+      ...EVENT_SCHEDULE_REFUSALS,
       'invalid',
       'denied',
       'conflict',

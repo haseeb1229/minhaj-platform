@@ -196,7 +196,8 @@
       "press-releases": "Press releases",
       "statements": "Statements",
       "media-coverage": "Media coverage",
-      "archive": "News archive"
+      "archive": "News archive",
+      "events": "Events"
     },
     "global": {
       "countries": "Countries",
@@ -1264,7 +1265,31 @@
     "slugReserved": "A news slug cannot be archive, press-releases, statements or media-coverage.",
     "centre": "Centre (optional)",
     "centreNone": "General News — no centre",
-    "centreHelp": "Choosing or changing the Centre is an ordinary edit: it returns the article to draft and needs fresh review. An archived Centre stays named only while it is left unchanged."
+    "centreHelp": "Choosing or changing the Centre is an ordinary edit: it returns the article to draft and needs fresh review. An archived Centre stays named only while it is left unchanged.",
+    "events": "Events",
+    "eventCentreNone": "No centre — a general event",
+    "eventCentreHelp": "The Centre the event is held at, if any. Its address and place are shown from the Centre's own public record, never copied. Choosing or changing it is an ordinary edit: it returns the event to draft and needs fresh review. An archived Centre stays named only while it is left unchanged.",
+    "eventSchedule": "When the event takes place",
+    "eventScheduleHelp": "Enter each occurrence as the local date and time where the event is held, in the time zone below. This is when the event happens, not when this page is published. Changing it returns the event to draft and needs fresh review.",
+    "eventTimezone": "Event time zone (IANA)",
+    "eventTimezoneHelp": "The zone the local times are in, for example Asia/Karachi. Daylight saving is applied from this zone.",
+    "occurrence": "Occurrence {number}",
+    "occurrenceStart": "Starts (local time)",
+    "occurrenceEnd": "Ends (local time, optional)",
+    "fold": "If the clock repeats this hour",
+    "foldHelp": "Only needed when the clocks go back and this local time happens twice.",
+    "foldNone": "Not repeated",
+    "foldEarlier": "The first time (before the clocks go back)",
+    "foldLater": "The second time (after the clocks go back)",
+    "moreOccurrences": "Save to add more occurrences, up to twelve.",
+    "eventGalleries": "Photo galleries",
+    "eventGalleriesHelp": "Galleries of this event's photographs, in order. A gallery stays Media's; removing it here deletes nothing. Changing the galleries returns the event to draft and needs fresh review. Searching above narrows the galleries offered.",
+    "eventGallery": "Gallery {number}",
+    "eventGalleryNone": "No gallery",
+    "nonexistent-time": "A start or end time does not exist in the event's time zone, because the clocks move forward then. Choose a time that exists.",
+    "ambiguous-time": "A start or end time happens twice in the event's time zone, because the clocks go back then. Choose whether you mean the first or the second time.",
+    "schedule-order": "Each occurrence must end after it starts.",
+    "duplicate-occurrence": "Two occurrences start at the same time. Remove the duplicate."
   },
   "library": {
     "title": "Library",
@@ -1690,7 +1715,8 @@
     "allVideos": "All videos on this topic",
     "audio": "Audio on this topic",
     "allAudio": "All audio on this topic",
-    "news": "News on this topic"
+    "news": "News on this topic",
+    "events": "Events on this topic"
   },
   "watch": {
     "title": "Watch",
@@ -2249,7 +2275,81 @@
     "mediaBody": "Photographs, photo galleries and the photograph archive.",
     "previous": "Previous page",
     "next": "Next page",
-    "centre": "Centre"
+    "centre": "Centre",
+    "events": "Events",
+    "eventsBody": "Upcoming and past gatherings, with when and where each is held."
+  },
+  "events": {
+    "title": "Events",
+    "description": "Gatherings, conferences, lectures and programmes, with when and where each is held.",
+    "type": "Event",
+    "now": "Happening now",
+    "moreDates": "{count, plural, one {and # more date} other {and # more dates}}",
+    "virtual": "Online centre",
+    "topics": "Topics",
+    "centresUnavailable": "Where these events are held cannot be shown right now. The events themselves are unaffected.",
+    "whenLabel": "Upcoming or past events",
+    "when": {
+      "upcoming": "Upcoming events",
+      "past": "Past events"
+    },
+    "filters": {
+      "label": "Filter events by place",
+      "country": "Country",
+      "unavailable": "Places cannot be listed right now.",
+      "anyCountry": "Any country",
+      "city": "City",
+      "chooseCountry": "Choose a country first to list its cities.",
+      "cityHelp": "Events held at a centre in this city.",
+      "anyCity": "Any city",
+      "submit": "Show events",
+      "reset": "Clear place",
+      "atCentre": "Held at",
+      "clearCentre": "Show events at every centre",
+      "invalid": "This filter does not name a place or centre in the directory, so no events are listed. Clear it to see every event.",
+      "tooBroad": "This place has more centres than one listing can cover. Choose a city to narrow it.",
+      "geographyUnavailable": "Places cannot be checked right now, so the filtered events cannot be listed. Try again shortly."
+    },
+    "empty": "No events have been published yet.",
+    "pageEmpty": "There are no more events on this page.",
+    "firstPage": "Back to the first page",
+    "noMatch": {
+      "upcoming": "No upcoming events are held in this place.",
+      "past": "No past events were held in this place."
+    },
+    "none": {
+      "upcoming": "No events are coming up at the moment. Past events are still listed.",
+      "past": "No events have been held yet."
+    },
+    "centreNone": {
+      "upcoming": "This centre has no upcoming events.",
+      "past": "This centre has no past events."
+    },
+    "previous": "Previous",
+    "next": "Next",
+    "status": {
+      "upcoming": "Upcoming",
+      "past": "Held"
+    },
+    "fallback": "This event is shown in {language}; it has not been translated into this language.",
+    "whenHeading": "When",
+    "held": "held",
+    "localTimeNote": "Times are local to where the event is held.",
+    "whereHeading": "Where",
+    "centreWithdrawn": "The centre for this event is not listed in the directory at the moment.",
+    "centre": "Centre",
+    "place": "Place",
+    "address": "Address",
+    "photographs": "Photographs",
+    "galleriesUnavailable": "The photographs cannot be shown right now.",
+    "galleriesWithdrawn": "No photographs of this event are available at the moment.",
+    "viewPhotographs": "{count, plural, one {View the photographs (# gallery)} other {View the photographs (# galleries)}}",
+    "facts": "About this event",
+    "contributors": "Contributors",
+    "all": "All events",
+    "galleryTitle": "Event photographs",
+    "galleryIntro": "Photo galleries of this event. Each opens on its own gallery page.",
+    "backToEvent": "Back to the event"
   },
   "global": {
     "title": "Global Network",
@@ -2268,8 +2368,8 @@
       "countries": "Browse every country in the directory, with its regions and cities.",
       "centres": "Every centre in the directory, in one list.",
       "pakistan": "The provinces, regions and cities of Pakistan, as one structure.",
-      "localTitle": "Local news and contacts",
-      "localBody": "Each centre's page lists its own news and its public contact details, where the centre has published them."
+      "localTitle": "Local news, events and contacts",
+      "localBody": "Each centre's page lists its own news and events and its public contact details, where the centre has published them."
     },
     "emptyDirectory": "No centres have been published in the directory yet. Centres appear here as the organisation confirms their details.",
     "dataNotice": "Directory details are published only once the organisation has confirmed them. Where nothing is listed, nothing has been confirmed yet.",
@@ -2337,7 +2437,11 @@
       "news": "News from this centre",
       "newsEmpty": "This centre has no published news yet.",
       "newsUnavailable": "This centre's news cannot be shown right now. Please try again later.",
-      "allNews": "All news from this centre"
+      "allNews": "All news from this centre",
+      "events": "Events",
+      "eventsUnavailable": "This centre's events cannot be shown right now.",
+      "eventsEmpty": "This centre has no upcoming events.",
+      "allEvents": "All events at this centre, upcoming and past"
     },
     "contact": {
       "title": "Contact details: {centre}",
@@ -2353,6 +2457,10 @@
       "title": "News: {centre}",
       "intro": "Published news about this centre, newest first.",
       "back": "Back to {centre}"
+    },
+    "centreEvents": {
+      "title": "Events at {centre}",
+      "intro": "Events held at this centre, upcoming and past."
     },
     "pakistan": {
       "intro": "Pakistan's regions and cities, as one structure. It is the same directory as the Pakistan country page, arranged region by region.",

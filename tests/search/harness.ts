@@ -103,6 +103,7 @@ export async function buildSearchHarness(admin: SqlSession) {
         );
       },
       selectableCentre: (id) => database.createGlobalReferences().centreSelectable(id),
+      selectableGallery: (id) => database.createMediaReferences().gallerySelectable(id),
     },
   });
 

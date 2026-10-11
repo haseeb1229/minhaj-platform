@@ -228,6 +228,8 @@ live('Phase 16 Global Network against real SQL Server', () => {
         validContributors: async () => true,
         validLanguages: async (codes) => codes.every((value) => value === 'en'),
         selectableCentre: (id) => centres.centreSelectable(id),
+        // Only an Event associates a Gallery; this suite writes News alone.
+        selectableGallery: async () => false,
       },
     });
     newsReads = createEditorialReadService(database.createEditorialPublicReader());
@@ -807,6 +809,119 @@ live('Phase 16 Global Network against real SQL Server', () => {
         news(here.id, article.slug),
       );
       expect(kept.revision.centreId).toBe(here.id);
+    });
+  });
+
+  describe('Phase 14 — where a Centre physically is, for the Event filters', () => {
+    it('resolves a Country or a City to the public Centres PHYSICALLY in it, never those serving it', async () => {
+      const home = await country();
+      const town = await city(home.id, null);
+      const elsewhere = await city(home.id, null);
+      const closedRegion = await region(home.id, { state: 'archived' });
+      const inTown = await centre(home.id, { cityId: town.id });
+      const noCity = await centre(home.id);
+      const servingOnly = await centre(home.id, { cityId: elsewhere.id });
+      await service.changeServedCities(
+        administrator,
+        servingOnly.id,
+        servingOnly.version,
+        {
+          op: 'add',
+          cityId: town.id,
+        },
+      );
+      const online = await centre(home.id, {
+        isVirtual: true,
+        labels: [
+          {
+            locale: 'en',
+            name: 'Synthetic Online Centre',
+            description: null,
+            address: null,
+          },
+        ],
+      });
+      await service.changeServedCities(administrator, online.id, online.version, {
+        op: 'add',
+        cityId: town.id,
+      });
+      const draft = await centre(home.id, { cityId: town.id, state: 'draft' });
+      const withheld = await centre(home.id, { regionId: closedRegion.id });
+
+      const inCountry = await reads.physicalCentreIds(
+        { countryId: home.id, cityId: null },
+        10,
+      );
+      expect([...(inCountry ?? [])].sort()).toEqual(
+        [inTown.id, noCity.id, servingOnly.id].sort(),
+      );
+      // A City: only the Centre IN it — not the one serving it from another
+      // City, not the virtual one serving it, and never a withheld one.
+      expect(
+        await reads.physicalCentreIds({ countryId: home.id, cityId: town.id }, 10),
+      ).toEqual([inTown.id]);
+      for (const absent of [online.id, draft.id, withheld.id])
+        expect(inCountry).not.toContain(absent);
+      // A City of ANOTHER Country names nothing in this one.
+      const other = await country();
+      expect(
+        await reads.physicalCentreIds({ countryId: other.id, cityId: town.id }, 10),
+      ).toEqual([]);
+    });
+
+    it('signals overflow with limit + 1 so the caller refuses rather than truncates', async () => {
+      const database = await import('../../packages/database/src/index.ts');
+      const reader = database.createGlobalPublicReader();
+      const home = await country();
+      const made = [await centre(home.id), await centre(home.id), await centre(home.id)];
+      const scope = { countryId: home.id, cityId: null };
+      // The adapter answers one more than asked for…
+      const raw = await reader.physicalCentreIds(scope, 2);
+      expect(raw).toHaveLength(3);
+      expect([...raw].sort()).toEqual(made.map((row) => row.id).sort());
+      // …and the read service turns that into a refusal, never a subset.
+      expect(await reads.physicalCentreIds(scope, 2)).toBeNull();
+      expect(await reads.physicalCentreIds(scope, 3)).toHaveLength(3);
+      await expect(reads.physicalCentreIds(scope, 0)).rejects.toThrow();
+      await expect(reads.physicalCentreIds(scope, 5001)).rejects.toThrow();
+      await expect(
+        reads.physicalCentreIds({ countryId: 'not-an-id', cityId: null }, 2),
+      ).rejects.toThrow();
+    });
+
+    it('summarises only public Centres, with where they are', async () => {
+      const home = await country();
+      const area = await region(home.id);
+      const town = await city(home.id, area.id);
+      const here = await centre(home.id, { cityId: town.id });
+      const draft = await centre(home.id, { state: 'draft' });
+      const summaries = await reads.centreSummaries([here.id, draft.id, randomUUID()]);
+      expect(summaries).toHaveLength(1);
+      expect(summaries[0]).toMatchObject({
+        id: here.id,
+        slug: here.slug,
+        isVirtual: false,
+        country: { id: home.id },
+        region: { id: area.id },
+        city: { id: town.id },
+      });
+      expect(summaries[0]?.labels[0]?.address).toBe('1 Synthetic Street');
+      expect(await reads.centreSummaries([])).toEqual([]);
+    });
+
+    it('resolves a geography filter to identifiers, or to nothing when it names nothing public', async () => {
+      const home = await country();
+      const town = await city(home.id, null);
+      const hiddenTown = await city(home.id, null, { state: 'draft' });
+      expect(await reads.scope({ country: home.slug, city: town.slug })).toEqual({
+        countryId: home.id,
+        regionId: null,
+        cityId: town.id,
+      });
+      expect(await reads.scope({ country: home.slug, city: hiddenTown.slug })).toBeNull();
+      expect(await reads.scope({ city: town.slug })).toBeNull();
+      expect(await reads.scope({ country: 'Not A Slug' })).toBeNull();
+      expect(await reads.scope({ country: home.slug, extra: 1 })).toBeNull();
     });
   });
 });

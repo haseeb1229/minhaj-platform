@@ -104,6 +104,16 @@ export function createGlobalReadService(reader: GlobalPublicReaderPort) {
       return { status: 'ok', scope, page, inventoryEmpty };
     },
 
+    /**
+     * Phase 14 — a geography filter's public slugs resolved to identifiers, or
+     * `null` when it names nothing public or does not parse: the caller then
+     * refuses the filter rather than widening it.
+     */
+    async scope(raw: unknown): Promise<CentreScope | null> {
+      const parsed = centreFinderSchema.safeParse(raw);
+      return parsed.success ? reader.scope(parsed.data) : null;
+    },
+
     /** The public Centres within one resolved geography, a page at a time. */
     centresIn(scope: CentreScope, offset = 0) {
       return reader.centres(scope, offsetSchema.parse(offset));
@@ -120,6 +130,29 @@ export function createGlobalReadService(reader: GlobalPublicReaderPort) {
     /** Public Centres among these identifiers — attribution, nothing more. */
     centreReferences(ids: readonly string[]) {
       return reader.centreReferences(z.array(globalIdSchema).max(200).parse(ids));
+    },
+    /** Phase 14 — the public Centres among these, with where they are. */
+    centreSummaries(ids: readonly string[]) {
+      return reader.centreSummaries(z.array(globalIdSchema).max(200).parse(ids));
+    },
+    /**
+     * Phase 14 — the public Centres PHYSICALLY in a Country or one of its Cities,
+     * or `null` when there are more than `limit`: a caller then refuses the
+     * filter rather than silently narrowing it to a subset.
+     */
+    async physicalCentreIds(
+      scope: { readonly countryId: string; readonly cityId: string | null },
+      limit: number,
+    ): Promise<readonly string[] | null> {
+      const bound = z.number().int().min(1).max(5000).parse(limit);
+      const ids = await reader.physicalCentreIds(
+        {
+          countryId: globalIdSchema.parse(scope.countryId),
+          cityId: scope.cityId === null ? null : globalIdSchema.parse(scope.cityId),
+        },
+        bound,
+      );
+      return ids.length > bound ? null : ids;
     },
     centreSitemap(offset: number, limit: number) {
       return reader.centreSitemap(offsetSchema.parse(offset), limit);

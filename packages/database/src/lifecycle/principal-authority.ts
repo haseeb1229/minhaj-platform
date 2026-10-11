@@ -441,6 +441,17 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[regionslughistory]': ['SELECT', 'INSERT'],
   '[dbo].[cityslughistory]': ['SELECT', 'INSERT'],
   '[dbo].[centreslughistory]': ['SELECT', 'INSERT'],
+  // Phase 14: Event, by the Phase-6 editorial postures. Its occurrences and its
+  // Gallery associations are revision state, appended and never changed, so
+  // no association can be removed in place.
+  '[dbo].[event]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[eventrevision]': ['SELECT', 'INSERT'],
+  '[dbo].[eventrevisiontranslation]': ['SELECT', 'INSERT'],
+  '[dbo].[eventtopic]': ['SELECT', 'INSERT'],
+  '[dbo].[eventcontributor]': ['SELECT', 'INSERT'],
+  '[dbo].[eventschedule]': ['SELECT', 'INSERT'],
+  '[dbo].[eventgallery]': ['SELECT', 'INSERT'],
+  '[dbo].[eventslughistory]': ['SELECT', 'INSERT'],
   '[dbo].[contactinquiry]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[feedback]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
 

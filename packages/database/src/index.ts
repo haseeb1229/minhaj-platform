@@ -161,6 +161,7 @@ export {
   createMediaAssetRelations,
   createMediaPersistence,
   createMediaPublicReader,
+  createMediaReferences,
 } from './adapters/media/index.ts';
 
 /* ---- Global Network (context-owned) ------------------------------------- */

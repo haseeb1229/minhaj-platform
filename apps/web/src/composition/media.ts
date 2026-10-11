@@ -9,6 +9,7 @@ import type { AssetAuthorizationPort } from '@minhaj/contracts/platform';
 import {
   createMediaAssetRelations,
   createMediaPersistence,
+  createMediaReferences,
   createRateLimiter,
   rateLimitKey,
 } from '@minhaj/database';
@@ -16,7 +17,9 @@ import {
 import {
   createAudioAssetPolicy,
   createAudioUpload,
+  createGalleryReferences,
   createMediaService,
+  type GalleryReferences,
   createPhotoAssetPolicy,
   createPhotoUpload,
 } from '@/contexts/media';
@@ -184,4 +187,16 @@ export function consumeMediaUpload(accountId: string): Promise<boolean> {
 
 export function consumePhotoUpload(accountId: string): Promise<boolean> {
   return consumeUploadBudget('media-photo-upload', accountId, PHOTO_UPLOAD_RULE);
+}
+
+let galleries: GalleryReferences | null = null;
+
+/**
+ * Media's REFERENCE interface for another context's composition — Editorial
+ * asking which Galleries an editor may associate with an Event (Phase 14).
+ * Identity, words and lifecycle state only; the caller has already checked its
+ * own permission.
+ */
+export function galleryReferences(): GalleryReferences {
+  return (galleries ??= createGalleryReferences(createMediaReferences()));
 }

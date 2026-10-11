@@ -1,7 +1,14 @@
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
-import { NEWS_PAGE, type NewsPage } from '@minhaj/contracts/editorial';
+import {
+  EVENT_PAGE,
+  EVENT_PREVIEW,
+  NEWS_PAGE,
+  type EventPage,
+  type EventWhen,
+  type NewsPage,
+} from '@minhaj/contracts/editorial';
 import {
   dialablePhone,
   globalPaths,
@@ -11,6 +18,7 @@ import {
 } from '@minhaj/contracts/global';
 
 import { editorialReadRuntime } from '@/composition/editorial-read';
+import { EventGrid, WhenLinks } from '@/components/editorial/events';
 import { NewsGrid } from '@/components/editorial/news';
 import { BreadcrumbData, Pagination } from '@/components/media/parts';
 import {
@@ -37,18 +45,19 @@ import {
  *
  *   `/global/centres/{slug}`           its genuine facts and latest local News
  *   `/global/centres/{slug}/news`      its News, a page at a time
+ *   `/global/centres/{slug}/events`    its Events, upcoming or past (Phase 14)
  *   `/global/centres/{slug}/contact`   its public directory contacts — display only
  *
  * LAYER-4 COMPOSITION, NEVER A JOIN. The Centre is Global's public read; its
- * News is Editorial's own bounded read by the Centre's identifier. Neither
- * context reads the other's tables, and a failure in Editorial's read degrades
- * the News section in words rather than taking the Centre page down.
+ * News and its Events are Editorial's own bounded reads by the Centre's
+ * identifier. Neither context reads the other's tables, and a failure in
+ * Editorial's read degrades that section in words rather than taking the Centre
+ * page down.
  *
  * ONLY GENUINE FACTS. An address, coordinates, a description and contacts are
  * shown when the organisation supplied them and are simply absent otherwise:
  * no map, logo, photograph, opening hours or official status is invented, and
- * coordinates are shown as numbers, never plotted. No Events link exists: Events
- * are Phase 14's.
+ * coordinates are shown as numbers, never plotted.
  *
  * THE CONTACT PAGE SENDS NOTHING. It lists public contact details; writing to
  * the organisation is the general `/contact` page's Editorial correspondence.
@@ -90,6 +99,20 @@ async function centreNews(
     // unavailable instead of failing. A public content route reaches no logger
     // (it would pull the full server environment into an anonymous page), so
     // Editorial's own read path is where such a failure is observed.
+    return null;
+  }
+}
+
+/** The Centre's Events, or `null` when Editorial's read failed — never a crash. */
+async function centreEvents(
+  centreId: string,
+  when: EventWhen,
+  offset: number,
+  limit: number,
+): Promise<EventPage | null> {
+  try {
+    return await editorialReadRuntime().centreEvents(centreId, when, offset, limit);
+  } catch {
     return null;
   }
 }
@@ -186,7 +209,10 @@ export async function CentreDetailPage({
   const trail = await centreTrail(locale, centre);
   const words = centreWords(centre, locale);
   const direction = directionOf(trail.nameLocale);
-  const news = await centreNews(centre.id, 0, NEWS_PREVIEW);
+  const [news, events] = await Promise.all([
+    centreNews(centre.id, 0, NEWS_PREVIEW),
+    centreEvents(centre.id, 'upcoming', 0, EVENT_PREVIEW),
+  ]);
 
   return (
     <Container>
@@ -332,6 +358,30 @@ export async function CentreDetailPage({
           )}
         </section>
 
+        <section className="flex flex-col gap-4" aria-labelledby="centre-events">
+          <h2 id="centre-events" className="text-xl font-semibold">
+            {t('centre.events')}
+          </h2>
+          {events === null ? (
+            <Alert tone="info">{t('centre.eventsUnavailable')}</Alert>
+          ) : events.items.length === 0 ? (
+            <EmptyState>{t('centre.eventsEmpty')}</EmptyState>
+          ) : (
+            <EventGrid
+              locale={locale}
+              items={events.items}
+              when="upcoming"
+              label={t('centre.events')}
+              headingLevel="h3"
+            />
+          )}
+          <p>
+            <TextLink href={globalPaths.centreEvents(locale, centre.slug)}>
+              {t('centre.allEvents')}
+            </TextLink>
+          </p>
+        </section>
+
         <BreadcrumbData
           contentLocales={placeLocales(centre)}
           trail={[
@@ -402,6 +452,82 @@ export async function CentreNewsPage({
             next={page.more ? withQuery(path, { offset: offset + NEWS_PAGE }) : null}
             previousLabel={news('previous')}
             nextLabel={news('next')}
+          />
+        )}
+        <p>
+          <TextLink href={globalPaths.centre(locale, centre.slug)}>
+            {t('centreNews.back', { centre: trail.name })}
+          </TextLink>
+        </p>
+      </div>
+    </Container>
+  );
+}
+
+/* ===========================================================================
+ * /global/centres/{slug}/events
+ * ========================================================================= */
+
+/**
+ * A Centre's Events — Local Events (INFORMATION_ARCHITECTURE.md §3.9) —
+ * upcoming by default, `?when=past` for those held, a page at a time. Global
+ * resolves the Centre; Editorial lists the published Events naming it. Not
+ * public when the Centre is not, whatever its Events' own state.
+ */
+export async function CentreEventsPage({
+  locale,
+  centre,
+  query,
+}: {
+  readonly locale: Locale;
+  readonly centre: PublicCentre;
+  readonly query: Query;
+}) {
+  const t = await getTranslations({ locale, namespace: 'global' });
+  const events = await getTranslations({ locale, namespace: 'events' });
+  const trail = await centreTrail(locale, centre);
+  const when: EventWhen = query['when'] === 'past' ? 'past' : 'upcoming';
+  const offset = readOffsetOf(query, 'offset');
+  const page = await centreEvents(centre.id, when, offset, EVENT_PAGE);
+  const path = globalPaths.centreEvents(locale, centre.slug);
+  const title = t('centreEvents.title', { centre: trail.name });
+  const at = (target: EventWhen, to: number) =>
+    withQuery(path, { when: target === 'past' ? 'past' : null, offset: to });
+
+  return (
+    <Container>
+      <div className="flex flex-col gap-8 py-12">
+        <Breadcrumbs
+          label={trail.label}
+          trail={[
+            ...trail.base,
+            { href: globalPaths.centre(locale, centre.slug), text: trail.name },
+            { text: t('centre.events') },
+          ]}
+        />
+        <Prose>
+          <h1 className="text-3xl font-semibold tracking-tight wrap-anywhere" dir="auto">
+            {title}
+          </h1>
+          <p>{t('centreEvents.intro')}</p>
+        </Prose>
+        <WhenLinks current={when} path={(target) => at(target, 0)} t={events} />
+        {page === null ? (
+          <Alert tone="info">{t('centre.eventsUnavailable')}</Alert>
+        ) : page.items.length === 0 ? (
+          <EmptyState>
+            {offset > 0 ? t('pageEmpty') : events(`centreNone.${when}`)}
+          </EmptyState>
+        ) : (
+          <EventGrid locale={locale} items={page.items} when={when} label={title} />
+        )}
+        {page === null ? null : (
+          <Pagination
+            label={title}
+            previous={offset > 0 ? at(when, Math.max(0, offset - EVENT_PAGE)) : null}
+            next={page.more ? at(when, offset + EVENT_PAGE) : null}
+            previousLabel={events('previous')}
+            nextLabel={events('next')}
           />
         )}
         <p>

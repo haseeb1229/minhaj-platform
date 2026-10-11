@@ -86,21 +86,22 @@ describe('no forward reference to Event, Centre or Collection exists', () => {
         .filter((line) => /^[a-z]\w*\s/u.test(line))
         .map((line) => `${line.split(/\s+/u)[0] ?? ''} ${line.split(/\s+/u)[1] ?? ''}`);
       for (const field of fields) {
+        // Phase 14: the ONE Event field is Prisma's back-relation of the
+        // EDITORIAL-owned `EventGallery` association — no column on Gallery,
+        // and Media's code reads none of it (below).
+        if (model === 'Gallery' && field === 'eventAssociations EventGallery[]') continue;
         expect(field, `${model}.${field}`).not.toMatch(
           /event|centre|center|collection|person|topic|kind|target|news/iu,
         );
       }
     }
     expect(modelBody(schema, 'Photo')).not.toMatch(/\bslug\b/u);
-    // No Event, gallery join or photograph aggregate beyond the three.
-    for (const absent of [
-      'Event',
-      'EventGallery',
-      'GalleryEvent',
-      'Album',
-      'MediaItem',
-      'Image',
-    ]) {
+    // No Media-owned Event join and no photograph aggregate beyond the three.
+    // `Event` and its `EventGallery` association arrived in Phase 14 as
+    // EDITORIAL's, held on the Event revision (proven in
+    // phase14-events-boundaries.test.ts).
+    expect(modelBody(schema, 'EventGallery')).toMatch(/^\s*revision EventRevision\s/mu);
+    for (const absent of ['GalleryEvent', 'EventPhoto', 'Album', 'MediaItem', 'Image']) {
       expect(schema, absent).not.toMatch(new RegExp(`^model ${absent} \\{`, 'mu'));
     }
   });
@@ -145,10 +146,9 @@ describe('only the promised routes exist', () => {
       'apps/web/src/app/[locale]/(public)/media/photos/page.tsx',
     ]);
     expect(media.some((entry) => /download/iu.test(entry))).toBe(false);
-    const events = await walk('apps/web/src/app/[locale]/(public)').then((entries) =>
-      entries.filter((entry) => entry.includes('/events')),
-    );
-    expect(events).toEqual([]);
+    // An Event's gallery view is Phase 14's, under Editorial's `/events`
+    // family; Media's own tree never grows one.
+    expect(media.filter((entry) => /event/iu.test(entry))).toEqual([]);
   });
 
   it('delivers the two administrative surfaces and no asset file manager', async () => {

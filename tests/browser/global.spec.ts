@@ -262,7 +262,7 @@ test.afterAll(async () => {
 /* ========================================================================== */
 
 test.describe('an anonymous visitor explores the Global Network', () => {
-  test('lands on the World Network with its genuine entry points, no Events link and no cookie', async ({
+  test('lands on the World Network with its genuine entry points and no cookie', async ({
     page,
   }) => {
     const response = await page.goto('/en/global');
@@ -284,7 +284,7 @@ test.describe('an anonymous visitor explores the Global Network', () => {
         href,
       );
 
-    // Local Events are Phase 14's: nothing links to one, here or per centre.
+    // Local Events are reached on each Centre's own page, not from the landing.
     await expect(page.locator('a[href*="/events"]')).toHaveCount(0);
     // The seeded Countries are listed; the directory is not called empty.
     const main = page.getByRole('main');
@@ -302,7 +302,10 @@ test.describe('an anonymous visitor explores the Global Network', () => {
       expect(plain.headers()['set-cookie'], path).toBeUndefined();
     }
     await page.goto(centrePath('en', slug.physical));
-    await expect(page.locator('a[href*="/events"]')).toHaveCount(0);
+    // Phase 14: the Centre links its own Local Events, and nothing else of Events.
+    await expect(
+      page.locator(`a[href="${centrePath('en', slug.physical)}/events"]`),
+    ).toBeVisible();
     expect(await page.context().cookies()).toHaveLength(0);
   });
 

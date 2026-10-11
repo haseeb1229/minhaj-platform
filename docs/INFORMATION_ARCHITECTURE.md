@@ -109,8 +109,11 @@ the authenticated area.
 
 **Note on "Media".** Photos and galleries are reachable through News & Events (where
 event galleries naturally belong) and through Collections (for the historical archive).
-Since Phase 13 the News & Events entry point, `/news`, links the photograph surfaces; Event
-galleries, Events and the newsletter appear in it only when their own phases deliver them.
+Since Phase 13 the News & Events entry point, `/news`, links the photograph surfaces; since
+Phase 14 it links Events too, and each Event links its own photographs (its gallery view), so
+Event galleries are reached through their Event rather than a listing of their own. The
+newsletter appears only when its own phase delivers it. Since Phase 14 each Centre page lists
+its Local Events beside its Local News.
 Media is therefore a content domain but **not** a primary navigation item — adding a
 thirteenth item for it would violate 1.5 while duplicating existing entry points.
 

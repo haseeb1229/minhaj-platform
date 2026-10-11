@@ -156,23 +156,40 @@ describe('a deferred capability cannot be linked', () => {
 
   it('delivers News and Events at /news, public, eligible and in the primary navigation', () => {
     // Phase 13: the News families, the News archive and the photograph surfaces
-    // are reached from here. Events and the newsletter are not delivered, so no
-    // route of theirs exists to be linked.
+    // are reached from here; Phase 14 adds Events. The newsletter is not
+    // delivered, so no route of its exists to be linked.
     const route = requireRoute('news-events');
 
     expect(route.path).toBe('/news');
     expect(route.visibility).toBe('public');
     expect(route.indexing).toBe('eligible');
     expect(route.placements).toContain('primary');
-    for (const key of ['events', 'newsletter', 'news.latest', 'news.popular'])
+    for (const key of ['newsletter', 'news.latest', 'news.popular'])
+      expect(routeByKey(key), key).toBeNull();
+  });
+
+  it('delivers Events at /events, public and eligible, reached from /news only', () => {
+    // Phase 14: `/events` is a genuine listing over delivered data. News &
+    // Events is the primary navigation item, so `/events` has NO placement of
+    // its own; `?when=` and the geography filters are queries canonical to it,
+    // never routes, and an Event's gallery view has no entry.
+    const route = requireRoute('events');
+
+    expect(route.path).toBe('/events');
+    expect(route.label).toBe('news.events');
+    expect(route.visibility).toBe('public');
+    expect(route.availability).toBe('delivered');
+    expect(route.indexing).toBe('eligible');
+    expect(route.placements).toEqual([]);
+    for (const key of ['events.upcoming', 'events.past', 'events.gallery'])
       expect(routeByKey(key), key).toBeNull();
   });
 
   it('delivers the Global Network at /global and Find a Centre in the utility navigation', () => {
     // Phase 16: Countries and Centres are reached from /global; the Pakistan
     // structure is a view of the Pakistan Country, canonical to it, so it is
-    // never indexable on its own. Events are Phase 14's, so no Centre Events
-    // route or Local Events entry exists to be linked.
+    // never indexable on its own. A Centre's Events (Phase 14) are reached on
+    // the Centre's own page, so no Centre Events or Local Events entry exists.
     const global = requireRoute('global');
     expect(global.path).toBe('/global');
     expect(global.visibility).toBe('public');
@@ -188,7 +205,6 @@ describe('a deferred capability cannot be linked', () => {
     expect(requireRoute('global.centres').path).toBe('/global/centres');
     expect(requireRoute('global.pakistan').indexing).toBe('excluded');
     for (const key of [
-      'events',
       'global.events',
       'global.local-events',
       'global.regions',
@@ -373,6 +389,9 @@ describe('indexing eligibility is honest', () => {
         .map((route) => route.key)
         .sort(),
     ).toEqual([
+      // Phase 14: the Events listing. Its queries and each Event's gallery
+      // view are not routes.
+      'events',
       'explore',
       // Phase 16: the World Network landing, Find a Centre, Countries and
       // Centres. The Pakistan structure is canonical to its Country, so absent.

@@ -23,6 +23,7 @@ import type { ContributionRole } from '@minhaj/contracts/people';
 import { getDatabaseClient } from '../../client.ts';
 import { auditRow } from '../../audit-row.ts';
 import { requestSearchIndexing } from '../../search-intent.ts';
+import { eventOperations, eventReads } from './event.ts';
 import { newsOperations, newsReads } from './news.ts';
 import {
   EditorialDataError,
@@ -1058,8 +1059,19 @@ function searchReads(): Pick<
 }
 
 export function createEditorialPersistence(): EditorialPersistencePort {
-  return { ...articleOperations(), ...pageOperations(), ...newsOperations() };
+  return {
+    ...articleOperations(),
+    ...pageOperations(),
+    ...newsOperations(),
+    ...eventOperations(),
+  };
 }
 export function createEditorialPublicReader(): EditorialPublicReaderPort {
-  return { ...articleReads(), ...pageReads(), ...searchReads(), ...newsReads() };
+  return {
+    ...articleReads(),
+    ...pageReads(),
+    ...searchReads(),
+    ...newsReads(),
+    ...eventReads(),
+  };
 }

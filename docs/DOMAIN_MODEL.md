@@ -122,7 +122,7 @@ interpretation. **An edge not listed here does not exist.**
 | Identity & Access | Layer 0 only |
 | People & Contributors | Layer 0; Identity & Access *(to link a Person to an optional User)* |
 | Taxonomy | Layer 0 only |
-| Editorial | Layer 0; Identity & Access; People & Contributors; Taxonomy; **Global Network** *(same-level edge — see §3.2)* |
+| Editorial | Layer 0; Identity & Access; People & Contributors; Taxonomy; **Global Network**; **Media** *(same-level edges — see §3.2)* |
 | Quran | Layer 0; Identity & Access; People & Contributors; Taxonomy |
 | Hadith | Layer 0; Identity & Access; People & Contributors; Taxonomy |
 | Library | Layer 0; Identity & Access; People & Contributors; Taxonomy |
@@ -149,9 +149,13 @@ interpretation. **An edge not listed here does not exist.**
   enrolment or teaching assignment is *currently* valid (§15.3). This is an explicitly
   allowlisted same-level edge (§3.2), **not** an implicit lateral import.
 - **Editorial depends on Global Network** because a centre-scoped NewsArticle names a
-  Global-owned Centre by typed identity (§17.1), and Events will do the same (Phase 14). Editorial
-  asks only Global's public reference interface; Global never imports Editorial, and a Centre
-  page composing both is Layer 4 (§3.3).
+  Global-owned Centre by typed identity (§17.1), and since Phase 14 an Event does the same.
+  Editorial asks only Global's public reference interface; Global never imports Editorial, and a
+  Centre page composing both is Layer 4 (§3.3).
+- **Editorial depends on Media** because an Event owns its typed association to Media-owned
+  Galleries (§7.2.3, Phase 14). Editorial asks only Media's public reference interface; Media
+  never imports Editorial and holds no Event schema, and an Event's gallery view composing both
+  is Layer 4 (§3.3).
 - **Layer 0 `database` is infrastructure, never an owner.** A context's persistence adapter may
   be physically implemented inside `packages/database` while remaining owned by that context
   (ARCHITECTURE.md §3.1.1). Physical placement grants no cross-context access and creates no
@@ -168,13 +172,14 @@ neither implied nor permitted.**
 | Permitted edge | Why it is legitimate | Reverse |
 |---|---|---|
 | **Messaging → Learning** | Message authorisation must verify a **current** teaching assignment or enrolment (§15.3). That knowledge belongs to Learning, and duplicating it inside Messaging would create two sources of truth for who may speak to whom | **`Learning → Messaging` is prohibited** |
-| **Editorial → Global Network** | A NewsArticle revision — and, from Phase 14, an Event — carries a typed reference to a **Centre**, which Global Network owns (§17.1). Editorial asks Global's public reference interface whether a Centre may be chosen; it never reads Global's tables, and no Global data is copied into Editorial | **`Global Network → Editorial` is prohibited**: Global persistence never reads Editorial tables, and a Centre page composes Global's Centre with Editorial's own bounded centre-News read at Layer 4 |
+| **Editorial → Global Network** | A NewsArticle revision — and, since Phase 14, an Event revision — carries a typed reference to a **Centre**, which Global Network owns (§17.1). Editorial asks Global's public reference interface whether a Centre may be chosen; it never reads Global's tables, and no Global data is copied into Editorial | **`Global Network → Editorial` is prohibited**: Global persistence never reads Editorial tables, and a Centre page composes Global's Centre with Editorial's own bounded centre-News and centre-Event reads at Layer 4 |
+| **Editorial → Media** | Phase 14: an Event revision owns its typed, ordered association to **Galleries**, which Media owns (§7.2.3, §11). Editorial asks Media's public reference interface whether a Gallery may be associated; it never reads Media's tables, and no Gallery data is copied into Editorial | **`Media → Editorial` is prohibited**: Media holds no Event column, table or code, and an Event's gallery view composes Editorial's Event with Media's listed Galleries at Layer 4 |
 
 **Rules:**
 - **No implicit lateral imports.** A same-level dependency exists only if listed here, and
   only in the listed direction.
-- **Acyclicity is preserved** by directedness: because `Learning → Messaging` and
-  `Global Network → Editorial` are prohibited, neither pair can form a cycle.
+- **Acyclicity is preserved** by directedness: because `Learning → Messaging`,
+  `Global Network → Editorial` and `Media → Editorial` are prohibited, no pair can form a cycle.
 - **Adding an edge is an architecture decision** requiring review — never a convenience taken
   during feature work.
 - The architecture is **not reorganised merely to make layer numbering look uniform**.
@@ -541,7 +546,8 @@ internal slug `page`. They cannot claim another context's route.
 
 The stored schedule binds UTC time, an IANA display zone, revision and scheduling actor.
 A single-instance executor processes at most 25 due records of each workflow-governed
-aggregate per sweep (Article, Page and, since Phase 13, the four News families), rechecking
+aggregate per sweep (Article, Page, since Phase 13 the four News families, and since Phase 14
+Event), rechecking
 reviewer and publisher authority. Failed authority or execution leaves a visible stopped
 schedule; an authorised publisher may reschedule after review. Expected-version transactions
 make duplicate execution harmless. Restart resumes pending due work; multi-instance hosting
@@ -577,6 +583,58 @@ editorial keys `content.read/author/review/publish` govern them; no `news.*` key
   never a record's creation time, across all four families.
 - **Issuer and source changes are audited as their own events**, and no audit row carries a
   title, body, authoring document, issuer or source address.
+
+#### 7.2.3 Event and EventSchedule — as delivered (Phase 14)
+
+Event is an Editorial aggregate of its own — **not a News family, not a Global record and not a
+Gallery** (§18: an Event occurs; News reports on it). It has the Article's shape of tables —
+record, immutable revisions, revision translations, typed Topic (`EventTopic`) and Person
+references, permanent slug reservations — and the same workflow, keys and edit-invalidates-approval
+rule as every other workflow-governed aggregate. No `event.*` permission exists.
+
+**What an Event owns is revision state.** Each revision carries:
+
+| Fact | Shape |
+|---|---|
+| **Zone** | One IANA zone name for the revision, stored in the runtime's canonical spelling. `UTC` is accepted; an offset (`+05:00`), an abbreviation (`GMT`, `EST`) and `Etc/GMT±N` are refused, by the contract and by a SQL CHECK |
+| **EventSchedule** | One to twelve occurrences, each the **intended local wall-clock start** and, optionally, end in that zone — the fact — and the UTC instants the server derived from them when the revision was written. Whole minutes; an end is strictly after its start; two occurrences never start at the same instant. A date-only occurrence is not modelled, so no date is ever faked as midnight UTC |
+| **Centre** | One nullable, non-cascading reference to a Global-owned Centre (§17.1) — an Event need not belong to a Centre |
+| **Galleries** | Up to twelve ordered, duplicate-free, non-cascading references to Media-owned Galleries (`EventGallery`), **owned by Editorial** |
+
+**EventSchedule is not independently mutable.** Its rows are immutable with their revision, so
+retiming an Event, changing its zone, moving it to another Centre or changing its Galleries is an
+ordinary edit: a new revision, back to draft, approval and any publication schedule cleared, fresh
+independent review — and each such change is audited as its own fact (`schedule-changed`,
+`centre-changed`, `galleries-changed`) with no time, zone or name in the audit row. A current
+revision without an occurrence is refused by the database (51146), so no Event is ever scheduled
+or published without a genuine schedule. **The occurrence schedule is not the publication
+schedule**: the shared workflow's "publish this revision at that instant" is unchanged.
+
+**Daylight saving is never guessed.** A local time a zone skips (spring forward) is refused as
+non-existent; one it repeats (fall back) is refused as ambiguous until the editor says which of
+the two instants is meant. Resolution uses the runtime's own IANA data on the server; the browser
+is never an authority.
+
+**Upcoming, ongoing, past** are defined once: an Event is upcoming while some occurrence has not
+ended (its end, or its start when it has none), ongoing while one has started and not ended, and
+past only when every occurrence has ended. Ongoing Events are listed with the upcoming ones.
+Classification uses the server's clock on each request.
+
+**Location is the Centre's, never copied.** An Event names no venue text, coordinates or address;
+where it is held is what Global says about its public Centre at render time. Geography filters
+resolve, through Global, to the public Centres **physically** in a Country or City — never those
+merely serving it, and never a virtual Centre — and Editorial matches the Event's own Centre
+against them.
+
+**Independent lifecycles.** Archiving a Centre or a Gallery changes no Event: a re-save may keep
+the Centre or Galleries the current revision already names, but neither may be newly chosen once
+archived; the public Event stays published, and the withdrawn Centre or Gallery is simply not
+shown. Archiving an Event archives no Centre and no Gallery, and removing an association removes
+no Gallery.
+
+**Not searchable yet.** Phase 14 enters from 6, 12, 13 and 16, not 17, and its deliverables
+promise no projection — the same posture as Phases 12 and 16 — so Events have no Search kind,
+scope, filter or indexing intent; Phase 31 reconciles the final searchable inventory.
 
 ### 7.3 Collection — typed membership
 
@@ -832,7 +890,9 @@ As delivered (Phase 12) — Photo, Gallery and GalleryItem, **with no Event rela
 
 **Rules:**
 - **No forward reference.** Nothing here names an Event, Centre or Collection, and a Gallery has
-  no kind: the Event↔Gallery association is Phase 14's, owned there once both ends exist.
+  no kind: the Event↔Gallery association is Phase 14's, owned there once both ends exist. As
+  delivered, it is Editorial's `EventGallery` (§7.2.3); Media still holds no Event column, table
+  or code, and answers only its reference and public reads.
 - **The image is Storage's; its meaning is Media's**, exactly as for audio: one never-cascading
   foreign key, one Asset per Photo, the identifier never accepted from a form, and **a published
   Photo has an image** (service and SQL CHECK). Technical availability is orthogonal to
@@ -1268,6 +1328,8 @@ A Centre's news and events are ordinary Editorial records carrying a Centre refe
   non-cascading `centreId`, so choosing or changing a Centre is an ordinary edit that needs
   fresh review. No other News family carries a Centre. Archiving a Centre changes no News; a
   News page shows the Centre only while it is public.
+- **Centre-scoped Events** (Phase 14) are the same rule applied to the Event revision's own
+  nullable `centreId` (§7.2.3); a Centre's Events page lists them while the Centre is public.
 - **Not searchable yet.** Phase 16 enters from 6 and 13, not 17; Find a Centre is Global's own
   owner query. A Global search projection, if wanted, is a recorded later step, and Phase 31
   proves completeness (DELIVERY_PLAN.md §3).

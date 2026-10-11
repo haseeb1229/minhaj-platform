@@ -295,6 +295,8 @@ describe('words and addresses', () => {
     expect(globalPaths.centreContact('en', 'a b')).toBe(
       '/en/global/centres/a%20b/contact',
     );
-    expect(Object.keys(globalPaths)).not.toContain('centreEvents');
+    // Phase 14: a Centre's Events page sits beside its News and Contact pages.
+    expect(globalPaths.centreEvents('ur', 'a b')).toBe('/ur/global/centres/a%20b/events');
+    expect(globalPaths.centreNews('ar', 'xa')).toBe('/ar/global/centres/xa/news');
   });
 });

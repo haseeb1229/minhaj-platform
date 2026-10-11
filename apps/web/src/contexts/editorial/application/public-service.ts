@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import {
+  EVENT_GEOGRAPHY_CENTRES,
+  EVENT_MAX_OFFSET,
+  EVENT_PAGE,
+  EVENT_PREVIEW,
+  eventWhenSchema,
   NEWS_EARLIEST_YEAR,
   NEWS_MAX_OFFSET,
   NEWS_PAGE,
@@ -10,6 +15,8 @@ import {
   newsKindSchema,
   validPageBinding,
   type EditorialPublicReaderPort,
+  type EventPage,
+  type EventWhen,
   type NewsKind,
   type NewsPage,
 } from '@minhaj/contracts/editorial';
@@ -28,7 +35,24 @@ const archiveFilterSchema = z
   })
   .refine((value) => value.month === null || value.year !== null);
 
-export function createEditorialReadService(reader: EditorialPublicReaderPort) {
+const eventOffsetSchema = z.number().int().min(0).max(EVENT_MAX_OFFSET);
+
+/**
+ * An Event listing's query, validated again here whatever the page tolerated.
+ * A Centre filter is a list of identifiers Global resolved — never more than a
+ * geography filter may resolve to — and `null` means no Centre filter at all.
+ */
+const eventFilterSchema = z.strictObject({
+  when: eventWhenSchema,
+  offset: eventOffsetSchema,
+  centreIds: z.array(editorialIdSchema).max(EVENT_GEOGRAPHY_CENTRES).nullable(),
+});
+
+export function createEditorialReadService(
+  reader: EditorialPublicReaderPort,
+  /** The SERVER's clock — never a visitor's — decides upcoming and past. */
+  now: () => Date = () => new Date(),
+) {
   /** A slug that cannot name a published record of this family answers null. */
   const newsSlug = (kind: NewsKind, slug: string) =>
     editorialSlugSchema.safeParse(slug).success &&
@@ -128,6 +152,75 @@ export function createEditorialReadService(reader: EditorialPublicReaderPort) {
         newsOffsetSchema.parse(offset),
         z.number().int().min(1).max(NEWS_PAGE).parse(limit),
       );
+    },
+
+    /* ---- Phase 14: Events ------------------------------------------------ */
+
+    async eventCanonicalSlug(slug: string) {
+      if (!editorialSlugSchema.safeParse(slug).success) return null;
+      return reader.eventCanonicalSlug(slug);
+    },
+    async event(slug: string) {
+      if (!editorialSlugSchema.safeParse(slug).success) return null;
+      return reader.publicEvent(slug);
+    },
+    /**
+     * One page of `/events`, upcoming or past. A Centre filter only ever
+     * NARROWS: an empty list matches nothing, it never means everything.
+     */
+    async events(filter: {
+      readonly when: EventWhen;
+      readonly offset: number;
+      readonly centreIds: readonly string[] | null;
+    }): Promise<EventPage> {
+      const parsed = eventFilterSchema.parse(filter);
+      if (parsed.centreIds !== null && parsed.centreIds.length === 0)
+        return { items: [], more: false };
+      return reader.events({ ...parsed, now: now(), limit: EVENT_PAGE, topicId: null });
+    },
+    hasPublishedEvents() {
+      return reader.hasPublishedEvents();
+    },
+    /**
+     * One page of the published Events held at a Centre, by its IDENTIFIER.
+     * Whether that Centre may be shown at all is Global's question, asked by the
+     * page that composes the two — never by Editorial.
+     */
+    async centreEvents(
+      centreId: string,
+      when: EventWhen,
+      offset = 0,
+      limit = EVENT_PAGE,
+    ): Promise<EventPage> {
+      return reader.events({
+        when: eventWhenSchema.parse(when),
+        now: now(),
+        offset: eventOffsetSchema.parse(offset),
+        limit: z.number().int().min(1).max(EVENT_PAGE).parse(limit),
+        centreIds: [editorialIdSchema.parse(centreId)],
+        topicId: null,
+      });
+    },
+    /**
+     * A topic hub's Events: the upcoming ones on the topic, soonest first, or —
+     * when none is ahead — the most recent past ones, saying which they are.
+     */
+    async eventsOnTopic(
+      topicId: string,
+    ): Promise<{ readonly when: EventWhen; readonly page: EventPage }> {
+      const query = {
+        now: now(),
+        offset: 0,
+        limit: EVENT_PREVIEW,
+        centreIds: null,
+        topicId: editorialIdSchema.parse(topicId),
+      };
+      const upcoming = await reader.events({ ...query, when: 'upcoming' });
+      if (upcoming.items.length > 0) return { when: 'upcoming', page: upcoming };
+      return { when: 'past', page: await reader.events({ ...query, when: 'past' }) };
+    },
+    eventSitemap(offset: number, limit: number) {
+      return reader.eventSitemap(offset, limit);
     },
   };
 }

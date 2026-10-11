@@ -689,6 +689,8 @@ export const globalPaths = Object.freeze({
     `/${locale}/global/centres/${encodeURIComponent(centre)}`,
   centreNews: (locale: Locale, centre: string) =>
     `/${locale}/global/centres/${encodeURIComponent(centre)}/news`,
+  centreEvents: (locale: Locale, centre: string) =>
+    `/${locale}/global/centres/${encodeURIComponent(centre)}/events`,
   centreContact: (locale: Locale, centre: string) =>
     `/${locale}/global/centres/${encodeURIComponent(centre)}/contact`,
   pakistan: (locale: Locale) => `/${locale}/global/pakistan`,

@@ -384,6 +384,43 @@ function GalleryCard({
   );
 }
 
+/**
+ * A grid of Gallery cards, each linking to the Gallery's own canonical page,
+ * with only the covers Storage can serve shown as images. What another page
+ * composes when it lists Galleries it does not own — an Event's gallery view
+ * (Phase 14) — so the Gallery is always presented as Media presents it.
+ */
+export async function GalleryCardGrid({
+  locale,
+  galleries,
+  label,
+}: {
+  readonly locale: Locale;
+  readonly galleries: readonly PublicGallery[];
+  readonly label: string;
+}) {
+  const t = await getTranslations({ locale, namespace: 'photos' });
+  const covers = await servablePhotos(
+    galleries.flatMap((gallery) => (gallery.cover === null ? [] : [gallery.cover])),
+  );
+  return (
+    <ul
+      aria-label={label}
+      className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
+    >
+      {galleries.map((gallery) => (
+        <GalleryCard
+          key={gallery.id}
+          locale={locale}
+          gallery={gallery}
+          cover={gallery.cover !== null && covers.has(gallery.cover.id)}
+          t={t}
+        />
+      ))}
+    </ul>
+  );
+}
+
 export async function GalleriesPage({
   locale,
   query,
@@ -397,9 +434,6 @@ export async function GalleriesPage({
   const base = `/${locale}/media/galleries`;
   const title = t('sections.galleries');
   const page = await mediaReadRuntime().galleries(offset);
-  const covers = await servablePhotos(
-    page.items.flatMap((gallery) => (gallery.cover === null ? [] : [gallery.cover])),
-  );
 
   return (
     <Container>
@@ -413,20 +447,7 @@ export async function GalleriesPage({
         {page.items.length === 0 ? (
           <EmptyState>{offset > 0 ? t('pageEmpty') : t('galleriesEmpty')}</EmptyState>
         ) : (
-          <ul
-            aria-label={title}
-            className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
-          >
-            {page.items.map((gallery) => (
-              <GalleryCard
-                key={gallery.id}
-                locale={locale}
-                gallery={gallery}
-                cover={gallery.cover !== null && covers.has(gallery.cover.id)}
-                t={t}
-              />
-            ))}
-          </ul>
+          <GalleryCardGrid locale={locale} galleries={page.items} label={title} />
         )}
         <Pagination
           label={title}

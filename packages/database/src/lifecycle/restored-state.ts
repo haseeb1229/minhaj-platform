@@ -75,9 +75,9 @@ const FUTURE_DOMAIN_TABLES = [
   'TopicAssignment',
   'TaxonomyAssignment',
   'EntityTopic',
-  // `NewsArticle` left this list in Phase 13, which delivers it; its restored
-  // rows are proved by the Phase-13 recovery fixture instead.
-  'Event',
+  // `NewsArticle` left this list in Phase 13 and `Event` in Phase 14, which
+  // deliver them; their restored rows are proved by the Phase-13 and Phase-14
+  // recovery fixtures instead.
   'Collection',
   'Quran',
   'Hadith',

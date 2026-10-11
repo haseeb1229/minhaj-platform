@@ -3,16 +3,22 @@ import { getMessages, getTranslations } from 'next-intl/server';
 import type { Locale } from '@minhaj/contracts';
 import { localeSchema } from '@minhaj/contracts';
 import {
+  EVENT_LIMITS,
   PAGE_BINDINGS,
+  canonicalTimeZone,
   editorialStateSchema,
+  eventTimeZones,
+  foldOf,
   type EditorialKind,
   type WorkflowAction,
 } from '@minhaj/contracts/editorial';
 import { labelFor } from '@minhaj/contracts/global';
+import { mediaLabel } from '@/components/media/presentation';
 import { CONTRIBUTION_ROLES } from '@minhaj/contracts/people';
 import { requireAdminPage } from '@/composition/authorization';
 import {
   editorialCentreChoice,
+  editorialGalleryChoices,
   editorialRuntime,
   editorialReferenceChoices,
 } from '@/composition/editorial';
@@ -149,11 +155,12 @@ export async function ContentEditor({
   const canAuthor = context.authorization.can('content.author');
   const choices = canAuthor
     ? await editorialReferenceChoices(locale, referenceQuery)
-    : { people: [], topics: [], centres: [] };
-  // A NewsArticle's Centre (Phase 16). The one its revision already names is
-  // offered WHATEVER its state now, so an archived Centre is shown truthfully
-  // rather than silently cleared by the next save.
-  const centreId = kind === 'news-article' ? (revision?.centreId ?? null) : null;
+    : { people: [], topics: [], centres: [], galleries: [] };
+  // A NewsArticle's or an Event's Centre (Phases 16 and 14). The one its
+  // revision already names is offered WHATEVER its state now, so an archived
+  // Centre is shown truthfully rather than silently cleared by the next save.
+  const hasCentre = kind === 'news-article' || kind === 'event';
+  const centreId = hasCentre ? (revision?.centreId ?? null) : null;
   const keptCentre =
     canAuthor &&
     centreId !== null &&
@@ -162,6 +169,50 @@ export async function ContentEditor({
       : null;
   const centres =
     keptCentre === null ? choices.centres : [keptCentre, ...choices.centres];
+  // An Event's Galleries (Phase 14), by the same rule: the ones its revision
+  // already associates are offered whatever their state, named, never as IDs.
+  const galleryIds = kind === 'event' ? (revision?.galleryIds ?? []) : [];
+  const keptGalleries =
+    canAuthor && galleryIds.length > 0 ? await editorialGalleryChoices(galleryIds) : [];
+  const galleries = [
+    ...keptGalleries,
+    ...choices.galleries.filter((gallery) => !galleryIds.includes(gallery.id)),
+  ];
+  const schedule = kind === 'event' ? (revision?.schedule ?? null) : null;
+  const eventZone =
+    schedule?.timezone ??
+    canonicalTimeZone(context.session.account.timezone ?? 'UTC') ??
+    'UTC';
+  const occurrenceRows = Math.min(
+    EVENT_LIMITS.occurrences,
+    Math.max(3, (schedule?.occurrences.length ?? 0) + 1),
+  );
+  const galleryRows = Math.min(EVENT_LIMITS.galleries, galleryIds.length + 3);
+  const foldSelect = (name: string, value: 'earlier' | 'later' | null) => (
+    <Field id={name} label={t('fold')} help={t('foldHelp')}>
+      {(props) => (
+        <Select {...props} name={name} defaultValue={value ?? ''}>
+          <option value="">{t('foldNone')}</option>
+          <option value="earlier">{t('foldEarlier')}</option>
+          <option value="later">{t('foldLater')}</option>
+        </Select>
+      )}
+    </Field>
+  );
+  const localInput = (name: string, label: string, value: string, required: boolean) => (
+    <Field id={name} label={label}>
+      {(props) => (
+        <TextInput
+          {...props}
+          type="datetime-local"
+          name={name}
+          defaultValue={value}
+          required={required}
+          dir="ltr"
+        />
+      )}
+    </Field>
+  );
   const hidden = (
     <>
       <input type="hidden" name="locale" value={locale} />
@@ -268,14 +319,14 @@ export async function ContentEditor({
                 {t('slugReserved')}
               </p>
             ) : null}
-            {kind === 'news-article' ? (
+            {hasCentre ? (
               <fieldset className="flex flex-col gap-4 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-4">
                 <legend className="px-1 text-sm font-semibold">{t('centre')}</legend>
                 <p
                   id="centreId-help"
                   className="text-xs text-[color:var(--color-foreground-muted)]"
                 >
-                  {t('centreHelp')}
+                  {t(kind === 'event' ? 'eventCentreHelp' : 'centreHelp')}
                 </p>
                 <Select
                   id="centreId"
@@ -284,7 +335,9 @@ export async function ContentEditor({
                   aria-describedby="centreId-help"
                   defaultValue={centreId ?? ''}
                 >
-                  <option value="">{t('centreNone')}</option>
+                  <option value="">
+                    {t(kind === 'event' ? 'eventCentreNone' : 'centreNone')}
+                  </option>
                   {centres.map((centre) => (
                     <option key={centre.id} value={centre.id}>
                       {labelFor(centre, locale)?.name ?? centre.slug}
@@ -292,6 +345,125 @@ export async function ContentEditor({
                     </option>
                   ))}
                 </Select>
+              </fieldset>
+            ) : null}
+            {kind === 'event' ? (
+              <fieldset className="flex flex-col gap-4 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-4">
+                <legend className="px-1 text-sm font-semibold">
+                  {t('eventSchedule')}
+                </legend>
+                <p className="text-xs text-[color:var(--color-foreground-muted)]">
+                  {t('eventScheduleHelp')}
+                </p>
+                <Field
+                  id="eventTimezone"
+                  label={t('eventTimezone')}
+                  help={t('eventTimezoneHelp')}
+                >
+                  {(props) => (
+                    <Select
+                      {...props}
+                      name="eventTimezone"
+                      defaultValue={eventZone}
+                      dir="ltr"
+                    >
+                      {eventTimeZones().map((zone) => (
+                        <option key={zone} value={zone}>
+                          {zone}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+                {Array.from({ length: occurrenceRows }, (_, index) => {
+                  const occurrence = schedule?.occurrences[index];
+                  return (
+                    <fieldset
+                      key={index}
+                      className="flex flex-col gap-3 border-t border-[color:var(--color-border)] pt-3"
+                    >
+                      <legend className="text-sm font-medium">
+                        {t('occurrence', { number: index + 1 })}
+                      </legend>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {localInput(
+                          `occurrence-${index}-start`,
+                          t('occurrenceStart'),
+                          occurrence?.startsLocal ?? '',
+                          index === 0,
+                        )}
+                        {foldSelect(
+                          `occurrence-${index}-startFold`,
+                          occurrence === undefined || schedule === null
+                            ? null
+                            : foldOf(
+                                occurrence.startsLocal,
+                                schedule.timezone,
+                                occurrence.startsAt,
+                              ),
+                        )}
+                        {localInput(
+                          `occurrence-${index}-end`,
+                          t('occurrenceEnd'),
+                          occurrence?.endsLocal ?? '',
+                          false,
+                        )}
+                        {foldSelect(
+                          `occurrence-${index}-endFold`,
+                          occurrence?.endsLocal == null ||
+                            occurrence.endsAt === null ||
+                            schedule === null
+                            ? null
+                            : foldOf(
+                                occurrence.endsLocal,
+                                schedule.timezone,
+                                occurrence.endsAt,
+                              ),
+                        )}
+                      </div>
+                    </fieldset>
+                  );
+                })}
+                {occurrenceRows < EVENT_LIMITS.occurrences ? (
+                  <p className="text-xs text-[color:var(--color-foreground-muted)]">
+                    {t('moreOccurrences')}
+                  </p>
+                ) : null}
+              </fieldset>
+            ) : null}
+            {kind === 'event' ? (
+              <fieldset className="flex flex-col gap-4 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-4">
+                <legend className="px-1 text-sm font-semibold">
+                  {t('eventGalleries')}
+                </legend>
+                <p className="text-xs text-[color:var(--color-foreground-muted)]">
+                  {t('eventGalleriesHelp')}
+                </p>
+                {Array.from({ length: galleryRows }, (_, index) => (
+                  <Field
+                    key={index}
+                    id={`gallery-${index}`}
+                    label={t('eventGallery', { number: index + 1 })}
+                  >
+                    {(props) => (
+                      <Select
+                        {...props}
+                        name={`gallery-${index}`}
+                        defaultValue={galleryIds[index] ?? ''}
+                      >
+                        <option value="">{t('eventGalleryNone')}</option>
+                        {galleries.map((gallery) => (
+                          <option key={gallery.id} value={gallery.id}>
+                            {mediaLabel(gallery, locale).title}
+                            {gallery.state === 'published'
+                              ? ''
+                              : ` (${t(gallery.state)})`}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
+                ))}
               </fieldset>
             ) : null}
             {kind === 'media-coverage' ? (
@@ -519,6 +691,26 @@ export async function ContentEditor({
               <summary className="min-h-11 cursor-pointer py-2">
                 {t('version')} {item.number} · {item.createdAt.toISOString()}
               </summary>
+              {item.schedule ? (
+                <dl className="text-sm">
+                  <dt>{t('eventTimezone')}</dt>
+                  <dd dir="ltr">{item.schedule.timezone}</dd>
+                  {item.schedule.occurrences.map((occurrence, index) => (
+                    <div key={index}>
+                      <dt>{t('occurrence', { number: index + 1 })}</dt>
+                      <dd dir="ltr">
+                        {occurrence.startsLocal.replace('T', ' ')} (
+                        {occurrence.startsAt.toISOString()})
+                        {occurrence.endsLocal === null || occurrence.endsAt === null
+                          ? ''
+                          : ` – ${occurrence.endsLocal.replace('T', ' ')} (${occurrence.endsAt.toISOString()})`}
+                      </dd>
+                    </div>
+                  ))}
+                  <dt>{t('eventGalleries')}</dt>
+                  <dd>{item.galleryIds?.length ?? 0}</dd>
+                </dl>
+              ) : null}
               {item.coverage ? (
                 <dl className="text-sm">
                   <dt>{t('outlet')}</dt>

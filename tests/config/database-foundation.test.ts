@@ -241,6 +241,17 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'CentreSlugHistory',
       'CentreServiceCity',
       'CentreContact',
+      // Phase 14 — Editorial: Event with the Article's own shape of tables, and
+      // two revision-owned typed sets — its occurrences and its ordered Media
+      // Galleries. Its Centre is a column on the revision, never a join table.
+      'Event',
+      'EventRevision',
+      'EventRevisionTranslation',
+      'EventTopic',
+      'EventContributor',
+      'EventSchedule',
+      'EventGallery',
+      'EventSlugHistory',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name
@@ -252,7 +263,7 @@ describe('Phase 1 Chunk 1 database foundation', () => {
     // enforcement that gives them meaning. Everything remaining belongs to a
     // later phase entirely.
     for (const domain of [
-      'Event',
+      // `Event` left this list when Phase 14 delivered it.
       'Collection',
       'Quran',
       'Hadith',
@@ -270,12 +281,12 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       // Shapes Media never delivers or has not yet: a Program aggregate (a
       // programme is a Series kind), per-kind or per-provider Video tables,
       // Phase 21's watch history — and, for Phase 12, an Album, an image or
-      // asset-link table, or an Event-owned gallery join, which is Phase 14's.
+      // asset-link table, or a Media-owned Event join. (Phase 14's
+      // `EventGallery` is Editorial's, on the Event revision.)
       'Program',
       'Album',
       'Image',
       'AssetLink',
-      'EventGallery',
       'GalleryEvent',
       'MediaItem',
       'YouTubeVideo',
@@ -299,6 +310,24 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'CentreSchedule',
       'GeocodeCache',
       'CentreImport',
+      // Phase 14 has no registration, ticketing, attendance or venue model, no
+      // recurrence rule, no Event image and no generic attachment or target:
+      // an occurrence is an explicit row, a place is a Global Centre, and its
+      // photographs are Media Galleries.
+      'EventRegistration',
+      'EventAttendee',
+      'EventTicket',
+      'EventBooking',
+      'EventVenue',
+      'Venue',
+      'EventLocation',
+      'EventRecurrence',
+      'EventImage',
+      'EventAsset',
+      'EventTarget',
+      'EventCentre',
+      'EventPhoto',
+      'Attachment',
     ]) {
       expect(models, `${domain} arrives with its owning slice`).not.toContain(domain);
     }

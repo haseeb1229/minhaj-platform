@@ -13,4 +13,5 @@ export const EDITORIAL_SEGMENTS = Object.freeze({
   'press-release': 'press-releases',
   statement: 'statements',
   'media-coverage': 'media-coverage',
+  event: 'events',
 } as const satisfies Record<EditorialKind, string>);

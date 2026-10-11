@@ -5,6 +5,7 @@ import { indexAfterResponse } from '@/composition/search';
 import { redirect } from 'next/navigation';
 import { localeSchema } from '@minhaj/contracts';
 import {
+  EVENT_LIMITS,
   editorialKindSchema,
   correspondenceKindSchema,
 } from '@minhaj/contracts/editorial';
@@ -72,6 +73,28 @@ export async function saveEditorial(
         : {}),
       // A NewsArticle's optional Centre (Phase 16); no other kind sends the key.
       ...(kind === 'news-article' ? { centreId: optional('centreId') } : {}),
+      // An Event's Centre, schedule and Galleries (Phase 14). Local times are
+      // sent as the editor typed them; the server resolves them in the zone.
+      ...(kind === 'event'
+        ? {
+            centreId: optional('centreId'),
+            schedule: {
+              timezone: form.get('eventTimezone'),
+              occurrences: Array.from(
+                { length: EVENT_LIMITS.occurrences },
+                (_, index) => ({
+                  start: optional(`occurrence-${index}-start`),
+                  startFold: optional(`occurrence-${index}-startFold`),
+                  end: optional(`occurrence-${index}-end`),
+                  endFold: optional(`occurrence-${index}-endFold`),
+                }),
+              ).filter((entry) => entry.start !== null || entry.end !== null),
+            },
+            galleryIds: Array.from({ length: EVENT_LIMITS.galleries }, (_, index) =>
+              optional(`gallery-${index}`),
+            ).filter((id) => id !== null),
+          }
+        : {}),
     };
     const id = String(form.get('id') ?? '');
     const saved = id

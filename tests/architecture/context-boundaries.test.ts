@@ -49,7 +49,7 @@ describe('production source satisfies the architecture', () => {
 });
 
 describe('A — permitted dependencies pass in every import form', () => {
-  it('accepts the allowlisted messaging -> learning and editorial -> global-network edges as import, re-export and dynamic import', async () => {
+  it('accepts the allowlisted messaging -> learning, editorial -> global-network and editorial -> media edges as import, re-export and dynamic import', async () => {
     const violations = await check(ALLOWED);
 
     expect(violations).toEqual([]);
@@ -191,10 +191,12 @@ describe('B6 — production JavaScript cannot bypass the rules', () => {
 });
 
 describe('D — the allowlist itself matches DOMAIN_MODEL.md §3.1', () => {
-  it('records exactly the two permitted same-level edges, each in its allowlist row', () => {
+  it('records exactly the three permitted same-level edges, each in its allowlist row', () => {
     expect(permittedSameLevelEdges).toEqual([
       { from: 'messaging', to: 'learning' },
       { from: 'editorial', to: 'global-network' },
+      // Phase 14: an Event owns its typed association to Media-owned Galleries.
+      { from: 'editorial', to: 'media' },
     ]);
     for (const edge of permittedSameLevelEdges) {
       expect(contextAllowlist[edge.from]).toContain(edge.to);

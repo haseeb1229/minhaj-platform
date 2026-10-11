@@ -159,6 +159,21 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // relation of a Centre to the further Cities it serves. No Event, map,
   // geocoder, import or search table; centre-scoped News is a column on the
   // existing NewsArticle revision, asserted by `assertGlobalFoundation`.
+  // ONE EDITORIAL EVENT AGGREGATE with the Article's own shape of tables, and two
+  // typed revision-owned sets: its occurrences and its ordered Media Galleries.
+  // Its Centre is ONE nullable column on the revision, never a join table; no
+  // registration, ticket, venue, recurrence, image or generic attachment table
+  // exists (DOMAIN_MODEL.md §7.1), asserted by `assertEventFoundation`.
+  '20260930000000_phase14_events': [
+    'Event',
+    'EventRevision',
+    'EventRevisionTranslation',
+    'EventTopic',
+    'EventContributor',
+    'EventSchedule',
+    'EventGallery',
+    'EventSlugHistory',
+  ],
   '20260929000000_phase16_global_network': [
     'Country',
     'CountryLabel',
@@ -292,7 +307,7 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
  * when Chunk 2 delivered authorisation and the privileged second factor.
  */
 const PREMATURE_TABLES = [
-  'Event',
+  // `Event` left this list when Phase 14 delivered it.
   'Collection',
   'Quran',
   'Hadith',
@@ -330,8 +345,9 @@ const PREMATURE_TABLES = [
   'RecitationSegment',
   'ListeningHistory',
   // Phase 12 delivers galleries with NO Event relationship: the typed
-  // Event↔Gallery association is Phase 14's, created once both ends exist.
-  'EventGallery',
+  // Event↔Gallery association is Phase 14's `EventGallery`, which left this list
+  // when Phase 14 delivered it on the Event revision. A Media-owned reverse join
+  // or a per-photograph Event link is still no phase's.
   'GalleryEvent',
   'EventPhoto',
   'PhotoPerson',
@@ -345,10 +361,11 @@ const PREMATURE_TABLES = [
   'NewsArticleAsset',
   'NewsArticlePhoto',
   // Phase 16 delivers the Global Network with NO Event relationship: the typed
-  // Event→Centre reference is Phase 14's, created there once Event exists.
+  // Event→Centre reference is Phase 14's, and Phase 14 delivers it as the
+  // revision's own `centreId` column — so a Global-owned or join-table shape of
+  // it stays absent. `EventSchedule` left this list when Phase 14 delivered it.
   'CentreEvent',
   'EventCentre',
-  'EventSchedule',
 ];
 
 /**
@@ -456,6 +473,28 @@ const PROHIBITED_TABLES = [
   'Geography',
   'PakistanCity',
   'PakistanRegion',
+
+  // PHASE 14 — ONE Event aggregate whose occurrences are explicit rows, whose
+  // place is a Global Centre and whose photographs are Media Galleries
+  // (DOMAIN_MODEL.md §7.1). A generic event-target or attachment table would be
+  // the polymorphic reference §6.2 refuses; a venue or location table would be
+  // a second directory beside the Global Network's own; a recurrence rule would
+  // replace the stored occurrence facts with a derivation; registration,
+  // attendance, booking and ticketing are no V1 phase's; and an Event image or
+  // asset table would duplicate Media and Storage.
+  'EventTarget',
+  'EventAttendee',
+  'EventRegistration',
+  'EventBooking',
+  'EventTicket',
+  'EventVenue',
+  'Venue',
+  'EventLocation',
+  'EventRecurrence',
+  'EventImage',
+  'EventAsset',
+  'CentreEventLink',
+  'Attachment',
 ];
 
 const EXPECTED_AUDIT_COLUMNS = [
@@ -606,6 +645,14 @@ const EXPECTED_COLUMN_SIZES: readonly {
   { table: 'CentreLabel', column: 'description', characters: 2000 },
   { table: 'CentreLabel', column: 'address', characters: 500 },
   { table: 'CentreContact', column: 'value', characters: 320 },
+  // Phase 14, by the Article's rules; the zone is an IANA name, sized as the
+  // editorial schedule's own zone column is.
+  { table: 'Event', column: 'slug', characters: 120 },
+  { table: 'EventSlugHistory', column: 'slug', characters: 120 },
+  { table: 'EventRevision', column: 'slug', characters: 120 },
+  { table: 'EventRevision', column: 'timezone', characters: 64 },
+  { table: 'Event', column: 'scheduledTimezone', characters: 64 },
+  { table: 'EventRevisionTranslation', column: 'languageCode', characters: 16 },
 ];
 
 /**
@@ -693,6 +740,8 @@ const EXPECTED_TRIGGERS = [
     'PressRelease',
     'Statement',
     'MediaCoverage',
+    // Phase 14: the same eleven for an Event, and four more below.
+    'Event',
   ].flatMap((kind) => [
     kind + 'RevisionImmutable',
     kind + 'RevisionTranslationImmutable',
@@ -743,6 +792,12 @@ const EXPECTED_TRIGGERS = [
   'GlobalReserveRegionSlug',
   'GlobalReserveCitySlug',
   'GlobalReserveCentreSlug',
+  // Phase 14: an Event's occurrences and Gallery associations are revision
+  // state — immutable, and never added to a revision once it is current.
+  'EventScheduleImmutable',
+  'EventGalleryImmutable',
+  'EventScheduleAppend',
+  'EventGalleryAppend',
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
@@ -917,6 +972,23 @@ const EXPECTED_CHECK_CONSTRAINTS = [
   { table: 'CentreContact', constraint: 'CentreContact_position_ck' },
   { table: 'CentreContact', constraint: 'CentreContact_value_ck' },
   { table: 'CentreContact', constraint: 'CentreContact_channel_ck' },
+  // Phase 14. The Article's six workflow rules, a revision's schema, a bounded
+  // translation and a closed contributor vocabulary; an IANA zone NAME, never an
+  // offset; occurrences in twelve places, whole minutes, an end strictly after
+  // its start and an offset no zone exceeds; Galleries in twelve places.
+  ...['state', 'version', 'approval', 'publication', 'published_date', 'schedule'].map(
+    (rule) => ({ table: 'Event', constraint: 'Event_' + rule + '_ck' }),
+  ),
+  { table: 'EventRevision', constraint: 'EventRevision_schema_ck' },
+  { table: 'EventRevision', constraint: 'EventRevision_timezone_ck' },
+  { table: 'EventRevisionTranslation', constraint: 'EventTranslation_size_ck' },
+  { table: 'EventContributor', constraint: 'EventContributor_role_ck' },
+  { table: 'EventContributor', constraint: 'EventContributor_position_ck' },
+  ...['position', 'minute', 'end', 'offset'].map((rule) => ({
+    table: 'EventSchedule',
+    constraint: 'EventSchedule_' + rule + '_ck',
+  })),
+  { table: 'EventGallery', constraint: 'EventGallery_position_ck' },
 ];
 
 /**
@@ -1691,6 +1763,9 @@ async function assertNewsFoundation(session: SqlSession): Promise<void> {
 
 const GLOBAL_PERMISSIONS = ['global.administer', 'global.read'];
 
+/** The editorial revisions that may name a Centre, by name order. */
+const CENTRE_REFERENCING_REVISIONS = ['EventRevision', 'NewsArticleRevision'];
+
 const GLOBAL_TABLES = [
   'Country',
   'CountryLabel',
@@ -1733,14 +1808,19 @@ const GLOBAL_COMPOSITE_KEYS = [
  *   3. coordinates are exact `decimal(9,6)`, never binary floating point;
  *   4. ONE nullable Centre column exists outside Global — on
  *      `NewsArticleRevision` — and none on any other News family or table;
+ *      Phase 14 adds exactly one more, `EventRevision.centreId` (`stage`);
  *   5. no Global table names an Event, News, a search kind or a target type;
  *   6. the Global vocabulary is exactly two keys, both in the protected bundle.
  */
-async function assertGlobalFoundation(session: SqlSession): Promise<void> {
+async function assertGlobalFoundation(
+  session: SqlSession,
+  stage: 'with-events' | 'before-events' = 'with-events',
+): Promise<void> {
   const tables = GLOBAL_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',');
   const cascading = await session.query<{ name: string }>(`
     SELECT name FROM sys.foreign_keys
-    WHERE (parent_object_id IN (${tables}) OR name = N'NewsArticleRevision_centreId_fkey')
+    WHERE (parent_object_id IN (${tables})
+           OR name IN (N'NewsArticleRevision_centreId_fkey', N'EventRevision_centreId_fkey'))
       AND (delete_referential_action <> 0 OR update_referential_action <> 0);
   `);
   if (cascading.length > 0)
@@ -1794,20 +1874,35 @@ async function assertGlobalFoundation(session: SqlSession): Promise<void> {
       AND OBJECT_NAME(c.object_id) NOT IN (${GLOBAL_TABLES.map((table) => `N'${table}'`).join(',')})
       AND OBJECTPROPERTY(c.object_id, 'IsUserTable') = 1;
   `);
-  const [newsKey] = await session.query<{ target: string | null }>(`
-    SELECT OBJECT_NAME(referenced_object_id) AS target FROM sys.foreign_keys
-    WHERE name = N'NewsArticleRevision_centreId_fkey';
+  // Phase 14 adds the SECOND and last: `EventRevision.centreId`. Before Phase 14
+  // is applied — and after its rollback — only the News one may exist.
+  const owners =
+    stage === 'with-events' ? CENTRE_REFERENCING_REVISIONS : ['NewsArticleRevision'];
+  const keys = await session.query<{
+    name: string;
+    target: string | null;
+    columns: number;
+  }>(`
+    SELECT fk.name, OBJECT_NAME(fk.referenced_object_id) AS target,
+      (SELECT COUNT(*) FROM sys.foreign_key_columns c WHERE c.constraint_object_id = fk.object_id) AS columns
+    FROM sys.foreign_keys fk
+    WHERE fk.referenced_object_id = OBJECT_ID(N'[dbo].[Centre]')
+      AND OBJECT_NAME(fk.parent_object_id) NOT IN (${GLOBAL_TABLES.map((table) => `N'${table}'`).join(',')})
+      AND (fk.delete_referential_action = 0 AND fk.update_referential_action = 0)
+    ORDER BY fk.name;
   `);
   if (
-    centreColumns.length !== 1 ||
-    centreColumns[0]?.tableName !== 'NewsArticleRevision' ||
-    centreColumns[0].name !== 'centreId' ||
-    !centreColumns[0].nullable ||
-    newsKey?.target !== 'Centre'
+    centreColumns
+      .map((row) => `${row.tableName}.${row.name}:${String(Boolean(row.nullable))}`)
+      .sort()
+      .join(',') !== owners.map((table) => `${table}.centreId:true`).join(',') ||
+    keys
+      .map((row) => `${row.name}>${row.target ?? ''}/${String(row.columns)}`)
+      .join(',') !== owners.map((table) => `${table}_centreId_fkey>Centre/1`).join(',')
   )
     fail(
-      `Exactly one nullable Centre reference may exist outside Global — ` +
-        `NewsArticleRevision.centreId to Centre; found ${JSON.stringify(centreColumns)}.`,
+      `Exactly ${owners.join(' and ')} may hold a nullable, non-cascading Centre ` +
+        `reference outside Global; found ${JSON.stringify(centreColumns)} and ${JSON.stringify(keys)}.`,
     );
 
   const forward = await session.query<{ name: string }>(`
@@ -1842,7 +1937,7 @@ async function assertGlobalFoundation(session: SqlSession): Promise<void> {
 
   report(
     'global foundation',
-    'no cascade, composite same-Country keys, exact coordinates, one News Centre column, two bundled keys',
+    `no cascade, composite same-Country keys, exact coordinates, ${owners.length === 1 ? 'one News' : 'News and Event'} Centre column(s), two bundled keys`,
   );
 }
 
@@ -1859,6 +1954,272 @@ async function assertGlobalRemoved(session: SqlSession): Promise<void> {
       `The Phase-16 rollback left a Centre column or a Global key: ${JSON.stringify(row)}.`,
     );
   report('global rollback', 'News Centre column and both Global keys removed');
+}
+
+const EVENT_TABLES = [
+  'Event',
+  'EventRevision',
+  'EventRevisionTranslation',
+  'EventTopic',
+  'EventContributor',
+  'EventSchedule',
+  'EventGallery',
+  'EventSlugHistory',
+];
+
+/**
+ * EVERY foreign key from an Event table to another owner's table, exactly. Each
+ * is a typed reference to one named table — never a type string beside an
+ * identifier — and the list is the whole of it, so a ninth edge (an image, a
+ * venue, a second Centre) fails here.
+ */
+const EVENT_EXTERNAL_KEYS = [
+  'EventContributor_personId_fkey>Person',
+  'EventGallery_galleryId_fkey>Gallery',
+  'EventRevisionTranslation_languageCode_fkey>Language',
+  'EventRevision_centreId_fkey>Centre',
+  'EventRevision_editorId_fkey>User',
+  'EventTopic_topicId_fkey>Topic',
+  'Event_approvedById_fkey>User',
+  'Event_creatorId_fkey>User',
+  'Event_scheduledById_fkey>User',
+];
+
+/** The two editorial descriptions as Phase 13 left them and Phase 14 restates them. */
+const EDITORIAL_DESCRIPTIONS = {
+  phase13: {
+    'content.author':
+      'Create and revise Article, Page, news, press release, statement and media coverage drafts and submit them for review.',
+    'content.read':
+      'Read private Article, Page, news, press release, statement and media coverage drafts and revisions.',
+  },
+  phase14: {
+    'content.author':
+      'Create and revise Article, Page, news, press release, statement, media coverage and event drafts and submit them for review.',
+    'content.read':
+      'Read private Article, Page, news, press release, statement, media coverage and event drafts and revisions.',
+  },
+} as const;
+
+/** The two editorial descriptions are EXACTLY a phase's wording, and no `event.*` key exists. */
+async function assertEditorialDescriptions(
+  session: SqlSession,
+  stage: keyof typeof EDITORIAL_DESCRIPTIONS,
+): Promise<void> {
+  const rows = await session.query<{ key: string; description: string }>(`
+    SELECT [key], [description] FROM [dbo].[Permission]
+    WHERE [key] IN (N'content.read', N'content.author') OR [key] LIKE N'event%'
+       OR [key] LIKE N'schedule%' OR [key] LIKE N'occurrence%'
+    ORDER BY [key];
+  `);
+  const expected = EDITORIAL_DESCRIPTIONS[stage];
+  if (
+    JSON.stringify(rows.map((row) => [row.key, row.description])) !==
+    JSON.stringify(Object.entries(expected))
+  )
+    fail(
+      `The editorial descriptions must be exactly the ${stage} wording, with no Event key; ` +
+        `found ${JSON.stringify(rows)}.`,
+    );
+  report('editorial descriptions', `exactly the ${stage} wording, no event.* key`);
+}
+
+/**
+ * Phase 14 — what only the catalogue can prove about Events:
+ *
+ *   1. EIGHT DISTINCT TABLES, none a generic content, target or attachment
+ *      table: no Event column names a type, kind, target, image, asset, photo,
+ *      venue, location, address, registration, ticket, attendance, capacity,
+ *      price, recurrence rule or offset, and the ONE Gallery and ONE Centre
+ *      column are the typed `EventGallery.galleryId` (required) and
+ *      `EventRevision.centreId` (optional);
+ *   2. no Phase-14 foreign key cascades, and the external edges are EXACTLY the
+ *      nine typed references above — to User, Language, Topic, Person, Centre
+ *      and Gallery — so no Event write can delete a Centre, a Gallery or
+ *      anything else of another owner's;
+ *   3. Global and Media own NO Event schema: no foreign key from outside the
+ *      Event tables references one, and no column outside them names an event
+ *      (bar Identity's unrelated provider-webhook `ProviderEvent.eventId`);
+ *   4. an occurrence's start is a required `datetime2` pair and its end an
+ *      optional one; the zone is a required name; one start and one Gallery
+ *      per revision are UNIQUE constraints;
+ *   5. the 51146 rule — a current revision has an occurrence — is in the
+ *      integrity trigger, beside 51142 and 51143;
+ *   6. no search vocabulary names an event: Events are not searchable yet;
+ *   7. the two editorial descriptions name events, exactly, and no `event.*`
+ *      permission exists.
+ *
+ * The refusals themselves are proved as BEHAVIOUR, through the runtime login,
+ * by `db:test:permissions`; this gate proves they are present in the catalogue.
+ */
+async function assertEventFoundation(session: SqlSession): Promise<void> {
+  const tables = EVENT_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',');
+
+  const shapes = await session.query<{ tableName: string; name: string }>(`
+    SELECT OBJECT_NAME(c.object_id) AS tableName, c.name FROM sys.columns c
+    WHERE c.object_id IN (${tables})
+      AND (c.name LIKE N'%type%' OR c.name LIKE N'%kind%' OR c.name LIKE N'%target%'
+           OR c.name LIKE N'%image%' OR c.name LIKE N'%asset%' OR c.name LIKE N'%photo%'
+           OR c.name LIKE N'%venue%' OR c.name LIKE N'%location%' OR c.name LIKE N'%address%'
+           OR c.name LIKE N'%regist%' OR c.name LIKE N'%ticket%' OR c.name LIKE N'%attend%'
+           OR c.name LIKE N'%capacity%' OR c.name LIKE N'%price%' OR c.name LIKE N'%recur%'
+           OR c.name LIKE N'%rrule%' OR c.name LIKE N'%offset%' OR c.name LIKE N'%gallery%'
+           OR c.name LIKE N'%centre%' OR c.name LIKE N'%center%' OR c.name LIKE N'%featured%'
+           OR c.name LIKE N'%popular%')
+    ORDER BY tableName, c.name;
+  `);
+  if (
+    shapes
+      .map((row) => `${row.tableName}.${row.name}`)
+      .sort()
+      .join(',') !== 'EventGallery.galleryId,EventRevision.centreId'
+  )
+    fail(
+      `Event tables may hold exactly one Gallery and one Centre column and no generic, ` +
+        `venue, registration, recurrence or image column; found ${JSON.stringify(shapes)}.`,
+    );
+
+  const cascading = await session.query<{ name: string }>(`
+    SELECT name FROM sys.foreign_keys
+    WHERE parent_object_id IN (${tables})
+      AND (delete_referential_action <> 0 OR update_referential_action <> 0);
+  `);
+  if (cascading.length > 0)
+    fail(
+      `Phase-14 foreign keys must not cascade; found ${cascading.map((row) => row.name).join(', ')}.`,
+    );
+
+  const external = await session.query<{ edge: string }>(`
+    SELECT fk.name + N'>' + OBJECT_NAME(fk.referenced_object_id) AS edge
+    FROM sys.foreign_keys fk
+    WHERE fk.parent_object_id IN (${tables}) AND fk.referenced_object_id NOT IN (${tables})
+    ORDER BY edge;
+  `);
+  if (
+    external
+      .map((row) => row.edge)
+      .sort()
+      .join(',') !== EVENT_EXTERNAL_KEYS.join(',')
+  )
+    fail(
+      `Event's references into other owners must be exactly ${EVENT_EXTERNAL_KEYS.join(', ')}; ` +
+        `found ${external.map((row) => row.edge).join(', ')}.`,
+    );
+
+  const [ownership] = await session.query<{ inbound: number; columns: string | null }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE referenced_object_id IN (${tables}) AND parent_object_id NOT IN (${tables})) AS inbound,
+      (SELECT STRING_AGG(OBJECT_NAME(c.object_id) + N'.' + c.name, N',') FROM sys.columns c
+        WHERE c.name LIKE N'%event%' AND c.object_id NOT IN (${tables})
+          AND OBJECTPROPERTY(c.object_id, 'IsUserTable') = 1
+          AND NOT (c.object_id = OBJECT_ID(N'[dbo].[ProviderEvent]') AND c.name = N'eventId')) AS columns;
+  `);
+  if (Number(ownership?.inbound) !== 0 || (ownership?.columns ?? null) !== null)
+    fail(
+      `No other owner may hold Event schema; found ${JSON.stringify(ownership ?? null)}.`,
+    );
+
+  const columns = await session.query<{
+    name: string;
+    type: string;
+    nullable: boolean;
+  }>(`
+    SELECT OBJECT_NAME(c.object_id) + N'.' + c.name AS name, TYPE_NAME(c.user_type_id) AS type,
+      c.is_nullable AS nullable
+    FROM sys.columns c
+    WHERE (c.object_id = OBJECT_ID(N'[dbo].[EventSchedule]')
+           AND c.name IN (N'startsLocal', N'startsAt', N'endsLocal', N'endsAt'))
+       OR (c.object_id = OBJECT_ID(N'[dbo].[EventRevision]') AND c.name IN (N'timezone', N'centreId'))
+       OR (c.object_id = OBJECT_ID(N'[dbo].[EventGallery]') AND c.name = N'galleryId')
+    ORDER BY name;
+  `);
+  const described = columns
+    .map((row) => `${row.name}:${row.type}:${row.nullable ? 'null' : 'required'}`)
+    .sort()
+    .join(',');
+  const expectedColumns = [
+    'EventGallery.galleryId:nvarchar:required',
+    'EventRevision.centreId:nvarchar:null',
+    'EventRevision.timezone:nvarchar:required',
+    'EventSchedule.endsAt:datetime2:null',
+    'EventSchedule.endsLocal:datetime2:null',
+    'EventSchedule.startsAt:datetime2:required',
+    'EventSchedule.startsLocal:datetime2:required',
+  ].join(',');
+  if (described !== expectedColumns)
+    fail(`Event time, zone and reference columns differ: ${described}.`);
+
+  const unique = await session.query<{ name: string }>(`
+    SELECT name FROM sys.key_constraints
+    WHERE type = 'UQ' AND name IN (N'EventSchedule_ownerId_revisionNumber_startsAt_key',
+                                   N'EventGallery_ownerId_revisionNumber_galleryId_key')
+    ORDER BY name;
+  `);
+  if (unique.length !== 2)
+    fail(
+      `One start and one Gallery per revision must be UNIQUE constraints; found ${JSON.stringify(unique)}.`,
+    );
+
+  const [integrity] = await session.query<{ definition: string | null }>(`
+    SELECT OBJECT_DEFINITION(OBJECT_ID(N'[dbo].[EventCurrentIntegrity]')) AS definition;
+  `);
+  const body = integrity?.definition ?? '';
+  if (
+    !['51142', '51143', '51146', '[dbo].[EventSchedule]'].every((word) =>
+      body.includes(word),
+    )
+  )
+    fail(
+      'EventCurrentIntegrity does not refuse a current revision without an occurrence.',
+    );
+
+  const vocabularies = await session.query<{ name: string }>(`
+    SELECT name FROM sys.check_constraints
+    WHERE name IN (N'SearchIndexRequest_scopeKind_ck', N'SearchIndexScope_scopeKind_ck',
+                   N'SearchDocument_kind_ck')
+      AND [definition] LIKE N'%event%';
+  `);
+  if (vocabularies.length > 0)
+    fail(
+      `Events are not searchable in Phase 14; ${vocabularies.map((row) => row.name).join(', ')} names one.`,
+    );
+
+  await assertEditorialDescriptions(session, 'phase14');
+
+  report(
+    'event foundation',
+    'eight typed tables, nine non-cascading external keys, no foreign Event schema, ' +
+      'local and UTC times, 51146, no search kind',
+  );
+}
+
+/**
+ * After the Phase-14 rollback: no Event object, no Event reference into a
+ * Centre or a Gallery, and the editorial descriptions exactly as Phase 13 left
+ * them. The caller then proves the whole Phase-16 state is back.
+ */
+async function assertEventRemoved(session: SqlSession): Promise<void> {
+  const [row] = await session.query<{
+    tables: number;
+    triggers: number;
+    galleryKeys: number;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables WHERE name LIKE N'Event%') AS tables,
+      (SELECT COUNT(*) FROM sys.triggers WHERE name LIKE N'Event%') AS triggers,
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE referenced_object_id = OBJECT_ID(N'[dbo].[Gallery]')
+          AND OBJECT_NAME(parent_object_id) NOT IN (N'GalleryLabel', N'GallerySlugHistory', N'GalleryItem')) AS galleryKeys;
+  `);
+  if (
+    Number(row?.tables) !== 0 ||
+    Number(row?.triggers) !== 0 ||
+    Number(row?.galleryKeys) !== 0
+  )
+    fail(`The Phase-14 rollback left an Event object: ${JSON.stringify(row)}.`);
+  await assertEditorialDescriptions(session, 'phase13');
+  report('event rollback', 'every Event table, trigger and Gallery reference removed');
 }
 
 /**
@@ -2515,6 +2876,7 @@ try {
   await assertPhotoFoundation(session);
   await assertNewsFoundation(session);
   await assertGlobalFoundation(session);
+  await assertEventFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -2562,6 +2924,16 @@ try {
     }
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
+    }
+    if (migration.id === '20260930000000_phase14_events') {
+      // Phase 14 widened no search vocabulary, so none narrows here — and the
+      // whole Phase-16 state it was applied on is back exactly: one Centre
+      // reference outside Global, the Gallery and News foundations intact.
+      await assertSearchVocabulary(session, 'phase13');
+      await assertEventRemoved(session);
+      await assertGlobalFoundation(session, 'before-events');
+      await assertPhotoFoundation(session);
+      await assertNewsFoundation(session);
     }
     if (migration.id === '20260929000000_phase16_global_network') {
       // Phase 16 widened no search vocabulary, so none narrows here.
@@ -2633,6 +3005,7 @@ try {
   await assertPhotoFoundation(session);
   await assertNewsFoundation(session);
   await assertGlobalFoundation(session);
+  await assertEventFoundation(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

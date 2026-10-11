@@ -194,16 +194,18 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
   // author, reviewer and publisher authority, so these keys govern them and
   // only the two descriptions that named Article and Page changed (migration
   // 20260928000000). `news.*` beside `content.*` would split one workflow's
-  // authority nobody asked to split.
+  // authority nobody asked to split. PHASE 14 ADDS NO KEY EITHER: Event joins
+  // the same workflow, and the same two descriptions now name it (migration
+  // 20260930000000). No `event.*` key exists.
   Object.freeze({
     key: 'content.read',
     description:
-      'Read private Article, Page, news, press release, statement and media coverage drafts and revisions.',
+      'Read private Article, Page, news, press release, statement, media coverage and event drafts and revisions.',
   }),
   Object.freeze({
     key: 'content.author',
     description:
-      'Create and revise Article, Page, news, press release, statement and media coverage drafts and submit them for review.',
+      'Create and revise Article, Page, news, press release, statement, media coverage and event drafts and submit them for review.',
   }),
   Object.freeze({
     key: 'content.review',

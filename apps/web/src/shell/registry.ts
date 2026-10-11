@@ -188,9 +188,9 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
   }),
   /**
    * DELIVERED BY PHASE 13 — News. `/news` is the News and Events entry point:
-   * the latest NewsArticles, the three other News families, the News archive
-   * and the photograph surfaces Phase 12 delivered. Events are Phase 14's and
-   * the newsletter Phase 21's, so neither is linked from it.
+   * the latest NewsArticles, the three other News families, the News archive,
+   * the photograph surfaces Phase 12 delivered and — since Phase 14 — Events.
+   * The newsletter is Phase 21's, so it is not linked from it.
    */
   Object.freeze({
     key: 'news-events',
@@ -204,8 +204,8 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
   /**
    * DELIVERED BY PHASE 16 — the Global Network. `/global` is the World Network
    * landing: Find a Centre, Countries, Centres and the Pakistan structure, and a
-   * plain statement while the directory holds nothing yet. Local Events are
-   * Phase 14's, so nothing links to them.
+   * plain statement while the directory holds nothing yet. Local News and — since
+   * Phase 14 — Local Events are reached on each Centre's own page.
    */
   Object.freeze({
     key: 'global',
@@ -504,8 +504,8 @@ const LISTEN: readonly ShellRoute[] = Object.freeze([
  * also reached from one another and from the human sitemap.
  *
  * `/media/downloads` HAS NO ENTRY AND NO ROUTE: a download needs a rights
- * decision no phase has made. Neither does `/events/{slug}/gallery`, which is
- * Phase 14's.
+ * decision no phase has made. An Event's gallery view, `/events/{slug}/gallery`
+ * (Phase 14), is a per-Event navigational view, `noindex`, with no entry here.
  */
 const MEDIA: readonly ShellRoute[] = Object.freeze(
   (['photos', 'galleries', 'archive'] as const).map((surface) =>
@@ -554,8 +554,8 @@ const NEWS: readonly ShellRoute[] = Object.freeze(
  * `excluded`: never a sitemap entry, never a second indexable Pakistan page.
  * NO PLACEMENT — they are reached from `/global`, the single entry point in the
  * primary navigation. A Region, a City and a Centre are reached through their
- * Country and the finder, and `/global/centres/{slug}/events` has no route:
- * Events are Phase 14's.
+ * Country and the finder, and a Centre's `news` and `events` pages through the
+ * Centre.
  */
 const GLOBAL: readonly ShellRoute[] = Object.freeze([
   ...(['countries', 'centres'] as const).map((surface) =>
@@ -577,6 +577,25 @@ const GLOBAL: readonly ShellRoute[] = Object.freeze([
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'excluded' as const,
+  }),
+]);
+
+/**
+ * Events — Phase 14 (ROUTE_MAP.md §3.9). `/events` is a genuine listing in all
+ * three interface locales over delivered data, and so `eligible`. NO PLACEMENT —
+ * News & Events is the primary navigation item, and `/news` links here.
+ * `?when=`, `?country=`, `?city=` and `?centre=` are queries canonical to it,
+ * never entries of their own; there is no `/events/upcoming` or `/events/past`.
+ */
+const EVENTS: readonly ShellRoute[] = Object.freeze([
+  Object.freeze({
+    key: 'events',
+    label: 'news.events',
+    path: '/events',
+    placements: Object.freeze([] as const),
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'eligible' as const,
   }),
 ]);
 
@@ -663,6 +682,7 @@ export const SHELL_ROUTES: readonly ShellRoute[] = Object.freeze([
   ...LISTEN,
   ...MEDIA,
   ...NEWS,
+  ...EVENTS,
   ...GLOBAL,
   ...exploreRoutes(),
   ...LEGAL,

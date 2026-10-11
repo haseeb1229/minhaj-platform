@@ -200,6 +200,14 @@ export function createMediaReadService(reader: MediaPublicReaderPort) {
       );
     },
 
+    /**
+     * Phase 14 — the LISTED Galleries among these identifiers, in the order
+     * given: what an Event's gallery view composes.
+     */
+    publicGalleries(ids: readonly string[]) {
+      return reader.publicGalleries(z.array(mediaIdSchema).max(50).parse(ids));
+    },
+
     gallerySitemap(offset: number, limit: number) {
       return reader.gallerySitemap(
         z.number().int().min(0).max(10_000_000).parse(offset),

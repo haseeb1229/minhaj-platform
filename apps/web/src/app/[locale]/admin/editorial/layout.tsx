@@ -28,6 +28,7 @@ export default async function Layout({
             'press-releases',
             'statements',
             'media-coverage',
+            'events',
             'queue',
             'correspondence',
           ] as const

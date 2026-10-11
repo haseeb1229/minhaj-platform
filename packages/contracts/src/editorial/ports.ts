@@ -17,8 +17,10 @@ import type {
   FeedbackDirectory,
   CorrespondenceState,
   PublicNews,
+  PublicEvent,
 } from './values.ts';
 import type { NewsArchivePeriod, NewsKind, NewsPage, NewsTimelineQuery } from './news.ts';
+import type { EventListQuery, EventPage } from './event.ts';
 
 export interface EditorialActor {
   readonly accountId: string;
@@ -130,6 +132,20 @@ export interface EditorialPublicReaderPort {
    * asked at Layer 4.
    */
   centreNews(centreId: string, offset: number, limit: number): Promise<NewsPage>;
+
+  /**
+   * PHASE 14 — Events, by the same rules: PUBLISHED ONLY, the predicate in every
+   * query, bounded pages with deterministic tie-breakers, and a former slug
+   * resolving to the current one only while the Event is published. A Centre or
+   * a Gallery is an identifier here; no Global or Media table is read.
+   */
+  eventCanonicalSlug(slug: string): Promise<string | null>;
+  publicEvent(slug: string): Promise<PublicEvent | null>;
+  /** One bounded page; see `EventListQuery`. */
+  events(query: EventListQuery): Promise<EventPage>;
+  /** Is any Event published at all? Distinguishes an empty inventory from no match. */
+  hasPublishedEvents(): Promise<boolean>;
+  eventSitemap(offset: number, limit: number): Promise<readonly EditorialSitemapEntry[]>;
 }
 
 /** What Search may know about one published Article or Page. */
@@ -203,6 +219,24 @@ export interface EditorialPersistencePort {
     expectedVersion: number,
     reason: 'authority-revoked' | 'execution-failed',
   ): Promise<void>;
+
+  /**
+   * PHASE 14 — Event, through the same workflow rules. A revision writes its
+   * schedule, Centre and Gallery associations with it, immutably; nothing
+   * changes any of them except a new revision.
+   */
+  event(id: string): Promise<ArticleDetail | null>;
+  eventDirectory(query: EditorialQuery): Promise<EditorialDirectory>;
+  eventRevisions(id: string, offset: number): Promise<RevisionDirectory>;
+  createEvent(input: EditorialWrite): Promise<ArticleDetail>;
+  reviseEvent(input: EditorialEdit): Promise<ArticleDetail>;
+  transitionEvent(input: EditorialTransition): Promise<ArticleDetail>;
+  dueEvents(now: Date, limit: number): Promise<readonly EditorialScheduleCandidate[]>;
+  failEventSchedule(
+    id: string,
+    expectedVersion: number,
+    reason: 'authority-revoked' | 'execution-failed',
+  ): Promise<void>;
 }
 export interface EditorialAuthorityPort {
   permits(accountId: string, permission: string): Promise<boolean>;
@@ -216,6 +250,12 @@ export interface EditorialReferencesPort {
    * reference interface at Layer 4 — Editorial never reads Global's tables.
    */
   selectableCentre(id: string): Promise<boolean>;
+  /**
+   * PHASE 14 — may an editor newly associate this Media Gallery with an Event?
+   * Answered by Media's reference interface at Layer 4 — Editorial never reads
+   * Media's tables (DOMAIN_MODEL.md §3.2, Editorial → Media).
+   */
+  selectableGallery(id: string): Promise<boolean>;
 }
 export interface CorrespondencePersistencePort {
   submitContact(input: {

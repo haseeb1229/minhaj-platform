@@ -168,6 +168,16 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/global/centres/[slug]/news/page.tsx',
   'apps/web/src/app/[locale]/(public)/global/centres/[slug]/contact/page.tsx',
   'apps/web/src/app/[locale]/(public)/global/pakistan/page.tsx',
+  // Phase 14. Every Event surface reads records an editor publishes and
+  // withdraws, and what is "upcoming" is decided by the server's clock on each
+  // request — and each composes Global's Centres and Media's Galleries through
+  // their PUBLIC readers — so none can be prerendered; each is proven below to
+  // reach no session, no identity service, no logger and no authentication
+  // library.
+  'apps/web/src/app/[locale]/(public)/events/page.tsx',
+  'apps/web/src/app/[locale]/(public)/events/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/events/[slug]/gallery/page.tsx',
+  'apps/web/src/app/[locale]/(public)/global/centres/[slug]/events/page.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [
@@ -796,6 +806,11 @@ describe('a public CONTENT route reads data, and still reads no session', () => 
       // Phase 16, for the same reason: the ADMINISTRATIVE Global runtime wires
       // Identity in. Public Global routes use `@/composition/global-read`.
       '@/composition/global',
+      // Phase 14, for the same reason: the ADMINISTRATIVE Editorial and Media
+      // runtimes wire Identity in. Public Event routes compose
+      // `@/composition/editorial-read` and `@/composition/media-read`.
+      '@/composition/editorial',
+      '@/composition/media',
       '@/contexts/identity-access',
       '@/config/server-env',
       '@minhaj/contracts/env/server',

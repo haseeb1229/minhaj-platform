@@ -452,12 +452,11 @@ test.describe('navigation is honest about what exists', () => {
       '/watch/audio',
       '/watch/galleries',
       '/fatwa',
-      // `/news` is delivered by Phase 13; Events and the newsletter are not,
-      // and stay asserted absent.
-      '/events',
+      // `/news` is delivered by Phase 13 and `/events` by Phase 14; the
+      // newsletter is not, and stays asserted absent.
       '/newsletter',
-      // `/global` is delivered by Phase 16; a Centre's Events are Phase 14's
-      // and stay asserted absent.
+      // `/global` is delivered by Phase 16. Local Events (Phase 14) live under
+      // each Centre, so no `/global/events` exists to be linked.
       '/global/events',
       // `/search` and `/topics` are delivered by Phase 17, and are asserted
       // present below.

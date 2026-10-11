@@ -12,6 +12,7 @@ import {
   createCorrespondenceService,
 } from '@/contexts/editorial';
 import { centreReferences } from './global';
+import { galleryReferences } from './media';
 import { identityRuntime } from './identity';
 import { peopleReadRuntime } from './people-read';
 import { taxonomyRuntime } from './taxonomy';
@@ -55,6 +56,9 @@ function buildEditorialRuntime() {
         // Phase 16: Global's reference interface answers; Editorial reads no
         // Global table (DOMAIN_MODEL.md §3.2, Editorial → Global Network).
         selectableCentre: (id) => centreReferences().centreSelectable(id),
+        // Phase 14: Media's reference interface answers; Editorial reads no
+        // Media table (DOMAIN_MODEL.md §3.2, Editorial → Media).
+        selectableGallery: (id) => galleryReferences().gallerySelectable(id),
       },
       reportFailure: (operation) =>
         appLogger().error({ operation }, 'Editorial operation failed.'),
@@ -76,7 +80,7 @@ export function editorialRuntime() {
 
 /** Bounded owner-provided choices; invoked only after the editor's permission check. */
 export async function editorialReferenceChoices(locale: Locale, query: string) {
-  const [people, topics, centres] = await Promise.all([
+  const [people, topics, centres, galleries] = await Promise.all([
     peopleRuntime().people.listPeople({
       query: query || null,
       status: 'published',
@@ -86,11 +90,13 @@ export async function editorialReferenceChoices(locale: Locale, query: string) {
     }),
     taxonomyRuntime().taxonomy.listTree({ locale, includeArchived: false }),
     centreReferences().centreChoices(query || null),
+    galleryReferences().galleryChoices(query || null),
   ]);
   return {
     people: people.items.map(({ id, label }) => ({ id, name: label.name })),
     topics: topics.map(({ id, label }) => ({ id, name: label.name })),
     centres,
+    galleries,
   };
 }
 
@@ -103,4 +109,13 @@ export function editorialCentreChoice(id: string) {
   return centreReferences()
     .centresByIds([id])
     .then((found) => found[0] ?? null);
+}
+
+/**
+ * The Galleries an Event revision already associates, WHATEVER their state now
+ * — so the editor shows an archived Gallery truthfully instead of silently
+ * dropping it. Invoked only after the editor's permission check.
+ */
+export function editorialGalleryChoices(ids: readonly string[]) {
+  return ids.length === 0 ? Promise.resolve([]) : galleryReferences().galleriesByIds(ids);
 }

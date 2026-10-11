@@ -12,6 +12,10 @@
  * the policy that decides when a track's bytes may be heard. PHASE 12 DELIVERS
  * PHOTOGRAPHS AND GALLERIES — Photo, Gallery and GalleryItem, the image upload
  * through Storage, and the same two-allow policy for a Photo's image.
+ *
+ * PHASE 14 ADDS THE GALLERY REFERENCE INTERFACE that Editorial's composition
+ * uses to associate a Gallery with an Event. Media depends on no Editorial
+ * code: the edge runs one way only, Editorial → Media (DOMAIN_MODEL.md §3.2).
  */
 export { createMediaService } from './application/service.ts';
 export { mediaFailure } from './application/refusal.ts';
@@ -22,6 +26,10 @@ export {
 } from './application/search-projection.ts';
 export { createAudioUpload } from './application/audio-upload.ts';
 export { createPhotoUpload } from './application/photo-upload.ts';
+export {
+  createGalleryReferences,
+  type GalleryReferences,
+} from './application/gallery-references.ts';
 export {
   createAudioAssetPolicy,
   createPhotoAssetPolicy,

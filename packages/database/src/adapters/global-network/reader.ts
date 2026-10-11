@@ -405,6 +405,36 @@ export function createGlobalPublicReader(): GlobalPublicReaderPort {
       return rows.map(place);
     },
 
+    async centreSummaries(ids) {
+      if (ids.length === 0) return [];
+      const rows = await db.centre.findMany({
+        where: { id: { in: [...ids].slice(0, ID_BATCH) }, ...PUBLIC_CENTRE },
+        select: SUMMARY_SELECT,
+      });
+      return rows.map(summary);
+    },
+
+    /**
+     * WHERE A CENTRE IS, NOT WHOM IT SERVES. A Country matches a Centre of that
+     * Country; a City only a Centre physically IN it — never one merely serving
+     * it, and never a virtual Centre, which has no place (DOMAIN_MODEL.md
+     * §17.1.1). Public Centres only, under public ancestors.
+     */
+    async physicalCentreIds({ countryId, cityId }, limit) {
+      const rows = await db.centre.findMany({
+        where: {
+          ...PUBLIC_CENTRE,
+          countryId,
+          isVirtual: false,
+          ...(cityId === null ? {} : { cityId }),
+        },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+        take: Math.max(1, Math.trunc(limit) || 1) + 1,
+      });
+      return rows.map((row) => row.id);
+    },
+
     async centreSitemap(offset, limit) {
       const rows = await db.centre.findMany({
         where: PUBLIC_CENTRE,

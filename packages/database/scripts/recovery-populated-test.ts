@@ -41,6 +41,12 @@ import {
   writePhase13Fixture,
 } from '../src/lifecycle/phase13-fixture.ts';
 import {
+  capturePhase14Fixture,
+  newPhase14Fixture,
+  verifyRestoredPhase14,
+  writePhase14Fixture,
+} from '../src/lifecycle/phase14-fixture.ts';
+import {
   capturePhase16Fixture,
   newPhase16Fixture,
   verifyRestoredPhase16,
@@ -169,6 +175,7 @@ const audioFixture = newPhase11Fixture();
 const photoFixture = newPhase12Fixture();
 const newsFixture = newPhase13Fixture();
 const globalFixture = newPhase16Fixture();
+const eventFixture = newPhase14Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -318,6 +325,26 @@ try {
   const globalSnapshot = await capturePhase16Fixture(admin, globalFixture);
   report('global fixture', `run ${globalFixture.runId}`);
 
+  // Phase-14 Events: a published Event renamed once and approved independently,
+  // in English and Urdu with a typed Topic and speaker, whose occurrences in a
+  // daylight-saving zone store both the local wall-clock time and the derived
+  // UTC instant — one in the repeated fall-back hour, at its LATER instant —
+  // held at the Phase-16 physical Centre and associated with the Phase-12
+  // Gallery, with its workflow audit trail.
+  const eventReferences = {
+    centreId: globalFixture.physicalCentreId,
+    galleryId: photoFixture.galleryId,
+  };
+  await writePhase14Fixture(admin, eventFixture, {
+    authorId: fixture.accountId,
+    reviewerId: peopleFixture.accountId,
+    personId: peopleFixture.linkedPersonId,
+    topicId: taxonomyFixture.childTopicId,
+    ...eventReferences,
+  });
+  const eventSnapshot = await capturePhase14Fixture(admin, eventFixture);
+  report('event fixture', `run ${eventFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -404,6 +431,10 @@ try {
   report(
     'global recovery',
     await verifyRestoredPhase16(restored, globalFixture, globalSnapshot),
+  );
+  report(
+    'event recovery',
+    await verifyRestoredPhase14(restored, eventFixture, eventSnapshot, eventReferences),
   );
 
   // ---- restored security posture -------------------------------------------
@@ -584,6 +615,20 @@ try {
           'CentreServiceCity UPDATE',
           'UPDATE [dbo].[CentreServiceCity] SET [cityId]=[cityId];',
         ],
+        // Phase 14. A restored runtime can neither erase an Event, move an
+        // occurrence or a revision's zone in place, remove a Gallery
+        // association, nor release a reserved slug.
+        ['Event DELETE', 'DELETE FROM [dbo].[Event];'],
+        [
+          'EventRevision UPDATE',
+          'UPDATE [dbo].[EventRevision] SET [timezone]=[timezone];',
+        ],
+        [
+          'EventSchedule UPDATE',
+          'UPDATE [dbo].[EventSchedule] SET [startsAt]=[startsAt];',
+        ],
+        ['EventGallery DELETE', 'DELETE FROM [dbo].[EventGallery];'],
+        ['EventSlugHistory DELETE', 'DELETE FROM [dbo].[EventSlugHistory];'],
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -616,6 +661,7 @@ try {
       await verifyRestoredPhase12(restored, photoFixture, photoSnapshot);
       await verifyRestoredPhase13(restored, newsFixture, newsSnapshot);
       await verifyRestoredPhase16(restored, globalFixture, globalSnapshot);
+      await verifyRestoredPhase14(restored, eventFixture, eventSnapshot, eventReferences);
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 
       // Phase 17. The full-text catalogue and index live INSIDE the database,

@@ -333,8 +333,9 @@ const FAMILY_PREVIEW = 3;
  * default and both are canonical to `/news`. On the first page, each other
  * family previews its latest records, and the photograph surfaces Phase 12
  * delivered are linked; a family with nothing published says so in its own
- * listing rather than rendering an empty frame here. No Event and no newsletter
- * is linked: neither exists yet.
+ * listing rather than rendering an empty frame here. Events (Phase 14) are linked
+ * as the other half of News and Events; the newsletter is not linked: it does
+ * not exist yet.
  */
 export async function NewsLandingPage({
   locale,
@@ -455,6 +456,18 @@ export async function NewsLandingPage({
                   </div>
                 </Panel>
               ))}
+              <Panel as="li">
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-lg font-semibold">
+                    <TextLink href={pathFor(locale, requireRoute('events'))}>
+                      {t('events')}
+                    </TextLink>
+                  </h3>
+                  <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                    {t('eventsBody')}
+                  </p>
+                </div>
+              </Panel>
               <Panel as="li">
                 <div className="flex flex-col gap-2">
                   <h3 className="text-lg font-semibold">

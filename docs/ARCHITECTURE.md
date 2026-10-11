@@ -767,7 +767,8 @@ Only these directed same-level edges are allowed. Each is **one-directional**; t
 | Permitted edge | Why | Reverse |
 |---|---|---|
 | **Messaging → Learning** | Message authorisation must verify a **current** teaching assignment or enrolment (DOMAIN_MODEL.md §15.3) | **`Learning → Messaging` is prohibited** |
-| **Editorial → Global Network** | A NewsArticle revision (and, from Phase 14, an Event) carries a typed Centre reference; Editorial asks Global's public reference interface whether a Centre may be chosen and never reads Global's tables (DOMAIN_MODEL.md §3.2, §17.1) | **`Global Network → Editorial` is prohibited** — a Centre page composes both at Layer 4 |
+| **Editorial → Global Network** | A NewsArticle revision and, since Phase 14, an Event revision carry a typed Centre reference; Editorial asks Global's public reference interface whether a Centre may be chosen and never reads Global's tables (DOMAIN_MODEL.md §3.2, §17.1) | **`Global Network → Editorial` is prohibited** — a Centre page composes both at Layer 4 |
+| **Editorial → Media** | Phase 14: an Event revision owns its typed, ordered association to Media-owned Galleries (`EventGallery`). Editorial asks Media's public reference interface whether a Gallery may be associated and never reads Media's tables; Media holds no Event column, table or code (DOMAIN_MODEL.md §3.2, §7.2.3) | **`Media → Editorial` is prohibited** — an Event's gallery view composes both at Layer 4 |
 
 Adding an edge to this table is an architecture decision requiring review — never a
 convenience taken during feature work. Any addition must preserve acyclicity.

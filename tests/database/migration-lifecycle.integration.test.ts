@@ -395,6 +395,17 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'CentreSlugHistory',
         'CentreServiceCity',
         'CentreContact',
+        // Phase 14 — Editorial's Event: record, immutable revisions, their
+        // translations, typed Topic and Person references, occurrences and
+        // ordered Gallery associations, and the permanent slug reservation.
+        'Event',
+        'EventRevision',
+        'EventRevisionTranslation',
+        'EventTopic',
+        'EventContributor',
+        'EventSchedule',
+        'EventGallery',
+        'EventSlugHistory',
       ].sort(),
     );
   });

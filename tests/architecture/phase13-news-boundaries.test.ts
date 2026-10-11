@@ -107,7 +107,9 @@ describe('four Editorial aggregates, and nothing generic', () => {
       'NewsItem',
       'EditorialContent',
       'ContentRevision',
-      'Event',
+      // `Event` is absent from this list since Phase 14 delivered it as its OWN
+      // Editorial aggregate; no News family gains an Event field (above).
+      'NewsEvent',
       'NewsletterSubscriber',
     ])
       expect(schema, absent).not.toMatch(new RegExp(`^model ${absent} \\{`, 'mu'));
@@ -140,7 +142,7 @@ describe('four Editorial aggregates, and nothing generic', () => {
 });
 
 describe('routes: path views that are curated, queries that are not', () => {
-  it('delivers the News route families and no sort, Event, newsletter or feed route', async () => {
+  it('delivers the News route families and no sort, News-scoped Event, newsletter or feed route', async () => {
     const base = 'apps/web/src/app/[locale]/(public)/news';
     for (const route of [
       'page.tsx',
@@ -154,11 +156,11 @@ describe('routes: path views that are curated, queries that are not', () => {
       'media-coverage/[slug]/page.tsx',
     ])
       expect(await exists(`${base}/${route}`), route).toBe(true);
-    for (const absent of ['latest', 'popular', 'featured'])
+    // `/events` is Phase 14's own top-level route family, never under `/news`.
+    for (const absent of ['latest', 'popular', 'featured', 'events'])
       expect(await exists(`${base}/${absent}`), absent).toBe(false);
     for (const absent of [
       'apps/web/src/app/[locale]/(public)/newsletter',
-      'apps/web/src/app/[locale]/(public)/events',
       'apps/web/src/app/rss',
       'apps/web/src/app/[locale]/(public)/media/downloads',
     ])

@@ -8,12 +8,20 @@ import {
   type MediaCoverageSource,
   type NewsKind,
 } from './news.ts';
+import {
+  EVENT_LIMITS,
+  EVENT_SCHEDULE_REFUSALS,
+  eventScheduleInputSchema,
+  resolveEventSchedule,
+  type EventSchedule,
+} from './event.ts';
 
 /**
  * Every aggregate the shared editorial workflow governs: Phase 6's Article and
- * Page, and Phase 13's four News families. One workflow, six sets of tables.
+ * Page, Phase 13's four News families and Phase 14's Event. One workflow, seven
+ * sets of tables.
  */
-export const editorialKindSchema = z.enum(['article', 'page', ...NEWS_KINDS]);
+export const editorialKindSchema = z.enum(['article', 'page', ...NEWS_KINDS, 'event']);
 export type EditorialKind = z.infer<typeof editorialKindSchema>;
 export const editorialStateSchema = z.enum([
   'draft',
@@ -135,6 +143,46 @@ const newsArticleContentSchema = z
   });
 
 /**
+ * PHASE 14 — an Event's content: the shared editorial content, the ONE Global
+ * Network Centre it is held at or none, its schedule and its ordered Media
+ * Galleries. All of it is revision state, so changing any of it is an ordinary
+ * edit that returns the Event to draft and needs fresh review.
+ *
+ * THE SCHEDULE IS RESOLVED HERE, ON THE SERVER: each local time becomes its
+ * authoritative UTC instant in the Event's zone, or the schedule is refused
+ * with the reason as the issue's message — a skipped or repeated local time is
+ * never silently moved (`./event.ts`).
+ */
+const eventContentSchema = z
+  .strictObject({
+    ...editorialContentSchema.shape,
+    centreId: editorialIdSchema.nullable().default(null),
+    schedule: eventScheduleInputSchema.transform((value, context): EventSchedule => {
+      const resolved = resolveEventSchedule(value);
+      if (resolved.ok) return resolved.schedule;
+      context.addIssue({ code: 'custom', message: resolved.refusal });
+      return z.NEVER;
+    }),
+    galleryIds: z
+      .array(editorialIdSchema)
+      .max(EVENT_LIMITS.galleries)
+      .refine((ids) => new Set(ids).size === ids.length, {
+        message: 'A Gallery is associated once.',
+      })
+      .default([]),
+  })
+  .superRefine(referencesAreUnique);
+
+/** The schedule refusal a failed Event parse carries, if that is why it failed. */
+export function eventScheduleRefusalOf(error: z.ZodError): string | null {
+  return (
+    error.issues.find((issue) =>
+      (EVENT_SCHEDULE_REFUSALS as readonly string[]).includes(issue.message),
+    )?.message ?? null
+  );
+}
+
+/**
  * THE content schema of one aggregate. Each is strict, so a field another family
  * owns — an issuer on an Article, an outlet on a Statement — is refused rather
  * than silently stored or silently dropped.
@@ -145,6 +193,7 @@ export function editorialContentSchemaFor(
   if (kind === 'statement') return statementContentSchema;
   if (kind === 'media-coverage') return mediaCoverageContentSchema;
   if (kind === 'news-article') return newsArticleContentSchema;
+  if (kind === 'event') return eventContentSchema;
   return editorialContentSchema;
 }
 
@@ -163,8 +212,15 @@ export interface EditorialContent {
   }[];
   /** A MediaCoverage record's source; absent for every other family. */
   readonly coverage?: MediaCoverageSource;
-  /** A NewsArticle's Global Network Centre, or `null`; absent for every other family. */
+  /**
+   * The Global Network Centre a NewsArticle is scoped to or an Event is held
+   * at, or `null`; absent for every other family.
+   */
   readonly centreId?: string | null;
+  /** An Event's resolved schedule; absent for every other family. */
+  readonly schedule?: EventSchedule;
+  /** An Event's ordered Media Galleries; absent for every other family. */
+  readonly galleryIds?: readonly string[];
 }
 export interface SafeEditorialTranslation extends EditorialTranslation {
   readonly html: string;
@@ -252,6 +308,17 @@ export interface PublicNews extends PublicEditorial {
    * public now; Editorial holds no Centre name and reads no Global table.
    */
   readonly centreId: string | null;
+}
+/**
+ * One published Event, as a visitor may see it: its words, its schedule, and
+ * its Centre and Galleries as IDENTIFIERS only. Whether a Centre or a Gallery is
+ * shown is decided at Layer 4 by asking Global and Media what is public now;
+ * Editorial holds no Centre or Gallery word and reads neither owner's tables.
+ */
+export interface PublicEvent extends PublicEditorial {
+  readonly schedule: EventSchedule;
+  readonly centreId: string | null;
+  readonly galleryIds: readonly string[];
 }
 export interface EditorialSitemapEntry {
   readonly id: string;

@@ -116,6 +116,8 @@ live('Phase 6 real SQL Editorial workflow and correspondence', () => {
         },
         // Articles and Pages carry no Centre; a NewsArticle's is proved in news tests.
         selectableCentre: async () => false,
+        // Nor any Gallery; an Event's are proved in `events.integration.test.ts`.
+        selectableGallery: async () => false,
       },
     });
     const configuration = {

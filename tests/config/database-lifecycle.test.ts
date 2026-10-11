@@ -149,13 +149,23 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'CentreSlugHistory',
       'CentreServiceCity',
       'CentreContact',
+      // Phase 14 — Editorial's Event, its revision-owned occurrences and its
+      // ordered Gallery associations.
+      'Event',
+      'EventRevision',
+      'EventRevisionTranslation',
+      'EventTopic',
+      'EventContributor',
+      'EventSchedule',
+      'EventGallery',
+      'EventSlugHistory',
     ]) {
       expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }
 
-    // Every LATER phase still arrives with the slice that owns it.
+    // Every LATER phase still arrives with the slice that owns it. (`Event`
+    // left this list when Phase 14 delivered it.)
     for (const table of [
-      'Event',
       'Collection',
       'Quran',
       'Hadith',

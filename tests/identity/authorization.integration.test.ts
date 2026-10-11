@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { PLATFORM_ADMINISTRATOR_ROLE } from '../../packages/contracts/src/identity/index.ts';
+import { PERMISSION_CATALOGUE } from '../../packages/contracts/src/identity/permissions.ts';
 import type { PrivilegedActor } from '../../packages/contracts/src/identity/index.ts';
 
 import {
@@ -414,9 +415,38 @@ describe.skipIf(!databaseConfigured)(
           'city.',
           'centre.',
           'messaging.',
+          // News (Phase 13) and Events (Phase 14) joined the shared editorial
+          // workflow under the `content.*` keys: no per-family vocabulary.
+          'news.',
+          'event.',
+          'events.',
         ]) {
           expect(keys.some((key) => key.startsWith(domain))).toBe(false);
         }
+      });
+
+      it('stores the editorial descriptions this build compiles, naming Events', async () => {
+        // The interface prefers the compiled words, so a migration that forgot
+        // to retarget a stored description would drift unseen. Phases 13 and 14
+        // retargeted `content.read` and `content.author` as the shared workflow
+        // grew; this reads what the MIGRATIONS left in the table, not the merged
+        // view the catalogue presents.
+        const stored = await database.admin.query<{ key: string; description: string }>(
+          "SELECT [key], [description] FROM [dbo].[Permission] WHERE [key] LIKE N'content.%';",
+        );
+        const compiled = new Map(
+          PERMISSION_CATALOGUE.map((entry) => [entry.key, entry.description]),
+        );
+        expect(stored.map((row) => row.key).sort()).toEqual([
+          'content.author',
+          'content.publish',
+          'content.read',
+          'content.review',
+        ]);
+        for (const row of stored)
+          expect(row.description, row.key).toBe(compiled.get(row.key));
+        for (const key of ['content.read', 'content.author'])
+          expect(compiled.get(key), key).toContain('event');
       });
 
       it('gives the protected role the appended Taxonomy keys, by migration', async () => {

@@ -12,6 +12,7 @@ import {
   type GalleryRecord,
   type MediaPersistencePort,
   type MediaPublicReaderPort,
+  type MediaReferencePort,
   type MediaState,
   type PhotoLabel,
   type PhotoPage,
@@ -669,7 +670,11 @@ type PhotoPublicReader = Pick<
   | 'galleryCanonicalSlug'
   | 'galleryPhotos'
   | 'gallerySitemap'
+  | 'publicGalleries'
 >;
+
+/** At most this many Galleries are composed for one Event at a time. */
+const EVENT_GALLERY_BATCH = 50;
 
 /** A published Gallery with at least one public Photo — what is LISTED. */
 const LISTED_GALLERY = {
@@ -778,6 +783,18 @@ export function photoPublicReader(): PhotoPublicReader {
       return photoPage(rows.map((row) => row.photo));
     },
 
+    async publicGalleries(ids) {
+      if (ids.length === 0) return [];
+      const wanted = [...new Set(ids)].slice(0, EVENT_GALLERY_BATCH);
+      const rows = await db.gallery.findMany({
+        where: { id: { in: wanted }, ...LISTED_GALLERY },
+        select: GALLERY_SELECT,
+      });
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      // The caller's order, which is the Event's; an unlisted Gallery is absent.
+      return withCovers(wanted.flatMap((id) => byId.get(id) ?? []));
+    },
+
     async gallerySitemap(offset, limit) {
       const rows = await db.gallery.findMany({
         where: LISTED_GALLERY,
@@ -796,6 +813,51 @@ export function photoPublicReader(): PhotoPublicReader {
         locales: row.labels.map((label) => label.locale),
         updatedAt: row.updatedAt,
       }));
+    },
+  };
+}
+
+/* ===========================================================================
+ * The reference surface — Phase 14, Editorial → Media
+ * ========================================================================= */
+
+/** How many Galleries an Event editor's selector offers at once. */
+const GALLERY_CHOICES = 50;
+
+/**
+ * Which Galleries an editor may associate with an Event: identity, words and
+ * lifecycle state, nothing more. No Photo, asset or membership leaves here, and
+ * nothing is written.
+ */
+export function createMediaReferences(): MediaReferencePort {
+  const db = getDatabaseClient();
+  return {
+    async galleryChoices(text) {
+      const rows = await db.gallery.findMany({
+        where: { state: { not: 'archived' }, ...textMatch(text) },
+        select: GALLERY_SELECT,
+        orderBy: [{ slug: 'asc' }, { id: 'asc' }],
+        take: GALLERY_CHOICES,
+      });
+      return rows.map(toGallery);
+    },
+
+    async galleriesByIds(ids) {
+      if (ids.length === 0) return [];
+      const rows = await db.gallery.findMany({
+        where: { id: { in: [...new Set(ids)].slice(0, GALLERY_CHOICES) } },
+        select: GALLERY_SELECT,
+      });
+      return rows.map(toGallery);
+    },
+
+    async gallerySelectable(id) {
+      return (
+        (await db.gallery.findFirst({
+          where: { id, state: { not: 'archived' } },
+          select: { id: true },
+        })) !== null
+      );
     },
   };
 }
