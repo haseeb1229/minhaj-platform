@@ -170,7 +170,10 @@ test.describe('the privileged administrator', () => {
     await page.goto('/en/admin/identity/assignments');
     await expect(page.getByRole('main')).toContainText('platform-administrator');
 
-    await page.goto('/en/admin/system/audit');
+    // Through the audit view's own Action filter: the unfiltered view is a
+    // bounded newest-first page, and specs running in parallel append rows
+    // that legitimately push the bootstrap record off it.
+    await page.goto('/en/admin/system/audit?action=identity.bootstrap.completed');
     await expect(page.getByRole('main')).toContainText('identity.bootstrap.completed');
 
     await page.goto('/en/admin/communications/delivery');
