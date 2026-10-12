@@ -180,6 +180,41 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // identity, and NOT ONE ROW of content is seeded (DOMAIN_MODEL.md §8),
   // asserted by `assertQuranFoundation` and proved as behaviour by
   // `assertQuranCanonicalRules`.
+  // THE HADITH CONTEXT in the same four postures: operator-registered SOURCE
+  // systems, editions and activations; the CANONICAL structure, source-qualified
+  // records, history, gradings, verification, citation mapping and conflict
+  // evidence, written only by six procedures; the LAYERED works; typed topic
+  // assignment. A record's identity is its source — collection, source system,
+  // edition and the source's own reference — and a public citation is a
+  // SEPARATE reviewed mapping; NOT ONE ROW of content is seeded (DOMAIN_MODEL.md
+  // §9), asserted by `assertHadithFoundation` and proved as behaviour by
+  // `assertHadithCanonicalRules`.
+  '20261003000000_phase19_hadith': [
+    'HadithSourceSystem',
+    'HadithCollection',
+    'HadithEdition',
+    'HadithActivation',
+    'HadithBook',
+    'HadithChapter',
+    'Hadith',
+    'HadithRevision',
+    'HadithGrading',
+    'HadithVerification',
+    'HadithCitation',
+    'HadithCitationRevision',
+    'HadithConflict',
+    'HadithCollectionName',
+    'HadithBookName',
+    'HadithChapterName',
+    'HadithTranslation',
+    'HadithTranslationContributor',
+    'HadithCommentary',
+    'HadithCommentaryContributor',
+    'HadithCommentaryEntry',
+    'HadithScience',
+    'HadithScienceText',
+    'HadithTopic',
+  ],
   '20261002000000_phase18_quran': [
     'QuranSource',
     'QuranSourceSurah',
@@ -363,7 +398,8 @@ const PREMATURE_TABLES = [
   // shares no table with the editorial Collection.
   'PrivateCollection',
   'Quran',
-  'Hadith',
+  // `Hadith` left this list when Phase 19 delivered it as the source-qualified
+  // record of its own context.
   'Book',
   'Fatwa',
   // `Scholar` and `Teacher` stay here after Phase 5, and the near-miss is
@@ -407,6 +443,14 @@ const PREMATURE_TABLES = [
   'QuranTranslationSlugHistory',
   'QuranTafsirSlugHistory',
   'QuranRecitationSlugHistory',
+  // Phase 19 delivers Hadith with NO per-user state — bookmarks and progress are
+  // Phase 21's — and with slugs that never change, so no layered work or
+  // structure owes a slug history.
+  'HadithBookmark',
+  'HadithReadingProgress',
+  'HadithCollectionSlugHistory',
+  'HadithCommentarySlugHistory',
+  'HadithScienceSlugHistory',
   // Phase 12 delivers galleries with NO Event relationship: the typed
   // Event↔Gallery association is Phase 14's `EventGallery`, which left this list
   // when Phase 14 delivered it on the Event revision. A Media-owned reverse join
@@ -592,6 +636,25 @@ const PROHIBITED_TABLES = [
   'QuranTarget',
   'AyahTarget',
   'QuranAssignment',
+
+  // PHASE 19 — the chain is the source's EXACT TEXT and a grading is what a
+  // named grader said (DOMAIN_MODEL.md §9). A narrator aggregate or chain-link
+  // table would turn sourced text into platform-asserted biography; a grade
+  // vocabulary would make the platform a grading authority; a bare number or
+  // second record table would lose the source-qualified identity; and a Hadith
+  // target or assignment table would be the polymorphic reference §6.2 refuses.
+  'Narrator',
+  'NarratorProfile',
+  'HadithNarrator',
+  'HadithChainLink',
+  'HadithGrade',
+  'HadithGradeScale',
+  'HadithNumber',
+  'HadithRecord',
+  'HadithContent',
+  'HadithLayer',
+  'HadithTarget',
+  'HadithAssignment',
 ];
 
 const EXPECTED_AUDIT_COLUMNS = [
@@ -791,6 +854,48 @@ const EXPECTED_COLUMN_SIZES: readonly {
     column: 'text',
     characters: 4000,
   })),
+  // Phase 19. Each public address is a unique key; a source's own reference is
+  // a byte-compared key no longer than the comparison's VARBINARY(128); every
+  // content language a foreign key into `Language.code`; a grader the key its
+  // gradings are unique by; a display-name locale one of three.
+  ...[
+    'HadithCollection',
+    'HadithBook',
+    'HadithChapter',
+    'HadithCommentary',
+    'HadithScience',
+  ].map((table) => ({ table, column: 'slug', characters: 120 })),
+  ...[
+    ['Hadith', 'sourceReference'],
+    ['HadithRevision', 'sourceReference'],
+    ['HadithBook', 'reference'],
+    ['HadithChapter', 'reference'],
+    ['HadithSourceSystem', 'code'],
+    ['HadithEdition', 'code'],
+    ['HadithConflict', 'facets'],
+  ].map(([table, column]) => ({
+    table: table ?? '',
+    column: column ?? '',
+    characters: 64,
+  })),
+  ...[
+    ['Hadith', 'textLanguage'],
+    ['Hadith', 'chainLanguage'],
+    ['HadithGrading', 'labelLanguage'],
+    ['HadithTranslation', 'languageCode'],
+    ['HadithCommentary', 'languageCode'],
+    ['HadithScienceText', 'languageCode'],
+  ].map(([table, column]) => ({
+    table: table ?? '',
+    column: column ?? '',
+    characters: 16,
+  })),
+  { table: 'HadithGrading', column: 'grader', characters: 200 },
+  ...['HadithCollectionName', 'HadithBookName', 'HadithChapterName'].map((table) => ({
+    table,
+    column: 'locale',
+    characters: 8,
+  })),
 ];
 
 /**
@@ -876,6 +981,60 @@ const EXPECTED_FILTERED_INDEXES: readonly {
     why: 'one audio file could be served as two different recitation segments',
   },
 ];
+
+/** The twenty-four Phase-19 tables, in the migration's order. */
+const HADITH_TABLES = MIGRATION_EXPECTATIONS['20261003000000_phase19_hadith'] ?? [];
+
+/**
+ * Each Hadith trigger, the table it guards and the refusal numbers its body
+ * raises: 51200 an immutable registered source, 51201 immutable canonical
+ * structure, 51202 a canonical change that is a recorded, one-step version,
+ * 51203 immutable history and evidence, 51204 no mapped citation under
+ * conflict evidence, 51205 no fixture record in an approved collection, 51206
+ * activation integrity, 51207 a published work keeps its text, 51208 no
+ * approved record in a collection activated as fixture.
+ */
+const HADITH_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, string]>> = {
+  HadithSourceSystemImmutable: ['HadithSourceSystem', '51200'],
+  HadithEditionImmutable: ['HadithEdition', '51200'],
+  HadithCollectionImmutable: ['HadithCollection', '51201'],
+  HadithBookImmutable: ['HadithBook', '51201'],
+  HadithChapterImmutable: ['HadithChapter', '51201'],
+  HadithCanonicalChange: ['Hadith', '51201+51202'],
+  HadithCitationChange: ['HadithCitation', '51201+51202'],
+  HadithRevisionImmutable: ['HadithRevision', '51203'],
+  HadithGradingImmutable: ['HadithGrading', '51203'],
+  HadithVerificationImmutable: ['HadithVerification', '51203'],
+  HadithCitationRevisionImmutable: ['HadithCitationRevision', '51203'],
+  HadithConflictImmutable: ['HadithConflict', '51203'],
+  HadithCitationIntegrity: ['HadithCitation', '51204+51205+51208'],
+  HadithActivationIntegrity: ['HadithActivation', '51205+51206+51208'],
+  HadithCommentaryPublishedText: ['HadithCommentary', '51207'],
+  HadithSciencePublishedText: ['HadithScience', '51207'],
+  HadithCommentaryEntryKept: ['HadithCommentaryEntry', '51207'],
+  HadithScienceTextKept: ['HadithScienceText', '51207'],
+};
+
+/**
+ * THE canonical write path, and the refusals each procedure raises: 51210 the
+ * live authority, 51211 a registered edition, 51212 an existing record or
+ * book, 51213 the expected version, 51214 a mapped record keeps its citation,
+ * 51215 structure of the record's own edition, 51216 evidence and reason,
+ * 51217 well-formed gradings, 51218 a change that changes something, 51219 a
+ * verified candidate, 51220 a declared candidate, 51204 no conflict evidence.
+ * Collection creation and conflict detection raise nothing of their own: the
+ * one relies on the authority check and its CHECKs, the other only records.
+ */
+const HADITH_PROCEDURE_NUMBERS: Readonly<Record<string, string>> = {
+  HadithAssertCanonicalAuthority: '51210',
+  HadithDetectConflicts: '',
+  HadithCreateCollection: '',
+  HadithCreateBook: '51211',
+  HadithCreateChapter: '51212',
+  HadithWriteRecord: '51211+51212+51213+51214+51215+51216+51217+51218',
+  HadithVerifyRecord: '51212+51213+51216+51218',
+  HadithSetCitation: '51204+51213+51216+51218+51219+51220',
+};
 
 /** The twenty-three Phase-18 tables, in the migration's order. */
 const QURAN_TABLES = MIGRATION_EXPECTATIONS['20261002000000_phase18_quran'] ?? [];
@@ -1021,6 +1180,9 @@ const EXPECTED_TRIGGERS = [
   // Phase 18: every Quran invariant no constraint can express — each listed,
   // with the refusal it raises, in `QURAN_TRIGGER_NUMBERS`.
   ...Object.keys(QURAN_TRIGGER_NUMBERS),
+  // Phase 19: every Hadith invariant no constraint can express — each listed,
+  // with the refusal it raises, in `HADITH_TRIGGER_NUMBERS`.
+  ...Object.keys(HADITH_TRIGGER_NUMBERS),
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
@@ -1273,6 +1435,51 @@ const EXPECTED_CHECK_CONSTRAINTS = [
     'QuranTafsirText',
     'QuranRecitationSegment',
     'QuranTajweedRuleText',
+  ].map((table) => ({ table, constraint: table + '_ck' })),
+  // Phase 19. A source system's authority, evidence, encoding and naming; an
+  // edition's naming; ONE authority per activation; slug grammar on every
+  // public address and the reserved section words on a collection's; source
+  // references present, unpadded and free of control characters; bounded
+  // citation numbers and texts; a correction that states its reason; a grading
+  // with its grader, label and reference; verification evidence; a citation
+  // that is mapped or withdrawn; conflict facets from a closed alphabet; a
+  // layered work published only with a registered source system; closed
+  // contributor roles; bounded entries and texts.
+  ...['authority', 'evidence', 'encoding', 'code'].map((rule) => ({
+    table: 'HadithSourceSystem',
+    constraint: 'HadithSourceSystem_' + rule + '_ck',
+  })),
+  { table: 'HadithEdition', constraint: 'HadithEdition_code_ck' },
+  ...[
+    'HadithCollection',
+    'HadithBook',
+    'HadithChapter',
+    'HadithCommentary',
+    'HadithScience',
+  ].map((table) => ({ table, constraint: table + '_slug_ck' })),
+  ...['HadithTranslation', 'HadithCommentary', 'HadithScience'].map((table) => ({
+    table,
+    constraint: table + '_state_ck',
+  })),
+  ...[
+    'HadithActivation',
+    'HadithCollection',
+    'HadithBook',
+    'HadithChapter',
+    'Hadith',
+    'HadithRevision',
+    'HadithGrading',
+    'HadithVerification',
+    'HadithCitation',
+    'HadithCitationRevision',
+    'HadithConflict',
+    'HadithCollectionName',
+    'HadithBookName',
+    'HadithChapterName',
+    'HadithTranslationContributor',
+    'HadithCommentaryContributor',
+    'HadithCommentaryEntry',
+    'HadithScienceText',
   ].map((table) => ({ table, constraint: table + '_ck' })),
 ];
 
@@ -1754,17 +1961,20 @@ const PHASE13_KINDS = ['media-coverage', 'news-article', 'press-release', 'state
 /** The canonical citation is the result unit; its scope is one Ayah. */
 const PHASE18_KINDS = ['quran-ayah'];
 
+/** The public citation is the result unit; its scope is one HadithCitation. */
+const PHASE19_KINDS = ['hadith'];
+
 /**
  * Phase 9 WIDENS the search vocabularies by exactly its six kinds, each its own
- * scope, Phase 10 by exactly `video`, Phase 11 by exactly `audio` and Phase 18
- * by exactly `quran-ayah`; each rollback narrows them back to exactly the
+ * scope, Phase 10 by exactly `video`, Phase 11 by exactly `audio`, Phase 18
+ * by exactly `quran-ayah` and Phase 19 by exactly `hadith`; each rollback narrows them back to exactly the
  * previous phase's. Asserted against the catalogue in every
  * direction, so a migration that pre-created a later domain's kind, or a
  * rollback that left one behind, fails here.
  */
 async function assertSearchVocabulary(
   session: SqlSession,
-  stage: 'phase17' | 'phase9' | 'phase10' | 'phase11' | 'phase13' | 'phase18',
+  stage: 'phase17' | 'phase9' | 'phase10' | 'phase11' | 'phase13' | 'phase18' | 'phase19',
 ): Promise<void> {
   const sorted = (values: readonly string[]) => [...values].sort().join(',');
   const phase13 = [...PHASE9_KINDS, ...PHASE10_KINDS, ...PHASE11_KINDS, ...PHASE13_KINDS];
@@ -1775,6 +1985,7 @@ async function assertSearchVocabulary(
     phase11: [...PHASE9_KINDS, ...PHASE10_KINDS, ...PHASE11_KINDS],
     phase13,
     phase18: [...phase13, ...PHASE18_KINDS],
+    phase19: [...phase13, ...PHASE18_KINDS, ...PHASE19_KINDS],
   }[stage];
   const scopes = sorted([...PHASE17_SCOPES, ...added]);
   const kinds = sorted([...PHASE17_KINDS, ...added]);
@@ -1800,6 +2011,8 @@ async function assertSearchVocabulary(
       phase13: 'Phase 17, the six Phase-9 kinds, video, audio and the four News kinds',
       phase18:
         'Phase 17, the six Phase-9 kinds, video, audio, the four News kinds and quran-ayah',
+      phase19:
+        'Phase 17, the six Phase-9 kinds, video, audio, the four News kinds, quran-ayah and hadith',
     }[stage],
   );
 }
@@ -2712,12 +2925,21 @@ async function assertCollectionFoundation(session: SqlSession): Promise<void> {
       `Every Collection reference into another owner must be ONE typed column; found ${JSON.stringify(external)}.`,
     );
 
+  // Phase 19's `HadithCollection` is a DIFFERENT aggregate that shares the
+  // word: the Hadith context's own namespace of collections, named by its own
+  // tables' `collectionId` columns and keyed only to its own tables (the
+  // inbound count above stays zero, and `assertHadithFoundation` proves those
+  // tables reach no Editorial table). Only those tables are set aside here.
+  // By NAME, never OBJECT_ID: once Phase 19 is rolled back an OBJECT_ID is
+  // NULL, and NOT IN over a NULL would silently excuse every column.
+  const hadithOwn = HADITH_TABLES.map((table) => `N'${table}'`).join(',');
   const [ownership] = await session.query<{ inbound: number; columns: string | null }>(`
     SELECT
       (SELECT COUNT(*) FROM sys.foreign_keys
         WHERE referenced_object_id IN (${tables}) AND parent_object_id NOT IN (${tables})) AS inbound,
       (SELECT STRING_AGG(OBJECT_NAME(c.object_id) + N'.' + c.name, N',') FROM sys.columns c
         WHERE c.name LIKE N'%collection%' AND c.object_id NOT IN (${tables})
+          AND OBJECT_NAME(c.object_id) NOT IN (${hadithOwn})
           AND OBJECTPROPERTY(c.object_id, 'IsUserTable') = 1) AS columns;
   `);
   if (Number(ownership?.inbound) !== 0 || (ownership?.columns ?? null) !== null)
@@ -4725,6 +4947,2038 @@ async function assertQuranCanonicalRules(session: SqlSession): Promise<void> {
   );
 }
 
+const HADITH_PERMISSIONS = ['hadith.administer', 'hadith.editCanonical', 'hadith.read'];
+
+/**
+ * EVERY foreign key from a Hadith table to another owner's table, exactly: the
+ * content languages, the contributors and the Topic. None names a User — a
+ * canonical revision's, verification's or citation's actor and step-up grant
+ * are HISTORICAL identifiers that must outlive the rows they name
+ * (DOMAIN_MODEL.md §6.2.1) — and none names Quran, Library, Media, Editorial
+ * or People beyond a contributor.
+ */
+const HADITH_EXTERNAL_KEYS = [
+  'HadithBook_titleLanguage_fkey>Language',
+  'HadithChapter_titleLanguage_fkey>Language',
+  'HadithCommentaryContributor_personId_fkey>Person',
+  'HadithCommentary_languageCode_fkey>Language',
+  'HadithGrading_labelLanguage_fkey>Language',
+  'HadithScienceText_languageCode_fkey>Language',
+  'HadithTopic_topicId_fkey>Topic',
+  'HadithTranslationContributor_personId_fkey>Person',
+  'HadithTranslation_languageCode_fkey>Language',
+  'Hadith_chainLanguage_fkey>Language',
+  'Hadith_textLanguage_fkey>Language',
+].sort();
+
+/**
+ * Phase 19 — what only the catalogue can prove about Hadith:
+ *
+ *   1. NOTHING IS SEEDED: all twenty-four tables are empty after deploy. The
+ *      collections, editions, numbering and grading authority are open
+ *      external decisions (OPEN_DECISIONS.md §1.3, §1.5, §1.6), so a migrated
+ *      database holds NO corpus;
+ *   2. the record's identity is its SOURCE: the only uniqueness on a record is
+ *      `(editionId, sourceReference)` — no bare number is a key — and the
+ *      public citation `(collectionId, number)` is a separate table whose
+ *      composite key reaches only a record that DECLARED that number; every
+ *      structural key carries the edition, and every source reference and
+ *      grader is held under a binary collation;
+ *   3. no Hadith foreign key cascades, its references into other owners are
+ *      EXACTLY the eleven above, no other owner references a Hadith table or
+ *      holds a Hadith or narrator column, and no Hadith table carries a type,
+ *      target, narrator or foreign-context column;
+ *   4. every canonical and layered text is NVARCHAR(MAX);
+ *   5. each of the eighteen triggers and eight procedures raises exactly its
+ *      own numbers from 51200–51220, on the table it guards;
+ *   6. the Hadith vocabulary is exactly three keys, all in the protected bundle.
+ *
+ * The rules themselves are proved as BEHAVIOUR by `assertHadithCanonicalRules`,
+ * and through the runtime login by `db:test:permissions`.
+ */
+async function assertHadithFoundation(session: SqlSession): Promise<void> {
+  const tables = HADITH_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',');
+  const names = HADITH_TABLES.map((table) => `N'${table}'`).join(',');
+
+  // ---- 1. NO corpus ----------------------------------------------------------
+  const counts = await session.query<{ name: string; total: number }>(
+    HADITH_TABLES.map(
+      (table) =>
+        `SELECT N'${table}' AS [name], COUNT_BIG(*) AS [total] FROM [dbo].[${table}]`,
+    ).join(' UNION ALL ') + ';',
+  );
+  const seeded = counts.filter((row) => Number(row.total) !== 0);
+  if (HADITH_TABLES.length !== 24 || counts.length !== 24 || seeded.length > 0)
+    fail(
+      `The Hadith migration must create twenty-four empty tables and seed no content; ` +
+        `found ${String(counts.length)} tables, seeded: ${JSON.stringify(seeded)}.`,
+    );
+
+  // ---- 2. source-qualified identity, a separate citation ---------------------
+  const unique = await session.query<{ name: string; columns: string }>(`
+    SELECT i.[name], STRING_AGG(COL_NAME(ic.[object_id], ic.[column_id]), N',')
+      WITHIN GROUP (ORDER BY ic.[key_ordinal]) AS [columns]
+    FROM sys.indexes i
+    JOIN sys.index_columns ic ON ic.[object_id] = i.[object_id] AND ic.[index_id] = i.[index_id]
+    WHERE i.[is_unique] = 1 AND ic.[key_ordinal] > 0
+      AND i.[object_id] IN (OBJECT_ID(N'[dbo].[Hadith]'), OBJECT_ID(N'[dbo].[HadithCitation]'),
+                            OBJECT_ID(N'[dbo].[HadithEdition]'))
+    GROUP BY i.[name];
+  `);
+  const describedUnique = unique
+    .map((row) => `${row.name}(${row.columns})`)
+    .sort()
+    .join(',');
+  const expectedUnique = [
+    'HadithCitation_id_key(id)',
+    'HadithCitation_pkey(collectionId,number)',
+    'HadithEdition_code_key(collectionId,sourceSystemId,code)',
+    'HadithEdition_collection_key(id,collectionId)',
+    'HadithEdition_identity_key(id,collectionId,sourceSystemId)',
+    'HadithEdition_pkey(id)',
+    'Hadith_citation_key(id,collectionId,citationNumber)',
+    'Hadith_identity_key(editionId,sourceReference)',
+    'Hadith_pkey(id)',
+  ]
+    .sort()
+    .join(',');
+  if (describedUnique !== expectedUnique)
+    fail(
+      `A Hadith record must be unique by its edition and source reference alone, and a ` +
+        `citation by its collection and number; found ${describedUnique}.`,
+    );
+
+  const composite = await session.query<{ name: string; columns: string }>(`
+    SELECT fk.[name], STRING_AGG(COL_NAME(c.[parent_object_id], c.[parent_column_id]) + N'>'
+        + COL_NAME(c.[referenced_object_id], c.[referenced_column_id]), N',')
+      WITHIN GROUP (ORDER BY c.[constraint_column_id]) AS [columns]
+    FROM sys.foreign_keys fk
+    JOIN sys.foreign_key_columns c ON c.[constraint_object_id] = fk.[object_id]
+    WHERE fk.[name] IN (N'HadithCitation_candidate_fkey', N'Hadith_edition_fkey', N'Hadith_book_fkey',
+                        N'Hadith_chapter_fkey', N'HadithBook_edition_fkey')
+    GROUP BY fk.[name];
+  `);
+  const describedComposite = composite
+    .map((row) => `${row.name}(${row.columns})`)
+    .sort()
+    .join(',');
+  const expectedComposite = [
+    'HadithBook_edition_fkey(editionId>id,collectionId>collectionId)',
+    'HadithCitation_candidate_fkey(hadithId>id,collectionId>collectionId,number>citationNumber)',
+    'Hadith_book_fkey(bookId>id,editionId>editionId)',
+    'Hadith_chapter_fkey(chapterId>id,bookId>bookId)',
+    'Hadith_edition_fkey(editionId>id,collectionId>collectionId,sourceSystemId>sourceSystemId)',
+  ]
+    .sort()
+    .join(',');
+  if (describedComposite !== expectedComposite)
+    fail(
+      `A record must sit in its own edition's structure and a citation reach only a declared ` +
+        `candidate; found ${describedComposite}.`,
+    );
+
+  const collations = await session.query<{ name: string; collation: string | null }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] AS [name], c.[collation_name] AS [collation]
+    FROM sys.columns c
+    WHERE (c.[object_id] IN (OBJECT_ID(N'[dbo].[Hadith]'), OBJECT_ID(N'[dbo].[HadithRevision]')) AND c.[name] = N'sourceReference')
+       OR (c.[object_id] IN (OBJECT_ID(N'[dbo].[HadithBook]'), OBJECT_ID(N'[dbo].[HadithChapter]')) AND c.[name] = N'reference')
+       OR (c.[object_id] = OBJECT_ID(N'[dbo].[HadithGrading]') AND c.[name] = N'grader');
+  `);
+  if (
+    collations.length !== 5 ||
+    collations.some((row) => row.collation !== 'Latin1_General_100_BIN2')
+  )
+    fail(
+      `Every source reference and grader must compare by its exact bytes; found ` +
+        `${JSON.stringify(collations)}.`,
+    );
+
+  // ---- 3. no cascade, exact external edges, no foreign Hadith schema ---------
+  const cascading = await session.query<{ name: string }>(`
+    SELECT [name] FROM sys.foreign_keys
+    WHERE [parent_object_id] IN (${tables})
+      AND ([delete_referential_action] <> 0 OR [update_referential_action] <> 0);
+  `);
+  if (cascading.length > 0)
+    fail(
+      `Phase-19 foreign keys must not cascade; found ${cascading.map((row) => row.name).join(', ')}.`,
+    );
+
+  const external = await session.query<{ edge: string }>(`
+    SELECT fk.[name] + N'>' + OBJECT_NAME(fk.[referenced_object_id]) AS [edge]
+    FROM sys.foreign_keys fk
+    WHERE fk.[parent_object_id] IN (${tables}) AND fk.[referenced_object_id] NOT IN (${tables});
+  `);
+  const edges = external.map((row) => row.edge).sort();
+  if (edges.join(',') !== HADITH_EXTERNAL_KEYS.join(','))
+    fail(
+      `Hadith's references into other owners must be exactly ${HADITH_EXTERNAL_KEYS.join(', ')}; ` +
+        `found ${edges.join(', ')}.`,
+    );
+
+  const [ownership] = await session.query<{ inbound: number; columns: string | null }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE [referenced_object_id] IN (${tables}) AND [parent_object_id] NOT IN (${tables})) AS [inbound],
+      (SELECT STRING_AGG(OBJECT_NAME(c.[object_id]) + N'.' + c.[name], N',') FROM sys.columns c
+        WHERE (c.[name] LIKE N'%hadith%' OR c.[name] LIKE N'%narrator%' OR c.[name] LIKE N'%isnad%'
+               OR c.[name] LIKE N'%grading%')
+          AND OBJECT_NAME(c.[object_id]) NOT IN (${names})
+          AND OBJECTPROPERTY(c.[object_id], 'IsUserTable') = 1) AS [columns];
+  `);
+  if (Number(ownership?.inbound) !== 0 || (ownership?.columns ?? null) !== null)
+    fail(
+      `No other owner may hold Hadith schema; found ${JSON.stringify(ownership ?? null)}.`,
+    );
+
+  const generic = await session.query<{ name: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] AS [name] FROM sys.columns c
+    WHERE c.[object_id] IN (${tables})
+      AND (c.[name] LIKE N'%type%' OR c.[name] LIKE N'%target%' OR c.[name] LIKE N'%kind%'
+           OR c.[name] LIKE N'%narrator%' OR (c.[name] LIKE N'%grade%' AND c.[name] <> N'grader') OR c.[name] LIKE N'%rank%'
+           OR c.[name] LIKE N'%quran%' OR c.[name] LIKE N'%surah%' OR c.[name] LIKE N'%ayah%'
+           OR c.[name] LIKE N'%media%' OR c.[name] LIKE N'%work%');
+  `);
+  if (generic.length > 0)
+    fail(
+      `Hadith tables may carry no type, target, narrator, grade or foreign-context column; ` +
+        `found ${JSON.stringify(generic)}.`,
+    );
+
+  // ---- 4. Unicode text everywhere it lives -----------------------------------
+  const texts = await session.query<{ name: string; type: string; size: number }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] AS [name], TYPE_NAME(c.[user_type_id]) AS [type],
+      c.[max_length] AS [size]
+    FROM sys.columns c
+    WHERE c.[name] IN (N'text', N'chain', N'body') AND c.[object_id] IN (${tables});
+  `);
+  const describedTexts = texts
+    .map((row) => `${row.name}:${row.type}(${String(row.size)})`)
+    .sort()
+    .join(',');
+  const expectedTexts = [
+    'Hadith.chain:nvarchar(-1)',
+    'Hadith.text:nvarchar(-1)',
+    'HadithCommentaryEntry.text:nvarchar(-1)',
+    'HadithRevision.chain:nvarchar(-1)',
+    'HadithRevision.text:nvarchar(-1)',
+    'HadithScienceText.body:nvarchar(-1)',
+    'HadithTranslation.text:nvarchar(-1)',
+  ].join(',');
+  if (describedTexts !== expectedTexts)
+    fail(`Hadith text columns differ: ${describedTexts}.`);
+
+  // ---- 5. every refusal in its own place -------------------------------------
+  const triggers = await session.query<{
+    name: string;
+    tableName: string;
+    definition: string | null;
+  }>(`
+    SELECT t.[name], OBJECT_NAME(t.[parent_id]) AS [tableName], OBJECT_DEFINITION(t.[object_id]) AS [definition]
+    FROM sys.triggers t WHERE t.[parent_id] IN (${tables});
+  `);
+  const describedTriggers = triggers
+    .map((row) => `${row.name}@${row.tableName}:${raisedNumbers(row.definition)}`)
+    .sort()
+    .join(',');
+  const expectedTriggers = Object.entries(HADITH_TRIGGER_NUMBERS)
+    .map(([name, [table, numbers]]) => `${name}@${table}:${numbers}`)
+    .sort()
+    .join(',');
+  if (describedTriggers !== expectedTriggers)
+    fail(
+      `Hadith triggers must raise exactly their own 5120x numbers; found ${describedTriggers}.`,
+    );
+
+  const procedures = await session.query<{ name: string; definition: string | null }>(`
+    SELECT p.[name], OBJECT_DEFINITION(p.[object_id]) AS [definition]
+    FROM sys.procedures p WHERE p.[name] LIKE N'Hadith%';
+  `);
+  const describedProcedures = procedures
+    .map((row) => `${row.name}:${raisedNumbers(row.definition)}`)
+    .sort()
+    .join(',');
+  const expectedProcedures = Object.entries(HADITH_PROCEDURE_NUMBERS)
+    .map(([name, numbers]) => `${name}:${numbers}`)
+    .sort()
+    .join(',');
+  if (describedProcedures !== expectedProcedures)
+    fail(
+      `The canonical write path must be exactly eight procedures raising their own ` +
+        `5120x–5122x numbers; found ${describedProcedures}.`,
+    );
+
+  // ---- 6. three keys, all bundled -------------------------------------------
+  const permissions = await session.query<{ key: string; bundled: number }>(`
+    SELECT p.[key],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp JOIN [dbo].[Role] r ON r.[id] = rp.[roleId]
+       WHERE r.[key] = N'platform-administrator' AND rp.[permissionKey] = p.[key]) AS [bundled]
+    FROM [dbo].[Permission] p
+    WHERE p.[key] LIKE N'hadith%' OR p.[key] LIKE N'narrator%' OR p.[key] LIKE N'grading%';
+  `);
+  if (
+    permissions
+      .map((row) => row.key)
+      .sort()
+      .join(',') !== HADITH_PERMISSIONS.join(',') ||
+    !permissions.every((row) => Number(row.bundled) === 1)
+  )
+    fail(
+      `The Hadith vocabulary must be exactly ${HADITH_PERMISSIONS.join(', ')}, all in the ` +
+        `protected bundle; found ${JSON.stringify(permissions)}.`,
+    );
+
+  report(
+    'hadith foundation',
+    'twenty-four empty tables, source-qualified identity and a separate citation, ' +
+      'eleven non-cascading external keys, 18 triggers and 8 procedures by number, three bundled keys',
+  );
+}
+
+/**
+ * After the Phase-19 rollback: no Hadith table, trigger, procedure or key, no
+ * `hadith.*` permission, bundle entry or purpose-bound grant, and no
+ * provisioning record. The caller then proves the vocabulary and the earlier
+ * owners it referenced are back.
+ */
+async function assertHadithRemoved(session: SqlSession): Promise<void> {
+  const [row] = await session.query<{
+    tables: number;
+    triggers: number;
+    procedures: number;
+    keys: number;
+    permissions: number;
+    bundled: number;
+    grants: number;
+    audit: number;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables WHERE [name] LIKE N'Hadith%') AS [tables],
+      (SELECT COUNT(*) FROM sys.triggers WHERE [name] LIKE N'Hadith%') AS [triggers],
+      (SELECT COUNT(*) FROM sys.procedures WHERE [name] LIKE N'Hadith%') AS [procedures],
+      (SELECT COUNT(*) FROM sys.foreign_keys WHERE [name] LIKE N'Hadith%') AS [keys],
+      (SELECT COUNT(*) FROM [dbo].[Permission] WHERE [key] LIKE N'hadith.%') AS [permissions],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] WHERE [permissionKey] LIKE N'hadith.%') AS [bundled],
+      (SELECT COUNT(*) FROM [dbo].[StepUpGrant] WHERE [purpose] = N'hadith-canonical-edit') AS [grants],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action] = N'hadith.permissions.provisioned') AS [audit];
+  `);
+  if (Object.values(row ?? { missing: 1 }).some((value) => Number(value) !== 0))
+    fail(`The Phase-19 rollback left a Hadith object: ${JSON.stringify(row ?? null)}.`);
+  report(
+    'hadith rollback',
+    'every Hadith table, trigger, procedure, key, permission, grant and provisioning record removed',
+  );
+}
+
+/** Neutral Arabic "test text", and two letters differing only by their mark. */
+const NON_HADITH_ARABIC = 'نص اختبار بَ بِ';
+
+/** The UTF-16LE bytes SQL Server stores for an NVARCHAR value, as upper hex. */
+function utf16Hex(text: string): string {
+  return Buffer.from(text, 'utf16le').toString('hex').toUpperCase();
+}
+
+/**
+ * Phase 19 — THE CANONICAL RULES, proved as behaviour against the re-deployed
+ * schema with sentinel NON_HADITH_FIXTURE text only, through the migration
+ * login (the runtime's own posture is `db:test:permissions`'s):
+ *
+ *   - every procedure refuses a caller without the live authority (51210): no
+ *     permission, a Quran-purpose grant, an expired grant, another session's
+ *     grant, an unknown grant, a deactivated role, a revoked assignment and an
+ *     inactive account — and writes nothing;
+ *   - a registered source system or edition is immutable (51200), an approved
+ *     one carries its evidence, one encoding; a collection's slug is public
+ *     grammar and never a reserved section word;
+ *   - structure is its edition's, its references exact and unpadded, and
+ *     immutable but for display-name versions (51201); a missing edition or
+ *     book is refused (51211, 51212);
+ *   - the SAME apparent source reference coexists across editions and
+ *     collections but never twice within one edition; a bare number is no key;
+ *     a record sits only in its own edition's structure (51215); evidence and
+ *     reasons are required (51216); gradings are present and well formed (51217), sourced
+ *     (the CHECK) and one per grader per version;
+ *   - conflict detection records exactly the facets that differ — text, chain,
+ *     grading, and structure only within one edition — compares bytes (a
+ *     trailing space, NFC against NFD), and records nothing for identical
+ *     candidates across editions; Arabic marks round-trip byte for byte;
+ *   - verification binds one version (51212, 51213, 51218); a citation maps only
+ *     a declared (51220), verified (51219), conflict-free (51204) candidate, by
+ *     procedure and by direct insert; versions are expected (51213), changes
+ *     real (51218), a new citation mapped (51216); its key is unique;
+ *   - a correction refuses a stale version (51213), a record outside its
+ *     edition (51212), a mapped record's new number (51214), structure outside
+ *     the edition (51215), no reason (51216) and no change (51218); a valid one
+ *     appends version 2 with versioned gradings, leaves the version-1
+ *     verification stale and records the conflict it creates;
+ *   - a record, citation and their history change only through those rules:
+ *     direct changes without a revision (51202), structure (51201) and history,
+ *     gradings, verification, citation history and conflict evidence (51203);
+ *   - activation refuses an empty collection and an edit (51206), a second
+ *     authority (51206), fixture records under approved authority (51205) and
+ *     approved records under fixture authority (51208); a fixture record
+ *     cannot be mapped into an approved collection, nor an approved record
+ *     into a fixture one (51208), by procedure or direct insert;
+ *   - a published commentary or science keeps its text (51207), a published
+ *     translation names a source system; `hadith` intent is admitted and an
+ *     invented Hadith kind is not; audit rows carry no text, and every one is
+ *     well-formed JSON whose quoted identifiers read back exactly (escaped).
+ */
+async function assertHadithCanonicalRules(session: SqlSession): Promise<void> {
+  const run = randomUUID().replaceAll('-', '').slice(0, 16);
+  const at = '2026-10-03T00:00:00';
+  let refusals = 0;
+  const refuse = async (
+    label: string,
+    statement: string,
+    numbers: readonly number[],
+    rule: string,
+  ): Promise<void> => {
+    await expectRefusal(session, label, statement, numbers, rule);
+    refusals += 1;
+  };
+  const count = async (statement: string): Promise<number> => {
+    const [row] = await session.query<{ total: number }>(statement);
+    return Number(row?.total ?? -1);
+  };
+  const optional = (text: string | null | undefined): string =>
+    text === null || text === undefined ? 'NULL' : `N'${literal(text)}'`;
+
+  // ---- the identities the procedures check, as authoritative rows ------------
+  const holder = randomUUID();
+  const outsider = randomUUID();
+  const deactivated = randomUUID();
+  const revoked = randomUUID();
+  const inactive = randomUUID();
+  const role = randomUUID();
+  const deadRole = randomUUID();
+  const holderSession = randomUUID();
+  const otherSession = randomUUID();
+  const outsiderSession = randomUUID();
+  const deactivatedSession = randomUUID();
+  const revokedSession = randomUUID();
+  const inactiveSession = randomUUID();
+  const grant = randomUUID();
+  const quranPurpose = randomUUID();
+  const expired = randomUUID();
+  const otherSessionGrant = randomUUID();
+  const outsiderGrant = randomUUID();
+  const deactivatedGrant = randomUUID();
+  const revokedGrant = randomUUID();
+  const inactiveGrant = randomUUID();
+  const user = (id: string, status: string): string =>
+    `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled]) VALUES (N'${id}',N'Synthetic Hadith proof user',N'${id}@proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'${status}',0);`;
+  const sessionRow = (id: string, userId: string): string =>
+    `INSERT INTO [dbo].[Session] ([id],[token],[userId],[expiresAt],[createdAt],[updatedAt]) VALUES (N'${id}',N'proof-hadith-${id}',N'${userId}',DATEADD(hour,1,SYSUTCDATETIME()),SYSUTCDATETIME(),SYSUTCDATETIME());`;
+  const grantRow = (
+    id: string,
+    userId: string,
+    sessionId: string,
+    purpose: string,
+    minutes: number,
+  ): string =>
+    `INSERT INTO [dbo].[StepUpGrant] ([id],[userId],[sessionId],[purpose],[expiresAt]) VALUES (N'${id}',N'${userId}',N'${sessionId}',N'${purpose}',DATEADD(minute,${String(minutes)},SYSUTCDATETIME()));`;
+  await expectAccepted(
+    session,
+    'A synthetic canonical Hadith authority',
+    `${user(holder, 'active')}
+     ${user(outsider, 'active')}
+     ${user(deactivated, 'active')}
+     ${user(revoked, 'active')}
+     ${user(inactive, 'suspended')}
+     INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system]) VALUES
+       (N'${role}',N'proof-hadith-canonical-${run}',N'Synthetic Hadith canonical proof role',N'Holds hadith.editCanonical for the migration proof only.',0),
+       (N'${deadRole}',N'proof-hadith-retired-${run}',N'Synthetic retired Hadith proof role',N'Deactivated; holds hadith.editCanonical for the migration proof only.',0);
+     UPDATE [dbo].[Role] SET [deactivatedAt]=SYSUTCDATETIME() WHERE [id]=N'${deadRole}';
+     INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES (N'${role}',N'hadith.editCanonical'),(N'${deadRole}',N'hadith.editCanonical');
+     INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId]) VALUES (N'${holder}',N'${role}'),(N'${deactivated}',N'${deadRole}'),(N'${inactive}',N'${role}');
+     INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId],[revokedAt],[revokedReason]) VALUES (N'${revoked}',N'${role}',SYSUTCDATETIME(),N'Synthetic revocation for the migration proof.');
+     ${sessionRow(holderSession, holder)}
+     ${sessionRow(otherSession, holder)}
+     ${sessionRow(outsiderSession, outsider)}
+     ${sessionRow(deactivatedSession, deactivated)}
+     ${sessionRow(revokedSession, revoked)}
+     ${sessionRow(inactiveSession, inactive)}
+     ${grantRow(grant, holder, holderSession, 'hadith-canonical-edit', 30)}
+     ${grantRow(quranPurpose, holder, holderSession, 'quran-canonical-edit', 30)}
+     ${grantRow(expired, holder, holderSession, 'hadith-canonical-edit', -1)}
+     ${grantRow(otherSessionGrant, holder, otherSession, 'hadith-canonical-edit', 30)}
+     ${grantRow(outsiderGrant, outsider, outsiderSession, 'hadith-canonical-edit', 30)}
+     ${grantRow(deactivatedGrant, deactivated, deactivatedSession, 'hadith-canonical-edit', 30)}
+     ${grantRow(revokedGrant, revoked, revokedSession, 'hadith-canonical-edit', 30)}
+     ${grantRow(inactiveGrant, inactive, inactiveSession, 'hadith-canonical-edit', 30)}`,
+  );
+
+  interface Authority {
+    readonly actor: string;
+    readonly session: string;
+    readonly grant: string;
+  }
+  const authorised: Authority = { actor: holder, session: holderSession, grant };
+  const outsiderAuthority: Authority = {
+    actor: outsider,
+    session: outsiderSession,
+    grant: outsiderGrant,
+  };
+  const unauthorised: readonly (readonly [string, Authority])[] = [
+    ['no permission', outsiderAuthority],
+    [
+      'a Quran-purpose grant',
+      { actor: holder, session: holderSession, grant: quranPurpose },
+    ],
+    ['an expired grant', { actor: holder, session: holderSession, grant: expired }],
+    [
+      "another session's grant",
+      { actor: holder, session: holderSession, grant: otherSessionGrant },
+    ],
+    ['an unknown grant', { actor: holder, session: holderSession, grant: randomUUID() }],
+    [
+      'a deactivated role',
+      { actor: deactivated, session: deactivatedSession, grant: deactivatedGrant },
+    ],
+    [
+      'a revoked assignment',
+      { actor: revoked, session: revokedSession, grant: revokedGrant },
+    ],
+    [
+      'an inactive account',
+      { actor: inactive, session: inactiveSession, grant: inactiveGrant },
+    ],
+  ];
+  const NO_AUTHORITY = 'Canonical Hadith authority is not held now.';
+
+  const authority = (a: Authority): string =>
+    `@actorId=N'${a.actor}', @sessionId=N'${a.session}', @stepUpGrantId=N'${a.grant}', @at='${at}'`;
+  const createCollection = (
+    a: Authority,
+    id: string,
+    slug: string,
+    position: number,
+  ): string =>
+    `EXEC [dbo].[HadithCreateCollection] @id=N'${id}', @slug=N'${literal(slug)}', @position=${String(position)}, ${authority(a)};`;
+  const createBook = (
+    a: Authority,
+    id: string,
+    editionId: string,
+    slug: string,
+    reference: string,
+    position: number,
+    title: string | null = null,
+  ): string =>
+    `EXEC [dbo].[HadithCreateBook] @id=N'${id}', @editionId=N'${editionId}', @slug=N'${slug}', @reference=N'${literal(reference)}', @position=${String(position)}, @title=${optional(title)}, @titleLanguage=${title === null ? 'NULL' : "N'ar'"}, ${authority(a)};`;
+  const createChapter = (
+    a: Authority,
+    id: string,
+    bookId: string,
+    slug: string,
+    reference: string,
+    position: number,
+  ): string =>
+    `EXEC [dbo].[HadithCreateChapter] @id=N'${id}', @bookId=N'${bookId}', @slug=N'${slug}', @reference=N'${literal(reference)}', @position=${String(position)}, @title=NULL, @titleLanguage=NULL, ${authority(a)};`;
+  interface RecordFacts {
+    readonly id: string;
+    readonly edition: string;
+    readonly expected: number;
+    readonly reference: string;
+    readonly citation: number | null;
+    readonly book: string;
+    readonly chapter: string | null;
+    readonly text: string;
+    readonly chain: string | null;
+    readonly gradings: string | null;
+    readonly evidence?: string | null;
+    readonly reason?: string | null;
+  }
+  const write = (a: Authority, r: RecordFacts): string =>
+    `EXEC [dbo].[HadithWriteRecord] @hadithId=N'${r.id}', @editionId=N'${r.edition}', @expectedVersion=${String(r.expected)}, @sourceReference=N'${literal(r.reference)}', @citationNumber=${r.citation === null ? 'NULL' : String(r.citation)}, @bookId=N'${r.book}', @chapterId=${r.chapter === null ? 'NULL' : `N'${r.chapter}'`}, @text=N'${literal(r.text)}', @textLanguage=N'ar', @chain=${optional(r.chain)}, @chainLanguage=${r.chain === null ? 'NULL' : "N'ar'"}, @gradings=${optional(r.gradings)}, @evidence=${r.evidence === undefined ? "N'NON_HADITH_FIXTURE_EVIDENCE_1'" : optional(r.evidence)}, @reason=${optional(r.reason)}, ${authority(a)};`;
+  const verify = (a: Authority, id: string, hadithId: string, expected: number): string =>
+    `EXEC [dbo].[HadithVerifyRecord] @id=N'${id}', @hadithId=N'${hadithId}', @expectedVersion=${String(expected)}, @evidence=N'NON_HADITH_FIXTURE_EVIDENCE_2', ${authority(a)};`;
+  const cite = (
+    a: Authority,
+    collectionId: string,
+    number: number,
+    hadithId: string,
+    state: 'mapped' | 'withdrawn',
+    expected: number,
+    reason: string | null,
+    id: string = randomUUID(),
+  ): string =>
+    `EXEC [dbo].[HadithSetCitation] @id=N'${id}', @collectionId=N'${collectionId}', @number=${String(number)}, @hadithId=N'${hadithId}', @state=N'${state}', @expectedVersion=${String(expected)}, @evidence=N'NON_HADITH_FIXTURE_EVIDENCE_3', @reason=${optional(reason)}, ${authority(a)};`;
+  const grading = (position: number, grader: number, label: number) => ({
+    position,
+    grader: `NON_HADITH_FIXTURE_GRADER_${String(grader)}`,
+    label: `NON_HADITH_FIXTURE_GRADING_${String(label)}`,
+    labelLanguage: 'ar',
+    reference: 'NON_HADITH_FIXTURE_REFERENCE_3',
+  });
+  const standard = JSON.stringify([grading(0, 1, 1)]);
+  const reason = 'NON_HADITH_FIXTURE correction against a registered fixture source.';
+
+  // ---- 51210: no authority, no collection --------------------------------------
+  for (const [why, held] of unauthorised)
+    await refuse(
+      `Collection creation refused with ${why}`,
+      createCollection(held, randomUUID(), `fixture-collection-denied-${run}`, 9),
+      [51210],
+      NO_AUTHORITY,
+    );
+  await expectAccepted(
+    session,
+    'The Hadith authority check itself, held',
+    `EXEC [dbo].[HadithAssertCanonicalAuthority] @actorId=N'${holder}', @sessionId=N'${holderSession}', @stepUpGrantId=N'${grant}';`,
+  );
+  await refuse(
+    'The Hadith authority check itself, not held',
+    `EXEC [dbo].[HadithAssertCanonicalAuthority] @actorId=N'${outsider}', @sessionId=N'${outsiderSession}', @stepUpGrantId=N'${outsiderGrant}';`,
+    [51210],
+    NO_AUTHORITY,
+  );
+  if (
+    (await count(
+      `SELECT COUNT(*) AS [total] FROM [dbo].[HadithCollection] WHERE [slug]=N'fixture-collection-denied-${run}';`,
+    )) !== 0
+  )
+    fail('A refused collection creation wrote a collection.');
+
+  // ---- the collections, through the procedure -----------------------------------
+  const collectionA = randomUUID();
+  const collectionB = randomUUID();
+  const collectionC = randomUUID();
+  const collectionD = randomUUID();
+  await expectAccepted(
+    session,
+    'Collections created under the live authority',
+    [
+      createCollection(authorised, collectionA, `fixture-collection-a-${run}`, 0),
+      createCollection(authorised, collectionB, `fixture-collection-b-${run}`, 1),
+      createCollection(authorised, collectionC, `fixture-collection-c-${run}`, 2),
+      createCollection(authorised, collectionD, `fixture-collection-d-${run}`, 3),
+    ].join('\n'),
+  );
+  for (const [why, slug] of [
+    ['a reserved section word', 'browse'],
+    ['another reserved section word', 'sciences'],
+    ['an uppercase letter', `Fixture-collection-${run}`],
+    ['a double hyphen', `fixture--collection-${run}`],
+  ] as const)
+    await refuse(
+      `A collection slug with ${why} is refused`,
+      createCollection(authorised, randomUUID(), slug, 4),
+      [547],
+      'HadithCollection_slug_ck',
+    );
+  await refuse(
+    'A reserved collection slug is refused on a direct insert too',
+    `INSERT INTO [dbo].[HadithCollection] ([id],[slug],[position]) VALUES (N'${randomUUID()}',N'topics',5);`,
+    [547],
+    'HadithCollection_slug_ck',
+  );
+  await refuse(
+    'A collection slug is unique',
+    createCollection(authorised, randomUUID(), `fixture-collection-a-${run}`, 6),
+    [2627],
+    'HadithCollection_slug_key',
+  );
+
+  // ---- the sources, registered by the owner -------------------------------------
+  const sourceA = randomUUID();
+  const sourceB = randomUUID();
+  const approved = randomUUID();
+  const bare = randomUUID();
+  const editionA1 = randomUUID();
+  const editionA2 = randomUUID();
+  const editionB1 = randomUUID();
+  const editionC1 = randomUUID();
+  const editionC2 = randomUUID();
+  const source = (id: string, code: string, kind: 'fixture' | 'approved'): string =>
+    `INSERT INTO [dbo].[HadithSourceSystem] ([id],[code],[authority],[title],[version],[encoding],[reference]) VALUES (N'${id}',N'${code}_${run}',N'${kind}',N'NON_HADITH_FIXTURE source ${code}',N'proof-1',N'utf-8',${kind === 'approved' ? "N'urn:example:non-hadith-fixture-evidence'" : 'NULL'});`;
+  const edition = (
+    id: string,
+    collectionId: string,
+    sourceId: string,
+    code: string,
+  ): string =>
+    `INSERT INTO [dbo].[HadithEdition] ([id],[collectionId],[sourceSystemId],[code],[title]) VALUES (N'${id}',N'${collectionId}',N'${sourceId}',N'${code}',N'NON_HADITH_FIXTURE edition ${code}');`;
+  await expectAccepted(
+    session,
+    'Source systems and editions registered by the owner',
+    `${source(sourceA, 'NON_HADITH_FIXTURE_A', 'fixture')}
+     ${source(sourceB, 'NON_HADITH_FIXTURE_B', 'fixture')}
+     ${source(approved, 'NON_HADITH_FIXTURE_APPROVED_PROBE', 'approved')}
+     ${source(bare, 'NON_HADITH_FIXTURE_BARE', 'fixture')}
+     ${edition(editionA1, collectionA, sourceA, 'NON_HADITH_FIXTURE_EDITION_A1')}
+     ${edition(editionA2, collectionA, sourceB, 'NON_HADITH_FIXTURE_EDITION_A2')}
+     ${edition(editionB1, collectionB, sourceA, 'NON_HADITH_FIXTURE_EDITION_B1')}
+     ${edition(editionC1, collectionC, approved, 'NON_HADITH_FIXTURE_EDITION_C1')}
+     ${edition(editionC2, collectionC, sourceA, 'NON_HADITH_FIXTURE_EDITION_C2')}`,
+  );
+  const IMMUTABLE_SOURCE = 'A registered Hadith source is immutable.';
+  await refuse(
+    'A source system is never edited',
+    `UPDATE [dbo].[HadithSourceSystem] SET [authority]=N'approved',[reference]=N'urn:example:forged' WHERE [id]=N'${sourceA}';`,
+    [51200],
+    IMMUTABLE_SOURCE,
+  );
+  await refuse(
+    'A source system is never removed',
+    `DELETE FROM [dbo].[HadithSourceSystem] WHERE [id]=N'${bare}';`,
+    [51200],
+    IMMUTABLE_SOURCE,
+  );
+  await refuse(
+    'An edition is never edited',
+    `UPDATE [dbo].[HadithEdition] SET [code]=[code] WHERE [id]=N'${editionA1}';`,
+    [51200],
+    IMMUTABLE_SOURCE,
+  );
+  await refuse(
+    'An edition is never removed',
+    `DELETE FROM [dbo].[HadithEdition] WHERE [id]=N'${editionC2}';`,
+    [51200],
+    IMMUTABLE_SOURCE,
+  );
+  await refuse(
+    'An approved source system carries its evidence',
+    `INSERT INTO [dbo].[HadithSourceSystem] ([id],[code],[authority],[title],[version],[encoding]) VALUES (N'${randomUUID()}',N'NON_HADITH_FIXTURE_NO_EVIDENCE_${run}',N'approved',N'NON_HADITH_FIXTURE',N'proof-1',N'utf-8');`,
+    [547],
+    'HadithSourceSystem_evidence_ck',
+  );
+  await refuse(
+    'A source system is UTF-8',
+    `INSERT INTO [dbo].[HadithSourceSystem] ([id],[code],[authority],[title],[version],[encoding]) VALUES (N'${randomUUID()}',N'NON_HADITH_FIXTURE_UTF16_${run}',N'fixture',N'NON_HADITH_FIXTURE',N'proof-1',N'utf-16');`,
+    [547],
+    'HadithSourceSystem_encoding_ck',
+  );
+
+  // ---- structure: each edition's own, created through the procedures ----------
+  const bookA1 = randomUUID();
+  const bookA2 = randomUUID();
+  const bookB1 = randomUUID();
+  const bookC1 = randomUUID();
+  const bookC2 = randomUUID();
+  const chapterA1 = randomUUID();
+  const emptyChapter = randomUUID();
+  const sharedBookReference = 'NON_HADITH_FIXTURE_REFERENCE_1';
+  await expectAccepted(
+    session,
+    'Books and chapters created under the live authority',
+    [
+      createBook(
+        authorised,
+        bookA1,
+        editionA1,
+        `fixture-book-a1-${run}`,
+        sharedBookReference,
+        1,
+        `NON_HADITH_FIXTURE book title ${NON_HADITH_ARABIC}`,
+      ),
+      createBook(
+        authorised,
+        bookA2,
+        editionA2,
+        `fixture-book-a2-${run}`,
+        sharedBookReference,
+        1,
+      ),
+      createBook(
+        authorised,
+        bookB1,
+        editionB1,
+        `fixture-book-b1-${run}`,
+        sharedBookReference,
+        1,
+      ),
+      createBook(
+        authorised,
+        bookC1,
+        editionC1,
+        `fixture-book-c1-${run}`,
+        sharedBookReference,
+        1,
+      ),
+      createBook(
+        authorised,
+        bookC2,
+        editionC2,
+        `fixture-book-c2-${run}`,
+        sharedBookReference,
+        1,
+      ),
+      createChapter(
+        authorised,
+        chapterA1,
+        bookA1,
+        `fixture-chapter-a1-${run}`,
+        'NON_HADITH_FIXTURE_REFERENCE_2',
+        1,
+      ),
+      createChapter(
+        authorised,
+        emptyChapter,
+        bookA1,
+        `fixture-chapter-a2-${run}`,
+        'NON_HADITH_FIXTURE_REFERENCE_5',
+        2,
+      ),
+    ].join('\n'),
+  );
+  for (const [label, statement, numbers, rule] of [
+    [
+      'A book needs the live authority',
+      createBook(
+        outsiderAuthority,
+        randomUUID(),
+        editionA1,
+        `fixture-book-x-${run}`,
+        'NON_HADITH_FIXTURE_REFERENCE_9',
+        9,
+      ),
+      [51210],
+      NO_AUTHORITY,
+    ],
+    [
+      'A chapter needs the live authority',
+      createChapter(
+        outsiderAuthority,
+        randomUUID(),
+        bookA1,
+        `fixture-chapter-x-${run}`,
+        'NON_HADITH_FIXTURE_REFERENCE_9',
+        9,
+      ),
+      [51210],
+      NO_AUTHORITY,
+    ],
+    [
+      'A book names a registered edition',
+      createBook(
+        authorised,
+        randomUUID(),
+        randomUUID(),
+        `fixture-book-x-${run}`,
+        'NON_HADITH_FIXTURE_REFERENCE_9',
+        9,
+      ),
+      [51211],
+      'The Hadith edition is not registered.',
+    ],
+    [
+      'A chapter names an existing book',
+      createChapter(
+        authorised,
+        randomUUID(),
+        randomUUID(),
+        `fixture-chapter-x-${run}`,
+        'NON_HADITH_FIXTURE_REFERENCE_9',
+        9,
+      ),
+      [51212],
+      'The Hadith record does not exist.',
+    ],
+    [
+      "A book's slug is unique within its collection, across editions",
+      createBook(
+        authorised,
+        randomUUID(),
+        editionA2,
+        `fixture-book-a1-${run}`,
+        'NON_HADITH_FIXTURE_REFERENCE_9',
+        9,
+      ),
+      [2627],
+      'HadithBook_slug_key',
+    ],
+    [
+      "A book's source reference is unique within its edition",
+      createBook(
+        authorised,
+        randomUUID(),
+        editionA1,
+        `fixture-book-x-${run}`,
+        sharedBookReference,
+        9,
+      ),
+      [2627],
+      'HadithBook_reference_key',
+    ],
+    [
+      "A book's source reference is never padded",
+      createBook(
+        authorised,
+        randomUUID(),
+        editionA1,
+        `fixture-book-x-${run}`,
+        'NON_HADITH_FIXTURE_REFERENCE_9 ',
+        9,
+      ),
+      [547],
+      'HadithBook_ck',
+    ],
+    [
+      "A chapter's position is unique within its book",
+      createChapter(
+        authorised,
+        randomUUID(),
+        bookA1,
+        `fixture-chapter-x-${run}`,
+        'NON_HADITH_FIXTURE_REFERENCE_9',
+        1,
+      ),
+      [2627],
+      'HadithChapter_position_key',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, rule);
+
+  const STRUCTURE = 'Canonical Hadith structure is immutable.';
+  for (const [label, statement] of [
+    [
+      "A collection's slug never changes",
+      `UPDATE [dbo].[HadithCollection] SET [slug]=N'fixture-collection-moved-${run}' WHERE [id]=N'${collectionA}';`,
+    ],
+    [
+      "A collection's names version moves by exactly one",
+      `UPDATE [dbo].[HadithCollection] SET [namesVersion]=[namesVersion]+2 WHERE [id]=N'${collectionA}';`,
+    ],
+    [
+      'A collection is never removed',
+      `DELETE FROM [dbo].[HadithCollection] WHERE [id]=N'${collectionD}';`,
+    ],
+    [
+      "A book's source reference never changes",
+      `UPDATE [dbo].[HadithBook] SET [reference]=[reference] WHERE [id]=N'${bookA1}';`,
+    ],
+    [
+      "A book's edition never changes",
+      `UPDATE [dbo].[HadithBook] SET [editionId]=[editionId] WHERE [id]=N'${bookA1}';`,
+    ],
+    [
+      "A book's title never changes",
+      `UPDATE [dbo].[HadithBook] SET [title]=NULL,[titleLanguage]=NULL WHERE [id]=N'${bookA1}';`,
+    ],
+    [
+      "A chapter's slug never changes",
+      `UPDATE [dbo].[HadithChapter] SET [slug]=[slug] WHERE [id]=N'${chapterA1}';`,
+    ],
+    [
+      'A chapter is never removed',
+      `DELETE FROM [dbo].[HadithChapter] WHERE [id]=N'${emptyChapter}';`,
+    ],
+  ] as const)
+    await refuse(label, statement, [51201], STRUCTURE);
+  await expectAccepted(
+    session,
+    'Display-name versions advance by one',
+    `UPDATE [dbo].[HadithCollection] SET [namesVersion]=[namesVersion]+1,[updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${collectionA}';
+     UPDATE [dbo].[HadithBook] SET [namesVersion]=[namesVersion]+1,[updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${bookA1}';
+     UPDATE [dbo].[HadithChapter] SET [namesVersion]=[namesVersion]+1,[updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${chapterA1}';`,
+  );
+
+  // ---- source-qualified records ----------------------------------------------------
+  //
+  // One apparent reference, `NON_HADITH_FIXTURE_REFERENCE_7`, in two editions of
+  // collection A and in collection B: three records, no collision, because the
+  // identity is the edition's and a number is nobody's key.
+  const sharedReference = 'NON_HADITH_FIXTURE_REFERENCE_7';
+  const sevenText = `NON_HADITH_FIXTURE_TEXT_7 ${NON_HADITH_ARABIC}`;
+  const chain = 'NON_HADITH_FIXTURE_CHAIN_1';
+  const recordA = randomUUID();
+  const recordA2 = randomUUID();
+  const recordB = randomUUID();
+  const base = (
+    id: string,
+    editionId: string,
+    reference: string,
+    citation: number | null,
+    book: string,
+    text: string,
+  ): RecordFacts => ({
+    id,
+    edition: editionId,
+    expected: 0,
+    reference,
+    citation,
+    book,
+    chapter: null,
+    text,
+    chain,
+    gradings: standard,
+  });
+  for (const [why, held] of unauthorised.slice(0, 2))
+    await refuse(
+      `Record creation refused with ${why}`,
+      write(held, base(randomUUID(), editionA1, sharedReference, 7, bookA1, sevenText)),
+      [51210],
+      NO_AUTHORITY,
+    );
+  await expectAccepted(
+    session,
+    'One apparent reference in two editions and two collections',
+    [
+      write(authorised, {
+        ...base(recordA, editionA1, sharedReference, 7, bookA1, sevenText),
+        chapter: chapterA1,
+      }),
+      write(authorised, base(recordA2, editionA2, sharedReference, 7, bookA2, sevenText)),
+      write(authorised, base(recordB, editionB1, sharedReference, 7, bookB1, sevenText)),
+    ].join('\n'),
+  );
+  if (
+    (await count(
+      `SELECT COUNT(DISTINCT [editionId]) AS [total] FROM [dbo].[Hadith] WHERE CAST([sourceReference] AS VARBINARY(128))=CAST(N'${sharedReference}' AS VARBINARY(128));`,
+    )) !== 3 ||
+    (await count(
+      `SELECT COUNT(*) AS [total] FROM [dbo].[Hadith] WHERE [citationNumber]=7;`,
+    )) !== 3
+  )
+    fail('One apparent reference and one bare number must coexist in three editions.');
+
+  const UNWELL = 'The gradings are not well formed.';
+  const longLabel = `NON_HADITH_FIXTURE_GRADING_${'x'.repeat(380)}`;
+  for (const [label, statement, numbers, rule] of [
+    [
+      'The same reference is never repeated within one edition',
+      write(
+        authorised,
+        base(randomUUID(), editionA1, sharedReference, 7, bookA1, sevenText),
+      ),
+      [2627],
+      'Hadith_identity_key',
+    ],
+    [
+      'A source reference is never padded',
+      write(
+        authorised,
+        base(
+          randomUUID(),
+          editionA1,
+          'NON_HADITH_FIXTURE_REFERENCE_99 ',
+          99,
+          bookA1,
+          sevenText,
+        ),
+      ),
+      [547],
+      'Hadith_ck',
+    ],
+    [
+      'A source reference carries no control character',
+      write(
+        authorised,
+        base(
+          randomUUID(),
+          editionA1,
+          'NON_HADITH_FIXTURE_REFERENCE\t99',
+          99,
+          bookA1,
+          sevenText,
+        ),
+      ),
+      [547],
+      'Hadith_ck',
+    ],
+    [
+      'A citation number is bounded',
+      write(
+        authorised,
+        base(
+          randomUUID(),
+          editionA1,
+          'NON_HADITH_FIXTURE_REFERENCE_98',
+          1000000,
+          bookA1,
+          sevenText,
+        ),
+      ),
+      [547],
+      'Hadith_ck',
+    ],
+    [
+      'A record names a registered edition',
+      write(
+        authorised,
+        base(
+          randomUUID(),
+          randomUUID(),
+          'NON_HADITH_FIXTURE_REFERENCE_98',
+          98,
+          bookA1,
+          sevenText,
+        ),
+      ),
+      [51211],
+      'The Hadith edition is not registered.',
+    ],
+    [
+      "A record sits in its own edition's book",
+      write(
+        authorised,
+        base(
+          randomUUID(),
+          editionA1,
+          'NON_HADITH_FIXTURE_REFERENCE_98',
+          98,
+          bookA2,
+          sevenText,
+        ),
+      ),
+      [51215],
+      'The structure does not belong to the edition.',
+    ],
+    [
+      "A record's chapter belongs to its book",
+      write(authorised, {
+        ...base(
+          randomUUID(),
+          editionA2,
+          'NON_HADITH_FIXTURE_REFERENCE_98',
+          98,
+          bookA2,
+          sevenText,
+        ),
+        chapter: chapterA1,
+      }),
+      [51215],
+      'The structure does not belong to the edition.',
+    ],
+    [
+      'A record states its evidence',
+      write(authorised, {
+        ...base(
+          randomUUID(),
+          editionA1,
+          'NON_HADITH_FIXTURE_REFERENCE_98',
+          98,
+          bookA1,
+          sevenText,
+        ),
+        evidence: null,
+      }),
+      [51216],
+      'A canonical change states its evidence.',
+    ],
+    [
+      'Gradings that are not JSON are refused',
+      write(authorised, {
+        ...base(
+          randomUUID(),
+          editionA1,
+          'NON_HADITH_FIXTURE_REFERENCE_98',
+          98,
+          bookA1,
+          sevenText,
+        ),
+        gradings: 'NON_HADITH_FIXTURE not json',
+      }),
+      [51217],
+      UNWELL,
+    ],
+    [
+      // ISJSON(NULL) is NULL, not 0: a missing list is refused, never read as
+      // "no gradings".
+      'Missing gradings are refused, never read as none',
+      write(authorised, {
+        ...base(
+          randomUUID(),
+          editionA1,
+          'NON_HADITH_FIXTURE_REFERENCE_98',
+          98,
+          bookA1,
+          sevenText,
+        ),
+        gradings: null,
+      }),
+      [51217],
+      UNWELL,
+    ],
+    [
+      'A grading without its reference is refused',
+      write(authorised, {
+        ...base(
+          randomUUID(),
+          editionA1,
+          'NON_HADITH_FIXTURE_REFERENCE_98',
+          98,
+          bookA1,
+          sevenText,
+        ),
+        gradings: JSON.stringify([{ ...grading(0, 1, 1), reference: undefined }]),
+      }),
+      [51217],
+      UNWELL,
+    ],
+    [
+      'Two gradings in one position are refused',
+      write(authorised, {
+        ...base(
+          randomUUID(),
+          editionA1,
+          'NON_HADITH_FIXTURE_REFERENCE_98',
+          98,
+          bookA1,
+          sevenText,
+        ),
+        gradings: JSON.stringify([grading(0, 1, 1), grading(0, 2, 1)]),
+      }),
+      [51217],
+      UNWELL,
+    ],
+    [
+      'A grading label too long for its column is refused, never truncated',
+      write(authorised, {
+        ...base(
+          randomUUID(),
+          editionA1,
+          'NON_HADITH_FIXTURE_REFERENCE_98',
+          98,
+          bookA1,
+          sevenText,
+        ),
+        gradings: JSON.stringify([{ ...grading(0, 1, 1), label: longLabel }]),
+      }),
+      [51217],
+      UNWELL,
+    ],
+    [
+      'A grading names its published reference',
+      write(authorised, {
+        ...base(
+          randomUUID(),
+          editionA1,
+          'NON_HADITH_FIXTURE_REFERENCE_98',
+          98,
+          bookA1,
+          sevenText,
+        ),
+        gradings: JSON.stringify([{ ...grading(0, 1, 1), reference: '' }]),
+      }),
+      [547],
+      'HadithGrading_ck',
+    ],
+    [
+      'One grader grades one version once',
+      write(authorised, {
+        ...base(
+          randomUUID(),
+          editionA1,
+          'NON_HADITH_FIXTURE_REFERENCE_98',
+          98,
+          bookA1,
+          sevenText,
+        ),
+        gradings: JSON.stringify([grading(0, 1, 1), grading(1, 1, 2)]),
+      }),
+      [2627],
+      'HadithGrading_grader_key',
+    ],
+    [
+      'A source-less grading is refused on a direct insert too',
+      `INSERT INTO [dbo].[HadithGrading] ([hadithId],[version],[position],[grader],[label],[labelLanguage],[reference]) VALUES (N'${recordA}',1,5,N'NON_HADITH_FIXTURE_GRADER_5',N'NON_HADITH_FIXTURE_GRADING_5',N'ar',N'');`,
+      [547],
+      'HadithGrading_ck',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, rule);
+  if (
+    (await count(
+      `SELECT COUNT(*) AS [total] FROM [dbo].[Hadith] WHERE [sourceReference] LIKE N'NON[_]HADITH[_]FIXTURE[_]REFERENCE[_]9%';`,
+    )) !== 0
+  )
+    fail('A refused record write left a record behind.');
+
+  // ---- conflict evidence: exactly the facets that differ ---------------------------
+  //
+  // Citation 8 differs by ONE TRAILING SPACE, citation 9 by NFC against NFD of
+  // the same letter, citation 10 by chain, citation 11 by one shared grader's
+  // label, and citation 12 by placement WITHIN edition A1 — while a third
+  // candidate for 12 in edition A2, placed differently but otherwise identical,
+  // and the identical candidates for 7 in two editions conflict with nothing.
+  const composed = 'NON_HADITH_FIXTURE_TEXT_9 é';
+  const decomposed = 'NON_HADITH_FIXTURE_TEXT_9 é';
+  const candidates = {
+    eightA: randomUUID(),
+    eightB: randomUUID(),
+    nineA: randomUUID(),
+    nineB: randomUUID(),
+    tenA: randomUUID(),
+    tenB: randomUUID(),
+    elevenA: randomUUID(),
+    elevenB: randomUUID(),
+    twelveA: randomUUID(),
+    twelveB: randomUUID(),
+    twelveC: randomUUID(),
+    fourteen: randomUUID(),
+    plain: randomUUID(),
+  };
+  const twelveText = 'NON_HADITH_FIXTURE_TEXT_12';
+  const reference = (n: string): string => `NON_HADITH_FIXTURE_REFERENCE_${n}`;
+  await expectAccepted(
+    session,
+    'Candidates that differ by one facet each',
+    [
+      write(
+        authorised,
+        base(
+          candidates.eightA,
+          editionA1,
+          reference('8'),
+          8,
+          bookA1,
+          'NON_HADITH_FIXTURE_TEXT_8',
+        ),
+      ),
+      write(
+        authorised,
+        base(
+          candidates.eightB,
+          editionA2,
+          reference('8'),
+          8,
+          bookA2,
+          'NON_HADITH_FIXTURE_TEXT_8 ',
+        ),
+      ),
+      write(
+        authorised,
+        base(candidates.nineA, editionA1, reference('9'), 9, bookA1, composed),
+      ),
+      write(
+        authorised,
+        base(candidates.nineB, editionA2, reference('9'), 9, bookA2, decomposed),
+      ),
+      write(
+        authorised,
+        base(
+          candidates.tenA,
+          editionA1,
+          reference('10'),
+          10,
+          bookA1,
+          'NON_HADITH_FIXTURE_TEXT_10',
+        ),
+      ),
+      write(authorised, {
+        ...base(
+          candidates.tenB,
+          editionA2,
+          reference('10'),
+          10,
+          bookA2,
+          'NON_HADITH_FIXTURE_TEXT_10',
+        ),
+        chain: 'NON_HADITH_FIXTURE_CHAIN_2',
+      }),
+      write(
+        authorised,
+        base(
+          candidates.elevenA,
+          editionA1,
+          reference('11'),
+          11,
+          bookA1,
+          'NON_HADITH_FIXTURE_TEXT_11',
+        ),
+      ),
+      write(authorised, {
+        ...base(
+          candidates.elevenB,
+          editionA2,
+          reference('11'),
+          11,
+          bookA2,
+          'NON_HADITH_FIXTURE_TEXT_11',
+        ),
+        gradings: JSON.stringify([grading(0, 1, 2)]),
+      }),
+      write(authorised, {
+        ...base(candidates.twelveA, editionA1, reference('12A'), 12, bookA1, twelveText),
+        chapter: chapterA1,
+      }),
+      write(
+        authorised,
+        base(candidates.twelveB, editionA1, reference('12B'), 12, bookA1, twelveText),
+      ),
+      write(
+        authorised,
+        base(candidates.twelveC, editionA2, reference('12'), 12, bookA2, twelveText),
+      ),
+      write(
+        authorised,
+        base(
+          candidates.fourteen,
+          editionA1,
+          reference('14'),
+          14,
+          bookA1,
+          'NON_HADITH_FIXTURE_TEXT_14',
+        ),
+      ),
+      write(authorised, {
+        ...base(
+          candidates.plain,
+          editionB1,
+          reference('20'),
+          null,
+          bookB1,
+          'NON_HADITH_FIXTURE_TEXT_20',
+        ),
+        chain: null,
+        gradings: '[]',
+      }),
+    ].join('\n'),
+  );
+  const conflicts = await session.query<{
+    number: number;
+    facets: string;
+    versions: string;
+  }>(`
+    SELECT [citationNumber] AS [number], [facets],
+      CONVERT(NVARCHAR(8), [hadithVersion]) + N'/' + CONVERT(NVARCHAR(8), [otherVersion]) AS [versions]
+    FROM [dbo].[HadithConflict] WHERE [collectionId]=N'${collectionA}'
+    ORDER BY [citationNumber], [facets];
+  `);
+  const expectedConflicts = JSON.stringify([
+    { number: 8, facets: 'text', versions: '1/1' },
+    { number: 9, facets: 'text', versions: '1/1' },
+    { number: 10, facets: 'chain', versions: '1/1' },
+    { number: 11, facets: 'grading', versions: '1/1' },
+    { number: 12, facets: 'structure', versions: '1/1' },
+  ]);
+  if (JSON.stringify(conflicts) !== expectedConflicts)
+    fail(
+      `Conflict detection must record exactly the differing facets; found ${JSON.stringify(conflicts)}.`,
+    );
+  const [pairs] = await session.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[HadithConflict] WHERE [hadithId]=N'${candidates.eightB}' AND [otherHadithId]=N'${candidates.eightA}') AS [eight],
+      (SELECT COUNT(*) FROM [dbo].[HadithConflict] WHERE [hadithId]=N'${candidates.twelveB}' AND [otherHadithId]=N'${candidates.twelveA}') AS [twelve],
+      (SELECT COUNT(*) FROM [dbo].[HadithConflict] WHERE N'${candidates.twelveC}' IN ([hadithId],[otherHadithId])) AS [crossEdition],
+      (SELECT COUNT(*) FROM [dbo].[HadithConflict] WHERE [collectionId]<>N'${collectionA}') AS [elsewhere];
+  `);
+  if (JSON.stringify(pairs) !== '{"eight":1,"twelve":1,"crossEdition":0,"elsewhere":0}')
+    fail(`Conflict evidence names the wrong candidates: ${JSON.stringify(pairs)}.`);
+
+  // ---- exact bytes, kept ------------------------------------------------------------
+  const kept = await session.query<{ id: string; bytes: string; revision: number }>(`
+    SELECT h.[id], CONVERT(VARCHAR(MAX), CAST(h.[text] AS VARBINARY(MAX)), 2) AS [bytes],
+      (SELECT COUNT(*) FROM [dbo].[HadithRevision] r WHERE r.[hadithId]=h.[id] AND r.[version]=h.[version]
+         AND CAST(r.[text] AS VARBINARY(MAX))=CAST(h.[text] AS VARBINARY(MAX))) AS [revision]
+    FROM [dbo].[Hadith] h WHERE h.[id] IN (N'${recordA}',N'${candidates.eightB}',N'${candidates.nineA}',N'${candidates.nineB}');
+  `);
+  const bytes = new Map(kept.map((row) => [row.id, row]));
+  for (const [id, text] of [
+    [recordA, sevenText],
+    [candidates.eightB, 'NON_HADITH_FIXTURE_TEXT_8 '],
+    [candidates.nineA, composed],
+    [candidates.nineB, decomposed],
+  ] as const) {
+    const row = bytes.get(id);
+    if (row?.bytes !== utf16Hex(text) || Number(row.revision) !== 1)
+      fail(
+        `A record's text must be kept and recorded byte for byte, marks and spaces included; ` +
+          `found ${JSON.stringify(row ?? null)}.`,
+      );
+  }
+
+  // ---- verification binds one version ------------------------------------------------
+  const verificationA = randomUUID();
+  const CHANGED = 'The Hadith record changed since it was reviewed.';
+  const UNCHANGED = 'The correction changes nothing.';
+  for (const [label, statement, numbers, rule] of [
+    [
+      'Verification needs the live authority',
+      verify(outsiderAuthority, randomUUID(), recordA, 1),
+      [51210],
+      NO_AUTHORITY,
+    ],
+    [
+      'Verification names an existing record',
+      verify(authorised, randomUUID(), randomUUID(), 1),
+      [51212],
+      'The Hadith record does not exist.',
+    ],
+    [
+      'Verification of another version is refused',
+      verify(authorised, randomUUID(), recordA, 2),
+      [51213],
+      CHANGED,
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, rule);
+  await expectAccepted(
+    session,
+    'A record verified at its version',
+    `${verify(authorised, verificationA, recordA, 1)}
+     ${verify(authorised, randomUUID(), candidates.eightA, 1)}
+     ${verify(authorised, randomUUID(), candidates.fourteen, 1)}`,
+  );
+  await refuse(
+    'A version is verified once',
+    verify(authorised, randomUUID(), recordA, 1),
+    [51218],
+    UNCHANGED,
+  );
+
+  // ---- the citation: a declared, verified, conflict-free candidate ------------------
+  const citationA = randomUUID();
+  const NOT_VERIFIED = 'The record is not verified at its current version.';
+  const NOT_CANDIDATE = 'The record is not a candidate for this citation.';
+  const CONFLICTED = 'A conflicted citation cannot be mapped.';
+  for (const [label, statement, numbers, rule] of [
+    [
+      'A citation needs the live authority',
+      cite(outsiderAuthority, collectionA, 7, recordA, 'mapped', 0, null),
+      [51210],
+      NO_AUTHORITY,
+    ],
+    [
+      'An unverified candidate is never mapped',
+      cite(authorised, collectionA, 7, recordA2, 'mapped', 0, null),
+      [51219],
+      NOT_VERIFIED,
+    ],
+    [
+      'A record maps only the number it declared',
+      cite(authorised, collectionA, 13, recordA, 'mapped', 0, null),
+      [51220],
+      NOT_CANDIDATE,
+    ],
+    [
+      'A record maps only in its own collection',
+      cite(authorised, collectionB, 7, recordA, 'mapped', 0, null),
+      [51220],
+      NOT_CANDIDATE,
+    ],
+    [
+      'A new citation is mapped, never withdrawn',
+      cite(authorised, collectionA, 7, recordA, 'withdrawn', 0, null),
+      [51216],
+      'A new citation is mapped.',
+    ],
+    [
+      'A conflicted citation is never mapped',
+      cite(authorised, collectionA, 8, candidates.eightA, 'mapped', 0, null),
+      [51204],
+      CONFLICTED,
+    ],
+    [
+      'A conflicted citation is never mapped by a direct insert either',
+      `INSERT INTO [dbo].[HadithCitation] ([collectionId],[number],[id],[hadithId],[state],[version]) VALUES (N'${collectionA}',8,N'${randomUUID()}',N'${candidates.eightA}',N'mapped',1);`,
+      [51204],
+      CONFLICTED,
+    ],
+    [
+      'A citation reaches only a declared candidate on a direct insert',
+      `INSERT INTO [dbo].[HadithCitation] ([collectionId],[number],[id],[hadithId],[state],[version]) VALUES (N'${collectionA}',13,N'${randomUUID()}',N'${recordA}',N'mapped',1);`,
+      [547],
+      'HadithCitation_candidate_fkey',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, rule);
+  await expectAccepted(
+    session,
+    'A verified candidate is mapped',
+    cite(authorised, collectionA, 7, recordA, 'mapped', 0, null, citationA),
+  );
+  const [mapped] = await session.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[HadithCitation] WHERE [id]=N'${citationA}' AND [collectionId]=N'${collectionA}'
+         AND [number]=7 AND [hadithId]=N'${recordA}' AND [state]=N'mapped' AND [version]=1) AS [citation],
+      (SELECT COUNT(*) FROM [dbo].[HadithCitationRevision] WHERE [collectionId]=N'${collectionA}' AND [number]=7
+         AND [version]=1 AND [actorId]=N'${holder}' AND [stepUpGrantId]=N'${grant}' AND [reason] IS NULL) AS [revision],
+      (SELECT COUNT(*) FROM [dbo].[SearchIndexRequest] WHERE [scopeKind]=N'hadith' AND [scopeId]=N'${citationA}') AS [intent],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action]=N'hadith.citation.set' AND [targetId]=N'${citationA}'
+         AND [actorId]=N'${holder}' AND [authorisingSource]=N'step-up:${grant}') AS [audit];
+  `);
+  if (JSON.stringify(mapped) !== '{"citation":1,"revision":1,"intent":1,"audit":1}')
+    fail(
+      `A mapping must be recorded with its history, intent and audit: ${JSON.stringify(mapped)}.`,
+    );
+  for (const [label, statement, numbers, rule] of [
+    [
+      'A citation is created once',
+      cite(authorised, collectionA, 7, recordA, 'mapped', 0, null),
+      [51213],
+      CHANGED,
+    ],
+    [
+      'A citation change states its reason',
+      cite(authorised, collectionA, 7, recordA, 'withdrawn', 1, null),
+      [51216],
+      'A correction states its reason.',
+    ],
+    [
+      'A citation change changes something',
+      cite(authorised, collectionA, 7, recordA, 'mapped', 1, reason),
+      [51218],
+      UNCHANGED,
+    ],
+    [
+      "A citation's key is unique",
+      `INSERT INTO [dbo].[HadithCitation] ([collectionId],[number],[id],[hadithId],[state],[version]) VALUES (N'${collectionA}',7,N'${randomUUID()}',N'${recordA}',N'mapped',1);`,
+      [2627],
+      'HadithCitation_pkey',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, rule);
+  await expectAccepted(
+    session,
+    'A citation is withdrawn and mapped again, by version',
+    `${cite(authorised, collectionA, 7, recordA, 'withdrawn', 1, reason)}
+     ${cite(authorised, collectionA, 7, recordA, 'mapped', 2, reason)}`,
+  );
+
+  // ---- corrections -----------------------------------------------------------------
+  const correction = (overrides: Partial<RecordFacts>): string =>
+    write(authorised, {
+      ...base(recordA, editionA1, sharedReference, 7, bookA1, sevenText),
+      chapter: chapterA1,
+      expected: 1,
+      reason,
+      ...overrides,
+    });
+  const correctedText = `NON_HADITH_FIXTURE_TEXT_7 corrected ${NON_HADITH_ARABIC}`;
+  for (const [label, statement, numbers, rule] of [
+    [
+      'A correction needs the live authority',
+      write(outsiderAuthority, {
+        ...base(recordA, editionA1, sharedReference, 7, bookA1, correctedText),
+        chapter: chapterA1,
+        expected: 1,
+        reason,
+      }),
+      [51210],
+      NO_AUTHORITY,
+    ],
+    [
+      'A stale correction is refused',
+      correction({ expected: 5, text: correctedText }),
+      [51213],
+      CHANGED,
+    ],
+    [
+      "A correction names the record's own edition",
+      correction({
+        edition: editionA2,
+        book: bookA2,
+        chapter: null,
+        text: correctedText,
+      }),
+      [51212],
+      'The Hadith record does not exist.',
+    ],
+    [
+      'A mapped record keeps its citation number',
+      correction({ citation: 70, text: correctedText }),
+      [51214],
+      'A mapped record keeps its citation.',
+    ],
+    [
+      "A correction stays in the record's edition",
+      correction({ book: bookA2, chapter: null, text: correctedText }),
+      [51215],
+      'The structure does not belong to the edition.',
+    ],
+    [
+      'A correction states its reason',
+      correction({ reason: null, text: correctedText }),
+      [51216],
+      'A correction states its reason.',
+    ],
+    ['A correction that changes nothing is refused', correction({}), [51218], UNCHANGED],
+  ] as const)
+    await refuse(label, statement, numbers, rule);
+  await expectAccepted(
+    session,
+    'A correction with a new grading version',
+    correction({ text: correctedText, gradings: JSON.stringify([grading(0, 1, 2)]) }),
+  );
+  const [corrected] = await session.query<Record<string, number | string>>(`
+    SELECT h.[version],
+      CONVERT(VARCHAR(MAX), CAST(h.[text] AS VARBINARY(MAX)), 2) AS [bytes],
+      (SELECT COUNT(*) FROM [dbo].[HadithRevision] r WHERE r.[hadithId]=h.[id] AND r.[version]=2
+         AND r.[operation]=N'corrected' AND r.[reason]=N'${literal(reason)}' AND r.[actorId]=N'${holder}'
+         AND CAST(r.[text] AS VARBINARY(MAX))=CAST(h.[text] AS VARBINARY(MAX))) AS [revision],
+      (SELECT COUNT(*) FROM [dbo].[HadithRevision] r WHERE r.[hadithId]=h.[id] AND r.[version]=1
+         AND CONVERT(VARCHAR(MAX), CAST(r.[text] AS VARBINARY(MAX)), 2)='${utf16Hex(sevenText)}') AS [original],
+      (SELECT STRING_AGG(CONVERT(NVARCHAR(8), g.[version]) + N':' + g.[label], N',') WITHIN GROUP (ORDER BY g.[version])
+         FROM [dbo].[HadithGrading] g WHERE g.[hadithId]=h.[id]) AS [gradings],
+      (SELECT COUNT(*) FROM [dbo].[HadithVerification] v WHERE v.[hadithId]=h.[id] AND v.[version]=h.[version]) AS [verifiedNow],
+      (SELECT [facets] FROM [dbo].[HadithConflict] c WHERE c.[hadithId]=h.[id] AND c.[hadithVersion]=2
+         AND c.[otherHadithId]=N'${recordA2}' AND c.[otherVersion]=1) AS [conflict],
+      (SELECT COUNT(*) FROM [dbo].[HadithConflict] c WHERE c.[hadithId]=h.[id] AND c.[otherHadithId]=N'${recordB}') AS [otherCollection]
+    FROM [dbo].[Hadith] h WHERE h.[id]=N'${recordA}';
+  `);
+  if (
+    JSON.stringify(corrected) !==
+    JSON.stringify({
+      version: 2,
+      bytes: utf16Hex(correctedText),
+      revision: 1,
+      original: 1,
+      gradings: '1:NON_HADITH_FIXTURE_GRADING_1,2:NON_HADITH_FIXTURE_GRADING_2',
+      verifiedNow: 0,
+      conflict: 'text,grading',
+      otherCollection: 0,
+    })
+  )
+    fail(
+      `A correction must append version 2 and nothing else: ${JSON.stringify(corrected)}.`,
+    );
+  await refuse(
+    'A stale verification cannot be replayed on the new version',
+    verify(authorised, randomUUID(), recordA, 1),
+    [51213],
+    CHANGED,
+  );
+  await expectAccepted(
+    session,
+    'A conflicted citation can always be withdrawn',
+    cite(authorised, collectionA, 7, recordA, 'withdrawn', 3, reason),
+  );
+  await refuse(
+    'A citation the correction conflicted is never mapped again',
+    cite(authorised, collectionA, 7, recordA, 'mapped', 4, reason),
+    [51204],
+    CONFLICTED,
+  );
+
+  // ---- direct changes: history first, or nothing --------------------------------
+  //
+  // A record and a citation the procedures wrote are held by their history's
+  // keys, so a DELETE of one would be refused by a foreign key before any
+  // trigger ran. The owner writes one of each WITHOUT history, so removal is
+  // refused by the immutability rule itself.
+  const bareRecord = randomUUID();
+  const bareCitation = randomUUID();
+  await expectAccepted(
+    session,
+    'The owner inserts a record and a citation with no history, to prove removal',
+    `INSERT INTO [dbo].[Hadith] ([id],[collectionId],[sourceSystemId],[editionId],[sourceReference],[citationNumber],[bookId],[chapterId],[text],[textLanguage],[chain],[chainLanguage],[version]) VALUES (N'${bareRecord}',N'${collectionB}',N'${sourceA}',N'${editionB1}',N'${reference('21')}',NULL,N'${bookB1}',NULL,N'NON_HADITH_FIXTURE_TEXT_21',N'ar',NULL,NULL,1);
+     INSERT INTO [dbo].[HadithCitation] ([collectionId],[number],[id],[hadithId],[state],[version]) VALUES (N'${collectionB}',7,N'${bareCitation}',N'${recordB}',N'withdrawn',1);`,
+  );
+  const HISTORY = 'Canonical Hadith history is immutable.';
+  for (const [label, statement, numbers, rule] of [
+    [
+      'A record is never removed',
+      `DELETE FROM [dbo].[Hadith] WHERE [id]=N'${bareRecord}';`,
+      [51201],
+      STRUCTURE,
+    ],
+    [
+      "A record's edition never changes",
+      `UPDATE [dbo].[Hadith] SET [editionId]=[editionId] WHERE [id]=N'${recordA}';`,
+      [51201],
+      STRUCTURE,
+    ],
+    [
+      "A record's text never changes in place",
+      `UPDATE [dbo].[Hadith] SET [text]=N'NON_HADITH_FIXTURE_TEXT_TAMPERED' WHERE [id]=N'${recordA}';`,
+      [51202],
+      'A canonical change must advance the version by one.',
+    ],
+    [
+      'A new version without its revision is refused',
+      `UPDATE [dbo].[Hadith] SET [text]=N'NON_HADITH_FIXTURE_TEXT_TAMPERED',[version]=[version]+1 WHERE [id]=N'${recordA}';`,
+      [51202],
+      'A canonical change must be recorded in its history.',
+    ],
+    [
+      'A citation never changes without its revision',
+      `UPDATE [dbo].[HadithCitation] SET [state]=N'withdrawn',[version]=[version]+1 WHERE [id]=N'${citationA}';`,
+      [51202],
+      'A canonical change must be recorded in its history.',
+    ],
+    [
+      "A citation's state never changes in place",
+      `UPDATE [dbo].[HadithCitation] SET [state]=N'withdrawn' WHERE [id]=N'${citationA}';`,
+      [51202],
+      'A canonical change must advance the version by one.',
+    ],
+    [
+      "A citation's number never changes",
+      `UPDATE [dbo].[HadithCitation] SET [number]=[number] WHERE [id]=N'${citationA}';`,
+      [51201],
+      STRUCTURE,
+    ],
+    [
+      'A citation is never removed',
+      `DELETE FROM [dbo].[HadithCitation] WHERE [id]=N'${bareCitation}';`,
+      [51201],
+      STRUCTURE,
+    ],
+    [
+      'A revision is never edited',
+      `UPDATE [dbo].[HadithRevision] SET [evidence]=[evidence] WHERE [hadithId]=N'${recordA}';`,
+      [51203],
+      HISTORY,
+    ],
+    [
+      'A revision is never removed',
+      `DELETE FROM [dbo].[HadithRevision] WHERE [hadithId]=N'${candidates.plain}';`,
+      [51203],
+      HISTORY,
+    ],
+    [
+      'A grading is never edited',
+      `UPDATE [dbo].[HadithGrading] SET [label]=N'NON_HADITH_FIXTURE_GRADING_9' WHERE [hadithId]=N'${recordA}';`,
+      [51203],
+      HISTORY,
+    ],
+    [
+      'A grading is never removed',
+      `DELETE FROM [dbo].[HadithGrading] WHERE [hadithId]=N'${recordA}';`,
+      [51203],
+      HISTORY,
+    ],
+    [
+      'A verification is never edited',
+      `UPDATE [dbo].[HadithVerification] SET [version]=2 WHERE [id]=N'${verificationA}';`,
+      [51203],
+      HISTORY,
+    ],
+    [
+      'A verification is never removed',
+      `DELETE FROM [dbo].[HadithVerification] WHERE [id]=N'${verificationA}';`,
+      [51203],
+      HISTORY,
+    ],
+    [
+      'Conflict evidence is never edited',
+      `UPDATE [dbo].[HadithConflict] SET [facets]=N'chain' WHERE [collectionId]=N'${collectionA}';`,
+      [51203],
+      HISTORY,
+    ],
+    [
+      'Conflict evidence is never resolved away',
+      `DELETE FROM [dbo].[HadithConflict] WHERE [collectionId]=N'${collectionA}';`,
+      [51203],
+      HISTORY,
+    ],
+    [
+      "A citation's history is never edited",
+      `UPDATE [dbo].[HadithCitationRevision] SET [reason]=[reason] WHERE [collectionId]=N'${collectionA}';`,
+      [51203],
+      HISTORY,
+    ],
+    [
+      "A citation's history is never removed",
+      `DELETE FROM [dbo].[HadithCitationRevision] WHERE [collectionId]=N'${collectionA}';`,
+      [51203],
+      HISTORY,
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, rule);
+
+  // ---- activation: an operator act with one authority ------------------------------
+  const recordC = randomUUID();
+  const fixtureInC = randomUUID();
+  await expectAccepted(
+    session,
+    'Mapped citations in a fixture collection and an approved one',
+    `${cite(authorised, collectionA, 14, candidates.fourteen, 'mapped', 0, null)}
+     ${write(authorised, base(recordC, editionC1, reference('30'), 30, bookC1, 'NON_HADITH_FIXTURE_TEXT_30'))}
+     ${write(authorised, base(fixtureInC, editionC2, reference('31'), 31, bookC2, 'NON_HADITH_FIXTURE_TEXT_31'))}
+     ${verify(authorised, randomUUID(), recordC, 1)}
+     ${verify(authorised, randomUUID(), fixtureInC, 1)}
+     ${cite(authorised, collectionC, 30, recordC, 'mapped', 0, null)}`,
+  );
+  // Collection A also gains an edition from the APPROVED source system and a
+  // verified record of it, left unmapped. Its edition, book, record and
+  // verification identifiers carry a JSON quote and backslash, so the audit
+  // rows naming them prove every audited value is escaped, never spliced.
+  const quoted = (kind: string): string => `NON_HADITH_"\\_${kind}_${run.slice(0, 8)}`;
+  const editionA3 = quoted('e');
+  const bookA3 = quoted('b');
+  const approvedInA = quoted('h');
+  const quotedVerification = quoted('v');
+  await expectAccepted(
+    session,
+    'An approved-source record, verified but unmapped, in collection A',
+    `${edition(editionA3, collectionA, approved, 'NON_HADITH_FIXTURE_EDITION_A3')}
+     ${createBook(authorised, bookA3, editionA3, `fixture-book-a3-${run}`, sharedBookReference, 1)}
+     ${createChapter(authorised, randomUUID(), bookA3, `fixture-chapter-a3-${run}`, 'NON_HADITH_FIXTURE_REFERENCE_6', 1)}
+     ${write(authorised, base(approvedInA, editionA3, reference('32'), 32, bookA3, 'NON_HADITH_FIXTURE_TEXT_32'))}
+     ${verify(authorised, quotedVerification, approvedInA, 1)}`,
+  );
+  const activate = (collectionId: string, kind: 'fixture' | 'approved'): string =>
+    `INSERT INTO [dbo].[HadithActivation] ([collectionId],[authority],[authorisedBy]) VALUES (N'${collectionId}',N'${kind}',N'Synthetic migration proof operator');`;
+  const FIXTURE_OVER_APPROVED = 'A fixture source cannot enter an approved collection.';
+  const APPROVED_AS_FIXTURE = 'An approved source cannot be shown as fixture text.';
+  await refuse(
+    'A collection with no mapped citation is never activated',
+    activate(collectionB, 'fixture'),
+    [51206],
+    'An empty Hadith collection cannot be activated.',
+  );
+  await refuse(
+    'An approved activation refuses a mapped fixture record',
+    activate(collectionA, 'approved'),
+    [51205],
+    FIXTURE_OVER_APPROVED,
+  );
+  // 51208, the activation path: a fixture activation's banner would call the
+  // approved record it shows non-authoritative proof text.
+  await refuse(
+    'A fixture activation refuses a mapped approved record',
+    activate(collectionC, 'fixture'),
+    [51208],
+    APPROVED_AS_FIXTURE,
+  );
+  await expectAccepted(
+    session,
+    'A fixture-mode activation',
+    activate(collectionA, 'fixture'),
+  );
+  // 51208, the citation path: once collection A is fixture proof, its approved
+  // record is never mapped into it — by procedure or by a direct insert.
+  await refuse(
+    'An approved record is never mapped into a fixture collection',
+    cite(authorised, collectionA, 32, approvedInA, 'mapped', 0, null),
+    [51208],
+    APPROVED_AS_FIXTURE,
+  );
+  await refuse(
+    'An approved record is never mapped into a fixture collection by a direct insert either',
+    `INSERT INTO [dbo].[HadithCitation] ([collectionId],[number],[id],[hadithId],[state],[version]) VALUES (N'${collectionA}',32,N'${randomUUID()}',N'${literal(approvedInA)}',N'mapped',1);`,
+    [51208],
+    APPROVED_AS_FIXTURE,
+  );
+  if (
+    (await count(
+      `SELECT COUNT(*) AS [total] FROM [dbo].[HadithCitation] WHERE [collectionId]=N'${collectionA}' AND [number]=32;`,
+    )) !== 0
+  )
+    fail('A refused approved-under-fixture mapping left a citation behind.');
+  await refuse(
+    'An activation is never edited',
+    `UPDATE [dbo].[HadithActivation] SET [authorisedBy]=N'Synthetic' WHERE [collectionId]=N'${collectionA}';`,
+    [51206],
+    'Activation is replaced, never edited.',
+  );
+  await refuse(
+    'Every activation shares one authority',
+    activate(collectionC, 'approved'),
+    [51206],
+    'Every Hadith activation shares one authority.',
+  );
+  await expectAccepted(
+    session,
+    'The operator replaces fixture mode with an approved collection',
+    `DELETE FROM [dbo].[HadithActivation] WHERE [collectionId]=N'${collectionA}';
+     ${activate(collectionC, 'approved')}`,
+  );
+  await refuse(
+    'A fixture record never enters an approved collection',
+    cite(authorised, collectionC, 31, fixtureInC, 'mapped', 0, null),
+    [51205],
+    FIXTURE_OVER_APPROVED,
+  );
+  await expectAccepted(
+    session,
+    'With fixture mode replaced, the approved record maps into its unactivated collection',
+    cite(authorised, collectionA, 32, approvedInA, 'mapped', 0, null),
+  );
+
+  // ---- layered works, search intent and content-free audit --------------------------
+  const [topic] = await session.query<{ id: string }>(
+    'SELECT TOP (1) [id] FROM [dbo].[Topic] ORDER BY [slug];',
+  );
+  if (topic === undefined) fail('The Hadith proofs need a seeded Topic.');
+  const commentary = randomUUID();
+  const science = randomUUID();
+  const NEEDS_TEXT = 'A published work needs text.';
+  await expectAccepted(
+    session,
+    'A published commentary with its entry, a topic and a display name',
+    `INSERT INTO [dbo].[HadithCommentary] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${commentary}',N'fixture-commentary-${run}',N'ur',N'NON_HADITH_FIXTURE commentary',N'draft',1,SYSUTCDATETIME());
+     INSERT INTO [dbo].[HadithCommentaryEntry] ([commentaryId],[hadithId],[text]) VALUES (N'${commentary}',N'${recordA}',N'NON_HADITH_FIXTURE_COMMENTARY_1');
+     UPDATE [dbo].[HadithCommentary] SET [state]=N'published',[sourceSystemId]=N'${sourceA}',[publishedAt]=SYSUTCDATETIME(),[version]=2 WHERE [id]=N'${commentary}';
+     INSERT INTO [dbo].[HadithTopic] ([hadithId],[topicId]) VALUES (N'${recordA}',N'${topic.id}');
+     INSERT INTO [dbo].[HadithCollectionName] ([collectionId],[locale],[name]) VALUES (N'${collectionA}',N'en',N'NON_HADITH_FIXTURE collection');`,
+  );
+  for (const [label, statement, numbers, rule] of [
+    [
+      'A published commentary keeps its last entry',
+      `DELETE FROM [dbo].[HadithCommentaryEntry] WHERE [commentaryId]=N'${commentary}';`,
+      [51207],
+      NEEDS_TEXT,
+    ],
+    [
+      'A science is never published without its text',
+      `INSERT INTO [dbo].[HadithScience] ([id],[slug],[position],[sourceSystemId],[state],[version],[updatedAt],[publishedAt]) VALUES (N'${science}',N'fixture-science-${run}',0,N'${sourceA}',N'published',1,SYSUTCDATETIME(),SYSUTCDATETIME());`,
+      [51207],
+      NEEDS_TEXT,
+    ],
+    [
+      'A translation is never published without a registered source system',
+      `INSERT INTO [dbo].[HadithTranslation] ([id],[hadithId],[languageCode],[text],[state],[version],[updatedAt],[publishedAt]) VALUES (N'${randomUUID()}',N'${recordA}',N'en',N'NON_HADITH_FIXTURE_TRANSLATION_1',N'published',1,SYSUTCDATETIME(),SYSUTCDATETIME());`,
+      [547],
+      'HadithTranslation_state_ck',
+    ],
+    [
+      'A display name is in an interface locale',
+      `INSERT INTO [dbo].[HadithCollectionName] ([collectionId],[locale],[name]) VALUES (N'${collectionA}',N'fr',N'NON_HADITH_FIXTURE collection');`,
+      [547],
+      'HadithCollectionName_ck',
+    ],
+    [
+      'A record is assigned a Topic once',
+      `INSERT INTO [dbo].[HadithTopic] ([hadithId],[topicId]) VALUES (N'${recordA}',N'${topic.id}');`,
+      [2627],
+      'HadithTopic_pkey',
+    ],
+    [
+      'An invented Hadith search kind is refused',
+      `INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'hadith-record',N'${recordA}');`,
+      [547],
+      'SearchIndexRequest_scopeKind_ck',
+    ],
+  ] as const)
+    await refuse(label, statement, numbers, rule);
+  const [audit] = await session.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action]=N'hadith.record.created' AND [actorId]=N'${holder}') AS [created],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action]=N'hadith.record.corrected' AND [targetId]=N'${recordA}') AS [corrected],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action] LIKE N'hadith.%'
+         AND (ISNULL([afterState],N'') LIKE N'%NON[_]HADITH[_]FIXTURE[_]%' OR ISNULL([beforeState],N'') LIKE N'%NON[_]HADITH[_]FIXTURE[_]%')) AS [content];
+  `);
+  if (JSON.stringify(audit) !== '{"created":19,"corrected":1,"content":0}')
+    fail(`Hadith audit must name records, never their text: ${JSON.stringify(audit)}.`);
+  // Every hadith.* audit row written above is well-formed JSON, and the quoted
+  // identifiers read back from it exactly: STRING_ESCAPE, never a splice.
+  const [shape] = await session.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action] LIKE N'hadith.%') AS [rows],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action] LIKE N'hadith.%'
+         AND (ISNULL(ISJSON([afterState]), 0) <> 1 OR ([beforeState] IS NOT NULL AND ISJSON([beforeState]) <> 1))) AS [malformed],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action] IN (N'hadith.book.created', N'hadith.record.created')
+         AND JSON_VALUE([afterState], '$.edition') = N'${literal(editionA3)}') AS [edition],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action] = N'hadith.chapter.created'
+         AND JSON_VALUE([afterState], '$.book') = N'${literal(bookA3)}') AS [book],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action] = N'hadith.record.verified'
+         AND JSON_VALUE([afterState], '$.verification') = N'${literal(quotedVerification)}') AS [verification],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action] = N'hadith.citation.set'
+         AND JSON_VALUE([afterState], '$.record') = N'${literal(approvedInA)}') AS [record];
+  `);
+  if (
+    shape === undefined ||
+    Number(shape['rows']) < 40 ||
+    JSON.stringify({ ...shape, rows: 0 }) !==
+      '{"rows":0,"malformed":0,"edition":2,"book":1,"verification":1,"record":1}'
+  )
+    fail(
+      `Every Hadith audit row must be escaped, well-formed JSON: ${JSON.stringify(shape)}.`,
+    );
+
+  report(
+    'hadith canonical rules',
+    `source-qualified identity, byte-exact conflict facets, versioned verification, ` +
+      `reviewed citations and one-authority activation; ${String(refusals)} refusals by name, ` +
+      `every text a NON_HADITH_FIXTURE sentinel`,
+  );
+}
+
 /**
  * The Phase-13 rollback restores the two editorial keys' Phase-6 descriptions
  * exactly — Article and Page, and no News family.
@@ -5373,7 +7627,7 @@ try {
   await assertNavigationPermission(session);
   await assertPeopleFoundation(session);
   await assertSearchFoundation(session);
-  await assertSearchVocabulary(session, 'phase18');
+  await assertSearchVocabulary(session, 'phase19');
   await assertMediaFoundation(session);
   await assertAudioFoundation(session);
   await assertPhotoFoundation(session);
@@ -5382,6 +7636,7 @@ try {
   await assertEventFoundation(session);
   await assertCollectionFoundation(session);
   await assertQuranFoundation(session);
+  await assertHadithFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -5429,6 +7684,18 @@ try {
     }
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
+    }
+    if (migration.id === '20261003000000_phase19_hadith') {
+      // Phase 19 widened the vocabulary by `hadith` alone, so it narrows back
+      // to exactly Phase 18's — and the whole Phase-18 state it was applied on
+      // is back: the owners a Hadith key once named (Language, Topic and
+      // Person) untouched by the drop, and the Quran intact.
+      await assertSearchVocabulary(session, 'phase18');
+      await assertHadithRemoved(session);
+      await assertTaxonomyFoundation(session);
+      await assertPeopleFoundation(session);
+      await assertQuranFoundation(session);
+      await assertCollectionFoundation(session);
     }
     if (migration.id === '20261002000000_phase18_quran') {
       // Phase 18 widened the vocabulary by `quran-ayah` alone, so it narrows
@@ -5529,7 +7796,7 @@ try {
   await assertNavigationPermission(session);
   await assertPeopleFoundation(session);
   await assertSearchFoundation(session);
-  await assertSearchVocabulary(session, 'phase18');
+  await assertSearchVocabulary(session, 'phase19');
   await assertMediaFoundation(session);
   await assertAudioFoundation(session);
   await assertPhotoFoundation(session);
@@ -5538,6 +7805,7 @@ try {
   await assertEventFoundation(session);
   await assertCollectionFoundation(session);
   await assertQuranFoundation(session);
+  await assertHadithFoundation(session);
   // The membership rules as BEHAVIOUR, on the re-deployed schema: what was
   // rolled back and re-applied enforces exactly what the first deploy did.
   await assertCollectionMembership(session);
@@ -5545,6 +7813,10 @@ try {
   // are never removed — canonical history cannot be — and die with this
   // disposable database.
   await assertQuranCanonicalRules(session);
+  // And the canonical Hadith rules, last, with sentinel text only. Their rows
+  // are never removed either — canonical history cannot be — and die with
+  // this disposable database.
+  await assertHadithCanonicalRules(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

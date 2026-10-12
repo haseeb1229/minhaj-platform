@@ -209,6 +209,7 @@ describe('Quran is its own context and nobody else authors it', () => {
       'people-contributors',
       'taxonomy',
       'global-network',
+      'hadith',
     ]) {
       for (const file of await sources(`apps/web/src/contexts/${context}`)) {
         expect(uncommented(await read(file)), file).not.toMatch(
@@ -272,10 +273,16 @@ describe('the vocabulary is exactly what the documents name', () => {
   });
 
   it('adds one step-up purpose, for canonical Quran edits alone', () => {
+    // Phase 19 appends Hadith's own purpose after it; the Quran's is still the
+    // one Phase 18 added, and no Quran purpose was added beside it.
     expect([...STEP_UP_PURPOSES]).toEqual([
       'privilege-administration',
       'account-administration',
       'second-factor',
+      'quran-canonical-edit',
+      'hadith-canonical-edit',
+    ]);
+    expect(STEP_UP_PURPOSES.filter((purpose) => purpose.startsWith('quran-'))).toEqual([
       'quran-canonical-edit',
     ]);
   });

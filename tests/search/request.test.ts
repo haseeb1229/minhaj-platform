@@ -64,7 +64,8 @@ describe('parseSearchParams', () => {
       'playlist',
       'fatwa',
       'quran',
-      'hadith',
+      'hadith-narration',
+      'narrator',
       'event',
       'journal',
     ]) {
@@ -91,6 +92,10 @@ describe('parseSearchParams', () => {
 
   it('accepts the audio kind Phase 11 delivered', () => {
     expect(parseSearchParams({ q: 'x1', type: 'audio' }).state).toBe('valid');
+  });
+
+  it('accepts the Hadith citation kind Phase 19 delivered', () => {
+    expect(parseSearchParams({ q: 'x1', type: 'hadith' }).state).toBe('valid');
   });
 
   it('reads a repeated parameter as its first value, never as a list', () => {

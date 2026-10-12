@@ -193,6 +193,33 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'QuranTajweedRule',
       'QuranTajweedRuleText',
       'QuranTopic',
+      // Phase 19 — Hadith's source systems, editions and activations, canonical
+      // structure, records and evidence, layered works and typed topic
+      // assignment.
+      'HadithSourceSystem',
+      'HadithCollection',
+      'HadithEdition',
+      'HadithActivation',
+      'HadithBook',
+      'HadithChapter',
+      'Hadith',
+      'HadithRevision',
+      'HadithGrading',
+      'HadithVerification',
+      'HadithCitation',
+      'HadithCitationRevision',
+      'HadithConflict',
+      'HadithCollectionName',
+      'HadithBookName',
+      'HadithChapterName',
+      'HadithTranslation',
+      'HadithTranslationContributor',
+      'HadithCommentary',
+      'HadithCommentaryContributor',
+      'HadithCommentaryEntry',
+      'HadithScience',
+      'HadithScienceText',
+      'HadithTopic',
     ]) {
       expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }
@@ -200,11 +227,10 @@ describe('Phase 1 Chunk 2 migration convention', () => {
     // Every LATER phase still arrives with the slice that owns it. (`Event`
     // left this list when Phase 14 delivered it, and `Collection` when Phase 15
     // did; Phase 18 delivers the Quran as its own tables, never one generic
-    // `Quran` table.)
+    // `Quran` table; `Hadith` left it when Phase 19 delivered the record.)
     for (const table of [
       'PrivateCollection',
       'Quran',
-      'Hadith',
       'Book',
       'Fatwa',
       'Scholar',

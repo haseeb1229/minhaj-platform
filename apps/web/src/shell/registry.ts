@@ -152,11 +152,26 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     availability: 'delivered' as const,
     indexing: 'excluded' as const,
   }),
+  /**
+   * DELIVERED BY PHASE 19. `/hadith` is the Hadith landing: a genuine page in
+   * all three locales that says honestly when no collection is activated, and
+   * otherwise leads into the collections, the citations, search and the study
+   * material.
+   *
+   * `excluded` FROM THE BUILD-BOUND SITEMAP for the reason `quran` is: whether
+   * a Hadith page may be indexed is a RUNTIME fact of the activation —
+   * inactive, engineering fixture text, or approved — so each page decides its
+   * own robots and canonical, and the `hadith` sitemap segment lists canonical
+   * citations only while an approved activation stands.
+   */
   Object.freeze({
     key: 'hadith',
     label: 'nav.hadith',
+    path: '/hadith',
     placements: Object.freeze(['primary'] as const),
-    availability: 'deferred' as const,
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'excluded' as const,
   }),
   Object.freeze({
     key: 'learn',
@@ -565,6 +580,48 @@ const QURAN: readonly ShellRoute[] = Object.freeze(
 );
 
 /**
+ * The Hadith surfaces — Phase 19 (ROUTE_MAP.md §3.4).
+ *
+ * The introduction, the collections, every public citation, Hadith search, the
+ * sciences and the commentary, and the three related-material views whose
+ * owners expose a public by-topic read (Library's Works and Research, Media's
+ * Videos). NO PLACEMENT — they are reached from `/hadith`, the single entry
+ * point in the primary navigation. Every one is `excluded` for the reason the
+ * `hadith` entry gives; search is excluded for good.
+ *
+ * WHAT IS ABSENT IS ABSENT. `/hadith/articles` has no entry because Editorial
+ * exposes no public by-topic Article read; `/hadith/courses` and
+ * `/hadith/scholars` have no deterministic owner read. A collection, book,
+ * chapter, citation, study page and topic view are resources and views
+ * reached through these, never registry entries.
+ */
+const HADITH_SURFACES = Object.freeze([
+  'introduction',
+  'collections',
+  'browse',
+  'search',
+  'sciences',
+  'commentary',
+  'books',
+  'videos',
+  'research',
+] as const);
+
+const HADITH: readonly ShellRoute[] = Object.freeze(
+  HADITH_SURFACES.map((surface) =>
+    Object.freeze({
+      key: `hadith.${surface}`,
+      label: `hadith.${surface}`,
+      path: `/hadith/${surface}`,
+      placements: Object.freeze([] as const),
+      visibility: 'public' as const,
+      availability: 'delivered' as const,
+      indexing: 'excluded' as const,
+    }),
+  ),
+);
+
+/**
  * The photograph surfaces — Phase 12 (ROUTE_MAP.md §3.9).
  *
  * Photographs, galleries and the historical archive: each a genuine page in all
@@ -774,6 +831,7 @@ export const SHELL_ROUTES: readonly ShellRoute[] = Object.freeze([
   ...WATCH,
   ...LISTEN,
   ...QURAN,
+  ...HADITH,
   ...MEDIA,
   ...NEWS,
   ...EVENTS,

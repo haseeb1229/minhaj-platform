@@ -40,6 +40,7 @@
         "media": "media",
         "global-network": "global-network",
         "quran": "quran",
+        "hadith": "hadith",
         "search": {
           "kind": "layer0",
           "concern": "search"

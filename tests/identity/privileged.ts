@@ -269,7 +269,8 @@ export async function actorFor(
     | 'privilege-administration'
     | 'account-administration'
     | 'second-factor'
-    | 'quran-canonical-edit',
+    | 'quran-canonical-edit'
+    | 'hadith-canonical-edit',
 ): Promise<PrivilegedActor> {
   const session = await sessionOf(harness, account);
 

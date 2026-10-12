@@ -80,9 +80,9 @@ const FUTURE_DOMAIN_TABLES = [
   // by the Phase-13, Phase-14 and Phase-15 recovery fixtures instead. Phase 18
   // delivers the Quran as `Surah`, `Ayah`, `Juz` and the `Quran*` tables, proved
   // by the Phase-18 recovery fixture; a single generic `Quran` table is still
-  // no phase's, so it stays here.
+  // no phase's, so it stays here. `Hadith` left in Phase 19, which delivers it
+  // with the `Hadith*` tables, proved by the Phase-19 recovery fixture.
   'Quran',
-  'Hadith',
   'Book',
   'Fatwa',
   'Scholar',
@@ -167,6 +167,41 @@ export const PHASE18_TABLES = [
   'QuranTajweedRule',
   'QuranTajweedRuleText',
   'QuranTopic',
+];
+
+/**
+ * Tables the Phase-19 migration creates: the registered source systems,
+ * editions and activations, the canonical structure, records and their
+ * evidence, and the layered works.
+ *
+ * Checked as REQUIRED whenever the Phase-19 migration is among those the caller
+ * expects.
+ */
+export const PHASE19_TABLES = [
+  'HadithSourceSystem',
+  'HadithCollection',
+  'HadithEdition',
+  'HadithActivation',
+  'HadithBook',
+  'HadithChapter',
+  'Hadith',
+  'HadithRevision',
+  'HadithGrading',
+  'HadithVerification',
+  'HadithCitation',
+  'HadithCitationRevision',
+  'HadithConflict',
+  'HadithCollectionName',
+  'HadithBookName',
+  'HadithChapterName',
+  'HadithTranslation',
+  'HadithTranslationContributor',
+  'HadithCommentary',
+  'HadithCommentaryContributor',
+  'HadithCommentaryEntry',
+  'HadithScience',
+  'HadithScienceText',
+  'HadithTopic',
 ];
 
 async function userTables(session: SqlSession): Promise<string[]> {
@@ -302,6 +337,18 @@ export async function verifyRestoredSchema(
     if (missing.length > 0)
       throw new Error(
         `Restored database is missing Phase-18 Quran tables: ${missing.join(', ')}`,
+      );
+  }
+
+  // Phase 19. A restore that carried the Hadith migration's history row but not
+  // its source-qualified records, their evidence or the citation mapping would
+  // report an applied migration over a database that has lost the identity
+  // every Hadith citation rests on.
+  if (expectedMigrationIds.some((id) => id.includes('phase19'))) {
+    const missing = PHASE19_TABLES.filter((table) => !tables.includes(table));
+    if (missing.length > 0)
+      throw new Error(
+        `Restored database is missing Phase-19 Hadith tables: ${missing.join(', ')}`,
       );
   }
   const columns = await auditColumns(restored);

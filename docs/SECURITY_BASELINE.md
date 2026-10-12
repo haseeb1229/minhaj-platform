@@ -220,6 +220,25 @@ text; no `content.*`, `library.*` or `media.*` key confers Quran authority, and 
 4. Imported Hadith requires human verification before publication.
 5. **Conflicting variants are escalated, never silently resolved.**
 
+**As delivered (Phase 19, engineering — DOMAIN_MODEL.md §9.1).** Rule 2 is a database property, not
+only an application check: the application principal holds no INSERT, UPDATE or DELETE on source,
+activation, structure, record, history, grading, verification, citation or conflict tables (beyond
+display-name versions), and every canonical write is a procedure that re-checks — from the
+authoritative rows, after the service has verified the Identity-minted actor — a current
+`hadith.editCanonical` assignment of an active role held by an active account, and an unexpired
+step-up grant for the dedicated `hadith-canonical-edit` purpose bound to a live session of that
+account (§8.1). A grant earned for any other purpose, `quran-canonical-edit` included, authorises
+nothing here. Rule 3: every grading belongs to one immutable record version with its grader, label
+and published reference, and every version names the evidence it rests on. Rule 4: a citation is
+public only while its record carries a human verification of its current version, so a correction
+always requires fresh verification. Rule 5: the database records byte-exact conflict evidence between
+candidates for one citation, and such a citation can be neither mapped nor published; the platform
+has no resolution path (OPEN_DECISIONS.md §1.6). Source systems, editions and activation are
+owner/operator-only, so external approval is never equivalent to an application permission, and a
+record or layered work is shown only beside an activation of its own source's authority. Layered
+records carry `hadith.administer`, isolated from every sourced fact; no `quran.*`, `content.*`,
+`library.*` or `media.*` key confers Hadith authority, and no profile does.
+
 ### 5.3 Structural safeguard
 
 Religious content is administered through **its own admin surfaces with their own

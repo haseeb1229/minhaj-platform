@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { Locale } from '../env/shared.ts';
+import { exactText, labelText } from '../exact-text.ts';
 
 /**
  * Quran — the platform's strictest-integrity content context
@@ -186,61 +187,11 @@ export const RECITATION_UPLOAD_MAX_BYTES = 64 * 1024 * 1024;
  * Text — exact, never normalised
  * ========================================================================= */
 
-/**
- * A C0 control character other than tab, line feed and carriage return, or
- * DEL. Tested by code unit rather than by a pattern of control characters.
+/*
+ * The exact-text schemas are shared with every religious-text context and live
+ * in Layer 0 (`../exact-text.ts`); Quran re-exports the two its callers use.
  */
-const FORBIDDEN_CONTROL = {
-  test(value: string): boolean {
-    for (let index = 0; index < value.length; index += 1) {
-      const unit = value.charCodeAt(index);
-      if (
-        (unit < 0x20 && unit !== 0x09 && unit !== 0x0a && unit !== 0x0d) ||
-        unit === 0x7f
-      )
-        return true;
-    }
-    return false;
-  },
-};
-
-/** An unpaired UTF-16 surrogate: a string that is not valid Unicode text. */
-const LONE_SURROGATE =
-  /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
-
-/** Is this string well-formed Unicode — no unpaired surrogate anywhere? */
-export function isWellFormedText(value: string): boolean {
-  return !LONE_SURROGATE.test(value);
-}
-
-/**
- * Religious text as supplied: non-empty, bounded, well-formed UTF-16, no
- * control characters beyond line breaks and tabs, and no surrounding
- * whitespace. A violation is REFUSED rather than repaired, because a repaired
- * text is a different text (Phase 18 §14).
- */
-export function exactText(max: number) {
-  return z
-    .string()
-    .min(1)
-    .max(max)
-    .refine(isWellFormedText, 'Text must be well-formed Unicode.')
-    .refine((value) => !FORBIDDEN_CONTROL.test(value), 'Text holds a control character.')
-    .refine(
-      (value) => value === value.trim(),
-      'Text may not begin or end with whitespace.',
-    );
-}
-
-/** Operator-entered descriptive text (names, attribution) — trimmed like any label. */
-function label(max: number) {
-  return z
-    .string()
-    .trim()
-    .min(1)
-    .max(max)
-    .refine((value) => !FORBIDDEN_CONTROL.test(value), 'Text holds a control character.');
-}
+export { exactText, isWellFormedText } from '../exact-text.ts';
 
 /* ===========================================================================
  * Layered works — input
@@ -279,9 +230,9 @@ function contributors<const R extends readonly [string, ...string[]]>(roles: R) 
  */
 const layerWorkFields = {
   slug: quranSlugSchema,
-  name: label(QURAN_LIMITS.name),
-  description: label(QURAN_LIMITS.description).nullable(),
-  attribution: label(QURAN_LIMITS.attribution).nullable(),
+  name: labelText(QURAN_LIMITS.name),
+  description: labelText(QURAN_LIMITS.description).nullable(),
+  attribution: labelText(QURAN_LIMITS.attribution).nullable(),
   languageCode: quranLanguageCodeSchema,
   sourceId: quranIdSchema.nullable(),
 };
@@ -295,7 +246,7 @@ export type TranslationValue = z.output<typeof translationInputSchema>;
 export const transliterationInputSchema = z.strictObject({
   ...layerWorkFields,
   /** What the scheme is, in the operator's words — e.g. its conventions. */
-  scheme: label(QURAN_LIMITS.description).nullable(),
+  scheme: labelText(QURAN_LIMITS.description).nullable(),
 });
 export type TransliterationValue = z.output<typeof transliterationInputSchema>;
 
@@ -311,11 +262,11 @@ export type TafsirValue = z.output<typeof tafsirInputSchema>;
  */
 export const recitationInputSchema = z.strictObject({
   slug: quranSlugSchema,
-  name: label(QURAN_LIMITS.name),
+  name: labelText(QURAN_LIMITS.name),
   reciterId: quranIdSchema,
   /** The recitation style as the source names it; never inferred. */
-  style: label(QURAN_LIMITS.style).nullable(),
-  attribution: label(QURAN_LIMITS.attribution).nullable(),
+  style: labelText(QURAN_LIMITS.style).nullable(),
+  attribution: labelText(QURAN_LIMITS.attribution).nullable(),
   sourceId: quranIdSchema.nullable(),
 });
 export type RecitationValue = z.output<typeof recitationInputSchema>;
@@ -324,13 +275,13 @@ export const tajweedRuleInputSchema = z
   .strictObject({
     slug: quranSlugSchema,
     position: z.number().int().min(0).max(QURAN_LIMITS.tajweedRules),
-    attribution: label(QURAN_LIMITS.attribution).nullable(),
+    attribution: labelText(QURAN_LIMITS.attribution).nullable(),
     sourceId: quranIdSchema.nullable(),
     texts: z
       .array(
         z.strictObject({
           languageCode: quranLanguageCodeSchema,
-          title: label(QURAN_LIMITS.tajweedTitle),
+          title: labelText(QURAN_LIMITS.tajweedTitle),
           body: exactText(QURAN_LIMITS.tajweedBody),
         }),
       )
@@ -395,7 +346,7 @@ export const surahNamesInputSchema = z.strictObject({
     .array(
       z.strictObject({
         locale: z.enum(['en', 'ur', 'ar']),
-        name: label(QURAN_LIMITS.surahName),
+        name: labelText(QURAN_LIMITS.surahName),
       }),
     )
     .max(3)
@@ -440,7 +391,7 @@ export const ayahCorrectionSchema = z.strictObject({
   expectedVersion: quranVersionSchema,
   sourceId: quranIdSchema,
   reviewedText: z.string().max(QURAN_LIMITS.ayahText),
-  reason: label(QURAN_LIMITS.reason),
+  reason: labelText(QURAN_LIMITS.reason),
 });
 export type AyahCorrectionValue = z.output<typeof ayahCorrectionSchema>;
 

@@ -218,6 +218,17 @@
       "countries": "Countries",
       "centres": "Centres",
       "pakistan": "Pakistan structure"
+    },
+    "hadith": {
+      "introduction": "Hadith: introduction",
+      "collections": "Hadith collections",
+      "browse": "Browse Hadith",
+      "search": "Hadith search",
+      "sciences": "Hadith sciences",
+      "commentary": "Hadith commentary",
+      "books": "Books on Hadith",
+      "videos": "Videos on Hadith",
+      "research": "Research on Hadith"
     }
   },
   "localeSwitcher": {
@@ -422,7 +433,8 @@
       "search": "Search",
       "media": "Media",
       "global": "Global Network",
-      "quran": "Quran"
+      "quran": "Quran",
+      "hadith": "Hadith"
     },
     "global": {
       "title": "Global Network",
@@ -609,7 +621,8 @@
       "invalidCredentials": "That password was not accepted.",
       "invalidCode": "That code was not accepted.",
       "rateLimited": "Too many attempts. Wait a little and try again.",
-      "quranCanonicalEdit": "Correcting canonical Quran text needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app."
+      "quranCanonicalEdit": "Correcting canonical Quran text needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app.",
+      "hadithCanonicalEdit": "Changing sourced Hadith records, structure, verification or citations needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app."
     },
     "users": {
       "title": "Accounts",
@@ -1125,7 +1138,8 @@
         "press-release": "Press release",
         "statement": "Statement",
         "media-coverage": "Media coverage",
-        "quran-ayah": "Quran ayah"
+        "quran-ayah": "Quran ayah",
+        "hadith": "Hadith citation"
       },
       "categories": {
         "source-unavailable": "The owner could not be read",
@@ -1689,7 +1703,8 @@
       "press-release": "Press release",
       "statement": "Statement",
       "media-coverage": "Media coverage",
-      "quran-ayah": "Quran ayah"
+      "quran-ayah": "Quran ayah",
+      "hadith": "Hadith"
     },
     "topic": "Topic",
     "topicAny": "Any topic",
@@ -1738,7 +1753,9 @@
     "limitedTitle": "Search paused",
     "backToSearch": "Return to search",
     "quranArabic": "Arabic text",
-    "quranLayer": "Translation or transliteration · {language}"
+    "quranLayer": "Translation or transliteration · {language}",
+    "hadithOriginal": "Original text",
+    "hadithTranslation": "Translation · {language}"
   },
   "topics": {
     "title": "Topics",
@@ -1774,7 +1791,8 @@
     "news": "News on this topic",
     "events": "Events on this topic",
     "collections": "Collections on this topic",
-    "quran": "Ayat on this topic"
+    "quran": "Ayat on this topic",
+    "hadith": "Hadith on this topic"
   },
   "watch": {
     "title": "Watch",
@@ -2951,6 +2969,532 @@
       "positionHelp": "Rules are listed in this order, lowest first.",
       "title": "Title",
       "full": "The most tajweed rules there can be already exist.",
+      "texts": "Texts",
+      "textsHelp": "A title and a plain-text body in each language you have. Leave a row entirely empty to give no text in it; a partly filled row is refused.",
+      "textLanguage": "Language {number}",
+      "textTitle": "Title {number}",
+      "textBody": "Body {number}"
+    }
+  },
+  "hadith": {
+    "title": "Hadith",
+    "description": "Browse Hadith collections by book and chapter, read each narration at its permanent citation, and study its sources, translations and commentary.",
+    "intro": "Browse the published collections by book and chapter, or go straight to a citation. Every citation shows its original text exactly as its source gives it, with the source's reference and the edition it comes from.",
+    "fixture": "Test fixture — this deployment shows non-authoritative engineering fixture text. It is not Hadith and must not be cited.",
+    "unavailable": {
+      "body": "Hadith collections are not yet available on this site.",
+      "home": "Return to the home page"
+    },
+    "previous": "Previous page",
+    "next": "Next page",
+    "landing": {
+      "collections": "Collections",
+      "browse": "Browse",
+      "study": "Study",
+      "related": "Related material"
+    },
+    "sections": {
+      "introduction": "Introduction",
+      "collections": "Collections",
+      "browse": "All citations",
+      "search": "Search Hadith",
+      "sciences": "Hadith sciences",
+      "commentary": "Commentary",
+      "books": "Books on Hadith",
+      "videos": "Videos on Hadith",
+      "research": "Research on Hadith",
+      "topics": "Hadith as a topic"
+    },
+    "sectionBody": {
+      "introduction": "How this section is organised, and what each part of a citation page shows.",
+      "collections": "Every published collection, with its books and the sources its citations come from.",
+      "browse": "Every published citation, collection by collection and number by number.",
+      "search": "Search the original texts and every published translation.",
+      "sciences": "Study material on the sciences of Hadith.",
+      "commentary": "Published commentary works. Their entries appear on the citations they comment on.",
+      "books": "Books from the Library classified under Hadith.",
+      "videos": "Videos classified under Hadith.",
+      "research": "Research from the Library classified under Hadith.",
+      "topics": "Everything on the platform classified under Hadith, in one place."
+    },
+    "introduction": {
+      "structure": "Each collection is divided into books, and a book may be divided into chapters, exactly as the edition it comes from divides it.",
+      "citation": "Every published narration has one permanent address: its collection and its number. Cite that address; it does not change.",
+      "source": "The original text is shown exactly as its source gives it, beside the source's own reference and the edition it was taken from, so it can be checked against that source.",
+      "sourced": "Where a source records a chain or a grading, it is shown as that source gives it, with who gave the grading and where it was published. This site does not grade, rank or endorse any narration.",
+      "layers": "Translations and commentary are separate works, each with its own language, contributors and attribution. They are shown beside the original text and never in place of it."
+    },
+    "citationName": "{collection}, number {number}",
+    "number": "number {number}",
+    "bookName": "Book {reference}",
+    "chapterName": "Chapter {reference}",
+    "books": "Books",
+    "chapters": "Chapters",
+    "citations": "Citations",
+    "bookCitations": "Citations in this book",
+    "chapterCitations": "Citations in this chapter",
+    "collectionsEmpty": "No collection has been published yet.",
+    "booksEmpty": "No book of this collection has been published yet.",
+    "citationsEmpty": "No citation has been published here yet.",
+    "sources": "Sources",
+    "facts": "Citation details",
+    "fact": {
+      "citation": "Citation",
+      "collection": "Collection",
+      "sourceReference": "Source reference",
+      "edition": "Edition",
+      "source": "Source",
+      "book": "Book",
+      "chapter": "Chapter"
+    },
+    "original": "Original text",
+    "originalOf": "Original text of {citation}",
+    "chain": "Chain as given in the source",
+    "chainOf": "Chain of {citation}, as given in the source",
+    "gradings": {
+      "heading": "Gradings as given in the source",
+      "note": "Each grading is recorded exactly as the source gives it, with who gave it and where it was published. This site does not grade, rank or endorse any narration.",
+      "item": "Grading recorded by {grader}",
+      "grader": "Given by",
+      "label": "Grading, in the source's words",
+      "reference": "Published in"
+    },
+    "translations": {
+      "heading": "Translations",
+      "title": "Translation",
+      "item": "Translation · {language}"
+    },
+    "commentaryOf": "Commentary · {name}",
+    "topicList": "Topics",
+    "role": {
+      "translator": "translator",
+      "editor": "editor",
+      "author": "author",
+      "compiler": "compiler"
+    },
+    "work": {
+      "language": "Language",
+      "attribution": "Attribution",
+      "entries": "Entries",
+      "entryCount": "{count, plural, one {# entry} other {# entries}}"
+    },
+    "worksEmpty": {
+      "commentary": "No commentary has been published yet.",
+      "sciences": "No study material has been published yet."
+    },
+    "scienceFallback": "This material is not available in your language, so it is shown in {language}.",
+    "topicTitle": "Hadith",
+    "topicHub": "Everything on this topic",
+    "topicEmpty": "No citation has been assigned to this topic yet.",
+    "topicAll": "All citations on this topic",
+    "relatedEmpty": {
+      "books": "No book on Hadith has been published in the Library yet.",
+      "videos": "No video on Hadith has been published yet.",
+      "research": "No research on Hadith has been published yet."
+    },
+    "relatedOwner": {
+      "books": "Browse these books in the Library",
+      "videos": "Browse these videos in Watch",
+      "research": "Browse this research in the Library"
+    },
+    "search": {
+      "intro": "Search the original texts and every published translation. Each result is one citation, labelled with the text that matched.",
+      "label": "Search Hadith for",
+      "help": "Every word you type must match. Use up to 8 words.",
+      "submit": "Search",
+      "clear": "Clear search",
+      "results": "Hadith search results",
+      "count": "{count, plural, one {# result} other {# results}} for “{query}”",
+      "capped": "More than {count} results for “{query}”. Add a word to narrow them.",
+      "none": "No citation matches “{query}”.",
+      "pages": "Hadith search result pages",
+      "pageStatus": "Page {page} of {pages}"
+    }
+  },
+  "hadithAdmin": {
+    "title": "Hadith",
+    "surface": {
+      "collections": "Collections",
+      "books": "Books",
+      "chapters": "Chapters",
+      "records": "Records",
+      "commentary": "Commentary",
+      "sciences": "Sciences"
+    },
+    "scope": {
+      "collections": "Each collection, whether the operator has activated it, and its registered editions. Source systems, editions and activation are the operator's to register; a new collection is created through the protected canonical flow.",
+      "books": "Books as each edition structures them, with the source's own reference. Choose a collection to narrow the list or to add a book for one of its editions.",
+      "chapters": "Chapters within books, with the source's own reference. Open a book to narrow the list to its chapters or to add one.",
+      "records": "Source-qualified records: each is identified by its collection, source system, edition and the source's own reference, never by a bare number. A public citation is a separate, reviewed mapping to one record.",
+      "commentary": "Commentary works, each with entries attached to individual records. Editing commentary never changes a record's sourced text.",
+      "sciences": "Study material on the Hadith sciences: plain-text titles and bodies in each language, each entry with its own source and lifecycle."
+    },
+    "createHelp": "A new work starts as a draft. It can be published only once it names a registered source and has something to show.",
+    "createSubmit": "Create",
+    "save": "Save",
+    "pending": "Saving…",
+    "loading": "Loading…",
+    "unknown": "Something went wrong. Nothing was changed.",
+    "reload": "Try again",
+    "saved": "Saved.",
+    "denied": "You do not have the permission this change requires.",
+    "invalid": "Some of the details are not valid. Check each field and try again. Sourced text may not begin or end with spaces or line breaks — nothing is trimmed for you.",
+    "conflict": "This record changed since you opened it. Reload the page to see the current version, then make your change again.",
+    "notFound": "That record no longer exists, or what it refers to is not registered.",
+    "duplicateSlug": "Another record already uses this slug.",
+    "duplicateReference": "That source reference or position is already taken in this edition or book.",
+    "sourceRequired": "This cannot be published until it names a registered source.",
+    "textRequired": "This cannot be published until it has text to show.",
+    "unchanged": "Nothing changed, so nothing was saved.",
+    "structureMismatch": "The book, chapter and edition do not belong together. A record is placed only within its own edition's books and chapters.",
+    "citationKept": "This record is the one its citation currently names, so its intended citation number cannot change. Withdraw the citation first if that is needed.",
+    "notCandidate": "A citation can name only a record that declares that number as its intended citation.",
+    "citationConflicted": "Conflict evidence stands against this citation, so it cannot be mapped. It stays blocked until an external authority decides.",
+    "notVerified": "Only a record verified at its current version can be named by a citation.",
+    "fixtureOverApproved": "A record’s source and its collection’s activation must share one authority: fixture text never enters an approved collection, and approved text is never shown as fixture text.",
+    "noSession": "Sign in again to continue.",
+    "secondFactorRequired": "Set up two-step verification and confirm your recovery codes before using this.",
+    "stepUpRequired": "Confirm it is you with the form above, then submit again.",
+    "accountInactive": "This account cannot act.",
+    "confirmRequired": "Tick the confirmation before submitting.",
+    "stateName": {
+      "draft": "Draft",
+      "published": "Published",
+      "archived": "Archived"
+    },
+    "stateTitle": "Lifecycle",
+    "stateHelp": "Draft is private. Published is public only while its record's citation is public and the work names a registered source — and a test fixture source is never public beside approved sources. Archived withdraws it without deleting it.",
+    "stateAction": {
+      "published": "Publish",
+      "draft": "Return to draft",
+      "archived": "Archive"
+    },
+    "authority": {
+      "fixture": "Test fixture — not authoritative",
+      "approved": "Approved source"
+    },
+    "activation": {
+      "title": "Activation",
+      "none": "Not activated",
+      "fixture": "Activated — test fixture",
+      "approved": "Activated — approved"
+    },
+    "language": {
+      "label": "Content language",
+      "help": "The language the text is written in, from the Taxonomy language list.",
+      "choose": "Choose a language",
+      "en": "English",
+      "ur": "Urdu",
+      "ar": "Arabic"
+    },
+    "people": {
+      "search": "Find a person by name",
+      "searchSubmit": "Find",
+      "searchHelp": "Narrows the person lists below to matching published contributors. People this record already names are always offered."
+    },
+    "personUnavailable": "A person who is not currently published",
+    "contributors": {
+      "title": "Contributors",
+      "help": "People credited for this work, each with a role, in the order shown. Up to {limit}. Being credited grants nobody any permission.",
+      "person": "Person {number}",
+      "role": "Role {number}",
+      "roleName": {
+        "translator": "Translator",
+        "editor": "Editor",
+        "author": "Author",
+        "compiler": "Compiler"
+      }
+    },
+    "filter": {
+      "collection": "Filter by collection",
+      "allCollections": "All collections"
+    },
+    "previous": "Previous page",
+    "next": "Next page",
+    "backToList": "Back to the list",
+    "empty": "Nothing here yet.",
+    "none": "None",
+    "version": "Version",
+    "updated": "Updated",
+    "when": "When",
+    "state": "State",
+    "name": "Name",
+    "nameIn": "Name in {language}",
+    "descriptionIn": "Description in {language} (optional)",
+    "slug": "Slug",
+    "slugHelp": "Lowercase letters, digits and hyphens. It forms the public address and cannot be changed once created.",
+    "slugFixed": "Fixed when this was created; it never changes.",
+    "position": "Position",
+    "description": "Description (optional)",
+    "attribution": "Attribution (optional)",
+    "attributionHelp": "As the source supplies it. Nothing is inferred.",
+    "details": "Details",
+    "source": "Source",
+    "sourceNone": "No registered source",
+    "sourceHelp": "Choose one of the registered source systems. Sources are registered by the operator and cannot be created here. Publication requires one.",
+    "exactTextHelp": "Saved exactly as entered. It may not begin or end with spaces or line breaks; nothing is trimmed or changed for you.",
+    "unavailableReference": "Not available",
+    "canonical": {
+      "title": "Canonical changes",
+      "intro": "Correct this record, verify its current version, or map or withdraw its public citation. Each needs the canonical-edit permission, a fresh confirmation that it is you, evidence, and an explicit confirmation.",
+      "begin": "Begin",
+      "leave": "Leave without changing anything",
+      "warning": "You are about to change sourced Hadith data. Nothing changes until you confirm, every change is recorded permanently, and the previous versions are kept."
+    },
+    "evidence": {
+      "label": "Evidence",
+      "help": "The source this is taken from or checked against, in your own words — for the permanent record."
+    },
+    "reason": {
+      "label": "Reason",
+      "help": "Why this change is being made, for the permanent record."
+    },
+    "names": {
+      "title": "Display names",
+      "help": "The name shown to readers in each interface language. Leave a language empty to give no display name in it. Display names never change a slug, a reference or a citation."
+    },
+    "editions": {
+      "title": "Registered editions",
+      "operatorOnly": "Editions and their source systems are registered by the operator on the host, and activation is the operator's decision. Nothing on these screens can register, change or activate them.",
+      "empty": "No edition is registered for this collection.",
+      "code": "Code",
+      "titleColumn": "Title",
+      "sourceSystem": "Source system",
+      "authority": "Authority",
+      "reference": "Evidence reference"
+    },
+    "structure": {
+      "collection": "Collection",
+      "edition": "Edition",
+      "book": "Book",
+      "chapter": "Chapter",
+      "reference": "Source reference",
+      "referenceHelp": "Exactly as the source gives it. It is never trimmed or renumbered, and cannot be changed later.",
+      "positionHelp": "The order within its parent, lowest first. Fixed once created.",
+      "sourcedTitle": "Title from the source",
+      "titleHelp": "Optional, exactly as the source gives it. A title needs its language, and a language its title.",
+      "titleLanguage": "Language of the title",
+      "titleLanguageHelp": "Required when a title is given.",
+      "readOnly": "These sourced facts are fixed. Only the display names below can be edited.",
+      "confirm": "I have checked these details against the registered edition, and I understand they cannot be changed after creation.",
+      "addRecord": "Add a record here"
+    },
+    "collections": {
+      "empty": "No collection exists yet.",
+      "displayName": "Display name",
+      "editions": "Editions",
+      "create": "New collection",
+      "createHelp": "A collection's slug and position are fixed once it is created. Its editions are registered, and it is activated, by the operator — never from these screens.",
+      "slugHelp": "Lowercase letters, digits and hyphens. It forms the public address and can never be changed. These words are section paths and cannot be used: {reserved}.",
+      "positionHelp": "Collections are listed in this order, lowest first.",
+      "confirm": "I understand this collection's slug and position cannot be changed after creation.",
+      "fixed": "The slug and position are fixed. Only the display names below can be edited.",
+      "books": "Books in this collection",
+      "records": "Records in this collection"
+    },
+    "books": {
+      "empty": "No book exists yet.",
+      "chooseCollection": "Choose a collection above to add a book for one of its editions.",
+      "create": "New book in {collection}",
+      "createHelp": "A book belongs to one registered edition and keeps the source's own reference. Its sourced details cannot be changed after creation.",
+      "editionHelp": "Only editions the operator registered for this collection are offered.",
+      "chooseEdition": "Choose an edition",
+      "chapters": "Chapters of this book",
+      "addChapter": "Add a chapter"
+    },
+    "chapters": {
+      "empty": "No chapter exists yet.",
+      "chooseBook": "To narrow the list or add a chapter, open a book from",
+      "allBooks": "Show chapters of every book",
+      "create": "New chapter in {book}",
+      "createHelp": "A chapter belongs to one book and keeps the source's own reference. Its sourced details cannot be changed after creation."
+    },
+    "records": {
+      "empty": "No record matches.",
+      "viewLabel": "Filter records",
+      "view": {
+        "all": "All",
+        "unverified": "Not verified at current version",
+        "conflicted": "With conflict evidence",
+        "mapped": "Named by a citation"
+      },
+      "create": "New record",
+      "createHelp": "A record is added to one book of one registered edition, with the source's own reference, its exact text, chain and gradings, and the evidence it was taken from.",
+      "chooseCollection": "Choose a collection",
+      "showBooks": "Show its books",
+      "bookHelp": "The book fixes the edition: a record is placed only within its own edition's structure.",
+      "chooseBook": "Choose a book",
+      "useBook": "Use this book",
+      "otherBook": "Choose another book",
+      "choicesTruncated": "Only the first part of a long list is offered here.",
+      "createSubmit": "Create record",
+      "confirm": "I have entered these details exactly as the registered edition gives them, and I understand the record is kept permanently with its history."
+    },
+    "record": {
+      "facts": "Source and placement",
+      "sourceSystem": "Source system",
+      "sourceReference": "Source reference",
+      "sourceReferenceHelp": "The record's reference in its edition, exactly as the source gives it.",
+      "citationNumber": "Intended citation number",
+      "citationNumberHelp": "Optional. The number under which this record may later be cited publicly in its collection. Declaring it maps nothing.",
+      "noCitationNumber": "No citation number declared",
+      "chapterHelp": "Optional. Only chapters of the chosen book are offered.",
+      "noChapter": "No chapter",
+      "text": "Original text",
+      "textLanguage": "Language of the original text",
+      "chain": "Chain",
+      "chainHelp": "Optional, exactly as the source gives it. It is kept as text; nothing in it is parsed or linked.",
+      "chainLanguage": "Language of the chain",
+      "chainLanguageHelp": "Required when a chain is given.",
+      "noChain": "No chain is recorded for this version.",
+      "readOnly": "Read-only. Sourced text changes only through a canonical correction, which keeps every previous version."
+    },
+    "gradings": {
+      "title": "Gradings",
+      "help": "Each grading exactly as the source gives it: the grader, their own words, the language of those words, and where they were published. Nothing is ranked or compared.",
+      "formHelp": "One row per grader, up to {limit}, in the order shown. Leave a row entirely empty to give no grading in it; a partly filled row is refused.",
+      "empty": "No grading is recorded for this version.",
+      "grader": "Grader",
+      "label": "Grading as given",
+      "labelLanguage": "Language",
+      "reference": "Published in",
+      "graderNumbered": "Grader {number}",
+      "labelNumbered": "Grading as given {number}",
+      "labelLanguageNumbered": "Language of grading {number}",
+      "labelLanguageHelp": "The language the grading is written in.",
+      "referenceNumbered": "Published in {number}"
+    },
+    "verification": {
+      "title": "Verification",
+      "verified": "Verified at current version",
+      "unverified": "Not verified at current version",
+      "current": "Version {version} has been verified by a person against its source.",
+      "notCurrent": "Version {version} has not been verified. Only a verified current version can be named by a public citation.",
+      "history": "Verifications",
+      "empty": "No verification has been recorded."
+    },
+    "conflicts": {
+      "title": "Conflict evidence",
+      "count": "{count, plural, one {# conflict} other {# conflicts}}",
+      "blocked": "Citation blocked by conflict evidence",
+      "escalated": "Records declaring the same citation number disagree. The evidence is kept unchanged and the citation stays blocked until an external authority decides. Nothing on these screens resolves it or chooses a record.",
+      "empty": "No conflict evidence names this record.",
+      "facets": "Where they differ",
+      "facet": {
+        "text": "Text",
+        "chain": "Chain",
+        "structure": "Book or chapter",
+        "grading": "Grading"
+      },
+      "thisVersion": "This record's version",
+      "other": "Other record",
+      "otherVersion": "Other record's version",
+      "detected": "Detected"
+    },
+    "candidates": {
+      "title": "Other records declaring the same citation number",
+      "help": "Variants from other editions or source systems coexist; none is chosen silently.",
+      "empty": "No other record declares this citation number."
+    },
+    "citation": {
+      "title": "Public citation",
+      "help": "A public citation is a separate, reviewed mapping from a collection and number to exactly one record.",
+      "noNumber": "This record declares no citation number, so it cannot be named by a citation.",
+      "unmapped": "No citation exists yet for {collection} {number}.",
+      "number": "Citation",
+      "names": "Names",
+      "thisRecord": "This record",
+      "otherRecord": "Another record",
+      "state": {
+        "mapped": "Mapped",
+        "withdrawn": "Withdrawn"
+      },
+      "history": "Citation history",
+      "historyEmpty": "No change has been recorded."
+    },
+    "history": {
+      "title": "Revision history",
+      "help": "Every version of this record, kept permanently. Versions are never edited or removed.",
+      "empty": "No revision has been recorded.",
+      "operation": "Change",
+      "operationName": {
+        "created": "Created",
+        "corrected": "Corrected"
+      }
+    },
+    "topics": {
+      "title": "Topics",
+      "help": "Topics from the Taxonomy that this record is filed under. {count} of {limit}.",
+      "empty": "This record is not filed under any topic.",
+      "unavailable": "A topic that is no longer available",
+      "remove": "Remove",
+      "add": "Add topic",
+      "choose": "Topic",
+      "placeholder": "Choose a topic",
+      "full": "This record has as many topics as it can hold. Remove one to add another.",
+      "none": "Every available topic is already assigned."
+    },
+    "translations": {
+      "title": "Translations",
+      "help": "Each translation is its own work with its own source, contributors and lifecycle. Editing one never changes the original text.",
+      "empty": "No translation yet.",
+      "open": "Open",
+      "edit": "Edit",
+      "view": "View",
+      "add": "Add a translation",
+      "new": "New translation",
+      "editing": "Translation — {language}",
+      "close": "Close",
+      "text": "Translation text"
+    },
+    "verify": {
+      "title": "Verify version {version}",
+      "help": "Records that a person has checked this exact version against its source. A later correction needs its own verification.",
+      "already": "The current version is already verified.",
+      "submit": "Verify this version",
+      "confirm": "I have checked this version's text, chain, gradings and placement against the registered source."
+    },
+    "mapping": {
+      "title": "Citation mapping",
+      "help": "Maps the record's declared citation number in its collection to this record, or withdraws the citation from public view.",
+      "conflicted": "Conflict evidence stands against this citation number, so it cannot be mapped. The conflict is escalated and stays until an external authority decides.",
+      "already": "The citation already names this record.",
+      "unverified": "Verify the current version first: only a verified record can be named by a citation.",
+      "target": "Citation: {collection} {number}",
+      "reasonHelp": "Why the citation is changing, for the permanent record.",
+      "submit": "Map the citation to this record",
+      "confirm": "I have reviewed the other records declaring this number, and I want the citation to name this record.",
+      "withdrawTitle": "Withdraw the citation",
+      "withdraw": "Withdraw the citation",
+      "withdrawConfirm": "I understand this removes the citation from public view until it is mapped again."
+    },
+    "correction": {
+      "title": "Correct this record",
+      "help": "Replaces every sourced fact of this record under its current version. The previous version stays in the history, and the new version must be verified separately.",
+      "citationKept": "The citation names this record, so its intended citation number must stay the same.",
+      "bookHelp": "Only books of this record's own edition are offered. Choose one to list its chapters.",
+      "submit": "Save the correction",
+      "confirm": "I have compared these details with the registered source, and I understand this creates a new version that is recorded permanently."
+    },
+    "commentary": {
+      "create": "New commentary",
+      "entries": "Entries",
+      "entriesHelp": "Each entry is attached to one record. Saving an entry for a record that already has one replaces it.",
+      "entriesEmpty": "No entries yet.",
+      "removeEntry": "Remove entry",
+      "saveEntry": "Save entry",
+      "addEntry": "Add an entry",
+      "addEntryHelp": "Narrow the records by collection, choose one, then enter the commentary for it.",
+      "findRecords": "Show records",
+      "record": "Record",
+      "chooseRecord": "Choose a record",
+      "addEntrySubmit": "Add entry",
+      "text": "Commentary text"
+    },
+    "sciences": {
+      "title": "Title",
+      "create": "New sciences entry",
+      "positionHelp": "Entries are listed in this order, lowest first.",
       "texts": "Texts",
       "textsHelp": "A title and a plain-text body in each language you have. Leave a row entirely empty to give no text in it; a partly filled row is refused.",
       "textLanguage": "Language {number}",

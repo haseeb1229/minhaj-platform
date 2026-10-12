@@ -12,6 +12,7 @@ import {
 import { scholarlySitemapPartitions } from './scholarly-sitemap';
 import { topicsSitemapPartitions } from './topics-sitemap';
 import { quranSitemapPartitions } from './quran-sitemap';
+import { hadithSitemapPartitions } from './hadith-sitemap';
 import 'server-only';
 
 import { localeSchema } from '@minhaj/contracts';
@@ -177,6 +178,9 @@ export async function allSitemapPartitions(): Promise<readonly SitemapPartition[
     // Phase 18's `quran` segment: canonical Ayah citations, and only while an
     // APPROVED corpus is active — a fixture corpus is never advertised.
     ...(await quranSitemapPartitions()),
+    // Phase 19's `hadith` segment: canonical citations, and only while an
+    // APPROVED activation stands — fixture activation is never advertised.
+    ...(await hadithSitemapPartitions()),
   ]);
 }
 

@@ -54,6 +54,13 @@ import { z } from 'zod';
  * translation's words are never presented as the Arabic. A Surah, a Juz and a
  * layered work are navigated, not searched. Its scope is one Ayah, because a
  * Surah can hold more ayat than a scope may hold documents.
+ *
+ * PHASE 19 adds `hadith`, and only that. The PUBLIC CITATION is the result
+ * unit — one collection-local number mapped to exactly one source-qualified
+ * record — so another edition's variant, a conflicting candidate or a
+ * translation never becomes a competing result. The record's original text and
+ * each public translation of it are documents of that one result, one per text
+ * language. Chains, gradings, commentary and conflict evidence are not indexed.
  */
 export const SEARCH_KINDS = Object.freeze([
   'topic',
@@ -76,6 +83,7 @@ export const SEARCH_KINDS = Object.freeze([
   'statement',
   'media-coverage',
   'quran-ayah',
+  'hadith',
 ] as const);
 
 export type SearchKind = (typeof SEARCH_KINDS)[number];
@@ -116,6 +124,7 @@ export const SEARCH_SCOPE_KINDS = Object.freeze([
   'statement',
   'media-coverage',
   'quran-ayah',
+  'hadith',
 ] as const);
 
 export type SearchScopeKind = (typeof SEARCH_SCOPE_KINDS)[number];
@@ -143,12 +152,14 @@ export const SCOPE_OF_KIND: Readonly<Record<SearchKind, SearchScopeKind>> = Obje
     statement: 'statement',
     'media-coverage': 'media-coverage',
     'quran-ayah': 'quran-ayah',
+    hadith: 'hadith',
   },
 );
 
 /**
  * Owner identifiers: GUID strings, except a Quran Ayah, whose identity is its
- * canonical citation `"{surah}:{ayah}"` (Phase 18) — the owner's own key.
+ * canonical citation `"{surah}:{ayah}"` (Phase 18) — the owner's own key. A
+ * Hadith result is its public citation's own GUID (Phase 19).
  */
 export const searchResourceIdSchema = z.string().min(1).max(36);
 

@@ -75,6 +75,12 @@ const REQUIRED = [
   // and its rebuild after a real restore.
   'quran.integration',
   'quran-recovery.integration',
+  // Phase 19: the Hadith kind — one result per public citation whatever its
+  // translations, withholding a conflicted, unverified, withdrawn, inactive or
+  // fixture-under-approved citation even while a stale row remains, rebuild
+  // and reconciliation — and its rebuild after a real restore.
+  'hadith.integration',
+  'hadith-recovery.integration',
 ];
 
 const seen = files.map((file) => String(file.name ?? ''));

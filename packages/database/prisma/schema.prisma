@@ -800,6 +800,7 @@ model Topic {
   statementTopics StatementTopic[]
   mediaCoverageTopics MediaCoverageTopic[]
   quranTopics QuranTopic[]
+  hadithTopics HadithTopic[]
 
   id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
 
@@ -925,6 +926,14 @@ model Language {
   statementTranslations StatementRevisionTranslation[]
   mediaCoverageTranslations MediaCoverageRevisionTranslation[]
   quranTranslations QuranTranslation[]
+  hadithBookTitles   HadithBook[]        @relation("HadithBookTitleLanguage")
+  hadithChapterTitles HadithChapter[]    @relation("HadithChapterTitleLanguage")
+  hadithTexts        Hadith[]            @relation("HadithTextLanguage")
+  hadithChains       Hadith[]            @relation("HadithChainLanguage")
+  hadithGradings     HadithGrading[]     @relation("HadithGradingLanguage")
+  hadithTranslations HadithTranslation[] @relation("HadithTranslationLanguage")
+  hadithCommentaries HadithCommentary[]  @relation("HadithCommentaryLanguage")
+  hadithScienceTexts HadithScienceText[] @relation("HadithScienceTextLanguage")
   quranTransliterations QuranTransliteration[]
   quranTafsirs QuranTafsir[]
   quranTajweedTexts QuranTajweedRuleText[]
@@ -1066,6 +1075,8 @@ model Person {
   statementContributions StatementContributor[]
   mediaCoverageContributions MediaCoverageContributor[]
   quranTranslationContributions QuranTranslationContributor[]
+  hadithTranslationContributions HadithTranslationContributor[]
+  hadithCommentaryContributions  HadithCommentaryContributor[]
   quranTafsirContributions QuranTafsirContributor[]
   quranRecitations QuranRecitation[]
 
@@ -4024,4 +4035,523 @@ model QuranTopic {
   @@id([surahNumber, ayahNumber, topicId])
   @@index([topicId, surahNumber, ayahNumber], map: "QuranTopic_topicId_idx")
   @@map("QuranTopic")
+}
+
+// =============================================================================
+// Phase 19 — Hadith
+// =============================================================================
+//
+// THE SOURCE IS THE IDENTITY. A Hadith record is `(collection, source system,
+// edition, source reference)`, the reference kept exactly as the source wrote
+// it; a bare number is never a platform-wide key. The public citation
+// `(collection, number)` is a separate reviewed mapping to one candidate.
+//
+// FOUR POSTURES (the migration's header and the runtime grants): source
+// systems, editions and activation are owner/operator-only; canonical tables
+// are written ONLY by the Hadith procedures, which re-check the actor's live
+// `hadith.editCanonical` grant and `hadith-canonical-edit` step-up; layered
+// records are administered under `hadith.administer`; Search's vocabulary gains
+// `hadith`. No Hadith content is seeded.
+//
+// Several keys are COMPOSITE in the database — a record's edition, collection
+// and source system; its book within its edition; its chapter within its book;
+// a citation's candidate declaring that number. Prisma models the plain
+// identifier relation where it cannot express the composite; the database
+// enforces the composite.
+
+/// A registered Hadith source system, `fixture` or `approved`. Immutable. The
+/// application principal can read it and nothing more.
+model HadithSourceSystem {
+  id        String   @id @db.NVarChar(36)
+  code      String   @unique @db.NVarChar(64)
+  /// fixture | approved
+  authority String   @db.NVarChar(16)
+  title     String   @db.NVarChar(200)
+  version   String   @db.NVarChar(64)
+  /// utf-8
+  encoding  String   @db.NVarChar(32)
+  /// The external authority's evidence reference; mandatory when approved.
+  reference String?  @db.NVarChar(400)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  editions     HadithEdition[]
+  records      Hadith[]
+  translations HadithTranslation[]
+  commentaries HadithCommentary[]
+  sciences     HadithScience[]
+
+  @@map("HadithSourceSystem")
+}
+
+/// The platform's collection namespace. The slug is chosen once and never
+/// changes; display names live in HadithCollectionName under `namesVersion`.
+model HadithCollection {
+  id           String   @id @db.NVarChar(36)
+  slug         String   @unique @db.NVarChar(120)
+  position     Int
+  namesVersion Int      @default(1)
+  createdAt    DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt    DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  editions   HadithEdition[]
+  books      HadithBook[]
+  records    Hadith[]
+  activation HadithActivation?
+  citations  HadithCitation[]
+  conflicts  HadithConflict[]
+  names      HadithCollectionName[]
+
+  @@index([position, slug], map: "HadithCollection_position_idx")
+  @@map("HadithCollection")
+}
+
+/// One edition of one collection as one source system carries it. Immutable,
+/// owner/operator-only.
+model HadithEdition {
+  id             String   @id @db.NVarChar(36)
+  collectionId   String   @db.NVarChar(36)
+  sourceSystemId String   @db.NVarChar(36)
+  code           String   @db.NVarChar(64)
+  title          String   @db.NVarChar(200)
+  reference      String?  @db.NVarChar(400)
+  createdAt      DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  collection   HadithCollection   @relation(fields: [collectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sourceSystem HadithSourceSystem @relation(fields: [sourceSystemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  books        HadithBook[]
+  records      Hadith[]
+
+  @@unique([collectionId, sourceSystemId, code], map: "HadithEdition_code_key")
+  @@unique([id, collectionId], map: "HadithEdition_collection_key")
+  @@unique([id, collectionId, sourceSystemId], map: "HadithEdition_identity_key")
+  @@index([sourceSystemId], map: "HadithEdition_sourceSystemId_idx")
+  @@map("HadithEdition")
+}
+
+/// A collection is public if and only if its row exists. Owner/operator-only;
+/// every row shares one authority.
+model HadithActivation {
+  collectionId String   @id @db.NVarChar(36)
+  /// fixture | approved
+  authority    String   @db.NVarChar(16)
+  authorisedBy String   @db.NVarChar(200)
+  activatedAt  DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  collection HadithCollection @relation(fields: [collectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("HadithActivation")
+}
+
+/// A sourced structural unit of ONE edition. `reference` and `title` are the
+/// source's own, kept exactly; immutable once created.
+model HadithBook {
+  id            String   @id @db.NVarChar(36)
+  collectionId  String   @db.NVarChar(36)
+  editionId     String   @db.NVarChar(36)
+  slug          String   @db.NVarChar(120)
+  reference     String   @db.NVarChar(64)
+  position      Int
+  title         String?  @db.NVarChar(400)
+  titleLanguage String?  @db.NVarChar(16)
+  namesVersion  Int      @default(1)
+  createdAt     DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt     DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  collection HadithCollection @relation(fields: [collectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  /// Composite in the database: (editionId, collectionId).
+  edition    HadithEdition    @relation(fields: [editionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  language   Language?        @relation("HadithBookTitleLanguage", fields: [titleLanguage], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  chapters   HadithChapter[]
+  records    Hadith[]
+  names      HadithBookName[]
+
+  @@unique([collectionId, slug], map: "HadithBook_slug_key")
+  @@unique([editionId, reference], map: "HadithBook_reference_key")
+  @@unique([editionId, position], map: "HadithBook_position_key")
+  @@unique([id, editionId], map: "HadithBook_edition_key")
+  @@index([collectionId, position], map: "HadithBook_collection_position_idx")
+  @@map("HadithBook")
+}
+
+model HadithChapter {
+  id            String   @id @db.NVarChar(36)
+  bookId        String   @db.NVarChar(36)
+  slug          String   @db.NVarChar(120)
+  reference     String   @db.NVarChar(64)
+  position      Int
+  title         String?  @db.NVarChar(400)
+  titleLanguage String?  @db.NVarChar(16)
+  namesVersion  Int      @default(1)
+  createdAt     DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt     DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  book     HadithBook          @relation(fields: [bookId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  language Language?           @relation("HadithChapterTitleLanguage", fields: [titleLanguage], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  records  Hadith[]
+  names    HadithChapterName[]
+
+  @@unique([bookId, slug], map: "HadithChapter_slug_key")
+  @@unique([bookId, reference], map: "HadithChapter_reference_key")
+  @@unique([bookId, position], map: "HadithChapter_position_key")
+  @@unique([id, bookId], map: "HadithChapter_book_key")
+  @@map("HadithChapter")
+}
+
+/// The source-qualified record. Written only by the canonical procedures; its
+/// current facts always equal its revision for `version`.
+model Hadith {
+  id              String   @id @db.NVarChar(36)
+  collectionId    String   @db.NVarChar(36)
+  sourceSystemId  String   @db.NVarChar(36)
+  editionId       String   @db.NVarChar(36)
+  /// The source's own reference, exactly as supplied.
+  sourceReference String   @db.NVarChar(64)
+  /// The collection-local public number this record is a candidate for.
+  citationNumber  Int?
+  bookId          String   @db.NVarChar(36)
+  chapterId       String?  @db.NVarChar(36)
+  text            String   @db.NVarChar(Max)
+  textLanguage    String   @db.NVarChar(16)
+  chain           String?  @db.NVarChar(Max)
+  chainLanguage   String?  @db.NVarChar(16)
+  version         Int
+  createdAt       DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt       DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  collection        HadithCollection         @relation(fields: [collectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sourceSystem      HadithSourceSystem       @relation(fields: [sourceSystemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  /// Composite in the database: (editionId, collectionId, sourceSystemId).
+  edition           HadithEdition            @relation(fields: [editionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  /// Composite in the database: (bookId, editionId).
+  book              HadithBook               @relation(fields: [bookId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  /// Composite in the database: (chapterId, bookId).
+  chapter           HadithChapter?           @relation(fields: [chapterId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  language          Language                 @relation("HadithTextLanguage", fields: [textLanguage], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  chainLanguageRef  Language?                @relation("HadithChainLanguage", fields: [chainLanguage], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  revisions         HadithRevision[]
+  citations         HadithCitation[]
+  citationRevisions HadithCitationRevision[]
+  translations      HadithTranslation[]
+  commentaryEntries HadithCommentaryEntry[]
+  topics            HadithTopic[]
+
+  @@unique([editionId, sourceReference], map: "Hadith_identity_key")
+  @@unique([id, collectionId, citationNumber], map: "Hadith_citation_key")
+  @@index([collectionId, citationNumber], map: "Hadith_candidates_idx")
+  @@index([bookId, chapterId], map: "Hadith_book_chapter_idx")
+  @@map("Hadith")
+}
+
+/// Every canonical version of every record, version 1 included. Immutable.
+model HadithRevision {
+  hadithId        String   @db.NVarChar(36)
+  version         Int
+  /// created | corrected
+  operation       String   @db.NVarChar(16)
+  sourceReference String   @db.NVarChar(64)
+  citationNumber  Int?
+  bookId          String   @db.NVarChar(36)
+  chapterId       String?  @db.NVarChar(36)
+  text            String   @db.NVarChar(Max)
+  textLanguage    String   @db.NVarChar(16)
+  chain           String?  @db.NVarChar(Max)
+  chainLanguage   String?  @db.NVarChar(16)
+  evidence        String   @db.NVarChar(400)
+  reason          String?  @db.NVarChar(500)
+  /// Historical identifiers: no foreign key.
+  actorId         String   @db.NVarChar(36)
+  stepUpGrantId   String   @db.NVarChar(36)
+  createdAt       DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  hadith         Hadith               @relation(fields: [hadithId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  gradings       HadithGrading[]
+  verifications  HadithVerification[]
+  conflicts      HadithConflict[]     @relation("HadithConflictRevision")
+  otherConflicts HadithConflict[]     @relation("HadithConflictOtherRevision")
+
+  @@id([hadithId, version])
+  @@map("HadithRevision")
+}
+
+/// What a named grader said, where, in the grader's own words — for one version
+/// of one record. Immutable; never a platform judgement.
+model HadithGrading {
+  hadithId      String   @db.NVarChar(36)
+  version       Int
+  position      Int
+  grader        String   @db.NVarChar(200)
+  label         String   @db.NVarChar(400)
+  labelLanguage String   @db.NVarChar(16)
+  reference     String   @db.NVarChar(400)
+  createdAt     DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  revision HadithRevision @relation(fields: [hadithId, version], references: [hadithId, version], onDelete: NoAction, onUpdate: NoAction)
+  language Language       @relation("HadithGradingLanguage", fields: [labelLanguage], references: [code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([hadithId, version, position])
+  @@unique([hadithId, version, grader], map: "HadithGrading_grader_key")
+  @@map("HadithGrading")
+}
+
+/// Human verification of ONE version. Immutable.
+model HadithVerification {
+  id            String   @id @db.NVarChar(36)
+  hadithId      String   @db.NVarChar(36)
+  version       Int
+  evidence      String   @db.NVarChar(400)
+  actorId       String   @db.NVarChar(36)
+  stepUpGrantId String   @db.NVarChar(36)
+  createdAt     DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  revision HadithRevision @relation(fields: [hadithId, version], references: [hadithId, version], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([hadithId, version], map: "HadithVerification_version_key")
+  @@map("HadithVerification")
+}
+
+/// The public citation `(collection, number)` and the one candidate it names.
+model HadithCitation {
+  collectionId String   @db.NVarChar(36)
+  number       Int
+  id           String   @unique(map: "HadithCitation_id_key") @db.NVarChar(36)
+  hadithId     String   @db.NVarChar(36)
+  /// mapped | withdrawn
+  state        String   @db.NVarChar(16)
+  version      Int
+  createdAt    DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt    DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  collection HadithCollection         @relation(fields: [collectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  /// Composite in the database: (hadithId, collectionId, number).
+  hadith     Hadith                   @relation(fields: [hadithId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  revisions  HadithCitationRevision[]
+
+  @@id([collectionId, number])
+  @@index([hadithId], map: "HadithCitation_hadithId_idx")
+  @@index([state, collectionId, number], map: "HadithCitation_state_idx")
+  @@map("HadithCitation")
+}
+
+model HadithCitationRevision {
+  collectionId  String   @db.NVarChar(36)
+  number        Int
+  version       Int
+  hadithId      String   @db.NVarChar(36)
+  state         String   @db.NVarChar(16)
+  evidence      String   @db.NVarChar(400)
+  reason        String?  @db.NVarChar(500)
+  actorId       String   @db.NVarChar(36)
+  stepUpGrantId String   @db.NVarChar(36)
+  createdAt     DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  citation HadithCitation @relation(fields: [collectionId, number], references: [collectionId, number], onDelete: NoAction, onUpdate: NoAction)
+  hadith   Hadith         @relation(fields: [hadithId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([collectionId, number, version])
+  @@map("HadithCitationRevision")
+}
+
+/// Conflict evidence between two candidates for one citation. Immutable; the
+/// platform never resolves it.
+model HadithConflict {
+  id             String   @id @db.NVarChar(36)
+  collectionId   String   @db.NVarChar(36)
+  citationNumber Int
+  hadithId       String   @db.NVarChar(36)
+  hadithVersion  Int
+  otherHadithId  String   @db.NVarChar(36)
+  otherVersion   Int
+  /// Comma-separated: text, chain, structure, grading.
+  facets         String   @db.NVarChar(64)
+  detectedAt     DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  collection    HadithCollection @relation(fields: [collectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  revision      HadithRevision   @relation("HadithConflictRevision", fields: [hadithId, hadithVersion], references: [hadithId, version], onDelete: NoAction, onUpdate: NoAction)
+  otherRevision HadithRevision   @relation("HadithConflictOtherRevision", fields: [otherHadithId, otherVersion], references: [hadithId, version], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([collectionId, citationNumber], map: "HadithConflict_citation_idx")
+  @@index([hadithId], map: "HadithConflict_hadithId_idx")
+  @@index([otherHadithId], map: "HadithConflict_otherHadithId_idx")
+  @@map("HadithConflict")
+}
+
+model HadithCollectionName {
+  collectionId String  @db.NVarChar(36)
+  /// en | ur | ar
+  locale       String  @db.NVarChar(8)
+  name         String  @db.NVarChar(200)
+  description  String? @db.NVarChar(2000)
+
+  collection HadithCollection @relation(fields: [collectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([collectionId, locale])
+  @@map("HadithCollectionName")
+}
+
+model HadithBookName {
+  bookId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  name   String @db.NVarChar(200)
+
+  book HadithBook @relation(fields: [bookId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([bookId, locale])
+  @@map("HadithBookName")
+}
+
+model HadithChapterName {
+  chapterId String @db.NVarChar(36)
+  locale    String @db.NVarChar(8)
+  name      String @db.NVarChar(200)
+
+  chapter HadithChapter @relation(fields: [chapterId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([chapterId, locale])
+  @@map("HadithChapterName")
+}
+
+/// A translation of one record into one language. Several may coexist; none
+/// is privileged. Public only while its record is public, it is published and
+/// it names a registered source system.
+model HadithTranslation {
+  id             String    @id @db.NVarChar(36)
+  /// Fixed once created: the runtime holds no UPDATE on it.
+  hadithId       String    @db.NVarChar(36)
+  languageCode   String    @db.NVarChar(16)
+  text           String    @db.NVarChar(Max)
+  attribution    String?   @db.NVarChar(400)
+  sourceSystemId String?   @db.NVarChar(36)
+  /// draft | published | archived
+  state          String    @db.NVarChar(16)
+  version        Int
+  createdAt      DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt      DateTime  @db.DateTime2
+  publishedAt    DateTime? @db.DateTime2
+
+  hadith       Hadith                         @relation(fields: [hadithId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  language     Language                       @relation("HadithTranslationLanguage", fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  sourceSystem HadithSourceSystem?            @relation(fields: [sourceSystemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contributors HadithTranslationContributor[]
+
+  @@index([hadithId, state, languageCode], map: "HadithTranslation_hadithId_idx")
+  @@map("HadithTranslation")
+}
+
+model HadithTranslationContributor {
+  translationId String @db.NVarChar(36)
+  personId      String @db.NVarChar(36)
+  /// translator | editor
+  role          String @db.NVarChar(32)
+  position      Int
+
+  translation HadithTranslation @relation(fields: [translationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  person      Person            @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([translationId, personId, role])
+  @@index([personId], map: "HadithTranslationContributor_personId_idx")
+  @@map("HadithTranslationContributor")
+}
+
+/// A commentary work in one language, with at most one entry per record.
+model HadithCommentary {
+  id             String    @id @db.NVarChar(36)
+  /// Immutable once chosen: the runtime holds no UPDATE on it.
+  slug           String    @unique @db.NVarChar(120)
+  languageCode   String    @db.NVarChar(16)
+  name           String    @db.NVarChar(200)
+  description    String?   @db.NVarChar(2000)
+  attribution    String?   @db.NVarChar(400)
+  sourceSystemId String?   @db.NVarChar(36)
+  /// draft | published | archived
+  state          String    @db.NVarChar(16)
+  version        Int
+  createdAt      DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt      DateTime  @db.DateTime2
+  publishedAt    DateTime? @db.DateTime2
+
+  language     Language                      @relation("HadithCommentaryLanguage", fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  sourceSystem HadithSourceSystem?           @relation(fields: [sourceSystemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  contributors HadithCommentaryContributor[]
+  entries      HadithCommentaryEntry[]
+
+  @@index([state, slug], map: "HadithCommentary_state_slug_idx")
+  @@map("HadithCommentary")
+}
+
+model HadithCommentaryContributor {
+  commentaryId String @db.NVarChar(36)
+  personId     String @db.NVarChar(36)
+  /// author | translator | editor | compiler
+  role         String @db.NVarChar(32)
+  position     Int
+
+  commentary HadithCommentary @relation(fields: [commentaryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  person     Person           @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([commentaryId, personId, role])
+  @@index([personId], map: "HadithCommentaryContributor_personId_idx")
+  @@map("HadithCommentaryContributor")
+}
+
+model HadithCommentaryEntry {
+  commentaryId String @db.NVarChar(36)
+  hadithId     String @db.NVarChar(36)
+  text         String @db.NVarChar(Max)
+
+  commentary HadithCommentary @relation(fields: [commentaryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  hadith     Hadith           @relation(fields: [hadithId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([commentaryId, hadithId])
+  @@index([hadithId], map: "HadithCommentaryEntry_hadithId_idx")
+  @@map("HadithCommentaryEntry")
+}
+
+/// Study material on the sciences of Hadith. Never a canonical record and
+/// never a grading authority.
+model HadithScience {
+  id             String    @id @db.NVarChar(36)
+  /// Immutable once chosen: the runtime holds no UPDATE on it.
+  slug           String    @unique @db.NVarChar(120)
+  position       Int
+  attribution    String?   @db.NVarChar(400)
+  sourceSystemId String?   @db.NVarChar(36)
+  /// draft | published | archived
+  state          String    @db.NVarChar(16)
+  version        Int
+  createdAt      DateTime  @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt      DateTime  @db.DateTime2
+  publishedAt    DateTime? @db.DateTime2
+
+  sourceSystem HadithSourceSystem? @relation(fields: [sourceSystemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  texts        HadithScienceText[]
+
+  @@index([state, position, slug], map: "HadithScience_state_position_idx")
+  @@map("HadithScience")
+}
+
+model HadithScienceText {
+  scienceId    String @db.NVarChar(36)
+  languageCode String @db.NVarChar(16)
+  title        String @db.NVarChar(200)
+  body         String @db.NVarChar(Max)
+
+  science  HadithScience @relation(fields: [scienceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  language Language      @relation("HadithScienceTextLanguage", fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([scienceId, languageCode])
+  @@map("HadithScienceText")
+}
+
+/// Typed topic assignment: a real key to the source-qualified record and to
+/// the Topic.
+model HadithTopic {
+  hadithId String @db.NVarChar(36)
+  topicId  String @db.NVarChar(36)
+
+  hadith Hadith @relation(fields: [hadithId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  topic  Topic  @relation(fields: [topicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([hadithId, topicId])
+  @@index([topicId, hadithId], map: "HadithTopic_topicId_idx")
+  @@map("HadithTopic")
 }

@@ -64,6 +64,12 @@ import {
   verifyRestoredPhase18,
   writePhase18Fixture,
 } from '../src/lifecycle/phase18-fixture.ts';
+import {
+  capturePhase19Fixture,
+  newPhase19Fixture,
+  verifyRestoredPhase19,
+  writePhase19Fixture,
+} from '../src/lifecycle/phase19-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -190,6 +196,7 @@ const globalFixture = newPhase16Fixture();
 const eventFixture = newPhase14Fixture();
 const collectionFixture = newPhase15Fixture();
 const quranFixture = newPhase18Fixture();
+const hadithFixture = newPhase19Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -399,6 +406,23 @@ try {
   const quranSnapshot = await capturePhase18Fixture(admin, quranFixture);
   report('quran fixture', `run ${quranFixture.runId}`);
 
+  // Phase-19 Hadith, with sentinel NON_HADITH_FIXTURE text only: two registered
+  // fixture source systems with one edition each of one collection, display
+  // names, a book per edition and a chapter, two records sharing one apparent
+  // source reference across the editions, version-1 history and a recorded
+  // version-2 correction with versioned gradings, verification at both
+  // versions, a mapped citation and the conflict evidence the correction
+  // produced, fixture-mode activation, a published translation, commentary and
+  // science, a record topic and the `hadith` search intent.
+  const hadithReferences = {
+    actorId: fixture.accountId,
+    personId: peopleFixture.linkedPersonId,
+    topicId: taxonomyFixture.childTopicId,
+  };
+  await writePhase19Fixture(admin, hadithFixture, hadithReferences);
+  const hadithSnapshot = await capturePhase19Fixture(admin, hadithFixture);
+  report('hadith fixture', `run ${hadithFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -502,6 +526,15 @@ try {
   report(
     'quran recovery',
     await verifyRestoredPhase18(restored, quranFixture, quranSnapshot, quranReferences),
+  );
+  report(
+    'hadith recovery',
+    await verifyRestoredPhase19(
+      restored,
+      hadithFixture,
+      hadithSnapshot,
+      hadithReferences,
+    ),
   );
 
   // ---- restored security posture -------------------------------------------
@@ -745,6 +778,53 @@ try {
           'QuranTranslationText re-parent UPDATE',
           'UPDATE [dbo].[QuranTranslationText] SET [translationId]=[translationId];',
         ],
+        // Phase 19. A restored runtime can neither edit a registered source,
+        // make a collection public, write canonical text, history, gradings,
+        // verification or citations directly, run conflict detection or the
+        // authority check itself, rename a work's public address, erase a work,
+        // re-parent a translation, nor alter a Hadith table.
+        [
+          'HadithSourceSystem UPDATE',
+          "UPDATE [dbo].[HadithSourceSystem] SET [authority]=N'approved',[reference]=N'urn:example:forged';",
+        ],
+        [
+          'HadithActivation INSERT',
+          "INSERT INTO [dbo].[HadithActivation] ([collectionId],[authority],[authorisedBy]) SELECT [id],N'approved',N'forged' FROM [dbo].[HadithCollection];",
+        ],
+        ['HadithActivation DELETE', 'DELETE FROM [dbo].[HadithActivation];'],
+        ['Hadith text UPDATE', 'UPDATE [dbo].[Hadith] SET [text]=[text];'],
+        ['Hadith DELETE', 'DELETE FROM [dbo].[Hadith];'],
+        ['HadithRevision DELETE', 'DELETE FROM [dbo].[HadithRevision];'],
+        ['HadithGrading UPDATE', 'UPDATE [dbo].[HadithGrading] SET [label]=[label];'],
+        ['HadithVerification DELETE', 'DELETE FROM [dbo].[HadithVerification];'],
+        [
+          'HadithCitation UPDATE',
+          "UPDATE [dbo].[HadithCitation] SET [state]=N'withdrawn';",
+        ],
+        ['HadithConflict DELETE', 'DELETE FROM [dbo].[HadithConflict];'],
+        [
+          'HadithBook reference UPDATE',
+          'UPDATE [dbo].[HadithBook] SET [reference]=[reference];',
+        ],
+        [
+          'HadithDetectConflicts EXECUTE',
+          "EXEC [dbo].[HadithDetectConflicts] @hadithId=N'none', @at='2026-10-03T00:00:00';",
+        ],
+        [
+          'HadithAssertCanonicalAuthority EXECUTE',
+          `EXEC [dbo].[HadithAssertCanonicalAuthority] @actorId=N'${fixture.accountId}', @sessionId=N'none', @stepUpGrantId=N'none';`,
+        ],
+        [
+          'HadithCommentary slug UPDATE',
+          'UPDATE [dbo].[HadithCommentary] SET [slug]=[slug];',
+        ],
+        ['HadithTranslation DELETE', 'DELETE FROM [dbo].[HadithTranslation];'],
+        [
+          'HadithTranslation re-parent UPDATE',
+          'UPDATE [dbo].[HadithTranslation] SET [hadithId]=[hadithId];',
+        ],
+        ['HadithTopic UPDATE', 'UPDATE [dbo].[HadithTopic] SET [topicId]=[topicId];'],
+        ['Hadith ALTER', 'ALTER TABLE [dbo].[Hadith] ADD [probe] INT NULL;'],
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -754,8 +834,13 @@ try {
           fail(`Restored database PERMITTED ${label} to the runtime principal.`);
         } catch (error) {
           const number = (error as { number?: number }).number;
-          // 229/230 = denied on object; 262 = denied in database.
-          if (number === undefined || ![229, 230, 262].includes(number)) {
+          // 229/230 = denied on object; 262 = denied in database. An ALTER on a
+          // table the runtime can SELECT answers 1088 — the object is visible,
+          // so "cannot find" can only mean the ALTER permission is missing.
+          const denials = label.endsWith(' ALTER')
+            ? [229, 230, 262, 1088]
+            : [229, 230, 262];
+          if (number === undefined || !denials.includes(number)) {
             fail(
               `Restored ${label} was rejected for the WRONG reason ` +
                 `(error ${number ?? 'unknown'}): ${(error as Error).message.split('\n')[0]}`,
@@ -785,6 +870,12 @@ try {
         collectionReferences,
       );
       await verifyRestoredPhase18(restored, quranFixture, quranSnapshot, quranReferences);
+      await verifyRestoredPhase19(
+        restored,
+        hadithFixture,
+        hadithSnapshot,
+        hadithReferences,
+      );
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 
       // Phase 17. The full-text catalogue and index live INSIDE the database,

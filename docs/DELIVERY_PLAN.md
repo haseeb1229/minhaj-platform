@@ -1395,6 +1395,101 @@ the real corpus has been reviewed. **Engineering completion is not scholarly acc
 
 ---
 
+**Phase-19 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+```
+ENGINEERING IMPLEMENTATION        COMPLETE (this phase)
+AUTHORITATIVE COLLECTIONS/EDITIONS NOT SUPPLIED — OPEN_DECISIONS.md §1.3
+REFERENCE-NUMBERING POLICY        OPEN — §1.3
+GRADING AUTHORITY                 OPEN — §1.3
+CHAIN / SOURCE POLICY             OPEN — §1.3
+RELIGIOUS QA CAPACITY             OPEN — §1.5
+CONFLICT DECISION-MAKER           OPEN — §1.6
+RIGHTS / ATTRIBUTION              OPEN — §2.4
+PRODUCTION ACTIVATION             BLOCKED until those close
+```
+
+- **No Hadith content exists in the repository or in any migrated database.** No collection,
+  edition, number, text, translation, chain, narrator, grading, grader or commentary is seeded, and
+  none was generated. Every proof uses controlled, unmistakably non-authoritative sentinel fixtures
+  (`NON_HADITH_FIXTURE_…`), and every page that shows one says so.
+- **Model** (DOMAIN_MODEL.md §9.1). Record identity is `(collection, source system, edition, source
+  reference)`, the reference exact and unique only within its edition. The public citation
+  `(collection, number)` is a separate reviewed mapping to one candidate that declared that number —
+  which is how `/hadith/{collectionSlug}/{hadithNumber}` (ROUTE_MAP.md §2.1) coexists with
+  source-qualified identity without collapsing editions. Books and chapters are sourced per edition.
+  Source systems, editions and activation are owner/operator-only and immutable.
+- **One canonical write path.** The application principal holds no write on source, activation or
+  canonical tables. Structure, record creation and correction, verification and citation mapping are
+  procedures that re-check, in SQL, a live `hadith.editCanonical` assignment and an unexpired
+  `hadith-canonical-edit` step-up grant bound to a live session. Every record version (1 included),
+  every grading, verification, citation change and conflict is immutable; corrections run under the
+  expected version and must change something; the generic audit never holds text.
+- **Gradings and chains are sourced.** A grading is grader + label in the grader's own words +
+  language + published reference, per record version; no grade vocabulary or equivalence exists. A
+  chain is the source's text; **no Narrator aggregate, profile, route, People link or chain graph
+  exists** (PRODUCT_SCOPE.md §4.4).
+- **Human verification and conflict escalation.** A citation is public only while its collection
+  is activated, the citation is mapped, the record is verified at its current version and no conflict
+  evidence exists for the citation. Conflicts (text, chain, a shared grader's grading, and structure
+  within one edition) are detected by the database byte for byte, recorded immutably and block
+  mapping and publication. **No resolution path exists** — OPEN_DECISIONS.md §1.6 names no
+  decision-maker, so Phase 19 builds evidence, visibility and blocking only. The consequence is
+  deliberate and stated: until that external process exists, one recorded conflict blocks its
+  citation permanently, even after both candidates are corrected to agree.
+- **One authority per section.** A mapped record's source must share its collection's activation
+  authority in both directions — fixture text never enters an approved collection, and approved
+  text is never shown under the fixture notice — and the public reader applies the same rule to
+  records and to layered translations, commentary and sciences.
+- **Permissions.** `hadith.read`, `hadith.administer` (translations, commentary, sciences, display
+  names, record topics — never a sourced fact) and `hadith.editCanonical`, in the protected bundle
+  with the same session and step-up revocation every bundle extension performs. **One new step-up
+  purpose, `hadith-canonical-edit`** — neither `quran-canonical-edit` nor
+  `privilege-administration` authorises Hadith, nor the reverse. No publish, grade, chain or
+  per-table key; no `quran.*`, `content.*`, `library.*` or `media.*` key or profile confers Hadith
+  authority.
+- **Exact text.** The exact-text schemas (refuse surrounding whitespace, control characters and
+  unpaired surrogates; never trim, fold or normalise) moved to a shared Layer-0 contracts module used
+  by Quran and Hadith alike, so neither depends on the other. The database compares UTF-16 bytes.
+- **Slugs are immutable** (collection, book, chapter, commentary, science), so no slug history is
+  owed (DOMAIN_MODEL.md §19.7). A collection slug may not be one of the section's own path words.
+- **Public.** `/hadith`, `/hadith/introduction` (neutral product explanation only), structural
+  browsing `/hadith/collections[/{slug}[/books[/{bookSlug}[/chapters/{chapterSlug}]]]]` (books and
+  chapters holding public citations; each lists citations linking to the short form), the canonical
+  citation `/hadith/{collectionSlug}/{hadithNumber}`, `/hadith/browse`, `/hadith/search` (`noindex`,
+  throttled like `/search`), `/hadith/topics/{slug}` (canonical → `/topics/{slug}`),
+  `/hadith/sciences[/{slug}]` and `/hadith/commentary`. No deep Hadith detail route exists, so the
+  short citation is the only Hadith entity URL. **States:** inactive → an honest unavailable state on
+  section pages and 404 for named resources; fixture mode → a non-authoritative notice on every page,
+  `noindex`, no sitemap; approved mode → canonical, indexable routes and the `hadith` sitemap segment
+  of citations. Structured data is `BreadcrumbList` only, and only in approved mode — no `Article`,
+  author, date, rating or any claim about a grading or narrator.
+- **Related material.** `/hadith/books`, `/hadith/videos` and `/hadith/research` are activated — each
+  the owner's own public by-topic read for the migration-seeded `hadith` topic, canonical to the
+  owner's collection. `/hadith/articles` (Editorial exposes no by-topic Article read),
+  `/hadith/courses` (Phase 22) and `/hadith/scholars` (no deterministic People–Hadith relation) stay
+  absent and unlinked. The topic hub gains a bounded Hadith section.
+- **Admin.** `/admin/hadith/{collections,books,chapters,records,commentary,sciences}` — `sciences`
+  is added to ROUTE_MAP.md §7. Registered sources, editions and activation are shown read-only.
+  Canonical operations (create structure and records, correct, verify, map or withdraw a citation)
+  are purpose-built structured forms (plain text fields, never Tiptap) available only to
+  `hadith.editCanonical` holders after a `hadith-canonical-edit` step-up. Conflict evidence and the
+  competing candidates are shown; there is no resolve action.
+- **Search.** Kind and scope `hadith`, one scope per public citation (identity: the citation id):
+  the original and one document per public translation language. Results always link to the short
+  citation; stale rows are withheld by the current-visibility resolver before return.
+- **Recovery** covers sources, editions, structure, records with history and gradings, verification,
+  citations, conflicts, every layered record, topics and search intent.
+- **Content gates open.** OPEN_DECISIONS.md §1.3, §1.5, §1.6 and §2.4 are unchanged. Engineering
+  completion is never "Hadith corpus approved", and Phase 21's software dependency on Phase 19 is
+  satisfied by this engineering exit alone (§3.1).
+- **Not delivered, and not owed by this phase:** a real corpus (external gates); a conflict
+  resolution process (§1.6, Phase 30); source adapters and live import (Phase 30); Narrator
+  management; reading progress, bookmarks and notes (Phase 21); Hadith audio, images or downloads.
+
+---
+
 ### Phase 20 — Fatwa
 
 **Entry — implementation gate (§3.1):** Phases 2, 5 and **17** complete.

@@ -178,6 +178,15 @@ signed-in additions remain Phase 21's.
 | Browse All | — | Hadith Research | — |
 | Search Hadith | — | — | — |
 
+Since Phase 19 the Hadith item is delivered (engineering only — no authoritative corpus is
+supplied, OPEN_DECISIONS.md §1.3). Introduction, Collections (with their books and chapters),
+Browse All, Search Hadith, Hadith Sciences, Commentary and Hadith by Topic are available, as are
+Hadith Books, Hadith Videos and Hadith Research (each the owner's own listing for the `hadith`
+topic). Hadith Articles, Hadith Courses and Hadith Scholars are not yet offered and are not linked
+(ROUTE_MAP.md §3.4); Books and Chapters are reached through a collection, not as separate menu
+entries. While no collection is activated the section says so plainly instead of showing empty
+structure. The signed-in additions remain Phase 21's.
+
 ### 3.4 Learn
 
 | Learning | Topics | Live | People |
@@ -441,7 +450,8 @@ Admin
 │   ├── Hadith
 │   │   ├── Collections, Books & Chapters
 │   │   ├── Hadith Records
-│   │   └── Commentary
+│   │   ├── Commentary
+│   │   └── Sciences
 │   └── Fatwa
 │       ├── Incoming Questions
 │       ├── Assignment

@@ -699,3 +699,65 @@ IF OBJECT_ID(N'[dbo].[QuranTajweedRuleText]',N'U') IS NOT NULL BEGIN GRANT SELEC
 -- and replacing a file never deletes the one it replaced.
 IF OBJECT_ID(N'[dbo].[QuranRecitationSegment]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranRecitationSegment] TO [$(app_login)]; GRANT UPDATE ON OBJECT::[dbo].[QuranRecitationSegment] ([assetId]) TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranRecitationSegment] ([id], [recitationId], [surahNumber], [startAyah], [endAyah], [createdAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[QuranRecitationSegment] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[QuranTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[QuranTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[QuranTopic] TO [$(app_login)]; END;
+
+-- Phase 19: Hadith.
+--
+-- SOURCE AND ACTIVATION ARE READ-ONLY. A registered source system, its editions
+-- and a collection's activation are the owner/operator's acts; the runtime can
+-- read them and nothing else, so no permission held through this principal can
+-- create an authority, turn a fixture into one, or make a collection public.
+IF OBJECT_ID(N'[dbo].[HadithSourceSystem]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[HadithSourceSystem] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[HadithSourceSystem] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithEdition]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[HadithEdition] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[HadithEdition] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithActivation]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[HadithActivation] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[HadithActivation] TO [$(app_login)]; END;
+--
+-- CANONICAL TABLES ARE READ-ONLY TOO. Records, their history, gradings,
+-- verifications, citations and conflict evidence are written ONLY by the
+-- procedures granted below, which re-check the actor's live
+-- `hadith.editCanonical` grant and purpose-bound step-up grant, the edition,
+-- the expected version and the exact text in SQL. This principal holds no
+-- UPDATE on a record, so ordinary administration has no path to canonical text,
+-- chain or grading at all, and no DELETE on the history.
+IF OBJECT_ID(N'[dbo].[Hadith]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[Hadith] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[Hadith] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithRevision]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[HadithRevision] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[HadithRevision] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithGrading]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[HadithGrading] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[HadithGrading] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithVerification]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[HadithVerification] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[HadithVerification] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithCitation]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[HadithCitation] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[HadithCitation] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithCitationRevision]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[HadithCitationRevision] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[HadithCitationRevision] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithConflict]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[HadithConflict] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[HadithConflict] TO [$(app_login)]; END;
+-- Collection, Book and Chapter are canonical structure created by procedure; a
+-- DISPLAY-NAME version is the one column each may advance.
+IF OBJECT_ID(N'[dbo].[HadithCollection]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[HadithCollection] TO [$(app_login)]; GRANT UPDATE ON OBJECT::[dbo].[HadithCollection] ([namesVersion], [updatedAt]) TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[HadithCollection] ([id], [slug], [position], [createdAt]) TO [$(app_login)]; DENY INSERT, DELETE, ALTER ON OBJECT::[dbo].[HadithCollection] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithBook]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[HadithBook] TO [$(app_login)]; GRANT UPDATE ON OBJECT::[dbo].[HadithBook] ([namesVersion], [updatedAt]) TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[HadithBook] ([id], [collectionId], [editionId], [slug], [reference], [position], [title], [titleLanguage], [createdAt]) TO [$(app_login)]; DENY INSERT, DELETE, ALTER ON OBJECT::[dbo].[HadithBook] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithChapter]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[HadithChapter] TO [$(app_login)]; GRANT UPDATE ON OBJECT::[dbo].[HadithChapter] ([namesVersion], [updatedAt]) TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[HadithChapter] ([id], [bookId], [slug], [reference], [position], [title], [titleLanguage], [createdAt]) TO [$(app_login)]; DENY INSERT, DELETE, ALTER ON OBJECT::[dbo].[HadithChapter] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithCreateCollection]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[HadithCreateCollection] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[HadithCreateBook]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[HadithCreateBook] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[HadithCreateChapter]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[HadithCreateChapter] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[HadithWriteRecord]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[HadithWriteRecord] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[HadithVerifyRecord]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[HadithVerifyRecord] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[HadithSetCitation]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[HadithSetCitation] TO [$(app_login)];
+-- The authority check and conflict detection are reached only from inside the
+-- writing procedures: a caller can neither probe the one nor forge the other.
+IF OBJECT_ID(N'[dbo].[HadithAssertCanonicalAuthority]',N'P') IS NOT NULL DENY EXECUTE ON OBJECT::[dbo].[HadithAssertCanonicalAuthority] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[HadithDetectConflicts]',N'P') IS NOT NULL DENY EXECUTE ON OBJECT::[dbo].[HadithDetectConflicts] TO [$(app_login)];
+--
+-- LAYERED WORKS, by the Quran postures. Translations, commentaries and sciences
+-- are inserted and updated but never deleted — archive is the lifecycle — a
+-- slug is chosen once, and a translation never moves to another record.
+-- Entries, texts, contributors, display names and topic assignments are child
+-- rows and may be replaced, but never re-parented. Naming a Person, a Topic, a
+-- Language or a source system grants NOTHING on those owners' tables beyond
+-- their own postures.
+IF OBJECT_ID(N'[dbo].[HadithCollectionName]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[HadithCollectionName] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[HadithCollectionName] ([collectionId], [locale]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[HadithCollectionName] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithBookName]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[HadithBookName] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[HadithBookName] ([bookId], [locale]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[HadithBookName] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithChapterName]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[HadithChapterName] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[HadithChapterName] ([chapterId], [locale]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[HadithChapterName] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithTranslation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[HadithTranslation] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[HadithTranslation] ([hadithId]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[HadithTranslation] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithCommentary]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[HadithCommentary] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[HadithCommentary] ([slug]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[HadithCommentary] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithScience]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[HadithScience] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[HadithScience] ([slug]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[HadithScience] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithTranslationContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[HadithTranslationContributor] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[HadithTranslationContributor] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithCommentaryContributor]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[HadithCommentaryContributor] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[HadithCommentaryContributor] TO [$(app_login)]; END;
+-- An entry or text belongs to its work and its place for ever: UPDATE reaches
+-- only the words, so no published work can lose its last text by having it
+-- moved.
+IF OBJECT_ID(N'[dbo].[HadithCommentaryEntry]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[HadithCommentaryEntry] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[HadithCommentaryEntry] ([commentaryId], [hadithId]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[HadithCommentaryEntry] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithScienceText]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[HadithScienceText] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[HadithScienceText] ([scienceId], [languageCode]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[HadithScienceText] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[HadithTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[HadithTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[HadithTopic] TO [$(app_login)]; END;

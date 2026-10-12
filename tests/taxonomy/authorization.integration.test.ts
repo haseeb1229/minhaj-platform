@@ -347,6 +347,7 @@ describeLive('Phase 3B — taxonomy administration is permission-checked', () =>
         'account-administration',
         'second-factor',
         'quran-canonical-edit',
+        'hadith-canonical-edit',
       ]);
     });
 

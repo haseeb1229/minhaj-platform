@@ -138,16 +138,16 @@ describe('a deferred capability cannot be linked', () => {
     }
   });
 
-  it('records the four deferred domains rather than forgetting them', () => {
+  it('records the three deferred domains rather than forgetting them', () => {
     // Recording them is what lets the administrative status surface tell the
     // truth about the roadmap, and what lets the assertions above range over
     // the whole set instead of over whatever somebody remembered to add.
     //
     // `library` LEFT THIS LIST IN PHASE 8, `search` IN PHASE 17, `watch` IN
-    // PHASE 10, `news-events` IN PHASE 13, `global` IN PHASE 16 and `quran` IN
-    // PHASE 18, when each was delivered. Each is asserted delivered below rather
-    // than silently dropped.
-    for (const key of ['hadith', 'learn', 'fatwa', 'donate']) {
+    // PHASE 10, `news-events` IN PHASE 13, `global` IN PHASE 16, `quran` IN
+    // PHASE 18 and `hadith` IN PHASE 19, when each was delivered. Each is
+    // asserted delivered below rather than silently dropped.
+    for (const key of ['learn', 'fatwa', 'donate']) {
       const route = routeByKey(key);
 
       expect(route, key).not.toBeNull();
@@ -195,6 +195,50 @@ describe('a deferred capability cannot be linked', () => {
     for (const key of ['quran.articles', 'quran.courses', 'quran.teachers'])
       expect(routeByKey(key), key).toBeNull();
     for (const path of ['/quran/articles', '/quran/courses', '/quran/teachers'])
+      expect(
+        SHELL_ROUTES.some((entry) => isAvailable(entry) && entry.path === path),
+        path,
+      ).toBe(false);
+  });
+
+  it('delivers Hadith at /hadith, public, linked, and excluded from the build-bound sitemap', () => {
+    // Phase 19: whether a Hadith page may be indexed is a RUNTIME fact of the
+    // activation (inactive, fixture or approved), so no Hadith route is
+    // eligible for the build-bound `pages` segment; each page decides its own
+    // robots, and the `hadith` content segment lists approved citations only.
+    const route = requireRoute('hadith');
+    expect(route.path).toBe('/hadith');
+    expect(route.visibility).toBe('public');
+    expect(route.availability).toBe('delivered');
+    expect(route.indexing).toBe('excluded');
+    expect(route.placements).toContain('primary');
+
+    const hadith = SHELL_ROUTES.filter((entry) => entry.key.startsWith('hadith.'));
+    expect(hadith.map((entry) => entry.key).sort()).toEqual([
+      'hadith.books',
+      'hadith.browse',
+      'hadith.collections',
+      'hadith.commentary',
+      'hadith.introduction',
+      'hadith.research',
+      'hadith.sciences',
+      'hadith.search',
+      'hadith.videos',
+    ]);
+    for (const entry of hadith) {
+      expect(isAvailable(entry) && entry.availability, entry.key).toBe('delivered');
+      expect(isAvailable(entry) && entry.indexing, entry.key).toBe('excluded');
+      expect(isAvailable(entry) && entry.path, entry.key).toBe(
+        `/hadith/${entry.key.slice('hadith.'.length)}`,
+      );
+      expect(entry.placements, entry.key).toEqual([]);
+    }
+    // No owner exposes a public by-topic Article read, and neither courses nor
+    // scholars have a deterministic owner read: these related views have no
+    // route to link (ROUTE_MAP.md §3.4, §5.2).
+    for (const key of ['hadith.articles', 'hadith.courses', 'hadith.scholars'])
+      expect(routeByKey(key), key).toBeNull();
+    for (const path of ['/hadith/articles', '/hadith/courses', '/hadith/scholars'])
       expect(
         SHELL_ROUTES.some((entry) => isAvailable(entry) && entry.path === path),
         path,
@@ -391,7 +435,7 @@ describe('a deferred capability cannot be linked', () => {
   });
 
   it('refuses to resolve a deferred route as a renderable one', () => {
-    expect(() => requireRoute('hadith')).toThrow(/deferred/);
+    expect(() => requireRoute('learn')).toThrow(/deferred/);
     expect(() => requireRoute('no-such-route')).toThrow(/registered/);
   });
 

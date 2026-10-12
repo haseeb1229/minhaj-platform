@@ -213,6 +213,28 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/quran/videos/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/research/page.tsx',
   'apps/web/src/app/[locale]/(public)/listen/recitations/page.tsx',
+  // Phase 19. Every Hadith surface reads whether a collection is activated, and
+  // what is public in it, through Hadith's PUBLIC reader — and the related views
+  // compose Library's and Media's public readers — so none can be prerendered;
+  // each is proven below to reach no session, no identity service, no logger
+  // and no authentication library.
+  'apps/web/src/app/[locale]/(public)/hadith/page.tsx',
+  'apps/web/src/app/[locale]/(public)/hadith/introduction/page.tsx',
+  'apps/web/src/app/[locale]/(public)/hadith/collections/page.tsx',
+  'apps/web/src/app/[locale]/(public)/hadith/collections/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/hadith/collections/[slug]/books/page.tsx',
+  'apps/web/src/app/[locale]/(public)/hadith/collections/[slug]/books/[bookSlug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/hadith/collections/[slug]/books/[bookSlug]/chapters/[chapterSlug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/hadith/[collectionSlug]/[hadithNumber]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/hadith/browse/page.tsx',
+  'apps/web/src/app/[locale]/(public)/hadith/search/page.tsx',
+  'apps/web/src/app/[locale]/(public)/hadith/topics/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/hadith/sciences/page.tsx',
+  'apps/web/src/app/[locale]/(public)/hadith/sciences/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/hadith/commentary/page.tsx',
+  'apps/web/src/app/[locale]/(public)/hadith/books/page.tsx',
+  'apps/web/src/app/[locale]/(public)/hadith/videos/page.tsx',
+  'apps/web/src/app/[locale]/(public)/hadith/research/page.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [
@@ -889,6 +911,9 @@ describe('a public CONTENT route reads data, and still reads no session', () => 
       // Phase 18, for the same reason: the ADMINISTRATIVE Quran runtime wires
       // Identity in. Public Quran routes use `@/composition/quran-read`.
       '@/composition/quran',
+      // Phase 19, for the same reason: the ADMINISTRATIVE Hadith runtime wires
+      // Identity in. Public Hadith routes use `@/composition/hadith-read`.
+      '@/composition/hadith',
       '@/contexts/identity-access',
       '@/config/server-env',
       '@minhaj/contracts/env/server',

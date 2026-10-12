@@ -931,6 +931,99 @@ it**. Different structures, different scholarship, different integrity rules.
   this model is **not** authority to build a narrator-management subsystem
   (PRODUCT_SCOPE.md §4.4).
 
+### 9.1 Hadith — as delivered (Phase 19, engineering)
+
+**Engineering implementation only.** No Hadith text, translation, chain, narrator, grading, grader,
+collection, edition, book or chapter is seeded or written anywhere in the repository; the
+authoritative collections and editions, the reference-numbering policy, the grading authority, the
+chain and source policy and the rights remain open (OPEN_DECISIONS.md §1.3, §1.5, §1.6, §2.4).
+Mechanisms are proven against controlled, unmistakably non-authoritative fixtures.
+
+**The source is the identity.** A `Hadith` row is a **source-qualified record**: its identity is
+`(collection, source system, edition, source reference)`. `HadithSourceSystem` (`fixture` or
+`approved`, with the authority's evidence reference mandatory for `approved`) and `HadithEdition`
+(one edition of one collection as one source system carries it) are registered by the
+owner/operator only and are immutable. The source reference is the source's own text — kept exactly,
+compared by its bytes, refused rather than trimmed when padded or carrying a control character — and
+it is unique only within its edition, so the same apparent number coexists in every edition of every
+collection without colliding. A bare number is never a key.
+
+**The public citation is a separate, reviewed mapping.** `HadithCitation` `(collection, number)`
+names exactly one record, and only a record that declared that number as its intended citation
+(`citationNumber`, enforced by a composite foreign key). Variants of one citation — other editions,
+other source systems — coexist as further candidates. This reconciles ROUTE_MAP.md's
+`/{locale}/hadith/{collectionSlug}/{hadithNumber}` with source-qualified identity: the URL addresses
+the mapping, never the source key, and the numbering policy that decides which candidate a number
+names is the external authority's (§1.3). A citation is mapped or withdrawn under an expected
+version, and every change is an immutable `HadithCitationRevision`.
+
+**Structure is sourced and per edition.** `HadithCollection` is the platform's namespace — a
+source-independent slug chosen once (never one of the section's own path words) plus per-locale
+display names under their own version. `HadithBook` belongs to one collection AND one edition;
+`HadithChapter` to one book; each keeps the source's reference and title exactly and an immutable
+slug. Two editions that divide a collection differently keep two structures, never merged by name.
+A record sits in a book (and optionally a chapter) of its own edition. Books and chapters are never
+Topics.
+
+**Canonical facts have one write path.** The application principal holds SELECT and nothing else on
+source, activation and canonical tables (and an UPDATE only of display-name versions). Canonical
+writes are procedures, each re-checking in SQL a current `hadith.editCanonical` assignment of an
+active role held by an active account and an unexpired step-up grant for the dedicated
+`hadith-canonical-edit` purpose bound to a live session, after the Hadith service has verified the
+Identity-minted `PrivilegedActor`: create collection, create book, create chapter, write record
+(create or correct — every sourced fact of the new version supplied whole, with the evidence it rests
+on and, for a correction, a reason), verify record, set citation. Every version, version 1 included,
+is an immutable `HadithRevision`; a record update is refused unless its revision for the new version
+holds exactly the new facts and the version advances by one. The generic audit names the record,
+versions, edition and evidence counts — never the text, chain or grading.
+
+**Gradings and chains are sourced data.** `HadithGrading` is what a named grader said — grader,
+label in the grader's own words, label language and the published reference, all four mandatory — for
+one version of one record, immutable; there is no grade vocabulary, rank or equivalence, and a
+grader is named once per version. The chain is the source's own text (with its language) on the
+record; no narrator is parsed, inferred, linked to People or modelled — there is no Narrator table.
+
+**Human verification precedes publication.** `HadithVerification` binds one version of one record,
+with evidence, actor and step-up grant. A correction creates a new version that no earlier
+verification covers, so a stale verification never authorises changed text.
+
+**Conflicts are escalated, never resolved.** Whenever a record is written the database compares it,
+byte for byte, with every other candidate for the same citation: text (and its language), chain,
+each shared grader's grading, and — within one edition only, since each edition keeps its own
+structure — book and chapter placement. Each disagreement is an immutable `HadithConflict` row naming
+both versions and the facets. A citation with conflict evidence cannot be mapped and is not public.
+Nothing in the platform resolves a conflict: who decides is OPEN_DECISIONS.md §1.6. Until that
+process exists, recorded evidence blocks its citation permanently — even if both candidates are
+later corrected to agree, because evidence is never deleted or re-judged by the platform.
+
+**Activation is an operator act.** A collection is public if and only if its `HadithActivation` row
+exists. Every activation shares one authority, an empty collection cannot be activated, and every
+mapped record's source must share the activation's authority: an `approved` collection refuses
+fixture text, and a `fixture` collection refuses approved text, which its non-authoritative notice
+would otherwise misdescribe. A citation is public only while its collection is active, it is
+mapped, it carries no conflict evidence, its record is verified at its current version, and its
+record's source shares the section's authority. Fixture activation exists for disposable proof
+environments only.
+
+**Layered records are separate.** `HadithTranslation` (+ contributors: translator, editor) is one
+record's translation into one content language; several coexist and none is privileged.
+`HadithCommentary` is a commentary work (immutable slug, language, contributors: author, translator,
+editor, compiler) with at most one `HadithCommentaryEntry` per record. `HadithScience` is study
+material (immutable slug, plain-text title and body per language) — never a canonical record and
+never a grading authority. Each is draft, published or archived, administered under
+`hadith.administer`, and public only while its parent is public, it is published and it names a
+registered source system of the section's own authority. No layered record can expose a hidden
+record, and withdrawing a translation never withdraws the record.
+
+**Typed topic assignment.** `HadithTopic` targets the source-qualified record with real foreign keys
+to the record and the Topic.
+
+**Search.** One kind, `hadith`, one scope per public citation (identity: the citation's own id): the
+record's original text and one document per language of its public translations, so another
+edition's variant, a conflicting candidate or a translation never becomes a competing result. Chains,
+gradings, commentary and conflict evidence are not indexed. Nothing is indexed while no citation is
+public.
+
 ---
 
 ## 10. Library

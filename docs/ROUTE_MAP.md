@@ -228,6 +228,26 @@ exposes a deterministic by-topic read.
 | `/hadith/sciences` · `/{slug}` · `/hadith/commentary` | Study material |
 | `/hadith/{books\|videos\|articles\|research\|courses\|scholars}` | Related material |
 
+**Delivered in Phase 19 (engineering — no authoritative corpus is supplied; DELIVERY_PLAN.md
+Phase-19 continuity).** Every route above except the three related views named below.
+**Citation versus identity:** a Hadith record's identity is source-qualified — collection, source
+system, edition and the source's own reference (DOMAIN_MODEL.md §9.1) — and `{hadithNumber}` is not
+that key. It is a collection-local public number, mapped by a reviewed, versioned
+`HadithCitation` to exactly one record that declared it; other editions' variants coexist without
+competing for the URL, and a citation with conflict evidence, an unverified record or an inactive
+collection answers 404. `{hadithNumber}` is a canonical decimal (1–999999). `{collectionSlug}` is
+immutable and can never be one of this section's own path words (`introduction`, `collections`,
+`browse`, `search`, `topics`, `sciences`, `commentary`, `books`, `videos`, `articles`, `research`,
+`courses`, `scholars`), so the two-segment citation never shadows a section page. Structural pages
+list citations that link to the short form; **no deep Hadith detail route exists**, so the short
+citation is the only Hadith entity URL. **Corpus states:** while no collection is activated,
+section pages render an honest unavailable state and named resources answer 404; a fixture
+activation carries a visible non-authoritative notice on every Hadith page and is `noindex`; only an
+approved activation is indexable. Related views: `/hadith/books`, `/hadith/videos` and
+`/hadith/research` are delivered — each the owner's own public listing for the seeded `hadith`
+topic, canonical to the owner's collection; `/hadith/articles`, `/hadith/courses` and
+`/hadith/scholars` stay absent and unlinked until an owner exposes a deterministic read.
+
 ### 3.5 Learn
 
 | Route | Purpose |
@@ -492,7 +512,7 @@ Prefixed `/{locale}/admin`.
 | Dashboard | `/admin` |
 | Editorial | `/admin/editorial/{articles\|pages\|news\|press-releases\|statements\|media-coverage\|events\|collections\|queue\|correspondence}` \u2014 **correspondence** covers private ContactInquiry and Feedback triage (DOMAIN_MODEL.md \u00a77.5); `news`, `press-releases`, `statements` and `media-coverage` delivered in Phase 13, `events` in Phase 14, `collections` in Phase 15, and `queue` lists every workflow-governed aggregate |
 | Quran | `/admin/quran/{surahs\|ayat\|translations\|tafsir\|transliterations\|recitations\|tajweed}` — delivered in Phase 18; `tajweed` holds TajweedRule guidance. Canonical text is read-only; the correction flow on an Ayah appears only to `quran.editCanonical` holders after a `quran-canonical-edit` step-up. No corpus import surface exists |
-| Hadith | `/admin/hadith/{collections\|books\|chapters\|records\|commentary}` |
+| Hadith | `/admin/hadith/{collections\|books\|chapters\|records\|commentary\|sciences}` — delivered in Phase 19; `sciences` holds HadithScience study material. Registered source systems, editions and activation are shown read-only (operator-only). Records are read-only by default; structure and record creation, correction, verification and citation mapping appear only to `hadith.editCanonical` holders after a `hadith-canonical-edit` step-up. Conflict evidence is shown with no resolve action. No corpus import surface exists |
 | Fatwa | `/admin/fatwa/{questions\|assignment\|drafts\|review\|published}` |
 | Library | `/admin/library/{works\|editions\|translations\|research\|publications\|magazines\|encyclopedias\|sale-points}` — research papers at `research/papers`, and a Magazine's issues beneath it at `magazines/{id}/issues/{issueId}` (Phase 9) |
 | Media | `/admin/media/{videos\|audio\|photos\|galleries\|playlists\|series\|assets}` — `videos`, `series` and `playlists` delivered in Phase 10; `audio` in Phase 11, with audio series at `audio/series`; `photos` and `galleries` in Phase 12. There is no generic `assets` file manager: a file is managed on the record it belongs to |

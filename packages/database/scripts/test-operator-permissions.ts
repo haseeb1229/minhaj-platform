@@ -328,6 +328,68 @@ try {
     `),
   );
 
+  // Phase 19 gives the operator ROLE nothing over Hadith either: registering a
+  // source system or edition and activating a collection are the OWNER's acts,
+  // and records, gradings, verifications and citations are written only by the
+  // runtime's canonical procedures under the live canonical authority.
+  for (const table of [
+    'HadithSourceSystem',
+    'HadithEdition',
+    'HadithActivation',
+    'Hadith',
+    'HadithRevision',
+    'HadithGrading',
+    'HadithVerification',
+    'HadithCitation',
+    'HadithConflict',
+  ]) {
+    await expectDenied(operatorSession, `operator SELECT on ${table} denied`, () =>
+      operatorSession.query(`SELECT TOP 1 1 AS probe FROM [dbo].[${table}];`),
+    );
+  }
+  await expectDenied(operatorSession, 'operator INSERT on HadithActivation denied', () =>
+    operatorSession.query(`
+      INSERT INTO [dbo].[HadithActivation] ([collectionId], [authority], [authorisedBy])
+      VALUES (N'injected', N'approved', N'injected');
+    `),
+  );
+  await expectDenied(
+    operatorSession,
+    'operator INSERT on HadithSourceSystem denied',
+    () =>
+      operatorSession.query(`
+      INSERT INTO [dbo].[HadithSourceSystem] ([id], [code], [authority], [title], [version], [encoding], [reference])
+      VALUES (N'injected', N'injected', N'approved', N'injected', N'injected', N'utf-8', N'injected');
+    `),
+  );
+  await expectDenied(operatorSession, 'operator UPDATE on Hadith denied', () =>
+    operatorSession.query(`UPDATE [dbo].[Hadith] SET [text] = [text];`),
+  );
+  await expectDenied(
+    operatorSession,
+    'operator EXECUTE on HadithWriteRecord denied',
+    () =>
+      operatorSession.query(`
+      EXEC [dbo].[HadithWriteRecord] @hadithId=N'injected', @editionId=N'injected',
+        @expectedVersion=0, @sourceReference=N'injected', @citationNumber=NULL,
+        @bookId=N'injected', @chapterId=NULL, @text=N'injected', @textLanguage=N'ar',
+        @chain=NULL, @chainLanguage=NULL, @gradings=N'[]', @evidence=N'injected',
+        @reason=NULL, @actorId=N'injected', @sessionId=N'injected',
+        @stepUpGrantId=N'injected', @at='2026-10-03T00:00:00';
+    `),
+  );
+  await expectDenied(
+    operatorSession,
+    'operator EXECUTE on HadithSetCitation denied',
+    () =>
+      operatorSession.query(`
+      EXEC [dbo].[HadithSetCitation] @id=N'injected', @collectionId=N'injected', @number=1,
+        @hadithId=N'injected', @state=N'mapped', @expectedVersion=0, @evidence=N'injected',
+        @reason=NULL, @actorId=N'injected', @sessionId=N'injected',
+        @stepUpGrantId=N'injected', @at='2026-10-03T00:00:00';
+    `),
+  );
+
   await expectDenied(operatorSession, 'operator INSERT on RoleAssignment denied', () =>
     operatorSession.query(`
       INSERT INTO [dbo].[RoleAssignment] ([userId], [roleId])

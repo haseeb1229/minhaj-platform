@@ -355,10 +355,9 @@ describe('Phase 2 Chunk 2 — what the delivered code does NOT contain', () => {
     for (const file of migrations) {
       const source = (await sourceOf(file)).toLowerCase();
 
-      // Quran left this list when Phase 18 shipped it, as every earlier domain
-      // left it at its own owning phase.
+      // Quran left this list when Phase 18 shipped it and Hadith when Phase 19
+      // shipped it, as every earlier domain left it at its own owning phase.
       for (const domain of [
-        'hadith.',
         'fatwa.',
         'learning.',
         'membership.',
@@ -558,6 +557,11 @@ const PERMISSION_MIGRATIONS = [
     id: '20261002000000_phase18_quran',
     keys: ['quran.administer', 'quran.editCanonical', 'quran.read'],
   },
+  {
+    phase: 'Phase 19',
+    id: '20261003000000_phase19_hadith',
+    keys: ['hadith.administer', 'hadith.editCanonical', 'hadith.read'],
+  },
 ] as const;
 
 describe('the permission catalogue is one definition, appended only by owners', () => {
@@ -607,7 +611,6 @@ describe('the permission catalogue is one definition, appended only by owners', 
     const declared = await declaredPermissions();
 
     for (const domain of [
-      'hadith.',
       'fatwa.',
       'learning.',
       'membership.',
@@ -616,9 +619,10 @@ describe('the permission catalogue is one definition, appended only by owners', 
       'teaching.',
       'editorial.',
       // Library shipped in Phase 8, Search in Phase 17, Media in Phase 10,
-      // Global in Phase 16 and Quran in Phase 18. Still absent: research and publication keys
-      // (Phase 9 uses Library's), any per-aggregate Media key, audio and
-      // gallery vocabulary, and any per-level Global key (Global has two).
+      // Global in Phase 16, Quran in Phase 18 and Hadith in Phase 19. Still
+      // absent: research and publication keys (Phase 9 uses Library's), any
+      // per-aggregate Media key, audio and gallery vocabulary, and any
+      // per-level Global key (Global has two).
       'research.',
       'publication.',
       'video.',

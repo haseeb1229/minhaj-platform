@@ -206,6 +206,23 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/quran/search.tsx',
     'apps/web/src/components/quran/topics.tsx',
     'apps/web/src/components/quran/works.tsx',
+    // Phase 19. The public Hadith surfaces, their pure presentation decisions
+    // and their request-cached reads, and the one batched current-text read
+    // and pure labels the search pages use for Hadith results. The ROUTES that
+    // use them are dynamic for data, never these modules.
+    'apps/web/src/components/hadith/citation.tsx',
+    'apps/web/src/components/hadith/commentary.tsx',
+    'apps/web/src/components/hadith/landing.tsx',
+    'apps/web/src/components/hadith/parts.tsx',
+    'apps/web/src/components/hadith/presentation.ts',
+    'apps/web/src/components/hadith/read.ts',
+    'apps/web/src/components/hadith/related.tsx',
+    'apps/web/src/components/hadith/sciences.tsx',
+    'apps/web/src/components/hadith/search.tsx',
+    'apps/web/src/components/hadith/structure.tsx',
+    'apps/web/src/components/hadith/topics.tsx',
+    'apps/web/src/components/search/hadith-hit.ts',
+    'apps/web/src/components/search/hadith-hit-text.ts',
     // Phase 10. The Watch surfaces, their pure presentation decisions and the
     // privacy-gated player island, on the same anonymous public path.
     'apps/web/src/components/media/audio-player.tsx',

@@ -83,8 +83,9 @@ describe('search is Layer 0, not a bounded context', () => {
     const contexts = await readdir(path.join(repoRoot, 'apps', 'web', 'src', 'contexts'));
     expect(contexts).not.toContain('search');
     // The delivered contexts — Media joined at Phase 10, Global Network at
-    // Phase 16, Quran at Phase 18 — and never a seventeenth for Search.
-    expect(contexts).toHaveLength(8);
+    // Phase 16, Quran at Phase 18, Hadith at Phase 19 — and never a
+    // seventeenth for Search.
+    expect(contexts).toHaveLength(9);
   });
 
   it('depends on no bounded context and holds no database capability', async () => {
@@ -170,15 +171,18 @@ describe('the engine stays behind its port', () => {
 describe('the inventory is closed — the delivered searchable domains and nothing later', () => {
   // Phase 17's initial seven, Phase 9's six scholarly and periodical kinds,
   // Phase 10's `video`, Phase 11's `audio`, Phase 13's four News families and
-  // Phase 18's `quran-ayah` — a Series, a Playlist or an AudioSeries is a
-  // grouping, not a kind, and a Quran recitation is not a search result. A later searchable domain adds its
-  // own in its own phase; none is pre-created.
+  // Phase 18's `quran-ayah` and Phase 19's `hadith` — a Series, a Playlist or
+  // an AudioSeries is a grouping, not a kind, a Quran recitation is not a
+  // search result, and a Hadith variant, chain, grading or commentary is not a
+  // result of its own. A later searchable domain adds its own in its own
+  // phase; none is pre-created.
   const EXPECTED = [
     'article',
     'audio',
     'book-translation',
     'edition',
     'encyclopedia',
+    'hadith',
     'magazine',
     'magazine-issue',
     'media-coverage',
@@ -206,7 +210,7 @@ describe('the inventory is closed — the delivered searchable domains and nothi
 
   it('holds the same kinds in the database constraint the latest migration set', async () => {
     const migration = await read(
-      'packages/database/prisma/migrations/20261002000000_phase18_quran/migration.sql',
+      'packages/database/prisma/migrations/20261003000000_phase19_hadith/migration.sql',
     );
     const constraint = /SearchDocument_kind_ck\] CHECK \(\[kind\] IN \(([^)]*)\)\)/u.exec(
       migration,

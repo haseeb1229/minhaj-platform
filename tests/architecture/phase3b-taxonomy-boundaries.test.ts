@@ -266,7 +266,14 @@ describe('Phase 3B — content language is not the interface locale', () => {
     expect(language.length).toBeGreaterThan(0);
     expect(translation.length).toBeGreaterThan(0);
 
-    expect(language).not.toMatch(/@relation\(/);
+    // Language holds no foreign key of its own and names no Topic model. A
+    // NAMED back-relation is admitted only because a model with two language
+    // columns (Phase 19's Hadith: its text and its chain) must name both sides
+    // for Prisma; the key is still the other model's, never Language's.
+    expect(language).not.toMatch(/@relation\([^)]*fields:/);
+    expect(language).not.toMatch(/\bTopic\w*/);
+    for (const [, named] of language.matchAll(/@relation\(([^)]*)\)/g))
+      expect(named).toMatch(/^"Hadith[A-Za-z]+"$/);
     expect(translation).not.toMatch(/Language/);
   });
 
@@ -493,6 +500,7 @@ describe('Phase 3B — every taxonomy surface passes the gate', () => {
       'account-administration',
       'second-factor',
       'quran-canonical-edit',
+      'hadith-canonical-edit',
     ]);
   });
 

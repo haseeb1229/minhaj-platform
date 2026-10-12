@@ -34,7 +34,8 @@
     "./media": "./src/media/index.ts",
     "./global": "./src/global/index.ts",
     "./search": "./src/search/index.ts",
-    "./quran": "./src/quran/index.ts"
+    "./quran": "./src/quran/index.ts",
+    "./hadith": "./src/hadith/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"

@@ -13,6 +13,8 @@ import type { SearchFormState, SearchOutcome } from '@minhaj/search';
 import { searchReadRuntime } from '@/composition/search-read';
 import { taxonomyRuntime } from '@/composition/taxonomy';
 import { Highlighted } from '@/components/search/highlighted';
+import { hadithHitKey, type HadithHitDisplay } from '@/components/search/hadith-hit';
+import { currentHadithHitText } from '@/components/search/hadith-hit-text';
 import { quranHitKey, type QuranHitDisplay } from '@/components/search/quran-hit';
 import { currentQuranHitText } from '@/components/search/quran-hit-text';
 import {
@@ -120,12 +122,16 @@ export default async function SearchPage({ params, searchParams }: SearchParams)
   ]);
 
   const { form } = outcome;
-  // A Quran result shows its Ayah's CURRENT text, read once for the whole page —
-  // never its indexed summary, which may lag a withdrawn or corrected text.
-  const quranText =
+  // A Quran or Hadith result shows its CURRENT text, read once per owner for
+  // the whole page — never its indexed summary, which may lag a withdrawn or
+  // corrected text.
+  const [quranText, hadithText] =
     outcome.state === 'results'
-      ? await currentQuranHitText(outcome.results.hits)
-      : new Map<string, QuranHitDisplay>();
+      ? await Promise.all([
+          currentQuranHitText(outcome.results.hits),
+          currentHadithHitText(outcome.results.hits),
+        ])
+      : [new Map<string, QuranHitDisplay>(), new Map<string, HadithHitDisplay>()];
   const issues =
     outcome.state === 'invalid' ? new Set(outcome.issues) : new Set<string>();
   /** A field's error, passed only when it has one. */
@@ -303,6 +309,7 @@ export default async function SearchPage({ params, searchParams }: SearchParams)
           locale={locale}
           languageNames={languageNames}
           quranText={quranText}
+          hadithText={hadithText}
           t={t}
           href={(overrides) => searchHref(locale, form, overrides)}
         />
@@ -318,6 +325,7 @@ function SearchResults({
   locale,
   languageNames,
   quranText,
+  hadithText,
   t,
   href,
 }: {
@@ -325,6 +333,7 @@ function SearchResults({
   readonly locale: Locale;
   readonly languageNames: ReadonlyMap<string, { name: string; direction: 'ltr' | 'rtl' }>;
   readonly quranText: ReadonlyMap<string, QuranHitDisplay>;
+  readonly hadithText: ReadonlyMap<string, HadithHitDisplay>;
   readonly t: Translate;
   readonly href: (overrides: Partial<SearchFormState> & { page?: number }) => string;
 }) {
@@ -414,6 +423,7 @@ function SearchResults({
                   query={query}
                   languageNames={languageNames}
                   quranText={quranText}
+                  hadithText={hadithText}
                   t={t}
                 />
               ))}
@@ -460,6 +470,7 @@ function ResultItem({
   query,
   languageNames,
   quranText,
+  hadithText,
   t,
 }: {
   readonly hit: SearchHit;
@@ -467,6 +478,7 @@ function ResultItem({
   readonly query: string;
   readonly languageNames: ReadonlyMap<string, { name: string; direction: 'ltr' | 'rtl' }>;
   readonly quranText: ReadonlyMap<string, QuranHitDisplay>;
+  readonly hadithText: ReadonlyMap<string, HadithHitDisplay>;
   readonly t: Translate;
 }) {
   // A Quran result shows its Ayah's CURRENT text in the language that text is
@@ -474,14 +486,20 @@ function ResultItem({
   // now and is not shown at all.
   const quran = hit.kind === 'quran-ayah' ? quranText.get(quranHitKey(hit)) : undefined;
   if (hit.kind === 'quran-ayah' && quran === undefined) return null;
+  // A Hadith result likewise shows its citation's CURRENT original or public
+  // translation, labelled as which it is; one not public now is not shown.
+  const hadith = hit.kind === 'hadith' ? hadithText.get(hadithHitKey(hit)) : undefined;
+  if (hit.kind === 'hadith' && hadith === undefined) return null;
+  const current = quran ?? hadith;
 
-  const textLanguage = quran?.language ?? hit.textLanguage;
-  const summary = quran?.text ?? hit.summary;
+  const textLanguage = current?.language ?? hit.textLanguage;
+  const summary = current?.text ?? hit.summary;
   const language = languageNames.get(textLanguage);
   const direction =
     language?.direction ??
     (isSupportedLocale(textLanguage) ? directionOf(textLanguage) : 'ltr');
-  const contentLanguageCode = quran === undefined ? hit.contentLanguage : quran.language;
+  const contentLanguageCode =
+    current === undefined ? hit.contentLanguage : current.language;
   const contentLanguage =
     contentLanguageCode === null
       ? null
@@ -499,6 +517,14 @@ function ResultItem({
               {quran.layer === 'arabic'
                 ? t('quranArabic')
                 : t('quranLayer', { language: language?.name ?? textLanguage })}
+            </span>
+          )}
+          {hadith === undefined ? null : (
+            // A translation is never presented as the original text.
+            <span>
+              {hadith.layer === 'original'
+                ? t('hadithOriginal')
+                : t('hadithTranslation', { language: language?.name ?? textLanguage })}
             </span>
           )}
           {contentLanguage === null ? null : (

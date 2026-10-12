@@ -442,6 +442,34 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'QuranTajweedRule',
         'QuranTajweedRuleText',
         'QuranTopic',
+        // Phase 19 — Hadith: registered source systems, editions and
+        // activations; the canonical structure and source-qualified records with
+        // immutable history, gradings, verification, citation mapping and
+        // conflict evidence; the layered works; typed topic assignment.
+        'HadithSourceSystem',
+        'HadithCollection',
+        'HadithEdition',
+        'HadithActivation',
+        'HadithBook',
+        'HadithChapter',
+        'Hadith',
+        'HadithRevision',
+        'HadithGrading',
+        'HadithVerification',
+        'HadithCitation',
+        'HadithCitationRevision',
+        'HadithConflict',
+        'HadithCollectionName',
+        'HadithBookName',
+        'HadithChapterName',
+        'HadithTranslation',
+        'HadithTranslationContributor',
+        'HadithCommentary',
+        'HadithCommentaryContributor',
+        'HadithCommentaryEntry',
+        'HadithScience',
+        'HadithScienceText',
+        'HadithTopic',
       ].sort(),
     );
   });

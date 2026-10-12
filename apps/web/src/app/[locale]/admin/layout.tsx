@@ -75,6 +75,11 @@ const SURFACES: readonly { key: string; permission: PermissionKey; path: string 
   // surfaces, every layered-work action re-checks `quran.administer`, and the
   // one canonical correction needs `quran.editCanonical` with its own step-up.
   { key: 'quran', permission: 'quran.read', path: 'quran/surahs' },
+  // Phase 19. One entry for the Hadith area, never folded into the Quran's:
+  // `hadith.read` opens all of its surfaces, every layered-work action
+  // re-checks `hadith.administer`, and every sourced write needs
+  // `hadith.editCanonical` with its own step-up.
+  { key: 'hadith', permission: 'hadith.read', path: 'hadith/records' },
   // Phase 4. A READ-ONLY view of the public shell's effective navigation; the
   // registry behind it is code, so there is no editing surface to reach.
   { key: 'navigation', permission: 'navigation.read', path: 'system/navigation' },

@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { EditorialPublicReaderPort, NewsKind } from '@minhaj/contracts/editorial';
 import { newsPathOf, pagePath } from '@minhaj/contracts/editorial';
+import type { HadithPublicReaderPort } from '@minhaj/contracts/hadith';
 import type { LibraryPublicReaderPort, ScholarlyKind } from '@minhaj/contracts/library';
 import type { MediaPublicReaderPort } from '@minhaj/contracts/media';
 import type { PeopleReaderPort } from '@minhaj/contracts/people';
@@ -19,6 +20,7 @@ import { EDITION_PARAM } from '@/components/library/presentation';
 import { scholarlyPathOf } from '@/components/library/scholarly-presentation';
 import { audioTrackPathOf, videoPathOf } from '@/components/media/presentation';
 import { createEditorialSearchSources } from '@/contexts/editorial';
+import { createHadithSearchProjection } from '@/contexts/hadith';
 import {
   createLibrarySearchSource,
   createScholarlySearchSource,
@@ -52,8 +54,9 @@ import { createTopicSearchSource } from '@/contexts/taxonomy';
  * Phase-9 Library routes, an issue beneath its Magazine's CURRENT slug, a
  * Phase-10 Video at `/watch/videos/{slug}`, a Phase-11 AudioTrack at
  * `/listen/lectures/{slug}`, and each Phase-13 News family at its own
- * canonical address beneath `/news`, and a Phase-18 Ayah at its permanent
- * citation address `/quran/surah/{surah}/{ayah}`.
+ * canonical address beneath `/news`, a Phase-18 Ayah at its permanent
+ * citation address `/quran/surah/{surah}/{ayah}`, and a Phase-19 Hadith
+ * citation at its permanent address `/hadith/{collection}/{number}`.
  */
 
 export interface SearchOwnerReaders {
@@ -63,6 +66,7 @@ export interface SearchOwnerReaders {
   readonly library: LibraryPublicReaderPort;
   readonly media: MediaPublicReaderPort;
   readonly quran: QuranPublicReaderPort;
+  readonly hadith: HadithPublicReaderPort;
 }
 
 const segment = (value: string) => encodeURIComponent(value);
@@ -81,6 +85,7 @@ export function searchWiring(readers: SearchOwnerReaders): {
 } {
   const editorial = createEditorialSearchSources(readers.editorial);
   const quran = createQuranSearchProjection(readers.quran);
+  const hadith = createHadithSearchProjection(readers.hadith);
 
   const editions: SearchTargetResolver = async (ids) =>
     mapOf(
@@ -133,6 +138,7 @@ export function searchWiring(readers: SearchOwnerReaders): {
       statement: editorial.news.statement,
       'media-coverage': editorial.news['media-coverage'],
       'quran-ayah': quran.source,
+      hadith: hadith.source,
     },
 
     targets: {
@@ -188,6 +194,9 @@ export function searchWiring(readers: SearchOwnerReaders): {
       // Quran's own public predicate answers which Ayat are public NOW — the
       // corpus active and the Ayah present — at their permanent citation.
       'quran-ayah': quran.target,
+      // Hadith's own public predicate answers which citations are public NOW —
+      // activated, mapped, unconflicted and verified at the current version.
+      hadith: hadith.target,
     },
 
     async resolveTopic(slug, locale) {

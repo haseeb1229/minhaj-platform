@@ -46,6 +46,7 @@ export async function buildSearchHarness(admin: SqlSession) {
     library: database.createLibraryPublicReader(),
     media: database.createMediaPublicReader(),
     quran: database.createQuranPublicReader(),
+    hadith: database.createHadithPublicReader(),
   };
   const wiring = searchWiring(readers);
   const authorization = createAuthorizationService({

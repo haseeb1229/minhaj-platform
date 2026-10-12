@@ -114,6 +114,8 @@ describe('the catalogues agree on their keys', () => {
       'localeSwitcher.label',
       'quran.fixture',
       'quran.unavailable.body',
+      'hadith.fixture',
+      'hadith.unavailable.body',
     ]) {
       const value = (locale: Catalogue) =>
         Object.fromEntries(leaves(locale))[key] as string;
@@ -143,6 +145,13 @@ describe('the catalogues agree on their keys', () => {
         'quran.unavailable.body',
         'quran.fixture',
         'quran.layer.arabic',
+        // Phase 19: likewise for Hadith — that no collection is available, that
+        // the text on a proof deployment is not Hadith, which text is the
+        // original, and that a grading is the source's, not this site's.
+        'hadith.unavailable.body',
+        'hadith.fixture',
+        'hadith.original',
+        'hadith.gradings.note',
       ]) {
         expect(String(prose[key]), `${locale} ${key}`).toMatch(/\p{Script=Arabic}/u);
       }

@@ -225,9 +225,10 @@ describe.skipIf(!databaseConfigured)(
         const session = await sessionOf(harness, administrator);
         const evaluated = await harness.authorization.evaluate(session);
 
-        // `hadith.editCanonical` is named by DOMAIN_MODEL.md §4.4 and belongs
-        // to Hadith, which has not shipped (Quran's key now exists, Phase 18).
-        expect(evaluated.can('hadith.editCanonical' as 'users.read')).toBe(false);
+        // `fatwa.publish` is named by DOMAIN_MODEL.md §4.4 and belongs to
+        // Fatwa, which has not shipped (Quran's and Hadith's canonical keys now
+        // exist, Phases 18 and 19).
+        expect(evaluated.can('fatwa.publish' as 'users.read')).toBe(false);
       });
 
       it('denies every non-active status, whatever the account may hold', async () => {
@@ -335,6 +336,7 @@ describe.skipIf(!databaseConfigured)(
        * administer pair for the layered works. No per-work and no publish key.
        */
       const PHASE_18_KEYS = ['quran.administer', 'quran.editCanonical', 'quran.read'];
+      const PHASE_19_KEYS = ['hadith.administer', 'hadith.editCanonical', 'hadith.read'];
 
       /**
        * The four capability-projection sources, which MUST NOT be grantable.
@@ -369,6 +371,7 @@ describe.skipIf(!databaseConfigured)(
             ...PHASE_10_KEYS,
             ...PHASE_16_KEYS,
             ...PHASE_18_KEYS,
+            ...PHASE_19_KEYS,
           ].sort(),
         );
 
@@ -401,7 +404,6 @@ describe.skipIf(!databaseConfigured)(
         // Taxonomy HAS shipped — which is the whole rule: a domain leaves it at
         // its owning phase and not before.
         for (const domain of [
-          'hadith.',
           'fatwa.',
           'learning.',
           'membership.',
@@ -409,10 +411,10 @@ describe.skipIf(!databaseConfigured)(
           'migration.',
           'teaching.',
           'editorial.',
-          // Library shipped in Phase 8, Search in Phase 17, Media in Phase 10
-          // and Global in Phase 16. Still absent: research and publication
-          // keys, per-aggregate Media keys, audio and gallery vocabulary, and
-          // per-level Global keys.
+          // Library shipped in Phase 8, Search in Phase 17, Media in Phase 10,
+          // Global in Phase 16, Quran in Phase 18 and Hadith in Phase 19.
+          // Still absent: research and publication keys, per-aggregate Media
+          // keys, audio and gallery vocabulary, and per-level Global keys.
           'research.',
           'publication.',
           'video.',
@@ -608,7 +610,7 @@ describe.skipIf(!databaseConfigured)(
 
         const outcome = await harness.administration.setRolePermissions(actor, {
           roleId: role.id,
-          permissions: ['hadith.editCanonical'],
+          permissions: ['fatwa.publish'],
         });
 
         expect(outcome.ok).toBe(false);

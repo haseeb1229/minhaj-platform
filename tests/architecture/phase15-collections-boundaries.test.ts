@@ -395,9 +395,17 @@ describe('Editorial’s own code imports nothing of Library, Media or Global Net
 describe('Collection is one Editorial aggregate and nothing else', () => {
   it('delivers exactly the seven Collection tables, and no private, generic or per-type collection', async () => {
     const schema = await read('packages/database/prisma/schema.prisma');
-    const models = [...schema.matchAll(/^model (\w*Collection\w*) \{/gmu)]
-      .map(([, name]) => name)
-      .sort();
+    const all = [...schema.matchAll(/^model (\w*Collection\w*) \{/gmu)].map(
+      ([, name]) => name,
+    );
+    // A Hadith collection is a different thing that shares the word: the
+    // source compilation a narration belongs to (Phase 19), owned by Hadith
+    // and never an Editorial grouping. Exactly its two tables, named apart.
+    expect(all.filter((name) => name?.startsWith('Hadith')).sort()).toEqual([
+      'HadithCollection',
+      'HadithCollectionName',
+    ]);
+    const models = all.filter((name) => !name?.startsWith('Hadith')).sort();
     expect(models).toEqual(
       [
         'Collection',

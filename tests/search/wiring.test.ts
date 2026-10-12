@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { EditorialPublicReaderPort } from '../../packages/contracts/src/editorial/index.ts';
+import type { HadithPublicReaderPort } from '../../packages/contracts/src/hadith/index.ts';
 import type { LibraryPublicReaderPort } from '../../packages/contracts/src/library/index.ts';
 import type { MediaPublicReaderPort } from '../../packages/contracts/src/media/index.ts';
 import type { PeopleReaderPort } from '../../packages/contracts/src/people/index.ts';
@@ -15,6 +16,9 @@ import { searchWiring } from '../../apps/web/src/composition/search-wiring.ts';
  * built from the owners' CURRENT answer — and an id an owner does not return is
  * simply absent, which is what makes the stale-index rule hold.
  */
+
+const PUBLIC_CITATION = '11111111-1111-4111-8111-111111111111';
+const WITHHELD_CITATION = '22222222-2222-4222-8222-222222222222';
 
 function readers() {
   const taxonomy = {
@@ -61,7 +65,19 @@ function readers() {
     publicAyahTargets: async (refs: readonly { surah: number; ayah: number }[]) =>
       refs.filter((ref) => ref.surah === 2 && ref.ayah === 3),
   } as unknown as QuranPublicReaderPort;
-  return { taxonomy, people, editorial, library, media, quran };
+  const hadith = {
+    // Only the first citation is public now; the second is withdrawn,
+    // conflicted or unverified — the owner simply does not return it.
+    publicCitationTargets: async (ids: readonly string[]) =>
+      ids
+        .filter((id) => id === PUBLIC_CITATION)
+        .map((citationId) => ({
+          citationId,
+          collectionSlug: 'fixture-collection-a',
+          number: 7,
+        })),
+  } as unknown as HadithPublicReaderPort;
+  return { taxonomy, people, editorial, library, media, quran, hadith };
 }
 
 describe('searchWiring', () => {
@@ -113,6 +129,14 @@ describe('searchWiring', () => {
     const { targets } = searchWiring(readers());
     const found = await targets['quran-ayah'](['2:3', '2:4', 'not-a-citation']);
     expect([...found.entries()]).toEqual([['2:3', '/quran/surah/2/3']]);
+  });
+
+  it('addresses a Hadith citation at its permanent address, and omits one Hadith withholds', async () => {
+    const { targets } = searchWiring(readers());
+    const found = await targets.hadith([PUBLIC_CITATION, WITHHELD_CITATION, 'not-an-id']);
+    expect([...found.entries()]).toEqual([
+      [PUBLIC_CITATION, '/hadith/fixture-collection-a/7'],
+    ]);
   });
 
   it('omits a Phase-9 record its owner no longer publishes', async () => {

@@ -409,8 +409,13 @@ export default async function proxy(request: NextRequest) {
      * PHASE 18 — `/quran/search` runs the SAME Search query restricted to one
      * kind, so it spends the SAME budget under the same rule, fails closed the
      * same way, and a throttled Quran search lands on the same static page.
+     *
+     * PHASE 19 — `/hadith/search` is the same Search query restricted to the
+     * `hadith` kind, admitted under the same rule.
      */
-    const search = /^\/(en|ur|ar)\/(?:quran\/)?search$/.exec(request.nextUrl.pathname);
+    const search = /^\/(en|ur|ar)\/(?:quran\/|hadith\/)?search$/.exec(
+      request.nextUrl.pathname,
+    );
     const query = request.nextUrl.searchParams.get('q');
     if (search?.[1] && query !== null && query.trim() !== '') {
       const { admitPublicSearch } = await import('@/composition/search-admission');

@@ -565,6 +565,10 @@ describe('F1 — the production database package publishes no raw capability', (
       // and owned there, and holds no write to canonical text but the two
       // authority-checking procedures.
       quran: { kind: 'context', slug: 'quran' },
+      // Phase 19. Hadith is a bounded CONTEXT; its adapter is hosted here and
+      // owned there, and writes sourced facts only through the database's
+      // authority-checking procedures.
+      hadith: { kind: 'context', slug: 'hadith' },
       email: { kind: 'layer0', concern: 'email' },
       'rate-limiting': { kind: 'layer0', concern: 'rate-limiting' },
       auditing: { kind: 'layer0', concern: 'auditing' },

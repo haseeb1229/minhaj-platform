@@ -499,6 +499,46 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[qurantajweedruletext]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[quranrecitationsegment]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[qurantopic]': ['SELECT', 'INSERT', 'DELETE'],
+  // Phase 19: Hadith, in the same four postures. SOURCE (source systems,
+  // editions, activation) and CANONICAL (records, history, gradings,
+  // verifications, citations, conflict evidence) are SELECT only, written by
+  // the six procedures below through ownership chaining; the authority check
+  // and conflict detection they call are DENIED to the runtime outright. A
+  // collection's, book's and chapter's UPDATE is a COLUMN grant on the
+  // display-name version, recorded against the object as UPDATE. Layered works
+  // are never deleted and a slug or parent record never changes (column DENYs
+  // the probe suite proves column by column); display names, entries, texts,
+  // contributors and topic assignments are child rows.
+  '[dbo].[hadithsourcesystem]': ['SELECT'],
+  '[dbo].[hadithedition]': ['SELECT'],
+  '[dbo].[hadithactivation]': ['SELECT'],
+  '[dbo].[hadithcollection]': ['SELECT', 'UPDATE'],
+  '[dbo].[hadithbook]': ['SELECT', 'UPDATE'],
+  '[dbo].[hadithchapter]': ['SELECT', 'UPDATE'],
+  '[dbo].[hadith]': ['SELECT'],
+  '[dbo].[hadithrevision]': ['SELECT'],
+  '[dbo].[hadithgrading]': ['SELECT'],
+  '[dbo].[hadithverification]': ['SELECT'],
+  '[dbo].[hadithcitation]': ['SELECT'],
+  '[dbo].[hadithcitationrevision]': ['SELECT'],
+  '[dbo].[hadithconflict]': ['SELECT'],
+  '[dbo].[hadithcreatecollection]': ['EXECUTE'],
+  '[dbo].[hadithcreatebook]': ['EXECUTE'],
+  '[dbo].[hadithcreatechapter]': ['EXECUTE'],
+  '[dbo].[hadithwriterecord]': ['EXECUTE'],
+  '[dbo].[hadithverifyrecord]': ['EXECUTE'],
+  '[dbo].[hadithsetcitation]': ['EXECUTE'],
+  '[dbo].[hadithcollectionname]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[hadithbookname]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[hadithchaptername]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[hadithtranslation]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[hadithcommentary]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[hadithscience]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[hadithtranslationcontributor]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[hadithcommentarycontributor]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[hadithcommentaryentry]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[hadithsciencetext]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[hadithtopic]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[contactinquiry]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[feedback]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
 

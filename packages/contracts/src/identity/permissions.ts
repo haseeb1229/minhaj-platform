@@ -20,7 +20,8 @@
  * surfaces' vocabulary; Phase 3B appended Taxonomy's two keys with the
  * migration that delivered those surfaces; Phase 4 appended the one read key
  * its navigation status surface needs; Phase 18 appended Quran's three,
- * `quran.editCanonical` among them. `fatwa.publish`, `teaching.perform` and the
+ * `quran.editCanonical` among them; Phase 19 appended Hadith's three,
+ * `hadith.editCanonical` among them. `fatwa.publish`, `teaching.perform` and the
  * rest are named by DOMAIN_MODEL.md §4.4 as INDICATIVE examples of the shape;
  * they belong to contexts that do not exist yet. Seeding one now would fix another owner's
  * vocabulary before that owner can have an opinion about it, and would leave
@@ -405,6 +406,49 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     description:
       'Accept a verified canonical Quran corpus and correct canonical Ayah text against a registered source, with step-up.',
   }),
+
+  /* ---- Phase 19 — Hadith ------------------------------------------------- */
+  //
+  // THREE KEYS, THE SAME SHAPE AS QURAN'S AND NEVER SHARED WITH IT.
+  // DOMAIN_MODEL.md §4.4 and §9 and SECURITY_BASELINE.md §5.2 and §8.1 name
+  // `hadith.editCanonical` as the authority over canonical Hadith, so the key is
+  // not this implementation's to rename. No `quran.*` key confers anything over
+  // Hadith, and no `hadith.*` key anything over the Quran.
+  //
+  // `hadith.administer` IS DELIBERATELY NARROW. It governs translations,
+  // commentary, sciences study material, display names and record topics. It
+  // can never reach a sourced fact — text, source reference, chain, grading,
+  // structure, verification or a public citation: no persistence method behind
+  // it writes one, and the application principal holds no INSERT, UPDATE or
+  // DELETE on those tables at all. One key per table (`hadith.grade`,
+  // `hadith.chain`, `hadith.publish`) would separate authority nobody asked to
+  // separate: every sourced fact is canonical, and canonical is one authority.
+  //
+  // `hadith.editCanonical` IS NEVER EXERCISED ALONE. Every use also costs a
+  // complete second-factor posture and a step-up grant for the dedicated
+  // `hadith-canonical-edit` purpose, and every database procedure behind it
+  // checks that grant again before it writes.
+  //
+  // NONE OF THE THREE IS SCHOLARLY APPROVAL. Which collections, editions,
+  // numbering and grading authority are accepted is the external authority's
+  // decision (OPEN_DECISIONS.md §1.3), recorded as a registered source system
+  // and edition that only the operator can create, and a collection is public
+  // only by the operator's activation. No permission here can do either.
+  Object.freeze({
+    key: 'hadith.read',
+    description:
+      'View Hadith administration: records and their history, sources and editions, verification, citation mapping, conflict evidence and draft layered records.',
+  }),
+  Object.freeze({
+    key: 'hadith.administer',
+    description:
+      'Manage Hadith translations, commentary, sciences study material, display names and record topics. Never canonical records, gradings, chains or citations.',
+  }),
+  Object.freeze({
+    key: 'hadith.editCanonical',
+    description:
+      'Create Hadith structure and source-qualified records, correct their sourced text, chain and gradings, verify them and map public citations, with step-up.',
+  }),
 ]);
 
 /** Every catalogue key, as a union. Mistyping one is a compile error. */
@@ -469,6 +513,11 @@ export const PLATFORM_ADMINISTRATOR_PERMISSIONS: readonly PermissionKey[] = Obje
  * scripture, which is exactly the universal elevation this vocabulary exists to
  * refuse; so the canonical Quran authority has its own purpose, and no other
  * purpose authorises it.
+ *
+ * PHASE 19 ADDS THE FIFTH FOR THE SAME REASON. §8.1 lists canonical Hadith
+ * edits as their own operation under `hadith.editCanonical`; a grant earned to
+ * correct an Ayah must not also authorise rewriting a Hadith's grading, nor the
+ * reverse, so canonical Hadith authority has its own purpose too.
  */
 export const STEP_UP_PURPOSES = Object.freeze([
   /** Role lifecycle, permission bundles, assignment grant and revoke. */
@@ -479,6 +528,8 @@ export const STEP_UP_PURPOSES = Object.freeze([
   'second-factor',
   /** Canonical Quran corpus acceptance and Ayah correction (Phase 18). */
   'quran-canonical-edit',
+  /** Canonical Hadith structure, records, verification and citations (Phase 19). */
+  'hadith-canonical-edit',
 ] as const);
 
 export type StepUpPurpose = (typeof STEP_UP_PURPOSES)[number];

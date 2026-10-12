@@ -778,6 +778,7 @@ try {
     mediaProvisioned: number;
     globalProvisioned: number;
     quranProvisioned: number;
+    hadithProvisioned: number;
   }>(`
     SELECT COUNT_BIG(*) AS total,
            SUM(CASE WHEN [action] = N'phase1.permission.probe' THEN 1 ELSE 0 END) AS probe,
@@ -808,17 +809,20 @@ try {
              AS globalProvisioned,
            SUM(CASE WHEN [action] = N'quran.permissions.provisioned'
                      AND [actorType] = N'migration' THEN 1 ELSE 0 END)
-             AS quranProvisioned
+             AS quranProvisioned,
+           SUM(CASE WHEN [action] = N'hadith.permissions.provisioned'
+                     AND [actorType] = N'migration' THEN 1 ELSE 0 END)
+             AS hadithProvisioned
     FROM [dbo].[AuditLog];
   `);
 
-  // Exactly ten rows: the Phase-3B through Phase-18 privilege extensions
+  // Exactly eleven rows: the Phase-3B through Phase-19 privilege extensions
   // (Phase 10's and Phase 16's included), and this run's probe. Naming every migration action is load-bearing:
   // deriving the expected total from whatever provisioning rows happened to
   // survive would pass if a phase omitted its own audit, and each privilege
   // extension must be able to show that it paid for itself
   // (SECURITY_BASELINE.md §8.1).
-  const EXPECTED_AUDIT_ROWS = 10;
+  const EXPECTED_AUDIT_ROWS = 11;
 
   if (
     Number(survivor?.taxonomyProvisioned ?? 0) !== 1 ||
@@ -830,6 +834,7 @@ try {
     Number(survivor?.mediaProvisioned ?? 0) !== 1 ||
     Number(survivor?.globalProvisioned ?? 0) !== 1 ||
     Number(survivor?.quranProvisioned ?? 0) !== 1 ||
+    Number(survivor?.hadithProvisioned ?? 0) !== 1 ||
     Number(survivor?.probe ?? 0) !== 1 ||
     Number(survivor?.tampered ?? -1) !== 0 ||
     Number(survivor?.total ?? 0) !== EXPECTED_AUDIT_ROWS
@@ -839,7 +844,7 @@ try {
       `expected ${EXPECTED_AUDIT_ROWS} rows with 1 taxonomy provisioning, ` +
         `1 navigation provisioning, 1 people provisioning, 1 editorial provisioning, ` +
         `1 library provisioning, 1 search provisioning, 1 media provisioning, ` +
-        `1 global provisioning, 1 quran provisioning, 1 probe and ` +
+        `1 global provisioning, 1 quran provisioning, 1 hadith provisioning, 1 probe and ` +
         `0 tampered; found ${survivor?.total ?? 0} rows, ` +
         `${survivor?.taxonomyProvisioned ?? 0} taxonomy provisioning, ` +
         `${survivor?.navigationProvisioned ?? 0} navigation provisioning, ` +
@@ -850,12 +855,13 @@ try {
         `${survivor?.mediaProvisioned ?? 0} media provisioning, ` +
         `${survivor?.globalProvisioned ?? 0} global provisioning, ` +
         `${survivor?.quranProvisioned ?? 0} quran provisioning, ` +
+        `${survivor?.hadithProvisioned ?? 0} hadith provisioning, ` +
         `${survivor?.probe ?? 0} probe, ${survivor?.tampered ?? 0} tampered`,
     );
   } else {
     pass(
       'audit rows unmodified',
-      'the probe row and all nine exact migration records are intact after ' +
+      'the probe row and all ten exact migration records are intact after ' +
         'UPDATE/DELETE attempts',
     );
   }
@@ -3834,6 +3840,532 @@ try {
     );
   } else {
     fail('Quran procedures EXECUTE exact', JSON.stringify(quranExecute ?? null));
+  }
+
+  // ---- Phase 19: Hadith, in four postures -----------------------------------
+  //
+  // THE SOURCE SYSTEMS, EDITIONS AND ACTIVATIONS are the owner's. The runtime
+  // reads them and writes nothing, so no permission it carries can register an
+  // authority, turn a fixture into one or make a collection public.
+  //
+  // THE CANONICAL TABLES are read-only to it as well. It reaches them ONLY by
+  // executing the six canonical procedures, which re-check the live
+  // `hadith.editCanonical` grant and purpose-bound step-up grant in SQL —
+  // proved here by the runtime naming an account that holds nothing, and a
+  // grant that does not exist, and being refused (51210) — while the authority
+  // check and conflict detection are denied to it outright. A collection's,
+  // book's or chapter's display-name version is the one canonical column it may
+  // advance.
+  //
+  // LAYERED WORKS by the Quran postures: inserted and updated, never deleted, a
+  // slug or parent record chosen once; display names, entries, texts,
+  // contributors and topic assignments are child rows. Naming a Person, a Topic,
+  // a Language or a source system grants nothing on those owners' tables.
+  //
+  // Every statement below is REAL SQL as the runtime principal over sentinel
+  // NON_HADITH_FIXTURE text; the source system, the edition and the canonical
+  // authority are the owner's rows.
+  const hadithRun = randomUUID().replaceAll('-', '').slice(0, 16);
+  const hadithAt = '2026-10-03T00:00:00';
+  const hadithSource = randomUUID();
+  const hadithCollection = randomUUID();
+  const hadithEdition = randomUUID();
+  const hadithBook = randomUUID();
+  const hadithChapter = randomUUID();
+  const hadithRecord = randomUUID();
+  const hadithCitation = randomUUID();
+  const hadithHolder = randomUUID();
+  const hadithRole = randomUUID();
+  const hadithSession = randomUUID();
+  const hadithGrant = randomUUID();
+  await admin.query(`
+    INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled])
+      VALUES (N'${hadithHolder}',N'Synthetic Hadith canonical holder',N'${hadithHolder}@proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);
+    INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system])
+      VALUES (N'${hadithRole}',N'lp-hadith-canonical-${hadithRun}',N'Synthetic Hadith canonical role',N'Least-privilege proof only.',0);
+    INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES (N'${hadithRole}',N'hadith.editCanonical');
+    INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId]) VALUES (N'${hadithHolder}',N'${hadithRole}');
+    INSERT INTO [dbo].[Session] ([id],[token],[userId],[expiresAt],[createdAt],[updatedAt])
+      VALUES (N'${hadithSession}',N'lp-hadith-${hadithSession}',N'${hadithHolder}',DATEADD(hour,1,SYSUTCDATETIME()),SYSUTCDATETIME(),SYSUTCDATETIME());
+    INSERT INTO [dbo].[StepUpGrant] ([id],[userId],[sessionId],[purpose],[expiresAt])
+      VALUES (N'${hadithGrant}',N'${hadithHolder}',N'${hadithSession}',N'hadith-canonical-edit',DATEADD(minute,30,SYSUTCDATETIME()));
+  `);
+  const hadithAuthority = (actor: string, grantId: string): string =>
+    `@actorId=N'${actor}', @sessionId=N'${hadithSession}', @stepUpGrantId=N'${grantId}', @at='${hadithAt}'`;
+  const hadithCreateCollection = (actor: string, grantId: string, id: string): string =>
+    `EXEC [dbo].[HadithCreateCollection] @id=N'${id}', @slug=N'lp-collection-${hadithRun}', @position=0, ${hadithAuthority(actor, grantId)};`;
+
+  // The runtime cannot borrow an authority it does not hold, nor forge a grant.
+  await expectRefusedByInvariant(
+    app,
+    'Hadith collection naming an account without authority',
+    hadithCreateCollection(editorialReviewer, hadithGrant, randomUUID()),
+    51210,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Hadith collection with a forged step-up grant',
+    hadithCreateCollection(hadithHolder, randomUUID(), randomUUID()),
+    51210,
+  );
+  await expectDenied(
+    app,
+    'HadithAssertCanonicalAuthority EXECUTE denied',
+    `EXEC [dbo].[HadithAssertCanonicalAuthority] @actorId=N'${hadithHolder}', @sessionId=N'${hadithSession}', @stepUpGrantId=N'${hadithGrant}';`,
+  );
+  await expectDenied(
+    app,
+    'HadithDetectConflicts EXECUTE denied',
+    `EXEC [dbo].[HadithDetectConflicts] @hadithId=N'${hadithRecord}', @at='${hadithAt}';`,
+  );
+  await expectAllowed(
+    app,
+    'HadithCreateCollection EXECUTE',
+    hadithCreateCollection(hadithHolder, hadithGrant, hadithCollection),
+    'a collection is created by the procedure, under the live authority',
+  );
+  await admin.query(`
+    INSERT INTO [dbo].[HadithSourceSystem] ([id],[code],[authority],[title],[version],[encoding])
+      VALUES (N'${hadithSource}',N'NON_HADITH_FIXTURE_LP_${hadithRun}',N'fixture',N'NON_HADITH_FIXTURE least-privilege source',N'proof-1',N'utf-8');
+    INSERT INTO [dbo].[HadithEdition] ([id],[collectionId],[sourceSystemId],[code],[title])
+      VALUES (N'${hadithEdition}',N'${hadithCollection}',N'${hadithSource}',N'NON_HADITH_FIXTURE_LP_EDITION',N'NON_HADITH_FIXTURE least-privilege edition');
+  `);
+  const hadithGradings = JSON.stringify([
+    {
+      position: 0,
+      grader: 'NON_HADITH_FIXTURE_GRADER_1',
+      label: 'NON_HADITH_FIXTURE_GRADING_1',
+      labelLanguage: 'ar',
+      reference: 'NON_HADITH_FIXTURE_REFERENCE_3',
+    },
+  ]);
+  for (const [label, statement, detail] of [
+    [
+      'HadithCreateBook EXECUTE',
+      `EXEC [dbo].[HadithCreateBook] @id=N'${hadithBook}', @editionId=N'${hadithEdition}', @slug=N'lp-book-${hadithRun}', @reference=N'NON_HADITH_FIXTURE_REFERENCE_1', @position=1, @title=NULL, @titleLanguage=NULL, ${hadithAuthority(hadithHolder, hadithGrant)};`,
+      'a book is created in its edition by the procedure',
+    ],
+    [
+      'HadithCreateChapter EXECUTE',
+      `EXEC [dbo].[HadithCreateChapter] @id=N'${hadithChapter}', @bookId=N'${hadithBook}', @slug=N'lp-chapter-${hadithRun}', @reference=N'NON_HADITH_FIXTURE_REFERENCE_2', @position=1, @title=NULL, @titleLanguage=NULL, ${hadithAuthority(hadithHolder, hadithGrant)};`,
+      'a chapter is created in its book by the procedure',
+    ],
+    [
+      'HadithWriteRecord EXECUTE',
+      `EXEC [dbo].[HadithWriteRecord] @hadithId=N'${hadithRecord}', @editionId=N'${hadithEdition}', @expectedVersion=0, @sourceReference=N'NON_HADITH_FIXTURE_REFERENCE_7', @citationNumber=7, @bookId=N'${hadithBook}', @chapterId=N'${hadithChapter}', @text=N'NON_HADITH_FIXTURE_TEXT_1', @textLanguage=N'ar', @chain=N'NON_HADITH_FIXTURE_CHAIN_1', @chainLanguage=N'ar', @gradings=N'${hadithGradings}', @evidence=N'NON_HADITH_FIXTURE_EVIDENCE_1', @reason=NULL, ${hadithAuthority(hadithHolder, hadithGrant)};`,
+      'a source-qualified record, its history and grading are written by the procedure alone',
+    ],
+    [
+      'HadithVerifyRecord EXECUTE',
+      `EXEC [dbo].[HadithVerifyRecord] @id=N'${randomUUID()}', @hadithId=N'${hadithRecord}', @expectedVersion=1, @evidence=N'NON_HADITH_FIXTURE_EVIDENCE_2', ${hadithAuthority(hadithHolder, hadithGrant)};`,
+      'version 1 is verified by the procedure',
+    ],
+    [
+      'HadithSetCitation EXECUTE',
+      `EXEC [dbo].[HadithSetCitation] @id=N'${hadithCitation}', @collectionId=N'${hadithCollection}', @number=7, @hadithId=N'${hadithRecord}', @state=N'mapped', @expectedVersion=0, @evidence=N'NON_HADITH_FIXTURE_EVIDENCE_3', @reason=NULL, ${hadithAuthority(hadithHolder, hadithGrant)};`,
+      'the citation is mapped to its verified candidate by the procedure',
+    ],
+  ] as const)
+    await expectAllowed(app, label, statement, detail);
+
+  const HADITH_READ_ONLY = [
+    'HadithSourceSystem',
+    'HadithEdition',
+    'HadithActivation',
+    'Hadith',
+    'HadithRevision',
+    'HadithGrading',
+    'HadithVerification',
+    'HadithCitation',
+    'HadithCitationRevision',
+    'HadithConflict',
+  ] as const;
+  const HADITH_STRUCTURE = ['HadithCollection', 'HadithBook', 'HadithChapter'] as const;
+  for (const table of [...HADITH_READ_ONLY, ...HADITH_STRUCTURE])
+    await expectAllowed(
+      app,
+      `${table} SELECT`,
+      `SELECT COUNT_BIG(*) AS [total] FROM [dbo].[${table}];`,
+      'the runtime reads it',
+    );
+  for (const [label, statement] of [
+    [
+      'HadithSourceSystem INSERT denied',
+      `INSERT INTO [dbo].[HadithSourceSystem] ([id],[code],[authority],[title],[version],[encoding],[reference]) VALUES (N'${randomUUID()}',N'NON_HADITH_FIXTURE_LP_FORGED_${hadithRun}',N'approved',N'NON_HADITH_FIXTURE forged',N'proof-1',N'utf-8',N'urn:example:forged');`,
+    ],
+    [
+      'HadithSourceSystem UPDATE denied',
+      `UPDATE [dbo].[HadithSourceSystem] SET [authority]=N'approved',[reference]=N'urn:example:forged' WHERE [id]=N'${hadithSource}';`,
+    ],
+    ['HadithSourceSystem DELETE denied', 'DELETE FROM [dbo].[HadithSourceSystem];'],
+    [
+      'HadithEdition INSERT denied',
+      `INSERT INTO [dbo].[HadithEdition] ([id],[collectionId],[sourceSystemId],[code],[title]) VALUES (N'${randomUUID()}',N'${hadithCollection}',N'${hadithSource}',N'NON_HADITH_FIXTURE_LP_FORGED',N'NON_HADITH_FIXTURE forged');`,
+    ],
+    ['HadithEdition UPDATE denied', 'UPDATE [dbo].[HadithEdition] SET [code]=[code];'],
+    ['HadithEdition DELETE denied', 'DELETE FROM [dbo].[HadithEdition];'],
+    [
+      'HadithActivation INSERT denied',
+      `INSERT INTO [dbo].[HadithActivation] ([collectionId],[authority],[authorisedBy]) VALUES (N'${hadithCollection}',N'fixture',N'runtime');`,
+    ],
+    ['HadithActivation DELETE denied', 'DELETE FROM [dbo].[HadithActivation];'],
+    [
+      'HadithCollection INSERT denied',
+      `INSERT INTO [dbo].[HadithCollection] ([id],[slug],[position]) VALUES (N'${randomUUID()}',N'lp-forged-${hadithRun}',1);`,
+    ],
+    [
+      'HadithCollection slug UPDATE denied',
+      'UPDATE [dbo].[HadithCollection] SET [slug]=[slug];',
+    ],
+    [
+      'HadithCollection position UPDATE denied',
+      'UPDATE [dbo].[HadithCollection] SET [position]=[position];',
+    ],
+    ['HadithCollection DELETE denied', 'DELETE FROM [dbo].[HadithCollection];'],
+    [
+      'HadithBook INSERT denied',
+      `INSERT INTO [dbo].[HadithBook] ([id],[collectionId],[editionId],[slug],[reference],[position]) VALUES (N'${randomUUID()}',N'${hadithCollection}',N'${hadithEdition}',N'lp-forged-${hadithRun}',N'NON_HADITH_FIXTURE_REFERENCE_9',9);`,
+    ],
+    [
+      'HadithBook reference UPDATE denied',
+      'UPDATE [dbo].[HadithBook] SET [reference]=[reference];',
+    ],
+    [
+      'HadithBook edition UPDATE denied',
+      'UPDATE [dbo].[HadithBook] SET [editionId]=[editionId];',
+    ],
+    ['HadithBook DELETE denied', 'DELETE FROM [dbo].[HadithBook];'],
+    [
+      'HadithChapter slug UPDATE denied',
+      'UPDATE [dbo].[HadithChapter] SET [slug]=[slug];',
+    ],
+    ['HadithChapter DELETE denied', 'DELETE FROM [dbo].[HadithChapter];'],
+    [
+      'Hadith INSERT denied',
+      `INSERT INTO [dbo].[Hadith] ([id],[collectionId],[sourceSystemId],[editionId],[sourceReference],[bookId],[text],[textLanguage],[version]) VALUES (N'${randomUUID()}',N'${hadithCollection}',N'${hadithSource}',N'${hadithEdition}',N'NON_HADITH_FIXTURE_REFERENCE_8',N'${hadithBook}',N'NON_HADITH_FIXTURE_TEXT_DIRECT',N'ar',1);`,
+    ],
+    [
+      'Hadith text UPDATE denied',
+      `UPDATE [dbo].[Hadith] SET [text]=N'NON_HADITH_FIXTURE_TEXT_TAMPERED' WHERE [id]=N'${hadithRecord}';`,
+    ],
+    ['Hadith chain UPDATE denied', 'UPDATE [dbo].[Hadith] SET [chain]=[chain];'],
+    ['Hadith DELETE denied', 'DELETE FROM [dbo].[Hadith];'],
+    [
+      'HadithRevision INSERT denied',
+      `INSERT INTO [dbo].[HadithRevision] ([hadithId],[version],[operation],[sourceReference],[bookId],[text],[textLanguage],[evidence],[reason],[actorId],[stepUpGrantId]) VALUES (N'${hadithRecord}',2,N'corrected',N'NON_HADITH_FIXTURE_REFERENCE_7',N'${hadithBook}',N'NON_HADITH_FIXTURE_TEXT_FORGED',N'ar',N'forged',N'forged',N'${hadithHolder}',N'${hadithGrant}');`,
+    ],
+    ['HadithRevision UPDATE denied', 'UPDATE [dbo].[HadithRevision] SET [text]=[text];'],
+    ['HadithRevision DELETE denied', 'DELETE FROM [dbo].[HadithRevision];'],
+    [
+      'HadithGrading INSERT denied',
+      `INSERT INTO [dbo].[HadithGrading] ([hadithId],[version],[position],[grader],[label],[labelLanguage],[reference]) VALUES (N'${hadithRecord}',1,1,N'NON_HADITH_FIXTURE_GRADER_2',N'NON_HADITH_FIXTURE_GRADING_2',N'ar',N'NON_HADITH_FIXTURE_REFERENCE_3');`,
+    ],
+    ['HadithGrading UPDATE denied', 'UPDATE [dbo].[HadithGrading] SET [label]=[label];'],
+    ['HadithGrading DELETE denied', 'DELETE FROM [dbo].[HadithGrading];'],
+    [
+      'HadithVerification INSERT denied',
+      `INSERT INTO [dbo].[HadithVerification] ([id],[hadithId],[version],[evidence],[actorId],[stepUpGrantId]) VALUES (N'${randomUUID()}',N'${hadithRecord}',1,N'forged',N'${hadithHolder}',N'${hadithGrant}');`,
+    ],
+    ['HadithVerification DELETE denied', 'DELETE FROM [dbo].[HadithVerification];'],
+    [
+      'HadithCitation INSERT denied',
+      `INSERT INTO [dbo].[HadithCitation] ([collectionId],[number],[id],[hadithId],[state],[version]) VALUES (N'${hadithCollection}',8,N'${randomUUID()}',N'${hadithRecord}',N'mapped',1);`,
+    ],
+    [
+      'HadithCitation UPDATE denied',
+      "UPDATE [dbo].[HadithCitation] SET [state]=N'withdrawn';",
+    ],
+    ['HadithCitation DELETE denied', 'DELETE FROM [dbo].[HadithCitation];'],
+    [
+      'HadithCitationRevision INSERT denied',
+      `INSERT INTO [dbo].[HadithCitationRevision] ([collectionId],[number],[version],[hadithId],[state],[evidence],[reason],[actorId],[stepUpGrantId]) VALUES (N'${hadithCollection}',7,2,N'${hadithRecord}',N'withdrawn',N'forged',N'forged',N'${hadithHolder}',N'${hadithGrant}');`,
+    ],
+    [
+      'HadithCitationRevision DELETE denied',
+      'DELETE FROM [dbo].[HadithCitationRevision];',
+    ],
+    [
+      'HadithConflict INSERT denied',
+      `INSERT INTO [dbo].[HadithConflict] ([id],[collectionId],[citationNumber],[hadithId],[hadithVersion],[otherHadithId],[otherVersion],[facets]) VALUES (N'${randomUUID()}',N'${hadithCollection}',7,N'${hadithRecord}',1,N'${hadithRecord}',1,N'text');`,
+    ],
+    ['HadithConflict DELETE denied', 'DELETE FROM [dbo].[HadithConflict];'],
+  ] as const)
+    await expectDenied(app, label, statement);
+  await expectAllowed(
+    app,
+    'Hadith display-name versions UPDATE',
+    `UPDATE [dbo].[HadithCollection] SET [namesVersion]=[namesVersion]+1,[updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${hadithCollection}';
+     UPDATE [dbo].[HadithBook] SET [namesVersion]=[namesVersion]+1,[updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${hadithBook}';
+     UPDATE [dbo].[HadithChapter] SET [namesVersion]=[namesVersion]+1,[updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${hadithChapter}';`,
+    'the one canonical column the application may advance',
+  );
+
+  // The canonical store is exactly what the procedures wrote, after every
+  // refused direct write.
+  const [hadithState] = await admin.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[HadithCollection] WHERE [id]=N'${hadithCollection}' AND [namesVersion]=2) AS [collections],
+      (SELECT COUNT(*) FROM [dbo].[HadithBook] WHERE [editionId]=N'${hadithEdition}' AND [namesVersion]=2) AS [books],
+      (SELECT COUNT(*) FROM [dbo].[HadithChapter] WHERE [bookId]=N'${hadithBook}' AND [namesVersion]=2) AS [chapters],
+      (SELECT COUNT(*) FROM [dbo].[Hadith] WHERE [text]=N'NON_HADITH_FIXTURE_TEXT_1' AND [version]=1) AS [records],
+      (SELECT COUNT(*) FROM [dbo].[HadithRevision]) AS [revisions],
+      (SELECT COUNT(*) FROM [dbo].[HadithGrading]) AS [gradings],
+      (SELECT COUNT(*) FROM [dbo].[HadithVerification]) AS [verifications],
+      (SELECT COUNT(*) FROM [dbo].[HadithCitation] WHERE [id]=N'${hadithCitation}' AND [state]=N'mapped' AND [version]=1) AS [citations],
+      (SELECT COUNT(*) FROM [dbo].[HadithCitationRevision]) AS [citationRevisions],
+      (SELECT COUNT(*) FROM [dbo].[HadithConflict]) AS [conflicts],
+      (SELECT COUNT(*) FROM [dbo].[HadithSourceSystem] WHERE [authority]=N'fixture' AND [reference] IS NULL) AS [sources],
+      (SELECT COUNT(*) FROM [dbo].[HadithActivation]) AS [activations];
+  `);
+  if (
+    JSON.stringify(hadithState) ===
+    '{"collections":1,"books":1,"chapters":1,"records":1,"revisions":1,"gradings":1,"verifications":1,"citations":1,"citationRevisions":1,"conflicts":0,"sources":1,"activations":0}'
+  ) {
+    pass(
+      'Hadith canonical state intact',
+      'only the procedures wrote it; every direct write was refused',
+    );
+  } else {
+    fail('Hadith canonical state intact', JSON.stringify(hadithState));
+  }
+
+  // ---- the layered works, through the runtime login --------------------------
+  const hadithTranslation = randomUUID();
+  const hadithCommentary = randomUUID();
+  const hadithScience = randomUUID();
+  const hadithPerson = editorialPeople.linkedPersonId;
+  await expectAllowed(
+    app,
+    'Hadith layered works INSERT',
+    `INSERT INTO [dbo].[HadithTranslation] ([id],[hadithId],[languageCode],[text],[state],[version],[updatedAt]) VALUES (N'${hadithTranslation}',N'${hadithRecord}',N'en',N'NON_HADITH_FIXTURE_TRANSLATION_1',N'draft',1,SYSUTCDATETIME());
+     INSERT INTO [dbo].[HadithCommentary] ([id],[slug],[languageCode],[name],[state],[version],[updatedAt]) VALUES (N'${hadithCommentary}',N'lp-commentary-${hadithRun}',N'ur',N'NON_HADITH_FIXTURE commentary',N'draft',1,SYSUTCDATETIME());
+     INSERT INTO [dbo].[HadithScience] ([id],[slug],[position],[state],[version],[updatedAt]) VALUES (N'${hadithScience}',N'lp-science-${hadithRun}',0,N'draft',1,SYSUTCDATETIME());`,
+    'three draft works with a registered language',
+  );
+  await expectAllowed(
+    app,
+    'Hadith child rows INSERT',
+    `INSERT INTO [dbo].[HadithTranslationContributor] ([translationId],[personId],[role],[position]) VALUES (N'${hadithTranslation}',N'${hadithPerson}',N'translator',0);
+     INSERT INTO [dbo].[HadithCommentaryContributor] ([commentaryId],[personId],[role],[position]) VALUES (N'${hadithCommentary}',N'${hadithPerson}',N'author',0);
+     INSERT INTO [dbo].[HadithCommentaryEntry] ([commentaryId],[hadithId],[text]) VALUES (N'${hadithCommentary}',N'${hadithRecord}',N'NON_HADITH_FIXTURE_COMMENTARY_1');
+     INSERT INTO [dbo].[HadithScienceText] ([scienceId],[languageCode],[title],[body]) VALUES (N'${hadithScience}',N'en',N'NON_HADITH_FIXTURE science',N'NON_HADITH_FIXTURE_SCIENCE_1'),(N'${hadithScience}',N'ur',N'NON_HADITH_FIXTURE science ur',N'NON_HADITH_FIXTURE_SCIENCE_2');
+     INSERT INTO [dbo].[HadithCollectionName] ([collectionId],[locale],[name]) VALUES (N'${hadithCollection}',N'en',N'NON_HADITH_FIXTURE collection'),(N'${hadithCollection}',N'ur',N'NON_HADITH_FIXTURE collection ur');
+     INSERT INTO [dbo].[HadithBookName] ([bookId],[locale],[name]) VALUES (N'${hadithBook}',N'en',N'NON_HADITH_FIXTURE book');
+     INSERT INTO [dbo].[HadithChapterName] ([chapterId],[locale],[name]) VALUES (N'${hadithChapter}',N'en',N'NON_HADITH_FIXTURE chapter');
+     INSERT INTO [dbo].[HadithTopic] ([hadithId],[topicId]) VALUES (N'${hadithRecord}',N'${editorialTopic.id}');
+     INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'hadith',N'${hadithCitation}');`,
+    'contributors, an entry, texts, display names, a topic and citation search intent',
+  );
+  await expectAllowed(
+    app,
+    'Hadith layered works UPDATE',
+    `UPDATE [dbo].[HadithTranslation] SET [text]=N'NON_HADITH_FIXTURE_TRANSLATION_2',[state]=N'published',[sourceSystemId]=N'${hadithSource}',[publishedAt]=SYSUTCDATETIME(),[version]=[version]+1,[updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${hadithTranslation}';
+     UPDATE [dbo].[HadithCommentaryEntry] SET [text]=N'NON_HADITH_FIXTURE_COMMENTARY_2' WHERE [commentaryId]=N'${hadithCommentary}';
+     UPDATE [dbo].[HadithCommentary] SET [state]=N'published',[sourceSystemId]=N'${hadithSource}',[publishedAt]=SYSUTCDATETIME(),[version]=[version]+1,[updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${hadithCommentary}';
+     UPDATE [dbo].[HadithScienceText] SET [body]=N'NON_HADITH_FIXTURE_SCIENCE_3' WHERE [scienceId]=N'${hadithScience}' AND [languageCode]=N'en';
+     UPDATE [dbo].[HadithScience] SET [position]=1,[version]=[version]+1,[updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${hadithScience}';
+     UPDATE [dbo].[HadithCollectionName] SET [name]=N'NON_HADITH_FIXTURE collection renamed' WHERE [collectionId]=N'${hadithCollection}' AND [locale]=N'en';
+     UPDATE [dbo].[HadithBookName] SET [name]=N'NON_HADITH_FIXTURE book renamed' WHERE [bookId]=N'${hadithBook}';`,
+    'texts, names and publication against a registered source system',
+  );
+  await expectAllowed(
+    app,
+    'Hadith child rows DELETE',
+    `DELETE FROM [dbo].[HadithTranslationContributor] WHERE [translationId]=N'${hadithTranslation}';
+     DELETE FROM [dbo].[HadithCommentaryContributor] WHERE [commentaryId]=N'${hadithCommentary}';
+     DELETE FROM [dbo].[HadithScienceText] WHERE [scienceId]=N'${hadithScience}' AND [languageCode]=N'ur';
+     DELETE FROM [dbo].[HadithCollectionName] WHERE [collectionId]=N'${hadithCollection}' AND [locale]=N'ur';
+     DELETE FROM [dbo].[HadithChapterName] WHERE [chapterId]=N'${hadithChapter}';
+     DELETE FROM [dbo].[HadithTopic] WHERE [hadithId]=N'${hadithRecord}';`,
+    'child rows are replaced',
+  );
+  for (const [label, statement] of [
+    [
+      'HadithCommentary slug UPDATE denied',
+      'UPDATE [dbo].[HadithCommentary] SET [slug]=[slug];',
+    ],
+    [
+      'HadithScience slug UPDATE denied',
+      'UPDATE [dbo].[HadithScience] SET [slug]=[slug];',
+    ],
+    // A translation never moves to another record, and a work is archived,
+    // never erased.
+    [
+      'HadithTranslation re-parent UPDATE denied',
+      'UPDATE [dbo].[HadithTranslation] SET [hadithId]=[hadithId];',
+    ],
+    ['HadithTranslation DELETE denied', 'DELETE FROM [dbo].[HadithTranslation];'],
+    ['HadithCommentary DELETE denied', 'DELETE FROM [dbo].[HadithCommentary];'],
+    ['HadithScience DELETE denied', 'DELETE FROM [dbo].[HadithScience];'],
+    [
+      'HadithTranslationContributor UPDATE denied',
+      'UPDATE [dbo].[HadithTranslationContributor] SET [position]=[position];',
+    ],
+    [
+      'HadithCommentaryContributor UPDATE denied',
+      'UPDATE [dbo].[HadithCommentaryContributor] SET [position]=[position];',
+    ],
+    ['HadithTopic UPDATE denied', 'UPDATE [dbo].[HadithTopic] SET [topicId]=[topicId];'],
+    // An entry or text is never re-parented: moving a published work's last
+    // entry to another work would empty it as surely as deleting it.
+    [
+      'HadithCommentaryEntry work UPDATE denied',
+      'UPDATE [dbo].[HadithCommentaryEntry] SET [commentaryId]=[commentaryId];',
+    ],
+    [
+      'HadithCommentaryEntry record UPDATE denied',
+      'UPDATE [dbo].[HadithCommentaryEntry] SET [hadithId]=[hadithId];',
+    ],
+    [
+      'HadithScienceText science UPDATE denied',
+      'UPDATE [dbo].[HadithScienceText] SET [scienceId]=[scienceId];',
+    ],
+    [
+      'HadithScienceText language UPDATE denied',
+      'UPDATE [dbo].[HadithScienceText] SET [languageCode]=[languageCode];',
+    ],
+    [
+      'HadithCollectionName key UPDATE denied',
+      'UPDATE [dbo].[HadithCollectionName] SET [locale]=[locale];',
+    ],
+    [
+      'HadithBookName key UPDATE denied',
+      'UPDATE [dbo].[HadithBookName] SET [bookId]=[bookId];',
+    ],
+    [
+      'HadithChapterName key UPDATE denied',
+      'UPDATE [dbo].[HadithChapterName] SET [chapterId]=[chapterId];',
+    ],
+  ] as const)
+    await expectDenied(app, label, statement);
+
+  // No Hadith table is alterable, each proved visible first so a DDL denial can
+  // only mean permission.
+  const HADITH_LAYERED = [
+    'HadithCollectionName',
+    'HadithBookName',
+    'HadithChapterName',
+    'HadithTranslation',
+    'HadithTranslationContributor',
+    'HadithCommentary',
+    'HadithCommentaryContributor',
+    'HadithCommentaryEntry',
+    'HadithScience',
+    'HadithScienceText',
+    'HadithTopic',
+  ] as const;
+  for (const table of [...HADITH_READ_ONLY, ...HADITH_STRUCTURE, ...HADITH_LAYERED]) {
+    await assertObjectVisible(app, table);
+    await expectDenied(
+      app,
+      `${table} ALTER denied`,
+      `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+    );
+  }
+  await expectDenied(
+    app,
+    'Hadith trigger DISABLE denied',
+    'DISABLE TRIGGER [dbo].[HadithCanonicalChange] ON [dbo].[Hadith];',
+  );
+  await expectDenied(
+    app,
+    'Hadith citation trigger DISABLE denied',
+    'DISABLE TRIGGER [dbo].[HadithCitationIntegrity] ON [dbo].[HadithCitation];',
+  );
+
+  // THE EXACT EFFECTIVE POSTURE, table by table and column by column. A string
+  // names the UPDATE columns exactly; a list names the columns EXCLUDED from an
+  // otherwise updatable table.
+  const HADITH_POSTURE: Readonly<
+    Record<string, readonly [string, string | readonly string[]]>
+  > = {
+    ...Object.fromEntries(
+      HADITH_READ_ONLY.map((table) => [table, ['SELECT', ''] as const]),
+    ),
+    ...Object.fromEntries(
+      HADITH_STRUCTURE.map((table) => [
+        table,
+        ['SELECT', 'namesVersion,updatedAt'] as const,
+      ]),
+    ),
+    HadithCollectionName: ['DELETE,INSERT,SELECT', 'name,description'],
+    HadithBookName: ['DELETE,INSERT,SELECT', 'name'],
+    HadithChapterName: ['DELETE,INSERT,SELECT', 'name'],
+    HadithTranslation: ['INSERT,SELECT', ['hadithId']],
+    HadithCommentary: ['INSERT,SELECT', ['slug']],
+    HadithScience: ['INSERT,SELECT', ['slug']],
+    HadithTranslationContributor: ['DELETE,INSERT,SELECT', ''],
+    HadithCommentaryContributor: ['DELETE,INSERT,SELECT', ''],
+    HadithCommentaryEntry: ['DELETE,INSERT,SELECT', 'text'],
+    HadithScienceText: ['DELETE,INSERT,SELECT', 'title,body'],
+    HadithTopic: ['DELETE,INSERT,SELECT', ''],
+  };
+  const hadithPosture = await app.query<{
+    name: string;
+    held: string | null;
+    updatable: string | null;
+    columns: string | null;
+  }>(`
+    SELECT t.[name],
+      (SELECT STRING_AGG(p.[permission], N',') WITHIN GROUP (ORDER BY p.[permission])
+         FROM (VALUES (N'ALTER'),(N'CONTROL'),(N'DELETE'),(N'INSERT'),(N'REFERENCES'),
+                      (N'SELECT'),(N'TAKE OWNERSHIP')) AS p([permission])
+        WHERE HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', p.[permission]) = 1) AS [held],
+      (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+         FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])
+          AND HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', N'UPDATE', c.[name], N'COLUMN') = 1) AS [updatable],
+      (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+         FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])) AS [columns]
+    FROM (VALUES ${Object.keys(HADITH_POSTURE)
+      .map((table) => `(N'${table}')`)
+      .join(',')}) AS t([name]);
+  `);
+  const hadithPostureFindings = hadithPosture.flatMap((row) => {
+    const [verbs, scope] = HADITH_POSTURE[row.name] ?? ['?', '?'];
+    const expectedColumns =
+      typeof scope === 'string'
+        ? scope
+        : (row.columns ?? '')
+            .split(',')
+            .filter((column) => !scope.includes(column))
+            .join(',');
+    return (row.held ?? '') === verbs && (row.updatable ?? '') === expectedColumns
+      ? []
+      : [`${row.name}: ${row.held ?? '(none)'} / UPDATE ${row.updatable ?? '(none)'}`];
+  });
+  if (
+    hadithPosture.length === Object.keys(HADITH_POSTURE).length &&
+    Object.keys(HADITH_POSTURE).length === 24 &&
+    hadithPostureFindings.length === 0
+  ) {
+    pass(
+      'Hadith effective posture exact',
+      `${String(hadithPosture.length)} tables, object verbs and UPDATE columns as granted`,
+    );
+  } else {
+    fail(
+      'Hadith effective posture exact',
+      hadithPostureFindings.join('; ') || 'tables missing',
+    );
+  }
+  const [hadithExecute] = await app.query<{ granted: number; denied: number }>(`
+    SELECT
+      HAS_PERMS_BY_NAME(N'dbo.HadithCreateCollection', N'OBJECT', N'EXECUTE')
+        + HAS_PERMS_BY_NAME(N'dbo.HadithCreateBook', N'OBJECT', N'EXECUTE')
+        + HAS_PERMS_BY_NAME(N'dbo.HadithCreateChapter', N'OBJECT', N'EXECUTE')
+        + HAS_PERMS_BY_NAME(N'dbo.HadithWriteRecord', N'OBJECT', N'EXECUTE')
+        + HAS_PERMS_BY_NAME(N'dbo.HadithVerifyRecord', N'OBJECT', N'EXECUTE')
+        + HAS_PERMS_BY_NAME(N'dbo.HadithSetCitation', N'OBJECT', N'EXECUTE') AS [granted],
+      HAS_PERMS_BY_NAME(N'dbo.HadithAssertCanonicalAuthority', N'OBJECT', N'EXECUTE')
+        + HAS_PERMS_BY_NAME(N'dbo.HadithDetectConflicts', N'OBJECT', N'EXECUTE') AS [denied];
+  `);
+  if (Number(hadithExecute?.granted) === 6 && Number(hadithExecute?.denied) === 0) {
+    pass(
+      'Hadith procedures EXECUTE exact',
+      'six canonical procedures executable; the authority check and conflict detection are not',
+    );
+  } else {
+    fail('Hadith procedures EXECUTE exact', JSON.stringify(hadithExecute ?? null));
   }
 
   // ---- the ungranted object was not merely unreadable, it is unchanged -----

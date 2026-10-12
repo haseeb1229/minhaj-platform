@@ -179,3 +179,11 @@ export {
   createQuranPersistence,
   createQuranPublicReader,
 } from './adapters/quran/index.ts';
+
+/* ---- Hadith (context-owned) --------------------------------------------- */
+
+export {
+  createHadithCanonical,
+  createHadithPersistence,
+  createHadithPublicReader,
+} from './adapters/hadith/index.ts';

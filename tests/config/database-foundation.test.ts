@@ -288,6 +288,34 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'QuranTajweedRule',
       'QuranTajweedRuleText',
       'QuranTopic',
+      // Phase 19 — Hadith: the operator-registered source systems, editions
+      // and activations, the canonical structure and source-qualified records
+      // with their immutable history, gradings, verification, citation mapping
+      // and conflict evidence, the layered works, and typed topic assignment.
+      'HadithSourceSystem',
+      'HadithCollection',
+      'HadithEdition',
+      'HadithActivation',
+      'HadithBook',
+      'HadithChapter',
+      'Hadith',
+      'HadithRevision',
+      'HadithGrading',
+      'HadithVerification',
+      'HadithCitation',
+      'HadithCitationRevision',
+      'HadithConflict',
+      'HadithCollectionName',
+      'HadithBookName',
+      'HadithChapterName',
+      'HadithTranslation',
+      'HadithTranslationContributor',
+      'HadithCommentary',
+      'HadithCommentaryContributor',
+      'HadithCommentaryEntry',
+      'HadithScience',
+      'HadithScienceText',
+      'HadithTopic',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name
@@ -301,9 +329,9 @@ describe('Phase 1 Chunk 1 database foundation', () => {
     for (const domain of [
       // `Event` left this list when Phase 14 delivered it, and `Collection`
       // when Phase 15 did. Phase 18 delivers the Quran as its own tables, so a
-      // single generic `Quran` model stays absent.
+      // single generic `Quran` model stays absent. `Hadith` left it when
+      // Phase 19 delivered the source-qualified record.
       'Quran',
-      'Hadith',
       // `Book` stays absent: Phase 8 models the Work/Edition split rather than a
       // single Book row, which is the conflation DOMAIN_MODEL.md §10.1 corrects.
       'Book',
@@ -392,6 +420,21 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'QuranBookmark',
       'QuranReadingProgress',
       'QuranTranslationSlugHistory',
+      // Phase 19 keeps the chain as the source's exact text: no narrator
+      // aggregate or chain link, no platform grade vocabulary, no generic
+      // target or assignment, no per-user reading state (Phase 21's), and no
+      // slug history for a slug that never changes.
+      'Narrator',
+      'NarratorProfile',
+      'HadithNarrator',
+      'HadithChainLink',
+      'HadithGrade',
+      'HadithTarget',
+      'HadithAssignment',
+      'HadithLayer',
+      'HadithBookmark',
+      'HadithReadingProgress',
+      'HadithSlugHistory',
     ]) {
       expect(models, `${domain} arrives with its owning slice`).not.toContain(domain);
     }
