@@ -238,6 +238,12 @@ lead to sign-in with a validated return path, never to a dead end.
 
 **Latest and Popular are query-based views of `/fatwa`**, not separate paths (§1.1).
 
+Since Phase 20 every Fatwa item is delivered (engineering only — no ruling is published and nobody
+holds a Fatwa permission, OPEN_DECISIONS.md §1.4). Popular means most read in the last 30 days,
+counted anonymously; Topics are reached from a ruling, a category or the topic hub rather than as a
+separate menu list. Ask a Question leads to sign-in and then to the Fatwa-owned My Questions; while
+the service is not activated the section says so plainly and accepts no question.
+
 ### 3.8 News & Events
 
 | News | Events | Media | Archive |
@@ -457,7 +463,8 @@ Admin
 │       ├── Assignment
 │       ├── Drafting
 │       ├── Scholar Review
-│       └── Published Fatawa
+│       ├── Published Fatawa
+│       └── Categories
 ├── Media
 │   ├── Videos                Provider metadata
 │   ├── Audio

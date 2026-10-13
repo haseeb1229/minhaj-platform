@@ -123,7 +123,8 @@ export class AuthorizationDataError extends Error {
     | 'assignment-not-found'
     | 'final-administrator'
     | 'unknown-permission'
-    | 'duplicate-role-key';
+    | 'duplicate-role-key'
+    | 'self-elevation';
 
   constructor(reason: AuthorizationDataError['reason'], message: string) {
     super(message);
@@ -532,6 +533,25 @@ export function createAuthorizationPersistence(): AuthorizationPersistencePort {
 
         const removed = before.filter((key) => !wanted.has(key));
         const added = after.filter((key) => !held.has(key));
+
+        // NEVER SELF-APPLICABLE, BY THE BUNDLE ROUTE EITHER (SECURITY_BASELINE.md
+        // §3.4 rule 6). Granting oneself a role is refused before this module is
+        // reached; widening a role one already holds would be the same
+        // self-elevation by another door — an administrator adding `fatwa.publish`
+        // to their own custom role would hold it from their next sign-in. Narrowing
+        // one's own role is not elevation and stays allowed. Checked inside the
+        // transaction, against the live assignment, so it cannot be raced.
+        if (added.length > 0) {
+          const ownHolding = await tx.roleAssignment.count({
+            where: { roleId, userId: actor.accountId, revokedAt: null },
+          });
+          if (ownHolding > 0) {
+            throw new AuthorizationDataError(
+              'self-elevation',
+              'A role the actor holds cannot be widened by that actor.',
+            );
+          }
+        }
 
         if (removed.length > 0) {
           await tx.rolePermission.deleteMany({

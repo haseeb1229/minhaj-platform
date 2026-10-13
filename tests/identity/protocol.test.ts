@@ -104,6 +104,33 @@ describe('returnTo destinations', () => {
     }
   });
 
+  it('accepts Fatwa’s own-question destinations, and an opaque UUID only', () => {
+    // Phase 20: `/fatwa/ask` sends an anonymous visitor through sign-in back to
+    // `/my/questions/ask`; a question is addressed by its opaque id alone.
+    const id = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+    expect(safeReturnTo('/en/my/questions', locale)).toBe('/en/my/questions');
+    expect(safeReturnTo('/ur/my/questions/ask', locale)).toBe('/ur/my/questions/ask');
+    expect(safeReturnTo(`/ar/my/questions/${id}`, locale)).toBe(`/ar/my/questions/${id}`);
+    expect(safeReturnTo('/en/my/questions/?offset=20', locale)).toBe(
+      '/en/my/questions/?offset=20',
+    );
+
+    for (const candidate of [
+      '/en/my/questions/not-an-id',
+      '/en/my/questions/0A1B2C3D-4E5F-4A6B-8C7D-9E0F1A2B3C4D',
+      `/en/my/questions/${id}x`,
+      `/en/my/questions/${id}/edit`,
+      '/en/my/questions/0a1b2c3d-4e5f-0a6b-8c7d-9e0f1a2b3c4d',
+      '/en/my/questions/0a1b2c3d4e5f4a6b8c7d9e0f1a2b3c4d',
+      '/en/my/questions/ask/extra',
+      `/en/my/questions/%2e%2e/${id}`,
+      `//evil.example/en/my/questions/${id}`,
+      `/fr/my/questions/${id}`,
+    ]) {
+      expect(safeReturnTo(candidate, locale), candidate).toBe('/en/my');
+    }
+  });
+
   it('falls back for an absent destination', () => {
     expect(safeReturnTo(null, locale)).toBe('/en/my');
   });

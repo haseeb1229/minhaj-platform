@@ -761,3 +761,45 @@ IF OBJECT_ID(N'[dbo].[HadithCommentaryContributor]',N'U') IS NOT NULL BEGIN GRAN
 IF OBJECT_ID(N'[dbo].[HadithCommentaryEntry]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[HadithCommentaryEntry] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[HadithCommentaryEntry] ([commentaryId], [hadithId]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[HadithCommentaryEntry] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[HadithScienceText]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[HadithScienceText] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[HadithScienceText] ([scienceId], [languageCode]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[HadithScienceText] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[HadithTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[HadithTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[HadithTopic] TO [$(app_login)]; END;
+
+-- Phase 20: Fatwa.
+--
+-- ACTIVATION IS READ-ONLY. Whether the service accepts questions and publishes
+-- at all is the owner/operator's act; no permission held through this
+-- principal can open it.
+IF OBJECT_ID(N'[dbo].[FatwaActivation]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[FatwaActivation] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[FatwaActivation] TO [$(app_login)]; END;
+--
+-- THE WORKFLOW TABLES ARE READ-ONLY TOO. Questions, rulings, revisions, their
+-- topics, publications and review decisions are written ONLY by the procedures
+-- granted below, which re-check the actor's live permission — and, to publish
+-- or withdraw, a live `fatwa-publication` step-up grant — in SQL. No UPDATE on
+-- a ruling means no path to "published" except `FatwaPublishRevision`; no
+-- DELETE means no path to erasing history.
+IF OBJECT_ID(N'[dbo].[FatwaQuestion]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[FatwaQuestion] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[FatwaQuestion] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Fatwa]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[Fatwa] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[Fatwa] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[FatwaRevision]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[FatwaRevision] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[FatwaRevision] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[FatwaRevisionTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[FatwaRevisionTopic] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[FatwaRevisionTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[FatwaPublication]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[FatwaPublication] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[FatwaPublication] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[FatwaReviewDecision]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[FatwaReviewDecision] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[FatwaReviewDecision] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[FatwaReadTally]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[FatwaReadTally] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[FatwaReadTally] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[FatwaSubmitQuestion]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[FatwaSubmitQuestion] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[FatwaTriageQuestion]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[FatwaTriageQuestion] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[FatwaAssignQuestion]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[FatwaAssignQuestion] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[FatwaDeclineQuestion]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[FatwaDeclineQuestion] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[FatwaSaveDraft]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[FatwaSaveDraft] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[FatwaSubmitForReview]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[FatwaSubmitForReview] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[FatwaReturnForRevision]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[FatwaReturnForRevision] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[FatwaPublishRevision]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[FatwaPublishRevision] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[FatwaWithdraw]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[FatwaWithdraw] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[FatwaDisposeQuestions]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[FatwaDisposeQuestions] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[FatwaRecordRead]',N'P') IS NOT NULL GRANT EXECUTE ON OBJECT::[dbo].[FatwaRecordRead] TO [$(app_login)];
+-- The authority checks are reached only from inside the writing procedures: a
+-- caller cannot probe who holds a Fatwa permission through them.
+IF OBJECT_ID(N'[dbo].[FatwaAssertPermission]',N'P') IS NOT NULL DENY EXECUTE ON OBJECT::[dbo].[FatwaAssertPermission] TO [$(app_login)];
+IF OBJECT_ID(N'[dbo].[FatwaAssertPublicationAuthority]',N'P') IS NOT NULL DENY EXECUTE ON OBJECT::[dbo].[FatwaAssertPublicationAuthority] TO [$(app_login)];
+--
+-- CATEGORIES are administered through the Fatwa service under `fatwa.publish`.
+-- A slug is chosen once and nothing is deleted; display names are child rows
+-- that may be replaced but never re-parented.
+IF OBJECT_ID(N'[dbo].[FatwaCategory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[FatwaCategory] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[FatwaCategory] ([id], [slug], [createdAt]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[FatwaCategory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[FatwaCategoryName]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[FatwaCategoryName] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[FatwaCategoryName] ([categoryId], [locale]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[FatwaCategoryName] TO [$(app_login)]; END;

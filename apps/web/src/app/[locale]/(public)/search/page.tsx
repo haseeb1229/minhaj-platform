@@ -15,6 +15,8 @@ import { taxonomyRuntime } from '@/composition/taxonomy';
 import { Highlighted } from '@/components/search/highlighted';
 import { hadithHitKey, type HadithHitDisplay } from '@/components/search/hadith-hit';
 import { currentHadithHitText } from '@/components/search/hadith-hit-text';
+import type { FatwaHitDisplay } from '@/components/search/fatwa-hit';
+import { currentFatwaHitText } from '@/components/search/fatwa-hit-text';
 import { quranHitKey, type QuranHitDisplay } from '@/components/search/quran-hit';
 import { currentQuranHitText } from '@/components/search/quran-hit-text';
 import {
@@ -122,16 +124,21 @@ export default async function SearchPage({ params, searchParams }: SearchParams)
   ]);
 
   const { form } = outcome;
-  // A Quran or Hadith result shows its CURRENT text, read once per owner for
-  // the whole page — never its indexed summary, which may lag a withdrawn or
-  // corrected text.
-  const [quranText, hadithText] =
+  // A Quran, Hadith or Fatwa result shows its CURRENT text, read once per
+  // owner for the whole page — never its indexed summary, which may lag a
+  // withdrawn or corrected text.
+  const [quranText, hadithText, fatwaText] =
     outcome.state === 'results'
       ? await Promise.all([
           currentQuranHitText(outcome.results.hits),
           currentHadithHitText(outcome.results.hits),
+          currentFatwaHitText(outcome.results.hits),
         ])
-      : [new Map<string, QuranHitDisplay>(), new Map<string, HadithHitDisplay>()];
+      : [
+          new Map<string, QuranHitDisplay>(),
+          new Map<string, HadithHitDisplay>(),
+          new Map<string, FatwaHitDisplay>(),
+        ];
   const issues =
     outcome.state === 'invalid' ? new Set(outcome.issues) : new Set<string>();
   /** A field's error, passed only when it has one. */
@@ -310,6 +317,7 @@ export default async function SearchPage({ params, searchParams }: SearchParams)
           languageNames={languageNames}
           quranText={quranText}
           hadithText={hadithText}
+          fatwaText={fatwaText}
           t={t}
           href={(overrides) => searchHref(locale, form, overrides)}
         />
@@ -326,6 +334,7 @@ function SearchResults({
   languageNames,
   quranText,
   hadithText,
+  fatwaText,
   t,
   href,
 }: {
@@ -334,6 +343,7 @@ function SearchResults({
   readonly languageNames: ReadonlyMap<string, { name: string; direction: 'ltr' | 'rtl' }>;
   readonly quranText: ReadonlyMap<string, QuranHitDisplay>;
   readonly hadithText: ReadonlyMap<string, HadithHitDisplay>;
+  readonly fatwaText: ReadonlyMap<string, FatwaHitDisplay>;
   readonly t: Translate;
   readonly href: (overrides: Partial<SearchFormState> & { page?: number }) => string;
 }) {
@@ -424,6 +434,7 @@ function SearchResults({
                   languageNames={languageNames}
                   quranText={quranText}
                   hadithText={hadithText}
+                  fatwaText={fatwaText}
                   t={t}
                 />
               ))}
@@ -471,6 +482,7 @@ function ResultItem({
   languageNames,
   quranText,
   hadithText,
+  fatwaText,
   t,
 }: {
   readonly hit: SearchHit;
@@ -479,6 +491,7 @@ function ResultItem({
   readonly languageNames: ReadonlyMap<string, { name: string; direction: 'ltr' | 'rtl' }>;
   readonly quranText: ReadonlyMap<string, QuranHitDisplay>;
   readonly hadithText: ReadonlyMap<string, HadithHitDisplay>;
+  readonly fatwaText: ReadonlyMap<string, FatwaHitDisplay>;
   readonly t: Translate;
 }) {
   // A Quran result shows its Ayah's CURRENT text in the language that text is
@@ -490,7 +503,12 @@ function ResultItem({
   // translation, labelled as which it is; one not public now is not shown.
   const hadith = hit.kind === 'hadith' ? hadithText.get(hadithHitKey(hit)) : undefined;
   if (hit.kind === 'hadith' && hadith === undefined) return null;
-  const current = quran ?? hadith;
+  // A Fatwa result shows its CURRENT published revision's title and public
+  // question; a ruling withdrawn since it was indexed is not shown.
+  const fatwa = hit.kind === 'fatwa' ? fatwaText.get(hit.resourceId) : undefined;
+  if (hit.kind === 'fatwa' && fatwa === undefined) return null;
+  const current = quran ?? hadith ?? fatwa;
+  const title = fatwa?.title ?? hit.title;
 
   const textLanguage = current?.language ?? hit.textLanguage;
   const summary = current?.text ?? hit.summary;
@@ -543,7 +561,7 @@ function ResultItem({
             href={`/${locale}${hit.href}`}
             className="text-[color:var(--color-action)] underline underline-offset-2"
           >
-            <Highlighted text={hit.title} query={query} />
+            <Highlighted text={title} query={query} />
           </a>
         </h3>
         {summary === '' ? null : (

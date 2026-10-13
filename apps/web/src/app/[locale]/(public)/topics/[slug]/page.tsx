@@ -17,6 +17,7 @@ import { EventTopicSection } from '@/components/editorial/events';
 import { NewsTopicSection } from '@/components/editorial/news';
 import { AudioPreview } from '@/components/media/listen';
 import { VideoPreview } from '@/components/media/watch';
+import { FatwaTopicSection } from '@/components/fatwa/topics';
 import { HadithTopicSection } from '@/components/hadith/topics';
 import { QuranTopicSection } from '@/components/quran/topics';
 import {
@@ -52,7 +53,8 @@ import { contentMetadata } from '@/seo/metadata';
  * encyclopedias, magazines and magazine issues — classified under it, Media for
  * the published Videos on it (Phase 10), Editorial for the published News of
  * every family on it (Phase 13), Quran for the public ayat on it (Phase 18),
- * Hadith for the public citations on it (Phase 19), and
+ * Hadith for the public citations on it (Phase 19), Fatwa for the published
+ * rulings on it (Phase 20), and
  * Search for everything else
  * classified under it. Each later domain adds its own section when it ships; nothing here renders an empty frame for a domain that
  * has not, and a delivered section with nothing on this topic is not rendered
@@ -225,6 +227,17 @@ export default async function TopicPage({ params }: TopicParams) {
           topic={topic}
           heading={t('hadith')}
           headingId="topic-hadith"
+        />
+
+        {/* PHASE 20 — the published rulings on this topic, from Fatwa's own
+            public reader, each linked to its canonical address; nothing while
+            the service is not activated or no published ruling is on the
+            topic. Fixture text carries the fixture banner. */}
+        <FatwaTopicSection
+          locale={locale}
+          topic={topic}
+          heading={t('fatwa')}
+          headingId="topic-fatwa"
         />
 
         {books.items.length === 0 ? null : (

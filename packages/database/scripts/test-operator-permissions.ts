@@ -2,6 +2,8 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 
+import { EXTERNALLY_GATED_PERMISSIONS } from '@minhaj/contracts/identity';
+
 import {
   getApplicationPrincipalCredentials,
   getOperatorPrincipalCredentials,
@@ -204,9 +206,20 @@ try {
   );
 
   // ---- the migration's own foundation data ---------------------------------
+  //
+  // The protected bundle is every catalogued key EXCEPT the externally gated
+  // ones: whoever triages, answers and publishes Fatwa is the organisation's
+  // decision (OPEN_DECISIONS.md §1.4, §6.3), so those keys are catalogued and
+  // bundled into no role. Both halves are asserted — every ordinary key
+  // bundled, and not one gated key bundled or granted to anybody.
+  const gated = EXTERNALLY_GATED_PERMISSIONS.map((key) => `N'${key}'`).join(', ');
   const seededPermissions = await scalar(
     admin,
     'SELECT COUNT_BIG(*) AS total FROM [dbo].[Permission];',
+  );
+  const seededGated = await scalar(
+    admin,
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[Permission] WHERE [key] IN (${gated});`,
   );
   const seededBundle = await scalar(
     admin,
@@ -214,15 +227,26 @@ try {
      JOIN [dbo].[Role] r ON r.[id] = rp.[roleId]
      WHERE r.[key] = N'platform-administrator';`,
   );
-  if (seededPermissions === 0 || seededBundle !== seededPermissions) {
+  const gatedHeld = await scalar(
+    admin,
+    `SELECT COUNT_BIG(*) AS total FROM [dbo].[RolePermission] WHERE [permissionKey] IN (${gated});`,
+  );
+  if (
+    seededPermissions === 0 ||
+    seededGated !== EXTERNALLY_GATED_PERMISSIONS.length ||
+    seededBundle !== seededPermissions - seededGated ||
+    gatedHeld !== 0
+  ) {
     fail(
       'protected role is migration-seeded',
-      `${seededPermissions} permissions, ${seededBundle} bundled`,
+      `${seededPermissions} permissions (${seededGated} externally gated), ` +
+        `${seededBundle} bundled, ${gatedHeld} gated grants`,
     );
   } else {
     pass(
       'protected role is migration-seeded',
-      `${seededPermissions} permissions, all bundled into the protected role`,
+      `${seededPermissions} permissions; all but the ${seededGated} externally gated ` +
+        `bundled, and no role holds a gated key`,
     );
   }
 
@@ -387,6 +411,60 @@ try {
         @hadithId=N'injected', @state=N'mapped', @expectedVersion=0, @evidence=N'injected',
         @reason=NULL, @actorId=N'injected', @sessionId=N'injected',
         @stepUpGrantId=N'injected', @at='2026-10-03T00:00:00';
+    `),
+  );
+
+  // Phase 20 gives the operator ROLE nothing over Fatwa: activating the service
+  // is the OWNER's act, a private question is readable only through the
+  // runtime's stage-scoped queries, and every workflow change is written by the
+  // runtime's procedures under a live permission re-checked in SQL.
+  for (const table of [
+    'FatwaActivation',
+    'FatwaCategory',
+    'FatwaQuestion',
+    'Fatwa',
+    'FatwaRevision',
+    'FatwaPublication',
+    'FatwaReviewDecision',
+    'FatwaReadTally',
+  ]) {
+    await expectDenied(operatorSession, `operator SELECT on ${table} denied`, () =>
+      operatorSession.query(`SELECT TOP 1 1 AS probe FROM [dbo].[${table}];`),
+    );
+  }
+  await expectDenied(operatorSession, 'operator INSERT on FatwaActivation denied', () =>
+    operatorSession.query(`
+      INSERT INTO [dbo].[FatwaActivation] ([id], [authority], [authorisedBy], [reference])
+      VALUES (1, N'approved', N'injected', N'injected');
+    `),
+  );
+  await expectDenied(operatorSession, 'operator UPDATE on Fatwa denied', () =>
+    operatorSession.query(`UPDATE [dbo].[Fatwa] SET [slug] = [slug];`),
+  );
+  await expectDenied(
+    operatorSession,
+    'operator EXECUTE on FatwaPublishRevision denied',
+    () =>
+      operatorSession.query(`
+      EXEC [dbo].[FatwaPublishRevision] @fatwaId=N'injected', @expectedVersion=1,
+        @revisionId=N'injected', @publicationId=N'injected', @actorId=N'injected',
+        @sessionId=N'injected', @stepUpGrantId=N'injected', @at='2026-10-04T00:00:00';
+    `),
+  );
+  await expectDenied(
+    operatorSession,
+    'operator EXECUTE on FatwaDisposeQuestions denied',
+    () =>
+      operatorSession.query(`
+      EXEC [dbo].[FatwaDisposeQuestions] @askerId=NULL, @limit=1, @at='2026-10-04T00:00:00';
+    `),
+  );
+  await expectDenied(
+    operatorSession,
+    'operator EXECUTE on FatwaAssertPermission denied',
+    () =>
+      operatorSession.query(`
+      EXEC [dbo].[FatwaAssertPermission] @actorId=N'injected', @permission=N'fatwa.publish';
     `),
   );
 

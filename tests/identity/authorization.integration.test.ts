@@ -1,7 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { PLATFORM_ADMINISTRATOR_ROLE } from '../../packages/contracts/src/identity/index.ts';
-import { PERMISSION_CATALOGUE } from '../../packages/contracts/src/identity/permissions.ts';
+import {
+  EXTERNALLY_GATED_PERMISSIONS,
+  PERMISSION_CATALOGUE,
+  PLATFORM_ADMINISTRATOR_PERMISSIONS,
+} from '../../packages/contracts/src/identity/permissions.ts';
 import type { PrivilegedActor } from '../../packages/contracts/src/identity/index.ts';
 
 import {
@@ -225,10 +229,10 @@ describe.skipIf(!databaseConfigured)(
         const session = await sessionOf(harness, administrator);
         const evaluated = await harness.authorization.evaluate(session);
 
-        // `fatwa.publish` is named by DOMAIN_MODEL.md §4.4 and belongs to
-        // Fatwa, which has not shipped (Quran's and Hadith's canonical keys now
-        // exist, Phases 18 and 19).
-        expect(evaluated.can('fatwa.publish' as 'users.read')).toBe(false);
+        // `teaching.perform` is named by DOMAIN_MODEL.md §4.4 and belongs to
+        // Learning, which has not shipped (Quran's, Hadith's and Fatwa's keys
+        // now exist, Phases 18, 19 and 20).
+        expect(evaluated.can('teaching.perform' as 'users.read')).toBe(false);
       });
 
       it('denies every non-active status, whatever the account may hold', async () => {
@@ -339,21 +343,24 @@ describe.skipIf(!databaseConfigured)(
       const PHASE_19_KEYS = ['hadith.administer', 'hadith.editCanonical', 'hadith.read'];
 
       /**
-       * The four capability-projection sources, which MUST NOT be grantable.
+       * The keys the Phase-20 migration appended, and the only ones: one per
+       * stage of the Fatwa workflow, each EXTERNALLY GATED — catalogued and
+       * grantable, bundled into no role (OPEN_DECISIONS.md §1.4, §6.3).
+       */
+      const PHASE_20_KEYS = ['fatwa.answer', 'fatwa.publish', 'question.receive'];
+
+      /**
+       * The capability-projection source that MUST NOT be grantable yet.
        *
        * DOMAIN_MODEL.md §4.5 derives `canTeach`, `canReceiveQuestions`,
-       * `canReviewContent` and `canIssueFatwa` from these codes, and Phase 5
+       * `canReviewContent` and `canIssueFatwa` from four codes, and Phase 5
        * consumes that projection — which made seeding one of them the obvious
-       * shortcut for a projection test. They belong to Learning, Fatwa and
-       * Editorial, none of which has shipped, and OPEN_DECISIONS.md §6.3
-       * separately reserves who receives them to the organisation.
+       * shortcut for a projection test. Each arrives with its owner:
+       * `content.review` with Editorial, `question.receive` and
+       * `fatwa.publish` with Fatwa (externally gated). `teaching.perform`
+       * belongs to Learning, which has not shipped.
        */
-      const UNSEEDED_CAPABILITY_KEYS = [
-        'teaching.perform',
-        'question.receive',
-        'fatwa.answer',
-        'fatwa.publish',
-      ];
+      const UNSEEDED_CAPABILITY_KEYS = ['teaching.perform'];
 
       it('is exactly what the delivered migrations seeded', async () => {
         const catalogue = await harness.administration.catalogue();
@@ -372,6 +379,7 @@ describe.skipIf(!databaseConfigured)(
             ...PHASE_16_KEYS,
             ...PHASE_18_KEYS,
             ...PHASE_19_KEYS,
+            ...PHASE_20_KEYS,
           ].sort(),
         );
 
@@ -404,7 +412,6 @@ describe.skipIf(!databaseConfigured)(
         // Taxonomy HAS shipped — which is the whole rule: a domain leaves it at
         // its owning phase and not before.
         for (const domain of [
-          'fatwa.',
           'learning.',
           'membership.',
           'donations.',
@@ -412,8 +419,8 @@ describe.skipIf(!databaseConfigured)(
           'teaching.',
           'editorial.',
           // Library shipped in Phase 8, Search in Phase 17, Media in Phase 10,
-          // Global in Phase 16, Quran in Phase 18 and Hadith in Phase 19.
-          // Still absent: research and publication keys, per-aggregate Media
+          // Global in Phase 16, Quran in Phase 18, Hadith in Phase 19 and Fatwa
+          // in Phase 20. Still absent: research and publication keys, per-aggregate Media
           // keys, audio and gallery vocabulary, and per-level Global keys.
           'research.',
           'publication.',
@@ -468,8 +475,9 @@ describe.skipIf(!databaseConfigured)(
       });
 
       it('gives the protected role the appended Taxonomy keys, by migration', async () => {
-        // The protected bundle is the whole catalogue, so an appended
-        // permission widens what a live administrator may do. That extension is
+        // The protected bundle is the whole catalogue less its externally gated
+        // keys, so an appended ordinary permission widens what a live
+        // administrator may do. That extension is
         // migration-controlled: no runtime path can re-bundle a protected role,
         // and this proves the migration did it rather than some later write.
         const role = await harness.administration.findRole('platform-administrator');
@@ -509,6 +517,40 @@ describe.skipIf(!databaseConfigured)(
         expect(role?.system).toBe(true);
         expect(role?.deactivatedAt).toBeNull();
         expect(role?.activeAssignments).toBeGreaterThanOrEqual(1);
+      });
+
+      it('holds the catalogue less the externally gated keys, so an administrator holds none of them', async () => {
+        // Who triages, answers and publishes Fatwa is the organisation's
+        // decision (OPEN_DECISIONS.md §1.4, §6.3). The keys are catalogued and
+        // grantable, and the protected bundle — and so every Platform
+        // Administrator — holds none of them.
+        const role = await harness.administration.findRole(PLATFORM_ADMINISTRATOR_ROLE);
+        const catalogue = (await harness.administration.catalogue()).map(
+          (entry) => entry.key,
+        );
+        const gated: readonly string[] = EXTERNALLY_GATED_PERMISSIONS;
+
+        expect([...(role?.permissions ?? [])].sort()).toEqual(
+          [...PLATFORM_ADMINISTRATOR_PERMISSIONS].sort(),
+        );
+        expect([...(role?.permissions ?? [])].sort()).toEqual(
+          catalogue.filter((key) => !gated.includes(key)).sort(),
+        );
+
+        const evaluated = await harness.authorization.evaluate(
+          await sessionOf(harness, administrator),
+        );
+        for (const key of EXTERNALLY_GATED_PERMISSIONS) {
+          expect(catalogue, key).toContain(key);
+          expect(role?.permissions, `${key} is bundled into no role`).not.toContain(key);
+          expect(evaluated.can(key), key).toBe(false);
+        }
+
+        const [holders] = await database.admin.query<{ total: number }>(
+          `SELECT COUNT_BIG(*) AS total FROM [dbo].[RolePermission]
+           WHERE [permissionKey] IN (${gated.map((key) => `N'${key}'`).join(', ')});`,
+        );
+        expect(Number(holders?.total ?? -1)).toBe(0);
       });
 
       it('cannot be renamed, re-bundled or deactivated through administration', async () => {
@@ -610,7 +652,7 @@ describe.skipIf(!databaseConfigured)(
 
         const outcome = await harness.administration.setRolePermissions(actor, {
           roleId: role.id,
-          permissions: ['fatwa.publish'],
+          permissions: ['teaching.perform'],
         });
 
         expect(outcome.ok).toBe(false);
@@ -1207,6 +1249,121 @@ describe.skipIf(!databaseConfigured)(
 
         expect(revoked.ok ? revoked.invalidation.sessionsRevoked : 0).toBe(1);
         expect(await sessionCount(database.admin, target.accountId)).toBe(0);
+      });
+
+      it('never lets an administrator widen a role they hold, and lets another do it', async () => {
+        // NEVER SELF-APPLICABLE, BY THE BUNDLE ROUTE TOO (SECURITY_BASELINE.md
+        // §3.4 rule 6). Two fresh administrators, so the bootstrap account's own
+        // sessions are untouched: `holder` is given custom role R by the
+        // bootstrap administrator, and may then narrow R but never widen it —
+        // with an externally gated key or an ordinary one. `other` may widen
+        // it, which invalidates the holder's sessions and step-up grants like
+        // any bundle change, and the protected role still holds no gated key.
+        const holder = await grantAdministrator('self-widen');
+        const other = await grantAdministrator('other-widen');
+        // Both stay administrators: nothing later in this suite counts them, and
+        // revoking them would cost the bootstrap account a fresh step-up from a
+        // budget the final-administrator proofs above have already spent.
+        const role = await makeRole(['audit.read', 'users.read']);
+        const grantActor = await actorFor(
+          harness,
+          administrator,
+          'permissions.grant',
+          'privilege-administration',
+        );
+        const granted = await harness.administration.grantRole(grantActor, {
+          accountId: holder.accountId,
+          roleId: role.id,
+          reason: 'PROOF self-widening holder',
+        });
+        expect(granted.ok).toBe(true);
+        // The grant revoked the holder's sessions; sign in again.
+        Object.assign(holder, await signInWithFactor(harness, holder));
+
+        const bundleOf = async () =>
+          (await harness.administration.listRoles({ includeDeactivated: true }))
+            .find((entry) => entry.id === role.id)
+            ?.permissions.slice()
+            .sort();
+
+        const selfActor = await actorFor(
+          harness,
+          holder,
+          'permissions.grant',
+          'privilege-administration',
+        );
+        for (const wanted of [
+          ['audit.read', 'fatwa.publish', 'users.read'],
+          ['audit.read', 'roles.administer', 'users.read'],
+          ['fatwa.publish'],
+        ]) {
+          const widened = await harness.administration.setRolePermissions(selfActor, {
+            roleId: role.id,
+            permissions: wanted,
+          });
+          expect(widened.ok, wanted.join(',')).toBe(false);
+          expect(widened.ok ? '' : widened.failure, wanted.join(',')).toBe(
+            'self-elevation',
+          );
+          expect(await bundleOf()).toEqual(['audit.read', 'users.read']);
+        }
+
+        // Narrowing one's own role is not elevation.
+        const narrowed = await harness.administration.setRolePermissions(selfActor, {
+          roleId: role.id,
+          permissions: ['audit.read'],
+        });
+        expect(narrowed.ok).toBe(true);
+        expect(narrowed.ok ? narrowed.after : []).toEqual(['audit.read']);
+        expect(await bundleOf()).toEqual(['audit.read']);
+
+        // The narrowing was itself a bundle change: sign in again and hold a
+        // step-up grant, so both consequences of the next change are visible.
+        Object.assign(holder, await signInWithFactor(harness, holder));
+        const holderSession = await sessionOf(harness, holder);
+        await harness.authorizationStore.createStepUpGrant({
+          accountId: holder.accountId,
+          sessionId: holderSession.sessionId,
+          purpose: 'fatwa-publication',
+          lifetimeSeconds: 300,
+        });
+        expect(await sessionCount(database.admin, holder.accountId)).toBe(1);
+        expect(await grantCount(database.admin, holder.accountId)).toBe(1);
+
+        const otherActor = await actorFor(
+          harness,
+          other,
+          'permissions.grant',
+          'privilege-administration',
+        );
+        const widenedByOther = await harness.administration.setRolePermissions(
+          otherActor,
+          { roleId: role.id, permissions: ['audit.read', 'fatwa.publish'] },
+        );
+        expect(widenedByOther.ok).toBe(true);
+        expect(widenedByOther.ok ? widenedByOther.after : []).toEqual([
+          'audit.read',
+          'fatwa.publish',
+        ]);
+        expect(widenedByOther.ok ? widenedByOther.invalidation.accountsAffected : 0).toBe(
+          1,
+        );
+        expect(widenedByOther.ok ? widenedByOther.invalidation.sessionsRevoked : 0).toBe(
+          1,
+        );
+        expect(
+          widenedByOther.ok ? widenedByOther.invalidation.stepUpGrantsRevoked : 0,
+        ).toBe(1);
+        expect(await sessionCount(database.admin, holder.accountId)).toBe(0);
+        expect(await grantCount(database.admin, holder.accountId)).toBe(0);
+
+        // An administrator who holds a gated key does so through R, never
+        // through the protected bundle.
+        const protectedRole = await harness.administration.findRole(
+          PLATFORM_ADMINISTRATOR_ROLE,
+        );
+        for (const key of EXTERNALLY_GATED_PERMISSIONS)
+          expect(protectedRole?.permissions, key).not.toContain(key);
       });
 
       it('revokes sessions and step-up grants when an account stops being active', async () => {

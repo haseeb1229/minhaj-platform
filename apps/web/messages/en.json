@@ -229,6 +229,12 @@
       "books": "Books on Hadith",
       "videos": "Videos on Hadith",
       "research": "Research on Hadith"
+    },
+    "fatwa": {
+      "search": "Fatwa search",
+      "categories": "Fatwa categories",
+      "how-it-works": "How the Fatwa service works",
+      "ask": "Ask a Fatwa question (sign-in required)"
     }
   },
   "localeSwitcher": {
@@ -282,6 +288,7 @@
       "profile": "Profile",
       "security": "Security",
       "language": "Language and time zone",
+      "questions": "My questions",
       "signOut": "Sign out"
     },
     "profile": {
@@ -434,7 +441,8 @@
       "media": "Media",
       "global": "Global Network",
       "quran": "Quran",
-      "hadith": "Hadith"
+      "hadith": "Hadith",
+      "fatwa": "Fatwa"
     },
     "global": {
       "title": "Global Network",
@@ -622,7 +630,8 @@
       "invalidCode": "That code was not accepted.",
       "rateLimited": "Too many attempts. Wait a little and try again.",
       "quranCanonicalEdit": "Correcting canonical Quran text needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app.",
-      "hadithCanonicalEdit": "Changing sourced Hadith records, structure, verification or citations needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app."
+      "hadithCanonicalEdit": "Changing sourced Hadith records, structure, verification or citations needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app.",
+      "fatwaPublication": "Publishing or withdrawing a Fatwa needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app."
     },
     "users": {
       "title": "Accounts",
@@ -1139,7 +1148,8 @@
         "statement": "Statement",
         "media-coverage": "Media coverage",
         "quran-ayah": "Quran ayah",
-        "hadith": "Hadith citation"
+        "hadith": "Hadith citation",
+        "fatwa": "Fatwa ruling"
       },
       "categories": {
         "source-unavailable": "The owner could not be read",
@@ -1704,7 +1714,8 @@
       "statement": "Statement",
       "media-coverage": "Media coverage",
       "quran-ayah": "Quran ayah",
-      "hadith": "Hadith"
+      "hadith": "Hadith",
+      "fatwa": "Fatwa"
     },
     "topic": "Topic",
     "topicAny": "Any topic",
@@ -1792,7 +1803,8 @@
     "events": "Events on this topic",
     "collections": "Collections on this topic",
     "quran": "Ayat on this topic",
-    "hadith": "Hadith on this topic"
+    "hadith": "Hadith on this topic",
+    "fatwa": "Rulings on this topic"
   },
   "watch": {
     "title": "Watch",
@@ -3111,6 +3123,179 @@
       "pageStatus": "Page {page} of {pages}"
     }
   },
+  "fatwa": {
+    "title": "Fatwa",
+    "description": "Published rulings on questions people have asked, each beside a separately written, anonymised statement of the question, with every correction shown openly.",
+    "intro": "Each published ruling appears beside a statement of the question it answers. That statement is written for publication by the people who answered it and leaves out anything that could identify the person who asked. Browse the latest or most read rulings, by category or topic, or search them.",
+    "fixture": "Test fixture — not a genuine Fatwa.",
+    "unavailable": {
+      "body": "The Fatwa service is not available on this site yet.",
+      "home": "Return to the home page",
+      "howItWorks": "How the Fatwa service works"
+    },
+    "previous": "Previous page",
+    "next": "Next page",
+    "signInRequired": "Sign-in required",
+    "sections": {
+      "search": "Search Fatwa",
+      "categories": "Categories",
+      "howItWorks": "How it works",
+      "ask": "Ask a question",
+      "myQuestions": "My questions"
+    },
+    "sectionBody": {
+      "search": "Search the titles, published questions and rulings.",
+      "categories": "Published rulings, grouped by category.",
+      "howItWorks": "How a question is received, answered, reviewed and published.",
+      "ask": "Ask privately. Your question is never published as you wrote it.",
+      "myQuestions": "See the questions you have asked and where each one stands."
+    },
+    "landing": {
+      "explore": "Explore",
+      "rulings": "Published rulings"
+    },
+    "sort": {
+      "label": "Order rulings by",
+      "latest": "Latest",
+      "popular": "Popular",
+      "latestNote": "Newest first, by the date each ruling was first published.",
+      "popularNote": "Most read in the last 30 days, counted anonymously."
+    },
+    "filter": {
+      "category": "Category",
+      "topic": "Topic",
+      "clear": "Show all rulings",
+      "invalid": "This view names a sort, category or topic that does not exist, so no ruling is listed."
+    },
+    "empty": "No ruling has been published yet.",
+    "filteredEmpty": "No published ruling matches this view yet.",
+    "item": {
+      "category": "Category",
+      "published": "First published",
+      "corrected": "Corrected"
+    },
+    "categories": {
+      "intro": "Each category groups published rulings on one subject, and each belongs to a topic shared across the platform.",
+      "empty": "No category is available yet.",
+      "count": "{count, plural, =0 {No published rulings} one {# published ruling} other {# published rulings}}",
+      "popular": "Most read in this category",
+      "topicLink": "Everything on {topic}",
+      "rulings": "Rulings in this category",
+      "rulingsEmpty": "No ruling has been published in this category yet."
+    },
+    "topicTitle": "Fatwa",
+    "topicHub": "Everything on this topic",
+    "topicEmpty": "No published ruling is on this topic yet.",
+    "topicAll": "All rulings on this topic",
+    "ruling": {
+      "category": "Category",
+      "firstPublished": "First published",
+      "corrected": "Corrected on",
+      "correctionReason": "Reason for the correction",
+      "languageNotice": "This ruling is published in {language} only, so it is shown in that language.",
+      "question": "Question (as published, anonymised)",
+      "questionNote": "Written for publication by the people who answered it. It is not the asker’s own words and leaves out anything that could identify them.",
+      "answer": "Ruling",
+      "topics": "Topics",
+      "answeredBy": "Answered by",
+      "publishedBy": "Published by",
+      "history": "Correction history",
+      "historyIntro": "Every earlier published version is kept here exactly as it was published, with the reason it was corrected.",
+      "version": "Version published",
+      "previousTitle": "Title",
+      "all": "All published rulings"
+    },
+    "howItWorks": {
+      "title": "How the Fatwa service works",
+      "intro": "This page explains the steps a question goes through. It does not describe any ruling or position.",
+      "accepting": "The service is accepting questions.",
+      "notAccepting": "The service is not accepting questions at the moment.",
+      "stepNumber": "Step {number}:",
+      "noPromise": "No response time is promised, and not every question can be answered.",
+      "steps": {
+        "ask": {
+          "title": "A question is asked privately",
+          "body": "You sign in and write your question. Only you, and the people handling it at each step, can read it. It is never published as you wrote it."
+        },
+        "triage": {
+          "title": "It is received and assigned",
+          "body": "The question is read, placed in a category and assigned to a person qualified to answer it. Some questions are declined."
+        },
+        "drafting": {
+          "title": "A ruling is drafted",
+          "body": "The person assigned writes the ruling, and also writes a separate, anonymised statement of the question for publication that leaves out anything that could identify the person who asked."
+        },
+        "review": {
+          "title": "A scholar reviews it",
+          "body": "A different person reviews the draft and either returns it for revision or approves it. Nobody publishes a ruling they wrote themselves."
+        },
+        "publication": {
+          "title": "It is published",
+          "body": "The approved ruling is published at a permanent address with its anonymised question. If you asked the question, your list of questions links to it."
+        },
+        "corrections": {
+          "title": "Corrections are visible",
+          "body": "If a published ruling is corrected, its page says when and why, and every earlier published version stays readable beneath it."
+        }
+      }
+    },
+    "search": {
+      "intro": "Search the titles, published questions and rulings. Each result is one published ruling, shown as it currently reads."
+    },
+    "ask": {
+      "title": "Ask a question",
+      "intro": "Write your question below. Please read how your question is handled first.",
+      "privacy": {
+        "heading": "How your question is handled",
+        "who": "Only you, and the people handling your question at each step, can read it.",
+        "never": "It is never published as you wrote it.",
+        "anonymised": "If it is answered, a separate, anonymised question is written for publication, leaving out anything that could identify you.",
+        "noPromise": "No response time is promised, and not every question can be answered."
+      },
+      "label": "Your question",
+      "help": "Between {min} and {max} characters. Please do not include your name, contact details or anything else that identifies you or anyone else.",
+      "submit": "Send question",
+      "pending": "Sending…",
+      "unavailable": "The Fatwa service is not accepting questions at the moment, so there is nothing to fill in.",
+      "failure": {
+        "inactive": "The Fatwa service is not accepting questions at the moment.",
+        "invalid": "Your question must be between {min} and {max} characters.",
+        "rateLimited": "You have sent several questions recently. Please try again tomorrow.",
+        "noSession": "You are no longer signed in. Please sign in and try again.",
+        "unavailable": "Your question could not be sent just now. Please try again later."
+      }
+    },
+    "my": {
+      "title": "My questions",
+      "description": "The questions you have asked. Only you can see this page.",
+      "empty": "You have not asked a question yet.",
+      "list": "Your questions",
+      "submitted": "Submitted",
+      "statusLabel": "Status",
+      "status": {
+        "received": "Received",
+        "in_progress": "In progress",
+        "answered": "Answered",
+        "declined": "Declined",
+        "closed": "Closed"
+      },
+      "statusNote": {
+        "received": "Your question has been received and is waiting to be read.",
+        "in_progress": "Your question is being answered.",
+        "answered": "Your question has been answered.",
+        "declined": "This question will not be answered.",
+        "closed": "This question was closed without an answer."
+      },
+      "questionTitle": "Your question",
+      "yourWords": "Your question, as you wrote it",
+      "erased": "The text of this question is no longer kept.",
+      "answered": "Published ruling",
+      "answeredNote": "The published ruling carries a separately written, anonymised question — never your own words.",
+      "answeredLink": "Read the published ruling",
+      "back": "All your questions",
+      "account": "Back to My Minhaj"
+    }
+  },
   "hadithAdmin": {
     "title": "Hadith",
     "surface": {
@@ -3501,6 +3686,247 @@
       "textTitle": "Title {number}",
       "textBody": "Body {number}"
     }
+  },
+  "fatwaAdmin": {
+    "title": "Fatwa",
+    "surface": {
+      "questions": "Questions",
+      "assignment": "Assignment",
+      "drafts": "My drafts",
+      "review": "Review",
+      "published": "Published",
+      "categories": "Categories"
+    },
+    "scope": {
+      "questions": "Questions waiting to be filed, assigned or answered. A question's text is shown only on its own page, and opening that page is recorded.",
+      "assignment": "Questions that have an answerer, and who it is. Open a question to reassign it.",
+      "drafts": "The questions assigned to you now. Write the ruling and a separate, anonymised public question, then send the revision for review.",
+      "review": "Rulings waiting for scholar review. Return a revision to its answerer with a private note, or publish it.",
+      "published": "Every ruling ever published, including withdrawn ones, with its full public history.",
+      "categories": "Fatwa categories. Each one maps onto a single topic, and triage and drafting both choose from them."
+    },
+    "loading": "Loading…",
+    "unknown": "That did not work. Try again.",
+    "reload": "Try again",
+    "pending": "Saving…",
+    "saved": "Saved.",
+    "previous": "Previous",
+    "next": "Next",
+    "pagerLabel": "Pages",
+    "backToList": "Back to the list",
+    "none": "None",
+    "version": "Version",
+    "submitted": "Submitted",
+    "updated": "Updated",
+    "stage": "Stage",
+    "category": "Category",
+    "categoryUnset": "Not yet filed",
+    "categoryUnavailable": "Unavailable category",
+    "topicUnavailable": "Unavailable topic",
+    "assignee": "Answerer",
+    "unassigned": "Not assigned",
+    "formerAnswerer": "Former answerer",
+    "stageName": {
+      "submitted": "Submitted",
+      "triaged": "Filed",
+      "assigned": "Assigned",
+      "drafted": "Drafted",
+      "in_review": "In review",
+      "returned": "Returned",
+      "published": "Published",
+      "declined": "Declined",
+      "closed": "Closed"
+    },
+    "reviewStateName": {
+      "drafting": "Draft saved",
+      "in_review": "In review",
+      "returned": "Returned"
+    },
+    "question": {
+      "reference": "Question",
+      "open": "Open question",
+      "heading": "Question",
+      "private": "The asker's private question",
+      "accessNotice": "This is the asker's private question. Your opening this page has been recorded. Do not copy it anywhere, and never into a public ruling.",
+      "unavailable": "The private question is no longer available.",
+      "empty": "No question is waiting."
+    },
+    "triage": {
+      "heading": "Category",
+      "help": "File the question under the category that fits it. Only active categories are offered.",
+      "choose": "Choose a category",
+      "submit": "File question",
+      "change": "Change category",
+      "noCategories": "No other active category is available. A scholar with publication authority maintains the categories."
+    },
+    "assign": {
+      "heading": "Answerer",
+      "help": "Only people who may answer now are offered. The asker can never be assigned their own question.",
+      "choose": "Choose an answerer",
+      "submit": "Assign",
+      "reassign": "Reassign",
+      "needsCategory": "File the question under a category before assigning it.",
+      "inReview": "The ruling is with a scholar for review, so the question cannot be reassigned now.",
+      "noAnswerers": "Nobody else may answer questions at the moment."
+    },
+    "decline": {
+      "heading": "Decline",
+      "help": "The asker is told that their question was declined. This cannot be undone.",
+      "confirm": "I confirm that this question is declined.",
+      "submit": "Decline question",
+      "inReview": "The ruling is with a scholar for review, so the question cannot be declined now."
+    },
+    "assignment": {
+      "empty": "No question has an answerer at the moment."
+    },
+    "drafts": {
+      "empty": "No question is assigned to you.",
+      "write": "Write",
+      "heading": "Assigned question"
+    },
+    "ruling": {
+      "heading": "The ruling",
+      "status": "Status",
+      "notStarted": "No revision has been saved yet.",
+      "publicNow": "Public",
+      "withdrawn": "Withdrawn",
+      "revisions": "Revisions, newest first",
+      "notes": "Returned with notes",
+      "notesHelp": "Private notes from the reviewing scholar. Only answerers and reviewers see them.",
+      "noteFor": "Revision {number}",
+      "currentPublished": "The published ruling",
+      "currentPublishedHelp": "This is what readers see now. A new revision replaces it only once another scholar publishes it.",
+      "inReviewNotice": "The latest revision is with a scholar for review. It cannot be changed until it is returned or published.",
+      "withdrawnNotice": "This ruling has been withdrawn from public view. It can no longer be revised."
+    },
+    "revision": {
+      "number": "Revision",
+      "created": "Saved",
+      "state": "Publication",
+      "published": "Published",
+      "notPublished": "Not published",
+      "pending": "Awaiting review",
+      "current": "Public now"
+    },
+    "draft": {
+      "heading": "Write a revision",
+      "correctionHeading": "Write a correction",
+      "help": "Saving creates a new revision. Earlier revisions are kept unchanged.",
+      "slug": "Address",
+      "slugHelp": "Lowercase letters, digits and hyphens. It becomes the ruling's public address and is fixed once published.",
+      "slugFixed": "A published ruling keeps its address.",
+      "title": "Title",
+      "titleHelp": "One line.",
+      "publicQuestion": "Public question",
+      "publicQuestionInstruction": "Write the anonymised public question yourself — never paste the original. Leave out names, contact details and personal circumstances.",
+      "publicQuestionHelp": "Between {min} and {max} characters. Line breaks are kept.",
+      "ruling": "Ruling",
+      "rulingHelp": "Plain text, between {min} and {max} characters. Line breaks are kept.",
+      "language": "Language of the ruling",
+      "languageHelp": "The language the title, public question and ruling are written in.",
+      "languageChoose": "Choose a language",
+      "categoryHelp": "Only active categories are offered.",
+      "noCategories": "No category is active, so no revision can be saved. A scholar with publication authority maintains the categories.",
+      "topics": "Topics",
+      "topicsHelp": "Choose up to {max} topics. The category's own topic applies in any case.",
+      "topicsDropped": "{count, plural, one {# topic chosen earlier is no longer available and is left out.} other {# topics chosen earlier are no longer available and are left out.}}",
+      "topicsEmpty": "No topic matches.",
+      "topicSearch": "Narrow the topics",
+      "topicSearchSubmit": "Search topics",
+      "topicSearchHelp": "Searching reloads this page and does not keep text you have not saved, so narrow the list before you write.",
+      "correctionReason": "Reason for the correction",
+      "correctionReasonHelp": "Required for a correction. It is shown publicly in the ruling's history.",
+      "submit": "Save revision"
+    },
+    "submitReview": {
+      "heading": "Send for review",
+      "help": "Revision {number} goes to a scholar with publication authority. You cannot change it while it is under review.",
+      "submit": "Send for review"
+    },
+    "review": {
+      "empty": "No ruling is waiting for review.",
+      "firstPublication": "First publication",
+      "correction": "Correction",
+      "pending": "Revision {number}, under review",
+      "comparison": "Revision {number}, public now",
+      "comparisonHelp": "This is a correction. Compare it with what readers see now.",
+      "drafter": "Written by",
+      "drafterYou": "You",
+      "drafterUnknown": "The assigned answerer",
+      "questionNotice": "This is the asker's private question, shown so that you can check the public question leaves out anything personal. Your opening this page has been recorded.",
+      "return": "Return to the answerer",
+      "returnNote": "Private note",
+      "returnNoteHelp": "Say what needs to change. Only answerers and reviewers see this note.",
+      "returnSubmit": "Return revision",
+      "publish": "Publish",
+      "publishHelp": "Publishing makes this revision public at once, under the ruling's address. It needs a recent confirmation for Fatwa publication.",
+      "publishConfirm": "I have reviewed this revision in full and confirm that it is to be published.",
+      "publishSubmit": "Publish revision",
+      "selfAuthored": "You wrote this revision, so another scholar must publish it."
+    },
+    "published": {
+      "empty": "No ruling has been published yet.",
+      "firstPublished": "First published",
+      "withdrawnAt": "Withdrawn",
+      "view": "View the public page",
+      "correctionInProgress": "A correction is in progress: {stage}.",
+      "openReview": "Open the review",
+      "history": "Public history, newest first",
+      "historyEntry": "Publication {sequence}",
+      "withdrawals": "Withdrawal record",
+      "withdraw": "Withdraw",
+      "withdrawHelp": "The ruling stops being public at once. Its history is kept and its address is never reused. It needs a recent confirmation for Fatwa publication.",
+      "withdrawReason": "Reason",
+      "withdrawReasonHelp": "Recorded privately with the withdrawal.",
+      "withdrawConfirm": "I confirm that this ruling is to be withdrawn from public view.",
+      "withdrawSubmit": "Withdraw ruling"
+    },
+    "categories": {
+      "empty": "There is no category yet.",
+      "readOnly": "Only a scholar with publication authority changes categories.",
+      "name": "Name",
+      "slug": "Slug",
+      "slugHelp": "Lowercase letters, digits and hyphens. It cannot be changed later.",
+      "slugFixed": "A category keeps its slug.",
+      "topic": "Topic",
+      "topicHelp": "The canonical topic this category maps onto.",
+      "topicChoose": "Choose a topic",
+      "position": "Position",
+      "positionHelp": "Categories are listed in this order, lowest first.",
+      "status": "Status",
+      "statusHelp": "An archived category is no longer offered for new questions or revisions.",
+      "statusName": {
+        "active": "Active",
+        "archived": "Archived"
+      },
+      "names": "Names",
+      "namesHelp": "A name in at least one language. Leave a field empty to give no name in that language.",
+      "nameEn": "English name",
+      "nameUr": "Urdu name",
+      "nameAr": "Arabic name",
+      "create": "New category",
+      "createSubmit": "Create category",
+      "update": "Edit category",
+      "updateSubmit": "Save category"
+    },
+    "denied": "You do not have permission to do that.",
+    "notFound": "That record no longer exists, or is no longer at this stage.",
+    "conflict": "This changed since you opened it. Reload the page and try again.",
+    "invalid": "Check the values and try again.",
+    "inactive": "The Fatwa service is not activated, so nothing can be published.",
+    "invalidState": "That step is not open at this stage.",
+    "invalidAssignee": "That person cannot be assigned this question.",
+    "invalidCategory": "That category does not exist or is archived.",
+    "slugFrozen": "A published ruling keeps its address.",
+    "duplicateSlug": "That address is already in use.",
+    "selfPublication": "The author of a revision, or the person who asked the question, cannot publish it.",
+    "correctionReasonRefused": "A correction states its public reason, and a first draft states none.",
+    "stepUpRequired": "Confirm it is you for Fatwa publication, then try again.",
+    "rateLimited": "Too many attempts. Wait a little and try again.",
+    "noSession": "Your session has ended. Sign in again.",
+    "secondFactorRequired": "Finish setting up two-step verification first.",
+    "accountInactive": "This account is not active.",
+    "confirmRequired": "Tick the confirmation first."
   },
   "global": {
     "title": "Global Network",

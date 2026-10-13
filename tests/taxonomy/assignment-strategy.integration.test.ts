@@ -112,8 +112,12 @@ describeLive('Phase 3B — typed topic assignment, proven on a disposable juncti
         // MediaCoverageTopic — and Phase 14's EventTopic and Phase 15's
         // CollectionTopic — and Phase 18's QuranTopic, typed on the Ayah's
         // canonical citation — and Phase 19's HadithTopic, typed on the
-        // source-qualified record.
-        enforcedRelationships: 19,
+        // source-qualified record — and Phase 20's FatwaRevisionTopic, typed on
+        // the immutable revision. Phase 20's FatwaCategory is NOT an assignment:
+        // its one `topicId` classifies the category's own row, outside its
+        // primary key, so there is no target to leave dangling and nothing to
+        // count as a half-typed junction.
+        enforcedRelationships: 20,
         incompleteRelationships: 0,
       });
     });
@@ -219,7 +223,7 @@ describeLive('Phase 3B — typed topic assignment, proven on a disposable juncti
       // context's table, column or constraint names. The adapter derives this
       // status from the foreign-key catalogue rather than a declared registry.
       expect(await harness.taxonomy.assignmentStatus()).toEqual({
-        enforcedRelationships: 20,
+        enforcedRelationships: 21,
         incompleteRelationships: 0,
       });
     });
@@ -323,7 +327,7 @@ describeLive('Phase 3B — typed topic assignment, proven on a disposable juncti
         // The surface reports the defect semantically without exposing either
         // the half-typed table or the sound owner's physical schema.
         expect(await harness.taxonomy.assignmentStatus()).toEqual({
-          enforcedRelationships: 21,
+          enforcedRelationships: 22,
           incompleteRelationships: 1,
         });
       } finally {

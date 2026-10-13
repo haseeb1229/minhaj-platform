@@ -211,11 +211,26 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
   }),
+  /**
+   * DELIVERED BY PHASE 20. `/fatwa` is the Fatwa landing and browse: a genuine
+   * page in all three locales that says honestly when the service is not
+   * activated, and otherwise lists published rulings, latest or popular, by
+   * category or topic, with search, the process and the ask entry.
+   *
+   * `excluded` FROM THE BUILD-BOUND SITEMAP for the reason `hadith` is: whether
+   * a Fatwa page may be indexed is a RUNTIME fact of the activation —
+   * inactive, engineering fixture text, or approved — so each page decides its
+   * own robots and canonical, and the `fatwa` sitemap segment lists published
+   * rulings only while an approved activation stands.
+   */
   Object.freeze({
     key: 'fatwa',
     label: 'nav.fatwa',
+    path: '/fatwa',
     placements: Object.freeze(['primary'] as const),
-    availability: 'deferred' as const,
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'excluded' as const,
   }),
   /**
    * DELIVERED BY PHASE 13 — News. `/news` is the News and Events entry point:
@@ -622,6 +637,41 @@ const HADITH: readonly ShellRoute[] = Object.freeze(
 );
 
 /**
+ * The Fatwa surfaces — Phase 20 (ROUTE_MAP.md §3.8).
+ *
+ * Search, the categories, the process explanation and the ask entry. NO
+ * PLACEMENT — they are reached from `/fatwa`, the single entry point in the
+ * primary navigation. Every one is `excluded` for the reason the `fatwa` entry
+ * gives; search is excluded for good, and `/fatwa/ask` is only a redirect into
+ * the authenticated `/my/questions/ask`.
+ *
+ * WHAT IS ABSENT IS ABSENT. `latest` and `popular` are QUERY views of `/fatwa`
+ * (`?sort=`), never paths (ROUTE_MAP.md §2.3); a ruling, a category and a
+ * topic view are resources and views reached through these, never registry
+ * entries.
+ */
+const FATWA_SURFACES = Object.freeze([
+  'search',
+  'categories',
+  'how-it-works',
+  'ask',
+] as const);
+
+const FATWA: readonly ShellRoute[] = Object.freeze(
+  FATWA_SURFACES.map((surface) =>
+    Object.freeze({
+      key: `fatwa.${surface}`,
+      label: `fatwa.${surface}`,
+      path: `/fatwa/${surface}`,
+      placements: Object.freeze([] as const),
+      visibility: 'public' as const,
+      availability: 'delivered' as const,
+      indexing: 'excluded' as const,
+    }),
+  ),
+);
+
+/**
  * The photograph surfaces — Phase 12 (ROUTE_MAP.md §3.9).
  *
  * Photographs, galleries and the historical archive: each a genuine page in all
@@ -832,6 +882,7 @@ export const SHELL_ROUTES: readonly ShellRoute[] = Object.freeze([
   ...LISTEN,
   ...QURAN,
   ...HADITH,
+  ...FATWA,
   ...MEDIA,
   ...NEWS,
   ...EVENTS,

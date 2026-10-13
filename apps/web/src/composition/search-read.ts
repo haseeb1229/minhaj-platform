@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   createEditorialPublicReader,
+  createFatwaPublicReader,
   createHadithPublicReader,
   createLibraryPublicReader,
   createMediaPublicReader,
@@ -49,6 +50,7 @@ export function buildSearchService(report: SearchReport): SearchService {
     media: createMediaPublicReader(),
     quran: createQuranPublicReader(),
     hadith: createHadithPublicReader(),
+    fatwa: createFatwaPublicReader(),
   });
 
   return createSearchService({

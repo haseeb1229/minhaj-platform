@@ -138,16 +138,16 @@ describe('a deferred capability cannot be linked', () => {
     }
   });
 
-  it('records the three deferred domains rather than forgetting them', () => {
+  it('records the two deferred domains rather than forgetting them', () => {
     // Recording them is what lets the administrative status surface tell the
     // truth about the roadmap, and what lets the assertions above range over
     // the whole set instead of over whatever somebody remembered to add.
     //
     // `library` LEFT THIS LIST IN PHASE 8, `search` IN PHASE 17, `watch` IN
     // PHASE 10, `news-events` IN PHASE 13, `global` IN PHASE 16, `quran` IN
-    // PHASE 18 and `hadith` IN PHASE 19, when each was delivered. Each is
-    // asserted delivered below rather than silently dropped.
-    for (const key of ['learn', 'fatwa', 'donate']) {
+    // PHASE 18, `hadith` IN PHASE 19 and `fatwa` IN PHASE 20, when each was
+    // delivered. Each is asserted delivered below rather than silently dropped.
+    for (const key of ['learn', 'donate']) {
       const route = routeByKey(key);
 
       expect(route, key).not.toBeNull();
@@ -239,6 +239,44 @@ describe('a deferred capability cannot be linked', () => {
     for (const key of ['hadith.articles', 'hadith.courses', 'hadith.scholars'])
       expect(routeByKey(key), key).toBeNull();
     for (const path of ['/hadith/articles', '/hadith/courses', '/hadith/scholars'])
+      expect(
+        SHELL_ROUTES.some((entry) => isAvailable(entry) && entry.path === path),
+        path,
+      ).toBe(false);
+  });
+
+  it('delivers Fatwa at /fatwa, public, linked, and excluded from the build-bound sitemap', () => {
+    // Phase 20: whether a Fatwa page may be indexed is a RUNTIME fact of the
+    // activation (inactive, fixture or approved), so no Fatwa route is eligible
+    // for the build-bound `pages` segment; each page decides its own robots,
+    // and the `fatwa` content segment lists approved, published rulings only.
+    const route = requireRoute('fatwa');
+    expect(route.path).toBe('/fatwa');
+    expect(route.visibility).toBe('public');
+    expect(route.availability).toBe('delivered');
+    expect(route.indexing).toBe('excluded');
+    expect(route.placements).toContain('primary');
+
+    const fatwa = SHELL_ROUTES.filter((entry) => entry.key.startsWith('fatwa.'));
+    expect(fatwa.map((entry) => entry.key).sort()).toEqual([
+      'fatwa.ask',
+      'fatwa.categories',
+      'fatwa.how-it-works',
+      'fatwa.search',
+    ]);
+    for (const entry of fatwa) {
+      expect(isAvailable(entry) && entry.availability, entry.key).toBe('delivered');
+      expect(isAvailable(entry) && entry.indexing, entry.key).toBe('excluded');
+      expect(isAvailable(entry) && entry.path, entry.key).toBe(
+        `/fatwa/${entry.key.slice('fatwa.'.length)}`,
+      );
+      expect(entry.placements, entry.key).toEqual([]);
+    }
+    // Latest and Popular are QUERY views of `/fatwa` (`?sort=`), never paths
+    // (ROUTE_MAP.md §2.3).
+    for (const key of ['fatwa.latest', 'fatwa.popular'])
+      expect(routeByKey(key), key).toBeNull();
+    for (const path of ['/fatwa/latest', '/fatwa/popular'])
       expect(
         SHELL_ROUTES.some((entry) => isAvailable(entry) && entry.path === path),
         path,

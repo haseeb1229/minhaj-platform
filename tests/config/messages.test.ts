@@ -116,6 +116,8 @@ describe('the catalogues agree on their keys', () => {
       'quran.unavailable.body',
       'hadith.fixture',
       'hadith.unavailable.body',
+      'fatwa.fixture',
+      'fatwa.unavailable.body',
     ]) {
       const value = (locale: Catalogue) =>
         Object.fromEntries(leaves(locale))[key] as string;
@@ -152,6 +154,10 @@ describe('the catalogues agree on their keys', () => {
         'hadith.fixture',
         'hadith.original',
         'hadith.gradings.note',
+        // Phase 20: likewise for Fatwa — that the service is not available, and
+        // that a ruling on a proof deployment is not a genuine Fatwa.
+        'fatwa.unavailable.body',
+        'fatwa.fixture',
       ]) {
         expect(String(prose[key]), `${locale} ${key}`).toMatch(/\p{Script=Arabic}/u);
       }

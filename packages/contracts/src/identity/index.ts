@@ -40,6 +40,8 @@ export {
   STEP_UP_LIFETIME_SECONDS,
   STEP_UP_PURPOSES,
   isPermissionKey,
+  EXTERNALLY_GATED_PERMISSIONS,
+  isExternallyGatedPermission,
 } from './permissions.ts';
 
 export type {

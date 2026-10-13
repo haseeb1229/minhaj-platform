@@ -412,8 +412,10 @@ export default async function proxy(request: NextRequest) {
      *
      * PHASE 19 — `/hadith/search` is the same Search query restricted to the
      * `hadith` kind, admitted under the same rule.
+     *
+     * PHASE 20 — `/fatwa/search` likewise, restricted to the `fatwa` kind.
      */
-    const search = /^\/(en|ur|ar)\/(?:quran\/|hadith\/)?search$/.exec(
+    const search = /^\/(en|ur|ar)\/(?:quran\/|hadith\/|fatwa\/)?search$/.exec(
       request.nextUrl.pathname,
     );
     const query = request.nextUrl.searchParams.get('q');

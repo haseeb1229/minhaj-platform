@@ -13,6 +13,7 @@ import { scholarlySitemapPartitions } from './scholarly-sitemap';
 import { topicsSitemapPartitions } from './topics-sitemap';
 import { quranSitemapPartitions } from './quran-sitemap';
 import { hadithSitemapPartitions } from './hadith-sitemap';
+import { fatwaSitemapPartitions } from './fatwa-sitemap';
 import 'server-only';
 
 import { localeSchema } from '@minhaj/contracts';
@@ -181,6 +182,10 @@ export async function allSitemapPartitions(): Promise<readonly SitemapPartition[
     // Phase 19's `hadith` segment: canonical citations, and only while an
     // APPROVED activation stands — fixture activation is never advertised.
     ...(await hadithSitemapPartitions()),
+    // Phase 20's `fatwa` segment: published rulings at their canonical address,
+    // each in its own content language only, and only while an APPROVED
+    // activation stands — fixture activation is never advertised.
+    ...(await fatwaSitemapPartitions()),
   ]);
 }
 

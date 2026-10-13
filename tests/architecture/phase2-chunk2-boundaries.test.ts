@@ -357,13 +357,15 @@ describe('Phase 2 Chunk 2 — what the delivered code does NOT contain', () => {
 
       // Quran left this list when Phase 18 shipped it and Hadith when Phase 19
       // shipped it, as every earlier domain left it at its own owning phase.
+      // Fatwa's `fatwa.*` and `question.receive` may appear in Phase 20's
+      // migration, which owns them, and in no other.
+      const fatwaOwner = file.includes('20261004000000_phase20_fatwa');
       for (const domain of [
-        'fatwa.',
+        ...(fatwaOwner ? [] : ['fatwa.', 'question.']),
         'learning.',
         'membership.',
         'donations.',
         'teaching.',
-        'question.',
       ]) {
         expect(source, `${file} must not seed ${domain}*`).not.toContain(`n'${domain}`);
       }
@@ -562,6 +564,12 @@ const PERMISSION_MIGRATIONS = [
     id: '20261003000000_phase19_hadith',
     keys: ['hadith.administer', 'hadith.editCanonical', 'hadith.read'],
   },
+  {
+    // Catalogued, externally gated and bundled into no role.
+    phase: 'Phase 20',
+    id: '20261004000000_phase20_fatwa',
+    keys: ['fatwa.answer', 'fatwa.publish', 'question.receive'],
+  },
 ] as const;
 
 describe('the permission catalogue is one definition, appended only by owners', () => {
@@ -611,7 +619,6 @@ describe('the permission catalogue is one definition, appended only by owners', 
     const declared = await declaredPermissions();
 
     for (const domain of [
-      'fatwa.',
       'learning.',
       'membership.',
       'donations.',
@@ -619,7 +626,8 @@ describe('the permission catalogue is one definition, appended only by owners', 
       'teaching.',
       'editorial.',
       // Library shipped in Phase 8, Search in Phase 17, Media in Phase 10,
-      // Global in Phase 16, Quran in Phase 18 and Hadith in Phase 19. Still
+      // Global in Phase 16, Quran in Phase 18, Hadith in Phase 19 and Fatwa in
+      // Phase 20 (its three keys externally gated). Still
       // absent: research and publication keys (Phase 9 uses Library's), any
       // per-aggregate Media key, audio and gallery vocabulary, and any
       // per-level Global key (Global has two).

@@ -81,10 +81,10 @@ const FUTURE_DOMAIN_TABLES = [
   // delivers the Quran as `Surah`, `Ayah`, `Juz` and the `Quran*` tables, proved
   // by the Phase-18 recovery fixture; a single generic `Quran` table is still
   // no phase's, so it stays here. `Hadith` left in Phase 19, which delivers it
-  // with the `Hadith*` tables, proved by the Phase-19 recovery fixture.
+  // with the `Hadith*` tables, proved by the Phase-19 recovery fixture, and
+  // `Fatwa` in Phase 20, proved by the Phase-20 recovery fixture.
   'Quran',
   'Book',
-  'Fatwa',
   'Scholar',
   'Teacher',
   'Course',
@@ -202,6 +202,27 @@ export const PHASE19_TABLES = [
   'HadithScience',
   'HadithScienceText',
   'HadithTopic',
+];
+
+/**
+ * Tables the Phase-20 migration creates: the operator's activation, the
+ * categories, the private question, the ruling with its immutable revisions,
+ * topics, publications and review decisions, and the anonymous read tally.
+ *
+ * Checked as REQUIRED whenever the Phase-20 migration is among those the caller
+ * expects.
+ */
+export const PHASE20_TABLES = [
+  'FatwaActivation',
+  'FatwaCategory',
+  'FatwaCategoryName',
+  'FatwaQuestion',
+  'Fatwa',
+  'FatwaRevision',
+  'FatwaRevisionTopic',
+  'FatwaPublication',
+  'FatwaReviewDecision',
+  'FatwaReadTally',
 ];
 
 async function userTables(session: SqlSession): Promise<string[]> {
@@ -349,6 +370,17 @@ export async function verifyRestoredSchema(
     if (missing.length > 0)
       throw new Error(
         `Restored database is missing Phase-19 Hadith tables: ${missing.join(', ')}`,
+      );
+  }
+
+  // Phase 20. A restore that carried the Fatwa migration's history row but not
+  // its revisions and publications would report an applied migration over a
+  // database that has lost what each public ruling said and who published it.
+  if (expectedMigrationIds.some((id) => id.includes('phase20'))) {
+    const missing = PHASE20_TABLES.filter((table) => !tables.includes(table));
+    if (missing.length > 0)
+      throw new Error(
+        `Restored database is missing Phase-20 Fatwa tables: ${missing.join(', ')}`,
       );
   }
   const columns = await auditColumns(restored);

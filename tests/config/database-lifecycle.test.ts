@@ -220,6 +220,19 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'HadithScience',
       'HadithScienceText',
       'HadithTopic',
+      // Phase 20 — Fatwa's activation, categories, private questions, rulings
+      // with their immutable revisions, topics, publications and decisions, and
+      // the read tally.
+      'FatwaActivation',
+      'FatwaCategory',
+      'FatwaCategoryName',
+      'FatwaQuestion',
+      'Fatwa',
+      'FatwaRevision',
+      'FatwaRevisionTopic',
+      'FatwaPublication',
+      'FatwaReviewDecision',
+      'FatwaReadTally',
     ]) {
       expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }
@@ -227,12 +240,14 @@ describe('Phase 1 Chunk 2 migration convention', () => {
     // Every LATER phase still arrives with the slice that owns it. (`Event`
     // left this list when Phase 14 delivered it, and `Collection` when Phase 15
     // did; Phase 18 delivers the Quran as its own tables, never one generic
-    // `Quran` table; `Hadith` left it when Phase 19 delivered the record.)
+    // `Quran` table; `Hadith` left it when Phase 19 delivered the record and
+    // `Fatwa` when Phase 20 delivered the ruling; a context-less `Question`
+    // is still no phase's.)
     for (const table of [
       'PrivateCollection',
       'Quran',
       'Book',
-      'Fatwa',
+      'Question',
       'Scholar',
       'Teacher',
       'Course',

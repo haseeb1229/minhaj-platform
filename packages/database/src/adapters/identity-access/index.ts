@@ -85,6 +85,10 @@ export {
   createAuthorizationReader,
 } from './authorization.ts';
 
+/** Current holders of one permission, by name — an assignment picker's choices. */
+export { createPermissionHolderReader } from './permission-holders.ts';
+export type { PermissionHolder, PermissionHolderReader } from './permission-holders.ts';
+
 /**
  * Builds the adapter.
  *

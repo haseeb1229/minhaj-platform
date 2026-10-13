@@ -89,6 +89,8 @@ function classify(error: unknown): AuthorizationFailure {
       return 'unknown-permission';
     case 'final-administrator':
       return 'final-administrator';
+    case 'self-elevation':
+      return 'self-elevation';
     default:
       return 'unavailable';
   }

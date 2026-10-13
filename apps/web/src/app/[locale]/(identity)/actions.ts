@@ -13,6 +13,7 @@ import {
 import { z } from 'zod';
 
 import { dispatchAfterResponse } from '@/composition/dispatch';
+import { fatwaRuntime } from '@/composition/fatwa';
 import { identityRuntime } from '@/composition/identity';
 import { peopleRuntime } from '@/composition/people';
 import { applySetCookies, requestContext } from '@/composition/request';
@@ -637,6 +638,18 @@ export async function closeAccountAction(
     }
   }
 
+  // THE THIRD OWNER. Fatwa erases the private text of this account's
+  // questions and closes those not yet answered, in Fatwa's own transaction;
+  // a published ruling never held the question and stays as it is. Idempotent,
+  // and its bounded sweep finishes any closure interrupted here.
+  let questionsPending = false;
+  try {
+    await fatwaRuntime().disposition.disposeAccount(session.account.id);
+    await fatwaRuntime().disposition.reconcileClosedAccounts();
+  } catch {
+    questionsPending = true;
+  }
+
   // The closure notice is enqueued against the address the account HAD, before
   // the tombstone replaces it. It goes out after this response.
   dispatchAfterResponse();
@@ -646,8 +659,9 @@ export async function closeAccountAction(
 
   // The Identity transaction has already closed the account, so its notice and
   // local sign-out still happen. What is withheld is a false successful
-  // completion while People's required owner work is pending.
-  if (!disposition.ok || reconciliationFailed) return failed('unavailable');
+  // completion while People's or Fatwa's required owner work is pending.
+  if (!disposition.ok || reconciliationFailed || questionsPending)
+    return failed('unavailable');
 
   redirect(`/${locale}`);
 }

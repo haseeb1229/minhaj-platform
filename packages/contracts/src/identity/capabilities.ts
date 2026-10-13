@@ -15,13 +15,13 @@
  * could disagree". Putting the mapping where the permissions are means People
  * consumes a result it cannot compute, cannot widen and cannot cache.
  *
- * THE FOUR SOURCE CODES ARE NOT GRANTABLE YET, AND THAT IS CORRECT.
- * `PERMISSION_CATALOGUE` in `./permissions.ts` deliberately does not contain
- * `teaching.perform`, `question.receive`, `content.review` or `fatwa.publish`:
- * they belong to Learning, Fatwa and Editorial, which have not shipped, and
- * seeding one early would fix another owner's vocabulary and leave grantable
- * authority over nothing. OPEN_DECISIONS.md §6.3 separately leaves WHO receives
- * them to an activation gate this project has not been given.
+ * EACH SOURCE CODE ARRIVES WITH ITS OWNER. `content.review` arrived with
+ * Editorial (Phase 6), and `question.receive` and `fatwa.publish` with Fatwa
+ * (Phase 20); `teaching.perform` still belongs to Learning, which has not
+ * shipped, and seeding it early would fix another owner's vocabulary and leave
+ * grantable authority over nothing. OPEN_DECISIONS.md §6.3 separately leaves WHO
+ * receives them to an activation gate this project has not been given — which
+ * is why the two Fatwa codes are catalogued but bundled into no role.
  *
  * So the codes below are typed as `string`, NOT as `PermissionKey`. That is the
  * whole reason this module has no cast in it: `effectivePermissions` already

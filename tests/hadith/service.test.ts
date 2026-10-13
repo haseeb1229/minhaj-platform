@@ -515,6 +515,7 @@ const STEP_UP_IDS: Record<StepUpPurpose, number> = {
   'second-factor': 3,
   'quran-canonical-edit': 4,
   'hadith-canonical-edit': 5,
+  'fatwa-publication': 6,
 };
 
 function identity(options: {

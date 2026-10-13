@@ -470,6 +470,20 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'HadithScience',
         'HadithScienceText',
         'HadithTopic',
+        // Phase 20 — Fatwa: the operator's activation; categories mapped onto
+        // Topics; the private question; the ruling with its immutable
+        // revisions, typed topics, publications and review decisions; the
+        // anonymous read tally.
+        'FatwaActivation',
+        'FatwaCategory',
+        'FatwaCategoryName',
+        'FatwaQuestion',
+        'Fatwa',
+        'FatwaRevision',
+        'FatwaRevisionTopic',
+        'FatwaPublication',
+        'FatwaReviewDecision',
+        'FatwaReadTally',
       ].sort(),
     );
   });

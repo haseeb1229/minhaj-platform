@@ -11,7 +11,9 @@ import {
 } from '../../packages/contracts/src/people/index.ts';
 import {
   CONTRIBUTOR_CAPABILITY_SOURCES,
+  EXTERNALLY_GATED_PERMISSIONS,
   PERMISSION_CATALOGUE,
+  PLATFORM_ADMINISTRATOR_PERMISSIONS,
 } from '../../packages/contracts/src/identity/index.ts';
 import { repoRoot } from './architecture-harness.ts';
 
@@ -385,15 +387,29 @@ describe('nothing in People can grant, store or fabricate a capability', () => {
     expect(source).toContain("requirePermittedAction(locale, 'people.administer')");
   });
 
-  it('keeps future capability sources ungrantable while Editorial owns content.review', () => {
-    // THE SHORTCUT NOT TAKEN. Seeding one of these would have made a projection
-    // test trivial; they belong to Learning, Fatwa and Editorial, and
-    // OPEN_DECISIONS.md §6.3 reserves who receives them to the organisation.
-    const catalogue = PERMISSION_CATALOGUE.map((entry) => entry.key);
+  it('keeps each capability source with its owner, and the Fatwa ones externally gated', () => {
+    // THE SHORTCUT NOT TAKEN. Seeding one of these early would have made a
+    // projection test trivial. Each arrives with its owner: `content.review`
+    // with Editorial (Phase 6); `question.receive` and `fatwa.publish` with
+    // Fatwa (Phase 20), catalogued but EXTERNALLY GATED — bundled into no role,
+    // because OPEN_DECISIONS.md §6.3 reserves who receives them to the
+    // organisation; `teaching.perform` still belongs to Learning, which has not
+    // shipped.
+    const catalogue: readonly string[] = PERMISSION_CATALOGUE.map((entry) => entry.key);
+    const gated: readonly string[] = EXTERNALLY_GATED_PERMISSIONS;
+    const bundled: readonly string[] = PLATFORM_ADMINISTRATOR_PERMISSIONS;
 
     for (const source of Object.values(CONTRIBUTOR_CAPABILITY_SOURCES)) {
-      if (source === 'content.review') expect(catalogue).toContain(source);
-      else expect(catalogue, `${source} belongs to a later phase`).not.toContain(source);
+      if (source === 'teaching.perform') {
+        expect(catalogue, `${source} belongs to a later phase`).not.toContain(source);
+      } else if (source === 'content.review') {
+        expect(catalogue).toContain(source);
+        expect(bundled).toContain(source);
+      } else {
+        expect(catalogue, source).toContain(source);
+        expect(gated, `${source} is the organisation's to grant`).toContain(source);
+        expect(bundled, `${source} is bundled into no role`).not.toContain(source);
+      }
     }
   });
 

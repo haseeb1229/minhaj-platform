@@ -38,8 +38,15 @@ interface LayoutProps {
   readonly params: Promise<{ readonly locale: string }>;
 }
 
-/** Each surface, the permission that opens it, and where it lives. */
-const SURFACES: readonly { key: string; permission: PermissionKey; path: string }[] = [
+/**
+ * Each surface, the permission that opens it, and where it lives. A list of
+ * permissions means ANY one of them opens the entry.
+ */
+const SURFACES: readonly {
+  key: string;
+  permission: PermissionKey | readonly PermissionKey[];
+  path: string;
+}[] = [
   { key: 'editorial', permission: 'content.read', path: 'editorial/articles' },
   {
     key: 'correspondence',
@@ -80,6 +87,14 @@ const SURFACES: readonly { key: string; permission: PermissionKey; path: string 
   // re-checks `hadith.administer`, and every sourced write needs
   // `hadith.editCanonical` with its own step-up.
   { key: 'hadith', permission: 'hadith.read', path: 'hadith/records' },
+  // Phase 20. One entry for the Fatwa area, opened by ANY of its three stage
+  // keys — none implies another, and no administrator key confers them. The
+  // area's root sends each holder to the first stage their keys open.
+  {
+    key: 'fatwa',
+    permission: ['question.receive', 'fatwa.answer', 'fatwa.publish'],
+    path: 'fatwa',
+  },
   // Phase 4. A READ-ONLY view of the public shell's effective navigation; the
   // registry behind it is code, so there is no editing surface to reach.
   { key: 'navigation', permission: 'navigation.read', path: 'system/navigation' },
@@ -105,7 +120,11 @@ export default async function AdminLayout({ children, params }: LayoutProps) {
   const held = (await identityRuntime().authorization.evaluate(active.session))
     .permissions;
 
-  const visible = SURFACES.filter((surface) => held.has(surface.permission));
+  const visible = SURFACES.filter((surface) =>
+    typeof surface.permission === 'string'
+      ? held.has(surface.permission)
+      : surface.permission.some((permission) => held.has(permission)),
+  );
   if (visible.length === 0) notFound();
 
   return (

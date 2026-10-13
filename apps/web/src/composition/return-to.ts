@@ -28,15 +28,31 @@ function hasControlCharacters(value: string): boolean {
   return false;
 }
 
-/** Authenticated destinations that actually exist in Chunk 1. */
+/**
+ * One of the asker's own questions: `/my/questions/` and a canonical lowercase
+ * UUID, nothing else — the id is opaque, so no other shape can name one.
+ */
+const OWN_QUESTION =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+/** Authenticated destinations that actually exist. */
 function isKnownDestination(pathname: string, locale: string): boolean {
-  return new Set([
-    `/${locale}/account-setup`,
-    `/${locale}/my`,
-    `/${locale}/my/settings/profile`,
-    `/${locale}/my/settings/security`,
-    `/${locale}/my/settings/language`,
-  ]).has(pathname.replace(/\/$/, ''));
+  const path = pathname.replace(/\/$/, '');
+  if (
+    new Set([
+      `/${locale}/account-setup`,
+      `/${locale}/my`,
+      `/${locale}/my/settings/profile`,
+      `/${locale}/my/settings/security`,
+      `/${locale}/my/settings/language`,
+      // Phase 20 — Fatwa's `/my/questions`.
+      `/${locale}/my/questions`,
+      `/${locale}/my/questions/ask`,
+    ]).has(path)
+  )
+    return true;
+  const question = `/${locale}/my/questions/`;
+  return path.startsWith(question) && OWN_QUESTION.test(path.slice(question.length));
 }
 
 /**

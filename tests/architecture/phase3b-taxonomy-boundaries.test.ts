@@ -501,6 +501,7 @@ describe('Phase 3B — every taxonomy surface passes the gate', () => {
       'second-factor',
       'quran-canonical-edit',
       'hadith-canonical-edit',
+      'fatwa-publication',
     ]);
   });
 

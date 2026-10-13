@@ -130,6 +130,15 @@ model User {
   mediaCoverageSchedules MediaCoverage[] @relation("MediaCoverageScheduler")
   mediaCoverageRevisions MediaCoverageRevision[]
 
+  fatwaQuestionsAsked     FatwaQuestion[]       @relation("FatwaQuestionAsker")
+  fatwaQuestionsAssigned  FatwaQuestion[]       @relation("FatwaQuestionAssignee")
+  fatwaQuestionsTriaged   FatwaQuestion[]       @relation("FatwaQuestionTriager")
+  fatwaQuestionsRouted    FatwaQuestion[]       @relation("FatwaQuestionAssigner")
+  fatwaQuestionsDeclined  FatwaQuestion[]       @relation("FatwaQuestionDecliner")
+  fatwaRevisionsAuthored  FatwaRevision[]
+  fatwaPublications       FatwaPublication[]
+  fatwaReviewDecisions    FatwaReviewDecision[]
+
   id String @id @db.NVarChar(36)
 
   // ---- Better Auth core -------------------------------------------------
@@ -801,6 +810,8 @@ model Topic {
   mediaCoverageTopics MediaCoverageTopic[]
   quranTopics QuranTopic[]
   hadithTopics HadithTopic[]
+  fatwaCategories FatwaCategory[]
+  fatwaRevisionTopics FatwaRevisionTopic[]
 
   id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
 
@@ -934,6 +945,7 @@ model Language {
   hadithTranslations HadithTranslation[] @relation("HadithTranslationLanguage")
   hadithCommentaries HadithCommentary[]  @relation("HadithCommentaryLanguage")
   hadithScienceTexts HadithScienceText[] @relation("HadithScienceTextLanguage")
+  fatwaRevisions FatwaRevision[]
   quranTransliterations QuranTransliteration[]
   quranTafsirs QuranTafsir[]
   quranTajweedTexts QuranTajweedRuleText[]
@@ -1077,6 +1089,8 @@ model Person {
   quranTranslationContributions QuranTranslationContributor[]
   hadithTranslationContributions HadithTranslationContributor[]
   hadithCommentaryContributions  HadithCommentaryContributor[]
+  fatwaPublicationsPublished     FatwaPublication[] @relation("FatwaPublicationPublisherPerson")
+  fatwaPublicationsAuthored      FatwaPublication[] @relation("FatwaPublicationAuthorPerson")
   quranTafsirContributions QuranTafsirContributor[]
   quranRecitations QuranRecitation[]
 
@@ -4554,4 +4568,228 @@ model HadithTopic {
   @@id([hadithId, topicId])
   @@index([topicId, hadithId], map: "HadithTopic_topicId_idx")
   @@map("HadithTopic")
+}
+
+// ===========================================================================
+// Phase 20 — Fatwa
+// ===========================================================================
+//
+// Fatwa is its own bounded context (DOMAIN_MODEL.md §12). A QUESTION is
+// private personal data; a FATWA is the public ruling, a sequence of immutable
+// revisions each carrying a separately written anonymised public question.
+// Every workflow table is written only by the `Fatwa*` procedures, which
+// re-check live permission (and, for publication, a live `fatwa-publication`
+// step-up grant) in SQL; the application principal holds SELECT and EXECUTE.
+// Integrity the schema language cannot express — status facts, the frozen
+// published slug, composite revision ownership, immutable history — is
+// enforced by the migration's CHECKs, composite keys and triggers.
+
+/// The service is open only while this singleton exists. Owner/operator-only;
+/// immutable. `approved` carries the organisation's evidence reference.
+model FatwaActivation {
+  id           Int      @id @db.TinyInt
+  /// fixture | approved
+  authority    String   @db.NVarChar(16)
+  authorisedBy String   @db.NVarChar(200)
+  reference    String?  @db.NVarChar(400)
+  activatedAt  DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  @@map("FatwaActivation")
+}
+
+/// A domain classification that maps onto exactly one canonical Topic. The
+/// slug never changes and nothing is deleted.
+model FatwaCategory {
+  id        String   @id @db.NVarChar(36)
+  slug      String   @unique(map: "FatwaCategory_slug_key") @db.NVarChar(120)
+  topicId   String   @db.NVarChar(36)
+  position  Int
+  /// active | archived
+  status    String   @db.NVarChar(16)
+  version   Int      @default(1)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+
+  topic     Topic               @relation(fields: [topicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  names     FatwaCategoryName[]
+  questions FatwaQuestion[]
+  revisions FatwaRevision[]
+
+  @@index([status, position, slug], map: "FatwaCategory_status_position_idx")
+  @@index([topicId], map: "FatwaCategory_topicId_idx")
+  @@map("FatwaCategory")
+}
+
+model FatwaCategoryName {
+  categoryId String @db.NVarChar(36)
+  /// en | ur | ar
+  locale     String @db.NVarChar(8)
+  name       String @db.NVarChar(200)
+
+  category FatwaCategory @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([categoryId, locale])
+  @@map("FatwaCategoryName")
+}
+
+/// A private question. Its text is erased at the asker's account closure.
+/// Never selected by a list read; never copied into a public table, search,
+/// metadata or an audit payload.
+model FatwaQuestion {
+  id           String    @id @db.NVarChar(36)
+  askerId      String    @db.NVarChar(36)
+  body         String?   @db.NVarChar(4000)
+  /// submitted | triaged | assigned | answered | declined | closed
+  status       String    @db.NVarChar(16)
+  categoryId   String?   @db.NVarChar(36)
+  assigneeId   String?   @db.NVarChar(36)
+  triagedById  String?   @db.NVarChar(36)
+  triagedAt    DateTime? @db.DateTime2
+  assignedById String?   @db.NVarChar(36)
+  assignedAt   DateTime? @db.DateTime2
+  declinedById String?   @db.NVarChar(36)
+  declinedAt   DateTime? @db.DateTime2
+  answeredAt   DateTime? @db.DateTime2
+  disposedAt   DateTime? @db.DateTime2
+  version      Int
+  submittedAt  DateTime  @db.DateTime2
+  updatedAt    DateTime  @db.DateTime2
+
+  asker      User           @relation("FatwaQuestionAsker", fields: [askerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  assignee   User?          @relation("FatwaQuestionAssignee", fields: [assigneeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  triagedBy  User?          @relation("FatwaQuestionTriager", fields: [triagedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  assignedBy User?          @relation("FatwaQuestionAssigner", fields: [assignedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  declinedBy User?          @relation("FatwaQuestionDecliner", fields: [declinedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  category   FatwaCategory? @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  fatwa      Fatwa?
+
+  @@index([askerId, submittedAt(sort: Desc), id], map: "FatwaQuestion_askerId_idx")
+  @@index([status, submittedAt, id], map: "FatwaQuestion_status_idx")
+  @@index([assigneeId, status, submittedAt], map: "FatwaQuestion_assigneeId_idx")
+  @@index([disposedAt, askerId], map: "FatwaQuestion_disposal_idx")
+  @@map("FatwaQuestion")
+}
+
+/// The ruling for one question. The slug freezes at first publication.
+model Fatwa {
+  id                  String    @id @db.NVarChar(36)
+  questionId          String    @unique(map: "Fatwa_questionId_key") @db.NVarChar(36)
+  slug                String    @unique(map: "Fatwa_slug_key") @db.NVarChar(120)
+  /// null | drafting | in_review | returned
+  reviewState         String?   @db.NVarChar(16)
+  pendingRevisionId   String?   @db.NVarChar(36)
+  publishedRevisionId String?   @db.NVarChar(36)
+  firstPublishedAt    DateTime? @db.DateTime2
+  withdrawnAt         DateTime? @db.DateTime2
+  version             Int
+  createdAt           DateTime  @db.DateTime2
+  updatedAt           DateTime  @db.DateTime2
+
+  question          FatwaQuestion    @relation(fields: [questionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pendingRevision   FatwaRevision?   @relation("FatwaPendingRevision", fields: [pendingRevisionId, id], references: [id, fatwaId], onDelete: NoAction, onUpdate: NoAction, map: "Fatwa_pendingRevision_fkey")
+  publishedRevision FatwaRevision?   @relation("FatwaPublishedRevision", fields: [publishedRevisionId, id], references: [id, fatwaId], onDelete: NoAction, onUpdate: NoAction, map: "Fatwa_publishedRevision_fkey")
+  revisions         FatwaRevision[]  @relation("FatwaRevisions")
+  readTallies       FatwaReadTally[]
+
+  @@index([reviewState, updatedAt, id], map: "Fatwa_reviewState_idx")
+  @@index([withdrawnAt, firstPublishedAt(sort: Desc), id], map: "Fatwa_public_idx")
+  @@map("Fatwa")
+}
+
+/// One saved revision, never edited. `publicQuestion` is a separately written
+/// anonymised statement — never the private question.
+model FatwaRevision {
+  id               String   @id @db.NVarChar(36)
+  fatwaId          String   @db.NVarChar(36)
+  number           Int
+  title            String   @db.NVarChar(300)
+  publicQuestion   String   @db.NVarChar(4000)
+  ruling           String   @db.NVarChar(Max)
+  language         String   @db.NVarChar(16)
+  categoryId       String   @db.NVarChar(36)
+  correctionReason String?  @db.NVarChar(1000)
+  authorId         String   @db.NVarChar(36)
+  createdAt        DateTime @db.DateTime2
+
+  fatwa        Fatwa                 @relation("FatwaRevisions", fields: [fatwaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  languageRef  Language              @relation(fields: [language], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  category     FatwaCategory         @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  author       User                  @relation(fields: [authorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  topics       FatwaRevisionTopic[]
+  publications FatwaPublication[]
+  decisions    FatwaReviewDecision[]
+  pendingFor   Fatwa[]               @relation("FatwaPendingRevision")
+  publishedFor Fatwa[]               @relation("FatwaPublishedRevision")
+
+  @@unique([fatwaId, number], map: "FatwaRevision_number_key")
+  @@unique([id, fatwaId], map: "FatwaRevision_owner_key")
+  @@index([categoryId], map: "FatwaRevision_categoryId_idx")
+  @@map("FatwaRevision")
+}
+
+/// The typed FatwaTopic junction (DOMAIN_MODEL.md §6.2), per revision.
+model FatwaRevisionTopic {
+  revisionId String @db.NVarChar(36)
+  topicId    String @db.NVarChar(36)
+
+  revision FatwaRevision @relation(fields: [revisionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  topic    Topic         @relation(fields: [topicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([revisionId, topicId])
+  @@index([topicId, revisionId], map: "FatwaRevisionTopic_topicId_idx")
+  @@map("FatwaRevisionTopic")
+}
+
+/// Each publication of a revision, with its step-up evidence. Never edited.
+model FatwaPublication {
+  id                String   @id @db.NVarChar(36)
+  fatwaId           String   @db.NVarChar(36)
+  revisionId        String   @unique(map: "FatwaPublication_revisionId_key") @db.NVarChar(36)
+  sequence          Int
+  publisherId       String   @db.NVarChar(36)
+  publisherPersonId String?  @db.NVarChar(36)
+  authorPersonId    String?  @db.NVarChar(36)
+  stepUpGrantId     String   @db.NVarChar(36)
+  publishedAt       DateTime @db.DateTime2
+
+  revision        FatwaRevision @relation(fields: [revisionId, fatwaId], references: [id, fatwaId], onDelete: NoAction, onUpdate: NoAction, map: "FatwaPublication_revision_fkey")
+  publisher       User          @relation(fields: [publisherId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  publisherPerson Person?       @relation("FatwaPublicationPublisherPerson", fields: [publisherPersonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  authorPerson    Person?       @relation("FatwaPublicationAuthorPerson", fields: [authorPersonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([fatwaId, sequence], map: "FatwaPublication_sequence_key")
+  @@map("FatwaPublication")
+}
+
+/// A return to the drafter or a withdrawal. The note is private. Never edited.
+model FatwaReviewDecision {
+  id            String   @id @db.NVarChar(36)
+  fatwaId       String   @db.NVarChar(36)
+  revisionId    String   @db.NVarChar(36)
+  /// returned | withdrawn
+  decision      String   @db.NVarChar(16)
+  note          String   @db.NVarChar(1000)
+  actorId       String   @db.NVarChar(36)
+  stepUpGrantId String?  @db.NVarChar(36)
+  decidedAt     DateTime @db.DateTime2
+
+  revision FatwaRevision @relation(fields: [revisionId, fatwaId], references: [id, fatwaId], onDelete: NoAction, onUpdate: NoAction, map: "FatwaReviewDecision_revision_fkey")
+  actor    User          @relation(fields: [actorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([fatwaId, decidedAt], map: "FatwaReviewDecision_fatwaId_idx")
+  @@map("FatwaReviewDecision")
+}
+
+/// Anonymous reads per ruling per UTC day — what `sort=popular` reads. A count
+/// and nothing else: no account, address, cookie or user agent.
+model FatwaReadTally {
+  fatwaId String   @db.NVarChar(36)
+  day     DateTime @db.Date
+  reads   Int
+
+  fatwa Fatwa @relation(fields: [fatwaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([fatwaId, day])
+  @@index([day, fatwaId], map: "FatwaReadTally_day_idx")
+  @@map("FatwaReadTally")
 }

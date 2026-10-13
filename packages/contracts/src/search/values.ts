@@ -61,6 +61,12 @@ import { z } from 'zod';
  * translation never becomes a competing result. The record's original text and
  * each public translation of it are documents of that one result, one per text
  * language. Chains, gradings, commentary and conflict evidence are not indexed.
+ *
+ * PHASE 20 adds `fatwa`, and only that. The RULING is the result unit and its
+ * one document is the CURRENT PUBLISHED revision: its title, its separately
+ * written anonymised public question and the ruling. A private question, an
+ * asker, an assignment, a draft, a review note, a superseded revision and a
+ * withdrawn ruling are never indexed.
  */
 export const SEARCH_KINDS = Object.freeze([
   'topic',
@@ -84,6 +90,7 @@ export const SEARCH_KINDS = Object.freeze([
   'media-coverage',
   'quran-ayah',
   'hadith',
+  'fatwa',
 ] as const);
 
 export type SearchKind = (typeof SEARCH_KINDS)[number];
@@ -125,6 +132,7 @@ export const SEARCH_SCOPE_KINDS = Object.freeze([
   'media-coverage',
   'quran-ayah',
   'hadith',
+  'fatwa',
 ] as const);
 
 export type SearchScopeKind = (typeof SEARCH_SCOPE_KINDS)[number];
@@ -153,6 +161,7 @@ export const SCOPE_OF_KIND: Readonly<Record<SearchKind, SearchScopeKind>> = Obje
     'media-coverage': 'media-coverage',
     'quran-ayah': 'quran-ayah',
     hadith: 'hadith',
+    fatwa: 'fatwa',
   },
 );
 

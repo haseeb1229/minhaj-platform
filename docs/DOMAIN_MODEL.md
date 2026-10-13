@@ -1188,6 +1188,83 @@ published / declined / returned for revision.
 - **FatwaCategory is a domain classification** that maps onto canonical Topics; it does not
   replace them.
 
+### 12.1 As delivered (Phase 20 — engineering; no real authority is granted)
+
+The context is built and proven against unmistakably synthetic `NON_FATWA_FIXTURE_*` material.
+**No ruling, question, category or activation is seeded, and nobody holds a Fatwa permission**
+(OPEN_DECISIONS.md §1.4 and §6.3 stay open). Engineering completion is never "Fatwa authority
+approved".
+
+| Aggregate | What it holds — and deliberately does not |
+|---|---|
+| **FatwaActivation** | An operator-only singleton (`fixture` or `approved`, an `approved` row carrying the organisation's evidence reference). With no row the service accepts no question, publishes nothing and every public Fatwa page says the service is not available. The runtime can read it and nothing else; it is immutable |
+| **FatwaCategory** | Immutable slug, one **typed foreign key to a canonical Topic**, position, `active`/`archived`, display names per interface locale. Never deleted; maintained under `fatwa.publish` |
+| **FatwaQuestion** | The asker's account (real FK to `User`), the asker's own words, status, category, the current assignee and the workflow facts (who triaged, assigned or declined, and when). **No name, address, phone or contact detail is copied from the account.** Its text is erased at account closure |
+| **Fatwa** | One per question: its slug, review state (`drafting`, `in_review`, `returned` or none), the pending revision, the current **published** revision, first publication and withdrawal instants |
+| **FatwaRevision** | Every saved draft, **never edited**: title, the **separately written anonymised public question**, the ruling, content language (FK `Language`), category, author, and — for a correction — the public correction reason. The original question is never copied here |
+| **FatwaRevisionTopic** | The typed `FatwaTopic` junction of §6.2, per revision, so a correction is reviewed with its topics and history keeps what was published |
+| **FatwaPublication** | Each publication of a revision, never edited: sequence, publisher, the step-up grant used, and the published contributor records the publisher's and drafter's accounts were linked to at that moment, if any |
+| **FatwaReviewDecision** | A return to the drafter or a withdrawal, never edited; its note is private |
+| **FatwaReadTally** | Anonymous reads per ruling per UTC day — a count and nothing else |
+
+**Lifecycle.** The question owns `submitted → triaged → assigned → answered`, and
+`declined` or `closed` (account closure) before an answer. Drafting and review are the ruling's:
+a save is a new revision and moves it to `drafting`; the assignee submits the exact pending
+revision (`in_review`); a `fatwa.publish` holder returns it (`returned`, with a private note) or
+publishes it. The canonical §12 lifecycle — submitted, triaged, assigned, drafted, scholar review,
+published, declined, returned — is **derived** from those two owners' facts, so it cannot disagree
+with them. The asker sees only `received`, `in progress`, `answered`, `declined` or `closed`.
+Every transition carries an expected version.
+
+**Stages and keys.** `question.receive` triages: it reads questions still in intake, categorises,
+assigns to an account that holds `fatwa.answer` **now** and is not the asker, and declines.
+`fatwa.answer` drafts, and only for a question assigned to the actor **now** — a reassigned or
+revoked answerer loses access on the next request. `fatwa.publish` reviews, returns, publishes,
+corrects and withdraws, each publication and withdrawal behind the dedicated `fatwa-publication`
+step-up; it reads a private question only while that question's ruling is under its review. No
+key implies another, and none is in the protected Platform Administrator bundle
+(SECURITY_BASELINE.md §3.2.1).
+
+**Separation of duties — a fail-closed engineering default, not a Minhaj policy.** The author of a
+revision cannot publish that revision, and the asker cannot publish the ruling on their own
+question. There is no administrator exception. The organisation's real triage, approval and
+sensitive-question escalation process is OPEN_DECISIONS.md §1.4; nothing here pretends to be it.
+
+**Public versus private.** Only a published revision is public, and only its public fields: title,
+anonymised public question, ruling, category, topics, language, publication and correction
+instants, the visible history of earlier published revisions with their correction reasons, and
+attribution to a **published** contributor record where the acting account was linked to one
+(§5) — a profile alone grants nothing and is never authority. Anonymisation is a person writing a
+separate field; **nothing rewrites, redacts, detects names in or summarises text**, and the
+original question never reaches a public page, Search, a sitemap, metadata, a log or an audit
+payload.
+
+**Corrections and withdrawal.** A correction is a new revision with a public reason, reviewed
+again and published again under fresh step-up; the URL stays the same and earlier versions remain
+visible on it. The slug may change while a ruling has never been published and **freezes at first
+publication**, so no slug history is owed. Withdrawal (same authority) removes the ruling from public
+view and from Search, keeps every revision and keeps the slug reserved; nothing is ever deleted.
+
+**Topics.** A ruling is on Topic T when its current published revision lists T or its category maps
+to T. `/fatwa?topic=` and `/fatwa/topics/{slug}` read exactly that; Search projects the same set.
+
+**`sort=popular` — exact semantics.** Anonymous reads over the trailing 30 UTC days, most first; ties
+by first publication instant (newest first), then id. A read is counted by a POST the ruling page
+sends after it renders — never by a GET — at most once per network address per ruling per 30
+minutes, enforced by the platform's existing limiter (which keeps only a keyed digest, until its
+window expires). The tally stores no account, address, cookie, fingerprint or user agent and
+writes no audit row. `latest` is first publication instant, newest first, with the same tie-break.
+
+**Account closure.** After Identity commits, Fatwa — in its own transaction — erases the private
+text of the closed account's questions and closes those not yet answered or declined; published
+rulings never held the question and are unaffected. The disposition is idempotent, refuses an
+account that is not closed, and a bounded sweep finishes an interrupted closure (§4.6,
+SECURITY_BASELINE.md §19.1). No jurisdiction-specific retention period is invented.
+
+**Not delivered, and not owed by Phase 20:** attachments (no Storage dependency), messaging between
+asker and scholar (Phase 24), notifications (Phase 21), consent-to-reveal-identity, import of
+published rulings (Phase 30 must call the same publication operation), and any real grant.
+
 ---
 
 ## 13. Learning

@@ -2,6 +2,12 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 
+import {
+  EXTERNALLY_GATED_PERMISSIONS,
+  PERMISSION_CATALOGUE,
+  PLATFORM_ADMINISTRATOR_PERMISSIONS,
+} from '@minhaj/contracts/identity';
+
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
 import { provisionApplicationPrincipal } from '../src/lifecycle/application-principal.ts';
 import {
@@ -189,6 +195,26 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // SEPARATE reviewed mapping; NOT ONE ROW of content is seeded (DOMAIN_MODEL.md
   // §9), asserted by `assertHadithFoundation` and proved as behaviour by
   // `assertHadithCanonicalRules`.
+  // THE FATWA CONTEXT: the operator's activation, a category that maps onto one
+  // canonical Topic, the PRIVATE question, the public ruling as a sequence of
+  // immutable revisions with their typed topics, publications and review
+  // decisions, and an anonymous per-day read tally. Workflow tables are written
+  // only by procedures re-checking a live permission; NOT ONE ROW is seeded,
+  // and the three keys are catalogued but bundled into NO role (DOMAIN_MODEL.md
+  // §12, OPEN_DECISIONS.md §1.4, §6.3), asserted by `assertFatwaFoundation` and
+  // proved as behaviour by `assertFatwaRules`.
+  '20261004000000_phase20_fatwa': [
+    'FatwaActivation',
+    'FatwaCategory',
+    'FatwaCategoryName',
+    'FatwaQuestion',
+    'Fatwa',
+    'FatwaRevision',
+    'FatwaRevisionTopic',
+    'FatwaPublication',
+    'FatwaReviewDecision',
+    'FatwaReadTally',
+  ],
   '20261003000000_phase19_hadith': [
     'HadithSourceSystem',
     'HadithCollection',
@@ -399,9 +425,11 @@ const PREMATURE_TABLES = [
   'PrivateCollection',
   'Quran',
   // `Hadith` left this list when Phase 19 delivered it as the source-qualified
-  // record of its own context.
+  // record of its own context. `Fatwa` left it when Phase 20 delivered the
+  // ruling with its revisions; the private question is `FatwaQuestion`, never a
+  // context-less `Question`.
   'Book',
-  'Fatwa',
+  'Question',
   // `Scholar` and `Teacher` stay here after Phase 5, and the near-miss is
   // deliberate. Phase 5 delivers `ScholarProfile` and `TeacherProfile` —
   // FACETS of a Person. A bare `Scholar` or `Teacher` table would be a second,
@@ -451,6 +479,12 @@ const PREMATURE_TABLES = [
   'HadithCollectionSlugHistory',
   'HadithCommentarySlugHistory',
   'HadithScienceSlugHistory',
+  // Phase 20 delivers Fatwa with NO per-user state — saved rulings are Phase
+  // 21's — and with a slug that freezes at first publication, so no ruling or
+  // category owes a slug history.
+  'FatwaBookmark',
+  'FatwaSlugHistory',
+  'FatwaCategorySlugHistory',
   // Phase 12 delivers galleries with NO Event relationship: the typed
   // Event↔Gallery association is Phase 14's `EventGallery`, which left this list
   // when Phase 14 delivered it on the Event revision. A Media-owned reverse join
@@ -655,6 +689,16 @@ const PROHIBITED_TABLES = [
   'HadithLayer',
   'HadithTarget',
   'HadithAssignment',
+
+  // PHASE 20 — a read is COUNTED, never recorded: a per-reader or per-request
+  // read table would store the account, address or cookie the tally refuses to
+  // hold. A ruling's topics are typed per revision (`FatwaRevisionTopic`), so a
+  // second, unversioned topic table would let history and the published topics
+  // disagree.
+  'FatwaRead',
+  'FatwaReadEvent',
+  'FatwaReader',
+  'FatwaTopic',
 ];
 
 const EXPECTED_AUDIT_COLUMNS = [
@@ -896,6 +940,19 @@ const EXPECTED_COLUMN_SIZES: readonly {
     column: 'locale',
     characters: 8,
   })),
+  // Phase 20. Each public address a unique key no longer than its trigger's
+  // VARBINARY(240) comparison; the private question bounded; a revision's
+  // language a foreign key into `Language.code`; a display-name locale one of
+  // three.
+  ...['Fatwa', 'FatwaCategory'].map((table) => ({
+    table,
+    column: 'slug',
+    characters: 120,
+  })),
+  { table: 'FatwaQuestion', column: 'body', characters: 4000 },
+  { table: 'FatwaRevision', column: 'publicQuestion', characters: 4000 },
+  { table: 'FatwaRevision', column: 'language', characters: 16 },
+  { table: 'FatwaCategoryName', column: 'locale', characters: 8 },
 ];
 
 /**
@@ -981,6 +1038,54 @@ const EXPECTED_FILTERED_INDEXES: readonly {
     why: 'one audio file could be served as two different recitation segments',
   },
 ];
+
+/** The ten Phase-20 tables, in the migration's order. */
+const FATWA_TABLES = MIGRATION_EXPECTATIONS['20261004000000_phase20_fatwa'] ?? [];
+
+/**
+ * Each Fatwa trigger, the table it guards and the refusal numbers its body
+ * raises: 51230 an immutable activation, 51240 a category that keeps its slug,
+ * moves one version at a time and is never deleted, 51241 a published ruling
+ * that keeps its address, 51242 immutable history, 51248 a ruling that changes
+ * only through its workflow.
+ */
+const FATWA_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, string]>> = {
+  FatwaActivationImmutable: ['FatwaActivation', '51230'],
+  FatwaCategoryIdentity: ['FatwaCategory', '51240'],
+  FatwaRevisionImmutable: ['FatwaRevision', '51242'],
+  FatwaRevisionTopicImmutable: ['FatwaRevisionTopic', '51242'],
+  FatwaPublicationImmutable: ['FatwaPublication', '51242'],
+  FatwaReviewDecisionImmutable: ['FatwaReviewDecision', '51242'],
+  FatwaRevisionTopicAppend: ['FatwaRevisionTopic', '51242'],
+  FatwaIntegrity: ['Fatwa', '51241+51242+51248'],
+};
+
+/**
+ * THE workflow write path, and the refusals each procedure raises: 51231 an
+ * inactive service, 51232 an inactive asker, 51233 a permission not held now,
+ * 51234 a question not assigned to the actor, 51235 publication authority
+ * (permission and `fatwa-publication` step-up) not held now, 51236 not found,
+ * 51237 stale, 51238 an illegal transition, 51239 a bad assignee, 51240 an
+ * unavailable category, 51241 a frozen slug, 51243 self-publication, 51244 the
+ * wrong revision, 51245 the correction-reason rule, 51246 an account not
+ * closed, 51247 invalid content. Recording a read raises nothing of its own: it
+ * counts only a ruling public now, and silently counts nothing otherwise.
+ */
+const FATWA_PROCEDURE_NUMBERS: Readonly<Record<string, string>> = {
+  FatwaAssertPermission: '51233',
+  FatwaAssertPublicationAuthority: '51235',
+  FatwaSubmitQuestion: '51231+51232+51247',
+  FatwaTriageQuestion: '51236+51237+51238+51240',
+  FatwaAssignQuestion: '51236+51237+51238+51239',
+  FatwaDeclineQuestion: '51236+51237+51238',
+  FatwaSaveDraft: '51234+51236+51237+51238+51240+51241+51245+51247',
+  FatwaSubmitForReview: '51234+51236+51237+51238+51244',
+  FatwaReturnForRevision: '51236+51237+51238+51244+51247',
+  FatwaPublishRevision: '51231+51236+51237+51238+51240+51243+51244',
+  FatwaWithdraw: '51236+51237+51238+51247',
+  FatwaDisposeQuestions: '51246+51247',
+  FatwaRecordRead: '',
+};
 
 /** The twenty-four Phase-19 tables, in the migration's order. */
 const HADITH_TABLES = MIGRATION_EXPECTATIONS['20261003000000_phase19_hadith'] ?? [];
@@ -1183,6 +1288,9 @@ const EXPECTED_TRIGGERS = [
   // Phase 19: every Hadith invariant no constraint can express — each listed,
   // with the refusal it raises, in `HADITH_TRIGGER_NUMBERS`.
   ...Object.keys(HADITH_TRIGGER_NUMBERS),
+  // Phase 20: every Fatwa invariant no constraint can express — each listed,
+  // with the refusal it raises, in `FATWA_TRIGGER_NUMBERS`.
+  ...Object.keys(FATWA_TRIGGER_NUMBERS),
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
@@ -1481,6 +1589,31 @@ const EXPECTED_CHECK_CONSTRAINTS = [
     'HadithCommentaryEntry',
     'HadithScienceText',
   ].map((table) => ({ table, constraint: table + '_ck' })),
+  // Phase 20. One activation, and an approved one with its evidence; slug
+  // grammar on both public addresses and the reserved section and view words
+  // on a ruling's; a question's closed status set, its text present exactly
+  // until disposal and the facts each status needs; a ruling's review and
+  // publication facts; a revision's bounded text; a publication's sequence and
+  // grant; a decision's closed vocabulary; a positive read count.
+  { table: 'FatwaActivation', constraint: 'FatwaActivation_evidence_ck' },
+  ...['FatwaCategory', 'Fatwa'].map((table) => ({
+    table,
+    constraint: table + '_slug_ck',
+  })),
+  ...['status', 'body', 'facts'].map((rule) => ({
+    table: 'FatwaQuestion',
+    constraint: 'FatwaQuestion_' + rule + '_ck',
+  })),
+  ...[
+    'FatwaActivation',
+    'FatwaCategory',
+    'FatwaCategoryName',
+    'Fatwa',
+    'FatwaRevision',
+    'FatwaPublication',
+    'FatwaReviewDecision',
+    'FatwaReadTally',
+  ].map((table) => ({ table, constraint: table + '_ck' })),
 ];
 
 /**
@@ -1547,27 +1680,23 @@ const NAVIGATION_PERMISSIONS = ['navigation.read'];
 const PEOPLE_PERMISSIONS = ['people.administer', 'people.read'];
 
 /**
- * The four capability-projection sources, which MUST NOT be seeded yet.
+ * The capability-projection sources that MUST NOT be seeded yet.
  *
  * DOMAIN_MODEL.md §4.5 derives `canTeach`, `canReceiveQuestions`,
- * `canReviewContent` and `canIssueFatwa` from these codes. Phase 5 consumes the
+ * `canReviewContent` and `canIssueFatwa` from four codes. Phase 5 consumes the
  * projection and it would have been trivially convenient to seed them so a test
  * could grant one — which is exactly why this is asserted as a NEGATIVE.
  *
- * They belong to Learning, Fatwa and Editorial, none of which has shipped.
- * Seeding one now would fix another owner's vocabulary before that owner can
- * have an opinion about it, and would leave grantable authority over nothing.
- * OPEN_DECISIONS.md §6.3 separately reserves WHO receives them to the
- * organisation.
- *
- * `fatwa.answer` is listed alongside `fatwa.publish` because §6.3 names both.
+ * Each arrives with its owner. `content.review` arrived with Editorial (Phase
+ * 6); `question.receive` and `fatwa.publish`, with `fatwa.answer` beside them,
+ * arrived with Fatwa (Phase 20) — catalogued but bundled into no role, which
+ * `assertFatwaFoundation` proves. `teaching.perform` belongs to Learning, which
+ * has not shipped: seeding it now would fix another owner's vocabulary before
+ * that owner can have an opinion about it, and would leave grantable authority
+ * over nothing. OPEN_DECISIONS.md §6.3 separately reserves WHO receives any of
+ * them to the organisation.
  */
-const UNSEEDED_CAPABILITY_PERMISSIONS = [
-  'teaching.perform',
-  'question.receive',
-  'fatwa.answer',
-  'fatwa.publish',
-];
+const UNSEEDED_CAPABILITY_PERMISSIONS = ['teaching.perform'];
 
 function report(step: string, detail: string): void {
   process.stdout.write(`  ${step.padEnd(24)} ${detail}\n`);
@@ -1782,8 +1911,41 @@ async function assertNoPolymorphicAssignment(session: SqlSession): Promise<void>
   // belonging to a context that owns the thing being classified.
   const AGGREGATE_TABLES = ['Topic', 'TopicTranslation'];
 
+  // A DOMAIN CLASSIFICATION THAT MAPS ONTO ONE TOPIC is not an assignment
+  // either. A Fatwa category's own row is what is classified, by ONE NOT NULL
+  // `topicId` column (DOMAIN_MODEL.md §12: "FatwaCategory is a domain
+  // classification that maps onto canonical Topics"), so there is no target
+  // identifier to leave dangling. Named exactly, and its shape proved below, so
+  // a junction cannot hide here by name.
+  const CLASSIFICATION_TABLES = ['FatwaCategory'];
+  const classifications = topicReferences.filter((row) =>
+    CLASSIFICATION_TABLES.includes(row.junctionTable),
+  );
+  for (const classification of classifications) {
+    const [shape] = await session.query<{ keys: number; columns: string | null }>(`
+      SELECT
+        (SELECT COUNT(*) FROM sys.foreign_keys
+          WHERE parent_object_id = OBJECT_ID(N'[dbo].[${classification.junctionTable}]')
+            AND referenced_object_id = OBJECT_ID(N'[dbo].[Topic]')) AS keys,
+        (SELECT STRING_AGG(c.name + N':' + CAST(c.is_nullable AS NVARCHAR(1)), N',')
+           FROM sys.foreign_key_columns fc
+           JOIN sys.foreign_keys fk ON fk.object_id = fc.constraint_object_id
+           JOIN sys.columns c ON c.object_id = fc.parent_object_id AND c.column_id = fc.parent_column_id
+          WHERE fk.parent_object_id = OBJECT_ID(N'[dbo].[${classification.junctionTable}]')
+            AND fk.referenced_object_id = OBJECT_ID(N'[dbo].[Topic]')) AS columns;
+    `);
+    if (Number(shape?.keys) !== 1 || shape?.columns !== 'topicId:0') {
+      fail(
+        `${classification.junctionTable} must map onto exactly one Topic by one NOT NULL ` +
+          `topicId column; found ${JSON.stringify(shape ?? null)}.`,
+      );
+    }
+  }
+
   const junctions = topicReferences.filter(
-    (row) => !AGGREGATE_TABLES.includes(row.junctionTable),
+    (row) =>
+      !AGGREGATE_TABLES.includes(row.junctionTable) &&
+      !CLASSIFICATION_TABLES.includes(row.junctionTable),
   );
   for (const junction of junctions) {
     if (Number(junction.otherForeignKeys) === 0) {
@@ -1813,6 +1975,7 @@ async function assertNoPolymorphicAssignment(session: SqlSession): Promise<void>
   report(
     'assignment strategy',
     `no polymorphic pair, ${junctions.length} typed junction(s), ` +
+      `${classifications.length} single-topic classification(s), ` +
       `aggregate edges: ${aggregateEdges.join(', ')}`,
   );
 }
@@ -1964,17 +2127,29 @@ const PHASE18_KINDS = ['quran-ayah'];
 /** The public citation is the result unit; its scope is one HadithCitation. */
 const PHASE19_KINDS = ['hadith'];
 
+/** The current published revision is the result unit; its scope is one Fatwa. */
+const PHASE20_KINDS = ['fatwa'];
+
 /**
  * Phase 9 WIDENS the search vocabularies by exactly its six kinds, each its own
  * scope, Phase 10 by exactly `video`, Phase 11 by exactly `audio`, Phase 18
- * by exactly `quran-ayah` and Phase 19 by exactly `hadith`; each rollback narrows them back to exactly the
+ * by exactly `quran-ayah`, Phase 19 by exactly `hadith` and Phase 20 by exactly
+ * `fatwa`; each rollback narrows them back to exactly the
  * previous phase's. Asserted against the catalogue in every
  * direction, so a migration that pre-created a later domain's kind, or a
  * rollback that left one behind, fails here.
  */
 async function assertSearchVocabulary(
   session: SqlSession,
-  stage: 'phase17' | 'phase9' | 'phase10' | 'phase11' | 'phase13' | 'phase18' | 'phase19',
+  stage:
+    | 'phase17'
+    | 'phase9'
+    | 'phase10'
+    | 'phase11'
+    | 'phase13'
+    | 'phase18'
+    | 'phase19'
+    | 'phase20',
 ): Promise<void> {
   const sorted = (values: readonly string[]) => [...values].sort().join(',');
   const phase13 = [...PHASE9_KINDS, ...PHASE10_KINDS, ...PHASE11_KINDS, ...PHASE13_KINDS];
@@ -1986,6 +2161,7 @@ async function assertSearchVocabulary(
     phase13,
     phase18: [...phase13, ...PHASE18_KINDS],
     phase19: [...phase13, ...PHASE18_KINDS, ...PHASE19_KINDS],
+    phase20: [...phase13, ...PHASE18_KINDS, ...PHASE19_KINDS, ...PHASE20_KINDS],
   }[stage];
   const scopes = sorted([...PHASE17_SCOPES, ...added]);
   const kinds = sorted([...PHASE17_KINDS, ...added]);
@@ -2013,6 +2189,8 @@ async function assertSearchVocabulary(
         'Phase 17, the six Phase-9 kinds, video, audio, the four News kinds and quran-ayah',
       phase19:
         'Phase 17, the six Phase-9 kinds, video, audio, the four News kinds, quran-ayah and hadith',
+      phase20:
+        'Phase 17, the six Phase-9 kinds, video, audio, the four News kinds, quran-ayah, hadith and fatwa',
     }[stage],
   );
 }
@@ -6979,6 +7157,1022 @@ async function assertHadithCanonicalRules(session: SqlSession): Promise<void> {
   );
 }
 
+const FATWA_PERMISSIONS = ['fatwa.answer', 'fatwa.publish', 'question.receive'];
+
+/**
+ * EVERY foreign key from a Fatwa table to another owner's table, exactly: the
+ * accounts the workflow names, the canonical Topic a category maps onto and a
+ * revision lists, the revision's content language, and the published
+ * contributor records a publication attributes. None names Editorial, Quran,
+ * Hadith, Library or Media, and none is a `targetType + targetId` pair.
+ */
+const FATWA_EXTERNAL_KEYS = [
+  'FatwaCategory_topicId_fkey>Topic',
+  'FatwaPublication_authorPersonId_fkey>Person',
+  'FatwaPublication_publisherId_fkey>User',
+  'FatwaPublication_publisherPersonId_fkey>Person',
+  'FatwaQuestion_askerId_fkey>User',
+  'FatwaQuestion_assignedById_fkey>User',
+  'FatwaQuestion_assigneeId_fkey>User',
+  'FatwaQuestion_declinedById_fkey>User',
+  'FatwaQuestion_triagedById_fkey>User',
+  'FatwaReviewDecision_actorId_fkey>User',
+  'FatwaRevisionTopic_topicId_fkey>Topic',
+  'FatwaRevision_authorId_fkey>User',
+  'FatwaRevision_language_fkey>Language',
+].sort();
+
+/**
+ * THE PROTECTED BUNDLE IS THE CATALOGUE LESS THE EXTERNALLY GATED KEYS, in
+ * whatever state the catalogue is: every catalogued key that is not gated is
+ * bundled, no gated key is bundled, and no role at all holds a gated key — a
+ * migrated database has no triage officer, answerer or Fatwa publisher until
+ * the organisation names one (OPEN_DECISIONS.md §1.4, §6.3). Read from the
+ * database on both sides, so it holds before Phase 20, after it and after its
+ * rollback alike. Returns the bundle's size.
+ */
+async function assertProtectedBundleExcludesGated(session: SqlSession): Promise<number> {
+  const gated = EXTERNALLY_GATED_PERMISSIONS.map((key) => `N'${key}'`).join(',');
+  const [row] = await session.query<{
+    expected: string | null;
+    bundled: string | null;
+    gatedHeld: number;
+  }>(`
+    SELECT
+      (SELECT STRING_AGG(p.[key], N',') WITHIN GROUP (ORDER BY p.[key])
+         FROM [dbo].[Permission] p WHERE p.[key] NOT IN (${gated})) AS [expected],
+      (SELECT STRING_AGG(rp.[permissionKey], N',') WITHIN GROUP (ORDER BY rp.[permissionKey])
+         FROM [dbo].[RolePermission] rp JOIN [dbo].[Role] r ON r.[id] = rp.[roleId]
+        WHERE r.[key] = N'platform-administrator') AS [bundled],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] WHERE [permissionKey] IN (${gated})) AS [gatedHeld];
+  `);
+  if (
+    row === undefined ||
+    row.expected === null ||
+    row.bundled !== row.expected ||
+    Number(row.gatedHeld) !== 0
+  )
+    fail(
+      `The protected bundle must be exactly the catalogue less the externally gated keys, ` +
+        `and no role may hold a gated key; found ${JSON.stringify(row ?? null)}.`,
+    );
+  return row.expected.split(',').length;
+}
+
+/**
+ * Phase 20 — what only the catalogue can prove about Fatwa:
+ *
+ *   1. NOTHING IS SEEDED: all ten tables are empty after deploy — no category,
+ *      question, ruling, tally or activation, so the service is inactive;
+ *   2. a ruling's address and question are unique, its revisions numbered per
+ *      ruling, each revision published at most once, and every pointer from a
+ *      ruling, publication or decision to a revision reaches a revision OF THAT
+ *      ruling by a composite key;
+ *   3. no Fatwa foreign key cascades, its references into other owners are
+ *      EXACTLY the thirteen above, no other owner references a Fatwa table or
+ *      holds a Fatwa column, no Fatwa table carries a type, target or kind
+ *      column, the private question holds no contact detail and the tally no
+ *      reader;
+ *   4. the ruling is NVARCHAR(MAX);
+ *   5. each of the eight triggers and thirteen procedures raises exactly its
+ *      own numbers from 51230–51248, on the table it guards;
+ *   6. the vocabulary is exactly the three externally gated keys, described as
+ *      the compiled catalogue describes them, bundled into NO role and granted
+ *      to nobody; no `fatwa-publication` grant exists; and the protected bundle
+ *      is the catalogue less exactly those keys — the compiled bundle.
+ *
+ * The rules themselves are proved as BEHAVIOUR by `assertFatwaRules`, and
+ * through the runtime login by `db:test:permissions`.
+ */
+async function assertFatwaFoundation(session: SqlSession): Promise<void> {
+  const tables = FATWA_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',');
+  const names = FATWA_TABLES.map((table) => `N'${table}'`).join(',');
+
+  // ---- 1. nothing seeded -------------------------------------------------------
+  const counts = await session.query<{ name: string; total: number }>(
+    FATWA_TABLES.map(
+      (table) =>
+        `SELECT N'${table}' AS [name], COUNT_BIG(*) AS [total] FROM [dbo].[${table}]`,
+    ).join(' UNION ALL ') + ';',
+  );
+  const seeded = counts.filter((row) => Number(row.total) !== 0);
+  if (FATWA_TABLES.length !== 10 || counts.length !== 10 || seeded.length > 0)
+    fail(
+      `The Fatwa migration must create ten empty tables and seed nothing; ` +
+        `found ${String(counts.length)} tables, seeded: ${JSON.stringify(seeded)}.`,
+    );
+
+  // ---- 2. identity, and every revision pointer kept to its own ruling ----------
+  const unique = await session.query<{ name: string; columns: string }>(`
+    SELECT i.[name], STRING_AGG(COL_NAME(ic.[object_id], ic.[column_id]), N',')
+      WITHIN GROUP (ORDER BY ic.[key_ordinal]) AS [columns]
+    FROM sys.indexes i
+    JOIN sys.index_columns ic ON ic.[object_id] = i.[object_id] AND ic.[index_id] = i.[index_id]
+    WHERE i.[is_unique] = 1 AND ic.[key_ordinal] > 0
+      AND i.[object_id] IN (OBJECT_ID(N'[dbo].[Fatwa]'), OBJECT_ID(N'[dbo].[FatwaRevision]'),
+                            OBJECT_ID(N'[dbo].[FatwaPublication]'), OBJECT_ID(N'[dbo].[FatwaCategory]'))
+    GROUP BY i.[name];
+  `);
+  const describedUnique = unique
+    .map((row) => `${row.name}(${row.columns})`)
+    .sort()
+    .join(',');
+  const expectedUnique = [
+    'FatwaCategory_pkey(id)',
+    'FatwaCategory_slug_key(slug)',
+    'FatwaPublication_pkey(id)',
+    'FatwaPublication_revisionId_key(revisionId)',
+    'FatwaPublication_sequence_key(fatwaId,sequence)',
+    'FatwaRevision_number_key(fatwaId,number)',
+    'FatwaRevision_owner_key(id,fatwaId)',
+    'FatwaRevision_pkey(id)',
+    'Fatwa_pkey(id)',
+    'Fatwa_questionId_key(questionId)',
+    'Fatwa_slug_key(slug)',
+  ]
+    .sort()
+    .join(',');
+  if (describedUnique !== expectedUnique)
+    fail(
+      `A ruling must be unique by its address and its question, a revision numbered per ` +
+        `ruling and published at most once; found ${describedUnique}.`,
+    );
+
+  const composite = await session.query<{ name: string; columns: string }>(`
+    SELECT fk.[name], STRING_AGG(COL_NAME(c.[parent_object_id], c.[parent_column_id]) + N'>'
+        + COL_NAME(c.[referenced_object_id], c.[referenced_column_id]), N',')
+      WITHIN GROUP (ORDER BY c.[constraint_column_id]) AS [columns]
+    FROM sys.foreign_keys fk
+    JOIN sys.foreign_key_columns c ON c.[constraint_object_id] = fk.[object_id]
+    WHERE fk.[referenced_object_id] = OBJECT_ID(N'[dbo].[FatwaRevision]')
+      AND fk.[parent_object_id] <> OBJECT_ID(N'[dbo].[FatwaRevisionTopic]')
+    GROUP BY fk.[name];
+  `);
+  const describedComposite = composite
+    .map((row) => `${row.name}(${row.columns})`)
+    .sort()
+    .join(',');
+  const expectedComposite = [
+    'FatwaPublication_revision_fkey(revisionId>id,fatwaId>fatwaId)',
+    'FatwaReviewDecision_revision_fkey(revisionId>id,fatwaId>fatwaId)',
+    'Fatwa_pendingRevision_fkey(pendingRevisionId>id,id>fatwaId)',
+    'Fatwa_publishedRevision_fkey(publishedRevisionId>id,id>fatwaId)',
+  ].join(',');
+  if (describedComposite !== expectedComposite)
+    fail(
+      `Every pointer to a revision must reach a revision of the same ruling; found ` +
+        `${describedComposite}.`,
+    );
+
+  // ---- 3. no cascade, exact external edges, no foreign Fatwa schema ------------
+  const cascading = await session.query<{ name: string }>(`
+    SELECT [name] FROM sys.foreign_keys
+    WHERE [parent_object_id] IN (${tables})
+      AND ([delete_referential_action] <> 0 OR [update_referential_action] <> 0);
+  `);
+  if (cascading.length > 0)
+    fail(
+      `Phase-20 foreign keys must not cascade; found ${cascading.map((row) => row.name).join(', ')}.`,
+    );
+
+  const external = await session.query<{ edge: string }>(`
+    SELECT fk.[name] + N'>' + OBJECT_NAME(fk.[referenced_object_id]) AS [edge]
+    FROM sys.foreign_keys fk
+    WHERE fk.[parent_object_id] IN (${tables}) AND fk.[referenced_object_id] NOT IN (${tables});
+  `);
+  const edges = external.map((row) => row.edge).sort();
+  if (edges.join(',') !== FATWA_EXTERNAL_KEYS.join(','))
+    fail(
+      `Fatwa's references into other owners must be exactly ${FATWA_EXTERNAL_KEYS.join(', ')}; ` +
+        `found ${edges.join(', ')}.`,
+    );
+
+  const [ownership] = await session.query<{ inbound: number; columns: string | null }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE [referenced_object_id] IN (${tables}) AND [parent_object_id] NOT IN (${tables})) AS [inbound],
+      (SELECT STRING_AGG(OBJECT_NAME(c.[object_id]) + N'.' + c.[name], N',') FROM sys.columns c
+        WHERE (c.[name] LIKE N'%fatwa%' OR c.[name] LIKE N'%ruling%')
+          AND OBJECT_NAME(c.[object_id]) NOT IN (${names})
+          AND OBJECTPROPERTY(c.[object_id], 'IsUserTable') = 1) AS [columns];
+  `);
+  if (Number(ownership?.inbound) !== 0 || (ownership?.columns ?? null) !== null)
+    fail(
+      `No other owner may hold Fatwa schema; found ${JSON.stringify(ownership ?? null)}.`,
+    );
+
+  const shapes = await session.query<{ name: string; columns: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) AS [name],
+      STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id]) AS [columns]
+    FROM sys.columns c
+    WHERE c.[object_id] IN (OBJECT_ID(N'[dbo].[FatwaQuestion]'), OBJECT_ID(N'[dbo].[FatwaReadTally]'))
+    GROUP BY c.[object_id];
+  `);
+  const describedShapes = shapes
+    .map((row) => `${row.name}(${row.columns})`)
+    .sort()
+    .join(' ');
+  const expectedShapes = [
+    'FatwaQuestion(id,askerId,body,status,categoryId,assigneeId,triagedById,triagedAt,' +
+      'assignedById,assignedAt,declinedById,declinedAt,answeredAt,disposedAt,version,' +
+      'submittedAt,updatedAt)',
+    'FatwaReadTally(fatwaId,day,reads)',
+  ].join(' ');
+  if (describedShapes !== expectedShapes)
+    fail(
+      `The private question holds the asker's words and workflow facts only, and the tally ` +
+        `a count only; found ${describedShapes}.`,
+    );
+
+  const generic = await session.query<{ name: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] AS [name] FROM sys.columns c
+    WHERE c.[object_id] IN (${tables})
+      AND (c.[name] LIKE N'%type%' OR c.[name] LIKE N'%target%' OR c.[name] LIKE N'%kind%'
+           OR c.[name] LIKE N'%email%' OR c.[name] LIKE N'%phone%' OR c.[name] LIKE N'%address%'
+           OR c.[name] LIKE N'%ip%' OR c.[name] LIKE N'%cookie%' OR c.[name] LIKE N'%agent%'
+           OR c.[name] LIKE N'%article%' OR c.[name] LIKE N'%hadith%' OR c.[name] LIKE N'%quran%');
+  `);
+  if (generic.length > 0)
+    fail(
+      `Fatwa tables may carry no type, target, contact, reader or foreign-context column; ` +
+        `found ${JSON.stringify(generic)}.`,
+    );
+
+  // ---- 4. the ruling is unbounded Unicode text --------------------------------
+  const [ruling] = await session.query<{ type: string; size: number }>(`
+    SELECT TYPE_NAME(c.[user_type_id]) AS [type], c.[max_length] AS [size] FROM sys.columns c
+    WHERE c.[object_id] = OBJECT_ID(N'[dbo].[FatwaRevision]') AND c.[name] = N'ruling';
+  `);
+  if (ruling?.type !== 'nvarchar' || Number(ruling.size) !== -1)
+    fail(
+      `FatwaRevision.ruling must be NVARCHAR(MAX); found ${JSON.stringify(ruling ?? null)}.`,
+    );
+
+  // ---- 5. every refusal in its own place --------------------------------------
+  const triggers = await session.query<{
+    name: string;
+    tableName: string;
+    definition: string | null;
+  }>(`
+    SELECT t.[name], OBJECT_NAME(t.[parent_id]) AS [tableName], OBJECT_DEFINITION(t.[object_id]) AS [definition]
+    FROM sys.triggers t WHERE t.[parent_id] IN (${tables});
+  `);
+  const describedTriggers = triggers
+    .map((row) => `${row.name}@${row.tableName}:${raisedNumbers(row.definition)}`)
+    .sort()
+    .join(',');
+  const expectedTriggers = Object.entries(FATWA_TRIGGER_NUMBERS)
+    .map(([name, [table, numbers]]) => `${name}@${table}:${numbers}`)
+    .sort()
+    .join(',');
+  if (describedTriggers !== expectedTriggers)
+    fail(
+      `Fatwa triggers must raise exactly their own 5123x–5124x numbers; found ${describedTriggers}.`,
+    );
+
+  const procedures = await session.query<{ name: string; definition: string | null }>(`
+    SELECT p.[name], OBJECT_DEFINITION(p.[object_id]) AS [definition]
+    FROM sys.procedures p WHERE p.[name] LIKE N'Fatwa%';
+  `);
+  const describedProcedures = procedures
+    .map((row) => `${row.name}:${raisedNumbers(row.definition)}`)
+    .sort()
+    .join(',');
+  const expectedProcedures = Object.entries(FATWA_PROCEDURE_NUMBERS)
+    .map(([name, numbers]) => `${name}:${numbers}`)
+    .sort()
+    .join(',');
+  if (describedProcedures !== expectedProcedures)
+    fail(
+      `The Fatwa write path must be exactly thirteen procedures raising their own ` +
+        `5123x–5124x numbers; found ${describedProcedures}.`,
+    );
+
+  // ---- 6. three gated keys, bundled into no role, granted to nobody ------------
+  const permissions = await session.query<{
+    key: string;
+    description: string;
+    held: number;
+  }>(`
+    SELECT p.[key], p.[description],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp WHERE rp.[permissionKey] = p.[key]) AS [held]
+    FROM [dbo].[Permission] p
+    WHERE p.[key] LIKE N'fatwa%' OR p.[key] LIKE N'question%' OR p.[key] LIKE N'ruling%'
+    ORDER BY p.[key];
+  `);
+  const described = new Map(
+    PERMISSION_CATALOGUE.map((entry) => [entry.key as string, entry.description]),
+  );
+  if (
+    permissions.map((row) => row.key).join(',') !== FATWA_PERMISSIONS.join(',') ||
+    [...EXTERNALLY_GATED_PERMISSIONS].sort().join(',') !== FATWA_PERMISSIONS.join(',') ||
+    permissions.some(
+      (row) => row.description !== described.get(row.key) || Number(row.held) !== 0,
+    )
+  )
+    fail(
+      `The Fatwa vocabulary must be exactly ${FATWA_PERMISSIONS.join(', ')}, described as the ` +
+        `compiled catalogue describes them and held by no role; found ${JSON.stringify(permissions)}.`,
+    );
+
+  const [quiet] = await session.query<{
+    grants: number;
+    holders: number;
+    audit: number;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[StepUpGrant] WHERE [purpose] = N'fatwa-publication') AS [grants],
+      (SELECT COUNT(*) FROM [dbo].[RoleAssignment] ra JOIN [dbo].[RolePermission] rp ON rp.[roleId] = ra.[roleId]
+        WHERE rp.[permissionKey] IN (${FATWA_PERMISSIONS.map((key) => `N'${key}'`).join(',')})) AS [holders],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action] LIKE N'fatwa.%') AS [audit];
+  `);
+  if (JSON.stringify(quiet) !== '{"grants":0,"holders":0,"audit":0}')
+    fail(
+      `A migrated database must hold no Fatwa grant, holder or audit row; found ${JSON.stringify(quiet)}.`,
+    );
+
+  const bundled = await assertProtectedBundleExcludesGated(session);
+  if (bundled !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length)
+    fail(
+      `The protected bundle holds ${String(bundled)} keys; the compiled bundle holds ` +
+        `${String(PLATFORM_ADMINISTRATOR_PERMISSIONS.length)}.`,
+    );
+
+  report(
+    'fatwa foundation',
+    'ten empty tables, composite revision pointers, thirteen non-cascading external keys, ' +
+      `8 triggers and 13 procedures by number, three gated keys held by no role, ` +
+      `${String(bundled)} bundled`,
+  );
+}
+
+/**
+ * After the Phase-20 rollback: no Fatwa table, trigger, procedure, key or
+ * permission, no grant of one and no `fatwa-publication` step-up grant — and
+ * the protected bundle is still the whole (now ungated) catalogue. The caller
+ * then proves the vocabulary and the earlier owners Fatwa referenced are back.
+ */
+async function assertFatwaRemoved(session: SqlSession): Promise<void> {
+  const keys = FATWA_PERMISSIONS.map((key) => `N'${key}'`).join(',');
+  const [row] = await session.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables WHERE [name] LIKE N'Fatwa%') AS [tables],
+      (SELECT COUNT(*) FROM sys.triggers WHERE [name] LIKE N'Fatwa%') AS [triggers],
+      (SELECT COUNT(*) FROM sys.procedures WHERE [name] LIKE N'Fatwa%') AS [procedures],
+      (SELECT COUNT(*) FROM sys.foreign_keys WHERE [name] LIKE N'Fatwa%') AS [keys],
+      (SELECT COUNT(*) FROM [dbo].[Permission] WHERE [key] IN (${keys})) AS [permissions],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] WHERE [permissionKey] IN (${keys})) AS [held],
+      (SELECT COUNT(*) FROM [dbo].[StepUpGrant] WHERE [purpose] = N'fatwa-publication') AS [grants];
+  `);
+  if (Object.values(row ?? { missing: 1 }).some((value) => Number(value) !== 0))
+    fail(`The Phase-20 rollback left a Fatwa object: ${JSON.stringify(row ?? null)}.`);
+  const bundled = await assertProtectedBundleExcludesGated(session);
+  report(
+    'fatwa rollback',
+    `every Fatwa table, trigger, procedure, key, permission and grant removed; ` +
+      `${String(bundled)} keys still bundled`,
+  );
+}
+
+/**
+ * Phase 20 — THE WORKFLOW RULES, proved as behaviour against the re-deployed
+ * schema with NON_FATWA_FIXTURE sentinels only, through the migration login
+ * (the runtime's own posture is `db:test:permissions`'s):
+ *
+ *   - with no activation nothing is asked (51231); an activation is one row,
+ *     an approved one carries its evidence, and it is immutable (51230);
+ *   - an inactive account asks nothing (51232) and a question has substance
+ *     (51247); each stage is its own key — a holder of another stage's key or
+ *     of none is refused (51233), a stale version (51237), an unavailable
+ *     category (51240), the asker or a non-answerer as assignee (51239), a
+ *     drafter the question is not assigned to (51234), a first draft with a
+ *     correction reason or a correction without one (51245), a revision that is
+ *     not the pending one (51244), a draft under review (51238);
+ *   - an address is public grammar and never a section or view word —
+ *     `latest`, `popular`, `ask`, … (Fatwa_slug_ck) — and freezes at first
+ *     publication, by procedure and by direct update (51241);
+ *   - publication needs `fatwa.publish` AND a live `fatwa-publication` grant of
+ *     the same session: a wrong-purpose grant, an expired grant and a borrowed
+ *     grant are refused (51235); the author of a revision cannot publish it
+ *     (51243); a correction is a NEW revision, its return a private decision,
+ *     and the second publication advances the current revision while the first
+ *     stays in history;
+ *   - revisions, their topics, publications and decisions refuse every change
+ *     (51242), a topic joins only the pending revision, a ruling changes only
+ *     through its workflow (51248) and never un-withdraws;
+ *   - a category keeps its slug, moves one version at a time and is never
+ *     deleted (51240); the question's status, text and facts CHECKs hold;
+ *   - disposal refuses an account not closed (51246) and an unbounded batch
+ *     (51247), and erases a closed account's text; a read is counted only for
+ *     a ruling public now; publication and withdrawal owe Search a pass; and no
+ *     audit row carries a question, ruling, note or reason.
+ */
+async function assertFatwaRules(session: SqlSession): Promise<void> {
+  const run = randomUUID().replaceAll('-', '').slice(0, 16);
+  const at = '2026-10-04T00:00:00';
+  let refusals = 0;
+  const refuse = async (
+    label: string,
+    statement: string,
+    numbers: readonly number[],
+    rule: string,
+  ): Promise<void> => {
+    await expectRefusal(session, label, statement, numbers, rule);
+    refusals += 1;
+  };
+  const count = async (statement: string): Promise<number> => {
+    const [row] = await session.query<{ total: number }>(statement);
+    return Number(row?.total ?? -1);
+  };
+
+  // ---- the identities the procedures check, as authoritative rows ------------
+  const asker = randomUUID();
+  const closingAsker = randomUUID();
+  const suspended = randomUUID();
+  const triager = randomUUID();
+  const answerer = randomUUID();
+  const publisher = randomUUID();
+  const dual = randomUUID();
+  const outsider = randomUUID();
+  const receiveRole = randomUUID();
+  const answerRole = randomUUID();
+  const publishRole = randomUUID();
+  const publisherSession = randomUUID();
+  const dualSession = randomUUID();
+  const grant = randomUUID();
+  const wrongPurpose = randomUUID();
+  const expired = randomUUID();
+  const dualGrant = randomUUID();
+  const user = (id: string, status: string): string =>
+    `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled]) VALUES (N'${id}',N'Synthetic Fatwa proof user',N'${id}@proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'${status}',0);`;
+  const role = (id: string, key: string, permission: string): string =>
+    `INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system]) VALUES (N'${id}',N'proof-fatwa-${key}-${run}',N'Synthetic Fatwa ${key} proof role',N'Holds ${permission} for the migration proof only.',0);
+     INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES (N'${id}',N'${permission}');`;
+  const sessionRow = (id: string, userId: string): string =>
+    `INSERT INTO [dbo].[Session] ([id],[token],[userId],[expiresAt],[createdAt],[updatedAt]) VALUES (N'${id}',N'proof-fatwa-${id}',N'${userId}',DATEADD(hour,1,SYSUTCDATETIME()),SYSUTCDATETIME(),SYSUTCDATETIME());`;
+  const grantRow = (
+    id: string,
+    userId: string,
+    sessionId: string,
+    purpose: string,
+    minutes: number,
+  ): string =>
+    `INSERT INTO [dbo].[StepUpGrant] ([id],[userId],[sessionId],[purpose],[expiresAt]) VALUES (N'${id}',N'${userId}',N'${sessionId}',N'${purpose}',DATEADD(minute,${String(minutes)},SYSUTCDATETIME()));`;
+  await expectAccepted(
+    session,
+    'A synthetic Fatwa workflow authority',
+    `${user(asker, 'active')}
+     ${user(closingAsker, 'active')}
+     ${user(suspended, 'suspended')}
+     ${user(triager, 'active')}
+     ${user(answerer, 'active')}
+     ${user(publisher, 'active')}
+     ${user(dual, 'active')}
+     ${user(outsider, 'active')}
+     ${role(receiveRole, 'receive', 'question.receive')}
+     ${role(answerRole, 'answer', 'fatwa.answer')}
+     ${role(publishRole, 'publish', 'fatwa.publish')}
+     INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId]) VALUES
+       (N'${triager}',N'${receiveRole}'),(N'${answerer}',N'${answerRole}'),(N'${publisher}',N'${publishRole}'),
+       (N'${dual}',N'${answerRole}'),(N'${dual}',N'${publishRole}');
+     ${sessionRow(publisherSession, publisher)}
+     ${sessionRow(dualSession, dual)}
+     ${grantRow(grant, publisher, publisherSession, 'fatwa-publication', 30)}
+     ${grantRow(wrongPurpose, publisher, publisherSession, 'hadith-canonical-edit', 30)}
+     ${grantRow(expired, publisher, publisherSession, 'fatwa-publication', -1)}
+     ${grantRow(dualGrant, dual, dualSession, 'fatwa-publication', 30)}`,
+  );
+
+  const topics = await session.query<{ id: string }>(
+    `SELECT TOP 2 [id] FROM [dbo].[Topic] WHERE [status] = N'active' ORDER BY [slug];`,
+  );
+  const [topicA, topicB] = topics.map((row) => row.id);
+  if (topicA === undefined || topicB === undefined)
+    fail('No canonical Topic to classify by.');
+  const category = randomUUID();
+  const archived = randomUUID();
+  const unused = randomUUID();
+  await expectAccepted(
+    session,
+    'Synthetic Fatwa categories',
+    `INSERT INTO [dbo].[FatwaCategory] ([id],[slug],[topicId],[position],[status]) VALUES
+       (N'${category}',N'fx-category-${run}',N'${topicA}',0,N'active'),
+       (N'${archived}',N'fx-archived-${run}',N'${topicB}',1,N'archived'),
+       (N'${unused}',N'fx-unused-${run}',N'${topicB}',2,N'active');
+     INSERT INTO [dbo].[FatwaCategoryName] ([categoryId],[locale],[name]) VALUES
+       (N'${category}',N'en',N'NON_FATWA_FIXTURE category');`,
+  );
+
+  const body = (n: number): string =>
+    `NON_FATWA_FIXTURE_QUESTION_${String(n)} synthetic private question text`;
+  const submit = (id: string, askerId: string, text: string): string =>
+    `EXEC [dbo].[FatwaSubmitQuestion] @id=N'${id}', @askerId=N'${askerId}', @body=N'${literal(text)}', @at='${at}';`;
+  const triage = (
+    id: string,
+    expected: number,
+    categoryId: string,
+    actor: string,
+  ): string =>
+    `EXEC [dbo].[FatwaTriageQuestion] @id=N'${id}', @expectedVersion=${String(expected)}, @categoryId=N'${categoryId}', @actorId=N'${actor}', @at='${at}';`;
+  const assign = (
+    id: string,
+    expected: number,
+    assignee: string,
+    actor: string,
+  ): string =>
+    `EXEC [dbo].[FatwaAssignQuestion] @id=N'${id}', @expectedVersion=${String(expected)}, @assigneeId=N'${assignee}', @actorId=N'${actor}', @at='${at}';`;
+  interface Draft {
+    readonly fatwa: string;
+    readonly question: string;
+    readonly expected: number;
+    readonly revision: string;
+    readonly slug: string;
+    readonly reason: string | null;
+    readonly actor: string;
+    readonly topics?: readonly string[];
+  }
+  const save = (d: Draft): string =>
+    `EXEC [dbo].[FatwaSaveDraft] @fatwaId=N'${d.fatwa}', @questionId=N'${d.question}', @expectedVersion=${String(d.expected)}, @revisionId=N'${d.revision}', @slug=N'${literal(d.slug)}', @title=N'NON_FATWA_FIXTURE title ${d.revision.slice(0, 8)}', @publicQuestion=N'NON_FATWA_FIXTURE_PUBLIC_QUESTION anonymised statement', @ruling=N'NON_FATWA_FIXTURE_RULING synthetic ruling text ${d.revision.slice(0, 8)}', @language=N'en', @categoryId=N'${category}', @topicIds=N'${JSON.stringify(d.topics ?? [topicB])}', @correctionReason=${d.reason === null ? 'NULL' : `N'${literal(d.reason)}'`}, @actorId=N'${d.actor}', @at='${at}';`;
+  const submitForReview = (
+    fatwa: string,
+    expected: number,
+    revision: string,
+    actor: string,
+  ): string =>
+    `EXEC [dbo].[FatwaSubmitForReview] @fatwaId=N'${fatwa}', @expectedVersion=${String(expected)}, @revisionId=N'${revision}', @actorId=N'${actor}', @at='${at}';`;
+  const publish = (
+    fatwa: string,
+    expected: number,
+    revision: string,
+    actor: string,
+    sessionId: string,
+    grantId: string,
+  ): string =>
+    `EXEC [dbo].[FatwaPublishRevision] @fatwaId=N'${fatwa}', @expectedVersion=${String(expected)}, @revisionId=N'${revision}', @publicationId=N'${randomUUID()}', @actorId=N'${actor}', @sessionId=N'${sessionId}', @stepUpGrantId=N'${grantId}', @at='${at}';`;
+  const NO_PERMISSION = 'Fatwa authority is not held now.';
+  const NO_PUBLICATION = 'Fatwa publication authority is not held now.';
+  const HISTORY = 'Fatwa history is immutable.';
+  const STALE_QUESTION = 'The question changed since it was read.';
+  const CLOSED_STEP = 'That step is not open for this';
+
+  // ---- activation --------------------------------------------------------------
+  const question = randomUUID();
+  await refuse(
+    'A question while the service is not activated',
+    submit(question, asker, body(1)),
+    [51231],
+    'The Fatwa service is not accepting questions.',
+  );
+  await refuse(
+    'An approved activation without its evidence',
+    `INSERT INTO [dbo].[FatwaActivation] ([id],[authority],[authorisedBy]) VALUES (1,N'approved',N'NON_FATWA_FIXTURE operator');`,
+    [547],
+    'FatwaActivation_evidence_ck',
+  );
+  await refuse(
+    'A second activation row',
+    `INSERT INTO [dbo].[FatwaActivation] ([id],[authority],[authorisedBy]) VALUES (2,N'fixture',N'NON_FATWA_FIXTURE operator');`,
+    [547],
+    'FatwaActivation_ck',
+  );
+  await expectAccepted(
+    session,
+    'A fixture activation',
+    `INSERT INTO [dbo].[FatwaActivation] ([id],[authority],[authorisedBy]) VALUES (1,N'fixture',N'NON_FATWA_FIXTURE operator');`,
+  );
+  for (const [label, statement] of [
+    [
+      'An activation turned approved',
+      `UPDATE [dbo].[FatwaActivation] SET [authority]=N'approved',[reference]=N'urn:example:forged';`,
+    ],
+    ['An activation withdrawn by deletion', 'DELETE FROM [dbo].[FatwaActivation];'],
+  ] as const)
+    await refuse(label, statement, [51230], 'Fatwa activation is immutable.');
+
+  // ---- intake, triage and assignment -------------------------------------------
+  await refuse(
+    'A question from an inactive account',
+    submit(randomUUID(), suspended, body(2)),
+    [51232],
+    'The asking account is not active.',
+  );
+  await refuse(
+    'A question with no substance',
+    submit(randomUUID(), asker, 'NON_FATWA_FIXTURE'),
+    [51247],
+    'The question is not acceptable.',
+  );
+  await expectAccepted(session, 'A question submitted', submit(question, asker, body(1)));
+  await refuse(
+    'Triage by an account holding nothing',
+    triage(question, 1, category, outsider),
+    [51233],
+    NO_PERMISSION,
+  );
+  await refuse(
+    'Triage by an answerer',
+    triage(question, 1, category, answerer),
+    [51233],
+    NO_PERMISSION,
+  );
+  await refuse(
+    'Triage against a stale version',
+    triage(question, 5, category, triager),
+    [51237],
+    STALE_QUESTION,
+  );
+  await refuse(
+    'Triage into an archived category',
+    triage(question, 1, archived, triager),
+    [51240],
+    'The category is not available.',
+  );
+  await expectAccepted(
+    session,
+    'A question triaged',
+    triage(question, 1, category, triager),
+  );
+  const BAD_ASSIGNEE = 'That account cannot be assigned this question.';
+  await refuse(
+    'Assignment to the asker',
+    assign(question, 2, asker, triager),
+    [51239],
+    BAD_ASSIGNEE,
+  );
+  await refuse(
+    'Assignment to a non-answerer',
+    assign(question, 2, outsider, triager),
+    [51239],
+    BAD_ASSIGNEE,
+  );
+  await expectAccepted(
+    session,
+    'A question assigned',
+    assign(question, 2, answerer, triager),
+  );
+
+  // ---- the first draft, its address and its review ------------------------------
+  const fatwa = randomUUID();
+  const first = randomUUID();
+  const slug = `fx-ruling-${run}`;
+  const draft = (overrides: Partial<Draft>): string =>
+    save({
+      fatwa,
+      question,
+      expected: 0,
+      revision: randomUUID(),
+      slug,
+      reason: null,
+      actor: answerer,
+      ...overrides,
+    });
+  await refuse(
+    'A draft by an account the question is not assigned to',
+    draft({ actor: dual }),
+    [51234],
+    'The question is not assigned to this account.',
+  );
+  for (const word of ['latest', 'popular'])
+    await refuse(
+      `A ruling addressed as '${word}'`,
+      draft({ slug: word }),
+      [547],
+      'Fatwa_slug_ck',
+    );
+  await refuse(
+    'A first draft stating a correction reason',
+    draft({ reason: 'NON_FATWA_FIXTURE reason' }),
+    [51245],
+    'A correction states its reason, and only a correction does.',
+  );
+  await expectAccepted(
+    session,
+    'A first draft',
+    draft({ revision: first, topics: [topicA, topicB] }),
+  );
+  for (const bad of [
+    'ask',
+    'search',
+    'Upper-case',
+    '-lead',
+    'trail-',
+    'two--hyphens',
+    'x',
+  ])
+    await refuse(
+      `A ruling readdressed as '${bad}'`,
+      `UPDATE [dbo].[Fatwa] SET [slug]=N'${bad}', [version]=[version]+1 WHERE [id]=N'${fatwa}';`,
+      [547],
+      'Fatwa_slug_ck',
+    );
+  await refuse(
+    'Submission of a revision that is not pending',
+    submitForReview(fatwa, 2, randomUUID(), answerer),
+    [51244],
+    'That is not the revision awaiting this step.',
+  );
+  await expectAccepted(
+    session,
+    'A draft submitted for review',
+    submitForReview(fatwa, 2, first, answerer),
+  );
+  await refuse(
+    'A draft saved while under review',
+    draft({ expected: 3, reason: null }),
+    [51238],
+    CLOSED_STEP,
+  );
+
+  // ---- publication authority ---------------------------------------------------
+  for (const [label, actor, sessionId, grantId] of [
+    ['a wrong-purpose grant', publisher, publisherSession, wrongPurpose],
+    ['an expired grant', publisher, publisherSession, expired],
+    ['a borrowed grant', answerer, publisherSession, grant],
+    ['a forged grant', publisher, publisherSession, randomUUID()],
+  ] as const)
+    await refuse(
+      `Publication with ${label}`,
+      publish(fatwa, 3, first, actor, sessionId, grantId),
+      [51235],
+      NO_PUBLICATION,
+    );
+  await expectAccepted(
+    session,
+    'A first publication',
+    publish(fatwa, 3, first, publisher, publisherSession, grant),
+  );
+
+  // ---- history, address and workflow integrity ----------------------------------
+  for (const [label, statement] of [
+    [
+      'A published revision rewritten',
+      `UPDATE [dbo].[FatwaRevision] SET [title]=N'NON_FATWA_FIXTURE tampered' WHERE [id]=N'${first}';`,
+    ],
+    [
+      'A revision topic removed',
+      `DELETE FROM [dbo].[FatwaRevisionTopic] WHERE [revisionId]=N'${first}';`,
+    ],
+    [
+      'A revision topic added to a published revision',
+      `INSERT INTO [dbo].[FatwaRevisionTopic] ([revisionId],[topicId]) SELECT N'${first}', [id] FROM [dbo].[Topic] WHERE [id] NOT IN (N'${topicA}',N'${topicB}') AND [status]=N'active' ORDER BY [slug] OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY;`,
+    ],
+    [
+      'A publication rewritten',
+      `UPDATE [dbo].[FatwaPublication] SET [publishedAt]=SYSUTCDATETIME() WHERE [fatwaId]=N'${fatwa}';`,
+    ],
+    [
+      'A publication erased',
+      `DELETE FROM [dbo].[FatwaPublication] WHERE [fatwaId]=N'${fatwa}';`,
+    ],
+  ] as const)
+    await refuse(label, statement, [51242], HISTORY);
+  await refuse(
+    'A published ruling readdressed directly',
+    `UPDATE [dbo].[Fatwa] SET [slug]=N'fx-moved-${run}', [version]=[version]+1 WHERE [id]=N'${fatwa}';`,
+    [51241],
+    'A published Fatwa keeps its address.',
+  );
+  await refuse(
+    'A ruling changed outside its workflow',
+    `UPDATE [dbo].[Fatwa] SET [updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${fatwa}';`,
+    [51248],
+    'A Fatwa changes only through its workflow.',
+  );
+
+  // ---- a correction: a NEW revision, returned once, then published --------------
+  await refuse(
+    'A correction with no reason',
+    draft({ expected: 4, reason: null }),
+    [51245],
+    'A correction states its reason, and only a correction does.',
+  );
+  await refuse(
+    'A correction that moves the address',
+    draft({ expected: 4, slug: `fx-moved-${run}`, reason: 'NON_FATWA_FIXTURE reason' }),
+    [51241],
+    'A published Fatwa keeps its address.',
+  );
+  const second = randomUUID();
+  const third = randomUUID();
+  const decision = randomUUID();
+  const reason = 'NON_FATWA_FIXTURE_CORRECTION_REASON public statement';
+  await expectAccepted(
+    session,
+    'A correction drafted, submitted and returned',
+    `${draft({ expected: 4, revision: second, reason })}
+     ${submitForReview(fatwa, 5, second, answerer)}
+     EXEC [dbo].[FatwaReturnForRevision] @fatwaId=N'${fatwa}', @expectedVersion=6, @revisionId=N'${second}', @decisionId=N'${decision}', @note=N'NON_FATWA_FIXTURE_NOTE private review note', @actorId=N'${publisher}', @at='${at}';`,
+  );
+  for (const [label, statement] of [
+    [
+      'A review decision rewritten',
+      `UPDATE [dbo].[FatwaReviewDecision] SET [note]=N'NON_FATWA_FIXTURE tampered' WHERE [id]=N'${decision}';`,
+    ],
+    [
+      'A review decision erased',
+      `DELETE FROM [dbo].[FatwaReviewDecision] WHERE [id]=N'${decision}';`,
+    ],
+  ] as const)
+    await refuse(label, statement, [51242], HISTORY);
+  await expectAccepted(
+    session,
+    'The returned correction revised and published',
+    `${draft({ expected: 7, revision: third, reason })}
+     ${submitForReview(fatwa, 8, third, answerer)}
+     ${publish(fatwa, 9, third, publisher, publisherSession, grant)}`,
+  );
+  const [history] = await session.query<Record<string, number | string | null>>(`
+    SELECT f.[version], f.[slug],
+      CASE WHEN f.[publishedRevisionId]=N'${third}' THEN 1 ELSE 0 END AS [current],
+      (SELECT STRING_AGG(r.[id], N',') WITHIN GROUP (ORDER BY p.[sequence])
+         FROM [dbo].[FatwaPublication] p JOIN [dbo].[FatwaRevision] r ON r.[id]=p.[revisionId]
+        WHERE p.[fatwaId]=f.[id]) AS [published],
+      (SELECT COUNT(*) FROM [dbo].[FatwaRevision] WHERE [fatwaId]=f.[id]) AS [revisions],
+      (SELECT COUNT(*) FROM [dbo].[FatwaReviewDecision] WHERE [fatwaId]=f.[id] AND [decision]=N'returned') AS [returned],
+      (SELECT [status] FROM [dbo].[FatwaQuestion] WHERE [id]=f.[questionId]) AS [question],
+      (SELECT COUNT(*) FROM [dbo].[SearchIndexRequest] WHERE [scopeKind]=N'fatwa' AND [scopeId]=f.[id]) AS [intent]
+    FROM [dbo].[Fatwa] f WHERE f.[id]=N'${fatwa}';
+  `);
+  if (
+    JSON.stringify(history) !==
+    JSON.stringify({
+      version: 10,
+      slug,
+      current: 1,
+      published: `${first},${third}`,
+      revisions: 3,
+      returned: 1,
+      question: 'answered',
+      intent: 2,
+    })
+  )
+    fail(
+      `A correction must append history and advance the current revision: ${JSON.stringify(history)}.`,
+    );
+
+  // ---- self-publication ----------------------------------------------------------
+  const ownQuestion = randomUUID();
+  const ownFatwa = randomUUID();
+  const ownRevision = randomUUID();
+  await expectAccepted(
+    session,
+    'A ruling drafted and submitted by a holder of both keys',
+    `${submit(ownQuestion, closingAsker, body(3))}
+     ${triage(ownQuestion, 1, category, triager)}
+     ${assign(ownQuestion, 2, dual, triager)}
+     ${save({ fatwa: ownFatwa, question: ownQuestion, expected: 0, revision: ownRevision, slug: `fx-own-${run}`, reason: null, actor: dual })}
+     ${submitForReview(ownFatwa, 2, ownRevision, dual)}`,
+  );
+  await refuse(
+    'Publication by the revision author',
+    publish(ownFatwa, 3, ownRevision, dual, dualSession, dualGrant),
+    [51243],
+    'The author of a revision cannot publish it.',
+  );
+
+  // ---- reads, withdrawal and un-withdrawal ---------------------------------------
+  await expectAccepted(
+    session,
+    'Reads recorded',
+    `EXEC [dbo].[FatwaRecordRead] @fatwaId=N'${fatwa}', @day='2026-10-04';
+     EXEC [dbo].[FatwaRecordRead] @fatwaId=N'${fatwa}', @day='2026-10-04';
+     EXEC [dbo].[FatwaRecordRead] @fatwaId=N'${ownFatwa}', @day='2026-10-04';`,
+  );
+  await expectAccepted(
+    session,
+    'A ruling withdrawn',
+    `EXEC [dbo].[FatwaWithdraw] @fatwaId=N'${fatwa}', @expectedVersion=10, @decisionId=N'${randomUUID()}', @reason=N'NON_FATWA_FIXTURE withdrawal reason', @actorId=N'${publisher}', @sessionId=N'${publisherSession}', @stepUpGrantId=N'${grant}', @at='${at}';
+     EXEC [dbo].[FatwaRecordRead] @fatwaId=N'${fatwa}', @day='2026-10-04';`,
+  );
+  await refuse(
+    'A withdrawn ruling restored directly',
+    `UPDATE [dbo].[Fatwa] SET [withdrawnAt]=NULL, [version]=[version]+1 WHERE [id]=N'${fatwa}';`,
+    [51248],
+    'A Fatwa changes only through its workflow.',
+  );
+  const tallies = await session.query<{ fatwaId: string; reads: number }>(
+    `SELECT [fatwaId], [reads] FROM [dbo].[FatwaReadTally] WHERE [fatwaId] IN (N'${fatwa}',N'${ownFatwa}');`,
+  );
+  if (JSON.stringify(tallies) !== JSON.stringify([{ fatwaId: fatwa, reads: 2 }]))
+    fail(
+      `Reads must be counted for a ruling public now and only then: ${JSON.stringify(tallies)}.`,
+    );
+
+  // ---- categories ----------------------------------------------------------------
+  await refuse(
+    'A category readdressed',
+    `UPDATE [dbo].[FatwaCategory] SET [slug]=N'fx-moved-${run}', [version]=[version]+1 WHERE [id]=N'${category}';`,
+    [51240],
+    'A Fatwa category keeps its slug and moves one version at a time.',
+  );
+  await refuse(
+    'A category changed without a version',
+    `UPDATE [dbo].[FatwaCategory] SET [position]=5 WHERE [id]=N'${unused}';`,
+    [51240],
+    'A Fatwa category keeps its slug and moves one version at a time.',
+  );
+  await refuse(
+    'A category deleted',
+    `DELETE FROM [dbo].[FatwaCategory] WHERE [id]=N'${unused}';`,
+    [51240],
+    'A Fatwa category is never deleted.',
+  );
+  await refuse(
+    'A category addressed as invalid grammar',
+    `INSERT INTO [dbo].[FatwaCategory] ([id],[slug],[topicId],[position],[status]) VALUES (N'${randomUUID()}',N'Bad Slug',N'${topicA}',3,N'active');`,
+    [547],
+    'FatwaCategory_slug_ck',
+  );
+
+  // ---- the private question's own CHECKs -----------------------------------------
+  const row = (status: string, text: string, extra = ''): string =>
+    `INSERT INTO [dbo].[FatwaQuestion] ([id],[askerId],[body],[status],[categoryId],[assigneeId],[version],[submittedAt],[updatedAt]) VALUES (N'${randomUUID()}',N'${asker}',${text},N'${status}',${extra === '' ? 'NULL,NULL' : extra},1,SYSUTCDATETIME(),SYSUTCDATETIME());`;
+  await refuse(
+    'A question with no text before disposal',
+    row('submitted', 'NULL'),
+    [547],
+    'FatwaQuestion_body_ck',
+  );
+  await refuse(
+    'A question with empty text',
+    row('submitted', "N''"),
+    [547],
+    'FatwaQuestion_body_ck',
+  );
+  await refuse(
+    'A question in an invented status',
+    row('pending', `N'${body(4)}'`, `N'${category}',NULL`),
+    [547],
+    'FatwaQuestion_status_ck',
+  );
+  await refuse(
+    'A triaged question with no category',
+    row('triaged', `N'${body(5)}'`),
+    [547],
+    'FatwaQuestion_facts_ck',
+  );
+  await refuse(
+    'A question assigned to its asker',
+    row('assigned', `N'${body(6)}'`, `N'${category}',N'${asker}'`),
+    [547],
+    'FatwaQuestion_facts_ck',
+  );
+
+  // ---- disposal --------------------------------------------------------------------
+  await refuse(
+    'Disposal for an account that is not closed',
+    `EXEC [dbo].[FatwaDisposeQuestions] @askerId=N'${asker}', @limit=10, @at='${at}';`,
+    [51246],
+    "Only a closed account's questions are disposed of.",
+  );
+  await refuse(
+    'Disposal with an unbounded batch',
+    `EXEC [dbo].[FatwaDisposeQuestions] @askerId=NULL, @limit=0, @at='${at}';`,
+    [51247],
+    'The disposal batch is out of bounds.',
+  );
+  await session.query(
+    `UPDATE [dbo].[User] SET [status]=N'closed' WHERE [id]=N'${closingAsker}';`,
+  );
+  const [disposed] = await session.query<{ disposed: number }>(
+    `EXEC [dbo].[FatwaDisposeQuestions] @askerId=N'${closingAsker}', @limit=10, @at='${at}';`,
+  );
+  const remaining = await count(
+    `SELECT COUNT(*) AS [total] FROM [dbo].[FatwaQuestion] WHERE [askerId]=N'${closingAsker}' AND ([body] IS NOT NULL OR [disposedAt] IS NULL OR [status]<>N'closed');`,
+  );
+  if (Number(disposed?.disposed) !== 1 || remaining !== 0)
+    fail(
+      `A closed account's question text must be erased: ${JSON.stringify({ disposed, remaining })}.`,
+    );
+
+  // ---- no audit row carries private or published text -----------------------------
+  const [audit] = await session.query<{
+    rows: number;
+    leaked: number;
+    malformed: number;
+  }>(`
+    SELECT COUNT(*) AS [rows],
+      SUM(CASE WHEN ISNULL([afterState],N'') LIKE N'%NON[_]FATWA[_]FIXTURE%' OR ISNULL([beforeState],N'') LIKE N'%NON[_]FATWA[_]FIXTURE%' THEN 1 ELSE 0 END) AS [leaked],
+      SUM(CASE WHEN ISJSON([afterState]) <> 1 THEN 1 ELSE 0 END) AS [malformed]
+    FROM [dbo].[AuditLog] WHERE [action] LIKE N'fatwa.%';
+  `);
+  if (
+    Number(audit?.rows) < 15 ||
+    Number(audit?.leaked) !== 0 ||
+    Number(audit?.malformed) !== 0
+  )
+    fail(
+      `Fatwa audit rows must be well formed and hold no text: ${JSON.stringify(audit)}.`,
+    );
+
+  report(
+    'fatwa rules',
+    `activation, stage-separated authority, frozen addresses, step-up publication, ` +
+      `immutable correction history, disposal and read tally; ${String(refusals)} refusals by ` +
+      `name, every text a NON_FATWA_FIXTURE sentinel`,
+  );
+}
+
 /**
  * The Phase-13 rollback restores the two editorial keys' Phase-6 descriptions
  * exactly — Article and Page, and no News family.
@@ -7361,7 +8555,7 @@ async function assertPeopleFoundation(session: SqlSession): Promise<void> {
     );
   }
 
-  // ---- the four capability sources are NOT grantable yet -------------------
+  // ---- the capability source whose owner has not shipped is NOT grantable ---
   const premature = await session.query<{ key: string }>(`
     SELECT [key] FROM [dbo].[Permission]
     WHERE [key] IN (${UNSEEDED_CAPABILITY_PERMISSIONS.map((key) => `N'${key}'`).join(', ')})
@@ -7371,9 +8565,9 @@ async function assertPeopleFoundation(session: SqlSession): Promise<void> {
     fail(
       `Capability-source permissions were seeded before their owning phase: ` +
         `${premature.map((row) => row.key).join(', ')}. DOMAIN_MODEL.md §4.5 ` +
-        `derives the four contributor capabilities from these codes, but they ` +
-        `belong to Learning, Fatwa and Editorial — and OPEN_DECISIONS.md §6.3 ` +
-        `reserves who receives them to the organisation.`,
+        `derives a contributor capability from it, but it belongs to Learning, ` +
+        `which has not shipped — and OPEN_DECISIONS.md §6.3 reserves who ` +
+        `receives it to the organisation.`,
     );
   }
 
@@ -7627,7 +8821,7 @@ try {
   await assertNavigationPermission(session);
   await assertPeopleFoundation(session);
   await assertSearchFoundation(session);
-  await assertSearchVocabulary(session, 'phase19');
+  await assertSearchVocabulary(session, 'phase20');
   await assertMediaFoundation(session);
   await assertAudioFoundation(session);
   await assertPhotoFoundation(session);
@@ -7637,6 +8831,7 @@ try {
   await assertCollectionFoundation(session);
   await assertQuranFoundation(session);
   await assertHadithFoundation(session);
+  await assertFatwaFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -7684,6 +8879,19 @@ try {
     }
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
+    }
+    if (migration.id === '20261004000000_phase20_fatwa') {
+      // Phase 20 widened the vocabulary by `fatwa` alone, so it narrows back to
+      // exactly Phase 19's — and the whole Phase-19 state it was applied on is
+      // back: the owners a Fatwa key once named (Identity's accounts, Language,
+      // Topic and Person) untouched by the drop, the protected bundle the whole
+      // ungated catalogue, and Hadith and the Quran intact.
+      await assertSearchVocabulary(session, 'phase19');
+      await assertFatwaRemoved(session);
+      await assertTaxonomyFoundation(session);
+      await assertPeopleFoundation(session);
+      await assertHadithFoundation(session);
+      await assertQuranFoundation(session);
     }
     if (migration.id === '20261003000000_phase19_hadith') {
       // Phase 19 widened the vocabulary by `hadith` alone, so it narrows back
@@ -7796,7 +9004,7 @@ try {
   await assertNavigationPermission(session);
   await assertPeopleFoundation(session);
   await assertSearchFoundation(session);
-  await assertSearchVocabulary(session, 'phase19');
+  await assertSearchVocabulary(session, 'phase20');
   await assertMediaFoundation(session);
   await assertAudioFoundation(session);
   await assertPhotoFoundation(session);
@@ -7806,6 +9014,7 @@ try {
   await assertCollectionFoundation(session);
   await assertQuranFoundation(session);
   await assertHadithFoundation(session);
+  await assertFatwaFoundation(session);
   // The membership rules as BEHAVIOUR, on the re-deployed schema: what was
   // rolled back and re-applied enforces exactly what the first deploy did.
   await assertCollectionMembership(session);
@@ -7817,6 +9026,10 @@ try {
   // are never removed either — canonical history cannot be — and die with
   // this disposable database.
   await assertHadithCanonicalRules(session);
+  // And the Fatwa workflow rules, last, with sentinel text only. Revisions,
+  // publications and decisions are never removed — history cannot be — and die
+  // with this disposable database.
+  await assertFatwaRules(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

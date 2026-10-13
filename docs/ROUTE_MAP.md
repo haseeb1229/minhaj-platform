@@ -298,6 +298,23 @@ topic, canonical to the owner's collection; `/hadith/articles`, `/hadith/courses
 
 `/fatwa/latest` and `/fatwa/popular` are **removed** as paths (§2.3).
 
+**Delivered in Phase 20 (engineering — no real Fatwa authority is granted; DOMAIN_MODEL.md §12.1).**
+Every route above. `/fatwa` canonicalises every `sort`, `category`, `topic` and `offset` variant to
+itself; `category` takes a category slug and `topic` a canonical topic slug, and an unknown or
+malformed value shows an empty, explained result — it never broadens the listing. `sort=latest`
+orders by first publication; `sort=popular` by anonymous reads over the trailing 30 UTC days, counted
+by a POST the ruling page sends after it renders (never a GET). `/fatwa/{slug}` is the one URL of a
+ruling: its slug freezes at first publication, so no slug history or redirect is owed, and it can
+never be a section word or `latest`/`popular`. Corrections stay on that URL with a visible history of
+earlier published versions and their public correction reasons; a withdrawn ruling answers 404 and
+its slug stays reserved. `/fatwa/ask` reads no session — it redirects to `/my/questions/ask`, whose
+guard sends a signed-out visitor to sign-in with a validated return path. **Service states:** with no
+operator activation the section pages (`/fatwa`, `/fatwa/search`, `/fatwa/categories` and the ask
+flow) say plainly that the service is not available and nothing is captured, while a named ruling,
+category or topic view answers 404; a fixture activation shows "Test fixture — not a genuine Fatwa"
+on every page and is `noindex` with no sitemap entry; only an approved activation is indexable.
+Structured data is `BreadcrumbList` only.
+
 ### 3.9 News, Events, Media, Global
 
 | Route | Purpose |
@@ -513,7 +530,7 @@ Prefixed `/{locale}/admin`.
 | Editorial | `/admin/editorial/{articles\|pages\|news\|press-releases\|statements\|media-coverage\|events\|collections\|queue\|correspondence}` \u2014 **correspondence** covers private ContactInquiry and Feedback triage (DOMAIN_MODEL.md \u00a77.5); `news`, `press-releases`, `statements` and `media-coverage` delivered in Phase 13, `events` in Phase 14, `collections` in Phase 15, and `queue` lists every workflow-governed aggregate |
 | Quran | `/admin/quran/{surahs\|ayat\|translations\|tafsir\|transliterations\|recitations\|tajweed}` — delivered in Phase 18; `tajweed` holds TajweedRule guidance. Canonical text is read-only; the correction flow on an Ayah appears only to `quran.editCanonical` holders after a `quran-canonical-edit` step-up. No corpus import surface exists |
 | Hadith | `/admin/hadith/{collections\|books\|chapters\|records\|commentary\|sciences}` — delivered in Phase 19; `sciences` holds HadithScience study material. Registered source systems, editions and activation are shown read-only (operator-only). Records are read-only by default; structure and record creation, correction, verification and citation mapping appear only to `hadith.editCanonical` holders after a `hadith-canonical-edit` step-up. Conflict evidence is shown with no resolve action. No corpus import surface exists |
-| Fatwa | `/admin/fatwa/{questions\|assignment\|drafts\|review\|published}` |
+| Fatwa | `/admin/fatwa/{questions\|assignment\|drafts\|review\|published\|categories}` — delivered in Phase 20. `questions` and `assignment` under `question.receive` (a question's private text only on its detail page, recorded as an audited access); `drafts/{questionId}` under `fatwa.answer` for the current assignee only; `review/{fatwaId}` and `published/{fatwaId}` under `fatwa.publish`, publication and withdrawal behind a `fatwa-publication` step-up and never offered to the revision's author; `categories` readable by any Fatwa key and maintained under `fatwa.publish`. No import, bulk or generation surface exists |
 | Library | `/admin/library/{works\|editions\|translations\|research\|publications\|magazines\|encyclopedias\|sale-points}` — research papers at `research/papers`, and a Magazine's issues beneath it at `magazines/{id}/issues/{issueId}` (Phase 9) |
 | Media | `/admin/media/{videos\|audio\|photos\|galleries\|playlists\|series\|assets}` — `videos`, `series` and `playlists` delivered in Phase 10; `audio` in Phase 11, with audio series at `audio/series`; `photos` and `galleries` in Phase 12. There is no generic `assets` file manager: a file is managed on the record it belongs to |
 | People | `/admin/people/{persons\|authors\|speakers\|scholars\|teachers}` |

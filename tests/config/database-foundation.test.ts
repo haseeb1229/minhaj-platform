@@ -316,6 +316,19 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'HadithScience',
       'HadithScienceText',
       'HadithTopic',
+      // Phase 20 — Fatwa's activation, categories, the private question, the
+      // ruling with its immutable revisions, topics, publications and review
+      // decisions, and the anonymous read tally.
+      'FatwaActivation',
+      'FatwaCategory',
+      'FatwaCategoryName',
+      'FatwaQuestion',
+      'Fatwa',
+      'FatwaRevision',
+      'FatwaRevisionTopic',
+      'FatwaPublication',
+      'FatwaReviewDecision',
+      'FatwaReadTally',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name
@@ -435,6 +448,16 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'HadithBookmark',
       'HadithReadingProgress',
       'HadithSlugHistory',
+      // Phase 20 counts reads and records no reader, keeps topics per revision,
+      // freezes an address at first publication and holds no per-user state:
+      // no read log, no unversioned topic table, no slug history, no
+      // context-less question and no saved rulings (Phase 21's).
+      'FatwaRead',
+      'FatwaReadEvent',
+      'FatwaTopic',
+      'FatwaSlugHistory',
+      'FatwaBookmark',
+      'Question',
     ]) {
       expect(models, `${domain} arrives with its owning slice`).not.toContain(domain);
     }

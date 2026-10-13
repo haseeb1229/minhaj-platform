@@ -539,6 +539,34 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[hadithcommentaryentry]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[hadithsciencetext]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[hadithtopic]': ['SELECT', 'INSERT', 'DELETE'],
+  // Phase 20: Fatwa. Activation and every workflow table — questions, rulings,
+  // revisions, their topics, publications, review decisions and the read tally
+  // — are SELECT only, written by the eleven procedures below through
+  // ownership chaining; the two authority checks they call are DENIED to the
+  // runtime outright. Categories are inserted and updated but never deleted
+  // and never re-slugged (column DENYs the probe suite proves); their display
+  // names are child rows.
+  '[dbo].[fatwaactivation]': ['SELECT'],
+  '[dbo].[fatwaquestion]': ['SELECT'],
+  '[dbo].[fatwa]': ['SELECT'],
+  '[dbo].[fatwarevision]': ['SELECT'],
+  '[dbo].[fatwarevisiontopic]': ['SELECT'],
+  '[dbo].[fatwapublication]': ['SELECT'],
+  '[dbo].[fatwareviewdecision]': ['SELECT'],
+  '[dbo].[fatwareadtally]': ['SELECT'],
+  '[dbo].[fatwasubmitquestion]': ['EXECUTE'],
+  '[dbo].[fatwatriagequestion]': ['EXECUTE'],
+  '[dbo].[fatwaassignquestion]': ['EXECUTE'],
+  '[dbo].[fatwadeclinequestion]': ['EXECUTE'],
+  '[dbo].[fatwasavedraft]': ['EXECUTE'],
+  '[dbo].[fatwasubmitforreview]': ['EXECUTE'],
+  '[dbo].[fatwareturnforrevision]': ['EXECUTE'],
+  '[dbo].[fatwapublishrevision]': ['EXECUTE'],
+  '[dbo].[fatwawithdraw]': ['EXECUTE'],
+  '[dbo].[fatwadisposequestions]': ['EXECUTE'],
+  '[dbo].[fatwarecordread]': ['EXECUTE'],
+  '[dbo].[fatwacategory]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[fatwacategoryname]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[contactinquiry]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[feedback]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
 

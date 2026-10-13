@@ -12,7 +12,8 @@ import { SignOutForm } from './sign-out-form';
  * what each owner has delivered and NOTHING ELSE: it renders no empty frame
  * for saved items, history, notifications, learning, messages, membership or
  * donations, because those belong to contexts that have not shipped. A promised
- * surface must never be mistaken for a delivered one (§5.1, §5.2).
+ * surface must never be mistaken for a delivered one (§5.1, §5.2). Fatwa's
+ * `/my/questions` (Phase 20) is the first owner after Identity to ship here.
  */
 export const metadata = { robots: { index: false, follow: false } };
 
@@ -51,6 +52,7 @@ export default async function MyPage({
         <TextLink href={`/${locale}/my/settings/profile`}>{t('my.profile')}</TextLink>
         <TextLink href={`/${locale}/my/settings/security`}>{t('my.security')}</TextLink>
         <TextLink href={`/${locale}/my/settings/language`}>{t('my.language')}</TextLink>
+        <TextLink href={`/${locale}/my/questions`}>{t('my.questions')}</TextLink>
       </nav>
 
       <SignOutForm locale={locale} label={t('my.signOut')} />

@@ -1533,6 +1533,46 @@ proven private.
 are issued only to **named individuals approved by Minhaj**, and real publication begins only
 then. **Signed off by Minhaj** — an engineering exit never substitutes for that signature.
 
+**Phase-20 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+```
+FATWA ENGINEERING IMPLEMENTATION      COMPLETE (this phase)
+PRIVATE QUESTION WORKFLOW             COMPLETE AND PROVEN
+PUBLIC SEARCH/BROWSE/CORRECTION       COMPLETE AND PROVEN
+NO-AI RULING PATH                     PROVEN
+REAL AUTHORISED SCHOLARS              NOT APPROVED / NOT GRANTED — OPEN_DECISIONS.md §1.4, §6.3
+REAL TRIAGE / ASSIGNMENT / ESCALATION OPEN — §1.4
+REAL FATWA PUBLICATION                BLOCKED until those close
+```
+
+- **The gated keys are bundled into no role.** `question.receive`, `fatwa.answer` and
+  `fatwa.publish` are catalogued but excluded from the protected Platform Administrator bundle
+  (SECURITY_BASELINE.md §3.5); the migration bundles, grants and invalidates nothing, and a migrated
+  database has no holder of any of them. Real holders arrive only through audited role assignments to
+  individuals Minhaj names. Widening a role one holds is now refused as self-elevation.
+- **Activation is an operator fact.** No `FatwaActivation` row means no question is captured and
+  nothing can be published, whoever holds which key; disposable proofs use a `fixture` activation,
+  and an `approved` one must carry the organisation's evidence reference.
+- **One publication operation** — a database procedure re-checking `fatwa.publish`, a live
+  `fatwa-publication` step-up, activation, the exact revision under review and author/asker
+  separation. The future Phase-30 importer must call it; nothing may set a ruling published directly.
+- **Separation of duties is a fail-closed engineering default**, not a Minhaj policy: the author of a
+  revision and the asker cannot publish it. The real process remains §1.4's.
+- **The public question is written by a person** as a separate field; nothing anonymises text.
+- **`sort=popular`** is anonymous reads over the trailing 30 UTC days (one per address per ruling per
+  30 minutes, counted by a POST after render, through the existing limiter), ties by first
+  publication then id — a query over a per-ruling, per-day count with no personal data
+  (DOMAIN_MODEL.md §12.1). `latest` is first publication, newest first.
+- **The slug freezes at first publication**; corrections stay on the same URL with visible history,
+  withdrawal answers 404 and keeps history and the slug.
+- **Topics:** a ruling is on a Topic through its current revision's topics or its category's topic.
+- **Account closure** erases a closed account's private question text in Fatwa's own transaction;
+  published rulings are unaffected.
+- **Not delivered, and not owed by this phase:** attachments, asker–scholar messaging (Phase 24),
+  notifications (Phase 21), consent-to-reveal-identity, import (Phase 30) and any real grant.
+  Phase 21 composes the Fatwa-owned `/my/questions`; it owns no Fatwa schema.
+
 ---
 
 ### Phase 21 — Personalisation & Notifications

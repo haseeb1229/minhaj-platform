@@ -41,6 +41,7 @@
         "global-network": "global-network",
         "quran": "quran",
         "hadith": "hadith",
+        "fatwa": "fatwa",
         "search": {
           "kind": "layer0",
           "concern": "search"

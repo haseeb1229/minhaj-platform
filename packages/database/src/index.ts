@@ -82,6 +82,12 @@ export {
   AuthorizationDataError,
   createAuthorizationPersistence,
   createAuthorizationReader,
+  createPermissionHolderReader,
+} from './adapters/identity-access/index.ts';
+
+export type {
+  PermissionHolder,
+  PermissionHolderReader,
 } from './adapters/identity-access/index.ts';
 
 /* ---- People & Contributors (context-owned) ------------------------------ */
@@ -187,3 +193,15 @@ export {
   createHadithPersistence,
   createHadithPublicReader,
 } from './adapters/hadith/index.ts';
+
+/* ---- Fatwa (context-owned) ---------------------------------------------- */
+
+export {
+  FatwaDataError,
+  createFatwaDisposition,
+  createFatwaOwner,
+  createFatwaPublicReader,
+  createFatwaReadTally,
+  createFatwaStaffReader,
+  createFatwaWorkflow,
+} from './adapters/fatwa/index.ts';

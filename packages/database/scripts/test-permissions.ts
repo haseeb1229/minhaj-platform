@@ -4368,6 +4368,473 @@ try {
     fail('Hadith procedures EXECUTE exact', JSON.stringify(hadithExecute ?? null));
   }
 
+  // ---- Phase 20: Fatwa, in four postures ------------------------------------
+  //
+  // ACTIVATION is the owner's. The runtime reads it and writes nothing, so no
+  // permission it carries can open the service.
+  //
+  // THE WORKFLOW TABLES are read-only to it as well. It reaches them ONLY by
+  // executing the eleven procedures, which re-check the actor's live Fatwa
+  // permission — and, to publish or withdraw, a live `fatwa-publication`
+  // step-up grant of the same session — in SQL: proved here by the runtime
+  // naming an account that holds nothing, a forged grant, a wrong-purpose grant
+  // and a borrowed one, and being refused (51233, 51235). The two authority
+  // checks themselves are denied to it outright, so it cannot probe who holds
+  // a key.
+  //
+  // CATEGORIES are inserted and updated, never deleted or re-slugged; their
+  // display names are child rows. The read tally is written only by
+  // `FatwaRecordRead`.
+  //
+  // Every statement below is REAL SQL as the runtime principal over sentinel
+  // NON_FATWA_FIXTURE text; the activation and the three keys' holders are the
+  // owner's rows, because the migration grants the keys to nobody.
+  const fatwaRun = randomUUID().replaceAll('-', '').slice(0, 16);
+  const fatwaAt = '2026-10-04T00:00:00';
+  const fatwaAsker = randomUUID();
+  const fatwaTriager = randomUUID();
+  const fatwaAnswerer = randomUUID();
+  const fatwaPublisher = randomUUID();
+  const fatwaRoles = {
+    receive: randomUUID(),
+    answer: randomUUID(),
+    publish: randomUUID(),
+  };
+  const fatwaSession = randomUUID();
+  const fatwaGrant = randomUUID();
+  const fatwaWrongPurpose = randomUUID();
+  const fatwaCategory = randomUUID();
+  const fatwaQuestion = randomUUID();
+  const fatwaDeclined = randomUUID();
+  const fatwaId = randomUUID();
+  const fatwaFirst = randomUUID();
+  const fatwaSecond = randomUUID();
+  const fatwaUser = (id: string, name: string): string =>
+    `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled])
+       VALUES (N'${id}',N'Synthetic Fatwa ${name}',N'${id}@proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);`;
+  const fatwaRole = (id: string, key: string, permission: string): string =>
+    `INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system])
+       VALUES (N'${id}',N'lp-fatwa-${key}-${fatwaRun}',N'Synthetic Fatwa ${key} role',N'Least-privilege proof only.',0);
+     INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES (N'${id}',N'${permission}');`;
+  await admin.query(`
+    ${fatwaUser(fatwaAsker, 'asker')}
+    ${fatwaUser(fatwaTriager, 'triage officer')}
+    ${fatwaUser(fatwaAnswerer, 'answerer')}
+    ${fatwaUser(fatwaPublisher, 'publisher')}
+    ${fatwaRole(fatwaRoles.receive, 'receive', 'question.receive')}
+    ${fatwaRole(fatwaRoles.answer, 'answer', 'fatwa.answer')}
+    ${fatwaRole(fatwaRoles.publish, 'publish', 'fatwa.publish')}
+    INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId]) VALUES
+      (N'${fatwaTriager}',N'${fatwaRoles.receive}'),
+      (N'${fatwaAnswerer}',N'${fatwaRoles.answer}'),
+      (N'${fatwaPublisher}',N'${fatwaRoles.publish}');
+    INSERT INTO [dbo].[Session] ([id],[token],[userId],[expiresAt],[createdAt],[updatedAt])
+      VALUES (N'${fatwaSession}',N'lp-fatwa-${fatwaSession}',N'${fatwaPublisher}',DATEADD(hour,1,SYSUTCDATETIME()),SYSUTCDATETIME(),SYSUTCDATETIME());
+    INSERT INTO [dbo].[StepUpGrant] ([id],[userId],[sessionId],[purpose],[expiresAt]) VALUES
+      (N'${fatwaGrant}',N'${fatwaPublisher}',N'${fatwaSession}',N'fatwa-publication',DATEADD(minute,30,SYSUTCDATETIME())),
+      (N'${fatwaWrongPurpose}',N'${fatwaPublisher}',N'${fatwaSession}',N'hadith-canonical-edit',DATEADD(minute,30,SYSUTCDATETIME()));
+  `);
+
+  // The runtime cannot open the service.
+  for (const [label, statement] of [
+    [
+      'FatwaActivation INSERT denied',
+      `INSERT INTO [dbo].[FatwaActivation] ([id],[authority],[authorisedBy],[reference]) VALUES (1,N'approved',N'runtime',N'urn:example:forged');`,
+    ],
+    [
+      'FatwaActivation UPDATE denied',
+      "UPDATE [dbo].[FatwaActivation] SET [authority]=N'approved';",
+    ],
+    ['FatwaActivation DELETE denied', 'DELETE FROM [dbo].[FatwaActivation];'],
+  ] as const)
+    await expectDenied(app, label, statement);
+  await admin.query(
+    `INSERT INTO [dbo].[FatwaActivation] ([id],[authority],[authorisedBy]) VALUES (1,N'fixture',N'NON_FATWA_FIXTURE least-privilege operator');`,
+  );
+
+  // Categories, through the runtime login: created and renamed, never re-slugged
+  // or deleted.
+  await expectAllowed(
+    app,
+    'FatwaCategory and names INSERT',
+    `INSERT INTO [dbo].[FatwaCategory] ([id],[slug],[topicId],[position],[status]) VALUES (N'${fatwaCategory}',N'lp-category-${fatwaRun}',N'${editorialTopic.id}',0,N'active');
+     INSERT INTO [dbo].[FatwaCategoryName] ([categoryId],[locale],[name]) VALUES (N'${fatwaCategory}',N'en',N'NON_FATWA_FIXTURE category'),(N'${fatwaCategory}',N'ur',N'NON_FATWA_FIXTURE category ur');`,
+    'a category mapped onto a Topic, with display names',
+  );
+  await expectAllowed(
+    app,
+    'FatwaCategory and names UPDATE/DELETE',
+    `UPDATE [dbo].[FatwaCategory] SET [position]=1,[version]=[version]+1,[updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${fatwaCategory}';
+     UPDATE [dbo].[FatwaCategoryName] SET [name]=N'NON_FATWA_FIXTURE category renamed' WHERE [categoryId]=N'${fatwaCategory}' AND [locale]=N'en';
+     DELETE FROM [dbo].[FatwaCategoryName] WHERE [categoryId]=N'${fatwaCategory}' AND [locale]=N'ur';`,
+    'ordered, renamed and a display name replaced',
+  );
+  for (const [label, statement] of [
+    [
+      'FatwaCategory slug UPDATE denied',
+      'UPDATE [dbo].[FatwaCategory] SET [slug]=[slug];',
+    ],
+    ['FatwaCategory id UPDATE denied', 'UPDATE [dbo].[FatwaCategory] SET [id]=[id];'],
+    ['FatwaCategory DELETE denied', 'DELETE FROM [dbo].[FatwaCategory];'],
+    [
+      'FatwaCategoryName key UPDATE denied',
+      'UPDATE [dbo].[FatwaCategoryName] SET [categoryId]=[categoryId];',
+    ],
+  ] as const)
+    await expectDenied(app, label, statement);
+
+  // The workflow, by the procedures alone, under each stage's own key.
+  const fatwaDraft = (revision: string, expected: number): string =>
+    `EXEC [dbo].[FatwaSaveDraft] @fatwaId=N'${fatwaId}', @questionId=N'${fatwaQuestion}', @expectedVersion=${String(expected)}, @revisionId=N'${revision}', @slug=N'lp-ruling-${fatwaRun}', @title=N'NON_FATWA_FIXTURE title', @publicQuestion=N'NON_FATWA_FIXTURE_PUBLIC_QUESTION anonymised statement', @ruling=N'NON_FATWA_FIXTURE_RULING synthetic ruling text', @language=N'en', @categoryId=N'${fatwaCategory}', @topicIds=N'["${editorialTopic.id}"]', @correctionReason=NULL, @actorId=N'${fatwaAnswerer}', @at='${fatwaAt}';`;
+  const fatwaPublish = (actor: string, grantId: string): string =>
+    `EXEC [dbo].[FatwaPublishRevision] @fatwaId=N'${fatwaId}', @expectedVersion=6, @revisionId=N'${fatwaSecond}', @publicationId=N'${randomUUID()}', @actorId=N'${actor}', @sessionId=N'${fatwaSession}', @stepUpGrantId=N'${grantId}', @at='${fatwaAt}';`;
+  for (const [label, statement, detail] of [
+    [
+      'FatwaSubmitQuestion EXECUTE',
+      `EXEC [dbo].[FatwaSubmitQuestion] @id=N'${fatwaQuestion}', @askerId=N'${fatwaAsker}', @body=N'NON_FATWA_FIXTURE_QUESTION_1 synthetic private question', @at='${fatwaAt}';
+       EXEC [dbo].[FatwaSubmitQuestion] @id=N'${fatwaDeclined}', @askerId=N'${fatwaAsker}', @body=N'NON_FATWA_FIXTURE_QUESTION_2 synthetic private question', @at='${fatwaAt}';`,
+      'an active account asks, while the service is activated',
+    ],
+  ] as const)
+    await expectAllowed(app, label, statement, detail);
+  await expectRefusedByInvariant(
+    app,
+    'Fatwa triage naming an account without the key',
+    `EXEC [dbo].[FatwaTriageQuestion] @id=N'${fatwaQuestion}', @expectedVersion=1, @categoryId=N'${fatwaCategory}', @actorId=N'${editorialReviewer}', @at='${fatwaAt}';`,
+    51233,
+  );
+  await expectRefusedByInvariant(
+    app,
+    "Fatwa triage borrowing another stage's key",
+    `EXEC [dbo].[FatwaTriageQuestion] @id=N'${fatwaQuestion}', @expectedVersion=1, @categoryId=N'${fatwaCategory}', @actorId=N'${fatwaAnswerer}', @at='${fatwaAt}';`,
+    51233,
+  );
+  for (const [label, statement, detail] of [
+    [
+      'FatwaTriageQuestion EXECUTE',
+      `EXEC [dbo].[FatwaTriageQuestion] @id=N'${fatwaQuestion}', @expectedVersion=1, @categoryId=N'${fatwaCategory}', @actorId=N'${fatwaTriager}', @at='${fatwaAt}';`,
+      'categorised under question.receive',
+    ],
+    [
+      'FatwaAssignQuestion EXECUTE',
+      `EXEC [dbo].[FatwaAssignQuestion] @id=N'${fatwaQuestion}', @expectedVersion=2, @assigneeId=N'${fatwaAnswerer}', @actorId=N'${fatwaTriager}', @at='${fatwaAt}';`,
+      'assigned to a current fatwa.answer holder',
+    ],
+    [
+      'FatwaDeclineQuestion EXECUTE',
+      `EXEC [dbo].[FatwaDeclineQuestion] @id=N'${fatwaDeclined}', @expectedVersion=1, @actorId=N'${fatwaTriager}', @at='${fatwaAt}';`,
+      'a second question declined',
+    ],
+    [
+      'FatwaSaveDraft EXECUTE',
+      fatwaDraft(fatwaFirst, 0),
+      'a first immutable revision by the assignee',
+    ],
+    [
+      'FatwaSubmitForReview EXECUTE',
+      `EXEC [dbo].[FatwaSubmitForReview] @fatwaId=N'${fatwaId}', @expectedVersion=2, @revisionId=N'${fatwaFirst}', @actorId=N'${fatwaAnswerer}', @at='${fatwaAt}';`,
+      'the exact pending revision submitted',
+    ],
+    [
+      'FatwaReturnForRevision EXECUTE',
+      `EXEC [dbo].[FatwaReturnForRevision] @fatwaId=N'${fatwaId}', @expectedVersion=3, @revisionId=N'${fatwaFirst}', @decisionId=N'${randomUUID()}', @note=N'NON_FATWA_FIXTURE_NOTE private', @actorId=N'${fatwaPublisher}', @at='${fatwaAt}';`,
+      'returned under fatwa.publish with a private note',
+    ],
+    [
+      'FatwaSaveDraft and FatwaSubmitForReview again',
+      `${fatwaDraft(fatwaSecond, 4)}
+       EXEC [dbo].[FatwaSubmitForReview] @fatwaId=N'${fatwaId}', @expectedVersion=5, @revisionId=N'${fatwaSecond}', @actorId=N'${fatwaAnswerer}', @at='${fatwaAt}';`,
+      'a second revision drafted and submitted',
+    ],
+  ] as const)
+    await expectAllowed(app, label, statement, detail);
+
+  // Publication authority cannot be forged, borrowed or carried over from
+  // another purpose.
+  for (const [label, actor, grantId] of [
+    ['a forged step-up grant', fatwaPublisher, randomUUID()],
+    ['a wrong-purpose step-up grant', fatwaPublisher, fatwaWrongPurpose],
+    ["another account's step-up grant", fatwaAnswerer, fatwaGrant],
+  ] as const)
+    await expectRefusedByInvariant(
+      app,
+      `Fatwa publication with ${label}`,
+      fatwaPublish(actor, grantId),
+      51235,
+    );
+  for (const [label, statement, detail] of [
+    [
+      'FatwaPublishRevision EXECUTE',
+      fatwaPublish(fatwaPublisher, fatwaGrant),
+      'published under fatwa.publish and a live fatwa-publication grant',
+    ],
+    [
+      'FatwaRecordRead EXECUTE',
+      `EXEC [dbo].[FatwaRecordRead] @fatwaId=N'${fatwaId}', @day='2026-10-04';`,
+      'one anonymous read counted',
+    ],
+    [
+      'FatwaWithdraw EXECUTE',
+      `EXEC [dbo].[FatwaWithdraw] @fatwaId=N'${fatwaId}', @expectedVersion=7, @decisionId=N'${randomUUID()}', @reason=N'NON_FATWA_FIXTURE withdrawal', @actorId=N'${fatwaPublisher}', @sessionId=N'${fatwaSession}', @stepUpGrantId=N'${fatwaGrant}', @at='${fatwaAt}';`,
+      'withdrawn under the same authority',
+    ],
+    [
+      'FatwaDisposeQuestions EXECUTE',
+      `EXEC [dbo].[FatwaDisposeQuestions] @askerId=NULL, @limit=10, @at='${fatwaAt}';`,
+      'a disposal pass over closed accounts (none here)',
+    ],
+  ] as const)
+    await expectAllowed(app, label, statement, detail);
+  await expectDenied(
+    app,
+    'FatwaAssertPermission EXECUTE denied',
+    `EXEC [dbo].[FatwaAssertPermission] @actorId=N'${fatwaPublisher}', @permission=N'fatwa.publish';`,
+  );
+  await expectDenied(
+    app,
+    'FatwaAssertPublicationAuthority EXECUTE denied',
+    `EXEC [dbo].[FatwaAssertPublicationAuthority] @actorId=N'${fatwaPublisher}', @sessionId=N'${fatwaSession}', @stepUpGrantId=N'${fatwaGrant}';`,
+  );
+
+  // Every direct write to a workflow table is refused by the grant.
+  const FATWA_WORKFLOW = [
+    'FatwaQuestion',
+    'Fatwa',
+    'FatwaRevision',
+    'FatwaRevisionTopic',
+    'FatwaPublication',
+    'FatwaReviewDecision',
+    'FatwaReadTally',
+  ] as const;
+  for (const table of [
+    ...FATWA_WORKFLOW,
+    'FatwaActivation',
+    'FatwaCategory',
+    'FatwaCategoryName',
+  ])
+    await expectAllowed(
+      app,
+      `${table} SELECT`,
+      `SELECT COUNT_BIG(*) AS [total] FROM [dbo].[${table}];`,
+      'the runtime reads it',
+    );
+  for (const [label, statement] of [
+    [
+      'FatwaQuestion INSERT denied',
+      `INSERT INTO [dbo].[FatwaQuestion] ([id],[askerId],[body],[status],[version],[submittedAt],[updatedAt]) VALUES (N'${randomUUID()}',N'${fatwaAsker}',N'NON_FATWA_FIXTURE_QUESTION_DIRECT direct write',N'submitted',1,SYSUTCDATETIME(),SYSUTCDATETIME());`,
+    ],
+    [
+      'FatwaQuestion UPDATE denied',
+      `UPDATE [dbo].[FatwaQuestion] SET [assigneeId]=N'${fatwaPublisher}' WHERE [id]=N'${fatwaQuestion}';`,
+    ],
+    ['FatwaQuestion DELETE denied', 'DELETE FROM [dbo].[FatwaQuestion];'],
+    [
+      'Fatwa INSERT denied',
+      `INSERT INTO [dbo].[Fatwa] ([id],[questionId],[slug],[version],[createdAt],[updatedAt]) VALUES (N'${randomUUID()}',N'${fatwaDeclined}',N'lp-forged-${fatwaRun}',1,SYSUTCDATETIME(),SYSUTCDATETIME());`,
+    ],
+    [
+      'Fatwa UPDATE denied',
+      `UPDATE [dbo].[Fatwa] SET [withdrawnAt]=NULL,[version]=[version]+1 WHERE [id]=N'${fatwaId}';`,
+    ],
+    ['Fatwa DELETE denied', 'DELETE FROM [dbo].[Fatwa];'],
+    [
+      'FatwaRevision INSERT denied',
+      `INSERT INTO [dbo].[FatwaRevision] ([id],[fatwaId],[number],[title],[publicQuestion],[ruling],[language],[categoryId],[authorId],[createdAt]) VALUES (N'${randomUUID()}',N'${fatwaId}',9,N'NON_FATWA_FIXTURE forged',N'NON_FATWA_FIXTURE_PUBLIC_QUESTION forged statement',N'NON_FATWA_FIXTURE_RULING forged ruling text',N'en',N'${fatwaCategory}',N'${fatwaAnswerer}',SYSUTCDATETIME());`,
+    ],
+    [
+      'FatwaRevision UPDATE denied',
+      'UPDATE [dbo].[FatwaRevision] SET [ruling]=[ruling];',
+    ],
+    ['FatwaRevision DELETE denied', 'DELETE FROM [dbo].[FatwaRevision];'],
+    [
+      'FatwaRevisionTopic INSERT denied',
+      `INSERT INTO [dbo].[FatwaRevisionTopic] ([revisionId],[topicId]) SELECT N'${fatwaSecond}', [id] FROM [dbo].[Topic] WHERE [id]<>N'${editorialTopic.id}' AND [status]=N'active';`,
+    ],
+    [
+      'FatwaRevisionTopic UPDATE denied',
+      'UPDATE [dbo].[FatwaRevisionTopic] SET [topicId]=[topicId];',
+    ],
+    ['FatwaRevisionTopic DELETE denied', 'DELETE FROM [dbo].[FatwaRevisionTopic];'],
+    [
+      'FatwaPublication INSERT denied',
+      `INSERT INTO [dbo].[FatwaPublication] ([id],[fatwaId],[revisionId],[sequence],[publisherId],[stepUpGrantId],[publishedAt]) VALUES (N'${randomUUID()}',N'${fatwaId}',N'${fatwaFirst}',2,N'${fatwaPublisher}',N'${fatwaGrant}',SYSUTCDATETIME());`,
+    ],
+    [
+      'FatwaPublication UPDATE denied',
+      'UPDATE [dbo].[FatwaPublication] SET [publisherId]=[publisherId];',
+    ],
+    ['FatwaPublication DELETE denied', 'DELETE FROM [dbo].[FatwaPublication];'],
+    [
+      'FatwaReviewDecision INSERT denied',
+      `INSERT INTO [dbo].[FatwaReviewDecision] ([id],[fatwaId],[revisionId],[decision],[note],[actorId],[decidedAt]) VALUES (N'${randomUUID()}',N'${fatwaId}',N'${fatwaSecond}',N'returned',N'NON_FATWA_FIXTURE forged',N'${fatwaPublisher}',SYSUTCDATETIME());`,
+    ],
+    [
+      'FatwaReviewDecision UPDATE denied',
+      'UPDATE [dbo].[FatwaReviewDecision] SET [note]=[note];',
+    ],
+    ['FatwaReviewDecision DELETE denied', 'DELETE FROM [dbo].[FatwaReviewDecision];'],
+    [
+      'FatwaReadTally INSERT denied',
+      `INSERT INTO [dbo].[FatwaReadTally] ([fatwaId],[day],[reads]) VALUES (N'${fatwaId}','2026-10-05',1000000);`,
+    ],
+    [
+      'FatwaReadTally UPDATE denied',
+      'UPDATE [dbo].[FatwaReadTally] SET [reads]=[reads]+1000000;',
+    ],
+    ['FatwaReadTally DELETE denied', 'DELETE FROM [dbo].[FatwaReadTally];'],
+  ] as const)
+    await expectDenied(app, label, statement);
+
+  // The workflow store is exactly what the procedures wrote, after every
+  // refused direct write.
+  const [fatwaState] = await admin.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[FatwaActivation] WHERE [authority]=N'fixture') AS [activations],
+      (SELECT COUNT(*) FROM [dbo].[FatwaCategory] WHERE [id]=N'${fatwaCategory}' AND [version]=2) AS [categories],
+      (SELECT COUNT(*) FROM [dbo].[FatwaCategoryName] WHERE [categoryId]=N'${fatwaCategory}') AS [names],
+      (SELECT COUNT(*) FROM [dbo].[FatwaQuestion] WHERE [askerId]=N'${fatwaAsker}') AS [questions],
+      (SELECT COUNT(*) FROM [dbo].[FatwaQuestion] WHERE [id]=N'${fatwaQuestion}' AND [status]=N'answered' AND [assigneeId]=N'${fatwaAnswerer}') AS [answered],
+      (SELECT COUNT(*) FROM [dbo].[FatwaQuestion] WHERE [id]=N'${fatwaDeclined}' AND [status]=N'declined') AS [declined],
+      (SELECT COUNT(*) FROM [dbo].[Fatwa] WHERE [id]=N'${fatwaId}' AND [publishedRevisionId]=N'${fatwaSecond}' AND [withdrawnAt] IS NOT NULL AND [version]=8) AS [rulings],
+      (SELECT COUNT(*) FROM [dbo].[FatwaRevision]) AS [revisions],
+      (SELECT COUNT(*) FROM [dbo].[FatwaRevisionTopic]) AS [revisionTopics],
+      (SELECT COUNT(*) FROM [dbo].[FatwaPublication]) AS [publications],
+      (SELECT COUNT(*) FROM [dbo].[FatwaReviewDecision]) AS [decisions],
+      (SELECT COUNT(*) FROM [dbo].[FatwaReadTally] WHERE [reads]=1) AS [tallies],
+      (SELECT COUNT(*) FROM [dbo].[SearchIndexRequest] WHERE [scopeKind]=N'fatwa' AND [scopeId]=N'${fatwaId}') AS [intents];
+  `);
+  if (
+    JSON.stringify(fatwaState) ===
+    '{"activations":1,"categories":1,"names":1,"questions":2,"answered":1,"declined":1,"rulings":1,"revisions":2,"revisionTopics":2,"publications":1,"decisions":2,"tallies":1,"intents":2}'
+  ) {
+    pass(
+      'Fatwa workflow state intact',
+      'only the procedures wrote it; every direct write was refused',
+    );
+  } else {
+    fail('Fatwa workflow state intact', JSON.stringify(fatwaState));
+  }
+
+  // No Fatwa table is alterable, each proved visible first so a DDL denial can
+  // only mean permission.
+  for (const table of [
+    ...FATWA_WORKFLOW,
+    'FatwaActivation',
+    'FatwaCategory',
+    'FatwaCategoryName',
+  ]) {
+    await assertObjectVisible(app, table);
+    await expectDenied(
+      app,
+      `${table} ALTER denied`,
+      `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+    );
+  }
+  await expectDenied(
+    app,
+    'Fatwa integrity trigger DISABLE denied',
+    'DISABLE TRIGGER [dbo].[FatwaIntegrity] ON [dbo].[Fatwa];',
+  );
+  await expectDenied(
+    app,
+    'Fatwa history trigger DISABLE denied',
+    'DISABLE TRIGGER [dbo].[FatwaRevisionImmutable] ON [dbo].[FatwaRevision];',
+  );
+
+  // THE EXACT EFFECTIVE POSTURE, table by table and column by column. A string
+  // names the UPDATE columns exactly; a list names the columns EXCLUDED from an
+  // otherwise updatable table.
+  const FATWA_POSTURE: Readonly<
+    Record<string, readonly [string, string | readonly string[]]>
+  > = {
+    ...Object.fromEntries(
+      [...FATWA_WORKFLOW, 'FatwaActivation'].map((table) => [
+        table,
+        ['SELECT', ''] as const,
+      ]),
+    ),
+    FatwaCategory: ['INSERT,SELECT', ['id', 'slug', 'createdAt']],
+    FatwaCategoryName: ['DELETE,INSERT,SELECT', 'name'],
+  };
+  const fatwaPosture = await app.query<{
+    name: string;
+    held: string | null;
+    updatable: string | null;
+    columns: string | null;
+  }>(`
+    SELECT t.[name],
+      (SELECT STRING_AGG(p.[permission], N',') WITHIN GROUP (ORDER BY p.[permission])
+         FROM (VALUES (N'ALTER'),(N'CONTROL'),(N'DELETE'),(N'INSERT'),(N'REFERENCES'),
+                      (N'SELECT'),(N'TAKE OWNERSHIP')) AS p([permission])
+        WHERE HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', p.[permission]) = 1) AS [held],
+      (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+         FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])
+          AND HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', N'UPDATE', c.[name], N'COLUMN') = 1) AS [updatable],
+      (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+         FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])) AS [columns]
+    FROM (VALUES ${Object.keys(FATWA_POSTURE)
+      .map((table) => `(N'${table}')`)
+      .join(',')}) AS t([name]);
+  `);
+  const fatwaPostureFindings = fatwaPosture.flatMap((row) => {
+    const [verbs, scope] = FATWA_POSTURE[row.name] ?? ['?', '?'];
+    const expectedColumns =
+      typeof scope === 'string'
+        ? scope
+        : (row.columns ?? '')
+            .split(',')
+            .filter((column) => !scope.includes(column))
+            .join(',');
+    return (row.held ?? '') === verbs && (row.updatable ?? '') === expectedColumns
+      ? []
+      : [`${row.name}: ${row.held ?? '(none)'} / UPDATE ${row.updatable ?? '(none)'}`];
+  });
+  if (
+    fatwaPosture.length === Object.keys(FATWA_POSTURE).length &&
+    Object.keys(FATWA_POSTURE).length === 10 &&
+    fatwaPostureFindings.length === 0
+  ) {
+    pass(
+      'Fatwa effective posture exact',
+      `${String(fatwaPosture.length)} tables, object verbs and UPDATE columns as granted`,
+    );
+  } else {
+    fail(
+      'Fatwa effective posture exact',
+      fatwaPostureFindings.join('; ') || 'tables missing',
+    );
+  }
+  const FATWA_EXECUTABLE = [
+    'FatwaSubmitQuestion',
+    'FatwaTriageQuestion',
+    'FatwaAssignQuestion',
+    'FatwaDeclineQuestion',
+    'FatwaSaveDraft',
+    'FatwaSubmitForReview',
+    'FatwaReturnForRevision',
+    'FatwaPublishRevision',
+    'FatwaWithdraw',
+    'FatwaDisposeQuestions',
+    'FatwaRecordRead',
+  ];
+  const [fatwaExecute] = await app.query<{ granted: number; denied: number }>(`
+    SELECT
+      ${FATWA_EXECUTABLE.map((name) => `HAS_PERMS_BY_NAME(N'dbo.${name}', N'OBJECT', N'EXECUTE')`).join(' + ')} AS [granted],
+      HAS_PERMS_BY_NAME(N'dbo.FatwaAssertPermission', N'OBJECT', N'EXECUTE')
+        + HAS_PERMS_BY_NAME(N'dbo.FatwaAssertPublicationAuthority', N'OBJECT', N'EXECUTE') AS [denied];
+  `);
+  if (
+    Number(fatwaExecute?.granted) === FATWA_EXECUTABLE.length &&
+    Number(fatwaExecute?.denied) === 0
+  ) {
+    pass(
+      'Fatwa procedures EXECUTE exact',
+      'eleven workflow procedures executable; the two authority checks are not',
+    );
+  } else {
+    fail('Fatwa procedures EXECUTE exact', JSON.stringify(fatwaExecute ?? null));
+  }
+
   // ---- the ungranted object was not merely unreadable, it is unchanged -----
   await assertSentinelIntact(admin);
   pass(`${SENTINEL_TABLE} unchanged`, 'one row, marker intact after four attempts');

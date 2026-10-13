@@ -2,7 +2,10 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 
-import { PERMISSION_CATALOGUE } from '@minhaj/contracts/identity';
+import {
+  PERMISSION_CATALOGUE,
+  PLATFORM_ADMINISTRATOR_PERMISSIONS,
+} from '@minhaj/contracts/identity';
 
 import type { SqlSession } from './sql-connection.ts';
 
@@ -43,6 +46,14 @@ const TAG = 'phase2-recovery';
  * to forget.
  */
 const EXPECTED_PERMISSION_COUNT = PERMISSION_CATALOGUE.length;
+
+/**
+ * How many of them the protected Platform Administrator bundle holds: the whole
+ * catalogue EXCEPT the externally gated keys, whose holders only the
+ * organisation names. Asked of the same compiled definition, for the same
+ * reason.
+ */
+const EXPECTED_BUNDLE_COUNT = PLATFORM_ADMINISTRATOR_PERMISSIONS.length;
 
 export interface Phase2Fixture {
   readonly runId: string;
@@ -573,15 +584,16 @@ async function verifyRestoredAuthorization(
     detail: `${EXPECTED_PERMISSION_COUNT} migration-seeded permissions`,
   });
 
-  // THE PROTECTED BUNDLE IS THE WHOLE CATALOGUE, which is why the two counts
-  // are the same number and why extending one is a privilege change.
+  // THE PROTECTED BUNDLE IS THE CATALOGUE LESS ITS EXTERNALLY GATED KEYS, which
+  // is why extending the catalogue with an ordinary key is a privilege change
+  // and extending it with a gated one is not.
   const [protectedRole] = await restored.query<{ total: number }>(
     `SELECT COUNT_BIG(*) AS total FROM [dbo].[Role] AS r
      JOIN [dbo].[RolePermission] AS rp ON rp.[roleId] = r.[id]
      WHERE r.[key] = N'platform-administrator' AND r.[system] = 1;`,
   );
   expect(
-    Number(protectedRole?.total) === EXPECTED_PERMISSION_COUNT,
+    Number(protectedRole?.total) === EXPECTED_BUNDLE_COUNT,
     'Restored protected role lost part of its permission bundle.',
   );
   found.push({ table: 'Role', detail: 'protected system role with its full bundle' });

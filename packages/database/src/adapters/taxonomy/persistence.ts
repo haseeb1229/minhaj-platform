@@ -540,6 +540,12 @@ export function createTaxonomyReader(): TaxonomyReaderPort {
       // context that owns the thing being classified. Reporting the aggregate's
       // own edges as assignments would show an administrator two relationships
       // on a page whose whole message is that there are none yet.
+      //
+      // A JUNCTION ROW IS IDENTIFIED BY ITS TOPIC, so the Topic column is part
+      // of its primary key. A record that merely CARRIES a single Topic column —
+      // Phase 20's `FatwaCategory.topicId`, a domain classification mapped onto
+      // one canonical Topic — is not a junction and has no second target to
+      // reach; counting it would report a complete relationship as incomplete.
       const rows = await prisma.$queryRaw<
         {
           junctionTable: string;
@@ -568,6 +574,15 @@ export function createTaxonomyReader(): TaxonomyReaderPort {
           AND fk.[parent_object_id] NOT IN (
               OBJECT_ID(N'[dbo].[Topic]'),
               OBJECT_ID(N'[dbo].[TopicTranslation]')
+          )
+          AND EXISTS (
+              SELECT 1
+              FROM sys.indexes pk
+              INNER JOIN sys.index_columns pkc
+                  ON pkc.[object_id] = pk.[object_id] AND pkc.[index_id] = pk.[index_id]
+              WHERE pk.[object_id] = fk.[parent_object_id]
+                AND pk.[is_primary_key] = 1
+                AND pkc.[column_id] = fkc.[parent_column_id]
           )
         ORDER BY [junctionTable], [topicColumn], [targetTable];
       `;

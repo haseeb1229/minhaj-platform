@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { EditorialPublicReaderPort } from '../../packages/contracts/src/editorial/index.ts';
+import type { FatwaPublicReaderPort } from '../../packages/contracts/src/fatwa/index.ts';
 import type { HadithPublicReaderPort } from '../../packages/contracts/src/hadith/index.ts';
 import type { LibraryPublicReaderPort } from '../../packages/contracts/src/library/index.ts';
 import type { MediaPublicReaderPort } from '../../packages/contracts/src/media/index.ts';
@@ -19,6 +20,8 @@ import { searchWiring } from '../../apps/web/src/composition/search-wiring.ts';
 
 const PUBLIC_CITATION = '11111111-1111-4111-8111-111111111111';
 const WITHHELD_CITATION = '22222222-2222-4222-8222-222222222222';
+const PUBLIC_RULING = '33333333-3333-4333-8333-333333333333';
+const WITHDRAWN_RULING = '44444444-4444-4444-8444-444444444444';
 
 function readers() {
   const taxonomy = {
@@ -77,7 +80,15 @@ function readers() {
           number: 7,
         })),
   } as unknown as HadithPublicReaderPort;
-  return { taxonomy, people, editorial, library, media, quran, hadith };
+  const fatwa = {
+    // Only the first ruling is public now; the second is withdrawn or was
+    // never published — the owner simply does not return it.
+    publicTargets: async (ids: readonly string[]) =>
+      ids
+        .filter((id) => id === PUBLIC_RULING)
+        .map((fatwaId) => ({ fatwaId, slug: 'non-fatwa-fixture-ruling' })),
+  } as unknown as FatwaPublicReaderPort;
+  return { taxonomy, people, editorial, library, media, quran, hadith, fatwa };
 }
 
 describe('searchWiring', () => {
@@ -136,6 +147,14 @@ describe('searchWiring', () => {
     const found = await targets.hadith([PUBLIC_CITATION, WITHHELD_CITATION, 'not-an-id']);
     expect([...found.entries()]).toEqual([
       [PUBLIC_CITATION, '/hadith/fixture-collection-a/7'],
+    ]);
+  });
+
+  it('addresses a published ruling at /fatwa/{slug}, and omits one Fatwa withholds', async () => {
+    const { targets } = searchWiring(readers());
+    const found = await targets.fatwa([PUBLIC_RULING, WITHDRAWN_RULING, 'not-an-id']);
+    expect([...found.entries()]).toEqual([
+      [PUBLIC_RULING, '/fatwa/non-fatwa-fixture-ruling'],
     ]);
   });
 

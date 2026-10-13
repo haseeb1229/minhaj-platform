@@ -21,18 +21,21 @@
  * migration that delivered those surfaces; Phase 4 appended the one read key
  * its navigation status surface needs; Phase 18 appended Quran's three,
  * `quran.editCanonical` among them; Phase 19 appended Hadith's three,
- * `hadith.editCanonical` among them. `fatwa.publish`, `teaching.perform` and the
- * rest are named by DOMAIN_MODEL.md §4.4 as INDICATIVE examples of the shape;
- * they belong to contexts that do not exist yet. Seeding one now would fix another owner's
+ * `hadith.editCanonical` among them; Phase 20 appended Fatwa's three,
+ * `fatwa.publish` among them. `teaching.perform` and the rest are named by
+ * DOMAIN_MODEL.md §4.4 as INDICATIVE examples of the shape; they belong to
+ * contexts that do not exist yet. Seeding one now would fix another owner's
  * vocabulary before that owner can have an opinion about it, and would leave
  * grantable authority over nothing (DELIVERY_PLAN.md).
  *
- * EXTENDING IT IS A PRIVILEGE CHANGE. The protected Platform Administrator
- * bundle below is the whole catalogue, so appending a key widens what a live
- * administrator may do. The owning phase's migration therefore performs the
- * same invalidation an ordinary bundle change performs — it revokes the
- * holders' sessions and step-up grants in the transaction that extends the
- * bundle (SECURITY_BASELINE.md §8.1).
+ * EXTENDING IT IS USUALLY A PRIVILEGE CHANGE. The protected Platform
+ * Administrator bundle below is the whole catalogue EXCEPT the externally gated
+ * keys, so appending an ordinary key widens what a live administrator may do.
+ * The owning phase's migration therefore performs the same invalidation an
+ * ordinary bundle change performs — it revokes the holders' sessions and
+ * step-up grants in the transaction that extends the bundle
+ * (SECURITY_BASELINE.md §8.1). Appending an externally gated key changes no
+ * bundle and so invalidates nobody.
  */
 
 /**
@@ -449,6 +452,57 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     description:
       'Create Hadith structure and source-qualified records, correct their sourced text, chain and gradings, verify them and map public citations, with step-up.',
   }),
+
+  /* ---- Phase 20 — Fatwa -------------------------------------------------- */
+  //
+  // THREE KEYS, EACH NAMED BY THE ACCEPTED DOCUMENTS THEMSELVES
+  // (DOMAIN_MODEL.md §4.4, §4.5; SECURITY_BASELINE.md §3.2, §6, §8.1;
+  // OPEN_DECISIONS.md §1.4, §6.3), so none is this implementation's to rename,
+  // and there is no fourth. Each is one STAGE of one workflow, and none implies
+  // another:
+  //
+  //   `question.receive` — triage incoming private questions: read the ones
+  //                        still in intake, categorise, assign to a current
+  //                        `fatwa.answer` holder, decline. Never drafts or
+  //                        publishes.
+  //   `fatwa.answer`     — draft and revise the ruling and the separately
+  //                        written anonymised public question for a question
+  //                        assigned to the holder NOW, and submit it for
+  //                        review. Never publishes.
+  //   `fatwa.publish`    — final scholar review: return a revision, publish it
+  //                        or a correction, or withdraw a ruling, each publish
+  //                        and withdrawal behind the dedicated
+  //                        `fatwa-publication` step-up. It also maintains the
+  //                        Fatwa categories, which classify published rulings.
+  //                        It confers no general access to private intake: a
+  //                        private question is readable to it only while that
+  //                        question's ruling is under review.
+  //
+  // THERE IS NO `fatwa.read`, `fatwa.review` OR `fatwa.administer`. Review IS
+  // publication authority, and a separate read key would be private-question
+  // access nobody needs. `content.review` and every other content key confer
+  // nothing here: a Fatwa is not an editorial record.
+  //
+  // EXTERNALLY GATED — see `EXTERNALLY_GATED_PERMISSIONS` below. These three
+  // are deliberately NOT in the protected Platform Administrator bundle: who
+  // may hold them is the organisation's decision (OPEN_DECISIONS.md §1.4,
+  // §6.3), and an administrator is not thereby a triage officer, answerer or
+  // scholar.
+  Object.freeze({
+    key: 'question.receive',
+    description:
+      'Triage incoming private Fatwa questions: read those still in intake, categorise, assign to a current answerer, or decline. Never drafts or publishes.',
+  }),
+  Object.freeze({
+    key: 'fatwa.answer',
+    description:
+      'Draft and revise the ruling and its separately written anonymised public question for a question currently assigned to you, and submit it for scholar review. Never publishes.',
+  }),
+  Object.freeze({
+    key: 'fatwa.publish',
+    description:
+      'Review a submitted Fatwa revision, return it, publish it or a correction, or withdraw a ruling, with step-up; and maintain Fatwa categories.',
+  }),
 ]);
 
 /** Every catalogue key, as a union. Mistyping one is a compile error. */
@@ -479,7 +533,38 @@ export function isPermissionKey(value: string): value is PermissionKey {
 export const PLATFORM_ADMINISTRATOR_ROLE = 'platform-administrator';
 
 /**
- * The protected bundle.
+ * Keys whose holders the ORGANISATION names, not the platform.
+ *
+ * OPEN_DECISIONS.md §1.4 and §6.3 reserve to Minhaj which named individuals
+ * receive `question.receive`, `fatwa.answer` and `fatwa.publish`, and
+ * DELIVERY_PLAN.md Phase 20 issues real grants only to those individuals. A
+ * bundle defined as "the whole catalogue" would have made every Platform
+ * Administrator an intake reader, answerer and Fatwa publisher the moment the
+ * keys were catalogued — before anybody approved anybody.
+ *
+ * So these keys are catalogued and grantable through the ordinary audited role
+ * and assignment lifecycle (`permissions.grant`, step-up, never
+ * self-applicable), and are NOT bundled into the protected role. The
+ * administrator keeps the authority to grant them once the organisation names a
+ * holder; it does not hold them. There is no boolean beside the permission and
+ * no second authorisation system: a holder is exactly an account with a live
+ * assignment of a role carrying the key.
+ */
+export const EXTERNALLY_GATED_PERMISSIONS = Object.freeze([
+  'question.receive',
+  'fatwa.answer',
+  'fatwa.publish',
+] as const satisfies readonly PermissionKey[]);
+
+const EXTERNALLY_GATED: ReadonlySet<string> = new Set(EXTERNALLY_GATED_PERMISSIONS);
+
+/** Is this a key whose holders only the organisation may name? */
+export function isExternallyGatedPermission(key: string): boolean {
+  return EXTERNALLY_GATED.has(key);
+}
+
+/**
+ * The protected bundle: every catalogued key except the externally gated ones.
  *
  * Migration-controlled foundation data rather than an ordinary editable row:
  * the role has to exist before the one-time bootstrap can assign it, and a
@@ -487,7 +572,9 @@ export const PLATFORM_ADMINISTRATOR_ROLE = 'platform-administrator';
  * removing the platform's only administrator (SECURITY_BASELINE.md §8).
  */
 export const PLATFORM_ADMINISTRATOR_PERMISSIONS: readonly PermissionKey[] = Object.freeze(
-  PERMISSION_CATALOGUE.map((entry) => entry.key),
+  PERMISSION_CATALOGUE.map((entry) => entry.key).filter(
+    (key) => !isExternallyGatedPermission(key),
+  ),
 );
 
 /* ===========================================================================
@@ -518,6 +605,11 @@ export const PLATFORM_ADMINISTRATOR_PERMISSIONS: readonly PermissionKey[] = Obje
  * edits as their own operation under `hadith.editCanonical`; a grant earned to
  * correct an Ayah must not also authorise rewriting a Hadith's grading, nor the
  * reverse, so canonical Hadith authority has its own purpose too.
+ *
+ * PHASE 20 ADDS THE SIXTH. §8.1 lists Fatwa publication as its own operation
+ * under `fatwa.publish` — the highest-consequence act on the platform — so no
+ * grant earned for privilege administration or canonical text authorises it,
+ * and a `fatwa-publication` grant authorises nothing else.
  */
 export const STEP_UP_PURPOSES = Object.freeze([
   /** Role lifecycle, permission bundles, assignment grant and revoke. */
@@ -530,6 +622,8 @@ export const STEP_UP_PURPOSES = Object.freeze([
   'quran-canonical-edit',
   /** Canonical Hadith structure, records, verification and citations (Phase 19). */
   'hadith-canonical-edit',
+  /** Fatwa publication, correction publication and withdrawal (Phase 20). */
+  'fatwa-publication',
 ] as const);
 
 export type StepUpPurpose = (typeof STEP_UP_PURPOSES)[number];

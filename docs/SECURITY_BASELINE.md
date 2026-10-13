@@ -165,7 +165,23 @@ assignment and **takes effect immediately**, including in messaging (§12.2).
    requesting user's identifier — the primary defence against horizontal privilege escalation.
 5. **Scoped assignments are evaluated per request**, never cached into the session.
 6. **No self-elevation.** `permissions.grant` is required to change permissions, is never
-   self-applicable, requires step-up reauthentication, and is audited.
+   self-applicable, requires step-up reauthentication, and is audited. **Since Phase 20 this
+   covers the bundle route too:** an administrator may narrow a custom role they hold but may not
+   add any permission to it — refused inside the transaction against the live assignment, because
+   widening one's own role is self-elevation from the next sign-in.
+
+### 3.5 Externally gated permissions — catalogued, bundled into no role (Phase 20)
+
+`question.receive`, `fatwa.answer` and `fatwa.publish` are **externally gated**: which named
+individuals hold them is the organisation's decision (OPEN_DECISIONS.md §1.4, §6.3). They are in
+the permission catalogue and grantable through the ordinary audited lifecycle — a custom role,
+`permissions.grant`, step-up, never self-applicable — but they are **excluded from the protected
+Platform Administrator bundle**, which is otherwise every catalogued key. An administrator keeps
+the authority to grant them once a holder is named; an administrator is not thereby a triage
+officer, answerer or Fatwa publisher. There is no boolean beside the permission and no second
+authorisation system. The Phase-20 migration therefore extends no bundle and invalidates no
+session, and a database it migrates has **no holder** of any of the three until a real, audited
+grant is made.
 
 ---
 
@@ -262,6 +278,43 @@ text uses purpose-built structured editors with validation.
    identity, contact details or personal circumstances without explicit consent.
 6. **Published Fatawa are immutable in substance**; corrections create a visible new version.
 7. Every publication is audited: who published, when, under which authority.
+
+**As delivered (Phase 20, engineering — DOMAIN_MODEL.md §12.1).** Each rule is a database property,
+not only an application check.
+
+- **Rules 1–2.** The application principal holds no INSERT, UPDATE or DELETE on any question,
+  ruling, revision, topic, publication, review-decision or tally table. Every write is a procedure
+  that re-checks — from the authoritative rows, after the service has asked Identity — the actor's
+  live assignment of an active role carrying the one key its stage needs, held by an active account.
+  **There is one publication operation** (`FatwaPublishRevision`), reached from one adapter module;
+  it re-checks `fatwa.publish`, an unexpired grant for the dedicated **`fatwa-publication`** step-up
+  purpose bound to a live session of the same account (§8.1), the service activation, the expected
+  version, that the exact revision is the one under review, and that the publisher is neither that
+  revision's author nor the asker. No other purpose — `hadith-canonical-edit`,
+  `quran-canonical-edit` or `privilege-administration` — authorises it. Withdrawal is the same
+  authority. There is no bulk path, no importer and no "publish without review"; a future importer
+  must call the same operation.
+- **Rule 3.** No language-model, generation or rewriting dependency or code path exists in the
+  context, its contract, its adapter, its administration or its public pages, and an architecture
+  test keeps it so. Ruling text and the anonymised public question are typed by people and stored
+  exactly as typed.
+- **Rule 4.** Every question read is scoped in SQL — to its asker, or to the stage that needs it
+  now (intake for `question.receive`; the current assignee for `fatwa.answer`; the ruling under
+  review for `fatwa.publish`). A revoked or reassigned answerer loses access on the next request.
+  Lists never select the text; each detail read that returns it writes a `fatwa.question.accessed`
+  audit row naming the stage (§13.2 *Data access*). Owner, intake and administration pages are
+  authenticated, `noindex` and dynamic; public pages read no question, set no cookie and are
+  shared-cache safe; a question id is opaque and its text is never in a URL.
+- **Rule 5.** The public question is a separate field a person writes; nothing redacts, detects names
+  in or anonymises text automatically, and no public page, Search document, sitemap or metadata reads
+  the original.
+- **Rule 6.** Revisions, their topics, publications and review decisions refuse UPDATE and DELETE;
+  a published ruling keeps its address and never returns to unpublished; corrections are new
+  revisions with a public reason and stay visible on the same URL.
+- **Rule 7.** Publication audits publisher, time, the permission and step-up purpose, the step-up
+  grant (`authorisingSource`), the question reference and the revision — never text.
+- **Fail-closed intake.** Until the operator records an activation, no question is captured and
+  nothing can be published, whoever holds which key (OPEN_DECISIONS.md §1.4).
 
 ---
 
@@ -423,7 +476,7 @@ controls apply, and they are not alternatives:**
 | Permission and role grants | `permissions.grant` |
 | **Canonical Quran edits** | `quran.editCanonical` |
 | **Canonical Hadith edits** | `hadith.editCanonical` |
-| **Fatwa publication** | `fatwa.publish` |
+| **Fatwa publication** | `fatwa.publish` — dedicated purpose `fatwa-publication` since Phase 20, also required to withdraw a published ruling |
 | **Migration publication** | `migration.publish` |
 | User account administration | Admin permissions |
 | Destructive bulk operations | Admin permissions |

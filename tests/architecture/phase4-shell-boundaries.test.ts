@@ -235,10 +235,29 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/hadith/books/page.tsx',
   'apps/web/src/app/[locale]/(public)/hadith/videos/page.tsx',
   'apps/web/src/app/[locale]/(public)/hadith/research/page.tsx',
+  // Phase 20. Every Fatwa surface reads whether the service is activated, and
+  // which rulings are public now, through Fatwa's PUBLIC reader, so none can be
+  // prerendered; each is proven below to reach no session, no identity
+  // service, no logger and no authentication library. `/fatwa/ask` reads
+  // nothing at all — it redirects every visitor into the authenticated tree —
+  // and the read beacon is the client island that posts one read count after
+  // render through the action declared below.
+  'apps/web/src/app/[locale]/(public)/fatwa/page.tsx',
+  'apps/web/src/app/[locale]/(public)/fatwa/search/page.tsx',
+  'apps/web/src/app/[locale]/(public)/fatwa/categories/page.tsx',
+  'apps/web/src/app/[locale]/(public)/fatwa/categories/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/fatwa/topics/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/fatwa/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/fatwa/how-it-works/page.tsx',
+  'apps/web/src/app/[locale]/(public)/fatwa/ask/page.tsx',
+  'apps/web/src/app/[locale]/(public)/fatwa/read-beacon.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [
   'apps/web/src/app/[locale]/(public)/correspondence-actions.ts',
+  // Phase 20 — the Fatwa read count: a POST after render, rate limited by the
+  // network address, which is why it (and only it) reads a request header.
+  'apps/web/src/app/[locale]/(public)/fatwa/read-actions.ts',
 ];
 
 /** Is this file one of the declared data-backed content routes? */
@@ -914,6 +933,9 @@ describe('a public CONTENT route reads data, and still reads no session', () => 
       // Phase 19, for the same reason: the ADMINISTRATIVE Hadith runtime wires
       // Identity in. Public Hadith routes use `@/composition/hadith-read`.
       '@/composition/hadith',
+      // Phase 20, for the same reason: the AUTHENTICATED Fatwa runtime wires
+      // Identity in. Public Fatwa routes use `@/composition/fatwa-read`.
+      '@/composition/fatwa',
       '@/contexts/identity-access',
       '@/config/server-env',
       '@minhaj/contracts/env/server',

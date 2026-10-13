@@ -223,6 +223,23 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/hadith/topics.tsx',
     'apps/web/src/components/search/hadith-hit.ts',
     'apps/web/src/components/search/hadith-hit-text.ts',
+    // Phase 20. The public Fatwa surfaces, their pure presentation decisions
+    // and request-cached reads, and the batched current-revision read and pure
+    // labels the search pages use for Fatwa results. The ROUTES that use them
+    // are dynamic for data, never these modules.
+    'apps/web/src/components/fatwa/categories.tsx',
+    'apps/web/src/components/fatwa/detail.tsx',
+    'apps/web/src/components/fatwa/history.tsx',
+    'apps/web/src/components/fatwa/how-it-works.tsx',
+    'apps/web/src/components/fatwa/landing.tsx',
+    'apps/web/src/components/fatwa/list.tsx',
+    'apps/web/src/components/fatwa/parts.tsx',
+    'apps/web/src/components/fatwa/presentation.ts',
+    'apps/web/src/components/fatwa/read.ts',
+    'apps/web/src/components/fatwa/search.tsx',
+    'apps/web/src/components/fatwa/topics.tsx',
+    'apps/web/src/components/search/fatwa-hit.ts',
+    'apps/web/src/components/search/fatwa-hit-text.ts',
     // Phase 10. The Watch surfaces, their pure presentation decisions and the
     // privacy-gated player island, on the same anonymous public path.
     'apps/web/src/components/media/audio-player.tsx',

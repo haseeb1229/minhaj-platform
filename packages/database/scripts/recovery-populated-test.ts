@@ -70,6 +70,12 @@ import {
   verifyRestoredPhase19,
   writePhase19Fixture,
 } from '../src/lifecycle/phase19-fixture.ts';
+import {
+  capturePhase20Fixture,
+  newPhase20Fixture,
+  verifyRestoredPhase20,
+  writePhase20Fixture,
+} from '../src/lifecycle/phase20-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -197,6 +203,7 @@ const eventFixture = newPhase14Fixture();
 const collectionFixture = newPhase15Fixture();
 const quranFixture = newPhase18Fixture();
 const hadithFixture = newPhase19Fixture();
+const fatwaFixture = newPhase20Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -423,6 +430,18 @@ try {
   const hadithSnapshot = await capturePhase19Fixture(admin, hadithFixture);
   report('hadith fixture', `run ${hadithFixture.runId}`);
 
+  // Phase-20 Fatwa, with NON_FATWA_FIXTURE sentinels only: fixture-mode
+  // activation, a category mapped onto a Topic with display names, two askers'
+  // private questions (one answered, one submitted), a ruling with a first
+  // publication, a correction returned with a private note and the revised
+  // correction published, revision topics, a two-day read tally, the `fatwa`
+  // search intent, and synthetic triage, answer and publish roles with the
+  // publisher's session and step-up grant.
+  const fatwaReferences = { topicId: taxonomyFixture.childTopicId };
+  await writePhase20Fixture(admin, fatwaFixture, fatwaReferences);
+  const fatwaSnapshot = await capturePhase20Fixture(admin, fatwaFixture);
+  report('fatwa fixture', `run ${fatwaFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -535,6 +554,10 @@ try {
       hadithSnapshot,
       hadithReferences,
     ),
+  );
+  report(
+    'fatwa recovery',
+    await verifyRestoredPhase20(restored, fatwaFixture, fatwaSnapshot, fatwaReferences),
   );
 
   // ---- restored security posture -------------------------------------------
@@ -825,6 +848,28 @@ try {
         ],
         ['HadithTopic UPDATE', 'UPDATE [dbo].[HadithTopic] SET [topicId]=[topicId];'],
         ['Hadith ALTER', 'ALTER TABLE [dbo].[Hadith] ADD [probe] INT NULL;'],
+        // Phase 20. A restored runtime can neither open the service, write a
+        // ruling, its history, a question or a read count directly, probe who
+        // holds a Fatwa key through the internal authority check, re-slug or
+        // erase a category, nor alter a Fatwa table.
+        [
+          'FatwaActivation INSERT',
+          "INSERT INTO [dbo].[FatwaActivation] ([id],[authority],[authorisedBy],[reference]) VALUES (2,N'approved',N'forged',N'urn:example:forged');",
+        ],
+        ['FatwaActivation DELETE', 'DELETE FROM [dbo].[FatwaActivation];'],
+        ['Fatwa UPDATE', 'UPDATE [dbo].[Fatwa] SET [withdrawnAt]=SYSUTCDATETIME();'],
+        ['Fatwa DELETE', 'DELETE FROM [dbo].[Fatwa];'],
+        ['FatwaRevision UPDATE', 'UPDATE [dbo].[FatwaRevision] SET [ruling]=[ruling];'],
+        ['FatwaPublication DELETE', 'DELETE FROM [dbo].[FatwaPublication];'],
+        ['FatwaQuestion UPDATE', 'UPDATE [dbo].[FatwaQuestion] SET [assigneeId]=NULL;'],
+        ['FatwaReadTally UPDATE', 'UPDATE [dbo].[FatwaReadTally] SET [reads]=[reads]+1;'],
+        [
+          'FatwaAssertPermission EXECUTE',
+          `EXEC [dbo].[FatwaAssertPermission] @actorId=N'${fatwaFixture.publisherId}', @permission=N'fatwa.publish';`,
+        ],
+        ['FatwaCategory slug UPDATE', 'UPDATE [dbo].[FatwaCategory] SET [slug]=[slug];'],
+        ['FatwaCategory DELETE', 'DELETE FROM [dbo].[FatwaCategory];'],
+        ['Fatwa ALTER', 'ALTER TABLE [dbo].[Fatwa] ADD [probe] INT NULL;'],
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -876,6 +921,7 @@ try {
         hadithSnapshot,
         hadithReferences,
       );
+      await verifyRestoredPhase20(restored, fatwaFixture, fatwaSnapshot, fatwaReferences);
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 
       // Phase 17. The full-text catalogue and index live INSIDE the database,

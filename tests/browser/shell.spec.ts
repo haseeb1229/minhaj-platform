@@ -440,7 +440,8 @@ test.describe('navigation is honest about what exists', () => {
     // Only domains still awaiting implementation remain absent.
     // Absent, not greyed out and not linked to a stub (ROUTE_MAP.md §5.2).
     const deferred = [
-      // `/quran` is delivered by Phase 18 and `/hadith` by Phase 19.
+      // `/quran` is delivered by Phase 18, `/hadith` by Phase 19 and `/fatwa`
+      // by Phase 20.
       '/learn',
       // `/library` is delivered by Phase 8 and its scholarly and periodical
       // surfaces by Phase 9. Phase 15 delivers `/collections` but deliberately
@@ -451,7 +452,6 @@ test.describe('navigation is honest about what exists', () => {
       // remain deferred to Phase 12.
       '/watch/audio',
       '/watch/galleries',
-      '/fatwa',
       // `/news` is delivered by Phase 13 and `/events` by Phase 14; the
       // newsletter is not, and stays asserted absent.
       '/newsletter',

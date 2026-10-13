@@ -81,6 +81,13 @@ const REQUIRED = [
   // and reconciliation — and its rebuild after a real restore.
   'hadith.integration',
   'hadith-recovery.integration',
+  // Phase 20: the Fatwa kind — one result per public ruling holding only its
+  // title, public question and ruling (never the private question, a return
+  // note or a draft), a correction replacing its superseded words, withholding
+  // a withdrawn ruling while a stale row remains, rebuild and reconciliation —
+  // and its rebuild after a real restore.
+  'fatwa.integration',
+  'fatwa-recovery.integration',
 ];
 
 const seen = files.map((file) => String(file.name ?? ''));
