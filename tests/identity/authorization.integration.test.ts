@@ -230,8 +230,8 @@ describe.skipIf(!databaseConfigured)(
         const evaluated = await harness.authorization.evaluate(session);
 
         // `teaching.perform` is named by DOMAIN_MODEL.md §4.4 and belongs to
-        // Learning, which has not shipped (Quran's, Hadith's and Fatwa's keys
-        // now exist, Phases 18, 19 and 20).
+        // Learning's teaching slice (Phase 23), which has not shipped — Phase 22
+        // delivered the catalogue and its two administrative keys only.
         expect(evaluated.can('teaching.perform' as 'users.read')).toBe(false);
       });
 
@@ -357,6 +357,14 @@ describe.skipIf(!databaseConfigured)(
       const PHASE_21_KEYS = ['newsletter.operate', 'newsletter.read'];
 
       /**
+       * The keys the Phase-22 migration appended: Learning's read and
+       * administer pair for the catalogue, bundled into the protected role.
+       * Neither reaches a learner's enrolments, progress or trial requests, and
+       * neither is teaching authority.
+       */
+      const PHASE_22_KEYS = ['learning.administer', 'learning.read'];
+
+      /**
        * The capability-projection source that MUST NOT be grantable yet.
        *
        * DOMAIN_MODEL.md §4.5 derives `canTeach`, `canReceiveQuestions`,
@@ -365,7 +373,7 @@ describe.skipIf(!databaseConfigured)(
        * shortcut for a projection test. Each arrives with its owner:
        * `content.review` with Editorial, `question.receive` and
        * `fatwa.publish` with Fatwa (externally gated). `teaching.perform`
-       * belongs to Learning, which has not shipped.
+       * belongs to Learning's teaching slice (Phase 23), which has not shipped.
        */
       const UNSEEDED_CAPABILITY_KEYS = ['teaching.perform'];
 
@@ -388,6 +396,7 @@ describe.skipIf(!databaseConfigured)(
             ...PHASE_19_KEYS,
             ...PHASE_20_KEYS,
             ...PHASE_21_KEYS,
+            ...PHASE_22_KEYS,
           ].sort(),
         );
 
@@ -420,7 +429,6 @@ describe.skipIf(!databaseConfigured)(
         // Taxonomy HAS shipped — which is the whole rule: a domain leaves it at
         // its owning phase and not before.
         for (const domain of [
-          'learning.',
           'membership.',
           'donations.',
           'migration.',
@@ -449,6 +457,12 @@ describe.skipIf(!databaseConfigured)(
           'events.',
           'collection.',
           'collections.',
+          // Learning (Phase 22) shipped two catalogue keys under `learning.*`:
+          // no per-aggregate key and nothing over a learner's own rows.
+          'course.',
+          'lesson.',
+          'enrolment.',
+          'trial.',
         ]) {
           expect(keys.some((key) => key.startsWith(domain))).toBe(false);
         }

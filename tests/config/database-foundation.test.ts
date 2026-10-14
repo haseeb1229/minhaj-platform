@@ -348,6 +348,26 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'Notification',
       'NewsletterSubscriber',
       'NewsletterConsentEvent',
+      // Phase 22 — Learning's public catalogue of Courses, their words, slug
+      // history, typed topics and teachers, modules and lessons; LearningPaths
+      // with their words, slug history and ordered Courses; and a person's own
+      // enrolments, lesson progress and trial-class requests.
+      'Course',
+      'CourseLabel',
+      'CourseSlugHistory',
+      'CourseTopic',
+      'CourseTeacher',
+      'CourseModule',
+      'CourseModuleLabel',
+      'Lesson',
+      'LessonLabel',
+      'LearningPath',
+      'LearningPathLabel',
+      'LearningPathSlugHistory',
+      'LearningPathCourse',
+      'Enrolment',
+      'LessonProgress',
+      'TrialClassRequest',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name
@@ -476,20 +496,37 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'Question',
       // Phase 21 holds every target as a typed key and sends nothing: no
       // polymorphic target or content reference, no generic activity log, no
-      // Learning progress (Learning's own, later), no raw newsletter token and
-      // no campaign, issue or delivery record.
+      // raw newsletter token and no campaign, issue or delivery record.
+      // (Learning's progress arrived as Phase 22's per-lesson
+      // `LessonProgress`.)
       'PersonalTarget',
       'UserContentReference',
       'ContentReference',
       'SavedTarget',
       'UserHistory',
       'UserActivity',
-      'CourseProgress',
-      'LessonProgress',
       'NewsletterToken',
       'NewsletterCampaign',
       'NewsletterIssue',
       'NewsletterDelivery',
+      // Phase 22 creates the trial REQUEST and nothing that schedules, keeps
+      // progress per lesson, names teachers as People's Person, and holds every
+      // reference by a typed key: no session, availability, attendance or
+      // booking model, no Course-level progress, no standalone Teacher, no
+      // Video or Centre relation, no generic learning target or content table,
+      // and no enrolment on a path.
+      'ClassSession',
+      'Availability',
+      'Attendance',
+      'Booking',
+      'CourseProgress',
+      'Teacher',
+      'CourseVideo',
+      'CourseCentre',
+      'LearningTarget',
+      'LearningContent',
+      'CourseItem',
+      'PathEnrolment',
     ]) {
       expect(models, `${domain} arrives with its owning slice`).not.toContain(domain);
     }

@@ -120,7 +120,7 @@ export function pathFor(locale: string, route: AvailableRoute): string {
  * The primary navigation, in the canonical order of
  * INFORMATION_ARCHITECTURE.md §2.2.
  *
- * ALL TWELVE ARE RECORDED, and seven of them are `deferred`. Recording them is
+ * ALL TWELVE ARE RECORDED, and one of them is `deferred`. Recording them is
  * not a promise to show them: it states the accepted final order in one place,
  * gives the administrative status surface something true to report, and makes
  * "a deferred domain renders no anchor" a property a test asserts over the
@@ -178,11 +178,22 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     availability: 'delivered' as const,
     indexing: 'excluded' as const,
   }),
+  /**
+   * DELIVERED BY PHASE 22. `/learn` is the Learn landing: a genuine page in all
+   * three locales that leads to the Course catalogue, the learning paths and the
+   * trial-class explanation, and says plainly when nothing is published yet.
+   * Every one of those is a public catalogue page whose words are the same for
+   * every visitor, so it is `eligible`; the Courses and paths themselves are the
+   * `courses` and `learning-paths` content segments.
+   */
   Object.freeze({
     key: 'learn',
     label: 'nav.learn',
+    path: '/learn',
     placements: Object.freeze(['primary'] as const),
-    availability: 'deferred' as const,
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'eligible' as const,
   }),
   /**
    * DELIVERED BY PHASE 8. The entry stops being `deferred` because the capability
@@ -558,17 +569,19 @@ const LISTEN: readonly ShellRoute[] = Object.freeze([
  * The Quran surfaces — Phase 18 (ROUTE_MAP.md §3.3).
  *
  * The reader entry, the Surah and Juz indexes, Quran search, the four study
- * aids, the recitations, and the three related-material views whose owners
- * expose a public by-topic read (Library's Works and Research, Media's Videos).
+ * aids, the recitations, and the four related-material views whose owners
+ * expose a public by-topic read (Library's Works and Research, Media's Videos
+ * and, since Phase 22, Learning's Courses).
  * NO PLACEMENT — they are reached from `/quran`, the single entry point in the
  * primary navigation. Every one is `excluded` for the reason the `quran` entry
  * gives; search is excluded for good.
  *
  * WHAT IS ABSENT IS ABSENT. `/quran/articles` has no entry because Editorial
- * exposes no public by-topic Article read; `/quran/courses` and
- * `/quran/teachers` belong to Learning, which has not shipped. A numbered
- * Surah, Ayah or Juz, a work, a reciter and a topic view are resources and
- * views reached through these, never registry entries.
+ * exposes no public by-topic Article read, and `/quran/teachers` has no
+ * deterministic owner read — a Course's teachers are attribution, and the
+ * teacher directory is Phase 23's. A numbered Surah, Ayah or Juz, a work, a
+ * reciter and a topic view are resources and views reached through these,
+ * never registry entries.
  *
  * `/listen/recitations` IS NOT HERE EITHER. It is the Listen projection of the
  * Quran-owned catalogue and exists only while a corpus is active, so it cannot
@@ -587,6 +600,7 @@ const QURAN_SURFACES = Object.freeze([
   'books',
   'videos',
   'research',
+  'courses',
 ] as const);
 
 const QURAN: readonly ShellRoute[] = Object.freeze(
@@ -607,17 +621,17 @@ const QURAN: readonly ShellRoute[] = Object.freeze(
  * The Hadith surfaces — Phase 19 (ROUTE_MAP.md §3.4).
  *
  * The introduction, the collections, every public citation, Hadith search, the
- * sciences and the commentary, and the three related-material views whose
+ * sciences and the commentary, and the four related-material views whose
  * owners expose a public by-topic read (Library's Works and Research, Media's
- * Videos). NO PLACEMENT — they are reached from `/hadith`, the single entry
+ * Videos and, since Phase 22, Learning's Courses). NO PLACEMENT — they are reached from `/hadith`, the single entry
  * point in the primary navigation. Every one is `excluded` for the reason the
  * `hadith` entry gives; search is excluded for good.
  *
  * WHAT IS ABSENT IS ABSENT. `/hadith/articles` has no entry because Editorial
- * exposes no public by-topic Article read; `/hadith/courses` and
- * `/hadith/scholars` have no deterministic owner read. A collection, book,
- * chapter, citation, study page and topic view are resources and views
- * reached through these, never registry entries.
+ * exposes no public by-topic Article read, and `/hadith/scholars` has no
+ * deterministic owner read. A collection, book, chapter, citation, study page
+ * and topic view are resources and views reached through these, never
+ * registry entries.
  */
 const HADITH_SURFACES = Object.freeze([
   'introduction',
@@ -629,6 +643,7 @@ const HADITH_SURFACES = Object.freeze([
   'books',
   'videos',
   'research',
+  'courses',
 ] as const);
 
 const HADITH: readonly ShellRoute[] = Object.freeze(
@@ -641,6 +656,37 @@ const HADITH: readonly ShellRoute[] = Object.freeze(
       visibility: 'public' as const,
       availability: 'delivered' as const,
       indexing: 'excluded' as const,
+    }),
+  ),
+);
+
+/**
+ * The Learn surfaces — Phase 22 (ROUTE_MAP.md §3.5).
+ *
+ * The Course catalogue, the learning paths and the trial-class explanation:
+ * each a genuine page in all three interface locales over delivered data, which
+ * is what makes `eligible` honest. NO PLACEMENT — they are reached from
+ * `/learn`, the single entry point in the primary navigation. A Course, a path
+ * and a filtered catalogue view are resources and views reached through these,
+ * never registry entries.
+ *
+ * WHAT IS ABSENT IS ABSENT. Live Learning, Training, Resources, Teachers and the
+ * Class Schedule (INFORMATION_ARCHITECTURE.md §3.4) are Phase 23's or later:
+ * they have no entry, so there is no string a link could be built from
+ * (ROUTE_MAP.md §5.2).
+ */
+const LEARN_SURFACES = Object.freeze(['courses', 'paths', 'trial'] as const);
+
+const LEARN: readonly ShellRoute[] = Object.freeze(
+  LEARN_SURFACES.map((surface) =>
+    Object.freeze({
+      key: `learn.${surface}`,
+      label: `learn.${surface}`,
+      path: `/learn/${surface}`,
+      placements: Object.freeze([] as const),
+      visibility: 'public' as const,
+      availability: 'delivered' as const,
+      indexing: 'eligible' as const,
     }),
   ),
 );
@@ -911,6 +957,7 @@ export const SHELL_ROUTES: readonly ShellRoute[] = Object.freeze([
   ...LISTEN,
   ...QURAN,
   ...HADITH,
+  ...LEARN,
   ...FATWA,
   ...MEDIA,
   ...NEWS,

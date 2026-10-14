@@ -393,12 +393,13 @@ test.describe('the taxonomy editor', () => {
     // ResearchPaper, Publication, Magazine, MagazineIssue and Encyclopedia —
     // Media's VideoTopic and AudioTrackTopic (Phases 10 and 11), one per
     // Phase-13 News family, Phase 14's EventTopic, Phase 15's CollectionTopic,
-    // Phase 18's QuranTopic, Phase 19's HadithTopic and Phase 20's
-    // FatwaRevisionTopic, each enforced by real foreign keys at both ends.
-    // Phase 20's FatwaCategory carries one Topic column of its own and is a
-    // classification, not a junction, so it is not counted.
+    // Phase 18's QuranTopic, Phase 19's HadithTopic, Phase 20's
+    // FatwaRevisionTopic and Phase 22's CourseTopic, each enforced by real
+    // foreign keys at both ends. Phase 20's FatwaCategory carries one Topic
+    // column of its own and is a classification, not a junction, so it is not
+    // counted.
     await expect(main).toContainText(
-      'The database enforces 20 typed topic-assignment relationships.',
+      'The database enforces 21 typed topic-assignment relationships.',
     );
     await expect(main).toContainText(
       'Every detected relationship has real foreign keys at both ends.',

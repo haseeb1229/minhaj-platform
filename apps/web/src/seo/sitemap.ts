@@ -43,9 +43,10 @@ import { indexableRoutes, pathFor } from '@/shell/registry';
  * change WHETHER anything is advertised.
  *
  * ONLY GENUINELY ELIGIBLE URLS CONTRIBUTE, and an empty partition is not emitted
- * at all. The remaining segments ROUTE_MAP.md §9.4 names — courses and the
- * rest — belong to contexts that have not shipped, so they are not listed as
- * empty promises; Phase 18's `quran` and Phase 19's `hadith` segments are
+ * at all. Since Phase 22's `courses` (`./learning-sitemap.ts`, beside its own
+ * `learning-paths`), every segment ROUTE_MAP.md §9.4 names has an owner that
+ * has shipped, and none is listed as an empty promise; Phase 18's `quran` and
+ * Phase 19's `hadith` segments are
  * CONTENT segments (`./quran-sitemap.ts`, `./hadith-sitemap.ts`), each empty
  * unless an approved corpus or activation stands. A sitemap advertising a URL
  * that does not exist is worse than no sitemap.

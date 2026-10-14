@@ -200,7 +200,8 @@
       "recitations": "Quran recitations",
       "books": "Books on the Quran",
       "videos": "Videos on the Quran",
-      "research": "Research on the Quran"
+      "research": "Research on the Quran",
+      "courses": "Courses on the Quran"
     },
     "media": {
       "photos": "Photographs",
@@ -229,13 +230,19 @@
       "commentary": "Hadith commentary",
       "books": "Books on Hadith",
       "videos": "Videos on Hadith",
-      "research": "Research on Hadith"
+      "research": "Research on Hadith",
+      "courses": "Courses on Hadith"
     },
     "fatwa": {
       "search": "Fatwa search",
       "categories": "Fatwa categories",
       "how-it-works": "How the Fatwa service works",
       "ask": "Ask a Fatwa question (sign-in required)"
+    },
+    "learn": {
+      "courses": "All courses",
+      "paths": "Learning paths",
+      "trial": "Trial classes"
     }
   },
   "localeSwitcher": {
@@ -445,7 +452,8 @@
       "quran": "Quran",
       "hadith": "Hadith",
       "fatwa": "Fatwa",
-      "newsletter": "Newsletter"
+      "newsletter": "Newsletter",
+      "learning": "Learning"
     },
     "global": {
       "title": "Global Network",
@@ -1152,7 +1160,9 @@
         "media-coverage": "Media coverage",
         "quran-ayah": "Quran ayah",
         "hadith": "Hadith citation",
-        "fatwa": "Fatwa ruling"
+        "fatwa": "Fatwa ruling",
+        "course": "Course",
+        "learning-path": "Learning path"
       },
       "categories": {
         "source-unavailable": "The owner could not be read",
@@ -1718,7 +1728,9 @@
       "media-coverage": "Media coverage",
       "quran-ayah": "Quran ayah",
       "hadith": "Hadith",
-      "fatwa": "Fatwa"
+      "fatwa": "Fatwa",
+      "course": "Course",
+      "learning-path": "Learning path"
     },
     "topic": "Topic",
     "topicAny": "Any topic",
@@ -1807,7 +1819,9 @@
     "collections": "Collections on this topic",
     "quran": "Ayat on this topic",
     "hadith": "Hadith on this topic",
-    "fatwa": "Rulings on this topic"
+    "fatwa": "Rulings on this topic",
+    "courses": "Courses on this topic",
+    "allCourses": "All courses on this topic"
   },
   "watch": {
     "title": "Watch",
@@ -2504,7 +2518,8 @@
       "books": "Books on the Quran",
       "videos": "Videos on the Quran",
       "research": "Research on the Quran",
-      "topics": "The Quran as a topic"
+      "topics": "The Quran as a topic",
+      "courses": "Courses on the Quran"
     },
     "sectionBody": {
       "read": "Choose a Surah, or go straight to an Ayah by its number.",
@@ -2519,7 +2534,8 @@
       "books": "Books from the Library classified under the Quran.",
       "videos": "Videos classified under the Quran.",
       "research": "Research from the Library classified under the Quran.",
-      "topics": "Everything on the platform classified under the Quran, in one place."
+      "topics": "Everything on the platform classified under the Quran, in one place.",
+      "courses": "Courses from Learn classified under the Quran."
     },
     "surahName": "Surah {number}",
     "ayahName": "Surah {surah}, Ayah {ayah}",
@@ -2642,12 +2658,14 @@
     "relatedEmpty": {
       "books": "No book on the Quran has been published in the Library yet.",
       "videos": "No video on the Quran has been published yet.",
-      "research": "No research on the Quran has been published yet."
+      "research": "No research on the Quran has been published yet.",
+      "courses": "No course on the Quran has been published yet."
     },
     "relatedOwner": {
       "books": "Browse these books in the Library",
       "videos": "Browse these videos in Watch",
-      "research": "Browse this research in the Library"
+      "research": "Browse this research in the Library",
+      "courses": "Browse these courses in Learn"
     },
     "search": {
       "intro": "Search the Arabic text and every published translation and transliteration. Each result is one Ayah, labelled with the text that matched.",
@@ -3018,7 +3036,8 @@
       "books": "Books on Hadith",
       "videos": "Videos on Hadith",
       "research": "Research on Hadith",
-      "topics": "Hadith as a topic"
+      "topics": "Hadith as a topic",
+      "courses": "Courses on Hadith"
     },
     "sectionBody": {
       "introduction": "How this section is organised, and what each part of a citation page shows.",
@@ -3030,7 +3049,8 @@
       "books": "Books from the Library classified under Hadith.",
       "videos": "Videos classified under Hadith.",
       "research": "Research from the Library classified under Hadith.",
-      "topics": "Everything on the platform classified under Hadith, in one place."
+      "topics": "Everything on the platform classified under Hadith, in one place.",
+      "courses": "Courses from Learn classified under Hadith."
     },
     "introduction": {
       "structure": "Each collection is divided into books, and a book may be divided into chapters, exactly as the edition it comes from divides it.",
@@ -3105,12 +3125,14 @@
     "relatedEmpty": {
       "books": "No book on Hadith has been published in the Library yet.",
       "videos": "No video on Hadith has been published yet.",
-      "research": "No research on Hadith has been published yet."
+      "research": "No research on Hadith has been published yet.",
+      "courses": "No course on Hadith has been published yet."
     },
     "relatedOwner": {
       "books": "Browse these books in the Library",
       "videos": "Browse these videos in Watch",
-      "research": "Browse this research in the Library"
+      "research": "Browse this research in the Library",
+      "courses": "Browse these courses in Learn"
     },
     "search": {
       "intro": "Search the original texts and every published translation. Each result is one citation, labelled with the text that matched.",
@@ -4436,11 +4458,15 @@
       "exportScope": "Saved items are listed by reference, not as copies of the content. Your account details and your questions are not part of this file.",
       "exportLink": "Download my data",
       "closureHeading": "Closing your account",
-      "closureBody": "Closing your account removes everything listed above — saved items, notes, collections, history, your reading position, interests and notifications. Closing is done from your Security settings, with your password.",
+      "closureBody": "Closing your account removes everything listed above — saved items, notes, collections, history, your reading position, interests, notifications, your course enrolments, lesson progress and trial-class requests. Closing is done from your Security settings, with your password.",
       "closureLink": "Go to account closure",
       "newsletterHeading": "Newsletter",
       "newsletterBody": "The newsletter is independent of your account: signing up for an account never subscribes you, and closing it does not unsubscribe you. Manage it from the links in its emails.",
-      "newsletterLink": "About the newsletter"
+      "newsletterLink": "About the newsletter",
+      "learningExportHeading": "Download your learning data",
+      "learningExportBody": "Download a copy of what Learning keeps for your account, as a separate JSON file:",
+      "learningExportContents": "Your course enrolments, the lessons you marked complete and your trial-class requests — listed by reference, not as copies of the courses.",
+      "learningExportLink": "Download your learning data"
     },
     "home": {
       "unavailable": "Your saved items, history and notifications can’t be shown right now. Your account settings below still work.",
@@ -4457,6 +4483,401 @@
       "savedLink": "See everything you saved",
       "historyHeading": "Recently read and watched",
       "historyEmpty": "Nothing read or watched since history was turned on."
+    }
+  },
+  "learn": {
+    "title": "Learn",
+    "description": "Courses and learning paths, open to read without an account.",
+    "intro": "Study a course at your own pace, follow a learning path of courses in order, or ask for a trial class on a course taught live with a teacher.",
+    "signedOut": "Every course, syllabus and learning path here can be read without an account. Signing in lets you enrol on a course, keep your progress and ask for a trial class.",
+    "previous": "Previous page",
+    "next": "Next page",
+    "sections": {
+      "courses": "All courses",
+      "paths": "Learning paths",
+      "trial": "Trial classes",
+      "topics": "Topics"
+    },
+    "sectionBody": {
+      "courses": "Every published course, by topic, level, language, format and teacher.",
+      "paths": "Courses set out in the order to study them in.",
+      "trial": "What a trial-class request is, and the courses taught live that take one.",
+      "topics": "Everything on the platform, organised by topic."
+    },
+    "landing": {
+      "browse": "Explore Learn",
+      "courses": "Recently published courses",
+      "paths": "Recently published learning paths",
+      "allCourses": "All courses",
+      "allPaths": "All learning paths",
+      "empty": "No course or learning path has been published yet."
+    },
+    "coursesEmpty": "No course has been published yet.",
+    "pathsEmpty": "No learning path has been published yet.",
+    "filter": {
+      "label": "Filter courses",
+      "topic": "Topic",
+      "level": "Level",
+      "language": "Language",
+      "format": "Format",
+      "teacher": "Teacher",
+      "any": "Any",
+      "apply": "Apply filters",
+      "clear": "Clear all filters",
+      "invalid": "These filters name a topic, teacher, level, format or language that does not exist, so no course is listed. Clear the filters to see every course.",
+      "empty": "No published course matches these filters."
+    },
+    "level": {
+      "beginner": "Beginner",
+      "intermediate": "Intermediate",
+      "advanced": "Advanced"
+    },
+    "format": {
+      "self-paced": "Self-paced",
+      "live": "Taught live"
+    },
+    "card": {
+      "teachers": "Taught by",
+      "modules": "{count, plural, one {# module} other {# modules}}",
+      "lessons": "{count, plural, one {# lesson} other {# lessons}}",
+      "courses": "{count, plural, one {# course} other {# courses}}",
+      "step": "Course {number}"
+    },
+    "course": {
+      "teachers": "Taught by",
+      "fallback": "This course is described in {language}; its description has not been translated into this language.",
+      "trialNote": "This course is taught live, and you can ask for a trial class on it. A request is not a booking.",
+      "trialLink": "How trial classes work",
+      "about": "About this course",
+      "facts": "Details",
+      "format": "Format",
+      "level": "Level",
+      "language": "Taught in",
+      "length": "Length",
+      "syllabus": "Syllabus",
+      "syllabusNote": "The syllabus names what each module and lesson covers. The lessons themselves are read by learners enrolled on the course.",
+      "syllabusEmpty": "The syllabus of this course has not been set out yet.",
+      "module": "Module {number}",
+      "lessonsIn": "Lessons in {title}",
+      "topics": "More courses on these topics"
+    },
+    "path": {
+      "type": "Learning path",
+      "fallback": "This learning path is described in {language}; its description has not been translated into this language.",
+      "courses": "Courses in this path",
+      "coursesNote": "Study them in this order. You enrol on each course separately, from its own page.",
+      "empty": "No published course is in this path yet."
+    },
+    "trial": {
+      "intro": "A trial class is a first class on a course taught live, to see whether the course suits you before you commit to it.",
+      "notBooked": "Asking for a trial class records your request and nothing more. No class is booked, no time is set and no teacher is assigned, and confirming a class is not yet offered on this platform.",
+      "how": "How a request works",
+      "stepChoose": "Choose a course taught live from the list below and open its page.",
+      "stepSignIn": "Sign in, or create an account, so that the request is yours.",
+      "stepRequest": "Ask for a trial class from the course’s page.",
+      "stepAfter": "The request itself schedules nothing. Confirming a class will be a separate step, once it is offered.",
+      "courses": "Courses taught live",
+      "empty": "No course taught live has been published yet, so there is no course to ask for a trial class on."
+    }
+  },
+  "learningIsland": {
+    "heading": "Study this course",
+    "privacy": "Only you can see your enrolment and your progress.",
+    "signedOutPrompt": "Sign in to enrol on this course and keep track of the lessons you complete.",
+    "signedOutLivePrompt": "This course is taught live. Once signed in, you can also request a trial class.",
+    "signInToEnrol": "Sign in to enrol",
+    "signInToRequestTrial": "Sign in to request a trial class",
+    "sessionEnded": "Your session has ended. Sign in again to continue.",
+    "enrol": "Enrol on this course",
+    "enrolHelp": "Enrolling adds this course to My Learning. You mark each lesson complete yourself.",
+    "enrolled": "You are enrolled on this course.",
+    "enrolledStatus": "You are now enrolled on this course.",
+    "continueLearning": "Continue in My Learning",
+    "requestTrial": "Request a trial class",
+    "trialHelp": "A trial class request is only a request. It does not enrol you, and no class has been scheduled — confirming trial classes is not offered on this site yet.",
+    "trialRequested": "Trial class requested — not yet scheduled",
+    "trialRequestedStatus": "Your request was recorded. It has not been scheduled.",
+    "trialManage": "See or withdraw your request in My Learning",
+    "working": "Working…",
+    "failureInvalid": "That could not be done. Reload the page and try again.",
+    "failureCourseUnavailable": "This course is not open for that right now.",
+    "failureRateLimited": "Too many changes in a short time. Wait a little and try again.",
+    "failureDenied": "This was refused. Reload the page and try again.",
+    "failureUnavailable": "This can’t be done right now. Try again later."
+  },
+  "myLearning": {
+    "title": "My learning",
+    "description": "The courses you are enrolled on, how far you are through them, and any trial classes you have requested. Only you can see this.",
+    "common": {
+      "working": "Working…"
+    },
+    "nav": {
+      "label": "My Learning pages",
+      "learning": "My learning",
+      "progress": "Course progress",
+      "catalogue": "Browse courses",
+      "account": "My Minhaj"
+    },
+    "list": {
+      "previous": "Previous page",
+      "next": "Next page",
+      "beyond": "There is nothing on this page. Go back to the first page."
+    },
+    "progress": {
+      "completed": "Completed",
+      "lessons": "Lessons complete: {completed} of {total}"
+    },
+    "failure": {
+      "invalid": "That could not be done. Reload the page and try again.",
+      "notEnrolled": "You are not enrolled on this course any more. Reload the page.",
+      "courseUnavailable": "This course is not currently available, so this can’t be done right now.",
+      "rateLimited": "Too many changes in a short time. Please wait a while and try again.",
+      "confirmRequired": "Tick the confirmation box first.",
+      "noSession": "Your session has ended. Please sign in again.",
+      "unavailable": "This can’t be done right now. Please try again later.",
+      "load": "This page can’t be shown right now. Please try again later."
+    },
+    "courses": {
+      "heading": "Your courses",
+      "empty": "You are not enrolled on any course yet.",
+      "browse": "Browse courses",
+      "enrolledAt": "Enrolled",
+      "unavailable": "Not currently available — your progress is kept."
+    },
+    "paths": {
+      "heading": "Your learning paths",
+      "help": "A learning path appears here when you are enrolled on one of its courses.",
+      "empty": "None of your courses is part of a learning path yet.",
+      "enrolledCount": "Courses you are enrolled on: {enrolled} of {total}"
+    },
+    "trials": {
+      "heading": "Trial class requests",
+      "help": "A request is not a booking. It has not been scheduled, and confirming trial classes is not offered on this site yet.",
+      "empty": "You have not requested a trial class.",
+      "status": "Requested — not yet scheduled",
+      "requestedAt": "Requested",
+      "withdraw": "Withdraw the request for “{title}”",
+      "withdrawn": "Your request was withdrawn."
+    },
+    "course": {
+      "fallbackTitle": "Course",
+      "publicPage": "Course page",
+      "unavailable": "This course is not currently available. Your progress is kept, but its lessons can’t be opened until it returns.",
+      "syllabus": "Syllabus",
+      "module": "Module {number}:"
+    },
+    "lesson": {
+      "completed": "Completed",
+      "notCompleted": "Not completed",
+      "unavailable": "This lesson can’t be shown right now. Please try again later.",
+      "position": "Lesson {number} of {total}",
+      "alreadyCompleted": "You completed this lesson.",
+      "complete": "Mark lesson complete",
+      "completedStatus": "Lesson marked complete.",
+      "next": "Next lesson"
+    },
+    "leave": {
+      "heading": "Leave this course",
+      "body": "Leaving removes this course from My Learning and deletes your progress on it. You can enrol again later, but you would start from the beginning.",
+      "submit": "Leave this course",
+      "confirm": "I understand that my progress on this course will be removed."
+    },
+    "path": {
+      "fallbackTitle": "Learning path",
+      "publicPage": "Learning path page",
+      "empty": "This learning path has no courses at the moment.",
+      "courses": "Courses in this learning path",
+      "position": "Course {number} of {total}",
+      "notEnrolled": "You are not enrolled on this course. Open it to enrol."
+    },
+    "progressPage": {
+      "title": "Course progress",
+      "description": "How far you are through each course you are enrolled on. Progress moves only when you mark a lesson complete.",
+      "caption": "Your courses and your progress",
+      "course": "Course",
+      "progress": "Progress"
+    },
+    "home": {
+      "heading": "Learning",
+      "unavailable": "Your courses can’t be shown right now.",
+      "enrolled": "Courses you are enrolled on: {count}",
+      "enrolledMany": "Courses you are enrolled on: {count} or more",
+      "continue": "Continue:",
+      "link": "Go to My learning"
+    }
+  },
+  "adminLearning": {
+    "title": "Learning",
+    "unknown": "Something went wrong. Nothing about it is shown here; try again.",
+    "reload": "Try again",
+    "loading": "Loading…",
+    "saved": "Saved.",
+    "pending": "Saving…",
+    "create": "Create",
+    "save": "Save",
+    "none": "None",
+    "empty": "Nothing matches.",
+    "previous": "Previous page",
+    "next": "Next page",
+    "backToList": "Back to the list",
+    "viewPublic": "View the public page",
+    "version": "Version",
+    "state": "State",
+    "allStates": "All states",
+    "textFilter": "Title or slug",
+    "filterApply": "Filter",
+    "slug": "Slug",
+    "slugHelp": "Lower-case letters, digits and single hyphens. It becomes part of the public address.",
+    "primaryLocale": "Primary language",
+    "primaryLocaleHelp": "The language whose words must be present to publish.",
+    "labels": "Words in each language",
+    "labelsHelp": "Tick each language you have words for. An unticked language is not saved. Plain text only.",
+    "labelEnabled": "Words in {language}",
+    "labelTitle": "Title",
+    "labelSummary": "Summary",
+    "labelDescription": "Description",
+    "labelBody": "Lesson text",
+    "labelBodyHelp": "Plain text. Leave a blank line between paragraphs. Only enrolled learners read it.",
+    "localeName": {
+      "en": "English",
+      "ur": "Urdu",
+      "ar": "Arabic"
+    },
+    "stateName": {
+      "draft": "Draft",
+      "published": "Published",
+      "archived": "Archived"
+    },
+    "surface": {
+      "courses": "Courses",
+      "paths": "Learning paths",
+      "enrolments": "Enrolments",
+      "trials": "Trial requests"
+    },
+    "failure": {
+      "denied": "You do not have permission to do this.",
+      "invalid": "Please check what you entered and try again.",
+      "conflict": "This changed somewhere else since the page loaded. Reload the page and try again.",
+      "notFound": "This is no longer here. Reload the page.",
+      "duplicateSlug": "Another record already uses that slug.",
+      "duplicateMember": "That course is already in this learning path.",
+      "limit": "This has reached the most it can hold. Remove something first.",
+      "notDraft": "The syllabus can only change while the course is a draft. Return it to draft first.",
+      "incomplete": "This can’t be published yet: a course needs words in its primary language, at least one module and a lesson in every module; a learning path needs at least one course.",
+      "inPublishedPath": "A published learning path includes this course. Remove it from that path, or return the path to draft, first.",
+      "courseUnavailable": "Only a published course can be added.",
+      "rateLimited": "Too many changes in a short time. Wait a little and try again.",
+      "confirmRequired": "Tick the confirmation box first."
+    },
+    "lifecycle": {
+      "heading": "Publication",
+      "current": "Currently:",
+      "to": {
+        "draft": "Return to draft",
+        "published": "Publish",
+        "archived": "Archive"
+      },
+      "course": {
+        "draft": "Return to draft takes the course out of the public catalogue so its syllabus can be edited. Learners keep their progress. It is refused while a published learning path includes the course.",
+        "published": "Publish makes the course public and lets people enrol. It needs a complete syllabus: words in the primary language, at least one module, and at least one lesson in every module. The syllabus is then frozen.",
+        "archived": "Archive retires the course from the public catalogue. Learners keep their progress and see it as not currently available. It is refused while a published learning path includes the course."
+      },
+      "path": {
+        "draft": "Return to draft takes the learning path out of the public catalogue.",
+        "published": "Publish makes the learning path public. It needs words in its primary language and at least one course.",
+        "archived": "Archive retires the learning path from the public catalogue."
+      }
+    },
+    "course": {
+      "create": "New course",
+      "edit": "Course details",
+      "format": "Format",
+      "formatHelp": "Self-paced: learners work through the lessons alone. Live: taught in classes with a teacher, and open to trial-class requests.",
+      "formatName": {
+        "self-paced": "Self-paced",
+        "live": "Live"
+      },
+      "level": "Level",
+      "levelHelp": "Who the course is pitched at. Leave unstated if it is for everyone.",
+      "levelNone": "Not stated",
+      "levelName": {
+        "beginner": "Beginner",
+        "intermediate": "Intermediate",
+        "advanced": "Advanced"
+      },
+      "contentLanguage": "Language of the course",
+      "contentLanguageHelp": "The language the course is taught in — not the language of this screen.",
+      "teachers": "Teachers",
+      "teachersHelp": "Public attribution only, chosen from published contributors. Naming a teacher grants them nothing on this platform.",
+      "teacher": "Teacher {number}",
+      "topics": "Topics",
+      "topic": "Topic {number}",
+      "teacherQuery": "Find contributors",
+      "teacherQueryHelp": "Narrows the teacher choices below. Search before you start typing in the form — searching reloads the page.",
+      "findTeachers": "Find",
+      "syllabusCount": "Syllabus",
+      "syllabusSize": "{modules} modules, {lessons} lessons"
+    },
+    "outline": {
+      "heading": "Syllabus",
+      "help": "Modules and lessons, in the order learners meet them. Each change applies to the version shown on this page.",
+      "frozen": "The syllabus is frozen while the course is not a draft. Return the course to draft to edit it.",
+      "empty": "This course has no modules yet.",
+      "modulePosition": "Module {position} of {total}:",
+      "moveModuleEarlier": "Move module “{title}” earlier ({position} of {total})",
+      "moveModuleLater": "Move module “{title}” later ({position} of {total})",
+      "editModule": "Edit module “{title}”",
+      "removeModule": "Remove module “{title}”",
+      "removeModuleConfirm": "I understand that this module and every lesson in it will be removed, along with learners’ progress on those lessons.",
+      "modulesFull": "This course has the most modules it can hold.",
+      "addModule": "Add a module",
+      "noLessons": "This module has no lessons yet.",
+      "lessonsOf": "Lessons in “{title}”",
+      "lessonPosition": "Lesson {position} of {total}:",
+      "moveLessonEarlier": "Move lesson “{title}” earlier ({position} of {total})",
+      "moveLessonLater": "Move lesson “{title}” later ({position} of {total})",
+      "removeLesson": "Remove lesson “{title}”",
+      "removeLessonConfirm": "I understand that this lesson will be removed, along with learners’ progress on it.",
+      "lessonsFull": "This module has the most lessons it can hold.",
+      "addLesson": "Add a lesson to “{title}”",
+      "addLessonSubmit": "Add the lesson"
+    },
+    "lesson": {
+      "backToCourse": "Back to the course",
+      "inModule": "In module “{title}”",
+      "edit": "Lesson words",
+      "plainText": "Everything here is plain text, shown exactly as written. Learners read the lesson text only once they enrol."
+    },
+    "path": {
+      "create": "New learning path",
+      "edit": "Learning path details",
+      "courseCount": "Courses",
+      "courses": "Courses in order",
+      "coursesHelp": "The order learners are shown. Only published courses can be added, and each change applies to the version shown on this page.",
+      "coursesEmpty": "This learning path has no courses yet.",
+      "position": "Course {position} of {total}:",
+      "moveEarlier": "Move “{title}” earlier ({position} of {total})",
+      "moveLater": "Move “{title}” later ({position} of {total})",
+      "remove": "Remove “{title}” from this path",
+      "add": "Add a course",
+      "findLabel": "Find a published course",
+      "find": "Find",
+      "noCandidates": "No published course matches that isn’t already in this path.",
+      "addCourse": "Course",
+      "addSubmit": "Add to the path"
+    },
+    "enrolments": {
+      "description": "How many people are enrolled on each course, and how many have completed every lesson. Counts only: who is enrolled is never shown.",
+      "empty": "Nobody is enrolled on any course yet.",
+      "learners": "Enrolled",
+      "completed": "Completed"
+    },
+    "trials": {
+      "description": "How many trial-class requests each live course holds, and when the oldest was made. Counts only: who asked is never shown.",
+      "notScheduled": "These are requests, not bookings. Nothing on this page confirms or schedules a class or assigns a teacher — confirming trial classes is not available yet.",
+      "empty": "There are no trial-class requests.",
+      "requests": "Requests",
+      "oldest": "Oldest request"
     }
   }
 }

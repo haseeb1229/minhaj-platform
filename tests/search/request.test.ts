@@ -101,6 +101,11 @@ describe('parseSearchParams', () => {
     expect(parseSearchParams({ q: 'x1', type: 'fatwa' }).state).toBe('valid');
   });
 
+  it('accepts the Course and LearningPath kinds Phase 22 delivered', () => {
+    expect(parseSearchParams({ q: 'x1', type: 'course' }).state).toBe('valid');
+    expect(parseSearchParams({ q: 'x1', type: 'learning-path' }).state).toBe('valid');
+  });
+
   it('reads a repeated parameter as its first value, never as a list', () => {
     const parsed = parseSearchParams({
       q: ['first', 'second'],

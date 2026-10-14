@@ -3,13 +3,21 @@ import 'server-only';
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
+import { LEARNING_PAGE } from '@minhaj/contracts/learning';
 import { SCHOLARLY_PAGE } from '@minhaj/contracts/library';
 import { MEDIA_PAGE } from '@minhaj/contracts/media';
 import type { QuranAvailability } from '@minhaj/contracts/quran';
 import type { TopicView } from '@minhaj/contracts/taxonomy';
 
+import { learningReadRuntime } from '@/composition/learning-read';
 import { libraryReadRuntime } from '@/composition/library-read';
 import { mediaReadRuntime } from '@/composition/media-read';
+import {
+  courseBrowseHref,
+  courseHref,
+  LEARNING_MAX_OFFSET,
+  outlineLabel,
+} from '@/components/learning/presentation';
 import { labelFor, WORK_PAGE, workPath } from '@/components/library/presentation';
 import { listingHref } from '@/components/library/scholarly';
 import {
@@ -25,24 +33,31 @@ import { QuranFrame, quranTrail } from './parts';
 import { offsetPathOf, quranPath } from './presentation';
 
 /**
- * Related material — `/quran/books`, `/quran/videos`, `/quran/research`
- * (ROUTE_MAP.md §3.3: "related material, canonical to their domain
- * collections").
+ * Related material — `/quran/books`, `/quran/videos`, `/quran/research`,
+ * `/quran/courses` (ROUTE_MAP.md §3.3: "related material, canonical to their
+ * domain collections").
  *
  * LAYER-4 COMPOSITION OF THE OWNERS' OWN PUBLIC READS. Each view is ONE bounded,
  * topic-filtered page of the owner's public listing for Taxonomy's `quran`
- * Topic — Library's Works and Research, Media's Videos — never the search index
- * and never a Quran read. Quran itself imports none of them; only this
- * presentation layer composes them. Each item links to its owner's canonical
- * address, and the page canonicalises to the owner's collection.
+ * Topic — Library's Works and Research, Media's Videos and, since Phase 22,
+ * Learning's published Courses — never the search index and never a Quran
+ * read. Quran itself imports none of them; only this presentation layer
+ * composes them. Each item links to its owner's canonical address, and the
+ * page canonicalises to the owner's collection.
  *
  * WHAT IS ABSENT IS ABSENT. `/quran/articles` has no view because Editorial
- * exposes no public by-topic Article read; `/quran/courses` and
- * `/quran/teachers` belong to Learning, which has not shipped. None of them is
- * routed or linked (ROUTE_MAP.md §5.2).
+ * exposes no public by-topic Article read, and `/quran/teachers` has no
+ * deterministic owner read — a Course's teachers are attribution, not a
+ * teacher directory, which is Phase 23's. Neither is routed or linked
+ * (ROUTE_MAP.md §5.2).
  */
 
-export const RELATED_KINDS = Object.freeze(['books', 'videos', 'research'] as const);
+export const RELATED_KINDS = Object.freeze([
+  'books',
+  'videos',
+  'research',
+  'courses',
+] as const);
 export type RelatedKind = (typeof RELATED_KINDS)[number];
 
 /** The LOCALE-FREE owner collection each related view canonicalises to. */
@@ -50,6 +65,7 @@ export const RELATED_CANONICAL: Readonly<Record<RelatedKind, string>> = Object.f
   books: '/library/books',
   videos: '/watch/videos',
   research: '/library/research',
+  courses: '/learn/courses',
 });
 
 interface RelatedRow {
@@ -130,6 +146,28 @@ async function relatedPage(
           from: null,
           to: null,
         }),
+      };
+    }
+    case 'courses': {
+      // Learning's own public catalogue for the Topic, by its identifier; the
+      // address it links to names the Topic by slug, as the catalogue does.
+      const page = await learningReadRuntime().courses({
+        topic: topic.id,
+        offset: Math.min(offset, LEARNING_MAX_OFFSET),
+      });
+      return {
+        rows: page.items.map((course) => {
+          const label = outlineLabel(course.labels, locale, course.primaryLocale);
+          return {
+            key: course.id,
+            href: courseHref(locale, course.slug),
+            title: label.title,
+            locale: label.locale,
+          };
+        }),
+        hasMore: page.hasMore,
+        size: LEARNING_PAGE,
+        owner: courseBrowseHref(locale, { topic: topic.slug }),
       };
     }
   }

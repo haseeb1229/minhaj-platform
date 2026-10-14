@@ -88,6 +88,11 @@ const REQUIRED = [
   // and its rebuild after a real restore.
   'fatwa.integration',
   'fatwa-recovery.integration',
+  // Phase 22: the Course and LearningPath kinds — a published Course found by
+  // its words and public syllabus (never a lesson body), a draft never indexed,
+  // an archived or withdrawn Course withheld while a stale row remains, a slug
+  // change moving the result's address, rebuild and reconciliation.
+  'learning.integration',
 ];
 
 const seen = files.map((file) => String(file.name ?? ''));

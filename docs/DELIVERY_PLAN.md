@@ -1681,6 +1681,68 @@ never appear in the catalogue or in search** · **no Video or Centre foreign key
 phase's schema**.
 **Exit:** Courses browsable publicly; enrolment, progress and trial requests working.
 
+**Phase-22 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+```
+LEARNING COURSES/PATHS ENGINEERING            COMPLETE (this phase)
+PUBLIC COURSE/PATH CATALOGUE                  COMPLETE
+MY LEARNING AND COURSE PROGRESS               COMPLETE
+SELF-ENROLMENT                                COMPLETE
+TRIAL REQUEST CREATION                        COMPLETE (request side only)
+TRIAL CONFIRMATION / SCHEDULING               NOT STARTED — Phase 23
+TEACHER EXPERIENCE, CLASSES, AVAILABILITY     NOT STARTED — Phase 23
+SEARCH PROJECTION                             COMPLETE (`course`, `learning-path`)
+SAFEGUARDING / MEET / TEACHER-GRANT GATES      OPEN — OPEN_DECISIONS.md §2.1, §5.3, §6.3
+```
+
+- **The schema is the catalogue and a person's own study** (DOMAIN_MODEL.md §13.4): Course with its
+  modules and lessons, LearningPath, Enrolment, lesson Progress and the request side of
+  TrialClassRequest. No ClassSession, Availability, Attendance or Booking table exists, no column can
+  hold a meeting provider or address, and **no Video, Work, Asset or Centre foreign key exists** — the
+  allowlist's Media, Library and Global Network edges are not taken.
+- **Level and format** are Learning's own controlled facets — `beginner` / `intermediate` /
+  `advanced` (or not stated) and `self-paced` / `live` — the smallest vocabulary the catalogue's
+  `?level` and `?format` need; they claim no external classification. Only a published `live` Course
+  takes a trial-class request.
+- **A published Course's syllabus is frozen.** Publication requires a complete syllabus in the primary
+  locale; modules and lessons change only in draft, so the public never reads a half-built outline. A
+  Course cannot leave publication while a published path holds it. Normal removal is archiving; a
+  Course is never deleted, and its learners keep their Enrolment and Progress.
+- **Public catalogue, enrolled lessons.** `/learn/courses/{slug}` shows the description and the
+  syllabus (module and lesson titles and summaries); lesson bodies are read in My Learning by a person
+  enrolled on the published Course. The public tree reads no session: enrolment and trial state reach a
+  Course page only through its private island after hydration (`/api/my/learning/*`).
+- **Enrolment, trial request and Booking are distinct.** A request enrols nobody and is never shown as
+  a scheduled class; confirmation, scheduling and the class itself are Phase 23's, as Booking and
+  ClassSession. Withdrawing a request deletes it. No age, guardian, contact or free-text field exists.
+- **Progress** is one row per completed lesson, recorded only by the learner's explicit act,
+  idempotent and monotonic; **Course completion and path progress are derived** — there is no
+  PathEnrolment, certificate, streak or grade.
+- **Permissions:** `learning.read` and `learning.administer`, ordinary keys bundled into the protected
+  Platform Administrator role by the established revocation convention. Neither is teaching authority,
+  neither reveals who is enrolled (the administration shows counts), and no key edits a learner's
+  Progress or confirms a request. `teaching.perform`, `learning.publish`, `learning.author` and
+  `learning.review` do not exist.
+- **Teachers are attribution.** A Course names published People as its teachers; `?teacher=` takes a
+  People slug resolved at Layer 4. A TeacherProfile or attribution grants nothing.
+- **Search, slugs, SEO.** Published Courses and paths are the `course` and `learning-path` kinds,
+  withheld at query time once withdrawn. Course and path slugs have native history: a former slug
+  answers one 301 and the Learn route words can never be a slug. Sitemap segments `courses` and
+  `learning-paths`; structured data is `BreadcrumbList` only.
+- **Quran and Hadith related Course views** `/quran/courses` and `/hadith/courses` are delivered as
+  Layer-4 compositions of Learning's public by-topic read for the seeded `quran` / `hadith` Topics;
+  Quran and Hadith import nothing of Learning. `/quran/teachers` and `/hadith/scholars` stay absent.
+- **Learner level and preferred format are still not collected** — the catalogue filters are chosen
+  per visit and need no stored preference, so Personalisation gains no field (DOMAIN_MODEL.md §14.6).
+- **Export and closure:** `/api/my/export/learning` returns the person's Learning data as typed
+  identifiers; closure now coordinates five owners (Identity, People, Fatwa, Personalisation,
+  Learning), and the personal-data sweep finishes interrupted Learning disposition.
+- **Not delivered, and not owed by this phase:** `/learn/live`, `/learn/teachers`, `/learn/training`
+  and `/learn/resources` (no truthful delivered contract), the teacher area, My Classes and My
+  Teachers, `/admin/learning/classes`, trial confirmation, under-18 rules, and any import of real
+  courses (Phase 30).
+
 ---
 
 ### Phase 23 — Teacher Experience & Live Classes

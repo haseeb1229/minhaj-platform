@@ -780,6 +780,7 @@ try {
     quranProvisioned: number;
     hadithProvisioned: number;
     newsletterProvisioned: number;
+    learningProvisioned: number;
   }>(`
     SELECT COUNT_BIG(*) AS total,
            SUM(CASE WHEN [action] = N'phase1.permission.probe' THEN 1 ELSE 0 END) AS probe,
@@ -816,18 +817,21 @@ try {
              AS hadithProvisioned,
            SUM(CASE WHEN [action] = N'newsletter.permissions.provisioned'
                      AND [actorType] = N'migration' THEN 1 ELSE 0 END)
-             AS newsletterProvisioned
+             AS newsletterProvisioned,
+           SUM(CASE WHEN [action] = N'learning.permissions.provisioned'
+                     AND [actorType] = N'migration' THEN 1 ELSE 0 END)
+             AS learningProvisioned
     FROM [dbo].[AuditLog];
   `);
 
-  // Exactly twelve rows: the Phase-3B through Phase-21 privilege extensions
+  // Exactly thirteen rows: the Phase-3B through Phase-22 privilege extensions
   // (Phase 10's and Phase 16's included; Phase 20 bundles nothing and so
   // records nothing), and this run's probe. Naming every migration action is load-bearing:
   // deriving the expected total from whatever provisioning rows happened to
   // survive would pass if a phase omitted its own audit, and each privilege
   // extension must be able to show that it paid for itself
   // (SECURITY_BASELINE.md §8.1).
-  const EXPECTED_AUDIT_ROWS = 12;
+  const EXPECTED_AUDIT_ROWS = 13;
 
   if (
     Number(survivor?.taxonomyProvisioned ?? 0) !== 1 ||
@@ -841,6 +845,7 @@ try {
     Number(survivor?.quranProvisioned ?? 0) !== 1 ||
     Number(survivor?.hadithProvisioned ?? 0) !== 1 ||
     Number(survivor?.newsletterProvisioned ?? 0) !== 1 ||
+    Number(survivor?.learningProvisioned ?? 0) !== 1 ||
     Number(survivor?.probe ?? 0) !== 1 ||
     Number(survivor?.tampered ?? -1) !== 0 ||
     Number(survivor?.total ?? 0) !== EXPECTED_AUDIT_ROWS
@@ -851,7 +856,7 @@ try {
         `1 navigation provisioning, 1 people provisioning, 1 editorial provisioning, ` +
         `1 library provisioning, 1 search provisioning, 1 media provisioning, ` +
         `1 global provisioning, 1 quran provisioning, 1 hadith provisioning, 1 newsletter provisioning, ` +
-        `1 probe and ` +
+        `1 learning provisioning, 1 probe and ` +
         `0 tampered; found ${survivor?.total ?? 0} rows, ` +
         `${survivor?.taxonomyProvisioned ?? 0} taxonomy provisioning, ` +
         `${survivor?.navigationProvisioned ?? 0} navigation provisioning, ` +
@@ -864,12 +869,13 @@ try {
         `${survivor?.quranProvisioned ?? 0} quran provisioning, ` +
         `${survivor?.hadithProvisioned ?? 0} hadith provisioning, ` +
         `${survivor?.newsletterProvisioned ?? 0} newsletter provisioning, ` +
+        `${survivor?.learningProvisioned ?? 0} learning provisioning, ` +
         `${survivor?.probe ?? 0} probe, ${survivor?.tampered ?? 0} tampered`,
     );
   } else {
     pass(
       'audit rows unmodified',
-      'the probe row and all eleven exact migration records are intact after ' +
+      'the probe row and all twelve exact migration records are intact after ' +
         'UPDATE/DELETE attempts',
     );
   }
@@ -5277,6 +5283,422 @@ try {
     fail(
       'Personalisation effective posture exact',
       personalPostureFindings.join('; ') || 'tables missing',
+    );
+  }
+
+  // ---- Phase 22: Learning, in three postures --------------------------------
+  //
+  // THE CATALOGUE — a Course and a LearningPath — is SELECT, INSERT and UPDATE
+  // and never DELETE: a record is withdrawn by archiving it, so the row its
+  // slug reservations, path places, Enrolments and Progress point at always
+  // exists, and its identifier is never rewritten. Its relation sets (labels,
+  // topics, teachers) are replaced wholesale — INSERT and DELETE, never UPDATE;
+  // a path's places move (their position is UPDATEd) but never change path or
+  // Course — and its slug histories are APPEND ONLY.
+  //
+  // THE SYLLABUS — modules and lessons — moves and is removed while its Course
+  // is a draft, so it holds all four verbs; what places it (its Course, its
+  // module) is never rewritten, and its words are replaced wholesale.
+  //
+  // A LEARNER'S OWN STATE — Enrolment, LessonProgress, TrialClassRequest — is
+  // INSERTed and DELETEd (leaving, withdrawing, disposition) and never UPDATEd.
+  //
+  // Naming a topic, a language, a teacher or an account grants nothing on its
+  // owner's table, and no Identity table's posture moves.
+  //
+  // Every statement below is REAL SQL as the runtime principal over synthetic
+  // NON_LEARNING_FIXTURE rows; the two accounts are the owner's rows.
+  const learningRun = randomUUID().replaceAll('-', '').slice(0, 16);
+  const learningAt = '2026-10-06T00:00:00';
+  const learningLater = '2026-10-06T01:00:00';
+  const learner = randomUUID();
+  const learningOther = randomUUID();
+  await admin.query(
+    [learner, learningOther]
+      .map(
+        (id) =>
+          `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled])
+             VALUES (N'${id}',N'NON_LEARNING_FIXTURE account',N'${id}@learning-proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);`,
+      )
+      .join('\n'),
+  );
+  const [learningTopic] = await admin.query<{ id: string }>(
+    'SELECT TOP 1 [id] FROM [dbo].[Topic] ORDER BY [slug];',
+  );
+  if (learningTopic === undefined)
+    throw new Error('The migration seeded no canonical Topic for a Course to name.');
+  const learningSlug = (label: string): string =>
+    `non-learning-fixture-${label}-${learningRun}`;
+  const liveCourse = randomUUID();
+  const pacedCourse = randomUUID();
+  const liveModule = randomUUID();
+  const pacedModule = randomUUID();
+  const liveLesson = randomUUID();
+  const pacedLesson = randomUUID();
+  const learningPath = randomUUID();
+  const courseColumns =
+    '[id],[slug],[primaryLocale],[state],[level],[format],[languageCode],[publishedAt],[version],[updatedAt]';
+  const syllabus = (
+    courseId: string,
+    moduleId: string,
+    lessonId: string,
+  ): string => `INSERT INTO [dbo].[CourseLabel] ([courseId],[locale],[title],[summary],[description]) VALUES (N'${courseId}',N'en',N'NON_LEARNING_FIXTURE course',N'NON_LEARNING_FIXTURE summary',N'NON_LEARNING_FIXTURE description');
+       INSERT INTO [dbo].[CourseModule] ([id],[courseId],[position]) VALUES (N'${moduleId}',N'${courseId}',0);
+       INSERT INTO [dbo].[CourseModuleLabel] ([moduleId],[locale],[title],[summary]) VALUES (N'${moduleId}',N'en',N'NON_LEARNING_FIXTURE module',N'NON_LEARNING_FIXTURE summary');
+       INSERT INTO [dbo].[Lesson] ([id],[courseId],[moduleId],[position]) VALUES (N'${lessonId}',N'${courseId}',N'${moduleId}',0);
+       INSERT INTO [dbo].[LessonLabel] ([lessonId],[locale],[title],[summary],[body]) VALUES (N'${lessonId}',N'en',N'NON_LEARNING_FIXTURE lesson',N'NON_LEARNING_FIXTURE summary',N'NON_LEARNING_FIXTURE body');`;
+
+  for (const [label, statement, detail] of [
+    [
+      'Course drafts INSERT, with their syllabus',
+      `INSERT INTO [dbo].[Course] (${courseColumns}) VALUES
+         (N'${liveCourse}',N'${learningSlug('live')}',N'en',N'draft',N'beginner',N'live',N'en',NULL,1,'${learningAt}'),
+         (N'${pacedCourse}',N'${learningSlug('paced')}',N'en',N'draft',NULL,N'self-paced',N'en',NULL,1,'${learningAt}');
+       ${syllabus(liveCourse, liveModule, liveLesson)}
+       ${syllabus(pacedCourse, pacedModule, pacedLesson)}
+       INSERT INTO [dbo].[CourseTopic] ([courseId],[topicId]) VALUES (N'${liveCourse}',N'${learningTopic.id}');
+       INSERT INTO [dbo].[CourseTeacher] ([courseId],[personId],[position]) VALUES (N'${liveCourse}',N'${editorialPeople.linkedPersonId}',0);`,
+      'two draft Courses with labels, modules, lessons, a typed topic and a named teacher',
+    ],
+    [
+      'Draft syllabus reordered and its words replaced',
+      `UPDATE [dbo].[CourseModule] SET [position]=1 WHERE [id]=N'${liveModule}';
+       UPDATE [dbo].[Lesson] SET [position]=1 WHERE [id]=N'${liveLesson}';
+       DELETE FROM [dbo].[LessonLabel] WHERE [lessonId]=N'${liveLesson}';
+       INSERT INTO [dbo].[LessonLabel] ([lessonId],[locale],[title],[summary],[body]) VALUES (N'${liveLesson}',N'en',N'NON_LEARNING_FIXTURE lesson revised',N'NON_LEARNING_FIXTURE summary',N'NON_LEARNING_FIXTURE body');
+       DELETE FROM [dbo].[CourseModuleLabel] WHERE [moduleId]=N'${liveModule}';
+       INSERT INTO [dbo].[CourseModuleLabel] ([moduleId],[locale],[title],[summary]) VALUES (N'${liveModule}',N'en',N'NON_LEARNING_FIXTURE module revised',N'NON_LEARNING_FIXTURE summary');
+       DELETE FROM [dbo].[CourseLabel] WHERE [courseId]=N'${liveCourse}';
+       INSERT INTO [dbo].[CourseLabel] ([courseId],[locale],[title],[summary],[description]) VALUES (N'${liveCourse}',N'en',N'NON_LEARNING_FIXTURE course revised',N'NON_LEARNING_FIXTURE summary',N'NON_LEARNING_FIXTURE description');`,
+      'a module and a lesson moved, module, lesson and Course words replaced',
+    ],
+    [
+      'Course slug renamed and both Courses published',
+      `UPDATE [dbo].[Course] SET [slug]=N'${learningSlug('live-renamed')}',[version]=[version]+1,[updatedAt]='${learningLater}' WHERE [id]=N'${liveCourse}';
+       UPDATE [dbo].[Course] SET [state]=N'published',[publishedAt]='${learningLater}',[version]=[version]+1,[updatedAt]='${learningLater}' WHERE [id] IN (N'${liveCourse}',N'${pacedCourse}');
+       INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'course',N'${liveCourse}'),(N'course',N'${pacedCourse}');`,
+      'the former slug reserved by the database, a search pass owed for each',
+    ],
+    [
+      'LearningPath INSERT, its places and publication',
+      `INSERT INTO [dbo].[LearningPath] ([id],[slug],[primaryLocale],[state],[publishedAt],[version],[updatedAt]) VALUES (N'${learningPath}',N'${learningSlug('path')}',N'en',N'draft',NULL,1,'${learningAt}');
+       INSERT INTO [dbo].[LearningPathLabel] ([pathId],[locale],[title],[summary],[description]) VALUES (N'${learningPath}',N'en',N'NON_LEARNING_FIXTURE path',N'NON_LEARNING_FIXTURE summary',N'NON_LEARNING_FIXTURE description');
+       INSERT INTO [dbo].[LearningPathCourse] ([pathId],[courseId],[position]) VALUES (N'${learningPath}',N'${pacedCourse}',0),(N'${learningPath}',N'${liveCourse}',1);
+       UPDATE [dbo].[LearningPathCourse] SET [position]=CASE WHEN [courseId]=N'${liveCourse}' THEN 0 ELSE 1 END WHERE [pathId]=N'${learningPath}';
+       UPDATE [dbo].[LearningPath] SET [slug]=N'${learningSlug('path-renamed')}',[state]=N'published',[publishedAt]='${learningLater}',[version]=[version]+1,[updatedAt]='${learningLater}' WHERE [id]=N'${learningPath}';
+       INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'learning-path',N'${learningPath}');`,
+      'a path of two published Courses, reordered in place, renamed and published',
+    ],
+    [
+      'Enrolment, progress and trial request INSERT',
+      `INSERT INTO [dbo].[Enrolment] ([userId],[courseId],[enrolledAt]) VALUES (N'${learner}',N'${liveCourse}','${learningAt}'),(N'${learner}',N'${pacedCourse}','${learningAt}'),(N'${learningOther}',N'${liveCourse}','${learningAt}');
+       INSERT INTO [dbo].[LessonProgress] ([userId],[courseId],[lessonId],[completedAt]) VALUES (N'${learner}',N'${liveCourse}',N'${liveLesson}','${learningLater}'),(N'${learner}',N'${pacedCourse}',N'${pacedLesson}','${learningLater}');
+       INSERT INTO [dbo].[TrialClassRequest] ([id],[userId],[courseId],[requestedAt]) VALUES (N'${randomUUID()}',N'${learner}',N'${liveCourse}','${learningAt}');`,
+      "a person's own enrolments, lesson completions and one trial request",
+    ],
+  ] as const)
+    await expectAllowed(app, label, statement, detail);
+
+  // The schema's own rules hold for the runtime as for the owner.
+  await expectRefusedByInvariant(
+    app,
+    "A published Course's syllabus changed",
+    `UPDATE [dbo].[Lesson] SET [position]=2 WHERE [id]=N'${liveLesson}';`,
+    51271,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Trial request on a self-paced Course',
+    `INSERT INTO [dbo].[TrialClassRequest] ([id],[userId],[courseId],[requestedAt]) VALUES (N'${randomUUID()}',N'${learningOther}',N'${pacedCourse}','${learningAt}');`,
+    51276,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Course in a published path archived',
+    `UPDATE [dbo].[Course] SET [state]=N'archived' WHERE [id]=N'${liveCourse}';`,
+    51273,
+  );
+  await expectRefusedByConstraint(
+    app,
+    "Progress on another Course's lesson",
+    `INSERT INTO [dbo].[LessonProgress] ([userId],[courseId],[lessonId],[completedAt]) VALUES (N'${learningOther}',N'${liveCourse}',N'${pacedLesson}','${learningLater}');`,
+    CONSTRAINT_VIOLATION,
+    'LessonProgress_lesson_fkey',
+  );
+  await expectRefusedByConstraint(
+    app,
+    "Another Course taking a Course's former slug",
+    `UPDATE [dbo].[Course] SET [slug]=N'${learningSlug('live')}' WHERE [id]=N'${pacedCourse}';`,
+    DUPLICATE_KEY,
+    'CourseSlugHistory_pkey',
+  );
+
+  // A record is archived, never deleted; nothing that places a row is
+  // rewritten; a learner's rows are never edited; slug reservations are never
+  // freed; and naming an owner's row grants nothing over it.
+  for (const [label, statement] of [
+    ['Course DELETE denied', 'DELETE FROM [dbo].[Course];'],
+    ['Course id UPDATE denied', 'UPDATE [dbo].[Course] SET [id]=[id];'],
+    ['LearningPath DELETE denied', 'DELETE FROM [dbo].[LearningPath];'],
+    ['LearningPath id UPDATE denied', 'UPDATE [dbo].[LearningPath] SET [id]=[id];'],
+    ['CourseLabel UPDATE denied', 'UPDATE [dbo].[CourseLabel] SET [title]=[title];'],
+    ['CourseTopic UPDATE denied', 'UPDATE [dbo].[CourseTopic] SET [topicId]=[topicId];'],
+    [
+      'CourseTeacher UPDATE denied',
+      'UPDATE [dbo].[CourseTeacher] SET [position]=[position];',
+    ],
+    [
+      'LearningPathLabel UPDATE denied',
+      'UPDATE [dbo].[LearningPathLabel] SET [title]=[title];',
+    ],
+    [
+      'LearningPathCourse Course UPDATE denied',
+      'UPDATE [dbo].[LearningPathCourse] SET [courseId]=[courseId];',
+    ],
+    [
+      'LearningPathCourse path UPDATE denied',
+      'UPDATE [dbo].[LearningPathCourse] SET [pathId]=[pathId];',
+    ],
+    [
+      'CourseModule Course UPDATE denied',
+      'UPDATE [dbo].[CourseModule] SET [courseId]=[courseId];',
+    ],
+    ['CourseModule id UPDATE denied', 'UPDATE [dbo].[CourseModule] SET [id]=[id];'],
+    ['Lesson module UPDATE denied', 'UPDATE [dbo].[Lesson] SET [moduleId]=[moduleId];'],
+    ['Lesson Course UPDATE denied', 'UPDATE [dbo].[Lesson] SET [courseId]=[courseId];'],
+    [
+      'CourseModuleLabel UPDATE denied',
+      'UPDATE [dbo].[CourseModuleLabel] SET [title]=[title];',
+    ],
+    ['LessonLabel UPDATE denied', 'UPDATE [dbo].[LessonLabel] SET [body]=[body];'],
+    [
+      'CourseSlugHistory UPDATE denied',
+      'UPDATE [dbo].[CourseSlugHistory] SET [courseId]=[courseId];',
+    ],
+    ['CourseSlugHistory DELETE denied', 'DELETE FROM [dbo].[CourseSlugHistory];'],
+    [
+      'LearningPathSlugHistory UPDATE denied',
+      'UPDATE [dbo].[LearningPathSlugHistory] SET [pathId]=[pathId];',
+    ],
+    [
+      'LearningPathSlugHistory DELETE denied',
+      'DELETE FROM [dbo].[LearningPathSlugHistory];',
+    ],
+    [
+      'Enrolment UPDATE denied',
+      'UPDATE [dbo].[Enrolment] SET [enrolledAt]=[enrolledAt];',
+    ],
+    [
+      'Enrolment Course UPDATE denied',
+      'UPDATE [dbo].[Enrolment] SET [courseId]=[courseId];',
+    ],
+    [
+      'LessonProgress UPDATE denied',
+      'UPDATE [dbo].[LessonProgress] SET [completedAt]=[completedAt];',
+    ],
+    [
+      'TrialClassRequest UPDATE denied',
+      'UPDATE [dbo].[TrialClassRequest] SET [courseId]=[courseId];',
+    ],
+    [
+      'Named Topic DELETE still denied',
+      `DELETE FROM [dbo].[Topic] WHERE [id]=N'${learningTopic.id}';`,
+    ],
+    [
+      'Named teacher Person DELETE still denied',
+      `DELETE FROM [dbo].[Person] WHERE [id]=N'${editorialPeople.linkedPersonId}';`,
+    ],
+    [
+      'Named Language DELETE still denied',
+      "DELETE FROM [dbo].[Language] WHERE [code]=N'en';",
+    ],
+    [
+      'Learner account DELETE still denied',
+      `DELETE FROM [dbo].[User] WHERE [id]=N'${learner}';`,
+    ],
+    [
+      'Learning Permission INSERT denied',
+      "INSERT INTO [dbo].[Permission] ([key],[description]) VALUES (N'teaching.perform',N'forged');",
+    ],
+    [
+      'Learning RolePermission UPDATE denied',
+      'UPDATE [dbo].[RolePermission] SET [permissionKey]=[permissionKey];',
+    ],
+  ] as const)
+    await expectDenied(app, label, statement);
+
+  // Leaving, withdrawing and closure disposition: every learner row deletable,
+  // in its own order, and the other person's untouched.
+  await expectAllowed(
+    app,
+    'Learner rows DELETE (leave, withdraw, dispose)',
+    `DELETE FROM [dbo].[LessonProgress] WHERE [userId]=N'${learner}';
+     DELETE FROM [dbo].[Enrolment] WHERE [userId]=N'${learner}';
+     DELETE FROM [dbo].[TrialClassRequest] WHERE [userId]=N'${learner}';`,
+    'every learning row of one account removed, as leaving and disposition must',
+  );
+
+  const [learningState] = await admin.query<Record<string, number | string | null>>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[Enrolment] WHERE [userId]=N'${learner}')
+        + (SELECT COUNT(*) FROM [dbo].[LessonProgress] WHERE [userId]=N'${learner}')
+        + (SELECT COUNT(*) FROM [dbo].[TrialClassRequest] WHERE [userId]=N'${learner}') AS [learnerRows],
+      (SELECT COUNT(*) FROM [dbo].[Enrolment] WHERE [userId]=N'${learningOther}') AS [otherRows],
+      (SELECT STRING_AGG([slug], N',') WITHIN GROUP (ORDER BY [slug]) FROM [dbo].[CourseSlugHistory] WHERE [courseId]=N'${liveCourse}') AS [reserved],
+      (SELECT STRING_AGG(c.[slug], N',') WITHIN GROUP (ORDER BY pc.[position])
+         FROM [dbo].[LearningPathCourse] pc JOIN [dbo].[Course] c ON c.[id] = pc.[courseId]
+        WHERE pc.[pathId]=N'${learningPath}') AS [path],
+      (SELECT COUNT(*) FROM [dbo].[Course] WHERE [id] IN (N'${liveCourse}',N'${pacedCourse}') AND [state]=N'published') AS [published],
+      (SELECT COUNT(*) FROM [dbo].[SearchIndexRequest] WHERE [scopeKind] IN (N'course',N'learning-path')
+         AND [scopeId] IN (N'${liveCourse}',N'${pacedCourse}',N'${learningPath}')) AS [search],
+      (SELECT COUNT(*) FROM [dbo].[Topic] WHERE [id]=N'${learningTopic.id}')
+        + (SELECT COUNT(*) FROM [dbo].[Person] WHERE [id]=N'${editorialPeople.linkedPersonId}')
+        + (SELECT COUNT(*) FROM [dbo].[User] WHERE [id] IN (N'${learner}',N'${learningOther}')) AS [owners];
+  `);
+  const expectedLearningState = {
+    learnerRows: 0,
+    otherRows: 1,
+    reserved: [learningSlug('live'), learningSlug('live-renamed')].sort().join(','),
+    path: [learningSlug('live-renamed'), learningSlug('paced')].join(','),
+    published: 2,
+    search: 3,
+    owners: 4,
+  };
+  if (JSON.stringify(learningState) === JSON.stringify(expectedLearningState)) {
+    pass(
+      'Learning state as written',
+      "one learner's rows removed, another's untouched, slugs reserved, path in order",
+    );
+  } else {
+    fail('Learning state as written', JSON.stringify(learningState));
+  }
+
+  const LEARNING_TABLES = [
+    'Course',
+    'CourseLabel',
+    'CourseSlugHistory',
+    'CourseTopic',
+    'CourseTeacher',
+    'CourseModule',
+    'CourseModuleLabel',
+    'Lesson',
+    'LessonLabel',
+    'LearningPath',
+    'LearningPathLabel',
+    'LearningPathSlugHistory',
+    'LearningPathCourse',
+    'Enrolment',
+    'LessonProgress',
+    'TrialClassRequest',
+  ] as const;
+  for (const table of LEARNING_TABLES) {
+    await assertObjectVisible(app, table);
+    await expectDenied(
+      app,
+      `${table} ALTER denied`,
+      `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+    );
+  }
+  for (const [trigger, table] of [
+    ['LearningReserveCourseSlug', 'Course'],
+    ['LearningReservePathSlug', 'LearningPath'],
+    ['LearningCourseIntegrity', 'Course'],
+    ['LearningModuleFrozen', 'CourseModule'],
+    ['LearningModuleLabelFrozen', 'CourseModuleLabel'],
+    ['LearningLessonFrozen', 'Lesson'],
+    ['LearningLessonLabelFrozen', 'LessonLabel'],
+    ['LearningPathIntegrity', 'LearningPath'],
+    ['LearningPathPlaces', 'LearningPathCourse'],
+    ['LearningEnrolmentOpen', 'Enrolment'],
+    ['LearningProgressOpen', 'LessonProgress'],
+    ['LearningTrialOpen', 'TrialClassRequest'],
+  ] as const)
+    await expectDenied(
+      app,
+      `${trigger} DISABLE denied`,
+      `DISABLE TRIGGER [dbo].[${trigger}] ON [dbo].[${table}];`,
+    );
+
+  // THE EXACT EFFECTIVE POSTURE, table by table and column by column, for the
+  // sixteen Phase-22 tables AND for every owner table a Learning key names or a
+  // Learning key lives in, which Phase 22 must leave as it found them. A string
+  // names the UPDATE columns exactly; a list names the columns EXCLUDED from an
+  // otherwise updatable table; `null` checks the verbs only.
+  const LEARNER_DATA = 'DELETE,INSERT,SELECT';
+  const LEARNING_POSTURE: Readonly<
+    Record<string, readonly [string, string | readonly string[] | null]>
+  > = {
+    Course: ['INSERT,SELECT', ['id']],
+    CourseLabel: [LEARNER_DATA, ''],
+    CourseSlugHistory: ['INSERT,SELECT', ''],
+    CourseTopic: [LEARNER_DATA, ''],
+    CourseTeacher: [LEARNER_DATA, ''],
+    CourseModule: [LEARNER_DATA, 'position'],
+    CourseModuleLabel: [LEARNER_DATA, ''],
+    Lesson: [LEARNER_DATA, 'position'],
+    LessonLabel: [LEARNER_DATA, ''],
+    LearningPath: ['INSERT,SELECT', ['id']],
+    LearningPathLabel: [LEARNER_DATA, ''],
+    LearningPathSlugHistory: ['INSERT,SELECT', ''],
+    LearningPathCourse: [LEARNER_DATA, 'position'],
+    Enrolment: [LEARNER_DATA, ''],
+    LessonProgress: [LEARNER_DATA, ''],
+    TrialClassRequest: [LEARNER_DATA, ''],
+    Topic: ['INSERT,SELECT', null],
+    Language: ['INSERT,SELECT', null],
+    Person: ['SELECT', null],
+    User: ['INSERT,SELECT', null],
+    Permission: ['SELECT', ''],
+    RolePermission: [LEARNER_DATA, ''],
+  };
+  const learningPosture = await app.query<{
+    name: string;
+    held: string | null;
+    updatable: string | null;
+    columns: string | null;
+  }>(`
+    SELECT t.[name],
+      (SELECT STRING_AGG(p.[permission], N',') WITHIN GROUP (ORDER BY p.[permission])
+         FROM (VALUES (N'ALTER'),(N'CONTROL'),(N'DELETE'),(N'INSERT'),(N'REFERENCES'),
+                      (N'SELECT'),(N'TAKE OWNERSHIP')) AS p([permission])
+        WHERE HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', p.[permission]) = 1) AS [held],
+      (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+         FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])
+          AND HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', N'UPDATE', c.[name], N'COLUMN') = 1) AS [updatable],
+      (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+         FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])) AS [columns]
+    FROM (VALUES ${Object.keys(LEARNING_POSTURE)
+      .map((table) => `(N'${table}')`)
+      .join(',')}) AS t([name]);
+  `);
+  const learningPostureFindings = learningPosture.flatMap((row) => {
+    const [verbs, scope] = LEARNING_POSTURE[row.name] ?? ['?', '?'];
+    const expectedColumns =
+      scope === null
+        ? (row.updatable ?? '')
+        : typeof scope === 'string'
+          ? scope
+          : (row.columns ?? '')
+              .split(',')
+              .filter((column) => !scope.includes(column))
+              .join(',');
+    return (row.held ?? '') === verbs && (row.updatable ?? '') === expectedColumns
+      ? []
+      : [`${row.name}: ${row.held ?? '(none)'} / UPDATE ${row.updatable ?? '(none)'}`];
+  });
+  if (
+    learningPosture.length === Object.keys(LEARNING_POSTURE).length &&
+    Object.keys(LEARNING_POSTURE).length === LEARNING_TABLES.length + 6 &&
+    learningPostureFindings.length === 0
+  ) {
+    pass(
+      'Learning effective posture exact',
+      `${String(learningPosture.length)} tables, object verbs and UPDATE columns as granted`,
+    );
+  } else {
+    fail(
+      'Learning effective posture exact',
+      learningPostureFindings.join('; ') || 'tables missing',
     );
   }
 

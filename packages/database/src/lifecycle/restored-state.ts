@@ -84,12 +84,14 @@ const FUTURE_DOMAIN_TABLES = [
   // with the `Hadith*` tables, proved by the Phase-19 recovery fixture, and
   // `Fatwa` in Phase 20, proved by the Phase-20 recovery fixture. `Notification`
   // left in Phase 21, which delivers it as Personalisation's in-app record,
-  // proved by the Phase-21 recovery fixture.
+  // proved by the Phase-21 recovery fixture, and `Course` in Phase 22, which
+  // delivers it with the Learning tables, proved by the Phase-22 recovery
+  // fixture. A bare `Teacher` stays: a Course names its teachers as People's
+  // `Person`, and teaching itself is no delivered phase's.
   'Quran',
   'Book',
   'Scholar',
   'Teacher',
-  'Course',
   'Message',
   'Membership',
   'Donation',
@@ -251,6 +253,34 @@ export const PHASE21_TABLES = [
   'Notification',
   'NewsletterSubscriber',
   'NewsletterConsentEvent',
+];
+
+/**
+ * Tables the Phase-22 migration creates: the public Course catalogue with its
+ * labels, slug history, typed topics and teachers, modules and lessons; the
+ * LearningPath with its labels, slug history and ordered Courses; and a
+ * person's own enrolments, lesson progress and trial-class requests.
+ *
+ * Checked as REQUIRED whenever the Phase-22 migration is among those the caller
+ * expects.
+ */
+export const PHASE22_TABLES = [
+  'Course',
+  'CourseLabel',
+  'CourseSlugHistory',
+  'CourseTopic',
+  'CourseTeacher',
+  'CourseModule',
+  'CourseModuleLabel',
+  'Lesson',
+  'LessonLabel',
+  'LearningPath',
+  'LearningPathLabel',
+  'LearningPathSlugHistory',
+  'LearningPathCourse',
+  'Enrolment',
+  'LessonProgress',
+  'TrialClassRequest',
 ];
 
 async function userTables(session: SqlSession): Promise<string[]> {
@@ -421,6 +451,18 @@ export async function verifyRestoredSchema(
     if (missing.length > 0)
       throw new Error(
         `Restored database is missing Phase-21 Personalisation tables: ${missing.join(', ')}`,
+      );
+  }
+
+  // Phase 22. A restore that carried the Learning migration's history row but
+  // not its catalogue, slug reservations or learners' rows would report an
+  // applied migration over a database that has lost what was published, which
+  // addresses redirect, and who is learning what.
+  if (expectedMigrationIds.some((id) => id.includes('phase22'))) {
+    const missing = PHASE22_TABLES.filter((table) => !tables.includes(table));
+    if (missing.length > 0)
+      throw new Error(
+        `Restored database is missing Phase-22 Learning tables: ${missing.join(', ')}`,
       );
   }
   const columns = await auditColumns(restored);

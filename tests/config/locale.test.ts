@@ -240,6 +240,28 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/fatwa/topics.tsx',
     'apps/web/src/components/search/fatwa-hit.ts',
     'apps/web/src/components/search/fatwa-hit-text.ts',
+    // Phase 22. The public Learn surfaces, their pure presentation decisions
+    // and request-cached reads. The ROUTES that use them are dynamic for data,
+    // never these modules.
+    'apps/web/src/components/learning/catalogue.tsx',
+    'apps/web/src/components/learning/course.tsx',
+    'apps/web/src/components/learning/landing.tsx',
+    'apps/web/src/components/learning/parts.tsx',
+    'apps/web/src/components/learning/paths.tsx',
+    'apps/web/src/components/learning/presentation.ts',
+    'apps/web/src/components/learning/read.ts',
+    // Phase 22. The Course page's private island (session-free by
+    // construction: it reads a learner's state only through `/api/my/learning/*`
+    // after hydration), and the My Learning parts, which read the session only
+    // through the guarded `/my` entry points that call them.
+    'apps/web/src/components/learning-island/learning-controls.tsx',
+    'apps/web/src/components/learning-island/learning-island.tsx',
+    'apps/web/src/components/learning-island/requests.ts',
+    'apps/web/src/components/my-learning/action-support.ts',
+    'apps/web/src/components/my-learning/nav.ts',
+    'apps/web/src/components/my-learning/parts.tsx',
+    'apps/web/src/components/my-learning/presentation.ts',
+    'apps/web/src/components/my-learning/read.ts',
     // Phase 21. The private island public content pages place (session-free
     // by construction: it reads personal state only through `/api/my/*`
     // after hydration), and the My Minhaj Personalisation parts, which read

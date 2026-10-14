@@ -43,6 +43,7 @@
         "hadith": "hadith",
         "fatwa": "fatwa",
         "personalisation-notifications": "personalisation-notifications",
+        "learning": "learning",
         "search": {
           "kind": "layer0",
           "concern": "search"

@@ -166,7 +166,8 @@ sign-in and returns to the Ayah.
 Since Phase 18 the Quran item is delivered (engineering only — no authoritative corpus is supplied,
 OPEN_DECISIONS.md §1.1). Read, Study and Search entries, Recitations and Quran Topics are available,
 as are Quran Books, Quran Videos and Quran Research (each the owner's own listing for the `quran`
-topic). Quran Articles, Quran Courses and Quran Teachers are not yet offered and are not linked
+topic). Since Phase 22 Quran Courses is offered too — Learning's public Course listing for the
+`quran` topic. Quran Articles and Quran Teachers are not yet offered and are not linked
 (ROUTE_MAP.md §3.3). While no corpus is active the section says so plainly instead of showing
 empty structure, and Listen's Quran Recitations appear only once a corpus is active. The
 signed-in additions remain Phase 21's.
@@ -186,7 +187,8 @@ Since Phase 19 the Hadith item is delivered (engineering only — no authoritati
 supplied, OPEN_DECISIONS.md §1.3). Introduction, Collections (with their books and chapters),
 Browse All, Search Hadith, Hadith Sciences, Commentary and Hadith by Topic are available, as are
 Hadith Books, Hadith Videos and Hadith Research (each the owner's own listing for the `hadith`
-topic). Hadith Articles, Hadith Courses and Hadith Scholars are not yet offered and are not linked
+topic). Since Phase 22 Hadith Courses is offered too — Learning's public Course listing for the
+`hadith` topic. Hadith Articles and Hadith Scholars are not yet offered and are not linked
 (ROUTE_MAP.md §3.4); Books and Chapters are reached through a collection, not as separate menu
 entries. While no collection is activated the section says so plainly instead of showing empty
 structure. The signed-in additions remain Phase 21's.
@@ -206,6 +208,14 @@ structure. The signed-in additions remain Phase 21's.
 
 The topic list shown in the menu is a curated subset. **All Topics** leads to the
 complete canonical taxonomy browser, which is shared platform-wide.
+
+Since Phase 22 the Learn item is delivered as a primary link to the `/learn` landing, which leads to
+All Courses, Learning Paths and Trial Classes (which explains that a trial class is a request on a
+live Course, recorded and not yet scheduled) and to the catalogue filtered by Topic. The shell has no
+per-domain mega menu yet (as for Watch and Quran), so these are reached from the landing and the
+human-readable sitemap. Live Learning, Class Schedule,
+Training, Resources, Teachers and Find a Teacher are not yet offered and are not linked — classes,
+availability and a teacher directory are Phase 23's or have no owner contract (ROUTE_MAP.md §3.5).
 
 ### 3.5 Library
 
@@ -394,9 +404,11 @@ the anonymous cached public render tree**.
 Since Phase 21 Saved (Bookmarks, Notes, Collections), History (Reading, Watch), Progress → Quran
 Reading Progress, Notifications, Settings → Interests & Goals, Notification Preferences and Privacy
 are delivered, and the Home overview shows the panels whose owners exist — continue reading, recent
-saved items, the Quran position, unread notifications and an optional onboarding prompt. Course
-Progress, Learning Streaks, My Learning, My Classes, Teachers and Messages stay with their later
-phases and are absent rather than empty. Bookmarks cover exactly Quran ayat, Hadith, articles,
+saved items, the Quran position, unread notifications and an optional onboarding prompt. Since
+Phase 22 My Learning (Enrolled Courses, Learning Paths and the person's trial-class requests) and
+Progress → Course Progress are delivered by Learning, with a Learning panel on the Home overview.
+Certificates, Learning Streaks, My Classes, Teachers and Messages stay with their later phases (or,
+for certificates and streaks, with no phase at all) and are absent rather than empty. Bookmarks cover exactly Quran ayat, Hadith, articles,
 videos and books; history is off until the person turns it on; notifications are in-app only.
 
 **Naming note.** *Saved → Collections* are private, user-owned lists. Editorial

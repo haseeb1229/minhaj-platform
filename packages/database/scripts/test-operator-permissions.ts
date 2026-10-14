@@ -519,6 +519,55 @@ try {
     () => operatorSession.query(`DELETE FROM [dbo].[NewsletterConsentEvent];`),
   );
 
+  // Phase 22 gives the operator ROLE nothing over Learning: the catalogue is
+  // administered only through the runtime under `learning.administer`, and a
+  // person's enrolments, progress and trial requests are read and written only
+  // by the runtime on that person's own behalf — so the operator can neither
+  // publish a Course, free a reserved slug nor read who is learning what.
+  for (const table of [
+    'Course',
+    'CourseLabel',
+    'CourseSlugHistory',
+    'CourseTopic',
+    'CourseTeacher',
+    'CourseModule',
+    'CourseModuleLabel',
+    'Lesson',
+    'LessonLabel',
+    'LearningPath',
+    'LearningPathLabel',
+    'LearningPathSlugHistory',
+    'LearningPathCourse',
+    'Enrolment',
+    'LessonProgress',
+    'TrialClassRequest',
+  ]) {
+    await expectDenied(operatorSession, `operator SELECT on ${table} denied`, () =>
+      operatorSession.query(`SELECT TOP 1 1 AS probe FROM [dbo].[${table}];`),
+    );
+  }
+  await expectDenied(operatorSession, 'operator INSERT on Enrolment denied', () =>
+    operatorSession.query(`
+      INSERT INTO [dbo].[Enrolment] ([userId], [courseId], [enrolledAt])
+      VALUES (N'injected', N'injected', SYSUTCDATETIME());
+    `),
+  );
+  await expectDenied(operatorSession, 'operator UPDATE on Course denied', () =>
+    operatorSession.query(`UPDATE [dbo].[Course] SET [state] = N'published';`),
+  );
+  await expectDenied(operatorSession, 'operator DELETE on CourseSlugHistory denied', () =>
+    operatorSession.query(`DELETE FROM [dbo].[CourseSlugHistory];`),
+  );
+  await expectDenied(operatorSession, 'operator DELETE on LessonProgress denied', () =>
+    operatorSession.query(`DELETE FROM [dbo].[LessonProgress];`),
+  );
+  await expectDenied(operatorSession, 'operator INSERT on TrialClassRequest denied', () =>
+    operatorSession.query(`
+      INSERT INTO [dbo].[TrialClassRequest] ([id], [userId], [courseId], [requestedAt])
+      VALUES (N'injected', N'injected', N'injected', SYSUTCDATETIME());
+    `),
+  );
+
   await expectDenied(operatorSession, 'operator INSERT on RoleAssignment denied', () =>
     operatorSession.query(`
       INSERT INTO [dbo].[RoleAssignment] ([userId], [roleId])

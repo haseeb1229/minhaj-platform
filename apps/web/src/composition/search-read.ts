@@ -4,6 +4,7 @@ import {
   createEditorialPublicReader,
   createFatwaPublicReader,
   createHadithPublicReader,
+  createLearningPublicReader,
   createLibraryPublicReader,
   createMediaPublicReader,
   createPeopleReader,
@@ -51,6 +52,7 @@ export function buildSearchService(report: SearchReport): SearchService {
     quran: createQuranPublicReader(),
     hadith: createHadithPublicReader(),
     fatwa: createFatwaPublicReader(),
+    learning: createLearningPublicReader(),
   });
 
   return createSearchService({

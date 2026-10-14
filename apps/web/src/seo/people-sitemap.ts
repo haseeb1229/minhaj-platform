@@ -14,6 +14,7 @@ import { topicsSitemapPartitions } from './topics-sitemap';
 import { quranSitemapPartitions } from './quran-sitemap';
 import { hadithSitemapPartitions } from './hadith-sitemap';
 import { fatwaSitemapPartitions } from './fatwa-sitemap';
+import { learningSitemapPartitions } from './learning-sitemap';
 import 'server-only';
 
 import { localeSchema } from '@minhaj/contracts';
@@ -186,6 +187,10 @@ export async function allSitemapPartitions(): Promise<readonly SitemapPartition[
     // each in its own content language only, and only while an APPROVED
     // activation stands — fixture activation is never advertised.
     ...(await fatwaSitemapPartitions()),
+    // Phase 22's `courses` and `learning-paths` segments: published Courses
+    // and LearningPaths at their current canonical address, each in the
+    // locales it genuinely has words in.
+    ...(await learningSitemapPartitions()),
   ]);
 }
 

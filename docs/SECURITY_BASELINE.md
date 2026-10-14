@@ -1146,6 +1146,40 @@ made, and no cookie banner is added — there is no non-essential processing to 
 - **Logging.** Note text, addresses, tokens, history and export bodies are never logged; failures are
   logged by operation name only, and operator audit rows carry identifiers and states, not addresses.
 
+#### 19.1.3 Phase-22 learning and progress
+
+Engineering defaults only; OPEN_DECISIONS §2.1 (under-18 safeguarding) and §2.2 (applicable
+jurisdictions) stay open, so no age rule, guardian consent, retention period or compliance claim is
+made, and the platform is not declared adults-only.
+
+- **Owner-only.** Enrolments, lesson Progress and trial-class requests are readable and writable only
+  by their account, with the account in every query's own predicate; another person's Course state
+  answers exactly like an absent one. `learning.read` and `learning.administer` govern the catalogue
+  and show **counts** of enrolments and requests per Course — never who. No key edits a learner's
+  Progress, and nothing confirms, schedules or assigns a request.
+- **Profiles and attribution grant nothing.** A Course's teachers are public attribution to People;
+  no TeacherProfile, attribution or Learning key is teaching authority, which remains Phase 23's
+  `teaching.perform` (not catalogued).
+- **Minimised by default.** A learner record holds the account, the Course or lesson and an instant —
+  no name, address, contact, age, note or free text is copied or asked. Progress is recorded only by
+  the learner's explicit act, never inferred from a view.
+- **Class-A mutations.** Enrolling and requesting a trial class from a public Course page go through
+  the same-origin-checked `/api/my/*` transport (§7.1 rule 6); leaving, completing a lesson and
+  withdrawing a request are Origin-protected Server Actions that re-resolve the session. Every write is
+  rate-limited per account.
+- **Cache boundary.** The public Learn tree reads no session, Enrolment, Progress or request: its
+  knowledge content is the same for every visitor, and a signed-in person's state arrives only through
+  the private island after hydration. Lesson bodies are read on private, `no-store`, `noindex` My
+  Learning pages by an enrolled account.
+- **Export and disposition.** `GET /api/my/export/learning` returns the person's Learning data as
+  typed identifiers, private and `no-store`, rate-limited and never written to disk. Closure
+  disposition is Learning's bounded, idempotent, resumable delete of a CLOSED account's Enrolments,
+  Progress and requests, coordinated at Layer 4 after Identity commits and reported as pending until
+  complete; it never deletes a Course or a path.
+- **Logging and audit.** Catalogue audit rows carry identifiers, states and counts — never a title,
+  description or lesson body; learner acts are not audited and are logged, on failure, by operation
+  name only.
+
 ### 19.2 Logging
 
 **Pino**, structured, with correlation identifiers. **Redaction is configured at the logger

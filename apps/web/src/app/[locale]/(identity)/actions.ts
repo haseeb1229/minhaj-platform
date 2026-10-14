@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { dispatchAfterResponse } from '@/composition/dispatch';
 import { fatwaRuntime } from '@/composition/fatwa';
 import { identityRuntime } from '@/composition/identity';
+import { learningRuntime } from '@/composition/learning';
 import { peopleRuntime } from '@/composition/people';
 import { personalisationRuntime } from '@/composition/personalisation';
 import { applySetCookies, requestContext } from '@/composition/request';
@@ -667,6 +668,19 @@ export async function closeAccountAction(
     personalPending = true;
   }
 
+  // THE FIFTH OWNER. Learning removes this account's Enrolments, lesson
+  // Progress and trial-class requests, in its own bounded batches. The catalogue
+  // is the organisation's: no Course or LearningPath is touched, whoever edited
+  // it. Idempotent; the closure sweep finishes what this leaves.
+  let learningPending: boolean;
+  try {
+    const learning = await learningRuntime().account.disposeAccount(session.account.id);
+    const sweep = await learningRuntime().account.reconcileClosedAccounts();
+    learningPending = !learning.complete || !sweep.complete;
+  } catch {
+    learningPending = true;
+  }
+
   // The closure notice is enqueued against the address the account HAD, before
   // the tombstone replaces it. It goes out after this response.
   dispatchAfterResponse();
@@ -678,7 +692,13 @@ export async function closeAccountAction(
   // local sign-out still happen. What is withheld is a false successful
   // completion while any owner's required work is pending — and says so,
   // rather than calling a closed account's pending cleanup a failure.
-  if (!disposition.ok || reconciliationFailed || questionsPending || personalPending)
+  if (
+    !disposition.ok ||
+    reconciliationFailed ||
+    questionsPending ||
+    personalPending ||
+    learningPending
+  )
     return { status: 'error', failure: 'closure-pending' };
 
   redirect(`/${locale}`);

@@ -589,6 +589,27 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[newsletterconsentevent]': ['SELECT', 'INSERT'],
   '[dbo].[contactinquiry]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[feedback]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  // Phase 22: Learning. A Course and a LearningPath are archived, never
+  // deleted; relation sets and syllabus words are replaced wholesale; only a
+  // module's, a lesson's or a path place's position moves, and what places
+  // each carries a column DENY. A learner's own rows are inserted and
+  // deleted, never updated.
+  '[dbo].[course]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[learningpath]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[courselabel]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[coursetopic]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[courseteacher]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[learningpathlabel]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[learningpathcourse]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[courseslughistory]': ['SELECT', 'INSERT'],
+  '[dbo].[learningpathslughistory]': ['SELECT', 'INSERT'],
+  '[dbo].[coursemodule]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[lesson]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[coursemodulelabel]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[lessonlabel]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[enrolment]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[lessonprogress]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[trialclassrequest]': ['SELECT', 'INSERT', 'DELETE'],
 
   // Phase 7 — storage custody metadata. DELETE is genuinely the operation
   // here: reconciliation removes rows a crash left mid-upload, which is

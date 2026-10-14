@@ -432,6 +432,38 @@ export default async function proxy(request: NextRequest) {
       }
     }
   }
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    /**
+     * PHASE 22 — LEARNING'S OWN SLUG HISTORY, through the same single-301
+     * mechanism. A Course and a LearningPath each have an editable slug, so each
+     * resolves a former one natively (DOMAIN_MODEL.md §19.7): one hop to the
+     * current address, locale preserved, the target built from Learning's
+     * answer and never from the request. Only a PUBLISHED record resolves — a
+     * draft or archived one's former slug falls through to the page's 404 — and
+     * Learn's own path words can never be a slug, so no section is shadowed.
+     */
+    const learn = /^\/(en|ur|ar)\/learn\/(courses|paths)\/([^/]+)$/.exec(
+      request.nextUrl.pathname,
+    );
+    if (learn?.[1] && learn[2] && learn[3]) {
+      const slug = decodedSegment(learn[3]);
+      if (slug !== null) {
+        const { learningReadRuntime } = await import('@/composition/learning-read');
+        const { coursePath, learningPathPath } = await import('@/contexts/learning');
+        const reads = learningReadRuntime();
+        const current =
+          learn[2] === 'courses'
+            ? await reads.courseCanonicalSlug(slug)
+            : await reads.pathCanonicalSlug(slug);
+        if (current !== null && current !== slug) {
+          return permanent(
+            request,
+            `/${learn[1]}${learn[2] === 'courses' ? coursePath(current) : learningPathPath(current)}`,
+          );
+        }
+      }
+    }
+  }
 
   const response = localeMiddleware(request);
   const pathname = request.nextUrl.pathname;

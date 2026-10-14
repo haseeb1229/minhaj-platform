@@ -4,6 +4,7 @@ import type { EditorialPublicReaderPort, NewsKind } from '@minhaj/contracts/edit
 import { newsPathOf, pagePath } from '@minhaj/contracts/editorial';
 import type { FatwaPublicReaderPort } from '@minhaj/contracts/fatwa';
 import type { HadithPublicReaderPort } from '@minhaj/contracts/hadith';
+import type { LearningPublicReaderPort } from '@minhaj/contracts/learning';
 import type { LibraryPublicReaderPort, ScholarlyKind } from '@minhaj/contracts/library';
 import type { MediaPublicReaderPort } from '@minhaj/contracts/media';
 import type { PeopleReaderPort } from '@minhaj/contracts/people';
@@ -23,6 +24,7 @@ import { audioTrackPathOf, videoPathOf } from '@/components/media/presentation';
 import { createEditorialSearchSources } from '@/contexts/editorial';
 import { createFatwaSearchProjection } from '@/contexts/fatwa';
 import { createHadithSearchProjection } from '@/contexts/hadith';
+import { createLearningSearchProjection } from '@/contexts/learning';
 import {
   createLibrarySearchSource,
   createScholarlySearchSource,
@@ -59,7 +61,8 @@ import { createTopicSearchSource } from '@/contexts/taxonomy';
  * canonical address beneath `/news`, a Phase-18 Ayah at its permanent
  * citation address `/quran/surah/{surah}/{ayah}`, and a Phase-19 Hadith
  * citation at its permanent address `/hadith/{collection}/{number}`, and a
- * Phase-20 published ruling at `/fatwa/{slug}`.
+ * Phase-20 published ruling at `/fatwa/{slug}`, and a Phase-22 published Course at
+ * `/learn/courses/{slug}` and LearningPath at `/learn/paths/{slug}`.
  */
 
 export interface SearchOwnerReaders {
@@ -71,6 +74,7 @@ export interface SearchOwnerReaders {
   readonly quran: QuranPublicReaderPort;
   readonly hadith: HadithPublicReaderPort;
   readonly fatwa: FatwaPublicReaderPort;
+  readonly learning: LearningPublicReaderPort;
 }
 
 const segment = (value: string) => encodeURIComponent(value);
@@ -91,6 +95,7 @@ export function searchWiring(readers: SearchOwnerReaders): {
   const quran = createQuranSearchProjection(readers.quran);
   const hadith = createHadithSearchProjection(readers.hadith);
   const fatwa = createFatwaSearchProjection(readers.fatwa);
+  const learning = createLearningSearchProjection(readers.learning);
 
   const editions: SearchTargetResolver = async (ids) =>
     mapOf(
@@ -145,6 +150,8 @@ export function searchWiring(readers: SearchOwnerReaders): {
       'quran-ayah': quran.source,
       hadith: hadith.source,
       fatwa: fatwa.source,
+      course: learning.course.source,
+      'learning-path': learning.path.source,
     },
 
     targets: {
@@ -207,6 +214,11 @@ export function searchWiring(readers: SearchOwnerReaders): {
       // activated, published, not withdrawn — so a stale row of a withdrawn
       // ruling is withheld before it is returned.
       fatwa: fatwa.target,
+      // Learning's own public predicate answers which Courses and LearningPaths
+      // are published NOW, and at what slug — a stale row of a Course returned
+      // to draft or archived is withheld before it is returned.
+      course: learning.course.target,
+      'learning-path': learning.path.target,
     },
 
     async resolveTopic(slug, locale) {

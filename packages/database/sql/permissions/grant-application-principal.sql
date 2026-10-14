@@ -831,3 +831,45 @@ IF OBJECT_ID(N'[dbo].[Notification]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSER
 -- even to a privileged session.
 IF OBJECT_ID(N'[dbo].[NewsletterSubscriber]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[NewsletterSubscriber] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[NewsletterSubscriber] ([id], [emailDigest], [digestKeyVersion]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[NewsletterSubscriber] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[NewsletterConsentEvent]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[NewsletterConsentEvent] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[NewsletterConsentEvent] TO [$(app_login)]; END;
+
+-- Phase 22: Learning — courses & paths.
+--
+-- THE CATALOGUE, by the Media postures. A Course and a LearningPath are INSERT
+-- and UPDATE and never DELETE — a record is withdrawn by archiving it, so the
+-- row its slug reservations, audit entries, path places, Enrolments and
+-- Progress point at always exists — and its identifier is never rewritten.
+-- Relation sets (labels, topics, teachers) are replaced wholesale, so INSERT
+-- and DELETE and never UPDATE. Slug histories are APPEND ONLY.
+IF OBJECT_ID(N'[dbo].[Course]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Course] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[Course] ([id]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Course] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[LearningPath]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[LearningPath] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[LearningPath] ([id]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[LearningPath] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CourseLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[CourseLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[CourseLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CourseTopic]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[CourseTopic] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[CourseTopic] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CourseTeacher]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[CourseTeacher] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[CourseTeacher] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[LearningPathLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[LearningPathLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[LearningPathLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CourseSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[CourseSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[CourseSlugHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[LearningPathSlugHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[LearningPathSlugHistory] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[LearningPathSlugHistory] TO [$(app_login)]; END;
+-- A path's places are NOT replaced wholesale: emptying a published path even
+-- for an instant is refused by its trigger, so a change deletes only the
+-- places that leave, renumbers the rest in ONE statement and inserts the new.
+-- Only the position moves; which path and which Course a place joins is never
+-- rewritten.
+IF OBJECT_ID(N'[dbo].[LearningPathCourse]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[LearningPathCourse] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[LearningPathCourse] ([pathId], [courseId]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[LearningPathCourse] TO [$(app_login)]; END;
+--
+-- THE SYLLABUS. A module or a lesson moves (its position is UPDATEd) and is
+-- removed while its Course is a draft, so it holds all four verbs — but what
+-- places it is never rewritten: a module never changes Course and a lesson
+-- never changes Course or module, so no forged identifier can re-home one.
+-- Their words are replaced wholesale, so INSERT and DELETE and never UPDATE.
+IF OBJECT_ID(N'[dbo].[CourseModule]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[CourseModule] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[CourseModule] ([id], [courseId]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[CourseModule] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Lesson]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[Lesson] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[Lesson] ([id], [courseId], [moduleId]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[Lesson] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[CourseModuleLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[CourseModuleLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[CourseModuleLabel] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[LessonLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[LessonLabel] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[LessonLabel] TO [$(app_login)]; END;
+--
+-- A LEARNER'S OWN STATE. Every row names one account; the person may leave a
+-- Course, withdraw a request and close the account, so DELETE is genuinely the
+-- operation. Nothing is ever UPDATEd: an enrolment cannot be moved to another
+-- Course or person, a completion instant cannot be rewritten (the first is
+-- kept), and a request cannot be re-pointed.
+IF OBJECT_ID(N'[dbo].[Enrolment]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[Enrolment] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[Enrolment] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[LessonProgress]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[LessonProgress] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[LessonProgress] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[TrialClassRequest]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[TrialClassRequest] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[TrialClassRequest] TO [$(app_login)]; END;

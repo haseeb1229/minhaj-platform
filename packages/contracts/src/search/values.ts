@@ -67,6 +67,13 @@ import { z } from 'zod';
  * written anonymised public question and the ruling. A private question, an
  * asker, an assignment, a draft, a review note, a superseded revision and a
  * withdrawn ruling are never indexed.
+ *
+ * PHASE 22 adds course and learning-path, each its own scope. A Course's one
+ * document per labelled locale carries its title, summary, description and its
+ * PUBLIC syllabus (module and lesson titles and summaries) — never a lesson body,
+ * which only an enrolled learner reads. A LearningPath carries its own words.
+ * Enrolments, Progress and trial requests are a person's own and never indexed,
+ * and neither is a module or a lesson, which has no public address of its own.
  */
 export const SEARCH_KINDS = Object.freeze([
   'topic',
@@ -91,6 +98,8 @@ export const SEARCH_KINDS = Object.freeze([
   'quran-ayah',
   'hadith',
   'fatwa',
+  'course',
+  'learning-path',
 ] as const);
 
 export type SearchKind = (typeof SEARCH_KINDS)[number];
@@ -133,6 +142,8 @@ export const SEARCH_SCOPE_KINDS = Object.freeze([
   'quran-ayah',
   'hadith',
   'fatwa',
+  'course',
+  'learning-path',
 ] as const);
 
 export type SearchScopeKind = (typeof SEARCH_SCOPE_KINDS)[number];
@@ -162,6 +173,8 @@ export const SCOPE_OF_KIND: Readonly<Record<SearchKind, SearchScopeKind>> = Obje
     'quran-ayah': 'quran-ayah',
     hadith: 'hadith',
     fatwa: 'fatwa',
+    course: 'course',
+    'learning-path': 'learning-path',
   },
 );
 

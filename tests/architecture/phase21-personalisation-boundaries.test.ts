@@ -166,7 +166,10 @@ async function phaseFiles(): Promise<string[]> {
   const files = [...COMPOSED];
   for (const directory of directories)
     if (await exists(directory)) files.push(...(await sources(directory)));
-  return files;
+  // Phase 22's course progress sits beside the Quran position under
+  // `/my/progress`, but it is LEARNING'S page, read through Learning's own
+  // runtime, so it is not one of this phase's files.
+  return files.filter((file) => !file.startsWith(`${MY}/progress/courses/`));
 }
 
 /** The body of one `model X { … }` in the Prisma schema, its comments removed. */
@@ -337,9 +340,18 @@ describe('Phase 21 builds no Learning, Messaging or realtime surface', () => {
     );
   });
 
-  it('adds no course progress route, and no history or progress landing', async () => {
+  it('adds no history or progress landing, and leaves course progress Learning’s', async () => {
     const routes = await walk(APP);
-    expect(routes.filter((file) => file.includes('/my/progress/courses'))).toEqual([]);
+    // Phase 22 delivers `/my/progress/courses` — through Learning, never
+    // through Personalisation.
+    expect(routes.filter((file) => file.includes('/my/progress/courses'))).toEqual([
+      `${MY}/progress/courses/page.tsx`,
+    ]);
+    const courses = uncommented(await read(`${MY}/progress/courses/page.tsx`));
+    expect(courses).toMatch(/composition\/learning['"]/u);
+    expect(courses).not.toMatch(
+      /composition\/personalisation['"]|contexts\/personalisation-notifications/u,
+    );
     expect(routes).not.toContain(`${MY}/progress/page.tsx`);
     expect(routes).not.toContain(`${MY}/history/page.tsx`);
   });

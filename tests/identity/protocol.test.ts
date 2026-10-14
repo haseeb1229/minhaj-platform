@@ -131,7 +131,7 @@ describe('returnTo destinations', () => {
     }
   });
 
-  it('accepts Personalisation’s own pages and the five saveable public pages, exactly', () => {
+  it('accepts Personalisation’s and Learning’s own pages and the island pages, exactly', () => {
     // Phase 21: a "sign in to save" island returns to the page it sits on, and
     // every `/my` page Personalisation delivers is a sign-in destination.
     const id = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
@@ -155,6 +155,13 @@ describe('returnTo destinations', () => {
       '/en/quran/surah/2/255',
       '/en/quran/surah/114/6',
       '/en/hadith/a-collection/7',
+      // Phase 22: Learning's own pages, and the public Course page whose
+      // island offers "sign in to enrol".
+      '/en/my/learning',
+      '/ur/my/learning/courses/a-course',
+      '/ar/my/learning/paths/a-path-2',
+      '/en/my/progress/courses',
+      '/en/learn/courses/a-course',
     ])
       expect(safeReturnTo(accepted, locale), accepted).toBe(accepted);
 
@@ -166,7 +173,14 @@ describe('returnTo destinations', () => {
       '/en/my/saved/everything',
       '/en/my/history',
       '/en/my/progress',
-      '/en/my/progress/courses',
+      '/en/my/learning/courses',
+      '/en/my/learning/courses/A-Course',
+      '/en/my/learning/courses/a-course/lesson',
+      '/en/my/learning/paths/',
+      '/en/my/learning/classes',
+      '/en/learn/courses',
+      '/en/learn/courses/a_course',
+      '/en/learn/paths/a-path',
       '/en/library/articles/../x',
       '/en/library/articles/%2e%2e/x',
       '/en/library/articles/Some-Article',
@@ -323,6 +337,14 @@ describe('the mutation surface', () => {
         'apps/web/src/app/api/my/notes/route.ts',
         'apps/web/src/app/api/my/quran-progress/route.ts',
         'apps/web/src/app/api/my/target-state/route.ts',
+        // Phase 22: Learning's handlers beneath the same prefix, admitted by
+        // the same transport — one GET of the person's state on one Course,
+        // two Class-A mutations (enrol, request a trial class) and Learning's
+        // own export. None authenticates anybody.
+        'apps/web/src/app/api/my/learning/state/route.ts',
+        'apps/web/src/app/api/my/learning/enrolments/route.ts',
+        'apps/web/src/app/api/my/learning/trials/route.ts',
+        'apps/web/src/app/api/my/export/learning/route.ts',
       ].sort(),
     );
 
@@ -348,9 +370,10 @@ describe('the mutation surface', () => {
       }
     }
 
-    // Phase 21's own: every mutating verb is a POST through the one transport
-    // that refuses a cross-origin request before anything is read; the reads
-    // export GET alone; and none of them reaches an authentication operation.
+    // Phase 21's own, and Phase 22's beside them: every mutating verb is a POST
+    // through the one transport that refuses a cross-origin request before
+    // anything is read; the reads export GET alone; and none of them reaches an
+    // authentication operation.
     const transport = await readFile(
       path.join(repoRoot, 'apps/web/src/app/api/my/personal-transport.ts'),
       'utf8',
@@ -359,7 +382,7 @@ describe('the mutation surface', () => {
       /if \(!isSameOriginMutation\(request, \w+\)\) return failed\('denied'\)/u,
     );
     const personal = routes.filter((entry) => entry.includes('/api/my/'));
-    expect(personal).toHaveLength(7);
+    expect(personal).toHaveLength(11);
     for (const route of personal) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');
       for (const verb of ['PUT', 'PATCH', 'DELETE'])
@@ -475,7 +498,32 @@ describe('the mutation surface', () => {
     expect(closureBody.indexOf('redirect(')).toBeGreaterThan(swept);
     expect(closureBody).toMatch(/personalPending\s*=\s*!personal\.complete/u);
     const pending = closureBody.indexOf("failure: 'closure-pending'");
-    expect(closureBody.slice(0, pending)).toMatch(/\|\|\s*personalPending\)/u);
+    expect(closureBody.slice(0, pending)).toMatch(/\|\|\s*personalPending\s*\|\|/u);
+    expect(closureBody.indexOf('redirect(')).toBeGreaterThan(pending);
+  });
+
+  it('coordinates Learning disposition after Identity commits and before success', async () => {
+    // Phase 22: the fifth owner removes the closed account's Enrolments,
+    // Progress and trial requests in its own bounded batches — never a Course
+    // or a path — and a pending disposal is reported as pending.
+    const actions = await sourceOf(ACTIONS);
+    const closureStart = actions.indexOf('export async function closeAccountAction');
+    const closureBody = actions.slice(
+      closureStart,
+      actions.indexOf('\n}', closureStart) + 2,
+    );
+    const closed = closureBody.indexOf('identity.closeAccount(');
+    const disposed = closureBody.indexOf('learningRuntime().account.disposeAccount(');
+    const swept = closureBody.indexOf(
+      'learningRuntime().account.reconcileClosedAccounts(',
+    );
+    expect(closed).toBeGreaterThan(0);
+    expect(disposed).toBeGreaterThan(closed);
+    expect(swept).toBeGreaterThan(disposed);
+    expect(closureBody.indexOf('redirect(')).toBeGreaterThan(swept);
+    expect(closureBody).toMatch(/learningPending\s*=\s*!learning\.complete/u);
+    const pending = closureBody.indexOf("failure: 'closure-pending'");
+    expect(closureBody.slice(0, pending)).toMatch(/\|\|\s*learningPending\s*\)/u);
     expect(closureBody.indexOf('redirect(')).toBeGreaterThan(pending);
   });
 

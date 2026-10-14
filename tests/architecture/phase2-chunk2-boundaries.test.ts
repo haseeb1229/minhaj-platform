@@ -358,11 +358,14 @@ describe('Phase 2 Chunk 2 — what the delivered code does NOT contain', () => {
       // Quran left this list when Phase 18 shipped it and Hadith when Phase 19
       // shipped it, as every earlier domain left it at its own owning phase.
       // Fatwa's `fatwa.*` and `question.receive` may appear in Phase 20's
-      // migration, which owns them, and in no other.
+      // migration, which owns them, and in no other; Learning's `learning.*`
+      // in Phase 22's alone. Teaching authority (`teaching.*`) is Phase 23's
+      // and appears in none.
       const fatwaOwner = file.includes('20261004000000_phase20_fatwa');
+      const learningOwner = file.includes('20261006000000_phase22_learning');
       for (const domain of [
         ...(fatwaOwner ? [] : ['fatwa.', 'question.']),
-        'learning.',
+        ...(learningOwner ? [] : ['learning.']),
         'membership.',
         'donations.',
         'teaching.',
@@ -575,6 +578,11 @@ const PERMISSION_MIGRATIONS = [
     id: '20261005000000_phase21_personalisation_notifications',
     keys: ['newsletter.operate', 'newsletter.read'],
   },
+  {
+    phase: 'Phase 22',
+    id: '20261006000000_phase22_learning',
+    keys: ['learning.administer', 'learning.read'],
+  },
 ] as const;
 
 describe('the permission catalogue is one definition, appended only by owners', () => {
@@ -624,7 +632,6 @@ describe('the permission catalogue is one definition, appended only by owners', 
     const declared = await declaredPermissions();
 
     for (const domain of [
-      'learning.',
       'membership.',
       'donations.',
       'migration.',
@@ -655,6 +662,17 @@ describe('the permission catalogue is one definition, appended only by owners', 
       'personalisation.',
       'notification.',
       'history.',
+      // Phase 22 shipped Learning's two administrative keys and nothing else:
+      // no per-aggregate or editorial-workflow key, nothing reaching a
+      // learner's enrolments, progress or trial requests, and no teaching
+      // authority, which is Phase 23's.
+      'course.',
+      'lesson.',
+      'path.',
+      'enrolment.',
+      'progress.',
+      'trial.',
+      'class.',
     ]) {
       expect(declared.some((key) => key.startsWith(domain))).toBe(false);
     }

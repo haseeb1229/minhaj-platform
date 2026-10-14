@@ -212,6 +212,9 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/quran/books/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/videos/page.tsx',
   'apps/web/src/app/[locale]/(public)/quran/research/page.tsx',
+  // Phase 22: the Quran related view of Learning's published Courses on the
+  // `quran` Topic, composed from Learning's PUBLIC root.
+  'apps/web/src/app/[locale]/(public)/quran/courses/page.tsx',
   'apps/web/src/app/[locale]/(public)/listen/recitations/page.tsx',
   // Phase 19. Every Hadith surface reads whether a collection is activated, and
   // what is public in it, through Hadith's PUBLIC reader — and the related views
@@ -235,6 +238,8 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/hadith/books/page.tsx',
   'apps/web/src/app/[locale]/(public)/hadith/videos/page.tsx',
   'apps/web/src/app/[locale]/(public)/hadith/research/page.tsx',
+  // Phase 22: the Hadith related view of Learning's published Courses.
+  'apps/web/src/app/[locale]/(public)/hadith/courses/page.tsx',
   // Phase 20. Every Fatwa surface reads whether the service is activated, and
   // which rulings are public now, through Fatwa's PUBLIC reader, so none can be
   // prerendered; each is proven below to reach no session, no identity
@@ -258,6 +263,18 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/newsletter/page.tsx',
   'apps/web/src/app/[locale]/(public)/newsletter/confirm/page.tsx',
   'apps/web/src/app/[locale]/(public)/newsletter/unsubscribe/page.tsx',
+  // Phase 22 — Learn. Every surface reads Courses and LearningPaths an operator
+  // publishes and withdraws through Learning's PUBLIC root, so none can be
+  // prerendered; each is proven below to reach no session, no identity
+  // service, no logger and no authentication library. A Course page places
+  // the private island, which reads the visitor's own state through
+  // `/api/my/learning/*` after hydration.
+  'apps/web/src/app/[locale]/(public)/learn/page.tsx',
+  'apps/web/src/app/[locale]/(public)/learn/courses/page.tsx',
+  'apps/web/src/app/[locale]/(public)/learn/courses/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/learn/paths/page.tsx',
+  'apps/web/src/app/[locale]/(public)/learn/paths/[slug]/page.tsx',
+  'apps/web/src/app/[locale]/(public)/learn/trial/page.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [
@@ -954,6 +971,10 @@ describe('a public CONTENT route reads data, and still reads no session', () => 
       // hydration, and the newsletter link pages use `newsletter-read`.
       '@/composition/personalisation',
       '@/composition/personal-targets',
+      // Phase 22: the AUTHENTICATED Learning runtime wires Identity in and
+      // holds every learner's enrolments, progress and trial requests. Public
+      // Learn routes use `@/composition/learning-read`.
+      '@/composition/learning',
       '@/contexts/identity-access',
       '@/config/server-env',
       '@minhaj/contracts/env/server',

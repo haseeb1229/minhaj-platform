@@ -163,6 +163,11 @@ minor-retention rule is invented by engineering** (SECURITY_BASELINE.md §19.3).
 
 **This is not a declaration that the platform is adults-only**, and it does not close this gate.
 
+**Still OPEN after Phase 22.** Phase 22 delivered the Course catalogue, self-enrolment, lesson
+progress and trial-class REQUESTS with no age, guardian, minor or vetting field and no rule about any
+of them; a trial request schedules nothing and no teacher reaches a learner (DOMAIN_MODEL.md §13.4).
+Teacher/student live learning — this gate's first subject — remains Phase 23's.
+
 **Why it matters:** It **materially changes** consent flows, messaging policy, moderation and
 data handling. Far cheaper to know before Phase 23 than after.
 
@@ -188,7 +193,8 @@ regardless.
 opt-in and consent evidence on privacy-minimising engineering defaults (SECURITY_BASELINE.md
 §19.1.2). It decides none of the questions above: no retention period, legal hold, residency rule,
 statutory deadline, age rule or named-jurisdiction compliance claim exists, and this gate still
-applies to Phase 33.
+applies to Phase 33. Phase 22 added Learning's export and closure disposition on the same defaults
+(SECURITY_BASELINE.md §19.1.3) and decided nothing above either.
 
 ### 2.3 Legal document content
 **Owner:** Minhaj · **Gates:** **Phase 6 — publication.** Phase 4 reserves the routes only ·
@@ -533,6 +539,10 @@ individuals receive which permission grants** (`teaching.perform`, `question.rec
 `content.review`, `fatwa.answer`, **`fatwa.publish`**).
 
 The `fatwa.publish` portion is Critical and duplicated at §1.4 because of its consequence.
+
+**Still OPEN after Phase 22.** Learning's catalogue keys (`learning.read`, `learning.administer`)
+are ordinary administrative keys and confer no teaching authority; `teaching.perform` is still not
+catalogued, and naming a person as a Course's teacher is public attribution that grants nothing.
 
 ### 6.4 Brand and visual identity
 **Owner:** Minhaj · **Gates:** Phase 4 · **Priority:** Medium

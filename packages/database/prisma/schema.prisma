@@ -153,6 +153,12 @@ model User {
   notificationPreferences NotificationPreference[]
   notifications           Notification[]
 
+  /// Phase 22 BACK-REFERENCES PRISMA REQUIRES, AND NOT DEPENDENCIES. Each is
+  /// owned on the Learning side; Identity never reads them, and account closure
+  /// reaches them only through Learning's own disposition.
+  enrolments        Enrolment[]
+  trialRequests     TrialClassRequest[]
+
   id String @id @db.NVarChar(36)
 
   // ---- Better Auth core -------------------------------------------------
@@ -826,6 +832,7 @@ model Topic {
   hadithTopics HadithTopic[]
   fatwaCategories FatwaCategory[]
   fatwaRevisionTopics FatwaRevisionTopic[]
+  courseTopics CourseTopic[]
 
   id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
 
@@ -963,6 +970,7 @@ model Language {
   quranTransliterations QuranTransliteration[]
   quranTafsirs QuranTafsir[]
   quranTajweedTexts QuranTajweedRuleText[]
+  courses Course[]
 
   code String @id @db.NVarChar(16)
 
@@ -1107,6 +1115,7 @@ model Person {
   fatwaPublicationsAuthored      FatwaPublication[] @relation("FatwaPublicationAuthorPerson")
   quranTafsirContributions QuranTafsirContributor[]
   quranRecitations QuranRecitation[]
+  courseTeachers CourseTeacher[]
 
   id String @id @default(dbgenerated("CONVERT(nvarchar(36), NEWID())")) @db.NVarChar(36)
 
@@ -5118,4 +5127,223 @@ model NewsletterConsentEvent {
 
   @@index([subscriberId, occurredAt], map: "NewsletterConsentEvent_subscriberId_idx")
   @@map("NewsletterConsentEvent")
+}
+
+// ===========================================================================
+// Phase 22 — Learning: courses & paths (DOMAIN_MODEL.md §13)
+// ===========================================================================
+//
+// THE CATALOGUE AND A PERSON'S OWN STUDY, AND NOTHING THAT SCHEDULES. Course,
+// its modules and lessons, LearningPath, Enrolment, lesson Progress and the
+// REQUEST side of a trial class. There is no ClassSession, Availability,
+// Attendance, Booking, meeting provider or meeting address: those are Phase
+// 23's, and no column here can hold one.
+//
+// TYPED REFERENCES, NEVER COPIES. Topics are Taxonomy's `Topic`, the content
+// language Taxonomy's `Language`, teachers People's `Person` — each by a real
+// foreign key, none of their words copied. A teacher is public attribution and
+// grants nothing. No Video, Work, Asset or Centre relation exists.
+//
+// NOTHING CASCADES. Every key is NO ACTION; Learning's adapter removes its own
+// children explicitly, and a Course is archived, never deleted, so Enrolments
+// and Progress on it survive withdrawal.
+
+/// One course in the catalogue.
+model Course {
+  id String @id @db.NVarChar(36)
+  slug String @unique @db.NVarChar(120)
+  primaryLocale String @db.NVarChar(8)
+  /// draft | published | archived
+  state String @db.NVarChar(16)
+  /// beginner | intermediate | advanced, or not stated.
+  level String? @db.NVarChar(16)
+  /// self-paced | live
+  format String @db.NVarChar(16)
+  languageCode String @db.NVarChar(16)
+  /// The latest instant the Course was published; kept when it is withdrawn.
+  publishedAt DateTime? @db.DateTime2
+  version Int @default(1)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  language Language @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  labels CourseLabel[]
+  slugs CourseSlugHistory[]
+  topics CourseTopic[]
+  teachers CourseTeacher[]
+  modules CourseModule[]
+  paths LearningPathCourse[]
+  enrolments Enrolment[]
+  trialRequests TrialClassRequest[]
+  @@index([state, publishedAt, slug])
+  @@index([state, format, level])
+  @@index([languageCode, state])
+}
+
+model CourseLabel {
+  courseId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(240)
+  summary String @db.NVarChar(1000)
+  description String @db.NVarChar(Max)
+  course Course @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([courseId, locale])
+}
+
+/// Includes the current slug: one namespace reserves every identity permanently.
+model CourseSlugHistory {
+  slug String @id @db.NVarChar(120)
+  courseId String @db.NVarChar(36)
+  course Course @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([courseId])
+}
+
+model CourseTopic {
+  courseId String @db.NVarChar(36)
+  topicId String @db.NVarChar(36)
+  course Course @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([courseId, topicId])
+  @@index([topicId, courseId])
+}
+
+/// A teacher named on a course: public attribution to People, in display order. Grants nothing.
+model CourseTeacher {
+  courseId String @db.NVarChar(36)
+  personId String @db.NVarChar(36)
+  position Int
+  course Course @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  person Person @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([courseId, personId])
+  @@unique([courseId, position])
+  @@index([personId, courseId])
+}
+
+/// One module of a course, in one dense order.
+model CourseModule {
+  id String @id @db.NVarChar(36)
+  courseId String @db.NVarChar(36)
+  position Int
+  course Course @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  labels CourseModuleLabel[]
+  lessons Lesson[]
+  @@unique([courseId, position])
+  @@unique([id, courseId], map: "CourseModule_owner_key")
+}
+
+model CourseModuleLabel {
+  moduleId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(240)
+  summary String @db.NVarChar(1000)
+  module CourseModule @relation(fields: [moduleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([moduleId, locale])
+}
+
+/// One lesson of one module. Its key carries the course, so it can only ever
+/// sit in a module of that course, and progress can only name it there.
+model Lesson {
+  id String @id @db.NVarChar(36)
+  courseId String @db.NVarChar(36)
+  moduleId String @db.NVarChar(36)
+  position Int
+  module CourseModule @relation(fields: [moduleId, courseId], references: [id, courseId], onDelete: NoAction, onUpdate: NoAction, map: "Lesson_module_fkey")
+  labels LessonLabel[]
+  progress LessonProgress[]
+  @@unique([moduleId, position])
+  @@unique([id, courseId], map: "Lesson_owner_key")
+  @@index([courseId])
+}
+
+model LessonLabel {
+  lessonId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(240)
+  summary String @db.NVarChar(1000)
+  /// Plain text, read only by a learner enrolled on the course.
+  body String @db.NVarChar(Max)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([lessonId, locale])
+}
+
+/// An ordered curation of courses.
+model LearningPath {
+  id String @id @db.NVarChar(36)
+  slug String @unique @db.NVarChar(120)
+  primaryLocale String @db.NVarChar(8)
+  /// draft | published | archived
+  state String @db.NVarChar(16)
+  publishedAt DateTime? @db.DateTime2
+  version Int @default(1)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  labels LearningPathLabel[]
+  slugs LearningPathSlugHistory[]
+  courses LearningPathCourse[]
+  @@index([state, publishedAt, slug])
+}
+
+model LearningPathLabel {
+  pathId String @db.NVarChar(36)
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(240)
+  summary String @db.NVarChar(1000)
+  description String @db.NVarChar(Max)
+  path LearningPath @relation(fields: [pathId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([pathId, locale])
+}
+
+model LearningPathSlugHistory {
+  slug String @id @db.NVarChar(120)
+  pathId String @db.NVarChar(36)
+  path LearningPath @relation(fields: [pathId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([pathId])
+}
+
+/// One course's place in one path. Unique per path, densely ordered.
+model LearningPathCourse {
+  pathId String @db.NVarChar(36)
+  courseId String @db.NVarChar(36)
+  position Int
+  path LearningPath @relation(fields: [pathId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  course Course @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([pathId, courseId])
+  @@unique([pathId, position])
+  @@index([courseId, pathId])
+}
+
+/// A person's membership of one course. Not a booking, not a class, not a payment.
+model Enrolment {
+  userId String @db.NVarChar(36)
+  courseId String @db.NVarChar(36)
+  enrolledAt DateTime @db.DateTime2
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  course Course @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  progress LessonProgress[]
+  @@id([userId, courseId])
+  @@index([courseId, userId])
+}
+
+/// One lesson a person completed, on a course they are enrolled on. Both keys
+/// carry the course, so progress can only name that course's own lesson.
+model LessonProgress {
+  userId String @db.NVarChar(36)
+  courseId String @db.NVarChar(36)
+  lessonId String @db.NVarChar(36)
+  completedAt DateTime @db.DateTime2
+  enrolment Enrolment @relation(fields: [userId, courseId], references: [userId, courseId], onDelete: NoAction, onUpdate: NoAction, map: "LessonProgress_enrolment_fkey")
+  lesson Lesson @relation(fields: [lessonId, courseId], references: [id, courseId], onDelete: NoAction, onUpdate: NoAction, map: "LessonProgress_lesson_fkey")
+  @@id([userId, lessonId])
+  @@index([userId, courseId])
+  @@index([lessonId, courseId])
+}
+
+/// A person's REQUEST for a trial class on one live course: who and when,
+/// nothing else. It reserves no teacher, names no time and books nothing.
+model TrialClassRequest {
+  id String @id @db.NVarChar(36)
+  userId String @db.NVarChar(36)
+  courseId String @db.NVarChar(36)
+  requestedAt DateTime @db.DateTime2
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  course Course @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@unique([userId, courseId])
+  @@index([courseId, requestedAt])
 }

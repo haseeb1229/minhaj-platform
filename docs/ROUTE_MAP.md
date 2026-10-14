@@ -213,8 +213,10 @@ honest unavailable state and named resources answer 404; a fixture-mode corpus c
 non-authoritative notice on every page and is `noindex`; only an approved corpus is indexable.
 Related views: `/quran/books`, `/quran/videos` and `/quran/research` are delivered — each the
 owner's own public listing for the seeded `quran` topic, canonical to the owner's collection;
-`/quran/articles`, `/quran/courses` and `/quran/teachers` stay absent and unlinked until an owner
-exposes a deterministic by-topic read.
+`/quran/articles` and `/quran/teachers` stay absent and unlinked until an owner exposes a
+deterministic by-topic read. **Phase 22:** `/quran/courses` is delivered — Learning's own public
+Course listing for the seeded `quran` topic, composed at Layer 4 and canonical to the Course catalogue
+(Quran imports nothing of Learning).
 
 ### 3.4 Hadith
 
@@ -245,8 +247,9 @@ section pages render an honest unavailable state and named resources answer 404;
 activation carries a visible non-authoritative notice on every Hadith page and is `noindex`; only an
 approved activation is indexable. Related views: `/hadith/books`, `/hadith/videos` and
 `/hadith/research` are delivered — each the owner's own public listing for the seeded `hadith`
-topic, canonical to the owner's collection; `/hadith/articles`, `/hadith/courses` and
-`/hadith/scholars` stay absent and unlinked until an owner exposes a deterministic read.
+topic, canonical to the owner's collection; `/hadith/articles` and `/hadith/scholars` stay absent and
+unlinked until an owner exposes a deterministic read. **Phase 22:** `/hadith/courses` is delivered —
+Learning's public Course listing for the seeded `hadith` topic, composed at Layer 4.
 
 ### 3.5 Learn
 
@@ -258,6 +261,21 @@ topic, canonical to the owner's collection; `/hadith/articles`, `/hadith/courses
 | `/learn/live` · `/learn/trial` · `/learn/training` · `/learn/resources` | Learning surfaces |
 | `/learn/teachers` | Teacher directory — `?subject, language, availability` |
 | `/learn/teachers/{slug}` | **301 → `/people/{slug}`** |
+
+**Delivered in Phase 22 (DOMAIN_MODEL.md §13.4).** `/learn`, `/learn/courses`,
+`/learn/courses/{slug}`, `/learn/paths`, `/learn/paths/{slug}` and `/learn/trial`. The catalogue's
+`?topic` takes a canonical Topic slug, `?teacher` a People slug (resolved at Layer 4), `?language`
+a content-language code, `?level` one of `beginner`, `intermediate`, `advanced` and `?format` one
+of `self-paced`, `live`; filters combine, and a malformed or unknown value shows an empty, explained
+result — it never broadens the listing. A Course or path slug is editable with native slug history: a
+former slug answers one 301 to the current one, and none of `courses`, `paths`, `live`, `trial`,
+`training`, `resources` or `teachers` can be a slug. A Course page shows its description and
+public syllabus; lesson bodies are read in My Learning. `/learn/trial` explains that a trial class
+is a REQUEST on a `live` Course — recorded, not booked — and lists those Courses; the request itself
+is made from the Course page's private island. Every Learn page reads no session. **Not delivered:**
+`/learn/live`, `/learn/training`, `/learn/resources`, `/learn/teachers` and its alias — no truthful
+delivered contract exists yet (confirmed classes, availability and a teacher directory are Phase 23's or
+unowned); they have no route and no link.
 
 ### 3.6 Library
 
@@ -354,8 +372,9 @@ Structured data is `BreadcrumbList` only.
 | `/{locale}/account-setup` | GET / POST | **Account setup** — Identity-owned: verified email, account interface locale, timezone (DOMAIN_MODEL.md §4.2). **Phase 2** |
 
 **Personalisation onboarding is a different step with a different owner.** Interests, goals,
-learner level and preferred format are collected by **Personalisation & Notifications** in
-**Phase 21**, under `/my/settings/interests` (§5.1). Authentication never depends on it, and the
+learner level and preferred format belong to **Personalisation & Notifications** onboarding under
+`/my/settings/interests` (§5.1); they are not yet collected, because no delivered surface uses a stored
+preference (Phase 22's level and format are catalogue filters chosen per visit). Authentication never depends on it, and the
 two are never merged into one route.
 
 `returnTo` is validated against an allowlist of internal paths. **All are `noindex`.**
@@ -436,11 +455,18 @@ never mistaken for a delivered one.
 `/my/notifications`, `/my/settings/interests`, `/my/settings/notifications` and
 `/my/settings/privacy`, plus the Personalisation panels of `/my`. Every one is private, `noindex`
 and per request, and every read and write is keyed by the signed-in account in its own query — a
-guessed collection id answers exactly like a missing one. `/my/progress/courses` stays Phase 22's
-and has no route; there is no `/my/progress` landing and no `/my/history` landing, because the
-register names none. `/my/questions/*` stays Fatwa's. `/my/settings/privacy` composes the history
+guessed collection id answers exactly like a missing one. There is no `/my/progress` landing and no
+`/my/history` landing, because the register names none. `/my/questions/*` stays Fatwa's. `/my/settings/privacy` composes the history
 switch, the Personalisation export and the Identity-owned closure (linked, not duplicated); the
 newsletter is managed from its own links because it is not the account's.
+
+**Delivered in Phase 22.** `/my/learning`, `/my/learning/courses/{slug}`,
+`/my/learning/paths/{slug}` and `/my/progress/courses`, plus the Learning panel of `/my` — Learning's,
+composed at Layer 4. Each is private, `noindex` and per request, and reads only the signed-in account's
+own Enrolments, Progress and trial requests; a Course the account is not enrolled on answers like a
+missing one. A lesson is completed only by the learner's explicit act. Path progress is derived from
+the account's Course Enrolments — there is no path enrolment. `/my/settings/privacy` also offers the
+Learning export. `/my/classes/*` and `/my/teachers` stay Phase 23's.
 
 > **Personalised home panels appear only for owners that actually exist.** The `/my` landing
 > composes what has been delivered; it does not render an empty frame for a context that has
@@ -547,7 +573,7 @@ Prefixed `/{locale}/admin`.
 | People | `/admin/people/{persons\|authors\|speakers\|scholars\|teachers}` |
 | Identity | `/admin/identity/{users\|roles\|permissions\|assignments\|security}` \u2014 **security** covers second-factor state, bootstrap status and identity audit (SECURITY_BASELINE.md \u00a78) |
 | Taxonomy | `/admin/taxonomy/{topics\|mapping\|languages\|tags}` |
-| Learning | `/admin/learning/{courses\|paths\|classes\|enrolments\|trials}` |
+| Learning | `/admin/learning/{courses\|paths\|classes\|enrolments\|trials}` — `courses` (with each Course's modules and lessons), `paths`, `enrolments` and `trials` delivered in Phase 22 under `learning.read` / `learning.administer`. A published Course's syllabus is frozen until it returns to draft. `enrolments` and `trials` show counts per Course, never who; `trials` is read-only — nothing confirms, schedules or assigns a request. `classes` is Phase 23's |
 | Global | `/admin/global/{countries\|regions\|cities\|centres}` — delivered in Phase 16; a Centre's contacts and served Cities are managed on the Centre |
 | Membership | `/admin/membership` · `/applications` |
 | Donations | `/admin/donations` · `/campaigns` |
@@ -572,7 +598,7 @@ Categories only; no endpoint contracts in this phase.
 | Auth | `/api/auth/*` | Delegated to the authentication library |
 | Search | `/api/search/*` | Search, suggestions, typeahead |
 | Content read | `/api/content/*` | Public read for progressive enhancement |
-| Personal | `/api/my/*` | Authenticated personal actions. Phase 21: `target-state` (GET) and `bookmarks`, `notes`, `collection-items`, `history`, `quran-progress` (POST) serve the private island on public content pages after hydration, and `export` (GET) returns the person's Personalisation data as a JSON download. Every response is private and `no-store`; every POST requires the configured origin, `Sec-Fetch-Site: same-origin` where sent and the `x-minhaj-intent: personal` header (SECURITY_BASELINE.md §7.1 rule 6) |
+| Personal | `/api/my/*` | Authenticated personal actions. Phase 21: `target-state` (GET) and `bookmarks`, `notes`, `collection-items`, `history`, `quran-progress` (POST) serve the private island on public content pages after hydration, and `export` (GET) returns the person's Personalisation data as a JSON download. Phase 22: `learning/state` (GET) and `learning/enrolments`, `learning/trials` (POST) serve a Course page's private island, and `export/learning` (GET) returns the person's Learning data. Every response is private and `no-store`; every POST requires the configured origin, `Sec-Fetch-Site: same-origin` where sent and the `x-minhaj-intent: personal` header (SECURITY_BASELINE.md §7.1 rule 6) |
 | Messaging REST | `/api/messaging/*` | History and read state via Messaging-owned services |
 | Teacher / Admin | `/api/teacher/*` · `/api/admin/*` | Role-gated operations |
 | Migration | `/api/admin/migration/*` | Import control and status |
@@ -685,7 +711,7 @@ A **sitemap index** at `/sitemap.xml` referencing partitioned child sitemaps:
 /sitemaps/{segment}-{locale}.xml
    segments: pages · topics · people · quran · hadith · books · research
              publications · videos · audio · galleries · fatwa · news
-             events · collections · centres · courses
+             events · collections · centres · courses · learning-paths
 ```
 
 - **Partitioned by content type and locale** — Quran ayah URLs alone are numerous, and mixing

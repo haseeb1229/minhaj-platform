@@ -26,7 +26,8 @@ import { clearQuranProgressAction } from '../actions';
  * SET BY THE READER, NEVER BY A PAGE VIEW. It moves only when the person
  * chooses "Set as my reading position" on an Ayah page, so it is never a
  * record of what they happened to open. Course progress is Learning's
- * (Phase 22) and is not on this page or anywhere beneath `/my/progress` yet.
+ * (Phase 22): it lives beside this page at `/my/progress/courses`, read
+ * through Learning's own runtime, and is not on this page.
  */
 export const metadata = { robots: { index: false, follow: false } };
 

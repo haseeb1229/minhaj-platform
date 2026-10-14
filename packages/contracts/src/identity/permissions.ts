@@ -22,12 +22,14 @@
  * its navigation status surface needs; Phase 18 appended Quran's three,
  * `quran.editCanonical` among them; Phase 19 appended Hadith's three,
  * `hadith.editCanonical` among them; Phase 20 appended Fatwa's three,
- * `fatwa.publish` among them; Phase 21 appended the two newsletter keys.
- * `teaching.perform` and the rest are named by
- * DOMAIN_MODEL.md §4.4 as INDICATIVE examples of the shape; they belong to
- * contexts that do not exist yet. Seeding one now would fix another owner's
- * vocabulary before that owner can have an opinion about it, and would leave
- * grantable authority over nothing (DELIVERY_PLAN.md).
+ * `fatwa.publish` among them; Phase 21 appended the two newsletter keys;
+ * Phase 22 appended Learning's two catalogue keys. `teaching.perform` and the
+ * rest are named by DOMAIN_MODEL.md §4.4 as INDICATIVE examples of the shape;
+ * they belong to slices that do not exist yet — `teaching.perform` to Phase
+ * 23's teacher experience, whose holders OPEN_DECISIONS.md §6.3 reserves to the
+ * organisation. Seeding one now would fix another owner's vocabulary before
+ * that owner can have an opinion about it, and would leave grantable authority
+ * over nothing (DELIVERY_PLAN.md).
  *
  * EXTENDING IT IS USUALLY A PRIVILEGE CHANGE. The protected Platform
  * Administrator bundle below is the whole catalogue EXCEPT the externally gated
@@ -530,6 +532,33 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     key: 'newsletter.operate',
     description:
       'Suppress a newsletter subscription, or reinstate a suppressed one so it must be confirmed again. No sending or campaign capability exists.',
+  }),
+
+  /* ---- Phase 22 — Learning: courses & paths ------------------------------ */
+  //
+  // READ AND ADMINISTER, the convention every catalogue context with no review
+  // step follows (Library, Media, Global). Seeing draft Courses and how many
+  // people are enrolled is not changing what the public catalogue offers.
+  //
+  // TWO KEYS, NOT ONE PER AGGREGATE. Course, module, lesson and LearningPath are
+  // one owner's one catalogue; `learning.publish`, `learning.author` or
+  // `learning.review` would separate transitions no Learning workflow has.
+  //
+  // NEITHER IS TEACHING AUTHORITY, AND NEITHER REACHES A LEARNER. Being named as
+  // a Course's teacher is public attribution and grants nothing; teaching is
+  // Phase 23's `teaching.perform`, which is not catalogued here. These keys read
+  // COUNTS of enrolments and trial requests, never who made them, and no key
+  // edits anybody's Progress. Both are ordinary keys, bundled into the
+  // protected role by the established revocation convention.
+  Object.freeze({
+    key: 'learning.read',
+    description:
+      'View Courses, their modules and lessons, and LearningPaths, including drafts, with counts of enrolments and trial-class requests. Never a learner, their progress or teaching authority.',
+  }),
+  Object.freeze({
+    key: 'learning.administer',
+    description:
+      'Create, edit, publish and archive Courses, their modules and lessons, and LearningPaths, and order them. Never confirms a trial class, edits a learner progress or grants teaching authority.',
   }),
 ]);
 

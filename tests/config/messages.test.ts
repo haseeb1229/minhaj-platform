@@ -118,6 +118,8 @@ describe('the catalogues agree on their keys', () => {
       'hadith.unavailable.body',
       'fatwa.fixture',
       'fatwa.unavailable.body',
+      'learn.trial.notBooked',
+      'learn.filter.invalid',
     ]) {
       const value = (locale: Catalogue) =>
         Object.fromEntries(leaves(locale))[key] as string;
@@ -158,6 +160,11 @@ describe('the catalogues agree on their keys', () => {
         // that a ruling on a proof deployment is not a genuine Fatwa.
         'fatwa.unavailable.body',
         'fatwa.fixture',
+        // Phase 22: that a trial-class request books nothing, and why a
+        // filtered catalogue lists nothing — both read in the visitor's own
+        // language.
+        'learn.trial.notBooked',
+        'learn.filter.invalid',
       ]) {
         expect(String(prose[key]), `${locale} ${key}`).toMatch(/\p{Script=Arabic}/u);
       }

@@ -1297,6 +1297,69 @@ specific courses. Approval creates that assignment; revocation removes it — an
 Distinct lifecycles. A trial booking (requested → confirmed → completed/cancelled) precedes
 and is independent of course enrolment.
 
+### 13.4 As delivered (Phase 22 — courses and paths; nothing that schedules)
+
+The context's first slice is built and proven against synthetic `NON_LEARNING_FIXTURE_*` material
+and `.invalid` accounts; **nothing is seeded** — no Course, path, enrolment or request. It depends on
+Layer 0 and, through Layer-4 answers, on People and Taxonomy only: the allowlist's Media, Library and
+Global Network edges are **not taken**, because nothing delivered needs a Video, Work, Asset or Centre
+relation (DELIVERY_PLAN.md Phase 22). **The Phase 22 / Phase 23 boundary:** ClassSession, Availability,
+Attendance and Booking have **no table, column or code**; no meeting provider or address can be
+stored; and `teaching.perform` is not catalogued (OPEN_DECISIONS.md §6.3 stays open).
+
+| Aggregate | What it holds — and deliberately does not |
+|---|---|
+| **Course** | Editable slug with **native slug history** (`CourseSlugHistory`, written by a trigger, never freed), primary locale, lifecycle `draft` / `published` / `archived`, **level** (`beginner`, `intermediate`, `advanced` or not stated) and **format** (`self-paced` or `live`) — Learning's own small catalogue facets, not an external scholarly classification — content language (FK `Language`), typed topics (`CourseTopic`, FK `Topic`), ordered **teachers** (`CourseTeacher`, FK `Person`), the latest publication instant and an expected version. Localised title, summary and description per interface locale. No price, duration, rating, certificate, enrolment cap or enrolment count |
+| **CourseModule** / **Lesson** | Ordered modules of a Course and ordered lessons of a module, dense unique positions, localised title and summary; a lesson also has a **plain-text body**. A lesson's key to its module carries the Course, so a lesson can never sit in another Course's module. Bounded: 20 modules, 30 lessons each |
+| **LearningPath** | Editable slug with its own slug history, lifecycle, localised words, and an ordered list of distinct Courses (`LearningPathCourse`, at most 30) |
+| **Enrolment** | One per account and Course — the account and the instant, nothing copied from the account. Not a booking, a class, a payment or an entitlement |
+| **Progress** (`LessonProgress`) | One row per account and **completed lesson**, both keys carrying the Course — to the Enrolment and to the Lesson — so progress can only name a lesson of the Course the person is enrolled on |
+| **TrialClassRequest** | The **request side only**: the account, one published `live` Course and the instant; one per account and Course. It reserves no teacher, names no time, creates no booking or class, confers no enrolment and has no confirmed state |
+
+**Publication keeps the public catalogue whole.** Publishing a Course requires a complete syllabus —
+at least one module, every module with a lesson, and the primary-locale words on the Course, each
+module and each lesson. **While a Course is published its syllabus is frozen**: modules and lessons
+change only after returning it to draft, so the public never reads a half-built outline — the
+Editorial precedent that an edit withdraws the published representation (§7.2.1), applied to the
+outline rather than imported as a workflow. A published path holds at least one Course and only
+published Courses, so **a Course cannot leave publication while a published path holds it**; the
+operator updates or unpublishes the path first. Each rule is checked by the adapter under the lock it
+needs and enforced again by the database (refusals 51270–51277). Normal removal is archiving: a
+Course is never deleted, so the Enrolments and Progress on it outlive its withdrawal.
+
+**Teacher attribution grants nothing.** A Course names published People as its teachers for the
+public catalogue and the `?teacher=` filter; it is never consulted for any authority, and no
+TeacherProfile, attribution or Learning key can reach a learner or a class (§13.2).
+
+**Lessons are read by enrolled learners.** The public Course page shows the description and the
+syllabus — module and lesson titles and summaries — and the lesson bodies are read in My Learning by a
+person enrolled on the published Course.
+
+**A person's own study.** Enrolling is self-service, requires an account and a Course published now
+(decided under a lock the Course's own lifecycle change waits for), and is idempotent. Leaving removes
+the person's Enrolment and their Progress on that Course. A lesson is completed only by an explicit
+act — never by a page view — idempotently and monotonically: the first instant is kept and nothing
+un-completes it. **Course completion is derived** — every current lesson completed. **Path progress
+is derived** from the person's own Course Enrolments and Progress; there is no PathEnrolment.
+Withdrawing a trial request deletes it. When a Course is archived or returned to draft its learners
+keep their Enrolment and Progress, and My Learning says the Course is not currently available.
+
+**Staff see counts, never learners.** `learning.read` and `learning.administer` (ordinary keys in the
+protected Platform Administrator bundle) govern the catalogue; the Learning administration shows how
+many accounts are enrolled on and have completed each Course and how many trial requests each live
+Course holds — never who. No key edits anybody's Progress or confirms a request.
+
+**Search, export and closure.** Published Courses and paths are the `course` and `learning-path`
+kinds; a Course document carries its words and public syllabus, never a lesson body. Learning exports
+the person's Enrolments, Progress and requests as typed identifiers and, after Identity commits a
+closure, deletes them in bounded, idempotent batches (SECURITY_BASELINE.md §19.1.3); a Course or path
+is never deleted because an editor's account closed.
+
+**Not delivered, and not owed by Phase 22:** ClassSession, Availability, Attendance, Booking and the
+confirmation of a trial request; teacher authority and the teacher area; My Classes and My Teachers;
+certificates, assessments, grades, payments and entitlements; under-18 rules (OPEN_DECISIONS.md §2.1
+stays open); and any import of real courses (Phase 30).
+
 ---
 
 ## 14. Personalisation & Notifications
@@ -1493,7 +1556,7 @@ are not saveable; appending one is a typed column and a migration, never a strin
 | **PrivateCollection** / **PrivateCollectionItem** | A person's own titled list (≤ 50 per account, ≤ 200 members, versioned). Members point at the owner's own SavedItems — both keys carry the owner, so a member cannot join someone else's item. One contiguous order, replaced whole under the version that was read. No slug, sharing or public page; distinct from an editorial Collection |
 | **ReadingHistory** / **WatchHistory** | **One row per account and target** — first and latest instant, nothing else; not an event stream. Only the newest 500 of each list are kept. **History is off until the person turns it on**; while off nothing is recorded, decided inside the write. Instants are the server's, and a late request never moves a newer instant backwards |
 | **QuranReadingProgress** | The account's one Quran position — a typed Ayah, versioned. It moves **only** when the reader chooses "Set as my reading position" under the version they read, so no page view, late beacon or replay can rewind it. No streaks and no completion claims |
-| **PersonalisationProfile** / **Interest** / **Goal** | Personalisation onboarding: explicit interests (public areas — Quran, Hadith, Library, Watch, Listen, Fatwa, News & Events, Global Network) and goals, plus the history switch. Optional, skippable, editable later and never a gate. Nothing is inferred from behaviour and nothing sensitive is asked. Learner level and preferred format are **not** collected: no delivered surface uses them, so they arrive with the phase that does (Learning, Phase 22) |
+| **PersonalisationProfile** / **Interest** / **Goal** | Personalisation onboarding: explicit interests (public areas — Quran, Hadith, Library, Watch, Listen, Fatwa, News & Events, Global Network) and goals, plus the history switch. Optional, skippable, editable later and never a gate. Nothing is inferred from behaviour and nothing sensitive is asked. Learner level and preferred format are **not** collected: no delivered surface uses them. Phase 22 delivered Course level and format as public catalogue filters a visitor chooses on each visit (§13.4), which need no stored preference, so they still are not collected; they arrive only with a surface that genuinely uses a stored preference |
 | **NotificationPreference** | A departure from the default for one category on one channel. Category `questions` (updates on the person's own Fatwa questions) on channel `in-app`, **on by default**. There is **no email notification channel**: nothing here is emailed, so no setting can reach Identity's verification, reset or security mail |
 | **Notification** | System-generated, one-directional, one account's: a translatable **kind** (`question-answered`, `question-declined`), its category, an optional **same-site path** (a CHECK and the service refuse schemes, hosts, protocol-relative and backslash forms, encoding, queries and dot segments), an idempotency key unique per account, created and read instants. Only the newest 200 are kept. Not a Message: no reply, participant or thread |
 | **NewsletterSubscriber** / **NewsletterConsentEvent** | §14.5 as built — below |
@@ -1542,7 +1605,7 @@ it); their releases exist so a future owner-approved purge has the same contract
 hard purge yet, so no purge workflow is wired to a surface.
 
 **Not delivered, and not owed by Phase 21:** course progress and any Course, Lesson or LearningPath
-reference (Phase 22); audio listening history; emailed notifications; campaign sending, segmentation
+reference (Learning's, delivered in Phase 22 — §13.4); audio listening history; emailed notifications; campaign sending, segmentation
 or any marketing automation; saved Fatwa rulings; and any staff access to a person's saved items,
 notes, history or notifications — no permission grants it.
 

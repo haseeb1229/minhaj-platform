@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { fatwaRuntime } from './fatwa';
+import { learningRuntime } from './learning';
 import { appLogger } from './logging';
 import { peopleRuntime } from './people';
 import { personalisationRuntime } from './personalisation';
@@ -11,7 +12,8 @@ import { personalisationRuntime } from './personalisation';
  * CLOSURE, FINISHED. Account closure is coordinated across owners at Layer 4,
  * each in its own transaction (SECURITY_BASELINE.md §19.1). An interruption
  * leaves rows only an owner's own reconciliation removes — People's live link,
- * Fatwa's question text, Personalisation's records — so each owner's bounded,
+ * Fatwa's question text, Personalisation's records, Learning's enrolments,
+ * progress and trial requests — so each owner's bounded,
  * idempotent reconciliation runs here on a timer, not only inside the next
  * closure somebody else happens to make.
  *
@@ -49,6 +51,9 @@ export async function runPersonalDataSweep(): Promise<void> {
   await step('closure-fatwa', () => fatwaRuntime().disposition.reconcileClosedAccounts());
   await step('closure-personalisation', () =>
     personalisationRuntime().account.reconcileClosedAccounts(),
+  );
+  await step('closure-learning', () =>
+    learningRuntime().account.reconcileClosedAccounts(),
   );
 }
 

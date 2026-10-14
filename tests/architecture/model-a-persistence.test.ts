@@ -580,6 +580,11 @@ describe('F1 — the production database package publishes no raw capability', (
         kind: 'context',
         slug: 'personalisation-notifications',
       },
+      // Phase 22. Learning is a bounded CONTEXT; its adapter is hosted here and
+      // owned there. The catalogue is administered through named acts, and a
+      // learner's own rows are read and written only with the account in the
+      // predicate.
+      learning: { kind: 'context', slug: 'learning' },
       email: { kind: 'layer0', concern: 'email' },
       'rate-limiting': { kind: 'layer0', concern: 'rate-limiting' },
       auditing: { kind: 'layer0', concern: 'auditing' },

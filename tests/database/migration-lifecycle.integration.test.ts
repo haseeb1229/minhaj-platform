@@ -504,6 +504,26 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'Notification',
         'NewsletterSubscriber',
         'NewsletterConsentEvent',
+        // Phase 22 — Learning: the public catalogue of Courses with their
+        // words, slug history, typed topics and teachers, modules and lessons;
+        // LearningPaths with their words, slug history and ordered Courses; and
+        // a person's own enrolments, lesson progress and trial-class requests.
+        'Course',
+        'CourseLabel',
+        'CourseSlugHistory',
+        'CourseTopic',
+        'CourseTeacher',
+        'CourseModule',
+        'CourseModuleLabel',
+        'Lesson',
+        'LessonLabel',
+        'LearningPath',
+        'LearningPathLabel',
+        'LearningPathSlugHistory',
+        'LearningPathCourse',
+        'Enrolment',
+        'LessonProgress',
+        'TrialClassRequest',
       ].sort(),
     );
   });

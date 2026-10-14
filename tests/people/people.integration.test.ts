@@ -1316,8 +1316,9 @@ describeLive('Phase 5 — People & Contributors over a live database', () => {
       // typed credit table per News family, Phase 14 `EventContributor` and
       // Phase 15 `CollectionContributor`, Phase 18 Quran's translator and
       // tafsir credits and the reciter of a `QuranRecitation`, Phase 19
-      // Hadith's translator and commentary credits, and Phase 20 the published
-      // contributor records a `FatwaPublication` attributes. Each is a
+      // Hadith's translator and commentary credits, Phase 20 the published
+      // contributor records a `FatwaPublication` attributes, and Phase 22 the
+      // teachers a Course names through `CourseTeacher`. Each is a
       // typed foreign key to Person, never a polymorphic pair — and none of them
       // grants the Person anything.
       const referencing = await admin.query<{ tableName: string }>(`
@@ -1333,6 +1334,7 @@ describeLive('Phase 5 — People & Contributors over a live database', () => {
         'AuthorProfile',
         'BookTranslator',
         'CollectionContributor',
+        'CourseTeacher',
         'EncyclopediaContributor',
         'EventContributor',
         'FatwaPublication',

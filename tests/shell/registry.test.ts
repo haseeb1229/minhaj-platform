@@ -140,16 +140,17 @@ describe('a deferred capability cannot be linked', () => {
     }
   });
 
-  it('records the two deferred domains rather than forgetting them', () => {
+  it('records the one deferred domain rather than forgetting it', () => {
     // Recording them is what lets the administrative status surface tell the
     // truth about the roadmap, and what lets the assertions above range over
     // the whole set instead of over whatever somebody remembered to add.
     //
     // `library` LEFT THIS LIST IN PHASE 8, `search` IN PHASE 17, `watch` IN
     // PHASE 10, `news-events` IN PHASE 13, `global` IN PHASE 16, `quran` IN
-    // PHASE 18, `hadith` IN PHASE 19 and `fatwa` IN PHASE 20, when each was
-    // delivered. Each is asserted delivered below rather than silently dropped.
-    for (const key of ['learn', 'donate']) {
+    // PHASE 18, `hadith` IN PHASE 19, `fatwa` IN PHASE 20 and `learn` IN
+    // PHASE 22, when each was delivered. Each is asserted delivered below
+    // rather than silently dropped.
+    for (const key of ['donate']) {
       const route = routeByKey(key);
 
       expect(route, key).not.toBeNull();
@@ -172,6 +173,7 @@ describe('a deferred capability cannot be linked', () => {
     const quran = SHELL_ROUTES.filter((entry) => entry.key.startsWith('quran.'));
     expect(quran.map((entry) => entry.key).sort()).toEqual([
       'quran.books',
+      'quran.courses',
       'quran.juz',
       'quran.read',
       'quran.recitations',
@@ -192,11 +194,13 @@ describe('a deferred capability cannot be linked', () => {
       );
       expect(entry.placements, entry.key).toEqual([]);
     }
-    // No owner exposes a public by-topic Article read, and Learning has not
-    // shipped: these related views have no route to link (ROUTE_MAP.md §5.2).
-    for (const key of ['quran.articles', 'quran.courses', 'quran.teachers'])
+    // No owner exposes a public by-topic Article read, and the teacher
+    // directory is Phase 23's: these related views have no route to link
+    // (ROUTE_MAP.md §5.2). Courses joined in Phase 22, once Learning offered a
+    // deterministic public by-topic read.
+    for (const key of ['quran.articles', 'quran.teachers'])
       expect(routeByKey(key), key).toBeNull();
-    for (const path of ['/quran/articles', '/quran/courses', '/quran/teachers'])
+    for (const path of ['/quran/articles', '/quran/teachers'])
       expect(
         SHELL_ROUTES.some((entry) => isAvailable(entry) && entry.path === path),
         path,
@@ -221,6 +225,7 @@ describe('a deferred capability cannot be linked', () => {
       'hadith.browse',
       'hadith.collections',
       'hadith.commentary',
+      'hadith.courses',
       'hadith.introduction',
       'hadith.research',
       'hadith.sciences',
@@ -235,16 +240,56 @@ describe('a deferred capability cannot be linked', () => {
       );
       expect(entry.placements, entry.key).toEqual([]);
     }
-    // No owner exposes a public by-topic Article read, and neither courses nor
-    // scholars have a deterministic owner read: these related views have no
-    // route to link (ROUTE_MAP.md §3.4, §5.2).
-    for (const key of ['hadith.articles', 'hadith.courses', 'hadith.scholars'])
+    // No owner exposes a public by-topic Article read, and scholars have no
+    // deterministic owner read: these related views have no route to link
+    // (ROUTE_MAP.md §3.4, §5.2). Courses joined in Phase 22.
+    for (const key of ['hadith.articles', 'hadith.scholars'])
       expect(routeByKey(key), key).toBeNull();
-    for (const path of ['/hadith/articles', '/hadith/courses', '/hadith/scholars'])
+    for (const path of ['/hadith/articles', '/hadith/scholars'])
       expect(
         SHELL_ROUTES.some((entry) => isAvailable(entry) && entry.path === path),
         path,
       ).toBe(false);
+  });
+
+  it('delivers Learn at /learn, public, linked and eligible, with only its Phase-22 surfaces', () => {
+    // Phase 22: the Learn landing, the Course catalogue, the learning paths and
+    // the trial-class explanation are genuine pages in all three locales, the
+    // same for every visitor, so each is eligible; a Course and a path are
+    // resources in the `courses` and `learning-paths` content segments.
+    const route = requireRoute('learn');
+    expect(route.path).toBe('/learn');
+    expect(route.visibility).toBe('public');
+    expect(route.availability).toBe('delivered');
+    expect(route.indexing).toBe('eligible');
+    expect(route.placements).toContain('primary');
+
+    const learn = SHELL_ROUTES.filter((entry) => entry.key.startsWith('learn.'));
+    expect(learn.map((entry) => entry.key).sort()).toEqual([
+      'learn.courses',
+      'learn.paths',
+      'learn.trial',
+    ]);
+    for (const entry of learn) {
+      expect(isAvailable(entry) && entry.availability, entry.key).toBe('delivered');
+      expect(isAvailable(entry) && entry.visibility, entry.key).toBe('public');
+      expect(isAvailable(entry) && entry.indexing, entry.key).toBe('eligible');
+      expect(isAvailable(entry) && entry.path, entry.key).toBe(
+        `/learn/${entry.key.slice('learn.'.length)}`,
+      );
+      expect(entry.placements, entry.key).toEqual([]);
+    }
+    // Live Learning, Training, Resources, Teachers and the Class Schedule are
+    // Phase 23's or later: no entry, so nothing can link them (ROUTE_MAP.md §5.2).
+    for (const absent of ['live', 'training', 'resources', 'teachers', 'schedule']) {
+      expect(routeByKey(`learn.${absent}`), absent).toBeNull();
+      expect(
+        SHELL_ROUTES.some(
+          (entry) => isAvailable(entry) && entry.path.startsWith(`/learn/${absent}`),
+        ),
+        absent,
+      ).toBe(false);
+    }
   });
 
   it('delivers Fatwa at /fatwa, public, linked, and excluded from the build-bound sitemap', () => {
@@ -499,7 +544,7 @@ describe('a deferred capability cannot be linked', () => {
   });
 
   it('refuses to resolve a deferred route as a renderable one', () => {
-    expect(() => requireRoute('learn')).toThrow(/deferred/);
+    expect(() => requireRoute('donate')).toThrow(/deferred/);
     expect(() => requireRoute('no-such-route')).toThrow(/registered/);
   });
 
@@ -587,6 +632,12 @@ describe('indexing eligibility is honest', () => {
       'global.centres',
       'global.countries',
       'home',
+      // Phase 22: the Learn landing, the Course catalogue, the learning paths
+      // and the trial-class explanation. Filtered and paged views are not routes.
+      'learn',
+      'learn.courses',
+      'learn.paths',
+      'learn.trial',
       // Phase 8: the Library landing page and its seven delivered surfaces;
       // Phase 9: five scholarly and periodical listings.
       'library',

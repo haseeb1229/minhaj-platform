@@ -204,15 +204,16 @@ function hrefsIn(page: Page): Promise<string[]> {
 }
 
 /**
- * No Hadith page links an Articles, Courses or Scholars view — none exists
- * (ROUTE_MAP.md §5.2), so a link to one would be a link to a 404.
+ * No Hadith page links an Articles or Scholars view — none exists
+ * (ROUTE_MAP.md §5.2), so a link to one would be a link to a 404. Courses is
+ * Learning's related view since Phase 22.
  */
 async function expectNoAbsentLinks(page: Page, where: string): Promise<void> {
   const hrefs = await page
     .locator('a[href]')
     .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
   expect(
-    hrefs.filter((href) => /\/hadith\/(articles|courses|scholars)\b/.test(href)),
+    hrefs.filter((href) => /\/hadith\/(articles|scholars)\b/.test(href)),
     where,
   ).toEqual([]);
 }
@@ -557,6 +558,7 @@ test.describe('while no collection is activated', () => {
       'books',
       'videos',
       'research',
+      'courses',
     ]) {
       const response = await page.goto(`/en/hadith/${section}`);
       expect(response?.status(), section).toBe(200);
@@ -584,7 +586,6 @@ test.describe('while no collection is activated', () => {
       `/en/hadith/sciences/${slug.science}`,
       `/en/hadith/topics/${slug.topic}`,
       '/en/hadith/articles',
-      '/en/hadith/courses',
       '/en/hadith/scholars',
     ]) {
       const response = await request.get(missing, { maxRedirects: 0 });
@@ -633,6 +634,7 @@ test.describe('a fixture activation', () => {
       '/en/hadith/books',
       '/en/hadith/videos',
       '/en/hadith/research',
+      '/en/hadith/courses',
     ])
       await visitFixture(page, target);
 
@@ -655,6 +657,7 @@ test.describe('a fixture activation', () => {
       'books',
       'videos',
       'research',
+      'courses',
     ])
       expect(hrefs, section).toContain(`/en/hadith/${section}`);
     expect(hrefs).toContain(`/en/hadith/collections/${slug.collection}`);

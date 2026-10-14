@@ -49,6 +49,17 @@ const SAVEABLE_PAGES: readonly RegExp[] = [
   new RegExp(`^/watch/videos/${SLUG}$`),
   /^\/quran\/surah\/[1-9][0-9]{0,2}\/[1-9][0-9]{0,2}$/,
   new RegExp(`^/hadith/${SLUG}/[1-9][0-9]{0,5}$`),
+  // Phase 22: a public Course page, whose island offers "sign in to enrol".
+  new RegExp(`^/learn/courses/${SLUG}$`),
+];
+
+/**
+ * Phase 22: the person's own Learning pages that are addressed by a slug — a
+ * Course they are enrolled on and a path they stand on.
+ */
+const OWN_LEARNING_PAGES: readonly RegExp[] = [
+  new RegExp(`^/my/learning/courses/${SLUG}$`),
+  new RegExp(`^/my/learning/paths/${SLUG}$`),
 ];
 
 /** Destinations that actually exist and a sign-in may return to. */
@@ -76,6 +87,9 @@ function isKnownDestination(pathname: string, locale: string): boolean {
       `/${locale}/my/settings/interests`,
       `/${locale}/my/settings/notifications`,
       `/${locale}/my/settings/privacy`,
+      // Phase 22 — Learning's `/my/learning` and course progress.
+      `/${locale}/my/learning`,
+      `/${locale}/my/progress/courses`,
     ]).has(path)
   )
     return true;
@@ -88,7 +102,9 @@ function isKnownDestination(pathname: string, locale: string): boolean {
   const prefix = `/${locale}`;
   return (
     path.startsWith(`${prefix}/`) &&
-    SAVEABLE_PAGES.some((pattern) => pattern.test(path.slice(prefix.length)))
+    [...SAVEABLE_PAGES, ...OWN_LEARNING_PAGES].some((pattern) =>
+      pattern.test(path.slice(prefix.length)),
+    )
   );
 }
 

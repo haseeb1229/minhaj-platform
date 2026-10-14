@@ -82,6 +82,12 @@ import {
   verifyRestoredPhase21,
   writePhase21Fixture,
 } from '../src/lifecycle/phase21-fixture.ts';
+import {
+  capturePhase22Fixture,
+  newPhase22Fixture,
+  verifyRestoredPhase22,
+  writePhase22Fixture,
+} from '../src/lifecycle/phase22-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -211,6 +217,7 @@ const quranFixture = newPhase18Fixture();
 const hadithFixture = newPhase19Fixture();
 const fatwaFixture = newPhase20Fixture();
 const personalFixture = newPhase21Fixture();
+const learningFixture = newPhase22Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -469,6 +476,21 @@ try {
   const personalSnapshot = await capturePhase21Fixture(admin, personalFixture);
   report('personal fixture', `run ${personalFixture.runId}`);
 
+  // Phase-22 Learning, with NON_LEARNING_FIXTURE sentinels and `.invalid`
+  // addresses only: a published live Course classified under the Phase-3B Topic
+  // with the Phase-5 Person as its teacher, two ordered modules of three
+  // ordered lessons and a former slug; a published self-paced Course; a draft
+  // Course; a published path holding both published Courses in order with a
+  // former slug of its own; two accounts' enrolments, lesson progress and a
+  // trial request; and the search passes owed for the Course and the path.
+  const learningReferences = {
+    topicId: taxonomyFixture.childTopicId,
+    personId: peopleFixture.linkedPersonId,
+  };
+  await writePhase22Fixture(admin, learningFixture, learningReferences);
+  const learningSnapshot = await capturePhase22Fixture(admin, learningFixture);
+  report('learning fixture', `run ${learningFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -593,6 +615,15 @@ try {
       personalFixture,
       personalSnapshot,
       personalReferences,
+    ),
+  );
+  report(
+    'learning recovery',
+    await verifyRestoredPhase22(
+      restored,
+      learningFixture,
+      learningSnapshot,
+      learningReferences,
     ),
   );
 
@@ -939,6 +970,37 @@ try {
           'NewsletterConsentEvent ALTER',
           'ALTER TABLE [dbo].[NewsletterConsentEvent] ADD [probe] INT NULL;',
         ],
+        // Phase 22. A restored runtime can neither delete a Course or a path,
+        // rewrite a Course's identifier, free a reserved slug, move a lesson to
+        // another Course or module, edit a person's enrolment, progress or trial
+        // request, delete the teacher a Course names, nor alter a Learning table.
+        ['Course DELETE', 'DELETE FROM [dbo].[Course];'],
+        ['Course id UPDATE', 'UPDATE [dbo].[Course] SET [id]=[id];'],
+        ['LearningPath DELETE', 'DELETE FROM [dbo].[LearningPath];'],
+        ['CourseSlugHistory DELETE', 'DELETE FROM [dbo].[CourseSlugHistory];'],
+        [
+          'LearningPathSlugHistory UPDATE',
+          'UPDATE [dbo].[LearningPathSlugHistory] SET [pathId]=[pathId];',
+        ],
+        ['Lesson module UPDATE', 'UPDATE [dbo].[Lesson] SET [moduleId]=[moduleId];'],
+        ['Enrolment UPDATE', 'UPDATE [dbo].[Enrolment] SET [courseId]=[courseId];'],
+        [
+          'LessonProgress UPDATE',
+          'UPDATE [dbo].[LessonProgress] SET [completedAt]=[completedAt];',
+        ],
+        [
+          'TrialClassRequest UPDATE',
+          'UPDATE [dbo].[TrialClassRequest] SET [courseId]=[courseId];',
+        ],
+        [
+          'Teacher Person DELETE',
+          `DELETE FROM [dbo].[Person] WHERE [id]=N'${peopleFixture.linkedPersonId}';`,
+        ],
+        ['Course ALTER', 'ALTER TABLE [dbo].[Course] ADD [probe] INT NULL;'],
+        [
+          'LessonProgress ALTER',
+          'ALTER TABLE [dbo].[LessonProgress] ADD [probe] INT NULL;',
+        ],
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -996,6 +1058,12 @@ try {
         personalFixture,
         personalSnapshot,
         personalReferences,
+      );
+      await verifyRestoredPhase22(
+        restored,
+        learningFixture,
+        learningSnapshot,
+        learningReferences,
       );
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 

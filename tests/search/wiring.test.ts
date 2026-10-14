@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { EditorialPublicReaderPort } from '../../packages/contracts/src/editorial/index.ts';
 import type { FatwaPublicReaderPort } from '../../packages/contracts/src/fatwa/index.ts';
 import type { HadithPublicReaderPort } from '../../packages/contracts/src/hadith/index.ts';
+import type { LearningPublicReaderPort } from '../../packages/contracts/src/learning/index.ts';
 import type { LibraryPublicReaderPort } from '../../packages/contracts/src/library/index.ts';
 import type { MediaPublicReaderPort } from '../../packages/contracts/src/media/index.ts';
 import type { PeopleReaderPort } from '../../packages/contracts/src/people/index.ts';
@@ -22,6 +23,10 @@ const PUBLIC_CITATION = '11111111-1111-4111-8111-111111111111';
 const WITHHELD_CITATION = '22222222-2222-4222-8222-222222222222';
 const PUBLIC_RULING = '33333333-3333-4333-8333-333333333333';
 const WITHDRAWN_RULING = '44444444-4444-4444-8444-444444444444';
+const PUBLIC_COURSE = '55555555-5555-4555-8555-555555555555';
+const ARCHIVED_COURSE = '66666666-6666-4666-8666-666666666666';
+const PUBLIC_PATH = '77777777-7777-4777-8777-777777777777';
+const DRAFT_PATH = '88888888-8888-4888-8888-888888888888';
 
 function readers() {
   const taxonomy = {
@@ -88,7 +93,19 @@ function readers() {
         .filter((id) => id === PUBLIC_RULING)
         .map((fatwaId) => ({ fatwaId, slug: 'non-fatwa-fixture-ruling' })),
   } as unknown as FatwaPublicReaderPort;
-  return { taxonomy, people, editorial, library, media, quran, hadith, fatwa };
+  const learning = {
+    // Only the first Course and the first path are published now; the others
+    // were archived or never published — the owner simply does not return them.
+    publicCourseTargets: async (ids: readonly string[]) =>
+      ids
+        .filter((id) => id === PUBLIC_COURSE)
+        .map((id) => ({ id, slug: 'non-learning-fixture-course' })),
+    publicPathTargets: async (ids: readonly string[]) =>
+      ids
+        .filter((id) => id === PUBLIC_PATH)
+        .map((id) => ({ id, slug: 'non-learning-fixture-path' })),
+  } as unknown as LearningPublicReaderPort;
+  return { taxonomy, people, editorial, library, media, quran, hadith, fatwa, learning };
 }
 
 describe('searchWiring', () => {
@@ -134,6 +151,18 @@ describe('searchWiring', () => {
     const { targets } = searchWiring(readers());
     const found = await targets.video(['1', 'withdrawn']);
     expect([...found.entries()]).toEqual([['1', '/watch/videos/video%201']]);
+  });
+
+  it('addresses a published Course and LearningPath at /learn, and omits ones Learning withholds', async () => {
+    const { targets } = searchWiring(readers());
+    const courses = await targets.course([PUBLIC_COURSE, ARCHIVED_COURSE, 'not-an-id']);
+    expect([...courses.entries()]).toEqual([
+      [PUBLIC_COURSE, '/learn/courses/non-learning-fixture-course'],
+    ]);
+    const paths = await targets['learning-path']([PUBLIC_PATH, DRAFT_PATH]);
+    expect([...paths.entries()]).toEqual([
+      [PUBLIC_PATH, '/learn/paths/non-learning-fixture-path'],
+    ]);
   });
 
   it('addresses an Ayah at its permanent citation, and omits one Quran withholds', async () => {

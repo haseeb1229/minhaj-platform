@@ -202,13 +202,16 @@ function hrefsIn(page: Page): Promise<string[]> {
     .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
 }
 
-/** No Quran page links a course or teacher surface — they do not exist (§5). */
+/**
+ * No Quran page links a teacher surface — none exists (§5). `/quran/courses` is
+ * Learning's related view since Phase 22, so it is no longer absent.
+ */
 async function expectNoLearningLinks(page: Page, where: string): Promise<void> {
   const hrefs = await page
     .locator('a[href]')
     .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
   expect(
-    hrefs.filter((href) => /\/quran\/(courses|teachers)\b/.test(href)),
+    hrefs.filter((href) => /\/quran\/teachers\b/.test(href)),
     where,
   ).toEqual([]);
 }
@@ -436,7 +439,6 @@ test.describe('while no corpus is active', () => {
       `/en/quran/topics/${slug.topic}`,
       '/en/listen/recitations',
       '/ur/listen/recitations',
-      '/en/quran/courses',
       '/en/quran/teachers',
     ]) {
       const response = await request.get(missing, { maxRedirects: 0 });

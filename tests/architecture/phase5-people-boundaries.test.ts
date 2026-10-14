@@ -393,8 +393,8 @@ describe('nothing in People can grant, store or fabricate a capability', () => {
     // with Editorial (Phase 6); `question.receive` and `fatwa.publish` with
     // Fatwa (Phase 20), catalogued but EXTERNALLY GATED — bundled into no role,
     // because OPEN_DECISIONS.md §6.3 reserves who receives them to the
-    // organisation; `teaching.perform` still belongs to Learning, which has not
-    // shipped.
+    // organisation; `teaching.perform` belongs to Phase 23's teacher slice —
+    // Phase 22 shipped Learning's catalogue keys and deliberately not it.
     const catalogue: readonly string[] = PERMISSION_CATALOGUE.map((entry) => entry.key);
     const gated: readonly string[] = EXTERNALLY_GATED_PERMISSIONS;
     const bundled: readonly string[] = PLATFORM_ADMINISTRATOR_PERMISSIONS;

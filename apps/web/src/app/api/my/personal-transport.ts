@@ -32,6 +32,11 @@ import {
  *   4. an answer is a fixed vocabulary. Input, note text, targets and error
  *      text are never echoed and never logged — an outage is logged by
  *      operation name only.
+ *
+ * Phase 22: Learning's handlers beneath `/api/my/learning` are admitted by
+ * the same steps. Only the vocabulary differs — a Learning refusal is mapped by
+ * Learning's own `learningFailure`, handed in as `failure` — so no handler
+ * gets a second, drifting copy of the admission order.
  */
 
 /** The custom header every personal POST carries. No HTML form can set it. */
@@ -66,6 +71,9 @@ const STATUS: Readonly<Record<string, number>> = {
   conflict: 409,
   'invalid-state': 409,
   limit: 409,
+  // Phase 22: a Course this act may not name now, or one the person is not on.
+  'course-unavailable': 409,
+  'not-enrolled': 409,
   'too-large': 413,
   unsupported: 415,
   'rate-limited': 429,
@@ -172,6 +180,9 @@ async function boundedJson(
  * `quiet` is for a record that is never worth a visible failure — a history
  * entry: after admission, any refusal is logged by operation name and answered
  * as success with no content.
+ *
+ * `failure` names the owner's own refusal mapping; Personalisation's is the
+ * default. Whatever it returns is still answered through the one status table.
  */
 export async function personalMutation<T>(
   request: Request,
@@ -179,6 +190,7 @@ export async function personalMutation<T>(
     readonly operation: string;
     readonly schema: z.ZodType<T>;
     readonly quiet?: boolean;
+    readonly failure?: (error: unknown) => string;
   },
   work: (actor: PersonalActor, value: T) => Promise<Response>,
 ): Promise<Response> {
@@ -204,7 +216,7 @@ export async function personalMutation<T>(
   try {
     return await work(actor, parsed.data);
   } catch (error) {
-    const failure = personalFailure(error);
+    const failure = (options.failure ?? personalFailure)(error);
     if (options.quiet) {
       appLogger().warn({ operation: options.operation }, 'Personal record was not kept.');
       return noContent();

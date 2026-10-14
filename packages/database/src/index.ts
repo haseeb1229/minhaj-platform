@@ -220,3 +220,14 @@ export {
   createPersonalSaved,
   createPersonalSettings,
 } from './adapters/personalisation-notifications/index.ts';
+
+/* ---- Learning (context-owned) ------------------------------------------- */
+
+export {
+  LearningDataError,
+  createLearner,
+  createLearningDisposition,
+  createLearningExport,
+  createLearningPersistence,
+  createLearningPublicReader,
+} from './adapters/learning/index.ts';

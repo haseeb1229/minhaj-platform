@@ -252,6 +252,26 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'Notification',
       'NewsletterSubscriber',
       'NewsletterConsentEvent',
+      // Phase 22 — Learning's Courses with their words, slug history, topics,
+      // teachers, modules and lessons; LearningPaths with their words, slug
+      // history and ordered Courses; and a person's enrolments, lesson progress
+      // and trial-class requests.
+      'Course',
+      'CourseLabel',
+      'CourseSlugHistory',
+      'CourseTopic',
+      'CourseTeacher',
+      'CourseModule',
+      'CourseModuleLabel',
+      'Lesson',
+      'LessonLabel',
+      'LearningPath',
+      'LearningPathLabel',
+      'LearningPathSlugHistory',
+      'LearningPathCourse',
+      'Enrolment',
+      'LessonProgress',
+      'TrialClassRequest',
     ]) {
       expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }
@@ -262,16 +282,21 @@ describe('Phase 1 Chunk 2 migration convention', () => {
     // `Quran` table; `Hadith` left it when Phase 19 delivered the record and
     // `Fatwa` when Phase 20 delivered the ruling; a context-less `Question`
     // is still no phase's. `PrivateCollection` and `Notification` left it when
-    // Phase 21 delivered them; Learning's progress is still Learning's.)
+    // Phase 21 delivered them, and `Course` when Phase 22 did; a bare
+    // `Teacher`, a Course-level `CourseProgress` and Phase 23's scheduling
+    // are still no delivered phase's.)
     for (const table of [
       'Quran',
       'Book',
       'Question',
       'Scholar',
       'Teacher',
-      'Course',
       'Message',
       'CourseProgress',
+      'ClassSession',
+      'Availability',
+      'Attendance',
+      'Booking',
       'Membership',
       'Donation',
       'MigrationProvenance',
