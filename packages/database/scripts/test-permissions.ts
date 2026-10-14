@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { newPhase5Fixture, writePhase5Fixture } from '../src/lifecycle/phase5-fixture.ts';
 import {
   newPhase6Fixture,
@@ -779,6 +779,7 @@ try {
     globalProvisioned: number;
     quranProvisioned: number;
     hadithProvisioned: number;
+    newsletterProvisioned: number;
   }>(`
     SELECT COUNT_BIG(*) AS total,
            SUM(CASE WHEN [action] = N'phase1.permission.probe' THEN 1 ELSE 0 END) AS probe,
@@ -812,17 +813,21 @@ try {
              AS quranProvisioned,
            SUM(CASE WHEN [action] = N'hadith.permissions.provisioned'
                      AND [actorType] = N'migration' THEN 1 ELSE 0 END)
-             AS hadithProvisioned
+             AS hadithProvisioned,
+           SUM(CASE WHEN [action] = N'newsletter.permissions.provisioned'
+                     AND [actorType] = N'migration' THEN 1 ELSE 0 END)
+             AS newsletterProvisioned
     FROM [dbo].[AuditLog];
   `);
 
-  // Exactly eleven rows: the Phase-3B through Phase-19 privilege extensions
-  // (Phase 10's and Phase 16's included), and this run's probe. Naming every migration action is load-bearing:
+  // Exactly twelve rows: the Phase-3B through Phase-21 privilege extensions
+  // (Phase 10's and Phase 16's included; Phase 20 bundles nothing and so
+  // records nothing), and this run's probe. Naming every migration action is load-bearing:
   // deriving the expected total from whatever provisioning rows happened to
   // survive would pass if a phase omitted its own audit, and each privilege
   // extension must be able to show that it paid for itself
   // (SECURITY_BASELINE.md §8.1).
-  const EXPECTED_AUDIT_ROWS = 11;
+  const EXPECTED_AUDIT_ROWS = 12;
 
   if (
     Number(survivor?.taxonomyProvisioned ?? 0) !== 1 ||
@@ -835,6 +840,7 @@ try {
     Number(survivor?.globalProvisioned ?? 0) !== 1 ||
     Number(survivor?.quranProvisioned ?? 0) !== 1 ||
     Number(survivor?.hadithProvisioned ?? 0) !== 1 ||
+    Number(survivor?.newsletterProvisioned ?? 0) !== 1 ||
     Number(survivor?.probe ?? 0) !== 1 ||
     Number(survivor?.tampered ?? -1) !== 0 ||
     Number(survivor?.total ?? 0) !== EXPECTED_AUDIT_ROWS
@@ -844,7 +850,8 @@ try {
       `expected ${EXPECTED_AUDIT_ROWS} rows with 1 taxonomy provisioning, ` +
         `1 navigation provisioning, 1 people provisioning, 1 editorial provisioning, ` +
         `1 library provisioning, 1 search provisioning, 1 media provisioning, ` +
-        `1 global provisioning, 1 quran provisioning, 1 hadith provisioning, 1 probe and ` +
+        `1 global provisioning, 1 quran provisioning, 1 hadith provisioning, 1 newsletter provisioning, ` +
+        `1 probe and ` +
         `0 tampered; found ${survivor?.total ?? 0} rows, ` +
         `${survivor?.taxonomyProvisioned ?? 0} taxonomy provisioning, ` +
         `${survivor?.navigationProvisioned ?? 0} navigation provisioning, ` +
@@ -856,12 +863,13 @@ try {
         `${survivor?.globalProvisioned ?? 0} global provisioning, ` +
         `${survivor?.quranProvisioned ?? 0} quran provisioning, ` +
         `${survivor?.hadithProvisioned ?? 0} hadith provisioning, ` +
+        `${survivor?.newsletterProvisioned ?? 0} newsletter provisioning, ` +
         `${survivor?.probe ?? 0} probe, ${survivor?.tampered ?? 0} tampered`,
     );
   } else {
     pass(
       'audit rows unmodified',
-      'the probe row and all ten exact migration records are intact after ' +
+      'the probe row and all eleven exact migration records are intact after ' +
         'UPDATE/DELETE attempts',
     );
   }
@@ -4833,6 +4841,443 @@ try {
     );
   } else {
     fail('Fatwa procedures EXECUTE exact', JSON.stringify(fatwaExecute ?? null));
+  }
+
+  // ---- Phase 21: Personalisation & Notifications, in three postures ----------
+  //
+  // OWNER DATA — a profile and its answers, saved items with their bookmarks and
+  // notes, private collections, history, the Quran position, notification
+  // preferences and notifications — is read, written and DELETED by the
+  // runtime, because the owner may remove every one of them and closure
+  // disposition must. What identifies a row — its owner, its typed target, its
+  // creation instant — is never UPDATEd: a saved item cannot be repointed at
+  // another target or another account, and a notification can only be marked
+  // read.
+  //
+  // THE NEWSLETTER SUBSCRIPTION changes state but is never deleted by the
+  // runtime, and its digest is never rewritten. CONSENT EVIDENCE is SELECT and
+  // INSERT only (and a trigger refuses the rest even to a privileged session,
+  // which `db:migrate:test` proves).
+  //
+  // Naming a target grants nothing on its owner's table: the runtime gains no
+  // DELETE on an Article, Work or Video and no write on an Ayah or citation,
+  // and no Identity table's posture moves.
+  //
+  // Every statement below is REAL SQL as the runtime principal over synthetic
+  // NON_PERSONALISATION_FIXTURE rows; the two accounts are the owner's rows.
+  const personalRun = randomUUID().replaceAll('-', '').slice(0, 16);
+  const personalAt = '2026-10-05T00:00:00';
+  const personalLater = '2026-10-05T01:00:00';
+  const personalOwner = randomUUID();
+  const personalOther = randomUUID();
+  await admin.query(
+    [personalOwner, personalOther]
+      .map(
+        (id) =>
+          `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled])
+             VALUES (N'${id}',N'NON_PERSONALISATION_FIXTURE account',N'${id}@personalisation-proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);`,
+      )
+      .join('\n'),
+  );
+  const [personalAyah] = await admin.query<{ surahNumber: number; ayahNumber: number }>(
+    'SELECT TOP 1 [surahNumber], [ayahNumber] FROM [dbo].[Ayah] ORDER BY [surahNumber], [ayahNumber];',
+  );
+  if (personalAyah === undefined)
+    throw new Error(
+      'The Phase-18 proof above wrote no Ayah for Personalisation to name.',
+    );
+  const personalSaved = {
+    article: randomUUID(),
+    work: randomUUID(),
+    video: randomUUID(),
+    ayah: randomUUID(),
+    hadith: randomUUID(),
+  };
+  const personalCollection = randomUUID();
+  const personalReading = randomUUID();
+  const personalNotification = randomUUID();
+  const personalSubscriber = randomUUID();
+  const personalHash = (label: string): string =>
+    createHash('sha256')
+      .update(`NON_PERSONALISATION_FIXTURE ${personalRun} ${label}`)
+      .digest('hex');
+  const savedColumns =
+    '[id],[userId],[articleId],[workId],[videoId],[surahNumber],[ayahNumber],[hadithCitationId],[createdAt]';
+
+  for (const [label, statement, detail] of [
+    [
+      'Personalisation profile and answers INSERT',
+      `INSERT INTO [dbo].[PersonalisationProfile] ([userId],[onboarding],[historyEnabled],[version],[createdAt],[updatedAt]) VALUES (N'${personalOwner}',NULL,1,1,'${personalAt}','${personalAt}');
+       INSERT INTO [dbo].[PersonalisationInterest] ([userId],[interest]) VALUES (N'${personalOwner}',N'quran'),(N'${personalOwner}',N'watch');
+       INSERT INTO [dbo].[PersonalisationGoal] ([userId],[goal]) VALUES (N'${personalOwner}',N'follow-lectures');`,
+      'an explicit profile with interests and a goal',
+    ],
+    [
+      'SavedItem INSERT, one per typed target',
+      `INSERT INTO [dbo].[SavedItem] (${savedColumns}) VALUES
+         (N'${personalSaved.article}',N'${personalOwner}',N'${editorialFixture.articleId}',NULL,NULL,NULL,NULL,NULL,'${personalAt}'),
+         (N'${personalSaved.work}',N'${personalOwner}',NULL,N'${libraryWorkId}',NULL,NULL,NULL,NULL,'${personalAt}'),
+         (N'${personalSaved.video}',N'${personalOwner}',NULL,NULL,N'${firstVideoId}',NULL,NULL,NULL,'${personalAt}'),
+         (N'${personalSaved.ayah}',N'${personalOwner}',NULL,NULL,NULL,${String(personalAyah.surahNumber)},${String(personalAyah.ayahNumber)},NULL,'${personalAt}'),
+         (N'${personalSaved.hadith}',N'${personalOwner}',NULL,NULL,NULL,NULL,NULL,N'${hadithCitation}','${personalAt}'),
+         (N'${randomUUID()}',N'${personalOther}',N'${editorialFixture.articleId}',NULL,NULL,NULL,NULL,NULL,'${personalAt}');`,
+      'an Article, a Work, a Video, an Ayah and a Hadith citation, each a typed key',
+    ],
+    [
+      'Bookmark, Note and PrivateCollection INSERT',
+      `INSERT INTO [dbo].[Bookmark] ([savedItemId],[createdAt]) VALUES (N'${personalSaved.ayah}','${personalAt}');
+       INSERT INTO [dbo].[Note] ([savedItemId],[body],[version],[createdAt],[updatedAt]) VALUES (N'${personalSaved.hadith}',N'NON_PERSONALISATION_FIXTURE_NOTE synthetic note',1,'${personalAt}','${personalAt}');
+       INSERT INTO [dbo].[PrivateCollection] ([id],[userId],[title],[description],[version],[createdAt],[updatedAt]) VALUES (N'${personalCollection}',N'${personalOwner}',N'NON_PERSONALISATION_FIXTURE_COLLECTION',NULL,1,'${personalAt}','${personalAt}');
+       INSERT INTO [dbo].[PrivateCollectionItem] ([collectionId],[savedItemId],[userId],[position],[addedAt]) VALUES
+         (N'${personalCollection}',N'${personalSaved.article}',N'${personalOwner}',0,'${personalAt}'),
+         (N'${personalCollection}',N'${personalSaved.video}',N'${personalOwner}',1,'${personalAt}');`,
+      'a bookmark, a private note and an ordered private collection',
+    ],
+    [
+      'History, Quran position and notification INSERT',
+      `INSERT INTO [dbo].[ReadingHistory] ([id],[userId],[articleId],[firstReadAt],[lastReadAt]) VALUES (N'${personalReading}',N'${personalOwner}',N'${editorialFixture.articleId}','${personalAt}','${personalAt}');
+       INSERT INTO [dbo].[WatchHistory] ([userId],[videoId],[firstWatchedAt],[lastWatchedAt]) VALUES (N'${personalOwner}',N'${firstVideoId}','${personalAt}','${personalAt}');
+       INSERT INTO [dbo].[QuranReadingProgress] ([userId],[surahNumber],[ayahNumber],[version],[updatedAt]) VALUES (N'${personalOwner}',${String(personalAyah.surahNumber)},${String(personalAyah.ayahNumber)},1,'${personalAt}');
+       INSERT INTO [dbo].[NotificationPreference] ([userId],[category],[channel],[enabled],[updatedAt]) VALUES (N'${personalOwner}',N'questions',N'in-app',1,'${personalAt}');
+       INSERT INTO [dbo].[Notification] ([id],[userId],[kind],[category],[destination],[idempotencyKey],[createdAt]) VALUES (N'${personalNotification}',N'${personalOwner}',N'question-answered',N'questions',N'/en/my/questions/${randomUUID()}',N'lp-${personalRun}','${personalAt}');`,
+      'reading and watch history, one Quran position, a preference and a notification',
+    ],
+    [
+      'Owner data UPDATE as granted',
+      `UPDATE [dbo].[PersonalisationProfile] SET [onboarding]=N'completed',[historyEnabled]=0,[version]=[version]+1,[updatedAt]='${personalLater}' WHERE [userId]=N'${personalOwner}';
+       UPDATE [dbo].[Note] SET [body]=N'NON_PERSONALISATION_FIXTURE_NOTE revised',[version]=[version]+1,[updatedAt]='${personalLater}' WHERE [savedItemId]=N'${personalSaved.hadith}';
+       UPDATE [dbo].[PrivateCollection] SET [title]=N'NON_PERSONALISATION_FIXTURE_COLLECTION renamed',[description]=N'NON_PERSONALISATION_FIXTURE description',[version]=[version]+1,[updatedAt]='${personalLater}' WHERE [id]=N'${personalCollection}';
+       UPDATE [dbo].[PrivateCollectionItem] SET [position]=[position]+10 WHERE [collectionId]=N'${personalCollection}';
+       UPDATE [dbo].[ReadingHistory] SET [lastReadAt]='${personalLater}' WHERE [id]=N'${personalReading}';
+       UPDATE [dbo].[WatchHistory] SET [lastWatchedAt]='${personalLater}' WHERE [userId]=N'${personalOwner}';
+       UPDATE [dbo].[QuranReadingProgress] SET [version]=[version]+1,[updatedAt]='${personalLater}' WHERE [userId]=N'${personalOwner}';
+       UPDATE [dbo].[NotificationPreference] SET [enabled]=0,[updatedAt]='${personalLater}' WHERE [userId]=N'${personalOwner}';
+       UPDATE [dbo].[Notification] SET [readAt]='${personalLater}' WHERE [id]=N'${personalNotification}';`,
+      'answers, a note, a collection and its order, history instants, a position, a preference, read',
+    ],
+    [
+      'NewsletterSubscriber and consent INSERT',
+      `INSERT INTO [dbo].[NewsletterSubscriber] ([id],[emailDigest],[digestKeyVersion],[email],[state],[locale],[generation],[confirmTokenHash],[confirmSalt],[confirmExpiresAt],[unsubscribeTokenHash],[unsubscribeSalt],[tokenKeyVersion],[submittedAt],[version],[updatedAt]) VALUES
+         (N'${personalSubscriber}',N'${personalHash('digest')}',1,N'subscriber-${personalRun}@personalisation-proof.invalid',N'pending',N'ur',1,N'${personalHash('confirm')}',N'${personalHash('confirm-salt')}','${personalLater}',N'${personalHash('unsubscribe')}',N'${personalHash('unsubscribe-salt')}',1,'${personalAt}',1,'${personalAt}');
+       INSERT INTO [dbo].[NewsletterConsentEvent] ([id],[subscriberId],[event],[purpose],[noticeVersion],[source],[locale],[occurredAt]) VALUES
+         (N'${randomUUID()}',N'${personalSubscriber}',N'submitted',N'newsletter',N'NON_PERSONALISATION_FIXTURE_NOTICE',N'newsletter-page',N'ur','${personalAt}');`,
+      'a pending subscription holding only link hashes, and its submission evidence',
+    ],
+    [
+      'NewsletterSubscriber state UPDATE',
+      `UPDATE [dbo].[NewsletterSubscriber] SET [state]=N'confirmed',[confirmTokenHash]=NULL,[confirmSalt]=NULL,[confirmExpiresAt]=NULL,[confirmedAt]='${personalLater}',[version]=[version]+1,[updatedAt]='${personalLater}' WHERE [id]=N'${personalSubscriber}';
+       INSERT INTO [dbo].[NewsletterConsentEvent] ([id],[subscriberId],[event],[purpose],[noticeVersion],[source],[locale],[occurredAt]) VALUES
+         (N'${randomUUID()}',N'${personalSubscriber}',N'confirmed',N'newsletter',N'NON_PERSONALISATION_FIXTURE_NOTICE',N'email-link',N'ur','${personalLater}');`,
+      'confirmed, with its confirmation evidence appended',
+    ],
+  ] as const)
+    await expectAllowed(app, label, statement, detail);
+
+  // The schema's own rules hold for the runtime as for the owner.
+  await expectRefusedByConstraint(
+    app,
+    'SavedItem target saved twice by one account',
+    `INSERT INTO [dbo].[SavedItem] (${savedColumns}) VALUES (N'${randomUUID()}',N'${personalOwner}',N'${editorialFixture.articleId}',NULL,NULL,NULL,NULL,NULL,'${personalAt}');`,
+    DUPLICATE_KEY,
+    'SavedItem_article_key',
+  );
+  await expectRefusedByConstraint(
+    app,
+    'Notification destination off this site',
+    `INSERT INTO [dbo].[Notification] ([id],[userId],[kind],[category],[destination],[idempotencyKey],[createdAt]) VALUES (N'${randomUUID()}',N'${personalOwner}',N'question-answered',N'questions',N'https://example.invalid/x',N'lp-${personalRun}-off-site','${personalAt}');`,
+    CONSTRAINT_VIOLATION,
+    'Notification_ck',
+  );
+
+  // Nothing that identifies a row is rewritten, a subscription is never deleted,
+  // consent evidence is never changed, and naming a target grants nothing over it.
+  for (const [label, statement] of [
+    [
+      'SavedItem target UPDATE denied',
+      'UPDATE [dbo].[SavedItem] SET [articleId]=[articleId];',
+    ],
+    ['SavedItem owner UPDATE denied', 'UPDATE [dbo].[SavedItem] SET [userId]=[userId];'],
+    ['Bookmark UPDATE denied', 'UPDATE [dbo].[Bookmark] SET [createdAt]=[createdAt];'],
+    [
+      'PersonalisationInterest UPDATE denied',
+      'UPDATE [dbo].[PersonalisationInterest] SET [interest]=[interest];',
+    ],
+    [
+      'PersonalisationGoal UPDATE denied',
+      'UPDATE [dbo].[PersonalisationGoal] SET [goal]=[goal];',
+    ],
+    [
+      'PersonalisationProfile owner UPDATE denied',
+      'UPDATE [dbo].[PersonalisationProfile] SET [userId]=[userId];',
+    ],
+    [
+      'PersonalisationProfile createdAt UPDATE denied',
+      'UPDATE [dbo].[PersonalisationProfile] SET [createdAt]=[createdAt];',
+    ],
+    ['Note anchor UPDATE denied', 'UPDATE [dbo].[Note] SET [savedItemId]=[savedItemId];'],
+    [
+      'PrivateCollection owner UPDATE denied',
+      'UPDATE [dbo].[PrivateCollection] SET [userId]=[userId];',
+    ],
+    [
+      'PrivateCollectionItem member UPDATE denied',
+      'UPDATE [dbo].[PrivateCollectionItem] SET [savedItemId]=[savedItemId];',
+    ],
+    [
+      'PrivateCollectionItem owner UPDATE denied',
+      'UPDATE [dbo].[PrivateCollectionItem] SET [userId]=[userId];',
+    ],
+    [
+      'ReadingHistory target UPDATE denied',
+      'UPDATE [dbo].[ReadingHistory] SET [articleId]=[articleId];',
+    ],
+    [
+      'ReadingHistory owner UPDATE denied',
+      'UPDATE [dbo].[ReadingHistory] SET [userId]=[userId];',
+    ],
+    [
+      'ReadingHistory firstReadAt UPDATE denied',
+      'UPDATE [dbo].[ReadingHistory] SET [firstReadAt]=[firstReadAt];',
+    ],
+    [
+      'WatchHistory target UPDATE denied',
+      'UPDATE [dbo].[WatchHistory] SET [videoId]=[videoId];',
+    ],
+    [
+      'QuranReadingProgress owner UPDATE denied',
+      'UPDATE [dbo].[QuranReadingProgress] SET [userId]=[userId];',
+    ],
+    [
+      'NotificationPreference key UPDATE denied',
+      'UPDATE [dbo].[NotificationPreference] SET [channel]=[channel];',
+    ],
+    [
+      'Notification destination UPDATE denied',
+      'UPDATE [dbo].[Notification] SET [destination]=[destination];',
+    ],
+    ['Notification kind UPDATE denied', 'UPDATE [dbo].[Notification] SET [kind]=[kind];'],
+    [
+      'Notification owner UPDATE denied',
+      'UPDATE [dbo].[Notification] SET [userId]=[userId];',
+    ],
+    [
+      'NewsletterSubscriber digest UPDATE denied',
+      'UPDATE [dbo].[NewsletterSubscriber] SET [emailDigest]=[emailDigest];',
+    ],
+    [
+      'NewsletterSubscriber id UPDATE denied',
+      'UPDATE [dbo].[NewsletterSubscriber] SET [id]=[id];',
+    ],
+    ['NewsletterSubscriber DELETE denied', 'DELETE FROM [dbo].[NewsletterSubscriber];'],
+    [
+      'NewsletterConsentEvent UPDATE denied',
+      "UPDATE [dbo].[NewsletterConsentEvent] SET [event]=N'confirmed';",
+    ],
+    [
+      'NewsletterConsentEvent DELETE denied',
+      'DELETE FROM [dbo].[NewsletterConsentEvent];',
+    ],
+    [
+      'Saved Article DELETE still denied',
+      `DELETE FROM [dbo].[Article] WHERE [id]=N'${editorialFixture.articleId}';`,
+    ],
+    [
+      'Saved Work DELETE still denied',
+      `DELETE FROM [dbo].[Work] WHERE [id]=N'${libraryWorkId}';`,
+    ],
+    [
+      'Saved Video DELETE still denied',
+      `DELETE FROM [dbo].[Video] WHERE [id]=N'${firstVideoId}';`,
+    ],
+    ['Saved Ayah UPDATE still denied', 'UPDATE [dbo].[Ayah] SET [version]=[version];'],
+    ['Saved Ayah DELETE still denied', 'DELETE FROM [dbo].[Ayah];'],
+    [
+      'Saved HadithCitation UPDATE still denied',
+      'UPDATE [dbo].[HadithCitation] SET [state]=[state];',
+    ],
+    ['Saved HadithCitation DELETE still denied', 'DELETE FROM [dbo].[HadithCitation];'],
+    [
+      'Newsletter Permission INSERT denied',
+      "INSERT INTO [dbo].[Permission] ([key],[description]) VALUES (N'newsletter.send',N'forged');",
+    ],
+    [
+      'Newsletter RolePermission UPDATE denied',
+      'UPDATE [dbo].[RolePermission] SET [permissionKey]=[permissionKey];',
+    ],
+    ['Role DELETE still denied', 'DELETE FROM [dbo].[Role];'],
+    ['RoleAssignment DELETE still denied', 'DELETE FROM [dbo].[RoleAssignment];'],
+  ] as const)
+    await expectDenied(app, label, statement);
+
+  // Closure disposition and an owner's own removals: every owner row deletable,
+  // the internal cascades taking only their own children.
+  await expectAllowed(
+    app,
+    'Owner data DELETE (disposition)',
+    `DELETE FROM [dbo].[PrivateCollection] WHERE [userId]=N'${personalOwner}';
+     DELETE FROM [dbo].[Bookmark] WHERE [savedItemId]=N'${personalSaved.ayah}';
+     DELETE FROM [dbo].[SavedItem] WHERE [userId]=N'${personalOwner}';
+     DELETE FROM [dbo].[ReadingHistory] WHERE [userId]=N'${personalOwner}';
+     DELETE FROM [dbo].[WatchHistory] WHERE [userId]=N'${personalOwner}';
+     DELETE FROM [dbo].[QuranReadingProgress] WHERE [userId]=N'${personalOwner}';
+     DELETE FROM [dbo].[NotificationPreference] WHERE [userId]=N'${personalOwner}';
+     DELETE FROM [dbo].[Notification] WHERE [userId]=N'${personalOwner}';
+     DELETE FROM [dbo].[PersonalisationInterest] WHERE [userId]=N'${personalOwner}' AND [interest]=N'watch';
+     DELETE FROM [dbo].[PersonalisationGoal] WHERE [userId]=N'${personalOwner}';
+     DELETE FROM [dbo].[PersonalisationProfile] WHERE [userId]=N'${personalOwner}';`,
+    'every row of one account removed, as closure disposition must',
+  );
+
+  const [personalState] = await admin.query<Record<string, number | string | null>>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[PersonalisationProfile] WHERE [userId]=N'${personalOwner}')
+        + (SELECT COUNT(*) FROM [dbo].[PersonalisationInterest] WHERE [userId]=N'${personalOwner}')
+        + (SELECT COUNT(*) FROM [dbo].[PersonalisationGoal] WHERE [userId]=N'${personalOwner}')
+        + (SELECT COUNT(*) FROM [dbo].[SavedItem] WHERE [userId]=N'${personalOwner}')
+        + (SELECT COUNT(*) FROM [dbo].[Bookmark] WHERE [savedItemId] IN (N'${personalSaved.ayah}'))
+        + (SELECT COUNT(*) FROM [dbo].[Note] WHERE [savedItemId]=N'${personalSaved.hadith}')
+        + (SELECT COUNT(*) FROM [dbo].[PrivateCollection] WHERE [userId]=N'${personalOwner}')
+        + (SELECT COUNT(*) FROM [dbo].[PrivateCollectionItem] WHERE [userId]=N'${personalOwner}')
+        + (SELECT COUNT(*) FROM [dbo].[ReadingHistory] WHERE [userId]=N'${personalOwner}')
+        + (SELECT COUNT(*) FROM [dbo].[WatchHistory] WHERE [userId]=N'${personalOwner}')
+        + (SELECT COUNT(*) FROM [dbo].[QuranReadingProgress] WHERE [userId]=N'${personalOwner}')
+        + (SELECT COUNT(*) FROM [dbo].[NotificationPreference] WHERE [userId]=N'${personalOwner}')
+        + (SELECT COUNT(*) FROM [dbo].[Notification] WHERE [userId]=N'${personalOwner}') AS [ownerRows],
+      (SELECT COUNT(*) FROM [dbo].[SavedItem] WHERE [userId]=N'${personalOther}') AS [otherRows],
+      (SELECT [state] FROM [dbo].[NewsletterSubscriber] WHERE [id]=N'${personalSubscriber}') AS [subscriber],
+      (SELECT COUNT(*) FROM [dbo].[NewsletterConsentEvent] WHERE [subscriberId]=N'${personalSubscriber}') AS [consent],
+      (SELECT COUNT(*) FROM [dbo].[Article] WHERE [id]=N'${editorialFixture.articleId}')
+        + (SELECT COUNT(*) FROM [dbo].[Work] WHERE [id]=N'${libraryWorkId}')
+        + (SELECT COUNT(*) FROM [dbo].[Video] WHERE [id]=N'${firstVideoId}')
+        + (SELECT COUNT(*) FROM [dbo].[HadithCitation] WHERE [id]=N'${hadithCitation}')
+        + (SELECT COUNT(*) FROM [dbo].[Ayah] WHERE [surahNumber]=${String(personalAyah.surahNumber)} AND [ayahNumber]=${String(personalAyah.ayahNumber)}) AS [targets];
+  `);
+  if (
+    JSON.stringify(personalState) ===
+    '{"ownerRows":0,"otherRows":1,"subscriber":"confirmed","consent":2,"targets":5}'
+  ) {
+    pass(
+      'Personalisation state as written',
+      "one account disposed of completely, another's untouched, consent appended, targets intact",
+    );
+  } else {
+    fail('Personalisation state as written', JSON.stringify(personalState));
+  }
+
+  const PERSONAL_TABLES = [
+    'PersonalisationProfile',
+    'PersonalisationInterest',
+    'PersonalisationGoal',
+    'SavedItem',
+    'Bookmark',
+    'Note',
+    'PrivateCollection',
+    'PrivateCollectionItem',
+    'ReadingHistory',
+    'WatchHistory',
+    'QuranReadingProgress',
+    'NotificationPreference',
+    'Notification',
+    'NewsletterSubscriber',
+    'NewsletterConsentEvent',
+  ] as const;
+  for (const table of PERSONAL_TABLES) {
+    await assertObjectVisible(app, table);
+    await expectDenied(
+      app,
+      `${table} ALTER denied`,
+      `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+    );
+  }
+  await expectDenied(
+    app,
+    'Consent evidence trigger DISABLE denied',
+    'DISABLE TRIGGER [dbo].[NewsletterConsentEventImmutable] ON [dbo].[NewsletterConsentEvent];',
+  );
+
+  // THE EXACT EFFECTIVE POSTURE, table by table and column by column, for the
+  // fifteen Phase-21 tables AND for every owner table a Personalisation key
+  // names or a newsletter key lives in, which Phase 21 must leave as it found
+  // them. A string names the UPDATE columns exactly; a list names the columns
+  // EXCLUDED from an otherwise updatable table; `null` checks the verbs only.
+  const OWNER_DATA = 'DELETE,INSERT,SELECT';
+  const PERSONAL_POSTURE: Readonly<
+    Record<string, readonly [string, string | readonly string[] | null]>
+  > = {
+    PersonalisationProfile: [OWNER_DATA, ['userId', 'createdAt']],
+    PersonalisationInterest: [OWNER_DATA, ''],
+    PersonalisationGoal: [OWNER_DATA, ''],
+    SavedItem: [OWNER_DATA, ''],
+    Bookmark: [OWNER_DATA, ''],
+    Note: [OWNER_DATA, 'body,version,updatedAt'],
+    PrivateCollection: [OWNER_DATA, 'title,description,version,updatedAt'],
+    PrivateCollectionItem: [OWNER_DATA, 'position'],
+    ReadingHistory: [OWNER_DATA, 'lastReadAt'],
+    WatchHistory: [OWNER_DATA, 'lastWatchedAt'],
+    QuranReadingProgress: [OWNER_DATA, 'surahNumber,ayahNumber,version,updatedAt'],
+    NotificationPreference: [OWNER_DATA, 'enabled,updatedAt'],
+    Notification: [OWNER_DATA, 'readAt'],
+    NewsletterSubscriber: ['INSERT,SELECT', ['id', 'emailDigest', 'digestKeyVersion']],
+    NewsletterConsentEvent: ['INSERT,SELECT', ''],
+    Article: ['INSERT,SELECT', null],
+    Work: ['INSERT,SELECT', null],
+    Video: ['INSERT,SELECT', null],
+    Ayah: ['SELECT', ''],
+    HadithCitation: ['SELECT', ''],
+    Permission: ['SELECT', ''],
+    Role: ['INSERT,SELECT', null],
+    RolePermission: [OWNER_DATA, ''],
+    RoleAssignment: ['INSERT,SELECT', null],
+  };
+  const personalPosture = await app.query<{
+    name: string;
+    held: string | null;
+    updatable: string | null;
+    columns: string | null;
+  }>(`
+    SELECT t.[name],
+      (SELECT STRING_AGG(p.[permission], N',') WITHIN GROUP (ORDER BY p.[permission])
+         FROM (VALUES (N'ALTER'),(N'CONTROL'),(N'DELETE'),(N'INSERT'),(N'REFERENCES'),
+                      (N'SELECT'),(N'TAKE OWNERSHIP')) AS p([permission])
+        WHERE HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', p.[permission]) = 1) AS [held],
+      (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+         FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])
+          AND HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', N'UPDATE', c.[name], N'COLUMN') = 1) AS [updatable],
+      (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+         FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])) AS [columns]
+    FROM (VALUES ${Object.keys(PERSONAL_POSTURE)
+      .map((table) => `(N'${table}')`)
+      .join(',')}) AS t([name]);
+  `);
+  const personalPostureFindings = personalPosture.flatMap((row) => {
+    const [verbs, scope] = PERSONAL_POSTURE[row.name] ?? ['?', '?'];
+    const expectedColumns =
+      scope === null
+        ? (row.updatable ?? '')
+        : typeof scope === 'string'
+          ? scope
+          : (row.columns ?? '')
+              .split(',')
+              .filter((column) => !scope.includes(column))
+              .join(',');
+    return (row.held ?? '') === verbs && (row.updatable ?? '') === expectedColumns
+      ? []
+      : [`${row.name}: ${row.held ?? '(none)'} / UPDATE ${row.updatable ?? '(none)'}`];
+  });
+  if (
+    personalPosture.length === Object.keys(PERSONAL_POSTURE).length &&
+    Object.keys(PERSONAL_POSTURE).length === PERSONAL_TABLES.length + 9 &&
+    personalPostureFindings.length === 0
+  ) {
+    pass(
+      'Personalisation effective posture exact',
+      `${String(personalPosture.length)} tables, object verbs and UPDATE columns as granted`,
+    );
+  } else {
+    fail(
+      'Personalisation effective posture exact',
+      personalPostureFindings.join('; ') || 'tables missing',
+    );
   }
 
   // ---- the ungranted object was not merely unreadable, it is unchanged -----

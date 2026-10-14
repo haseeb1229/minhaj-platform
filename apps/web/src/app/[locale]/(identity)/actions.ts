@@ -16,6 +16,7 @@ import { dispatchAfterResponse } from '@/composition/dispatch';
 import { fatwaRuntime } from '@/composition/fatwa';
 import { identityRuntime } from '@/composition/identity';
 import { peopleRuntime } from '@/composition/people';
+import { personalisationRuntime } from '@/composition/personalisation';
 import { applySetCookies, requestContext } from '@/composition/request';
 import { safeReturnTo } from '@/composition/return-to';
 import type { IdentityFailure } from '@/contexts/identity-access';
@@ -42,7 +43,7 @@ import type { IdentityFailure } from '@/contexts/identity-access';
 /** What a form gets back. Never carries a provider message or a token. */
 export interface ActionState {
   readonly status: 'idle' | 'success' | 'error';
-  readonly failure?: IdentityFailure | 'invalid-input';
+  readonly failure?: IdentityFailure | 'invalid-input' | 'closure-pending';
   readonly retryAfter?: number;
 }
 
@@ -650,6 +651,22 @@ export async function closeAccountAction(
     questionsPending = true;
   }
 
+  // THE FOURTH OWNER. Personalisation removes this account's saved items,
+  // notes, private collections, history, Quran position, onboarding answers,
+  // notification preferences and notifications, in its own bounded batches.
+  // A newsletter subscription is NOT the account's and is left alone, whatever
+  // its address. Idempotent; the closure sweep finishes what this leaves.
+  let personalPending: boolean;
+  try {
+    const personal = await personalisationRuntime().account.disposeAccount(
+      session.account.id,
+    );
+    const sweep = await personalisationRuntime().account.reconcileClosedAccounts();
+    personalPending = !personal.complete || !sweep.complete;
+  } catch {
+    personalPending = true;
+  }
+
   // The closure notice is enqueued against the address the account HAD, before
   // the tombstone replaces it. It goes out after this response.
   dispatchAfterResponse();
@@ -659,9 +676,10 @@ export async function closeAccountAction(
 
   // The Identity transaction has already closed the account, so its notice and
   // local sign-out still happen. What is withheld is a false successful
-  // completion while People's or Fatwa's required owner work is pending.
-  if (!disposition.ok || reconciliationFailed || questionsPending)
-    return failed('unavailable');
+  // completion while any owner's required work is pending — and says so,
+  // rather than calling a closed account's pending cleanup a failure.
+  if (!disposition.ok || reconciliationFailed || questionsPending || personalPending)
+    return { status: 'error', failure: 'closure-pending' };
 
   redirect(`/${locale}`);
 }

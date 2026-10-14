@@ -1314,7 +1314,7 @@ history and notifications with no owner and no retention rules.
 | **PrivateCollection** | A user's own list — **distinct from an editorial Collection** |
 | ReadingHistory | What a user has read, when |
 | WatchHistory | What a user has watched, when |
-| ReadingProgress | Quran reading position and course progress projections |
+| ReadingProgress | The Quran reading position. **Course progress is Learning's** (§13; `/my/progress/courses`, Phase 22) — never this context's |
 | NotificationPreference | Per-channel, per-category preferences |
 | Notification | A system-generated, one-directional message to a user |
 | **NewsletterSubscriber** | A confirmed or pending subscription to the newsletter — **independent of User** (§14.5) |
@@ -1469,6 +1469,80 @@ submitted -> confirmation pending -> confirmed subscriber -> unsubscribed / supp
 
 This posture is a safe V1 default. **A future adopter or jurisdiction may require stricter
 behaviour; it is never weakened below verified explicit opt-in.**
+
+### 14.6 As delivered (Phase 21 — engineering)
+
+The context is built and proven against synthetic `NON_PERSONALISATION_FIXTURE_*` material and
+`.invalid` accounts; **nothing is seeded**. It depends on Layer 0 and Identity & Access only — no
+content context is imported anywhere in it. Content is held by typed foreign key and resolved at Layer
+4 through each owner's public reader (Editorial for Articles, Library for Works, Media for Videos,
+Quran for Ayat, Hadith for citations), batched by owner. **OPEN_DECISIONS.md §2.2 stays open**: no
+retention period, legal hold, residency rule, statutory deadline or age rule is invented.
+
+**The saveable vocabulary is exactly what INFORMATION_ARCHITECTURE.md §5 promises:** Quran **Ayah**
+(by its canonical `(surah, ayah)` identity), Hadith **HadithCitation** (the public citation, never a
+source-qualified record), **Article**, **Video** and **Work** (a book). Reading history covers the four
+readable kinds; watch history covers Video. Fatwa, News, Events, Audio, Galleries, Courses and Centres
+are not saveable; appending one is a typed column and a migration, never a string.
+
+| Aggregate | What it holds — and deliberately does not |
+|---|---|
+| **SavedItem** | The account's typed anchor on **exactly one** target: one nullable foreign key per kind, a CHECK that exactly one is set (an Ayah takes both its columns or neither), and filtered unique indexes so an account holds a target once. The kind is **inferred from the key that is set** — there is no type column. No title, status or text of the target. It exists only while a bookmark, note or collection membership needs it and is removed in the same transaction as the last one |
+| **Bookmark** | The explicit "saved" mark on one SavedItem. Idempotent to add and remove |
+| **Note** | A private plain-text annotation on one SavedItem (≤ 2,000 characters, versioned). Never logged, indexed, audited or shown to anyone but its owner |
+| **PrivateCollection** / **PrivateCollectionItem** | A person's own titled list (≤ 50 per account, ≤ 200 members, versioned). Members point at the owner's own SavedItems — both keys carry the owner, so a member cannot join someone else's item. One contiguous order, replaced whole under the version that was read. No slug, sharing or public page; distinct from an editorial Collection |
+| **ReadingHistory** / **WatchHistory** | **One row per account and target** — first and latest instant, nothing else; not an event stream. Only the newest 500 of each list are kept. **History is off until the person turns it on**; while off nothing is recorded, decided inside the write. Instants are the server's, and a late request never moves a newer instant backwards |
+| **QuranReadingProgress** | The account's one Quran position — a typed Ayah, versioned. It moves **only** when the reader chooses "Set as my reading position" under the version they read, so no page view, late beacon or replay can rewind it. No streaks and no completion claims |
+| **PersonalisationProfile** / **Interest** / **Goal** | Personalisation onboarding: explicit interests (public areas — Quran, Hadith, Library, Watch, Listen, Fatwa, News & Events, Global Network) and goals, plus the history switch. Optional, skippable, editable later and never a gate. Nothing is inferred from behaviour and nothing sensitive is asked. Learner level and preferred format are **not** collected: no delivered surface uses them, so they arrive with the phase that does (Learning, Phase 22) |
+| **NotificationPreference** | A departure from the default for one category on one channel. Category `questions` (updates on the person's own Fatwa questions) on channel `in-app`, **on by default**. There is **no email notification channel**: nothing here is emailed, so no setting can reach Identity's verification, reset or security mail |
+| **Notification** | System-generated, one-directional, one account's: a translatable **kind** (`question-answered`, `question-declined`), its category, an optional **same-site path** (a CHECK and the service refuse schemes, hosts, protocol-relative and backslash forms, encoding, queries and dot segments), an idempotency key unique per account, created and read instants. Only the newest 200 are kept. Not a Message: no reply, participant or thread |
+| **NewsletterSubscriber** / **NewsletterConsentEvent** | §14.5 as built — below |
+
+**Notification producers.** Producers are Layer 4 and call the context's narrow `produce` service with
+the account their owner decided is concerned, a kind, a same-site destination and an idempotency key;
+no visitor-facing endpoint can create one. The one producer today is Fatwa: after a decline or a
+publication commits, Fatwa's workflow returns the asker's account id (a narrow read added for this) and
+Layer 4 notifies them, keyed by question so a correction never repeats it. It is derived work — not
+atomic with the decision — and the asker's own question page shows the status regardless.
+
+**The newsletter as built.** One row per address, keyed by an HMAC digest of the address as Identity
+compares addresses (`canonicaliseEmail` — trimmed and lower-cased, no provider rewriting), so concurrent
+submissions serialise on it. **No relation to `User` exists**: registering never subscribes, and
+closing an account never unsubscribes, whatever the address. States are `pending`, `confirmed`,
+`unsubscribed`, `expired` (a lapsed confirmation window) and `suppressed` (an operator decision), and a
+CHECK fixes what each may hold — only `pending` and `confirmed` keep the address. Each submission
+issues two single-purpose link tokens, `HMAC(NEWSLETTER_TOKEN_KEY, purpose | subscriber | generation |
+salt)` over fresh random salts; **only their SHA-256 hashes and the salts are stored**, and the
+dispatcher re-derives the same link for a retried message, so nothing mints a second token. The
+confirmation link works for 48 hours (a security bound, not a retention period) and is consumed once
+by a POST whose predicate is the check; resubmission rotates both links. Unsubscribing needs no
+account and is idempotent. A suppressed or provider-suppressed address is never written to and cannot
+be confirmed, and every submission answers the same whatever the state. Consent evidence — purpose
+`newsletter`, notice version, source, locale and instant of every change — is append-only (a trigger
+refuses any change). Lapsed confirmations lose their address in a bounded sweep.
+
+**Account closure.** After Identity commits, Layer 4 asks Personalisation — in its own bounded,
+idempotent batches — to delete every row of the closed account: saved items with their bookmarks and
+notes, collections and members, history, Quran position, onboarding answers, preferences and
+notifications. It refuses an account Identity does not report closed. Newsletter subscriptions are not
+touched. The closure response says "pending" honestly while any owner's work remains, and a bounded
+sweep (with People's and Fatwa's reconciliations) finishes interrupted closures. A later account with
+the same address starts empty.
+
+**Hard purge participation (§14.3).** Every typed key to content is `NO ACTION`, so a physical delete
+of a referenced Article, Work or Video is refused by the database while any reference remains.
+Personalisation offers one **typed** release per target family — Article, Work, Video, Ayah,
+HadithCitation — each removing a bounded batch of its own references (collection members, anchors with
+their bookmarks and notes, history, Quran position), bumping affected collections' versions and
+returning how many remain; zero is the owner's signal to delete. There is no generic `purge(type,
+id)`. Ayat and Hadith citations are never physically deleted by their owners (their triggers refuse
+it); their releases exist so a future owner-approved purge has the same contract. No owner offers a
+hard purge yet, so no purge workflow is wired to a surface.
+
+**Not delivered, and not owed by Phase 21:** course progress and any Course, Lesson or LearningPath
+reference (Phase 22); audio listening history; emailed notifications; campaign sending, segmentation
+or any marketing automation; saved Fatwa rulings; and any staff access to a person's saved items,
+notes, history or notifications — no permission grants it.
 
 ---
 

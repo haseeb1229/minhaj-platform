@@ -765,6 +765,12 @@ export interface PublicHadithCommentaryEntry {
 
 /** The canonical citation page: genuine current-public facts and nothing else. */
 export interface PublicHadith {
+  /**
+   * The public citation's own identity — what a person's saved item or reading
+   * history holds (Phase 21). It names the CITATION, never the source-qualified
+   * record beneath it, which can be remapped while the citation stays.
+   */
+  readonly citationId: string;
   readonly collection: {
     readonly slug: string;
     readonly names: readonly HadithCollectionNameRecord[];

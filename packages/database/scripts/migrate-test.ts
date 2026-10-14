@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import {
   EXTERNALLY_GATED_PERMISSIONS,
@@ -195,6 +195,33 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // SEPARATE reviewed mapping; NOT ONE ROW of content is seeded (DOMAIN_MODEL.md
   // §9), asserted by `assertHadithFoundation` and proved as behaviour by
   // `assertHadithCanonicalRules`.
+  // THE PERSONALISATION & NOTIFICATIONS CONTEXT: a person's OWN profile and
+  // onboarding answers, saved items with their bookmarks and notes, private
+  // collections, reading and watch history, one Quran position, notification
+  // preferences and in-app notifications; and the newsletter subscription —
+  // consent from an address, never an account — with append-only consent
+  // evidence. Every target is a typed, non-cascading key to its owner's row,
+  // never a `targetType + targetId` pair; NOT ONE ROW is seeded, and the two
+  // newsletter keys join the protected bundle (DOMAIN_MODEL.md §14), asserted
+  // by `assertPersonalisationFoundation` and proved as behaviour by
+  // `assertPersonalisationRules`.
+  '20261005000000_phase21_personalisation_notifications': [
+    'PersonalisationProfile',
+    'PersonalisationInterest',
+    'PersonalisationGoal',
+    'SavedItem',
+    'Bookmark',
+    'Note',
+    'PrivateCollection',
+    'PrivateCollectionItem',
+    'ReadingHistory',
+    'WatchHistory',
+    'QuranReadingProgress',
+    'NotificationPreference',
+    'Notification',
+    'NewsletterSubscriber',
+    'NewsletterConsentEvent',
+  ],
   // THE FATWA CONTEXT: the operator's activation, a category that maps onto one
   // canonical Topic, the PRIVATE question, the public ruling as a sequence of
   // immutable revisions with their typed topics, publications and review
@@ -420,9 +447,8 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
 const PREMATURE_TABLES = [
   // `Event` left this list when Phase 14 delivered it, and `Collection` when
   // Phase 15 delivered it as Editorial's public, curated aggregate. A user's
-  // private saved list is Personalisation's and arrives with its own phase; it
-  // shares no table with the editorial Collection.
-  'PrivateCollection',
+  // private saved list left it when Phase 21 delivered `PrivateCollection` as
+  // Personalisation's own; it shares no table with the editorial Collection.
   'Quran',
   // `Hadith` left this list when Phase 19 delivered it as the source-qualified
   // record of its own context. `Fatwa` left it when Phase 20 delivered the
@@ -438,8 +464,12 @@ const PREMATURE_TABLES = [
   'Scholar',
   'Teacher',
   'Course',
+  // `Notification` left this list when Phase 21 delivered the in-app record.
+  // Learning's per-user progress is Learning's and arrives with it: Phase 21
+  // records reading, watch and Quran progress only, never a course's.
+  'CourseProgress',
+  'LessonProgress',
   'Message',
-  'Notification',
   'Membership',
   'Donation',
   'MigrationProvenance',
@@ -451,10 +481,9 @@ const PREMATURE_TABLES = [
   'PeriodicalIssue',
   'EncyclopediaEntry',
   // Phase 10 delivers Video, Series and Playlist and nothing else of Media's
-  // that is not its own: a programme is a Series kind, and watch history is
-  // Phase 21's per-user state.
+  // that is not its own: a programme is a Series kind. Watch history left this
+  // list when Phase 21 delivered it as Personalisation's per-user state.
   'Program',
-  'WatchHistory',
   // Phase 11 delivers non-Quran audio and nothing of Quran's: a Recitation and
   // its verse mapping belong to Phase 18, which delivers them as Quran's own
   // `QuranRecitation` and `QuranRecitationSegment` — so a bare, context-less
@@ -462,11 +491,12 @@ const PREMATURE_TABLES = [
   'Recitation',
   'RecitationSegment',
   'ListeningHistory',
-  // Phase 18 delivers the Quran with NO per-user reading state — bookmarks and
-  // progress are Phase 21's — and with slugs that never change, so no layered
-  // work owes a slug history.
+  // Phase 18 delivers the Quran with NO per-user reading state, and with slugs
+  // that never change, so no layered work owes a slug history. Phase 21
+  // delivers the reading position as Personalisation's `QuranReadingProgress`
+  // and a saved Ayah as a typed `SavedItem` — so a Quran-owned bookmark table
+  // stays absent.
   'QuranBookmark',
-  'QuranReadingProgress',
   'QuranListeningHistory',
   'QuranTranslationSlugHistory',
   'QuranTafsirSlugHistory',
@@ -494,10 +524,14 @@ const PREMATURE_TABLES = [
   'PhotoPerson',
   'PhotoTopic',
   // Phase 13 delivers News with NO Event or newsletter relationship: the
-  // newsletter is Phase 21's consent record, and a News lead image would need a
+  // newsletter is Phase 21's consent record (`NewsletterSubscriber` left this
+  // list when Phase 21 delivered it), and a News lead image would need a
   // Storage or Media dependency no phase has decided. `Centre` left this list
-  // when Phase 16 delivered it.
-  'NewsletterSubscriber',
+  // when Phase 16 delivered it. Phase 21 delivers NO sending capability, so no
+  // campaign, issue or delivery table exists for the newsletter.
+  'NewsletterCampaign',
+  'NewsletterIssue',
+  'NewsletterDelivery',
   'NewsArticleImage',
   'NewsArticleAsset',
   'NewsArticlePhoto',
@@ -699,6 +733,23 @@ const PROHIBITED_TABLES = [
   'FatwaReadEvent',
   'FatwaReader',
   'FatwaTopic',
+
+  // PHASE 21 — every saved or read target is a typed key to its owner's row
+  // (DOMAIN_MODEL.md §14, §6.2). A generic target, content-reference or
+  // activity table would be the polymorphic reference §6.2 refuses, and a
+  // stored copy of a target's title would drift from its owner; a raw
+  // newsletter token table would store what only a hash may hold.
+  'PersonalTarget',
+  'UserContentReference',
+  'ContentReference',
+  'SavedTarget',
+  'SavedContent',
+  'HistoryTarget',
+  'UserHistory',
+  'ActivityHistory',
+  'UserActivity',
+  'NotificationTarget',
+  'NewsletterToken',
 ];
 
 const EXPECTED_AUDIT_COLUMNS = [
@@ -953,6 +1004,38 @@ const EXPECTED_COLUMN_SIZES: readonly {
   { table: 'FatwaRevision', column: 'publicQuestion', characters: 4000 },
   { table: 'FatwaRevision', column: 'language', characters: 16 },
   { table: 'FatwaCategoryName', column: 'locale', characters: 8 },
+  // Phase 21. Every owner and every target a 36-character key matching the row
+  // it names; a note and a collection bounded; a destination short enough to be
+  // a path and never a document; a newsletter digest and each token hash exactly
+  // a SHA-256 hex string, and an address no longer than User.email.
+  ...[
+    'PersonalisationProfile',
+    'SavedItem',
+    'PrivateCollection',
+    'ReadingHistory',
+    'WatchHistory',
+    'QuranReadingProgress',
+    'NotificationPreference',
+    'Notification',
+  ].map((table) => ({ table, column: 'userId', characters: 36 })),
+  ...['articleId', 'workId', 'videoId', 'hadithCitationId'].map((column) => ({
+    table: 'SavedItem',
+    column,
+    characters: 36,
+  })),
+  { table: 'Note', column: 'body', characters: 2000 },
+  { table: 'PrivateCollection', column: 'title', characters: 120 },
+  { table: 'PrivateCollection', column: 'description', characters: 500 },
+  { table: 'Notification', column: 'destination', characters: 300 },
+  { table: 'Notification', column: 'idempotencyKey', characters: 200 },
+  { table: 'NewsletterSubscriber', column: 'email', characters: 320 },
+  ...['emailDigest', 'confirmTokenHash', 'unsubscribeTokenHash'].map((column) => ({
+    table: 'NewsletterSubscriber',
+    column,
+    characters: 64,
+  })),
+  { table: 'NewsletterSubscriber', column: 'locale', characters: 8 },
+  { table: 'NewsletterConsentEvent', column: 'noticeVersion', characters: 64 },
 ];
 
 /**
@@ -1037,7 +1120,36 @@ const EXPECTED_FILTERED_INDEXES: readonly {
     index: 'QuranRecitationSegment_assetId_key',
     why: 'one audio file could be served as two different recitation segments',
   },
+  // Phase 21. Filtered because each saved item and each history row names ONE
+  // of its typed targets, so every other target column is NULL there — and an
+  // unfiltered index would treat those NULLs as one repeated value and refuse
+  // a person's second saved item. A token hash is filtered because every ended
+  // subscription holds none.
+  ...['article', 'work', 'video', 'ayah', 'hadith'].map((target) => ({
+    table: 'SavedItem',
+    index: `SavedItem_${target}_key`,
+    why: `one account could save the same ${target} twice`,
+  })),
+  ...['article', 'work', 'ayah', 'hadith'].map((target) => ({
+    table: 'ReadingHistory',
+    index: `ReadingHistory_${target}_key`,
+    why: `one account could hold two history rows for the same ${target}`,
+  })),
+  {
+    table: 'NewsletterSubscriber',
+    index: 'NewsletterSubscriber_confirm_key',
+    why: 'one confirmation link could resolve to two subscriptions',
+  },
+  {
+    table: 'NewsletterSubscriber',
+    index: 'NewsletterSubscriber_unsubscribe_key',
+    why: 'one unsubscribe link could resolve to two subscriptions',
+  },
 ];
+
+/** The fifteen Phase-21 tables, in the migration's order. */
+const PERSONALISATION_TABLES =
+  MIGRATION_EXPECTATIONS['20261005000000_phase21_personalisation_notifications'] ?? [];
 
 /** The ten Phase-20 tables, in the migration's order. */
 const FATWA_TABLES = MIGRATION_EXPECTATIONS['20261004000000_phase20_fatwa'] ?? [];
@@ -1291,6 +1403,8 @@ const EXPECTED_TRIGGERS = [
   // Phase 20: every Fatwa invariant no constraint can express — each listed,
   // with the refusal it raises, in `FATWA_TRIGGER_NUMBERS`.
   ...Object.keys(FATWA_TRIGGER_NUMBERS),
+  // Phase 21: consent evidence is append-only, even to a privileged session.
+  'NewsletterConsentEventImmutable',
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
@@ -1613,6 +1727,32 @@ const EXPECTED_CHECK_CONSTRAINTS = [
     'FatwaPublication',
     'FatwaReviewDecision',
     'FatwaReadTally',
+  ].map((table) => ({ table, constraint: table + '_ck' })),
+  // Phase 21. Exactly one typed target per saved item and history row, with an
+  // Ayah's two columns set together; instants in order; the closed onboarding,
+  // interest, goal, category, channel and kind vocabularies; bounded notes,
+  // collections and positions; a notification destination that can only be a
+  // path on this site; which columns each newsletter state may hold; and the
+  // consent event's closed vocabulary.
+  ...['SavedItem', 'ReadingHistory'].map((table) => ({
+    table,
+    constraint: table + '_one_target_ck',
+  })),
+  { table: 'NewsletterSubscriber', constraint: 'NewsletterSubscriber_facts_ck' },
+  ...[
+    'ReadingHistory',
+    'WatchHistory',
+    'PersonalisationProfile',
+    'PersonalisationInterest',
+    'PersonalisationGoal',
+    'Note',
+    'PrivateCollection',
+    'PrivateCollectionItem',
+    'QuranReadingProgress',
+    'NotificationPreference',
+    'Notification',
+    'NewsletterSubscriber',
+    'NewsletterConsentEvent',
   ].map((table) => ({ table, constraint: table + '_ck' })),
 ];
 
@@ -2419,9 +2559,11 @@ async function assertNewsFoundation(session: SqlSession): Promise<void> {
         `no type or engagement column; found ${forward.map((row) => row.name).join(', ')}.`,
     );
 
+  // `newsletter.*` is Personalisation's (Phase 21), a subscription and never a
+  // News family, and is proved by `assertPersonalisationFoundation`.
   const permissions = await session.query<{ key: string; description: string }>(`
     SELECT [key], [description] FROM [dbo].[Permission]
-    WHERE [key] LIKE N'content.%' OR [key] LIKE N'news%' OR [key] LIKE N'press%'
+    WHERE [key] LIKE N'content.%' OR ([key] LIKE N'news%' AND [key] NOT LIKE N'newsletter.%') OR [key] LIKE N'press%'
        OR [key] LIKE N'statement%' OR [key] LIKE N'mediaCoverage%' ORDER BY [key];
   `);
   const described = permissions.filter((row) =>
@@ -2817,7 +2959,10 @@ async function assertEventFoundation(
       (SELECT STRING_AGG(OBJECT_NAME(c.object_id) + N'.' + c.name, N',') FROM sys.columns c
         WHERE c.name LIKE N'%event%' AND c.object_id NOT IN (${tables})
           AND OBJECTPROPERTY(c.object_id, 'IsUserTable') = 1
-          AND NOT (c.object_id = OBJECT_ID(N'[dbo].[ProviderEvent]') AND c.name = N'eventId')) AS columns;
+          AND NOT (c.object_id = OBJECT_ID(N'[dbo].[ProviderEvent]') AND c.name = N'eventId')
+          -- Phase 21: a newsletter consent event's own vocabulary column names
+          -- what happened to a subscription, never an Editorial Event.
+          AND NOT (OBJECT_NAME(c.object_id) = N'NewsletterConsentEvent' AND c.name = N'event')) AS columns;
   `);
   if (Number(ownership?.inbound) !== 0 || (ownership?.columns ?? null) !== null)
     fail(
@@ -3110,14 +3255,21 @@ async function assertCollectionFoundation(session: SqlSession): Promise<void> {
   // tables reach no Editorial table). Only those tables are set aside here.
   // By NAME, never OBJECT_ID: once Phase 19 is rolled back an OBJECT_ID is
   // NULL, and NOT IN over a NULL would silently excuse every column.
-  const hadithOwn = HADITH_TABLES.map((table) => `N'${table}'`).join(',');
+  //
+  // Phase 21's `PrivateCollection` is likewise a DIFFERENT aggregate: a
+  // person's own list, keyed only to Personalisation's tables and to User,
+  // never to an Editorial Collection (`assertPersonalisationFoundation` proves
+  // its exact keys). Its two tables are set aside by name for the same reason.
+  const setAside = [...HADITH_TABLES, 'PrivateCollection', 'PrivateCollectionItem']
+    .map((table) => `N'${table}'`)
+    .join(',');
   const [ownership] = await session.query<{ inbound: number; columns: string | null }>(`
     SELECT
       (SELECT COUNT(*) FROM sys.foreign_keys
         WHERE referenced_object_id IN (${tables}) AND parent_object_id NOT IN (${tables})) AS inbound,
       (SELECT STRING_AGG(OBJECT_NAME(c.object_id) + N'.' + c.name, N',') FROM sys.columns c
         WHERE c.name LIKE N'%collection%' AND c.object_id NOT IN (${tables})
-          AND OBJECT_NAME(c.object_id) NOT IN (${hadithOwn})
+          AND OBJECT_NAME(c.object_id) NOT IN (${setAside})
           AND OBJECTPROPERTY(c.object_id, 'IsUserTable') = 1) AS columns;
   `);
   if (Number(ownership?.inbound) !== 0 || (ownership?.columns ?? null) !== null)
@@ -3846,11 +3998,12 @@ async function assertQuranFoundation(session: SqlSession): Promise<void> {
     WHERE fk.[referenced_object_id] = OBJECT_ID(N'[dbo].[Ayah]')
     GROUP BY fk.[name];
   `);
+  const personalAyah = await personalisationAyahKeys(session);
   if (
     ayahKeys
       .map((row) => row.name)
       .sort()
-      .join(',') !== QURAN_AYAH_KEYS.join(',') ||
+      .join(',') !== [...QURAN_AYAH_KEYS, ...personalAyah].sort().join(',') ||
     ayahKeys.some((row) => Number(row.columns) !== 2)
   )
     fail(
@@ -3881,19 +4034,33 @@ async function assertQuranFoundation(session: SqlSession): Promise<void> {
         `found ${edges.join(', ')}.`,
     );
 
-  const [ownership] = await session.query<{ inbound: number; columns: string | null }>(`
+  // Phase 21's typed references are the ONE admitted exception, by exact key
+  // name and by table name (never OBJECT_ID, which is NULL once Phase 21 is
+  // rolled back): a saved Ayah, an Ayah read and a reading position, each the
+  // two-column citation proved above, each refusing deletion of the Ayah it
+  // names. `assertPersonalisationFoundation` proves their exact columns.
+  const personalOwn = PERSONALISATION_TABLES.map((table) => `N'${table}'`).join(',');
+  const [ownership] = await session.query<{
+    inbound: string | null;
+    columns: string | null;
+  }>(`
     SELECT
-      (SELECT COUNT(*) FROM sys.foreign_keys
+      (SELECT STRING_AGG([name], N',') WITHIN GROUP (ORDER BY [name]) FROM sys.foreign_keys
         WHERE [referenced_object_id] IN (${tables}) AND [parent_object_id] NOT IN (${tables})) AS [inbound],
       (SELECT STRING_AGG(OBJECT_NAME(c.[object_id]) + N'.' + c.[name], N',') FROM sys.columns c
         WHERE (c.[name] LIKE N'%surah%' OR c.[name] LIKE N'%ayah%' OR c.[name] LIKE N'%juz%'
                OR c.[name] LIKE N'%quran%' OR c.[name] LIKE N'%tafsir%' OR c.[name] LIKE N'%tajweed%')
           AND OBJECT_NAME(c.[object_id]) NOT IN (${names})
+          AND OBJECT_NAME(c.[object_id]) NOT IN (${personalOwn})
           AND OBJECTPROPERTY(c.[object_id], 'IsUserTable') = 1) AS [columns];
   `);
-  if (Number(ownership?.inbound) !== 0 || (ownership?.columns ?? null) !== null)
+  if (
+    (ownership?.inbound ?? '') !== [...personalAyah].sort().join(',') ||
+    (ownership?.columns ?? null) !== null
+  )
     fail(
-      `No other owner may hold Quran schema; found ${JSON.stringify(ownership ?? null)}.`,
+      `No other owner may hold Quran schema beyond Personalisation's typed Ayah keys; ` +
+        `found ${JSON.stringify(ownership ?? null)}.`,
     );
 
   const generic = await session.query<{ name: string }>(`
@@ -5294,19 +5461,36 @@ async function assertHadithFoundation(session: SqlSession): Promise<void> {
         `found ${edges.join(', ')}.`,
     );
 
-  const [ownership] = await session.query<{ inbound: number; columns: string | null }>(`
+  // Phase 21's typed references are the ONE admitted exception: a saved and a
+  // read public CITATION, each one column naming `HadithCitation.id` — never a
+  // source-qualified record — and each refusing deletion of the citation it
+  // names. Excepted by exact key and column name, never by OBJECT_ID.
+  const personal = await personalisationPresent(session);
+  const [ownership] = await session.query<{
+    inbound: string | null;
+    columns: string | null;
+  }>(`
     SELECT
-      (SELECT COUNT(*) FROM sys.foreign_keys
-        WHERE [referenced_object_id] IN (${tables}) AND [parent_object_id] NOT IN (${tables})) AS [inbound],
+      (SELECT STRING_AGG(fk.[name] + N'>' + OBJECT_NAME(fk.[referenced_object_id]), N',')
+          WITHIN GROUP (ORDER BY fk.[name]) FROM sys.foreign_keys fk
+        WHERE fk.[referenced_object_id] IN (${tables}) AND fk.[parent_object_id] NOT IN (${tables})) AS [inbound],
       (SELECT STRING_AGG(OBJECT_NAME(c.[object_id]) + N'.' + c.[name], N',') FROM sys.columns c
         WHERE (c.[name] LIKE N'%hadith%' OR c.[name] LIKE N'%narrator%' OR c.[name] LIKE N'%isnad%'
                OR c.[name] LIKE N'%grading%')
           AND OBJECT_NAME(c.[object_id]) NOT IN (${names})
+          AND NOT (OBJECT_NAME(c.[object_id]) IN (N'SavedItem', N'ReadingHistory') AND c.[name] = N'hadithCitationId')
           AND OBJECTPROPERTY(c.[object_id], 'IsUserTable') = 1) AS [columns];
   `);
-  if (Number(ownership?.inbound) !== 0 || (ownership?.columns ?? null) !== null)
+  const admittedInbound = personal
+    ? 'ReadingHistory_hadithCitationId_fkey>HadithCitation,SavedItem_hadithCitationId_fkey>HadithCitation'
+    : '';
+  if (
+    (ownership?.inbound ?? '') !== admittedInbound ||
+    (ownership?.columns ?? null) !== null
+  )
     fail(
-      `No other owner may hold Hadith schema; found ${JSON.stringify(ownership ?? null)}.`,
+      `No other owner may hold Hadith schema beyond Personalisation's typed citation keys; ` +
+        `found ${JSON.stringify(ownership ?? null)}.`,
     );
 
   const generic = await session.query<{ name: string }>(`
@@ -7244,7 +7428,10 @@ async function assertProtectedBundleExcludesGated(session: SqlSession): Promise<
  * The rules themselves are proved as BEHAVIOUR by `assertFatwaRules`, and
  * through the runtime login by `db:test:permissions`.
  */
-async function assertFatwaFoundation(session: SqlSession): Promise<void> {
+async function assertFatwaFoundation(
+  session: SqlSession,
+  stage: 'current' | 'before-personalisation' = 'current',
+): Promise<void> {
   const tables = FATWA_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',');
   const names = FATWA_TABLES.map((table) => `N'${table}'`).join(',');
 
@@ -7491,11 +7678,20 @@ async function assertFatwaFoundation(session: SqlSession): Promise<void> {
       `A migrated database must hold no Fatwa grant, holder or audit row; found ${JSON.stringify(quiet)}.`,
     );
 
+  // Once Phase 21 is rolled back the database's bundle lacks the two newsletter
+  // keys the compiled bundle now carries, so that stage compares against the
+  // compiled bundle less exactly those two.
   const bundled = await assertProtectedBundleExcludesGated(session);
-  if (bundled !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length)
+  const compiledBundle =
+    stage === 'current'
+      ? PLATFORM_ADMINISTRATOR_PERMISSIONS.length
+      : PLATFORM_ADMINISTRATOR_PERMISSIONS.filter(
+          (key) => !NEWSLETTER_PERMISSIONS.includes(key),
+        ).length;
+  if (bundled !== compiledBundle)
     fail(
       `The protected bundle holds ${String(bundled)} keys; the compiled bundle holds ` +
-        `${String(PLATFORM_ADMINISTRATOR_PERMISSIONS.length)}.`,
+        `${String(compiledBundle)} at stage ${stage}.`,
     );
 
   report(
@@ -8173,6 +8369,1170 @@ async function assertFatwaRules(session: SqlSession): Promise<void> {
   );
 }
 
+const PERSONALISATION_MIGRATION = '20261005000000_phase21_personalisation_notifications';
+
+/** The two keys Phase 21 appends and bundles, and only these. */
+const NEWSLETTER_PERMISSIONS = ['newsletter.operate', 'newsletter.read'];
+
+/**
+ * Every Ayah reference Phase 21 adds: a saved Ayah, an Ayah read and a reading
+ * position, each the two-column canonical citation. `assertQuranFoundation`
+ * admits exactly these beside its own, and only while Phase 21 is applied.
+ */
+const PERSONALISATION_AYAH_KEYS = [
+  'QuranReadingProgress_surahNumber_ayahNumber_fkey',
+  'ReadingHistory_surahNumber_ayahNumber_fkey',
+  'SavedItem_surahNumber_ayahNumber_fkey',
+];
+
+/**
+ * EVERY foreign key from a Phase-21 table, exactly, with its column mapping and
+ * its delete action. Each owner and each typed target is NO ACTION: neither an
+ * account nor any content takes a person's data with it, and a hard delete of a
+ * referenced row is refused until Personalisation has released its own
+ * references. The ONLY cascades are internal — a saved item its bookmark and
+ * note, a private collection its members, a profile its interests and goals —
+ * and a collection member carries the owner on both keys. A subscriber has no
+ * key at all, to User or to anything.
+ */
+const PERSONALISATION_KEYS = [
+  'Bookmark_savedItemId_fkey(savedItemId>id)>SavedItem:CASCADE',
+  'NewsletterConsentEvent_subscriberId_fkey(subscriberId>id)>NewsletterSubscriber:NO_ACTION',
+  'NotificationPreference_userId_fkey(userId>id)>User:NO_ACTION',
+  'Notification_userId_fkey(userId>id)>User:NO_ACTION',
+  'Note_savedItemId_fkey(savedItemId>id)>SavedItem:CASCADE',
+  'PersonalisationGoal_userId_fkey(userId>userId)>PersonalisationProfile:CASCADE',
+  'PersonalisationInterest_userId_fkey(userId>userId)>PersonalisationProfile:CASCADE',
+  'PersonalisationProfile_userId_fkey(userId>id)>User:NO_ACTION',
+  'PrivateCollectionItem_collection_fkey(collectionId>id,userId>userId)>PrivateCollection:CASCADE',
+  'PrivateCollectionItem_savedItem_fkey(savedItemId>id,userId>userId)>SavedItem:NO_ACTION',
+  'PrivateCollection_userId_fkey(userId>id)>User:NO_ACTION',
+  'QuranReadingProgress_surahNumber_ayahNumber_fkey(surahNumber>surahNumber,ayahNumber>ayahNumber)>Ayah:NO_ACTION',
+  'QuranReadingProgress_userId_fkey(userId>id)>User:NO_ACTION',
+  'ReadingHistory_articleId_fkey(articleId>id)>Article:NO_ACTION',
+  'ReadingHistory_hadithCitationId_fkey(hadithCitationId>id)>HadithCitation:NO_ACTION',
+  'ReadingHistory_surahNumber_ayahNumber_fkey(surahNumber>surahNumber,ayahNumber>ayahNumber)>Ayah:NO_ACTION',
+  'ReadingHistory_userId_fkey(userId>id)>User:NO_ACTION',
+  'ReadingHistory_workId_fkey(workId>id)>Work:NO_ACTION',
+  'SavedItem_articleId_fkey(articleId>id)>Article:NO_ACTION',
+  'SavedItem_hadithCitationId_fkey(hadithCitationId>id)>HadithCitation:NO_ACTION',
+  'SavedItem_surahNumber_ayahNumber_fkey(surahNumber>surahNumber,ayahNumber>ayahNumber)>Ayah:NO_ACTION',
+  'SavedItem_userId_fkey(userId>id)>User:NO_ACTION',
+  'SavedItem_videoId_fkey(videoId>id)>Video:NO_ACTION',
+  'SavedItem_workId_fkey(workId>id)>Work:NO_ACTION',
+  'WatchHistory_userId_fkey(userId>id)>User:NO_ACTION',
+  'WatchHistory_videoId_fkey(videoId>id)>Video:NO_ACTION',
+].sort();
+
+/**
+ * Every unique index on a Phase-21 table, exactly, with its filter. The typed
+ * target keys are FILTERED so each holds only where its column is set, and a
+ * token-hash key only while a link is live.
+ */
+const PERSONALISATION_UNIQUE = [
+  'Bookmark_pkey(savedItemId)',
+  'NewsletterConsentEvent_pkey(id)',
+  'NewsletterSubscriber_confirm_key(confirmTokenHash) WHERE ([confirmTokenHash] IS NOT NULL)',
+  'NewsletterSubscriber_emailDigest_key(emailDigest)',
+  'NewsletterSubscriber_pkey(id)',
+  'NewsletterSubscriber_unsubscribe_key(unsubscribeTokenHash) WHERE ([unsubscribeTokenHash] IS NOT NULL)',
+  'Note_pkey(savedItemId)',
+  'NotificationPreference_pkey(userId,category,channel)',
+  'Notification_idempotency_key(userId,idempotencyKey)',
+  'Notification_pkey(id)',
+  'PersonalisationGoal_pkey(userId,goal)',
+  'PersonalisationInterest_pkey(userId,interest)',
+  'PersonalisationProfile_pkey(userId)',
+  'PrivateCollectionItem_pkey(collectionId,savedItemId)',
+  'PrivateCollectionItem_position_key(collectionId,position)',
+  'PrivateCollection_owner_key(id,userId)',
+  'PrivateCollection_pkey(id)',
+  'QuranReadingProgress_pkey(userId)',
+  'ReadingHistory_article_key(articleId,userId) WHERE ([articleId] IS NOT NULL)',
+  'ReadingHistory_ayah_key(surahNumber,ayahNumber,userId) WHERE ([surahNumber] IS NOT NULL)',
+  'ReadingHistory_hadith_key(hadithCitationId,userId) WHERE ([hadithCitationId] IS NOT NULL)',
+  'ReadingHistory_pkey(id)',
+  'ReadingHistory_work_key(workId,userId) WHERE ([workId] IS NOT NULL)',
+  'SavedItem_article_key(articleId,userId) WHERE ([articleId] IS NOT NULL)',
+  'SavedItem_ayah_key(surahNumber,ayahNumber,userId) WHERE ([surahNumber] IS NOT NULL)',
+  'SavedItem_hadith_key(hadithCitationId,userId) WHERE ([hadithCitationId] IS NOT NULL)',
+  'SavedItem_owner_key(id,userId)',
+  'SavedItem_pkey(id)',
+  'SavedItem_video_key(videoId,userId) WHERE ([videoId] IS NOT NULL)',
+  'SavedItem_work_key(workId,userId) WHERE ([workId] IS NOT NULL)',
+  'WatchHistory_pkey(userId,videoId)',
+].sort();
+
+/**
+ * Every column of every Phase-21 table, in order. Stated whole so a stored
+ * title, status or text of a target, a `targetType`/`targetId` or `contentType`
+ * pair, a raw token, a course or lesson column or a subscriber's account link
+ * cannot arrive unnoticed.
+ */
+const PERSONALISATION_COLUMNS: Readonly<Record<string, string>> = {
+  PersonalisationProfile: 'userId,onboarding,historyEnabled,version,createdAt,updatedAt',
+  PersonalisationInterest: 'userId,interest',
+  PersonalisationGoal: 'userId,goal',
+  SavedItem:
+    'id,userId,articleId,workId,videoId,surahNumber,ayahNumber,hadithCitationId,createdAt',
+  Bookmark: 'savedItemId,createdAt',
+  Note: 'savedItemId,body,version,createdAt,updatedAt',
+  PrivateCollection: 'id,userId,title,description,version,createdAt,updatedAt',
+  PrivateCollectionItem: 'collectionId,savedItemId,userId,position,addedAt',
+  ReadingHistory:
+    'id,userId,articleId,workId,surahNumber,ayahNumber,hadithCitationId,firstReadAt,lastReadAt',
+  WatchHistory: 'userId,videoId,firstWatchedAt,lastWatchedAt',
+  QuranReadingProgress: 'userId,surahNumber,ayahNumber,version,updatedAt',
+  NotificationPreference: 'userId,category,channel,enabled,updatedAt',
+  Notification: 'id,userId,kind,category,destination,idempotencyKey,createdAt,readAt',
+  NewsletterSubscriber:
+    'id,emailDigest,digestKeyVersion,email,state,locale,generation,confirmTokenHash,' +
+    'confirmSalt,confirmExpiresAt,unsubscribeTokenHash,unsubscribeSalt,tokenKeyVersion,' +
+    'submittedAt,confirmedAt,endedAt,version,updatedAt',
+  NewsletterConsentEvent:
+    'id,subscriberId,event,purpose,noticeVersion,source,locale,occurredAt',
+};
+
+/**
+ * Whether Phase 21 is applied, ALL OR NOTHING: either every one of its fifteen
+ * tables exists or none does. Half a schema fails here rather than letting an
+ * earlier owner's foundation check admit or refuse its references by accident.
+ */
+async function personalisationPresent(session: SqlSession): Promise<boolean> {
+  const names = PERSONALISATION_TABLES.map((table) => `N'${table}'`).join(',');
+  const [row] = await session.query<{ present: number }>(
+    `SELECT COUNT(*) AS [present] FROM sys.tables WHERE [name] IN (${names});`,
+  );
+  const present = Number(row?.present ?? -1);
+  if (present !== 0 && present !== PERSONALISATION_TABLES.length)
+    fail(
+      `Phase 21 is half applied: ${String(present)} of ${String(PERSONALISATION_TABLES.length)} ` +
+        `Personalisation tables exist.`,
+    );
+  return present === PERSONALISATION_TABLES.length;
+}
+
+/** The Ayah keys Personalisation holds now: all three, or none. */
+async function personalisationAyahKeys(session: SqlSession): Promise<readonly string[]> {
+  return (await personalisationPresent(session)) ? PERSONALISATION_AYAH_KEYS : [];
+}
+
+/**
+ * Phase 21 — what only the catalogue can prove about Personalisation:
+ *
+ *   1. NOTHING IS SEEDED: all fifteen tables are empty after deploy — no saved
+ *      item, note, history, notification or subscriber of anybody;
+ *   2. every column of every table is exactly as stated — no `targetType`,
+ *      `targetId` or `contentType`, no stored title or status of a target, no
+ *      raw token, no course or lesson column — and the unique and FILTERED
+ *      indexes are exactly the per-account typed-target keys, the owner keys a
+ *      collection member reaches through and the two live-link keys;
+ *   3. every foreign key is exactly one of the twenty-six above: owners and
+ *      typed targets NO ACTION, the five internal cascades the only cascades, a
+ *      collection member's owner on both of its keys, and no key from the
+ *      newsletter to User; no other owner references a Phase-21 table;
+ *   4. the CHECKs are exactly the sixteen named rules, and the one trigger
+ *      raises exactly 51260 on any UPDATE or DELETE of consent evidence;
+ *   5. the vocabulary is exactly the two newsletter keys, described as the
+ *      compiled catalogue describes them, BOTH in the protected bundle and held
+ *      by no other role, with exactly one `newsletter.permissions.provisioned`
+ *      record naming this migration; no permission names saved items, notes,
+ *      history or notifications.
+ *
+ * The rules themselves are proved as BEHAVIOUR by `assertPersonalisationRules`,
+ * and through the runtime login by `db:test:permissions`.
+ */
+async function assertPersonalisationFoundation(session: SqlSession): Promise<void> {
+  const tables = PERSONALISATION_TABLES.map(
+    (table) => `OBJECT_ID(N'[dbo].[${table}]')`,
+  ).join(',');
+  if (!(await personalisationPresent(session)))
+    fail('The Phase-21 Personalisation tables are missing after deploy.');
+
+  // ---- 1. nothing seeded -------------------------------------------------------
+  const counts = await session.query<{ name: string; total: number }>(
+    PERSONALISATION_TABLES.map(
+      (table) =>
+        `SELECT N'${table}' AS [name], COUNT_BIG(*) AS [total] FROM [dbo].[${table}]`,
+    ).join(' UNION ALL ') + ';',
+  );
+  const seeded = counts.filter((row) => Number(row.total) !== 0);
+  if (PERSONALISATION_TABLES.length !== 15 || counts.length !== 15 || seeded.length > 0)
+    fail(
+      `The Personalisation migration must create fifteen empty tables and seed nothing; ` +
+        `found ${String(counts.length)} tables, seeded: ${JSON.stringify(seeded)}.`,
+    );
+
+  // ---- 2. exact columns, exact unique and filtered indexes ----------------------
+  const shapes = await session.query<{ name: string; columns: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) AS [name],
+      STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id]) AS [columns]
+    FROM sys.columns c WHERE c.[object_id] IN (${tables})
+    GROUP BY c.[object_id];
+  `);
+  const shapeFindings = PERSONALISATION_TABLES.filter(
+    (table) =>
+      shapes.find((row) => row.name === table)?.columns !==
+      PERSONALISATION_COLUMNS[table],
+  );
+  if (shapes.length !== 15 || shapeFindings.length > 0)
+    fail(
+      `Personalisation columns differ from the reviewed shape in ${shapeFindings.join(', ')}: ` +
+        `${JSON.stringify(shapes.filter((row) => shapeFindings.includes(row.name)))}.`,
+    );
+
+  const generic = await session.query<{ name: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] AS [name] FROM sys.columns c
+    WHERE c.[object_id] IN (${tables})
+      AND (c.[name] LIKE N'%type%' OR c.[name] LIKE N'%target%' OR c.[name] LIKE N'%entity%'
+           OR c.[name] LIKE N'%course%' OR c.[name] LIKE N'%lesson%' OR c.[name] LIKE N'%class%'
+           OR c.[name] LIKE N'%teacher%' OR c.[name] LIKE N'%slug%' OR c.[name] LIKE N'%status%'
+           OR c.[name] LIKE N'%token' OR c.[name] LIKE N'%password%' OR c.[name] LIKE N'%account%'
+           OR (c.[name] LIKE N'%title%' AND OBJECT_NAME(c.[object_id]) <> N'PrivateCollection'));
+  `);
+  if (generic.length > 0)
+    fail(
+      `Personalisation may carry no type, target, course, copied-content, raw-token or account ` +
+        `column; found ${JSON.stringify(generic)}.`,
+    );
+
+  const unique = await session.query<{
+    name: string;
+    columns: string;
+    filter: string | null;
+  }>(`
+    SELECT i.[name], i.[filter_definition] AS [filter],
+      STRING_AGG(COL_NAME(ic.[object_id], ic.[column_id]), N',')
+        WITHIN GROUP (ORDER BY ic.[key_ordinal]) AS [columns]
+    FROM sys.indexes i
+    JOIN sys.index_columns ic ON ic.[object_id] = i.[object_id] AND ic.[index_id] = i.[index_id]
+    WHERE i.[is_unique] = 1 AND ic.[key_ordinal] > 0 AND i.[object_id] IN (${tables})
+    GROUP BY i.[object_id], i.[name], i.[filter_definition];
+  `);
+  const describedUnique = unique
+    .map(
+      (row) =>
+        `${row.name}(${row.columns})` +
+        (row.filter === null ? '' : ` WHERE ${row.filter}`),
+    )
+    .sort();
+  if (describedUnique.join(' | ') !== PERSONALISATION_UNIQUE.join(' | '))
+    fail(
+      `Personalisation must hold each typed target at most once per account, and a live link ` +
+        `in one subscription; found ${describedUnique.join(' | ')}.`,
+    );
+
+  // ---- 3. exact keys: internal cascades only, nothing to the newsletter's User ---
+  const keys = await session.query<{
+    name: string;
+    columns: string;
+    target: string;
+    deletes: string;
+    updates: string;
+  }>(`
+    SELECT fk.[name], OBJECT_NAME(fk.[referenced_object_id]) AS [target],
+      fk.[delete_referential_action_desc] AS [deletes], fk.[update_referential_action_desc] AS [updates],
+      STRING_AGG(COL_NAME(c.[parent_object_id], c.[parent_column_id]) + N'>'
+        + COL_NAME(c.[referenced_object_id], c.[referenced_column_id]), N',')
+        WITHIN GROUP (ORDER BY c.[constraint_column_id]) AS [columns]
+    FROM sys.foreign_keys fk
+    JOIN sys.foreign_key_columns c ON c.[constraint_object_id] = fk.[object_id]
+    WHERE fk.[parent_object_id] IN (${tables})
+    GROUP BY fk.[name], fk.[referenced_object_id], fk.[delete_referential_action_desc],
+      fk.[update_referential_action_desc];
+  `);
+  const describedKeys = keys
+    .map((row) => `${row.name}(${row.columns})>${row.target}:${row.deletes}`)
+    .sort();
+  if (
+    describedKeys.join(',') !== PERSONALISATION_KEYS.join(',') ||
+    keys.some((row) => row.updates !== 'NO_ACTION')
+  )
+    fail(
+      `Personalisation's keys must be exactly the reviewed twenty-six, cascading only ` +
+        `inside the context; found ${describedKeys.join(', ')}.`,
+    );
+
+  const [isolation] = await session.query<{
+    inbound: number;
+    newsletterKeys: string | null;
+    foreign: string | null;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE [referenced_object_id] IN (${tables}) AND [parent_object_id] NOT IN (${tables})) AS [inbound],
+      (SELECT STRING_AGG([name], N',') FROM sys.foreign_keys
+        WHERE [parent_object_id] = OBJECT_ID(N'[dbo].[NewsletterSubscriber]')
+           OR ([parent_object_id] = OBJECT_ID(N'[dbo].[NewsletterConsentEvent]')
+               AND [referenced_object_id] <> OBJECT_ID(N'[dbo].[NewsletterSubscriber]'))) AS [newsletterKeys],
+      (SELECT STRING_AGG(OBJECT_NAME(c.[object_id]) + N'.' + c.[name], N',') FROM sys.columns c
+        WHERE (c.[name] LIKE N'%saveditem%' OR c.[name] LIKE N'%bookmark%' OR c.[name] LIKE N'%newsletter%'
+               OR c.[name] LIKE N'%subscriber%' OR c.[name] LIKE N'%notification%')
+          AND c.[object_id] NOT IN (${tables})
+          AND OBJECTPROPERTY(c.[object_id], 'IsUserTable') = 1) AS [foreign];
+  `);
+  if (
+    Number(isolation?.inbound) !== 0 ||
+    (isolation?.newsletterKeys ?? null) !== null ||
+    (isolation?.foreign ?? null) !== null
+  )
+    fail(
+      `No other owner may reference or hold Personalisation schema, and a newsletter ` +
+        `subscription relates to nothing; found ${JSON.stringify(isolation ?? null)}.`,
+    );
+
+  // ---- 4. exactly sixteen CHECKs and one immutable-evidence trigger -----------
+  const checks = await session.query<{ name: string; trusted: number }>(`
+    SELECT [name], CASE WHEN [is_disabled] = 0 AND [is_not_trusted] = 0 THEN 1 ELSE 0 END AS [trusted]
+    FROM sys.check_constraints WHERE [parent_object_id] IN (${tables});
+  `);
+  const expectedChecks = EXPECTED_CHECK_CONSTRAINTS.filter((entry) =>
+    PERSONALISATION_TABLES.includes(entry.table),
+  )
+    .map((entry) => entry.constraint)
+    .sort();
+  if (
+    expectedChecks.length !== 16 ||
+    checks
+      .map((row) => row.name)
+      .sort()
+      .join(',') !== expectedChecks.join(',') ||
+    checks.some((row) => Number(row.trusted) !== 1)
+  )
+    fail(
+      `Personalisation must carry exactly its sixteen trusted CHECKs; found ${JSON.stringify(checks)}.`,
+    );
+
+  const triggers = await session.query<{
+    name: string;
+    tableName: string;
+    events: string;
+    definition: string | null;
+  }>(`
+    SELECT t.[name], OBJECT_NAME(t.[parent_id]) AS [tableName], OBJECT_DEFINITION(t.[object_id]) AS [definition],
+      (SELECT STRING_AGG(e.[type_desc], N',') WITHIN GROUP (ORDER BY e.[type_desc])
+         FROM sys.trigger_events e WHERE e.[object_id] = t.[object_id]) AS [events]
+    FROM sys.triggers t WHERE t.[parent_id] IN (${tables});
+  `);
+  const describedTriggers = triggers
+    .map(
+      (row) =>
+        `${row.name}@${row.tableName}[${row.events}]:${raisedNumbers(row.definition)}`,
+    )
+    .join(',');
+  if (
+    describedTriggers !==
+    'NewsletterConsentEventImmutable@NewsletterConsentEvent[DELETE,UPDATE]:51260'
+  )
+    fail(
+      `Consent evidence must be guarded by exactly one trigger refusing UPDATE and DELETE ` +
+        `with 51260; found ${describedTriggers || '(none)'}.`,
+    );
+
+  const [procedures] = await session.query<{ total: number }>(`
+    SELECT COUNT(*) AS [total] FROM sys.procedures
+    WHERE [name] LIKE N'Personal%' OR [name] LIKE N'Newsletter%' OR [name] LIKE N'Notification%'
+       OR [name] LIKE N'Saved%';
+  `);
+  if (Number(procedures?.total) !== 0)
+    fail('Phase 21 writes through its owner adapters; it must create no procedure.');
+
+  // ---- 5. two keys, both bundled, provisioned once ----------------------------
+  const permissions = await session.query<{
+    key: string;
+    description: string;
+    bundled: number;
+    held: number;
+  }>(`
+    SELECT p.[key], p.[description],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp JOIN [dbo].[Role] r ON r.[id] = rp.[roleId]
+        WHERE r.[key] = N'platform-administrator' AND rp.[permissionKey] = p.[key]) AS [bundled],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp WHERE rp.[permissionKey] = p.[key]) AS [held]
+    FROM [dbo].[Permission] p
+    WHERE p.[key] LIKE N'newsletter%' OR p.[key] LIKE N'notification%' OR p.[key] LIKE N'personal%'
+       OR p.[key] LIKE N'saved%' OR p.[key] LIKE N'bookmark%' OR p.[key] LIKE N'note%'
+       OR p.[key] LIKE N'history%' OR p.[key] LIKE N'subscriber%'
+    ORDER BY p.[key];
+  `);
+  const described = new Map(
+    PERMISSION_CATALOGUE.map((entry) => [entry.key as string, entry.description]),
+  );
+  const compiled = new Set<string>(PLATFORM_ADMINISTRATOR_PERMISSIONS);
+  if (
+    permissions.map((row) => row.key).join(',') !== NEWSLETTER_PERMISSIONS.join(',') ||
+    !NEWSLETTER_PERMISSIONS.every((key) => compiled.has(key)) ||
+    permissions.some(
+      (row) =>
+        row.description !== described.get(row.key) ||
+        Number(row.bundled) !== 1 ||
+        Number(row.held) !== 1,
+    )
+  )
+    fail(
+      `The Personalisation vocabulary must be exactly ${NEWSLETTER_PERMISSIONS.join(', ')}, ` +
+        `described as the compiled catalogue describes them, in the protected bundle and held ` +
+        `by no other role; found ${JSON.stringify(permissions)}.`,
+    );
+
+  const provisioning = await session.query<{
+    actorType: string;
+    actorId: string | null;
+    targetType: string;
+    roleKey: string | null;
+    afterState: string | null;
+    authorisingSource: string | null;
+  }>(`
+    SELECT a.[actorType], a.[actorId], a.[targetType], r.[key] AS [roleKey], a.[afterState], a.[authorisingSource]
+    FROM [dbo].[AuditLog] a LEFT JOIN [dbo].[Role] r ON r.[id] = a.[targetId]
+    WHERE a.[action] = N'newsletter.permissions.provisioned';
+  `);
+  if (
+    JSON.stringify(provisioning) !==
+    JSON.stringify([
+      {
+        actorType: 'migration',
+        actorId: null,
+        targetType: 'role',
+        roleKey: 'platform-administrator',
+        afterState: '{"added":"newsletter.operate newsletter.read"}',
+        authorisingSource: PERSONALISATION_MIGRATION,
+      },
+    ])
+  )
+    fail(
+      `Extending the protected bundle must leave exactly one provisioning record naming the ` +
+        `added keys and this migration; found ${JSON.stringify(provisioning)}.`,
+    );
+
+  report(
+    'personalisation schema',
+    'fifteen empty tables of the reviewed shape, filtered per-account target keys, ' +
+      'twenty-six keys cascading only inside the context, 16 CHECKs, one 51260 trigger, ' +
+      'two bundled newsletter keys provisioned once',
+  );
+}
+
+/**
+ * After the Phase-21 rollback: no Personalisation table, key, index or trigger,
+ * no newsletter permission, bundle entry or provisioning record — and the
+ * protected bundle is the catalogue less the gated keys and exactly the
+ * compiled bundle less the two newsletter keys. The caller then proves the
+ * owners Personalisation referenced are intact.
+ */
+async function assertPersonalisationRemoved(session: SqlSession): Promise<void> {
+  const names = PERSONALISATION_TABLES.map((table) => `N'${table}'`).join(',');
+  const [row] = await session.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables WHERE [name] IN (${names})) AS [tables],
+      (SELECT COUNT(*) FROM sys.triggers WHERE [name] = N'NewsletterConsentEventImmutable') AS [triggers],
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [keys],
+      (SELECT COUNT(*) FROM sys.check_constraints
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [checks],
+      (SELECT COUNT(*) FROM sys.indexes
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [indexes],
+      (SELECT COUNT(*) FROM [dbo].[Permission] WHERE [key] LIKE N'newsletter.%') AS [permissions],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] WHERE [permissionKey] LIKE N'newsletter.%') AS [bundled],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action] = N'newsletter.permissions.provisioned') AS [audit];
+  `);
+  if (Object.values(row ?? { missing: 1 }).some((value) => Number(value) !== 0))
+    fail(
+      `The Phase-21 rollback left a Personalisation object: ${JSON.stringify(row ?? null)}.`,
+    );
+  if (await personalisationPresent(session))
+    fail('The Phase-21 rollback left the Personalisation schema in place.');
+  const bundled = await assertProtectedBundleExcludesGated(session);
+  const expected = PLATFORM_ADMINISTRATOR_PERMISSIONS.filter(
+    (key) => !NEWSLETTER_PERMISSIONS.includes(key),
+  ).length;
+  if (
+    bundled !== expected ||
+    expected !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length - NEWSLETTER_PERMISSIONS.length
+  )
+    fail(
+      `After the Phase-21 rollback the protected bundle holds ${String(bundled)} keys; the ` +
+        `compiled bundle less the two newsletter keys holds ${String(expected)}.`,
+    );
+  report(
+    'personalisation rollback',
+    `every Personalisation table, key, index, CHECK, trigger, newsletter permission and ` +
+      `provisioning record removed; ${String(bundled)} keys still bundled`,
+  );
+}
+
+/**
+ * Phase 21 — THE RULES, proved as behaviour against the re-deployed schema
+ * with NON_PERSONALISATION_FIXTURE sentinels only, through the migration login
+ * (the runtime's own posture is `db:test:permissions`'s):
+ *
+ *   - a saved item and a history row name EXACTLY ONE typed target: none, two,
+ *     or half an Ayah citation is refused (…_one_target_ck); a video cannot be
+ *     a reading-history row at all; each account holds each target at most once
+ *     (the filtered keys) while two accounts may each hold it; a target that
+ *     does not exist — an Ayah or a public Hadith citation included — is
+ *     refused by its own typed key;
+ *   - nothing cascades from content or an account: a referenced Article, Work
+ *     or Video cannot be deleted while a saved item or history row names it,
+ *     and can once Personalisation has released it; an account with saved
+ *     items cannot be deleted;
+ *   - inside the context only: a saved item takes its bookmark and note, a
+ *     private collection its members, a profile its interests and goals; a
+ *     saved item that is still a collection member is not deleted; a member
+ *     joins only its owner's collection to its owner's saved item, at a unique
+ *     place from 0 to 199;
+ *   - a notification destination is a path on this site and nothing else —
+ *     no scheme, host, protocol-relative URL, backslash, dot segment or
+ *     percent-encoding — its idempotency key is unique per account, and the
+ *     kind, category and channel vocabularies are closed;
+ *   - a newsletter state holds exactly the columns it may: a pending
+ *     subscription has its live link hashes, an ended one keeps no address;
+ *     one digest per address and one subscription per live link hash; a
+ *     subscriber with consent evidence is never deleted, and that evidence
+ *     refuses UPDATE and DELETE even to this privileged session (51260).
+ */
+async function assertPersonalisationRules(session: SqlSession): Promise<void> {
+  const run = randomUUID().replaceAll('-', '').slice(0, 16);
+  const at = '2026-10-05T00:00:00';
+  const later = '2026-10-05T01:00:00';
+  let refusals = 0;
+  const refuse = async (
+    label: string,
+    statement: string,
+    numbers: readonly number[],
+    rule: string,
+  ): Promise<void> => {
+    await expectRefusal(session, label, statement, numbers, rule);
+    refusals += 1;
+  };
+  const count = async (statement: string): Promise<number> => {
+    const [row] = await session.query<{ total: number }>(statement);
+    return Number(row?.total ?? -1);
+  };
+  const hash = (label: string): string =>
+    createHash('sha256')
+      .update(`NON_PERSONALISATION_FIXTURE ${run} ${label}`)
+      .digest('hex');
+
+  // ---- the accounts and the content the proofs name -----------------------------
+  const owner = randomUUID();
+  const other = randomUUID();
+  const closing = randomUUID();
+  for (const [user, label] of [
+    [owner, 'owner'],
+    [other, 'other'],
+    [closing, 'closing'],
+  ] as const)
+    await session.query(
+      `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled]) VALUES (N'${user}',N'NON_PERSONALISATION_FIXTURE ${label}',N'${label}-${run}@personalisation-proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);`,
+    );
+
+  // Two of each releasable target, written as their owners write them: an
+  // Article as a draft with no revision, a Work and a Video published (their
+  // slugs reserved by their owners' own triggers). Every slug is a sentinel.
+  const articles = [randomUUID(), randomUUID()] as const;
+  const works = [randomUUID(), randomUUID()] as const;
+  const videos = [randomUUID(), randomUUID()] as const;
+  for (const [index, id] of articles.entries())
+    await expectAccepted(
+      session,
+      'Article synthetic target',
+      `INSERT INTO [dbo].[Article] ([id],[slug],[state],[version],[creatorId],[updatedAt]) VALUES (N'${id}',N'non-personalisation-fixture-article-${String(index)}-${run}',N'draft',1,N'${owner}',SYSUTCDATETIME());`,
+    );
+  for (const [index, id] of works.entries())
+    await expectAccepted(
+      session,
+      'Work synthetic target',
+      `INSERT INTO [dbo].[Work] ([id],[slug],[primaryLocale],[state]) VALUES (N'${id}',N'non-personalisation-fixture-work-${String(index)}-${run}',N'en',N'published');`,
+    );
+  for (const [index, id] of videos.entries())
+    await expectAccepted(
+      session,
+      'Video synthetic target',
+      `INSERT INTO [dbo].[Video] ([id],[slug],[primaryLocale],[state],[provider],[providerVideoId],[availability],[languageCode]) VALUES (N'${id}',N'non-personalisation-fixture-video-${String(index)}-${run}',N'en',N'published',N'youtube','p21${String(index)}${run.slice(0, 7)}',N'available',N'en');`,
+    );
+
+  // An Ayah and a public Hadith citation are written only through their owners'
+  // guarded canonical paths, so the proofs name rows the Quran and Hadith rule
+  // proofs above already wrote — and fail rather than pass vacuously without.
+  const [ayah] = await session.query<{ surahNumber: number; ayahNumber: number }>(
+    'SELECT TOP 1 [surahNumber], [ayahNumber] FROM [dbo].[Ayah] ORDER BY [surahNumber], [ayahNumber];',
+  );
+  const [citation] = await session.query<{ id: string }>(
+    'SELECT TOP 1 [id] FROM [dbo].[HadithCitation] ORDER BY [id];',
+  );
+  if (ayah === undefined || citation === undefined)
+    fail(
+      'The Personalisation rules need an Ayah and a Hadith citation from the canonical rule ' +
+        'proofs, which must run first.',
+    );
+  const ayahColumns = {
+    surahNumber: String(ayah.surahNumber),
+    ayahNumber: String(ayah.ayahNumber),
+  };
+
+  const saved = (
+    id: string,
+    user: string,
+    target: Readonly<Record<string, string>>,
+  ): string => {
+    const columns = Object.keys(target);
+    const values = Object.entries(target).map(([column, value]) =>
+      column === 'surahNumber' || column === 'ayahNumber' ? value : `N'${value}'`,
+    );
+    return `INSERT INTO [dbo].[SavedItem] ([id],[userId]${columns.map((column) => `,[${column}]`).join('')},[createdAt]) VALUES (N'${id}',N'${user}'${values.map((value) => `,${value}`).join('')},'${at}');`;
+  };
+  const read = (
+    user: string,
+    target: Readonly<Record<string, string>>,
+    last = at,
+  ): string => {
+    const columns = Object.keys(target);
+    const values = Object.entries(target).map(([column, value]) =>
+      column === 'surahNumber' || column === 'ayahNumber' ? value : `N'${value}'`,
+    );
+    return `INSERT INTO [dbo].[ReadingHistory] ([id],[userId]${columns.map((column) => `,[${column}]`).join('')},[firstReadAt],[lastReadAt]) VALUES (N'${randomUUID()}',N'${user}'${values.map((value) => `,${value}`).join('')},'${at}','${last}');`;
+  };
+
+  // ---- exactly one typed target, at most once per account ----------------------
+  const savedIds = {
+    article: randomUUID(),
+    work: randomUUID(),
+    video: randomUUID(),
+    ayah: randomUUID(),
+    hadith: randomUUID(),
+  };
+  const targets: Readonly<
+    Record<keyof typeof savedIds, Readonly<Record<string, string>>>
+  > = {
+    article: { articleId: articles[0] },
+    work: { workId: works[0] },
+    video: { videoId: videos[0] },
+    ayah: ayahColumns,
+    hadith: { hadithCitationId: citation.id },
+  };
+  for (const kind of Object.keys(savedIds) as (keyof typeof savedIds)[])
+    await expectAccepted(
+      session,
+      `A ${kind} saved by its owner`,
+      saved(savedIds[kind], owner, targets[kind]),
+    );
+  for (const kind of Object.keys(savedIds) as (keyof typeof savedIds)[]) {
+    await refuse(
+      `The same ${kind} saved twice by one account`,
+      saved(randomUUID(), owner, targets[kind]),
+      [2601],
+      `SavedItem_${kind}_key`,
+    );
+    await expectAccepted(
+      session,
+      `The same ${kind} saved by a second account`,
+      saved(randomUUID(), other, targets[kind]),
+    );
+  }
+  await refuse(
+    'A saved item with no target',
+    saved(randomUUID(), owner, {}),
+    [547],
+    'SavedItem_one_target_ck',
+  );
+  await refuse(
+    'A saved item with two targets',
+    saved(randomUUID(), closing, { articleId: articles[1], workId: works[1] }),
+    [547],
+    'SavedItem_one_target_ck',
+  );
+  await refuse(
+    'A saved Ayah with only its Surah',
+    saved(randomUUID(), closing, { surahNumber: ayahColumns.surahNumber }),
+    [547],
+    'SavedItem_one_target_ck',
+  );
+  await refuse(
+    'A saved Ayah with only its verse number',
+    saved(randomUUID(), closing, { ayahNumber: ayahColumns.ayahNumber }),
+    [547],
+    'SavedItem_one_target_ck',
+  );
+  await refuse(
+    'A saved Ayah that does not exist',
+    saved(randomUUID(), closing, { surahNumber: '9999', ayahNumber: '9999' }),
+    [547],
+    'SavedItem_surahNumber_ayahNumber_fkey',
+  );
+  await refuse(
+    'A saved Hadith citation that does not exist',
+    saved(randomUUID(), closing, { hadithCitationId: randomUUID() }),
+    [547],
+    'SavedItem_hadithCitationId_fkey',
+  );
+  await refuse(
+    'A saved Article that does not exist',
+    saved(randomUUID(), closing, { articleId: randomUUID() }),
+    [547],
+    'SavedItem_articleId_fkey',
+  );
+
+  for (const [kind, target] of [
+    ['article', { articleId: articles[0] }],
+    ['work', { workId: works[0] }],
+    ['ayah', ayahColumns],
+    ['hadith', { hadithCitationId: citation.id }],
+  ] as const) {
+    await expectAccepted(session, `A ${kind} read by its owner`, read(owner, target));
+    await refuse(
+      `A second history row for the same ${kind}`,
+      read(owner, target),
+      [2601],
+      `ReadingHistory_${kind}_key`,
+    );
+  }
+  await refuse(
+    'A history row with no target',
+    read(closing, {}),
+    [547],
+    'ReadingHistory_one_target_ck',
+  );
+  await refuse(
+    'A history row with two targets',
+    read(closing, { articleId: articles[1], workId: works[1] }),
+    [547],
+    'ReadingHistory_one_target_ck',
+  );
+  await refuse(
+    'A history row last read before it was first read',
+    read(closing, { articleId: articles[1] }, '2026-10-04T00:00:00'),
+    [547],
+    'ReadingHistory_ck',
+  );
+  await refuse(
+    'A video named as reading history',
+    `INSERT INTO [dbo].[ReadingHistory] ([id],[userId],[videoId],[firstReadAt],[lastReadAt]) VALUES (N'${randomUUID()}',N'${closing}',N'${videos[1]}','${at}','${at}');`,
+    [207],
+    'videoId',
+  );
+  await expectAccepted(
+    session,
+    'A video watched by its owner',
+    `INSERT INTO [dbo].[WatchHistory] ([userId],[videoId],[firstWatchedAt],[lastWatchedAt]) VALUES (N'${owner}',N'${videos[1]}','${at}','${later}');`,
+  );
+  await refuse(
+    'A watch row last watched before it was first watched',
+    `INSERT INTO [dbo].[WatchHistory] ([userId],[videoId],[firstWatchedAt],[lastWatchedAt]) VALUES (N'${other}',N'${videos[1]}','${later}','${at}');`,
+    [547],
+    'WatchHistory_ck',
+  );
+
+  // ---- nothing cascades from content or an account -------------------------------
+  //
+  // Each target's owner first releases the slug reservation its own trigger
+  // wrote, so the Personalisation key is the ONLY reference left and the
+  // refusal can only be that key's. The disposable database is the owner's.
+  await session.query(`
+    DELETE FROM [dbo].[WorkSlugHistory] WHERE [workId] IN (N'${works[0]}', N'${works[1]}');
+    DELETE FROM [dbo].[VideoSlugHistory] WHERE [videoId] IN (N'${videos[0]}', N'${videos[1]}');
+  `);
+  // A target named by BOTH a saved item and a history row conflicts with two
+  // keys, and SQL Server names whichever its plan checks first — so the first
+  // Article's and Work's history rows are released before the proof.
+  await session.query(
+    `DELETE FROM [dbo].[ReadingHistory] WHERE [userId]=N'${owner}' AND ([articleId]=N'${articles[0]}' OR [workId]=N'${works[0]}');`,
+  );
+  const personalRows = async (): Promise<number> =>
+    count(`
+      SELECT (SELECT COUNT_BIG(*) FROM [dbo].[SavedItem]) + (SELECT COUNT_BIG(*) FROM [dbo].[ReadingHistory])
+        + (SELECT COUNT_BIG(*) FROM [dbo].[WatchHistory]) AS [total];
+    `);
+  const before = await personalRows();
+  for (const [table, id, key] of [
+    ['Article', articles[0], 'SavedItem_articleId_fkey'],
+    ['Work', works[0], 'SavedItem_workId_fkey'],
+    ['Video', videos[0], 'SavedItem_videoId_fkey'],
+    ['Video', videos[1], 'WatchHistory_videoId_fkey'],
+  ] as const)
+    await refuse(
+      `A ${table} a person still holds is never deleted`,
+      `DELETE FROM [dbo].[${table}] WHERE [id]=N'${id}';`,
+      [547],
+      key,
+    );
+  await expectAccepted(
+    session,
+    'An Article read by a person',
+    read(owner, { articleId: articles[1] }),
+  );
+  await refuse(
+    'An Article a person has read is never deleted',
+    `DELETE FROM [dbo].[Article] WHERE [id]=N'${articles[1]}';`,
+    [547],
+    'ReadingHistory_articleId_fkey',
+  );
+  if ((await personalRows()) !== before + 1)
+    fail('A refused content deletion changed a Personalisation row.');
+
+  // Personalisation releases its own references; the owners may then delete.
+  await expectAccepted(
+    session,
+    'Personalisation releases its typed references',
+    `DELETE FROM [dbo].[SavedItem] WHERE [articleId]=N'${articles[0]}' OR [workId]=N'${works[0]}' OR [videoId]=N'${videos[0]}';
+     DELETE FROM [dbo].[WatchHistory] WHERE [videoId]=N'${videos[1]}';
+     DELETE FROM [dbo].[ReadingHistory] WHERE [articleId]=N'${articles[1]}';`,
+  );
+  await expectAccepted(
+    session,
+    'Released content is deleted by its owner',
+    `DELETE FROM [dbo].[Article] WHERE [id] IN (N'${articles[0]}', N'${articles[1]}');
+     DELETE FROM [dbo].[Work] WHERE [id]=N'${works[0]}';
+     DELETE FROM [dbo].[Video] WHERE [id] IN (N'${videos[0]}', N'${videos[1]}');`,
+  );
+
+  await expectAccepted(
+    session,
+    'An account holding one saved item',
+    saved(randomUUID(), closing, { workId: works[1] }),
+  );
+  await refuse(
+    'An account with saved items is never deleted under them',
+    `DELETE FROM [dbo].[User] WHERE [id]=N'${closing}';`,
+    [547],
+    'SavedItem_userId_fkey',
+  );
+
+  // ---- inside the context: bookmarks, notes, collections, profiles ---------------
+  const collection = randomUUID();
+  const otherCollection = randomUUID();
+  const loose = randomUUID();
+  await expectAccepted(
+    session,
+    'A saved item in no collection',
+    saved(loose, owner, { workId: works[1] }),
+  );
+  await expectAccepted(
+    session,
+    'A bookmark, a note and a private collection of two members',
+    `INSERT INTO [dbo].[Bookmark] ([savedItemId],[createdAt]) VALUES (N'${savedIds.ayah}','${at}');
+     INSERT INTO [dbo].[Note] ([savedItemId],[body],[version],[createdAt],[updatedAt]) VALUES (N'${savedIds.ayah}',N'NON_PERSONALISATION_FIXTURE_NOTE synthetic note',1,'${at}','${at}');
+     INSERT INTO [dbo].[PrivateCollection] ([id],[userId],[title],[description],[version],[createdAt],[updatedAt]) VALUES
+       (N'${collection}',N'${owner}',N'NON_PERSONALISATION_FIXTURE_COLLECTION',NULL,1,'${at}','${at}'),
+       (N'${otherCollection}',N'${other}',N'NON_PERSONALISATION_FIXTURE_COLLECTION other',NULL,1,'${at}','${at}');
+     INSERT INTO [dbo].[PrivateCollectionItem] ([collectionId],[savedItemId],[userId],[position],[addedAt]) VALUES
+       (N'${collection}',N'${savedIds.ayah}',N'${owner}',0,'${at}'),
+       (N'${collection}',N'${savedIds.hadith}',N'${owner}',1,'${at}');`,
+  );
+  const [otherSaved] = await session.query<{ id: string }>(
+    `SELECT TOP 1 [id] FROM [dbo].[SavedItem] WHERE [userId]=N'${other}' ORDER BY [id];`,
+  );
+  if (otherSaved === undefined) fail('The second account holds no saved item.');
+  await refuse(
+    "A member joining one account's collection to another's saved item",
+    `INSERT INTO [dbo].[PrivateCollectionItem] ([collectionId],[savedItemId],[userId],[position],[addedAt]) VALUES (N'${collection}',N'${otherSaved.id}',N'${owner}',2,'${at}');`,
+    [547],
+    'PrivateCollectionItem_savedItem_fkey',
+  );
+  await refuse(
+    "A member joining another account's collection",
+    `INSERT INTO [dbo].[PrivateCollectionItem] ([collectionId],[savedItemId],[userId],[position],[addedAt]) VALUES (N'${collection}',N'${otherSaved.id}',N'${other}',2,'${at}');`,
+    [547],
+    'PrivateCollectionItem_collection_fkey',
+  );
+  await refuse(
+    'Two members at one place',
+    `INSERT INTO [dbo].[PrivateCollectionItem] ([collectionId],[savedItemId],[userId],[position],[addedAt]) VALUES (N'${collection}',N'${loose}',N'${owner}',1,'${at}');`,
+    [2627],
+    'PrivateCollectionItem_position_key',
+  );
+  await refuse(
+    'A member beyond the last place',
+    `INSERT INTO [dbo].[PrivateCollectionItem] ([collectionId],[savedItemId],[userId],[position],[addedAt]) VALUES (N'${collection}',N'${loose}',N'${owner}',200,'${at}');`,
+    [547],
+    'PrivateCollectionItem_ck',
+  );
+  await refuse(
+    'An empty note',
+    `INSERT INTO [dbo].[Note] ([savedItemId],[body],[version],[createdAt],[updatedAt]) VALUES (N'${savedIds.hadith}',N'',1,'${at}','${at}');`,
+    [547],
+    'Note_ck',
+  );
+  await refuse(
+    'A private collection with no title',
+    `INSERT INTO [dbo].[PrivateCollection] ([id],[userId],[title],[version],[createdAt],[updatedAt]) VALUES (N'${randomUUID()}',N'${owner}',N'',1,'${at}','${at}');`,
+    [547],
+    'PrivateCollection_ck',
+  );
+  await refuse(
+    'A saved item that is still a collection member is not deleted',
+    `DELETE FROM [dbo].[SavedItem] WHERE [id]=N'${savedIds.ayah}';`,
+    [547],
+    'PrivateCollectionItem_savedItem_fkey',
+  );
+  await expectAccepted(
+    session,
+    'A private collection deleted with its members',
+    `DELETE FROM [dbo].[PrivateCollection] WHERE [id]=N'${collection}';`,
+  );
+  await expectAccepted(
+    session,
+    'A saved item deleted with its bookmark and note',
+    `DELETE FROM [dbo].[SavedItem] WHERE [id]=N'${savedIds.ayah}';`,
+  );
+  const [internal] = await session.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[PrivateCollectionItem] WHERE [collectionId]=N'${collection}') AS [members],
+      (SELECT COUNT(*) FROM [dbo].[SavedItem] WHERE [id]=N'${savedIds.hadith}') AS [memberKept],
+      (SELECT COUNT(*) FROM [dbo].[Bookmark] WHERE [savedItemId]=N'${savedIds.ayah}') AS [bookmarks],
+      (SELECT COUNT(*) FROM [dbo].[Note] WHERE [savedItemId]=N'${savedIds.ayah}') AS [notes],
+      (SELECT COUNT(*) FROM [dbo].[PrivateCollection] WHERE [id]=N'${otherCollection}') AS [untouched];
+  `);
+  if (
+    JSON.stringify(internal) !==
+    '{"members":0,"memberKept":1,"bookmarks":0,"notes":0,"untouched":1}'
+  )
+    fail(
+      `The internal cascades did not take exactly their own children: ${JSON.stringify(internal)}.`,
+    );
+
+  await expectAccepted(
+    session,
+    'A profile with explicit onboarding answers',
+    `INSERT INTO [dbo].[PersonalisationProfile] ([userId],[onboarding],[historyEnabled],[version],[createdAt],[updatedAt]) VALUES (N'${owner}',N'completed',1,1,'${at}','${at}');
+     INSERT INTO [dbo].[PersonalisationInterest] ([userId],[interest]) VALUES (N'${owner}',N'quran'),(N'${owner}',N'hadith');
+     INSERT INTO [dbo].[PersonalisationGoal] ([userId],[goal]) VALUES (N'${owner}',N'study-hadith');`,
+  );
+  await refuse(
+    'An onboarding answer outside its vocabulary',
+    `INSERT INTO [dbo].[PersonalisationProfile] ([userId],[onboarding],[historyEnabled],[version],[createdAt],[updatedAt]) VALUES (N'${other}',N'inferred',1,1,'${at}','${at}');`,
+    [547],
+    'PersonalisationProfile_ck',
+  );
+  await refuse(
+    'An interest outside its vocabulary',
+    `INSERT INTO [dbo].[PersonalisationInterest] ([userId],[interest]) VALUES (N'${owner}',N'courses');`,
+    [547],
+    'PersonalisationInterest_ck',
+  );
+  await refuse(
+    'A goal outside its vocabulary',
+    `INSERT INTO [dbo].[PersonalisationGoal] ([userId],[goal]) VALUES (N'${owner}',N'finish-a-course');`,
+    [547],
+    'PersonalisationGoal_ck',
+  );
+  await refuse(
+    'An interest with no profile',
+    `INSERT INTO [dbo].[PersonalisationInterest] ([userId],[interest]) VALUES (N'${other}',N'quran');`,
+    [547],
+    'PersonalisationInterest_userId_fkey',
+  );
+  await expectAccepted(
+    session,
+    'A profile deleted with its interests and goals',
+    `DELETE FROM [dbo].[PersonalisationProfile] WHERE [userId]=N'${owner}';`,
+  );
+  if (
+    (await count(
+      `SELECT (SELECT COUNT_BIG(*) FROM [dbo].[PersonalisationInterest] WHERE [userId]=N'${owner}') + (SELECT COUNT_BIG(*) FROM [dbo].[PersonalisationGoal] WHERE [userId]=N'${owner}') AS [total];`,
+    )) !== 0
+  )
+    fail('Deleting a profile did not take its own interests and goals.');
+
+  // ---- one Quran position --------------------------------------------------------
+  await expectAccepted(
+    session,
+    'A Quran reading position',
+    `INSERT INTO [dbo].[QuranReadingProgress] ([userId],[surahNumber],[ayahNumber],[version],[updatedAt]) VALUES (N'${owner}',${ayahColumns.surahNumber},${ayahColumns.ayahNumber},1,'${at}');`,
+  );
+  await refuse(
+    'A Quran reading position at an Ayah that does not exist',
+    `INSERT INTO [dbo].[QuranReadingProgress] ([userId],[surahNumber],[ayahNumber],[version],[updatedAt]) VALUES (N'${other}',9999,9999,1,'${at}');`,
+    [547],
+    'QuranReadingProgress_surahNumber_ayahNumber_fkey',
+  );
+  await refuse(
+    'A second Quran reading position for one account',
+    `INSERT INTO [dbo].[QuranReadingProgress] ([userId],[surahNumber],[ayahNumber],[version],[updatedAt]) VALUES (N'${owner}',${ayahColumns.surahNumber},${ayahColumns.ayahNumber},1,'${at}');`,
+    [2627],
+    'QuranReadingProgress_pkey',
+  );
+
+  // ---- notifications: an internal path or nothing ---------------------------------
+  const notification = (
+    destination: string | null,
+    key: string,
+    kind = 'question-answered',
+  ): string =>
+    `INSERT INTO [dbo].[Notification] ([id],[userId],[kind],[category],[destination],[idempotencyKey],[createdAt]) VALUES (N'${randomUUID()}',N'${owner}',N'${kind}',N'questions',${destination === null ? 'NULL' : `N'${destination}'`},N'${key}','${at}');`;
+  await expectAccepted(
+    session,
+    'A notification with an internal destination',
+    notification(`/en/my/questions/${randomUUID()}`, `fixture-${run}-1`),
+  );
+  await expectAccepted(
+    session,
+    'A notification with no destination',
+    notification(null, `fixture-${run}-2`, 'question-declined'),
+  );
+  for (const [label, destination] of [
+    ['an absolute URL', 'https://x'],
+    ['a protocol-relative URL', '//x'],
+    ['a backslash', '/\\x'],
+    // Assembled, so the script-URL rule does not read this refused value as
+    // a link this code would follow.
+    ['a script scheme', ['javascript', 'x'].join(':')],
+    ['a dot segment', '/a/../b'],
+    ['percent-encoding', '/a%2f'],
+  ] as const)
+    await refuse(
+      `A notification destination with ${label}`,
+      notification(destination, `fixture-${run}-${label}`),
+      [547],
+      'Notification_ck',
+    );
+  await refuse(
+    'A notification kind outside its vocabulary',
+    notification(null, `fixture-${run}-kind`, 'marketing'),
+    [547],
+    'Notification_ck',
+  );
+  await refuse(
+    'One idempotency key used twice for one account',
+    notification(null, `fixture-${run}-1`),
+    [2627],
+    'Notification_idempotency_key',
+  );
+  await refuse(
+    'A notification read before it was created',
+    `INSERT INTO [dbo].[Notification] ([id],[userId],[kind],[category],[destination],[idempotencyKey],[createdAt],[readAt]) VALUES (N'${randomUUID()}',N'${owner}',N'question-answered',N'questions',NULL,N'fixture-${run}-early','${later}','${at}');`,
+    [547],
+    'Notification_ck',
+  );
+  await refuse(
+    'A notification preference on a channel that does not exist',
+    `INSERT INTO [dbo].[NotificationPreference] ([userId],[category],[channel],[enabled],[updatedAt]) VALUES (N'${owner}',N'questions',N'email',1,'${at}');`,
+    [547],
+    'NotificationPreference_ck',
+  );
+
+  // ---- the newsletter: consent from an address, never an account -------------------
+  const subscriber = randomUUID();
+  const pending = (
+    id: string,
+    digest: string,
+    confirm: string,
+    unsubscribe: string,
+  ): string =>
+    `INSERT INTO [dbo].[NewsletterSubscriber] ([id],[emailDigest],[digestKeyVersion],[email],[state],[locale],[generation],[confirmTokenHash],[confirmSalt],[confirmExpiresAt],[unsubscribeTokenHash],[unsubscribeSalt],[tokenKeyVersion],[submittedAt],[version],[updatedAt]) VALUES (N'${id}',N'${digest}',1,N'subscriber-${run}@personalisation-proof.invalid',N'pending',N'en',1,N'${confirm}',N'${hash('confirm-salt')}','${later}',N'${unsubscribe}',N'${hash('unsubscribe-salt')}',1,'${at}',1,'${at}');`;
+  const ended = (state: string, digest: string): string =>
+    `INSERT INTO [dbo].[NewsletterSubscriber] ([id],[emailDigest],[digestKeyVersion],[email],[state],[locale],[generation],[submittedAt],[endedAt],[version],[updatedAt]) VALUES (N'${randomUUID()}',N'${digest}',1,NULL,N'${state}',N'en',1,'${at}','${later}',1,'${later}');`;
+  await expectAccepted(
+    session,
+    'A pending subscription holding only its link hashes',
+    pending(subscriber, hash('digest'), hash('confirm'), hash('unsubscribe')),
+  );
+  await expectAccepted(
+    session,
+    'Two ended subscriptions holding no link',
+    `${ended('expired', hash('digest-expired'))}
+     ${ended('suppressed', hash('digest-suppressed'))}`,
+  );
+  await refuse(
+    'A second subscription for one address',
+    pending(randomUUID(), hash('digest'), hash('confirm-2'), hash('unsubscribe-2')),
+    [2627],
+    'NewsletterSubscriber_emailDigest_key',
+  );
+  await refuse(
+    'One confirmation link for two subscriptions',
+    pending(randomUUID(), hash('digest-3'), hash('confirm'), hash('unsubscribe-3')),
+    [2601],
+    'NewsletterSubscriber_confirm_key',
+  );
+  await refuse(
+    'One unsubscribe link for two subscriptions',
+    pending(randomUUID(), hash('digest-4'), hash('confirm-4'), hash('unsubscribe')),
+    [2601],
+    'NewsletterSubscriber_unsubscribe_key',
+  );
+  await refuse(
+    'A pending subscription without its link hashes',
+    `INSERT INTO [dbo].[NewsletterSubscriber] ([id],[emailDigest],[digestKeyVersion],[email],[state],[locale],[generation],[submittedAt],[version],[updatedAt]) VALUES (N'${randomUUID()}',N'${hash('digest-5')}',1,N'pending-${run}@personalisation-proof.invalid',N'pending',N'en',1,'${at}',1,'${at}');`,
+    [547],
+    'NewsletterSubscriber_facts_ck',
+  );
+  await refuse(
+    'An unsubscribed subscription that keeps its address',
+    `INSERT INTO [dbo].[NewsletterSubscriber] ([id],[emailDigest],[digestKeyVersion],[email],[state],[locale],[generation],[submittedAt],[endedAt],[version],[updatedAt]) VALUES (N'${randomUUID()}',N'${hash('digest-6')}',1,N'kept-${run}@personalisation-proof.invalid',N'unsubscribed',N'en',1,'${at}','${later}',1,'${later}');`,
+    [547],
+    'NewsletterSubscriber_facts_ck',
+  );
+  await refuse(
+    'A confirmed subscription that keeps a live confirmation link',
+    `UPDATE [dbo].[NewsletterSubscriber] SET [state]=N'confirmed',[confirmedAt]='${later}',[version]=[version]+1 WHERE [id]=N'${subscriber}';`,
+    [547],
+    'NewsletterSubscriber_facts_ck',
+  );
+  await refuse(
+    'A subscription in a locale the site does not serve',
+    pending(
+      randomUUID(),
+      hash('digest-7'),
+      hash('confirm-7'),
+      hash('unsubscribe-7'),
+    ).replace(`N'pending',N'en'`, `N'pending',N'fr'`),
+    [547],
+    'NewsletterSubscriber_ck',
+  );
+
+  const consent = randomUUID();
+  await expectAccepted(
+    session,
+    'Consent evidence appended',
+    `INSERT INTO [dbo].[NewsletterConsentEvent] ([id],[subscriberId],[event],[purpose],[noticeVersion],[source],[locale],[occurredAt]) VALUES (N'${consent}',N'${subscriber}',N'submitted',N'newsletter',N'NON_PERSONALISATION_FIXTURE_NOTICE',N'newsletter-page',N'en','${at}');`,
+  );
+  const evidence = async (): Promise<string> =>
+    JSON.stringify(
+      await session.query(
+        `SELECT * FROM [dbo].[NewsletterConsentEvent] WHERE [subscriberId]=N'${subscriber}' ORDER BY [id];`,
+      ),
+    );
+  const evidenceBefore = await evidence();
+  await refuse(
+    'A consent event outside its vocabulary',
+    `INSERT INTO [dbo].[NewsletterConsentEvent] ([id],[subscriberId],[event],[purpose],[noticeVersion],[source],[locale],[occurredAt]) VALUES (N'${randomUUID()}',N'${subscriber}',N'imported',N'newsletter',N'NON_PERSONALISATION_FIXTURE_NOTICE',N'newsletter-page',N'en','${at}');`,
+    [547],
+    'NewsletterConsentEvent_ck',
+  );
+  await refuse(
+    'Consent evidence rewritten, even by a privileged session',
+    `UPDATE [dbo].[NewsletterConsentEvent] SET [event]=N'confirmed' WHERE [id]=N'${consent}';`,
+    [51260],
+    'Newsletter consent evidence is immutable',
+  );
+  await refuse(
+    'Consent evidence erased, even by a privileged session',
+    `DELETE FROM [dbo].[NewsletterConsentEvent] WHERE [id]=N'${consent}';`,
+    [51260],
+    'Newsletter consent evidence is immutable',
+  );
+  await refuse(
+    'A subscriber with consent evidence is never deleted',
+    `DELETE FROM [dbo].[NewsletterSubscriber] WHERE [id]=N'${subscriber}';`,
+    [547],
+    'NewsletterConsentEvent_subscriberId_fkey',
+  );
+  if ((await evidence()) !== evidenceBefore)
+    fail('A refused change altered consent evidence.');
+  await expectAccepted(
+    session,
+    'An unsubscribe ends the subscription and forgets the address',
+    `UPDATE [dbo].[NewsletterSubscriber] SET [state]=N'unsubscribed',[email]=NULL,[confirmTokenHash]=NULL,[confirmSalt]=NULL,[confirmExpiresAt]=NULL,[unsubscribeSalt]=NULL,[endedAt]='${later}',[version]=[version]+1,[updatedAt]='${later}' WHERE [id]=N'${subscriber}';`,
+  );
+
+  report(
+    'personalisation rules',
+    `one typed target per row, per-account keys, no cascade from content or an account, ` +
+      `owner-bound collections, internal paths only, newsletter facts and immutable consent; ` +
+      `${String(refusals)} refusals by name, every text a NON_PERSONALISATION_FIXTURE sentinel`,
+  );
+}
+
 /**
  * The Phase-13 rollback restores the two editorial keys' Phase-6 descriptions
  * exactly — Article and Page, and no News family.
@@ -8832,6 +10192,7 @@ try {
   await assertQuranFoundation(session);
   await assertHadithFoundation(session);
   await assertFatwaFoundation(session);
+  await assertPersonalisationFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -8879,6 +10240,23 @@ try {
     }
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
+    }
+    if (migration.id === PERSONALISATION_MIGRATION) {
+      // Phase 21 widened no search vocabulary, so none narrows here — and the
+      // whole Phase-20 state it was applied on is back: the protected bundle the
+      // compiled bundle less the two newsletter keys, and every owner a
+      // Personalisation key once named — Fatwa and Identity's accounts, the
+      // Quran's Ayah, Hadith's citation, Editorial's Article, Library's Work,
+      // Media's Video and the editorial Collection — untouched by the drop and
+      // holding no foreign reference again.
+      await assertSearchVocabulary(session, 'phase20');
+      await assertPersonalisationRemoved(session);
+      await assertFatwaFoundation(session, 'before-personalisation');
+      await assertHadithFoundation(session);
+      await assertQuranFoundation(session);
+      await assertCollectionFoundation(session);
+      await assertEventFoundation(session);
+      await assertMediaFoundation(session);
     }
     if (migration.id === '20261004000000_phase20_fatwa') {
       // Phase 20 widened the vocabulary by `fatwa` alone, so it narrows back to
@@ -9015,6 +10393,7 @@ try {
   await assertQuranFoundation(session);
   await assertHadithFoundation(session);
   await assertFatwaFoundation(session);
+  await assertPersonalisationFoundation(session);
   // The membership rules as BEHAVIOUR, on the re-deployed schema: what was
   // rolled back and re-applied enforces exactly what the first deploy did.
   await assertCollectionMembership(session);
@@ -9030,6 +10409,10 @@ try {
   // publications and decisions are never removed — history cannot be — and die
   // with this disposable database.
   await assertFatwaRules(session);
+  // And the Personalisation rules, last of all: they name an Ayah and a Hadith
+  // citation the canonical proofs above wrote, and their synthetic accounts,
+  // content and subscribers die with this disposable database.
+  await assertPersonalisationRules(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

@@ -30,7 +30,8 @@
       "contact": "Contact",
       "feedback": "Feedback",
       "volunteer": "Volunteer",
-      "topics": "Topics"
+      "topics": "Topics",
+      "newsletter": "Newsletter"
     },
     "home": {
       "description": "A unified digital platform for the Quran, Hadith, learning, library and media resources of Minhaj-ul-Quran International.",
@@ -365,7 +366,8 @@
       "recoveryCode": "Recovery code",
       "invalidCode": "That code was not accepted.",
       "notEnrolled": "Two-step verification is not set up on this account.",
-      "alreadyEnrolled": "Two-step verification is already set up."
+      "alreadyEnrolled": "Two-step verification is already set up.",
+      "closePending": "Your account is closed and you have been signed out. Removing the rest of your data is still in progress and will finish automatically."
     },
     "setup": {
       "title": "Finish setting up",
@@ -442,7 +444,8 @@
       "global": "Global Network",
       "quran": "Quran",
       "hadith": "Hadith",
-      "fatwa": "Fatwa"
+      "fatwa": "Fatwa",
+      "newsletter": "Newsletter"
     },
     "global": {
       "title": "Global Network",
@@ -4044,6 +4047,416 @@
       "unavailable": "The Pakistan structure has not been published yet.",
       "viewCountry": "Pakistan country page",
       "empty": "No regions or cities have been published for Pakistan yet."
+    }
+  },
+  "personalIsland": {
+    "heading": "Save and notes",
+    "privacy": "Only you can see what you save here.",
+    "signedOutPrompt": "Sign in to save this, keep a private note or add it to a collection.",
+    "signIn": "Sign in to save",
+    "save": "Save",
+    "savedStatus": "Saved to your bookmarks.",
+    "unsavedStatus": "Removed from your bookmarks.",
+    "noteAdd": "Add a private note",
+    "noteEdit": "Your private note",
+    "noteLabel": "Private note",
+    "noteHelp": "Plain text, up to 2,000 characters. Only you can see it.",
+    "noteSave": "Save note",
+    "noteDelete": "Delete note",
+    "noteSaved": "Your note was saved.",
+    "noteDeleted": "Your note was deleted.",
+    "noteConflict": "This note was changed somewhere else. Your text is still here; saving again will replace the other version.",
+    "collections": "Add to a collection",
+    "collectionsLegend": "Your collections",
+    "collectionsEmpty": "You have no collections yet.",
+    "collectionsManage": "Manage your collections",
+    "collectionAdded": "Added to the collection.",
+    "collectionRemoved": "Removed from the collection.",
+    "collectionConflict": "That collection changed somewhere else. It has been refreshed; try again.",
+    "positionSet": "Set as my reading position",
+    "positionCurrent": "This is your reading position.",
+    "positionSaved": "Your reading position was saved.",
+    "positionConflict": "Your reading position changed somewhere else. It has been refreshed; try again.",
+    "working": "Saving…",
+    "sessionEnded": "Your session has ended. Sign in again to save.",
+    "failureInvalid": "That could not be saved. Check it and try again.",
+    "failureNotFound": "This can no longer be saved.",
+    "failureConflict": "This changed somewhere else. Reload the page and try again.",
+    "failureLimit": "You have reached a limit on what you can save. Remove something first.",
+    "failureRateLimited": "Too many changes in a short time. Wait a little and try again.",
+    "failureDenied": "This was refused. Reload the page and try again.",
+    "failureUnavailable": "Saving is unavailable right now. Try again later."
+  },
+  "newsletter": {
+    "title": "Newsletter",
+    "description": "Subscribe by email to news, events and new material from this platform.",
+    "notice": {
+      "heading": "Before you subscribe",
+      "what": "The newsletter is email about news, events and new material on this platform. It is sent only to addresses that have been confirmed.",
+      "confirm": "Nothing is sent until you confirm. We email a confirmation link to the address you enter, and the subscription starts only when that link is used. The link works for {hours} hours.",
+      "unsubscribe": "You can unsubscribe at any time, without signing in, using the link in any newsletter email.",
+      "account": "No account is needed. Having a My Minhaj account does not subscribe you, and subscribing does not create an account.",
+      "kept": "We keep the address, the language of this page, and when you subscribed and confirmed. When you unsubscribe, the address is removed; the record of when you subscribed and left is kept."
+    },
+    "form": {
+      "heading": "Subscribe",
+      "email": "Email address",
+      "submit": "Subscribe",
+      "pending": "Sending…"
+    },
+    "result": {
+      "sent": "If this address can receive the newsletter, we've sent a confirmation link to it. Open that email and use the link to confirm. If nothing arrives, check your spam folder or try again later.",
+      "invalid": "Enter a valid email address.",
+      "rateLimited": "Too many attempts. Wait a while and try again.",
+      "unavailable": "That didn't work. Try again later."
+    },
+    "confirm": {
+      "title": "Confirm your subscription",
+      "description": "Press the button to confirm that you want to receive the newsletter at this address.",
+      "submit": "Confirm subscription",
+      "pending": "Confirming…",
+      "done": "Your subscription is confirmed. You can unsubscribe at any time from any newsletter email."
+    },
+    "unsubscribe": {
+      "title": "Unsubscribe from the newsletter",
+      "description": "Press the button to stop the newsletter at this address. Your account, if you have one, and any account email are not affected.",
+      "submit": "Unsubscribe",
+      "pending": "Unsubscribing…",
+      "done": "You're unsubscribed. No more newsletter email will be sent to this address."
+    },
+    "link": {
+      "invalid": "This link is no longer valid. It may have expired or already been used.",
+      "back": "Go to the newsletter page"
+    },
+    "admin": {
+      "title": "Newsletter subscribers",
+      "description": "Subscription states and consent dates. Addresses are masked, and an address that has left is not held at all.",
+      "scope": {
+        "heading": "What this surface does",
+        "noSending": "There are no campaigns and no sending here. The platform records who asked for the newsletter and who confirmed.",
+        "provider": "Provider bounces and complaints are suppressed separately by outbound mail delivery, and override everything here.",
+        "providerLink": "See Mail delivery.",
+        "private": "Nothing here gives access to anyone's saved items, notes, history or notifications."
+      },
+      "counts": "Subscribers by state",
+      "total": "Total",
+      "filter": "Show",
+      "all": "All",
+      "states": {
+        "pending": "Awaiting confirmation",
+        "confirmed": "Confirmed",
+        "unsubscribed": "Unsubscribed",
+        "expired": "Expired",
+        "suppressed": "Suppressed"
+      },
+      "columns": {
+        "address": "Address",
+        "state": "State",
+        "locale": "Language",
+        "submitted": "Submitted",
+        "confirmed": "Confirmed",
+        "ended": "Ended",
+        "actions": "Actions"
+      },
+      "locales": {
+        "en": "English",
+        "ur": "Urdu",
+        "ar": "Arabic"
+      },
+      "noAddress": "Address removed",
+      "none": "No subscriptions in this view.",
+      "showing": "Showing {from}–{to} of {total}",
+      "pages": "Pages",
+      "previous": "Previous",
+      "next": "Next",
+      "suppress": {
+        "submit": "Suppress",
+        "confirm": "I understand: the address is removed and no newsletter will be sent to it.",
+        "done": "The subscription is suppressed."
+      },
+      "reinstate": {
+        "explain": "Reinstating lifts the suppression and returns the record to unsubscribed. Nothing is sent until the person subscribes and confirms again.",
+        "submit": "Reinstate",
+        "confirm": "I understand that reinstating does not resubscribe anyone.",
+        "done": "The suppression is lifted. The record is now unsubscribed."
+      },
+      "refused": {
+        "conflict": "This record changed after the page loaded. Reload and try again.",
+        "invalidState": "That change does not apply to this record now.",
+        "notFound": "That record no longer exists.",
+        "invalid": "Check the values and try again.",
+        "confirmRequired": "Tick the confirmation box first.",
+        "rateLimited": "Too many attempts. Wait a while and try again.",
+        "denied": "You do not have the permission this action requires."
+      },
+      "unknown": "Something went wrong. Try again.",
+      "reload": "Try again",
+      "pending": "Working…",
+      "loading": "Loading newsletter subscribers…"
+    }
+  },
+  "personal": {
+    "common": {
+      "working": "Working…"
+    },
+    "target": {
+      "unavailable": "No longer available",
+      "unknown": "Can’t be checked right now",
+      "savedAt": "Saved"
+    },
+    "kinds": {
+      "article": "Article",
+      "work": "Book",
+      "video": "Video",
+      "ayah": "Quran ayah",
+      "hadith": "Hadith"
+    },
+    "failure": {
+      "conflict": "This changed somewhere else since the page loaded. Reload the page and try again.",
+      "invalid": "Please check what you entered and try again.",
+      "limit": "You have reached the most this list can hold. Remove something first.",
+      "rateLimited": "Too many changes in a short time. Please wait a while and try again.",
+      "notFound": "This is no longer here. Reload the page to see the current list.",
+      "confirmRequired": "Tick the confirmation box first.",
+      "noSession": "Your session has ended. Please sign in again.",
+      "unavailable": "This can’t be done right now. Please try again later.",
+      "load": "This page can’t be shown right now. Please try again later."
+    },
+    "list": {
+      "previous": "Previous",
+      "next": "Next",
+      "beyond": "There is nothing more on this page."
+    },
+    "nav": {
+      "label": "My Minhaj pages",
+      "account": "My Minhaj",
+      "saved": "Saved",
+      "bookmarks": "Bookmarks",
+      "notes": "Notes",
+      "collections": "My collections",
+      "reading": "Reading history",
+      "watch": "Watch history",
+      "quran": "Quran reading position",
+      "notifications": "Notifications",
+      "interests": "Interests and goals",
+      "notificationSettings": "Notification settings",
+      "privacy": "Privacy"
+    },
+    "saved": {
+      "title": "Saved",
+      "description": "What you have kept for later: bookmarks, notes and your own private collections. Only you can see them.",
+      "bookmarks": "Bookmarks",
+      "notes": "Notes",
+      "collections": "My collections",
+      "recent": "Recently saved",
+      "empty": "Nothing saved yet. Use “Save” on a Quran ayah, a Hadith, an article, a video or a book to keep it here."
+    },
+    "bookmarks": {
+      "title": "Bookmarks",
+      "description": "Quran ayat, Hadith, articles, videos and books you have bookmarked, newest first.",
+      "list": "Your bookmarks",
+      "empty": "You have no bookmarks yet. Use “Save” on any ayah, Hadith, article, video or book.",
+      "remove": "Remove"
+    },
+    "notes": {
+      "title": "Notes",
+      "description": "Your private notes, most recently changed first. They are plain text and only you can read them.",
+      "list": "Your notes",
+      "empty": "You have no notes yet. Add a note from any ayah, Hadith, article, video or book.",
+      "updatedAt": "Last changed",
+      "edit": "Edit note",
+      "label": "Note",
+      "help": "Plain text, up to {max} characters.",
+      "save": "Save note",
+      "saved": "Note saved.",
+      "delete": "Delete note",
+      "conflict": "This note was changed somewhere else since the page loaded. Reload the page to see the latest version before editing.",
+      "invalid": "A note needs some text and can be up to {max} characters. To remove a note, use “Delete note”."
+    },
+    "collections": {
+      "title": "My collections",
+      "description": "Your own private lists of things you have saved. Only you can see them.",
+      "distinct": "These are not the platform’s public Collections, which are curated by the editors. Nobody else sees your lists.",
+      "list": "Your collections",
+      "empty": "You have no collections yet. Create one below.",
+      "items": "Items: {count}",
+      "updatedAt": "Last changed",
+      "create": "Create a collection",
+      "createSubmit": "Create collection",
+      "titleLabel": "Title",
+      "titleHelp": "Up to {title} characters.",
+      "descriptionLabel": "Description (optional)",
+      "descriptionHelp": "Up to {description} characters.",
+      "invalid": "A collection needs a title of up to {title} characters; a description can be up to {description} characters.",
+      "limit": "You can have up to {collections} collections. Delete one before creating another."
+    },
+    "collection": {
+      "title": "My collection",
+      "private": "A private collection. Only you can see it.",
+      "members": "In this collection",
+      "empty": "This collection is empty. Add to it from any ayah, Hadith, article, video or book page using “Add to a collection”.",
+      "position": "Item {position}",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "removeMember": "Remove from collection",
+      "conflict": "This collection was changed somewhere else since the page loaded. Reload the page and try again.",
+      "notFound": "This collection is no longer here.",
+      "details": "Title and description",
+      "save": "Save changes",
+      "saved": "Changes saved.",
+      "delete": "Delete this collection",
+      "deleteHelp": "Deleting removes the list itself. Bookmarks and notes on the same items are kept.",
+      "deleteConfirm": "I understand this collection will be deleted.",
+      "deleteSubmit": "Delete collection"
+    },
+    "history": {
+      "readingTitle": "Reading history",
+      "readingDescription": "Ayat, Hadith, articles and books you have read, with the last time you read each one. Only you can see this.",
+      "readingList": "Your reading history",
+      "readingEmpty": "There is no reading history.",
+      "lastRead": "Last read",
+      "watchTitle": "Watch history",
+      "watchDescription": "Videos you have watched, with the last time you watched each one. Only you can see this.",
+      "watchList": "Your watch history",
+      "watchEmpty": "There is no watch history.",
+      "lastWatched": "Last watched",
+      "remove": "Remove",
+      "off": "History is off. It is off unless you turn it on, and while it is off nothing you read or watch is recorded.",
+      "offLink": "Turn history on in privacy settings",
+      "clear": "Clear all history",
+      "clearHelp": "Removes all of your reading and watch history. Your Quran reading position, bookmarks and notes are kept.",
+      "clearConfirm": "I understand all of my reading and watch history will be removed.",
+      "clearSubmit": "Clear all history",
+      "cleared": "Your reading and watch history has been cleared."
+    },
+    "progress": {
+      "title": "Quran reading position",
+      "description": "The one place in the Quran you have marked to continue reading from.",
+      "howTo": "To set it, open any ayah and choose “Set as my reading position”. It only moves when you choose that — never just by opening a page.",
+      "empty": "You haven’t set a reading position yet.",
+      "browse": "Go to the Quran",
+      "position": "Your position",
+      "updatedAt": "Set",
+      "continue": "Continue reading",
+      "clear": "Clear reading position",
+      "conflict": "Your reading position was changed somewhere else since the page loaded. Reload the page and try again."
+    },
+    "notifications": {
+      "title": "Notifications",
+      "description": "Updates about your own activity on the platform, newest first.",
+      "unreadCount": "Unread: {count}",
+      "list": "Your notifications",
+      "empty": "You have no notifications.",
+      "unread": "Unread",
+      "read": "Read",
+      "kind": {
+        "question-answered": "Your question has been answered.",
+        "question-declined": "Your question has been declined."
+      },
+      "open": "View",
+      "markRead": "Mark as read",
+      "remove": "Remove",
+      "markAllRead": "Mark all as read",
+      "clearRead": "Clear read notifications"
+    },
+    "interests": {
+      "title": "Interests and goals",
+      "description": "Optional. Tell us which parts of Minhaj you are interested in and what you hope to do, and your My Minhaj page will link to them. You can skip this, and change it at any time.",
+      "ownPages": "Your answers only shape your own My Minhaj pages. Public pages are the same for everybody.",
+      "notInferred": "Nothing here is guessed from what you read or watch — only what you choose.",
+      "language": "Your account language and time zone are separate settings.",
+      "languageLink": "Language and time zone",
+      "state": {
+        "completed": "Answered",
+        "skipped": "Skipped",
+        "none": "Not answered yet"
+      },
+      "interestsLegend": "Interests",
+      "interest": {
+        "quran": "Quran",
+        "hadith": "Hadith",
+        "library": "Library and books",
+        "watch": "Videos",
+        "listen": "Audio",
+        "fatwa": "Fatwa",
+        "news-events": "News and events",
+        "global-network": "Global network"
+      },
+      "goalsLegend": "Goals",
+      "goal": {
+        "read-quran-regularly": "Read the Quran regularly",
+        "study-hadith": "Study Hadith",
+        "read-books-and-research": "Read books and research",
+        "follow-lectures": "Follow lectures and talks",
+        "stay-informed": "Stay informed about news and events"
+      },
+      "save": "Save",
+      "saved": "Your interests and goals have been saved.",
+      "conflict": "These settings were changed somewhere else since the page loaded. Reload the page and try again.",
+      "skipHeading": "Not now",
+      "skipHelp": "Skip these questions. Nothing is chosen, and you can answer them here later.",
+      "skip": "Skip"
+    },
+    "notificationSettings": {
+      "title": "Notification settings",
+      "description": "Choose which updates appear in your notifications.",
+      "inAppOnly": "Notifications appear only here on the platform, under Notifications. None are sent by email.",
+      "security": "Account emails — address verification, password reset and security alerts — are always sent and cannot be turned off here.",
+      "newsletter": "The newsletter is separate from your account and these settings.",
+      "newsletterLink": "About the newsletter",
+      "list": "Notification categories",
+      "category": {
+        "questions": "Updates about your questions"
+      },
+      "channel": {
+        "in-app": "On the platform"
+      },
+      "on": "On",
+      "off": "Off",
+      "turnOn": "Turn on",
+      "turnOff": "Turn off"
+    },
+    "privacy": {
+      "title": "Privacy",
+      "description": "What My Minhaj keeps about your activity, how to see it, and how to remove it.",
+      "noLegalClaim": "This page describes what the platform does. It does not claim to meet the rules of any particular country.",
+      "historyHeading": "Reading and watch history",
+      "historyHelp": "History is off unless you turn it on. While it is on, the platform remembers what you read and watch so you can return to it; only you can see it. Turning it off stops recording straight away; anything already recorded stays until you clear it.",
+      "historyOn": "History is on",
+      "historyOff": "History is off",
+      "turnOn": "Turn history on",
+      "turnOff": "Turn history off",
+      "conflict": "This setting was changed somewhere else since the page loaded. Reload the page and try again.",
+      "exportHeading": "Download my data",
+      "exportBody": "Download a copy of what My Minhaj keeps for your account, as a JSON file:",
+      "exportSaved": "Bookmarks, notes and your private collections",
+      "exportHistory": "Reading and watch history, and your Quran reading position",
+      "exportSettings": "Your interests and goals, and your history and notification settings",
+      "exportNotifications": "Your notifications",
+      "exportScope": "Saved items are listed by reference, not as copies of the content. Your account details and your questions are not part of this file.",
+      "exportLink": "Download my data",
+      "closureHeading": "Closing your account",
+      "closureBody": "Closing your account removes everything listed above — saved items, notes, collections, history, your reading position, interests and notifications. Closing is done from your Security settings, with your password.",
+      "closureLink": "Go to account closure",
+      "newsletterHeading": "Newsletter",
+      "newsletterBody": "The newsletter is independent of your account: signing up for an account never subscribes you, and closing it does not unsubscribe you. Manage it from the links in its emails.",
+      "newsletterLink": "About the newsletter"
+    },
+    "home": {
+      "unavailable": "Your saved items, history and notifications can’t be shown right now. Your account settings below still work.",
+      "onboardingHeading": "Make My Minhaj yours",
+      "onboardingBody": "Optional: choose the parts of Minhaj you are interested in, and this page will link to them. You can skip it.",
+      "onboardingLink": "Choose interests and goals",
+      "sectionsHeading": "Your sections",
+      "notificationsHeading": "Notifications",
+      "notificationsLink": "See all notifications",
+      "quranHeading": "Quran reading position",
+      "quranNone": "No reading position set. Choose “Set as my reading position” on any ayah.",
+      "quranLink": "Manage reading position",
+      "savedHeading": "Recently saved",
+      "savedLink": "See everything you saved",
+      "historyHeading": "Recently read and watched",
+      "historyEmpty": "Nothing read or watched since history was turned on."
     }
   }
 }

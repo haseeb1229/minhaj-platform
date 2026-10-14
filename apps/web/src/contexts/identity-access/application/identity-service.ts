@@ -19,6 +19,7 @@ import type {
   DeliveryRecord,
   DeliveryResolution,
   EmailDeliveryStorePort,
+  IdentityDeliveryPurpose,
   EmailSuppressionPort,
   RateLimiterPort,
 } from '@minhaj/contracts/platform';
@@ -1182,6 +1183,12 @@ export function createIdentityService(dependencies: IdentityServiceDependencies)
      * issuance has plainly not happened, and it is abandoned like any other.
      */
     async resolveDelivery(delivery: DeliveryRecord): Promise<DeliveryResolution> {
+      // Only Identity's own purposes are Identity's to resolve. Another owner's
+      // message (the newsletter's) is routed to that owner by the dispatcher;
+      // reaching here, it is owed nothing rather than rendered as account mail.
+      const purpose = identityPurpose(delivery.purpose);
+      if (purpose === null) return { outcome: 'nothing-owed' };
+
       /** A token that is not there yet, versus one that never will be. */
       const missingToken = (): DeliveryResolution =>
         delivery.attemptCount === 0
@@ -1238,7 +1245,7 @@ export function createIdentityService(dependencies: IdentityServiceDependencies)
         return {
           outcome: 'send',
           message: renderMessage({
-            purpose: delivery.purpose,
+            purpose,
             locale,
             recipient: token.email,
             actionUrl: url.toString(),
@@ -1272,7 +1279,7 @@ export function createIdentityService(dependencies: IdentityServiceDependencies)
       return {
         outcome: 'send',
         message: renderMessage({
-          purpose: delivery.purpose,
+          purpose,
           locale: account.locale,
           recipient,
         }),
@@ -1332,6 +1339,11 @@ export type IdentityService = ReturnType<typeof createIdentityService>;
  */
 function verificationPath(purpose: AddressTokenPurpose): string {
   return purpose === 'password-reset' ? '/reset-password' : '/verify-email';
+}
+
+/** Narrows a delivery's purpose to one of Identity's own, or null. */
+function identityPurpose(purpose: DeliveryPurpose): IdentityDeliveryPurpose | null {
+  return purpose.startsWith('identity.') ? (purpose as IdentityDeliveryPurpose) : null;
 }
 
 /**

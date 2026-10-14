@@ -405,7 +405,16 @@ describe('Collection is one Editorial aggregate and nothing else', () => {
       'HadithCollection',
       'HadithCollectionName',
     ]);
-    const models = all.filter((name) => !name?.startsWith('Hadith')).sort();
+    // A PRIVATE collection is Personalisation's (Phase 21): a person's own
+    // list over their saved items — distinct from an editorial Collection
+    // (DOMAIN_MODEL.md §18), with exactly its two tables, named apart.
+    expect(all.filter((name) => name?.startsWith('Private')).sort()).toEqual([
+      'PrivateCollection',
+      'PrivateCollectionItem',
+    ]);
+    const models = all
+      .filter((name) => !name?.startsWith('Hadith') && !name?.startsWith('Private'))
+      .sort();
     expect(models).toEqual(
       [
         'Collection',
@@ -418,7 +427,6 @@ describe('Collection is one Editorial aggregate and nothing else', () => {
       ].sort(),
     );
     for (const absent of [
-      'PrivateCollection',
       'CollectionEvent',
       'CollectionGallery',
       'CollectionPage',

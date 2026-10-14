@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import type { BrowserContext, Page } from '@playwright/test';
 import type { SqlSession } from '../../packages/database/src/lifecycle/sql-connection.ts';
 import {
@@ -156,6 +157,29 @@ test('publishes a Page through an independent review workflow', async () => {
   await publisher.goto(pagePath);
   await clickSaved(publisher, 'Publish');
 });
+/**
+ * The Article's shared text: the main region once its private island (Phase 21)
+ * has finished its post-hydration read, with the island's own frame left out.
+ * The island is per viewer BY DESIGN — a sign-in prompt for one, save controls
+ * for another — and only after hydration; the server document both receive is
+ * proved byte-identical below.
+ */
+async function sharedText(page: Page, locale: string): Promise<string> {
+  const heading = (
+    JSON.parse(
+      readFileSync(
+        new URL('../../apps/web/messages/' + locale + '.json', import.meta.url),
+        'utf8',
+      ),
+    ) as { personalIsland: { heading: string } }
+  ).personalIsland.heading;
+  const island = page.getByRole('main').getByRole('region', { name: heading });
+  await island.waitFor();
+  await island.locator('..').evaluate((frame: HTMLElement) => {
+    frame.style.display = 'none';
+  });
+  return page.getByRole('main').innerText();
+}
 test('renders signed-out fallback content with no cookies and the same signed-in body', async ({
   page,
 }) => {
@@ -166,15 +190,54 @@ test('renders signed-out fallback content with no cookies and the same signed-in
     expect(response?.headers()['set-cookie']).toBeUndefined();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
     if (locale !== 'en') await expect(page.getByRole('status')).toContainText('en');
-    const text = await page.getByRole('main').innerText();
+    const text = await sharedText(page, locale);
     await author.goto('/' + locale + '/library/articles/' + renamed);
-    expect(await author.getByRole('main').innerText()).toBe(text);
+    expect(await sharedText(author, locale)).toBe(text);
     expect(await page.context().cookies()).toHaveLength(0);
   }
   await page.goto('/en/help/' + slug);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
     'Synthetic help browser proof',
   );
+});
+test('serves the Article byte-identically signed in and out, its private island empty until hydrated', async ({
+  browser,
+}) => {
+  // Phase 21: the Article page carries the personal island, and must still be
+  // ONE shared document. A fresh anonymous visitor on its own client address,
+  // against the signed-in author.
+  const anon = await browser.newContext({
+    baseURL: baseUrl(),
+    extraHTTPHeaders: { 'x-forwarded-for': '100.64.241.1' },
+  });
+  const target = '/en/library/articles/' + renamed;
+  const anonymous = await anon.request.get(target, { maxRedirects: 0 });
+  const signedIn = await author.context().request.get(target, { maxRedirects: 0 });
+  expect(anonymous.status()).toBe(200);
+  expect(signedIn.status()).toBe(200);
+  expect(anonymous.headers()['set-cookie']).toBeUndefined();
+  expect(signedIn.headers()['set-cookie']).toBeUndefined();
+  const html = await anonymous.text();
+  expect(html).toContain(title);
+  expect((await signedIn.text()) === html, 'the Article differs signed in').toBe(true);
+  expect(html).not.toContain('aria-pressed');
+
+  // Signed out, once hydrated, the island offers sign-in back to this Article.
+  const page = await anon.newPage();
+  const state = page.waitForResponse((response) =>
+    response.url().includes('/api/my/target-state'),
+  );
+  await page.goto(target);
+  expect((await state).status()).toBe(200);
+  const island = page.getByRole('region', { name: 'Save and notes' });
+  await expect(island).toContainText(
+    'Sign in to save this, keep a private note or add it to a collection.',
+  );
+  await expect(island.getByRole('link', { name: 'Sign in to save' })).toHaveAttribute(
+    'href',
+    '/en/signin?returnTo=' + encodeURIComponent(target),
+  );
+  await anon.close();
 });
 test('accepts private correspondence and restricts triage to the operator', async ({
   page,

@@ -547,7 +547,7 @@ function articleReads(): Pick<
         where: { id: history.owner.id, state: 'published' },
         select: publicSelect,
       });
-      return row ? articlePublic(row) : null;
+      return row ? { ...articlePublic(row), id: history.owner.id } : null;
     },
     async publishedArticles(offset: number, limit: number) {
       const rows = await getDatabaseClient().article.findMany({

@@ -42,6 +42,7 @@
         "quran": "quran",
         "hadith": "hadith",
         "fatwa": "fatwa",
+        "personalisation-notifications": "personalisation-notifications",
         "search": {
           "kind": "layer0",
           "concern": "search"

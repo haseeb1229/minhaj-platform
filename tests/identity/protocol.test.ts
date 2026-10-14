@@ -131,6 +131,73 @@ describe('returnTo destinations', () => {
     }
   });
 
+  it('accepts Personalisation’s own pages and the five saveable public pages, exactly', () => {
+    // Phase 21: a "sign in to save" island returns to the page it sits on, and
+    // every `/my` page Personalisation delivers is a sign-in destination.
+    const id = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+    for (const accepted of [
+      '/en/my/saved',
+      '/en/my/saved/bookmarks',
+      '/ur/my/saved/notes',
+      '/ar/my/saved/collections',
+      `/en/my/saved/collections/${id}`,
+      '/en/my/history/reading',
+      '/en/my/history/watch',
+      '/en/my/progress/quran',
+      '/en/my/notifications',
+      '/en/my/settings/interests',
+      '/en/my/settings/notifications',
+      '/en/my/settings/privacy',
+      '/en/my/saved/bookmarks?offset=20',
+      '/en/library/articles/some-article',
+      '/ur/library/books/a-book-2',
+      '/ar/watch/videos/a-lecture',
+      '/en/quran/surah/2/255',
+      '/en/quran/surah/114/6',
+      '/en/hadith/a-collection/7',
+    ])
+      expect(safeReturnTo(accepted, locale), accepted).toBe(accepted);
+
+    for (const candidate of [
+      '/en/my/saved/collections/not-a-uuid',
+      `/en/my/saved/collections/${id.toUpperCase()}`,
+      `/en/my/saved/collections/${id}/edit`,
+      `/en/my/saved/collections/${id}x`,
+      '/en/my/saved/everything',
+      '/en/my/history',
+      '/en/my/progress',
+      '/en/my/progress/courses',
+      '/en/library/articles/../x',
+      '/en/library/articles/%2e%2e/x',
+      '/en/library/articles/Some-Article',
+      '/en/library/articles/some_article',
+      '/en/library/articles/-leading',
+      '/en/library/articles/a/b',
+      '/en/library/articles/',
+      '/en/library/editions/a-book',
+      '/en/quran/surah/0/1',
+      '/en/quran/surah/1/0',
+      '/en/quran/surah/01/1',
+      '/en/quran/surah/1',
+      '/en/quran/surah/1/1/extra',
+      '/en/quran/surah/a/1',
+      '/en/hadith/a-collection/0',
+      '/en/hadith/a-collection/1234567',
+      '/en/hadith/a-collection',
+      '/en/watch/videos/a-lecture/transcript',
+      '/en/watch/playlists/a-lecture',
+      '//evil',
+      '//evil.example/en/library/articles/x',
+      '/\\evil.example/en/my/saved',
+      'https://evil.example/en/my/saved',
+      '/en//my/saved',
+      '/fr/my/saved',
+      '/en/my/saved%2f..%2fadmin',
+      '/library/articles/some-article',
+    ])
+      expect(safeReturnTo(candidate, locale), candidate).toBe('/en/my');
+  });
+
   it('falls back for an absent destination', () => {
     expect(safeReturnTo(null, locale)).toBe('/en/my');
   });
@@ -244,6 +311,18 @@ describe('the mutation surface', () => {
         'apps/web/src/app/assets/quran/recitations/[recitationId]/[segmentId]/[assetId]/route.ts',
         'apps/web/src/app/assets/quran/previews/recitations/[recitationId]/[segmentId]/[assetId]/route.ts',
         'apps/web/src/app/api/admin/quran/recitations/[recitationId]/segments/[segmentId]/asset/route.ts',
+        // Phase 21: the private handlers a public page's island calls after
+        // hydration, so the page's shared render never reads a session. Two
+        // are GET reads of the signed-in person's own state; five are Class-A
+        // BROWSER mutations through one same-origin-checked transport. None
+        // authenticates anybody.
+        'apps/web/src/app/api/my/bookmarks/route.ts',
+        'apps/web/src/app/api/my/collection-items/route.ts',
+        'apps/web/src/app/api/my/export/route.ts',
+        'apps/web/src/app/api/my/history/route.ts',
+        'apps/web/src/app/api/my/notes/route.ts',
+        'apps/web/src/app/api/my/quran-progress/route.ts',
+        'apps/web/src/app/api/my/target-state/route.ts',
       ].sort(),
     );
 
@@ -252,7 +331,10 @@ describe('the mutation surface', () => {
     const { readFile } = await import('node:fs/promises');
 
     const readOnly = routes.filter(
-      (entry) => !entry.includes('webhooks') && !entry.includes('/api/admin/'),
+      (entry) =>
+        !entry.includes('webhooks') &&
+        !entry.includes('/api/admin/') &&
+        !entry.includes('/api/my/'),
     );
     expect(readOnly).toHaveLength(14);
 
@@ -264,6 +346,33 @@ describe('the mutation surface', () => {
           new RegExp(`export\\s+(async\\s+)?function\\s+${verb}\\b`),
         );
       }
+    }
+
+    // Phase 21's own: every mutating verb is a POST through the one transport
+    // that refuses a cross-origin request before anything is read; the reads
+    // export GET alone; and none of them reaches an authentication operation.
+    const transport = await readFile(
+      path.join(repoRoot, 'apps/web/src/app/api/my/personal-transport.ts'),
+      'utf8',
+    );
+    expect(transport).toMatch(
+      /if \(!isSameOriginMutation\(request, \w+\)\) return failed\('denied'\)/u,
+    );
+    const personal = routes.filter((entry) => entry.includes('/api/my/'));
+    expect(personal).toHaveLength(7);
+    for (const route of personal) {
+      const source = await readFile(path.join(repoRoot, route), 'utf8');
+      for (const verb of ['PUT', 'PATCH', 'DELETE'])
+        expect(source, `${route} exports ${verb}`).not.toMatch(
+          new RegExp(`export\\s+(async\\s+)?function\\s+${verb}\\b`),
+        );
+      if (/export\s+(async\s+)?function\s+POST\b/u.test(source)) {
+        expect(source, route).toContain('personalMutation(');
+        expect(source, route).not.toMatch(/export\s+(async\s+)?function\s+GET\b/u);
+      }
+      expect(source, route).not.toMatch(
+        /signIn|signUp|signOut|resetPassword|verifyEmail|identity\.\w+\(/u,
+      );
     }
   });
 
@@ -341,6 +450,33 @@ describe('the mutation surface', () => {
       closureBody.indexOf('reconcileClosedAccountLinks('),
     );
     expect(closureBody).toContain('reconciliationFailed');
+  });
+
+  it('coordinates Personalisation disposition after Identity commits and before success', async () => {
+    // Phase 21: the fourth owner removes saved items, notes, history and
+    // notifications of the closed account in its own bounded batches; a
+    // pending disposal is reported as pending, never as a completed closure.
+    const actions = await sourceOf(ACTIONS);
+    const closureStart = actions.indexOf('export async function closeAccountAction');
+    const closureBody = actions.slice(
+      closureStart,
+      actions.indexOf('\n}', closureStart) + 2,
+    );
+    const closed = closureBody.indexOf('identity.closeAccount(');
+    const disposed = closureBody.indexOf(
+      'personalisationRuntime().account.disposeAccount(',
+    );
+    const swept = closureBody.indexOf(
+      'personalisationRuntime().account.reconcileClosedAccounts(',
+    );
+    expect(closed).toBeGreaterThan(0);
+    expect(disposed).toBeGreaterThan(closed);
+    expect(swept).toBeGreaterThan(disposed);
+    expect(closureBody.indexOf('redirect(')).toBeGreaterThan(swept);
+    expect(closureBody).toMatch(/personalPending\s*=\s*!personal\.complete/u);
+    const pending = closureBody.indexOf("failure: 'closure-pending'");
+    expect(closureBody.slice(0, pending)).toMatch(/\|\|\s*personalPending\)/u);
+    expect(closureBody.indexOf('redirect(')).toBeGreaterThan(pending);
   });
 
   it('renders emailed links with a GET that consumes nothing', async () => {

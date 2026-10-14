@@ -494,6 +494,7 @@ export function createHadithPublicReader(): HadithPublicReaderPort {
       const citation = await db.hadithCitation.findFirst({
         where: { number, collection: { slug: collectionSlug } },
         select: {
+          id: true,
           collectionId: true,
           state: true,
           updatedAt: true,
@@ -597,6 +598,7 @@ export function createHadithPublicReader(): HadithPublicReaderPort {
       ]);
 
       return {
+        citationId: citation.id,
         collection: {
           slug: citation.collection.slug,
           names: collectionNames(citation.collection.names),

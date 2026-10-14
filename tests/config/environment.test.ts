@@ -42,6 +42,8 @@ const SERVER_DEFAULTS = {
   RATE_LIMIT_DIGEST_KEY_VERSION: 1,
   EMAIL_DIGEST_KEY: 'development-only-email-digest-key',
   EMAIL_DIGEST_KEY_VERSION: 1,
+  NEWSLETTER_TOKEN_KEY: 'development-only-newsletter-token-key',
+  NEWSLETTER_TOKEN_KEY_VERSION: 1,
 
   // Off unless a deployment declares a proxy in front of it. The per-client
   // rate-limit budget is keyed on a header only a proxy can be trusted to set.
@@ -63,6 +65,7 @@ const PRODUCTION_SECRETS = {
   AUTH_SECRETS: '1:synthetic-production-sentinel-value-0001',
   RATE_LIMIT_DIGEST_KEY: 'synthetic-rate-limit-sentinel-0001',
   EMAIL_DIGEST_KEY: 'synthetic-email-digest-sentinel-0001',
+  NEWSLETTER_TOKEN_KEY: 'synthetic-newsletter-token-sentinel-0001',
 } as const;
 
 const SECRET_NAME_FRAGMENTS = [

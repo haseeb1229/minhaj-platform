@@ -1111,6 +1111,39 @@ identity, body and operator notes together. No private correspondence text enter
 application diagnostics or shared caches. Backup retention/disposition remains separately
 owned under OPEN_DECISIONS §4.4.
 
+#### 19.1.2 Phase-21 personalisation and the newsletter
+
+Engineering defaults only; **OPEN_DECISIONS §2.2 (applicable jurisdictions) stays open**, so no
+retention period, legal hold, residency rule, statutory deadline, age rule or compliance claim is
+made, and no cookie banner is added — there is no non-essential processing to consent to.
+
+- **Owner-only.** Saved items, notes, private collections, history, the Quran position, onboarding
+  answers, notification preferences and notifications are readable and writable only by their
+  account, with the account in every query's own predicate; a guessed id answers like a missing one.
+  **No staff permission reads them** — there is no `personalisation.*` key — and the newsletter keys
+  reach only subscription state. Future verified data-subject support must be an owner-specific
+  workflow, never universal browsing.
+- **Minimised by default.** History is off until the person turns it on and is one row per target
+  (newest 500 kept); onboarding stores explicit choices of public areas only; nothing is inferred
+  from behaviour and no third-party analytics, pixel or fingerprinting exists.
+- **Export and disposition.** `GET /api/my/export` returns the person's Personalisation data as
+  deterministic JSON (typed target identities, never content copies), private and `no-store`,
+  rate-limited and never written to disk. Closure disposition is the owner's bounded, idempotent,
+  resumable delete of a CLOSED account's rows, coordinated at Layer 4 after Identity commits and
+  reported as pending until complete; it never touches a newsletter subscription.
+- **Newsletter consent.** Double opt-in; submissions are anti-enumerating and limited per address
+  digest and per client. Link tokens are HMACs under `NEWSLETTER_TOKEN_KEY` over per-issuance random
+  salts; only their SHA-256 is stored, they are single-purpose, the confirmation expires after 48
+  hours and is consumed once by a POST, and they carry no authentication authority. Consent evidence
+  (purpose, notice version, source, locale, instant, revocation) is append-only. A marketing
+  unsubscribe or suppression never reaches verification, reset or account-security mail, which a
+  newsletter state cannot express.
+- **Cache boundary.** Public content pages render the same for everyone; their private island reads
+  and writes through `/api/my/*` after hydration, so no personal state enters a shared render or a
+  public GET's cookies.
+- **Logging.** Note text, addresses, tokens, history and export bodies are never logged; failures are
+  logged by operation name only, and operator audit rows carry identifiers and states, not addresses.
+
 ### 19.2 Logging
 
 **Pino**, structured, with correlation identifiers. **Redaction is configured at the logger

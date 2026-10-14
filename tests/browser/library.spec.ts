@@ -276,10 +276,19 @@ test.describe('an anonymous visitor reads the Library', () => {
     await expect(page.locator(`[id="${position('closing')}"]`)).toHaveCount(1);
 
     // No reading position left the browser: nothing about this visit was stored.
+    // Since Phase 21 a SIGNED-IN person may keep their own history of a book
+    // (one row per Work, never a position inside an Edition); an anonymous
+    // visit like this one leaves no personal row naming the Work at all.
     const [stored] = await sql.query<{ total: number }>(
-      `SELECT COUNT_BIG(*) AS [total] FROM sys.tables WHERE [name] LIKE N'%Reading%' OR [name] LIKE N'%Bookmark%';`,
+      `SELECT (SELECT COUNT_BIG(*) FROM [dbo].[ReadingHistory] WHERE [workId] = N'${workId}')
+             + (SELECT COUNT_BIG(*) FROM [dbo].[SavedItem] WHERE [workId] = N'${workId}') AS [total];`,
     );
     expect(Number(stored?.total ?? -1)).toBe(0);
+    // And the edition reader still keeps no position table of its own.
+    const [positions] = await sql.query<{ total: number }>(
+      `SELECT COUNT_BIG(*) AS [total] FROM sys.tables WHERE [name] LIKE N'%Edition%Position%' OR [name] LIKE N'%ReaderPosition%';`,
+    );
+    expect(Number(positions?.total ?? -1)).toBe(0);
   });
 
   test('reflows at a 320px width without horizontal scroll', async ({ page }) => {

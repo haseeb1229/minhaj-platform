@@ -63,6 +63,8 @@ describe('.env.example', () => {
       'EMAIL_FROM_NAME',
       'EMAIL_DIGEST_KEY',
       'EMAIL_DIGEST_KEY_VERSION',
+      'NEWSLETTER_TOKEN_KEY',
+      'NEWSLETTER_TOKEN_KEY_VERSION',
       'RESEND_API_KEY',
       'RESEND_WEBHOOK_SECRET',
     ]) {

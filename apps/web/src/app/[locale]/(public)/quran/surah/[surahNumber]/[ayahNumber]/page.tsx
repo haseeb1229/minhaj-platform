@@ -14,6 +14,7 @@ import {
 } from '@/components/quran/presentation';
 import { quranAvailability, quranMetadata, readSurah } from '@/components/quran/read';
 import { AyahPage } from '@/components/quran/reader';
+import { PersonalControls } from '@/components/personal-island/personal-controls';
 import { requireLocale } from '@/config/route-locale';
 
 /**
@@ -75,12 +76,19 @@ export default async function AyahRoute({ params, searchParams }: AyahParams) {
   const [availability, found] = await Promise.all([quranAvailability(), load(params)]);
   if (!availability.active || found === null) notFound();
   return (
-    <AyahPage
-      locale={locale}
-      availability={availability}
-      surah={found.surah}
-      ayah={found.ayah}
-      request={readReadingRequest(await searchParams)}
-    />
+    <>
+      <AyahPage
+        locale={locale}
+        availability={availability}
+        surah={found.surah}
+        ayah={found.ayah}
+        request={readReadingRequest(await searchParams)}
+      />
+      <PersonalControls
+        locale={locale}
+        target={{ kind: 'ayah', surah: found.ayah.surah, ayah: found.ayah.ayah }}
+        framed
+      />
+    </>
   );
 }

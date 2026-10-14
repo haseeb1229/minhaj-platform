@@ -115,7 +115,8 @@ describe('four Editorial aggregates, and nothing generic', () => {
       // `Event` is absent from this list since Phase 14 delivered it as its OWN
       // Editorial aggregate; no News family gains an Event field (above).
       'NewsEvent',
-      'NewsletterSubscriber',
+      // `NewsletterSubscriber` is absent from this list since Phase 21 delivered
+      // it in Personalisation & Notifications; no News family references it.
     ])
       expect(schema, absent).not.toMatch(new RegExp(`^model ${absent} \\{`, 'mu'));
   });
@@ -164,8 +165,8 @@ describe('routes: path views that are curated, queries that are not', () => {
     // `/events` is Phase 14's own top-level route family, never under `/news`.
     for (const absent of ['latest', 'popular', 'featured', 'events'])
       expect(await exists(`${base}/${absent}`), absent).toBe(false);
+    // `/newsletter` is Personalisation's since Phase 21, never under `/news`.
     for (const absent of [
-      'apps/web/src/app/[locale]/(public)/newsletter',
       'apps/web/src/app/rss',
       'apps/web/src/app/[locale]/(public)/media/downloads',
     ])
@@ -199,7 +200,8 @@ describe('authority stays in the Editorial keys', () => {
   it('mints no news, press, statement or coverage permission', () => {
     const keys = PERMISSION_CATALOGUE.map((entry) => entry.key);
     expect(
-      keys.filter((key) => /^(news|press|statement|mediaCoverage)/u.test(key)),
+      // `newsletter.*` (Phase 21) is Personalisation's, not a News family's.
+      keys.filter((key) => /^(news|press|statement|mediaCoverage)\./u.test(key)),
     ).toEqual([]);
     for (const key of [
       'content.read',

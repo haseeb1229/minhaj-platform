@@ -43,5 +43,9 @@ export async function register(): Promise<void> {
     // scheduled publications committed (ARCHITECTURE.md §8.5).
     const { startSearchSweep } = await import('@/composition/search');
     startSearchSweep();
+    // Closure reconciliation for every owner, and lapsed newsletter
+    // confirmations (SECURITY_BASELINE.md §19.1).
+    const { startPersonalDataSweep } = await import('@/composition/personal-data-sweep');
+    startPersonalDataSweep();
   }
 }

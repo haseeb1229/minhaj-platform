@@ -182,6 +182,22 @@ export function createFatwaWorkflow(): FatwaWorkflowPort {
       }
     },
 
+    async askerOf(input) {
+      try {
+        const [row] =
+          'questionId' in input
+            ? await db.$queryRaw<{ askerId: string; id: string }[]>`
+                SELECT q.[askerId], q.[id] FROM [dbo].[FatwaQuestion] q WHERE q.[id] = ${input.questionId}`
+            : await db.$queryRaw<{ askerId: string; id: string }[]>`
+                SELECT q.[askerId], q.[id] FROM [dbo].[Fatwa] f
+                JOIN [dbo].[FatwaQuestion] q ON q.[id] = f.[questionId]
+                WHERE f.[id] = ${input.fatwaId}`;
+        return row === undefined ? null : { accountId: row.askerId, questionId: row.id };
+      } catch (error) {
+        refuse(error);
+      }
+    },
+
     async publish({ authority, publicationId, value }) {
       try {
         await db.$executeRaw`EXEC [dbo].[FatwaPublishRevision]

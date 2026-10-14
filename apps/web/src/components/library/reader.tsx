@@ -68,15 +68,17 @@ export function Reader({
   /**
    * The in-page address of one section, from its authored key.
    *
-   * FOR AN EDITION THIS IS THE STABLE POSITION IDENTIFIER — the seam Phase 21
-   * attaches to: `readerPosition(editionId, contentVersion, sectionKey)`, built
+   * FOR AN EDITION THIS IS THE STABLE POSITION IDENTIFIER — the seam a stored
+   * in-edition reading position would attach to: `readerPosition(editionId, contentVersion, sectionKey)`, built
    * from exactly those three things and nothing else. The EDITION, because a
    * position in an Urdu translation is not a position in the Arabic original;
    * the CONTENT VERSION, because a position in text that has since been re-cut
    * should not silently resolve into different words; the SECTION KEY, which is
    * authored structure. No pixel offset, no viewport, no font size and no user —
    * so it is the same at every zoom and type size, before and after a reload,
-   * and safe for Phase 21 to store later (DOMAIN_MODEL.md §14.1).
+   * and safe to store. Phase 21 records only THAT a book was read (one history
+   * row per Work) and keeps the Quran as its only position (DOMAIN_MODEL.md
+   * §14.6); storing a position inside an Edition is not delivered.
    *
    * A Phase-9 document names its sections by key alone: it offers stable
    * in-page links, and no reading-position seam is owed for it.

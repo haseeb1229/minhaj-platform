@@ -567,6 +567,26 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[fatwarecordread]': ['EXECUTE'],
   '[dbo].[fatwacategory]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[fatwacategoryname]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  // Phase 21: Personalisation & Notifications. Owner data is removable by its
+  // owner and by closure disposition, so DELETE is the operation; anchors,
+  // bookmarks, interests and goals are never updated, and identifying columns
+  // carry column DENYs the probe suite proves. A newsletter subscription is
+  // never deleted by the runtime, and consent evidence is append-only.
+  '[dbo].[personalisationprofile]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[personalisationinterest]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[personalisationgoal]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[saveditem]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[bookmark]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[note]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[privatecollection]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[privatecollectionitem]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[readinghistory]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[watchhistory]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[quranreadingprogress]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[notificationpreference]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[notification]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[newslettersubscriber]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[newsletterconsentevent]': ['SELECT', 'INSERT'],
   '[dbo].[contactinquiry]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[feedback]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
 

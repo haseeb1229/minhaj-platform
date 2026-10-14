@@ -83,9 +83,9 @@ describe('search is Layer 0, not a bounded context', () => {
     const contexts = await readdir(path.join(repoRoot, 'apps', 'web', 'src', 'contexts'));
     expect(contexts).not.toContain('search');
     // The delivered contexts — Media joined at Phase 10, Global Network at
-    // Phase 16, Quran at Phase 18, Hadith at Phase 19, Fatwa at Phase 20 —
-    // and never one for Search.
-    expect(contexts).toHaveLength(10);
+    // Phase 16, Quran at Phase 18, Hadith at Phase 19, Fatwa at Phase 20,
+    // Personalisation & Notifications at Phase 21 — and never one for Search.
+    expect(contexts).toHaveLength(11);
   });
 
   it('depends on no bounded context and holds no database capability', async () => {

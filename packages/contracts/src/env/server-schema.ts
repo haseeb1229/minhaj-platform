@@ -139,6 +139,18 @@ export const serverEnvSchema = z.object({
   EMAIL_DIGEST_KEY: z.string().min(16).default('development-only-email-digest-key'),
   EMAIL_DIGEST_KEY_VERSION: z.coerce.number().int().min(1).default(1),
 
+  /**
+   * HMAC key newsletter link tokens are derived under (Phase 21). Only each
+   * token's SHA-256 is stored, so without this key nobody — a database reader
+   * included — can produce a working confirm or unsubscribe link. Rotating it
+   * retires every outstanding link; a new submission issues a fresh one.
+   */
+  NEWSLETTER_TOKEN_KEY: z
+    .string()
+    .min(16)
+    .default('development-only-newsletter-token-key'),
+  NEWSLETTER_TOKEN_KEY_VERSION: z.coerce.number().int().min(1).default(1),
+
   // -------------------------------------------------------------------------
   // Phase 4 — Public shell
   // -------------------------------------------------------------------------
@@ -237,6 +249,7 @@ const DEVELOPMENT_DEFAULTS = [
   'AUTH_SECRETS',
   'RATE_LIMIT_DIGEST_KEY',
   'EMAIL_DIGEST_KEY',
+  'NEWSLETTER_TOKEN_KEY',
 ] as const satisfies readonly (keyof ServerEnv)[];
 
 /**

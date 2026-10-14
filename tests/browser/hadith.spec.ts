@@ -1007,6 +1007,52 @@ test.describe('a fixture activation', () => {
       }
     }
   });
+  test('a citation is one shared document signed in and out, its private island empty until hydrated', async ({
+    browser,
+  }) => {
+    test.setTimeout(120_000);
+    // Phase 21: the citation carries the personal island, and must still be
+    // ONE shared document — a fresh reader and a fresh anonymous visitor, each
+    // on a client address of their own.
+    const target = `/en${COLLECTION}/1`;
+    const anonymous = await browser.newContext({
+      baseURL: baseUrl(),
+      extraHTTPHeaders: { 'x-forwarded-for': '100.64.240.1' },
+    });
+    const signedIn = await browser.newContext({
+      baseURL: baseUrl(),
+      extraHTTPHeaders: { 'x-forwarded-for': '100.64.240.2' },
+    });
+    contexts.push(anonymous, signedIn);
+    await registerAndSignIn(await signedIn.newPage(), 'hadith-island');
+
+    const shared = await anonymous.request.get(target, { maxRedirects: 0 });
+    const personal = await signedIn.request.get(target, { maxRedirects: 0 });
+    expect(shared.status()).toBe(200);
+    expect(personal.status()).toBe(200);
+    expect(shared.headers()['set-cookie']).toBeUndefined();
+    expect(personal.headers()['set-cookie']).toBeUndefined();
+    const html = await shared.text();
+    expect(html).toContain(TEXT.public);
+    expect((await personal.text()) === html, 'the citation differs signed in').toBe(true);
+    expect(html).not.toContain('aria-pressed');
+
+    // Signed out, once hydrated, the island offers sign-in back to this citation.
+    const page = await anonymous.newPage();
+    const state = page.waitForResponse((response) =>
+      response.url().includes('/api/my/target-state'),
+    );
+    await page.goto(target);
+    expect((await state).status()).toBe(200);
+    const island = page.getByRole('region', { name: 'Save and notes' });
+    await expect(island).toContainText(
+      'Sign in to save this, keep a private note or add it to a collection.',
+    );
+    await expect(island.getByRole('link', { name: 'Sign in to save' })).toHaveAttribute(
+      'href',
+      `/en/signin?returnTo=${encodeURIComponent(target)}`,
+    );
+  });
 });
 
 /* ===========================================================================

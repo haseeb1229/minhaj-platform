@@ -22,7 +22,8 @@
  * its navigation status surface needs; Phase 18 appended Quran's three,
  * `quran.editCanonical` among them; Phase 19 appended Hadith's three,
  * `hadith.editCanonical` among them; Phase 20 appended Fatwa's three,
- * `fatwa.publish` among them. `teaching.perform` and the rest are named by
+ * `fatwa.publish` among them; Phase 21 appended the two newsletter keys.
+ * `teaching.perform` and the rest are named by
  * DOMAIN_MODEL.md §4.4 as INDICATIVE examples of the shape; they belong to
  * contexts that do not exist yet. Seeding one now would fix another owner's
  * vocabulary before that owner can have an opinion about it, and would leave
@@ -502,6 +503,33 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     key: 'fatwa.publish',
     description:
       'Review a submitted Fatwa revision, return it, publish it or a correction, or withdraw a ruling, with step-up; and maintain Fatwa categories.',
+  }),
+
+  /* ---- Phase 21 — Personalisation & Notifications ------------------------ */
+  //
+  // THE NEWSLETTER, AND NOTHING ELSE. ROUTE_MAP.md §5.1 places
+  // `/admin/communications/newsletter` under Personalisation & Notifications:
+  //
+  //   `newsletter.read`    — subscription states, consent dates and masked
+  //                          addresses, with counts.
+  //   `newsletter.operate` — suppress a subscription, or reinstate a suppressed
+  //                          one so that it must be confirmed afresh.
+  //
+  // THERE IS NO `personalisation.read` AND NO `personalisation.administer`.
+  // Saved items, notes, history, progress and notifications are their owner's
+  // alone; no staff key browses them, and neither of these reaches them
+  // (SECURITY_BASELINE.md §19.1). There is no sending or campaign key either:
+  // no campaign, segment or broadcast capability exists (DOMAIN_MODEL.md
+  // §14.5). Both are ordinary keys, bundled into the protected role.
+  Object.freeze({
+    key: 'newsletter.read',
+    description:
+      'View newsletter subscription states, consent dates and masked addresses. Never the saved items, notes, history or notifications of any account.',
+  }),
+  Object.freeze({
+    key: 'newsletter.operate',
+    description:
+      'Suppress a newsletter subscription, or reinstate a suppressed one so it must be confirmed again. No sending or campaign capability exists.',
   }),
 ]);
 

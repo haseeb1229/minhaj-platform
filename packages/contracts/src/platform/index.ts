@@ -17,6 +17,7 @@ export type {
   DeliveryOperatorRecord,
   DeliveryOutcome,
   DeliveryPurpose,
+  IdentityDeliveryPurpose,
   DeliveryRecord,
   DeliveryRejected,
   DeliveryStatus,

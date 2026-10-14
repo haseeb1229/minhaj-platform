@@ -38,6 +38,7 @@ import {
   workPath,
 } from '@/components/library/presentation';
 import { Reader } from '@/components/library/reader';
+import { PersonalControls } from '@/components/personal-island/personal-controls';
 import {
   contentMetadata,
   isContentIndexable,
@@ -213,6 +214,8 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
             {t('metadataNotice')}
           </p>
         </Prose>
+
+        <PersonalControls locale={locale} target={{ kind: 'work', id: record.id }} />
 
         <Contributors work={record} people={references.people} locale={locale} t={t} />
 

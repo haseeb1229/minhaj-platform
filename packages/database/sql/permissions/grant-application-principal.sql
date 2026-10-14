@@ -803,3 +803,31 @@ IF OBJECT_ID(N'[dbo].[FatwaAssertPublicationAuthority]',N'P') IS NOT NULL DENY E
 -- that may be replaced but never re-parented.
 IF OBJECT_ID(N'[dbo].[FatwaCategory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[FatwaCategory] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[FatwaCategory] ([id], [slug], [createdAt]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[FatwaCategory] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[FatwaCategoryName]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[FatwaCategoryName] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[FatwaCategoryName] ([categoryId], [locale]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[FatwaCategoryName] TO [$(app_login)]; END;
+
+-- Phase 21: Personalisation & Notifications.
+--
+-- OWNER DATA. Every row names one account, and the owner may remove any of it
+-- while disposition at closure must, so DELETE is genuinely the operation.
+-- What identifies a row — its owner, its typed target, its creation instant —
+-- is never UPDATEd: a saved item cannot be repointed at another target or
+-- another account, a notification cannot be rewritten, only marked read.
+IF OBJECT_ID(N'[dbo].[PersonalisationProfile]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[PersonalisationProfile] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[PersonalisationProfile] ([userId], [createdAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[PersonalisationProfile] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PersonalisationInterest]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[PersonalisationInterest] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[PersonalisationInterest] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PersonalisationGoal]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[PersonalisationGoal] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[PersonalisationGoal] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[SavedItem]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[SavedItem] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[SavedItem] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Bookmark]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[Bookmark] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[Bookmark] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Note]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[Note] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[Note] ([savedItemId], [createdAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[Note] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PrivateCollection]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[PrivateCollection] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[PrivateCollection] ([id], [userId], [createdAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[PrivateCollection] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[PrivateCollectionItem]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[PrivateCollectionItem] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[PrivateCollectionItem] ([collectionId], [savedItemId], [userId], [addedAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[PrivateCollectionItem] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[ReadingHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[ReadingHistory] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[ReadingHistory] ([id], [userId], [articleId], [workId], [surahNumber], [ayahNumber], [hadithCitationId], [firstReadAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[ReadingHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[WatchHistory]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[WatchHistory] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[WatchHistory] ([userId], [videoId], [firstWatchedAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[WatchHistory] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[QuranReadingProgress]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[QuranReadingProgress] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[QuranReadingProgress] ([userId]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[QuranReadingProgress] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[NotificationPreference]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[NotificationPreference] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[NotificationPreference] ([userId], [category], [channel]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[NotificationPreference] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[Notification]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[Notification] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[Notification] ([id], [userId], [kind], [category], [destination], [idempotencyKey], [createdAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[Notification] TO [$(app_login)]; END;
+--
+-- THE NEWSLETTER is consent, not an account. A subscription changes state but
+-- is never deleted by the runtime, and its digest is never rewritten. Consent
+-- evidence is append-only: INSERT and SELECT, and a trigger refuses the rest
+-- even to a privileged session.
+IF OBJECT_ID(N'[dbo].[NewsletterSubscriber]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[NewsletterSubscriber] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[NewsletterSubscriber] ([id], [emailDigest], [digestKeyVersion]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[NewsletterSubscriber] TO [$(app_login)]; END;
+IF OBJECT_ID(N'[dbo].[NewsletterConsentEvent]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[NewsletterConsentEvent] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[NewsletterConsentEvent] TO [$(app_login)]; END;

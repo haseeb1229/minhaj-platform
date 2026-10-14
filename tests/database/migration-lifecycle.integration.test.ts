@@ -484,6 +484,26 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'FatwaPublication',
         'FatwaReviewDecision',
         'FatwaReadTally',
+        // Phase 21 — Personalisation: a person's own profile and onboarding
+        // answers, saved items with bookmarks and notes, private collections,
+        // reading and watch history, the Quran position, notification
+        // preferences and notifications; and the newsletter subscription with
+        // its append-only consent evidence.
+        'PersonalisationProfile',
+        'PersonalisationInterest',
+        'PersonalisationGoal',
+        'SavedItem',
+        'Bookmark',
+        'Note',
+        'PrivateCollection',
+        'PrivateCollectionItem',
+        'ReadingHistory',
+        'WatchHistory',
+        'QuranReadingProgress',
+        'NotificationPreference',
+        'Notification',
+        'NewsletterSubscriber',
+        'NewsletterConsentEvent',
       ].sort(),
     );
   });

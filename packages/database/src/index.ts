@@ -205,3 +205,17 @@ export {
   createFatwaStaffReader,
   createFatwaWorkflow,
 } from './adapters/fatwa/index.ts';
+
+/* ---- Personalisation & Notifications (context-owned) -------------------- */
+
+export {
+  PersonalDataError,
+  createNewsletter,
+  createPersonalDisposition,
+  createPersonalExport,
+  createPersonalHistory,
+  createPersonalNotifications,
+  createPersonalPurge,
+  createPersonalSaved,
+  createPersonalSettings,
+} from './adapters/personalisation-notifications/index.ts';

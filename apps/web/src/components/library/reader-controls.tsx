@@ -16,8 +16,9 @@ import { useCallback, useEffect, useState } from 'react';
  * are PRESENTATION PREFERENCES, so they live in `localStorage` — per browser,
  * never sent anywhere, carrying no account identifier and no reading position
  * (§37). What it must NOT remember is WHERE somebody has read to: authenticated
- * reading history and progress are Phase 21's, and Phase 8 stores no per-user
- * state at all, on the server or here.
+ * reading history is Personalisation's (Phase 21 records which book was read,
+ * never where in it), and this reader stores no per-user state at all, on the
+ * server or here.
  *
  * EVERY STORAGE ACCESS IS GUARDED. A private window, blocked site data or a
  * quota refusal makes these calls throw; a reader that failed to render a book

@@ -1612,6 +1612,48 @@ suppress security or account-service mail**.
 **Exit:** Personalisation working with **defined ownership, privacy and disposition rules** and
 no reduction in public access.
 
+**Phase-21 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+```
+PERSONALISATION & NOTIFICATIONS ENGINEERING   COMPLETE (this phase)
+SAVED / HISTORY / QURAN PROGRESS              COMPLETE
+ONBOARDING (INTERESTS, GOALS)                 COMPLETE
+IN-APP NOTIFICATIONS AND PREFERENCES          COMPLETE to the current producer contract
+NEWSLETTER DOUBLE OPT-IN                      COMPLETE
+EXPORT AND CLOSURE DISPOSITION                COMPLETE
+COURSE PROGRESS                               DEFERRED — Learning, Phase 22
+APPLICABLE-JURISDICTION POLICY                OPEN — OPEN_DECISIONS.md §2.2
+```
+
+- **No content-context dependency.** The context depends on Layer 0 and Identity & Access only;
+  content is a typed foreign key resolved at Layer 4 through each owner's public reader
+  (DOMAIN_MODEL.md §14.6). The saveable kinds are exactly Ayah, HadithCitation, Article, Video and
+  Work. **SavedItem** is the typed anchor; **Bookmark**, **Note** and private-collection membership
+  are distinct states over it, so the target is held once and never copied.
+- **ReadingProgress is the Quran position only**, moved only by an explicit, versioned "set as my
+  reading position". Course progress and `/my/progress/courses` are Phase 22's; no Course, Lesson or
+  LearningPath reference exists here.
+- **History is off by default** and one row per target; nothing is recorded until the person turns
+  it on (SECURITY_BASELINE.md §19.1 — no automatic behavioural tracking).
+- **Notifications are in-app only**, with one category (`questions`) produced by Layer 4 after a
+  Fatwa decline or publication commits. No notification is emailed, so no preference can touch
+  security or account-service mail.
+- **The newsletter is independent of User** and double opt-in, with hash-only link tokens derived
+  under `NEWSLETTER_TOKEN_KEY`, append-only consent evidence and marketing-scope provider suppression.
+  `newsletter.read` and `newsletter.operate` are ordinary keys bundled into Platform Administrator by
+  the established revocation convention; neither reaches anyone's saved items, notes or history, and
+  no `personalisation.*` staff key exists.
+- **Broadcast is not built.** No campaign aggregate, sending, segmentation or automation exists: the
+  canonical documents define no campaign owner or contract, so `/admin/communications/newsletter`
+  manages subscriber, consent and suppression state only. A future campaign capability is a separate,
+  explicitly owned decision.
+- **Closure** now coordinates four owners (Identity, People, Fatwa, Personalisation); the response
+  reports pending honestly, and a bounded personal-data sweep finishes interrupted closures and
+  retires lapsed newsletter confirmations.
+- **Not delivered, and not owed by this phase:** course progress (Phase 22), audio listening history,
+  emailed notifications, campaign sending, saved Fatwa rulings, and any staff browsing of personal data.
+
 ---
 
 ### Phase 22 — Learning: courses & paths

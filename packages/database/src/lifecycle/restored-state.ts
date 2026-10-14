@@ -82,14 +82,15 @@ const FUTURE_DOMAIN_TABLES = [
   // by the Phase-18 recovery fixture; a single generic `Quran` table is still
   // no phase's, so it stays here. `Hadith` left in Phase 19, which delivers it
   // with the `Hadith*` tables, proved by the Phase-19 recovery fixture, and
-  // `Fatwa` in Phase 20, proved by the Phase-20 recovery fixture.
+  // `Fatwa` in Phase 20, proved by the Phase-20 recovery fixture. `Notification`
+  // left in Phase 21, which delivers it as Personalisation's in-app record,
+  // proved by the Phase-21 recovery fixture.
   'Quran',
   'Book',
   'Scholar',
   'Teacher',
   'Course',
   'Message',
-  'Notification',
   'Membership',
   'Donation',
   'MigrationProvenance',
@@ -223,6 +224,33 @@ export const PHASE20_TABLES = [
   'FatwaPublication',
   'FatwaReviewDecision',
   'FatwaReadTally',
+];
+
+/**
+ * Tables the Phase-21 migration creates: a person's own profile, saved items,
+ * bookmarks, notes, private collections, history, Quran position, notification
+ * preferences and notifications, and the newsletter subscription with its
+ * append-only consent evidence.
+ *
+ * Checked as REQUIRED whenever the Phase-21 migration is among those the caller
+ * expects.
+ */
+export const PHASE21_TABLES = [
+  'PersonalisationProfile',
+  'PersonalisationInterest',
+  'PersonalisationGoal',
+  'SavedItem',
+  'Bookmark',
+  'Note',
+  'PrivateCollection',
+  'PrivateCollectionItem',
+  'ReadingHistory',
+  'WatchHistory',
+  'QuranReadingProgress',
+  'NotificationPreference',
+  'Notification',
+  'NewsletterSubscriber',
+  'NewsletterConsentEvent',
 ];
 
 async function userTables(session: SqlSession): Promise<string[]> {
@@ -381,6 +409,18 @@ export async function verifyRestoredSchema(
     if (missing.length > 0)
       throw new Error(
         `Restored database is missing Phase-20 Fatwa tables: ${missing.join(', ')}`,
+      );
+  }
+
+  // Phase 21. A restore that carried the Personalisation migration's history row
+  // but not its typed references or the newsletter's consent evidence would
+  // report an applied migration over a database that has lost what each person
+  // saved and what each subscriber agreed to.
+  if (expectedMigrationIds.some((id) => id.includes('phase21'))) {
+    const missing = PHASE21_TABLES.filter((table) => !tables.includes(table));
+    if (missing.length > 0)
+      throw new Error(
+        `Restored database is missing Phase-21 Personalisation tables: ${missing.join(', ')}`,
       );
   }
   const columns = await auditColumns(restored);

@@ -251,6 +251,13 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/fatwa/how-it-works/page.tsx',
   'apps/web/src/app/[locale]/(public)/fatwa/ask/page.tsx',
   'apps/web/src/app/[locale]/(public)/fatwa/read-beacon.tsx',
+  // Phase 21 — the newsletter. The subscribe page is a form; the two emailed
+  // link pages GET only whether a link is still usable, through the
+  // session-free, secret-free `newsletter-read` root, and POST through the
+  // action declared below.
+  'apps/web/src/app/[locale]/(public)/newsletter/page.tsx',
+  'apps/web/src/app/[locale]/(public)/newsletter/confirm/page.tsx',
+  'apps/web/src/app/[locale]/(public)/newsletter/unsubscribe/page.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [
@@ -258,6 +265,10 @@ const PUBLIC_ACTION_FILES = [
   // Phase 20 — the Fatwa read count: a POST after render, rate limited by the
   // network address, which is why it (and only it) reads a request header.
   'apps/web/src/app/[locale]/(public)/fatwa/read-actions.ts',
+  // Phase 21 — newsletter subscribe, confirm and unsubscribe. Anonymous: it
+  // reads no session; it reaches the shared mail infrastructure to enqueue
+  // and dispatch the confirmation, which is why it is not the Phase-6 graph.
+  'apps/web/src/app/[locale]/(public)/newsletter/actions.ts',
 ];
 
 /** Is this file one of the declared data-backed content routes? */
@@ -496,6 +507,7 @@ describe('the anonymous public tree reads no session-derived state', () => {
       'AUTH_SECRETS',
       'DATABASE_URL',
       'EMAIL_DIGEST_KEY',
+      'NEWSLETTER_TOKEN_KEY',
       'RATE_LIMIT_DIGEST_KEY',
       'RESEND_API_KEY',
     ]) {
@@ -936,6 +948,12 @@ describe('a public CONTENT route reads data, and still reads no session', () => 
       // Phase 20, for the same reason: the AUTHENTICATED Fatwa runtime wires
       // Identity in. Public Fatwa routes use `@/composition/fatwa-read`.
       '@/composition/fatwa',
+      // Phase 21: the AUTHENTICATED Personalisation runtime wires Identity in
+      // and holds every person's saved state. No public route reaches it: a
+      // content page's private island reads through `/api/my/*` after
+      // hydration, and the newsletter link pages use `newsletter-read`.
+      '@/composition/personalisation',
+      '@/composition/personal-targets',
       '@/contexts/identity-access',
       '@/config/server-env',
       '@minhaj/contracts/env/server',
@@ -1310,6 +1328,50 @@ describe('the base security headers', () => {
     // at length why the one allowance exists and why the other does not, and
     // the explanation must not be what the count measures.
     expect(code(config).match(/'unsafe-inline'/g) ?? []).toHaveLength(1);
+  });
+});
+
+describe('Phase 21 private island and newsletter action', () => {
+  it('walks the island into the content graph and keeps it client-only', async () => {
+    const { modules } = await contentGraph();
+    const files = [...modules.keys()].map(relative);
+    for (const island of [
+      'apps/web/src/components/personal-island/personal-island.tsx',
+      'apps/web/src/components/personal-island/requests.ts',
+    ])
+      expect(files).toContain(island);
+    const island = code(
+      await readFile(
+        path.join(APP_SRC, 'components/personal-island/personal-island.tsx'),
+        'utf8',
+      ),
+    );
+    expect(island.trimStart()).toMatch(/^['"]use client['"]/);
+  });
+
+  it('reads no session in the anonymous newsletter action', async () => {
+    const file = path.join(
+      repoRoot,
+      'apps/web/src/app/[locale]/(public)/newsletter/actions.ts',
+    );
+    const raw = await readFile(file, 'utf8');
+    const source = code(raw);
+    expect(source.trimStart()).toMatch(/^['"]use server['"]/);
+    for (const call of [
+      'requireOwnSession',
+      'requireActiveSession',
+      'session.resolve',
+      'cookies(',
+    ])
+      expect(source, call).not.toContain(call);
+    for (const specifier of specifiersIn(raw))
+      expect(
+        ['@/composition/authorization', '@/composition/request', 'next/headers'].includes(
+          specifier,
+        ),
+        specifier,
+      ).toBe(false);
+    expect(specifiersIn(raw)).toContain('@/composition/request-address');
   });
 });
 

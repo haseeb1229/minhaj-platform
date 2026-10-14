@@ -162,6 +162,20 @@ export interface FatwaWorkflowPort {
     input: Acting & { readonly id: string; readonly value: CategoryCreateValue },
   ): Promise<void>;
   updateCategory(input: Acting & { readonly value: CategoryUpdateValue }): Promise<void>;
+  /**
+   * WHO ASKED — read by the workflow service only after it has committed a
+   * decline or a publication, so Layer 4 can tell the asker in-app (Phase 21).
+   * The asker's account and the question's id; never the question's words.
+   */
+  askerOf(
+    input: { readonly questionId: string } | { readonly fatwaId: string },
+  ): Promise<FatwaAsker | null>;
+}
+
+/** The asker of one question, as the in-app notification needs it. */
+export interface FatwaAsker {
+  readonly accountId: string;
+  readonly questionId: string;
 }
 
 /* ===========================================================================

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
 import { CitationPage } from '@/components/hadith/citation';
+import { PersonalControls } from '@/components/personal-island/personal-controls';
 import {
   hadithCitationPath,
   readCollectionSegment,
@@ -65,5 +66,14 @@ export default async function CitationRoute({ params }: CitationParams) {
   const locale = await requireLocale(params);
   const [availability, hadith] = await Promise.all([hadithAvailability(), load(params)]);
   if (!availability.active || hadith === null) notFound();
-  return <CitationPage locale={locale} availability={availability} hadith={hadith} />;
+  return (
+    <>
+      <CitationPage locale={locale} availability={availability} hadith={hadith} />
+      <PersonalControls
+        locale={locale}
+        target={{ kind: 'hadith', id: hadith.citationId }}
+        framed
+      />
+    </>
+  );
 }

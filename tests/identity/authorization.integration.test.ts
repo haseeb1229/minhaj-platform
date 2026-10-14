@@ -350,6 +350,13 @@ describe.skipIf(!databaseConfigured)(
       const PHASE_20_KEYS = ['fatwa.answer', 'fatwa.publish', 'question.receive'];
 
       /**
+       * The keys the Phase-21 migration appended: the newsletter's read and
+       * operate pair, bundled into the protected role. Neither reaches any
+       * account's saved items, notes, history or notifications.
+       */
+      const PHASE_21_KEYS = ['newsletter.operate', 'newsletter.read'];
+
+      /**
        * The capability-projection source that MUST NOT be grantable yet.
        *
        * DOMAIN_MODEL.md §4.5 derives `canTeach`, `canReceiveQuestions`,
@@ -380,6 +387,7 @@ describe.skipIf(!databaseConfigured)(
             ...PHASE_18_KEYS,
             ...PHASE_19_KEYS,
             ...PHASE_20_KEYS,
+            ...PHASE_21_KEYS,
           ].sort(),
         );
 

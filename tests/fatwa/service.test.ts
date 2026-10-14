@@ -63,6 +63,9 @@ async function failure(promise: Promise<unknown>): Promise<string> {
   return 'accepted';
 }
 
+/** Who asked — the account and question id, never the question's words. */
+const ASKER = { accountId: 'proof-asker-1', questionId: ID(1) } as const;
+
 const draft = (overrides: Record<string, unknown> = {}) => ({
   questionId: ID(1),
   expectedVersion: 0,
@@ -94,6 +97,8 @@ function workflowHarness(
       const thrown = options.throws?.[method];
       if (thrown !== undefined) throw thrown;
       if (method === 'assignedFatwa') return { id: ID(9) };
+      // Phase 21: who to tell, read only after a decline or publication.
+      if (method === 'askerOf') return ASKER;
       if (method.endsWith('Question') || method.endsWith('Fatwa')) return null;
       if (method === 'categories') return [];
       return { items: [], total: 0, offset: 0 };
@@ -200,6 +205,25 @@ describe('the workflow service', () => {
     ];
     for (const attempt of attempts) expect(await failure(attempt)).toBe('denied');
     expect(admin.calls).toEqual([]);
+  });
+
+  it('names the asker of a declined question only after the decline has been written', async () => {
+    const receiver = workflowHarness({ permissions: [FATWA_PERMISSIONS.receive] });
+    expect(
+      await receiver.service.decline(actor, { id: ID(1), expectedVersion: 1 }),
+    ).toEqual(ASKER);
+    expect(receiver.calls.map((call) => call.method)).toEqual(['decline', 'askerOf']);
+    expect(receiver.calls[1]?.args).toEqual([{ questionId: ID(1) }]);
+
+    // A refused decline asks nobody: there is nothing to tell.
+    const refused = workflowHarness({
+      permissions: [FATWA_PERMISSIONS.receive],
+      throws: { decline: { reason: 'conflict' } },
+    });
+    expect(
+      await failure(refused.service.decline(actor, { id: ID(1), expectedVersion: 1 })),
+    ).toBe('conflict');
+    expect(refused.calls.map((call) => call.method)).toEqual(['decline']);
   });
 
   it('gives each key exactly its own stage and nothing more', async () => {
@@ -393,12 +417,18 @@ describe('the one publication operation', () => {
     });
     expect(h.outcome.state).toBe('allowed');
     if (h.outcome.state !== 'allowed') return;
-    await h.service.publish(h.outcome.actor, decision);
+    // Phase 21: the asker is named only once the publication has committed.
+    expect(await h.service.publish(h.outcome.actor, decision)).toEqual(ASKER);
     const call = h.calls.find((entry) => entry.method === 'publish');
     expect(call?.args[0]).toMatchObject({
       authority: { actorId: ID(200), sessionId: ID(400) },
       value: decision,
     });
+    const methods = h.calls.map((entry) => entry.method);
+    expect(methods.indexOf('askerOf')).toBeGreaterThan(methods.indexOf('publish'));
+    expect(h.calls.find((entry) => entry.method === 'askerOf')?.args).toEqual([
+      { fatwaId: decision.fatwaId },
+    ]);
     expect(h.logged).toContainEqual(
       expect.objectContaining({ operation: 'fatwa.publish', outcome: 'passed' }),
     );

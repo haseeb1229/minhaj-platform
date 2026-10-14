@@ -233,6 +233,25 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'FatwaPublication',
       'FatwaReviewDecision',
       'FatwaReadTally',
+      // Phase 21 — Personalisation's own profile, saved items, bookmarks,
+      // notes, private collections, history, Quran position, notification
+      // preferences and notifications, and the newsletter with its consent
+      // evidence.
+      'PersonalisationProfile',
+      'PersonalisationInterest',
+      'PersonalisationGoal',
+      'SavedItem',
+      'Bookmark',
+      'Note',
+      'PrivateCollection',
+      'PrivateCollectionItem',
+      'ReadingHistory',
+      'WatchHistory',
+      'QuranReadingProgress',
+      'NotificationPreference',
+      'Notification',
+      'NewsletterSubscriber',
+      'NewsletterConsentEvent',
     ]) {
       expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }
@@ -242,9 +261,9 @@ describe('Phase 1 Chunk 2 migration convention', () => {
     // did; Phase 18 delivers the Quran as its own tables, never one generic
     // `Quran` table; `Hadith` left it when Phase 19 delivered the record and
     // `Fatwa` when Phase 20 delivered the ruling; a context-less `Question`
-    // is still no phase's.)
+    // is still no phase's. `PrivateCollection` and `Notification` left it when
+    // Phase 21 delivered them; Learning's progress is still Learning's.)
     for (const table of [
-      'PrivateCollection',
       'Quran',
       'Book',
       'Question',
@@ -252,7 +271,7 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'Teacher',
       'Course',
       'Message',
-      'Notification',
+      'CourseProgress',
       'Membership',
       'Donation',
       'MigrationProvenance',

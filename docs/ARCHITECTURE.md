@@ -639,6 +639,15 @@ work, outbox, saga, event bus or cross-owner transaction.
 > **Critical service mail is not marketing.** A marketing unsubscribe or suppression **never**
 > suppresses security-critical or account-service communication.
 
+**As delivered (Phase 21): a second owner.** The Layer-4 dispatcher routes the
+`newsletter.confirmation` purpose to Personalisation & Notifications, which re-derives the link at
+send time from its own state, and checks it against provider suppression under the **marketing**
+scope; every Identity purpose keeps the transactional scope, and Identity resolves nothing that is
+not its own. The newsletter enqueues through the same durable delivery rows — no second queue, no
+direct provider call. A bounded personal-data sweep beside the existing ones runs each owner's
+closure reconciliation and retires lapsed newsletter confirmations. No dependency edge is added:
+Personalisation still depends on Layer 0 and Identity only.
+
 ### 4.7 Integration abstractions
 
 | Integration | V1 | Later |

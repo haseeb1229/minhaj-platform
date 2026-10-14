@@ -7,8 +7,10 @@ import { repoRoot } from '../architecture/architecture-harness.ts';
 import {
   EXPLORE_PAGES,
   EXPLORE_SECTIONS,
+  exploreHrefOf,
   exploreSlugsOf,
   isExplorePage,
+  ownerPathOf,
 } from '../../apps/web/src/shell/explore.ts';
 import {
   LEGAL_DOCUMENTS,
@@ -285,16 +287,40 @@ describe('a deferred capability cannot be linked', () => {
 
   it('delivers News and Events at /news, public, eligible and in the primary navigation', () => {
     // Phase 13: the News families, the News archive and the photograph surfaces
-    // are reached from here; Phase 14 adds Events. The newsletter is not
-    // delivered, so no route of its exists to be linked.
+    // are reached from here; Phase 14 adds Events. The newsletter (Phase 21) is
+    // its own entry, not a News surface.
     const route = requireRoute('news-events');
 
     expect(route.path).toBe('/news');
     expect(route.visibility).toBe('public');
     expect(route.indexing).toBe('eligible');
     expect(route.placements).toContain('primary');
-    for (const key of ['newsletter', 'news.latest', 'news.popular'])
+    for (const key of ['news.newsletter', 'news.latest', 'news.popular'])
       expect(routeByKey(key), key).toBeNull();
+  });
+
+  it('delivers the newsletter at /newsletter, public, eligible and in the footer', () => {
+    // Phase 21: the subscription page is a genuine, session-free page in all
+    // three locales. Where an emailed link lands — confirm and unsubscribe —
+    // is a token's status, `noindex`: never a registry entry, so never linked
+    // and never a sitemap entry (ROUTE_MAP.md §4, class D).
+    const route = requireRoute('newsletter');
+
+    expect(route.path).toBe('/newsletter');
+    expect(route.label).toBe('nav.newsletter');
+    expect(route.visibility).toBe('public');
+    expect(route.availability).toBe('delivered');
+    expect(route.indexing).toBe('eligible');
+    expect(route.placements).toEqual(['footer-utility']);
+    expect(linksIn('footer-utility').map((entry) => entry.key)).toContain('newsletter');
+
+    for (const key of ['newsletter.confirm', 'newsletter.unsubscribe'])
+      expect(routeByKey(key), key).toBeNull();
+    for (const path of ['/newsletter/confirm', '/newsletter/unsubscribe'])
+      expect(
+        SHELL_ROUTES.some((entry) => isAvailable(entry) && entry.path === path),
+        path,
+      ).toBe(false);
   });
 
   it('delivers Events at /events, public and eligible, reached from /news only', () => {
@@ -591,6 +617,9 @@ describe('indexing eligibility is honest', () => {
       'news.media-coverage',
       'news.press-releases',
       'news.statements',
+      // Phase 21: the newsletter subscription page. Its confirm and
+      // unsubscribe link pages are not routes here.
+      'newsletter',
       'sitemap',
       // Phase 17: the canonical Topics browser. `search` is delivered too, and
       // is deliberately NOT here.
@@ -639,11 +668,33 @@ describe('the registry and the Explore allowlists cannot drift', () => {
       .map((route) => route.key.slice('explore.'.length))
       .sort();
 
+    // An item its owner has delivered elsewhere is no longer a reserved shell.
     const expected = Object.entries(EXPLORE_PAGES)
-      .flatMap(([section, pages]) => pages.map((page) => `${section}.${page}`))
+      .flatMap(([section, pages]) =>
+        pages
+          .filter((page) => ownerPathOf(section, page) === null)
+          .map((page) => `${section}.${page}`),
+      )
       .sort();
 
     expect(registered).toEqual(expected);
+  });
+
+  it('sends the Explore newsletter item to the delivered /newsletter (Phase 21)', () => {
+    expect(ownerPathOf('digital-resources', 'newsletter')).toBe('/newsletter');
+    expect(exploreHrefOf('ur', 'digital-resources', 'newsletter')).toBe('/ur/newsletter');
+    // Every other item still links to its own reserved Explore address.
+    expect(exploreHrefOf('en', 'digital-resources', 'rss')).toBe(
+      '/en/explore/digital-resources/rss',
+    );
+    expect(
+      Object.entries(EXPLORE_PAGES).flatMap(([section, pages]) =>
+        pages.filter((page) => ownerPathOf(section, page) !== null),
+      ),
+    ).toEqual(['newsletter']);
+    expect(SHELL_ROUTES.find((route) => route.key === 'newsletter')?.path).toBe(
+      '/newsletter',
+    );
   });
 
   it('gives a leaf section no pages at all', () => {

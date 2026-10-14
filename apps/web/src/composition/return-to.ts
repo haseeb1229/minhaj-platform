@@ -35,7 +35,23 @@ function hasControlCharacters(value: string): boolean {
 const OWN_QUESTION =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-/** Authenticated destinations that actually exist. */
+/** A public slug, as every owner's slug grammar admits one. */
+const SLUG = '[a-z0-9]+(?:-[a-z0-9]+)*';
+
+/**
+ * Phase 21: the public pages whose private island offers "sign in to save" —
+ * an Article, a book (Work), a Video, an Ayah and a Hadith citation. Exact
+ * shapes, same origin, nothing a visitor can widen.
+ */
+const SAVEABLE_PAGES: readonly RegExp[] = [
+  new RegExp(`^/library/articles/${SLUG}$`),
+  new RegExp(`^/library/books/${SLUG}$`),
+  new RegExp(`^/watch/videos/${SLUG}$`),
+  /^\/quran\/surah\/[1-9][0-9]{0,2}\/[1-9][0-9]{0,2}$/,
+  new RegExp(`^/hadith/${SLUG}/[1-9][0-9]{0,5}$`),
+];
+
+/** Destinations that actually exist and a sign-in may return to. */
 function isKnownDestination(pathname: string, locale: string): boolean {
   const path = pathname.replace(/\/$/, '');
   if (
@@ -48,11 +64,32 @@ function isKnownDestination(pathname: string, locale: string): boolean {
       // Phase 20 — Fatwa's `/my/questions`.
       `/${locale}/my/questions`,
       `/${locale}/my/questions/ask`,
+      // Phase 21 — Personalisation & Notifications.
+      `/${locale}/my/saved`,
+      `/${locale}/my/saved/bookmarks`,
+      `/${locale}/my/saved/notes`,
+      `/${locale}/my/saved/collections`,
+      `/${locale}/my/history/reading`,
+      `/${locale}/my/history/watch`,
+      `/${locale}/my/progress/quran`,
+      `/${locale}/my/notifications`,
+      `/${locale}/my/settings/interests`,
+      `/${locale}/my/settings/notifications`,
+      `/${locale}/my/settings/privacy`,
     ]).has(path)
   )
     return true;
   const question = `/${locale}/my/questions/`;
-  return path.startsWith(question) && OWN_QUESTION.test(path.slice(question.length));
+  if (path.startsWith(question)) return OWN_QUESTION.test(path.slice(question.length));
+  // One of the person's own private collections, by its opaque id.
+  const collection = `/${locale}/my/saved/collections/`;
+  if (path.startsWith(collection))
+    return OWN_QUESTION.test(path.slice(collection.length));
+  const prefix = `/${locale}`;
+  return (
+    path.startsWith(`${prefix}/`) &&
+    SAVEABLE_PAGES.some((pattern) => pattern.test(path.slice(prefix.length)))
+  );
 }
 
 /**

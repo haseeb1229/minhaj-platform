@@ -25,6 +25,7 @@ import {
   requirePrivilegedActor,
 } from '@/composition/authorization';
 import { fatwaRuntime } from '@/composition/fatwa';
+import { notifyAsker } from '@/composition/fatwa-notifications';
 import { appLogger } from '@/composition/logging';
 import { indexAfterResponse } from '@/composition/search';
 import { fatwaFailure } from '@/contexts/fatwa';
@@ -212,7 +213,8 @@ export async function declineFatwaQuestion(
     });
     if (!parsed.success) return INVALID;
 
-    await fatwaRuntime().workflow.decline(gate.actor, parsed.data);
+    const asker = await fatwaRuntime().workflow.decline(gate.actor, parsed.data);
+    await notifyAsker(asker, 'question-declined');
     refresh(gate.locale);
     destination = `/${gate.locale}/admin/fatwa/questions`;
   } catch (error) {
@@ -353,7 +355,8 @@ export async function publishFatwaRevision(
     });
     if (!parsed.success) return INVALID;
 
-    await fatwaRuntime().workflow.publish(gate.actor, parsed.data);
+    const asker = await fatwaRuntime().workflow.publish(gate.actor, parsed.data);
+    await notifyAsker(asker, 'question-answered');
     refresh(locale);
     // The procedure already owes Search a pass; this only indexes it sooner.
     indexAfterResponse();

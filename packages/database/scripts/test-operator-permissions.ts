@@ -468,6 +468,57 @@ try {
     `),
   );
 
+  // Phase 21 gives the operator ROLE nothing over Personalisation: a person's
+  // saved items, notes, history and notifications are read and written only by
+  // the runtime on that person's own behalf, and a newsletter subscription and
+  // its consent evidence only through the runtime's newsletter operations — so
+  // the operator can neither read an address nor rewrite what was agreed.
+  for (const table of [
+    'PersonalisationProfile',
+    'PersonalisationInterest',
+    'PersonalisationGoal',
+    'SavedItem',
+    'Bookmark',
+    'Note',
+    'PrivateCollection',
+    'PrivateCollectionItem',
+    'ReadingHistory',
+    'WatchHistory',
+    'QuranReadingProgress',
+    'NotificationPreference',
+    'Notification',
+    'NewsletterSubscriber',
+    'NewsletterConsentEvent',
+  ]) {
+    await expectDenied(operatorSession, `operator SELECT on ${table} denied`, () =>
+      operatorSession.query(`SELECT TOP 1 1 AS probe FROM [dbo].[${table}];`),
+    );
+  }
+  await expectDenied(operatorSession, 'operator INSERT on Notification denied', () =>
+    operatorSession.query(`
+      INSERT INTO [dbo].[Notification] ([id], [userId], [kind], [category], [destination],
+        [idempotencyKey], [createdAt])
+      VALUES (N'injected', N'injected', N'question-answered', N'questions', NULL,
+        N'injected', SYSUTCDATETIME());
+    `),
+  );
+  await expectDenied(
+    operatorSession,
+    'operator UPDATE on NewsletterSubscriber denied',
+    () =>
+      operatorSession.query(
+        `UPDATE [dbo].[NewsletterSubscriber] SET [state] = N'suppressed';`,
+      ),
+  );
+  await expectDenied(operatorSession, 'operator DELETE on SavedItem denied', () =>
+    operatorSession.query(`DELETE FROM [dbo].[SavedItem];`),
+  );
+  await expectDenied(
+    operatorSession,
+    'operator DELETE on NewsletterConsentEvent denied',
+    () => operatorSession.query(`DELETE FROM [dbo].[NewsletterConsentEvent];`),
+  );
+
   await expectDenied(operatorSession, 'operator INSERT on RoleAssignment denied', () =>
     operatorSession.query(`
       INSERT INTO [dbo].[RoleAssignment] ([userId], [roleId])

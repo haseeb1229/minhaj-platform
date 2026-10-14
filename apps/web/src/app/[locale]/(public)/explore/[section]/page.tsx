@@ -11,7 +11,12 @@ import { Breadcrumbs, Container, Prose } from '@/components/ui';
 import { PublicationStatus } from '@/components/shell/publication-status';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
-import { EXPLORE_SECTIONS, exploreSlugsOf, type ExploreSection } from '@/shell/explore';
+import {
+  EXPLORE_SECTIONS,
+  exploreHrefOf,
+  exploreSlugsOf,
+  type ExploreSection,
+} from '@/shell/explore';
 import { requireRoute } from '@/shell/registry';
 
 /**
@@ -108,7 +113,7 @@ export default async function ExploreSectionPage({ params }: SectionParams) {
               {slugs.map((slug) => (
                 <li key={slug}>
                   <a
-                    href={`/${locale}/explore/${section}/${slug}`}
+                    href={exploreHrefOf(locale, section, slug)}
                     className="underline underline-offset-2"
                   >
                     {t(

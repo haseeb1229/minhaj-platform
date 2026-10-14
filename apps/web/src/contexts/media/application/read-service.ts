@@ -20,8 +20,9 @@ import {
  * NO ACTOR, NO SESSION, NO PERMISSION, and the SHAPE is what makes that
  * structural: there is no parameter a viewer's identity could arrive through,
  * so no answer can vary with one (ARCHITECTURE.md §8.1). Watching and listening
- * are not recorded here or anywhere — watch history is Phase 21's, and it needs
- * an account this surface never sees; no listening history is authorised.
+ * are not recorded here — watch history is Personalisation's (Phase 21), kept
+ * only while the person has turned it on and recorded by the page's private
+ * island after it loads, never by this read; no listening history is authorised.
  *
  * EVERY INPUT IS VALIDATED HERE, at the trust boundary. A slug from a URL
  * segment that does not match the grammar resolves to `null` — the page's own

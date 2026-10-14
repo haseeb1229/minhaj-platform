@@ -81,8 +81,8 @@ export const routing = defineRouting({
    * profile capability (SECURITY_BASELINE.md — a profile alone grants
    * nothing). It is deliberately not `httpOnly`, because locale switching is a
    * client-side navigation concern and there is nothing here to protect from a
-   * script that could not simply navigate instead. Authenticated preference
-   * persistence is Phase 21's, not this cookie's.
+   * script that could not simply navigate instead. The ACCOUNT's interface
+   * locale is Identity's (`/my/settings/language`), not this cookie's.
    */
   localeCookie: {
     ...LOCALE_COOKIE,

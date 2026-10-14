@@ -76,6 +76,12 @@ import {
   verifyRestoredPhase20,
   writePhase20Fixture,
 } from '../src/lifecycle/phase20-fixture.ts';
+import {
+  capturePhase21Fixture,
+  newPhase21Fixture,
+  verifyRestoredPhase21,
+  writePhase21Fixture,
+} from '../src/lifecycle/phase21-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -204,6 +210,7 @@ const collectionFixture = newPhase15Fixture();
 const quranFixture = newPhase18Fixture();
 const hadithFixture = newPhase19Fixture();
 const fatwaFixture = newPhase20Fixture();
+const personalFixture = newPhase21Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -442,6 +449,26 @@ try {
   const fatwaSnapshot = await capturePhase20Fixture(admin, fatwaFixture);
   report('fatwa fixture', `run ${fatwaFixture.runId}`);
 
+  // Phase-21 Personalisation, with NON_PERSONALISATION_FIXTURE sentinels and
+  // `.invalid` addresses only: two accounts' onboarding answers, a saved item of
+  // each typed kind — the Phase-6 Article, the Phase-8 Work, the Phase-10
+  // Video, a Phase-18 Ayah and the Phase-19 public citation — with a bookmark
+  // and a note, an ordered private collection, reading, watch and Quran
+  // progress, a preference and two notifications, and five newsletter
+  // subscriptions, one per state, holding only link hashes, with their consent
+  // evidence.
+  const personalReferences = {
+    articleId: editorialFixture.articleId,
+    workId: libraryFixture.workId,
+    videoId: mediaFixture.videoId,
+    surahNumber: 1,
+    ayahNumber: 1,
+    hadithCitationId: hadithFixture.citationId,
+  };
+  await writePhase21Fixture(admin, personalFixture, personalReferences);
+  const personalSnapshot = await capturePhase21Fixture(admin, personalFixture);
+  report('personal fixture', `run ${personalFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -558,6 +585,15 @@ try {
   report(
     'fatwa recovery',
     await verifyRestoredPhase20(restored, fatwaFixture, fatwaSnapshot, fatwaReferences),
+  );
+  report(
+    'personal recovery',
+    await verifyRestoredPhase21(
+      restored,
+      personalFixture,
+      personalSnapshot,
+      personalReferences,
+    ),
   );
 
   // ---- restored security posture -------------------------------------------
@@ -870,6 +906,39 @@ try {
         ['FatwaCategory slug UPDATE', 'UPDATE [dbo].[FatwaCategory] SET [slug]=[slug];'],
         ['FatwaCategory DELETE', 'DELETE FROM [dbo].[FatwaCategory];'],
         ['Fatwa ALTER', 'ALTER TABLE [dbo].[Fatwa] ADD [probe] INT NULL;'],
+        // Phase 21. A restored runtime can neither rewrite or erase consent
+        // evidence, delete a subscription or rewrite its digest, repoint a saved
+        // item or a history row at another target or account, rewrite a
+        // notification's destination, delete the content a person saved, nor
+        // alter a Personalisation table.
+        [
+          'NewsletterConsentEvent UPDATE',
+          "UPDATE [dbo].[NewsletterConsentEvent] SET [event]=N'confirmed';",
+        ],
+        ['NewsletterConsentEvent DELETE', 'DELETE FROM [dbo].[NewsletterConsentEvent];'],
+        ['NewsletterSubscriber DELETE', 'DELETE FROM [dbo].[NewsletterSubscriber];'],
+        [
+          'NewsletterSubscriber digest UPDATE',
+          'UPDATE [dbo].[NewsletterSubscriber] SET [emailDigest]=[emailDigest];',
+        ],
+        ['SavedItem UPDATE', 'UPDATE [dbo].[SavedItem] SET [userId]=[userId];'],
+        [
+          'ReadingHistory target UPDATE',
+          'UPDATE [dbo].[ReadingHistory] SET [articleId]=[articleId];',
+        ],
+        [
+          'Notification destination UPDATE',
+          'UPDATE [dbo].[Notification] SET [destination]=[destination];',
+        ],
+        [
+          'Saved Work DELETE',
+          `DELETE FROM [dbo].[Work] WHERE [id]=N'${libraryFixture.workId}';`,
+        ],
+        ['SavedItem ALTER', 'ALTER TABLE [dbo].[SavedItem] ADD [probe] INT NULL;'],
+        [
+          'NewsletterConsentEvent ALTER',
+          'ALTER TABLE [dbo].[NewsletterConsentEvent] ADD [probe] INT NULL;',
+        ],
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -922,6 +991,12 @@ try {
         hadithReferences,
       );
       await verifyRestoredPhase20(restored, fatwaFixture, fatwaSnapshot, fatwaReferences);
+      await verifyRestoredPhase21(
+        restored,
+        personalFixture,
+        personalSnapshot,
+        personalReferences,
+      );
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 
       // Phase 17. The full-text catalogue and index live INSIDE the database,

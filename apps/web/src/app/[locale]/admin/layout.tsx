@@ -101,6 +101,11 @@ const SURFACES: readonly {
   { key: 'audit', permission: 'audit.read', path: 'system/audit' },
   { key: 'integrations', permission: 'integrations.read', path: 'system/integrations' },
   { key: 'delivery', permission: 'delivery.read', path: 'communications/delivery' },
+  // Phase 21. Newsletter subscription and suppression state under
+  // Personalisation & Notifications. `newsletter.read` opens the page; the
+  // suppress and reinstate actions re-check `newsletter.operate`, which alone
+  // opens nothing here, so it does not show the entry.
+  { key: 'newsletter', permission: 'newsletter.read', path: 'communications/newsletter' },
   // Phase 17. Indexing lag and failures; operating the indexer needs
   // `search.operate` as well, re-checked by every action.
   { key: 'search', permission: 'search.read', path: 'system/search' },

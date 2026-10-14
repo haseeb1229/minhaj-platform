@@ -573,6 +573,13 @@ describe('F1 — the production database package publishes no raw capability', (
       // owned there, and writes questions and rulings only through the
       // database's live-permission-checking procedures.
       fatwa: { kind: 'context', slug: 'fatwa' },
+      // Phase 21. Personalisation & Notifications is a bounded CONTEXT; its
+      // adapter is hosted here and owned there, and reads and writes only its
+      // own tables, every statement keyed by the owning account.
+      'personalisation-notifications': {
+        kind: 'context',
+        slug: 'personalisation-notifications',
+      },
       email: { kind: 'layer0', concern: 'email' },
       'rate-limiting': { kind: 'layer0', concern: 'rate-limiting' },
       auditing: { kind: 'layer0', concern: 'auditing' },

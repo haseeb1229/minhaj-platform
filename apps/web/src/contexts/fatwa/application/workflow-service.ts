@@ -195,6 +195,8 @@ export function createFatwaWorkflowService(deps: {
         input,
       );
       await run(deps.workflow.decline({ actorId: actor.accountId, value }));
+      // Who to tell, once the decline has committed — Layer 4 notifies them.
+      return run(deps.workflow.askerOf({ questionId: value.id }));
     },
 
     /* ---- Drafting — `fatwa.answer`, the current assignee only --------- */
@@ -317,6 +319,8 @@ export function createFatwaWorkflowService(deps: {
         },
         'Fatwa revision published.',
       );
+      // Who to tell, once the publication has committed — Layer 4 notifies them.
+      return run(deps.workflow.askerOf({ fatwaId: parsed.data.fatwaId }));
     },
 
     async withdraw(actor: PrivilegedActor, input: z.input<typeof fatwaWithdrawalSchema>) {

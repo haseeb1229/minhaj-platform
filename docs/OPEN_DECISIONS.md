@@ -184,6 +184,12 @@ notification and any residency constraints.
 **Interim position:** The architecture supports export, deletion and consent tracking
 regardless.
 
+**Still OPEN after Phase 21.** Phase 21 delivered export, closure disposition, newsletter double
+opt-in and consent evidence on privacy-minimising engineering defaults (SECURITY_BASELINE.md
+§19.1.2). It decides none of the questions above: no retention period, legal hold, residency rule,
+statutory deadline, age rule or named-jurisdiction compliance claim exists, and this gate still
+applies to Phase 33.
+
 ### 2.3 Legal document content
 **Owner:** Minhaj · **Gates:** **Phase 6 — publication.** Phase 4 reserves the routes only ·
 **Priority:** Medium
@@ -585,7 +591,7 @@ following **is decided**:
 |---|---|
 | 16 bounded contexts; infrastructure is not a domain | DOMAIN_MODEL.md §1 |
 | Explicit acyclic dependency allowlist, incl. `Messaging → Learning` and `Editorial → Global Network` | ARCHITECTURE.md §6 (canonical); DOMAIN_MODEL.md §3.1–3.2 |
-| Personalisation deletion integrity: archive by default, transactional purge for hard deletes | DOMAIN_MODEL.md §14.3 |
+| Personalisation deletion integrity: archive by default; a durable, resumable, owner-coordinated purge for hard deletes (typed releases since Phase 21) | DOMAIN_MODEL.md §14.3, §14.6 |
 | Conditional `x-default` resolution | ROUTE_MAP.md §9.2.1 |
 | Realtime as a transport adapter; `server-core` hosts context-owned services and owns nothing | ARCHITECTURE.md §3.1 |
 | **Model A — encapsulated persistence through context-owned services; invoking a service that persists is not holding raw database capability** | ARCHITECTURE.md §3.1.1–§3.1.2, §4.1 |

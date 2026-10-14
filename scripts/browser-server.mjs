@@ -54,6 +54,7 @@ const SECRETS = {
   AUTH_SECRETS: '1:synthetic-browser-suite-secret-0001',
   RATE_LIMIT_DIGEST_KEY: 'synthetic-browser-rate-limit-0001',
   EMAIL_DIGEST_KEY: 'synthetic-browser-email-digest-0001',
+  NEWSLETTER_TOKEN_KEY: 'synthetic-browser-newsletter-token-0001',
 };
 
 const port = Number(process.argv[2] ?? 3100);

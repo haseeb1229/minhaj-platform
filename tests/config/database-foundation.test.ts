@@ -329,6 +329,25 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'FatwaPublication',
       'FatwaReviewDecision',
       'FatwaReadTally',
+      // Phase 21 — a person's own profile, saved items, bookmarks, notes,
+      // private collections, history, Quran position, notification preferences
+      // and notifications, and the newsletter subscription with its consent
+      // evidence.
+      'PersonalisationProfile',
+      'PersonalisationInterest',
+      'PersonalisationGoal',
+      'SavedItem',
+      'Bookmark',
+      'Note',
+      'PrivateCollection',
+      'PrivateCollectionItem',
+      'ReadingHistory',
+      'WatchHistory',
+      'QuranReadingProgress',
+      'NotificationPreference',
+      'Notification',
+      'NewsletterSubscriber',
+      'NewsletterConsentEvent',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name
@@ -348,17 +367,16 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       // `Book` stays absent: Phase 8 models the Work/Edition split rather than a
       // single Book row, which is the conflation DOMAIN_MODEL.md §10.1 corrects.
       'Book',
-      // Sub-aggregates Phase 9 deliberately does not invent, and Phase 21's
-      // per-user reading state, which must not arrive with Library.
+      // Sub-aggregates Phase 9 deliberately does not invent. Phase 21 delivered
+      // per-user reading state as Personalisation's `ReadingHistory` and
+      // `Bookmark`; a generic `ReadingProgress` is still no phase's.
       'MagazineArticle',
       'PublicationIssue',
       'EncyclopediaEntry',
-      'ReadingHistory',
       'ReadingProgress',
-      'Bookmark',
       // Shapes Media never delivers or has not yet: a Program aggregate (a
-      // programme is a Series kind), per-kind or per-provider Video tables,
-      // Phase 21's watch history — and, for Phase 12, an Album, an image or
+      // programme is a Series kind), per-kind or per-provider Video tables
+      // (watch history is Personalisation's, Phase 21) — and, for Phase 12, an Album, an image or
       // asset-link table, or a Media-owned Event join. (Phase 14's
       // `EventGallery` is Editorial's, on the Event revision.)
       'Program',
@@ -369,15 +387,13 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'MediaItem',
       'YouTubeVideo',
       'LectureVideo',
-      'WatchHistory',
-      // Phase 13 invents no generic News or editorial table, no lead image and
-      // no newsletter: those are Phase 21's, or an architecture decision no
-      // phase has made. (Phase 16's Centre is a column on the News revision,
-      // never a per-centre content table.)
+      // Phase 13 invents no generic News or editorial table and no lead image:
+      // that is an architecture decision no phase has made, and the newsletter
+      // arrived as Phase 21's consent record. (Phase 16's Centre is a column on
+      // the News revision, never a per-centre content table.)
       'NewsItem',
       'EditorialContent',
       'NewsArticleImage',
-      'NewsletterSubscriber',
       'CentreNews',
       'CentreContent',
       // Phase 16 has no generic location table, no Event or schedule, and no
@@ -406,10 +422,10 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'EventCentre',
       'EventPhoto',
       'Attachment',
-      // Phase 15 has one EDITORIAL Collection: no visitor-owned private list
-      // (Personalisation's, later), no join per member type, no member type a
-      // prerequisite did not deliver, and no generic target table.
-      'PrivateCollection',
+      // Phase 15 has one EDITORIAL Collection: no join per member type, no
+      // member type a prerequisite did not deliver, and no generic target table.
+      // (A person's private list arrived as Personalisation's
+      // `PrivateCollection` in Phase 21, sharing no table with it.)
       'CollectionMember',
       'CollectionTarget',
       'CollectionArticle',
@@ -421,8 +437,9 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'CollectionImage',
       // Phase 18 has ONE canonical identity and separate layered works: no
       // second verse or chapter model, no generic layer, work or target model,
-      // no per-user reading state (Phase 21's), and no slug history for a slug
-      // that never changes.
+      // no Quran-owned per-user state (the reading position is Personalisation's
+      // `QuranReadingProgress`), and no slug history for a slug that never
+      // changes.
       'Verse',
       'Chapter',
       'QuranVerse',
@@ -431,7 +448,6 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'QuranTarget',
       'AyahTarget',
       'QuranBookmark',
-      'QuranReadingProgress',
       'QuranTranslationSlugHistory',
       // Phase 19 keeps the chain as the source's exact text: no narrator
       // aggregate or chain link, no platform grade vocabulary, no generic
@@ -458,6 +474,22 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'FatwaSlugHistory',
       'FatwaBookmark',
       'Question',
+      // Phase 21 holds every target as a typed key and sends nothing: no
+      // polymorphic target or content reference, no generic activity log, no
+      // Learning progress (Learning's own, later), no raw newsletter token and
+      // no campaign, issue or delivery record.
+      'PersonalTarget',
+      'UserContentReference',
+      'ContentReference',
+      'SavedTarget',
+      'UserHistory',
+      'UserActivity',
+      'CourseProgress',
+      'LessonProgress',
+      'NewsletterToken',
+      'NewsletterCampaign',
+      'NewsletterIssue',
+      'NewsletterDelivery',
     ]) {
       expect(models, `${domain} arrives with its owning slice`).not.toContain(domain);
     }

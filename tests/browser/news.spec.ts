@@ -208,8 +208,10 @@ test('shows News and Events to an anonymous visitor with no cookie, and the same
     await expect(main.locator(`a[href="${href}"]`).first()).toBeVisible();
   // Events (Phase 14) are linked as the other half of News and Events.
   await expect(main.locator('a[href="/en/events"]').first()).toBeVisible();
-  // Nothing that does not exist is linked.
-  await expect(page.locator('a[href="/en/newsletter"], a[href^="/rss"]')).toHaveCount(0);
+  // Nothing that does not exist is linked. The newsletter is delivered by
+  // Phase 21 and reached from the footer and Explore, not from News.
+  await expect(main.locator('a[href="/en/newsletter"]')).toHaveCount(0);
+  await expect(page.locator('a[href^="/rss"]')).toHaveCount(0);
   await expect(page.locator('img')).toHaveCount(0);
   // The primary navigation now leads here.
   await expect(

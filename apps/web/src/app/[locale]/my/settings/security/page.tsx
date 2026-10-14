@@ -355,6 +355,7 @@ export default async function SecurityPage({
               'invalid-credentials': t('security.passwordWrong'),
               'invalid-input': t('common.checkFields'),
               'rate-limited': t('common.rateLimited'),
+              'closure-pending': t('security.closePending'),
               unknown: t('common.unavailable'),
             }}
           >

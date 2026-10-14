@@ -7,7 +7,7 @@ import type {
   RevisionDirectory,
   SafeEditorialContent,
   WorkflowCommand,
-  PublicEditorial,
+  PublicArticle,
   PublicPage,
   EditorialSitemapEntry,
   EditorialState,
@@ -57,7 +57,7 @@ export interface EditorialPublicReaderPort {
     offset: number,
     limit: number,
   ): Promise<readonly PublicEditorialSummary[]>;
-  publicArticle(slug: string): Promise<PublicEditorial | null>;
+  publicArticle(slug: string): Promise<PublicArticle | null>;
   publicPage(routeBinding: string, slug: string): Promise<PublicPage | null>;
   publishedArticles(
     offset: number,

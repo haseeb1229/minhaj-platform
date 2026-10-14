@@ -7,6 +7,7 @@ import type { DeliveryRecord } from '@minhaj/contracts/platform';
 import { failureLabel, isTransientDatabaseFailure } from './failure-label';
 import { identityRuntime } from './identity';
 import { appLogger } from './logging';
+import { personalisationRuntime } from './personalisation';
 
 /**
  * The outbound-communication dispatcher.
@@ -109,7 +110,14 @@ export async function dispatchOnce(): Promise<DispatchSummary> {
     // outstanding token from Better Auth's own record — no mint, no rotation,
     // no expiry extension, and no bearer material was ever written anywhere
     // else to be read back (ARCHITECTURE.md §4.6.1).
-    const resolution = await identity.resolveDelivery(delivery);
+    //
+    // TWO OWNERS, ONE PROVIDER. The newsletter confirmation is Personalisation's
+    // marketing message; everything else is Identity's security and account
+    // service mail. Each owner resolves only its own.
+    const newsletter = delivery.purpose === 'newsletter.confirmation';
+    const resolution = newsletter
+      ? await personalisationRuntime().newsletter.resolveDelivery(delivery)
+      : await identity.resolveDelivery(delivery);
 
     if (resolution.outcome === 'nothing-owed') {
       // Nothing is owed any more: the token was used or expired, the account
@@ -138,7 +146,10 @@ export async function dispatchOnce(): Promise<DispatchSummary> {
     if (
       await suppression.isSuppressed({
         recipient: resolved.recipient,
-        scope: 'transactional',
+        // Marketing mail is withheld by ANY bounce or complaint; security and
+        // account-service mail only by a transactional one, so no newsletter
+        // state can ever withhold a verification or reset message.
+        scope: newsletter ? 'marketing' : 'transactional',
       })
     ) {
       // The provider already told us this address rejects mail. Writing to it

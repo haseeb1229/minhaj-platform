@@ -240,6 +240,18 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/fatwa/topics.tsx',
     'apps/web/src/components/search/fatwa-hit.ts',
     'apps/web/src/components/search/fatwa-hit-text.ts',
+    // Phase 21. The private island public content pages place (session-free
+    // by construction: it reads personal state only through `/api/my/*`
+    // after hydration), and the My Minhaj Personalisation parts, which read
+    // the session only through the guarded `/my` entry points that call them.
+    'apps/web/src/components/personal-island/personal-controls.tsx',
+    'apps/web/src/components/personal-island/personal-island.tsx',
+    'apps/web/src/components/personal-island/requests.ts',
+    'apps/web/src/components/personal/action-support.ts',
+    'apps/web/src/components/personal/nav.ts',
+    'apps/web/src/components/personal/parts.tsx',
+    'apps/web/src/components/personal/presentation.ts',
+    'apps/web/src/components/personal/read.ts',
     // Phase 10. The Watch surfaces, their pure presentation decisions and the
     // privacy-gated player island, on the same anonymous public path.
     'apps/web/src/components/media/audio-player.tsx',

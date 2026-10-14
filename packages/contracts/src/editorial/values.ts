@@ -316,6 +316,14 @@ export interface PublicEditorial {
   readonly publishedAt: Date;
   readonly updatedAt: Date;
 }
+/**
+ * A published Article, with its identity: the typed key a person's saved
+ * item or reading history holds (Phase 21), and nothing else that the shared
+ * public shape does not already disclose.
+ */
+export interface PublicArticle extends PublicEditorial {
+  readonly id: string;
+}
 export interface PublicPage extends PublicEditorial {
   readonly routeBinding: string;
 }

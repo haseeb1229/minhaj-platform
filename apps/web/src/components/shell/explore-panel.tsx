@@ -2,7 +2,7 @@ import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
 
-import { EXPLORE_SECTIONS, exploreSlugsOf } from '@/shell/explore';
+import { EXPLORE_SECTIONS, exploreHrefOf, exploreSlugsOf } from '@/shell/explore';
 
 /**
  * The Explore panel — the mega menu's contents and the mobile drawer's, both.
@@ -42,7 +42,7 @@ export async function ExplorePanel({ locale }: { readonly locale: Locale }) {
                 {slugs.map((slug) => (
                   <li key={slug}>
                     <a
-                      href={`/${locale}/explore/${section}/${slug}`}
+                      href={exploreHrefOf(locale, section, slug)}
                       className="underline underline-offset-2"
                     >
                       {t(

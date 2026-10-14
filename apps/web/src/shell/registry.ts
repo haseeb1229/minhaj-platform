@@ -1,4 +1,9 @@
-import { EXPLORE_SECTIONS, exploreSlugsOf, type ExploreSection } from '@/shell/explore';
+import {
+  EXPLORE_SECTIONS,
+  exploreSlugsOf,
+  ownerPathOf,
+  type ExploreSection,
+} from '@/shell/explore';
 
 /**
  * THE shell route registry — Layer 4, and the minimum of it (ROUTE_MAP.md §5.2).
@@ -236,8 +241,8 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
    * DELIVERED BY PHASE 13 — News. `/news` is the News and Events entry point:
    * the latest NewsArticles, the three other News families, the News archive,
    * the photograph surfaces Phase 12 delivered, Events (Phase 14) and
-   * Collections (Phase 15). The newsletter is Phase 21's, so it is not linked
-   * from it.
+   * Collections (Phase 15). The newsletter (Phase 21) has its own entry, in
+   * the footer, rather than a link from here.
    */
   Object.freeze({
     key: 'news-events',
@@ -365,17 +370,21 @@ function exploreRoutes(): readonly ShellRoute[] {
         availability: 'reserved' as const,
         indexing: 'excluded' as const,
       }),
-      ...exploreSlugsOf(section).map((slug) =>
-        Object.freeze({
-          key: `explore.${section}.${slug}`,
-          label: `explore.${section}.pages.${slug}`,
-          path: `/explore/${section}/${slug}`,
-          placements: Object.freeze([] as const),
-          visibility: 'public' as const,
-          availability: 'reserved' as const,
-          indexing: 'excluded' as const,
-        }),
-      ),
+      // An item an owner has delivered elsewhere is that owner's route, not a
+      // reserved shell: its Explore address only redirects (`ownerPathOf`).
+      ...exploreSlugsOf(section)
+        .filter((slug) => ownerPathOf(section, slug) === null)
+        .map((slug) =>
+          Object.freeze({
+            key: `explore.${section}.${slug}`,
+            label: `explore.${section}.pages.${slug}`,
+            path: `/explore/${section}/${slug}`,
+            placements: Object.freeze([] as const),
+            visibility: 'public' as const,
+            availability: 'reserved' as const,
+            indexing: 'excluded' as const,
+          }),
+        ),
     ]),
   );
 }
@@ -827,6 +836,26 @@ const SHELL: readonly ShellRoute[] = Object.freeze([
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'excluded' as const,
+  }),
+  /**
+   * DELIVERED BY PHASE 21 — the newsletter subscription page, owned by
+   * Personalisation & Notifications (DOMAIN_MODEL.md §14.5). A genuine page in
+   * all three locales: its notice and form are code, and nothing on it depends
+   * on who is looking, so it is `eligible`. In the footer beside Contact and
+   * Feedback (INFORMATION_ARCHITECTURE.md §4, column 6).
+   *
+   * `/newsletter/confirm` and `/newsletter/unsubscribe` HAVE NO ENTRY. They are
+   * where an emailed link lands — a token's status, `noindex`, never
+   * navigation and never a sitemap entry (ROUTE_MAP.md §4, class D).
+   */
+  Object.freeze({
+    key: 'newsletter',
+    label: 'nav.newsletter',
+    path: '/newsletter',
+    placements: Object.freeze(['footer-utility'] as const),
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'eligible' as const,
   }),
   Object.freeze({
     key: 'volunteer',

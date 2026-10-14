@@ -139,6 +139,20 @@ model User {
   fatwaPublications       FatwaPublication[]
   fatwaReviewDecisions    FatwaReviewDecision[]
 
+  /// Phase 21 BACK-REFERENCES PRISMA REQUIRES, AND NOT DEPENDENCIES. Each
+  /// relation is declared and owned on the Personalisation side; Identity
+  /// never reads them, and account closure reaches them only through
+  /// Personalisation's own disposition (SECURITY_BASELINE.md §19.1). There is
+  /// deliberately none to `NewsletterSubscriber`, which is not an account's.
+  personalisationProfile  PersonalisationProfile?
+  savedItems              SavedItem[]
+  privateCollections      PrivateCollection[]
+  readingHistory          ReadingHistory[]
+  watchHistory            WatchHistory[]
+  quranReadingProgress    QuranReadingProgress?
+  notificationPreferences NotificationPreference[]
+  notifications           Notification[]
+
   id String @id @db.NVarChar(36)
 
   // ---- Better Auth core -------------------------------------------------
@@ -1496,6 +1510,8 @@ model Article {
   revisions ArticleRevision[] @relation("ArticleHistory")
   slugs ArticleSlugHistory[]
   collectionItems CollectionItem[]
+  savedItems SavedItem[]
+  readingHistory ReadingHistory[]
   @@unique([slug])
   @@index([state,updatedAt,id])
   @@index([state,publishedAt(sort: Desc),id])
@@ -2137,6 +2153,8 @@ model Work {
   salePoints WorkSalePoint[]
   editions Edition[]
   collectionItems CollectionItem[]
+  savedItems SavedItem[]
+  readingHistory ReadingHistory[]
   @@index([state, slug])
 }
 model WorkLabel {
@@ -2680,6 +2698,8 @@ model Video {
   topics VideoTopic[]
   playlists PlaylistVideo[]
   collectionItems CollectionItem[]
+  savedItems SavedItem[]
+  watchHistory WatchHistory[]
   @@unique([provider, providerVideoId])
   @@index([state, publishedOn, slug])
   @@index([state, isFeatured, publishedOn])
@@ -3751,6 +3771,9 @@ model Ayah {
   segmentStarts        QuranRecitationSegment[]   @relation("QuranRecitationSegmentStart")
   segmentEnds          QuranRecitationSegment[]   @relation("QuranRecitationSegmentEnd")
   topics               QuranTopic[]
+  savedItems           SavedItem[]
+  readingHistory       ReadingHistory[]
+  quranProgress        QuranReadingProgress[]
 
   @@id([surahNumber, ayahNumber])
   @@index([juzNumber, surahNumber, ayahNumber])
@@ -4339,6 +4362,8 @@ model HadithCitation {
   /// Composite in the database: (hadithId, collectionId, number).
   hadith     Hadith                   @relation(fields: [hadithId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   revisions  HadithCitationRevision[]
+  savedItems     SavedItem[]
+  readingHistory ReadingHistory[]
 
   @@id([collectionId, number])
   @@index([hadithId], map: "HadithCitation_hadithId_idx")
@@ -4792,4 +4817,305 @@ model FatwaReadTally {
   @@id([fatwaId, day])
   @@index([day, fatwaId], map: "FatwaReadTally_day_idx")
   @@map("FatwaReadTally")
+}
+
+// ===========================================================================
+// Phase 21 — Personalisation & Notifications
+// ===========================================================================
+//
+// One account's OWN continuity (DOMAIN_MODEL.md §14). Every row but the
+// newsletter's names exactly one `User`, and every read and write puts that
+// account in its own predicate. No content is copied: a saved or read target is
+// a real, NON-CASCADING foreign key to its owner's canonical row, one typed
+// nullable column per kind with a CHECK that exactly one is set — never
+// `targetType + targetId` (§6.2). Archiving content leaves the key valid; a hard
+// purge must first call Personalisation's typed release (§14.3), because the
+// key refuses the delete until then. Inside the context, a removed parent takes
+// its own children with it (a SavedItem's bookmark and note, a collection's
+// items); nothing cascades from a User or from content. Integrity the schema
+// language cannot express — the exactly-one CHECKs, the filtered unique
+// indexes, the newsletter's state facts and the immutable consent history — is
+// the migration's.
+
+/// The account's own settings: onboarding answers and the history switch.
+/// Absent until the person first answers, skips or sets something.
+model PersonalisationProfile {
+  userId         String   @id @db.NVarChar(36)
+  /// completed | skipped — null while only the history switch has been set
+  onboarding     String?  @db.NVarChar(16)
+  /// Off until the person turns it on; nothing is recorded while it is off.
+  historyEnabled Boolean
+  version        Int
+  createdAt      DateTime @db.DateTime2
+  updatedAt      DateTime @db.DateTime2
+
+  user      User                      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  interests PersonalisationInterest[]
+  goals     PersonalisationGoal[]
+
+  @@map("PersonalisationProfile")
+}
+
+/// One explicit interest — a public area of the platform, never inferred.
+model PersonalisationInterest {
+  userId   String @db.NVarChar(36)
+  interest String @db.NVarChar(32)
+
+  profile PersonalisationProfile @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([userId, interest])
+  @@map("PersonalisationInterest")
+}
+
+/// One explicit goal.
+model PersonalisationGoal {
+  userId String @db.NVarChar(36)
+  goal   String @db.NVarChar(32)
+
+  profile PersonalisationProfile @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([userId, goal])
+  @@map("PersonalisationGoal")
+}
+
+/// A user-owned anchor on EXACTLY ONE typed target. It exists only while a
+/// bookmark, a note or a collection membership needs it, and holds no title,
+/// status or text of the target. One per account and target, through
+/// FILTERED unique indexes the migration creates.
+model SavedItem {
+  id               String   @id @db.NVarChar(36)
+  userId           String   @db.NVarChar(36)
+  articleId        String?  @db.NVarChar(36)
+  workId           String?  @db.NVarChar(36)
+  videoId          String?  @db.NVarChar(36)
+  surahNumber      Int?
+  ayahNumber       Int?
+  hadithCitationId String?  @db.NVarChar(36)
+  createdAt        DateTime @db.DateTime2
+
+  user            User                    @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  article         Article?                @relation(fields: [articleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work            Work?                   @relation(fields: [workId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  video           Video?                  @relation(fields: [videoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ayah            Ayah?                   @relation(fields: [surahNumber, ayahNumber], references: [surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction)
+  hadithCitation  HadithCitation?         @relation(fields: [hadithCitationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  bookmark        Bookmark?
+  note            Note?
+  collectionItems PrivateCollectionItem[]
+
+  @@unique([id, userId], map: "SavedItem_owner_key")
+  @@index([userId, createdAt(sort: Desc), id], map: "SavedItem_userId_idx")
+  @@map("SavedItem")
+}
+
+/// The explicit saved mark on one SavedItem.
+model Bookmark {
+  savedItemId String   @id @db.NVarChar(36)
+  createdAt   DateTime @db.DateTime2
+
+  savedItem SavedItem @relation(fields: [savedItemId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("Bookmark")
+}
+
+/// A private plain-text annotation on one SavedItem. Never logged, indexed,
+/// audited or shown to anyone but its owner.
+model Note {
+  savedItemId String   @id @db.NVarChar(36)
+  body        String   @db.NVarChar(2000)
+  version     Int
+  createdAt   DateTime @db.DateTime2
+  updatedAt   DateTime @db.DateTime2
+
+  savedItem SavedItem @relation(fields: [savedItemId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("Note")
+}
+
+/// A person's own list — distinct from an editorial Collection. No slug, no
+/// sharing, no public page.
+model PrivateCollection {
+  id          String   @id @db.NVarChar(36)
+  userId      String   @db.NVarChar(36)
+  title       String   @db.NVarChar(120)
+  description String?  @db.NVarChar(500)
+  version     Int
+  createdAt   DateTime @db.DateTime2
+  updatedAt   DateTime @db.DateTime2
+
+  user  User                    @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items PrivateCollectionItem[]
+
+  @@unique([id, userId], map: "PrivateCollection_owner_key")
+  @@index([userId, updatedAt(sort: Desc), id], map: "PrivateCollection_userId_idx")
+  @@map("PrivateCollection")
+}
+
+/// One ordered member. Both keys carry the owner, so a member can only ever
+/// be the collection owner's own SavedItem.
+model PrivateCollectionItem {
+  collectionId String   @db.NVarChar(36)
+  savedItemId  String   @db.NVarChar(36)
+  userId       String   @db.NVarChar(36)
+  position     Int
+  addedAt      DateTime @db.DateTime2
+
+  collection PrivateCollection @relation(fields: [collectionId, userId], references: [id, userId], onDelete: Cascade, onUpdate: NoAction, map: "PrivateCollectionItem_collection_fkey")
+  savedItem  SavedItem         @relation(fields: [savedItemId, userId], references: [id, userId], onDelete: NoAction, onUpdate: NoAction, map: "PrivateCollectionItem_savedItem_fkey")
+
+  @@id([collectionId, savedItemId])
+  @@unique([collectionId, position], map: "PrivateCollectionItem_position_key")
+  @@index([savedItemId, userId], map: "PrivateCollectionItem_savedItem_idx")
+  @@map("PrivateCollectionItem")
+}
+
+/// One row per account and readable target — first and latest read, nothing
+/// else. Not an event stream. Recorded only while history is on.
+model ReadingHistory {
+  id               String   @id @db.NVarChar(36)
+  userId           String   @db.NVarChar(36)
+  articleId        String?  @db.NVarChar(36)
+  workId           String?  @db.NVarChar(36)
+  surahNumber      Int?
+  ayahNumber       Int?
+  hadithCitationId String?  @db.NVarChar(36)
+  firstReadAt      DateTime @db.DateTime2
+  lastReadAt       DateTime @db.DateTime2
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  article        Article?        @relation(fields: [articleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work           Work?           @relation(fields: [workId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ayah           Ayah?           @relation(fields: [surahNumber, ayahNumber], references: [surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction)
+  hadithCitation HadithCitation? @relation(fields: [hadithCitationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([userId, lastReadAt(sort: Desc), id], map: "ReadingHistory_userId_idx")
+  @@map("ReadingHistory")
+}
+
+/// One row per account and Video — first and latest watch. No provider
+/// identifier, position or telemetry.
+model WatchHistory {
+  userId         String   @db.NVarChar(36)
+  videoId        String   @db.NVarChar(36)
+  firstWatchedAt DateTime @db.DateTime2
+  lastWatchedAt  DateTime @db.DateTime2
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  video Video @relation(fields: [videoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([userId, videoId])
+  @@index([userId, lastWatchedAt(sort: Desc), videoId], map: "WatchHistory_userId_idx")
+  @@index([videoId], map: "WatchHistory_videoId_idx")
+  @@map("WatchHistory")
+}
+
+/// The account's ONE current position in the Quran — a typed Ayah, never its
+/// text. Moved only by the reader, under the version they read. Course
+/// progress is Learning's (Phase 22), never this.
+model QuranReadingProgress {
+  userId      String   @id @db.NVarChar(36)
+  surahNumber Int
+  ayahNumber  Int
+  version     Int
+  updatedAt   DateTime @db.DateTime2
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ayah Ayah @relation(fields: [surahNumber, ayahNumber], references: [surahNumber, ayahNumber], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([surahNumber, ayahNumber], map: "QuranReadingProgress_ayah_idx")
+  @@map("QuranReadingProgress")
+}
+
+/// A departure from the default for one category on one channel. Absent means
+/// the default (`NOTIFICATION_DEFAULTS`).
+model NotificationPreference {
+  userId    String   @db.NVarChar(36)
+  /// questions
+  category  String   @db.NVarChar(32)
+  /// in-app
+  channel   String   @db.NVarChar(16)
+  enabled   Boolean
+  updatedAt DateTime @db.DateTime2
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([userId, category, channel])
+  @@map("NotificationPreference")
+}
+
+/// A system-generated, one-directional notice to one account. It stores a
+/// translatable KIND, never prose, and at most a path on this site.
+model Notification {
+  id             String    @id @db.NVarChar(36)
+  userId         String    @db.NVarChar(36)
+  /// question-answered | question-declined
+  kind           String    @db.NVarChar(32)
+  /// questions
+  category       String    @db.NVarChar(32)
+  destination    String?   @db.NVarChar(300)
+  idempotencyKey String    @db.NVarChar(200)
+  createdAt      DateTime  @db.DateTime2
+  readAt         DateTime? @db.DateTime2
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([userId, idempotencyKey], map: "Notification_idempotency_key")
+  @@index([userId, createdAt(sort: Desc), id], map: "Notification_userId_idx")
+  @@map("Notification")
+}
+
+/// A newsletter subscription — consent from an address, NOT an account. No
+/// relation to `User` exists or may be added (DOMAIN_MODEL.md §14.5). Only the
+/// hashes of its link tokens are stored, beside the salts the dispatcher
+/// re-derives them from under a key the database never holds; the address
+/// itself is kept only while it is `pending` or `confirmed`.
+model NewsletterSubscriber {
+  id                   String    @id @db.NVarChar(36)
+  /// HMAC of the canonical address under `EMAIL_DIGEST_KEY`.
+  emailDigest          String    @db.NVarChar(64)
+  digestKeyVersion     Int
+  email                String?   @db.NVarChar(320)
+  /// pending | confirmed | unsubscribed | expired | suppressed
+  state                String    @db.NVarChar(16)
+  locale               String    @db.NVarChar(8)
+  /// Which issuance of a link pair is current; a new submission increments it.
+  generation           Int
+  confirmTokenHash     String?   @db.NVarChar(64)
+  confirmSalt          String?   @db.NVarChar(64)
+  confirmExpiresAt     DateTime? @db.DateTime2
+  unsubscribeTokenHash String?   @db.NVarChar(64)
+  unsubscribeSalt      String?   @db.NVarChar(64)
+  tokenKeyVersion      Int?
+  submittedAt          DateTime  @db.DateTime2
+  confirmedAt          DateTime? @db.DateTime2
+  endedAt              DateTime? @db.DateTime2
+  version              Int
+  updatedAt            DateTime  @db.DateTime2
+
+  consentEvents NewsletterConsentEvent[]
+
+  @@unique([emailDigest], map: "NewsletterSubscriber_emailDigest_key")
+  @@index([state, submittedAt(sort: Desc), id], map: "NewsletterSubscriber_state_idx")
+  @@index([state, confirmExpiresAt], map: "NewsletterSubscriber_expiry_idx")
+  @@map("NewsletterSubscriber")
+}
+
+/// Consent evidence: purpose, notice version, source and instant of every
+/// change, never edited and never deleted (SECURITY_BASELINE.md §19.1).
+model NewsletterConsentEvent {
+  id            String   @id @db.NVarChar(36)
+  subscriberId  String   @db.NVarChar(36)
+  /// submitted | confirmed | unsubscribed | expired | suppressed | reinstated
+  event         String   @db.NVarChar(16)
+  purpose       String   @db.NVarChar(32)
+  noticeVersion String   @db.NVarChar(64)
+  /// newsletter-page | email-link | operator | system
+  source        String   @db.NVarChar(16)
+  locale        String?  @db.NVarChar(8)
+  occurredAt    DateTime @db.DateTime2
+
+  subscriber NewsletterSubscriber @relation(fields: [subscriberId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([subscriberId, occurredAt], map: "NewsletterConsentEvent_subscriberId_idx")
+  @@map("NewsletterConsentEvent")
 }

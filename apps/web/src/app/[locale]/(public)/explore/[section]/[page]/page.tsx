@@ -4,14 +4,19 @@ import {
   PublicContent,
 } from '@/components/editorial/public-content';
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Breadcrumbs, Container, Prose } from '@/components/ui';
 import { PublicationStatus } from '@/components/shell/publication-status';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
-import { EXPLORE_PAGES, EXPLORE_SECTIONS, type SectionWithPages } from '@/shell/explore';
+import {
+  EXPLORE_PAGES,
+  EXPLORE_SECTIONS,
+  ownerPathOf,
+  type SectionWithPages,
+} from '@/shell/explore';
 import { requireRoute } from '@/shell/registry';
 
 /**
@@ -69,6 +74,9 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
   const locale = await requireLocale(params);
   const { section, page } = await params;
   const owner = requirePage(section, page);
+  // Redirected by the page below; nothing here is a canonical URL.
+  if (ownerPathOf(owner, page) !== null)
+    return { robots: { index: false, follow: false } };
   const t = await getTranslations({ locale, namespace: 'shell' });
 
   const published = await publishedPageMetadata(locale, `/explore/${owner}/${page}`);
@@ -85,6 +93,9 @@ export default async function ExplorePagePage({ params }: PageParams) {
   const locale = await requireLocale(params);
   const { section, page } = await params;
   const owner = requirePage(section, page);
+  // The owner delivered the real page: one permanent redirect to it.
+  const delivered = ownerPathOf(owner, page);
+  if (delivered !== null) permanentRedirect(`/${locale}${delivered}`);
   setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: 'shell' });

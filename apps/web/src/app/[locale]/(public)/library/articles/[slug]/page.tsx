@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { requireLocale } from '@/config/route-locale';
+import { PersonalControls } from '@/components/personal-island/personal-controls';
 import {
   readArticle,
   editorialMetadata,
@@ -27,11 +28,18 @@ export default async function ArticlePage({ params }: Props) {
   const record = await readArticle(slug);
   if (!record) notFound();
   return (
-    <PublicContent
-      record={record}
-      locale={locale}
-      path={'/library/articles/' + encodeURIComponent(record.slug)}
-      kind="Article"
-    />
+    <>
+      <PublicContent
+        record={record}
+        locale={locale}
+        path={'/library/articles/' + encodeURIComponent(record.slug)}
+        kind="Article"
+      />
+      <PersonalControls
+        locale={locale}
+        target={{ kind: 'article', id: record.id }}
+        framed
+      />
+    </>
   );
 }

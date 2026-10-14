@@ -78,8 +78,8 @@ export interface EmailProviderPort {
  * Email — durable delivery state
  * ========================================================================= */
 
-/** Message categories this platform sends. */
-export type DeliveryPurpose =
+/** The security and account-service messages Identity owns. Never optional. */
+export type IdentityDeliveryPurpose =
   | 'identity.email-verification'
   | 'identity.password-reset'
   | 'identity.email-change'
@@ -88,6 +88,16 @@ export type DeliveryPurpose =
   | 'identity.account-closed'
   | 'identity.sessions-revoked'
   | 'identity.second-factor-changed';
+
+/**
+ * Message categories this platform sends.
+ *
+ * `newsletter.confirmation` is the double opt-in link Personalisation &
+ * Notifications owns (DOMAIN_MODEL.md §14.5) — MARKETING mail, sent under the
+ * marketing suppression scope, and a different class from every Identity
+ * purpose, which no marketing unsubscribe or suppression can touch.
+ */
+export type DeliveryPurpose = IdentityDeliveryPurpose | 'newsletter.confirmation';
 
 export type DeliveryStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'suppressed';
 

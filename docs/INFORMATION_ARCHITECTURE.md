@@ -112,7 +112,9 @@ event galleries naturally belong) and through Collections (for the historical ar
 Since Phase 13 the News & Events entry point, `/news`, links the photograph surfaces; since
 Phase 14 it links Events too, and each Event links its own photographs (its gallery view), so
 Event galleries are reached through their Event rather than a listing of their own. The
-newsletter appears only when its own phase delivers it. Since Phase 14 each Centre page lists
+newsletter appears only when its own phase delivers it — since Phase 21 it is delivered at
+`/newsletter` (double opt-in) and linked from Explore's Connect column, the Digital Resources group
+and the footer. Since Phase 14 each Centre page lists
 its Local Events beside its Local News. Since Phase 15 `/news` also links Collections (§3.8,
 the Archive column), a topic hub lists the Collections on its topic, and each Collection links
 its members at their owners' own addresses — a Video at `/watch/videos/{slug}`, a book at
@@ -157,7 +159,9 @@ Digital Resources heading on the Explore landing page.*
 | Recitation / Audio | — | Quran Research | — |
 
 Signed-in additions surfaced in-context (not in the menu): bookmarks, notes, reading
-progress, continue reading.
+progress, continue reading. Since Phase 21 these appear on an Ayah's own page as a private control
+that loads after the page, so the page itself is the same for every visitor; signed out it offers
+sign-in and returns to the Ayah.
 
 Since Phase 18 the Quran item is delivered (engineering only — no authoritative corpus is supplied,
 OPEN_DECISIONS.md §1.1). Read, Study and Search entries, Recitations and Quran Topics are available,
@@ -386,6 +390,14 @@ make one context the semantic owner of every operation beneath `/my`:
 their privacy, deletion and retention rules. It stores **typed references** to content;
 canonical content remains owned by its original domain, and personalisation is **never read in
 the anonymous cached public render tree**.
+
+Since Phase 21 Saved (Bookmarks, Notes, Collections), History (Reading, Watch), Progress → Quran
+Reading Progress, Notifications, Settings → Interests & Goals, Notification Preferences and Privacy
+are delivered, and the Home overview shows the panels whose owners exist — continue reading, recent
+saved items, the Quran position, unread notifications and an optional onboarding prompt. Course
+Progress, Learning Streaks, My Learning, My Classes, Teachers and Messages stay with their later
+phases and are absent rather than empty. Bookmarks cover exactly Quran ayat, Hadith, articles,
+videos and books; history is off until the person turns it on; notifications are in-app only.
 
 **Naming note.** *Saved → Collections* are private, user-owned lists. Editorial
 Collections (section 1.3) are public, curated and permissioned. These are distinct

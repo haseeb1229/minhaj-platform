@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { mediaReadRuntime } from '@/composition/media-read';
 import { VideoDetailPage, videoMetadataInput } from '@/components/media/watch';
+import { PersonalControls } from '@/components/personal-island/personal-controls';
 import { requireLocale } from '@/config/route-locale';
 import { contentMetadata } from '@/seo/metadata';
 
@@ -39,5 +40,14 @@ export default async function VideoPage({ params }: DetailParams) {
   const { slug } = await params;
   const record = await mediaReadRuntime().video(slug);
   if (record === null) notFound();
-  return <VideoDetailPage locale={locale} record={record} />;
+  return (
+    <>
+      <VideoDetailPage locale={locale} record={record} />
+      <PersonalControls
+        locale={locale}
+        target={{ kind: 'video', id: record.id }}
+        framed
+      />
+    </>
+  );
 }

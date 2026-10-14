@@ -48,6 +48,7 @@ interface BrowserEnvironment {
   readonly AUTH_SECRETS: string;
   readonly RATE_LIMIT_DIGEST_KEY: string;
   readonly EMAIL_DIGEST_KEY: string;
+  readonly NEWSLETTER_TOKEN_KEY: string;
 }
 
 let environment: BrowserEnvironment | null = null;

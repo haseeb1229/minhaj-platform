@@ -43,7 +43,7 @@ export function mayHoldSession(status: AccountStatus): boolean {
  *
  * Setup is the ACCOUNT's — a verified address, an interface locale, a
  * timezone. It is not personalisation onboarding, which is Phase 21's and
- * collects interests, goals and learner level. Merging them would recreate the
+ * collects interests and goals at `/my/settings/interests`. Merging them would recreate the
  * dependency cycle that splitting the former Phase 3 removed
  * (DOMAIN_MODEL.md §4.2, §14.1).
  */

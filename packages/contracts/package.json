@@ -36,7 +36,8 @@
     "./search": "./src/search/index.ts",
     "./quran": "./src/quran/index.ts",
     "./hadith": "./src/hadith/index.ts",
-    "./fatwa": "./src/fatwa/index.ts"
+    "./fatwa": "./src/fatwa/index.ts",
+    "./personalisation": "./src/personalisation/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"

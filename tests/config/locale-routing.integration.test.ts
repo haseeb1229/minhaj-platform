@@ -93,6 +93,7 @@ const PRODUCTION_SECRETS = {
   AUTH_SECRETS: '1:synthetic-locale-routing-sentinel-0001',
   RATE_LIMIT_DIGEST_KEY: 'synthetic-locale-routing-rate-limit-0001',
   EMAIL_DIGEST_KEY: 'synthetic-locale-routing-email-digest-0001',
+  NEWSLETTER_TOKEN_KEY: 'synthetic-locale-routing-newsletter-token-0001',
 } as const;
 
 beforeAll(async () => {

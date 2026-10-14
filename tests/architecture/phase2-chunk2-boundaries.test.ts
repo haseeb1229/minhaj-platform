@@ -570,6 +570,11 @@ const PERMISSION_MIGRATIONS = [
     id: '20261004000000_phase20_fatwa',
     keys: ['fatwa.answer', 'fatwa.publish', 'question.receive'],
   },
+  {
+    phase: 'Phase 21',
+    id: '20261005000000_phase21_personalisation_notifications',
+    keys: ['newsletter.operate', 'newsletter.read'],
+  },
 ] as const;
 
 describe('the permission catalogue is one definition, appended only by owners', () => {
@@ -642,6 +647,14 @@ describe('the permission catalogue is one definition, appended only by owners', 
       'city.',
       'centre.',
       'messaging.',
+      // Phase 21 shipped the newsletter's two keys and nothing else: no
+      // permission reaches any account's saved items, notes, history or
+      // notifications.
+      'saved.',
+      'personal.',
+      'personalisation.',
+      'notification.',
+      'history.',
     ]) {
       expect(declared.some((key) => key.startsWith(domain))).toBe(false);
     }

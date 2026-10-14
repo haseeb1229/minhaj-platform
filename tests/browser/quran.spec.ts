@@ -865,6 +865,153 @@ test.describe('a fixture corpus', () => {
 });
 
 /* ===========================================================================
+ * 2b. A reader's own reading position (Phase 21)
+ * ========================================================================= */
+
+/**
+ * HERE, BECAUSE THE CORPUS IS. A reading position can only be set on an Ayah
+ * that is public now, and this file owns the run's one corpus — so the island
+ * on an Ayah page is proved against it, while it is active, rather than by a
+ * spec that would have to hope another had activated it first.
+ */
+test.describe('a reader’s own reading position', () => {
+  const ISLAND = (
+    JSON.parse(readFileSync(path.join(MESSAGES, 'en.json'), 'utf8')) as {
+      personalIsland: Record<string, string>;
+    }
+  ).personalIsland;
+  const PROGRESS = (
+    JSON.parse(readFileSync(path.join(MESSAGES, 'en.json'), 'utf8')) as {
+      personal: { progress: Record<string, string>; home: Record<string, string> };
+    }
+  ).personal;
+
+  const AYAH = '/en/quran/surah/2/3';
+  let reader: Page;
+  let readerId: string;
+
+  const island = (page: Page) =>
+    page.getByRole('region', { name: ISLAND['heading'] ?? '' });
+
+  /** Opens a citation and waits for the island's private read. */
+  async function openWithIsland(page: Page, target: string): Promise<void> {
+    const state = page.waitForResponse((response) =>
+      response.url().includes('/api/my/target-state'),
+    );
+    await visitFixture(page, target);
+    expect((await state).status(), target).toBe(200);
+  }
+
+  async function position(): Promise<{ surah: number; ayah: number } | null> {
+    const [row] = await sql.query<{ surah: number; ayah: number }>(
+      `SELECT [surahNumber] AS [surah],[ayahNumber] AS [ayah] FROM [dbo].[QuranReadingProgress] WHERE [userId]=N'${readerId}';`,
+    );
+    return row === undefined
+      ? null
+      : { surah: Number(row.surah), ayah: Number(row.ayah) };
+  }
+
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(120_000);
+    const context = await browser.newContext({
+      baseURL: baseUrl(),
+      extraHTTPHeaders: { 'x-forwarded-for': '100.64.242.1' },
+    });
+    contexts.push(context);
+    reader = await context.newPage();
+    const { email } = await registerAndSignIn(reader, 'quran-position');
+    readerId = await accountIdFor(sql, email);
+  });
+
+  test('the citation is the same document signed in and signed out', async ({
+    request,
+  }) => {
+    const anonymous = await request.get(AYAH, { maxRedirects: 0 });
+    const signedIn = await reader.context().request.get(AYAH, { maxRedirects: 0 });
+    expect(anonymous.status()).toBe(200);
+    expect(signedIn.status()).toBe(200);
+    expect(anonymous.headers()['set-cookie']).toBeUndefined();
+    expect(signedIn.headers()['set-cookie']).toBeUndefined();
+    const html = await anonymous.text();
+    expect(html).toContain(canonicalText(2, 3));
+    // BYTE FOR BYTE: nothing per-visitor reaches the shared render.
+    expect((await signedIn.text()) === html, 'the citation differs signed in').toBe(true);
+    expect(html).not.toContain('aria-pressed');
+  });
+
+  test('signed out, the island offers sign-in with the way back to the Ayah', async ({
+    page,
+  }) => {
+    await openWithIsland(page, AYAH);
+    const region = island(page);
+    await expect(region).toContainText(ISLAND['signedOutPrompt'] ?? '');
+    await expect(region.getByRole('link', { name: ISLAND['signIn'] })).toHaveAttribute(
+      'href',
+      `/en/signin?returnTo=${encodeURIComponent(AYAH)}`,
+    );
+    await expect(region.getByRole('button')).toHaveCount(0);
+  });
+
+  test('set from the Ayah, shown on My Minhaj, refused from a stale page, and cleared', async () => {
+    test.setTimeout(120_000);
+    await reader.goto('/en/my/progress/quran');
+    await expect(reader.getByRole('main')).toContainText(
+      PROGRESS.progress['empty'] ?? '',
+    );
+
+    await openWithIsland(reader, AYAH);
+    const region = island(reader);
+    await region.getByRole('button', { name: ISLAND['positionSet'] }).click();
+    await expect(reader.getByText(ISLAND['positionSaved'] ?? '')).toBeVisible();
+    await expect(region).toContainText(ISLAND['positionCurrent'] ?? '');
+    await expect(region.getByRole('button', { name: ISLAND['positionSet'] })).toHaveCount(
+      0,
+    );
+    expect(await position()).toEqual({ surah: 2, ayah: 3 });
+
+    await reader.goto('/en/my/progress/quran');
+    await expect(
+      reader.getByRole('link', { name: PROGRESS.progress['continue'] }),
+    ).toHaveAttribute('href', AYAH);
+    await reader.goto('/en/my');
+    const main = reader.getByRole('main');
+    await expect(main).not.toContainText(PROGRESS.home['quranNone'] ?? '');
+    await expect(
+      main.getByRole('link', { name: PROGRESS.progress['continue'] }),
+    ).toHaveAttribute('href', AYAH);
+
+    // A STALE PAGE. One tab read the position's version before another moved
+    // it; its own attempt is a conflict, not an overwrite — and, refreshed,
+    // its retry is honoured.
+    const stale = await reader.context().newPage();
+    await openWithIsland(stale, '/en/quran/surah/2/4');
+    await openWithIsland(reader, '/en/quran/surah/2/2');
+    await island(reader).getByRole('button', { name: ISLAND['positionSet'] }).click();
+    await expect(reader.getByText(ISLAND['positionSaved'] ?? '')).toBeVisible();
+    expect(await position()).toEqual({ surah: 2, ayah: 2 });
+
+    await island(stale).getByRole('button', { name: ISLAND['positionSet'] }).click();
+    await expect(stale.getByText(ISLAND['positionConflict'] ?? '')).toBeVisible();
+    expect(await position()).toEqual({ surah: 2, ayah: 2 });
+    await island(stale).getByRole('button', { name: ISLAND['positionSet'] }).click();
+    await expect(stale.getByText(ISLAND['positionSaved'] ?? '')).toBeVisible();
+    expect(await position()).toEqual({ surah: 2, ayah: 4 });
+    await stale.close();
+
+    await reader.goto('/en/my/progress/quran');
+    await reader.getByRole('button', { name: PROGRESS.progress['clear'] }).click();
+    await expect(reader.getByRole('main')).toContainText(
+      PROGRESS.progress['empty'] ?? '',
+    );
+    expect(await position()).toBeNull();
+    await reader.goto('/en/my');
+    await expect(reader.getByRole('main')).toContainText(
+      PROGRESS.home['quranNone'] ?? '',
+    );
+  });
+});
+
+/* ===========================================================================
  * 3. Administration
  * ========================================================================= */
 

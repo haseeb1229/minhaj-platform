@@ -391,6 +391,7 @@ const PRODUCTION_SECRETS = {
   AUTH_SECRETS: '1:synthetic-startup-sentinel-value-0001',
   RATE_LIMIT_DIGEST_KEY: 'synthetic-startup-rate-limit-0001',
   EMAIL_DIGEST_KEY: 'synthetic-startup-email-digest-0001',
+  NEWSLETTER_TOKEN_KEY: 'synthetic-startup-newsletter-token-0001',
 } as const;
 
 /** Launches the ordinary, UNCONDITIONED start wrapper, as a container does. */
@@ -542,8 +543,8 @@ describe('B4 — an invalid environment starts no process to strand', () => {
   }, 60_000);
 
   it('refuses to start in production on a development secret default', async () => {
-    // The guard, end to end. `AUTH_SECRETS`, `RATE_LIMIT_DIGEST_KEY` and
-    // `EMAIL_DIGEST_KEY` all carry a development default so a fresh checkout
+    // The guard, end to end. `AUTH_SECRETS`, `RATE_LIMIT_DIGEST_KEY`,
+    // `EMAIL_DIGEST_KEY` and `NEWSLETTER_TOKEN_KEY` all carry a development default so a fresh checkout
     // runs — and a default secret in a deployed environment is not a secret
     // (SECURITY_BASELINE.md §18.1).
     //

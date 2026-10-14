@@ -452,9 +452,8 @@ test.describe('navigation is honest about what exists', () => {
       // remain deferred to Phase 12.
       '/watch/audio',
       '/watch/galleries',
-      // `/news` is delivered by Phase 13 and `/events` by Phase 14; the
-      // newsletter is not, and stays asserted absent.
-      '/newsletter',
+      // `/news` is delivered by Phase 13, `/events` by Phase 14 and
+      // `/newsletter` by Phase 21.
       // `/global` is delivered by Phase 16. Local Events (Phase 14) live under
       // each Centre, so no `/global/events` exists to be linked.
       '/global/events',
@@ -491,6 +490,8 @@ test.describe('navigation is honest about what exists', () => {
         // Centre in the utility navigation.
         '/global',
         '/global/find-a-centre',
+        // Phase 21: the newsletter, in the footer.
+        '/newsletter',
       ]) {
         expect(hrefs, `${path} exposes delivered ${delivered}`).toContain(
           `/en${delivered}`,

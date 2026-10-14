@@ -1,4 +1,7 @@
-import type { DeliveryPurpose, ResolvedDelivery } from '@minhaj/contracts/platform';
+import type {
+  IdentityDeliveryPurpose,
+  ResolvedDelivery,
+} from '@minhaj/contracts/platform';
 
 /**
  * What Identity's mail SAYS.
@@ -33,7 +36,7 @@ function localeOf(value: string): Locale {
   return value === 'ur' || value === 'ar' ? value : 'en';
 }
 
-const COPY: Readonly<Record<DeliveryPurpose, Readonly<Record<Locale, Copy>>>> = {
+const COPY: Readonly<Record<IdentityDeliveryPurpose, Readonly<Record<Locale, Copy>>>> = {
   'identity.email-verification': {
     en: {
       subject: 'Confirm your email address',
@@ -268,7 +271,7 @@ function escapeHtml(value: string): string {
  * (ARCHITECTURE.md §9).
  */
 export function renderMessage(input: {
-  readonly purpose: DeliveryPurpose;
+  readonly purpose: IdentityDeliveryPurpose;
   readonly locale: string;
   readonly recipient: string;
   readonly actionUrl?: string;
@@ -314,4 +317,4 @@ export function renderMessage(input: {
 export const MESSAGE_LOCALES: readonly Locale[] = ['en', 'ur', 'ar'];
 
 /** The purposes Identity sends. Asserted by test against the copy table. */
-export const MESSAGE_PURPOSES = Object.keys(COPY) as readonly DeliveryPurpose[];
+export const MESSAGE_PURPOSES = Object.keys(COPY) as readonly IdentityDeliveryPurpose[];

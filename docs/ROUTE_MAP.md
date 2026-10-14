@@ -322,7 +322,7 @@ Structured data is `BreadcrumbList` only.
 | `/news` · `/news/{slug}` | News — `?sort=latest`. Phase 13: `/news` is the News and Events entry point, listing the latest NewsArticles; `latest` is a query canonical to `/news`, never a path |
 | `/news/{press-releases\|statements\|media-coverage}` · `/{slug}` | Editorial types — delivered in Phase 13, each family with its own slug history. The three segments and `archive` are reserved: no NewsArticle slug can hold them |
 | `/news/archive` | `?year, month` — every published News record by the UTC year and month of its publication (Phase 13) |
-| `/newsletter` | Subscription |
+| `/newsletter` · `/newsletter/confirm` · `/newsletter/unsubscribe` | Subscription — delivered in Phase 21 (DOMAIN_MODEL.md §14.6). `/newsletter` submits an address and always answers the same, whatever its state; nothing is sent until the address confirms. `confirm` and `unsubscribe` are the emailed links (class D, SECURITY_BASELINE.md §7.4): the GET renders only whether the link is still usable and a button, and the POST consumes it — confirmation once, unsubscribe idempotently and without an account. Both are `noindex`, carry no canonical or alternate with the token, and are never sitemap entries |
 | `/events` · `/events/{slug}` · `/events/{slug}/gallery` | Events — `?upcoming, past, country, city, centre`. Delivered in Phase 14: `/events` lists upcoming Events by default and `?when=past` the held ones; `?country=`, `?city=` and `?centre=` narrow to Events held at Centres physically there. Every query is canonical to `/events` and never a sitemap entry; there is no `/events/upcoming` or `/events/past`. `/events/{slug}/gallery` is a `noindex` navigational view over the Event's listed Galleries — each keeps its one canonical `/media/galleries/{slug}` — and exists only for an Event that associates a Gallery. A former Event slug, with or without `/gallery`, answers one 301 |
 | `/media/photos` · `/media/galleries` · `/{slug}` · `/media/archive` · `/media/downloads` | Media — Phase 12 delivers photos, galleries, each Gallery at `/media/galleries/{slug}`, and the archive (`?year, month`). A Photo has no page of its own. `/media/downloads` has **no route** until a rights decision authorises downloads |
 | `/global` · `/global/find-a-centre` | World network and centre finder — Phase 16. The finder's `?country, region, city` are queries canonical to it |
@@ -431,6 +431,17 @@ never mistaken for a delivered one.
 | `/my/membership` | **Membership** | **Phase 26** |
 | `/my/donations` — **only** where user-linked donation history is genuinely in scope | **Donations** | **Phase 27** |
 
+**Delivered in Phase 21.** `/my/saved` (+ `/bookmarks`, `/notes`, `/collections`,
+`/collections/{id}`), `/my/history/reading`, `/my/history/watch`, `/my/progress/quran`,
+`/my/notifications`, `/my/settings/interests`, `/my/settings/notifications` and
+`/my/settings/privacy`, plus the Personalisation panels of `/my`. Every one is private, `noindex`
+and per request, and every read and write is keyed by the signed-in account in its own query — a
+guessed collection id answers exactly like a missing one. `/my/progress/courses` stays Phase 22's
+and has no route; there is no `/my/progress` landing and no `/my/history` landing, because the
+register names none. `/my/questions/*` stays Fatwa's. `/my/settings/privacy` composes the history
+switch, the Personalisation export and the Identity-owned closure (linked, not duplicated); the
+newsletter is managed from its own links because it is not the account's.
+
 > **Personalised home panels appear only for owners that actually exist.** The `/my` landing
 > composes what has been delivered; it does not render an empty frame for a context that has
 > not shipped.
@@ -463,7 +474,7 @@ never mistaken for a delivered one.
 | `/admin/system/redirects` — native slug history **and** legacy mappings, distinguished | Each owning context; legacy rows from **Migration** | **Phase 6** onward; legacy rows **Phase 29** |
 | `/admin/system/search` — configuration, rebuild, indexing lag and failures | Search infrastructure, operated at Layer 4 | **Phase 17** |
 | `/admin/system/integrations` — provider configuration and status | Platform integrations | **Phase 2** for email; extended per provider |
-| `/admin/communications/newsletter` | **Personalisation & Notifications** | **Phase 21** |
+| `/admin/communications/newsletter` | **Personalisation & Notifications** | **Phase 21** — delivered: subscription counts and a paginated list of masked addresses, states and consent dates under `newsletter.read`; suppress and reinstate (to `unsubscribed`, requiring fresh confirmation) under `newsletter.operate`. No campaign, sending or segmentation surface exists |
 | `/admin/communications/delivery` — pending, failed, suppressed mail | The shared communication concern | **Phase 2** |
 | `/admin/system/navigation` | Layer 4 shell | **Phase 4**, only to the extent it is genuinely promised |
 
@@ -561,7 +572,7 @@ Categories only; no endpoint contracts in this phase.
 | Auth | `/api/auth/*` | Delegated to the authentication library |
 | Search | `/api/search/*` | Search, suggestions, typeahead |
 | Content read | `/api/content/*` | Public read for progressive enhancement |
-| Personal | `/api/my/*` | Authenticated personal actions |
+| Personal | `/api/my/*` | Authenticated personal actions. Phase 21: `target-state` (GET) and `bookmarks`, `notes`, `collection-items`, `history`, `quran-progress` (POST) serve the private island on public content pages after hydration, and `export` (GET) returns the person's Personalisation data as a JSON download. Every response is private and `no-store`; every POST requires the configured origin, `Sec-Fetch-Site: same-origin` where sent and the `x-minhaj-intent: personal` header (SECURITY_BASELINE.md §7.1 rule 6) |
 | Messaging REST | `/api/messaging/*` | History and read state via Messaging-owned services |
 | Teacher / Admin | `/api/teacher/*` · `/api/admin/*` | Role-gated operations |
 | Migration | `/api/admin/migration/*` | Import control and status |
