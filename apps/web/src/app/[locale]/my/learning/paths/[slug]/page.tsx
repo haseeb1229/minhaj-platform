@@ -58,14 +58,14 @@ export default async function MyLearningPathPage({
   return (
     <PersonalFrame
       title={
-        <span lang={label?.locale} dir="auto">
+        <span lang={label?.locale} dir="auto" className="wrap-anywhere">
           {label?.title}
         </span>
       }
       description={
         <>
           {label === null || label.summary === '' ? null : (
-            <p lang={label.locale} dir="auto">
+            <p lang={label.locale} dir="auto" className="wrap-anywhere">
               {label.summary}
             </p>
           )}

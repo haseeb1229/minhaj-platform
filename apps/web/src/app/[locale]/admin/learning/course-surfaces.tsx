@@ -859,7 +859,7 @@ export async function LessonEditor({
       </p>
       <div className="flex flex-col gap-2">
         <PageHeading>
-          <span lang={label?.locale} dir="auto">
+          <span lang={label?.locale} dir="auto" className="wrap-anywhere">
             {label?.title}
           </span>
         </PageHeading>
@@ -910,7 +910,11 @@ export async function LessonEditor({
           <Alert tone="info">{t('outline.frozen')}</Alert>
           {lesson.labels.map((entry) => (
             <Panel key={entry.locale}>
-              <div lang={entry.locale} dir="auto" className="flex flex-col gap-3">
+              <div
+                lang={entry.locale}
+                dir="auto"
+                className="flex flex-col gap-3 wrap-anywhere"
+              >
                 <SectionHeading>{entry.title}</SectionHeading>
                 {entry.summary === '' ? null : (
                   <p className="font-medium">{entry.summary}</p>

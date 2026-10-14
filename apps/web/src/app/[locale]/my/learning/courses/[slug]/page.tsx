@@ -101,14 +101,14 @@ export default async function MyCoursePage({
   return (
     <PersonalFrame
       title={
-        <span lang={label?.locale} dir="auto">
+        <span lang={label?.locale} dir="auto" className="wrap-anywhere">
           {label?.title}
         </span>
       }
       description={
         <>
           {label === null || label.summary === '' ? null : (
-            <p lang={label.locale} dir="auto">
+            <p lang={label.locale} dir="auto" className="wrap-anywhere">
               {label.summary}
             </p>
           )}
@@ -205,7 +205,7 @@ export default async function MyCoursePage({
         <section className="flex flex-col gap-4" aria-labelledby="course-lesson">
           <span id="course-lesson">
             <SectionHeading>
-              <span lang={lessonLabel.locale} dir="auto">
+              <span lang={lessonLabel.locale} dir="auto" className="wrap-anywhere">
                 {lessonLabel.title}
               </span>
             </SectionHeading>
@@ -217,13 +217,13 @@ export default async function MyCoursePage({
             })}
           </p>
           {lessonLabel.summary === '' ? null : (
-            <p lang={lessonLabel.locale} dir="auto" className="font-medium">
+            <p lang={lessonLabel.locale} dir="auto" className="font-medium wrap-anywhere">
               {lessonLabel.summary}
             </p>
           )}
           <div lang={lessonLabel.locale} dir="auto" className="flex flex-col gap-3">
             {paragraphs(lessonLabel.body).map((paragraph, index) => (
-              <p key={index} className="whitespace-pre-line">
+              <p key={index} className="whitespace-pre-line wrap-anywhere">
                 {paragraph}
               </p>
             ))}

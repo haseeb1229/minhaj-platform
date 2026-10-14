@@ -101,7 +101,7 @@ export function Title({
 }) {
   const label = pickLabel(record.labels, locale, record.primaryLocale);
   return (
-    <span lang={label?.locale} dir="auto">
+    <span lang={label?.locale} dir="auto" className="wrap-anywhere">
       {label?.title}
     </span>
   );
