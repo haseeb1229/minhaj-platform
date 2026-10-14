@@ -224,6 +224,17 @@ describe('the workflow service', () => {
       await failure(refused.service.decline(actor, { id: ID(1), expectedVersion: 1 })),
     ).toBe('conflict');
     expect(refused.calls.map((call) => call.method)).toEqual(['decline']);
+
+    // A failed lookup AFTER the committed decline is derived work, not the
+    // decision failing: the decline resolves, with nobody to tell.
+    const lookupFails = workflowHarness({
+      permissions: [FATWA_PERMISSIONS.receive],
+      throws: { askerOf: new Error('synthetic lookup outage') },
+    });
+    expect(
+      await lookupFails.service.decline(actor, { id: ID(1), expectedVersion: 1 }),
+    ).toBeNull();
+    expect(lookupFails.calls.map((call) => call.method)).toEqual(['decline', 'askerOf']);
   });
 
   it('gives each key exactly its own stage and nothing more', async () => {

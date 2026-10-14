@@ -1137,7 +1137,9 @@ made, and no cookie banner is added — there is no non-essential processing to 
   hours and is consumed once by a POST, and they carry no authentication authority. Consent evidence
   (purpose, notice version, source, locale, instant, revocation) is append-only. A marketing
   unsubscribe or suppression never reaches verification, reset or account-security mail, which a
-  newsletter state cannot express.
+  newsletter state cannot express — and a provider complaint about a newsletter message is recorded
+  in the marketing scope only, so a confirmation sent to somebody else's address cannot be turned
+  into a block on their password reset.
 - **Cache boundary.** Public content pages render the same for everyone; their private island reads
   and writes through `/api/my/*` after hydration, so no personal state enters a shared render or a
   public GET's cookies.

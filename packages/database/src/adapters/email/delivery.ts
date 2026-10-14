@@ -181,6 +181,14 @@ export function createEmailDeliveryStore(
       return claimed.map(toRecord);
     },
 
+    async purposeOfProviderMessage(providerMessageId: string) {
+      const row = await prisma.emailDelivery.findFirst({
+        where: { providerMessageId },
+        select: { purpose: true },
+      });
+      return row === null ? null : (row.purpose as DeliveryPurpose);
+    },
+
     async markSent({ id, providerMessageId }): Promise<void> {
       await prisma.emailDelivery.update({
         where: { id },

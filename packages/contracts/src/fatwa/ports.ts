@@ -166,6 +166,8 @@ export interface FatwaWorkflowPort {
    * WHO ASKED — read by the workflow service only after it has committed a
    * decline or a publication, so Layer 4 can tell the asker in-app (Phase 21).
    * The asker's account and the question's id; never the question's words.
+   * For a ruling, only its FIRST publication has an asker to tell: a
+   * correction answers null, so the question is never "answered" twice.
    */
   askerOf(
     input: { readonly questionId: string } | { readonly fatwaId: string },

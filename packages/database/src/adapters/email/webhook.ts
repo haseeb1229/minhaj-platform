@@ -130,6 +130,20 @@ export function verifyResendWebhook(
  * unrelated part of the provider's schema cannot reach this platform's tables
  * (SECURITY_BASELINE.md §7.2).
  */
+/**
+ * The provider's id of the message an event is about (`data.email_id`), or
+ * null. Used only to look up what kind of message it was; never stored here.
+ */
+export function messageIdFromEvent(rawBody: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(rawBody);
+    const id = (parsed as { data?: { email_id?: unknown } }).data?.email_id;
+    return typeof id === 'string' && id.length > 0 && id.length <= 200 ? id : null;
+  } catch {
+    return null;
+  }
+}
+
 export function recipientFromEvent(rawBody: string): string | null {
   try {
     const parsed: unknown = JSON.parse(rawBody);

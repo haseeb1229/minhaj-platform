@@ -1502,7 +1502,9 @@ are not saveable; appending one is a typed column and a migration, never a strin
 the account their owner decided is concerned, a kind, a same-site destination and an idempotency key;
 no visitor-facing endpoint can create one. The one producer today is Fatwa: after a decline or a
 publication commits, Fatwa's workflow returns the asker's account id (a narrow read added for this) and
-Layer 4 notifies them, keyed by question so a correction never repeats it. It is derived work — not
+Layer 4 notifies them, keyed by question. Only a ruling's FIRST publication names an asker, so a
+correction never repeats it, and a failed lookup after the committed decision is logged and never
+reported as the decision failing. It is derived work — not
 atomic with the decision — and the asker's own question page shows the status regardless.
 
 **The newsletter as built.** One row per address, keyed by an HMAC digest of the address as Identity

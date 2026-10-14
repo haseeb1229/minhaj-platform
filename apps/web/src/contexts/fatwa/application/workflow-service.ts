@@ -68,8 +68,9 @@ import { FatwaRefusal, asRefusal } from '../domain/refusal.ts';
 
 /** What may reach the log: identifiers and outcomes, never text. */
 export interface FatwaWorkflowLogDetail {
-  readonly operation: 'fatwa.publish' | 'fatwa.withdraw';
-  readonly outcome: 'passed' | 'denied';
+  /** `fatwa.asker`: the after-commit lookup of whom to notify (Phase 21). */
+  readonly operation: 'fatwa.publish' | 'fatwa.withdraw' | 'fatwa.asker';
+  readonly outcome: 'passed' | 'denied' | 'failed';
   readonly actorId?: string;
   readonly fatwaId?: string;
   readonly revisionId?: string;
@@ -95,6 +96,22 @@ export function createFatwaWorkflowService(deps: {
 }) {
   const ids = deps.ids ?? randomUUID;
   const run = <T>(work: Promise<T>): Promise<T> => work.catch(asRefusal);
+
+  /**
+   * Who to tell about a decision that has ALREADY COMMITTED. The decision is
+   * the result; this is derived work, so a failed read here is logged and
+   * answered as "nobody to tell" — never reported as the decision failing.
+   */
+  const askerAfterCommit = (
+    input: { readonly questionId: string } | { readonly fatwaId: string },
+  ) =>
+    deps.workflow.askerOf(input).catch(() => {
+      deps.log?.warn(
+        { operation: 'fatwa.asker', outcome: 'failed' },
+        'Asker lookup after a decision failed.',
+      );
+      return null;
+    });
 
   /** Identity's live answer for one key. Anything but `true` is a refusal. */
   async function holds(actor: FatwaActor, permission: string): Promise<void> {
@@ -196,7 +213,7 @@ export function createFatwaWorkflowService(deps: {
       );
       await run(deps.workflow.decline({ actorId: actor.accountId, value }));
       // Who to tell, once the decline has committed — Layer 4 notifies them.
-      return run(deps.workflow.askerOf({ questionId: value.id }));
+      return askerAfterCommit({ questionId: value.id });
     },
 
     /* ---- Drafting — `fatwa.answer`, the current assignee only --------- */
@@ -320,7 +337,7 @@ export function createFatwaWorkflowService(deps: {
         'Fatwa revision published.',
       );
       // Who to tell, once the publication has committed — Layer 4 notifies them.
-      return run(deps.workflow.askerOf({ fatwaId: parsed.data.fatwaId }));
+      return askerAfterCommit({ fatwaId: parsed.data.fatwaId });
     },
 
     async withdraw(actor: PrivilegedActor, input: z.input<typeof fatwaWithdrawalSchema>) {

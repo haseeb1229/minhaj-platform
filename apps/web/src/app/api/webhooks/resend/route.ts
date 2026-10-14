@@ -3,7 +3,12 @@ import 'server-only';
 import { identityRuntime } from '@/composition/identity';
 import { appLogger } from '@/composition/logging';
 import { serverEnv } from '@/config/server-env';
-import { recipientFromEvent, verifyResendWebhook } from '@minhaj/database';
+import { suppressionScopeOf } from '@minhaj/contracts/platform';
+import {
+  messageIdFromEvent,
+  recipientFromEvent,
+  verifyResendWebhook,
+} from '@minhaj/database';
 
 /**
  * The Resend delivery-event callback — PROTOCOL CLASS B
@@ -86,7 +91,7 @@ export async function POST(request: Request): Promise<Response> {
     return new Response(null, { status: 401 });
   }
 
-  const { providerEvents } = identityRuntime();
+  const { providerEvents, deliveries } = identityRuntime();
 
   // EXACTLY ONCE, and "once" means once COMPLETED — not once seen.
   //
@@ -112,11 +117,16 @@ export async function POST(request: Request): Promise<Response> {
   const reason = SUPPRESSING_EVENTS[verification.type];
   const recipient = reason === undefined ? null : recipientFromEvent(rawBody);
 
+  // SCOPED BY WHAT IT WAS ABOUT. Since Phase 21 this platform also sends the
+  // newsletter confirmation, which anybody can cause to be sent to anybody: a
+  // complaint about THAT message is marketing-scoped, so it can never silence
+  // the person's verification, reset or account-security mail
+  // (ARCHITECTURE.md §4.6.1). Everything else stays transactional.
+  const messageId = reason === 'complaint' ? messageIdFromEvent(rawBody) : null;
+  const purpose =
+    messageId === null ? null : await deliveries.purposeOfProviderMessage(messageId);
+
   // ONE ATOMIC STEP: the effect and the completion that records it.
-  //
-  // Scoped to `transactional`, which is the scope this platform sends in. The
-  // type keeps a future marketing unsubscribe structurally unable to suppress
-  // verification, reset or account-security mail (ARCHITECTURE.md §4.6.1).
   //
   // An event with no effect — every type not in the short list above, and a
   // suppressing one whose payload names no recipient — completes with `null`.
@@ -127,7 +137,7 @@ export async function POST(request: Request): Promise<Response> {
     effect:
       reason === undefined || recipient === null
         ? null
-        : { recipient, reason, scope: 'transactional' },
+        : { recipient, reason, scope: suppressionScopeOf(reason, purpose) },
   });
 
   // 204: accepted, nothing to say. A body here would only be read by a

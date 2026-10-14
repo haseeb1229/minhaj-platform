@@ -10,6 +10,9 @@ import {
   registerAndSignIn,
   test,
   grantRole,
+  asTwoVisitors,
+  knowledgeOf,
+  firstDifference,
 } from './support';
 
 test.describe.configure({ mode: 'serial' });
@@ -211,15 +214,21 @@ test('serves the Article byte-identically signed in and out, its private island 
     extraHTTPHeaders: { 'x-forwarded-for': '100.64.241.1' },
   });
   const target = '/en/library/articles/' + renamed;
-  const anonymous = await anon.request.get(target, { maxRedirects: 0 });
-  const signedIn = await author.context().request.get(target, { maxRedirects: 0 });
+  const { anonymous, signedIn } = await asTwoVisitors(
+    anon.request,
+    author.context().request,
+    target,
+  );
   expect(anonymous.status()).toBe(200);
   expect(signedIn.status()).toBe(200);
   expect(anonymous.headers()['set-cookie']).toBeUndefined();
   expect(signedIn.headers()['set-cookie']).toBeUndefined();
   const html = await anonymous.text();
   expect(html).toContain(title);
-  expect((await signedIn.text()) === html, 'the Article differs signed in').toBe(true);
+  expect(
+    firstDifference(knowledgeOf(html), knowledgeOf(await signedIn.text())),
+    'the Article differs signed in',
+  ).toBe('identical');
   expect(html).not.toContain('aria-pressed');
 
   // Signed out, once hydrated, the island offers sign-in back to this Article.

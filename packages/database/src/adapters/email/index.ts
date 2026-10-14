@@ -30,6 +30,7 @@ export {
   type DeliveryStoreConfiguration,
 } from './delivery.ts';
 export {
+  messageIdFromEvent,
   recipientFromEvent,
   verifyResendWebhook,
   type WebhookConfiguration,

@@ -217,6 +217,13 @@ export interface EmailDeliveryStorePort {
    * an operator's to overrule.
    */
   rescheduleDelivery(id: string): Promise<boolean>;
+
+  /**
+   * The purpose of the message a provider event names, by the provider's own
+   * message id — so a complaint is scoped by WHAT was complained about. Null
+   * when no delivery carries that id.
+   */
+  purposeOfProviderMessage(providerMessageId: string): Promise<DeliveryPurpose | null>;
 }
 
 export interface DeliverySummary {
@@ -294,6 +301,26 @@ export type SuppressionReason = 'bounce' | 'complaint';
  * account-security mail (ARCHITECTURE.md §4.6.1).
  */
 export type SuppressionScope = 'transactional' | 'marketing';
+
+/**
+ * The scope a provider's bounce or complaint suppresses, by what it was about.
+ *
+ * A COMPLAINT about a newsletter message is a marketing complaint: anybody can
+ * submit somebody else's address to `/newsletter`, and the confirmation that
+ * person then marks as spam must never be able to silence their verification,
+ * password-reset or account-security mail (ARCHITECTURE.md §4.6.1). Every other
+ * complaint — and one whose message cannot be identified — is about account
+ * mail and stays transactional. A BOUNCE says the mailbox does not take mail at
+ * all, whatever was sent, so it is transactional whatever the purpose.
+ */
+export function suppressionScopeOf(
+  reason: SuppressionReason,
+  purpose: DeliveryPurpose | null,
+): SuppressionScope {
+  return reason === 'complaint' && purpose !== null && purpose.startsWith('newsletter.')
+    ? 'marketing'
+    : 'transactional';
+}
 
 /**
  * READ-ONLY, deliberately.

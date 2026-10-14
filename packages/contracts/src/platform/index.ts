@@ -40,6 +40,7 @@ export type {
   SuppressionReason,
   SuppressionScope,
 } from './ports.ts';
+export { suppressionScopeOf } from './ports.ts';
 
 export type {
   AssetAccessRequest,

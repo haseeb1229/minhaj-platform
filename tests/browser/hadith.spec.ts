@@ -17,6 +17,9 @@ import {
   registerAndSignIn,
   test,
   totpCodeFor,
+  asTwoVisitors,
+  knowledgeOf,
+  firstDifference,
 } from './support';
 
 /**
@@ -1026,15 +1029,21 @@ test.describe('a fixture activation', () => {
     contexts.push(anonymous, signedIn);
     await registerAndSignIn(await signedIn.newPage(), 'hadith-island');
 
-    const shared = await anonymous.request.get(target, { maxRedirects: 0 });
-    const personal = await signedIn.request.get(target, { maxRedirects: 0 });
+    const { anonymous: shared, signedIn: personal } = await asTwoVisitors(
+      anonymous.request,
+      signedIn.request,
+      target,
+    );
     expect(shared.status()).toBe(200);
     expect(personal.status()).toBe(200);
     expect(shared.headers()['set-cookie']).toBeUndefined();
     expect(personal.headers()['set-cookie']).toBeUndefined();
     const html = await shared.text();
     expect(html).toContain(TEXT.public);
-    expect((await personal.text()) === html, 'the citation differs signed in').toBe(true);
+    expect(
+      firstDifference(knowledgeOf(html), knowledgeOf(await personal.text())),
+      'the citation differs signed in',
+    ).toBe('identical');
     expect(html).not.toContain('aria-pressed');
 
     // Signed out, once hydrated, the island offers sign-in back to this citation.

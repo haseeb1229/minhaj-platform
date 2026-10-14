@@ -23,6 +23,9 @@ import {
   registerAndSignIn,
   test,
   totpCodeFor,
+  asTwoVisitors,
+  knowledgeOf,
+  firstDifference as documentDifference,
 } from './support';
 
 /**
@@ -926,8 +929,11 @@ test.describe('a reader’s own reading position', () => {
   test('the citation is the same document signed in and signed out', async ({
     request,
   }) => {
-    const anonymous = await request.get(AYAH, { maxRedirects: 0 });
-    const signedIn = await reader.context().request.get(AYAH, { maxRedirects: 0 });
+    const { anonymous, signedIn } = await asTwoVisitors(
+      request,
+      reader.context().request,
+      AYAH,
+    );
     expect(anonymous.status()).toBe(200);
     expect(signedIn.status()).toBe(200);
     expect(anonymous.headers()['set-cookie']).toBeUndefined();
@@ -935,7 +941,10 @@ test.describe('a reader’s own reading position', () => {
     const html = await anonymous.text();
     expect(html).toContain(canonicalText(2, 3));
     // BYTE FOR BYTE: nothing per-visitor reaches the shared render.
-    expect((await signedIn.text()) === html, 'the citation differs signed in').toBe(true);
+    expect(
+      documentDifference(knowledgeOf(html), knowledgeOf(await signedIn.text())),
+      'the Ayah differs signed in',
+    ).toBe('identical');
     expect(html).not.toContain('aria-pressed');
   });
 

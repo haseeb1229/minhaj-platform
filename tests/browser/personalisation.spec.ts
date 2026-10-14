@@ -16,6 +16,9 @@ import {
   privilegedSession,
   registerAndSignIn,
   test,
+  asTwoVisitors,
+  knowledgeOf,
+  firstDifference,
 } from './support';
 
 /**
@@ -280,8 +283,11 @@ test.describe('a public page', () => {
     request,
   }) => {
     for (const target of [PAGE.work, PAGE.video]) {
-      const anonymous = await request.get(target, { maxRedirects: 0 });
-      const signedIn = await owner.context().request.get(target, { maxRedirects: 0 });
+      const { anonymous, signedIn } = await asTwoVisitors(
+        request,
+        owner.context().request,
+        target,
+      );
       expect(anonymous.status(), target).toBe(200);
       expect(signedIn.status(), target).toBe(200);
       expect(anonymous.headers()['set-cookie'], target).toBeUndefined();
@@ -292,7 +298,10 @@ test.describe('a public page', () => {
       // differed would be the session reaching the shared render.
       const [html, signedInHtml] = [await anonymous.text(), await signedIn.text()];
       expect(html, target).toContain(target.includes('books') ? TITLE.work : TITLE.video);
-      expect(signedInHtml === html, `${target} differs signed in`).toBe(true);
+      expect(
+        firstDifference(knowledgeOf(html), knowledgeOf(signedInHtml)),
+        `${target} differs signed in`,
+      ).toBe('identical');
       expect(html, target).not.toContain(ownerEmail);
       // The island is server-rendered as an empty frame: no toggle state, no
       // sign-in prompt — both arrive only after hydration.

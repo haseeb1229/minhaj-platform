@@ -8,6 +8,8 @@ import { createOTP } from '@better-auth/utils/otp';
 import {
   expect,
   test as base,
+  type APIRequestContext,
+  type APIResponse,
   type Browser,
   type BrowserContext,
   type Locator,
@@ -660,4 +662,59 @@ export async function signInWithSecondFactor(
   await page.getByLabel('Authentication code').fill(await totpCodeFor(totpUri));
   await page.getByRole('button', { name: 'Verify and sign in' }).click();
   await page.waitForURL('**/my');
+}
+
+/**
+ * ONE public page, fetched as two visitors AT THE SAME MOMENT (Phase 21).
+ *
+ * Concurrently, because other specs publish shared public material in parallel:
+ * two sequential fetches could observe two states of the platform rather than
+ * two visitors. Fetching together compares visitors, not moments — and a
+ * session reaching the shared render would still differ.
+ */
+export async function asTwoVisitors(
+  anonymous: APIRequestContext,
+  signedIn: APIRequestContext,
+  target: string,
+): Promise<{ readonly anonymous: APIResponse; readonly signedIn: APIResponse }> {
+  const [first, second] = await Promise.all([
+    anonymous.get(target, { maxRedirects: 0 }),
+    signedIn.get(target, { maxRedirects: 0 }),
+  ]);
+  return { anonymous: first, signedIn: second };
+}
+
+/**
+ * What a server-rendered document SAYS, independent of the order React
+ * streamed it in.
+ *
+ * A page whose data reads run in parallel resolves its Suspense boundaries
+ * and flight rows in whatever order those reads finish, so two renders of the
+ * same content can emit the same rows in a different order under load. Byte
+ * order is therefore not the property; what is said is. Every flight row is
+ * decoded and the rows sorted, and the markup outside scripts is split at its
+ * streamed segments and sorted — so ANY per-visitor value, anywhere, still
+ * differs, and only the interleaving is set aside.
+ */
+export function knowledgeOf(html: string): string {
+  const rows: string[] = [];
+  for (const match of html.matchAll(
+    /self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)/gu,
+  )) {
+    const decoded = JSON.parse(`"${match[1] ?? ''}"`) as string;
+    rows.push(...decoded.split('\n').filter((row) => row !== ''));
+  }
+  const markup = html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gu, '')
+    .split(/(?=<div hidden id="S:)/u);
+  return JSON.stringify({ markup: markup.sort(), rows: rows.sort() });
+}
+
+/** Where two documents first differ, with a little context either side. */
+export function firstDifference(expected: string, received: string): string {
+  if (expected === received) return 'identical';
+  let index = 0;
+  while (index < expected.length && expected[index] === received[index]) index += 1;
+  const from = Math.max(0, index - 120);
+  return `at ${index}: expected …${expected.slice(from, index + 120)}… received …${received.slice(from, index + 120)}…`;
 }

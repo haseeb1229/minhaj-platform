@@ -718,6 +718,28 @@ describe.skipIf(!databaseConfigured)('Phase 2 Chunk 1 — communication', () => 
         await harness.suppression.isSuppressed({ recipient: email, scope: 'marketing' }),
       ).toBe(true);
     });
+
+    it('tells the webhook what a sent message was for, by the provider id only', async () => {
+      // Phase 21: a complaint is scoped by the PURPOSE of the message it names,
+      // so a newsletter complaint can never silence account mail.
+      const delivery = await harness.deliveries.enqueue({
+        purpose: 'newsletter.confirmation',
+        recipient: freshEmail('purpose-lookup'),
+        sourceReference: 'newsletter:00000000-0000-4000-8000-000000000021:1',
+        idempotencyKey: `newsletter.confirmation:purpose-lookup:${Date.now()}`,
+      });
+      await harness.deliveries.markSent({
+        id: delivery.id,
+        providerMessageId: `re_purpose_${delivery.id}`,
+      });
+
+      expect(
+        await harness.deliveries.purposeOfProviderMessage(`re_purpose_${delivery.id}`),
+      ).toBe('newsletter.confirmation');
+      expect(
+        await harness.deliveries.purposeOfProviderMessage('re_never_sent'),
+      ).toBeNull();
+    });
   });
 
   /* =======================================================================

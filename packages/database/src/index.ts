@@ -116,6 +116,7 @@ export {
   createResendProvider,
   providerFailureCode,
   recipientDigest,
+  messageIdFromEvent,
   recipientFromEvent,
   verifyResendWebhook,
 } from './adapters/email/index.ts';

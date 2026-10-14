@@ -994,6 +994,11 @@ live('Phase 20 Fatwa against real SQL Server, as the runtime principal', () => {
       expect(await staff.publishedFatwa(publisher.actorId, f.one)).toMatchObject({
         publishedRevisionId: r.two,
       });
+      // Phase 21: the first publication names the asker to tell — and only them.
+      expect(await workflow.askerOf({ fatwaId: f.one })).toEqual({
+        accountId: askerA,
+        questionId: q.one,
+      });
     });
 
     it('publishes a correction as a new revision, keeping the slug and the public history', async () => {
@@ -1073,6 +1078,8 @@ live('Phase 20 Fatwa against real SQL Server, as the runtime principal', () => {
       expect(page.items.find((item) => item.id === f.one)?.correctedAt).toBeInstanceOf(
         Date,
       );
+      // A correction answers nobody to tell: the question was answered once.
+      expect(await workflow.askerOf({ fatwaId: f.one })).toBeNull();
     });
   });
 

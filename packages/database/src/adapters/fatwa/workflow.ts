@@ -191,7 +191,8 @@ export function createFatwaWorkflow(): FatwaWorkflowPort {
             : await db.$queryRaw<{ askerId: string; id: string }[]>`
                 SELECT q.[askerId], q.[id] FROM [dbo].[Fatwa] f
                 JOIN [dbo].[FatwaQuestion] q ON q.[id] = f.[questionId]
-                WHERE f.[id] = ${input.fatwaId}`;
+                WHERE f.[id] = ${input.fatwaId}
+                  AND (SELECT COUNT(*) FROM [dbo].[FatwaPublication] p WHERE p.[fatwaId] = f.[id]) = 1`;
         return row === undefined ? null : { accountId: row.askerId, questionId: row.id };
       } catch (error) {
         refuse(error);

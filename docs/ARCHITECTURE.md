@@ -643,7 +643,10 @@ work, outbox, saga, event bus or cross-owner transaction.
 `newsletter.confirmation` purpose to Personalisation & Notifications, which re-derives the link at
 send time from its own state, and checks it against provider suppression under the **marketing**
 scope; every Identity purpose keeps the transactional scope, and Identity resolves nothing that is
-not its own. The newsletter enqueues through the same durable delivery rows — no second queue, no
+not its own. **A provider complaint is scoped by the message it names**: a complaint about a
+newsletter message suppresses marketing mail only, because anybody can cause a confirmation to be
+sent to anybody and its recipient's spam report must never silence their account mail; any other
+complaint, one whose message cannot be identified, and every bounce stay transactional. The newsletter enqueues through the same durable delivery rows — no second queue, no
 direct provider call. A bounded personal-data sweep beside the existing ones runs each owner's
 closure reconciliation and retires lapsed newsletter confirmations. No dependency edge is added:
 Personalisation still depends on Layer 0 and Identity only.

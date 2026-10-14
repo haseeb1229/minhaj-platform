@@ -92,8 +92,17 @@ const providerEvents = {
   },
 };
 
+/** What each provider message id was sent for — the delivery store's answer. */
+const sentPurposes = new Map<string, string>();
+
+const deliveries = {
+  async purposeOfProviderMessage(providerMessageId: string): Promise<string | null> {
+    return sentPurposes.get(providerMessageId) ?? null;
+  },
+};
+
 vi.mock('@/composition/identity', () => ({
-  identityRuntime: () => ({ providerEvents }),
+  identityRuntime: () => ({ providerEvents, deliveries }),
 }));
 
 vi.mock('@/composition/logging', () => ({
@@ -143,6 +152,7 @@ describe('Phase 2 Chunk 1 — the provider callback handler', () => {
   beforeEach(() => {
     events.clear();
     suppressed.length = 0;
+    sentPurposes.clear();
     failNextComplete = false;
   });
 
@@ -302,6 +312,63 @@ describe('Phase 2 Chunk 1 — the provider callback handler', () => {
       await POST(post('msg_complaint', payload));
 
       expect(suppressed[0]?.reason).toBe('complaint');
+    });
+
+    /*
+     * Phase 21. Anybody can submit somebody else's address to `/newsletter`;
+     * if that person then marks the confirmation as spam, the complaint must
+     * not stop their verification, reset or account-security mail.
+     */
+    function complaint(recipient: string, emailId: string): string {
+      return JSON.stringify({
+        type: 'email.complained',
+        data: { to: [recipient], email_id: emailId },
+      });
+    }
+
+    it('scopes a complaint about a NEWSLETTER message to marketing only', async () => {
+      sentPurposes.set('re_newsletter_1', 'newsletter.confirmation');
+
+      await POST(
+        post(
+          'msg_newsletter_complaint',
+          complaint('victim@proof.invalid', 're_newsletter_1'),
+        ),
+      );
+
+      expect(suppressed).toEqual([
+        { recipient: 'victim@proof.invalid', reason: 'complaint', scope: 'marketing' },
+      ]);
+    });
+
+    it('keeps a complaint about ACCOUNT mail transactional', async () => {
+      sentPurposes.set('re_account_1', 'identity.password-changed');
+
+      await POST(
+        post('msg_account_complaint', complaint('account@proof.invalid', 're_account_1')),
+      );
+
+      expect(suppressed[0]?.scope).toBe('transactional');
+    });
+
+    it('keeps a complaint about an UNIDENTIFIED message transactional', async () => {
+      await POST(
+        post('msg_unknown_complaint', complaint('unknown@proof.invalid', 're_unknown')),
+      );
+
+      expect(suppressed[0]?.scope).toBe('transactional');
+    });
+
+    it('keeps a BOUNCE transactional whatever was sent', async () => {
+      sentPurposes.set('re_newsletter_2', 'newsletter.confirmation');
+      const payload = JSON.stringify({
+        type: 'email.bounced',
+        data: { to: ['bounced@proof.invalid'], email_id: 're_newsletter_2' },
+      });
+
+      await POST(post('msg_newsletter_bounce', payload));
+
+      expect(suppressed[0]?.scope).toBe('transactional');
     });
   });
 });
