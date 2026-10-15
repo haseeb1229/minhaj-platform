@@ -22,6 +22,10 @@ import { TextLink } from '@/components/ui';
  * server-side and every action re-checks `learning.administer`
  * (SECURITY_BASELINE.md §3.4 rule 1).
  *
+ * OPERATOR TEXT NEVER WIDENS THE PAGE. Titles, slugs and lesson words are typed
+ * by operators and may hold a long unbroken token; the content may break one
+ * anywhere rather than push a phone-width screen sideways.
+ *
  * THE CLIENT PROVIDER CARRIES THREE STRINGS — the error boundary's copy — rather
  * than shipping every administrative message to the browser.
  */
@@ -68,7 +72,7 @@ export default async function LearningAdminLayout({
           },
         }}
       >
-        {children}
+        <div className="min-w-0 wrap-anywhere">{children}</div>
       </NextIntlClientProvider>
     </>
   );

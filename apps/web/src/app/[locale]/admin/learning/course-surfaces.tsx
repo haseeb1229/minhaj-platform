@@ -575,6 +575,7 @@ function Outline({
                     <span
                       lang={pickLabel(part.labels, locale, course.primaryLocale)?.locale}
                       dir="auto"
+                      className="min-w-0 wrap-anywhere"
                     >
                       {title}
                     </span>
@@ -734,6 +735,7 @@ function Lessons({
                         pickLabel(lesson.labels, locale, course.primaryLocale)?.locale
                       }
                       dir="auto"
+                      className="wrap-anywhere"
                     >
                       {title}
                     </span>
