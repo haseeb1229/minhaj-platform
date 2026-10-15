@@ -306,7 +306,7 @@ function CourseForm({
         record={record}
         copy={copy}
       />
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Field
           id={`${prefix}-format`}
           label={t('course.format')}
@@ -378,7 +378,7 @@ function CourseForm({
       <p className="text-sm text-[color:var(--color-foreground-muted)]">
         {t('course.teachersHelp')}
       </p>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {Array.from({ length: LEARNING_FORM_ROWS.teachers }, (_, index) => {
           const selected = record?.teacherIds[index];
           return (
@@ -409,7 +409,7 @@ function CourseForm({
       </div>
 
       <SectionHeading>{t('course.topics')}</SectionHeading>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {Array.from({ length: LEARNING_FORM_ROWS.topics }, (_, index) => (
           <Field
             key={index}

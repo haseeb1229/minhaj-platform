@@ -265,7 +265,7 @@ export function CatalogueIdentityFields({
 }) {
   const { t } = copy;
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <Field id={`${prefix}-slug`} label={t('slug')} help={t('slugHelp')}>
         {(props) => (
           <TextInput
@@ -451,7 +451,7 @@ export function Transitions({
       <p className="text-sm">
         {t('lifecycle.current')} <StateBadge state={record.state} copy={copy} />
       </p>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {targets.map((state) => (
           <Panel key={state} as="div">
             <div className="flex flex-col gap-3">
