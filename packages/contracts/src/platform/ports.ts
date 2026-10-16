@@ -97,7 +97,15 @@ export type IdentityDeliveryPurpose =
  * marketing suppression scope, and a different class from every Identity
  * purpose, which no marketing unsubscribe or suppression can touch.
  */
-export type DeliveryPurpose = IdentityDeliveryPurpose | 'newsletter.confirmation';
+/** Learning's service mail (Phase 23) — transactional, never marketing. */
+export type LearningDeliveryPurpose =
+  | 'learning.booking-confirmed'
+  | 'learning.session-rescheduled'
+  | 'learning.session-cancelled'
+  | 'learning.class-reminder';
+
+export type DeliveryPurpose =
+  IdentityDeliveryPurpose | 'newsletter.confirmation' | LearningDeliveryPurpose;
 
 export type DeliveryStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'suppressed';
 

@@ -225,9 +225,15 @@ export {
 
 export {
   LearningDataError,
+  createClassAdmin,
+  createClassCommunication,
+  createClassLearner,
+  createClassPublicReader,
   createLearner,
+  createLearningActivation,
   createLearningDisposition,
   createLearningExport,
   createLearningPersistence,
   createLearningPublicReader,
+  createTeaching,
 } from './adapters/learning/index.ts';

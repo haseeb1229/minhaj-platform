@@ -159,6 +159,17 @@ model User {
   enrolments        Enrolment[]
   trialRequests     TrialClassRequest[]
 
+  /// Phase 23 BACK-REFERENCES PRISMA REQUIRES, AND NOT DEPENDENCIES. Each is
+  /// owned on the Learning side — a typed teaching scope, a teacher's window,
+  /// a learner's Booking and Attendance, and a class service-mail intent.
+  /// Identity never reads them; closure reaches them only through Learning's
+  /// own disposition, and revocation needs none of them.
+  teachingScopes            CourseTeachingAssignment[]
+  availability              Availability[]
+  bookings                  Booking[]
+  attendance                Attendance[]
+  classCommunicationIntents ClassCommunicationIntent[]
+
   id String @id @db.NVarChar(36)
 
   // ---- Better Auth core -------------------------------------------------
@@ -632,6 +643,12 @@ model RoleAssignment {
   revokedAt     DateTime? @db.DateTime2
   revokedById   String?   @db.NVarChar(36)
   revokedReason String?   @db.NVarChar(200)
+
+  /// Phase 23 BACK-REFERENCE PRISMA REQUIRES, AND NOT A DEPENDENCY. Learning's
+  /// typed Course teaching scope names the exact assignment that carried
+  /// `teaching.perform`; Identity never reads it, and revocation changes this
+  /// row alone — the scope stays as Learning's own safe history.
+  teachingScopes CourseTeachingAssignment[]
 
   @@index([userId, revokedAt])
   @@index([roleId, revokedAt])
@@ -5173,6 +5190,9 @@ model Course {
   paths LearningPathCourse[]
   enrolments Enrolment[]
   trialRequests TrialClassRequest[]
+  teachingScopes CourseTeachingAssignment[]
+  sessions ClassSession[]
+  bookings Booking[]
   @@index([state, publishedAt, slug])
   @@index([state, format, level])
   @@index([languageCode, state])
@@ -5344,6 +5364,174 @@ model TrialClassRequest {
   requestedAt DateTime @db.DateTime2
   user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   course Course @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  /// Phase 23: the one Booking that confirmed this request, if any. While it
+  /// exists the request cannot be withdrawn by deletion (the key refuses it).
+  booking Booking?
   @@unique([userId, courseId])
   @@index([courseId, requestedAt])
+}
+
+/// Phase 23 — the fail-closed live-learning gate. ONE row at most, written by
+/// the owner/operator only (the runtime holds SELECT), immutable once written.
+/// No row: live learning is OFF — no window, session or booking can exist.
+model LiveLearningActivation {
+  id           Int      @id @db.TinyInt
+  /// fixture | approved
+  authority    String   @db.NVarChar(16)
+  authorisedBy String   @db.NVarChar(200)
+  reference    String?  @db.NVarChar(400)
+  activatedAt  DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+}
+
+/// A TYPED Course teaching scope: this account teaches this Course under this
+/// exact Identity RoleAssignment. Current while `endedAt` is null AND Identity
+/// still reports the assignment live for `teaching.perform` (re-read every
+/// request); afterwards safe history that grants nothing. Never deleted.
+model CourseTeachingAssignment {
+  id String @id @db.NVarChar(36)
+  courseId String @db.NVarChar(36)
+  userId String @db.NVarChar(36)
+  roleAssignmentId String @db.NVarChar(36)
+  grantedAt DateTime @db.DateTime2
+  /// Historical attribution, not a relation (SECURITY_BASELINE.md §13.3).
+  grantedById String? @db.NVarChar(36)
+  endedAt DateTime? @db.DateTime2
+  endedById String? @db.NVarChar(36)
+  version Int @default(1)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  course Course @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  roleAssignment RoleAssignment @relation(fields: [roleAssignmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sessions ClassSession[]
+  @@unique([id, courseId], map: "CourseTeachingAssignment_owner_key")
+  @@index([userId, endedAt])
+  @@index([roleAssignmentId])
+}
+
+/// One bookable window a teacher offers: UTC instants plus the zone and the
+/// wall-clock times it was offered in. A confirmed trial Booking claims it
+/// whole; a teacher's open windows never overlap.
+model Availability {
+  id String @id @db.NVarChar(36)
+  userId String @db.NVarChar(36)
+  startsAt DateTime @db.DateTime2
+  endsAt DateTime @db.DateTime2
+  timeZone String @db.NVarChar(64)
+  startsLocal String @db.NVarChar(16)
+  endsLocal String @db.NVarChar(16)
+  /// open | withdrawn
+  state String @db.NVarChar(16)
+  version Int @default(1)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  bookings Booking[]
+  @@index([userId, state, startsAt])
+  @@index([state, startsAt])
+}
+
+/// One class — a regular Course session or a single-participant trial — on a
+/// published live Course under a current teaching scope OF THAT COURSE (the
+/// composite key carries the Course). The meeting address is held only while
+/// scheduled and is NULL by CHECK once completed or cancelled; it is read by
+/// exactly one disclosure operation and copied nowhere.
+model ClassSession {
+  id String @id @db.NVarChar(36)
+  courseId String @db.NVarChar(36)
+  /// course | trial
+  kind String @db.NVarChar(16)
+  scopeId String @db.NVarChar(36)
+  startsAt DateTime @db.DateTime2
+  endsAt DateTime @db.DateTime2
+  timeZone String @db.NVarChar(64)
+  startsLocal String @db.NVarChar(16)
+  endsLocal String @db.NVarChar(16)
+  /// scheduled | completed | cancelled
+  state String @db.NVarChar(16)
+  /// google-meet, or null
+  meetingProvider String? @db.NVarChar(32)
+  meetingUrl String? @db.NVarChar(200)
+  /// The chosen reminder instant, before the start; null for no reminder.
+  reminderAt DateTime? @db.DateTime2
+  version Int @default(1)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  closedAt DateTime? @db.DateTime2
+  course Course @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  scope CourseTeachingAssignment @relation(fields: [scopeId, courseId], references: [id, courseId], onDelete: NoAction, onUpdate: NoAction, map: "ClassSession_scope_fkey")
+  booking Booking?
+  attendance Attendance[]
+  intents ClassCommunicationIntent[]
+  @@index([state, startsAt])
+  @@index([courseId, state, startsAt])
+  @@index([scopeId, state, startsAt])
+  @@index([state, reminderAt])
+}
+
+/// A confirmed trial: exactly one per request, one per session, and one LIVE
+/// claim per window (the filtered key). Distinct from Enrolment: it enrols
+/// nobody.
+model Booking {
+  id String @id @db.NVarChar(36)
+  requestId String @unique @db.NVarChar(36)
+  userId String @db.NVarChar(36)
+  courseId String @db.NVarChar(36)
+  sessionId String @unique @db.NVarChar(36)
+  availabilityId String @db.NVarChar(36)
+  /// confirmed | cancelled | completed
+  state String @db.NVarChar(16)
+  confirmedAt DateTime @db.DateTime2
+  confirmedById String? @db.NVarChar(36)
+  cancelledAt DateTime? @db.DateTime2
+  cancelledById String? @db.NVarChar(36)
+  version Int @default(1)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  request TrialClassRequest @relation(fields: [requestId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  course Course @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  session ClassSession @relation(fields: [sessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  availability Availability @relation(fields: [availabilityId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([userId, state])
+  @@index([courseId, state])
+}
+
+/// One participant's mark on one session: present or absent, by the
+/// session's current teacher or a narrowly justified operator correction.
+/// No note, grade or free text.
+model Attendance {
+  sessionId String @db.NVarChar(36)
+  userId String @db.NVarChar(36)
+  /// present | absent
+  status String @db.NVarChar(16)
+  markedAt DateTime @db.DateTime2
+  markedById String? @db.NVarChar(36)
+  session ClassSession @relation(fields: [sessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([sessionId, userId])
+  @@index([userId, sessionId])
+}
+
+/// Learning's durable service-mail intent (ARCHITECTURE.md §4.6.1): safe
+/// identifiers, a purpose and an instant — never a body, an address or a
+/// meeting link. Relayed by the Layer-4 dispatcher through the shared email
+/// concern after re-checking what is owed; abandoned when a session moves or
+/// closes or a participant leaves.
+model ClassCommunicationIntent {
+  id String @id @db.NVarChar(36)
+  /// learning.booking-confirmed | learning.session-rescheduled | learning.session-cancelled | learning.class-reminder
+  purpose String @db.NVarChar(64)
+  sessionId String @db.NVarChar(36)
+  userId String @db.NVarChar(36)
+  dueAt DateTime @db.DateTime2
+  /// pending | relayed | abandoned
+  state String @db.NVarChar(16)
+  idempotencyKey String @unique @db.NVarChar(200)
+  claimedUntil DateTime? @db.DateTime2
+  relayedAt DateTime? @db.DateTime2
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  session ClassSession @relation(fields: [sessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([state, dueAt])
+  @@index([sessionId, state])
+  @@index([userId, state])
 }

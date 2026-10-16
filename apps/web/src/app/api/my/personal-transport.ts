@@ -74,6 +74,20 @@ const STATUS: Readonly<Record<string, number>> = {
   // Phase 22: a Course this act may not name now, or one the person is not on.
   'course-unavailable': 409,
   'not-enrolled': 409,
+  // Phase 23: a class the act may not reach, or a time, window or address
+  // that is not acceptable — categories only, never a reason's detail.
+  'not-activated': 409,
+  'not-a-teacher': 403,
+  booked: 409,
+  overlap: 409,
+  'window-unavailable': 409,
+  terminal: 409,
+  past: 409,
+  'nonexistent-time': 400,
+  'ambiguous-time': 400,
+  'invalid-meeting': 400,
+  'not-participant': 404,
+  'has-classes': 409,
   'too-large': 413,
   unsupported: 415,
   'rate-limited': 429,

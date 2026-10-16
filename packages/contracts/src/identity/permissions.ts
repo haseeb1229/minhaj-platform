@@ -560,6 +560,38 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     description:
       'Create, edit, publish and archive Courses, their modules and lessons, and LearningPaths, and order them. Never confirms a trial class, edits a learner progress or grants teaching authority.',
   }),
+
+  /* ---- Phase 23 — Learning: teacher experience & live classes ------------ */
+  //
+  // THREE KEYS, TWO KINDS. `teaching.perform` is the teacher's authority and
+  // is EXTERNALLY GATED (OPEN_DECISIONS.md §6.3): catalogued, grantable
+  // through the ordinary audited lifecycle, bundled into NO role and held by
+  // nobody until the organisation names a teacher. It opens nothing on its
+  // own — a teacher also needs a CURRENT typed Course teaching scope, which an
+  // operator makes under `learning.classes.administer`.
+  //
+  // `learning.classes.read` and `learning.classes.administer` are ordinary
+  // operator keys, bundled into the protected role by the usual convention.
+  // They are deliberately SEPARATE from Phase 22's catalogue keys: those show
+  // counts and never a learner; these reach private booking, class, participant
+  // and attendance state, and every identity read under them is audited
+  // (SECURITY_BASELINE.md §13.2). Neither grants `teaching.perform`, and no
+  // `attendance.*`, `meeting.*`, `booking.*` or `availability.*` key exists.
+  Object.freeze({
+    key: 'teaching.perform',
+    description:
+      'Teach live classes on Courses scoped to you: their enrolled learners, your sessions, windows and attendance, and your own scheduled class meeting address. Nothing on other Courses.',
+  }),
+  Object.freeze({
+    key: 'learning.classes.read',
+    description:
+      'View teaching scopes, trial requests with who asked, bookings, sessions, participants, attendance and a scheduled class meeting address. Identity access is audited. Changes nothing.',
+  }),
+  Object.freeze({
+    key: 'learning.classes.administer',
+    description:
+      'Scope a current teaching.perform holder to a Course, confirm trial requests, schedule, move, cancel and complete sessions, replace a teacher and correct attendance. Grants no Identity key.',
+  }),
 ]);
 
 /** Every catalogue key, as a union. Mistyping one is a compile error. */
@@ -611,6 +643,9 @@ export const EXTERNALLY_GATED_PERMISSIONS = Object.freeze([
   'question.receive',
   'fatwa.answer',
   'fatwa.publish',
+  // Phase 23: who teaches is the organisation's decision (OPEN_DECISIONS.md
+  // §6.3, with §2.1 safeguarding open). Catalogued, bundled into no role.
+  'teaching.perform',
 ] as const satisfies readonly PermissionKey[]);
 
 const EXTERNALLY_GATED: ReadonlySet<string> = new Set(EXTERNALLY_GATED_PERMISSIONS);

@@ -273,7 +273,16 @@ describe('export and closure', () => {
     let remaining = 3;
     const service = createLearningAccountService({
       exports: {
-        collect: async () => ({ enrolments: [], progress: [], trialRequests: [] }),
+        collect: async () => ({
+          enrolments: [],
+          progress: [],
+          trialRequests: [],
+          bookings: [],
+          classes: [],
+          attendance: [],
+          availability: [],
+          teachingScopes: [],
+        }),
       } as LearningExportPort,
       disposition: {
         async disposeAccount(accountId) {
@@ -297,11 +306,17 @@ describe('export and closure', () => {
   it('exports a deterministic, versioned document of identifiers', async () => {
     expect(await account([]).service.export({ accountId: 'a' })).toEqual({
       schema: 'minhaj.learning.export',
-      version: 1,
+      // Version 2 since Phase 23: the person's own classes join the document.
+      version: 2,
       generatedAt: '2026-10-15T00:00:00.000Z',
       enrolments: [],
       progress: [],
       trialRequests: [],
+      bookings: [],
+      classes: [],
+      attendance: [],
+      availability: [],
+      teachingScopes: [],
     });
     expect(await refusal(account([], false).service.export({ accountId: 'a' }))).toBe(
       'rate-limited',

@@ -524,6 +524,16 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'Enrolment',
         'LessonProgress',
         'TrialClassRequest',
+        // Phase 23 — Learning's live slice: the owner's activation, the typed
+        // teaching scope, a teacher's windows, class sessions, the confirmed
+        // trial Booking, attendance and the service-mail intent.
+        'LiveLearningActivation',
+        'CourseTeachingAssignment',
+        'Availability',
+        'ClassSession',
+        'Booking',
+        'Attendance',
+        'ClassCommunicationIntent',
       ].sort(),
     );
   });

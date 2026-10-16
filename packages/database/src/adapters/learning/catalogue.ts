@@ -683,6 +683,20 @@ export function createLearningPersistence(): LearningPersistencePort {
               where: { courseId: id, path: PUBLISHED },
             });
             if (holding > 0) throw new LearningDataError('in-published-path');
+            // Phase 23: a scheduled future class, or a confirmed trial on a
+            // scheduled one, needs the Course public — close or move them
+            // first. Asked under the claim's exclusive lock, so a session
+            // being created under the Course's shared lock has either
+            // committed and is counted, or saw this withdrawal (51285).
+            const now = new Date();
+            const classes = await tx.classSession.count({
+              where: {
+                courseId: id,
+                state: 'scheduled',
+                OR: [{ startsAt: { gt: now } }, { booking: { state: 'confirmed' } }],
+              },
+            });
+            if (classes > 0) throw new LearningDataError('has-classes');
           }
           if (
             state === 'published' &&

@@ -1817,6 +1817,50 @@ automated provisioning.**
 behaviour it genuinely requires has been implemented and tested, and the organisation's Meet
 capability is confirmed.
 
+**Phase-23 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+```
+TEACHER EXPERIENCE ENGINEERING                COMPLETE (this phase, policy-independent)
+AVAILABILITY / BOOKING / CLASSES / ATTENDANCE COMPLETE
+MANUAL GOOGLE MEET VALIDATION                 COMPLETE (string validation only; no API)
+CLASS REMINDERS / SERVICE MAIL                COMPLETE (shared communication architecture)
+MY CLASSES / MY TEACHERS                      COMPLETE
+PUBLIC /learn/live, /learn/teachers           COMPLETE — activation-aware
+REAL teaching.perform HOLDERS                 NONE
+LIVE-LEARNING ACTIVATION (production)         BLOCKED — no activation row exists
+SAFEGUARDING / MEET / TEACHER-GRANT GATES      OPEN — OPEN_DECISIONS.md §2.1, §5.3, §6.3
+PHASE 24 MESSAGING                            NOT STARTED
+```
+
+- **Permissions:** `teaching.perform` is catalogued and **externally gated** — bundled into no
+  role, held by nobody, grantable only through `permissions.grant` with its step-up and audit;
+  `learning.classes.read` and `learning.classes.administer` are ordinary keys bundled into the
+  protected role with session invalidation. Phase 22's `learning.read` / `learning.administer`
+  are **not** widened: they still show counts and never a learner. No `attendance.*`, `meeting.*`,
+  `booking.*` or `availability.*` key exists. No new step-up purpose.
+- **Activation is a fail-closed row** (`LiveLearningActivation`, DOMAIN_MODEL.md §13.5): absent by
+  default, operator-written, immutable, and enforced by the database on every window, session and
+  booking write. Engineering closure records no row; a `fixture` row is test-only and never survives
+  a test; an `approved` row is the organisation's later decision.
+- **The typed teaching scope** names a Course and the exact live RoleAssignment carrying
+  `teaching.perform`; current means not ended AND still live in Identity, re-read every request.
+  No scope row means no authority. CourseTeacher attribution grants nothing and is left as it is.
+- **Delivered routes:** `/learn/live`, `/learn/teachers` (+ the one-hop `/learn/teachers/{slug}`
+  301 to `/people/{slug}`), `/my/classes`, `/my/classes/{id}`, `/my/teachers`, every teacher route
+  of ROUTE_MAP.md §6 **except** `/teacher/messages`, `/admin/learning/classes` (with its session,
+  scope and new-session views) and trial confirmation on `/admin/learning/trials`. `/learn/training`
+  and `/learn/resources` remain absent (no owner contract).
+- **Reminder timing** is a per-session choice of 60, 180 or 1,440 minutes or none; no fixed lead is
+  promised. A reschedule abandons the old intent and commits a new one.
+- **No-show** is derived from an absent or unmarked trial participant on a completed session; no
+  Booking state was added.
+- **Teacher notes** are not delivered: INFORMATION_ARCHITECTURE.md §6 no longer promises free-form
+  notes on a learner, because no accepted contract defines their retention or safeguarding rules.
+- **No recording, no Google Calendar/Meet API, no OAuth credential, no messaging, no realtime
+  process**, no Storage/Media/Library relation for "materials" (the teacher reads the Course's own
+  syllabus and lesson bodies), no under-18 rule of any kind.
+
 ---
 
 ### Phase 24 — Messaging: domain & shared server services

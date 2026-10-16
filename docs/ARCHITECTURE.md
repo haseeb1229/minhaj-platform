@@ -651,11 +651,23 @@ direct provider call. A bounded personal-data sweep beside the existing ones run
 closure reconciliation and retires lapsed newsletter confirmations. No dependency edge is added:
 Personalisation still depends on Layer 0 and Identity only.
 
+**As delivered (Phase 23): a third owner.** Learning commits a durable `ClassCommunicationIntent` —
+purpose, session, recipient account, due instant, idempotency key — in the same transaction as a
+trial confirmation, a reschedule, a cancellation or a chosen reminder instant. The Layer-4 dispatcher
+relays due intents each tick: Learning re-checks that the message is still owed (activation, session
+state, the recipient's current Enrolment, Booking or teaching scope), Identity resolves the account's
+current address and locale through its public interface, and the shared delivery row is enqueued
+under the intent's own key; at send time Learning resolves and renders the message the same way, with
+a link to the person's own private class page and never a meeting address. A reschedule abandons the
+old reminder intent and commits a new one, so the old time cannot fire. The four Learning purposes
+keep the **transactional** suppression scope. No dependency edge is added: Learning still depends on
+Layer 0 and, through Layer-4 answers, on Identity and People.
+
 ### 4.7 Integration abstractions
 
 | Integration | V1 | Later |
 |---|---|---|
-| Live class | `MeetingProvider` storing provider + manually entered URL, with validation (DOMAIN_MODEL.md §13.1) | Google Calendar/Meet API provisioning |
+| Live class | `MeetingProvider` storing provider + manually entered URL, with validation (DOMAIN_MODEL.md §13.1). **Delivered in Phase 23** as a pure Layer-0 contract: one provider (Google Meet), standard-parser validation and canonicalisation, no network, no credential | Google Calendar/Meet API provisioning |
 | Video | `VideoProvider` — YouTube/Vimeo metadata and embed | Additional providers |
 | Payment | `PaymentProvider` interface only | Provider selection is an open decision |
 | Email | `EmailProvider` interface, **first adapter Resend** (§4.6) | An adopting organisation supplies its own provider adapter |

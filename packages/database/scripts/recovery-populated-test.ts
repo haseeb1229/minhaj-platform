@@ -88,6 +88,12 @@ import {
   verifyRestoredPhase22,
   writePhase22Fixture,
 } from '../src/lifecycle/phase22-fixture.ts';
+import {
+  capturePhase23Fixture,
+  newPhase23Fixture,
+  verifyRestoredPhase23,
+  writePhase23Fixture,
+} from '../src/lifecycle/phase23-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -218,6 +224,7 @@ const hadithFixture = newPhase19Fixture();
 const fatwaFixture = newPhase20Fixture();
 const personalFixture = newPhase21Fixture();
 const learningFixture = newPhase22Fixture();
+const classesFixture = newPhase23Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -491,6 +498,23 @@ try {
   const learningSnapshot = await capturePhase22Fixture(admin, learningFixture);
   report('learning fixture', `run ${learningFixture.runId}`);
 
+  // Phase-23 live classes, with NON_LEARNING_FIXTURE sentinels and `.invalid`
+  // addresses only: the fixture activation; two synthetic teachers holding
+  // synthetic roles carrying `teaching.perform` — one live and currently
+  // scoped to the Phase-22 published live Course, one revoked with an ended
+  // scope; the live teacher's windows; the Phase-22 learner's trial request
+  // confirmed into a Booking of a trial session with a synthetic-but-valid
+  // meeting address; a Course session with a reminder and the learner's mark;
+  // two pending intents; and a cancelled past session.
+  const classesReferences = {
+    liveCourseId: learningFixture.liveCourseId,
+    learnerId: learningFixture.learnerId,
+    trialId: learningFixture.trialId,
+  };
+  await writePhase23Fixture(admin, classesFixture, classesReferences);
+  const classesSnapshot = await capturePhase23Fixture(admin, classesFixture);
+  report('classes fixture', `run ${classesFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -624,6 +648,15 @@ try {
       learningFixture,
       learningSnapshot,
       learningReferences,
+    ),
+  );
+  report(
+    'classes recovery',
+    await verifyRestoredPhase23(
+      restored,
+      classesFixture,
+      classesSnapshot,
+      classesReferences,
     ),
   );
 
@@ -1001,6 +1034,41 @@ try {
           'LessonProgress ALTER',
           'ALTER TABLE [dbo].[LessonProgress] ADD [probe] INT NULL;',
         ],
+        // Phase 23. A restored runtime can neither switch live learning on or
+        // off, erase a teaching scope or a session, re-point a Booking at
+        // another learner, session or window, nor alter a live-class table.
+        [
+          'LiveLearningActivation INSERT',
+          "INSERT INTO [dbo].[LiveLearningActivation] ([id],[authority],[authorisedBy],[reference]) VALUES (2,N'approved',N'forged',N'urn:example:forged');",
+        ],
+        ['LiveLearningActivation DELETE', 'DELETE FROM [dbo].[LiveLearningActivation];'],
+        [
+          'CourseTeachingAssignment DELETE',
+          'DELETE FROM [dbo].[CourseTeachingAssignment];',
+        ],
+        ['ClassSession DELETE', 'DELETE FROM [dbo].[ClassSession];'],
+        ['Booking learner UPDATE', 'UPDATE [dbo].[Booking] SET [userId]=[userId];'],
+        ['Booking session UPDATE', 'UPDATE [dbo].[Booking] SET [sessionId]=[sessionId];'],
+        [
+          'Booking window UPDATE',
+          'UPDATE [dbo].[Booking] SET [availabilityId]=[availabilityId];',
+        ],
+        [
+          'LiveLearningActivation ALTER',
+          'ALTER TABLE [dbo].[LiveLearningActivation] ADD [probe] INT NULL;',
+        ],
+        [
+          'CourseTeachingAssignment ALTER',
+          'ALTER TABLE [dbo].[CourseTeachingAssignment] ADD [probe] INT NULL;',
+        ],
+        ['Availability ALTER', 'ALTER TABLE [dbo].[Availability] ADD [probe] INT NULL;'],
+        ['ClassSession ALTER', 'ALTER TABLE [dbo].[ClassSession] ADD [probe] INT NULL;'],
+        ['Booking ALTER', 'ALTER TABLE [dbo].[Booking] ADD [probe] INT NULL;'],
+        ['Attendance ALTER', 'ALTER TABLE [dbo].[Attendance] ADD [probe] INT NULL;'],
+        [
+          'ClassCommunicationIntent ALTER',
+          'ALTER TABLE [dbo].[ClassCommunicationIntent] ADD [probe] INT NULL;',
+        ],
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -1064,6 +1132,44 @@ try {
         learningFixture,
         learningSnapshot,
         learningReferences,
+      );
+
+      // Phase 23. The meeting address is readable by the restored runtime —
+      // SELECT is the one verb it holds for the disclosure operation — while a
+      // terminal session can never carry one: the UPDATE is refused by the
+      // session CHECK, not by a grant, so the proof names the constraint.
+      const [disclosed] = await app.query<{ meetingUrl: string | null }>(
+        `SELECT [meetingUrl] FROM [dbo].[ClassSession] WHERE [id]=N'${classesFixture.trialSessionId}';`,
+      );
+      if (disclosed?.meetingUrl !== 'https://meet.google.com/abc-defg-hij') {
+        fail(
+          'The restored runtime could not read the scheduled session meeting address.',
+        );
+      }
+      try {
+        await app.query(
+          `UPDATE [dbo].[ClassSession] SET [meetingProvider]=N'google-meet',[meetingUrl]=N'https://meet.google.com/abc-defg-hij' WHERE [id]=N'${classesFixture.cancelledSessionId}';`,
+        );
+        fail('Restored database PERMITTED a meeting address on a cancelled session.');
+      } catch (error) {
+        const number = (error as { number?: number }).number;
+        const message = (error as Error).message;
+        if (number !== 547 || !message.includes('ClassSession_ck')) {
+          fail(
+            `Restored ClassSession meetingUrl on terminal session UPDATE was rejected for the ` +
+              `WRONG reason (error ${number ?? 'unknown'}): ${message.split('\n')[0]}`,
+          );
+        }
+        report(
+          'restored ClassSession meetingUrl on terminal session UPDATE',
+          'refused by ClassSession_ck, SQL Server error 547',
+        );
+      }
+      await verifyRestoredPhase23(
+        restored,
+        classesFixture,
+        classesSnapshot,
+        classesReferences,
       );
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 

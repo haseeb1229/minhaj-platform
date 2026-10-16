@@ -363,19 +363,30 @@ describe.skipIf(!databaseConfigured)(
        * neither is teaching authority.
        */
       const PHASE_22_KEYS = ['learning.administer', 'learning.read'];
+      /** Phase 23: the gated teaching key and the two ordinary class keys. */
+      const PHASE_23_KEYS = [
+        'learning.classes.administer',
+        'learning.classes.read',
+        'teaching.perform',
+      ];
 
       /**
-       * The capability-projection source that MUST NOT be grantable yet.
+       * The capability-projection sources, each arrived with its OWNER.
        *
        * DOMAIN_MODEL.md §4.5 derives `canTeach`, `canReceiveQuestions`,
        * `canReviewContent` and `canIssueFatwa` from four codes, and Phase 5
        * consumes that projection — which made seeding one of them the obvious
-       * shortcut for a projection test. Each arrives with its owner:
+       * shortcut for a projection test. Each arrived with its owner instead:
        * `content.review` with Editorial, `question.receive` and
-       * `fatwa.publish` with Fatwa (externally gated). `teaching.perform`
-       * belongs to Learning's teaching slice (Phase 23), which has not shipped.
+       * `fatwa.publish` with Fatwa, and `teaching.perform` with Learning's
+       * teaching slice (Phase 23). The externally gated ones are catalogued
+       * and held by NO role: who holds them is the organisation's decision.
        */
-      const UNSEEDED_CAPABILITY_KEYS = ['teaching.perform'];
+      const GATED_CAPABILITY_KEYS = [
+        'question.receive',
+        'fatwa.publish',
+        'teaching.perform',
+      ];
 
       it('is exactly what the delivered migrations seeded', async () => {
         const catalogue = await harness.administration.catalogue();
@@ -397,14 +408,19 @@ describe.skipIf(!databaseConfigured)(
             ...PHASE_20_KEYS,
             ...PHASE_21_KEYS,
             ...PHASE_22_KEYS,
+            ...PHASE_23_KEYS,
           ].sort(),
         );
 
-        // AND NOT ONE CAPABILITY SOURCE, asserted against the live catalogue
-        // rather than the migration text: a key seeded by any route at all
-        // would be grantable authority over a context that has not shipped.
-        for (const key of UNSEEDED_CAPABILITY_KEYS) {
-          expect(keys, `${key} belongs to a later phase`).not.toContain(key);
+        // EVERY GATED CAPABILITY SOURCE IS CATALOGUED AND HELD BY NO ROLE,
+        // asserted against the live database rather than the migration text:
+        // a role carrying one would be a holder nobody named.
+        for (const key of GATED_CAPABILITY_KEYS) {
+          expect(keys, `${key} is catalogued by its owner`).toContain(key);
+          const [held] = await database.admin.query<{ total: number }>(
+            `SELECT COUNT_BIG(*) AS total FROM [dbo].[RolePermission] WHERE [permissionKey] = N'${key}';`,
+          );
+          expect(Number(held?.total), `${key} is held by no role`).toBe(0);
         }
 
         // Every stored key is one this build can describe: a catalogue the
@@ -432,7 +448,8 @@ describe.skipIf(!databaseConfigured)(
           'membership.',
           'donations.',
           'migration.',
-          'teaching.',
+          // `teaching.perform` shipped with Phase 23 and is the only teaching
+          // key: no other `teaching.*` vocabulary exists.
           'editorial.',
           // Library shipped in Phase 8, Search in Phase 17, Media in Phase 10,
           // Global in Phase 16, Quran in Phase 18, Hadith in Phase 19 and Fatwa
@@ -463,9 +480,20 @@ describe.skipIf(!databaseConfigured)(
           'lesson.',
           'enrolment.',
           'trial.',
+          // Phase 23 shipped `teaching.perform` and two `learning.classes.*`
+          // keys: no per-aggregate class, booking, attendance, meeting or
+          // availability key.
+          'class.',
+          'booking.',
+          'attendance.',
+          'meeting.',
+          'availability.',
         ]) {
           expect(keys.some((key) => key.startsWith(domain))).toBe(false);
         }
+        expect(keys.filter((key) => key.startsWith('teaching.'))).toEqual([
+          'teaching.perform',
+        ]);
       });
 
       it('stores the editorial descriptions this build compiles, naming Events and Collections', async () => {
@@ -674,7 +702,8 @@ describe.skipIf(!databaseConfigured)(
 
         const outcome = await harness.administration.setRolePermissions(actor, {
           roleId: role.id,
-          permissions: ['teaching.perform'],
+          // Messaging is Phase 24's and has not shipped: no such key exists.
+          permissions: ['messaging.send'],
         });
 
         expect(outcome.ok).toBe(false);

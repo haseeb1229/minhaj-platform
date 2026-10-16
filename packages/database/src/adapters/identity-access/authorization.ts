@@ -1022,6 +1022,53 @@ export function createAuthorizationPersistence(): AuthorizationPersistencePort {
       return rows.map((row) => row.id);
     },
 
+    /* ---- Phase 23: Learning's questions ----------------------------------- */
+
+    async liveAssignmentsCarrying(accountId, permission) {
+      const rows = await prisma.roleAssignment.findMany({
+        where: {
+          userId: accountId,
+          revokedAt: null,
+          user: { status: 'active' },
+          role: {
+            deactivatedAt: null,
+            permissions: { some: { permissionKey: permission } },
+          },
+        },
+        select: { id: true },
+        orderBy: [{ grantedAt: 'asc' }, { id: 'asc' }],
+        take: MAX_PAGE,
+      });
+      return rows.map((row) => row.id);
+    },
+
+    async serviceRecipients(accountIds) {
+      const wanted = accountIds.slice(0, MAX_PAGE);
+      if (wanted.length === 0) return [];
+      const rows = await prisma.user.findMany({
+        where: { id: { in: [...wanted] }, status: 'active' },
+        select: { id: true, email: true, locale: true },
+        orderBy: { id: 'asc' },
+      });
+      return rows.map((row) => ({
+        accountId: row.id,
+        email: row.email,
+        locale: row.locale,
+      }));
+    },
+
+    async participantNames(accountIds) {
+      const wanted = accountIds.slice(0, MAX_PAGE);
+      if (wanted.length === 0) return [];
+      const rows = await prisma.user.findMany({
+        where: { id: { in: [...wanted] }, status: 'active' },
+        // THE NAME AND NOTHING ELSE (SECURITY_BASELINE.md §19.1).
+        select: { id: true, name: true },
+        orderBy: { id: 'asc' },
+      });
+      return rows.map((row) => ({ accountId: row.id, name: row.name }));
+    },
+
     /* ---- Audit ------------------------------------------------------------ */
 
     async listAuditRecords({ action, actorId, limit, offset }) {

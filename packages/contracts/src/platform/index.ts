@@ -18,6 +18,7 @@ export type {
   DeliveryOutcome,
   DeliveryPurpose,
   IdentityDeliveryPurpose,
+  LearningDeliveryPurpose,
   DeliveryRecord,
   DeliveryRejected,
   DeliveryStatus,
@@ -58,3 +59,20 @@ export type {
   StoredAsset,
   UploadPolicy,
 } from './storage.ts';
+
+/* ---- Time (Phase 23 moved the Event helpers here; both owners import them) ---- */
+export {
+  canonicalTimeZone,
+  foldOf,
+  foldSchema,
+  instantsOf,
+  localTimeAt,
+  localTimeSchema,
+  offsetMinutesOf,
+  parseWallTime,
+  resolveLocalTime,
+  supportedTimeZones,
+  timeZoneSchema,
+  zonedIso,
+} from './time.ts';
+export type { Fold, ResolvedTime, WallTime, YearBounds } from './time.ts';

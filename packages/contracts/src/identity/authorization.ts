@@ -392,6 +392,46 @@ export interface AuthorizationPersistencePort {
    */
   closedAccountIds(accountIds: readonly string[]): Promise<readonly string[]>;
 
+  /* ---- Phase 23: what Learning asks Identity, answered at Layer 4 ------- */
+
+  /**
+   * The identifiers of the account's LIVE RoleAssignments whose ACTIVE role
+   * carries `permission`, for an ACTIVE account — in grant order, then id.
+   *
+   * ADDED FOR THE TYPED TEACHING SCOPE (DOMAIN_MODEL.md §13.2). Learning names
+   * the exact assignment a scope was made under and re-asks this on every
+   * request, so a revoked assignment stops answering immediately. It returns
+   * assignment identifiers only: no role name, no bundle, no address.
+   */
+  liveAssignmentsCarrying(
+    accountId: string,
+    permission: string,
+  ): Promise<readonly string[]>;
+
+  /**
+   * The address and interface locale of each ACTIVE account named — for the
+   * Layer-4 outbound-communication dispatcher resolving another owner's
+   * service mail at send time (ARCHITECTURE.md §4.6.1). A closed, disabled or
+   * suspended account is simply absent: it is owed nothing. Bounded by the
+   * caller's set, capped again by the adapter.
+   */
+  serviceRecipients(accountIds: readonly string[]): Promise<
+    readonly {
+      readonly accountId: string;
+      readonly email: string;
+      readonly locale: string;
+    }[]
+  >;
+
+  /**
+   * The display name of each ACTIVE account named — what a teacher's class
+   * list or an operator's participant list shows beside Learning's own facts.
+   * NEVER an address, a status or anything else. Bounded and capped.
+   */
+  participantNames(
+    accountIds: readonly string[],
+  ): Promise<readonly { readonly accountId: string; readonly name: string }[]>;
+
   /* ---- Audit ------------------------------------------------------------ */
 
   listAuditRecords(input: {

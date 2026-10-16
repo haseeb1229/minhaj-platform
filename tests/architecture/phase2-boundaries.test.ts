@@ -393,13 +393,16 @@ describe('Phase 2 — what the delivered code does NOT contain', () => {
       // Quran left this list when Phase 18, its owning phase, seeded its keys,
       // and Hadith when Phase 19 seeded its own. Fatwa's keys may appear in
       // Phase 20's migration, which owns them, and in no other; Learning's in
-      // Phase 22's alone. Teaching authority is Phase 23's and seeded nowhere.
+      // Phase 22's and Phase 23's (its two class keys) alone. Teaching
+      // authority is Phase 23's and seeded in its migration alone.
       const fatwaOwner = file.includes('20261004000000_phase20_fatwa');
-      const learningOwner = file.includes('20261006000000_phase22_learning');
+      const classesOwner = file.includes('20261007000000_phase23_teacher_live_classes');
+      const learningOwner =
+        file.includes('20261006000000_phase22_learning') || classesOwner;
       for (const domain of [
         ...(fatwaOwner ? [] : ['fatwa.']),
         ...(learningOwner ? [] : ['learning.']),
-        'teaching.',
+        ...(classesOwner ? [] : ['teaching.']),
         'migration.',
         'membership.',
         'donations.',

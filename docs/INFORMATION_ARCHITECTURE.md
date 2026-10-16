@@ -213,9 +213,10 @@ Since Phase 22 the Learn item is delivered as a primary link to the `/learn` lan
 All Courses, Learning Paths and Trial Classes (which explains that a trial class is a request on a
 live Course, recorded and not yet scheduled) and to the catalogue filtered by Topic. The shell has no
 per-domain mega menu yet (as for Watch and Quran), so these are reached from the landing and the
-human-readable sitemap. Live Learning, Class Schedule,
-Training, Resources, Teachers and Find a Teacher are not yet offered and are not linked — classes,
-availability and a teacher directory are Phase 23's or have no owner contract (ROUTE_MAP.md §3.5).
+human-readable sitemap. Since Phase 23 Live Learning (`/learn/live`, the class schedule) and Find a
+Teacher (`/learn/teachers`) are delivered as activation-aware pages, linked from the landing; they say
+honestly when live learning is not switched on. Training and Resources have no owner contract and are
+not linked.
 
 ### 3.5 Library
 
@@ -407,8 +408,10 @@ are delivered, and the Home overview shows the panels whose owners exist — con
 saved items, the Quran position, unread notifications and an optional onboarding prompt. Since
 Phase 22 My Learning (Enrolled Courses, Learning Paths and the person's trial-class requests) and
 Progress → Course Progress are delivered by Learning, with a Learning panel on the Home overview.
-Certificates, Learning Streaks, My Classes, Teachers and Messages stay with their later phases (or,
-for certificates and streaks, with no phase at all) and are absent rather than empty. Bookmarks cover exactly Quran ayat, Hadith, articles,
+Since Phase 23 My Classes (Upcoming, Past, Class Detail with the meeting link under the disclosure
+rule and the person's attendance record) and Teachers → My Teachers and Find a Teacher are delivered
+by Learning. Certificates, Learning Streaks and Messages stay with their later phases (or, for
+certificates and streaks, with no phase at all) and are absent rather than empty. Bookmarks cover exactly Quran ayat, Hadith, articles,
 videos and books; history is off until the person turns it on; notifications are in-app only.
 
 **Naming note.** *Saved → Collections* are private, user-owned lists. Editorial
@@ -427,7 +430,7 @@ Teacher
 ├── Calendar                  Schedule across courses
 ├── Students
 │   ├── All Students
-│   └── Student Detail        Enrolment, attendance, progress, notes
+│   └── Student Detail        Enrolment, attendance, progress (no free-form notes — see below)
 ├── Courses
 │   ├── My Courses
 │   └── Course Detail         Enrolled students, sessions, materials
@@ -446,6 +449,15 @@ identity**, not a separate product. A teacher is also a user and retains their M
 **A TeacherProfile grants nothing.** Access requires a **current, auditable role assignment**
 granting the teaching permission; revoking that assignment removes access immediately,
 including in messaging (DOMAIN_MODEL.md §4.5).
+
+**Delivered in Phase 23:** every item above except Messages, which stays Phase 24's and has no
+link. Access additionally requires a current typed Course teaching scope and live-learning
+activation (DOMAIN_MODEL.md §13.5). **Student Detail carries no free-form notes:** an earlier
+revision of this tree listed "notes", but no accepted Learning aggregate, retention rule or
+safeguarding contract defines teacher notes about a learner (OPEN_DECISIONS.md §2.1, §2.2 open), so
+none is stored; a future owning decision would add it as its own contract. Resources is a truthful
+view over the Courses' own syllabus and lesson bodies — nothing is uploaded or shared. Profile is
+read-only here; the public TeacherProfile is People's.
 
 ---
 

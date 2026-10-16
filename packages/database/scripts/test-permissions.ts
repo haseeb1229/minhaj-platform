@@ -781,6 +781,7 @@ try {
     hadithProvisioned: number;
     newsletterProvisioned: number;
     learningProvisioned: number;
+    classesProvisioned: number;
   }>(`
     SELECT COUNT_BIG(*) AS total,
            SUM(CASE WHEN [action] = N'phase1.permission.probe' THEN 1 ELSE 0 END) AS probe,
@@ -820,18 +821,21 @@ try {
              AS newsletterProvisioned,
            SUM(CASE WHEN [action] = N'learning.permissions.provisioned'
                      AND [actorType] = N'migration' THEN 1 ELSE 0 END)
-             AS learningProvisioned
+             AS learningProvisioned,
+           SUM(CASE WHEN [action] = N'learning.classes.permissions.provisioned'
+                     AND [actorType] = N'migration' THEN 1 ELSE 0 END)
+             AS classesProvisioned
     FROM [dbo].[AuditLog];
   `);
 
-  // Exactly thirteen rows: the Phase-3B through Phase-22 privilege extensions
+  // Exactly fourteen rows: the Phase-3B through Phase-23 privilege extensions
   // (Phase 10's and Phase 16's included; Phase 20 bundles nothing and so
   // records nothing), and this run's probe. Naming every migration action is load-bearing:
   // deriving the expected total from whatever provisioning rows happened to
   // survive would pass if a phase omitted its own audit, and each privilege
   // extension must be able to show that it paid for itself
   // (SECURITY_BASELINE.md §8.1).
-  const EXPECTED_AUDIT_ROWS = 13;
+  const EXPECTED_AUDIT_ROWS = 14;
 
   if (
     Number(survivor?.taxonomyProvisioned ?? 0) !== 1 ||
@@ -846,6 +850,7 @@ try {
     Number(survivor?.hadithProvisioned ?? 0) !== 1 ||
     Number(survivor?.newsletterProvisioned ?? 0) !== 1 ||
     Number(survivor?.learningProvisioned ?? 0) !== 1 ||
+    Number(survivor?.classesProvisioned ?? 0) !== 1 ||
     Number(survivor?.probe ?? 0) !== 1 ||
     Number(survivor?.tampered ?? -1) !== 0 ||
     Number(survivor?.total ?? 0) !== EXPECTED_AUDIT_ROWS
@@ -856,7 +861,7 @@ try {
         `1 navigation provisioning, 1 people provisioning, 1 editorial provisioning, ` +
         `1 library provisioning, 1 search provisioning, 1 media provisioning, ` +
         `1 global provisioning, 1 quran provisioning, 1 hadith provisioning, 1 newsletter provisioning, ` +
-        `1 learning provisioning, 1 probe and ` +
+        `1 learning provisioning, 1 classes provisioning, 1 probe and ` +
         `0 tampered; found ${survivor?.total ?? 0} rows, ` +
         `${survivor?.taxonomyProvisioned ?? 0} taxonomy provisioning, ` +
         `${survivor?.navigationProvisioned ?? 0} navigation provisioning, ` +
@@ -870,12 +875,13 @@ try {
         `${survivor?.hadithProvisioned ?? 0} hadith provisioning, ` +
         `${survivor?.newsletterProvisioned ?? 0} newsletter provisioning, ` +
         `${survivor?.learningProvisioned ?? 0} learning provisioning, ` +
+        `${survivor?.classesProvisioned ?? 0} classes provisioning, ` +
         `${survivor?.probe ?? 0} probe, ${survivor?.tampered ?? 0} tampered`,
     );
   } else {
     pass(
       'audit rows unmodified',
-      'the probe row and all twelve exact migration records are intact after ' +
+      'the probe row and all thirteen exact migration records are intact after ' +
         'UPDATE/DELETE attempts',
     );
   }
@@ -5699,6 +5705,482 @@ try {
     fail(
       'Learning effective posture exact',
       learningPostureFindings.join('; ') || 'tables missing',
+    );
+  }
+
+  // ---- Phase 23: live classes, in four postures ------------------------------
+  //
+  // THE ACTIVATION is the owner's: SELECT and nothing else. No runtime
+  // permission can turn live learning on or re-label a fixture as approved.
+  //
+  // A TEACHING SCOPE and a SESSION are history: INSERT, UPDATE of what moves
+  // (a scope's ending and version; a session's times, address, state, reminder
+  // and closure) and never DELETE; what identifies each — the Course, the
+  // account, the RoleAssignment, the grant; the Course, the kind, the creation
+  // instant — is never UPDATEd.
+  //
+  // A WINDOW, a BOOKING, an ATTENDANCE MARK and an INTENT are an account's own
+  // and are removed by its disposition, so they hold all four verbs; what
+  // identifies each carries a column DENY.
+  //
+  // Naming an account, an assignment, a Course or a request grants nothing on
+  // its owner's table, and no Identity table's posture moves: the runtime
+  // still cannot catalogue a key, rewrite a bundle entry or erase an
+  // assignment, an account or a Person.
+  //
+  // Every statement below is REAL SQL as the runtime principal over synthetic
+  // NON_LEARNING_FIXTURE rows; the activation, the teaching role and its
+  // assignment are the owner's rows, written with administrative authority.
+  const classDay = '2026-10-07';
+  const classesAt = `${classDay}T00:00:00`;
+  const classInstant = (hour: string): string => `'${classDay}T${hour}:00'`;
+  const classLocal = (hour: string): string => `N'${classDay}T${hour}'`;
+  const MEET = 'https://meet.google.com/abc-defg-hij';
+  const classTeacher = randomUUID();
+  const classRole = randomUUID();
+  const classAssignment = randomUUID();
+  await admin.query(`
+    INSERT INTO [dbo].[LiveLearningActivation] ([id],[authority],[authorisedBy],[reference])
+      VALUES (1,N'fixture',N'NON_LEARNING_FIXTURE operator',NULL);
+    INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled])
+      VALUES (N'${classTeacher}',N'NON_LEARNING_FIXTURE teacher',N'${classTeacher}@learning-proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);
+    INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system])
+      VALUES (N'${classRole}',N'lp-teaching-${learningRun}',N'NON_LEARNING_FIXTURE teaching role',N'Least-privilege proof only.',0);
+    INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES (N'${classRole}',N'teaching.perform');
+    INSERT INTO [dbo].[RoleAssignment] ([id],[userId],[roleId]) VALUES (N'${classAssignment}',N'${classTeacher}',N'${classRole}');
+  `);
+  const classScope = randomUUID();
+  const windowA = randomUUID();
+  const windowB = randomUUID();
+  const trialSession = randomUUID();
+  const trialCancelled = randomUUID();
+  const courseSession = randomUUID();
+  const doneSession = randomUUID();
+  const classRequest = randomUUID();
+  const otherRequest = randomUUID();
+  const classBooking = randomUUID();
+  const classIntent = randomUUID();
+  const classWindow = (id: string, from: string, to: string): string =>
+    `INSERT INTO [dbo].[Availability] ([id],[userId],[startsAt],[endsAt],[timeZone],[startsLocal],[endsLocal],[state]) VALUES (N'${id}',N'${classTeacher}',${classInstant(from)},${classInstant(to)},N'Europe/London',${classLocal(from)},${classLocal(to)},N'open');`;
+  const classSessionRow = (
+    id: string,
+    kind: 'course' | 'trial',
+    from: string,
+    to: string,
+    extra: { meeting?: boolean; reminder?: string; cancelled?: boolean } = {},
+  ): string =>
+    `INSERT INTO [dbo].[ClassSession] ([id],[courseId],[kind],[scopeId],[startsAt],[endsAt],[timeZone],[startsLocal],[endsLocal],[state],[meetingProvider],[meetingUrl],[reminderAt],[closedAt]) VALUES (N'${id}',N'${liveCourse}',N'${kind}',N'${classScope}',${classInstant(from)},${classInstant(to)},N'Europe/London',${classLocal(from)},${classLocal(to)},N'${extra.cancelled ? 'cancelled' : 'scheduled'}',${extra.meeting ? "N'google-meet'" : 'NULL'},${extra.meeting ? `N'${MEET}'` : 'NULL'},${extra.reminder ? classInstant(extra.reminder) : 'NULL'},${extra.cancelled ? classInstant(to) : 'NULL'});`;
+  const classBookingRow = (
+    id: string,
+    requestId: string,
+    userId: string,
+    sessionId: string,
+    windowId: string,
+  ): string =>
+    `INSERT INTO [dbo].[Booking] ([id],[requestId],[userId],[courseId],[sessionId],[availabilityId],[state],[confirmedAt],[confirmedById]) VALUES (N'${id}',N'${requestId}',N'${userId}',N'${liveCourse}',N'${sessionId}',N'${windowId}',N'confirmed','${classesAt}',NULL);`;
+
+  for (const [label, statement, detail] of [
+    [
+      'Teaching scope INSERT',
+      `INSERT INTO [dbo].[CourseTeachingAssignment] ([id],[courseId],[userId],[roleAssignmentId],[grantedAt],[grantedById]) VALUES (N'${classScope}',N'${liveCourse}',N'${classTeacher}',N'${classAssignment}','${classesAt}',NULL);`,
+      'a typed scope naming the Course, the account and its live teaching.perform assignment',
+    ],
+    [
+      'Availability INSERT',
+      `${classWindow(windowA, '09:00', '10:00')}
+       ${classWindow(windowB, '10:00', '11:00')}`,
+      'two adjacent open windows',
+    ],
+    [
+      'ClassSession INSERT (trial and course)',
+      `${classSessionRow(trialSession, 'trial', '09:00', '10:00', { meeting: true })}
+       ${classSessionRow(courseSession, 'course', '11:00', '12:00', { reminder: '10:30' })}
+       ${classSessionRow(doneSession, 'course', '12:00', '13:00')}`,
+      'a trial session with its meeting address and two Course sessions, one with a reminder',
+    ],
+    [
+      'Trial request and Booking INSERT',
+      `INSERT INTO [dbo].[TrialClassRequest] ([id],[userId],[courseId],[requestedAt]) VALUES
+         (N'${classRequest}',N'${learner}',N'${liveCourse}','${classesAt}'),
+         (N'${otherRequest}',N'${learningOther}',N'${liveCourse}','${classesAt}');
+       ${classBookingRow(classBooking, classRequest, learner, trialSession, windowA)}`,
+      "the learner's request confirmed into a Booking of the trial session and its window",
+    ],
+    [
+      'Attendance INSERT and UPDATE',
+      `INSERT INTO [dbo].[Attendance] ([sessionId],[userId],[status],[markedAt],[markedById]) VALUES
+         (N'${trialSession}',N'${learner}',N'present','${classesAt}',N'${classTeacher}'),
+         (N'${courseSession}',N'${learningOther}',N'present','${classesAt}',N'${classTeacher}');
+       UPDATE [dbo].[Attendance] SET [status]=N'absent',[markedAt]='${classesAt}' WHERE [sessionId]=N'${courseSession}' AND [userId]=N'${learningOther}';`,
+      'the trial learner and an enrolled learner marked, one mark corrected',
+    ],
+    [
+      'ClassCommunicationIntent INSERT and state UPDATE',
+      `INSERT INTO [dbo].[ClassCommunicationIntent] ([id],[purpose],[sessionId],[userId],[dueAt],[state],[idempotencyKey]) VALUES
+         (N'${classIntent}',N'learning.booking-confirmed',N'${trialSession}',N'${learner}','${classesAt}',N'pending',N'lp-${learningRun}-confirmed');
+       UPDATE [dbo].[ClassCommunicationIntent] SET [state]=N'relayed',[relayedAt]='${classesAt}' WHERE [id]=N'${classIntent}';`,
+      'a pending intent committed and relayed',
+    ],
+    [
+      'Session reschedule, meeting address and completion UPDATE',
+      `UPDATE [dbo].[ClassSession] SET [startsAt]=${classInstant('11:30')},[startsLocal]=${classLocal('11:30')},[reminderAt]=${classInstant('11:00')},[version]=2 WHERE [id]=N'${courseSession}';
+       UPDATE [dbo].[ClassSession] SET [meetingProvider]=N'google-meet',[meetingUrl]=N'${MEET}',[version]=3 WHERE [id]=N'${courseSession}';
+       UPDATE [dbo].[ClassSession] SET [state]=N'completed',[closedAt]=${classInstant('13:00')},[version]=2 WHERE [id]=N'${doneSession}';`,
+      'a Course session moved and re-addressed, another completed',
+    ],
+    [
+      'Availability state UPDATE',
+      `UPDATE [dbo].[Availability] SET [state]=N'withdrawn',[version]=2 WHERE [id]=N'${windowB}';`,
+      'an unbooked window withdrawn',
+    ],
+    [
+      'sys.sp_getapplock EXECUTE',
+      `DECLARE @held INT;
+       EXEC @held = sys.sp_getapplock @Resource=N'minhaj:learning:proof-${learningRun}', @LockMode=N'Exclusive', @LockOwner=N'Session', @LockTimeout=0;
+       IF @held < 0 THROW 50000, N'sp_getapplock refused the runtime principal.', 1;
+       EXEC sys.sp_releaseapplock @Resource=N'minhaj:learning:proof-${learningRun}', @LockOwner=N'Session';`,
+      'the teacher serialisation lock is reachable through the public role',
+    ],
+  ] as const)
+    await expectAllowed(app, label, statement, detail);
+
+  // The schema's own rules hold for the runtime as for the owner.
+  await expectRefusedByInvariant(
+    app,
+    "Session overlapping the teacher's scheduled one",
+    classSessionRow(randomUUID(), 'trial', '09:30', '10:30'),
+    51287,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Attendance for a learner not enrolled on the Course',
+    `INSERT INTO [dbo].[Attendance] ([sessionId],[userId],[status],[markedAt],[markedById]) VALUES (N'${courseSession}',N'${learner}',N'present','${classesAt}',NULL);`,
+    51289,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Completed session moved',
+    `UPDATE [dbo].[ClassSession] SET [startsAt]=${classInstant('12:30')},[startsLocal]=${classLocal('12:30')} WHERE [id]=N'${doneSession}';`,
+    51286,
+  );
+  await expectAllowed(
+    app,
+    'Second trial session at the booked hour, inserted cancelled',
+    classSessionRow(trialCancelled, 'trial', '09:00', '10:00', { cancelled: true }),
+    'a cancelled session blocks nothing and claims nothing',
+  );
+  await expectRefusedByConstraint(
+    app,
+    'Second live claim on one window',
+    classBookingRow(randomUUID(), otherRequest, learningOther, trialCancelled, windowA),
+    DUPLICATE_KEY,
+    'Booking_slot_key',
+  );
+  await expectRefusedByConstraint(
+    app,
+    'Trial request DELETE while booked',
+    `DELETE FROM [dbo].[TrialClassRequest] WHERE [id]=N'${classRequest}';`,
+    CONSTRAINT_VIOLATION,
+    'Booking_requestId_fkey',
+  );
+
+  // The activation is never the runtime's; a scope and a session are never
+  // deleted and never re-identified; an owner's rows are never re-keyed; and
+  // naming Identity's rows grants nothing over them.
+  for (const [label, statement] of [
+    [
+      'LiveLearningActivation INSERT denied',
+      "INSERT INTO [dbo].[LiveLearningActivation] ([id],[authority],[authorisedBy],[reference]) VALUES (2,N'approved',N'forged',N'urn:example:forged');",
+    ],
+    [
+      'LiveLearningActivation UPDATE denied',
+      "UPDATE [dbo].[LiveLearningActivation] SET [authority]=N'approved';",
+    ],
+    [
+      'LiveLearningActivation DELETE denied',
+      'DELETE FROM [dbo].[LiveLearningActivation];',
+    ],
+    [
+      'CourseTeachingAssignment DELETE denied',
+      'DELETE FROM [dbo].[CourseTeachingAssignment];',
+    ],
+    [
+      'CourseTeachingAssignment Course UPDATE denied',
+      'UPDATE [dbo].[CourseTeachingAssignment] SET [courseId]=[courseId];',
+    ],
+    [
+      'CourseTeachingAssignment account UPDATE denied',
+      'UPDATE [dbo].[CourseTeachingAssignment] SET [userId]=[userId];',
+    ],
+    [
+      'CourseTeachingAssignment assignment UPDATE denied',
+      'UPDATE [dbo].[CourseTeachingAssignment] SET [roleAssignmentId]=[roleAssignmentId];',
+    ],
+    [
+      'CourseTeachingAssignment grant UPDATE denied',
+      'UPDATE [dbo].[CourseTeachingAssignment] SET [grantedAt]=[grantedAt];',
+    ],
+    ['ClassSession DELETE denied', 'DELETE FROM [dbo].[ClassSession];'],
+    [
+      'ClassSession Course UPDATE denied',
+      'UPDATE [dbo].[ClassSession] SET [courseId]=[courseId];',
+    ],
+    ['ClassSession kind UPDATE denied', 'UPDATE [dbo].[ClassSession] SET [kind]=[kind];'],
+    [
+      'ClassSession creation UPDATE denied',
+      'UPDATE [dbo].[ClassSession] SET [createdAt]=[createdAt];',
+    ],
+    [
+      'Availability owner UPDATE denied',
+      'UPDATE [dbo].[Availability] SET [userId]=[userId];',
+    ],
+    [
+      'Availability times UPDATE denied',
+      'UPDATE [dbo].[Availability] SET [startsAt]=[startsAt];',
+    ],
+    [
+      'Booking request UPDATE denied',
+      'UPDATE [dbo].[Booking] SET [requestId]=[requestId];',
+    ],
+    ['Booking learner UPDATE denied', 'UPDATE [dbo].[Booking] SET [userId]=[userId];'],
+    [
+      'Booking session UPDATE denied',
+      'UPDATE [dbo].[Booking] SET [sessionId]=[sessionId];',
+    ],
+    [
+      'Booking window UPDATE denied',
+      'UPDATE [dbo].[Booking] SET [availabilityId]=[availabilityId];',
+    ],
+    [
+      'Attendance session UPDATE denied',
+      'UPDATE [dbo].[Attendance] SET [sessionId]=[sessionId];',
+    ],
+    [
+      'Attendance account UPDATE denied',
+      'UPDATE [dbo].[Attendance] SET [userId]=[userId];',
+    ],
+    [
+      'ClassCommunicationIntent purpose UPDATE denied',
+      'UPDATE [dbo].[ClassCommunicationIntent] SET [purpose]=[purpose];',
+    ],
+    [
+      'ClassCommunicationIntent key UPDATE denied',
+      'UPDATE [dbo].[ClassCommunicationIntent] SET [idempotencyKey]=[idempotencyKey];',
+    ],
+    [
+      'ClassCommunicationIntent recipient UPDATE denied',
+      'UPDATE [dbo].[ClassCommunicationIntent] SET [userId]=[userId];',
+    ],
+    [
+      'teaching.perform Permission INSERT still denied',
+      "INSERT INTO [dbo].[Permission] ([key],[description]) VALUES (N'teaching.perform',N'forged');",
+    ],
+    [
+      'Permission description UPDATE denied',
+      "UPDATE [dbo].[Permission] SET [description]=N'forged' WHERE [key]=N'teaching.perform';",
+    ],
+    [
+      'RolePermission UPDATE denied',
+      'UPDATE [dbo].[RolePermission] SET [permissionKey]=[permissionKey];',
+    ],
+    [
+      'Teaching RoleAssignment DELETE denied',
+      `DELETE FROM [dbo].[RoleAssignment] WHERE [id]=N'${classAssignment}';`,
+    ],
+    [
+      'Teacher account DELETE denied',
+      `DELETE FROM [dbo].[User] WHERE [id]=N'${classTeacher}';`,
+    ],
+    [
+      'Named Person DELETE still denied',
+      `DELETE FROM [dbo].[Person] WHERE [id]=N'${editorialPeople.linkedPersonId}';`,
+    ],
+    [
+      'Named Person slug UPDATE still denied',
+      `UPDATE [dbo].[Person] SET [slug]=[slug] WHERE [id]=N'${editorialPeople.linkedPersonId}';`,
+    ],
+  ] as const)
+    await expectDenied(app, label, statement);
+
+  // Closure disposition and the end of a teaching scope: the owner's rows go,
+  // children first; the scope and every session stay as history.
+  await expectAllowed(
+    app,
+    'Booking cancelled, then owner rows DELETE (dispose) and scope ended',
+    `UPDATE [dbo].[Booking] SET [state]=N'cancelled',[cancelledAt]='${classesAt}',[version]=2 WHERE [id]=N'${classBooking}';
+     DELETE FROM [dbo].[ClassCommunicationIntent] WHERE [userId]=N'${learner}';
+     DELETE FROM [dbo].[Attendance] WHERE [userId] IN (N'${learner}',N'${learningOther}');
+     DELETE FROM [dbo].[Booking] WHERE [userId]=N'${learner}';
+     DELETE FROM [dbo].[TrialClassRequest] WHERE [userId] IN (N'${learner}',N'${learningOther}');
+     DELETE FROM [dbo].[Availability] WHERE [userId]=N'${classTeacher}';
+     UPDATE [dbo].[CourseTeachingAssignment] SET [endedAt]='${classesAt}',[endedById]=NULL,[version]=2 WHERE [id]=N'${classScope}';`,
+    'intents, marks, the Booking, requests and windows removed; the scope ended, sessions kept',
+  );
+
+  const [classesState] = await admin.query<Record<string, number | string | null>>(`
+    SELECT
+      (SELECT [authority] FROM [dbo].[LiveLearningActivation] WHERE [id]=1) AS [activation],
+      (SELECT COUNT(*) FROM [dbo].[CourseTeachingAssignment] WHERE [id]=N'${classScope}' AND [endedAt] IS NOT NULL) AS [scopeEnded],
+      (SELECT STRING_AGG([state], N',') WITHIN GROUP (ORDER BY [startsAt], [state])
+         FROM [dbo].[ClassSession] WHERE [scopeId]=N'${classScope}') AS [sessions],
+      (SELECT COUNT(*) FROM [dbo].[ClassSession] WHERE [id]=N'${doneSession}' AND [meetingUrl] IS NULL AND [closedAt] IS NOT NULL) AS [closedClean],
+      (SELECT [meetingUrl] FROM [dbo].[ClassSession] WHERE [id]=N'${trialSession}') AS [meeting],
+      (SELECT COUNT(*) FROM [dbo].[Booking]) + (SELECT COUNT(*) FROM [dbo].[Attendance])
+        + (SELECT COUNT(*) FROM [dbo].[ClassCommunicationIntent]) + (SELECT COUNT(*) FROM [dbo].[Availability]) AS [ownerRows],
+      (SELECT COUNT(*) FROM [dbo].[RoleAssignment] ra JOIN [dbo].[RolePermission] rp ON rp.[roleId]=ra.[roleId]
+        WHERE rp.[permissionKey]=N'teaching.perform' AND ra.[revokedAt] IS NULL) AS [teachers],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp JOIN [dbo].[Role] r ON r.[id]=rp.[roleId]
+        WHERE r.[key]=N'platform-administrator' AND rp.[permissionKey] IN (N'learning.classes.read',N'learning.classes.administer')) AS [bundled];
+  `);
+  const expectedClassesState = {
+    activation: 'fixture',
+    scopeEnded: 1,
+    sessions: 'cancelled,scheduled,scheduled,completed',
+    closedClean: 1,
+    meeting: MEET,
+    ownerRows: 0,
+    teachers: 1,
+    bundled: 2,
+  };
+  if (JSON.stringify(classesState) === JSON.stringify(expectedClassesState)) {
+    pass(
+      'Live-class state as written',
+      'activation untouched, scope ended, four sessions kept, owner rows gone, one teacher',
+    );
+  } else {
+    fail('Live-class state as written', JSON.stringify(classesState));
+  }
+
+  const CLASSES_TABLES = [
+    'LiveLearningActivation',
+    'CourseTeachingAssignment',
+    'Availability',
+    'ClassSession',
+    'Booking',
+    'Attendance',
+    'ClassCommunicationIntent',
+  ] as const;
+  for (const table of CLASSES_TABLES) {
+    await assertObjectVisible(app, table);
+    await expectDenied(
+      app,
+      `${table} ALTER denied`,
+      `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+    );
+  }
+  for (const [trigger, table] of [
+    ['LearningLiveActivationImmutable', 'LiveLearningActivation'],
+    ['LearningScopeIntegrity', 'CourseTeachingAssignment'],
+    ['LearningAvailabilityIntegrity', 'Availability'],
+    ['LearningSessionIntegrity', 'ClassSession'],
+    ['LearningBookingIntegrity', 'Booking'],
+    ['LearningAttendanceIntegrity', 'Attendance'],
+    ['LearningIntentIntegrity', 'ClassCommunicationIntent'],
+  ] as const)
+    await expectDenied(
+      app,
+      `${trigger} DISABLE denied`,
+      `DISABLE TRIGGER [dbo].[${trigger}] ON [dbo].[${table}];`,
+    );
+
+  // THE EXACT EFFECTIVE POSTURE, table by table and column by column, for the
+  // seven Phase-23 tables AND for every owner table a live-class key names,
+  // which Phase 23 must leave as it found them.
+  const CLASSES_POSTURE: Readonly<
+    Record<string, readonly [string, string | readonly string[] | null]>
+  > = {
+    LiveLearningActivation: ['SELECT', ''],
+    CourseTeachingAssignment: [
+      'INSERT,SELECT',
+      ['id', 'courseId', 'userId', 'roleAssignmentId', 'grantedAt', 'grantedById'],
+    ],
+    Availability: [
+      LEARNER_DATA,
+      [
+        'id',
+        'userId',
+        'startsAt',
+        'endsAt',
+        'timeZone',
+        'startsLocal',
+        'endsLocal',
+        'createdAt',
+      ],
+    ],
+    ClassSession: ['INSERT,SELECT', ['id', 'courseId', 'kind', 'createdAt']],
+    Booking: [
+      LEARNER_DATA,
+      [
+        'id',
+        'requestId',
+        'userId',
+        'courseId',
+        'sessionId',
+        'availabilityId',
+        'confirmedAt',
+        'confirmedById',
+      ],
+    ],
+    Attendance: [LEARNER_DATA, ['sessionId', 'userId']],
+    ClassCommunicationIntent: [
+      LEARNER_DATA,
+      ['id', 'purpose', 'sessionId', 'userId', 'dueAt', 'idempotencyKey', 'createdAt'],
+    ],
+    Course: ['INSERT,SELECT', ['id']],
+    TrialClassRequest: [LEARNER_DATA, ''],
+    User: ['INSERT,SELECT', null],
+    RoleAssignment: ['INSERT,SELECT', null],
+    Permission: ['SELECT', ''],
+    RolePermission: [LEARNER_DATA, ''],
+  };
+  const classesPosture = await app.query<{
+    name: string;
+    held: string | null;
+    updatable: string | null;
+    columns: string | null;
+  }>(`
+    SELECT t.[name],
+      (SELECT STRING_AGG(p.[permission], N',') WITHIN GROUP (ORDER BY p.[permission])
+         FROM (VALUES (N'ALTER'),(N'CONTROL'),(N'DELETE'),(N'INSERT'),(N'REFERENCES'),
+                      (N'SELECT'),(N'TAKE OWNERSHIP')) AS p([permission])
+        WHERE HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', p.[permission]) = 1) AS [held],
+      (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+         FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])
+          AND HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', N'UPDATE', c.[name], N'COLUMN') = 1) AS [updatable],
+      (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+         FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])) AS [columns]
+    FROM (VALUES ${Object.keys(CLASSES_POSTURE)
+      .map((table) => `(N'${table}')`)
+      .join(',')}) AS t([name]);
+  `);
+  const classesPostureFindings = classesPosture.flatMap((row) => {
+    const [verbs, scope] = CLASSES_POSTURE[row.name] ?? ['?', '?'];
+    const expectedColumns =
+      scope === null
+        ? (row.updatable ?? '')
+        : typeof scope === 'string'
+          ? scope
+          : (row.columns ?? '')
+              .split(',')
+              .filter((column) => !scope.includes(column))
+              .join(',');
+    return (row.held ?? '') === verbs && (row.updatable ?? '') === expectedColumns
+      ? []
+      : [`${row.name}: ${row.held ?? '(none)'} / UPDATE ${row.updatable ?? '(none)'}`];
+  });
+  if (
+    classesPosture.length === Object.keys(CLASSES_POSTURE).length &&
+    Object.keys(CLASSES_POSTURE).length === CLASSES_TABLES.length + 6 &&
+    classesPostureFindings.length === 0
+  ) {
+    pass(
+      'Live-class effective posture exact',
+      `${String(classesPosture.length)} tables, object verbs and UPDATE columns as granted`,
+    );
+  } else {
+    fail(
+      'Live-class effective posture exact',
+      classesPostureFindings.join('; ') || 'tables missing',
     );
   }
 

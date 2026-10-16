@@ -308,6 +308,9 @@ describe('the mutation surface', () => {
         // Phase 10: the Watch speaker alias — the same shared, GET-only 301 to
         // `/people/{slug}` the two author aliases are.
         'apps/web/src/app/[locale]/(public)/watch/speakers/[slug]/route.ts',
+        // Phase 23: the Learn teacher alias — the same shared, GET-only 301 to
+        // `/people/{slug}` the author and speaker aliases are.
+        'apps/web/src/app/[locale]/(public)/learn/teachers/[slug]/route.ts',
         // Phase 11: Media's audio byte routes — public playback, and the
         // administrator's preview, which READS a session to re-check
         // `media.administer` live — and the one audio upload.
@@ -348,7 +351,7 @@ describe('the mutation surface', () => {
       ].sort(),
     );
 
-    // And the fourteen others genuinely are read-only: a mutating verb on any of
+    // And the fifteen others (Phase 23 added the Learn teacher alias) genuinely are read-only: a mutating verb on any of
     // them would be a state-changing endpoint outside the Class-A controls.
     const { readFile } = await import('node:fs/promises');
 
@@ -358,7 +361,7 @@ describe('the mutation surface', () => {
         !entry.includes('/api/admin/') &&
         !entry.includes('/api/my/'),
     );
-    expect(readOnly).toHaveLength(14);
+    expect(readOnly).toHaveLength(15);
 
     for (const route of readOnly) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');

@@ -205,14 +205,35 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // newsletter keys join the protected bundle (DOMAIN_MODEL.md §14), asserted
   // by `assertPersonalisationFoundation` and proved as behaviour by
   // `assertPersonalisationRules`.
+  // THE LEARNING CONTEXT'S SECOND SLICE: the owner's live-learning activation
+  // (fail closed until a row exists), the TYPED Course teaching scope naming
+  // the exact Identity RoleAssignment that carries `teaching.perform`, a
+  // teacher's bookable windows, class sessions on a published live Course under
+  // a current scope OF THAT COURSE (a composite key), the conflict-safe trial
+  // Booking with one live claim per window (a filtered key), attendance marks
+  // and the durable service-mail intent. Every key is NO ACTION; NOT ONE ROW is
+  // seeded — no activation, so live learning is OFF — `teaching.perform` is
+  // catalogued, externally gated and bundled into no role, and the two class
+  // keys join the protected bundle (DOMAIN_MODEL.md §13.1–13.3), asserted by
+  // `assertClassesFoundation` and proved as behaviour by `assertClassesRules`.
+  '20261007000000_phase23_teacher_live_classes': [
+    'LiveLearningActivation',
+    'CourseTeachingAssignment',
+    'Availability',
+    'ClassSession',
+    'Booking',
+    'Attendance',
+    'ClassCommunicationIntent',
+  ],
   // THE LEARNING CONTEXT'S FIRST SLICE: the public catalogue of Courses — their
   // labels, typed topics, attributed teachers, modules and lessons — and
   // LearningPaths with their ordered Courses and permanent slug reservations; a
   // person's own Enrolments and lesson Progress; and the REQUEST side of a trial
-  // class. Nothing schedules — no session, availability, attendance or booking
-  // table — and every key is NO ACTION; NOT ONE ROW is seeded, and the two
-  // Learning keys join the protected bundle (DOMAIN_MODEL.md §13), asserted by
-  // `assertLearningFoundation` and proved as behaviour by `assertLearningRules`.
+  // class. Nothing schedules — the session, availability, attendance and
+  // booking tables are Phase 23's — and every key is NO ACTION; NOT ONE ROW is
+  // seeded, and the two Learning keys join the protected bundle
+  // (DOMAIN_MODEL.md §13), asserted by `assertLearningFoundation` and proved as
+  // behaviour by `assertLearningRules`.
   '20261006000000_phase22_learning': [
     'Course',
     'CourseLabel',
@@ -495,14 +516,12 @@ const PREMATURE_TABLES = [
   // Learning's own; a course-level `CourseProgress` is still no phase's —
   // progress is recorded per lesson and summarised, never stored twice.
   'CourseProgress',
-  // Phase 22 creates the trial REQUEST and nothing that schedules: a session,
-  // a teacher's availability, attendance and a confirmed booking are Phase
-  // 23's, each its own aggregate. Nor does it relate a Course to a Video or a
-  // Centre — a later phase that needs one adds the prerequisite first.
-  'ClassSession',
-  'Availability',
-  'Attendance',
-  'Booking',
+  // `ClassSession`, `Availability`, `Attendance` and `Booking` left this list
+  // when Phase 23 delivered them as Learning's own live slice, each its own
+  // aggregate; a teacher's window is `Availability` of an ACCOUNT, never a
+  // `TeacherAvailability` of a profile. Nor does any phase relate a Course to a
+  // Video or a Centre — a later phase that needs one adds the prerequisite
+  // first.
   'TeacherAvailability',
   'CourseVideo',
   'LessonVideo',
@@ -1232,6 +1251,18 @@ const EXPECTED_FILTERED_INDEXES: readonly {
   // always has its module, a progress row its enrolment, a request its Course —
   // so no NULL needs setting aside, and `assertLearningFoundation` proves every
   // Learning unique index is unfiltered.
+  // Phase 23 adds two, and each is the race itself: the filter is what lets an
+  // ended scope and a cancelled Booking stay as history beside the live one.
+  {
+    table: 'CourseTeachingAssignment',
+    index: 'CourseTeachingAssignment_current_key',
+    why: 'two operators scoping one teacher to one Course at once both succeed',
+  },
+  {
+    table: 'Booking',
+    index: 'Booking_slot_key',
+    why: 'two confirmations of one window both commit',
+  },
 ];
 
 /** The sixteen Phase-22 tables, in the migration's order. */
@@ -1259,6 +1290,31 @@ const LEARNING_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, string
   LearningEnrolmentOpen: ['Enrolment', '51275'],
   LearningProgressOpen: ['LessonProgress', '51277'],
   LearningTrialOpen: ['TrialClassRequest', '51276'],
+};
+
+/** The seven Phase-23 tables, in the migration's order. */
+const CLASSES_TABLES =
+  MIGRATION_EXPECTATIONS['20261007000000_phase23_teacher_live_classes'] ?? [];
+
+/**
+ * Each live-class trigger, the table it guards and the refusal numbers its
+ * body raises: 51280 the immutable activation; 51281 a window, a scheduled
+ * session or a Booking while not activated; 51282 a scope that is not typed and
+ * live, or rewritten; 51283 overlapping or rewritten windows and 51284 one
+ * offered without live `teaching.perform`; 51285 a session off a published live
+ * Course or a current scope, 51286 a terminal session changed and 51287
+ * overlapping sessions of one teacher; 51288 a Booking that does not fit, or
+ * rewritten; 51289 attendance that is not eligible, or re-keyed; 51292 an
+ * intent reopened, or re-keyed.
+ */
+const CLASSES_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, string]>> = {
+  LearningLiveActivationImmutable: ['LiveLearningActivation', '51280'],
+  LearningScopeIntegrity: ['CourseTeachingAssignment', '51282'],
+  LearningAvailabilityIntegrity: ['Availability', '51281+51283+51284'],
+  LearningSessionIntegrity: ['ClassSession', '51281+51285+51286+51287'],
+  LearningBookingIntegrity: ['Booking', '51281+51288'],
+  LearningAttendanceIntegrity: ['Attendance', '51289'],
+  LearningIntentIntegrity: ['ClassCommunicationIntent', '51292'],
 };
 
 /** The fifteen Phase-21 tables, in the migration's order. */
@@ -1523,6 +1579,10 @@ const EXPECTED_TRIGGERS = [
   // public catalogue whole — each listed, with the refusal it raises, in
   // `LEARNING_TRIGGER_NUMBERS`.
   ...Object.keys(LEARNING_TRIGGER_NUMBERS),
+  // Phase 23: the immutable activation and every rule that keeps live classes
+  // typed, activated, conflict-free and final — each listed, with the refusal
+  // it raises, in `CLASSES_TRIGGER_NUMBERS`.
+  ...Object.keys(CLASSES_TRIGGER_NUMBERS),
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
@@ -1892,6 +1952,24 @@ const EXPECTED_CHECK_CONSTRAINTS = [
     'LearningPathLabel',
     'LearningPathCourse',
   ].map((table) => ({ table, constraint: table + '_ck' })),
+  // Phase 23. The activation's single row and its evidence when approved; a
+  // scope's ending after its grant; a window's and a session's closed
+  // vocabularies, real local pairs and bounded length; a meeting address only
+  // with its provider, only on `meet.google.com` over HTTPS and NEVER once a
+  // session is terminal; a reminder before the start; a Booking's cancellation
+  // instant exactly when cancelled; the attendance mark; and an intent's
+  // purpose, state and relay instant.
+  { table: 'LiveLearningActivation', constraint: 'LiveLearningActivation_evidence_ck' },
+  { table: 'ClassSession', constraint: 'ClassSession_meeting_ck' },
+  ...[
+    'LiveLearningActivation',
+    'CourseTeachingAssignment',
+    'Availability',
+    'ClassSession',
+    'Booking',
+    'Attendance',
+    'ClassCommunicationIntent',
+  ].map((table) => ({ table, constraint: table + '_ck' })),
 ];
 
 /**
@@ -1958,25 +2036,27 @@ const NAVIGATION_PERMISSIONS = ['navigation.read'];
 const PEOPLE_PERMISSIONS = ['people.administer', 'people.read'];
 
 /**
- * The capability-projection sources that MUST NOT be seeded yet.
+ * The capability-projection source that arrives LAST, and only with its owner.
  *
  * DOMAIN_MODEL.md §4.5 derives `canTeach`, `canReceiveQuestions`,
  * `canReviewContent` and `canIssueFatwa` from four codes. Phase 5 consumes the
  * projection and it would have been trivially convenient to seed them so a test
- * could grant one — which is exactly why this is asserted as a NEGATIVE.
+ * could grant one — which is exactly why this is asserted as a NEGATIVE for as
+ * long as the owner has not shipped.
  *
  * Each arrives with its owner. `content.review` arrived with Editorial (Phase
  * 6); `question.receive` and `fatwa.publish`, with `fatwa.answer` beside them,
  * arrived with Fatwa (Phase 20) — catalogued but bundled into no role, which
- * `assertFatwaFoundation` proves. `teaching.perform` belongs to Learning's
- * teaching slice, which has not shipped: Phase 22 delivers the catalogue and
- * names a Course's teachers as public attribution only, and teaching authority
- * arrives with Phase 23's teacher area. Seeding it now would fix that slice's
- * vocabulary before it can have an opinion about it, and would leave grantable
- * authority over nothing. OPEN_DECISIONS.md §6.3 separately reserves WHO
- * receives any of them to the organisation.
+ * `assertFatwaFoundation` proves. `teaching.perform` arrives with Phase 23's
+ * teacher area, where it is catalogued, externally gated and bundled into NO
+ * role, which `assertClassesFoundation` proves; Phase 22 delivers the catalogue
+ * and names a Course's teachers as public attribution only. So
+ * `assertPeopleFoundation` requires it ABSENT until Phase 23 is applied (and
+ * again once Phase 23 is rolled back), and present but HELD BY NOBODY after.
+ * OPEN_DECISIONS.md §6.3 separately reserves WHO receives any of them to the
+ * organisation.
  */
-const UNSEEDED_CAPABILITY_PERMISSIONS = ['teaching.perform'];
+const TEACHING_CAPABILITY_PERMISSIONS = ['teaching.perform'];
 
 function report(step: string, detail: string): void {
   process.stdout.write(`  ${step.padEnd(24)} ${detail}\n`);
@@ -7563,22 +7643,27 @@ async function assertProtectedBundleExcludesGated(session: SqlSession): Promise<
 
 /**
  * How far the rollback loop has gone when an earlier owner's foundation is
- * re-proved: every phase applied, Phase 22 rolled back, or Phases 22 and 21.
+ * re-proved: every phase applied, Phase 23 rolled back, Phases 23 and 22, or
+ * Phases 23, 22 and 21.
  */
-type BundleStage = 'current' | 'before-learning' | 'before-personalisation';
+type BundleStage =
+  'current' | 'before-classes' | 'before-learning' | 'before-personalisation';
 
 /**
  * The compiled bundle less exactly the keys the rollbacks have removed by
- * `stage`: the two Learning keys once Phase 22 is rolled back, and the two
- * newsletter keys as well once Phase 21 is.
+ * `stage`: the two class keys once Phase 23 is rolled back, the two Learning
+ * keys as well once Phase 22 is, and the two newsletter keys as well once
+ * Phase 21 is.
  */
 function compiledBundleAt(stage: BundleStage): readonly string[] {
   const removed =
     stage === 'current'
       ? []
-      : stage === 'before-learning'
-        ? LEARNING_PERMISSIONS
-        : [...LEARNING_PERMISSIONS, ...NEWSLETTER_PERMISSIONS];
+      : stage === 'before-classes'
+        ? CLASSES_PERMISSIONS
+        : stage === 'before-learning'
+          ? [...CLASSES_PERMISSIONS, ...LEARNING_PERMISSIONS]
+          : [...CLASSES_PERMISSIONS, ...LEARNING_PERMISSIONS, ...NEWSLETTER_PERMISSIONS];
   return PLATFORM_ADMINISTRATOR_PERMISSIONS.filter((key) => !removed.includes(key));
 }
 
@@ -7829,16 +7914,20 @@ async function assertFatwaFoundation(
   const described = new Map(
     PERMISSION_CATALOGUE.map((entry) => [entry.key as string, entry.description]),
   );
+  // The externally gated set is the three Fatwa keys and, since Phase 23,
+  // `teaching.perform` as the fourth — and nothing else.
   if (
     permissions.map((row) => row.key).join(',') !== FATWA_PERMISSIONS.join(',') ||
-    [...EXTERNALLY_GATED_PERMISSIONS].sort().join(',') !== FATWA_PERMISSIONS.join(',') ||
+    [...EXTERNALLY_GATED_PERMISSIONS].sort().join(',') !==
+      [...FATWA_PERMISSIONS, TEACHING_PERMISSION].sort().join(',') ||
     permissions.some(
       (row) => row.description !== described.get(row.key) || Number(row.held) !== 0,
     )
   )
     fail(
       `The Fatwa vocabulary must be exactly ${FATWA_PERMISSIONS.join(', ')}, described as the ` +
-        `compiled catalogue describes them and held by no role; found ${JSON.stringify(permissions)}.`,
+        `compiled catalogue describes them and held by no role, and the gated set exactly ` +
+        `those three and ${TEACHING_PERMISSION}; found ${JSON.stringify(permissions)}.`,
     );
 
   const [quiet] = await session.query<{
@@ -8720,7 +8809,7 @@ async function personalisationAyahKeys(session: SqlSession): Promise<readonly st
  */
 async function assertPersonalisationFoundation(
   session: SqlSession,
-  stage: 'current' | 'before-learning' = 'current',
+  stage: Exclude<BundleStage, 'before-personalisation'> = 'current',
 ): Promise<void> {
   const tables = PERSONALISATION_TABLES.map(
     (table) => `OBJECT_ID(N'[dbo].[${table}]')`,
@@ -9038,11 +9127,13 @@ async function assertPersonalisationRemoved(session: SqlSession): Promise<void> 
     expected !==
       PLATFORM_ADMINISTRATOR_PERMISSIONS.length -
         NEWSLETTER_PERMISSIONS.length -
-        LEARNING_PERMISSIONS.length
+        LEARNING_PERMISSIONS.length -
+        CLASSES_PERMISSIONS.length
   )
     fail(
       `After the Phase-21 rollback the protected bundle holds ${String(bundled)} keys; the ` +
-        `compiled bundle less the two newsletter and two Learning keys holds ${String(expected)}.`,
+        `compiled bundle less the two newsletter, two Learning and two class keys holds ` +
+        `${String(expected)}.`,
     );
   report(
     'personalisation rollback',
@@ -9725,20 +9816,31 @@ async function assertPersonalisationRules(session: SqlSession): Promise<void> {
 }
 
 const LEARNING_MIGRATION = '20261006000000_phase22_learning';
+const CLASSES_MIGRATION = '20261007000000_phase23_teacher_live_classes';
 
 /** The two keys Phase 22 appends and bundles, and only these. */
 const LEARNING_PERMISSIONS = ['learning.administer', 'learning.read'];
 
+/** The two ordinary keys Phase 23 appends and bundles, and only these. */
+const CLASSES_PERMISSIONS = ['learning.classes.administer', 'learning.classes.read'];
+
 /**
- * Keys Phase 22 must NOT catalogue: teaching authority is Phase 23's, and the
- * catalogue is administered by ONE key rather than an editorial workflow of
- * authors, reviewers and publishers it does not have.
+ * The teaching authority Phase 23 catalogues: EXTERNALLY GATED, bundled into
+ * no role and held by nobody until the organisation names a teacher
+ * (OPEN_DECISIONS.md §6.3).
+ */
+const TEACHING_PERMISSION = 'teaching.perform';
+
+/**
+ * Keys Learning must NOT catalogue: the catalogue is administered by ONE key
+ * rather than an editorial workflow of authors, reviewers and publishers it
+ * does not have. (`teaching.perform` left this list when Phase 23 delivered
+ * it; `assertLearningFoundation` now requires it absent only until then.)
  */
 const LEARNING_ABSENT_PERMISSIONS = [
   'learning.author',
   'learning.publish',
   'learning.review',
-  'teaching.perform',
 ];
 
 /**
@@ -9877,21 +9979,34 @@ async function learningPresent(session: SqlSession): Promise<boolean> {
  *   5. the vocabulary is exactly `learning.administer` and `learning.read`,
  *      described as the compiled catalogue describes them, each bundled exactly
  *      once into the protected role and held by no other, with exactly one
- *      `learning.permissions.provisioned` record naming this migration; and no
- *      `teaching.perform`, `learning.author`, `learning.publish` or
- *      `learning.review` exists — teaching authority is Phase 23's.
+ *      `learning.permissions.provisioned` record naming this migration; no
+ *      `learning.author`, `learning.publish` or `learning.review` exists; and
+ *      `teaching.perform` and the two class keys exist exactly when Phase 23 is
+ *      applied — the class keys bundled once, the teaching key held by nobody —
+ *      and not at all once it is rolled back (`before-classes`).
+ *
+ * At `before-classes` the Phase-23 tables are gone too, so nothing may
+ * reference a Learning table; while they are present, the only inbound keys
+ * and the only foreign Course columns are theirs.
  *
  * The rules themselves are proved as BEHAVIOUR by `assertLearningRules`, and
  * through the runtime login by `db:test:permissions`.
  */
 async function assertLearningFoundation(
   session: SqlSession,
-  stage: 'deploy' | 're-deploy' = 'deploy',
+  stage: 'deploy' | 're-deploy' | 'before-classes' = 'deploy',
 ): Promise<void> {
   const tables = LEARNING_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
     ',',
   );
   const names = LEARNING_TABLES.map((table) => `N'${table}'`).join(',');
+  const withClasses = stage !== 'before-classes';
+  const classTables = withClasses
+    ? CLASSES_TABLES.map((table) => `,OBJECT_ID(N'[dbo].[${table}]')`).join('')
+    : '';
+  const classNames = withClasses
+    ? CLASSES_TABLES.map((table) => `,N'${table}'`).join('')
+    : '';
   if (!(await learningPresent(session)))
     fail(`The Phase-22 Learning tables are missing after ${stage}.`);
 
@@ -10009,11 +10124,12 @@ async function assertLearningFoundation(
   }>(`
     SELECT
       (SELECT COUNT(*) FROM sys.foreign_keys
-        WHERE [referenced_object_id] IN (${tables}) AND [parent_object_id] NOT IN (${tables})) AS [inbound],
+        WHERE [referenced_object_id] IN (${tables})
+          AND [parent_object_id] NOT IN (${tables}${classTables})) AS [inbound],
       (SELECT STRING_AGG(OBJECT_NAME(c.[object_id]) + N'.' + c.[name], N',') FROM sys.columns c
         WHERE (c.[name] LIKE N'%course%' OR c.[name] LIKE N'%lesson%' OR c.[name] LIKE N'%enrol%'
                OR c.[name] LIKE N'%learningpath%' OR c.[name] LIKE N'%trialclass%')
-          AND OBJECT_NAME(c.[object_id]) NOT IN (${names})
+          AND OBJECT_NAME(c.[object_id]) NOT IN (${names}${classNames})
           -- Identity's second-factor re-enrolment instant names a TOTP
           -- enrolment, never a Course's.
           AND NOT (OBJECT_NAME(c.[object_id]) = N'PrivilegedSecurityPosture'
@@ -10084,7 +10200,7 @@ async function assertLearningFoundation(
   if (Number(procedures?.total) !== 0)
     fail('Phase 22 writes through its owner adapters; it must create no procedure.');
 
-  // ---- 5. two keys, both bundled once, provisioned once; no teaching key ---------
+  // ---- 5. two keys, both bundled once, provisioned once; Phase 23's by stage ------
   const permissions = await session.query<{
     key: string;
     description: string;
@@ -10105,33 +10221,46 @@ async function assertLearningFoundation(
     PERMISSION_CATALOGUE.map((entry) => [entry.key as string, entry.description]),
   );
   const compiled = new Set<string>(PLATFORM_ADMINISTRATOR_PERMISSIONS);
+  // Once Phase 23 is applied the same query also returns its two bundled class
+  // keys and the gated teaching key; once it is rolled back, exactly Phase 22's.
+  const expectedKeys = withClasses
+    ? [...LEARNING_PERMISSIONS, ...CLASSES_PERMISSIONS, TEACHING_PERMISSION].sort()
+    : LEARNING_PERMISSIONS;
+  const bundledOnce = withClasses
+    ? [...LEARNING_PERMISSIONS, ...CLASSES_PERMISSIONS]
+    : LEARNING_PERMISSIONS;
   if (
-    permissions.map((row) => row.key).join(',') !== LEARNING_PERMISSIONS.join(',') ||
-    !LEARNING_PERMISSIONS.every((key) => compiled.has(key)) ||
+    permissions.map((row) => row.key).join(',') !== expectedKeys.join(',') ||
+    !bundledOnce.every((key) => compiled.has(key)) ||
+    compiled.has(TEACHING_PERMISSION) ||
     permissions.some(
       (row) =>
         row.description !== described.get(row.key) ||
-        Number(row.bundled) !== 1 ||
-        Number(row.held) !== 1,
+        Number(row.bundled) !== (row.key === TEACHING_PERMISSION ? 0 : 1) ||
+        Number(row.held) !== (row.key === TEACHING_PERMISSION ? 0 : 1),
     )
   )
     fail(
-      `The Learning vocabulary must be exactly ${LEARNING_PERMISSIONS.join(', ')}, described ` +
-        `as the compiled catalogue describes them, each bundled once into the protected role ` +
-        `and held by no other; found ${JSON.stringify(permissions)}.`,
+      `The Learning vocabulary must be exactly ${expectedKeys.join(', ')} at ${stage}, ` +
+        `described as the compiled catalogue describes them, each ordinary key bundled once ` +
+        `into the protected role and held by no other, and ${TEACHING_PERMISSION} held by ` +
+        `nobody; found ${JSON.stringify(permissions)}.`,
     );
 
+  const absentKeys = withClasses
+    ? LEARNING_ABSENT_PERMISSIONS
+    : [...LEARNING_ABSENT_PERMISSIONS, TEACHING_PERMISSION, ...CLASSES_PERMISSIONS];
   const absent = await session.query<{ key: string }>(`
     SELECT [key] FROM [dbo].[Permission]
-    WHERE [key] IN (${LEARNING_ABSENT_PERMISSIONS.map((key) => `N'${key}'`).join(',')});
+    WHERE [key] IN (${absentKeys.map((key) => `N'${key}'`).join(',')});
   `);
   if (
     absent.length > 0 ||
     LEARNING_ABSENT_PERMISSIONS.some((key) => described.has(key) || compiled.has(key))
   )
     fail(
-      `Phase 22 catalogues no teaching or editorial-workflow key; found ` +
-        `${absent.map((row) => row.key).join(', ') || 'one in the compiled catalogue'}.`,
+      `Phase 22 catalogues no editorial-workflow key, and no Phase-23 key exists at ${stage}; ` +
+        `found ${absent.map((row) => row.key).join(', ') || 'one in the compiled catalogue'}.`,
     );
 
   const provisioning = await session.query<{
@@ -10164,18 +10293,25 @@ async function assertLearningFoundation(
         `added keys and this migration; found ${JSON.stringify(provisioning)}.`,
     );
 
+  // Once Phase 23 is rolled back the database's bundle lacks the two class keys
+  // the compiled bundle now carries.
   const bundled = await assertProtectedBundleExcludesGated(session);
-  if (bundled !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length)
+  const compiledBundle = compiledBundleAt(
+    withClasses ? 'current' : 'before-classes',
+  ).length;
+  if (bundled !== compiledBundle)
     fail(
       `The protected bundle holds ${String(bundled)} keys; the compiled bundle holds ` +
-        `${String(PLATFORM_ADMINISTRATOR_PERMISSIONS.length)}.`,
+        `${String(compiledBundle)} at ${stage}.`,
     );
 
   report(
     'learning schema',
     'sixteen empty tables of the reviewed shape, twenty-five unfiltered unique keys, ' +
       'twenty-one trusted NO ACTION keys, 14 CHECKs, twelve triggers raising 51270–51277, ' +
-      `no procedure, two bundled Learning keys provisioned once, ${String(bundled)} bundled`,
+      `no procedure, two bundled Learning keys provisioned once, ` +
+      `${withClasses ? 'Phase-23 keys present as reviewed' : 'no Phase-23 key'}, ` +
+      `${String(bundled)} bundled`,
   );
 }
 
@@ -10216,11 +10352,14 @@ async function assertLearningRemoved(session: SqlSession): Promise<void> {
   const expected = compiledBundleAt('before-learning').length;
   if (
     bundled !== expected ||
-    expected !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length - LEARNING_PERMISSIONS.length
+    expected !==
+      PLATFORM_ADMINISTRATOR_PERMISSIONS.length -
+        LEARNING_PERMISSIONS.length -
+        CLASSES_PERMISSIONS.length
   )
     fail(
       `After the Phase-22 rollback the protected bundle holds ${String(bundled)} keys; the ` +
-        `compiled bundle less the two Learning keys holds ${String(expected)}.`,
+        `compiled bundle less the two Learning and two class keys holds ${String(expected)}.`,
     );
   report(
     'learning rollback',
@@ -10794,6 +10933,1245 @@ async function assertLearningRules(session: SqlSession): Promise<void> {
 }
 
 /**
+ * EVERY foreign key from a Phase-23 table, exactly, with its column mapping and
+ * its delete action. ALL are NO ACTION: nothing cascades, inside the context or
+ * out of it. The external edges are Identity's User and RoleAssignment and
+ * Learning's own Course and trial request; a session reaches its scope by a
+ * composite key that carries the Course, so it can never sit on a scope of
+ * another Course.
+ */
+const CLASSES_KEYS = [
+  'Attendance_sessionId_fkey(sessionId>id)>ClassSession:NO_ACTION',
+  'Attendance_userId_fkey(userId>id)>User:NO_ACTION',
+  'Availability_userId_fkey(userId>id)>User:NO_ACTION',
+  'Booking_availabilityId_fkey(availabilityId>id)>Availability:NO_ACTION',
+  'Booking_courseId_fkey(courseId>id)>Course:NO_ACTION',
+  'Booking_requestId_fkey(requestId>id)>TrialClassRequest:NO_ACTION',
+  'Booking_sessionId_fkey(sessionId>id)>ClassSession:NO_ACTION',
+  'Booking_userId_fkey(userId>id)>User:NO_ACTION',
+  'ClassCommunicationIntent_sessionId_fkey(sessionId>id)>ClassSession:NO_ACTION',
+  'ClassCommunicationIntent_userId_fkey(userId>id)>User:NO_ACTION',
+  'ClassSession_courseId_fkey(courseId>id)>Course:NO_ACTION',
+  'ClassSession_scope_fkey(scopeId>id,courseId>courseId)>CourseTeachingAssignment:NO_ACTION',
+  'CourseTeachingAssignment_courseId_fkey(courseId>id)>Course:NO_ACTION',
+  'CourseTeachingAssignment_roleAssignmentId_fkey(roleAssignmentId>id)>RoleAssignment:NO_ACTION',
+  'CourseTeachingAssignment_userId_fkey(userId>id)>User:NO_ACTION',
+].sort();
+
+/**
+ * Every unique index on a Phase-23 table, exactly: the keys, the scope's owner
+ * key a session reaches through, one Booking per request and per session, one
+ * intent per idempotency key, and the TWO FILTERED claims — one current scope
+ * per account and Course, one live Booking per window.
+ */
+const CLASSES_UNIQUE = [
+  'Attendance_pkey(sessionId,userId)',
+  'Availability_pkey(id)',
+  'Booking_pkey(id)',
+  'Booking_requestId_key(requestId)',
+  'Booking_sessionId_key(sessionId)',
+  "Booking_slot_key(availabilityId) WHERE ([state]<>N'cancelled')",
+  'ClassCommunicationIntent_idempotencyKey_key(idempotencyKey)',
+  'ClassCommunicationIntent_pkey(id)',
+  'ClassSession_pkey(id)',
+  'CourseTeachingAssignment_current_key(courseId,userId) WHERE ([endedAt] IS NULL)',
+  'CourseTeachingAssignment_owner_key(id,courseId)',
+  'CourseTeachingAssignment_pkey(id)',
+  'LiveLearningActivation_pkey(id)',
+].sort();
+
+/**
+ * Every column of every Phase-23 table, in order. Stated whole so a
+ * `scopeType`/`targetType`/`sourceType` pair, a copied name or address, a
+ * grade, note, age, guardian, consent, recording, calendar or OAuth column, or
+ * a second home for the meeting address cannot arrive unnoticed.
+ */
+const CLASSES_COLUMNS: Readonly<Record<string, string>> = {
+  LiveLearningActivation: 'id,authority,authorisedBy,reference,activatedAt',
+  CourseTeachingAssignment:
+    'id,courseId,userId,roleAssignmentId,grantedAt,grantedById,endedAt,endedById,version,updatedAt',
+  Availability:
+    'id,userId,startsAt,endsAt,timeZone,startsLocal,endsLocal,state,version,createdAt,updatedAt',
+  ClassSession:
+    'id,courseId,kind,scopeId,startsAt,endsAt,timeZone,startsLocal,endsLocal,state,meetingProvider,meetingUrl,reminderAt,version,createdAt,updatedAt,closedAt',
+  Booking:
+    'id,requestId,userId,courseId,sessionId,availabilityId,state,confirmedAt,confirmedById,cancelledAt,cancelledById,version,updatedAt',
+  Attendance: 'sessionId,userId,status,markedAt,markedById',
+  ClassCommunicationIntent:
+    'id,purpose,sessionId,userId,dueAt,state,idempotencyKey,claimedUntil,relayedAt,createdAt',
+};
+
+/**
+ * Whether Phase 23 is applied, ALL OR NOTHING: either every one of its seven
+ * tables exists or none does.
+ */
+async function classesPresent(session: SqlSession): Promise<boolean> {
+  const names = CLASSES_TABLES.map((table) => `N'${table}'`).join(',');
+  const [row] = await session.query<{ present: number }>(
+    `SELECT COUNT(*) AS [present] FROM sys.tables WHERE [name] IN (${names});`,
+  );
+  const present = Number(row?.present ?? -1);
+  if (present !== 0 && present !== CLASSES_TABLES.length)
+    fail(
+      `Phase 23 is half applied: ${String(present)} of ${String(CLASSES_TABLES.length)} ` +
+        `live-class tables exist.`,
+    );
+  return present === CLASSES_TABLES.length;
+}
+
+/**
+ * Phase 23 — what only the catalogue can prove about live classes:
+ *
+ *   1. NOTHING IS SEEDED: all seven tables are empty after deploy — and above
+ *      all NO activation row, so a migrated database has live learning OFF;
+ *   2. every column of every table is exactly as stated — no `scopeType`,
+ *      `targetType`, `sourceType` or `entity` column, no grade, note, age,
+ *      guardian, consent, vetting, recording, calendar, OAuth or token column —
+ *      and the unique indexes are exactly the thirteen above, the two claims
+ *      FILTERED;
+ *   3. every foreign key is exactly one of the fifteen above, ALL NO ACTION
+ *      and trusted: User and RoleAssignment the only Identity edges, Course and
+ *      the trial request the only Learning ones, a session's scope reached by
+ *      the composite key that carries the Course; no other owner references a
+ *      live-class table or holds a booking, window, attendance or meeting
+ *      column, and the meeting address lives in ClassSession alone;
+ *   4. the CHECKs are exactly the nine named rules, all trusted; the triggers
+ *      are exactly the seven in `CLASSES_TRIGGER_NUMBERS`, enabled, each
+ *      raising exactly its own numbers from 51280–51292 on the table it
+ *      guards; and the slice has no procedure;
+ *   5. the vocabulary is exactly `learning.classes.administer`,
+ *      `learning.classes.read` and `teaching.perform`, described as the
+ *      compiled catalogue describes them; the two class keys each bundled
+ *      exactly once into the protected role and held by no other, with exactly
+ *      one `learning.classes.permissions.provisioned` record naming this
+ *      migration; `teaching.perform` externally gated in the compiled
+ *      catalogue, bundled into NO role and held by NOBODY; and the protected
+ *      bundle exactly the compiled bundle.
+ *
+ * The rules themselves are proved as BEHAVIOUR by `assertClassesRules`, and
+ * through the runtime login by `db:test:permissions`.
+ */
+async function assertClassesFoundation(
+  session: SqlSession,
+  stage: 'deploy' | 're-deploy' = 'deploy',
+): Promise<void> {
+  const tables = CLASSES_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
+    ',',
+  );
+  const names = CLASSES_TABLES.map((table) => `N'${table}'`).join(',');
+  if (!(await classesPresent(session)))
+    fail(`The Phase-23 live-class tables are missing after ${stage}.`);
+
+  // ---- 1. nothing seeded, and no activation above all ----------------------------
+  const counts = await session.query<{ name: string; total: number }>(
+    CLASSES_TABLES.map(
+      (table) =>
+        `SELECT N'${table}' AS [name], COUNT_BIG(*) AS [total] FROM [dbo].[${table}]`,
+    ).join(' UNION ALL ') + ';',
+  );
+  const seeded = counts.filter((row) => Number(row.total) !== 0);
+  if (CLASSES_TABLES.length !== 7 || counts.length !== 7 || seeded.length > 0)
+    fail(
+      `The live-class migration must create seven empty tables and seed nothing — above ` +
+        `all no activation, so live learning is OFF; found ${String(counts.length)} tables ` +
+        `after ${stage}, seeded: ${JSON.stringify(seeded)}.`,
+    );
+
+  // ---- 2. exact columns, exact unique indexes with exactly two filtered ------------
+  const shapes = await session.query<{ name: string; columns: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) AS [name],
+      STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id]) AS [columns]
+    FROM sys.columns c WHERE c.[object_id] IN (${tables})
+    GROUP BY c.[object_id];
+  `);
+  const shapeFindings = CLASSES_TABLES.filter(
+    (table) =>
+      shapes.find((row) => row.name === table)?.columns !== CLASSES_COLUMNS[table],
+  );
+  if (shapes.length !== 7 || shapeFindings.length > 0)
+    fail(
+      `Live-class columns differ from the reviewed shape in ${shapeFindings.join(', ')}: ` +
+        `${JSON.stringify(shapes.filter((row) => shapeFindings.includes(row.name)))}.`,
+    );
+
+  const generic = await session.query<{ name: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] AS [name] FROM sys.columns c
+    WHERE c.[object_id] IN (${tables})
+      AND (c.[name] LIKE N'%Type' OR c.[name] LIKE N'%target%' OR c.[name] LIKE N'%entity%'
+           OR c.[name] LIKE N'%source%' OR c.[name] LIKE N'%grade%' OR c.[name] LIKE N'%note%'
+           OR c.[name] LIKE N'%age%' OR c.[name] LIKE N'%guardian%' OR c.[name] LIKE N'%consent%'
+           OR c.[name] LIKE N'%vetting%' OR c.[name] LIKE N'%record%' OR c.[name] LIKE N'%calendar%'
+           OR c.[name] LIKE N'%oauth%' OR c.[name] LIKE N'%token%' OR c.[name] LIKE N'%credential%'
+           OR c.[name] LIKE N'%email%' OR c.[name] LIKE N'%phone%' OR c.[name] LIKE N'%name%'
+           OR c.[name] LIKE N'%retention%' OR c.[name] LIKE N'%adult%');
+  `);
+  if (generic.length > 0)
+    fail(
+      `A live-class table may carry no type, target, source, grade, note, age, guardian, ` +
+        `consent, vetting, recording, calendar, OAuth, token or contact column; found ` +
+        `${JSON.stringify(generic)}.`,
+    );
+
+  const unique = await session.query<{
+    name: string;
+    columns: string;
+    filter: string | null;
+  }>(`
+    SELECT i.[name], i.[filter_definition] AS [filter],
+      STRING_AGG(COL_NAME(ic.[object_id], ic.[column_id]), N',')
+        WITHIN GROUP (ORDER BY ic.[key_ordinal]) AS [columns]
+    FROM sys.indexes i
+    JOIN sys.index_columns ic ON ic.[object_id] = i.[object_id] AND ic.[index_id] = i.[index_id]
+    WHERE i.[is_unique] = 1 AND ic.[key_ordinal] > 0 AND i.[object_id] IN (${tables})
+    GROUP BY i.[object_id], i.[name], i.[filter_definition];
+  `);
+  const describedUnique = unique
+    .map(
+      (row) =>
+        `${row.name}(${row.columns})` +
+        (row.filter === null ? '' : ` WHERE ${row.filter}`),
+    )
+    .sort();
+  if (
+    describedUnique.join(' | ') !== CLASSES_UNIQUE.join(' | ') ||
+    unique.filter((row) => row.filter !== null).length !== 2
+  )
+    fail(
+      `Live-class unique indexes must be exactly the reviewed thirteen, the two claims ` +
+        `filtered; found ${describedUnique.join(' | ')}.`,
+    );
+
+  // ---- 3. exact keys, all NO ACTION and trusted; nothing foreign holds the slice ---
+  const keys = await session.query<{
+    name: string;
+    columns: string;
+    target: string;
+    deletes: string;
+    updates: string;
+    trusted: number;
+  }>(`
+    SELECT fk.[name], OBJECT_NAME(fk.[referenced_object_id]) AS [target],
+      fk.[delete_referential_action_desc] AS [deletes], fk.[update_referential_action_desc] AS [updates],
+      CASE WHEN fk.[is_disabled] = 0 AND fk.[is_not_trusted] = 0 THEN 1 ELSE 0 END AS [trusted],
+      STRING_AGG(COL_NAME(c.[parent_object_id], c.[parent_column_id]) + N'>'
+        + COL_NAME(c.[referenced_object_id], c.[referenced_column_id]), N',')
+        WITHIN GROUP (ORDER BY c.[constraint_column_id]) AS [columns]
+    FROM sys.foreign_keys fk
+    JOIN sys.foreign_key_columns c ON c.[constraint_object_id] = fk.[object_id]
+    WHERE fk.[parent_object_id] IN (${tables})
+    GROUP BY fk.[name], fk.[referenced_object_id], fk.[delete_referential_action_desc],
+      fk.[update_referential_action_desc], fk.[is_disabled], fk.[is_not_trusted];
+  `);
+  const describedKeys = keys
+    .map((row) => `${row.name}(${row.columns})>${row.target}:${row.deletes}`)
+    .sort();
+  if (
+    describedKeys.join(',') !== CLASSES_KEYS.join(',') ||
+    keys.some((row) => row.updates !== 'NO_ACTION' || Number(row.trusted) !== 1)
+  )
+    fail(
+      `Live-class keys must be exactly the reviewed fifteen, none cascading and all ` +
+        `trusted; found ${describedKeys.join(', ')}.`,
+    );
+
+  const [isolation] = await session.query<{
+    inbound: number;
+    foreign: string | null;
+    meeting: string | null;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE [referenced_object_id] IN (${tables}) AND [parent_object_id] NOT IN (${tables})) AS [inbound],
+      (SELECT STRING_AGG(OBJECT_NAME(c.[object_id]) + N'.' + c.[name], N',') FROM sys.columns c
+        WHERE (c.[name] LIKE N'%booking%' OR c.[name] LIKE N'%availabilityId%' OR c.[name] LIKE N'%attendance%'
+               OR c.[name] LIKE N'%meeting%' OR c.[name] LIKE N'%classSession%'
+               OR c.[name] LIKE N'%teachingAssignment%' OR c.[name] LIKE N'%teachingScope%')
+          AND OBJECT_NAME(c.[object_id]) NOT IN (${names})
+          AND OBJECTPROPERTY(c.[object_id], 'IsUserTable') = 1) AS [foreign],
+      (SELECT STRING_AGG(OBJECT_NAME(c.[object_id]) + N'.' + c.[name], N',') WITHIN GROUP (ORDER BY c.[name])
+         FROM sys.columns c
+        WHERE c.[name] LIKE N'%meeting%' AND OBJECTPROPERTY(c.[object_id], 'IsUserTable') = 1) AS [meeting];
+  `);
+  if (
+    Number(isolation?.inbound) !== 0 ||
+    (isolation?.foreign ?? null) !== null ||
+    isolation?.meeting !== 'ClassSession.meetingProvider,ClassSession.meetingUrl'
+  )
+    fail(
+      `No other owner may reference or hold live-class schema, and the meeting address ` +
+        `lives in ClassSession alone; found ${JSON.stringify(isolation ?? null)}.`,
+    );
+
+  // ---- 4. nine trusted CHECKs, seven triggers by number, no procedure -------------
+  const checks = await session.query<{ name: string; trusted: number }>(`
+    SELECT [name], CASE WHEN [is_disabled] = 0 AND [is_not_trusted] = 0 THEN 1 ELSE 0 END AS [trusted]
+    FROM sys.check_constraints WHERE [parent_object_id] IN (${tables});
+  `);
+  const expectedChecks = EXPECTED_CHECK_CONSTRAINTS.filter((entry) =>
+    CLASSES_TABLES.includes(entry.table),
+  )
+    .map((entry) => entry.constraint)
+    .sort();
+  if (
+    expectedChecks.length !== 9 ||
+    checks
+      .map((row) => row.name)
+      .sort()
+      .join(',') !== expectedChecks.join(',') ||
+    checks.some((row) => Number(row.trusted) !== 1)
+  )
+    fail(
+      `Live classes must carry exactly their nine trusted CHECKs; found ${JSON.stringify(checks)}.`,
+    );
+
+  const triggers = await session.query<{
+    name: string;
+    tableName: string;
+    disabled: number;
+    definition: string | null;
+  }>(`
+    SELECT t.[name], OBJECT_NAME(t.[parent_id]) AS [tableName], CAST(t.[is_disabled] AS INT) AS [disabled],
+      OBJECT_DEFINITION(t.[object_id]) AS [definition]
+    FROM sys.triggers t WHERE t.[parent_id] IN (${tables});
+  `);
+  const describedTriggers = triggers
+    .map((row) => `${row.name}@${row.tableName}:${raisedNumbers(row.definition)}`)
+    .sort()
+    .join(',');
+  const expectedTriggers = Object.entries(CLASSES_TRIGGER_NUMBERS)
+    .map(([name, [table, numbers]]) => `${name}@${table}:${numbers}`)
+    .sort()
+    .join(',');
+  if (
+    describedTriggers !== expectedTriggers ||
+    triggers.length !== 7 ||
+    triggers.some((row) => Number(row.disabled) !== 0)
+  )
+    fail(
+      `Live-class triggers must be exactly seven, enabled, raising exactly their own ` +
+        `51280–51292 numbers; found ${describedTriggers}.`,
+    );
+
+  const [procedures] = await session.query<{ total: number }>(`
+    SELECT COUNT(*) AS [total] FROM sys.procedures
+    WHERE [name] LIKE N'Learning%' OR [name] LIKE N'Class%' OR [name] LIKE N'Booking%'
+       OR [name] LIKE N'Attendance%' OR [name] LIKE N'Availability%' OR [name] LIKE N'Teaching%';
+  `);
+  if (Number(procedures?.total) !== 0)
+    fail('Phase 23 writes through its owner adapters; it must create no procedure.');
+
+  // ---- 5. two keys bundled once and provisioned once; the teaching key gated ------
+  const permissions = await session.query<{
+    key: string;
+    description: string;
+    bundled: number;
+    held: number;
+    holders: number;
+  }>(`
+    SELECT p.[key], p.[description],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp JOIN [dbo].[Role] r ON r.[id] = rp.[roleId]
+        WHERE r.[key] = N'platform-administrator' AND rp.[permissionKey] = p.[key]) AS [bundled],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp WHERE rp.[permissionKey] = p.[key]) AS [held],
+      (SELECT COUNT(*) FROM [dbo].[RoleAssignment] ra JOIN [dbo].[RolePermission] rp ON rp.[roleId] = ra.[roleId]
+        WHERE rp.[permissionKey] = p.[key]) AS [holders]
+    FROM [dbo].[Permission] p
+    WHERE p.[key] LIKE N'learning.classes%' OR p.[key] LIKE N'teaching%' OR p.[key] LIKE N'class%'
+       OR p.[key] LIKE N'booking%' OR p.[key] LIKE N'attendance%' OR p.[key] LIKE N'meeting%'
+       OR p.[key] LIKE N'availability%'
+    ORDER BY p.[key];
+  `);
+  const described = new Map(
+    PERMISSION_CATALOGUE.map((entry) => [entry.key as string, entry.description]),
+  );
+  const compiled = new Set<string>(PLATFORM_ADMINISTRATOR_PERMISSIONS);
+  const gated = new Set<string>(EXTERNALLY_GATED_PERMISSIONS);
+  const expectedKeys = [...CLASSES_PERMISSIONS, TEACHING_PERMISSION].sort();
+  if (
+    permissions.map((row) => row.key).join(',') !== expectedKeys.join(',') ||
+    !CLASSES_PERMISSIONS.every((key) => compiled.has(key) && !gated.has(key)) ||
+    compiled.has(TEACHING_PERMISSION) ||
+    !gated.has(TEACHING_PERMISSION) ||
+    permissions.some(
+      (row) =>
+        row.description !== described.get(row.key) ||
+        Number(row.bundled) !== (row.key === TEACHING_PERMISSION ? 0 : 1) ||
+        Number(row.held) !== (row.key === TEACHING_PERMISSION ? 0 : 1) ||
+        Number(row.holders) !== 0,
+    )
+  )
+    fail(
+      `The live-class vocabulary must be exactly ${expectedKeys.join(', ')}, described as ` +
+        `the compiled catalogue describes them, the two class keys each bundled once into the ` +
+        `protected role and held by no other, and ${TEACHING_PERMISSION} externally gated, ` +
+        `bundled into no role and held by nobody; found ${JSON.stringify(permissions)}.`,
+    );
+
+  const provisioning = await session.query<{
+    actorType: string;
+    actorId: string | null;
+    targetType: string;
+    roleKey: string | null;
+    afterState: string | null;
+    authorisingSource: string | null;
+  }>(`
+    SELECT a.[actorType], a.[actorId], a.[targetType], r.[key] AS [roleKey], a.[afterState], a.[authorisingSource]
+    FROM [dbo].[AuditLog] a LEFT JOIN [dbo].[Role] r ON r.[id] = a.[targetId]
+    WHERE a.[action] = N'learning.classes.permissions.provisioned';
+  `);
+  if (
+    JSON.stringify(provisioning) !==
+    JSON.stringify([
+      {
+        actorType: 'migration',
+        actorId: null,
+        targetType: 'role',
+        roleKey: 'platform-administrator',
+        afterState: '{"added":"learning.classes.administer learning.classes.read"}',
+        authorisingSource: CLASSES_MIGRATION,
+      },
+    ])
+  )
+    fail(
+      `Extending the protected bundle must leave exactly one provisioning record naming the ` +
+        `two class keys and this migration; found ${JSON.stringify(provisioning)}.`,
+    );
+
+  const bundled = await assertProtectedBundleExcludesGated(session);
+  if (bundled !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length)
+    fail(
+      `The protected bundle holds ${String(bundled)} keys; the compiled bundle holds ` +
+        `${String(PLATFORM_ADMINISTRATOR_PERMISSIONS.length)}.`,
+    );
+
+  report(
+    'classes schema',
+    'seven empty tables of the reviewed shape and NO activation, thirteen unique keys with ' +
+      'two filtered claims, fifteen trusted NO ACTION keys, 9 CHECKs, seven triggers raising ' +
+      `51280–51292, no procedure, two bundled class keys provisioned once, ` +
+      `${TEACHING_PERMISSION} gated and held by nobody, ${String(bundled)} bundled`,
+  );
+}
+
+/**
+ * After the Phase-23 rollback: no live-class table, trigger, key, CHECK or
+ * index, no class or teaching permission, bundle entry or provisioning record,
+ * nothing referencing Identity's RoleAssignment or Learning's trial request —
+ * and the protected bundle the compiled bundle less the two class keys.
+ * Identity's RoleAssignment itself is whole, its live-assignment claim still
+ * filtered. The caller then proves the owners the slice referenced are intact.
+ */
+async function assertClassesRemoved(session: SqlSession): Promise<void> {
+  const names = CLASSES_TABLES.map((table) => `N'${table}'`).join(',');
+  const triggerNames = Object.keys(CLASSES_TRIGGER_NUMBERS)
+    .map((name) => `N'${name}'`)
+    .join(',');
+  const keys = [...CLASSES_PERMISSIONS, TEACHING_PERMISSION]
+    .map((key) => `N'${key}'`)
+    .join(',');
+  const [row] = await session.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables WHERE [name] IN (${names})) AS [tables],
+      (SELECT COUNT(*) FROM sys.triggers WHERE [name] IN (${triggerNames})) AS [triggers],
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [keys],
+      (SELECT COUNT(*) FROM sys.check_constraints
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [checks],
+      (SELECT COUNT(*) FROM sys.indexes
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [indexes],
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE [referenced_object_id] IN (OBJECT_ID(N'[dbo].[RoleAssignment]'), OBJECT_ID(N'[dbo].[TrialClassRequest]'))) AS [references],
+      (SELECT COUNT(*) FROM [dbo].[Permission] WHERE [key] IN (${keys})) AS [permissions],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] WHERE [permissionKey] IN (${keys})) AS [bundled],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action] = N'learning.classes.permissions.provisioned') AS [audit],
+      (SELECT 1 - COUNT(*) FROM sys.indexes
+        WHERE [object_id] = OBJECT_ID(N'[dbo].[RoleAssignment]')
+          AND [name] = N'RoleAssignment_userId_roleId_live_key' AND [is_unique] = 1 AND [has_filter] = 1) AS [identityBroken];
+  `);
+  if (Object.values(row ?? { missing: 1 }).some((value) => Number(value) !== 0))
+    fail(
+      `The Phase-23 rollback left a live-class object: ${JSON.stringify(row ?? null)}.`,
+    );
+  if (await classesPresent(session))
+    fail('The Phase-23 rollback left the live-class schema in place.');
+  const bundled = await assertProtectedBundleExcludesGated(session);
+  const expected = compiledBundleAt('before-classes').length;
+  if (
+    bundled !== expected ||
+    expected !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length - CLASSES_PERMISSIONS.length
+  )
+    fail(
+      `After the Phase-23 rollback the protected bundle holds ${String(bundled)} keys; the ` +
+        `compiled bundle less the two class keys holds ${String(expected)}.`,
+    );
+  report(
+    'classes rollback',
+    `every live-class table, key, index, CHECK, trigger, permission and provisioning record ` +
+      `removed, RoleAssignment whole; ${String(bundled)} keys still bundled`,
+  );
+}
+
+/**
+ * Phase 23 — THE RULES, proved as behaviour against the re-deployed schema
+ * with NON_LEARNING_FIXTURE sentinels only, through the migration login (the
+ * runtime's own posture is `db:test:permissions`'s):
+ *
+ *   - FAIL CLOSED: before any activation row exists, a window and a scheduled
+ *     session are refused (51281) while a session may still be inserted
+ *     closed; the fixture activation then written is immutable (51280), single
+ *     and, when approved, evidenced (…_ck). A Booking's own 51281 and the
+ *     cancellation of a scheduled session while not activated cannot be
+ *     reached as behaviour — each needs a window or a scheduled session, which
+ *     cannot exist before the activation that cannot be removed — so they are
+ *     proved by the trigger bodies' numbers in `assertClassesFoundation`;
+ *   - a scope is typed and live when made (51282): never on a self-paced
+ *     Course, under a revoked assignment, under another account's assignment
+ *     or under a role without `teaching.perform`; its identity never changes
+ *     and an ended scope stays ended; one current scope per account and Course
+ *     (the filtered key), an ended one beside it;
+ *   - a window needs live `teaching.perform` (51284), never overlaps another
+ *     open window of the same teacher (51283) while adjacent ones may touch,
+ *     and its times, owner and withdrawal never change (51283);
+ *   - a session needs a published live Course and a current scope of THAT
+ *     Course (51285, and the composite key for a scope of another Course);
+ *     a terminal session never changes or returns (51286); one teacher's
+ *     scheduled sessions never overlap (51287) while a cancelled one blocks
+ *     nothing; a meeting address only with its provider, only on
+ *     `meet.google.com` in lower case, never once terminal, and a reminder
+ *     only before the start (…_ck);
+ *   - a Booking fits exactly (51288): the request's learner, a TRIAL session
+ *     of its Course, the session teacher's open window at the session's own
+ *     times; its identity never changes and cancelled is final; one live claim
+ *     per window (the filtered key) and a cancelled claim frees it;
+ *   - attendance only on an open session for the Booking's learner or an
+ *     enrolled learner (51289), re-marked but never re-keyed;
+ *   - an intent is relayed or abandoned once and never reopened or re-keyed
+ *     (51292);
+ *   - nothing cascades: a request under its Booking, a scope under its
+ *     session, an assignment under its scope and a window under its Booking
+ *     are never deleted.
+ *
+ * Every row the proofs write except the immutable activation is removed at the
+ * end, children first, which shows the slice can be emptied without a cascade;
+ * the synthetic Courses, roles and accounts go with them.
+ */
+async function assertClassesRules(session: SqlSession): Promise<void> {
+  const run = randomUUID().replaceAll('-', '').slice(0, 16);
+  const day = '2026-10-07';
+  const at = `${day}T00:00:00`;
+  let refusals = 0;
+  const refuse = async (
+    label: string,
+    statement: string,
+    numbers: readonly number[],
+    rule: string,
+  ): Promise<void> => {
+    await expectRefusal(session, label, statement, numbers, rule);
+    refusals += 1;
+  };
+  const count = async (statement: string): Promise<number> => {
+    const [row] = await session.query<{ total: number }>(statement);
+    return Number(row?.total ?? -1);
+  };
+  const slug = (label: string): string => `non-learning-fixture-classes-${label}-${run}`;
+  const instant = (hour: string): string => `'${day}T${hour}:00'`;
+  const local = (hour: string): string => `N'${day}T${hour}'`;
+
+  // ---- the accounts, the roles and the assignments the proofs name ---------------
+  const teacher = randomUUID();
+  const otherTeacher = randomUUID();
+  const revokedTeacher = randomUUID();
+  const learner = randomUUID();
+  const outsider = randomUUID();
+  const second = randomUUID();
+  const users = [
+    [teacher, 'teacher'],
+    [otherTeacher, 'other-teacher'],
+    [revokedTeacher, 'revoked-teacher'],
+    [learner, 'learner'],
+    [outsider, 'outsider'],
+    [second, 'second'],
+  ] as const;
+  for (const [user, label] of users)
+    await session.query(
+      `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled]) VALUES (N'${user}',N'NON_LEARNING_FIXTURE ${label}',N'${label}-${run}@classes-proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);`,
+    );
+  const teachingRole = randomUUID();
+  const plainRole = randomUUID();
+  const raTeacher = randomUUID();
+  const raOther = randomUUID();
+  const raRevoked = randomUUID();
+  const raPlain = randomUUID();
+  await expectAccepted(
+    session,
+    'A synthetic teaching role, a plain role and their assignments',
+    `INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system]) VALUES
+       (N'${teachingRole}',N'non-learning-fixture-teaching-${run}',N'NON_LEARNING_FIXTURE teaching role',N'Synthetic proof role.',0),
+       (N'${plainRole}',N'non-learning-fixture-plain-${run}',N'NON_LEARNING_FIXTURE plain role',N'Synthetic proof role.',0);
+     INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES (N'${teachingRole}',N'${TEACHING_PERMISSION}');
+     INSERT INTO [dbo].[RoleAssignment] ([id],[userId],[roleId],[grantedAt],[revokedAt]) VALUES
+       (N'${raTeacher}',N'${teacher}',N'${teachingRole}','${at}',NULL),
+       (N'${raOther}',N'${otherTeacher}',N'${teachingRole}','${at}',NULL),
+       (N'${raRevoked}',N'${revokedTeacher}',N'${teachingRole}','${at}','${at}'),
+       (N'${raPlain}',N'${teacher}',N'${plainRole}','${at}',NULL);`,
+  );
+
+  // ---- three Courses: a published live one, a published self-paced one, a draft --
+  const live = randomUUID();
+  const paced = randomUUID();
+  const draft = randomUUID();
+  const course = (id: string, label: string, format: 'live' | 'self-paced'): string => {
+    const moduleId = randomUUID();
+    const lessonId = randomUUID();
+    return `INSERT INTO [dbo].[Course] ([id],[slug],[primaryLocale],[state],[level],[format],[languageCode],[publishedAt],[version],[updatedAt]) VALUES (N'${id}',N'${slug(label)}',N'en',N'draft',NULL,N'${format}',N'en',NULL,1,'${at}');
+     INSERT INTO [dbo].[CourseLabel] ([courseId],[locale],[title],[summary],[description]) VALUES (N'${id}',N'en',N'NON_LEARNING_FIXTURE course',N'NON_LEARNING_FIXTURE summary',N'NON_LEARNING_FIXTURE description');
+     INSERT INTO [dbo].[CourseModule] ([id],[courseId],[position]) VALUES (N'${moduleId}',N'${id}',0);
+     INSERT INTO [dbo].[CourseModuleLabel] ([moduleId],[locale],[title],[summary]) VALUES (N'${moduleId}',N'en',N'NON_LEARNING_FIXTURE module',N'NON_LEARNING_FIXTURE summary');
+     INSERT INTO [dbo].[Lesson] ([id],[courseId],[moduleId],[position]) VALUES (N'${lessonId}',N'${id}',N'${moduleId}',0);
+     INSERT INTO [dbo].[LessonLabel] ([lessonId],[locale],[title],[summary],[body]) VALUES (N'${lessonId}',N'en',N'NON_LEARNING_FIXTURE lesson',N'NON_LEARNING_FIXTURE summary',N'NON_LEARNING_FIXTURE body');`;
+  };
+  await expectAccepted(
+    session,
+    'Three complete Courses, two of them published',
+    `${course(live, 'live', 'live')}
+     ${course(paced, 'paced', 'self-paced')}
+     ${course(draft, 'draft', 'live')}
+     UPDATE [dbo].[Course] SET [state]=N'published',[publishedAt]='${at}',[version]=2,[updatedAt]='${at}' WHERE [id] IN (N'${live}',N'${paced}');`,
+  );
+
+  // ---- a scope is typed and live when made (51282) ---------------------------------
+  const scope = (
+    id: string,
+    courseId: string,
+    userId: string,
+    assignment: string,
+    ended = false,
+  ): string =>
+    `INSERT INTO [dbo].[CourseTeachingAssignment] ([id],[courseId],[userId],[roleAssignmentId],[grantedAt],[grantedById],[endedAt],[endedById]) VALUES (N'${id}',N'${courseId}',N'${userId}',N'${assignment}','${at}',NULL,${ended ? `'${at}'` : 'NULL'},NULL);`;
+  const TYPED = 'live Course and the account';
+  await refuse(
+    'A scope on a self-paced Course',
+    scope(randomUUID(), paced, teacher, raTeacher),
+    [51282],
+    TYPED,
+  );
+  await refuse(
+    'A scope under a revoked assignment',
+    scope(randomUUID(), live, revokedTeacher, raRevoked),
+    [51282],
+    TYPED,
+  );
+  await refuse(
+    "A scope under another account's assignment",
+    scope(randomUUID(), live, otherTeacher, raTeacher),
+    [51282],
+    TYPED,
+  );
+  await refuse(
+    'A scope under a role without teaching.perform',
+    scope(randomUUID(), live, teacher, raPlain),
+    [51282],
+    TYPED,
+  );
+  const scopeTeacher = randomUUID();
+  const scopeOther = randomUUID();
+  const scopeDraft = randomUUID();
+  const scopeEnded = randomUUID();
+  // An ended scope on a Course where its account holds NO current one, so
+  // un-ending it reaches the trigger rather than the filtered claim.
+  const scopeEndedAlone = randomUUID();
+  await expectAccepted(
+    session,
+    'Current scopes for two teachers on the live Course, one on the draft, two already ended',
+    `${scope(scopeTeacher, live, teacher, raTeacher)}
+     ${scope(scopeOther, live, otherTeacher, raOther)}
+     ${scope(scopeDraft, draft, teacher, raTeacher)}
+     ${scope(scopeEnded, live, teacher, raTeacher, true)}
+     ${scope(scopeEndedAlone, draft, otherTeacher, raOther, true)}`,
+  );
+  await refuse(
+    'A second current scope for one account and Course',
+    scope(randomUUID(), live, teacher, raTeacher),
+    [2601],
+    'CourseTeachingAssignment_current_key',
+  );
+  // A one-current-scope collision is the filtered key's refusal above; these
+  // two rewrite nothing that key covers, so each reaches the trigger itself.
+  await refuse(
+    "A scope's assignment rewritten",
+    `UPDATE [dbo].[CourseTeachingAssignment] SET [roleAssignmentId]=N'${raPlain}' WHERE [id]=N'${scopeTeacher}';`,
+    [51282],
+    'identity cannot change',
+  );
+  await refuse(
+    "A scope's grant instant rewritten",
+    `UPDATE [dbo].[CourseTeachingAssignment] SET [grantedAt]=DATEADD(minute,-1,[grantedAt]) WHERE [id]=N'${scopeTeacher}';`,
+    [51282],
+    'identity cannot change',
+  );
+  await refuse(
+    'An ended scope un-ended',
+    `UPDATE [dbo].[CourseTeachingAssignment] SET [endedAt]=NULL WHERE [id]=N'${scopeEndedAlone}';`,
+    [51282],
+    'ended scope stays ended',
+  );
+
+  // ---- fail closed: nothing is offered or scheduled before activation (51281) ------
+  const window = (
+    id: string,
+    userId: string,
+    from: string,
+    to: string,
+    state: 'open' | 'withdrawn' = 'open',
+  ): string =>
+    `INSERT INTO [dbo].[Availability] ([id],[userId],[startsAt],[endsAt],[timeZone],[startsLocal],[endsLocal],[state]) VALUES (N'${id}',N'${userId}',${instant(from)},${instant(to)},N'Europe/London',${local(from)},${local(to)},N'${state}');`;
+  const classSession = (
+    id: string,
+    courseId: string,
+    kind: 'course' | 'trial',
+    scopeId: string,
+    from: string,
+    to: string,
+    options: {
+      state?: 'scheduled' | 'completed' | 'cancelled';
+      meeting?: string | null;
+      provider?: string | null;
+      reminder?: string | null;
+    } = {},
+  ): string => {
+    const state = options.state ?? 'scheduled';
+    const meeting =
+      options.meeting === undefined || options.meeting === null
+        ? 'NULL'
+        : `N'${options.meeting}'`;
+    const provider =
+      options.provider === undefined
+        ? options.meeting === undefined || options.meeting === null
+          ? 'NULL'
+          : "N'google-meet'"
+        : options.provider === null
+          ? 'NULL'
+          : `N'${options.provider}'`;
+    const reminder =
+      options.reminder === undefined || options.reminder === null
+        ? 'NULL'
+        : instant(options.reminder);
+    const closed = state === 'scheduled' ? 'NULL' : instant(to);
+    return `INSERT INTO [dbo].[ClassSession] ([id],[courseId],[kind],[scopeId],[startsAt],[endsAt],[timeZone],[startsLocal],[endsLocal],[state],[meetingProvider],[meetingUrl],[reminderAt],[closedAt]) VALUES (N'${id}',N'${courseId}',N'${kind}',N'${scopeId}',${instant(from)},${instant(to)},N'Europe/London',${local(from)},${local(to)},N'${state}',${provider},${meeting},${reminder},${closed});`;
+  };
+  const OFF = 'not activated';
+  const windowOne = randomUUID();
+  await refuse(
+    'A window before activation',
+    window(windowOne, teacher, '09:00', '10:00'),
+    [51281],
+    OFF,
+  );
+  await refuse(
+    'A scheduled session before activation',
+    classSession(randomUUID(), live, 'trial', scopeTeacher, '09:00', '10:00'),
+    [51281],
+    OFF,
+  );
+  const cancelledEarly = randomUUID();
+  await expectAccepted(
+    session,
+    'A session inserted already cancelled before activation — closing is never gated',
+    classSession(cancelledEarly, live, 'course', scopeTeacher, '15:00', '16:00', {
+      state: 'cancelled',
+    }),
+  );
+  if (
+    (await count('SELECT COUNT(*) AS [total] FROM [dbo].[LiveLearningActivation];')) !== 0
+  )
+    fail('The live-class rules must start with no activation row.');
+
+  // ---- the fixture activation: single, evidenced when approved, immutable (51280) --
+  await refuse(
+    'A second activation row',
+    "INSERT INTO [dbo].[LiveLearningActivation] ([id],[authority],[authorisedBy],[reference]) VALUES (2,N'fixture',N'NON_LEARNING_FIXTURE operator',NULL);",
+    [547],
+    'LiveLearningActivation_ck',
+  );
+  await refuse(
+    'An approved activation without evidence',
+    "INSERT INTO [dbo].[LiveLearningActivation] ([id],[authority],[authorisedBy],[reference]) VALUES (1,N'approved',N'NON_LEARNING_FIXTURE operator',NULL);",
+    [547],
+    'LiveLearningActivation_evidence_ck',
+  );
+  await expectAccepted(
+    session,
+    'The fixture activation',
+    "INSERT INTO [dbo].[LiveLearningActivation] ([id],[authority],[authorisedBy],[reference]) VALUES (1,N'fixture',N'NON_LEARNING_FIXTURE operator',NULL);",
+  );
+  await refuse(
+    'The activation re-labelled',
+    "UPDATE [dbo].[LiveLearningActivation] SET [authority]=N'approved',[reference]=N'urn:example:forged' WHERE [id]=1;",
+    [51280],
+    'immutable',
+  );
+  await refuse(
+    'The activation removed',
+    'DELETE FROM [dbo].[LiveLearningActivation] WHERE [id]=1;',
+    [51280],
+    'immutable',
+  );
+
+  // ---- windows: live teaching.perform (51284), no overlap, nothing rewritten (51283)
+  const windowTwo = randomUUID();
+  const windowFive = randomUUID();
+  const windowWithdrawn = randomUUID();
+  const otherWindowOne = randomUUID();
+  const otherWindowTwo = randomUUID();
+  await expectAccepted(
+    session,
+    'Adjacent open windows for two teachers, and one withdrawn',
+    `${window(windowOne, teacher, '09:00', '10:00')}
+     ${window(windowTwo, teacher, '10:00', '11:00')}
+     ${window(windowFive, teacher, '11:00', '12:00')}
+     ${window(windowWithdrawn, teacher, '13:00', '14:00', 'withdrawn')}
+     ${window(otherWindowOne, otherTeacher, '09:00', '10:00')}
+     ${window(otherWindowTwo, otherTeacher, '10:00', '11:00')}`,
+  );
+  await refuse(
+    "A window overlapping the teacher's open one",
+    window(randomUUID(), teacher, '09:30', '10:30'),
+    [51283],
+    'cannot overlap',
+  );
+  await refuse(
+    'A window by an account without teaching.perform',
+    window(randomUUID(), learner, '09:00', '10:00'),
+    [51284],
+    'live teaching.perform',
+  );
+  await refuse(
+    'A window by a revoked teacher',
+    window(randomUUID(), revokedTeacher, '09:00', '10:00'),
+    [51284],
+    'live teaching.perform',
+  );
+  await refuse(
+    'A window of fourteen minutes',
+    window(randomUUID(), teacher, '16:00', '16:14'),
+    [547],
+    'Availability_ck',
+  );
+  await refuse(
+    'A withdrawn window reopened',
+    `UPDATE [dbo].[Availability] SET [state]=N'open' WHERE [id]=N'${windowWithdrawn}';`,
+    [51283],
+    'withdrawn window stays withdrawn',
+  );
+  await refuse(
+    "A window's times rewritten",
+    `UPDATE [dbo].[Availability] SET [startsAt]=${instant('08:00')},[startsLocal]=${local('08:00')} WHERE [id]=N'${windowOne}';`,
+    [51283],
+    'cannot change',
+  );
+
+  // ---- sessions: a published live Course under a current scope OF THAT COURSE -----
+  const trialOne = randomUUID();
+  const trialOther = randomUUID();
+  const courseOne = randomUUID();
+  const courseDone = randomUUID();
+  const courseLate = randomUUID();
+  const MEET = 'https://meet.google.com/abc-defg-hij';
+  const SCOPED = 'current teaching scope';
+  await refuse(
+    'A session on a draft Course',
+    classSession(randomUUID(), draft, 'course', scopeDraft, '09:00', '10:00'),
+    [51285],
+    SCOPED,
+  );
+  await refuse(
+    'A session under an ended scope',
+    classSession(randomUUID(), live, 'course', scopeEnded, '09:00', '10:00'),
+    [51285],
+    SCOPED,
+  );
+  await refuse(
+    "A session of one Course under another Course's scope",
+    classSession(randomUUID(), paced, 'course', scopeTeacher, '09:00', '10:00'),
+    [547],
+    'ClassSession_scope_fkey',
+  );
+  await refuse(
+    'A meeting address without its provider',
+    classSession(randomUUID(), live, 'trial', scopeTeacher, '09:00', '10:00', {
+      meeting: MEET,
+      provider: null,
+    }),
+    [547],
+    'ClassSession_ck',
+  );
+  await refuse(
+    'A meeting address off meet.google.com',
+    classSession(randomUUID(), live, 'trial', scopeTeacher, '09:00', '10:00', {
+      meeting: 'https://meet.example.com/abc-defg-hij',
+    }),
+    [547],
+    'ClassSession_meeting_ck',
+  );
+  await refuse(
+    'A meeting address in upper case',
+    classSession(randomUUID(), live, 'trial', scopeTeacher, '09:00', '10:00', {
+      meeting: 'https://meet.google.com/ABC-DEFG-HIJ',
+    }),
+    [547],
+    'ClassSession_meeting_ck',
+  );
+  await refuse(
+    'A reminder after the start',
+    classSession(randomUUID(), live, 'course', scopeTeacher, '11:00', '12:00', {
+      reminder: '11:30',
+    }),
+    [547],
+    'ClassSession_ck',
+  );
+  await expectAccepted(
+    session,
+    "A trial session with its meeting address, the other teacher's trial, and two Course sessions",
+    `${classSession(trialOne, live, 'trial', scopeTeacher, '09:00', '10:00', { meeting: MEET })}
+     ${classSession(trialOther, live, 'trial', scopeOther, '09:00', '10:00')}
+     ${classSession(courseOne, live, 'course', scopeTeacher, '11:00', '12:00', { reminder: '10:30' })}
+     ${classSession(courseDone, live, 'course', scopeTeacher, '12:00', '13:00')}`,
+  );
+  await refuse(
+    "A session overlapping the teacher's scheduled one",
+    classSession(randomUUID(), live, 'trial', scopeTeacher, '09:30', '10:30'),
+    [51287],
+    'cannot overlap',
+  );
+  await expectAccepted(
+    session,
+    'A session over the hour of a cancelled one — a cancelled session blocks nothing',
+    classSession(courseLate, live, 'course', scopeTeacher, '15:00', '16:00'),
+  );
+  await expectAccepted(
+    session,
+    'A scheduled session moved, re-addressed and completed',
+    `UPDATE [dbo].[ClassSession] SET [startsAt]=${instant('15:30')},[startsLocal]=${local('15:30')},[version]=2 WHERE [id]=N'${courseLate}';
+     UPDATE [dbo].[ClassSession] SET [meetingProvider]=N'google-meet',[meetingUrl]=N'${MEET}',[version]=3 WHERE [id]=N'${courseLate}';
+     UPDATE [dbo].[ClassSession] SET [state]=N'completed',[closedAt]=${instant('13:00')},[version]=2 WHERE [id]=N'${courseDone}';`,
+  );
+  await refuse(
+    'A completed session with a meeting address',
+    `UPDATE [dbo].[ClassSession] SET [state]=N'completed',[closedAt]=${instant('16:00')} WHERE [id]=N'${courseLate}';`,
+    [547],
+    'ClassSession_ck',
+  );
+  const FINAL = 'cannot change or return';
+  await refuse(
+    'A completed session moved',
+    `UPDATE [dbo].[ClassSession] SET [startsAt]=${instant('12:30')},[startsLocal]=${local('12:30')} WHERE [id]=N'${courseDone}';`,
+    [51286],
+    FINAL,
+  );
+  await refuse(
+    'A cancelled session returned to scheduled',
+    `UPDATE [dbo].[ClassSession] SET [state]=N'scheduled',[closedAt]=NULL WHERE [id]=N'${cancelledEarly}';`,
+    [51286],
+    FINAL,
+  );
+  await refuse(
+    "A session's kind rewritten",
+    `UPDATE [dbo].[ClassSession] SET [kind]=N'course' WHERE [id]=N'${trialOne}';`,
+    [51286],
+    'never change',
+  );
+
+  // ---- a Booking fits exactly (51288), claims one window (filtered key) ------------
+  const requestLearner = randomUUID();
+  const requestOutsider = randomUUID();
+  const requestSecond = randomUUID();
+  await expectAccepted(
+    session,
+    'Three trial requests on the live Course, and one enrolment',
+    `INSERT INTO [dbo].[TrialClassRequest] ([id],[userId],[courseId],[requestedAt]) VALUES
+       (N'${requestLearner}',N'${learner}',N'${live}','${at}'),
+       (N'${requestOutsider}',N'${outsider}',N'${live}','${at}'),
+       (N'${requestSecond}',N'${second}',N'${live}','${at}');
+     INSERT INTO [dbo].[Enrolment] ([userId],[courseId],[enrolledAt]) VALUES (N'${learner}',N'${live}','${at}');`,
+  );
+  const booking = (
+    id: string,
+    requestId: string,
+    userId: string,
+    sessionId: string,
+    windowId: string,
+  ): string =>
+    `INSERT INTO [dbo].[Booking] ([id],[requestId],[userId],[courseId],[sessionId],[availabilityId],[state],[confirmedAt],[confirmedById]) VALUES (N'${id}',N'${requestId}',N'${userId}',N'${live}',N'${sessionId}',N'${windowId}',N'confirmed','${at}',NULL);`;
+  const FIT = 'must fit';
+  await refuse(
+    "A Booking for someone other than the request's learner",
+    booking(randomUUID(), requestLearner, outsider, trialOne, windowOne),
+    [51288],
+    FIT,
+  );
+  await refuse(
+    'A Booking on a Course session',
+    booking(randomUUID(), requestOutsider, outsider, courseOne, windowFive),
+    [51288],
+    FIT,
+  );
+  await refuse(
+    "A Booking on another teacher's window",
+    booking(randomUUID(), requestOutsider, outsider, trialOther, windowOne),
+    [51288],
+    FIT,
+  );
+  await refuse(
+    'A Booking on a window at other times',
+    booking(randomUUID(), requestOutsider, outsider, trialOther, otherWindowTwo),
+    [51288],
+    FIT,
+  );
+  const bookingLearner = randomUUID();
+  const bookingOutsider = randomUUID();
+  await expectAccepted(
+    session,
+    'Two Bookings, each on its own trial session and window',
+    `${booking(bookingLearner, requestLearner, learner, trialOne, windowOne)}
+     ${booking(bookingOutsider, requestOutsider, outsider, trialOther, otherWindowOne)}`,
+  );
+  const trialThird = randomUUID();
+  await expectAccepted(
+    session,
+    "A second trial session at the first window's hour, inserted cancelled",
+    classSession(trialThird, live, 'trial', scopeTeacher, '09:00', '10:00', {
+      state: 'cancelled',
+    }),
+  );
+  await refuse(
+    'A second live claim on one window',
+    booking(randomUUID(), requestSecond, second, trialThird, windowOne),
+    [2601],
+    'Booking_slot_key',
+  );
+  await refuse(
+    'A Booking cancelled without its instant',
+    `UPDATE [dbo].[Booking] SET [state]=N'cancelled' WHERE [id]=N'${bookingOutsider}';`,
+    [547],
+    'Booking_ck',
+  );
+  await expectAccepted(
+    session,
+    'A Booking cancelled',
+    `UPDATE [dbo].[Booking] SET [state]=N'cancelled',[cancelledAt]='${at}',[version]=2 WHERE [id]=N'${bookingOutsider}';`,
+  );
+  await refuse(
+    'A cancelled Booking confirmed again',
+    `UPDATE [dbo].[Booking] SET [state]=N'confirmed',[cancelledAt]=NULL WHERE [id]=N'${bookingOutsider}';`,
+    [51288],
+    'final',
+  );
+  await refuse(
+    "A Booking's window rewritten",
+    `UPDATE [dbo].[Booking] SET [availabilityId]=N'${windowTwo}' WHERE [id]=N'${bookingLearner}';`,
+    [51288],
+    'never changes',
+  );
+  const trialFreed = randomUUID();
+  const bookingSecond = randomUUID();
+  await expectAccepted(
+    session,
+    'A cancelled claim frees its window for another request',
+    `${classSession(trialFreed, live, 'trial', scopeOther, '09:00', '10:00', { state: 'cancelled' })}
+     ${booking(bookingSecond, requestSecond, second, trialFreed, otherWindowOne)}`,
+  );
+
+  // ---- attendance (51289): an open session, an eligible participant, never re-keyed
+  const mark = (sessionId: string, userId: string): string =>
+    `INSERT INTO [dbo].[Attendance] ([sessionId],[userId],[status],[markedAt],[markedById]) VALUES (N'${sessionId}',N'${userId}',N'present','${at}',N'${teacher}');`;
+  const ELIGIBLE = 'eligible participant';
+  await refuse(
+    "Attendance for someone other than the trial's learner",
+    mark(trialOne, outsider),
+    [51289],
+    ELIGIBLE,
+  );
+  await refuse(
+    'Attendance for a learner not enrolled on the Course',
+    mark(courseOne, outsider),
+    [51289],
+    ELIGIBLE,
+  );
+  await refuse(
+    'Attendance on a cancelled session',
+    mark(cancelledEarly, learner),
+    [51289],
+    ELIGIBLE,
+  );
+  await refuse(
+    'An attendance mark outside the vocabulary',
+    `INSERT INTO [dbo].[Attendance] ([sessionId],[userId],[status],[markedAt],[markedById]) VALUES (N'${trialOne}',N'${learner}',N'late','${at}',NULL);`,
+    [547],
+    'Attendance_ck',
+  );
+  await expectAccepted(
+    session,
+    'Attendance for the trial learner and for an enrolled learner, then re-marked',
+    `${mark(trialOne, learner)}
+     ${mark(courseOne, learner)}
+     UPDATE [dbo].[Attendance] SET [status]=N'absent',[markedAt]='${at}' WHERE [sessionId]=N'${courseOne}' AND [userId]=N'${learner}';`,
+  );
+  // Any UPDATE touching a key column is a re-key, refused before eligibility
+  // is even asked — a lone re-key as well as one beside a kept mark, and a
+  // move to another session as well as to another person. (The runtime cannot
+  // attempt any of them: its UPDATE on `sessionId` and `userId` is denied by
+  // column.)
+  await refuse(
+    'A lone attendance mark re-keyed to another account',
+    `UPDATE [dbo].[Attendance] SET [userId]=N'${outsider}' WHERE [sessionId]=N'${trialOne}' AND [userId]=N'${learner}';`,
+    [51289],
+    'never re-keyed',
+  );
+  await refuse(
+    'A lone attendance mark moved to another session',
+    `UPDATE [dbo].[Attendance] SET [sessionId]=N'${cancelledEarly}' WHERE [sessionId]=N'${trialOne}' AND [userId]=N'${learner}';`,
+    [51289],
+    'never re-keyed',
+  );
+  await refuse(
+    'An attendance mark re-keyed beside a kept one',
+    `UPDATE [dbo].[Attendance] SET [userId]=CASE WHEN [sessionId]=N'${trialOne}' THEN N'${outsider}' ELSE [userId] END WHERE [userId]=N'${learner}';`,
+    [51289],
+    'never re-keyed',
+  );
+
+  // ---- an intent is relayed or abandoned once, never reopened or re-keyed (51292) --
+  const intentConfirmed = randomUUID();
+  const intentReminder = randomUUID();
+  await expectAccepted(
+    session,
+    'Two pending intents, one relayed and one abandoned',
+    `INSERT INTO [dbo].[ClassCommunicationIntent] ([id],[purpose],[sessionId],[userId],[dueAt],[state],[idempotencyKey]) VALUES
+       (N'${intentConfirmed}',N'learning.booking-confirmed',N'${trialOne}',N'${learner}','${at}',N'pending',N'non-learning-fixture-${run}-confirmed'),
+       (N'${intentReminder}',N'learning.class-reminder',N'${trialOne}',N'${learner}','${at}',N'pending',N'non-learning-fixture-${run}-reminder');
+     UPDATE [dbo].[ClassCommunicationIntent] SET [state]=N'relayed',[relayedAt]='${at}' WHERE [id]=N'${intentConfirmed}';
+     UPDATE [dbo].[ClassCommunicationIntent] SET [state]=N'abandoned' WHERE [id]=N'${intentReminder}';`,
+  );
+  await refuse(
+    'An intent relayed without its instant',
+    `UPDATE [dbo].[ClassCommunicationIntent] SET [state]=N'relayed',[relayedAt]=NULL WHERE [id]=N'${intentReminder}';`,
+    [547],
+    'ClassCommunicationIntent_ck',
+  );
+  const ONCE = 'relayed or abandoned once';
+  await refuse(
+    'A relayed intent reopened',
+    `UPDATE [dbo].[ClassCommunicationIntent] SET [state]=N'pending' WHERE [id]=N'${intentConfirmed}';`,
+    [51292],
+    ONCE,
+  );
+  await refuse(
+    'An abandoned intent relayed',
+    `UPDATE [dbo].[ClassCommunicationIntent] SET [state]=N'relayed',[relayedAt]='${at}' WHERE [id]=N'${intentReminder}';`,
+    [51292],
+    ONCE,
+  );
+  await refuse(
+    'An intent re-keyed',
+    `UPDATE [dbo].[ClassCommunicationIntent] SET [purpose]=N'learning.session-cancelled' WHERE [id]=N'${intentConfirmed}';`,
+    [51292],
+    ONCE,
+  );
+
+  // ---- nothing cascades --------------------------------------------------------------
+  const mutableTables = CLASSES_TABLES.filter(
+    (table) => table !== 'LiveLearningActivation',
+  );
+  const classesRows = async (): Promise<number> =>
+    count(
+      `SELECT (${mutableTables
+        .map((table) => `SELECT COUNT_BIG(*) FROM [dbo].[${table}]`)
+        .join(') + (')}) AS [total];`,
+    );
+  const before = await classesRows();
+  await refuse(
+    'A trial request deleted under its Booking',
+    `DELETE FROM [dbo].[TrialClassRequest] WHERE [id]=N'${requestLearner}';`,
+    [547],
+    'Booking_requestId_fkey',
+  );
+  await refuse(
+    'A scope deleted under its sessions',
+    `DELETE FROM [dbo].[CourseTeachingAssignment] WHERE [id]=N'${scopeTeacher}';`,
+    [547],
+    'ClassSession_scope_fkey',
+  );
+  await refuse(
+    'An assignment deleted under its scope',
+    `DELETE FROM [dbo].[RoleAssignment] WHERE [id]=N'${raTeacher}';`,
+    [547],
+    'CourseTeachingAssignment_roleAssignmentId_fkey',
+  );
+  await refuse(
+    'A window deleted under its Booking',
+    `DELETE FROM [dbo].[Availability] WHERE [id]=N'${windowOne}';`,
+    [547],
+    'Booking_availabilityId_fkey',
+  );
+  if ((await classesRows()) !== before)
+    fail('A refused deletion changed a live-class row.');
+
+  // ---- every fixture row removed, children first, without a cascade -----------------
+  const courses = [live, paced, draft].map((id) => `N'${id}'`).join(',');
+  const accounts = users.map(([user]) => `N'${user}'`).join(',');
+  await expectAccepted(
+    session,
+    'Every live-class fixture row removed, children first, then its Courses, roles and accounts',
+    `DELETE FROM [dbo].[ClassCommunicationIntent] WHERE [userId] IN (${accounts});
+     DELETE FROM [dbo].[Attendance] WHERE [userId] IN (${accounts});
+     DELETE FROM [dbo].[Booking] WHERE [userId] IN (${accounts});
+     DELETE FROM [dbo].[ClassSession] WHERE [courseId] IN (${courses});
+     DELETE FROM [dbo].[Availability] WHERE [userId] IN (${accounts});
+     DELETE FROM [dbo].[CourseTeachingAssignment] WHERE [courseId] IN (${courses});
+     DELETE FROM [dbo].[TrialClassRequest] WHERE [userId] IN (${accounts});
+     DELETE FROM [dbo].[Enrolment] WHERE [userId] IN (${accounts});
+     UPDATE [dbo].[Course] SET [state]=N'archived',[version]=[version]+1,[updatedAt]='${at}' WHERE [id] IN (N'${live}',N'${paced}');
+     DELETE FROM [dbo].[LessonLabel] WHERE [lessonId] IN (SELECT [id] FROM [dbo].[Lesson] WHERE [courseId] IN (${courses}));
+     DELETE FROM [dbo].[Lesson] WHERE [courseId] IN (${courses});
+     DELETE FROM [dbo].[CourseModuleLabel] WHERE [moduleId] IN (SELECT [id] FROM [dbo].[CourseModule] WHERE [courseId] IN (${courses}));
+     DELETE FROM [dbo].[CourseModule] WHERE [courseId] IN (${courses});
+     DELETE FROM [dbo].[CourseLabel] WHERE [courseId] IN (${courses});
+     DELETE FROM [dbo].[CourseSlugHistory] WHERE [courseId] IN (${courses});
+     DELETE FROM [dbo].[Course] WHERE [id] IN (${courses});
+     DELETE FROM [dbo].[RoleAssignment] WHERE [roleId] IN (N'${teachingRole}',N'${plainRole}');
+     DELETE FROM [dbo].[RolePermission] WHERE [roleId] IN (N'${teachingRole}',N'${plainRole}');
+     DELETE FROM [dbo].[Role] WHERE [id] IN (N'${teachingRole}',N'${plainRole}');
+     DELETE FROM [dbo].[User] WHERE [id] IN (${accounts});`,
+  );
+  const [left] = await session.query<{
+    classes: number;
+    learning: number;
+    holders: number;
+  }>(`
+    SELECT
+      (${mutableTables.map((table) => `SELECT COUNT_BIG(*) FROM [dbo].[${table}]`).join(') + (')}) AS [classes],
+      (${LEARNING_TABLES.map((table) => `SELECT COUNT_BIG(*) FROM [dbo].[${table}]`).join(') + (')}) AS [learning],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] WHERE [permissionKey] = N'${TEACHING_PERMISSION}') AS [holders];
+  `);
+  if (
+    Number(left?.classes ?? -1) !== 0 ||
+    Number(left?.learning ?? -1) !== 0 ||
+    Number(left?.holders ?? -1) !== 0
+  )
+    fail(
+      `The live-class rule proofs left a fixture row behind: ${JSON.stringify(left ?? null)}.`,
+    );
+
+  report(
+    'classes rules',
+    `fail closed before activation, immutable activation, typed live scopes, exclusive windows, ` +
+      `sessions on current scopes of their own Course, final sessions, fitting Bookings with one ` +
+      `live claim per window, eligible attendance, once-only intents, no cascade; ` +
+      `${String(refusals)} refusals by name, every text a NON_LEARNING_FIXTURE sentinel, ` +
+      `every row but the activation removed`,
+  );
+}
+
+/**
  * The Phase-13 rollback restores the two editorial keys' Phase-6 descriptions
  * exactly — Article and Page, and no News family.
  */
@@ -11145,7 +12523,10 @@ async function assertNavigationPermission(session: SqlSession): Promise<void> {
  *   4. no People table carries a stored capability, which is what makes "a
  *      profile alone grants nothing" unable to be contradicted by data.
  */
-async function assertPeopleFoundation(session: SqlSession): Promise<void> {
+async function assertPeopleFoundation(
+  session: SqlSession,
+  stage: 'current' | 'before-classes' = 'current',
+): Promise<void> {
   // ---- the catalogue extension and the protected bundle --------------------
   const permissions = await session.query<{ key: string }>(`
     SELECT [key] FROM [dbo].[Permission]
@@ -11175,19 +12556,33 @@ async function assertPeopleFoundation(session: SqlSession): Promise<void> {
     );
   }
 
-  // ---- the capability source whose owner has not shipped is NOT grantable ---
-  const premature = await session.query<{ key: string }>(`
-    SELECT [key] FROM [dbo].[Permission]
-    WHERE [key] IN (${UNSEEDED_CAPABILITY_PERMISSIONS.map((key) => `N'${key}'`).join(', ')})
-    ORDER BY [key];
+  // ---- the teaching capability source: absent until its owner, then ungranted ---
+  const teaching = await session.query<{ key: string; held: number }>(`
+    SELECT p.[key],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp WHERE rp.[permissionKey] = p.[key]) AS [held]
+    FROM [dbo].[Permission] p
+    WHERE p.[key] IN (${TEACHING_CAPABILITY_PERMISSIONS.map((key) => `N'${key}'`).join(', ')})
+    ORDER BY p.[key];
   `);
-  if (premature.length > 0) {
+  if (stage === 'before-classes' && teaching.length > 0) {
     fail(
       `Capability-source permissions were seeded before their owning phase: ` +
-        `${premature.map((row) => row.key).join(', ')}. DOMAIN_MODEL.md §4.5 ` +
+        `${teaching.map((row) => row.key).join(', ')}. DOMAIN_MODEL.md §4.5 ` +
         `derives a contributor capability from it, but it belongs to Learning's ` +
-        `teaching slice (Phase 23), which has not shipped — and OPEN_DECISIONS.md ` +
-        `§6.3 reserves who receives it to the organisation.`,
+        `teaching slice (Phase 23), which is not applied at this stage — and ` +
+        `OPEN_DECISIONS.md §6.3 reserves who receives it to the organisation.`,
+    );
+  }
+  if (
+    stage === 'current' &&
+    (teaching.map((row) => row.key).join(',') !==
+      TEACHING_CAPABILITY_PERMISSIONS.join(',') ||
+      teaching.some((row) => Number(row.held) !== 0))
+  ) {
+    fail(
+      `With Phase 23 applied, ${TEACHING_CAPABILITY_PERMISSIONS.join(', ')} must be catalogued ` +
+        `and held by NO role — a profile alone grants nothing, and OPEN_DECISIONS.md §6.3 ` +
+        `reserves who receives it to the organisation; found ${JSON.stringify(teaching)}.`,
     );
   }
 
@@ -11454,6 +12849,7 @@ try {
   await assertFatwaFoundation(session);
   await assertPersonalisationFoundation(session);
   await assertLearningFoundation(session);
+  await assertClassesFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -11502,19 +12898,36 @@ try {
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
     }
+    if (migration.id === CLASSES_MIGRATION) {
+      // Phase 23 widened no search vocabulary, so none narrows here — and the
+      // whole Phase-22 state it was applied on is back: the protected bundle the
+      // compiled bundle less the two class keys, no teaching key, Learning's
+      // first slice whole with nothing referencing it, Personalisation and
+      // Fatwa whole, and every owner a live-class key once named — Identity's
+      // accounts and RoleAssignment, Learning's own Course and trial request —
+      // untouched by the drop.
+      await assertSearchVocabulary(session, 'phase22');
+      await assertClassesRemoved(session);
+      await assertLearningFoundation(session, 'before-classes');
+      await assertPersonalisationFoundation(session, 'before-classes');
+      await assertFatwaFoundation(session, 'before-classes');
+      await assertTaxonomyFoundation(session);
+      await assertPeopleFoundation(session, 'before-classes');
+    }
     if (migration.id === LEARNING_MIGRATION) {
       // Phase 22 widened the vocabulary by `course` and `learning-path`, so it
       // narrows back to exactly Phase 20's (Phase 21 widened nothing) — and the
       // whole Phase-21 state it was applied on is back: the protected bundle the
-      // compiled bundle less the two Learning keys, Personalisation whole, and
-      // every owner a Learning key once named — Taxonomy's Topic and Language,
+      // compiled bundle less the two Learning keys (and the two class keys
+      // Phase 23's rollback removed first), Personalisation whole, and every
+      // owner a Learning key once named — Taxonomy's Topic and Language,
       // People's Person and Identity's accounts — untouched by the drop.
       await assertSearchVocabulary(session, 'phase20');
       await assertLearningRemoved(session);
       await assertPersonalisationFoundation(session, 'before-learning');
       await assertFatwaFoundation(session, 'before-learning');
       await assertTaxonomyFoundation(session);
-      await assertPeopleFoundation(session);
+      await assertPeopleFoundation(session, 'before-classes');
     }
     if (migration.id === PERSONALISATION_MIGRATION) {
       // Phase 21 widened no search vocabulary, so none narrows here — and the
@@ -11543,7 +12956,7 @@ try {
       await assertSearchVocabulary(session, 'phase19');
       await assertFatwaRemoved(session);
       await assertTaxonomyFoundation(session);
-      await assertPeopleFoundation(session);
+      await assertPeopleFoundation(session, 'before-classes');
       await assertHadithFoundation(session);
       await assertQuranFoundation(session);
     }
@@ -11555,7 +12968,7 @@ try {
       await assertSearchVocabulary(session, 'phase18');
       await assertHadithRemoved(session);
       await assertTaxonomyFoundation(session);
-      await assertPeopleFoundation(session);
+      await assertPeopleFoundation(session, 'before-classes');
       await assertQuranFoundation(session);
       await assertCollectionFoundation(session);
     }
@@ -11567,7 +12980,7 @@ try {
       await assertSearchVocabulary(session, 'phase13');
       await assertQuranRemoved(session);
       await assertTaxonomyFoundation(session);
-      await assertPeopleFoundation(session);
+      await assertPeopleFoundation(session, 'before-classes');
       await assertAudioFoundation(session);
       await assertPhotoFoundation(session);
       await assertCollectionFoundation(session);
@@ -11671,6 +13084,7 @@ try {
   await assertFatwaFoundation(session);
   await assertPersonalisationFoundation(session);
   await assertLearningFoundation(session, 're-deploy');
+  await assertClassesFoundation(session, 're-deploy');
   // The membership rules as BEHAVIOUR, on the re-deployed schema: what was
   // rolled back and re-applied enforces exactly what the first deploy did.
   await assertCollectionMembership(session);
@@ -11690,10 +13104,16 @@ try {
   // canonical proofs above wrote, and their synthetic accounts, content and
   // subscribers die with this disposable database.
   await assertPersonalisationRules(session);
-  // And the Learning rules, last: their synthetic accounts, teacher, Courses
-  // and paths are written and then removed again, children first, so the
+  // And the Learning rules: their synthetic accounts, teacher, Courses and
+  // paths are written and then removed again, children first, so the
   // re-deployed Learning schema ends as empty as the migration left it.
   await assertLearningRules(session);
+  // And the live-class rules, last: 51281 is proved BEFORE the fixture
+  // activation is written, because that row is immutable (51280) and so, like
+  // canonical history, dies only with this disposable database; every other
+  // synthetic row — accounts, roles, Courses, scopes, windows, sessions,
+  // bookings, marks and intents — is removed again, children first.
+  await assertClassesRules(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

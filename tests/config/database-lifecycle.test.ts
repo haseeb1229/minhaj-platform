@@ -272,6 +272,16 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'Enrolment',
       'LessonProgress',
       'TrialClassRequest',
+      // Phase 23 — Learning's live slice: the owner's activation, the typed
+      // teaching scope, a teacher's windows, class sessions, the confirmed
+      // trial Booking, attendance and the service-mail intent.
+      'LiveLearningActivation',
+      'CourseTeachingAssignment',
+      'Availability',
+      'ClassSession',
+      'Booking',
+      'Attendance',
+      'ClassCommunicationIntent',
     ]) {
       expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }
@@ -282,9 +292,10 @@ describe('Phase 1 Chunk 2 migration convention', () => {
     // `Quran` table; `Hadith` left it when Phase 19 delivered the record and
     // `Fatwa` when Phase 20 delivered the ruling; a context-less `Question`
     // is still no phase's. `PrivateCollection` and `Notification` left it when
-    // Phase 21 delivered them, and `Course` when Phase 22 did; a bare
-    // `Teacher`, a Course-level `CourseProgress` and Phase 23's scheduling
-    // are still no delivered phase's.)
+    // Phase 21 delivered them, `Course` when Phase 22 did, and `ClassSession`,
+    // `Availability`, `Attendance` and `Booking` when Phase 23 did; a bare
+    // `Teacher` and a Course-level `CourseProgress` are still no delivered
+    // phase's.)
     for (const table of [
       'Quran',
       'Book',
@@ -293,10 +304,6 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'Teacher',
       'Message',
       'CourseProgress',
-      'ClassSession',
-      'Availability',
-      'Attendance',
-      'Booking',
       'Membership',
       'Donation',
       'MigrationProvenance',

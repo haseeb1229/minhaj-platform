@@ -275,6 +275,14 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/learn/paths/page.tsx',
   'apps/web/src/app/[locale]/(public)/learn/paths/[slug]/page.tsx',
   'apps/web/src/app/[locale]/(public)/learn/trial/page.tsx',
+  // Phase 23 — live classes. The public schedule and the teacher directory read
+  // sessions and teaching scopes an operator schedules, scopes and closes, so
+  // neither can be prerendered; each is proven below to reach no session, no
+  // identity service, no logger and no authentication library. The teacher
+  // alias shares People's alias behaviour, as the author and speaker aliases do.
+  'apps/web/src/app/[locale]/(public)/learn/live/page.tsx',
+  'apps/web/src/app/[locale]/(public)/learn/teachers/page.tsx',
+  'apps/web/src/app/[locale]/(public)/learn/teachers/[slug]/route.ts',
 ];
 
 const PUBLIC_ACTION_FILES = [
@@ -1062,10 +1070,12 @@ describe('a public CONTENT route reads data, and still reads no session', () => 
     // `permanentRedirect` must not be what emits it.
     expect(code(shared)).not.toContain('permanentRedirect');
 
-    // And each route is a handler that delegates, with no render of its own.
+    // And each route is a handler that delegates, with no render of its own —
+    // Phase 23's teacher alias included, which is the same shared function.
     for (const file of [
       'apps/web/src/app/[locale]/(public)/authors/[slug]/route.ts',
       'apps/web/src/app/[locale]/(public)/library/authors/[slug]/route.ts',
+      'apps/web/src/app/[locale]/(public)/learn/teachers/[slug]/route.ts',
     ]) {
       const source = code(await readFile(path.join(repoRoot, file), 'utf8'));
 

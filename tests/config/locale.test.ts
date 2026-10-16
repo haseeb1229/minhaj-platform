@@ -262,6 +262,28 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/my-learning/parts.tsx',
     'apps/web/src/components/my-learning/presentation.ts',
     'apps/web/src/components/my-learning/read.ts',
+    // Phase 23. The public live schedule and teacher directory with their pure
+    // presentation decisions; and the My Classes and teacher-area parts, which
+    // read the session only through the guarded `/my` and `/teacher` entry
+    // points that call them. The ROUTES are dynamic for data, never these
+    // modules.
+    'apps/web/src/components/live-learning/directory.tsx',
+    'apps/web/src/components/live-learning/parts.tsx',
+    'apps/web/src/components/live-learning/presentation.ts',
+    'apps/web/src/components/live-learning/schedule.tsx',
+    'apps/web/src/components/my-classes/parts.tsx',
+    'apps/web/src/components/teacher/action-support.ts',
+    'apps/web/src/components/teacher/attendance-marks.tsx',
+    'apps/web/src/components/teacher/course-frame.tsx',
+    'apps/web/src/components/teacher/names.ts',
+    'apps/web/src/components/teacher/nav.ts',
+    'apps/web/src/components/teacher/parts.tsx',
+    'apps/web/src/components/teacher/presentation.ts',
+    'apps/web/src/components/teacher/read.ts',
+    'apps/web/src/components/teacher/report-table.tsx',
+    'apps/web/src/components/teacher/schedule-form.tsx',
+    'apps/web/src/components/teacher/session-card.tsx',
+    'apps/web/src/components/teacher/student-list.tsx',
     // Phase 21. The private island public content pages place (session-free
     // by construction: it reads personal state only through `/api/my/*`
     // after hydration), and the My Minhaj Personalisation parts, which read

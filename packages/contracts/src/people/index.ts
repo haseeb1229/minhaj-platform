@@ -78,6 +78,7 @@ export type {
   ProfileTextField,
   ProfileTranslationView,
   PublicPersonProfile,
+  PublicTeacherEntry,
 } from './values.ts';
 
 export type {

@@ -181,7 +181,7 @@ administrator enters the Meet URL manually, so **the application holds no Google
 credentials for this flow and never calls a Google API**. Automated Google Calendar/Meet API
 provisioning is deferred behind an integration abstraction and **would carry its own
 credential requirements** if later approved. Class metadata and history are
-in scope for a later phase; class recording is not.
+delivered by Phase 23 (DOMAIN_MODEL.md §13.5); class recording is not in scope.
 
 ### 2.6 Messaging
 

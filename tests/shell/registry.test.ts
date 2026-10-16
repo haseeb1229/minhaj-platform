@@ -252,7 +252,7 @@ describe('a deferred capability cannot be linked', () => {
       ).toBe(false);
   });
 
-  it('delivers Learn at /learn, public, linked and eligible, with only its Phase-22 surfaces', () => {
+  it('delivers Learn at /learn, public, linked and eligible, with its Phase-22 and Phase-23 surfaces', () => {
     // Phase 22: the Learn landing, the Course catalogue, the learning paths and
     // the trial-class explanation are genuine pages in all three locales, the
     // same for every visitor, so each is eligible; a Course and a path are
@@ -267,21 +267,29 @@ describe('a deferred capability cannot be linked', () => {
     const learn = SHELL_ROUTES.filter((entry) => entry.key.startsWith('learn.'));
     expect(learn.map((entry) => entry.key).sort()).toEqual([
       'learn.courses',
+      'learn.live',
       'learn.paths',
+      'learn.teachers',
       'learn.trial',
     ]);
+    // Phase 23: what Live Learning and Find a Teacher show is a RUNTIME fact of
+    // the live-learning activation, so both are excluded from the build-bound
+    // sitemap and each page is noindex (ROUTE_MAP.md §9.5).
+    const activationDependent = new Set(['learn.live', 'learn.teachers']);
     for (const entry of learn) {
       expect(isAvailable(entry) && entry.availability, entry.key).toBe('delivered');
       expect(isAvailable(entry) && entry.visibility, entry.key).toBe('public');
-      expect(isAvailable(entry) && entry.indexing, entry.key).toBe('eligible');
+      expect(isAvailable(entry) && entry.indexing, entry.key).toBe(
+        activationDependent.has(entry.key) ? 'excluded' : 'eligible',
+      );
       expect(isAvailable(entry) && entry.path, entry.key).toBe(
         `/learn/${entry.key.slice('learn.'.length)}`,
       );
       expect(entry.placements, entry.key).toEqual([]);
     }
-    // Live Learning, Training, Resources, Teachers and the Class Schedule are
-    // Phase 23's or later: no entry, so nothing can link them (ROUTE_MAP.md §5.2).
-    for (const absent of ['live', 'training', 'resources', 'teachers', 'schedule']) {
+    // Training, Resources and a separate Class Schedule are later work: no
+    // entry, so nothing can link them (ROUTE_MAP.md §5.2).
+    for (const absent of ['training', 'resources', 'schedule']) {
       expect(routeByKey(`learn.${absent}`), absent).toBeNull();
       expect(
         SHELL_ROUTES.some(

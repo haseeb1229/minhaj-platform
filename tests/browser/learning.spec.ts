@@ -1035,7 +1035,16 @@ test.describe('a learner', () => {
     await expect(
       learner.getByRole('list', { name: copy('myLearning.courses.heading') }),
     ).not.toContainText(TEXT.live);
-    expect(await main.innerText()).not.toMatch(BOOKED);
+    // The request itself says nothing is booked and links no class. Since Phase
+    // 23 the section's help explains what WOULD happen once a class is
+    // confirmed — that one sentence is the only booking word the page may hold.
+    expect(await request.innerText()).not.toMatch(BOOKED);
+    await expect(
+      request.getByRole('link', { name: copy('myLearning.trials.openClass') }),
+    ).toHaveCount(0);
+    expect(
+      (await main.innerText()).replace(copy('myLearning.trials.help'), ''),
+    ).not.toMatch(BOOKED);
     await expect(
       main.getByRole('button', { name: /confirm|schedule|book|join|assign/i }),
     ).toHaveCount(0);
@@ -1655,5 +1664,1326 @@ test.describe('Learning surfaces', () => {
       .click();
     await expect(islandOn(other)).toContainText(copy('learningIsland.enrolled'));
     await other.emulateMedia({ reducedMotion: 'no-preference' });
+  });
+});
+
+/* ===========================================================================
+ * 8. Phase 23 — teachers and live classes
+ * ========================================================================= */
+
+/**
+ * Phase 23 — Teacher Experience & Live Classes, against the production build.
+ *
+ * WHAT ONLY A BROWSER CAN PROVE: that while live learning is switched off the
+ * public schedule, Find a Teacher, My Classes and the Teacher area say so in
+ * words and invent nothing; that the Teacher area is a 404 to anyone who does
+ * not hold `teaching.perform` NOW — a teacher profile alone grants nothing, and
+ * a revoked assignment stops answering on the next request — and shows a
+ * teacher only the Course they are scoped to; that an operator scopes a
+ * teacher, confirms a learner's trial request into a teacher's open window and
+ * schedules a class with a Google Meet link, all through the pages; that the
+ * meeting link reaches the class's own participants on their own pages and no
+ * public document; that a class moved from a stale page is refused visibly, a
+ * mark is one row whose latest value wins, and a cancelled or completed class
+ * offers no join link; that Find a Teacher lists only operational teachers,
+ * narrows by every filter and explains an unknown one; and that the new
+ * surfaces are right-to-left in Urdu and Arabic, reflow at 320 pixels and at
+ * 200% zoom, reach their controls by keyboard with a visible focus, and state
+ * every status in words.
+ *
+ * THE ACTIVATION IS THIS FILE'S. `LiveLearningActivation` is a database-wide,
+ * immutable singleton no other spec writes. The switched-off proofs run first,
+ * against a precondition asserted on the database; only then does this file
+ * write the one `fixture` row, which every later public page must announce
+ * with its test-state banner.
+ *
+ * WHO WRITES WHAT. Identity's role assignments and display names, People's
+ * published teacher profiles and the activation are other owners' or an
+ * operator's facts, written as fixtures through the privileged session.
+ * Everything Learning owns — the scope, the windows, the trial confirmation,
+ * the classes, the meeting links, the marks, every move, cancellation and
+ * completion — is done through the pages.
+ */
+
+/** Synthetic Google Meet addresses; the last is a lookalike host. */
+const MEET = {
+  created: 'https://meet.google.com/xyz-wvut-srq',
+  join: 'https://meet.google.com/abc-defg-hij',
+  trial: 'https://meet.google.com/tri-alxy-zab',
+  invalid: 'https://meet.google.com.evil.example/abc-defg-hij',
+} as const;
+
+/** A UTC calendar date `days` from now, as a `datetime-local` value's date. */
+function dateIn(days: number): string {
+  return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** Wall-clock times in UTC, the zone every form here is given. */
+const WHEN = {
+  windowOne: [`${dateIn(2)}T09:00`, `${dateIn(2)}T10:00`],
+  windowTwo: [`${dateIn(2)}T12:00`, `${dateIn(2)}T13:00`],
+  regular: [`${dateIn(3)}T10:00`, `${dateIn(3)}T11:00`],
+  moved: [`${dateIn(3)}T14:00`, `${dateIn(3)}T15:00`],
+  stale: [`${dateIn(3)}T16:00`, `${dateIn(3)}T17:00`],
+  later: [`${dateIn(5)}T10:00`, `${dateIn(5)}T11:00`],
+} as const;
+
+interface Actor {
+  readonly page: Page;
+  readonly id: string;
+  /** Identity's display name — what an operator or a teacher is shown. */
+  readonly name: string;
+}
+
+interface Teacher extends Actor {
+  /** People's slug and public name — what a visitor is shown. */
+  readonly slug: string;
+  readonly publicName: string;
+}
+
+let teacherOne: Teacher;
+let teacherTwo: Teacher;
+let profileOnly: Teacher;
+let operator: Actor;
+let catalogueReader: Actor;
+let student: Actor;
+let bystander: Actor;
+let trialSessionId: string;
+let regularSessionId: string;
+let laterSessionId: string;
+
+/** One row of a privileged read. */
+async function rowOf<T>(statement: string): Promise<T | undefined> {
+  const [row] = await sql.query<T>(statement);
+  return row;
+}
+
+/** A fresh signed-in account whose Identity display name is a sentinel. */
+async function namedAccount(
+  browser: Browser,
+  index: number,
+  prefix: string,
+  name: string,
+): Promise<Actor> {
+  const { page, id } = await account(browser, index, prefix);
+  await sql.query(`UPDATE [dbo].[User] SET [name]=${n(name)} WHERE [id]=N'${id}';`);
+  return { page, id, name };
+}
+
+/** People's published contributor with an ACTIVE TeacherProfile, linked to the account. */
+async function publishTeacherProfile(actor: Actor, key: string): Promise<Teacher> {
+  const personId = randomUUID();
+  const personSlug = `non-learning-fixture-teacher-${key}-${run}`;
+  const publicName = `${SENTINEL} teacher ${key} ${run}`;
+  await sql.query(`
+    INSERT INTO [dbo].[Person] ([id],[slug],[userId],[primaryLocale],[status])
+      VALUES (N'${personId}', N'${personSlug}', N'${actor.id}', N'en', N'published');
+    INSERT INTO [dbo].[PersonTranslation] ([personId],[locale],[name],[biography])
+      VALUES (N'${personId}', N'en', ${n(publicName)}, NULL);
+    INSERT INTO [dbo].[TeacherProfile] ([id],[personId],[status])
+      VALUES (NEWID(), N'${personId}', N'active');
+    INSERT INTO [dbo].[TeacherProfileLanguage] ([teacherProfileId],[languageCode])
+      SELECT [id], N'ur' FROM [dbo].[TeacherProfile] WHERE [personId]=N'${personId}';
+  `);
+  return { ...actor, slug: personSlug, publicName };
+}
+
+/** The page's own first-level heading, once a streamed page has settled. */
+function mainHeading(page: Page): Locator {
+  return page.getByRole('main').getByRole('heading', { level: 1 }).first();
+}
+
+/**
+ * A Learning administration page refused to a viewer who MAY enter the area.
+ *
+ * The area streams behind its `loading.tsx`, so a page's own key check runs
+ * after the response's status line has gone: the refusal arrives as the
+ * not-found document in the stream (Next's 404 fallback marker), with none of
+ * the page — no `main`, no title, no record. That document is what is proved.
+ * (A viewer with no administrative key at all is refused by the shell before
+ * anything streams, and gets the 404 status too — proved in section 6.)
+ */
+async function expectRefusedInArea(page: Page, target: string): Promise<void> {
+  const response = await page.goto(target);
+  const html = (await response?.text()) ?? '';
+  expect(html, target).toContain('NEXT_HTTP_ERROR_FALLBACK;404');
+  await expect(page.getByRole('main'), target).toHaveCount(0);
+  for (const secret of [TEXT.live, SENTINEL]) expect(html, target).not.toContain(secret);
+}
+
+/** Scopes an account to the live Course through the scopes page. */
+async function grantScope(page: Page, accountId: string): Promise<void> {
+  await page.goto('/en/admin/learning/classes/scopes');
+  await expect(mainHeading(page)).toHaveText(copy('adminLearning.classes.scopes'));
+  await page.locator('#grant-course').selectOption({ label: TEXT.live });
+  await page.locator('#grant-account').fill(accountId);
+  await page
+    .getByRole('button', { name: copy('adminLearning.classes.grantSubmit') })
+    .click();
+}
+
+/** Fills and submits the operator's "Schedule a class" form; the class's page follows. */
+async function scheduleClass(
+  page: Page,
+  teacher: Actor,
+  [starts, ends]: readonly [string, string],
+  meetingUrl: string,
+): Promise<void> {
+  await page.goto('/en/admin/learning/classes/new');
+  await expect(mainHeading(page)).toHaveText(copy('adminLearning.classes.create'));
+  await page
+    .locator('#new-scope')
+    .selectOption({ label: `${TEXT.live} — ${teacher.name}` });
+  await page.locator('#new-zone').selectOption('UTC');
+  await page.locator('#new-starts').fill(starts);
+  await page.locator('#new-ends').fill(ends);
+  await page.locator('#new-meeting').fill(meetingUrl);
+  await page
+    .getByRole('button', { name: copy('adminLearning.classes.createSubmit') })
+    .click();
+}
+
+/** The class identifier an operator's class page is addressed by. */
+function classIdIn(url: string): string {
+  const match = /\/classes\/([0-9a-fA-F-]{36})$/.exec(new URL(url).pathname);
+  if (match?.[1] === undefined) throw new Error(`No class identifier in ${url}`);
+  return match[1];
+}
+
+test.describe('Phase 23 — before live learning is switched on', () => {
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(300_000);
+    teacherOne = await publishTeacherProfile(
+      await namedAccount(
+        browser,
+        7,
+        'learning-teacher-one',
+        `${SENTINEL} account one ${run}`,
+      ),
+      'one',
+    );
+    await grantRole(sql, teacherOne.id, ['teaching.perform'], `${SENTINEL} teaching`);
+    teacherTwo = await publishTeacherProfile(
+      await namedAccount(
+        browser,
+        8,
+        'learning-teacher-two',
+        `${SENTINEL} account two ${run}`,
+      ),
+      'two',
+    );
+    await grantRole(sql, teacherTwo.id, ['teaching.perform'], `${SENTINEL} teaching`);
+    // A published teacher profile and NO teaching role: a profile grants nothing.
+    profileOnly = await publishTeacherProfile(
+      await namedAccount(
+        browser,
+        9,
+        'learning-profile-only',
+        `${SENTINEL} account profile ${run}`,
+      ),
+      'profile-only',
+    );
+    operator = await namedAccount(
+      browser,
+      10,
+      'learning-class-operator',
+      `${SENTINEL} operator ${run}`,
+    );
+    await grantRole(
+      sql,
+      operator.id,
+      ['learning.classes.read', 'learning.classes.administer'],
+      `${SENTINEL} class operator`,
+    );
+    catalogueReader = await namedAccount(
+      browser,
+      11,
+      'learning-catalogue-reader',
+      `${SENTINEL} catalogue reader ${run}`,
+    );
+    await grantRole(sql, catalogueReader.id, ['learning.read'], `${SENTINEL} catalogue`);
+    student = await namedAccount(
+      browser,
+      12,
+      'learning-student',
+      `${SENTINEL} student ${run}`,
+    );
+    bystander = await namedAccount(
+      browser,
+      13,
+      'learning-bystander',
+      `${SENTINEL} bystander ${run}`,
+    );
+  });
+
+  test('Live learning and Find a teacher say plainly that nothing is switched on', async ({
+    page,
+  }) => {
+    // THE PRECONDITION, PROVED: no other spec writes the activation, and this
+    // file has not yet.
+    expect(
+      await scalar('SELECT COUNT_BIG(*) AS [value] FROM [dbo].[LiveLearningActivation];'),
+    ).toBe(0);
+
+    for (const [target, unavailable] of [
+      ['/en/learn/live', copy('learnLive.unavailable.body')],
+      ['/en/learn/teachers', copy('learnTeachers.unavailable.body')],
+      [
+        '/en/learn/teachers?availability=available',
+        copy('learnTeachers.unavailable.body'),
+      ],
+    ] as const) {
+      const response = await page.goto(target);
+      expect(response?.status(), target).toBe(200);
+      expect(response?.headers()['set-cookie'], target).toBeUndefined();
+      await expect(page.locator('meta[name="robots"]').first(), target).toHaveAttribute(
+        'content',
+        /noindex/,
+      );
+      const main = page.getByRole('main');
+      await expect(main, target).toContainText(unavailable);
+      await expect(main, target).not.toContainText(SENTINEL);
+      // No test banner and no list: there is nothing to label.
+      for (const banner of [copy('learnLive.fixture'), copy('learnTeachers.fixture')])
+        await expect(main, target).not.toContainText(banner);
+      for (const list of [copy('learnLive.listLabel'), copy('learnTeachers.title')])
+        await expect(
+          main.getByRole('list', { name: list, exact: true }),
+          target,
+        ).toHaveCount(0);
+      await expect(
+        main.getByRole('link', { name: copy('learnLive.unavailable.browse') }),
+        target,
+      ).toHaveAttribute('href', '/en/learn/courses');
+    }
+  });
+
+  test('a teacher is told the area is off, a learner sees the notice, and only a scope can be prepared', async () => {
+    test.setTimeout(120_000);
+    // A real teacher meets the honest not-switched-on page, with no sections.
+    const teacher = teacherOne.page;
+    for (const target of [
+      '/en/teacher',
+      '/en/teacher/availability',
+      '/en/teacher/students',
+    ]) {
+      const response = await teacher.goto(target);
+      expect(response?.status(), target).toBe(200);
+      await expect(mainHeading(teacher), target).toHaveText(
+        copy('teacher.notActivated.title'),
+      );
+      await expect(teacher.getByRole('main'), target).toContainText(
+        copy('teacher.notActivated.body'),
+      );
+      await expect(
+        teacher.getByRole('navigation', { name: copy('teacher.nav.label') }),
+        target,
+      ).toHaveCount(0);
+      await expect(teacher.getByRole('main').locator('form'), target).toHaveCount(0);
+    }
+
+    // A learner's My Classes says so in words, and offers nothing to join.
+    const response = await student.page.goto('/en/my/classes');
+    expect(response?.status()).toBe(200);
+    const mine = student.page.getByRole('main');
+    await expect(mine).toContainText(copy('myClasses.notActivated'));
+    await expect(mine).toContainText(copy('myClasses.upcoming.empty'));
+    await expect(student.page.locator('a[href*="meet.google.com"]')).toHaveCount(0);
+
+    // The operator is told too; a profile alone cannot be scoped, a teacher can.
+    const op = operator.page;
+    await op.goto('/en/admin/learning/classes');
+    await expect(mainHeading(op)).toHaveText(copy('adminLearning.surface.classes'));
+    await expect(op.getByRole('main')).toContainText(
+      copy('adminLearning.classes.notActivated'),
+    );
+
+    await grantScope(op, profileOnly.id);
+    await expect(
+      op
+        .getByRole('alert')
+        .filter({ hasText: copy('adminLearning.failure.notATeacher') }),
+    ).toBeVisible();
+    await grantScope(op, teacherOne.id);
+    await expect(
+      op.getByRole('status').filter({ hasText: copy('adminLearning.saved') }),
+    ).toBeVisible();
+    const scopes = op.getByRole('table', {
+      name: copy('adminLearning.classes.scopesCurrent'),
+    });
+    const row = scopes.getByRole('row').filter({ hasText: teacherOne.name });
+    await expect(row).toContainText(TEXT.live);
+    await expect(row).toContainText(copy('adminLearning.classes.scopeCurrent'));
+    await expect(scopes).not.toContainText(profileOnly.name);
+    for (const [who, expected] of [
+      [teacherOne.id, 1],
+      [profileOnly.id, 0],
+    ] as const)
+      expect(
+        await scalar(
+          `SELECT COUNT_BIG(*) AS [value] FROM [dbo].[CourseTeachingAssignment] WHERE [userId]=N'${who}' AND [courseId]=N'${ids.live}' AND [endedAt] IS NULL;`,
+        ),
+      ).toBe(expected);
+
+    // …and no class can be scheduled on it until live learning is on.
+    await scheduleClass(op, teacherOne, WHEN.regular, MEET.created);
+    await expect(
+      op
+        .getByRole('alert')
+        .filter({ hasText: copy('adminLearning.failure.notActivated') }),
+    ).toBeVisible();
+    expect(
+      await scalar('SELECT COUNT_BIG(*) AS [value] FROM [dbo].[ClassSession];'),
+    ).toBe(0);
+  });
+});
+
+test.describe('Phase 23 — switched on, and who may enter', () => {
+  test('switching on (as a fixture) opens the Teacher area to a teacher, with only its delivered sections', async () => {
+    expect(
+      await scalar('SELECT COUNT_BIG(*) AS [value] FROM [dbo].[LiveLearningActivation];'),
+    ).toBe(0);
+    await sql.query(
+      `INSERT INTO [dbo].[LiveLearningActivation] ([id],[authority],[authorisedBy]) VALUES (1, N'fixture', N'${SENTINEL} browser operator');`,
+    );
+
+    const teacher = teacherOne.page;
+    const response = await teacher.goto('/en/teacher');
+    expect(response?.status()).toBe(200);
+    await expect(mainHeading(teacher)).toHaveText(copy('teacher.title'));
+    const nav = teacher.getByRole('navigation', { name: copy('teacher.nav.label') });
+    const sections = [
+      'overview',
+      'today',
+      'calendar',
+      'students',
+      'courses',
+      'resources',
+      'attendance',
+      'availability',
+      'profile',
+    ];
+    await expect(nav.getByRole('link')).toHaveText(
+      sections.map((key) => copy(`teacher.nav.${key}`)),
+    );
+    // NO MESSAGES: that surface is a later phase's, and its address does not exist.
+    for (const region of [nav, teacher.getByRole('main')])
+      await expect(region.getByRole('link', { name: /message/i })).toHaveCount(0);
+    await expect(teacher.locator('a[href*="/teacher/messages"]')).toHaveCount(0);
+    expect((await teacher.goto('/en/teacher/messages'))?.status()).toBe(404);
+
+    // The scope prepared while switched off is the one Course this teacher has.
+    await teacher.goto('/en/teacher/courses');
+    const courses = teacher.getByRole('list', { name: copy('teacher.courses.list') });
+    await expect(courses).toContainText(TEXT.live);
+    await expect(courses).not.toContainText(TEXT.paced);
+  });
+
+  test('a profile alone, a teaching role alone and a catalogue key alone each open nothing more', async () => {
+    test.setTimeout(120_000);
+    // A published teacher profile with no live `teaching.perform`: no area.
+    for (const target of [
+      '/en/teacher',
+      '/en/teacher/students',
+      '/en/teacher/availability',
+    ]) {
+      const response = await profileOnly.page.goto(target);
+      expect(response?.status(), target).toBe(404);
+      await expect(
+        profileOnly.page.getByRole('navigation', { name: copy('teacher.nav.label') }),
+        target,
+      ).toHaveCount(0);
+    }
+
+    // `teaching.perform` with no scope: the area, and nothing in it.
+    const two = teacherTwo.page;
+    expect((await two.goto('/en/teacher'))?.status()).toBe(200);
+    await expect(mainHeading(two)).toHaveText(copy('teacher.title'));
+    await expect(two.getByRole('main')).toContainText(copy('teacher.overview.todayNone'));
+    await expect(two.getByRole('main')).toContainText(copy('teacher.overview.nextNone'));
+    for (const [target, empty] of [
+      ['/en/teacher/courses', copy('teacher.courses.empty')],
+      ['/en/teacher/students', copy('teacher.students.empty')],
+      ['/en/teacher/resources', copy('teacher.resources.empty')],
+      ['/en/teacher/calendar', copy('teacher.calendar.empty')],
+    ] as const) {
+      await two.goto(target);
+      await expect(two.getByRole('main'), target).toContainText(empty);
+      await expect(two.getByRole('main'), target).not.toContainText(TEXT.live);
+    }
+
+    // `learning.read` alone: the request COUNTS, never who asked; no classes.
+    const reader = catalogueReader.page;
+    await reader.goto('/en/admin/learning/trials');
+    const main = reader.getByRole('main');
+    await expect(mainHeading(reader)).toHaveText(copy('adminLearning.surface.trials'));
+    await expect(main).toContainText(copy('adminLearning.trials.notScheduled'));
+    const requests = await scalar(
+      `SELECT COUNT_BIG(*) AS [value] FROM [dbo].[TrialClassRequest] WHERE [courseId]=N'${ids.live}';`,
+    );
+    await expect(
+      reader
+        .getByRole('table', { name: copy('adminLearning.surface.trials') })
+        .getByRole('row')
+        .filter({ hasText: TEXT.live })
+        .getByRole('cell'),
+    ).toHaveText([TEXT.live, /\S/, String(requests), /\S/]);
+    await expect(
+      main.getByRole('heading', { name: copy('adminLearning.trials.requestsHeading') }),
+    ).toHaveCount(0);
+    await expect(main.getByRole('button')).toHaveCount(0);
+    const text = await reader.locator('body').innerText();
+    for (const secret of ['Browser Proof', student.name, otherEmail, learnerEmail])
+      expect(text).not.toContain(secret);
+    await expect(
+      reader
+        .getByRole('navigation', { name: copy('adminLearning.title'), exact: true })
+        .getByRole('link', { name: copy('adminLearning.surface.classes') }),
+    ).toHaveCount(0);
+    for (const target of [
+      '/en/admin/learning/classes',
+      '/en/admin/learning/classes/scopes',
+      '/en/admin/learning/classes/new',
+    ])
+      await expectRefusedInArea(reader, target);
+
+    // The class keys alone: the area root sends them to classes; the trials
+    // page shows who asked, and the catalogue's counts stay the catalogue's.
+    const op = operator.page;
+    await op.goto('/en/admin/learning');
+    await op.waitForURL(/\/en\/admin\/learning\/classes$/);
+    await expect(mainHeading(op)).toHaveText(copy('adminLearning.surface.classes'));
+    await expect(
+      op
+        .getByRole('navigation', { name: copy('adminLearning.title'), exact: true })
+        .getByRole('link'),
+    ).toHaveText([
+      copy('adminLearning.surface.trials'),
+      copy('adminLearning.surface.classes'),
+    ]);
+    await expectRefusedInArea(op, '/en/admin/learning/courses');
+    await op.goto('/en/admin/learning/trials');
+    await expect(mainHeading(op)).toHaveText(copy('adminLearning.surface.trials'));
+    await expect(
+      op.getByRole('main').getByRole('heading', {
+        name: copy('adminLearning.trials.requestsHeading'),
+      }),
+    ).toBeVisible();
+    await expect(op.getByRole('main')).toContainText(
+      copy('adminLearning.trials.notBookedUntilConfirmed'),
+    );
+    await expect(
+      op.getByRole('table', { name: copy('adminLearning.surface.trials') }),
+    ).toHaveCount(0);
+  });
+});
+
+test.describe('Phase 23 — a class, from a request to a join link', () => {
+  test('a teacher offers two windows from the availability page', async () => {
+    const teacher = teacherOne.page;
+    for (const [starts, ends] of [WHEN.windowOne, WHEN.windowTwo]) {
+      await teacher.goto('/en/teacher/availability');
+      await expect(mainHeading(teacher)).toHaveText(copy('teacher.availability.title'));
+      await teacher
+        .getByLabel(copy('teacher.availability.timeZone'), { exact: true })
+        .selectOption('UTC');
+      await teacher
+        .getByLabel(copy('teacher.availability.starts'), { exact: true })
+        .fill(starts);
+      await teacher
+        .getByLabel(copy('teacher.availability.ends'), { exact: true })
+        .fill(ends);
+      await teacher
+        .getByRole('button', { name: copy('teacher.availability.submit') })
+        .click();
+      await expect(
+        teacher
+          .getByRole('status')
+          .filter({ hasText: copy('teacher.availability.opened') }),
+      ).toBeVisible();
+    }
+    const windows = teacher.getByRole('list', {
+      name: copy('teacher.availability.list'),
+    });
+    await expect(windows.getByRole('listitem')).toHaveCount(2);
+    for (const window of await windows.getByRole('listitem').all())
+      await expect(
+        window.getByText(copy('teacher.availability.open'), { exact: true }),
+      ).toBeVisible();
+
+    const rows = await sql.query<{ startsLocal: string; timeZone: string }>(
+      `SELECT [startsLocal],[timeZone] FROM [dbo].[Availability] WHERE [userId]=N'${teacherOne.id}' ORDER BY [startsAt];`,
+    );
+    expect(rows).toEqual([
+      { startsLocal: WHEN.windowOne[0], timeZone: 'UTC' },
+      { startsLocal: WHEN.windowTwo[0], timeZone: 'UTC' },
+    ]);
+  });
+
+  test('a learner requests a trial; the operator confirms it into a window, and only then is it booked', async () => {
+    test.setTimeout(120_000);
+    const learnerPage = student.page;
+    await openWithIsland(learnerPage, PAGE.live);
+    const island = islandOn(learnerPage);
+    await island.getByRole('button', { name: copy('learningIsland.enrol') }).click();
+    await expect(island).toContainText(copy('learningIsland.enrolled'));
+    await island
+      .getByRole('button', { name: copy('learningIsland.requestTrial') })
+      .click();
+    await expect(island).toContainText(copy('learningIsland.trialRequested'));
+    // A request books nothing by itself.
+    expect(
+      await scalar(
+        `SELECT COUNT_BIG(*) AS [value] FROM [dbo].[Booking] WHERE [userId]=N'${student.id}';`,
+      ),
+    ).toBe(0);
+
+    const op = operator.page;
+    await op.goto('/en/admin/learning/trials');
+    await expect(mainHeading(op)).toHaveText(copy('adminLearning.surface.trials'));
+    const mine = op
+      .getByRole('list', { name: copy('adminLearning.trials.requestsHeading') })
+      .getByRole('listitem')
+      .filter({ hasText: student.name });
+    await expect(mine).toContainText(copy('adminLearning.trials.unbooked'));
+    const windowOne = await rowOf<{ id: string }>(
+      `SELECT TOP (1) [id] FROM [dbo].[Availability] WHERE [userId]=N'${teacherOne.id}' ORDER BY [startsAt];`,
+    );
+    await mine
+      .getByLabel(copy('adminLearning.trials.window'), { exact: true })
+      .selectOption(windowOne?.id ?? '');
+    await mine
+      .getByRole('button', {
+        name: copy('adminLearning.trials.confirm', { title: TEXT.live }),
+      })
+      .click();
+    await expect(mine).toContainText(copy('adminLearning.trials.bookingState.confirmed'));
+    trialSessionId = classIdIn(
+      new URL(
+        (await mine
+          .getByRole('link', { name: copy('adminLearning.trials.openClass') })
+          .getAttribute('href')) ?? '',
+        baseUrl(),
+      ).toString(),
+    );
+
+    const booking = await rowOf<{
+      state: string;
+      availabilityId: string;
+      sessionId: string;
+    }>(
+      `SELECT [state],[availabilityId],[sessionId] FROM [dbo].[Booking] WHERE [userId]=N'${student.id}';`,
+    );
+    expect(booking).toEqual({
+      state: 'confirmed',
+      availabilityId: windowOne?.id,
+      sessionId: trialSessionId,
+    });
+
+    // The booked window says so in words and can no longer be withdrawn.
+    const teacher = teacherOne.page;
+    await teacher.goto('/en/teacher/availability');
+    const main = teacher.getByRole('main');
+    await expect(
+      main.getByText(copy('teacher.availability.booked'), { exact: true }),
+    ).toBeVisible();
+    await expect(main).toContainText(copy('teacher.availability.cannotWithdraw'));
+    await expect(
+      main.getByRole('button', { name: copy('teacher.availability.withdraw') }),
+    ).toHaveCount(1);
+  });
+
+  test('the operator schedules a regular class with a Google Meet link', async () => {
+    const op = operator.page;
+    await scheduleClass(op, teacherOne, WHEN.regular, MEET.created);
+    await op.waitForURL(/\/en\/admin\/learning\/classes\/[0-9a-fA-F-]{36}$/);
+    regularSessionId = classIdIn(op.url());
+    await expect(mainHeading(op)).toHaveText(TEXT.live);
+    const main = op.getByRole('main');
+    await expect(main).toContainText(copy('adminLearning.classes.kindName.course'));
+    await expect(main).toContainText(copy('adminLearning.classes.stateName.scheduled'));
+    await expect(main.locator('dl').first()).toContainText(teacherOne.name);
+    // The operator's one disclosure: a described link, never the address as text.
+    await expect(
+      main.getByRole('link', { name: copy('adminLearning.classes.meetingOpen') }),
+    ).toHaveAttribute('href', MEET.created);
+    expect(await main.innerText()).not.toContain('xyz-wvut-srq');
+    const participants = op.getByRole('table', {
+      name: copy('adminLearning.classes.participants'),
+      exact: true,
+    });
+    await expect(
+      participants.getByRole('row').filter({ hasText: student.name }),
+    ).toContainText(copy('adminLearning.classes.participationName.enrolment'));
+
+    // The confirmed trial is a class of its own, with its one participant.
+    await op.goto(`/en/admin/learning/classes/${trialSessionId}`);
+    await expect(mainHeading(op)).toHaveText(TEXT.live);
+    await expect(op.getByRole('main')).toContainText(
+      copy('adminLearning.classes.kindName.trial'),
+    );
+    await expect(op.getByRole('main')).toContainText(
+      copy('adminLearning.classes.meetingNone'),
+    );
+    const trialParticipants = op.getByRole('table', {
+      name: copy('adminLearning.classes.participants'),
+      exact: true,
+    });
+    await expect(trialParticipants.getByRole('row')).toHaveCount(2);
+    await expect(
+      trialParticipants.getByRole('row').filter({ hasText: student.name }),
+    ).toContainText(copy('adminLearning.classes.participationName.booking'));
+  });
+
+  test('the teacher sets and replaces meeting links, and a lookalike address is refused', async () => {
+    const teacher = teacherOne.page;
+    const main = teacher.getByRole('main');
+    const address = teacher.getByLabel(copy('teacher.meeting.url'), { exact: true });
+
+    await teacher.goto(`/en/teacher/classes/today/${trialSessionId}`);
+    await expect(mainHeading(teacher)).toHaveText(TEXT.live);
+    await expect(main).toContainText(copy('teacher.kind.trial'));
+    await expect(main).toContainText(copy('teacher.meeting.none'));
+    await address.fill(MEET.trial);
+    await teacher.getByRole('button', { name: copy('teacher.meeting.set') }).click();
+    await expect(
+      teacher.getByRole('status').filter({ hasText: copy('teacher.meeting.saved') }),
+    ).toBeVisible();
+    await expect(main.locator(`a[href="${MEET.trial}"]`)).toHaveAccessibleName(
+      copy('teacher.meeting.join'),
+    );
+
+    await teacher.goto(`/en/teacher/classes/today/${regularSessionId}`);
+    await expect(mainHeading(teacher)).toHaveText(TEXT.live);
+    await expect(main.locator(`a[href="${MEET.created}"]`)).toHaveCount(1);
+    // A lookalike host is refused, visibly, and changes nothing.
+    await address.fill(MEET.invalid);
+    await teacher.getByRole('button', { name: copy('teacher.meeting.replace') }).click();
+    await expect(
+      teacher
+        .getByRole('alert')
+        .filter({ hasText: copy('teacher.failure.invalidMeeting') }),
+    ).toBeVisible();
+    const meetingOf = async (id: string) =>
+      (
+        await rowOf<{ meetingUrl: string | null }>(
+          `SELECT [meetingUrl] FROM [dbo].[ClassSession] WHERE [id]=N'${id}';`,
+        )
+      )?.meetingUrl;
+    expect(await meetingOf(regularSessionId)).toBe(MEET.created);
+
+    await address.fill(MEET.join);
+    await teacher.getByRole('button', { name: copy('teacher.meeting.replace') }).click();
+    await expect(
+      teacher.getByRole('status').filter({ hasText: copy('teacher.meeting.saved') }),
+    ).toBeVisible();
+    const join = main.locator(`a[href="${MEET.join}"]`);
+    await expect(join).toHaveAccessibleName(copy('teacher.meeting.join'));
+    await expect(join).toHaveAttribute('target', '_blank');
+    await expect(main.locator(`a[href="${MEET.created}"]`)).toHaveCount(0);
+    expect(await meetingOf(regularSessionId)).toBe(MEET.join);
+    expect(await meetingOf(trialSessionId)).toBe(MEET.trial);
+    // An href, never text: the address is not written out or echoed back.
+    expect(await main.innerText()).not.toContain('abc-defg-hij');
+    await expect(address).toHaveValue('');
+  });
+
+  test('the learner finds both classes, and each join link, on their own pages', async () => {
+    const page = student.page;
+    const response = await page.goto('/en/my/classes');
+    expect(response?.status()).toBe(200);
+    await expect(mainHeading(page)).toHaveText(copy('myClasses.title'));
+    await expect(page.getByRole('main')).not.toContainText(
+      copy('myClasses.notActivated'),
+    );
+    const upcoming = page.getByRole('list', { name: copy('myClasses.upcoming.heading') });
+    await expect(upcoming.getByRole('listitem')).toHaveCount(2);
+    const trial = upcoming
+      .getByRole('listitem')
+      .filter({ hasText: copy('myClasses.participation.booking') });
+    const regular = upcoming
+      .getByRole('listitem')
+      .filter({ hasText: copy('myClasses.participation.enrolment') });
+    await expect(trial.locator(`a[href="${MEET.trial}"]`)).toHaveAccessibleName(
+      copy('myClasses.join'),
+    );
+    await expect(regular.locator(`a[href="${MEET.join}"]`)).toHaveAccessibleName(
+      copy('myClasses.join'),
+    );
+    for (const item of [trial, regular])
+      await expect(
+        item.getByText(copy('myClasses.state.scheduled'), { exact: true }),
+      ).toBeVisible();
+    await expect(
+      regular.getByRole('button', { name: copy('myClasses.cancel.submit') }),
+    ).toHaveCount(0);
+
+    await page.goto(`/en/my/classes/${regularSessionId}`);
+    await expect(mainHeading(page)).toHaveText(TEXT.live);
+    const join = page
+      .getByRole('main')
+      .getByRole('link', { name: copy('myClasses.join') });
+    await expect(join).toHaveCount(1);
+    await expect(join).toHaveAttribute('href', MEET.join);
+    await expect(join).toHaveAttribute('target', '_blank');
+    await expect(join).toHaveAttribute('rel', /noopener/);
+    await expect(
+      page.getByRole('button', { name: copy('myClasses.cancel.submit') }),
+    ).toHaveCount(0);
+
+    // My Learning says the request is confirmed, links the class, and no
+    // longer offers to withdraw a request a Booking now rests on.
+    await page.goto('/en/my/learning');
+    const request = page
+      .getByRole('list', { name: copy('myLearning.trials.heading') })
+      .getByRole('listitem')
+      .filter({ hasText: TEXT.live });
+    await expect(request).toContainText(copy('myLearning.trials.bookedConfirmed'));
+    await expect(
+      request.getByRole('link', { name: copy('myLearning.trials.openClass') }),
+    ).toHaveAttribute('href', `/en/my/classes/${trialSessionId}`);
+    await expect(request.getByRole('button')).toHaveCount(0);
+  });
+});
+
+test.describe('Phase 23 — nobody else reaches a class', () => {
+  test('another learner and an unscoped teacher are refused every address', async () => {
+    test.setTimeout(120_000);
+    const page = bystander.page;
+    await page.goto('/en/my/classes');
+    const main = page.getByRole('main');
+    await expect(main).toContainText(copy('myClasses.upcoming.empty'));
+    await expect(main).toContainText(copy('myClasses.past.empty'));
+    await expect(page.locator('a[href*="meet.google.com"]')).toHaveCount(0);
+    const secrets = [MEET.join, MEET.trial, MEET.created, student.name];
+    for (const id of [trialSessionId, regularSessionId]) {
+      const response = await page.goto(`/en/my/classes/${id}`);
+      expect(response?.status(), id).toBe(404);
+      const html = await page.content();
+      for (const secret of secrets) expect(html, id).not.toContain(secret);
+    }
+
+    // A teacher with no scope on the Course reaches none of its records.
+    const two = teacherTwo.page;
+    for (const target of [
+      `/en/teacher/classes/today/${regularSessionId}`,
+      `/en/teacher/classes/today/${trialSessionId}`,
+      `/en/teacher/attendance/${regularSessionId}`,
+      `/en/teacher/students/${student.id}`,
+      `/en/teacher/courses/${ids.live}`,
+      `/en/teacher/courses/${ids.live}/students`,
+    ]) {
+      const response = await two.goto(target);
+      expect(response?.status(), target).toBe(404);
+      const html = await two.content();
+      for (const secret of secrets) expect(html, target).not.toContain(secret);
+    }
+    await two.goto('/en/teacher/students');
+    await expect(two.getByRole('main')).toContainText(copy('teacher.students.empty'));
+    await expect(two.getByRole('main')).not.toContainText(student.name);
+  });
+
+  test('no public page carries a meeting address or a participant, and the schedule is one document for everybody', async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(120_000);
+    for (const target of [
+      '/en/learn/live',
+      '/en/learn/teachers',
+      PAGE.live,
+      '/en/learn',
+      '/en/learn/trial',
+      `/en/people/${teacherOne.slug}`,
+    ]) {
+      const response = await request.get(target);
+      expect(response.status(), target).toBe(200);
+      const html = await response.text();
+      expect(html, target).not.toContain('meet.google.com');
+      for (const secret of [
+        student.name,
+        student.id,
+        bystander.name,
+        teacherOne.name,
+        teacherOne.id,
+      ])
+        expect(html, target).not.toContain(secret);
+    }
+
+    // The schedule: the test banner first, then the Course and the teacher's
+    // PUBLIC name — the trial and the regular class, and no participant.
+    const response = await page.goto('/en/learn/live');
+    expect(response?.headers()['set-cookie']).toBeUndefined();
+    await expect(page.locator('meta[name="robots"]').first()).toHaveAttribute(
+      'content',
+      /noindex/,
+    );
+    await expect(page.getByRole('note')).toHaveText(copy('learnLive.fixture'));
+    const schedule = page.getByRole('list', { name: copy('learnLive.listLabel') });
+    await expect(schedule.getByRole('listitem')).toHaveCount(2);
+    for (const item of await schedule.getByRole('listitem').all()) {
+      await expect(
+        item.getByRole('link', { name: TEXT.live, exact: true }),
+      ).toHaveAttribute('href', PAGE.live);
+      await expect(
+        item.getByRole('link', { name: teacherOne.publicName, exact: true }),
+      ).toHaveAttribute('href', `/en/people/${teacherOne.slug}`);
+    }
+
+    for (const target of ['/en/learn/live', '/en/learn/teachers'])
+      for (const visitor of [student, teacherOne]) {
+        const { anonymous, signedIn } = await asTwoVisitors(
+          request,
+          visitor.page.context().request,
+          target,
+        );
+        expect(anonymous.status(), target).toBe(200);
+        expect(signedIn.status(), target).toBe(200);
+        expect(anonymous.headers()['set-cookie'], target).toBeUndefined();
+        expect(signedIn.headers()['set-cookie'], target).toBeUndefined();
+        const [html, signedInHtml] = [await anonymous.text(), await signedIn.text()];
+        expect(
+          firstDifference(knowledgeOf(html), knowledgeOf(signedInHtml)),
+          `${target} differs signed in`,
+        ).toBe('identical');
+        expect(signedInHtml, target).not.toContain(visitor.id);
+      }
+  });
+});
+
+test.describe('Phase 23 — Find a teacher', () => {
+  test('lists the operational teacher only, narrows by every filter, and explains an unknown one', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const listing = () =>
+      page.getByRole('list', { name: copy('learnTeachers.title'), exact: true });
+    const listed = async (query: string): Promise<void> => {
+      const response = await page.goto(`/en/learn/teachers${query}`);
+      expect(response?.status(), query).toBe(200);
+      await expect(listing().getByRole('heading', { level: 2 }), query).toHaveText([
+        teacherOne.publicName,
+      ]);
+    };
+
+    await listed('');
+    await expect(page.getByRole('note')).toHaveText(copy('learnTeachers.fixture'));
+    const card = listing()
+      .getByRole('listitem')
+      .filter({ hasText: teacherOne.publicName });
+    await expect(
+      card.getByRole('link', { name: teacherOne.publicName, exact: true }),
+    ).toHaveAttribute('href', `/en/people/${teacherOne.slug}`);
+    await expect(
+      card.getByRole('link', { name: TEXT.live, exact: true }),
+    ).toHaveAttribute('href', PAGE.live);
+    // An open window remains, so the teacher has open times — a fact, not a time.
+    await expect(card).toContainText(copy('learnTeachers.available'));
+    // Not listed: a teacher with no scope, a profile with no role, and the
+    // Course's public attribution, which is not operational status.
+    const main = page.getByRole('main');
+    for (const absent of [teacherTwo.publicName, profileOnly.publicName])
+      await expect(main).not.toContainText(absent);
+    await expect(main.locator(`a[href="/en/people/${people.linkedSlug}"]`)).toHaveCount(
+      0,
+    );
+
+    // Each filter keeps the teacher while it is true of them.
+    for (const query of ['?availability=available', '?subject=hadith', '?language=ur'])
+      await listed(query);
+
+    // A REAL GET FORM: the labelled choice submits a shareable address.
+    await page.goto('/en/learn/teachers');
+    await page
+      .getByLabel(copy('learnTeachers.filter.availability'), { exact: true })
+      .selectOption('available');
+    await page.getByRole('button', { name: copy('learn.filter.apply') }).click();
+    await expect(page).toHaveURL(
+      /\/en\/learn\/teachers\?(.*&)?availability=available(&|$)/,
+    );
+    await expect(listing().getByRole('heading', { level: 2 })).toHaveText([
+      teacherOne.publicName,
+    ]);
+
+    // A real subject nobody teaches live is an explained empty result…
+    await page.goto('/en/learn/teachers?subject=quran');
+    await expect(main).toContainText(copy('learnTeachers.filter.empty'));
+    await expect(listing()).toHaveCount(0);
+
+    // …and an unknown value lists NOTHING and says why — it never broadens.
+    for (const query of [
+      '?availability=bogus',
+      '?subject=no-such-topic',
+      `?subject=no-such-topic-${run}`,
+      '?subject=hadith&availability=bogus',
+    ]) {
+      await page.goto(`/en/learn/teachers${query}`);
+      await expect(main, query).toContainText(copy('learnTeachers.filter.invalid'));
+      await expect(listing(), query).toHaveCount(0);
+      await expect(main, query).not.toContainText(teacherOne.publicName);
+      await expect(
+        main.getByRole('link', { name: copy('learn.filter.clear') }).first(),
+        query,
+      ).toHaveAttribute('href', '/en/learn/teachers');
+    }
+  });
+
+  test('a teacher address under Learn is ONE 301 to the contributor profile', async ({
+    request,
+  }) => {
+    for (const locale of ['en', 'ur'] as const) {
+      const from = `/${locale}/learn/teachers/${teacherOne.slug}`;
+      const response = await request.get(from, { maxRedirects: 0 });
+      expect(response.status(), from).toBe(301);
+      const location = new URL(response.headers()['location'] ?? '', baseUrl());
+      expect(location.pathname, from).toBe(`/${locale}/people/${teacherOne.slug}`);
+      const landing = await request.get(location.pathname, { maxRedirects: 0 });
+      expect(landing.status(), from).toBe(200);
+    }
+    const unknown = await request.get(
+      `/en/learn/teachers/non-learning-fixture-nobody-${run}`,
+      { maxRedirects: 0 },
+    );
+    expect(unknown.status()).toBe(404);
+  });
+});
+
+test.describe('Phase 23 — a class’s life', () => {
+  test('the teacher moves a class, and a page that saw the old version is refused', async () => {
+    const teacher = teacherOne.page;
+    const target = `/en/teacher/classes/today/${regularSessionId}`;
+    await teacher.goto(target);
+    await expect(mainHeading(teacher)).toHaveText(TEXT.live);
+    const stale = await teacher.context().newPage();
+    await stale.goto(target);
+    await expect(mainHeading(stale)).toHaveText(TEXT.live);
+
+    const move = async (page: Page, [starts, ends]: readonly [string, string]) => {
+      await page
+        .getByLabel(copy('teacher.reschedule.timeZone'), { exact: true })
+        .selectOption('UTC');
+      await page
+        .getByLabel(copy('teacher.reschedule.starts'), { exact: true })
+        .fill(starts);
+      await page.getByLabel(copy('teacher.reschedule.ends'), { exact: true }).fill(ends);
+      await page.getByRole('button', { name: copy('teacher.reschedule.submit') }).click();
+    };
+    await move(teacher, WHEN.moved);
+    await expect(
+      teacher.getByRole('status').filter({ hasText: copy('teacher.reschedule.moved') }),
+    ).toBeVisible();
+
+    await move(stale, WHEN.stale);
+    await expect(
+      stale.getByRole('alert').filter({ hasText: copy('teacher.failure.conflict') }),
+    ).toBeVisible();
+    await stale.close();
+
+    const moved = await rowOf<{ startsLocal: string; endsLocal: string; state: string }>(
+      `SELECT [startsLocal],[endsLocal],[state] FROM [dbo].[ClassSession] WHERE [id]=N'${regularSessionId}';`,
+    );
+    expect(moved).toEqual({
+      startsLocal: WHEN.moved[0],
+      endsLocal: WHEN.moved[1],
+      state: 'scheduled',
+    });
+  });
+
+  test('the teacher marks the learner present, then absent — one mark, the latest', async () => {
+    const teacher = teacherOne.page;
+    await teacher.goto(`/en/teacher/classes/today/${regularSessionId}`);
+    await expect(mainHeading(teacher)).toHaveText(TEXT.live);
+    const row = teacher.getByRole('row').filter({ hasText: student.name });
+    const word = (key: string) =>
+      row.getByText(copy(`teacher.attendance.${key}`), { exact: true });
+    await expect(word('unmarked')).toBeVisible();
+
+    await row
+      .getByRole('button', {
+        name: copy('teacher.session.markPresent', { name: student.name }),
+      })
+      .click();
+    await expect(word('present')).toBeVisible();
+    await row
+      .getByRole('button', {
+        name: copy('teacher.session.markAbsent', { name: student.name }),
+      })
+      .click();
+    await expect(word('absent')).toBeVisible();
+    await expect(word('present')).toHaveCount(0);
+
+    const marks = await sql.query<{ status: string }>(
+      `SELECT [status] FROM [dbo].[Attendance] WHERE [sessionId]=N'${regularSessionId}' AND [userId]=N'${student.id}';`,
+    );
+    expect(marks).toEqual([{ status: 'absent' }]);
+  });
+
+  test('the learner cancels their trial from My Classes under reduced motion, and its join link goes', async () => {
+    const page = student.page;
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/en/my/classes');
+    await expect(mainHeading(page)).toHaveText(copy('myClasses.title'));
+    expect(
+      await page.evaluate(
+        () =>
+          document
+            .getAnimations()
+            .filter((animation) => animation.playState === 'running').length,
+      ),
+    ).toBe(0);
+    const trial = page
+      .getByRole('list', { name: copy('myClasses.upcoming.heading') })
+      .getByRole('listitem')
+      .filter({ hasText: copy('myClasses.participation.booking') });
+    await trial.getByLabel(copy('myClasses.cancel.confirm')).check();
+    await trial.getByRole('button', { name: copy('myClasses.cancel.submit') }).click();
+
+    const past = page.getByRole('list', { name: copy('myClasses.past.heading') });
+    await expect(
+      past
+        .getByRole('listitem')
+        .filter({ hasText: copy('myClasses.participation.booking') })
+        .getByText(copy('myClasses.state.cancelled'), { exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(`a[href="${MEET.trial}"]`)).toHaveCount(0);
+
+    const response = await page.goto(`/en/my/classes/${trialSessionId}`);
+    expect(response?.status()).toBe(200);
+    const main = page.getByRole('main');
+    await expect(
+      main.getByText(copy('myClasses.state.cancelled'), { exact: true }),
+    ).toBeVisible();
+    await expect(main.locator('a[href*="meet.google.com"]')).toHaveCount(0);
+    await expect(
+      main.getByRole('heading', { name: copy('myClasses.detail.joining') }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: copy('myClasses.cancel.submit') }),
+    ).toHaveCount(0);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+    expect(
+      await rowOf(
+        `SELECT b.[state] AS [booking], cs.[state] AS [session], cs.[meetingUrl] FROM [dbo].[Booking] b JOIN [dbo].[ClassSession] cs ON cs.[id]=b.[sessionId] WHERE b.[userId]=N'${student.id}';`,
+      ),
+    ).toEqual({ booking: 'cancelled', session: 'cancelled', meetingUrl: null });
+
+    // The request is still recorded, and says what became of it.
+    await page.goto('/en/my/learning');
+    await expect(
+      page
+        .getByRole('list', { name: copy('myLearning.trials.heading') })
+        .getByRole('listitem')
+        .filter({ hasText: TEXT.live }),
+    ).toContainText(copy('myLearning.trials.bookedCancelled'));
+
+    // The teacher's page shows a closed class: no link, no changes.
+    const teacher = teacherOne.page;
+    await teacher.goto(`/en/teacher/classes/today/${trialSessionId}`);
+    const closed = teacher.getByRole('main');
+    await expect(
+      closed.getByText(copy('teacher.state.cancelled'), { exact: true }),
+    ).toBeVisible();
+    await expect(closed).toContainText(copy('teacher.meeting.notScheduled'));
+    await expect(closed.locator('a[href*="meet.google.com"]')).toHaveCount(0);
+    await expect(closed.locator('form')).toHaveCount(0);
+  });
+
+  test('a completed class offers no join link to its teacher or its learner', async () => {
+    test.setTimeout(120_000);
+    // A later class first, on the same scope, for the teacher replacement below.
+    const op = operator.page;
+    await scheduleClass(op, teacherOne, WHEN.later, '');
+    await op.waitForURL(/\/en\/admin\/learning\/classes\/[0-9a-fA-F-]{36}$/);
+    laterSessionId = classIdIn(op.url());
+    await expect(mainHeading(op)).toHaveText(TEXT.live);
+    await expect(op.getByRole('main')).toContainText(
+      copy('adminLearning.classes.meetingNone'),
+    );
+
+    const teacher = teacherOne.page;
+    await teacher.goto(`/en/teacher/classes/today/${regularSessionId}`);
+    await expect(mainHeading(teacher)).toHaveText(TEXT.live);
+    await teacher.getByRole('button', { name: copy('teacher.complete.submit') }).click();
+    const main = teacher.getByRole('main');
+    await expect(main).toContainText(
+      copy('teacher.session.closed', { state: copy('teacher.state.completed') }),
+    );
+    await expect(main.locator('a[href*="meet.google.com"]')).toHaveCount(0);
+    // A held class still shows its mark.
+    await expect(
+      teacher
+        .getByRole('row')
+        .filter({ hasText: student.name })
+        .getByText(copy('teacher.attendance.absent'), { exact: true }),
+    ).toBeVisible();
+    expect(
+      await rowOf(
+        `SELECT [state],[meetingUrl] FROM [dbo].[ClassSession] WHERE [id]=N'${regularSessionId}';`,
+      ),
+    ).toEqual({ state: 'completed', meetingUrl: null });
+
+    const page = student.page;
+    await page.goto(`/en/my/classes/${regularSessionId}`);
+    const mine = page.getByRole('main');
+    await expect(
+      mine.getByText(copy('myClasses.state.completed'), { exact: true }),
+    ).toBeVisible();
+    await expect(
+      mine.getByText(copy('myClasses.attendance.absent'), { exact: true }),
+    ).toBeVisible();
+    await expect(mine.locator('a[href*="meet.google.com"]')).toHaveCount(0);
+    await page.goto('/en/my/classes');
+    await expect(page.locator('a[href*="meet.google.com"]')).toHaveCount(0);
+    // The later class is upcoming, with no link until its teacher adds one.
+    await expect(
+      page
+        .getByRole('list', { name: copy('myClasses.upcoming.heading') })
+        .getByRole('listitem'),
+    ).toHaveCount(1);
+  });
+
+  test('revoking the teaching role closes the area on the next request; another scoped teacher takes the class', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await sql.query(
+      `UPDATE [dbo].[RoleAssignment] SET [revokedAt]=SYSUTCDATETIME() WHERE [userId]=N'${teacherOne.id}' AND [revokedAt] IS NULL;`,
+    );
+    for (const target of ['/en/teacher', `/en/teacher/classes/today/${laterSessionId}`]) {
+      const response = await teacherOne.page.goto(target);
+      expect(response?.status(), target).toBe(404);
+      await expect(
+        teacherOne.page.getByRole('navigation', { name: copy('teacher.nav.label') }),
+        target,
+      ).toHaveCount(0);
+    }
+    // Find a Teacher drops them at once: they are no longer operational.
+    await page.goto('/en/learn/teachers');
+    await expect(page.getByRole('main')).toContainText(copy('learnTeachers.empty'));
+    await expect(page.getByRole('main')).not.toContainText(teacherOne.publicName);
+
+    const op = operator.page;
+    await grantScope(op, teacherTwo.id);
+    await expect(
+      op.getByRole('status').filter({ hasText: copy('adminLearning.saved') }),
+    ).toBeVisible();
+    await op.goto(`/en/admin/learning/classes/${laterSessionId}`);
+    await expect(mainHeading(op)).toHaveText(TEXT.live);
+    await op
+      .locator('#replacement-scope')
+      .selectOption({ label: `${TEXT.live} — ${teacherTwo.name}` });
+    await op
+      .getByRole('button', { name: copy('adminLearning.classes.replaceTeacherSubmit') })
+      .click();
+    await expect(op.getByRole('main').locator('dl').first()).toContainText(
+      teacherTwo.name,
+    );
+    expect(
+      await rowOf(
+        `SELECT s.[userId] FROM [dbo].[ClassSession] cs JOIN [dbo].[CourseTeachingAssignment] s ON s.[id]=cs.[scopeId] WHERE cs.[id]=N'${laterSessionId}';`,
+      ),
+    ).toEqual({ userId: teacherTwo.id });
+
+    const two = teacherTwo.page;
+    const response = await two.goto(`/en/teacher/classes/today/${laterSessionId}`);
+    expect(response?.status()).toBe(200);
+    await expect(mainHeading(two)).toHaveText(TEXT.live);
+    await two.goto('/en/teacher/calendar');
+    await expect(two.getByRole('main')).toContainText(TEXT.live);
+  });
+});
+
+test.describe('Phase 23 — every locale, every width, the keyboard', () => {
+  test('the new surfaces are right-to-left in Urdu and Arabic', async ({ page }) => {
+    test.setTimeout(180_000);
+    for (const locale of ['ur', 'ar'] as const)
+      for (const [viewer, target] of [
+        [page, `/${locale}/learn/live`],
+        [page, `/${locale}/learn/teachers`],
+        [student.page, `/${locale}/my/classes`],
+        [teacherTwo.page, `/${locale}/teacher`],
+        [teacherTwo.page, `/${locale}/teacher/availability`],
+        [operator.page, `/${locale}/admin/learning/classes`],
+      ] as const) {
+        const response = await viewer.goto(target);
+        expect(response?.status(), target).toBe(200);
+        await expect(mainHeading(viewer), target).toBeVisible();
+        await expect(viewer.locator('html'), target).toHaveAttribute('dir', 'rtl');
+        await expect(viewer.locator('html'), target).toHaveAttribute('lang', locale);
+      }
+  });
+
+  test('they reflow at 320px and at 200% zoom, with headings in order', async () => {
+    test.setTimeout(300_000);
+    const viewers = [student.page, teacherTwo.page, operator.page];
+    // 640 CSS pixels is a 1280-pixel window at 200% zoom.
+    for (const width of [320, 640]) {
+      for (const viewer of viewers) await viewer.setViewportSize({ width, height: 800 });
+      for (const locale of ['en', 'ar'] as const)
+        for (const [viewer, target] of [
+          [student.page, `/${locale}/my/classes`],
+          [student.page, `/${locale}/my/classes/${regularSessionId}`],
+          [teacherTwo.page, `/${locale}/teacher`],
+          [teacherTwo.page, `/${locale}/teacher/classes/today/${laterSessionId}`],
+          [teacherTwo.page, `/${locale}/teacher/availability`],
+          [operator.page, `/${locale}/admin/learning/classes/${laterSessionId}`],
+        ] as const) {
+          const response = await viewer.goto(target);
+          expect(response?.status(), target).toBe(200);
+          await expect(mainHeading(viewer), target).toBeVisible();
+          expect(
+            await overflowOf(viewer),
+            `${String(width)}px ${target}`,
+          ).toBeLessThanOrEqual(0);
+          await expectHeadingsInOrder(viewer, `${String(width)}px ${target}`);
+        }
+    }
+    for (const viewer of viewers)
+      await viewer.setViewportSize({ width: 1280, height: 800 });
+  });
+
+  test('a class page’s meeting form and marks are labelled and reached by keyboard, and every status is a word', async () => {
+    test.setTimeout(120_000);
+    const teacher = teacherTwo.page;
+    await teacher.goto(`/en/teacher/classes/today/${laterSessionId}`);
+    await expect(mainHeading(teacher)).toHaveText(TEXT.live);
+    await expectLabelledControls(teacher, 'the teacher’s class page');
+
+    const address = teacher.getByLabel(copy('teacher.meeting.url'), { exact: true });
+    await tabTo(teacher, address);
+    await expectVisibleFocus(address, 'the meeting address');
+    const present = teacher.getByRole('button', {
+      name: copy('teacher.session.markPresent', { name: student.name }),
+    });
+    await tabTo(teacher, present);
+    await expectVisibleFocus(present, 'Mark present');
+
+    // States in words, not colour: the class and each participant's mark.
+    const main = teacher.getByRole('main');
+    await expect(
+      main.getByText(copy('teacher.state.scheduled'), { exact: true }),
+    ).toBeVisible();
+    await expect(
+      teacher
+        .getByRole('row')
+        .filter({ hasText: student.name })
+        .getByText(copy('teacher.attendance.unmarked'), { exact: true }),
+    ).toBeVisible();
+
+    // The learner's own history says cancelled, completed and absent in words.
+    await student.page.goto('/en/my/classes');
+    const past = student.page.getByRole('list', { name: copy('myClasses.past.heading') });
+    for (const key of ['state.cancelled', 'state.completed', 'attendance.absent'])
+      await expect(
+        past.getByText(copy(`myClasses.${key}`), { exact: true }),
+        key,
+      ).toBeVisible();
+    const upcoming = student.page.getByRole('list', {
+      name: copy('myClasses.upcoming.heading'),
+    });
+    await expect(
+      upcoming.getByText(copy('myClasses.state.scheduled'), { exact: true }),
+    ).toBeVisible();
   });
 });

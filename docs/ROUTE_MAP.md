@@ -273,9 +273,20 @@ former slug answers one 301 to the current one, and none of `courses`, `paths`, 
 public syllabus; lesson bodies are read in My Learning. `/learn/trial` explains that a trial class
 is a REQUEST on a `live` Course — recorded, not booked — and lists those Courses; the request itself
 is made from the Course page's private island. Every Learn page reads no session. **Not delivered:**
-`/learn/live`, `/learn/training`, `/learn/resources`, `/learn/teachers` and its alias — no truthful
-delivered contract exists yet (confirmed classes, availability and a teacher directory are Phase 23's or
-unowned); they have no route and no link.
+`/learn/training` and `/learn/resources` — no owner contract exists; they have no route and no link.
+
+**Delivered in Phase 23 (DOMAIN_MODEL.md §13.5).** `/learn/live` and `/learn/teachers`, both
+activation-aware: with no live-learning activation each renders an honest localized unavailable
+state, with a `fixture` activation a visible test-state notice, and both are `noindex` and absent from
+every sitemap because their content depends on an operator decision. `/learn/live` lists upcoming
+scheduled sessions on published live Courses with the Course and the teacher's public People profile
+and the time in the class's own zone — never a participant, a Booking, an Attendance mark, a window or
+a meeting address. `/learn/teachers` lists teachers who are current on every axis (DOMAIN_MODEL.md
+§13.5); `?subject` takes a canonical Topic slug, `?language` a content-language code and
+`?availability` exactly `available` (at least one future open, unbooked window); a malformed or unknown
+value shows an empty, explained result and never broadens. `/learn/teachers/{slug}` is a one-hop
+`301` to `/people/{slug}` for a published contributor and a 404 otherwise, like the author aliases.
+Both pages read no session. There is no public per-session route.
 
 ### 3.6 Library
 
@@ -466,7 +477,17 @@ composed at Layer 4. Each is private, `noindex` and per request, and reads only 
 own Enrolments, Progress and trial requests; a Course the account is not enrolled on answers like a
 missing one. A lesson is completed only by the learner's explicit act. Path progress is derived from
 the account's Course Enrolments — there is no path enrolment. `/my/settings/privacy` also offers the
-Learning export. `/my/classes/*` and `/my/teachers` stay Phase 23's.
+Learning export.
+
+**Delivered in Phase 23.** `/my/classes`, `/my/classes/{id}` and `/my/teachers` — Learning's,
+composed at Layer 4. Each is private, `noindex` and per request, and reads only the signed-in
+account's own classes: upcoming regular sessions through a current Enrolment, trial sessions through
+the account's own confirmed Booking, past classes through participation and Attendance. A guessed
+session id answers like a missing one. The meeting link appears only under the disclosure rule
+(SECURITY_BASELINE.md §11) and never on a completed or cancelled class; a learner may cancel their
+own confirmed future trial Booking and nothing else. `/my/teachers` lists teachers the account
+genuinely has a class relationship with, by their public People profile — never every attribution
+or every TeacherProfile. `/my/messages/*` stays Phase 24's.
 
 > **Personalised home panels appear only for owners that actually exist.** The `/my` landing
 > composes what has been delivered; it does not render an empty frame for a context that has
@@ -554,6 +575,15 @@ Require a current `teaching.perform` assignment. All `noindex`, private cache. P
 **Meeting URLs appear only on authenticated, private-cached pages** for authorised
 participants (SECURITY_BASELINE.md §11).
 
+**Delivered in Phase 23.** Every route above **except `/teacher/messages` and its conversation
+view**, which stay Phase 24's and have no link. Every page requires an active session holding a
+live `teaching.perform` assignment AND a current typed scope on the Course concerned, re-read per
+request; a signed-in account without that authority gets the same 404 an administrative page gives,
+and with no live-learning activation the area renders an honest unavailable state. `/teacher/profile`
+is read-only — the public TeacherProfile is People's and is edited by People's own administration.
+`/teacher/resources` and `/teacher/courses/{id}/materials` are truthful views over the Course's own
+syllabus and lesson bodies; there is no upload.
+
 ---
 
 ## 7. Admin routes
@@ -573,7 +603,11 @@ Prefixed `/{locale}/admin`.
 | People | `/admin/people/{persons\|authors\|speakers\|scholars\|teachers}` |
 | Identity | `/admin/identity/{users\|roles\|permissions\|assignments\|security}` \u2014 **security** covers second-factor state, bootstrap status and identity audit (SECURITY_BASELINE.md \u00a78) |
 | Taxonomy | `/admin/taxonomy/{topics\|mapping\|languages\|tags}` |
-| Learning | `/admin/learning/{courses\|paths\|classes\|enrolments\|trials}` — `courses` (with each Course's modules and lessons), `paths`, `enrolments` and `trials` delivered in Phase 22 under `learning.read` / `learning.administer`. A published Course's syllabus is frozen until it returns to draft. `enrolments` and `trials` show counts per Course, never who; `trials` is read-only — nothing confirms, schedules or assigns a request. `classes` is Phase 23's |
+| Learning | `/admin/learning/{courses\|paths\|classes\|enrolments\|trials}` — `courses` (with each Course's modules and lessons), `paths`, `enrolments` and `trials` delivered in Phase 22 under `learning.read` / `learning.administer`. A published Course's syllabus is frozen until it returns to draft. `enrolments` and `trials` show counts per Course, never who; `trials` showed counts only in Phase 22. **Phase 23:** `classes` (sessions, a session's participants and
+attendance, new regular sessions, reschedule, cancel, complete, teacher replacement, and the typed
+teaching scopes) under `learning.classes.read` / `learning.classes.administer`; `trials` additionally
+shows who asked and confirms a request into a Booking on a teacher's open window under the same keys —
+`learning.read` alone keeps the count-only view. Identity reads are audited |
 | Global | `/admin/global/{countries\|regions\|cities\|centres}` — delivered in Phase 16; a Centre's contacts and served Cities are managed on the Centre |
 | Membership | `/admin/membership` · `/applications` |
 | Donations | `/admin/donations` · `/campaigns` |

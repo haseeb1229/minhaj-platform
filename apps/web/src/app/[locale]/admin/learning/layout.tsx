@@ -11,11 +11,12 @@ import { TextLink } from '@/components/ui';
  * The Learning administration shell (ROUTE_MAP.md §7:
  * `/admin/learning/{courses|paths|classes|enrolments|trials}`), Phase 22.
  *
- * ONLY WHAT EXISTS. Phase 22 delivers courses, paths, enrolments and trials;
- * classes are Phase 23's teaching work and have no link and no route here.
- * Enrolments and trials are COUNTS — no Learning permission reveals who
- * enrolled or who asked for a trial class — and the trials page confirms,
- * schedules and assigns nothing.
+ * ONLY WHAT THE VIEWER MAY OPEN. Phase 22 delivered courses, paths,
+ * enrolments and trials under `learning.read`; Phase 23 adds classes under
+ * the separate `learning.classes.read`, and that link appears only for a
+ * viewer holding it. Enrolments are COUNTS — `learning.read` reveals who
+ * enrolled to nobody — and the trials page names who asked, and confirms a
+ * request, only under the class keys.
  *
  * `noindex, nofollow` for the whole subtree, and the navigation is filtered by
  * permission as presentation only: every page re-checks `learning.read`
@@ -34,6 +35,7 @@ export const metadata = { robots: { index: false, follow: false } };
 export const dynamic = 'force-dynamic';
 
 const SURFACES = ['courses', 'paths', 'enrolments', 'trials'] as const;
+const CLASS_SURFACES = ['classes'] as const;
 
 export default async function LearningAdminLayout({
   children,
@@ -52,9 +54,12 @@ export default async function LearningAdminLayout({
 
   return (
     <>
-      {held.has('learning.read') ? (
+      {held.has('learning.read') || held.has('learning.classes.read') ? (
         <nav className="flex flex-wrap gap-4" aria-label={t('title')}>
-          {SURFACES.map((surface) => (
+          {[
+            ...(held.has('learning.read') ? SURFACES : (['trials'] as const)),
+            ...(held.has('learning.classes.read') ? CLASS_SURFACES : []),
+          ].map((surface) => (
             <TextLink key={surface} href={`/${locale}/admin/learning/${surface}`}>
               {t(`surface.${surface}`)}
             </TextLink>

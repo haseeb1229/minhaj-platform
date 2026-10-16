@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import { localeSchema, type Locale } from '@minhaj/contracts';
+import type { PermissionKey } from '@minhaj/contracts/identity';
 
 import { requirePermittedAction } from '@/composition/authorization';
 import { learningRuntime } from '@/composition/learning';
@@ -12,6 +13,7 @@ import { indexAfterResponse } from '@/composition/search';
 import { learningFailure } from '@/contexts/learning';
 import type { FormActionState } from '../../(identity)/form-state';
 import {
+  confirmationFields,
   courseFields,
   formInteger,
   formValue,
@@ -19,6 +21,8 @@ import {
   moduleChange,
   pathChange,
   pathFields,
+  rescheduleFields,
+  sessionFields,
 } from './forms';
 
 /**
@@ -32,9 +36,12 @@ import {
  * nothing, so it is not a step-up operation; being named as a Course's
  * teacher grants nothing either.
  *
- * NOTHING HERE REACHES A LEARNER. There is no action that reads or edits
- * anybody's Enrolment or Progress, and none that confirms, schedules or
- * assigns a trial class: those requests are counted, read-only.
+ * THE CATALOGUE NEVER REACHES A LEARNER. No catalogue action reads or edits
+ * anybody's Enrolment or Progress. The CLASS actions below (Phase 23) are a
+ * separate key — `learning.classes.administer`, re-checked live here and
+ * again in the service — and they confirm, schedule, move, cancel and
+ * complete classes, scope teachers and correct one attendance mark; none of
+ * them grants an Identity key, and none prints a meeting address.
  *
  * NAMED CHANGES UNDER AN EXPECTED VERSION. A syllabus or a path changes one
  * named change at a time — add, edit, remove, move — against the version the
@@ -60,9 +67,10 @@ function rejected(error: unknown, operation: string): FormActionState {
 /** The locale, then the live permission: who acts, or `null` for a refusal. */
 async function authorise(
   form: FormData,
+  permission: PermissionKey = 'learning.administer',
 ): Promise<{ readonly locale: Locale; readonly accountId: string } | null> {
   const locale = localeSchema.parse(form.get('locale'));
-  const permitted = await requirePermittedAction(locale, 'learning.administer');
+  const permitted = await requirePermittedAction(locale, permission);
   if (permitted.state === 'denied') return null;
   return { locale, accountId: permitted.session.account.id };
 }
@@ -250,6 +258,207 @@ export async function changePathAction(
     refreshed(actor.locale);
   } catch (error) {
     return rejected(error, 'learning-change-path');
+  }
+  return DONE;
+}
+
+/* ===========================================================================
+ * Classes — Phase 23, under `learning.classes.administer`
+ * ========================================================================= */
+
+const CLASSES: PermissionKey = 'learning.classes.administer';
+
+/** Re-renders the class administration and My Minhaj; no catalogue words changed. */
+function refreshedClasses(locale: Locale): void {
+  revalidatePath(`/${locale}/admin/learning`, 'layout');
+  revalidatePath(`/${locale}/my`, 'layout');
+}
+
+/** Confirms one trial request into a Booking and a class on the chosen window. */
+export async function confirmTrialAction(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  try {
+    const actor = await authorise(form, CLASSES);
+    if (actor === null) return DENIED;
+    await learningRuntime().classes.confirmTrial(
+      { accountId: actor.accountId },
+      confirmationFields(form),
+    );
+    refreshedClasses(actor.locale);
+  } catch (error) {
+    return rejected(error, 'learning-confirm-trial');
+  }
+  return DONE;
+}
+
+/** Schedules a regular Course session on a current scope, then opens it. */
+export async function createSessionAction(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  let destination: string;
+  try {
+    const actor = await authorise(form, CLASSES);
+    if (actor === null) return DENIED;
+    const created = await learningRuntime().classes.createSession(
+      { accountId: actor.accountId },
+      formValue(form, 'scopeId') ?? '',
+      sessionFields(form),
+    );
+    destination = `/${actor.locale}/admin/learning/classes/${created.session.id}`;
+    refreshedClasses(actor.locale);
+  } catch (error) {
+    return rejected(error, 'learning-create-session');
+  }
+  // Outside the try: `redirect` signals by throwing, and that is not a failure.
+  redirect(destination);
+}
+
+export async function rescheduleSessionAction(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  try {
+    const actor = await authorise(form, CLASSES);
+    if (actor === null) return DENIED;
+    await learningRuntime().classes.reschedule(
+      { accountId: actor.accountId },
+      formValue(form, 'id') ?? '',
+      expected(form),
+      rescheduleFields(form),
+    );
+    refreshedClasses(actor.locale);
+  } catch (error) {
+    return rejected(error, 'learning-reschedule-session');
+  }
+  return DONE;
+}
+
+/** Cancels a session — everybody's class, so it is confirmed first. */
+export async function cancelSessionAction(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  if (form.get('confirm') !== 'on') return UNCONFIRMED;
+  try {
+    const actor = await authorise(form, CLASSES);
+    if (actor === null) return DENIED;
+    await learningRuntime().classes.cancel(
+      { accountId: actor.accountId },
+      formValue(form, 'id') ?? '',
+      expected(form),
+    );
+    refreshedClasses(actor.locale);
+  } catch (error) {
+    return rejected(error, 'learning-cancel-session');
+  }
+  return DONE;
+}
+
+export async function completeSessionAction(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  try {
+    const actor = await authorise(form, CLASSES);
+    if (actor === null) return DENIED;
+    await learningRuntime().classes.complete(
+      { accountId: actor.accountId },
+      formValue(form, 'id') ?? '',
+      expected(form),
+    );
+    refreshedClasses(actor.locale);
+  } catch (error) {
+    return rejected(error, 'learning-complete-session');
+  }
+  return DONE;
+}
+
+/** Moves a future session to another current scope of the same Course. */
+export async function replaceTeacherAction(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  try {
+    const actor = await authorise(form, CLASSES);
+    if (actor === null) return DENIED;
+    await learningRuntime().classes.replaceTeacher(
+      { accountId: actor.accountId },
+      formValue(form, 'id') ?? '',
+      expected(form),
+      formValue(form, 'scopeId') ?? '',
+    );
+    refreshedClasses(actor.locale);
+  } catch (error) {
+    return rejected(error, 'learning-replace-teacher');
+  }
+  return DONE;
+}
+
+/** Corrects one participant's attendance mark on one session. */
+export async function correctAttendanceAction(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  try {
+    const actor = await authorise(form, CLASSES);
+    if (actor === null) return DENIED;
+    await learningRuntime().classes.correctAttendance(
+      { accountId: actor.accountId },
+      formValue(form, 'sessionId') ?? '',
+      formValue(form, 'accountId') ?? '',
+      formValue(form, 'status'),
+    );
+    refreshedClasses(actor.locale);
+  } catch (error) {
+    return rejected(error, 'learning-correct-attendance');
+  }
+  return DONE;
+}
+
+/**
+ * Scopes a teacher to a Course. The account must ALREADY hold a live
+ * `teaching.perform` assignment from Identity and a published TeacherProfile
+ * from People; this grants neither.
+ */
+export async function grantScopeAction(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  try {
+    const actor = await authorise(form, CLASSES);
+    if (actor === null) return DENIED;
+    await learningRuntime().classes.grantScope(
+      { accountId: actor.accountId },
+      formValue(form, 'courseId') ?? '',
+      formValue(form, 'accountId') ?? '',
+    );
+    refreshedClasses(actor.locale);
+  } catch (error) {
+    return rejected(error, 'learning-grant-scope');
+  }
+  return DONE;
+}
+
+/** Ends a scope, under the version shown. Its future classes are refused until moved. */
+export async function endScopeAction(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  if (form.get('confirm') !== 'on') return UNCONFIRMED;
+  try {
+    const actor = await authorise(form, CLASSES);
+    if (actor === null) return DENIED;
+    await learningRuntime().classes.endScope(
+      { accountId: actor.accountId },
+      formValue(form, 'id') ?? '',
+      expected(form),
+    );
+    refreshedClasses(actor.locale);
+  } catch (error) {
+    return rejected(error, 'learning-end-scope');
   }
   return DONE;
 }

@@ -873,3 +873,40 @@ IF OBJECT_ID(N'[dbo].[LessonLabel]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT
 IF OBJECT_ID(N'[dbo].[Enrolment]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[Enrolment] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[Enrolment] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[LessonProgress]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[LessonProgress] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[LessonProgress] TO [$(app_login)]; END;
 IF OBJECT_ID(N'[dbo].[TrialClassRequest]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[TrialClassRequest] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[TrialClassRequest] TO [$(app_login)]; END;
+
+-- Phase 23: Learning — teacher experience & live classes.
+--
+-- THE ACTIVATION is the owner's: SELECT and nothing else, so no runtime
+-- permission can turn live learning on, or re-label a fixture as approved.
+IF OBJECT_ID(N'[dbo].[LiveLearningActivation]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[LiveLearningActivation] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[LiveLearningActivation] TO [$(app_login)]; END;
+--
+-- A TEACHING SCOPE is privilege history: inserted, ENDED (its ending and its
+-- version are the only columns that move) and never deleted, so what was
+-- taught under which assignment can always be read back. Its identity — the
+-- Course, the account, the RoleAssignment and the grant — is never rewritten.
+IF OBJECT_ID(N'[dbo].[CourseTeachingAssignment]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[CourseTeachingAssignment] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[CourseTeachingAssignment] ([id], [courseId], [userId], [roleAssignmentId], [grantedAt], [grantedById]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[CourseTeachingAssignment] TO [$(app_login)]; END;
+--
+-- A SESSION is scheduled, moved, re-addressed, re-assigned and closed, and
+-- never deleted: a cancelled class stays as the record its Booking, its
+-- Attendance and its intents point at. Its identity, Course, kind and
+-- creation instant are never rewritten.
+IF OBJECT_ID(N'[dbo].[ClassSession]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[ClassSession] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[ClassSession] ([id], [courseId], [kind], [createdAt]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[ClassSession] TO [$(app_login)]; END;
+--
+-- A WINDOW is offered, withdrawn (state and version alone move; its times and
+-- owner never do) and, once its owner's account is closed and no Booking names
+-- it, deleted by the owner's own disposition.
+IF OBJECT_ID(N'[dbo].[Availability]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[Availability] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[Availability] ([id], [userId], [startsAt], [endsAt], [timeZone], [startsLocal], [endsLocal], [createdAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[Availability] TO [$(app_login)]; END;
+--
+-- A BOOKING is confirmed, cancelled or completed (state, cancellation and
+-- version move; what it names never does) and deleted only by its owner's
+-- closed-account disposition.
+IF OBJECT_ID(N'[dbo].[Booking]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[Booking] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[Booking] ([id], [requestId], [userId], [courseId], [sessionId], [availabilityId], [confirmedAt], [confirmedById]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[Booking] TO [$(app_login)]; END;
+--
+-- AN ATTENDANCE MARK is made, re-marked (the mark alone; never re-keyed) and
+-- removed by its owner's disposition.
+IF OBJECT_ID(N'[dbo].[Attendance]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[Attendance] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[Attendance] ([sessionId], [userId]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[Attendance] TO [$(app_login)]; END;
+--
+-- A COMMUNICATION INTENT is committed, claimed, relayed or abandoned (state,
+-- claim and relay move; its purpose, session, recipient, instant and key never
+-- do) and removed by its recipient's disposition.
+IF OBJECT_ID(N'[dbo].[ClassCommunicationIntent]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[ClassCommunicationIntent] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[ClassCommunicationIntent] ([id], [purpose], [sessionId], [userId], [dueAt], [idempotencyKey], [createdAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[ClassCommunicationIntent] TO [$(app_login)]; END;

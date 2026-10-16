@@ -100,3 +100,125 @@ export async function modulePositions(
     `SELECT [id], [position] FROM [dbo].[CourseModule] WHERE [courseId] = ${n(courseId)} ORDER BY [position];`,
   );
 }
+
+/* ===========================================================================
+ * Phase 23 — the owner's activation and Identity's teaching authority
+ * ========================================================================= */
+
+/** The operator's activation of live learning. Immutable once written. */
+export async function activateLive(
+  admin: SqlSession,
+  authority: 'fixture' | 'approved',
+): Promise<void> {
+  const reference =
+    authority === 'approved' ? n('NON_LEARNING_FIXTURE evidence') : 'NULL';
+  await admin.query(`
+    INSERT INTO [dbo].[LiveLearningActivation] ([id],[authority],[authorisedBy],[reference])
+    VALUES (1, ${n(authority)}, N'NON_LEARNING_FIXTURE operator', ${reference});
+  `);
+}
+
+export interface TeacherFixture {
+  readonly accountId: string;
+  readonly roleId: string;
+  readonly roleAssignmentId: string;
+}
+
+/**
+ * A synthetic active account holding a LIVE assignment of a role carrying
+ * exactly the keys named (`teaching.perform` by default) — what Identity
+ * would report as a live teaching assignment. The assignment id is what a
+ * scope must name.
+ */
+export async function teacherAccount(
+  admin: SqlSession,
+  permissions: readonly string[] = ['teaching.perform'],
+): Promise<TeacherFixture> {
+  const accountId = await createProofAccount(admin);
+  const roleId = randomUUID();
+  const roleAssignmentId = randomUUID();
+  await admin.query(`
+    INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system])
+    VALUES (${n(roleId)}, ${n(`proof-learning-${roleId}`)}, N'Synthetic teaching role', N'Test fixture', 0);
+    INSERT INTO [dbo].[RoleAssignment] ([id],[userId],[roleId])
+    VALUES (${n(roleAssignmentId)}, ${n(accountId)}, ${n(roleId)});
+  `);
+  for (const key of permissions)
+    await admin.query(
+      `INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES (${n(roleId)}, ${n(key)});`,
+    );
+  return { accountId, roleId, roleAssignmentId };
+}
+
+/** Revokes one assignment, as Identity would. */
+export async function revokeAssignment(
+  admin: SqlSession,
+  roleAssignmentId: string,
+): Promise<void> {
+  await admin.query(
+    `UPDATE [dbo].[RoleAssignment] SET [revokedAt] = SYSUTCDATETIME() WHERE [id] = ${n(roleAssignmentId)};`,
+  );
+}
+
+/** A scope written directly by the owner — for trigger-floor proofs. */
+export async function scope(
+  admin: SqlSession,
+  courseId: string,
+  teacher: { readonly accountId: string; readonly roleAssignmentId: string },
+): Promise<string> {
+  const id = randomUUID();
+  await admin.query(`
+    INSERT INTO [dbo].[CourseTeachingAssignment] ([id],[courseId],[userId],[roleAssignmentId],[grantedAt])
+    VALUES (${n(id)}, ${n(courseId)}, ${n(teacher.accountId)}, ${n(teacher.roleAssignmentId)}, SYSUTCDATETIME());
+  `);
+  return id;
+}
+
+/** A window written directly by the owner — the only way a PAST window exists. */
+export async function pastWindow(admin: SqlSession, accountId: string): Promise<string> {
+  const id = randomUUID();
+  await admin.query(`
+    INSERT INTO [dbo].[Availability] ([id],[userId],[startsAt],[endsAt],[timeZone],[startsLocal],[endsLocal],[state])
+    VALUES (${n(id)}, ${n(accountId)}, DATEADD(hour, -3, SYSUTCDATETIME()), DATEADD(hour, -2, SYSUTCDATETIME()),
+            N'UTC', N'2026-01-01T00:00', N'2026-01-01T01:00', N'open');
+  `);
+  return id;
+}
+
+/** Intents owed for one session, by state and purpose. */
+export async function intentsFor(
+  admin: SqlSession,
+  sessionId: string,
+): Promise<{ purpose: string; userId: string; state: string; dueAt: Date }[]> {
+  return admin.query<{ purpose: string; userId: string; state: string; dueAt: Date }>(
+    `SELECT [purpose], [userId], [state], [dueAt] FROM [dbo].[ClassCommunicationIntent]
+     WHERE [sessionId] = ${n(sessionId)} ORDER BY [purpose], [userId], [dueAt];`,
+  );
+}
+
+/** A session's private columns, read by the owner for "cleared" proofs. */
+export async function sessionColumns(
+  admin: SqlSession,
+  sessionId: string,
+): Promise<{ state: string; meetingUrl: string | null; scopeId: string } | undefined> {
+  const [row] = await admin.query<{
+    state: string;
+    meetingUrl: string | null;
+    scopeId: string;
+  }>(
+    `SELECT [state], [meetingUrl], [scopeId] FROM [dbo].[ClassSession] WHERE [id] = ${n(sessionId)};`,
+  );
+  return row;
+}
+
+/** Every Phase 23 row one account owns that disposition may remove or end. */
+export async function classRows(admin: SqlSession, accountId: string): Promise<number> {
+  const owner = `[userId] = ${n(accountId)}`;
+  return (
+    (await count(admin, 'Booking', owner)) +
+    (await count(admin, 'Attendance', owner)) +
+    (await count(admin, 'ClassCommunicationIntent', owner)) +
+    (await count(admin, 'Availability', owner)) +
+    (await count(admin, 'CourseTeachingAssignment', `${owner} AND [endedAt] IS NULL`))
+  );
+}

@@ -26,10 +26,11 @@ import { courseBrowseHref, learnPageLinks, learnPath, offsetHref } from './prese
  * The Learn landing, the trial-class explanation and the topic hub's Course
  * section (ROUTE_MAP.md §3.5; INFORMATION_ARCHITECTURE.md §3.4).
  *
- * ONLY WHAT IS DELIVERED IS OFFERED. All Courses, Learning Paths and Trial
- * Classes are linked because they exist; Live Learning, Training, Resources,
- * Teachers, Find a Teacher and the Class Schedule are Phase 23's or later and
- * appear nowhere — not greyed out, not "coming soon" (ROUTE_MAP.md §5.2).
+ * ONLY WHAT IS DELIVERED IS OFFERED. All Courses, Learning Paths, Trial
+ * Classes, Live Learning and Find a Teacher are linked because they exist
+ * (Live Learning and Find a Teacher since Phase 23); Training and Resources
+ * are later work and appear nowhere — not greyed out, not "coming soon"
+ * (ROUTE_MAP.md §5.2).
  *
  * NO FAKE CATALOGUE. Nothing here is counted, rated or featured: the landing
  * shows the most recently published Courses and paths the reader returns, and
@@ -41,7 +42,7 @@ const LANDING_COURSES = 6;
 const LANDING_PATHS = 3;
 
 /** The delivered Learn surfaces, in the order the landing lists them. */
-const SURFACES = ['courses', 'paths', 'trial'] as const;
+const SURFACES = ['courses', 'paths', 'trial', 'live', 'teachers'] as const;
 
 export async function LearnLandingPage({ locale }: { readonly locale: Locale }) {
   const t = await getTranslations({ locale, namespace: 'learn' });
@@ -146,9 +147,9 @@ export async function LearnLandingPage({ locale }: { readonly locale: Locale }) 
  *
  * A REQUEST, NEVER A BOOKING. A signed-in person may ask for a trial class on a
  * Course taught live; the request is recorded and nothing else happens — no
- * teacher is reserved, no time is named, no class is created. Confirming a
- * class is not offered yet (Phase 23), and the page says exactly that rather
- * than implying a booking. The request itself is made from the Course's own
+ * teacher is reserved, no time is named, no class is created. Confirming it
+ * into a class is a separate act by staff (Phase 23), and the page says so
+ * rather than implying a booking. The request itself is made from the Course's own
  * page, through its private island.
  */
 export async function TrialPage({

@@ -169,3 +169,58 @@ export function pathChange(form: FormValues): object | null {
       return null;
   }
 }
+
+/* ===========================================================================
+ * Classes — Phase 23
+ * ========================================================================= */
+
+/**
+ * A window as a scheduling form states it: the zone, the local start and end
+ * as a `datetime-local` control submits them, and the operator's choice for a
+ * repeated hour — absent until a refusal asked for it, never guessed.
+ */
+export function windowFields(form: FormValues) {
+  return {
+    timeZone: line(form, 'timeZone'),
+    startsLocal: line(form, 'startsLocal'),
+    endsLocal: line(form, 'endsLocal'),
+    startFold: formValue(form, 'startFold'),
+    endFold: formValue(form, 'endFold'),
+  };
+}
+
+/** The reminder lead chosen: none when the field is empty; anything else as typed. */
+export function reminderLead(form: FormValues): number | null {
+  const raw = formValue(form, 'reminderLeadMinutes');
+  if (raw === null) return null;
+  return /^[0-9]{1,5}$/u.test(raw) ? Number(raw) : Number.NaN;
+}
+
+/** A new regular session: its schedule and, when one was pasted, a meeting address. */
+export function sessionFields(form: FormValues) {
+  const url = formValue(form, 'meetingUrl');
+  return {
+    schedule: { ...windowFields(form), reminderLeadMinutes: reminderLead(form) },
+    meeting: url === null ? null : { provider: 'google-meet', url },
+  };
+}
+
+/**
+ * A reschedule: the new window, and the reminder lead ONLY when the form
+ * chose one — `keep` leaves the session's current lead alone, which the
+ * contract expresses as the field being absent.
+ */
+export function rescheduleFields(form: FormValues) {
+  const window = windowFields(form);
+  if (formValue(form, 'reminderLeadMinutes') === 'keep') return window;
+  return { ...window, reminderLeadMinutes: reminderLead(form) };
+}
+
+/** A trial confirmation: the request, the chosen window and the reminder lead. */
+export function confirmationFields(form: FormValues) {
+  return {
+    requestId: line(form, 'requestId'),
+    availabilityId: line(form, 'availabilityId'),
+    reminderLeadMinutes: reminderLead(form),
+  };
+}

@@ -168,6 +168,14 @@ progress and trial-class REQUESTS with no age, guardian, minor or vetting field 
 of them; a trial request schedules nothing and no teacher reaches a learner (DOMAIN_MODEL.md §13.4).
 Teacher/student live learning — this gate's first subject — remains Phase 23's.
 
+**Still OPEN after Phase 23.** Phase 23 delivered the policy-independent, default-deny mechanics
+only (DOMAIN_MODEL.md §13.5): typed teaching scopes under a live `teaching.perform` grant, bookable
+windows, conflict-safe trial confirmation, sessions, attendance, revocation and replacement,
+private meeting addresses and service mail. It invented no age threshold, guardian consent, vetting,
+one-to-one or retention rule, stores no note about a learner, and ships **no activation**: the
+`LiveLearningActivation` row that switches live learning on is absent, and an `approved` row records
+this decision when it is made. Student-to-student messaging does not exist (Phase 24 not started).
+
 **Why it matters:** It **materially changes** consent flows, messaging policy, moderation and
 data handling. Far cheaper to know before Phase 23 than after.
 
@@ -194,7 +202,8 @@ opt-in and consent evidence on privacy-minimising engineering defaults (SECURITY
 §19.1.2). It decides none of the questions above: no retention period, legal hold, residency rule,
 statutory deadline, age rule or named-jurisdiction compliance claim exists, and this gate still
 applies to Phase 33. Phase 22 added Learning's export and closure disposition on the same defaults
-(SECURITY_BASELINE.md §19.1.3) and decided nothing above either.
+(SECURITY_BASELINE.md §19.1.3) and decided nothing above either. Phase 23 extended both to classes on
+the same privacy-minimising defaults (§19.1.4) and decided nothing above either.
 
 ### 2.3 Legal document content
 **Owner:** Minhaj · **Gates:** **Phase 6 — publication.** Phase 4 reserves the routes only ·
@@ -476,6 +485,12 @@ who creates meeting links · the **safeguarding and business rules** governing t
 Automatic Calendar/Meet creation remains deferred, and **any future explicitly approved Google
 API integration would have its own credential requirements.**
 
+**Still OPEN after Phase 23.** The manual flow is delivered: a teacher or operator pastes a
+`meet.google.com` address, the platform validates and stores the string, and discloses it only to
+authorised participants while a session is scheduled. Whether the organisation and its teachers
+may legitimately create and use such meetings is not decided by that engineering, and no activation
+row records it.
+
 ### 5.4 Payment provider
 **Owner:** Minhaj · **Gates:** Phase 27 only · **Priority:** Low–Medium
 
@@ -543,6 +558,11 @@ The `fatwa.publish` portion is Critical and duplicated at §1.4 because of its c
 **Still OPEN after Phase 22.** Learning's catalogue keys (`learning.read`, `learning.administer`)
 are ordinary administrative keys and confer no teaching authority; `teaching.perform` is still not
 catalogued, and naming a person as a Course's teacher is public attribution that grants nothing.
+
+**Still OPEN after Phase 23.** `teaching.perform` is now catalogued and externally gated — bundled
+into no role and held by nobody. A real teacher is named by the organisation and granted through
+the ordinary audited `permissions.grant` lifecycle; an operator then scopes that account to a
+Course. No such grant and no scope exists in the delivered database.
 
 ### 6.4 Brand and visual identity
 **Owner:** Minhaj · **Gates:** Phase 4 · **Priority:** Medium

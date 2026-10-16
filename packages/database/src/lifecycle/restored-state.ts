@@ -86,8 +86,10 @@ const FUTURE_DOMAIN_TABLES = [
   // left in Phase 21, which delivers it as Personalisation's in-app record,
   // proved by the Phase-21 recovery fixture, and `Course` in Phase 22, which
   // delivers it with the Learning tables, proved by the Phase-22 recovery
-  // fixture. A bare `Teacher` stays: a Course names its teachers as People's
-  // `Person`, and teaching itself is no delivered phase's.
+  // fixture. A bare `Teacher` stays even after Phase 23: a Course names its
+  // teachers as People's `Person`, and teaching authority is Identity's
+  // `teaching.perform` scoped by the typed `CourseTeachingAssignment`, proved
+  // by the Phase-23 recovery fixture.
   'Quran',
   'Book',
   'Scholar',
@@ -283,6 +285,25 @@ export const PHASE22_TABLES = [
   'TrialClassRequest',
 ];
 
+/**
+ * Tables the Phase-23 migration creates: the owner's live-learning activation,
+ * the typed Course teaching scope, a teacher's bookable windows, class
+ * sessions, the confirmed trial Booking, attendance marks and the durable
+ * service-mail intent.
+ *
+ * Checked as REQUIRED whenever the Phase-23 migration is among those the caller
+ * expects.
+ */
+export const PHASE23_TABLES = [
+  'LiveLearningActivation',
+  'CourseTeachingAssignment',
+  'Availability',
+  'ClassSession',
+  'Booking',
+  'Attendance',
+  'ClassCommunicationIntent',
+];
+
 async function userTables(session: SqlSession): Promise<string[]> {
   const rows = await session.query<{ name: string }>(`
     SELECT t.name FROM sys.tables t
@@ -463,6 +484,18 @@ export async function verifyRestoredSchema(
     if (missing.length > 0)
       throw new Error(
         `Restored database is missing Phase-22 Learning tables: ${missing.join(', ')}`,
+      );
+  }
+
+  // Phase 23. A restore that carried the live-classes migration's history row
+  // but not its activation, scopes, windows, sessions, bookings, attendance or
+  // intents would report an applied migration over a database that has lost
+  // who teaches what, what was booked and what mail is still owed.
+  if (expectedMigrationIds.some((id) => id.includes('phase23'))) {
+    const missing = PHASE23_TABLES.filter((table) => !tables.includes(table));
+    if (missing.length > 0)
+      throw new Error(
+        `Restored database is missing Phase-23 live-class tables: ${missing.join(', ')}`,
       );
   }
   const columns = await auditColumns(restored);

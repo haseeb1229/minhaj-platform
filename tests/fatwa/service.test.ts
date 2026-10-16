@@ -146,10 +146,13 @@ describe('the Fatwa permission vocabulary', () => {
   });
 
   it('keeps every externally gated key out of the protected administrator bundle', () => {
+    // The three Fatwa keys are gated; Phase 23 added `teaching.perform` as the
+    // fourth gated key (OPEN_DECISIONS.md §6.3), and nothing else is.
     expect([...EXTERNALLY_GATED_PERMISSIONS].sort()).toEqual([
       'fatwa.answer',
       'fatwa.publish',
       'question.receive',
+      'teaching.perform',
     ]);
     for (const key of EXTERNALLY_GATED_PERMISSIONS)
       expect(PLATFORM_ADMINISTRATOR_PERMISSIONS).not.toContain(key);

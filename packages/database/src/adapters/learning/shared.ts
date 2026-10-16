@@ -1,6 +1,10 @@
 import 'server-only';
 
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+
+import type { TeacherIdentity } from '@minhaj/contracts/learning';
+
+import { LearningDataError } from './errors.ts';
 
 /**
  * What the Learning adapter's halves share — refusal mapping, THE PUBLIC RULE
@@ -8,22 +12,16 @@ import type { Prisma } from '@prisma/client';
  * and closure cannot disagree about what a stale version, a frozen syllabus or
  * a published Course means.
  *
- * PACKAGE-INTERNAL. Only `LearningDataError` leaves this package; none of the
- * rest is a capability: `Client` is a type the adapter's own transactions use.
+ * PACKAGE-INTERNAL, AND NEVER NAMED BY THE ADAPTER'S ENTRY: it holds the
+ * Prisma value its SQL fragments are built from. Only `LearningDataError`
+ * (defined in `./errors.ts`) leaves this package; `Client` is a type the
+ * adapter's own transactions use.
  */
 
 export type Client = Prisma.TransactionClient;
 
-/**
- * A database refusal in Learning's own vocabulary. The service maps `reason`
- * onto its refusal list; nothing here carries a title, a lesson or a learner.
- */
-export class LearningDataError extends Error {
-  constructor(readonly reason: string) {
-    super(reason);
-    this.name = 'LearningDataError';
-  }
-}
+/** The refusal every adapter here throws, re-exported for the adapter's own modules. */
+export { LearningDataError };
 
 /* ===========================================================================
  * Refusals
@@ -51,6 +49,18 @@ const THROW_REASONS: ReadonlyMap<number, string> = new Map([
   [51276, 'course-unavailable'],
   [51277, 'course-unavailable'],
   [51273, 'in-published-path'],
+  // Phase 23 (`THROW 51280`–`51292`), the floor beneath the class adapters.
+  [51280, 'invalid'],
+  [51281, 'not-activated'],
+  [51282, 'not-a-teacher'],
+  [51283, 'overlap'],
+  [51284, 'not-a-teacher'],
+  [51285, 'course-unavailable'],
+  [51286, 'terminal'],
+  [51287, 'overlap'],
+  [51288, 'window-unavailable'],
+  [51289, 'not-participant'],
+  [51292, 'conflict'],
 ]);
 
 /**
@@ -89,6 +99,12 @@ const KEY_REASONS: ReadonlyMap<string, string> = new Map([
   ['dbo.LearningPathCourse', 'duplicate-member'],
   ['dbo.CourseModule', 'conflict'],
   ['dbo.Lesson', 'conflict'],
+  // Phase 23: one current scope per account and Course; one Booking per
+  // request and per session, and one live claim per window — the slot claim
+  // the second of two confirmations meets.
+  ['dbo.CourseTeachingAssignment', 'conflict'],
+  ['dbo.Booking', 'window-unavailable'],
+  ['dbo.ClassCommunicationIntent', 'conflict'],
 ]);
 
 /** Where a structured error fact can sit once Prisma and the driver wrap it. */
@@ -161,6 +177,21 @@ export function isUniqueViolation(error: unknown): boolean {
     kinds.has(UNIQUE_VIOLATION) ||
     numbers.includes(2627) ||
     numbers.includes(2601)
+  );
+}
+
+/**
+ * Whether the database refused a write on a foreign key — the signal, on a
+ * delete, that another row still names the one being removed. A CHECK
+ * violation arrives as the same number (547) but never from a delete.
+ */
+export function isForeignKeyViolation(error: unknown): boolean {
+  const { numbers, kinds } = errorFacts(error);
+  if (numbers.some((number) => THROW_REASONS.has(number))) return false;
+  return (
+    (error as { code?: unknown } | null)?.code === 'P2003' ||
+    kinds.has('ForeignKeyConstraintViolation') ||
+    numbers.includes(547)
   );
 }
 
@@ -257,4 +288,57 @@ export function textMatch(text: string | null): object {
 
 export function iso(value: Date): string {
   return value.toISOString();
+}
+
+/* ===========================================================================
+ * Phase 23 — activation and the teacher's scope, as predicates
+ * ========================================================================= */
+
+/**
+ * THE ACTIVATION GATE, as SQL: live learning is on while the owner's single
+ * activation row exists. Every raw read that discloses class state composes
+ * it IN THE QUERY, so no disclosure can forget it; a model query asks
+ * `activated` first instead, which is the same question on the same table.
+ */
+export const ACTIVATED = Prisma.sql`EXISTS (SELECT 1 FROM [dbo].[LiveLearningActivation])`;
+
+export async function activated(db: Client): Promise<boolean> {
+  return (await db.liveLearningActivation.count()) > 0;
+}
+
+/**
+ * The CURRENT scope predicate of one teacher, as a model `where`: this
+ * account, under one of the live `teaching.perform` assignments Identity just
+ * reported for it, not ended. Carried in every teaching query beside its
+ * other conditions. An EMPTY assignment list matches nothing — which the
+ * `in` of an empty list already states — so a caller may still short-circuit
+ * without querying.
+ */
+export function currentScope(identity: TeacherIdentity): {
+  readonly userId: string;
+  readonly roleAssignmentId: { readonly in: string[] };
+  readonly endedAt: null;
+} {
+  return {
+    userId: identity.accountId,
+    roleAssignmentId: { in: [...identity.assignmentIds] },
+    endedAt: null,
+  };
+}
+
+/** The same predicate for a raw statement, over a scope alias `s`. */
+export function currentScopeSql(identity: TeacherIdentity): Prisma.Sql {
+  if (identity.assignmentIds.length === 0) return Prisma.sql`1 = 0`;
+  return Prisma.sql`s.[userId] = ${identity.accountId}
+    AND s.[roleAssignmentId] IN (${Prisma.join([...identity.assignmentIds])})
+    AND s.[endedAt] IS NULL`;
+}
+
+/** A raw query's timestamp, whatever shape the driver hands back. */
+export function dateOf(value: Date | string): Date {
+  return value instanceof Date ? value : new Date(value);
+}
+
+export function maybeDate(value: Date | string | null): Date | null {
+  return value === null ? null : dateOf(value);
 }

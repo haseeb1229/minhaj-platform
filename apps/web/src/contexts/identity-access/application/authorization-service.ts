@@ -12,6 +12,7 @@ import type {
   RoleSummary,
 } from '@minhaj/contracts/identity';
 import {
+  isPermissionKey,
   PERMISSION_CATALOGUE,
   PLATFORM_ADMINISTRATOR_ROLE,
 } from '@minhaj/contracts/identity';
@@ -427,6 +428,35 @@ export function createAuthorizationService({
     async closedAccounts(accountIds: readonly string[]): Promise<readonly string[]> {
       if (accountIds.length === 0) return [];
       return authorization.closedAccountIds(accountIds);
+    },
+
+    /**
+     * Phase 23 — the three questions Learning asks Identity, each shaped so
+     * it can be used for nothing else (the `closedAccounts` precedent).
+     *
+     * NO PERMISSION IS CHECKED HERE, and none is appropriate: the callers are
+     * the Layer-4 Learning composition, acting for a teacher whose own live
+     * grant this answers, and the outbound dispatcher resolving a service mail
+     * Learning has already decided is owed. None returns a directory: an
+     * assignment list carries identifiers only, a recipient list only the
+     * accounts a committed intent already names, and a name list only names.
+     */
+    async liveAssignmentsCarrying(
+      accountId: string,
+      permission: string,
+    ): Promise<readonly string[]> {
+      if (!isPermissionKey(permission)) return [];
+      return authorization.liveAssignmentsCarrying(accountId, permission);
+    },
+
+    async serviceRecipients(accountIds: readonly string[]) {
+      if (accountIds.length === 0) return [];
+      return authorization.serviceRecipients(accountIds);
+    },
+
+    async participantNames(accountIds: readonly string[]) {
+      if (accountIds.length === 0) return [];
+      return authorization.participantNames(accountIds);
     },
 
     async listAuditRecords(input: {

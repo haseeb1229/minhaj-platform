@@ -441,9 +441,8 @@ test.describe('navigation is honest about what exists', () => {
     // Absent, not greyed out and not linked to a stub (ROUTE_MAP.md §5.2).
     const deferred = [
       // `/quran` is delivered by Phase 18, `/hadith` by Phase 19, `/fatwa` by
-      // Phase 20 and `/learn` by Phase 22 — whose Phase-23 surfaces stay absent.
-      '/learn/live',
-      '/learn/teachers',
+      // Phase 20, `/learn` by Phase 22 and its Live Learning and Find a Teacher
+      // surfaces by Phase 23 (asserted present on the human sitemap below).
       // `/library` is delivered by Phase 8 and its scholarly and periodical
       // surfaces by Phase 9. Phase 15 delivers `/collections` but deliberately
       // no Library-filtered view, so `/library/collections` stays asserted
@@ -504,6 +503,10 @@ test.describe('navigation is honest about what exists', () => {
         // Phase 15: editorial Collections are delivered, with no placement of
         // their own; the human sitemap lists them.
         expect(hrefs, 'sitemap exposes Collections').toContain('/en/collections');
+        // Phase 23: Live Learning and Find a Teacher have no placement of
+        // their own; they are reached from Learn and listed here.
+        expect(hrefs, 'sitemap exposes Live learning').toContain('/en/learn/live');
+        expect(hrefs, 'sitemap exposes Find a teacher').toContain('/en/learn/teachers');
       }
 
       for (const href of hrefs) {

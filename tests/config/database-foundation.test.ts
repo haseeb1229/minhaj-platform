@@ -368,6 +368,17 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'Enrolment',
       'LessonProgress',
       'TrialClassRequest',
+      // Phase 23 — Learning's live slice: the owner's activation, the typed
+      // Course teaching scope, a teacher's bookable windows, class sessions, the
+      // confirmed trial Booking, attendance marks and the durable service-mail
+      // intent.
+      'LiveLearningActivation',
+      'CourseTeachingAssignment',
+      'Availability',
+      'ClassSession',
+      'Booking',
+      'Attendance',
+      'ClassCommunicationIntent',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name
@@ -509,16 +520,12 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'NewsletterCampaign',
       'NewsletterIssue',
       'NewsletterDelivery',
-      // Phase 22 creates the trial REQUEST and nothing that schedules, keeps
-      // progress per lesson, names teachers as People's Person, and holds every
-      // reference by a typed key: no session, availability, attendance or
-      // booking model, no Course-level progress, no standalone Teacher, no
-      // Video or Centre relation, no generic learning target or content table,
-      // and no enrolment on a path.
-      'ClassSession',
-      'Availability',
-      'Attendance',
-      'Booking',
+      // Phase 22 keeps progress per lesson, names teachers as People's Person
+      // and holds every reference by a typed key; Phase 23 delivered the
+      // session, availability, attendance and booking models as Learning's own
+      // live slice. Still no phase's: Course-level progress, a standalone
+      // Teacher, a Video or Centre relation, a generic learning target or
+      // content table, and an enrolment on a path.
       'CourseProgress',
       'Teacher',
       'CourseVideo',

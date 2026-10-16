@@ -1358,7 +1358,86 @@ is never deleted because an editor's account closed.
 **Not delivered, and not owed by Phase 22:** ClassSession, Availability, Attendance, Booking and the
 confirmation of a trial request; teacher authority and the teacher area; My Classes and My Teachers;
 certificates, assessments, grades, payments and entitlements; under-18 rules (OPEN_DECISIONS.md §2.1
-stays open); and any import of real courses (Phase 30).
+stays open); and any import of real courses (Phase 30). Phase 23 delivered the first group (§13.5).
+
+### 13.5 As delivered (Phase 23 — teacher experience and live classes; engineering only)
+
+The context's second slice is built and proven against synthetic `NON_LEARNING_FIXTURE_*` material
+and `.invalid` accounts; **nothing is seeded, nothing is activated and nobody holds `teaching.perform`.**
+It adds no dependency edge: Identity answers live authority and People answers public teacher facts
+through their public interfaces at Layer 4, and Learning reads neither owner's tables.
+
+**The activation gate is a row, not prose.** `LiveLearningActivation` holds at most one row — `fixture`
+or `approved`, the latter only with recorded evidence — written by the owner/operator alone (the
+runtime holds SELECT), immutable once written (51280). With no row live learning is OFF: no window,
+session or Booking can be inserted and no scheduled session can move, be re-addressed or re-assigned
+(51281); closing a session is always allowed. The persistent database holds no row. An `approved` row
+records the organisation's decisions under OPEN_DECISIONS.md §2.1, §5.3 and §6.3, which this slice
+does not make.
+
+| Aggregate | What it holds — and deliberately does not |
+|---|---|
+| **CourseTeachingAssignment** (the typed teaching scope) | Course, account and the **exact Identity RoleAssignment** that carried `teaching.perform` when the scope was made, with a grant instant and an optional end. **Current** means `endedAt` is null **and** Identity still reports that assignment live — re-read on every request. One current scope per account and Course (filtered unique key). Made only for a live-format Course under the account's own live assignment (51282); never deleted, so what was taught stays as history that grants nothing. No `scopeType`/`scopeId` |
+| **Availability** | One bookable window a teacher offers: UTC instants plus the IANA zone and the wall-clock start and end it was offered in; `open` or `withdrawn`. Fifteen minutes to eight hours; a teacher's open windows never overlap (51283); offered only while activated, by an account holding live `teaching.perform` (51284). A confirmed Booking claims the whole window |
+| **ClassSession** | A `course` session or a single-participant `trial`, on a **published live Course under a current scope of that Course** (the composite key carries the Course; 51285). UTC start and end plus the scheduling zone and locals, `scheduled` / `completed` / `cancelled`, an optional reminder instant, the meeting provider and address while scheduled, an expected version. A terminal session never changes or returns to scheduled (51286); one teacher's scheduled sessions never overlap (51287). Rescheduling is a versioned mutation with its audit row, not a state |
+| **Booking** | The confirmation of exactly one Phase-22 TrialClassRequest: the request's own learner and Course, one trial session, one window — one per request, one per session, and **one live claim per window** (filtered unique key, the slot two confirmations race for). `confirmed` / `cancelled` / `completed`; must fit its request, session and window exactly (51288). **Distinct from Enrolment: it enrols nobody.** A request a Booking names can no longer be withdrawn by deletion (the key refuses it); cancellation is the Booking's own act |
+| **Attendance** | One `present` / `absent` mark per session and participant, by the current teacher or a narrowly justified operator correction; only on a session not cancelled, for a participant eligible now (51289). No note, grade, score or free text — and no `TeacherStudentNote` exists, because no accepted contract defines one |
+| **ClassCommunicationIntent** | Learning's durable service-mail intent: purpose, session, recipient account, due instant and idempotency key — never a body, an address or a meeting link. Pending → relayed or abandoned, once (51292) |
+
+**Who is a teacher.** A TeacherProfile, a Course's `CourseTeacher` attribution and a role name grant
+nothing. A teacher operation requires, on every request, **both** a live `teaching.perform`
+RoleAssignment — catalogued by this phase, externally gated, bundled into no role — **and** a current
+typed scope on the exact Course made under one of those assignments. Identity's revocation therefore
+wins immediately: the Teacher area, the students, the sessions, the windows and every meeting address
+close on the next request, while the scope row remains as safe history. An operator holding
+`learning.classes.administer` may scope only an account Identity already reports live and People
+reports linked to a published Person with an active TeacherProfile; the operator cannot grant the key.
+A scope's end makes its future sessions **replacement-required**: an operator moves each to another
+current scope of the same Course (audited old and new), or cancels it.
+
+**Time** follows §19.5: instants in UTC, the scheduling zone and wall-clock times kept beside them, a
+wall time the zone skips refused, one it repeats resolved only by an explicit choice, and a moved
+class keeping its intended local time.
+
+**The meeting address** is a validated string for the one V1 provider: HTTPS, host exactly
+`meet.google.com`, a meeting code, no credential, port, query, fragment, backslash or escape — parsed
+by the standard parser after the raw text is checked, canonicalised, and consistent with its provider
+(SECURITY_BASELINE.md §11). It is held only while the session is scheduled and is **NULL by CHECK once
+completed or cancelled**. It is disclosed by exactly one operation per surface — to the session's
+current teacher, to a current participant (a confirmed trial Booking or a current Enrolment on a
+published Course), and to `learning.classes.read` — only while activated and the session scheduled,
+and it appears in no listing, log, audit row, export or email.
+
+**Reminders and service mail** follow ARCHITECTURE.md §4.6.1: a confirmation, a reschedule, a
+cancellation and a reminder commit intents in the same transaction as the class change; the Layer-4
+dispatcher relays them through the shared delivery rows after Learning re-checks what is still owed
+and Identity resolves each recipient's current address and locale. **No fixed reminder lead is a
+product promise:** the scheduler chooses one of 60, 180 or 1,440 minutes, or none, per session; a move
+keeps the lead, abandons the old intent and commits a new one, so the old time never fires. A
+withdrawn learner, a cancelled Booking, a replaced or revoked teacher and a closed account are owed
+nothing at dispatch. Every message links to the person's own private class page, never to the address.
+
+**No-show** is derived, not stored: a trial participant marked `absent` on a completed session — or
+unmarked — is the no-show; no Booking state and no subsystem exists for it.
+
+**Public surfaces.** `/learn/live` lists upcoming scheduled sessions on published live Courses under
+current scopes, with the Course and the teacher's public People profile, while activated; a `fixture`
+activation is shown as a test state. `/learn/teachers` lists accounts holding a current scope on a
+published live Course that Identity reports live for `teaching.perform` and People reports with a
+published TeacherProfile; `availability=available` means at least one future open, unbooked window.
+Neither shows a participant, a window's times, a Booking or an address, and neither is sitemap
+material. Catalogue attribution stays what it was: a Course names its teachers whether or not they are
+currently operational.
+
+**Export and closure** (SECURITY_BASELINE.md §19.1.4): the person's own Bookings, class participation,
+Attendance, windows and scopes by typed identifier; a closed learner's future Bookings and trial
+sessions cancelled, their Attendance and intents removed; a closed teacher's current scopes ended,
+their windows removed and their future sessions left replacement-required. No ClassSession or scope is
+ever deleted, and no other participant's history is touched.
+
+**Not delivered, and not owed by Phase 23:** messaging of any kind, `/teacher/messages`, Google
+Calendar or Meet API provisioning, recording, certificates, assessments, grades, payments, teacher
+notes on learners, repeat-trial policy, and every policy OPEN_DECISIONS.md §2.1 reserves.
 
 ---
 

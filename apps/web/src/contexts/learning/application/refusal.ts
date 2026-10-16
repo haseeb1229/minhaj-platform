@@ -26,6 +26,31 @@ export const LEARNING_REFUSAL_REASONS = Object.freeze([
   'not-enrolled',
   'rate-limited',
   'unavailable',
+  /* ---- Phase 23 ------------------------------------------------------ */
+  /** Live learning is not activated (no activation row, or none in force). */
+  'not-activated',
+  /** No live `teaching.perform` grant, or no current scope on the Course named. */
+  'not-a-teacher',
+  /** A request confirmed into a Booking is withdrawn through the Booking, not deleted. */
+  'booked',
+  /** Two windows or two sessions of one teacher would overlap. */
+  'overlap',
+  /** The window is withdrawn, claimed by another Booking, or not the teacher's. */
+  'window-unavailable',
+  /** The session or Booking is completed or cancelled. */
+  'terminal',
+  /** The time is in the past, or beyond the scheduling horizon. */
+  'past',
+  /** The local time does not exist in that zone (a daylight-saving gap). */
+  'nonexistent-time',
+  /** The local time occurs twice in that zone; a choice is needed. */
+  'ambiguous-time',
+  /** Not an HTTPS meet.google.com address, or inconsistent with its provider. */
+  'invalid-meeting',
+  /** The account is not a participant of that session. */
+  'not-participant',
+  /** A Course cannot leave publication while future classes or confirmed bookings depend on it. */
+  'has-classes',
 ] as const);
 
 export type LearningRefusalReason = (typeof LEARNING_REFUSAL_REASONS)[number];

@@ -12,6 +12,7 @@ import type {
   ProfileKind,
   ProfileStatus,
   PublicPersonProfile,
+  PublicTeacherEntry,
 } from '@minhaj/contracts/people';
 
 /**
@@ -256,6 +257,19 @@ export function createPeopleReadService({
       offset = 0,
     ): Promise<readonly PersonSitemapEntry[]> {
       return reader.listSitemapEntries(limit, offset);
+    },
+
+    /**
+     * Phase 23 — the public teacher facts of the accounts named, for the
+     * Find-a-Teacher directory and My Teachers. A profile grants nothing:
+     * whether any of them may TEACH is Identity's and Learning's to say.
+     */
+    async publicTeachers(
+      accountIds: readonly string[],
+      locale: Locale,
+    ): Promise<readonly PublicTeacherEntry[]> {
+      if (accountIds.length === 0) return [];
+      return reader.publicTeachers([...new Set(accountIds)], locale);
     },
   };
 }

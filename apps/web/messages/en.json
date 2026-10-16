@@ -242,7 +242,9 @@
     "learn": {
       "courses": "All courses",
       "paths": "Learning paths",
-      "trial": "Trial classes"
+      "trial": "Trial classes",
+      "live": "Live learning",
+      "teachers": "Find a teacher"
     }
   },
   "localeSwitcher": {
@@ -4465,7 +4467,7 @@
       "newsletterLink": "About the newsletter",
       "learningExportHeading": "Download your learning data",
       "learningExportBody": "Download a copy of what Learning keeps for your account, as a separate JSON file:",
-      "learningExportContents": "Your course enrolments, the lessons you marked complete and your trial-class requests — listed by reference, not as copies of the courses.",
+      "learningExportContents": "Your course enrolments, the lessons you marked complete, your trial-class requests, your trial bookings, the classes you took part in or taught, your attendance, and any teaching windows and scopes of your own — listed by reference, never as copies of the courses and never a meeting link.",
       "learningExportLink": "Download your learning data"
     },
     "home": {
@@ -4496,13 +4498,17 @@
       "courses": "All courses",
       "paths": "Learning paths",
       "trial": "Trial classes",
-      "topics": "Topics"
+      "topics": "Topics",
+      "live": "Live learning",
+      "teachers": "Find a teacher"
     },
     "sectionBody": {
       "courses": "Every published course, by topic, level, language, format and teacher.",
       "paths": "Courses set out in the order to study them in.",
       "trial": "What a trial-class request is, and the courses taught live that take one.",
-      "topics": "Everything on the platform, organised by topic."
+      "topics": "Everything on the platform, organised by topic.",
+      "live": "Upcoming classes taught live, with their course, teacher and time.",
+      "teachers": "Teachers currently teaching live courses, by subject, language and open times."
     },
     "landing": {
       "browse": "Explore Learn",
@@ -4570,12 +4576,12 @@
     },
     "trial": {
       "intro": "A trial class is a first class on a course taught live, to see whether the course suits you before you commit to it.",
-      "notBooked": "Asking for a trial class records your request and nothing more. No class is booked, no time is set and no teacher is assigned, and confirming a class is not yet offered on this platform.",
+      "notBooked": "Asking for a trial class records your request; it is not a booking. No time is set and no teacher is assigned until a class is confirmed for you, and a confirmed class then appears in My classes.",
       "how": "How a request works",
       "stepChoose": "Choose a course taught live from the list below and open its page.",
       "stepSignIn": "Sign in, or create an account, so that the request is yours.",
       "stepRequest": "Ask for a trial class from the course’s page.",
-      "stepAfter": "The request itself schedules nothing. Confirming a class will be a separate step, once it is offered.",
+      "stepAfter": "The request itself schedules nothing. If a class is confirmed for you, it appears in My classes with its time and teacher.",
       "courses": "Courses taught live",
       "empty": "No course taught live has been published yet, so there is no course to ask for a trial class on."
     }
@@ -4594,7 +4600,7 @@
     "enrolledStatus": "You are now enrolled on this course.",
     "continueLearning": "Continue in My Learning",
     "requestTrial": "Request a trial class",
-    "trialHelp": "A trial class request is only a request. It does not enrol you, and no class has been scheduled — confirming trial classes is not offered on this site yet.",
+    "trialHelp": "A trial class request is only a request. It does not enrol you and arranges no class by itself; if a class is arranged for you, it appears in My classes.",
     "trialRequested": "Trial class requested — not yet scheduled",
     "trialRequestedStatus": "Your request was recorded. It has not been scheduled.",
     "trialManage": "See or withdraw your request in My Learning",
@@ -4615,6 +4621,7 @@
       "label": "My Learning pages",
       "learning": "My learning",
       "progress": "Course progress",
+      "classes": "My classes",
       "catalogue": "Browse courses",
       "account": "My Minhaj"
     },
@@ -4631,6 +4638,7 @@
       "invalid": "That could not be done. Reload the page and try again.",
       "notEnrolled": "You are not enrolled on this course any more. Reload the page.",
       "courseUnavailable": "This course is not currently available, so this can’t be done right now.",
+      "booked": "This request was confirmed as a class, so it can’t be withdrawn here. Cancel it from My classes.",
       "rateLimited": "Too many changes in a short time. Please wait a while and try again.",
       "confirmRequired": "Tick the confirmation box first.",
       "noSession": "Your session has ended. Please sign in again.",
@@ -4652,12 +4660,16 @@
     },
     "trials": {
       "heading": "Trial class requests",
-      "help": "A request is not a booking. It has not been scheduled, and confirming trial classes is not offered on this site yet.",
+      "help": "A request is not a booking. If a class is confirmed for you, it appears in My classes, and you cancel it there.",
       "empty": "You have not requested a trial class.",
-      "status": "Requested — not yet scheduled",
+      "status": "Requested",
       "requestedAt": "Requested",
       "withdraw": "Withdraw the request for “{title}”",
-      "withdrawn": "Your request was withdrawn."
+      "withdrawn": "Your request was withdrawn.",
+      "bookedConfirmed": "Confirmed — a trial class has been scheduled for you.",
+      "bookedCompleted": "Your trial class has taken place.",
+      "bookedCancelled": "The trial class for this request was cancelled.",
+      "openClass": "Open the class in My classes"
     },
     "course": {
       "fallbackTitle": "Course",
@@ -4752,7 +4764,8 @@
       "courses": "Courses",
       "paths": "Learning paths",
       "enrolments": "Enrolments",
-      "trials": "Trial requests"
+      "trials": "Trial requests",
+      "classes": "Classes"
     },
     "failure": {
       "denied": "You do not have permission to do this.",
@@ -4767,7 +4780,19 @@
       "inPublishedPath": "A published learning path includes this course. Remove it from that path, or return the path to draft, first.",
       "courseUnavailable": "Only a published course can be added.",
       "rateLimited": "Too many changes in a short time. Wait a little and try again.",
-      "confirmRequired": "Tick the confirmation box first."
+      "confirmRequired": "Tick the confirmation box first.",
+      "notActivated": "Live learning is not switched on, so no class, window or booking can be created or moved yet.",
+      "notATeacher": "That account is not a current teacher: it needs a live teaching role assignment in Identity and a published teacher profile in People, and a current scope on this course.",
+      "booked": "This request has been confirmed as a class. Cancel the class instead of withdrawing the request.",
+      "overlap": "The teacher already has a class at an overlapping time.",
+      "windowUnavailable": "That time is no longer open — it was withdrawn, booked by someone else, or is not this teacher’s. Choose another.",
+      "terminal": "This class or booking has already finished or been cancelled.",
+      "past": "That time is in the past, or further ahead than classes can be scheduled.",
+      "nonexistentTime": "That local time does not exist in this time zone (the clocks skip it). Choose another time.",
+      "ambiguousTime": "That local time happens twice in this time zone (the clocks go back). Open “Repeated hour” and choose which one you mean.",
+      "invalidMeeting": "That is not a Google Meet address. Paste a link of the form https://meet.google.com/abc-defg-hij.",
+      "notParticipant": "That person is not a participant of this class.",
+      "hasClasses": "This course has upcoming classes or confirmed trial bookings. Cancel or complete them before it leaves publication."
     },
     "lifecycle": {
       "heading": "Publication",
@@ -4874,10 +4899,595 @@
     },
     "trials": {
       "description": "How many trial-class requests each live course holds, and when the oldest was made. Counts only: who asked is never shown.",
-      "notScheduled": "These are requests, not bookings. Nothing on this page confirms or schedules a class or assigns a teacher — confirming trial classes is not available yet.",
+      "notScheduled": "These are requests, not bookings. Confirming a request into a class needs the class administration permissions; this table shows counts only.",
       "empty": "There are no trial-class requests.",
       "requests": "Requests",
-      "oldest": "Oldest request"
+      "oldest": "Oldest request",
+      "notBookedUntilConfirmed": "A request is not a booking until it is confirmed below into a class at one of a teacher’s open times.",
+      "requestsHeading": "Requests and who asked",
+      "requestsHelp": "Viewing who asked is recorded in the audit log.",
+      "requester": "Asked by:",
+      "requestedAt": "Requested:",
+      "booking": "Booking:",
+      "unbooked": "Not booked",
+      "bookingState": {
+        "confirmed": "Confirmed",
+        "cancelled": "Cancelled",
+        "completed": "Completed"
+      },
+      "openClass": "Open the class",
+      "noWindows": "No teacher scoped to this course has an open time to confirm into.",
+      "window": "Time",
+      "windowHelp": "Open times of teachers currently scoped to this course.",
+      "chooseWindow": "Choose a time",
+      "windowOption": "{teacher} — {time} ({zone})",
+      "confirm": "Confirm a trial class on “{title}”",
+      "confirmed": "The trial class was confirmed."
+    },
+    "classes": {
+      "description": "Every live class, scheduled, completed and cancelled. Open a class to see its participants and act on it.",
+      "notActivated": "Live learning is not switched on. Teaching scopes can be prepared, but no class can be scheduled, moved or confirmed until it is.",
+      "fixture": "Live learning is switched on in a test state: classes shown publicly carry a test banner and are not indexed.",
+      "create": "Schedule a class",
+      "createHelp": "A regular class on a course, taught by a teacher currently scoped to it. Times are wall-clock times in the zone you choose.",
+      "createSubmit": "Schedule the class",
+      "readOnly": "You can see classes, but scheduling them needs the class administration permission.",
+      "scopes": "Teaching scopes",
+      "scopesDescription": "Which teacher currently teaches which course. A scope lets a teacher run classes on that course; it grants no other permission.",
+      "scopesCurrent": "Current scopes",
+      "scopesEnded": "Ended scopes",
+      "scopesEmpty": "There are no scopes here.",
+      "scopesTruncated": "Only the first scopes are offered here. Use “Schedule a class” from the teaching scopes page for any other.",
+      "scopeActions": "Actions",
+      "scopeCurrent": "Current",
+      "scopeEnded": "Ended",
+      "scheduleFor": "Schedule a class on “{title}”",
+      "endScope": "End this scope",
+      "endScopeConfirm": "I understand that this teacher will no longer teach this course; future classes must be moved to another teacher.",
+      "grant": "Scope a teacher to a course",
+      "grantHelp": "The teacher must already hold a live teaching role assignment and a published teacher profile. Scoping grants neither.",
+      "grantNoCourses": "There is no published live course to scope a teacher to.",
+      "grantSubmit": "Scope the teacher",
+      "chooseCourse": "Choose a course",
+      "accountId": "Teacher’s account identifier",
+      "accountIdHelp": "The account identifier Identity lists for the teacher’s role assignment. There is no search here by design.",
+      "assignmentsLink": "Open role assignments in Identity",
+      "scope": "Course and teacher",
+      "scopeHelp": "Only current teaching scopes are offered.",
+      "chooseScope": "Choose a course and teacher",
+      "noScopes": "No teacher is currently scoped to a course, so no class can be scheduled yet.",
+      "kind": "Kind",
+      "anyKind": "Any kind",
+      "kindName": {
+        "course": "Course class",
+        "trial": "Trial class"
+      },
+      "stateName": {
+        "scheduled": "Scheduled",
+        "completed": "Completed",
+        "cancelled": "Cancelled"
+      },
+      "course": "Course",
+      "anyCourse": "Any course",
+      "empty": "No class matches.",
+      "when": "When",
+      "until": "until",
+      "teacher": "Teacher",
+      "teacherUnnamed": "Teacher",
+      "learnerUnnamed": "Learner",
+      "meeting": "Meeting link",
+      "meetingHeld": "Added",
+      "meetingNone": "Not added",
+      "meetingWithheld": "Added, but not shown while the class is not open to join.",
+      "meetingOpen": "Open the Google Meet link (opens in a new tab)",
+      "meetingUrl": "Google Meet link (optional)",
+      "meetingUrlHelp": "Create the meeting in Google Meet yourself and paste its link. Only the class’s current participants and its teacher can see it.",
+      "participants": "Participants",
+      "participantsHelp": "Viewing participants is recorded in the audit log.",
+      "noParticipants": "This class has no participants.",
+      "participant": "Participant",
+      "participation": "Taking part through",
+      "participationName": {
+        "enrolment": "Course enrolment",
+        "booking": "Trial booking"
+      },
+      "attendance": "Attendance",
+      "attendanceName": {
+        "present": "Present",
+        "absent": "Absent"
+      },
+      "unmarked": "Not marked",
+      "correct": "Correct the mark",
+      "closed": "This class is finished or cancelled; only attendance can be corrected.",
+      "reschedule": "Move this class",
+      "rescheduleHelp": "Participants are told the new time. The reminder keeps its lead unless you choose another.",
+      "rescheduleSubmit": "Move the class",
+      "replaceTeacher": "Replace the teacher",
+      "replaceTeacherHelp": "Choose another teacher currently scoped to the same course.",
+      "replaceTeacherSubmit": "Replace the teacher",
+      "noReplacement": "No other teacher is currently scoped to this course.",
+      "chooseTeacher": "Choose a teacher",
+      "complete": "Complete",
+      "completeHelp": "Mark the class as having taken place.",
+      "completeSubmit": "Mark the class complete",
+      "cancel": "Cancel",
+      "cancelHelp": "Cancel the class for everyone. Participants are told.",
+      "cancelSubmit": "Cancel the class",
+      "cancelConfirm": "I understand that this class will be cancelled for every participant.",
+      "timeZone": "Time zone",
+      "timeZoneHelp": "The zone the class is scheduled in. Its times stay right across daylight-saving changes.",
+      "startsLocal": "Starts (local time)",
+      "endsLocal": "Ends (local time)",
+      "windowHelp": "A class lasts between 15 minutes and 8 hours, and can be scheduled up to 180 days ahead.",
+      "foldSummary": "Repeated hour",
+      "foldHelp": "Only needed when the clocks go back and the time you chose happens twice. Leave “Not needed” unless you are asked.",
+      "foldStart": "Which start time",
+      "foldEnd": "Which end time",
+      "foldNone": "Not needed",
+      "fold": {
+        "earlier": "The earlier one",
+        "later": "The later one"
+      },
+      "reminder": "Reminder email",
+      "reminderHelp": "When participants are reminded before the class.",
+      "reminderKeep": "Keep the current reminder",
+      "reminderNone": "No reminder",
+      "reminderLead": {
+        "60": "1 hour before",
+        "180": "3 hours before",
+        "1440": "1 day before"
+      }
+    }
+  },
+  "teacher": {
+    "title": "Teacher area",
+    "description": "Your classes, students, courses and availability. Only you can see this.",
+    "nav": {
+      "label": "Teacher area",
+      "overview": "Overview",
+      "today": "Today’s classes",
+      "calendar": "Calendar",
+      "students": "Students",
+      "courses": "Courses",
+      "resources": "Resources",
+      "attendance": "Attendance",
+      "availability": "Availability",
+      "profile": "Profile"
+    },
+    "common": {
+      "working": "Working…",
+      "learner": "Learner",
+      "previous": "Previous page",
+      "next": "Next page",
+      "beyond": "There is nothing on this page. Go back to the first page.",
+      "course": "Course",
+      "class": "Class",
+      "when": "When",
+      "state": "State",
+      "openClass": "Open class",
+      "noTimeZone": "Your account has no time zone, so your own times are shown in UTC. You can set one in your account settings."
+    },
+    "notActivated": {
+      "title": "Live learning is not switched on",
+      "body": "Classes, availability and attendance are not available until live learning is switched on for this site. Your courses and students return when it is; nothing here is lost."
+    },
+    "failure": {
+      "load": "This page can’t be shown right now. Please try again later.",
+      "invalid": "Please check what you entered and try again.",
+      "notFound": "This is no longer here. Reload the page.",
+      "conflict": "This changed somewhere else since the page loaded. Reload the page and try again.",
+      "rateLimited": "Too many changes in a short time. Please wait a while and try again.",
+      "confirmRequired": "Tick the confirmation box first.",
+      "noSession": "Your session has ended. Please sign in again.",
+      "unavailable": "This can’t be done right now. Please try again later.",
+      "denied": "You can’t do this.",
+      "notTeacher": "You no longer teach this course, so this can’t be done. Reload the page.",
+      "notActivated": "Live learning is not switched on, so this can’t be done.",
+      "overlap": "This overlaps another class or window of yours. Choose a different time.",
+      "windowUnavailable": "This window is no longer available: it is booked, withdrawn, or not yours.",
+      "terminal": "This class is already completed or cancelled, so it can’t change.",
+      "past": "The time must be in the future and within the next 180 days.",
+      "nonexistentTime": "A start or end time does not exist in that time zone, because the clocks move forward then. Choose a time that exists.",
+      "ambiguousTime": "A start or end time happens twice in that time zone, because the clocks go back then. Say whether you mean the first or the second time, below.",
+      "invalidMeeting": "That is not a Google Meet address. Enter an https://meet.google.com/… link exactly as Google gave it, with nothing added.",
+      "notParticipant": "That person is not a participant of this class.",
+      "booked": "This window is booked, so it can’t be withdrawn."
+    },
+    "state": {
+      "scheduled": "Scheduled",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "kind": {
+      "course": "Course class",
+      "trial": "Trial class"
+    },
+    "attendance": {
+      "present": "Present",
+      "absent": "Absent",
+      "unmarked": "Not marked"
+    },
+    "participation": {
+      "enrolment": "Enrolled on the course",
+      "booking": "Trial booking"
+    },
+    "time": {
+      "classZone": "Class time ({zone})",
+      "ownZone": "Your time ({zone})",
+      "sameZone": "This is also your own time zone."
+    },
+    "meeting": {
+      "heading": "Meeting link",
+      "join": "Join on Google Meet (opens in a new tab)",
+      "none": "No meeting link has been set for this class yet. Learners can’t join until one is.",
+      "held": "A Google Meet link is set for this class.",
+      "unreadable": "The meeting link can’t be shown right now.",
+      "notScheduled": "A meeting link applies only to a scheduled class.",
+      "provider": "Meeting provider",
+      "providerName": "Google Meet",
+      "url": "Meeting address",
+      "urlHelp": "An https://meet.google.com/… address you created yourself in Google. The platform stores the address; it never creates the meeting.",
+      "set": "Save the meeting link",
+      "replace": "Replace the meeting link",
+      "saved": "The meeting link was saved.",
+      "clear": "Remove the meeting link",
+      "cleared": "The meeting link was removed."
+    },
+    "overview": {
+      "today": "Classes today",
+      "todayCount": "Classes today: {count}",
+      "todayNone": "No classes today.",
+      "todayLink": "See today’s classes",
+      "next": "Next class",
+      "nextNone": "No upcoming class in the next 62 days.",
+      "pending": "Needs a meeting link",
+      "pendingCount": "Upcoming classes without a meeting link: {count}",
+      "pendingNone": "Every upcoming class has a meeting link.",
+      "pendingHelp": "A learner can’t join a class until its meeting link is set.",
+      "sections": "Sections",
+      "unavailable": "This part can’t be shown right now."
+    },
+    "today": {
+      "title": "Today’s classes",
+      "description": "Your classes today, in your own time zone. Each shows the time it was scheduled in as well.",
+      "empty": "You have no classes today.",
+      "list": "Today’s classes"
+    },
+    "session": {
+      "fallbackTitle": "Class",
+      "participants": "Participants",
+      "participantsEmpty": "Nobody is on this class yet.",
+      "participantsHelp": "Learners enrolled on the course, or holding a trial booking for this class. Only their names and attendance are shown here.",
+      "participant": "Participant",
+      "participation": "How they take part",
+      "mark": "Attendance",
+      "markPresent": "Mark {name} present",
+      "markAbsent": "Mark {name} absent",
+      "marked": "Attendance was saved.",
+      "markHelp": "A mark can be changed at any time; saving the same mark again changes nothing.",
+      "changes": "Changes to this class",
+      "closed": "This class is {state}, so it can’t change any more."
+    },
+    "reschedule": {
+      "heading": "Move this class",
+      "help": "Choose the new start and end in the class’s time zone. Learners on the class are told by email, and the reminder moves with the class.",
+      "timeZone": "Time zone",
+      "timeZoneHelp": "The zone the times below are stated in.",
+      "starts": "Starts",
+      "ends": "Ends",
+      "startFold": "If the clock repeats the start time",
+      "endFold": "If the clock repeats the end time",
+      "foldHelp": "Needed only because this local time happens twice: the clocks go back then.",
+      "foldEarlier": "The first time (before the clocks go back)",
+      "foldLater": "The second time (after the clocks go back)",
+      "reminder": "Reminder",
+      "reminderHelp": "When learners are reminded by email before the class starts.",
+      "reminderKeep": "Keep the current reminder",
+      "reminderNone": "No reminder",
+      "lead60": "1 hour before",
+      "lead180": "3 hours before",
+      "lead1440": "1 day before",
+      "currentReminder": "Current reminder: {lead}",
+      "currentReminderNone": "No reminder is set for this class.",
+      "submit": "Move the class",
+      "moved": "The class was moved."
+    },
+    "cancel": {
+      "heading": "Cancel this class",
+      "body": "Cancelling tells every learner on the class by email and cannot be undone. A cancelled class stays in your history.",
+      "confirm": "I understand that this class will be cancelled and learners will be told.",
+      "submit": "Cancel the class",
+      "cancelled": "The class was cancelled."
+    },
+    "complete": {
+      "heading": "Complete this class",
+      "body": "Mark the class as held. Attendance can still be marked afterwards.",
+      "submit": "Mark the class complete",
+      "completed": "The class was marked complete."
+    },
+    "calendar": {
+      "title": "Calendar",
+      "description": "Your classes over the next 62 days, grouped by day in your own time zone.",
+      "empty": "You have no classes in the next 62 days.",
+      "day": "Classes on {day}"
+    },
+    "students": {
+      "title": "Students",
+      "description": "Learners enrolled on the courses you currently teach, with how far they are through each. Only their learning is shown here: no contact details, and no notes.",
+      "filter": "Course",
+      "allCourses": "All your courses",
+      "apply": "Show",
+      "filtered": "Showing learners on one course.",
+      "empty": "Nobody is enrolled on your courses yet.",
+      "list": "Students",
+      "courses": "Courses with you",
+      "progress": "Lessons complete: {completed} of {total}",
+      "enrolledAt": "Enrolled"
+    },
+    "student": {
+      "fallbackTitle": "Student",
+      "description": "This learner’s learning on your courses: enrolments, progress and class history. No contact details, and no notes.",
+      "courses": "Courses with you",
+      "coursesEmpty": "This learner is not enrolled on any course you currently teach.",
+      "classes": "Class history with you",
+      "classesEmpty": "No classes with this learner yet.",
+      "attendance": "Attendance",
+      "back": "Back to students"
+    },
+    "courses": {
+      "title": "Courses",
+      "description": "The courses you currently teach. Each opens its syllabus, students, classes and materials.",
+      "empty": "You are not currently assigned to teach any course.",
+      "list": "Your courses",
+      "since": "Teaching since",
+      "syllabusSize": "{modules} modules, {lessons} lessons",
+      "materials": "Materials",
+      "students": "Students",
+      "sessions": "Classes"
+    },
+    "course": {
+      "fallbackTitle": "Course",
+      "syllabus": "Syllabus",
+      "module": "Module {number}:",
+      "publicPage": "Course page",
+      "back": "Back to courses",
+      "sections": "This course",
+      "studentsTitle": "Students on this course",
+      "sessionsTitle": "Classes for this course",
+      "upcoming": "Upcoming classes",
+      "upcomingHelp": "Your classes for this course in the next 62 days.",
+      "upcomingEmpty": "No upcoming classes for this course.",
+      "upcomingMore": "More classes may exist beyond those shown here. The calendar lists them all:",
+      "past": "Recent classes",
+      "pastHelp": "The most recent past classes for this course, with their attendance counts.",
+      "pastEmpty": "No past classes for this course yet.",
+      "notLive": "This course is self-paced: it has no live classes."
+    },
+    "materials": {
+      "title": "Materials",
+      "description": "The syllabus and lesson text of this course, as learners read it. Choose a lesson to read its text.",
+      "lessons": "Lessons",
+      "position": "Lesson {number} of {total}",
+      "unavailable": "This lesson can’t be shown right now. Please try again later.",
+      "next": "Next lesson",
+      "noLessons": "This course has no lessons yet."
+    },
+    "resources": {
+      "title": "Resources",
+      "description": "The materials of every course you teach: the syllabus and lesson text learners read. There is no file upload here; course materials are written in the course itself by the editorial team.",
+      "empty": "You are not currently assigned to teach any course, so there are no materials to show.",
+      "open": "Open the materials for “{title}”"
+    },
+    "attendancePage": {
+      "title": "Attendance",
+      "description": "Past classes with participants not yet marked, most recent first. Open a class to mark who was present.",
+      "empty": "Every participant of your recent classes is marked.",
+      "bounded": "Older classes are on the reports page.",
+      "reports": "Attendance reports",
+      "markTitle": "Mark attendance",
+      "markDescription": "Who was present at this class. A mark can be changed at any time."
+    },
+    "reports": {
+      "title": "Attendance reports",
+      "description": "Each past class with how many participants were marked present, absent, or not marked yet.",
+      "empty": "No past classes yet.",
+      "caption": "Past classes and their attendance counts",
+      "present": "Present",
+      "absent": "Absent",
+      "unmarked": "Not marked"
+    },
+    "availability": {
+      "title": "Availability",
+      "description": "The windows you offer for trial classes. A learner’s trial request is confirmed into one of them by the learning team; a booked window becomes a class.",
+      "empty": "You have not offered any window yet.",
+      "list": "Your windows",
+      "booked": "Booked",
+      "open": "Open",
+      "withdrawn": "Withdrawn",
+      "openHeading": "Offer a window",
+      "openHelp": "Between 15 minutes and 8 hours, in the future and within the next 180 days. It may not overlap another of your open windows.",
+      "timeZone": "Time zone",
+      "timeZoneHelp": "The zone the times below are stated in. Your account’s zone is chosen first.",
+      "starts": "Starts",
+      "ends": "Ends",
+      "startFold": "If the clock repeats the start time",
+      "endFold": "If the clock repeats the end time",
+      "submit": "Offer this window",
+      "opened": "The window was offered.",
+      "withdraw": "Withdraw this window",
+      "withdrew": "The window was withdrawn.",
+      "cannotWithdraw": "A booked window can’t be withdrawn; cancel its class instead."
+    },
+    "profile": {
+      "title": "Profile",
+      "description": "How you appear to learners. This page is read-only: your public profile is kept by the editorial team, and your account name is yours to change.",
+      "publicHeading": "Public teacher profile",
+      "name": "Name",
+      "subjects": "Subjects",
+      "languages": "Languages",
+      "none": "Not stated",
+      "publicPage": "View your public profile",
+      "noProfile": "You have no published public teacher profile. Learners see you as “Teacher” without a name on the public schedule. Ask the editorial team to publish one.",
+      "capabilitiesHeading": "What you are approved to do",
+      "capabilitiesHelp": "Read live from your current roles. Holding a profile grants nothing by itself.",
+      "capability": {
+        "canTeach": "Teach classes",
+        "canReceiveQuestions": "Receive questions",
+        "canReviewContent": "Review content",
+        "canIssueFatwa": "Issue fatwa"
+      },
+      "yes": "Yes",
+      "no": "No",
+      "accountHeading": "Account",
+      "accountName": "Account name",
+      "accountSettings": "Change your account name",
+      "unavailable": "Your profile can’t be shown right now."
+    }
+  },
+  "learnLive": {
+    "title": "Live learning",
+    "description": "Upcoming classes taught live on Minhaj courses.",
+    "intro": "These are the upcoming classes on courses taught live. Joining a class is for learners enrolled on its course or booked on a trial class; open the course to find out more.",
+    "zoneNote": "Each time is shown in the time zone the class was scheduled in, and that zone is named beside it.",
+    "fixture": "Test state: these classes are engineering test data, not a real timetable. Do not rely on them.",
+    "unavailable": {
+      "body": "Live learning is not available on this site at the moment, so no class schedule is shown.",
+      "browse": "Browse all courses"
+    },
+    "empty": "No upcoming class is scheduled at the moment.",
+    "beyond": "There is nothing on this page. Go back to the first page.",
+    "listLabel": "Upcoming classes",
+    "teacher": "Teacher:",
+    "teacherUnnamed": "Teacher",
+    "starts": "Starts:",
+    "ends": "Ends:",
+    "zone": "Time zone: {zone}",
+    "findTeacher": "Find a teacher"
+  },
+  "learnTeachers": {
+    "title": "Find a teacher",
+    "description": "Teachers currently teaching live courses on Minhaj.",
+    "intro": "Teachers listed here are currently teaching at least one course taught live. Open a teacher’s profile to read more about them, or a course to find out how to join it.",
+    "fixture": "Test state: these teachers and courses are engineering test data, not the real teaching staff. Do not rely on them.",
+    "filter": {
+      "label": "Filter teachers",
+      "subject": "Subject",
+      "language": "Language",
+      "availability": "Open times",
+      "available": "Has open times",
+      "invalid": "These filters name a subject, language or availability that does not exist, so no teacher is listed. Clear the filters to see every teacher.",
+      "empty": "No teacher matches these filters."
+    },
+    "unavailable": {
+      "body": "Live learning is not available on this site at the moment, so no teacher is listed.",
+      "browse": "Browse all courses"
+    },
+    "empty": "No teacher is teaching a live course at the moment.",
+    "teacherUnnamed": "Teacher",
+    "available": "Has open times for trial classes",
+    "subjects": "Subjects:",
+    "languages": "Languages:",
+    "courses": "Courses taught",
+    "schedule": "See upcoming live classes"
+  },
+  "myClasses": {
+    "title": "My classes",
+    "description": "Your upcoming and past live classes — on the courses you are enrolled on, and any trial class confirmed for you. Only you can see this.",
+    "notActivated": "Live learning is not switched on at the moment, so no class can be joined. Your courses and requests are kept.",
+    "join": "Join on Google Meet (opens in a new tab)",
+    "common": {
+      "working": "Working…"
+    },
+    "nav": {
+      "label": "My Classes pages",
+      "classes": "My classes",
+      "teachers": "My teachers",
+      "learning": "My learning",
+      "schedule": "Live class schedule",
+      "account": "My Minhaj"
+    },
+    "list": {
+      "previous": "Previous page",
+      "next": "Next page",
+      "beyond": "There is nothing on this page. Go back to the first page."
+    },
+    "failure": {
+      "invalid": "That could not be done. Reload the page and try again.",
+      "notFound": "This class is not one of yours any more. Reload the page.",
+      "conflict": "This changed since the page loaded. Reload the page and try again.",
+      "terminal": "This class has already finished or been cancelled.",
+      "past": "This class has already started, so it can’t be changed now.",
+      "notActivated": "Live learning is not switched on at the moment, so this can’t be done.",
+      "rateLimited": "Too many changes in a short time. Please wait a while and try again.",
+      "confirmRequired": "Tick the confirmation box first.",
+      "noSession": "Your session has ended. Please sign in again.",
+      "unavailable": "This can’t be done right now. Please try again later.",
+      "load": "This page can’t be shown right now. Please try again later."
+    },
+    "state": {
+      "scheduled": "Scheduled",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "attendance": {
+      "present": "Marked present",
+      "absent": "Marked absent"
+    },
+    "participation": {
+      "enrolment": "Course class",
+      "booking": "Trial class"
+    },
+    "time": {
+      "starts": "Starts:",
+      "ends": "Ends:",
+      "classZone": "Class time zone:",
+      "yourZone": "In your time zone:"
+    },
+    "upcoming": {
+      "heading": "Upcoming classes",
+      "help": "A class’s join link appears here once its teacher has added one.",
+      "empty": "You have no upcoming class.",
+      "detail": "Details of “{title}”"
+    },
+    "past": {
+      "heading": "Past classes",
+      "empty": "You have no past class yet."
+    },
+    "cancel": {
+      "heading": "Cancel this trial class",
+      "body": "Cancelling releases the time for someone else. Your trial request stays recorded, and you can be offered another time.",
+      "submit": "Cancel this trial class",
+      "confirm": "I understand that this trial class will be cancelled.",
+      "done": "The trial class was cancelled."
+    },
+    "detail": {
+      "fallbackTitle": "Class",
+      "when": "When",
+      "course": "Course",
+      "coursePage": "Course page",
+      "courseUnavailable": "This course is not currently available in the public catalogue.",
+      "myCourse": "Open the course in My learning",
+      "joining": "Joining",
+      "noJoin": "There is no join link for this class yet. It appears here when the teacher adds one and you can take part.",
+      "joinHelp": "The class takes place on Google Meet, outside this site."
+    },
+    "teachers": {
+      "title": "My teachers",
+      "description": "The teachers of the courses you are enrolled on, and of classes you have taken or are booked on. Only you can see this.",
+      "empty": "You have no teacher yet.",
+      "find": "Find a teacher",
+      "unnamed": "Teacher",
+      "courses": "Courses:",
+      "upcoming": "{count, plural, =0 {No upcoming class} one {# upcoming class} other {# upcoming classes}}",
+      "last": "Last class:",
+      "noLast": "No class with this teacher yet."
+    },
+    "home": {
+      "heading": "Classes",
+      "unavailable": "Your classes can’t be shown right now.",
+      "none": "You have no upcoming class.",
+      "next": "Next class:",
+      "link": "Go to My classes"
     }
   }
 }

@@ -670,10 +670,9 @@ const HADITH: readonly ShellRoute[] = Object.freeze(
  * and a filtered catalogue view are resources and views reached through these,
  * never registry entries.
  *
- * WHAT IS ABSENT IS ABSENT. Live Learning, Training, Resources, Teachers and the
- * Class Schedule (INFORMATION_ARCHITECTURE.md §3.4) are Phase 23's or later:
- * they have no entry, so there is no string a link could be built from
- * (ROUTE_MAP.md §5.2).
+ * WHAT IS ABSENT IS ABSENT. Training, Resources and a separate Class Schedule
+ * (INFORMATION_ARCHITECTURE.md §3.4) are later work: they have no entry, so
+ * there is no string a link could be built from (ROUTE_MAP.md §5.2).
  */
 const LEARN_SURFACES = Object.freeze(['courses', 'paths', 'trial'] as const);
 
@@ -687,6 +686,33 @@ const LEARN: readonly ShellRoute[] = Object.freeze(
       visibility: 'public' as const,
       availability: 'delivered' as const,
       indexing: 'eligible' as const,
+    }),
+  ),
+);
+
+/**
+ * The live-learning surfaces — Phase 23 (ROUTE_MAP.md §3.5).
+ *
+ * Live Learning (the public schedule of upcoming classes) and Find a Teacher.
+ * Both are genuine pages in all three locales, but WHAT they show is a RUNTIME
+ * fact of the live-learning activation — nothing, a fixture test state, or the
+ * approved timetable — so neither is eligible for the build-bound sitemap and
+ * each page is `noindex` (ROUTE_MAP.md §9.5). NO PLACEMENT: they are reached
+ * from `/learn`. `/learn/teachers/{slug}` is an alias of `/people/{slug}`
+ * and never a registry entry.
+ */
+const LIVE_LEARNING_SURFACES = Object.freeze(['live', 'teachers'] as const);
+
+const LIVE_LEARNING: readonly ShellRoute[] = Object.freeze(
+  LIVE_LEARNING_SURFACES.map((surface) =>
+    Object.freeze({
+      key: `learn.${surface}`,
+      label: `learn.${surface}`,
+      path: `/learn/${surface}`,
+      placements: Object.freeze([] as const),
+      visibility: 'public' as const,
+      availability: 'delivered' as const,
+      indexing: 'excluded' as const,
     }),
   ),
 );
@@ -958,6 +984,7 @@ export const SHELL_ROUTES: readonly ShellRoute[] = Object.freeze([
   ...QURAN,
   ...HADITH,
   ...LEARN,
+  ...LIVE_LEARNING,
   ...FATWA,
   ...MEDIA,
   ...NEWS,

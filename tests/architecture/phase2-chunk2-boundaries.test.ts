@@ -359,16 +359,19 @@ describe('Phase 2 Chunk 2 — what the delivered code does NOT contain', () => {
       // shipped it, as every earlier domain left it at its own owning phase.
       // Fatwa's `fatwa.*` and `question.receive` may appear in Phase 20's
       // migration, which owns them, and in no other; Learning's `learning.*`
-      // in Phase 22's alone. Teaching authority (`teaching.*`) is Phase 23's
-      // and appears in none.
+      // in Phase 22's and Phase 23's (its two class keys) alone. Teaching
+      // authority (`teaching.*`) is Phase 23's and appears in its migration
+      // alone.
       const fatwaOwner = file.includes('20261004000000_phase20_fatwa');
-      const learningOwner = file.includes('20261006000000_phase22_learning');
+      const classesOwner = file.includes('20261007000000_phase23_teacher_live_classes');
+      const learningOwner =
+        file.includes('20261006000000_phase22_learning') || classesOwner;
       for (const domain of [
         ...(fatwaOwner ? [] : ['fatwa.', 'question.']),
         ...(learningOwner ? [] : ['learning.']),
+        ...(classesOwner ? [] : ['teaching.']),
         'membership.',
         'donations.',
-        'teaching.',
       ]) {
         expect(source, `${file} must not seed ${domain}*`).not.toContain(`n'${domain}`);
       }
@@ -583,6 +586,13 @@ const PERMISSION_MIGRATIONS = [
     id: '20261006000000_phase22_learning',
     keys: ['learning.administer', 'learning.read'],
   },
+  {
+    // Two ordinary class keys bundled, and `teaching.perform` catalogued,
+    // externally gated and bundled into no role.
+    phase: 'Phase 23',
+    id: '20261007000000_phase23_teacher_live_classes',
+    keys: ['learning.classes.administer', 'learning.classes.read', 'teaching.perform'],
+  },
 ] as const;
 
 describe('the permission catalogue is one definition, appended only by owners', () => {
@@ -635,7 +645,6 @@ describe('the permission catalogue is one definition, appended only by owners', 
       'membership.',
       'donations.',
       'migration.',
-      'teaching.',
       'editorial.',
       // Library shipped in Phase 8, Search in Phase 17, Media in Phase 10,
       // Global in Phase 16, Quran in Phase 18, Hadith in Phase 19 and Fatwa in
@@ -663,9 +672,10 @@ describe('the permission catalogue is one definition, appended only by owners', 
       'notification.',
       'history.',
       // Phase 22 shipped Learning's two administrative keys and nothing else:
-      // no per-aggregate or editorial-workflow key, nothing reaching a
-      // learner's enrolments, progress or trial requests, and no teaching
-      // authority, which is Phase 23's.
+      // no per-aggregate or editorial-workflow key, and nothing reaching a
+      // learner's enrolments, progress or trial requests. Phase 23 shipped
+      // `teaching.perform` and the two `learning.classes.*` keys and nothing
+      // else: no attendance, meeting, booking, availability or session key.
       'course.',
       'lesson.',
       'path.',
@@ -673,9 +683,18 @@ describe('the permission catalogue is one definition, appended only by owners', 
       'progress.',
       'trial.',
       'class.',
+      'attendance.',
+      'meeting.',
+      'booking.',
+      'availability.',
+      'session.',
     ]) {
       expect(declared.some((key) => key.startsWith(domain))).toBe(false);
     }
+    // Teaching has exactly one key, and it is the organisation's to grant.
+    expect(declared.filter((key) => key.startsWith('teaching.'))).toEqual([
+      'teaching.perform',
+    ]);
   });
 
   it('names `permissions.grant` exactly as the security baseline does', async () => {

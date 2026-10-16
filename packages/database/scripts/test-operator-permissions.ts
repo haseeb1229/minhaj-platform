@@ -568,6 +568,50 @@ try {
     `),
   );
 
+  // Phase 23 gives the operator ROLE nothing over live classes either: the
+  // activation is the owner's own migration-level act, scopes and sessions are
+  // administered only through the runtime under `learning.classes.administer`,
+  // and a Booking, a mark, a window and an intent are an account's own — so
+  // the operator can neither switch live learning on, scope a teacher, nor read
+  // a meeting address or who is booked with whom.
+  for (const table of [
+    'LiveLearningActivation',
+    'CourseTeachingAssignment',
+    'Availability',
+    'ClassSession',
+    'Booking',
+    'Attendance',
+    'ClassCommunicationIntent',
+  ]) {
+    await expectDenied(operatorSession, `operator SELECT on ${table} denied`, () =>
+      operatorSession.query(`SELECT TOP 1 1 AS probe FROM [dbo].[${table}];`),
+    );
+  }
+  await expectDenied(
+    operatorSession,
+    'operator INSERT on LiveLearningActivation denied',
+    () =>
+      operatorSession.query(`
+      INSERT INTO [dbo].[LiveLearningActivation] ([id], [authority], [authorisedBy], [reference])
+      VALUES (1, N'approved', N'injected', N'urn:example:injected');
+    `),
+  );
+  await expectDenied(
+    operatorSession,
+    'operator INSERT on CourseTeachingAssignment denied',
+    () =>
+      operatorSession.query(`
+      INSERT INTO [dbo].[CourseTeachingAssignment] ([id], [courseId], [userId], [roleAssignmentId], [grantedAt])
+      VALUES (N'injected', N'injected', N'injected', N'injected', SYSUTCDATETIME());
+    `),
+  );
+  await expectDenied(operatorSession, 'operator UPDATE on ClassSession denied', () =>
+    operatorSession.query(`UPDATE [dbo].[ClassSession] SET [meetingUrl] = NULL;`),
+  );
+  await expectDenied(operatorSession, 'operator DELETE on Booking denied', () =>
+    operatorSession.query(`DELETE FROM [dbo].[Booking];`),
+  );
+
   await expectDenied(operatorSession, 'operator INSERT on RoleAssignment denied', () =>
     operatorSession.query(`
       INSERT INTO [dbo].[RoleAssignment] ([userId], [roleId])

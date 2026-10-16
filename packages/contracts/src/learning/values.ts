@@ -539,6 +539,16 @@ export interface TrialRequestRecord {
   readonly id: string;
   readonly course: CourseListing;
   readonly requestedAt: Date;
+  /**
+   * Phase 23: the Booking that confirmed this request, if one exists. A
+   * confirmed request is no longer withdrawn by deletion — its class is
+   * cancelled from My Classes — and the trial's session is linked there.
+   */
+  readonly booking: {
+    readonly id: string;
+    readonly sessionId: string;
+    readonly state: 'confirmed' | 'cancelled' | 'completed';
+  } | null;
 }
 
 /** Course progress, derived: every current lesson completed is a completed Course. */
@@ -551,7 +561,7 @@ export function courseCompleted(completedLessons: number, lessons: number): bool
  * ========================================================================= */
 
 export const LEARNING_EXPORT_SCHEMA = 'minhaj.learning.export';
-export const LEARNING_EXPORT_VERSION = 1;
+export const LEARNING_EXPORT_VERSION = 2;
 
 /**
  * A person's own Learning data, by typed identifier — never a Course's words or
@@ -575,6 +585,49 @@ export interface LearningExport {
     readonly id: string;
     readonly courseId: string;
     readonly requestedAt: string;
+  }[];
+  /**
+   * Phase 23 — the person's own classes, by typed identifier: their trial
+   * Bookings, the sessions they took part in (as a learner or, if they teach,
+   * as the teacher), their own Attendance, their own Availability and their
+   * teaching scopes. NEVER another participant, and NEVER a meeting address.
+   */
+  readonly bookings: readonly {
+    readonly id: string;
+    readonly requestId: string;
+    readonly courseId: string;
+    readonly sessionId: string;
+    readonly state: 'confirmed' | 'cancelled' | 'completed';
+    readonly confirmedAt: string;
+    readonly cancelledAt: string | null;
+  }[];
+  readonly classes: readonly {
+    readonly sessionId: string;
+    readonly courseId: string;
+    readonly kind: 'course' | 'trial';
+    readonly startsAt: string;
+    readonly endsAt: string;
+    readonly timeZone: string;
+    readonly state: 'scheduled' | 'completed' | 'cancelled';
+    readonly participation: 'enrolment' | 'booking' | 'teacher';
+  }[];
+  readonly attendance: readonly {
+    readonly sessionId: string;
+    readonly status: 'present' | 'absent';
+    readonly markedAt: string;
+  }[];
+  readonly availability: readonly {
+    readonly id: string;
+    readonly startsAt: string;
+    readonly endsAt: string;
+    readonly timeZone: string;
+    readonly state: 'open' | 'withdrawn';
+  }[];
+  readonly teachingScopes: readonly {
+    readonly id: string;
+    readonly courseId: string;
+    readonly grantedAt: string;
+    readonly endedAt: string | null;
   }[];
 }
 

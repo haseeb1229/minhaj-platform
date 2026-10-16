@@ -5,7 +5,9 @@ import { after } from 'next/server';
 import type { DeliveryRecord } from '@minhaj/contracts/platform';
 
 import { failureLabel, isTransientDatabaseFailure } from './failure-label';
+import { isLearningDeliveryPurpose } from '@/contexts/learning';
 import { identityRuntime } from './identity';
+import { learningRuntime } from './learning';
 import { appLogger } from './logging';
 import { personalisationRuntime } from './personalisation';
 
@@ -70,7 +72,13 @@ export async function dispatchOnce(): Promise<DispatchSummary> {
   // Identity's committed notification intents become deliveries first, so a
   // notification committed in the same transaction as its security change is
   // picked up by this same tick rather than the next one.
-  const relayed = await identity.relayPendingIntents(BATCH);
+  const relayed =
+    (await identity.relayPendingIntents(BATCH)) +
+    // THE THIRD OWNER (Phase 23). Learning's committed class intents — a
+    // confirmed trial, a moved or cancelled class, a due reminder — become
+    // deliveries by the same tick, after Learning re-checks what is still
+    // owed and Identity resolves each recipient's current address.
+    (await learningRuntime().communication.relayPendingIntents(BATCH));
 
   const claimed = await deliveries.claimDue({
     limit: BATCH,
@@ -111,13 +119,17 @@ export async function dispatchOnce(): Promise<DispatchSummary> {
     // no expiry extension, and no bearer material was ever written anywhere
     // else to be read back (ARCHITECTURE.md §4.6.1).
     //
-    // TWO OWNERS, ONE PROVIDER. The newsletter confirmation is Personalisation's
-    // marketing message; everything else is Identity's security and account
-    // service mail. Each owner resolves only its own.
+    // THREE OWNERS, ONE PROVIDER. The newsletter confirmation is
+    // Personalisation's marketing message; a class confirmation, change or
+    // reminder is Learning's service mail; everything else is Identity's
+    // security and account service mail. Each owner resolves only its own,
+    // and only the newsletter is ever withheld by a marketing suppression.
     const newsletter = delivery.purpose === 'newsletter.confirmation';
     const resolution = newsletter
       ? await personalisationRuntime().newsletter.resolveDelivery(delivery)
-      : await identity.resolveDelivery(delivery);
+      : isLearningDeliveryPurpose(delivery.purpose)
+        ? await learningRuntime().communication.resolveDelivery(delivery)
+        : await identity.resolveDelivery(delivery);
 
     if (resolution.outcome === 'nothing-owed') {
       // Nothing is owed any more: the token was used or expired, the account

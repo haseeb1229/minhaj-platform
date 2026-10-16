@@ -183,6 +183,12 @@ authorisation system. The Phase-20 migration therefore extends no bundle and inv
 session, and a database it migrates has **no holder** of any of the three until a real, audited
 grant is made.
 
+**Phase 23 adds the fourth: `teaching.perform`** (OPEN_DECISIONS.md §6.3, with §2.1 open). It is
+catalogued, externally gated, bundled into no role and held by nobody; and it opens nothing on its own —
+a teacher also needs a current typed Course teaching scope, which `learning.classes.administer` makes
+only for an account Identity already reports live (DOMAIN_MODEL.md §13.5). The two class keys are
+ordinary and bundled.
+
 ---
 
 ## 4. CMS publishing permissions
@@ -723,6 +729,18 @@ sniffing, checksum verification, and malware scanning consistent with §10.1.
 | Logging | **Not logged unnecessarily**; excluded from general application logs |
 | Automation | **Google Meet creation is not automated in the V1 foundation** |
 
+**As delivered (Phase 23).** The provider abstraction accepts exactly one provider and canonicalises
+an address by the standard URL parser after refusing a backslash or percent escape in the raw text:
+HTTPS, hostname exactly `meet.google.com`, a meeting code as the whole path, no credential, port,
+query or fragment; the database CHECK repeats the shape, requires the provider beside the address and
+forces the address to NULL once the session is completed or cancelled. **Disclosure is one operation
+per surface** — the session's current teacher, a current participant (a confirmed trial Booking or a
+current Enrolment on a published Course), or `learning.classes.read` — and only while live learning is
+activated and the session is scheduled; a revoked or replaced teacher, a cancelled Booking or a
+withdrawn Enrolment closes it on the next request. The address is in no list, log, audit row, export
+or email: service mail links to the person's own private class page. The platform calls no Google API
+and holds no Google credential (OPEN_DECISIONS.md §5.2, §5.3).
+
 ---
 
 ## 12. Messaging security
@@ -1179,6 +1197,48 @@ made, and the platform is not declared adults-only.
 - **Logging and audit.** Catalogue audit rows carry identifiers, states and counts — never a title,
   description or lesson body; learner acts are not audited and are logged, on failure, by operation
   name only.
+
+#### 19.1.4 Phase-23 live classes
+
+Engineering defaults only; OPEN_DECISIONS §2.1, §2.2, §5.3 and §6.3 stay open, so no age, guardian,
+vetting, retention or adults-only rule exists and no real teacher is named (DOMAIN_MODEL.md §13.5).
+
+- **Fail closed until activated.** No window, session or Booking exists and no address is disclosed
+  while `LiveLearningActivation` holds no row; the runtime cannot write that row.
+- **Default-deny teaching.** A teacher read or write needs a live `teaching.perform` RoleAssignment
+  (Identity, re-read every request) and a current typed scope on the exact Course; the Teacher area,
+  the students, the sessions, the windows and the addresses close on revocation or scope end. A
+  TeacherProfile, a CourseTeacher attribution and a role name grant nothing. A teacher sees only
+  learners enrolled on the Courses they currently teach, and only Learning-owned facts — enrolment,
+  progress, class and attendance history — never contact, account, Fatwa or Personalisation data,
+  and no free-form note is stored about anybody.
+- **Participant authorisation.** A learner reaches a session through a current Enrolment on a
+  published Course or their own confirmed Booking; a guessed id answers like a missing one. A learner
+  cancels only their own trial Booking.
+- **Audited identity access.** Every read that names learners or requesters — a teacher's student
+  list or detail, an operator's request list or participant list — records an audit row of
+  identifiers only (§13.2 "data access"); scope grant and end, confirmation, cancellation,
+  scheduling, rescheduling, completion, teacher replacement and attendance correction are audited by
+  identifier and state, never with an address, a body or a payload.
+- **Concurrency.** One Booking per request and per session, one live claim per window, one current
+  scope per account and Course (unique keys); no overlapping windows or sessions for one teacher
+  (triggers), serialised on the teacher before the first protected write; expected versions on every
+  session, Booking, window and scope mutation; a refusal is never reported as a serialisation
+  failure (DOMAIN_MODEL.md §19.8).
+- **Class-A mutations.** Every teacher, learner and operator class mutation is an Origin-protected
+  Server Action that re-resolves the session and re-reads authority; teacher and learner writes are
+  rate-limited per account; no state-changing GET exists.
+- **Service mail.** Learning commits durable intent in the class transaction; the dispatcher relays
+  it only after re-checking activation, session state and the recipient's current relationship, and
+  Identity resolves the recipient's current address at relay and at send. A marketing unsubscribe
+  never suppresses it. The intent row and the message carry no address, body or meeting link.
+- **Export and disposition.** The person's export adds their Bookings, class participation,
+  Attendance, windows and scopes by typed identifier — never another participant and never an
+  address. A closed learner's future Bookings and trial sessions are cancelled and their Attendance
+  and intents removed; a closed teacher's scopes are ended, windows removed and future sessions left
+  replacement-required; no session or scope is deleted and no other participant's history changes.
+- **Logging.** Structured, by operation name; no meeting address, participant list, requester,
+  recipient address or reminder body.
 
 ### 19.2 Logging
 

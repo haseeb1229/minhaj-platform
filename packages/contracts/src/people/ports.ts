@@ -8,6 +8,7 @@ import type {
   ProfileKind,
   ProfileStatus,
   PublicPersonProfile,
+  PublicTeacherEntry,
 } from './values.ts';
 
 /**
@@ -126,6 +127,19 @@ export interface PeopleReaderPort {
     limit: number,
     offset: number,
   ): Promise<readonly PersonSitemapEntry[]>;
+
+  /**
+   * Phase 23 — of the accounts named, those linked to a PUBLISHED Person
+   * holding an ACTIVE TeacherProfile, with that profile's public facts.
+   *
+   * Asked by the Layer-4 Learning composition to LIST operational teachers
+   * and to ADMIT a teaching scope; never to decide authority, which is
+   * Identity's live grant and Learning's current scope. Bounded and capped.
+   */
+  publicTeachers(
+    accountIds: readonly string[],
+    locale: Locale,
+  ): Promise<readonly PublicTeacherEntry[]>;
 
   /**
    * One PUBLISHED Person's public search projection data, or `null`.

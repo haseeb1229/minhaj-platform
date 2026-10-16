@@ -16,9 +16,12 @@ import { repoRoot } from './architecture-harness.ts';
  * THE FAILURES THIS FILE EXISTS TO PREVENT, each of which would pass every
  * behavioural test on the day it was introduced:
  *
- *   - Phase 23 arriving early: a ClassSession, Availability, Attendance or
- *     Booking table, a meeting provider or address, a teacher area, My Classes
- *     or My Teachers, or `teaching.perform` seeded "for later";
+ *   - Phase 22 reaching into Phase 23's slice: its OWN migration creating a
+ *     ClassSession, Availability, Attendance or Booking table, its own tables
+ *     carrying a meeting provider or address, a slot or a booking column, or
+ *     its migration seeding `teaching.perform` "for later" — Phase 23 delivers
+ *     each of those as Learning's second slice, asserted by its own boundary
+ *     file;
  *   - a placeholder relation to a Video, Work, Asset or Centre because the
  *     allowlist would permit one (DELIVERY_PLAN.md Phase 22: no Video or Centre
  *     foreign key exists in this phase's schema);
@@ -127,19 +130,23 @@ describe('Phase 22 builds the catalogue and a person’s own study — and no Ph
     expect(created).toEqual(OWN_TABLES);
   });
 
-  it('has no class, availability, attendance, booking or meeting anywhere in its schema', async () => {
+  it('carries no class, availability, attendance, booking or meeting COLUMN of its own', async () => {
+    // Phase 23 delivers the ClassSession, Availability, Attendance and Booking
+    // models, and Prisma requires the Phase-22 Course and trial request to
+    // carry back-reference RELATION fields to them. Those are not columns: the
+    // scalar fields of every Phase-22 table are still free of any meeting,
+    // scheduling, slot or booking state, and the Phase-22 migration itself
+    // creates none of those tables.
     const schema = await read(SCHEMA);
-    for (const name of [
-      'ClassSession',
-      'Availability',
-      'Attendance',
-      'Booking',
-      'PathEnrolment',
-    ])
-      expect(schema, name).not.toMatch(new RegExp(`model ${name}\\b`, 'u'));
+    expect(schema).not.toMatch(/model PathEnrolment\b/u);
     for (const table of OWN_TABLES) {
-      const body = model(schema, table);
-      expect(body, table).not.toMatch(
+      const scalars = model(schema, table)
+        .split('\n')
+        .filter((line) =>
+          /^\s+\w+\s+(?:String|Int|DateTime|Boolean|BigInt|Decimal|Float)\b/u.test(line),
+        )
+        .join('\n');
+      expect(scalars, table).not.toMatch(
         /meeting|provider|scheduled|slot|confirmed|teacherAccount|assigned|booking|attendance|price|amount|currency|certificate|grade|score/iu,
       );
     }
@@ -186,9 +193,11 @@ describe('Phase 22 builds the catalogue and a person’s own study — and no Ph
 describe('Learning’s authority is the catalogue’s, and never teaching', () => {
   const catalogue: readonly string[] = PERMISSION_CATALOGUE.map((entry) => entry.key);
 
-  it('catalogues exactly two Learning keys, both ordinary', () => {
+  it('catalogues exactly two catalogue keys, both ordinary — Phase 23 adds the two class keys', () => {
     expect(catalogue.filter((key) => key.startsWith('learning.')).sort()).toEqual([
       'learning.administer',
+      'learning.classes.administer',
+      'learning.classes.read',
       'learning.read',
     ]);
     const bundled: readonly string[] = PLATFORM_ADMINISTRATOR_PERMISSIONS;
@@ -197,18 +206,21 @@ describe('Learning’s authority is the catalogue’s, and never teaching', () =
     expect(EXTERNALLY_GATED_PERMISSIONS as readonly string[]).not.toContain(
       'learning.read',
     );
+    expect(EXTERNALLY_GATED_PERMISSIONS as readonly string[]).not.toContain(
+      'learning.administer',
+    );
   });
 
   it('seeds no teaching authority and no workflow key nobody asked for', async () => {
-    for (const absent of [
-      'teaching.perform',
-      'learning.publish',
-      'learning.author',
-      'learning.review',
-    ])
+    // `teaching.perform` is Phase 23's to catalogue — externally gated, which
+    // its own boundary file proves; this migration must still seed neither it
+    // nor an editorial workflow for the catalogue.
+    for (const absent of ['learning.publish', 'learning.author', 'learning.review'])
       expect(catalogue, absent).not.toContain(absent);
     const migration = sql(await read(MIGRATION));
-    expect(migration).not.toMatch(/teaching\.|learning\.(?:publish|author|review)/u);
+    expect(migration).not.toMatch(
+      /teaching\.|learning\.(?:publish|author|review|classes)/u,
+    );
   });
 });
 
@@ -216,8 +228,16 @@ describe('the context depends on its contracts alone', () => {
   it('imports no other context, no database, no framework', async () => {
     const files = await sources(CONTEXT);
     expect(files.length).toBeGreaterThan(4);
+    // The one reach into the contracts root: the shared `Locale` TYPE, imported
+    // type-only (erased at build) exactly as Personalisation's newsletter mail,
+    // Taxonomy and People do. Any other name from the root barrel still fails.
     for (const file of files)
-      for (const specifier of imports(await read(file)))
+      for (const specifier of imports(
+        (await read(file)).replace(
+          /^import type \{ Locale \} from '@minhaj\/contracts';$/gmu,
+          '',
+        ),
+      ))
         expect(
           specifier.startsWith('./') ||
             specifier.startsWith('../') ||
@@ -233,12 +253,15 @@ describe('the context depends on its contracts alone', () => {
   });
 
   it('keeps the contracts free of every other owner', async () => {
+    // The shared locale grammar and, since Phase 23, the platform's own time
+    // grammar (a zone, a wall-clock pair, a fold) are the only reach outside.
     for (const file of await sources(CONTRACT))
       for (const specifier of imports(await read(file)))
         expect(
           specifier === 'zod' ||
             specifier.startsWith('./') ||
-            specifier === '../env/shared.ts',
+            specifier === '../env/shared.ts' ||
+            specifier === '../platform/time.ts',
           `${file} imports ${specifier}`,
         ).toBe(true);
   });
@@ -290,15 +313,13 @@ describe('the routes Phase 22 delivers, and the ones it does not', () => {
   });
 
   it('leaves every Phase 23 and undefined surface absent', async () => {
+    // `/learn/live`, `/learn/teachers`, the teacher area, My Classes, My
+    // Teachers and the classes administration left this list when Phase 23
+    // delivered them; its own boundary file guards them now.
     for (const absent of [
-      `${LEARN}/live`,
-      `${LEARN}/teachers`,
       `${LEARN}/training`,
       `${LEARN}/resources`,
-      `${APP}/teacher`,
-      `${APP}/my/classes`,
-      `${APP}/my/teachers`,
-      `${APP}/admin/learning/classes`,
+      `${APP}/teacher/messages`,
       `${APP}/(public)/quran/teachers`,
       `${APP}/(public)/hadith/scholars`,
     ])
@@ -307,11 +328,31 @@ describe('the routes Phase 22 delivers, and the ones it does not', () => {
     expect(await walk(`${APP}/my`)).not.toContain(`${APP}/my/progress/page.tsx`);
   });
 
-  it('offers staff no way to confirm, schedule or assign a trial request', async () => {
-    const files = await sources(`${APP}/admin/learning`);
-    for (const file of files)
-      expect(code(await read(file)), file).not.toMatch(
-        /\b(?:confirm|schedule|assign|book)\w*Trial|\bconfirmTrial|requestTrial|withdrawTrial/u,
-      );
+  it('offers no trial confirmation from the catalogue surfaces, and none through the catalogue service', async () => {
+    // Confirming a request is Phase 23's, offered on the trial-request list and
+    // the classes administration. The Phase-22 catalogue, path and enrolment
+    // surfaces still only list and count, and wherever confirmation IS offered
+    // it goes through the classes service, never the catalogue's.
+    const TRIAL_WRITE =
+      /\b(?:confirm|schedule|assign|book)\w*Trial|\bconfirmTrial|requestTrial|withdrawTrial/u;
+    const admin = `${APP}/admin/learning`;
+    const catalogueSurfaces = (await sources(admin)).filter(
+      (file) =>
+        [`${admin}/courses/`, `${admin}/paths/`, `${admin}/enrolments/`].some((dir) =>
+          file.startsWith(dir),
+        ) ||
+        file === `${admin}/course-surfaces.tsx` ||
+        file === `${admin}/path-surfaces.tsx`,
+    );
+    expect(catalogueSurfaces.length).toBeGreaterThan(2);
+    for (const file of catalogueSurfaces)
+      expect(code(await read(file)), file).not.toMatch(TRIAL_WRITE);
+    for (const file of await sources(admin)) {
+      const source = code(await read(file));
+      for (const call of source.matchAll(/(\.\w+)?\.confirmTrial\(/gu))
+        expect(call[1], `${file} confirms a trial outside the classes service`).toBe(
+          '.classes',
+        );
+    }
   });
 });

@@ -26,10 +26,10 @@ import { ActionForm, type FormActionState } from '../../(identity)/form-state';
 import { pageOffset, queryValue } from '../shared';
 
 /**
- * The parts every Learning administration screen shares (Phase 22): the copy
- * and its refusal messages, the directory filter and pager, the lifecycle
- * badge and transitions, the per-locale label fields and the hidden fields
- * that make an edit an edit.
+ * The parts every Learning administration screen shares (Phase 22, with the
+ * class refusals of Phase 23): the copy and its refusal messages, the
+ * directory filter and pager, the lifecycle badge and transitions, the
+ * per-locale label fields and the hidden fields that make an edit an edit.
  *
  * `learning.read` OPENS A SCREEN, `learning.administer` IS WHAT EVERY ACTION
  * RE-CHECKS, live. Every form carries its record's expected version, so a
@@ -74,6 +74,19 @@ export async function learningCopy(locale: Locale) {
       'not-enrolled': t('failure.invalid'),
       'rate-limited': t('failure.rateLimited'),
       'confirm-required': t('failure.confirmRequired'),
+      /* ---- Phase 23 — classes ---- */
+      'not-activated': t('failure.notActivated'),
+      'not-a-teacher': t('failure.notATeacher'),
+      booked: t('failure.booked'),
+      overlap: t('failure.overlap'),
+      'window-unavailable': t('failure.windowUnavailable'),
+      terminal: t('failure.terminal'),
+      past: t('failure.past'),
+      'nonexistent-time': t('failure.nonexistentTime'),
+      'ambiguous-time': t('failure.ambiguousTime'),
+      'invalid-meeting': t('failure.invalidMeeting'),
+      'not-participant': t('failure.notParticipant'),
+      'has-classes': t('failure.hasClasses'),
       unavailable: t('unknown'),
       unknown: t('unknown'),
     } as Readonly<Record<string, string>>,

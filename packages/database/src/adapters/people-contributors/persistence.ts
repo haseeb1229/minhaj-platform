@@ -556,6 +556,58 @@ export function createPeopleReader(): PeopleReaderPort {
           )?.name ?? row.slug,
       }));
     },
+    async publicTeachers(accountIds, locale) {
+      const wanted = accountIds.slice(0, 300);
+      if (wanted.length === 0) return [];
+      const rows = await prisma.person.findMany({
+        where: {
+          userId: { in: [...wanted] },
+          status: 'published',
+          teacherProfile: { is: { status: 'active' } },
+        },
+        select: {
+          id: true,
+          slug: true,
+          userId: true,
+          primaryLocale: true,
+          translations: { select: { locale: true, name: true } },
+          teacherProfile: {
+            select: {
+              translations: { select: { locale: true, subjects: true } },
+              languages: {
+                select: { languageCode: true },
+                orderBy: { languageCode: 'asc' },
+              },
+            },
+          },
+        },
+        orderBy: { slug: 'asc' },
+        take: 300,
+      });
+      return rows.flatMap((row) => {
+        if (row.userId === null || row.teacherProfile === null) return [];
+        const label =
+          row.translations.find((t) => t.locale === locale) ??
+          row.translations.find((t) => t.locale === row.primaryLocale) ??
+          row.translations[0];
+        const subjects =
+          row.teacherProfile.translations.find((t) => t.locale === locale)?.subjects ??
+          row.teacherProfile.translations.find((t) => t.locale === row.primaryLocale)
+            ?.subjects ??
+          null;
+        return [
+          {
+            accountId: row.userId,
+            personId: row.id,
+            slug: row.slug,
+            name: label?.name ?? row.slug,
+            nameLocale: (label?.locale ?? row.primaryLocale) as Locale,
+            subjects: subjects === null || subjects === '' ? null : subjects,
+            languages: row.teacherProfile.languages.map((entry) => entry.languageCode),
+          },
+        ];
+      });
+    },
     async listPeople({ query, status, profileKind, locale, limit, offset }) {
       const cap = boundedLimit(limit);
       const skip = boundedOffset(offset);

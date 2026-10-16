@@ -98,7 +98,13 @@ const SURFACES: readonly {
   // Phase 22. One entry for Learning: `learning.read` opens its courses, paths
   // and the enrolment and trial-request COUNTS; every catalogue action
   // re-checks `learning.administer`. There is no classes surface yet.
-  { key: 'learning', permission: 'learning.read', path: 'learning/courses' },
+  // Phase 23: the class keys open the same entry. The Learning area root
+  // sends each holder to the first surface their keys open.
+  {
+    key: 'learning',
+    permission: ['learning.read', 'learning.classes.read'],
+    path: 'learning',
+  },
   // Phase 4. A READ-ONLY view of the public shell's effective navigation; the
   // registry behind it is code, so there is no editing surface to reach.
   { key: 'navigation', permission: 'navigation.read', path: 'system/navigation' },

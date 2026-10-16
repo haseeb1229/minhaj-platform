@@ -221,7 +221,22 @@ export default async function MyLearningPage({
                       ) : (
                         title
                       )}
-                      <p className="text-sm font-medium">{t('trials.status')}</p>
+                      <p className="text-sm font-medium">
+                        {request.booking === null
+                          ? t('trials.status')
+                          : request.booking.state === 'confirmed'
+                            ? t('trials.bookedConfirmed')
+                            : request.booking.state === 'completed'
+                              ? t('trials.bookedCompleted')
+                              : t('trials.bookedCancelled')}
+                      </p>
+                      {request.booking === null ? null : (
+                        <TextLink
+                          href={`/${locale}/my/classes/${request.booking.sessionId}`}
+                        >
+                          {t('trials.openClass')}
+                        </TextLink>
+                      )}
                       <p className="text-sm text-[color:var(--color-foreground-muted)]">
                         {t('trials.requestedAt')}{' '}
                         <PersonalTime
@@ -231,23 +246,25 @@ export default async function MyLearningPage({
                         />
                       </p>
                     </div>
-                    <ActionForm
-                      action={withdrawTrialAction}
-                      submitLabel={t('trials.withdraw', {
-                        title:
-                          pickLabel(
-                            request.course.labels,
-                            locale,
-                            request.course.primaryLocale,
-                          )?.title ?? '',
-                      })}
-                      pendingLabel={t('common.working')}
-                      tone="secondary"
-                      messages={learningMessages(t, { success: t('trials.withdrawn') })}
-                    >
-                      <input type="hidden" name="locale" value={locale} />
-                      <input type="hidden" name="courseId" value={request.course.id} />
-                    </ActionForm>
+                    {request.booking !== null ? null : (
+                      <ActionForm
+                        action={withdrawTrialAction}
+                        submitLabel={t('trials.withdraw', {
+                          title:
+                            pickLabel(
+                              request.course.labels,
+                              locale,
+                              request.course.primaryLocale,
+                            )?.title ?? '',
+                        })}
+                        pendingLabel={t('common.working')}
+                        tone="secondary"
+                        messages={learningMessages(t, { success: t('trials.withdrawn') })}
+                      >
+                        <input type="hidden" name="locale" value={locale} />
+                        <input type="hidden" name="courseId" value={request.course.id} />
+                      </ActionForm>
+                    )}
                   </div>
                 </Panel>
               );

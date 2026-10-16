@@ -398,6 +398,24 @@ export interface ProfileFacetView {
   readonly languages: readonly string[];
 }
 
+/**
+ * Phase 23 — a teacher as the PUBLIC Find-a-Teacher directory and a learner's
+ * My Teachers list show them: the Person's public address and name, and the
+ * TeacherProfile's own public subjects and content languages. Keyed by the
+ * ACCOUNT Learning holds, so Layer 4 can join Learning's operational facts to
+ * People's public ones; the account identifier never reaches a public page.
+ * Presentation only: holding a profile grants nothing (§5.2).
+ */
+export interface PublicTeacherEntry {
+  readonly accountId: string;
+  readonly personId: string;
+  readonly slug: string;
+  readonly name: string;
+  readonly nameLocale: Locale;
+  readonly subjects: string | null;
+  readonly languages: readonly string[];
+}
+
 /** A Person with everything a PUBLIC profile page renders. */
 export interface PublicPersonProfile {
   /**

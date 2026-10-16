@@ -20,8 +20,10 @@ import {
   type CourseListingRow,
   type PathListingRow,
 } from './records.ts';
+import { lockedCourse } from './sessions.ts';
 import {
   boundedOffset,
+  isForeignKeyViolation,
   isUniqueViolation,
   LearningDataError,
   PUBLISHED,
@@ -56,17 +58,6 @@ import {
 /** How many paths and trial requests one learner's page shows. */
 const LEARNER_PATHS = 50;
 const LEARNER_TRIALS = 100;
-
-/** The Course's state and format, read under a shared lock held to commit. */
-async function lockedCourse(
-  tx: Client,
-  courseId: string,
-): Promise<{ readonly state: string; readonly format: string } | null> {
-  const [row] = await tx.$queryRaw<{ state: string; format: string }[]>`
-    SELECT [state], [format] FROM [dbo].[Course] WITH (HOLDLOCK, ROWLOCK)
-    WHERE [id] = ${courseId}`;
-  return row ?? null;
-}
 
 /** Completed lessons per Course, for one account, in ONE statement for a page. */
 async function completedByCourse(
@@ -358,10 +349,16 @@ export function createLearner(): LearnerPort {
       }
     },
 
+    /**
+     * A request a Booking has confirmed can no longer be withdrawn by
+     * deletion: the key refuses it, and the learner cancels the Booking
+     * instead (Phase 23). The key's refusal IS that answer.
+     */
     async withdrawTrial(userId, courseId) {
       try {
         await db.trialClassRequest.deleteMany({ where: { userId, courseId } });
       } catch (error) {
+        if (isForeignKeyViolation(error)) throw new LearningDataError('booked');
         refuse(error);
       }
     },
@@ -373,6 +370,9 @@ export function createLearner(): LearnerPort {
           id: true,
           requestedAt: true,
           course: { select: COURSE_LISTING_SELECT },
+          // The request's own Booking, keyed by the request: the same
+          // account's row, so nothing of anybody else's is reachable.
+          booking: { select: { id: true, sessionId: true, state: true } },
         },
         orderBy: [{ requestedAt: 'desc' }, { id: 'asc' }],
         take: LEARNER_TRIALS,
@@ -381,6 +381,14 @@ export function createLearner(): LearnerPort {
         id: row.id,
         course: toCourseListing(row.course),
         requestedAt: row.requestedAt,
+        booking:
+          row.booking === null
+            ? null
+            : {
+                id: row.booking.id,
+                sessionId: row.booking.sessionId,
+                state: row.booking.state as 'confirmed' | 'cancelled' | 'completed',
+              },
       }));
     },
   };

@@ -610,6 +610,18 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[enrolment]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[lessonprogress]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[trialclassrequest]': ['SELECT', 'INSERT', 'DELETE'],
+  // Phase 23: Learning — live classes. The activation is the owner's and
+  // read-only; a teaching scope and a session are history, ended or closed
+  // and never deleted; a window, a Booking, an Attendance mark and a
+  // communication intent are removed only by their owner's disposition.
+  // Identifying columns carry column DENYs.
+  '[dbo].[livelearningactivation]': ['SELECT'],
+  '[dbo].[courseteachingassignment]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[classsession]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[availability]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[booking]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[attendance]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[classcommunicationintent]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
 
   // Phase 7 — storage custody metadata. DELETE is genuinely the operation
   // here: reconciliation removes rows a crash left mid-upload, which is

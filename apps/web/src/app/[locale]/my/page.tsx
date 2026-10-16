@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import type { Locale } from '@minhaj/contracts';
 import { targetKey, type PersonalTarget } from '@minhaj/contracts/personalisation';
 
+import { ClassSchedule } from '@/components/my-classes/parts';
 import { LearningTitle } from '@/components/my-learning/parts';
 import { learningRead } from '@/components/my-learning/read';
 import {
@@ -44,14 +45,14 @@ import { SignOutForm } from './sign-out-form';
  * notifications, the optional interests prompt, and links to the public
  * sections the person said they are interested in — and Learning's panel
  * (Phase 22): how many Courses the person is enrolled on and a way back into
- * the one they enrolled on most recently. It renders no frame for classes,
- * teachers, messages, membership or donations, because those belong to work
- * that has not shipped. A promised surface must never be mistaken for a
- * delivered one (§5.1, §5.2).
+ * the one they enrolled on most recently — and, from Phase 23, their next
+ * upcoming class. It renders no frame for messages, membership or donations,
+ * because those belong to work that has not shipped. A promised surface must
+ * never be mistaken for a delivered one (§5.1, §5.2).
  *
  * THE PANELS ARE THE PERSON'S OWN, read with the session's account and
  * resolved through each content owner now. If they cannot be read, the page
- * says so and the account itself stays fully reachable. Learning's panel is
+ * says so and the account itself stays fully reachable. Learning's panels are
  * read separately, so one owner's outage never blanks the other's.
  */
 export const metadata = { robots: { index: false, follow: false } };
@@ -131,6 +132,7 @@ export default async function MyPage({
   const t = await getTranslations({ locale, namespace: 'identity' });
   const p = await getTranslations({ locale, namespace: 'personal' });
   const l = await getTranslations({ locale, namespace: 'myLearning' });
+  const c = await getTranslations({ locale, namespace: 'myClasses' });
   const session = await requireActiveSession(locale, `/${locale}/my`);
   const timeZone = session.account.timezone;
 
@@ -141,6 +143,12 @@ export default async function MyPage({
   const resume = learning.ok
     ? learning.value.items.find((entry) => entry.available)
     : undefined;
+
+  // The person's next class, if any: the soonest of their upcoming classes.
+  const classes = await learningRead('learning-home-classes', () =>
+    learningRuntime().myClasses.upcoming({ accountId: session.account.id }),
+  );
+  const nextClass = classes.ok ? classes.value[0] : undefined;
 
   const read = await personalRead('personal-home', () =>
     personalPanels(session.account.id),
@@ -235,6 +243,39 @@ export default async function MyPage({
           )}
           <p>
             <TextLink href={`/${locale}/my/learning`}>{l('home.link')}</TextLink>
+          </p>
+        </div>
+      </Panel>
+
+      <Panel>
+        <div className="flex flex-col gap-2">
+          <SectionHeading>{c('home.heading')}</SectionHeading>
+          {!classes.ok ? (
+            <Alert tone="error">{c('home.unavailable')}</Alert>
+          ) : nextClass === undefined ? (
+            <p className="text-sm">{c('home.none')}</p>
+          ) : (
+            <>
+              <p className="flex flex-wrap items-center gap-x-2">
+                <span>{c('home.next')}</span>
+                <TextLink href={`/${locale}/my/classes/${nextClass.session.id}`}>
+                  <LearningTitle
+                    labels={nextClass.course.labels}
+                    primaryLocale={nextClass.course.primaryLocale}
+                    locale={locale}
+                  />
+                </TextLink>
+              </p>
+              <ClassSchedule
+                session={nextClass.session}
+                locale={locale}
+                timeZone={timeZone}
+                t={c}
+              />
+            </>
+          )}
+          <p>
+            <TextLink href={`/${locale}/my/classes`}>{c('home.link')}</TextLink>
           </p>
         </div>
       </Panel>
@@ -383,6 +424,8 @@ export default async function MyPage({
         <TextLink href={`/${locale}/my/notifications`}>{p('nav.notifications')}</TextLink>
         <TextLink href={`/${locale}/my/learning`}>{l('nav.learning')}</TextLink>
         <TextLink href={`/${locale}/my/progress/courses`}>{l('nav.progress')}</TextLink>
+        <TextLink href={`/${locale}/my/classes`}>{c('nav.classes')}</TextLink>
+        <TextLink href={`/${locale}/my/teachers`}>{c('nav.teachers')}</TextLink>
         <TextLink href={`/${locale}/my/questions`}>{t('my.questions')}</TextLink>
         <TextLink href={`/${locale}/my/settings/profile`}>{t('my.profile')}</TextLink>
         <TextLink href={`/${locale}/my/settings/security`}>{t('my.security')}</TextLink>

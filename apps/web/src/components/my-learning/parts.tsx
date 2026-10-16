@@ -82,6 +82,7 @@ export function learningMessages(
     'not-found': t('failure.invalid'),
     'not-enrolled': t('failure.notEnrolled'),
     'course-unavailable': t('failure.courseUnavailable'),
+    booked: t('failure.booked'),
     'rate-limited': t('failure.rateLimited'),
     'confirm-required': t('failure.confirmRequired'),
     'no-session': t('failure.noSession'),
