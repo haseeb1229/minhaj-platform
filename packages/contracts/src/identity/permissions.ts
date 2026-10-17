@@ -23,7 +23,9 @@
  * `quran.editCanonical` among them; Phase 19 appended Hadith's three,
  * `hadith.editCanonical` among them; Phase 20 appended Fatwa's three,
  * `fatwa.publish` among them; Phase 21 appended the two newsletter keys;
- * Phase 22 appended Learning's two catalogue keys. `teaching.perform` and the
+ * Phase 22 appended Learning's two catalogue keys; Phase 23 appended
+ * `teaching.perform` and the two class keys; Phase 24 appended Messaging's two
+ * externally gated keys. `teaching.perform` and the
  * rest are named by DOMAIN_MODEL.md §4.4 as INDICATIVE examples of the shape;
  * they belong to slices that do not exist yet — `teaching.perform` to Phase
  * 23's teacher experience, whose holders OPEN_DECISIONS.md §6.3 reserves to the
@@ -592,6 +594,25 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     description:
       'Scope a current teaching.perform holder to a Course, confirm trial requests, schedule, move, cancel and complete sessions, replace a teacher and correct attendance. Grants no Identity key.',
   }),
+
+  /* ---- Phase 24 — Messaging ---------------------------------------------- */
+  //
+  // TWO KEYS, BOTH EXTERNALLY GATED (OPEN_DECISIONS.md §6.6): who staffs
+  // support and who moderates reported messages is the organisation's
+  // decision. Catalogued, grantable through the ordinary audited lifecycle,
+  // bundled into NO role and held by nobody. Ordinary messaging needs no key
+  // at all: a person reaches a conversation through their CURRENT relationship
+  // (DOMAIN_MODEL.md §15.3), never through a permission.
+  Object.freeze({
+    key: 'messaging.support',
+    description:
+      'Take part in authenticated support conversations: see the support queue, claim, reply to and resolve a conversation. Every opening of support content is audited.',
+  }),
+  Object.freeze({
+    key: 'messaging.moderate',
+    description:
+      'Review reported messages and conversations: read the bounded evidence one report authorises, then withhold a message, close a conversation or dismiss. Every evidence read is audited.',
+  }),
 ]);
 
 /** Every catalogue key, as a union. Mistyping one is a compile error. */
@@ -646,6 +667,10 @@ export const EXTERNALLY_GATED_PERMISSIONS = Object.freeze([
   // Phase 23: who teaches is the organisation's decision (OPEN_DECISIONS.md
   // §6.3, with §2.1 safeguarding open). Catalogued, bundled into no role.
   'teaching.perform',
+  // Phase 24: who staffs support and who moderates is the organisation's
+  // decision (OPEN_DECISIONS.md §6.6). Catalogued, bundled into no role.
+  'messaging.support',
+  'messaging.moderate',
 ] as const satisfies readonly PermissionKey[]);
 
 const EXTERNALLY_GATED: ReadonlySet<string> = new Set(EXTERNALLY_GATED_PERMISSIONS);

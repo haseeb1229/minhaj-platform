@@ -379,6 +379,19 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'Booking',
       'Attendance',
       'ClassCommunicationIntent',
+      // Phase 24 — Messaging: the owner's per-kind activation, conversations
+      // with their participants, ordered immutable messages, attachments that
+      // name a Storage asset, read positions, blocks, reports and permanent
+      // moderation decisions.
+      'MessagingActivation',
+      'Conversation',
+      'ConversationParticipant',
+      'Message',
+      'MessageAttachment',
+      'MessageReadState',
+      'MessagingBlock',
+      'MessagingReport',
+      'MessagingModerationDecision',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name

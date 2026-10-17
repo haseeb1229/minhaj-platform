@@ -235,5 +235,13 @@ export {
   createLearningExport,
   createLearningPersistence,
   createLearningPublicReader,
+  createLearningRelationshipReader,
   createTeaching,
 } from './adapters/learning/index.ts';
+
+/* ---- Messaging (context-owned) ------------------------------------------ */
+
+export {
+  MessagingDataError,
+  createMessagingPersistence,
+} from './adapters/messaging/index.ts';

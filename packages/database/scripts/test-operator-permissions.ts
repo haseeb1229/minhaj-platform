@@ -612,6 +612,55 @@ try {
     operatorSession.query(`DELETE FROM [dbo].[Booking];`),
   );
 
+  // Phase 24 gives the operator ROLE nothing over Messaging: the activation is
+  // the owner's own migration-level act, a conversation's messages are read
+  // only by the Messaging service on a current relationship, and support and
+  // moderation are runtime authority under the externally gated keys — so the
+  // operator can neither switch messaging on, read a message, a report or who
+  // talks to whom, nor withhold, decide or erase anything.
+  for (const table of [
+    'MessagingActivation',
+    'Conversation',
+    'ConversationParticipant',
+    'Message',
+    'MessageAttachment',
+    'MessageReadState',
+    'MessagingBlock',
+    'MessagingReport',
+    'MessagingModerationDecision',
+  ]) {
+    await expectDenied(operatorSession, `operator SELECT on ${table} denied`, () =>
+      operatorSession.query(`SELECT TOP 1 1 AS probe FROM [dbo].[${table}];`),
+    );
+  }
+  await expectDenied(
+    operatorSession,
+    'operator INSERT on MessagingActivation denied',
+    () =>
+      operatorSession.query(`
+      INSERT INTO [dbo].[MessagingActivation] ([capability], [authority], [authorisedBy], [reference])
+      VALUES (N'support', N'approved', N'injected', N'urn:example:injected');
+    `),
+  );
+  await expectDenied(operatorSession, 'operator UPDATE on Message denied', () =>
+    operatorSession.query(`UPDATE [dbo].[Message] SET [moderation] = N'withheld';`),
+  );
+  await expectDenied(operatorSession, 'operator DELETE on Message denied', () =>
+    operatorSession.query(`DELETE FROM [dbo].[Message];`),
+  );
+  await expectDenied(
+    operatorSession,
+    'operator INSERT on MessagingModerationDecision denied',
+    () =>
+      operatorSession.query(`
+      INSERT INTO [dbo].[MessagingModerationDecision] ([id], [reportId], [moderatorUserId], [action])
+      VALUES (N'injected', N'injected', N'injected', N'dismiss');
+    `),
+  );
+  await expectDenied(operatorSession, 'operator DELETE on MessagingReport denied', () =>
+    operatorSession.query(`DELETE FROM [dbo].[MessagingReport];`),
+  );
+
   await expectDenied(operatorSession, 'operator INSERT on RoleAssignment denied', () =>
     operatorSession.query(`
       INSERT INTO [dbo].[RoleAssignment] ([userId], [roleId])

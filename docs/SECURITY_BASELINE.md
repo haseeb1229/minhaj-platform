@@ -189,6 +189,13 @@ a teacher also needs a current typed Course teaching scope, which `learning.clas
 only for an account Identity already reports live (DOMAIN_MODEL.md §13.5). The two class keys are
 ordinary and bundled.
 
+**Phase 24 adds the fifth and sixth: `messaging.support` and `messaging.moderate`**
+(OPEN_DECISIONS.md §6.6). Both are catalogued, externally gated, bundled into no role and held by
+nobody, so the migration extends no bundle and invalidates no session. Neither is needed for
+ordinary messaging, which a person reaches only through their current relationship
+(DOMAIN_MODEL.md §15.6); neither implies the other; and neither can switch Messaging on, which only
+the owner-written activation row does.
+
 ---
 
 ## 4. CMS publishing permissions
@@ -686,6 +693,24 @@ served (ARCHITECTURE.md §4.2). Public images are `private, no-cache` with the c
 validator, and a `304` is sent only after both allows, so withdrawal takes effect for a browser
 that already holds the image; previews are `private, no-store`.
 
+**Phase 24 (Messaging attachments)** is the first consumer that RELEASES what it stores. Uploads
+arrive at `POST /api/messaging/conversations/{id}/attachments` by the same streamed Class-A pattern —
+origin, intent header, session, the conversation's CURRENT send authority, a per-account budget and
+a declared length of at most 5 MiB, all before any byte is read. The policy admits JPEG and PNG
+(Phase 12's image validation and metadata removal) and PDF only, at most four per message. Before
+storing, Messaging records the upload with a 256-bit release token; Storage keeps only its SHA-256
+(`Asset.releaseDigest`). `StorageService.release(token)` withdraws that asset from service, removes
+its bytes and then its record — **an asset id alone releases nothing**, so no consumer can release
+another's asset, and every asset stored without a token stays unreleasable. Rejected and uncleared
+uploads are released at once; an upload never sent is released by a bounded sweep after 24 hours,
+which also closes the crash window between storing and recording. Bytes are served at
+`/assets/messaging/attachments/{id}` (participants), `/assets/messaging/support/{id}` (live
+`messaging.support`, audited) and `/assets/messaging/evidence/{reportId}/{id}` (live
+`messaging.moderate`, inside that report's evidence only, audited). Each request re-decides
+Messaging's access NOW and Storage's custody; images are `inline`, PDFs `attachment`; every response
+is `private, no-store`, `nosniff`, `Cross-Origin-Resource-Policy: same-origin` and `noindex`, and
+every denial is the same 404.
+
 ### 10.2 Imported HTML — the largest injection vector
 
 Legacy content is **untrusted input**, regardless of Minhaj owning the source site. Those
@@ -793,7 +818,32 @@ disabled by default** pending policy approval.
 Socket connections **authenticated at handshake** — no anonymous connections. **Authorisation
 re-checked on every event.** **Conversation membership and current relationship verified
 server-side before any delivery.** Per-connection rate limiting. Payload size limits. All
-socket input Zod-validated. **Typing state is ephemeral and never persisted.**
+socket input Zod-validated. **Typing state is ephemeral and never persisted.** (Phase 25; Phase
+24 has no socket.)
+
+### 12.5 As delivered (Phase 24)
+
+- **One decision, every request.** The Messaging service hosted in `server-core` decides each
+  list, open, history page, catch-up, send, read mark, report, upload and attachment byte request
+  from the kind's activation and the CURRENT relationship (Learning's two halves), the requester's
+  own conversation, or a live `messaging.support`. Participant rows are history: a revoked teacher,
+  an ended scope and a withdrawn learner are refused on the next request, history and attachments
+  included. A non-participant, an inactive kind and a missing id are refused identically.
+- **Fail closed.** No `MessagingActivation` row exists; the runtime can read the table and never
+  write it. Student-to-student stays off behind a peer policy that denies every pair.
+- **Block and report.** A block in either direction stops starting and continuing a direct
+  conversation, decided again under the conversation's lock so a racing send cannot slip past.
+  Only a current participant reports, with a controlled reason; one open report per target.
+- **Evidence is bounded.** A moderator reads only the window one report authorises; a moderation
+  decision is immutable, withholds without editing, and suspends nobody.
+- **Audit.** Opening support content or history, opening a support attachment, claiming and
+  resolving, and every moderation-evidence read and decision record an audit row of identifiers and
+  states — never a body, a filename or a token. Ordinary messages are not audited.
+- **Class-A.** Every person, teacher and operator mutation is an Origin-protected Server Action
+  or a same-origin, intent-headed Route Handler that re-resolves the session; reads of catch-up are
+  Fetch-Metadata-guarded GETs; no state changes on GET. Starting, sending, uploading, opening
+  support, reporting, blocking, staff reads and moderation are rate-limited per account on the
+  single-instance limiter (§15; no cross-instance claim is made).
 
 ---
 
@@ -1240,6 +1290,32 @@ vetting, retention or adults-only rule exists and no real teacher is named (DOMA
 - **Logging.** Structured, by operation name; no meeting address, participant list, requester,
   recipient address or reminder body.
 
+#### 19.1.5 Phase-24 messaging
+
+Engineering defaults only; OPEN_DECISIONS §2.1, §2.2, §2.5 and §6.6 stay open, so no age, guardian,
+vetting, retention, escalation or adults-only rule exists and no real support or moderation staff is
+named (DOMAIN_MODEL.md §15.6).
+
+- **Minimised.** Messaging stores account ids, roles, plain-text bodies, attachment metadata and
+  safety states — no email, name, phone, age, guardian, address, device, Course title or meeting
+  link. Display names are resolved at Layer 4 for people already in the conversation; support
+  staff appear as "Minhaj Support".
+- **Private surfaces.** `/my/messages/*`, `/teacher/messages/*` and `/admin/messaging/*` are
+  per-request, `no-store` and `noindex`; nothing of Messaging enters Search, a sitemap or a shared
+  cache, and no message content is sent by email.
+- **Export.** `GET /api/my/export/messaging` returns the person's participation, their OWN messages
+  with their text, their attachments' metadata (never bytes), their read state, blocks and reports —
+  never another person's message — private, `no-store`, rate-limited and never written to disk.
+- **Disposition and the terminal-history rule.** After Identity commits a closure, Messaging's
+  bounded, idempotent, resumable disposition (reported as pending until complete) closes the
+  account's conversations, ends its participation and removes its read state, blocks and unsent
+  uploads. The REMAINING participant keeps read-only access to the immutable history while their
+  own half of the relationship is current; ordinary revocation, withdrawal or a block never does
+  this. A conversation is disposed, attachments released from Storage, once every non-support
+  participant has left through closure and no report names it; a reported conversation is kept as
+  evidence pending §2.2. A new registration is a new account and reaches nothing old.
+- **Logging.** By operation name only — never a body, filename, token, storage key or address.
+
 ### 19.2 Logging
 
 **Pino**, structured, with correlation identifiers. **Redaction is configured at the logger
@@ -1252,18 +1328,23 @@ URLs** · full request bodies containing personal data · full email addresses i
 
 ### 19.3 Under-18 safeguarding
 
-**A genuine external policy decision** (OPEN_DECISIONS.md) that **blocks implementation** of:
+**A genuine external policy decision** (OPEN_DECISIONS.md §2.1) that gates the **production
+activation** of:
 
 - Teacher/student live learning
 - One-to-one messaging
 - Student-to-student messaging where relevant
 
-Before those phases Minhaj must decide: whether minors are supported · age thresholds ·
-parental/guardian consent · **teacher vetting** · one-to-one communication rules ·
-reporting and escalation · moderation requirements · retention requirements.
+Minhaj must decide: whether minors are supported · age thresholds · parental/guardian consent ·
+**teacher vetting** · one-to-one communication rules · reporting and escalation · moderation
+requirements · retention requirements.
 
-**This does not block Phase 0B tooling or foundation work.** It gates the specific phases
-above and nothing else.
+**It is an implementation gate only for the behaviour the policy itself determines** — a
+guardian-consent flow, an age threshold, a minor-specific retention or communication rule — and
+that behaviour is not built until the policy defines it (DELIVERY_PLAN.md §3.1). It is **not** a
+blanket block on building the phases above: their policy-independent mechanics may be engineered
+fail-closed while production activation stays blocked, as Phases 23 and 24 did. **This does not
+block Phase 0B tooling or foundation work** either.
 
 **What engineering may build before the policy arrives.** The absence of a final policy does not
 prevent implementing the **policy-independent, default-deny mechanics** that any policy will

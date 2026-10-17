@@ -170,6 +170,22 @@ model User {
   attendance                Attendance[]
   classCommunicationIntents ClassCommunicationIntent[]
 
+  /// Phase 24 BACK-REFERENCES PRISMA REQUIRES, AND NOT DEPENDENCIES. Each is
+  /// owned on the Messaging side — a direct conversation's two accounts, a
+  /// support conversation's person, a participant, a sender, an uploader, a
+  /// block, a reporter and a moderator. Identity never reads them; closure
+  /// reaches them only through Messaging's own disposition.
+  conversationsLow       Conversation[]                @relation("ConversationLowUser")
+  conversationsHigh      Conversation[]                @relation("ConversationHighUser")
+  supportConversations   Conversation[]                @relation("ConversationRequester")
+  conversationMembership ConversationParticipant[]
+  sentMessages           Message[]
+  messageUploads         MessageAttachment[]
+  messagingBlocksMade    MessagingBlock[]              @relation("MessagingBlocker")
+  messagingBlocksAgainst MessagingBlock[]              @relation("MessagingBlocked")
+  messagingReports       MessagingReport[]
+  moderationDecisions    MessagingModerationDecision[]
+
   id String @id @db.NVarChar(36)
 
   // ---- Better Auth core -------------------------------------------------
@@ -2129,6 +2145,7 @@ model Asset {
   audioTracks AudioTrack[] @relation("AudioTrackAsset")
   photos Photo[] @relation("PhotoAsset")
   quranRecitationSegments QuranRecitationSegment[] @relation("QuranRecitationSegmentAsset")
+  messageAttachments MessageAttachment[] @relation("MessageAttachmentAsset")
   id String @id @db.NVarChar(36)
 
   /// Server-generated and opaque. Never derived from caller input.
@@ -2151,6 +2168,12 @@ model Asset {
   displayName String? @db.NVarChar(200)
 
   scanAttempts Int @default(0)
+
+  /// Phase 24. SHA-256 of a release token the CONSUMER generated before
+  /// storing; only that token's holder can release the asset. Null for every
+  /// asset stored without one, which can then never be released through
+  /// StorageService. Unique where present (a filtered key in the migration).
+  releaseDigest String? @db.NVarChar(64)
 
   createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
   updatedAt DateTime @db.DateTime2
@@ -5193,6 +5216,10 @@ model Course {
   teachingScopes CourseTeachingAssignment[]
   sessions ClassSession[]
   bookings Booking[]
+  /// Phase 24 BACK-REFERENCE PRISMA REQUIRES, AND NOT A DEPENDENCY: a direct
+  /// conversation names the Course its relationship is on. Learning never
+  /// reads it.
+  conversations Conversation[]
   @@index([state, publishedAt, slug])
   @@index([state, format, level])
   @@index([languageCode, state])
@@ -5534,4 +5561,197 @@ model ClassCommunicationIntent {
   @@index([state, dueAt])
   @@index([sessionId, state])
   @@index([userId, state])
+}
+
+// ===========================================================================
+// Phase 24 — Messaging (DOMAIN_MODEL.md §15). Owned by the Messaging context;
+// its adapter lives in packages/database/src/adapters/messaging. Composite
+// keys that carry the conversation (an attachment's and a report's message)
+// and the filtered unique keys are declared in the migration, which the
+// database enforces; Prisma navigates only the simple relations.
+// ===========================================================================
+
+/// The fail-closed Messaging gate: at most one row per kind, written by the
+/// owner/operator only (the runtime holds SELECT), immutable once written.
+/// No row for a kind: that kind is OFF — no conversation or message of it.
+model MessagingActivation {
+  /// support | teacher-student | student-student
+  capability   String   @id @db.NVarChar(24)
+  /// fixture | approved
+  authority    String   @db.NVarChar(16)
+  authorisedBy String   @db.NVarChar(200)
+  reference    String?  @db.NVarChar(400)
+  activatedAt  DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+}
+
+/// One conversation. A DIRECT one (teacher-student, student-student) names its
+/// Course and its two accounts in binary order — unique per kind, Course and
+/// pair; a SUPPORT one names its person — one open at a time. Membership is
+/// history; authority is re-decided on every request.
+model Conversation {
+  id String @id @db.NVarChar(36)
+  /// teacher-student | student-student | support
+  kind String @db.NVarChar(24)
+  courseId String? @db.NVarChar(36)
+  lowUserId String? @db.NVarChar(36)
+  highUserId String? @db.NVarChar(36)
+  requesterUserId String? @db.NVarChar(36)
+  /// open | closed
+  state String @default("open") @db.NVarChar(16)
+  /// account-closed | moderation | resolved
+  closedReason String? @db.NVarChar(24)
+  closedAt DateTime? @db.DateTime2
+  /// Set once the owner's disposition began removing it; never cleared.
+  disposingAt DateTime? @db.DateTime2
+  /// The last allocated message sequence: the per-conversation order.
+  lastSequence Int @default(0)
+  activityAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  version Int @default(1)
+  course Course? @relation(fields: [courseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  lowUser User? @relation("ConversationLowUser", fields: [lowUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  highUser User? @relation("ConversationHighUser", fields: [highUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  requester User? @relation("ConversationRequester", fields: [requesterUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  participants ConversationParticipant[]
+  messages Message[]
+  attachments MessageAttachment[]
+  reports MessagingReport[]
+  @@index([kind, state, activityAt, id])
+  @@index([courseId])
+  @@index([lowUserId])
+  @@index([highUserId])
+  @@index([requesterUserId])
+}
+
+/// A person's membership of one conversation, and the role they hold in it.
+/// Historical membership, never authority by itself. No email, name, phone,
+/// age or profile is copied here.
+model ConversationParticipant {
+  id String @id @db.NVarChar(36)
+  conversationId String @db.NVarChar(36)
+  userId String @db.NVarChar(36)
+  /// teacher | learner | peer | requester | support
+  role String @db.NVarChar(16)
+  joinedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  leftAt DateTime? @db.DateTime2
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  readState MessageReadState?
+  @@unique([conversationId, userId], map: "ConversationParticipant_member_key")
+  @@index([userId, leftAt])
+}
+
+/// One immutable plain-text message at one position of its conversation's
+/// durable order. One per sender and client operation identifier, so a
+/// retried send is the same message. Moderation may withhold it, never edit it.
+model Message {
+  id String @id @db.NVarChar(36)
+  conversationId String @db.NVarChar(36)
+  sequence Int
+  senderUserId String @db.NVarChar(36)
+  operationId String @db.NVarChar(36)
+  body String @db.NVarChar(Max)
+  /// SHA-256 of the body and the ordered attachment ids, for replay detection.
+  payloadDigest String @db.NVarChar(64)
+  /// visible | withheld
+  moderation String @default("visible") @db.NVarChar(16)
+  withheldAt DateTime? @db.DateTime2
+  sentAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sender User @relation(fields: [senderUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@unique([conversationId, sequence], map: "Message_order_key")
+  @@unique([conversationId, senderUserId, operationId], map: "Message_operation_key")
+  @@unique([id, conversationId], map: "Message_conversation_key")
+  @@index([senderUserId])
+}
+
+/// One file a participant uploaded into a conversation: recorded BEFORE its
+/// bytes are stored with the release token they are stored under, ready once
+/// Storage cleared them, attached to exactly one of the uploader's messages.
+/// Its message key carries the conversation (composite, in the migration).
+model MessageAttachment {
+  id String @id @db.NVarChar(36)
+  conversationId String @db.NVarChar(36)
+  uploaderUserId String @db.NVarChar(36)
+  /// The secret this upload's asset is released with. Never shown or logged.
+  releaseToken String @unique(map: "MessageAttachment_releaseToken_key") @db.NVarChar(64)
+  /// pending | ready | attached | releasing
+  state String @db.NVarChar(16)
+  assetId String? @db.NVarChar(36)
+  messageId String? @db.NVarChar(36)
+  position Int? @db.TinyInt
+  /// image/jpeg | image/png | application/pdf — as Storage sniffed it.
+  mediaType String? @db.NVarChar(32)
+  byteSize BigInt?
+  displayName String? @db.NVarChar(200)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  attachedAt DateTime? @db.DateTime2
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  uploader User @relation(fields: [uploaderUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  asset Asset? @relation("MessageAttachmentAsset", fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([conversationId, state, createdAt])
+  @@index([uploaderUserId, state])
+}
+
+/// One participant's high-water read position in one conversation. Only moves
+/// forward; unread is derived from it.
+model MessageReadState {
+  conversationId String @db.NVarChar(36)
+  userId String @db.NVarChar(36)
+  lastReadSequence Int @default(0)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  participant ConversationParticipant @relation(fields: [conversationId, userId], references: [conversationId, userId], onDelete: NoAction, onUpdate: NoAction, map: "MessageReadState_participant_fkey")
+  @@id([conversationId, userId])
+  @@index([userId])
+}
+
+/// One person's block of another. Directional; while either direction exists
+/// neither may start or continue a direct conversation with the other. History
+/// is untouched.
+model MessagingBlock {
+  blockerUserId String @db.NVarChar(36)
+  blockedUserId String @db.NVarChar(36)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  blocker User @relation("MessagingBlocker", fields: [blockerUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  blocked User @relation("MessagingBlocked", fields: [blockedUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([blockerUserId, blockedUserId])
+  @@index([blockedUserId])
+}
+
+/// A participant's report. Its target is TYPED: the Conversation, or — when
+/// `messageId` is set — that Message, by a composite key that carries the
+/// conversation (in the migration). A small controlled reason; no narrative.
+model MessagingReport {
+  id String @id @db.NVarChar(36)
+  conversationId String @db.NVarChar(36)
+  messageId String? @db.NVarChar(36)
+  reporterUserId String @db.NVarChar(36)
+  /// harassment | spam | inappropriate | safety | other
+  reason String @db.NVarChar(24)
+  /// The conversation's last sequence when the report was filed: bounds evidence.
+  atSequence Int
+  /// open | resolved
+  state String @default("open") @db.NVarChar(16)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  resolvedAt DateTime? @db.DateTime2
+  version Int @default(1)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reporter User @relation(fields: [reporterUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  decision MessagingModerationDecision?
+  @@index([state, createdAt, id])
+  @@index([conversationId])
+  @@index([reporterUserId])
+}
+
+/// The one immutable moderation decision on a report.
+model MessagingModerationDecision {
+  id String @id @db.NVarChar(36)
+  reportId String @unique(map: "MessagingModerationDecision_reportId_key") @db.NVarChar(36)
+  moderatorUserId String @db.NVarChar(36)
+  /// dismiss | withhold-message | close-conversation
+  action String @db.NVarChar(24)
+  decidedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  report MessagingReport @relation(fields: [reportId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  moderator User @relation(fields: [moderatorUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([moderatorUserId])
 }

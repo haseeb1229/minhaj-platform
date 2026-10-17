@@ -366,10 +366,13 @@ describe('Phase 2 Chunk 2 — what the delivered code does NOT contain', () => {
       const classesOwner = file.includes('20261007000000_phase23_teacher_live_classes');
       const learningOwner =
         file.includes('20261006000000_phase22_learning') || classesOwner;
+      // Messaging's two keys are Phase 24's and appear in its migration alone.
+      const messagingOwner = file.includes('20261008000000_phase24_messaging');
       for (const domain of [
         ...(fatwaOwner ? [] : ['fatwa.', 'question.']),
         ...(learningOwner ? [] : ['learning.']),
         ...(classesOwner ? [] : ['teaching.']),
+        ...(messagingOwner ? [] : ['messaging.']),
         'membership.',
         'donations.',
       ]) {
@@ -593,6 +596,12 @@ const PERMISSION_MIGRATIONS = [
     id: '20261007000000_phase23_teacher_live_classes',
     keys: ['learning.classes.administer', 'learning.classes.read', 'teaching.perform'],
   },
+  {
+    // Both catalogued, externally gated and bundled into no role.
+    phase: 'Phase 24',
+    id: '20261008000000_phase24_messaging',
+    keys: ['messaging.moderate', 'messaging.support'],
+  },
 ] as const;
 
 describe('the permission catalogue is one definition, appended only by owners', () => {
@@ -662,7 +671,6 @@ describe('the permission catalogue is one definition, appended only by owners', 
       'region.',
       'city.',
       'centre.',
-      'messaging.',
       // Phase 21 shipped the newsletter's two keys and nothing else: no
       // permission reaches any account's saved items, notes, history or
       // notifications.
@@ -688,9 +696,24 @@ describe('the permission catalogue is one definition, appended only by owners', 
       'booking.',
       'availability.',
       'session.',
+      // Phase 24 shipped `messaging.support` and `messaging.moderate` and
+      // nothing else: no key reaches a person's conversations, messages,
+      // attachments or reports — those are decided by participation and
+      // Learning's live relationship, never by a grant.
+      'conversation.',
+      'message.',
+      'chat.',
+      'attachment.',
+      'report.',
+      'moderation.',
     ]) {
       expect(declared.some((key) => key.startsWith(domain))).toBe(false);
     }
+    // Messaging has exactly two keys, both the organisation's to grant.
+    expect(declared.filter((key) => key.startsWith('messaging.'))).toEqual([
+      'messaging.moderate',
+      'messaging.support',
+    ]);
     // Teaching has exactly one key, and it is the organisation's to grant.
     expect(declared.filter((key) => key.startsWith('teaching.'))).toEqual([
       'teaching.perform',

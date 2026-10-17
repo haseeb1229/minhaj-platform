@@ -534,6 +534,18 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'Booking',
         'Attendance',
         'ClassCommunicationIntent',
+        // Phase 24 — Messaging: the owner's per-kind activation, conversations,
+        // participants, messages, attachments, read positions, blocks, reports
+        // and moderation decisions.
+        'MessagingActivation',
+        'Conversation',
+        'ConversationParticipant',
+        'Message',
+        'MessageAttachment',
+        'MessageReadState',
+        'MessagingBlock',
+        'MessagingReport',
+        'MessagingModerationDecision',
       ].sort(),
     );
   });

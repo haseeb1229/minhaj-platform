@@ -17,8 +17,9 @@ import { requireTeacher } from './guard';
  * navigation — and hand a non-teacher the area's map. The guard here is the
  * same live question each page asks again.
  *
- * NO MESSAGES ENTRY. Teacher–learner messaging is Phase 24's; nothing here
- * links to a surface that does not exist.
+ * MESSAGES ARE PART OF THE AREA since Phase 24 — the teacher's conversations
+ * with learners on the Courses they teach now — and the entry is listed like
+ * every other section.
  */
 export const metadata = { robots: { index: false, follow: false } };
 

@@ -67,7 +67,39 @@ export default defineConfig({
     video: 'off',
   },
 
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  /**
+   * ONE ENGINE, THREE PROJECTS — and the split is an ORDER, not a matrix.
+   *
+   * `LiveLearningActivation` is a database-wide, immutable singleton, and
+   * `learning.spec.ts` proves Learning's switched-off and empty-catalogue
+   * states against the run's database before it writes that row and publishes
+   * a Course. Messaging (Phase 24) cannot be proved without both: a teacher
+   * and a learner have a conversation only on a published live Course while
+   * live learning is on. Run beside Learning, the Messaging proofs would
+   * either break Learning's preconditions or race its activation, so they run
+   * AFTER it, as a dependent project, while every other spec runs in parallel
+   * with both. A failed Learning run therefore skips the Messaging proofs —
+   * visibly, in the report — rather than letting them prove anything against
+   * a half-built state.
+   */
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+      testIgnore: ['**/learning.spec.ts', '**/messaging.spec.ts'],
+    },
+    {
+      name: 'learning',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: '**/learning.spec.ts',
+    },
+    {
+      name: 'messaging',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: '**/messaging.spec.ts',
+      dependencies: ['learning'],
+    },
+  ],
 
   /**
    * The application under test is the PRODUCTION BUILD.

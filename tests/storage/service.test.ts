@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -14,7 +15,10 @@ import type {
   StorageServicePort,
   UploadPolicy,
 } from '../../packages/contracts/src/platform/storage.ts';
-import { createFilesystemStore } from '../../packages/storage/src/filesystem.ts';
+import {
+  createFilesystemStore,
+  type FilesystemStore,
+} from '../../packages/storage/src/filesystem.ts';
 import { createStorageService } from '../../packages/storage/src/service.ts';
 import {
   containsText,
@@ -36,14 +40,27 @@ import {
  * that detection itself works is proven against a real ClamAV separately.
  */
 
-/** Metadata persistence, in memory, with the same state rules as the SQL adapter. */
-function memoryAssets(): AssetPersistencePort & { rows: Map<string, AssetRecord> } {
+/**
+ * Metadata persistence, in memory, with the same state rules as the SQL adapter.
+ * `digests` is the release-digest column; `referenced` stands in for a
+ * consumer foreign key that still names a record.
+ */
+function memoryAssets(): AssetPersistencePort & {
+  rows: Map<string, AssetRecord>;
+  digests: Map<string, string | null>;
+  referenced: Set<string>;
+} {
   const rows = new Map<string, AssetRecord>();
+  const digests = new Map<string, string | null>();
+  const referenced = new Set<string>();
   const stamp = () => new Date();
 
   return {
     rows,
+    digests,
+    referenced,
     async begin(input) {
+      digests.set(input.id, input.releaseDigest ?? null);
       rows.set(input.id, {
         id: input.id,
         storageKey: input.storageKey,
@@ -120,6 +137,28 @@ function memoryAssets(): AssetPersistencePort & { rows: Map<string, AssetRecord>
     },
     async remove(id) {
       rows.delete(id);
+    },
+    // Mirrors `UPDATE ... WHERE releaseDigest = @digest`, whatever the state.
+    async beginRelease(releaseDigest) {
+      const id = [...digests].find(([, digest]) => digest === releaseDigest)?.[0];
+      const row = id === undefined ? undefined : rows.get(id);
+      if (row === undefined) return null;
+      rows.set(row.id, {
+        ...row,
+        state: 'rejected',
+        rejection: 'released',
+        updatedAt: stamp(),
+      });
+      return { id: row.id, storageKey: row.storageKey };
+    },
+    // Mirrors `DELETE ... WHERE id = @id AND rejection = 'released'`, refused by a foreign key.
+    async removeReleased(id) {
+      if (referenced.has(id)) return false;
+      if (rows.get(id)?.rejection === 'released') {
+        rows.delete(id);
+        digests.delete(id);
+      }
+      return true;
     },
   };
 }
@@ -685,5 +724,123 @@ describe('servability is one bounded technical question for a page (Phase 12)', 
         Array.from({ length: 101 }, (_, index) => `asset-${String(index)}`),
       ),
     ).rejects.toThrow(RangeError);
+  });
+});
+
+describe('a release token is the only way to release an asset (Phase 24)', () => {
+  const TOKEN = 'a1'.repeat(32);
+  const OTHER = 'b2'.repeat(32);
+  const digest = (token: string) => createHash('sha256').update(token).digest('hex');
+
+  /** A service whose filesystem the test can also ask, so byte removal is observable. */
+  async function releasable(): Promise<{
+    storage: StorageServicePort;
+    files: FilesystemStore;
+  }> {
+    const root = path.join(base, `release-${Math.random().toString(36).slice(2)}`);
+    await mkdir(root, { recursive: true });
+    const files = await createFilesystemStore(root);
+    const storage = createStorageService({
+      files,
+      assets,
+      scanner: programmableScanner({ status: 'clean' }),
+      maxBytes: 8 * 1024 * 1024,
+    });
+    return { storage, files };
+  }
+
+  function keyOf(id: string): string {
+    const row = assets.rows.get(id);
+    if (row === undefined) throw new Error('missing row');
+    return row.storageKey;
+  }
+
+  it('keeps only the digest, and releases with the token and nothing else', async () => {
+    const { storage, files } = await releasable();
+    const stored = await storage.store(bytes(PNG), { ...IMAGES, releaseToken: TOKEN });
+    expect(stored.state).toBe('clean');
+    const key = keyOf(stored.id);
+
+    // The secret itself is never persisted.
+    expect(assets.digests.get(stored.id)).toBe(digest(TOKEN));
+    expect(assets.digests.get(stored.id)).not.toBe(TOKEN);
+
+    // A wrong token, or the asset's DIGEST offered as a token, releases nothing.
+    expect(await storage.release(OTHER)).toBe('absent');
+    expect(await storage.release(digest(TOKEN))).toBe('absent');
+    expect(await storage.open(stored.id, allow)).not.toBeNull();
+    expect(await files.exists(key)).toBe(true);
+
+    expect(await storage.release(TOKEN)).toBe('released');
+    expect(assets.rows.has(stored.id)).toBe(false);
+    expect(await files.exists(key)).toBe(false);
+    expect(await storage.open(stored.id, allow)).toBeNull();
+
+    // Idempotent: the same token again finds nothing.
+    expect(await storage.release(TOKEN)).toBe('absent');
+  });
+
+  it('can never release an asset stored without a token', async () => {
+    const { storage, files } = await releasable();
+    const stored = await storage.store(bytes(PNG), IMAGES);
+    expect(assets.digests.get(stored.id)).toBeNull();
+
+    for (const token of [TOKEN, OTHER, '0'.repeat(64)])
+      expect(await storage.release(token)).toBe('absent');
+    expect(assets.rows.get(stored.id)?.state).toBe('clean');
+    expect(await files.exists(keyOf(stored.id))).toBe(true);
+    expect([...(await storage.servable([stored.id]))]).toEqual([stored.id]);
+  });
+
+  it('resumes a release interrupted after the record was withdrawn', async () => {
+    const { storage, files } = await releasable();
+    const stored = await storage.store(bytes(PNG), { ...IMAGES, releaseToken: TOKEN });
+    const key = keyOf(stored.id);
+
+    // The crash: only the first step ran. Already unservable, bytes still there.
+    expect(await assets.beginRelease(digest(TOKEN))).toEqual({
+      id: stored.id,
+      storageKey: key,
+    });
+    expect(await storage.open(stored.id, allow)).toBeNull();
+    expect(await storage.servable([stored.id])).toEqual(new Set());
+    expect(await files.exists(key)).toBe(true);
+
+    // The retry finds the same record by the same token and finishes.
+    expect(await storage.release(TOKEN)).toBe('released');
+    expect(await files.exists(key)).toBe(false);
+    expect(assets.rows.has(stored.id)).toBe(false);
+  });
+
+  it('removes the bytes of a still-referenced record and never serves it again', async () => {
+    const { storage, files } = await releasable();
+    const stored = await storage.store(bytes(PNG), { ...IMAGES, releaseToken: TOKEN });
+    const key = keyOf(stored.id);
+    assets.referenced.add(stored.id);
+
+    expect(await storage.release(TOKEN)).toBe('referenced');
+    expect(await files.exists(key)).toBe(false);
+    expect(assets.rows.get(stored.id)).toMatchObject({
+      state: 'rejected',
+      rejection: 'released',
+    });
+    expect(await storage.open(stored.id, allow)).toBeNull();
+    expect(await storage.servable([stored.id])).toEqual(new Set());
+
+    // Once the consumer stops referencing it, the same token completes the release.
+    assets.referenced.delete(stored.id);
+    expect(await storage.release(TOKEN)).toBe('released');
+    expect(assets.rows.has(stored.id)).toBe(false);
+  });
+
+  it('refuses a malformed token before anything is stored or released', async () => {
+    const { storage } = await releasable();
+    for (const token of ['', 'abc', 'A1'.repeat(32), `${TOKEN}0`, 'g'.repeat(64)]) {
+      await expect(
+        storage.store(bytes(PNG), { ...IMAGES, releaseToken: token }),
+      ).rejects.toThrow(/release token/u);
+      await expect(storage.release(token)).rejects.toThrow(RangeError);
+    }
+    expect(assets.rows.size).toBe(0);
   });
 });

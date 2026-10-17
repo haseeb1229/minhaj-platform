@@ -622,6 +622,20 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[booking]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[attendance]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   '[dbo].[classcommunicationintent]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  // Phase 24: Messaging. The activation is the owner's and read-only; a block
+  // is made and lifted, never edited; a report is evidence, resolved and never
+  // deleted; a moderation decision is permanent. Everything else is removed
+  // only by its owner's disposition, and identifying columns carry column
+  // DENYs.
+  '[dbo].[messagingactivation]': ['SELECT'],
+  '[dbo].[conversation]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[conversationparticipant]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[message]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[messageattachment]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[messagereadstate]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[messagingblock]': ['SELECT', 'INSERT', 'DELETE'],
+  '[dbo].[messagingreport]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[messagingmoderationdecision]': ['SELECT', 'INSERT'],
 
   // Phase 7 — storage custody metadata. DELETE is genuinely the operation
   // here: reconciliation removes rows a crash left mid-upload, which is

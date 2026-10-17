@@ -369,6 +369,12 @@ describe.skipIf(!databaseConfigured)(
         'learning.classes.read',
         'teaching.perform',
       ];
+      /**
+       * Phase 24: Messaging's two keys — staff support and moderation — both
+       * EXTERNALLY GATED: catalogued and grantable, bundled into no role. Who
+       * answers support and who moderates is the organisation's decision.
+       */
+      const PHASE_24_KEYS = ['messaging.moderate', 'messaging.support'];
 
       /**
        * The capability-projection sources, each arrived with its OWNER.
@@ -386,6 +392,10 @@ describe.skipIf(!databaseConfigured)(
         'question.receive',
         'fatwa.publish',
         'teaching.perform',
+        // Not capability-projection sources, but gated the same way and held by
+        // no role (Phase 24).
+        'messaging.support',
+        'messaging.moderate',
       ];
 
       it('is exactly what the delivered migrations seeded', async () => {
@@ -409,6 +419,7 @@ describe.skipIf(!databaseConfigured)(
             ...PHASE_21_KEYS,
             ...PHASE_22_KEYS,
             ...PHASE_23_KEYS,
+            ...PHASE_24_KEYS,
           ].sort(),
         );
 
@@ -465,7 +476,6 @@ describe.skipIf(!databaseConfigured)(
           'region.',
           'city.',
           'centre.',
-          'messaging.',
           // News (Phase 13), Events (Phase 14) and Collections (Phase 15) joined
           // the shared editorial workflow under the `content.*` keys: no
           // per-family vocabulary.
@@ -488,12 +498,21 @@ describe.skipIf(!databaseConfigured)(
           'attendance.',
           'meeting.',
           'availability.',
+          // Phase 24 shipped `messaging.support` and `messaging.moderate`:
+          // no key reaches a conversation, a message, an attachment or a report.
+          'conversation.',
+          'message.',
+          'attachment.',
+          'report.',
         ]) {
           expect(keys.some((key) => key.startsWith(domain))).toBe(false);
         }
         expect(keys.filter((key) => key.startsWith('teaching.'))).toEqual([
           'teaching.perform',
         ]);
+        expect(keys.filter((key) => key.startsWith('messaging.')).sort()).toEqual(
+          PHASE_24_KEYS,
+        );
       });
 
       it('stores the editorial descriptions this build compiles, naming Events and Collections', async () => {
@@ -702,7 +721,8 @@ describe.skipIf(!databaseConfigured)(
 
         const outcome = await harness.administration.setRolePermissions(actor, {
           roleId: role.id,
-          // Messaging is Phase 24's and has not shipped: no such key exists.
+          // Messaging shipped two staff keys and no per-message one: no such
+          // key exists, however plausible it sounds.
           permissions: ['messaging.send'],
         });
 

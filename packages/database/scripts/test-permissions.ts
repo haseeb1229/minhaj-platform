@@ -6184,6 +6184,518 @@ try {
     );
   }
 
+  // ---- Phase 24: messaging, in five postures ---------------------------------
+  //
+  // THE ACTIVATION is the owner's: SELECT and nothing else. No runtime
+  // permission can switch a kind of messaging on or re-label a fixture as
+  // approved.
+  //
+  // A CONVERSATION, a PARTICIPANT, a MESSAGE, an ATTACHMENT and a READ POSITION
+  // are written, moved through their lifecycles and removed by their owner's
+  // disposition, so they hold all four verbs; what identifies each — and a
+  // message's body, order, sender, operation, digest and instant — carries a
+  // column DENY.
+  //
+  // A BLOCK is made and lifted, never edited. A REPORT is evidence: filed and
+  // resolved, never deleted and never re-targeted. A MODERATION DECISION is
+  // permanent: SELECT and INSERT alone.
+  //
+  // Naming an account, a Course or a Storage asset grants nothing on its
+  // owner's table, and no Identity table's posture moves: the runtime still
+  // cannot catalogue a Messaging key or rewrite its description.
+  //
+  // Every statement below is REAL SQL as the runtime principal over synthetic
+  // NON_MESSAGING_FIXTURE rows; the activations and the staff account are the
+  // owner's rows, written with administrative authority.
+  const messagingAt = '2026-10-08T00:00:00';
+  const messagingLater = '2026-10-08T01:00:00';
+  const messagingDigest = (label: string): string =>
+    createHash('sha256')
+      .update(`NON_MESSAGING_FIXTURE ${label} ${learningRun}`)
+      .digest('hex');
+  const messagingStaff = randomUUID();
+  const messagingModerator = randomUUID();
+  await admin.query(`
+    INSERT INTO [dbo].[MessagingActivation] ([capability],[authority],[authorisedBy],[reference]) VALUES
+      (N'support',N'fixture',N'NON_MESSAGING_FIXTURE operator',NULL),
+      (N'teacher-student',N'fixture',N'NON_MESSAGING_FIXTURE operator',NULL),
+      (N'student-student',N'fixture',N'NON_MESSAGING_FIXTURE operator',NULL);
+    ${[messagingStaff, messagingModerator]
+      .map(
+        (id) =>
+          `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled])
+             VALUES (N'${id}',N'NON_MESSAGING_FIXTURE account',N'${id}@messaging-proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);`,
+      )
+      .join('\n')}
+  `);
+  const [taughtLow, taughtHigh] =
+    classTeacher < learner ? [classTeacher, learner] : [learner, classTeacher];
+  const taughtConversation = randomUUID();
+  const supportConversation = randomUUID();
+  const taughtMessage = randomUUID();
+  const learnerMessage = randomUUID();
+  const supportMessage = randomUUID();
+  const messagingAsset = randomUUID();
+  const sentAttachment = randomUUID();
+  const unsentAttachment = randomUUID();
+  const sentToken = messagingDigest('sent-token');
+  const messagingReport = randomUUID();
+  const messagingDecision = randomUUID();
+  const messagingSend = (
+    id: string,
+    conversationId: string,
+    sender: string,
+    label: string,
+  ): string =>
+    `UPDATE [dbo].[Conversation] SET [lastSequence]=[lastSequence]+1,[activityAt]=SYSUTCDATETIME(),[version]=[version]+1 WHERE [id]=N'${conversationId}';
+     INSERT INTO [dbo].[Message] ([id],[conversationId],[sequence],[senderUserId],[operationId],[body],[payloadDigest])
+       SELECT N'${id}',N'${conversationId}',c.[lastSequence],N'${sender}',N'${randomUUID()}',N'NON_MESSAGING_FIXTURE ${label}',N'${messagingDigest(label)}'
+       FROM [dbo].[Conversation] c WHERE c.[id]=N'${conversationId}';`;
+
+  for (const [label, statement, detail] of [
+    [
+      'Conversation and participant INSERT',
+      `INSERT INTO [dbo].[Conversation] ([id],[kind],[courseId],[lowUserId],[highUserId],[requesterUserId]) VALUES
+         (N'${taughtConversation}',N'teacher-student',N'${liveCourse}',N'${taughtLow}',N'${taughtHigh}',NULL),
+         (N'${supportConversation}',N'support',NULL,NULL,NULL,N'${learningOther}');
+       INSERT INTO [dbo].[ConversationParticipant] ([id],[conversationId],[userId],[role]) VALUES
+         (N'${randomUUID()}',N'${taughtConversation}',N'${classTeacher}',N'teacher'),
+         (N'${randomUUID()}',N'${taughtConversation}',N'${learner}',N'learner'),
+         (N'${randomUUID()}',N'${supportConversation}',N'${learningOther}',N'requester'),
+         (N'${randomUUID()}',N'${supportConversation}',N'${messagingStaff}',N'support');`,
+      'a teacher-student conversation on a Course and a support conversation, with their people',
+    ],
+    [
+      'Message send (sequence allocation and INSERT)',
+      `${messagingSend(taughtMessage, taughtConversation, classTeacher, 'teacher message')}
+       ${messagingSend(learnerMessage, taughtConversation, learner, 'learner message')}
+       ${messagingSend(supportMessage, supportConversation, messagingStaff, 'staff message')}`,
+      'three messages, each at the place its conversation just allocated',
+    ],
+    [
+      'Asset and attachment lifecycle',
+      `INSERT INTO [dbo].[MessageAttachment] ([id],[conversationId],[uploaderUserId],[releaseToken],[state]) VALUES
+         (N'${sentAttachment}',N'${taughtConversation}',N'${classTeacher}',N'${sentToken}',N'pending'),
+         (N'${unsentAttachment}',N'${taughtConversation}',N'${learner}',N'${messagingDigest('unsent-token')}',N'pending');
+       INSERT INTO [dbo].[Asset] ([id],[storageKey],[state],[updatedAt],[releaseDigest]) VALUES
+         (N'${messagingAsset}',N'proof/messaging/${learningRun}',N'uploading',SYSUTCDATETIME(),N'${createHash('sha256').update(sentToken).digest('hex')}');
+       UPDATE [dbo].[MessageAttachment] SET [state]=N'ready',[assetId]=N'${messagingAsset}',[mediaType]=N'application/pdf',[byteSize]=2048,[displayName]=N'NON_MESSAGING_FIXTURE file' WHERE [id]=N'${sentAttachment}';
+       UPDATE [dbo].[MessageAttachment] SET [state]=N'attached',[messageId]=N'${taughtMessage}',[position]=0,[attachedAt]='${messagingAt}' WHERE [id]=N'${sentAttachment}';`,
+      "an upload recorded pending, its asset stored with the token's digest, made ready and attached",
+    ],
+    [
+      'Unsent attachment released and DELETE',
+      `UPDATE [dbo].[MessageAttachment] SET [state]=N'releasing' WHERE [id]=N'${unsentAttachment}';
+       DELETE FROM [dbo].[MessageAttachment] WHERE [id]=N'${unsentAttachment}';`,
+      'an unsent upload released and removed',
+    ],
+    [
+      'Read position INSERT and UPDATE',
+      `INSERT INTO [dbo].[MessageReadState] ([conversationId],[userId],[lastReadSequence]) VALUES (N'${taughtConversation}',N'${learner}',1);
+       UPDATE [dbo].[MessageReadState] SET [lastReadSequence]=2,[updatedAt]=SYSUTCDATETIME() WHERE [conversationId]=N'${taughtConversation}' AND [userId]=N'${learner}';`,
+      'a read position recorded and moved forward',
+    ],
+    [
+      'Block INSERT and DELETE',
+      `INSERT INTO [dbo].[MessagingBlock] ([blockerUserId],[blockedUserId]) VALUES (N'${learner}',N'${classTeacher}');
+       DELETE FROM [dbo].[MessagingBlock] WHERE [blockerUserId]=N'${learner}' AND [blockedUserId]=N'${classTeacher}';`,
+      'a block made and lifted',
+    ],
+    [
+      'Support claim released and taken again',
+      `UPDATE [dbo].[ConversationParticipant] SET [leftAt]=SYSUTCDATETIME() WHERE [conversationId]=N'${supportConversation}' AND [userId]=N'${messagingStaff}';
+       UPDATE [dbo].[ConversationParticipant] SET [leftAt]=NULL WHERE [conversationId]=N'${supportConversation}' AND [userId]=N'${messagingStaff}';`,
+      'a support claim returns',
+    ],
+    [
+      'Report, moderation decision and withholding',
+      `INSERT INTO [dbo].[MessagingReport] ([id],[conversationId],[messageId],[reporterUserId],[reason],[atSequence]) VALUES
+         (N'${messagingReport}',N'${supportConversation}',N'${supportMessage}',N'${learningOther}',N'harassment',1);
+       INSERT INTO [dbo].[MessagingModerationDecision] ([id],[reportId],[moderatorUserId],[action]) VALUES
+         (N'${messagingDecision}',N'${messagingReport}',N'${messagingModerator}',N'withhold-message');
+       UPDATE [dbo].[Message] SET [moderation]=N'withheld',[withheldAt]='${messagingAt}' WHERE [id]=N'${supportMessage}';
+       UPDATE [dbo].[MessagingReport] SET [state]=N'resolved',[resolvedAt]='${messagingAt}',[version]=2 WHERE [id]=N'${messagingReport}';`,
+      'a message reported, withheld by a decision and its report resolved',
+    ],
+  ] as const)
+    await expectAllowed(app, label, statement, detail);
+
+  // The schema's own rules hold for the runtime as for the owner.
+  await expectRefusedByInvariant(
+    app,
+    'Message at a place that was not allocated',
+    `INSERT INTO [dbo].[Message] ([id],[conversationId],[sequence],[senderUserId],[operationId],[body],[payloadDigest]) VALUES (N'${randomUUID()}',N'${taughtConversation}',9,N'${learner}',N'${randomUUID()}',N'NON_MESSAGING_FIXTURE gap',N'${messagingDigest('gap')}');`,
+    51303,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Withheld message returned to view',
+    `UPDATE [dbo].[Message] SET [moderation]=N'visible',[withheldAt]=NULL WHERE [id]=N'${supportMessage}';`,
+    51304,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Message DELETE outside disposal',
+    `DELETE FROM [dbo].[Message] WHERE [id]=N'${learnerMessage}';`,
+    51305,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Read position moved backwards',
+    `UPDATE [dbo].[MessageReadState] SET [lastReadSequence]=1 WHERE [conversationId]=N'${taughtConversation}' AND [userId]=N'${learner}';`,
+    51307,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Report filed already resolved',
+    `INSERT INTO [dbo].[MessagingReport] ([id],[conversationId],[messageId],[reporterUserId],[reason],[atSequence],[state],[resolvedAt]) VALUES (N'${randomUUID()}',N'${supportConversation}',NULL,N'${learningOther}',N'spam',1,N'resolved','${messagingAt}');`,
+    51308,
+  );
+  await expectRefusedByConstraint(
+    app,
+    'Second open support conversation for one person',
+    `INSERT INTO [dbo].[Conversation] ([id],[kind],[requesterUserId]) VALUES (N'${randomUUID()}',N'support',N'${learningOther}');`,
+    DUPLICATE_KEY,
+    'Conversation_support_key',
+  );
+  await expectRefusedByConstraint(
+    app,
+    'Asset DELETE under its attachment',
+    `DELETE FROM [dbo].[Asset] WHERE [id]=N'${messagingAsset}';`,
+    CONSTRAINT_VIOLATION,
+    'MessageAttachment_assetId_fkey',
+  );
+
+  // The activation is never the runtime's; nothing identifying is ever
+  // rewritten; a report is never deleted and a decision never changes; and the
+  // Messaging keys stay the owner's to catalogue.
+  for (const [label, statement] of [
+    [
+      'MessagingActivation INSERT denied',
+      "INSERT INTO [dbo].[MessagingActivation] ([capability],[authority],[authorisedBy],[reference]) VALUES (N'group',N'approved',N'forged',N'urn:example:forged');",
+    ],
+    [
+      'MessagingActivation UPDATE denied',
+      "UPDATE [dbo].[MessagingActivation] SET [authority]=N'approved';",
+    ],
+    ['MessagingActivation DELETE denied', 'DELETE FROM [dbo].[MessagingActivation];'],
+    ['Conversation id UPDATE denied', 'UPDATE [dbo].[Conversation] SET [id]=[id];'],
+    ['Conversation kind UPDATE denied', 'UPDATE [dbo].[Conversation] SET [kind]=[kind];'],
+    [
+      'Conversation Course UPDATE denied',
+      'UPDATE [dbo].[Conversation] SET [courseId]=[courseId];',
+    ],
+    [
+      'Conversation lower account UPDATE denied',
+      'UPDATE [dbo].[Conversation] SET [lowUserId]=[lowUserId];',
+    ],
+    [
+      'Conversation higher account UPDATE denied',
+      'UPDATE [dbo].[Conversation] SET [highUserId]=[highUserId];',
+    ],
+    [
+      'Conversation requester UPDATE denied',
+      'UPDATE [dbo].[Conversation] SET [requesterUserId]=[requesterUserId];',
+    ],
+    [
+      'Conversation creation UPDATE denied',
+      'UPDATE [dbo].[Conversation] SET [createdAt]=[createdAt];',
+    ],
+    [
+      'Participant conversation UPDATE denied',
+      'UPDATE [dbo].[ConversationParticipant] SET [conversationId]=[conversationId];',
+    ],
+    [
+      'Participant account UPDATE denied',
+      'UPDATE [dbo].[ConversationParticipant] SET [userId]=[userId];',
+    ],
+    [
+      'Participant role UPDATE denied',
+      'UPDATE [dbo].[ConversationParticipant] SET [role]=[role];',
+    ],
+    ['Message body UPDATE denied', 'UPDATE [dbo].[Message] SET [body]=[body];'],
+    [
+      'Message sender UPDATE denied',
+      'UPDATE [dbo].[Message] SET [senderUserId]=[senderUserId];',
+    ],
+    ['Message order UPDATE denied', 'UPDATE [dbo].[Message] SET [sequence]=[sequence];'],
+    [
+      'Message operation UPDATE denied',
+      'UPDATE [dbo].[Message] SET [operationId]=[operationId];',
+    ],
+    [
+      'Message digest UPDATE denied',
+      'UPDATE [dbo].[Message] SET [payloadDigest]=[payloadDigest];',
+    ],
+    ['Message instant UPDATE denied', 'UPDATE [dbo].[Message] SET [sentAt]=[sentAt];'],
+    [
+      'Message conversation UPDATE denied',
+      'UPDATE [dbo].[Message] SET [conversationId]=[conversationId];',
+    ],
+    [
+      'Attachment token UPDATE denied',
+      'UPDATE [dbo].[MessageAttachment] SET [releaseToken]=[releaseToken];',
+    ],
+    [
+      'Attachment uploader UPDATE denied',
+      'UPDATE [dbo].[MessageAttachment] SET [uploaderUserId]=[uploaderUserId];',
+    ],
+    [
+      'Attachment conversation UPDATE denied',
+      'UPDATE [dbo].[MessageAttachment] SET [conversationId]=[conversationId];',
+    ],
+    [
+      'Read position key UPDATE denied',
+      'UPDATE [dbo].[MessageReadState] SET [userId]=[userId];',
+    ],
+    [
+      'MessagingBlock UPDATE denied',
+      'UPDATE [dbo].[MessagingBlock] SET [createdAt]=[createdAt];',
+    ],
+    ['MessagingReport DELETE denied', 'DELETE FROM [dbo].[MessagingReport];'],
+    [
+      'MessagingReport reason UPDATE denied',
+      'UPDATE [dbo].[MessagingReport] SET [reason]=[reason];',
+    ],
+    [
+      'MessagingReport target UPDATE denied',
+      'UPDATE [dbo].[MessagingReport] SET [messageId]=[messageId];',
+    ],
+    [
+      'MessagingReport reporter UPDATE denied',
+      'UPDATE [dbo].[MessagingReport] SET [reporterUserId]=[reporterUserId];',
+    ],
+    [
+      'MessagingReport position UPDATE denied',
+      'UPDATE [dbo].[MessagingReport] SET [atSequence]=[atSequence];',
+    ],
+    [
+      'MessagingModerationDecision UPDATE denied',
+      'UPDATE [dbo].[MessagingModerationDecision] SET [action]=[action];',
+    ],
+    [
+      'MessagingModerationDecision DELETE denied',
+      'DELETE FROM [dbo].[MessagingModerationDecision];',
+    ],
+    [
+      'messaging.support Permission INSERT denied',
+      "INSERT INTO [dbo].[Permission] ([key],[description]) VALUES (N'messaging.support',N'forged');",
+    ],
+    [
+      'messaging.moderate description UPDATE denied',
+      "UPDATE [dbo].[Permission] SET [description]=N'forged' WHERE [key]=N'messaging.moderate';",
+    ],
+    [
+      'Messaging Permission DELETE denied',
+      "DELETE FROM [dbo].[Permission] WHERE [key]=N'messaging.support';",
+    ],
+    [
+      'Asset release digest UPDATE denied',
+      'UPDATE [dbo].[Asset] SET [releaseDigest]=[releaseDigest];',
+    ],
+    [
+      'Staff account DELETE denied',
+      `DELETE FROM [dbo].[User] WHERE [id]=N'${messagingStaff}';`,
+    ],
+  ] as const)
+    await expectDenied(app, label, statement);
+
+  // Closure disposition: the conversation no report names is closed, marked and
+  // removed, children first; the reported support conversation, its report and
+  // its decision stay as evidence.
+  await expectAllowed(
+    app,
+    'Conversation closed, marked and disposed of, children first',
+    `UPDATE [dbo].[Conversation] SET [state]=N'closed',[closedReason]=N'account-closed',[closedAt]='${messagingLater}',[disposingAt]='${messagingLater}',[version]=[version]+1 WHERE [id]=N'${taughtConversation}';
+     UPDATE [dbo].[MessageAttachment] SET [state]=N'releasing',[assetId]=NULL,[messageId]=NULL,[position]=NULL WHERE [conversationId]=N'${taughtConversation}';
+     DELETE FROM [dbo].[MessageAttachment] WHERE [conversationId]=N'${taughtConversation}';
+     DELETE FROM [dbo].[Asset] WHERE [id]=N'${messagingAsset}';
+     DELETE FROM [dbo].[MessageReadState] WHERE [conversationId]=N'${taughtConversation}';
+     DELETE FROM [dbo].[Message] WHERE [conversationId]=N'${taughtConversation}';
+     DELETE FROM [dbo].[ConversationParticipant] WHERE [conversationId]=N'${taughtConversation}';
+     DELETE FROM [dbo].[Conversation] WHERE [id]=N'${taughtConversation}';`,
+    'the attachment released with its asset, then read positions, messages, participants and the conversation',
+  );
+
+  const [messagingState] = await admin.query<Record<string, number | string | null>>(`
+    SELECT
+      (SELECT STRING_AGG([capability] + N':' + [authority], N',') WITHIN GROUP (ORDER BY [capability])
+         FROM [dbo].[MessagingActivation]) AS [activations],
+      (SELECT COUNT(*) FROM [dbo].[Conversation]) AS [conversations],
+      (SELECT [state] FROM [dbo].[Conversation] WHERE [id]=N'${supportConversation}') AS [support],
+      (SELECT COUNT(*) FROM [dbo].[ConversationParticipant] WHERE [leftAt] IS NULL) AS [participants],
+      (SELECT STRING_AGG([moderation], N',') FROM [dbo].[Message]) AS [messages],
+      (SELECT COUNT(*) FROM [dbo].[MessageAttachment]) + (SELECT COUNT(*) FROM [dbo].[MessageReadState])
+        + (SELECT COUNT(*) FROM [dbo].[MessagingBlock]) AS [ownerRows],
+      (SELECT [state] FROM [dbo].[MessagingReport] WHERE [id]=N'${messagingReport}') AS [report],
+      (SELECT [action] FROM [dbo].[MessagingModerationDecision] WHERE [id]=N'${messagingDecision}') AS [decision],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] WHERE [permissionKey] IN (N'messaging.support',N'messaging.moderate')) AS [held];
+  `);
+  const expectedMessagingState = {
+    activations: 'student-student:fixture,support:fixture,teacher-student:fixture',
+    conversations: 1,
+    support: 'open',
+    participants: 2,
+    messages: 'withheld',
+    ownerRows: 0,
+    report: 'resolved',
+    decision: 'withhold-message',
+    held: 0,
+  };
+  if (JSON.stringify(messagingState) === JSON.stringify(expectedMessagingState)) {
+    pass(
+      'Messaging state as written',
+      'activations untouched, one conversation disposed, the reported one kept with its decision',
+    );
+  } else {
+    fail('Messaging state as written', JSON.stringify(messagingState));
+  }
+
+  const MESSAGING_TABLES = [
+    'MessagingActivation',
+    'Conversation',
+    'ConversationParticipant',
+    'Message',
+    'MessageAttachment',
+    'MessageReadState',
+    'MessagingBlock',
+    'MessagingReport',
+    'MessagingModerationDecision',
+  ] as const;
+  for (const table of MESSAGING_TABLES) {
+    await assertObjectVisible(app, table);
+    await expectDenied(
+      app,
+      `${table} ALTER denied`,
+      `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+    );
+  }
+  for (const [trigger, table] of [
+    ['MessagingActivationImmutable', 'MessagingActivation'],
+    ['MessagingConversationIntegrity', 'Conversation'],
+    ['MessagingParticipantIntegrity', 'ConversationParticipant'],
+    ['MessagingMessageIntegrity', 'Message'],
+    ['MessagingAttachmentIntegrity', 'MessageAttachment'],
+    ['MessagingReadStateIntegrity', 'MessageReadState'],
+    ['MessagingReportIntegrity', 'MessagingReport'],
+    ['MessagingDecisionIntegrity', 'MessagingModerationDecision'],
+  ] as const)
+    await expectDenied(
+      app,
+      `${trigger} DISABLE denied`,
+      `DISABLE TRIGGER [dbo].[${trigger}] ON [dbo].[${table}];`,
+    );
+
+  // THE EXACT EFFECTIVE POSTURE, table by table and column by column, for the
+  // nine Phase-24 tables AND for every owner table a Messaging key names, which
+  // Phase 24 must leave as it found them (Storage's Asset gains the release
+  // digest, which the runtime may write once and never UPDATE, and every other
+  // Asset column keeps its posture).
+  const MESSAGING_POSTURE: Readonly<
+    Record<string, readonly [string, string | readonly string[] | null]>
+  > = {
+    MessagingActivation: ['SELECT', ''],
+    Conversation: [
+      LEARNER_DATA,
+      [
+        'id',
+        'kind',
+        'courseId',
+        'lowUserId',
+        'highUserId',
+        'requesterUserId',
+        'createdAt',
+      ],
+    ],
+    ConversationParticipant: [LEARNER_DATA, ['id', 'conversationId', 'userId', 'role']],
+    Message: [
+      LEARNER_DATA,
+      [
+        'id',
+        'conversationId',
+        'sequence',
+        'senderUserId',
+        'operationId',
+        'body',
+        'payloadDigest',
+        'sentAt',
+      ],
+    ],
+    MessageAttachment: [
+      LEARNER_DATA,
+      ['id', 'conversationId', 'uploaderUserId', 'releaseToken', 'createdAt'],
+    ],
+    MessageReadState: [LEARNER_DATA, ['conversationId', 'userId']],
+    MessagingBlock: [LEARNER_DATA, ''],
+    MessagingReport: [
+      'INSERT,SELECT',
+      [
+        'id',
+        'conversationId',
+        'messageId',
+        'reporterUserId',
+        'reason',
+        'atSequence',
+        'createdAt',
+      ],
+    ],
+    MessagingModerationDecision: ['INSERT,SELECT', ''],
+    Course: ['INSERT,SELECT', ['id']],
+    Asset: [LEARNER_DATA, ['releaseDigest']],
+    User: ['INSERT,SELECT', null],
+    Permission: ['SELECT', ''],
+  };
+  const messagingPosture = await app.query<{
+    name: string;
+    held: string | null;
+    updatable: string | null;
+    columns: string | null;
+  }>(`
+    SELECT t.[name],
+      (SELECT STRING_AGG(p.[permission], N',') WITHIN GROUP (ORDER BY p.[permission])
+         FROM (VALUES (N'ALTER'),(N'CONTROL'),(N'DELETE'),(N'INSERT'),(N'REFERENCES'),
+                      (N'SELECT'),(N'TAKE OWNERSHIP')) AS p([permission])
+        WHERE HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', p.[permission]) = 1) AS [held],
+      (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+         FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])
+          AND HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', N'UPDATE', c.[name], N'COLUMN') = 1) AS [updatable],
+      (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+         FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])) AS [columns]
+    FROM (VALUES ${Object.keys(MESSAGING_POSTURE)
+      .map((table) => `(N'${table}')`)
+      .join(',')}) AS t([name]);
+  `);
+  const messagingPostureFindings = messagingPosture.flatMap((row) => {
+    const [verbs, scope] = MESSAGING_POSTURE[row.name] ?? ['?', '?'];
+    const expectedColumns =
+      scope === null
+        ? (row.updatable ?? '')
+        : typeof scope === 'string'
+          ? scope
+          : (row.columns ?? '')
+              .split(',')
+              .filter((column) => !scope.includes(column))
+              .join(',');
+    return (row.held ?? '') === verbs && (row.updatable ?? '') === expectedColumns
+      ? []
+      : [`${row.name}: ${row.held ?? '(none)'} / UPDATE ${row.updatable ?? '(none)'}`];
+  });
+  if (
+    messagingPosture.length === Object.keys(MESSAGING_POSTURE).length &&
+    Object.keys(MESSAGING_POSTURE).length === MESSAGING_TABLES.length + 4 &&
+    messagingPostureFindings.length === 0
+  ) {
+    pass(
+      'Messaging effective posture exact',
+      `${String(messagingPosture.length)} tables, object verbs and UPDATE columns as granted`,
+    );
+  } else {
+    fail(
+      'Messaging effective posture exact',
+      messagingPostureFindings.join('; ') || 'tables missing',
+    );
+  }
+
   // ---- the ungranted object was not merely unreadable, it is unchanged -----
   await assertSentinelIntact(admin);
   pass(`${SENTINEL_TABLE} unchanged`, 'one row, marker intact after four attempts');

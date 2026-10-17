@@ -315,11 +315,11 @@ describe('the routes Phase 22 delivers, and the ones it does not', () => {
   it('leaves every Phase 23 and undefined surface absent', async () => {
     // `/learn/live`, `/learn/teachers`, the teacher area, My Classes, My
     // Teachers and the classes administration left this list when Phase 23
-    // delivered them; its own boundary file guards them now.
+    // delivered them, and the teacher's messages when Phase 24 delivered
+    // Messaging; their own boundary files guard them now.
     for (const absent of [
       `${LEARN}/training`,
       `${LEARN}/resources`,
-      `${APP}/teacher/messages`,
       `${APP}/(public)/quran/teachers`,
       `${APP}/(public)/hadith/scholars`,
     ])

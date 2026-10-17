@@ -290,7 +290,8 @@ describe('the mutation surface', () => {
     // because the Server Action body cap is global and is not raised. Each
     // carries explicit Origin, Fetch-Metadata and custom-header anti-CSRF
     // checks and a live permission; neither authenticates anybody. None of these is an authentication endpoint, which is what this
-    // test exists to prevent.
+    // test exists to prevent. (Phase 21 onwards adds the `/api/my/*` Class-A
+    // mutations and Phase 24 Messaging's two, each counted below.)
     expect([...routes].sort()).toEqual(
       [
         'apps/web/src/app/api/webhooks/resend/route.ts',
@@ -348,20 +349,38 @@ describe('the mutation surface', () => {
         'apps/web/src/app/api/my/learning/enrolments/route.ts',
         'apps/web/src/app/api/my/learning/trials/route.ts',
         'apps/web/src/app/api/my/export/learning/route.ts',
+        // Phase 24: Messaging's own export beside Learning's, through the same
+        // personal transport; the three private attachment byte routes, each
+        // READING a session and handing it to Messaging's live decision (the
+        // participant's, the support staff member's, the moderator's); and
+        // the three Messaging handlers — two Class-A BROWSER mutations (an
+        // attachment upload, which cannot be a Server Action for the body-cap
+        // reason the Media uploads give, and discarding an unsent upload) and
+        // one GET catch-up read. None authenticates anybody.
+        'apps/web/src/app/api/my/export/messaging/route.ts',
+        'apps/web/src/app/assets/messaging/attachments/[attachmentId]/route.ts',
+        'apps/web/src/app/assets/messaging/support/[attachmentId]/route.ts',
+        'apps/web/src/app/assets/messaging/evidence/[reportId]/[attachmentId]/route.ts',
+        'apps/web/src/app/api/messaging/conversations/[conversationId]/attachments/route.ts',
+        'apps/web/src/app/api/messaging/conversations/[conversationId]/messages/route.ts',
+        'apps/web/src/app/api/messaging/attachments/[attachmentId]/discard/route.ts',
       ].sort(),
     );
 
-    // And the fifteen others (Phase 23 added the Learn teacher alias) genuinely are read-only: a mutating verb on any of
-    // them would be a state-changing endpoint outside the Class-A controls.
+    // And the eighteen others (Phase 23 added the Learn teacher alias, Phase 24
+    // the three attachment byte routes) genuinely are read-only: a mutating
+    // verb on any of them would be a state-changing endpoint outside the
+    // Class-A controls.
     const { readFile } = await import('node:fs/promises');
 
     const readOnly = routes.filter(
       (entry) =>
         !entry.includes('webhooks') &&
         !entry.includes('/api/admin/') &&
-        !entry.includes('/api/my/'),
+        !entry.includes('/api/my/') &&
+        !entry.includes('/api/messaging/'),
     );
-    expect(readOnly).toHaveLength(15);
+    expect(readOnly).toHaveLength(18);
 
     for (const route of readOnly) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');
@@ -385,7 +404,7 @@ describe('the mutation surface', () => {
       /if \(!isSameOriginMutation\(request, \w+\)\) return failed\('denied'\)/u,
     );
     const personal = routes.filter((entry) => entry.includes('/api/my/'));
-    expect(personal).toHaveLength(11);
+    expect(personal).toHaveLength(12);
     for (const route of personal) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');
       for (const verb of ['PUT', 'PATCH', 'DELETE'])
@@ -395,6 +414,44 @@ describe('the mutation surface', () => {
       if (/export\s+(async\s+)?function\s+POST\b/u.test(source)) {
         expect(source, route).toContain('personalMutation(');
         expect(source, route).not.toMatch(/export\s+(async\s+)?function\s+GET\b/u);
+      }
+      expect(source, route).not.toMatch(
+        /signIn|signUp|signOut|resetPassword|verifyEmail|identity\.\w+\(/u,
+      );
+    }
+
+    // Phase 24's Messaging handlers: each mutation is a POST alone whose FIRST
+    // act is the Class-A check under Messaging's own intent header, before the
+    // session is resolved; the catch-up read is a GET alone behind the Fetch
+    // Metadata admission; and none reaches an authentication operation.
+    const messaging = routes.filter((entry) => entry.includes('/api/messaging/'));
+    expect(messaging).toHaveLength(3);
+    expect(
+      await readFile(
+        path.join(repoRoot, 'apps/web/src/app/api/messaging/transport.ts'),
+        'utf8',
+      ),
+    ).toMatch(/header: 'x-minhaj-intent',\s*value: 'messaging-attachment'/u);
+    for (const route of messaging) {
+      const source = await readFile(path.join(repoRoot, route), 'utf8');
+      for (const verb of ['PUT', 'PATCH', 'DELETE'])
+        expect(source, `${route} exports ${verb}`).not.toMatch(
+          new RegExp(`export\\s+(async\\s+)?function\\s+${verb}\\b`),
+        );
+      if (/export\s+(async\s+)?function\s+POST\b/u.test(source)) {
+        expect(source, route).not.toMatch(/export\s+(async\s+)?function\s+GET\b/u);
+        const guard = source.indexOf(
+          "if (!isSameOriginMutation(request, MESSAGING_INTENT)) return failed('denied');",
+        );
+        expect(guard, route).toBeGreaterThan(-1);
+        expect(source.indexOf('messagingActor('), route).toBeGreaterThan(guard);
+      } else {
+        expect(source, route).toMatch(/export\s+(async\s+)?function\s+GET\b/u);
+        const admitted = source.indexOf(
+          "if (!isPrivateRead(request)) return failed('denied');",
+        );
+        expect(admitted, route).toBeGreaterThan(-1);
+        expect(source.indexOf('messagingActor('), route).toBeGreaterThan(admitted);
       }
       expect(source, route).not.toMatch(
         /signIn|signUp|signOut|resetPassword|verifyEmail|identity\.\w+\(/u,
@@ -526,7 +583,36 @@ describe('the mutation surface', () => {
     expect(closureBody.indexOf('redirect(')).toBeGreaterThan(swept);
     expect(closureBody).toMatch(/learningPending\s*=\s*!learning\.complete/u);
     const pending = closureBody.indexOf("failure: 'closure-pending'");
-    expect(closureBody.slice(0, pending)).toMatch(/\|\|\s*learningPending\s*\)/u);
+    expect(closureBody.slice(0, pending)).toMatch(/\|\|\s*learningPending\s*\|\|/u);
+    expect(closureBody.indexOf('redirect(')).toBeGreaterThan(pending);
+  });
+
+  it('coordinates Messaging disposition after Learning and before success', async () => {
+    // Phase 24: the sixth owner closes the account's conversations, removes
+    // its read positions, blocks and unsent uploads and disposes of what no
+    // remaining participant can read — refused by Messaging until Identity
+    // reports the account closed — and a pending disposal is reported as
+    // pending, never as a completed closure.
+    const actions = await sourceOf(ACTIONS);
+    const closureStart = actions.indexOf('export async function closeAccountAction');
+    const closureBody = actions.slice(
+      closureStart,
+      actions.indexOf('\n}', closureStart) + 2,
+    );
+    const learned = closureBody.indexOf(
+      'learningRuntime().account.reconcileClosedAccounts(',
+    );
+    const disposed = closureBody.indexOf('messagingRuntime().service.disposeAccount(');
+    const swept = closureBody.indexOf(
+      'messagingRuntime().service.reconcileClosedAccounts(',
+    );
+    expect(learned).toBeGreaterThan(closureBody.indexOf('identity.closeAccount('));
+    expect(disposed).toBeGreaterThan(learned);
+    expect(swept).toBeGreaterThan(disposed);
+    expect(closureBody.indexOf('redirect(')).toBeGreaterThan(swept);
+    expect(closureBody).toMatch(/messagingPending\s*=\s*!messaging\.complete/u);
+    const pending = closureBody.indexOf("failure: 'closure-pending'");
+    expect(closureBody.slice(0, pending)).toMatch(/\|\|\s*messagingPending\s*\)/u);
     expect(closureBody.indexOf('redirect(')).toBeGreaterThan(pending);
   });
 

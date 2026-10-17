@@ -176,6 +176,14 @@ one-to-one or retention rule, stores no note about a learner, and ships **no act
 `LiveLearningActivation` row that switches live learning on is absent, and an `approved` row records
 this decision when it is made. Student-to-student messaging does not exist (Phase 24 not started).
 
+**Still OPEN after Phase 24.** Phase 24 delivered non-realtime Messaging as policy-independent,
+default-deny mechanics (DOMAIN_MODEL.md §15.6): current-relationship authorisation on every read and
+write, blocking, reporting, bounded moderation evidence, attachment security and the
+account-closure terminal-history rule. It invented no age, guardian, vetting, one-to-one or
+retention rule, and ships **no activation**: `MessagingActivation` holds no row for any kind, so
+teacher↔student and support messaging are OFF, and student-to-student stays off behind a peer
+policy that denies every pair.
+
 **Why it matters:** It **materially changes** consent flows, messaging policy, moderation and
 data handling. Far cheaper to know before Phase 23 than after.
 
@@ -203,7 +211,10 @@ opt-in and consent evidence on privacy-minimising engineering defaults (SECURITY
 statutory deadline, age rule or named-jurisdiction compliance claim exists, and this gate still
 applies to Phase 33. Phase 22 added Learning's export and closure disposition on the same defaults
 (SECURITY_BASELINE.md §19.1.3) and decided nothing above either. Phase 23 extended both to classes on
-the same privacy-minimising defaults (§19.1.4) and decided nothing above either.
+the same privacy-minimising defaults (§19.1.4) and decided nothing above either. Phase 24 added
+Messaging's export and disposition (§19.1.5): a reported conversation is kept as evidence and every
+other conversation is disposed once all its non-support participants have closed their accounts —
+an engineering lifecycle, not a retention period, which this decision still owns.
 
 ### 2.3 Legal document content
 **Owner:** Minhaj · **Gates:** **Phase 6 — publication.** Phase 4 reserves the routes only ·
@@ -255,6 +266,11 @@ reporting policy.
 
 **Interim position:** Disabled by default. The model supports it "where policy permits"; the
 policy must exist before it is enabled.
+
+**Still OPEN after Phase 24.** The mechanics exist and are proven only against a disposable test
+policy: the `student-student` conversation kind, its activation row (absent) and a peer-policy seam
+whose production wiring refuses every pair. No "same Course" or other relationship is recorded as
+approved policy, no learner directory exists, and no permission or setting can enable it.
 
 ---
 
@@ -594,6 +610,13 @@ needed.
 
 Who staffs support conversations · response expectations · **who moderates reported messages
 and may access moderation evidence**.
+
+**Still OPEN after Phase 24.** `messaging.support` and `messaging.moderate` are catalogued and
+externally gated — bundled into no role and held by nobody; a Platform Administrator holds neither.
+Support conversations, the support queue, reports and moderation exist as engineering mechanics,
+with every content and evidence access audited, but the `support` activation row is absent, so no
+support conversation can start, and nobody can read a report's evidence until the organisation names
+holders through the ordinary audited `permissions.grant` lifecycle. No response-time promise exists.
 
 ---
 

@@ -63,7 +63,13 @@ export type AssetRejection =
    * side, than the upload's image policy permits — the decompression-bomb
    * guard. Distinct from `too-large`, which is about bytes.
    */
-  | 'dimensions-too-large';
+  | 'dimensions-too-large'
+  /**
+   * Phase 24. Its holder released it with the release token it stored the
+   * bytes under (`StorageServicePort.release`). The bytes are being removed and
+   * the record follows them; nothing serves it in the meantime.
+   */
+  | 'released';
 
 /**
  * The technical record of one stored object.
@@ -130,7 +136,20 @@ export interface UploadPolicy {
    * Every allowed media type must be one the foundation can validate this way.
    */
   readonly image?: ImageLimits;
+  /**
+   * Phase 24. A secret the CALLER generated and recorded in its own row
+   * BEFORE storing — 64 lowercase hex characters (256 random bits).
+   *
+   * Storage keeps only its SHA-256, so the asset can later be released by
+   * whoever holds the token and by nobody else (`release`). An upload without
+   * one can never be released through this foundation, which is the posture
+   * of every asset stored before Phase 24.
+   */
+  readonly releaseToken?: string;
 }
+
+/** The release-token grammar: 64 lowercase hex characters. */
+export const RELEASE_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
 
 /**
  * Bounds on a still image's DECLARED size, checked from its header before the
@@ -219,6 +238,8 @@ export interface AssetPersistencePort {
     readonly id: string;
     readonly storageKey: string;
     readonly displayName: string | null;
+    /** Phase 24. SHA-256 of the caller's release token, or `null`. */
+    readonly releaseDigest?: string | null;
   }): Promise<void>;
   quarantine(input: {
     readonly id: string;
@@ -243,6 +264,21 @@ export interface AssetPersistencePort {
   /** Bounded sweep of records a crash left mid-lifecycle. */
   staleBefore(cutoff: Date, limit: number): Promise<readonly AssetRecord[]>;
   remove(id: string): Promise<void>;
+  /**
+   * Phase 24. Withdraws the asset recorded under this release digest from
+   * service — `rejected` / `released`, whatever its state — and returns what
+   * is needed to remove its bytes, or `null` when no asset carries the digest.
+   * Repeatable: a release interrupted after this step finds the record again.
+   */
+  beginRelease(releaseDigest: string): Promise<{
+    readonly id: string;
+    readonly storageKey: string;
+  } | null>;
+  /**
+   * Phase 24. Deletes a released record. `false` when a consumer's foreign key
+   * still names it: the record then stays `released` and is never served.
+   */
+  removeReleased(id: string): Promise<boolean>;
 }
 
 /** What a successful `store` reports back. */
@@ -290,6 +326,21 @@ export interface StorageServicePort {
   servable(assetIds: readonly string[]): Promise<ReadonlySet<string>>;
   /** Bounded, idempotent reconciliation of Storage-owned resources only. */
   reconcile(now: Date, limit: number): Promise<number>;
+  /**
+   * Phase 24. Releases the asset stored under `releaseToken`: it stops being
+   * servable at once, its bytes are removed, then its record.
+   *
+   * OPERATION-BOUND, NEVER BY IDENTIFIER. The caller proves custody with the
+   * secret it generated before storing; an asset id alone releases nothing, so
+   * one consumer can never release another consumer's asset, and an asset
+   * stored without a token can never be released here at all.
+   *
+   * Idempotent and resumable: `absent` when nothing carries the token (never
+   * stored, or already released), `referenced` when a consumer's foreign key
+   * still names the record — whose bytes are then gone and which is never
+   * served again, and which the caller must stop referencing first.
+   */
+  release(releaseToken: string): Promise<'released' | 'absent' | 'referenced'>;
 }
 
 /** A resolved, authorised asset ready to be served. */

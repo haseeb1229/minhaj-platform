@@ -28,6 +28,18 @@
       "node": "./src/session/index.ts",
       "browser": "./src/client-import-error.ts",
       "default": "./src/session/index.ts"
+    },
+    "./messaging": {
+      "react-server": "./src/messaging/index.ts",
+      "node": "./src/messaging/index.ts",
+      "browser": "./src/client-import-error.ts",
+      "default": "./src/messaging/index.ts"
+    },
+    "./relationships": {
+      "react-server": "./src/relationships/index.ts",
+      "node": "./src/relationships/index.ts",
+      "browser": "./src/client-import-error.ts",
+      "default": "./src/relationships/index.ts"
     }
   },
   "scripts": {

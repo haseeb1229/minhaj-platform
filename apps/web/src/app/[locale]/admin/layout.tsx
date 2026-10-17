@@ -105,6 +105,15 @@ const SURFACES: readonly {
     permission: ['learning.read', 'learning.classes.read'],
     path: 'learning',
   },
+  // Phase 24. One entry for Messaging, opened by EITHER of its two externally
+  // gated keys — support staff and moderators are different people, and
+  // neither key implies the other. The area root sends each holder to the
+  // first surface their key opens.
+  {
+    key: 'messaging',
+    permission: ['messaging.support', 'messaging.moderate'],
+    path: 'messaging',
+  },
   // Phase 4. A READ-ONLY view of the public shell's effective navigation; the
   // registry behind it is code, so there is no editing surface to reach.
   { key: 'navigation', permission: 'navigation.read', path: 'system/navigation' },

@@ -22,8 +22,9 @@ import { setHistoryAction } from './actions';
  * Personalisation's. "Download my data" is Personalisation's export of what it
  * keeps for this account — and only that; it is fetched by the private export
  * handler, never rendered into this page. "Download your learning data" is
- * Learning's own export (Phase 22), from its own handler, so neither document
- * claims what the other context keeps. Closing the account is Identity's,
+ * Learning's own export (Phase 22), from its own handler, and "Download your
+ * messaging data" is Messaging's (Phase 24), from its own, so no document
+ * claims what another context keeps. Closing the account is Identity's,
  * on its own page behind its own password check: this page explains what
  * closing removes and links there, and builds no second closure form. The
  * newsletter is not the account's at all (DOMAIN_MODEL.md §14.5).
@@ -154,6 +155,28 @@ export default async function PrivacyPage({
             className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-4 py-2 text-sm font-medium hover:bg-[color:var(--color-surface-sunken)]"
           >
             {t('privacy.learningExportLink')}
+          </a>
+        </p>
+      </section>
+
+      <section className="flex flex-col gap-3" aria-labelledby="privacy-messaging-export">
+        <span id="privacy-messaging-export">
+          <SectionHeading>{t('privacy.messagingExportHeading')}</SectionHeading>
+        </span>
+        <p className="text-sm">{t('privacy.messagingExportBody')}</p>
+        <ul className="flex list-disc flex-col gap-1 ps-5 text-sm">
+          <li>{t('privacy.messagingExportContents')}</li>
+        </ul>
+        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+          {t('privacy.messagingExportClosure')}
+        </p>
+        <p>
+          <a
+            href="/api/my/export/messaging"
+            download
+            className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-4 py-2 text-sm font-medium hover:bg-[color:var(--color-surface-sunken)]"
+          >
+            {t('privacy.messagingExportLink')}
           </a>
         </p>
       </section>

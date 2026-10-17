@@ -910,3 +910,49 @@ IF OBJECT_ID(N'[dbo].[Attendance]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT,
 -- claim and relay move; its purpose, session, recipient, instant and key never
 -- do) and removed by its recipient's disposition.
 IF OBJECT_ID(N'[dbo].[ClassCommunicationIntent]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[ClassCommunicationIntent] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[ClassCommunicationIntent] ([id], [purpose], [sessionId], [userId], [dueAt], [idempotencyKey], [createdAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[ClassCommunicationIntent] TO [$(app_login)]; END;
+
+-- Phase 24: Messaging.
+--
+-- THE ACTIVATION is the owner's: SELECT and nothing else, so no runtime
+-- permission can switch a kind of messaging on, or re-label a fixture as
+-- approved.
+IF OBJECT_ID(N'[dbo].[MessagingActivation]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[MessagingActivation] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[MessagingActivation] TO [$(app_login)]; END;
+--
+-- A CONVERSATION is opened, advanced (its order and activity), closed, marked
+-- for disposal and disposed by its owner's disposition. What it names — its
+-- kind, its Course and its people — and its creation instant are never
+-- rewritten.
+IF OBJECT_ID(N'[dbo].[Conversation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[Conversation] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[Conversation] ([id], [kind], [courseId], [lowUserId], [highUserId], [requesterUserId], [createdAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[Conversation] TO [$(app_login)]; END;
+--
+-- A PARTICIPANT joins and leaves (a support claim may return); it is never
+-- re-keyed to another conversation, person or role.
+IF OBJECT_ID(N'[dbo].[ConversationParticipant]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[ConversationParticipant] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[ConversationParticipant] ([id], [conversationId], [userId], [role]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[ConversationParticipant] TO [$(app_login)]; END;
+--
+-- A MESSAGE is written once: only its moderation moves, and it is deleted
+-- only by its conversation's disposal. Its order, sender, operation, body,
+-- digest and instant are never rewritten.
+IF OBJECT_ID(N'[dbo].[Message]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[Message] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[Message] ([id], [conversationId], [sequence], [senderUserId], [operationId], [body], [payloadDigest], [sentAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[Message] TO [$(app_login)]; END;
+--
+-- AN ATTACHMENT moves through its lifecycle and is deleted once released; its
+-- conversation, uploader, release token and creation instant never move.
+IF OBJECT_ID(N'[dbo].[MessageAttachment]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[MessageAttachment] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[MessageAttachment] ([id], [conversationId], [uploaderUserId], [releaseToken], [createdAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[MessageAttachment] TO [$(app_login)]; END;
+--
+-- A READ POSITION moves forward and is removed with its owner; it is never
+-- re-keyed.
+IF OBJECT_ID(N'[dbo].[MessageReadState]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[MessageReadState] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[MessageReadState] ([conversationId], [userId]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[MessageReadState] TO [$(app_login)]; END;
+--
+-- A BLOCK exists or it does not: made and lifted, never edited.
+IF OBJECT_ID(N'[dbo].[MessagingBlock]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, DELETE ON OBJECT::[dbo].[MessagingBlock] TO [$(app_login)]; DENY UPDATE, ALTER ON OBJECT::[dbo].[MessagingBlock] TO [$(app_login)]; END;
+--
+-- A REPORT is evidence: filed, then resolved (its state, resolution and
+-- version alone move), and never deleted.
+IF OBJECT_ID(N'[dbo].[MessagingReport]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[MessagingReport] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[MessagingReport] ([id], [conversationId], [messageId], [reporterUserId], [reason], [atSequence], [createdAt]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[MessagingReport] TO [$(app_login)]; END;
+--
+-- STORAGE'S RELEASE DIGEST is written once, with the asset, from the token its
+-- consumer generated, and never re-bound: only that token's holder can release
+-- the asset, so the runtime may not point another token at it. Every other
+-- Asset column keeps its Phase-7 posture.
+IF OBJECT_ID(N'[dbo].[Asset]',N'U') IS NOT NULL AND COL_LENGTH(N'dbo.Asset', N'releaseDigest') IS NOT NULL BEGIN DENY UPDATE ON OBJECT::[dbo].[Asset] ([releaseDigest]) TO [$(app_login)]; END;
+--
+-- A MODERATION DECISION is made once and is permanent.
+IF OBJECT_ID(N'[dbo].[MessagingModerationDecision]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[MessagingModerationDecision] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[MessagingModerationDecision] TO [$(app_login)]; END;

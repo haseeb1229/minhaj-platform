@@ -1,7 +1,10 @@
 import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 
+import { messagingMessages } from '@/components/messaging/parts';
+import { messagingRead } from '@/components/messaging/read';
 import { LearningTitle } from '@/components/my-learning/parts';
+import { pickLabel } from '@/components/my-learning/presentation';
 import { learningRead } from '@/components/my-learning/read';
 import { participantNames } from '@/components/teacher/names';
 import {
@@ -23,8 +26,11 @@ import {
   TextLink,
 } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
+import { messagingRuntime } from '@/composition/messaging';
 import { requireLocale } from '@/config/route-locale';
+import { ActionForm } from '../../../(identity)/form-state';
 import { requireTeacher } from '../../guard';
+import { startTeacherConversationAction } from '../../messages/actions';
 
 /**
  * One learner as their teacher may know them (ROUTE_MAP.md §6): the Courses
@@ -35,6 +41,12 @@ import { requireTeacher } from '../../guard';
  * A learner unrelated to this teacher is this page's 404 exactly like an
  * account that does not exist. Opening it is audited by the service as
  * identifiers only.
+ *
+ * MESSAGING, PER COURSE (Phase 24). Each Course listed is one this teacher
+ * teaches NOW and the learner is enrolled on, so each may open — or return to
+ * — that relationship's conversation. The button appears only while
+ * teacher–student messaging is activated; the Messaging service re-decides
+ * the relationship when it is pressed.
  */
 export const metadata = { robots: { index: false, follow: false } };
 
@@ -66,6 +78,12 @@ export default async function StudentPage({
 
   const student = read.value;
   const names = await participantNames([student.accountId]);
+  const capabilities = await messagingRead('messaging-capabilities', () =>
+    messagingRuntime().service.capabilities(),
+  );
+  const canMessage = capabilities.ok && capabilities.value.teacherStudent;
+  const m = await getTranslations({ locale, namespace: 'messages' });
+  const learnerName = names.get(student.accountId) ?? t('common.learner');
   const accountZone = gate.session.account.timezone;
   const back = (
     <p>
@@ -77,7 +95,7 @@ export default async function StudentPage({
     <TeacherFrame
       title={
         <span dir="auto" className="wrap-anywhere">
-          {names.get(student.accountId) ?? t('common.learner')}
+          {learnerName}
         </span>
       }
       description={<p>{t('student.description')}</p>}
@@ -92,7 +110,7 @@ export default async function StudentPage({
           <ul className="flex flex-col gap-3" aria-label={t('student.courses')}>
             {student.courses.map((entry) => (
               <Panel key={entry.course.id} as="li">
-                <div className="flex min-w-0 flex-col gap-1 text-sm">
+                <div className="flex min-w-0 flex-col gap-1 text-sm wrap-anywhere">
                   <TextLink
                     href={`/${locale}/teacher/courses/${encodeURIComponent(entry.course.id)}`}
                   >
@@ -118,6 +136,31 @@ export default async function StudentPage({
                       accountZone={accountZone}
                     />
                   </span>
+                  {canMessage && entry.course.state === 'published' ? (
+                    <ActionForm
+                      action={startTeacherConversationAction}
+                      submitLabel={m('teacher.message', {
+                        name: learnerName,
+                        course:
+                          pickLabel(
+                            entry.course.labels,
+                            locale,
+                            entry.course.primaryLocale,
+                          )?.title ?? m('start.someCourse'),
+                      })}
+                      pendingLabel={m('common.working')}
+                      tone="secondary"
+                      messages={messagingMessages(m)}
+                    >
+                      <input type="hidden" name="locale" value={locale} />
+                      <input
+                        type="hidden"
+                        name="counterpartAccountId"
+                        value={student.accountId}
+                      />
+                      <input type="hidden" name="courseId" value={entry.course.id} />
+                    </ActionForm>
+                  ) : null}
                 </div>
               </Panel>
             ))}

@@ -137,13 +137,16 @@ describe('the externally gated keys are nobody’s by default', () => {
 
   it('keeps every Fatwa key out of the protected Platform Administrator bundle', () => {
     // The three Fatwa keys are gated; since Phase 23 `teaching.perform` is the
-    // fourth and only other gated key, and no gated key is ever bundled.
+    // fourth, since Phase 24 the two Messaging keys are the fifth and sixth,
+    // and no gated key is ever bundled.
     const gated: readonly string[] = EXTERNALLY_GATED_PERMISSIONS;
     for (const key of ['fatwa.answer', 'fatwa.publish', 'question.receive'])
       expect(gated, key).toContain(key);
     expect([...gated].sort()).toEqual([
       'fatwa.answer',
       'fatwa.publish',
+      'messaging.moderate',
+      'messaging.support',
       'question.receive',
       'teaching.perform',
     ]);

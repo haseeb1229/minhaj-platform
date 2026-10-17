@@ -120,6 +120,9 @@ describe('the catalogues agree on their keys', () => {
       'fatwa.unavailable.body',
       'learn.trial.notBooked',
       'learn.filter.invalid',
+      'messages.ended.body',
+      'messages.thread.withheld',
+      'adminMessaging.evidence.audited',
     ]) {
       const value = (locale: Catalogue) =>
         Object.fromEntries(leaves(locale))[key] as string;
@@ -165,6 +168,13 @@ describe('the catalogues agree on their keys', () => {
         // language.
         'learn.trial.notBooked',
         'learn.filter.invalid',
+        // Phase 24: that a conversation has ended, that a moderator withheld a
+        // message, and that opening a support conversation or a report's
+        // evidence is audited — each read in the reader's own language.
+        'messages.ended.body',
+        'messages.thread.withheld',
+        'adminMessaging.conversation.audited',
+        'adminMessaging.evidence.audited',
       ]) {
         expect(String(prose[key]), `${locale} ${key}`).toMatch(/\p{Script=Arabic}/u);
       }

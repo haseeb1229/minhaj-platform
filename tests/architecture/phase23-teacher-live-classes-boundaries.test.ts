@@ -85,7 +85,6 @@ const MIGRATION =
 const SCHEMA = 'packages/database/prisma/schema.prisma';
 const CONTEXT = 'apps/web/src/contexts/learning';
 const ADAPTERS = 'packages/database/src/adapters/learning';
-const APP = 'apps/web/src/app/[locale]';
 
 /** Phase 23's own tables — every one, in the migration's order, and nothing else. */
 const OWN_TABLES = [
@@ -275,13 +274,16 @@ describe('the context depends on its contracts alone', () => {
   });
 });
 
-describe('V1 is manual Google Meet over service mail — no realtime, no Messaging, no Google API', () => {
-  it('has no realtime app, no Messaging model and no teacher messages route', async () => {
+describe('V1 is manual Google Meet over service mail — no realtime, no Google API', () => {
+  it('has no realtime app, and Learning carries no message model of its own', async () => {
+    // Phase 24 delivered Messaging — its `Conversation` and `Message` models
+    // and the teacher's messages route — as its OWN context; its boundary file
+    // guards them. What stays true here: no realtime transport exists, and no
+    // thread or chat model was ever folded into Learning's classes.
     expect(await exists('apps/realtime')).toBe(false);
     const schema = await read(SCHEMA);
-    for (const name of ['Message', 'Conversation', 'MessageThread', 'ChatMessage'])
+    for (const name of ['MessageThread', 'ChatMessage', 'ClassMessage', 'SessionChat'])
       expect(schema, name).not.toMatch(new RegExp(`^\\s*model ${name}\\b`, 'mu'));
-    expect(await exists(`${APP}/teacher/messages`)).toBe(false);
   });
 
   it('names no Google API, Calendar or OAuth client anywhere in Learning', async () => {

@@ -1,14 +1,15 @@
 import 'server-only';
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
-import type {
-  AssetPersistencePort,
-  AssetRejection,
-  AssetStream,
-  MalwareScannerPort,
-  StorageServicePort,
-  StoredAsset,
+import {
+  RELEASE_TOKEN_PATTERN,
+  type AssetPersistencePort,
+  type AssetRejection,
+  type AssetStream,
+  type MalwareScannerPort,
+  type StorageServicePort,
+  type StoredAsset,
 } from '@minhaj/contracts/platform';
 
 import { ByteLimitExceeded, type FilesystemStore } from './filesystem.ts';
@@ -18,6 +19,15 @@ import { archiveOrExecutable, detectMediaType } from './sniff.ts';
 
 /** How many assets one `servable` question may name. */
 const SERVABLE_BATCH = 100;
+
+/**
+ * Phase 24. What Storage keeps of a release token: its SHA-256, in lowercase
+ * hex. The token itself is never stored, logged or returned, so reading the
+ * Asset table yields nothing that can release an asset.
+ */
+function releaseDigestOf(token: string): string {
+  return createHash('sha256').update(token, 'utf8').digest('hex');
+}
 
 /**
  * THE storage service (DELIVERY_PLAN.md Phase 7).
@@ -97,6 +107,16 @@ export function createStorageService(
         throw new Error('An image upload policy may admit only JPEG and PNG.');
       }
 
+      // A release token is a caller's secret of a fixed grammar. A malformed
+      // one is a programming error, refused before anything is written — never
+      // stored as a weaker secret, and never silently dropped.
+      if (
+        policy.releaseToken !== undefined &&
+        !RELEASE_TOKEN_PATTERN.test(policy.releaseToken)
+      ) {
+        throw new Error('A release token must be 64 lowercase hexadecimal characters.');
+      }
+
       const id = randomUUID();
       const key = generateStorageKey();
       const ceiling = Math.min(policy.maxBytes, dependencies.maxBytes);
@@ -107,6 +127,8 @@ export function createStorageService(
         id,
         storageKey: key,
         displayName: displayNameFrom(policy.displayName),
+        releaseDigest:
+          policy.releaseToken === undefined ? null : releaseDigestOf(policy.releaseToken),
       });
 
       let written;
@@ -376,6 +398,33 @@ export function createStorageService(
       }
 
       return settled;
+    },
+
+    /**
+     * Phase 24. Release the asset stored under `releaseToken` — by the secret,
+     * never by an identifier.
+     *
+     * THE ORDER WITHHOLDS FIRST. The record leaves service (`rejected` /
+     * `released`) before its bytes are touched, so no request can stream a file
+     * mid-removal; the bytes go next (removal is idempotent: a missing file is
+     * already the goal); the record goes last. A crash between any two steps
+     * leaves a record the same token finds again, so a retry resumes rather
+     * than leaking either half. A consumer foreign key still naming the record
+     * stops only the last step: the bytes are gone, the record is released and
+     * never served, and the caller is told `referenced`.
+     */
+    async release(releaseToken) {
+      if (!RELEASE_TOKEN_PATTERN.test(releaseToken)) {
+        throw new RangeError(
+          'A release token must be 64 lowercase hexadecimal characters.',
+        );
+      }
+
+      const record = await assets.beginRelease(releaseDigestOf(releaseToken));
+      if (record === null) return 'absent';
+
+      await files.remove(record.storageKey);
+      return (await assets.removeReleased(record.id)) ? 'released' : 'referenced';
     },
   };
 

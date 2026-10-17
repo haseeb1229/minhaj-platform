@@ -4,8 +4,8 @@ import type { LearningTranslator } from './parts';
 
 /**
  * The neighbouring pages each My Learning page links to. Only routes that
- * exist are listed: My Classes arrived with Phase 23; messages belong to a
- * later phase and have no link (ROUTE_MAP.md §5.2).
+ * exist are listed: My Classes arrived with Phase 23. Messages (Phase 24) are
+ * reached from My Minhaj and My Teachers, where a conversation is begun.
  */
 
 interface Link {

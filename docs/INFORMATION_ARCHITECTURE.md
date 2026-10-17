@@ -410,8 +410,10 @@ Phase 22 My Learning (Enrolled Courses, Learning Paths and the person's trial-cl
 Progress → Course Progress are delivered by Learning, with a Learning panel on the Home overview.
 Since Phase 23 My Classes (Upcoming, Past, Class Detail with the meeting link under the disclosure
 rule and the person's attendance record) and Teachers → My Teachers and Find a Teacher are delivered
-by Learning. Certificates, Learning Streaks and Messages stay with their later phases (or, for
-certificates and streaks, with no phase at all) and are absent rather than empty. Bookmarks cover exactly Quran ayat, Hadith, articles,
+by Learning. Since Phase 24 Messages → Conversations and Messages → Support are delivered by
+Messaging (non-realtime; DOMAIN_MODEL.md §15.6) — a support conversation, never a ticket or CRM record
+— with an unread-messages panel on the Home overview. Certificates and Learning Streaks stay with no
+phase at all and are absent rather than empty. Bookmarks cover exactly Quran ayat, Hadith, articles,
 videos and books; history is off until the person turns it on; notifications are in-app only.
 
 **Naming note.** *Saved → Collections* are private, user-owned lists. Editorial
@@ -450,8 +452,7 @@ identity**, not a separate product. A teacher is also a user and retains their M
 granting the teaching permission; revoking that assignment removes access immediately,
 including in messaging (DOMAIN_MODEL.md §4.5).
 
-**Delivered in Phase 23:** every item above except Messages, which stays Phase 24's and has no
-link. Access additionally requires a current typed Course teaching scope and live-learning
+**Delivered in Phase 23:** every item above except Messages, which Phase 24 delivered. Access additionally requires a current typed Course teaching scope and live-learning
 activation (DOMAIN_MODEL.md §13.5). **Student Detail carries no free-form notes:** an earlier
 revision of this tree listed "notes", but no accepted Learning aggregate, retention rule or
 safeguarding contract defines teacher notes about a learner (OPEN_DECISIONS.md §2.1, §2.2 open), so
@@ -537,9 +538,9 @@ Admin
 │   └── Centre Contacts
 ├── Membership
 ├── Donations                 Configuration and records
-├── Messaging
-│   ├── Support Queue
-│   └── Moderation
+├── Messaging                 Delivered in Phase 24 — messaging.support / messaging.moderate
+│   ├── Support Queue         Metadata only; opening a conversation is an audited access
+│   └── Moderation            Open reports, Reports, and one report's bounded evidence
 ├── Migration & Provenance
 │   ├── Sources              Authorisation and licensing evidence
 │   ├── Import Runs

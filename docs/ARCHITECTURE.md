@@ -331,6 +331,23 @@ would mean extracting and rewriting a security-critical path later.
 package, a utils package, an infrastructure tunnel, a second domain layer, or an owner of
 Identity, Messaging or Learning rules.
 
+**As delivered (Phase 24).** `server-core` now hosts, beside `session/`, `authorization/` and
+logging:
+
+- `messaging/` — Messaging's application services (list, open, history, catch-up, start, send, mark
+  read, block, report, attachment upload/serve decisions, support queue and claim, moderation
+  evidence and decisions, export and disposition), admitted as one unit because every operation
+  hangs off the ONE conversation-access decision Phase 25's transport must also make. Messaging
+  therefore has no `apps/web/src/contexts/messaging`: its application layer is this module, its
+  contract `@minhaj/contracts/messaging`, its adapter `packages/database/src/adapters/messaging`;
+- `relationships/` — Learning's current-teaching-relationship answer (both halves, read live),
+  which Messaging consumes through a Layer-4-wired port; Learning never imports Messaging.
+
+Both take only injected ports and import nothing but `server-only`, Node built-ins and
+`@minhaj/contracts`; Layer 4 (`apps/web/src/composition/messaging.ts`) wires the adapters, Identity
+and Storage. No new context edge exists beyond the allowlisted `Messaging → Learning`, and no
+realtime process, socket, presence or typing state exists yet (Phase 25).
+
 ### 3.2 Division of responsibility
 
 | Concern | `apps/web` | `apps/realtime` |
@@ -477,6 +494,15 @@ ceiling counts what ARRIVES, discarded metadata included. `servable(ids)` answer
 bounded page, which assets are technically servable (clean, bytes present) — a question a
 consumer asks only about assets its own authorised records name, so a page offers an image only
 where fetching it can work; the byte route still makes both decisions per request.
+
+**Owner-safe release (Phase 24).** A consumer that must be able to dispose of what it stores
+generates a 256-bit release token, records it in its OWN row, and passes it in the upload policy;
+Storage keeps only its SHA-256 (`Asset.releaseDigest`, unique where present). `release(token)`
+withdraws the matching asset from service (`rejected`/`released`), removes its bytes, then its
+record; it is idempotent and resumable, and answers `referenced` — record kept, never served — if a
+consumer's key still names it. The API takes a token, never an asset id, so no consumer can release
+another's asset and nothing stored without a token can be released at all; Storage still reads no
+consumer's table. Messaging is the first user (SECURITY_BASELINE.md §10.1).
 
 ### 4.3 Search
 

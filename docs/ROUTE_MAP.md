@@ -489,6 +489,16 @@ own confirmed future trial Booking and nothing else. `/my/teachers` lists teache
 genuinely has a class relationship with, by their public People profile — never every attribution
 or every TeacherProfile. `/my/messages/*` stays Phase 24's.
 
+**Delivered in Phase 24.** `/my/messages`, `/my/messages/{conversationId}` and `/my/messages/support` —
+Messaging's, composed at Layer 4; the IA's `Messages → Support` is the `support` subroute (a static
+segment, so it never collides with a conversation id). Each is private, `noindex` and per request.
+The list and every thread re-decide access from the current relationship on each request; a person
+whose relationship ended sees an ended state and none of the history, and a guessed id answers like a
+missing one. A learner starts a conversation from My Teachers, only with a teacher who currently
+teaches them a Course. Nothing here is realtime: new messages arrive on refresh or through the
+"check for new messages" catch-up. `/my` gains an unread-messages panel, and
+`/my/settings/privacy` the Messaging export.
+
 > **Personalised home panels appear only for owners that actually exist.** The `/my` landing
 > composes what has been delivered; it does not render an empty frame for a context that has
 > not shipped.
@@ -584,6 +594,13 @@ is read-only — the public TeacherProfile is People's and is edited by People's
 `/teacher/resources` and `/teacher/courses/{id}/materials` are truthful views over the Course's own
 syllabus and lesson bodies; there is no upload.
 
+**Delivered in Phase 24.** `/teacher/messages` and `/teacher/messages/{conversationId}` — Messaging's,
+composed at Layer 4, now linked from the Teacher navigation. They list and open the teacher's own
+teacher↔student conversations; each request re-reads the live `teaching.perform` assignment, the
+current scope and the learner's Enrolment on that Course, so a revoked or replaced teacher sees the
+conversation as ended and nothing of it. A teacher starts a conversation from a learner's Student
+Detail, per Course they currently teach that learner on — there is no learner directory.
+
 ---
 
 ## 7. Admin routes
@@ -611,7 +628,7 @@ shows who asked and confirms a request into a Booking on a teacher's open window
 | Global | `/admin/global/{countries\|regions\|cities\|centres}` — delivered in Phase 16; a Centre's contacts and served Cities are managed on the Centre |
 | Membership | `/admin/membership` · `/applications` |
 | Donations | `/admin/donations` · `/campaigns` |
-| Messaging | `/admin/messaging/{support\|moderation\|reports}` |
+| Messaging | `/admin/messaging/{support\|moderation\|reports}` — delivered in Phase 24. `support` (+ `/support/{conversationId}`) under `messaging.support`: the queue shows metadata only, opening a conversation's content is an audited access, and claiming, replying and resolving are versioned. `moderation` (open reports, oldest first) and `reports` (+ `/reports/{reportId}`) under `messaging.moderate`: identifiers and reasons in the lists, the bounded evidence one report authorises on its own page (audited), and the immutable dismiss / withhold / close decision. Both keys are externally gated and held by nobody; a Platform Administrator holds neither |
 | Migration | `/admin/migration/{sources\|runs\|runs/{id}\|staging\|duplicates\|url-mapping\|errors\|manifests\|reconciliation}` |
 | Communications | `/admin/communications/{newsletter\|delivery}` \u2014 subscriber and suppression state; pending, failed and suppressed outbound mail |
 | System | `/admin/system/{navigation\|redirects\|search\|audit\|integrations\|settings}` \u2014 **redirects** distinguishes native slug history from legacy mappings; **search** covers configuration, rebuild, indexing lag and failures; **integrations** covers provider configuration and status |
@@ -633,10 +650,11 @@ Categories only; no endpoint contracts in this phase.
 | Search | `/api/search/*` | Search, suggestions, typeahead |
 | Content read | `/api/content/*` | Public read for progressive enhancement |
 | Personal | `/api/my/*` | Authenticated personal actions. Phase 21: `target-state` (GET) and `bookmarks`, `notes`, `collection-items`, `history`, `quran-progress` (POST) serve the private island on public content pages after hydration, and `export` (GET) returns the person's Personalisation data as a JSON download. Phase 22: `learning/state` (GET) and `learning/enrolments`, `learning/trials` (POST) serve a Course page's private island, and `export/learning` (GET) returns the person's Learning data. Every response is private and `no-store`; every POST requires the configured origin, `Sec-Fetch-Site: same-origin` where sent and the `x-minhaj-intent: personal` header (SECURITY_BASELINE.md §7.1 rule 6) |
-| Messaging REST | `/api/messaging/*` | History and read state via Messaging-owned services |
+| Messaging REST | `/api/messaging/*` | Phase 24: `conversations/{id}/messages?after={sequence}` (GET) — durable catch-up after a sequence the reader holds, the source Phase 25 reconnection uses; `conversations/{id}/attachments` (POST) — one attachment's streamed raw body, JPEG, PNG or PDF up to 5 MiB, Class A with `x-minhaj-intent: messaging-attachment`; `attachments/{id}/discard` (POST) — release an unsent upload. Every response private and `no-store`; current access re-decided on every request |
 | Teacher / Admin | `/api/teacher/*` · `/api/admin/*` | Role-gated operations |
 | Migration | `/api/admin/migration/*` | Import control and status |
 | Media | `/api/media/*` | Asset serving and signed downloads |
+| Messaging bytes | `/assets/messaging/attachments/{id}` · `/assets/messaging/support/{id}` · `/assets/messaging/evidence/{reportId}/{id}` | Phase 24: a participant's attachment, a support staff member's (audited) and a moderator's inside one report's evidence (audited). Images `inline`, PDFs `attachment`; `private, no-store`, `nosniff`, CORP same-origin; one 404 for every denial. No signed or public URL |
 | Media upload | `/api/admin/media/audio/{id}/asset` · `/api/admin/media/photos/{id}/asset` | Phase 11: one track's audio file; Phase 12: one Photo's image. `POST` only, a streamed raw body — Class A with explicit anti-CSRF (SECURITY_BASELINE.md §7.1) |
 | Quran upload | `/api/admin/quran/recitations/{id}/segments/{segmentId}/asset` | Phase 18: one recitation segment's audio file, by the same streamed Class-A pattern. Its bytes are served at `/assets/quran/recitations/…` and previewed at `/assets/quran/previews/recitations/…`; nothing is offered as a download |
 | Webhooks | `/api/webhooks/{provider}` | **Signature-verified, idempotent, replay-resistant** |

@@ -44,6 +44,7 @@
     "test": "vitest run",
     "test:storage": "vitest run tests/storage",
     "test:search": "vitest run tests/search",
+    "test:messaging": "vitest run tests/messaging",
     "build": "npm run build --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

@@ -3,6 +3,7 @@ import 'server-only';
 import { fatwaRuntime } from './fatwa';
 import { learningRuntime } from './learning';
 import { appLogger } from './logging';
+import { messagingRuntime } from './messaging';
 import { peopleRuntime } from './people';
 import { personalisationRuntime } from './personalisation';
 
@@ -13,9 +14,14 @@ import { personalisationRuntime } from './personalisation';
  * each in its own transaction (SECURITY_BASELINE.md §19.1). An interruption
  * leaves rows only an owner's own reconciliation removes — People's live link,
  * Fatwa's question text, Personalisation's records, Learning's enrolments,
- * progress and trial requests — so each owner's bounded,
+ * progress and trial requests, Messaging's participation, read positions,
+ * blocks and messages — so each owner's bounded,
  * idempotent reconciliation runs here on a timer, not only inside the next
  * closure somebody else happens to make.
+ *
+ * UNSENT UPLOADS, RELEASED. A message attachment uploaded but never sent, or
+ * one whose release was interrupted, is released by Messaging's own bounded
+ * sweep once it is older than Messaging's bound.
  *
  * NEWSLETTER, MINIMISED. A confirmation window that lapsed leaves an address
  * with no purpose; the newsletter's own sweep drops it.
@@ -54,6 +60,12 @@ export async function runPersonalDataSweep(): Promise<void> {
   );
   await step('closure-learning', () =>
     learningRuntime().account.reconcileClosedAccounts(),
+  );
+  await step('closure-messaging', () =>
+    messagingRuntime().service.reconcileClosedAccounts(),
+  );
+  await step('messaging-attachments', () =>
+    messagingRuntime().service.sweepAttachments(),
   );
 }
 

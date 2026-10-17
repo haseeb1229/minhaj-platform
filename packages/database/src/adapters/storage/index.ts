@@ -18,6 +18,46 @@ import { getDatabaseClient } from '../../client.ts';
  * nothing else.
  */
 
+/** Where a structured error fact can sit once Prisma and the driver wrap it. */
+const NESTED_KEYS = ['cause', 'meta', 'driverAdapterError', 'originalError', 'info'];
+
+/** One own DATA property — never an accessor, and never one that throws. */
+function ownData(record: object, key: string): unknown {
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(record, key);
+    return descriptor !== undefined && 'value' in descriptor
+      ? descriptor.value
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether a delete met a foreign key — Prisma's `P2003`, the driver adapter's
+ * `ForeignKeyConstraintViolation`, or SQL Server's 547 — read from STRUCTURED
+ * fields only, never from message text. Bounded, so a wrapped error cannot
+ * cost unbounded work to classify.
+ */
+function isForeignKeyRefusal(error: unknown): boolean {
+  const seen = new Set<object>();
+  const pending: unknown[] = [error];
+  while (pending.length > 0 && seen.size < 32) {
+    const current = pending.shift();
+    if (current === null || typeof current !== 'object' || seen.has(current)) continue;
+    seen.add(current);
+    const code = ownData(current, 'code');
+    if (code === 'P2003' || code === 547 || ownData(current, 'number') === 547)
+      return true;
+    if (ownData(current, 'kind') === 'ForeignKeyConstraintViolation') return true;
+    for (const key of NESTED_KEYS) {
+      const value = ownData(current, key);
+      if (value !== undefined) pending.push(value);
+    }
+  }
+  return false;
+}
+
 /** `BigInt` is how SQL Server returns `BIGINT`; the domain works in numbers. */
 function toRecord(row: {
   id: string;
@@ -57,6 +97,7 @@ export function createAssetPersistence(): AssetPersistencePort {
           id: input.id,
           storageKey: input.storageKey,
           displayName: input.displayName,
+          releaseDigest: input.releaseDigest ?? null,
           state: 'uploading',
           updatedAt: new Date(),
         },
@@ -170,6 +211,44 @@ export function createAssetPersistence(): AssetPersistencePort {
      */
     async remove(id) {
       await database.asset.deleteMany({ where: { id } });
+    },
+
+    /**
+     * Phase 24. Withdraw the asset its release digest names from service, in
+     * ONE statement, whatever state it is in.
+     *
+     * `rejected` / `released` is unservable at once — `open` and `servable`
+     * serve `clean` alone — so from this statement on nothing can stream the
+     * bytes being removed. The digest is the whole predicate: the only way to
+     * reach a row here is to hold the token whose SHA-256 it is, and an asset
+     * stored without one carries `NULL`, which no digest equals. Repeatable:
+     * an interrupted release finds the same row again and moves nothing new.
+     */
+    async beginRelease(releaseDigest) {
+      const [row] = await database.$queryRaw<{ id: string; storageKey: string }[]>`
+        UPDATE [dbo].[Asset]
+        SET [state] = N'rejected', [rejection] = N'released', [updatedAt] = SYSUTCDATETIME()
+        OUTPUT INSERTED.[id] AS [id], INSERTED.[storageKey] AS [storageKey]
+        WHERE [releaseDigest] = ${releaseDigest}
+      `;
+
+      return row === undefined ? null : { id: row.id, storageKey: row.storageKey };
+    },
+
+    /**
+     * Phase 24. Delete a RELEASED record — the rejection is in the predicate, so
+     * this can never remove a live asset. A consumer's foreign key that still
+     * names it refuses the delete (547): that is an answer, `false`, and the
+     * record stays released and unservable. Anything else is rethrown.
+     */
+    async removeReleased(id) {
+      try {
+        await database.asset.deleteMany({ where: { id, rejection: 'released' } });
+        return true;
+      } catch (error) {
+        if (isForeignKeyRefusal(error)) return false;
+        throw error;
+      }
     },
   };
 }

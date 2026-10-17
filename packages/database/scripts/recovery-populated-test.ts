@@ -94,6 +94,12 @@ import {
   verifyRestoredPhase23,
   writePhase23Fixture,
 } from '../src/lifecycle/phase23-fixture.ts';
+import {
+  capturePhase24Fixture,
+  newPhase24Fixture,
+  verifyRestoredPhase24,
+  writePhase24Fixture,
+} from '../src/lifecycle/phase24-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -225,6 +231,7 @@ const fatwaFixture = newPhase20Fixture();
 const personalFixture = newPhase21Fixture();
 const learningFixture = newPhase22Fixture();
 const classesFixture = newPhase23Fixture();
+const messagingFixture = newPhase24Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -515,6 +522,23 @@ try {
   const classesSnapshot = await capturePhase23Fixture(admin, classesFixture);
   report('classes fixture', `run ${classesFixture.runId}`);
 
+  // Phase-24 Messaging, with NON_MESSAGING_FIXTURE sentinels and `.invalid`
+  // addresses only: the three fixture activations; a teacher-student
+  // conversation between the Phase-23 live teacher and the Phase-22 learner on
+  // the Phase-22 live Course with ordered messages, read positions, a withheld
+  // message, an open conversation report and three attachments naming clean
+  // assets by their release digests (metadata only — bytes are Storage's); a
+  // released upload; a block; a support conversation with a live claim and a
+  // revoked one; a moderator; and a closed-account terminal conversation.
+  const messagingReferences = {
+    liveCourseId: learningFixture.liveCourseId,
+    learnerId: learningFixture.learnerId,
+    teacherId: classesFixture.teacherId,
+  };
+  await writePhase24Fixture(admin, messagingFixture, messagingReferences);
+  const messagingSnapshot = await capturePhase24Fixture(admin, messagingFixture);
+  report('messaging fixture', `run ${messagingFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -657,6 +681,15 @@ try {
       classesFixture,
       classesSnapshot,
       classesReferences,
+    ),
+  );
+  report(
+    'messaging recovery',
+    await verifyRestoredPhase24(
+      restored,
+      messagingFixture,
+      messagingSnapshot,
+      messagingReferences,
     ),
   );
 
@@ -1069,6 +1102,53 @@ try {
           'ClassCommunicationIntent ALTER',
           'ALTER TABLE [dbo].[ClassCommunicationIntent] ADD [probe] INT NULL;',
         ],
+        // Phase 24. A restored runtime can neither switch a kind of messaging
+        // on or off, rewrite a message, re-point a report, re-bind an asset's
+        // release digest, erase a report or a decision, nor alter a Messaging
+        // table.
+        [
+          'MessagingActivation INSERT',
+          "INSERT INTO [dbo].[MessagingActivation] ([capability],[authority],[authorisedBy],[reference]) VALUES (N'group',N'approved',N'forged',N'urn:example:forged');",
+        ],
+        ['MessagingActivation DELETE', 'DELETE FROM [dbo].[MessagingActivation];'],
+        ['Message body UPDATE', 'UPDATE [dbo].[Message] SET [body]=[body];'],
+        [
+          'Message sender UPDATE',
+          'UPDATE [dbo].[Message] SET [senderUserId]=[senderUserId];',
+        ],
+        [
+          'MessagingReport target UPDATE',
+          'UPDATE [dbo].[MessagingReport] SET [messageId]=[messageId];',
+        ],
+        ['MessagingReport DELETE', 'DELETE FROM [dbo].[MessagingReport];'],
+        [
+          'runtime UPDATE of Asset.releaseDigest',
+          'UPDATE [dbo].[Asset] SET [releaseDigest]=[releaseDigest];',
+        ],
+        [
+          'MessagingModerationDecision DELETE',
+          'DELETE FROM [dbo].[MessagingModerationDecision];',
+        ],
+        [
+          'MessagingModerationDecision UPDATE',
+          'UPDATE [dbo].[MessagingModerationDecision] SET [action]=[action];',
+        ],
+        ...(
+          [
+            'MessagingActivation',
+            'Conversation',
+            'ConversationParticipant',
+            'Message',
+            'MessageAttachment',
+            'MessageReadState',
+            'MessagingBlock',
+            'MessagingReport',
+            'MessagingModerationDecision',
+          ] as const
+        ).map((table): [string, string] => [
+          `${table} ALTER`,
+          `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+        ]),
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -1170,6 +1250,12 @@ try {
         classesFixture,
         classesSnapshot,
         classesReferences,
+      );
+      await verifyRestoredPhase24(
+        restored,
+        messagingFixture,
+        messagingSnapshot,
+        messagingReferences,
       );
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 

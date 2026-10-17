@@ -89,12 +89,13 @@ const FUTURE_DOMAIN_TABLES = [
   // fixture. A bare `Teacher` stays even after Phase 23: a Course names its
   // teachers as People's `Person`, and teaching authority is Identity's
   // `teaching.perform` scoped by the typed `CourseTeachingAssignment`, proved
-  // by the Phase-23 recovery fixture.
+  // by the Phase-23 recovery fixture. `Message` left in Phase 24, which
+  // delivers it inside Messaging's `Conversation`, proved by the Phase-24
+  // recovery fixture.
   'Quran',
   'Book',
   'Scholar',
   'Teacher',
-  'Message',
   'Membership',
   'Donation',
   'MigrationProvenance',
@@ -304,6 +305,27 @@ export const PHASE23_TABLES = [
   'ClassCommunicationIntent',
 ];
 
+/**
+ * Tables the Phase-24 migration creates: the owner's per-kind messaging
+ * activation, conversations and their participants, ordered immutable
+ * messages, attachments naming a Storage asset, read positions, blocks,
+ * reports and permanent moderation decisions.
+ *
+ * Checked as REQUIRED whenever the Phase-24 migration is among those the caller
+ * expects.
+ */
+export const PHASE24_TABLES = [
+  'MessagingActivation',
+  'Conversation',
+  'ConversationParticipant',
+  'Message',
+  'MessageAttachment',
+  'MessageReadState',
+  'MessagingBlock',
+  'MessagingReport',
+  'MessagingModerationDecision',
+];
+
 async function userTables(session: SqlSession): Promise<string[]> {
   const rows = await session.query<{ name: string }>(`
     SELECT t.name FROM sys.tables t
@@ -496,6 +518,19 @@ export async function verifyRestoredSchema(
     if (missing.length > 0)
       throw new Error(
         `Restored database is missing Phase-23 live-class tables: ${missing.join(', ')}`,
+      );
+  }
+
+  // Phase 24. A restore that carried the Messaging migration's history row but
+  // not its activations, conversations, messages, attachments, read positions,
+  // blocks, reports or decisions would report an applied migration over a
+  // database that has lost who said what to whom, and the evidence a moderator
+  // decided on.
+  if (expectedMigrationIds.some((id) => id.includes('phase24'))) {
+    const missing = PHASE24_TABLES.filter((table) => !tables.includes(table));
+    if (missing.length > 0)
+      throw new Error(
+        `Restored database is missing Phase-24 Messaging tables: ${missing.join(', ')}`,
       );
   }
   const columns = await auditColumns(restored);

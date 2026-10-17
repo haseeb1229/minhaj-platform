@@ -4,8 +4,8 @@ import type { TeacherTranslator } from './parts';
 
 /**
  * The Teacher area's sections (ROUTE_MAP.md §6). Only routes that exist are
- * listed: there is NO messages entry, because teacher–learner messaging is
- * Phase 24's and a link to it would be a promise this phase cannot keep.
+ * listed. Messages arrived with Phase 24: the teacher's conversations with the
+ * learners they currently teach.
  */
 
 export interface TeacherLink {
@@ -24,6 +24,7 @@ export function teacherLinks(
     { key: 'today', href: `${root}/classes/today`, text: t('nav.today') },
     { key: 'calendar', href: `${root}/calendar`, text: t('nav.calendar') },
     { key: 'students', href: `${root}/students`, text: t('nav.students') },
+    { key: 'messages', href: `${root}/messages`, text: t('nav.messages') },
     { key: 'courses', href: `${root}/courses`, text: t('nav.courses') },
     { key: 'resources', href: `${root}/resources`, text: t('nav.resources') },
     { key: 'attendance', href: `${root}/attendance`, text: t('nav.attendance') },

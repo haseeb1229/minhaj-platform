@@ -497,6 +497,22 @@ jobs:
         run: docker rm -f minhaj-clamav-ci || true
 
       # -----------------------------------------------------------------
+      # Phase 24 — Messaging's live proofs.
+      #
+      # Real SQL Server, as the least-privilege runtime principal: the current
+      # relationship deciding every read and send, revocation winning on the
+      # next request, support and moderation behind their live keys, ordering,
+      # idempotency and read state under real concurrency, blocks racing sends,
+      # and the account-closure terminal-history rule with disposition. They
+      # skip without a database, so the assertion below fails the job if any of
+      # them did not run.
+      # -----------------------------------------------------------------
+      - name: Messaging proof (real SQL Server, runtime principal)
+        run: |
+          npm run test:messaging -- --reporter=json --outputFile=messaging-report.json
+          node scripts/assert-messaging-proofs.mjs messaging-report.json
+
+      # -----------------------------------------------------------------
       # Phase 17 — the search foundation's live proofs.
       #
       # Real SQL Server Full-Text Search: the Arabic, Urdu, English and mixed-

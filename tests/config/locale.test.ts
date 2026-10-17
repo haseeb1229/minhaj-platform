@@ -284,6 +284,20 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/teacher/schedule-form.tsx',
     'apps/web/src/components/teacher/session-card.tsx',
     'apps/web/src/components/teacher/student-list.tsx',
+    // Phase 24. Messaging's shared parts. The conversation screen and its
+    // reads are reached only from the guarded `/my`, `/teacher` and
+    // `/admin/messaging` pages, which resolve the session first; the client
+    // islands (composer, catch-up, mark-read) read nothing at render and talk
+    // to `/api/messaging/*` or a Server Action only after hydration.
+    'apps/web/src/components/messaging/action-support.ts',
+    'apps/web/src/components/messaging/catch-up.client.tsx',
+    'apps/web/src/components/messaging/composer.client.tsx',
+    'apps/web/src/components/messaging/conversation.tsx',
+    'apps/web/src/components/messaging/mark-read.client.tsx',
+    'apps/web/src/components/messaging/parts.tsx',
+    'apps/web/src/components/messaging/presentation.ts',
+    'apps/web/src/components/messaging/read.ts',
+    'apps/web/src/components/messaging/requests.client.ts',
     // Phase 21. The private island public content pages place (session-free
     // by construction: it reads personal state only through `/api/my/*`
     // after hydration), and the My Minhaj Personalisation parts, which read

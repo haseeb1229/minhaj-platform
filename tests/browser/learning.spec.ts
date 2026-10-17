@@ -54,7 +54,9 @@ import {
  *
  * EVERYTHING IS SYNTHETIC. Every word is a `NON_LEARNING_FIXTURE` sentinel and
  * every slug a `non-learning-fixture-` one, which no other spec looks for; the
- * accounts are fresh. NO OTHER SPEC PUBLISHES A COURSE, which is what makes the
+ * accounts are fresh. NO OTHER SPEC PUBLISHES A COURSE while this file runs —
+ * `messaging.spec.ts` does, but only AFTER it, as a dependent Playwright
+ * project — which is what makes the
  * empty-catalogue proof order-independent across files — it asserts that
  * precondition against the database rather than assuming it. The Quran corpus
  * and the Hadith activation are database-wide singletons owned by
@@ -1692,7 +1694,8 @@ test.describe('Learning surfaces', () => {
  * every status in words.
  *
  * THE ACTIVATION IS THIS FILE'S. `LiveLearningActivation` is a database-wide,
- * immutable singleton no other spec writes. The switched-off proofs run first,
+ * immutable singleton no other spec writes before this file has finished
+ * (`messaging.spec.ts` runs after it). The switched-off proofs run first,
  * against a precondition asserted on the database; only then does this file
  * write the one `fixture` row, which every later public page must announce
  * with its test-state banner.
@@ -2057,6 +2060,7 @@ test.describe('Phase 23 — switched on, and who may enter', () => {
       'today',
       'calendar',
       'students',
+      'messages',
       'courses',
       'resources',
       'attendance',
@@ -2066,11 +2070,17 @@ test.describe('Phase 23 — switched on, and who may enter', () => {
     await expect(nav.getByRole('link')).toHaveText(
       sections.map((key) => copy(`teacher.nav.${key}`)),
     );
-    // NO MESSAGES: that surface is a later phase's, and its address does not exist.
-    for (const region of [nav, teacher.getByRole('main')])
-      await expect(region.getByRole('link', { name: /message/i })).toHaveCount(0);
-    await expect(teacher.locator('a[href*="/teacher/messages"]')).toHaveCount(0);
-    expect((await teacher.goto('/en/teacher/messages'))?.status()).toBe(404);
+    // MESSAGES (Phase 24) is a delivered section: its link goes to a page that
+    // renders for an activated teacher. Messaging itself is switched on only by
+    // `messaging.spec.ts`, which runs after this file, so the page says so.
+    await expect(
+      nav.getByRole('link', { name: copy('teacher.nav.messages'), exact: true }),
+    ).toHaveAttribute('href', '/en/teacher/messages');
+    expect((await teacher.goto('/en/teacher/messages'))?.status()).toBe(200);
+    await expect(mainHeading(teacher)).toHaveText(copy('messages.title'));
+    await expect(teacher.getByRole('main')).toContainText(
+      copy('messages.teacher.notActivated'),
+    );
 
     // The scope prepared while switched off is the one Course this teacher has.
     await teacher.goto('/en/teacher/courses');

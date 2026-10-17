@@ -59,6 +59,7 @@ export type {
   StoredAsset,
   UploadPolicy,
 } from './storage.ts';
+export { RELEASE_TOKEN_PATTERN } from './storage.ts';
 
 /* ---- Time (Phase 23 moved the Event helpers here; both owners import them) ---- */
 export {

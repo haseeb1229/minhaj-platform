@@ -1794,6 +1794,100 @@ the platform two message stores with two authorisation implementations.
 **Editorial-owned correspondence workflows** (§7.5) for visitors with no account. The two are
 not merged, and neither is a route into the other.
 
+### 15.6 As delivered (Phase 24 — non-realtime messaging; engineering only)
+
+Built and proven against synthetic `NON_MESSAGING_FIXTURE_*` material and `.invalid` accounts;
+**nothing is seeded, nothing is activated and nobody holds `messaging.support` or
+`messaging.moderate`.** The context's application services live in
+`packages/server-core/src/messaging` (ARCHITECTURE.md §3.1.3), its adapter in
+`packages/database/src/adapters/messaging`, its contracts in `@minhaj/contracts/messaging`; there is
+no `apps/web/src/contexts/messaging`, because every operation depends on the one access decision
+the realtime process will also need. It adds no dependency edge: Learning answers the current
+relationship through a Learning-owned reader hosted in `server-core/relationships`, Identity answers
+live keys and closed accounts at Layer 4, and Messaging reads none of their tables. **Phase 25 adds
+a transport over the same services and no table.**
+
+**The activation gate is a row per kind.** `MessagingActivation` holds at most one row for each of
+`support`, `teacher-student` and `student-student` — `fixture` or `approved`, the latter only with
+its evidence reference — written by the owner/operator alone (the runtime holds SELECT), immutable
+(51300). Without its kind's row no conversation of that kind can be created (51302) and no message
+written (51303), and the service refuses every read and write of it. The persistent database holds
+no row. Student-to-student additionally needs the peer-policy seam, whose production wiring denies
+every pair (OPEN_DECISIONS.md §2.5).
+
+| Aggregate | What it holds — and deliberately does not |
+|---|---|
+| **Conversation** | A controlled `kind`. A **direct** conversation names its Course and its two accounts in binary order (CHECK), one per kind, Course and pair (filtered unique key); a **support** conversation names the person asking, one open at a time (filtered unique key). `open` / `closed` with a reason — `account-closed`, `moderation` or `resolved` (support only) — a never-cleared disposal mark, the last allocated sequence and the activity instant. No relationship type or id, no Course title, no name or address |
+| **ConversationParticipant** | Account, role (`teacher`, `learner`, `peer`, `requester`, `support`), joined and left instants. One per account and conversation; one teacher, one learner and one requester; at most one active support claim. Its role must fit the kind and the accounts the conversation names (51301). **History, never authority** |
+| **Message** | Sequence, sender, client operation id, plain-text body (≤ 4,000 code points), payload digest, moderation state (`visible` / `withheld`) and the server's instant. Unique `(conversation, sequence)` and `(conversation, sender, operation)`. Written only to an open, activated conversation by a current participant at the sequence just allocated (51303); never rewritten, never returned to view once withheld (51304); removed only by disposal (51305) |
+| **MessageAttachment** | A file a participant uploaded into a conversation, recorded **before** its bytes are stored, with the release token they are stored under: `pending` → `ready` (Storage's measured type and size) → `attached` to one of the uploader's own messages at a position 0–3, or `releasing` → removed (51306). JPEG, PNG and PDF only, ≤ 5 MiB, ≤ 4 per message. Its message key carries the conversation. Its Asset is a typed key; nothing cascades |
+| **MessageReadState** | One high-water `lastReadSequence` per participant (keyed to the participant), only forward and never past the last message (51307). Unread is derived |
+| **MessagingBlock** | Blocker → blocked, directional, never self (CHECK). While either direction exists neither may start or continue a direct conversation with the other; history is untouched. Support is an organisational service, not a peer relation, so blocks do not apply to it |
+| **MessagingReport** | A current participant's report of the Conversation or — when `messageId` is set — of that Message, by a composite key that carries the conversation; a controlled reason, the conversation's last sequence at the time, `open` / `resolved`. One open report per reporter and target (51308). No narrative: the reported content is the evidence |
+| **MessagingModerationDecision** | The one immutable decision on an open report — `dismiss`, `withhold-message` (message reports only) or `close-conversation` (51309) — with the moderator and the instant. It never edits text, suspends an account or escalates anywhere |
+
+**Current relationship on every read.** Listing, opening, history, catch-up, sending, marking read,
+reporting, uploading and every attachment byte request re-decide access from the activation and:
+for teacher↔student, Learning's two halves — the teacher's current scope on the Course under a live
+`teaching.perform` assignment, and the learner's Enrolment on the published Course — while live
+learning is activated; for support, being the requester, or holding `messaging.support` live; for
+student↔student, the peer policy. A participant row alone never suffices: a revoked or replaced
+teacher, an ended scope and a withdrawn learner are told the conversation has `ended` and shown
+nothing of it on the next request. A non-participant, an inactive kind and a missing id answer alike.
+
+**Order, idempotency and catch-up.** The sequence is allocated under the conversation's lock and is
+the only order; timestamps are the server's. A retried send with the same operation id returns the
+same message; a different payload under that id is refused and changes nothing. History pages
+backwards by sequence; catch-up returns exactly the messages after a sequence the reader holds,
+bounded — the durable source Phase 25's reconnection will use.
+
+**Support** is a conversation, never a ticket. Staff see the queue's metadata — state, activity,
+claimed, awaiting a reply — and opening a conversation's content is a separate, audited act
+(`messaging.support.accessed`). Replying needs the claim; claiming and resolving are versioned and
+audited. The person sees "Minhaj Support", never a staff identity.
+
+**Moderation** reads only the evidence one report authorises — the reported message and ten either
+side within what existed when it was filed, or the last thirty messages of a reported conversation —
+each read audited by identifier. A withheld message renders as a neutral placeholder to its
+participants and stays whole, immutable evidence.
+
+**Account closure — the terminal-history rule.** Two rules must both hold: a relationship that ENDS
+removes access to its history, and closing one account must not silently destroy another person's
+history. They are reconciled by one narrow exception, created **only** by a VERIFIED Identity
+account closure:
+
+- the closed account loses every access at once (it has no session), and Messaging's disposition
+  closes its open conversations as `account-closed`, ends its participation, and removes its read
+  state, its blocks and its unsent uploads;
+- the **remaining** participant of a closed direct conversation keeps **read-only** access to its
+  immutable history and attachments while Identity reports the counterpart closed **and their OWN
+  half of the relationship is still current** — a teacher still teaching that Course, a learner
+  still enrolled on it. Nothing new can be sent;
+- ordinary revocation, scope end, withdrawal, a block or a moderator's closure never create it:
+  those answer `ended`;
+- nothing about the closed person is copied to keep the history readable — their pseudonymised User
+  row is enough — and a new registration with the same address is a new account that reaches
+  nothing of the old one;
+- a conversation is **disposed** — messages, attachments (released from Storage), read state,
+  participants and the conversation — only once every non-support participant has left through
+  closure and no report names it. A reported conversation is evidence and is kept; its legal
+  retention is OPEN_DECISIONS.md §2.2's. A support conversation of a closed requester is disposed
+  on the same terms.
+
+**Export** returns the person's participation, their OWN messages with their text, their
+attachments' metadata, their read state, blocks and reports — never another person's message and
+never attachment bytes.
+
+**Attachment custody.** Storage keeps only the SHA-256 of a release token Messaging generated
+before storing; only that token releases the asset (ARCHITECTURE.md §4.2). A crash between storing
+and recording leaves a recorded token, so the bounded sweep releases unsent uploads after 24 hours;
+rejected and uncleared uploads are released at once.
+
+**Not delivered, and not owed by Phase 24:** realtime delivery, presence and typing (Phase 25),
+message edit, delete or unsend, group or public conversations, calls, email or notification of
+messages, an approved student-to-student policy, real support staff or moderators, any strike, ban,
+escalation or retention rule, and every policy OPEN_DECISIONS.md §2.1, §2.2, §2.5 and §6.6 reserve.
+
 ---
 
 ## 16. Migration & Provenance

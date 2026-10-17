@@ -221,10 +221,14 @@ describe('server-core is a host, not a domain', () => {
     // module claiming to be an authorization service is worse than its
     // absence: callers would start depending on it.
     //
-    // The rest stay prohibited until the contexts that own them arrive.
+    // Phase 24 admitted `messaging/` and `relationships/` on the same ground:
+    // the Phase-25 realtime process must reach Messaging's decisions — and the
+    // Learning relationship facts they rest on — through the SAME code the web
+    // process calls. The TRANSPORT itself is not a hosted service: a socket,
+    // presence or typing module belongs to the realtime app, never here.
     const directories = await hostedDirectories();
 
-    for (const premature of ['messaging', 'relationships']) {
+    for (const premature of ['realtime', 'socket', 'presence', 'typing']) {
       expect(directories).not.toContain(premature);
     }
   });
@@ -236,7 +240,13 @@ describe('server-core is a host, not a domain', () => {
     // decision; this is the list of decisions that have been taken.
     const directories = await hostedDirectories();
 
-    expect([...directories].sort()).toEqual(['authorization', 'logging', 'session']);
+    expect([...directories].sort()).toEqual([
+      'authorization',
+      'logging',
+      'messaging',
+      'relationships',
+      'session',
+    ]);
   });
 
   it('keeps the authorization service free of infrastructure', async () => {
@@ -287,4 +297,40 @@ describe('server-core is a host, not a domain', () => {
       );
     }
   });
+
+  it.each(['messaging', 'relationships'])(
+    'keeps every %s module free of infrastructure and server-only',
+    async (directory) => {
+      // Phase 24. The same rule again, for EVERY module of the two hosted
+      // Phase-24 services rather than only their entry: Messaging's service and
+      // Learning's relationship facts hold narrow injected ports, so the
+      // realtime process can make the same decision without acquiring a
+      // database, a Prisma delegate or a framework by doing so.
+      const folder = path.join(serverCoreRoot, 'src', directory);
+      const modules = (await readdir(folder)).filter((name) => name.endsWith('.ts'));
+      expect(modules.length).toBeGreaterThan(0);
+      for (const name of modules) {
+        const source = await readFile(path.join(folder, name), 'utf8');
+        expect(source, `${directory}/${name} must import 'server-only'`).toMatch(
+          /^import\s+['"]server-only['"];/m,
+        );
+        for (const forbidden of [
+          '@minhaj/database',
+          '@prisma/client',
+          'better-auth',
+          'resend',
+          'next',
+          'mssql',
+          'socket.io',
+          'ws',
+        ]) {
+          // The package itself or any subpath of it, e.g. `next/headers`.
+          const specifier = forbidden.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+          expect(source, `${directory}/${name} must not import ${forbidden}`).not.toMatch(
+            new RegExp(`from\\s+'${specifier}(?:'|/)`),
+          );
+        }
+      }
+    },
+  );
 });

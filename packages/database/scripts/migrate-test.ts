@@ -205,6 +205,29 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // newsletter keys join the protected bundle (DOMAIN_MODEL.md §14), asserted
   // by `assertPersonalisationFoundation` and proved as behaviour by
   // `assertPersonalisationRules`.
+  // THE MESSAGING CONTEXT: the owner's per-kind activation (fail closed until a
+  // kind's row exists), conversations that name their Course and their two
+  // accounts — or, for support, their person — by typed keys, historical
+  // participants, ordered immutable messages, attachments naming a Storage
+  // Asset and their own Message by a composite key that carries the
+  // conversation, forward-only read positions, blocks, reports and permanent
+  // moderation decisions; and Storage's one new column, the release digest.
+  // Every key is NO ACTION; NOT ONE ROW is seeded — no activation, so messaging
+  // is OFF — and `messaging.support` and `messaging.moderate` are catalogued,
+  // externally gated and bundled into no role (DOMAIN_MODEL.md §15), asserted
+  // by `assertMessagingFoundation` and proved as behaviour by
+  // `assertMessagingRules`.
+  '20261008000000_phase24_messaging': [
+    'MessagingActivation',
+    'Conversation',
+    'ConversationParticipant',
+    'Message',
+    'MessageAttachment',
+    'MessageReadState',
+    'MessagingBlock',
+    'MessagingReport',
+    'MessagingModerationDecision',
+  ],
   // THE LEARNING CONTEXT'S SECOND SLICE: the owner's live-learning activation
   // (fail closed until a row exists), the TYPED Course teaching scope naming
   // the exact Identity RoleAssignment that carries `teaching.perform`, a
@@ -526,7 +549,8 @@ const PREMATURE_TABLES = [
   'CourseVideo',
   'LessonVideo',
   'CourseCentre',
-  'Message',
+  // `Message` left this list when Phase 24 delivered it as Messaging's own,
+  // ordered and immutable within its Conversation.
   'Membership',
   'Donation',
   'MigrationProvenance',
@@ -827,6 +851,39 @@ const PROHIBITED_TABLES = [
   'LessonTarget',
   'PathEnrolment',
   'LearningPathEnrolment',
+
+  // PHASE 24 — a conversation names its Course and its people, a report its
+  // Conversation and, when a message is the target, that Message, all by typed
+  // keys (DOMAIN_MODEL.md §15, §6.2). A generic conversation, message, report or
+  // moderation target would be the polymorphic reference §6.2 refuses; a
+  // thread, chat or member table beside `Conversation` and
+  // `ConversationParticipant` would be a second notion of the same aggregate;
+  // a ticket table would be a support desk outside the conversation it is; an
+  // edit or revision table would make an immutable message rewritable;
+  // presence, typing and socket state are Phase 25 transport and never a
+  // table; and a strike or ban table would invent a policy nobody approved.
+  'ConversationTarget',
+  'MessageTarget',
+  'MessagingTarget',
+  'ReportTarget',
+  'ModerationTarget',
+  'Thread',
+  'MessageThread',
+  'ChatMessage',
+  'ChatRoom',
+  'ConversationMember',
+  'SupportTicket',
+  'Ticket',
+  'MessageEdit',
+  'MessageRevision',
+  'Presence',
+  'UserPresence',
+  'TypingState',
+  'TypingIndicator',
+  'SocketSession',
+  'RealtimeSession',
+  'MessagingStrike',
+  'MessagingBan',
 ];
 
 const EXPECTED_AUDIT_COLUMNS = [
@@ -1263,6 +1320,51 @@ const EXPECTED_FILTERED_INDEXES: readonly {
     index: 'Booking_slot_key',
     why: 'two confirmations of one window both commit',
   },
+  // Phase 24 adds eight. Storage's release digest is filtered because an Asset
+  // stored without a token names no digest; the rest are the races themselves,
+  // and each filter is what lets history — a support conversation that was
+  // resolved, a claim that was released, an unattached upload, a resolved
+  // report — stay beside the live row.
+  {
+    table: 'Asset',
+    index: 'Asset_releaseDigest_key',
+    why: 'one release token could release two assets',
+  },
+  {
+    table: 'Conversation',
+    index: 'Conversation_direct_key',
+    why: 'two concurrent openings between two people on one Course both create a conversation',
+  },
+  {
+    table: 'Conversation',
+    index: 'Conversation_support_key',
+    why: 'one person could hold two open support conversations at once',
+  },
+  {
+    table: 'ConversationParticipant',
+    index: 'ConversationParticipant_claim_key',
+    why: 'two support staff could claim one conversation at once',
+  },
+  {
+    table: 'ConversationParticipant',
+    index: 'ConversationParticipant_role_key',
+    why: 'a conversation could hold two teachers, two learners or two requesters',
+  },
+  {
+    table: 'MessageAttachment',
+    index: 'MessageAttachment_assetId_key',
+    why: 'one stored asset could be attached twice',
+  },
+  {
+    table: 'MessageAttachment',
+    index: 'MessageAttachment_position_key',
+    why: 'two attachments could take one place in a message',
+  },
+  {
+    table: 'MessagingReport',
+    index: 'MessagingReport_open_key',
+    why: 'one person could hold two open reports of the same target',
+  },
 ];
 
 /** The sixteen Phase-22 tables, in the migration's order. */
@@ -1315,6 +1417,34 @@ const CLASSES_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, string]
   LearningBookingIntegrity: ['Booking', '51281+51288'],
   LearningAttendanceIntegrity: ['Attendance', '51289'],
   LearningIntentIntegrity: ['ClassCommunicationIntent', '51292'],
+};
+
+/** The nine Phase-24 tables, in the migration's order. */
+const MESSAGING_TABLES = MIGRATION_EXPECTATIONS['20261008000000_phase24_messaging'] ?? [];
+
+/**
+ * Each Messaging trigger, the table it guards and the refusal numbers its body
+ * raises: 51300 the immutable activation; 51301 a participant that does not
+ * fit, rejoins, is re-keyed or leaves outside disposal; 51302 a conversation
+ * not activated, rewritten, reopened, gone backwards or removed outside
+ * disposal; 51303 a message to a conversation that is not open or not
+ * activated, from someone who is not a current participant or off its
+ * allocated sequence, 51304 one rewritten or returned to view and 51305 one
+ * removed outside disposal; 51306 an attachment off its lifecycle or its
+ * uploader; 51307 a read position backwards or past the last message; 51308 a
+ * report by a non-participant, beyond its conversation, rewritten or reopened;
+ * 51309 a decision rewritten, removed, on a closed report or withholding
+ * nothing.
+ */
+const MESSAGING_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, string]>> = {
+  MessagingActivationImmutable: ['MessagingActivation', '51300'],
+  MessagingConversationIntegrity: ['Conversation', '51302'],
+  MessagingParticipantIntegrity: ['ConversationParticipant', '51301'],
+  MessagingMessageIntegrity: ['Message', '51303+51304+51305'],
+  MessagingAttachmentIntegrity: ['MessageAttachment', '51306'],
+  MessagingReadStateIntegrity: ['MessageReadState', '51307'],
+  MessagingReportIntegrity: ['MessagingReport', '51308'],
+  MessagingDecisionIntegrity: ['MessagingModerationDecision', '51309'],
 };
 
 /** The fifteen Phase-21 tables, in the migration's order. */
@@ -1583,6 +1713,10 @@ const EXPECTED_TRIGGERS = [
   // typed, activated, conflict-free and final — each listed, with the refusal
   // it raises, in `CLASSES_TRIGGER_NUMBERS`.
   ...Object.keys(CLASSES_TRIGGER_NUMBERS),
+  // Phase 24: the immutable activation and every rule that keeps a
+  // conversation typed, activated, ordered and immutable — each listed, with
+  // the refusal it raises, in `MESSAGING_TRIGGER_NUMBERS`.
+  ...Object.keys(MESSAGING_TRIGGER_NUMBERS),
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
@@ -1969,6 +2103,28 @@ const EXPECTED_CHECK_CONSTRAINTS = [
     'Booking',
     'Attendance',
     'ClassCommunicationIntent',
+  ].map((table) => ({ table, constraint: table + '_ck' })),
+  // Phase 24. Storage's release digest is lower-case SHA-256 hex or absent; the
+  // activation's closed kinds and its evidence when approved; a conversation's
+  // shape by kind (two accounts in binary order on a Course, or one person
+  // asking) and its open/closed consistency; a participant's role; a message's
+  // positive sequence, bounded body, digest and moderation instant; an
+  // attachment's token, formats, 5 MiB bound, four places and per-state shape;
+  // a read position, a block of someone else, a report's reasons and lifecycle
+  // and a decision's three actions.
+  { table: 'Asset', constraint: 'Asset_releaseDigest_ck' },
+  { table: 'MessagingActivation', constraint: 'MessagingActivation_evidence_ck' },
+  { table: 'Conversation', constraint: 'Conversation_shape_ck' },
+  ...[
+    'MessagingActivation',
+    'Conversation',
+    'ConversationParticipant',
+    'Message',
+    'MessageAttachment',
+    'MessageReadState',
+    'MessagingBlock',
+    'MessagingReport',
+    'MessagingModerationDecision',
   ].map((table) => ({ table, constraint: table + '_ck' })),
 ];
 
@@ -7643,21 +7799,26 @@ async function assertProtectedBundleExcludesGated(session: SqlSession): Promise<
 
 /**
  * How far the rollback loop has gone when an earlier owner's foundation is
- * re-proved: every phase applied, Phase 23 rolled back, Phases 23 and 22, or
- * Phases 23, 22 and 21.
+ * re-proved: every phase applied, Phase 24 rolled back, Phases 24 and 23,
+ * Phases 24, 23 and 22, or Phases 24, 23, 22 and 21.
  */
 type BundleStage =
-  'current' | 'before-classes' | 'before-learning' | 'before-personalisation';
+  | 'current'
+  | 'before-messaging'
+  | 'before-classes'
+  | 'before-learning'
+  | 'before-personalisation';
 
 /**
  * The compiled bundle less exactly the keys the rollbacks have removed by
- * `stage`: the two class keys once Phase 23 is rolled back, the two Learning
- * keys as well once Phase 22 is, and the two newsletter keys as well once
- * Phase 21 is.
+ * `stage`: nothing once Phase 24 is rolled back (its two keys are externally
+ * gated and were never bundled), the two class keys once Phase 23 is, the two
+ * Learning keys as well once Phase 22 is, and the two newsletter keys as well
+ * once Phase 21 is.
  */
 function compiledBundleAt(stage: BundleStage): readonly string[] {
   const removed =
-    stage === 'current'
+    stage === 'current' || stage === 'before-messaging'
       ? []
       : stage === 'before-classes'
         ? CLASSES_PERMISSIONS
@@ -7914,12 +8075,14 @@ async function assertFatwaFoundation(
   const described = new Map(
     PERMISSION_CATALOGUE.map((entry) => [entry.key as string, entry.description]),
   );
-  // The externally gated set is the three Fatwa keys and, since Phase 23,
-  // `teaching.perform` as the fourth — and nothing else.
+  // The externally gated set is the three Fatwa keys, `teaching.perform` since
+  // Phase 23 and the two Messaging keys since Phase 24 — and nothing else.
   if (
     permissions.map((row) => row.key).join(',') !== FATWA_PERMISSIONS.join(',') ||
     [...EXTERNALLY_GATED_PERMISSIONS].sort().join(',') !==
-      [...FATWA_PERMISSIONS, TEACHING_PERMISSION].sort().join(',') ||
+      [...FATWA_PERMISSIONS, TEACHING_PERMISSION, ...MESSAGING_PERMISSIONS]
+        .sort()
+        .join(',') ||
     permissions.some(
       (row) => row.description !== described.get(row.key) || Number(row.held) !== 0,
     )
@@ -7927,7 +8090,8 @@ async function assertFatwaFoundation(
     fail(
       `The Fatwa vocabulary must be exactly ${FATWA_PERMISSIONS.join(', ')}, described as the ` +
         `compiled catalogue describes them and held by no role, and the gated set exactly ` +
-        `those three and ${TEACHING_PERMISSION}; found ${JSON.stringify(permissions)}.`,
+        `those three, ${TEACHING_PERMISSION} and ${MESSAGING_PERMISSIONS.join(', ')}; found ` +
+        `${JSON.stringify(permissions)}.`,
     );
 
   const [quiet] = await session.query<{
@@ -9987,26 +10151,31 @@ async function learningPresent(session: SqlSession): Promise<boolean> {
  *
  * At `before-classes` the Phase-23 tables are gone too, so nothing may
  * reference a Learning table; while they are present, the only inbound keys
- * and the only foreign Course columns are theirs.
+ * and the only foreign Course columns are theirs — and, while Phase 24 is
+ * applied (not at `before-messaging`), Messaging's: a direct conversation
+ * names its Course by a typed key.
  *
  * The rules themselves are proved as BEHAVIOUR by `assertLearningRules`, and
  * through the runtime login by `db:test:permissions`.
  */
 async function assertLearningFoundation(
   session: SqlSession,
-  stage: 'deploy' | 're-deploy' | 'before-classes' = 'deploy',
+  stage: 'deploy' | 're-deploy' | 'before-messaging' | 'before-classes' = 'deploy',
 ): Promise<void> {
   const tables = LEARNING_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
     ',',
   );
   const names = LEARNING_TABLES.map((table) => `N'${table}'`).join(',');
   const withClasses = stage !== 'before-classes';
-  const classTables = withClasses
-    ? CLASSES_TABLES.map((table) => `,OBJECT_ID(N'[dbo].[${table}]')`).join('')
-    : '';
-  const classNames = withClasses
-    ? CLASSES_TABLES.map((table) => `,N'${table}'`).join('')
-    : '';
+  const withMessaging = stage === 'deploy' || stage === 're-deploy';
+  const referencing = [
+    ...(withClasses ? CLASSES_TABLES : []),
+    ...(withMessaging ? MESSAGING_TABLES : []),
+  ];
+  const classTables = referencing
+    .map((table) => `,OBJECT_ID(N'[dbo].[${table}]')`)
+    .join('');
+  const classNames = referencing.map((table) => `,N'${table}'`).join('');
   if (!(await learningPresent(session)))
     fail(`The Phase-22 Learning tables are missing after ${stage}.`);
 
@@ -11053,7 +11222,7 @@ async function classesPresent(session: SqlSession): Promise<boolean> {
  */
 async function assertClassesFoundation(
   session: SqlSession,
-  stage: 'deploy' | 're-deploy' = 'deploy',
+  stage: 'deploy' | 're-deploy' | 'before-messaging' = 'deploy',
 ): Promise<void> {
   const tables = CLASSES_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
     ',',
@@ -12171,6 +12340,1838 @@ async function assertClassesRules(session: SqlSession): Promise<void> {
   );
 }
 
+const MESSAGING_MIGRATION = '20261008000000_phase24_messaging';
+
+/**
+ * The two keys Phase 24 catalogues, and only these: both EXTERNALLY GATED,
+ * bundled into no role and held by nobody until the organisation names who
+ * staffs support and who moderates (OPEN_DECISIONS.md §6.6).
+ */
+const MESSAGING_PERMISSIONS = ['messaging.moderate', 'messaging.support'];
+
+/**
+ * EVERY foreign key from a Phase-24 table, exactly, with its column mapping and
+ * its delete action. ALL are NO ACTION: nothing cascades, inside the context or
+ * out of it. The external edges are Identity's User, Learning's Course and
+ * Storage's Asset; an attachment and a report reach their Message by a
+ * composite key that carries the conversation, and a read position its
+ * participant by the conversation and the account, so none of them can name a
+ * message or a member of another conversation.
+ */
+const MESSAGING_KEYS = [
+  'ConversationParticipant_conversationId_fkey(conversationId>id)>Conversation:NO_ACTION',
+  'ConversationParticipant_userId_fkey(userId>id)>User:NO_ACTION',
+  'Conversation_courseId_fkey(courseId>id)>Course:NO_ACTION',
+  'Conversation_highUserId_fkey(highUserId>id)>User:NO_ACTION',
+  'Conversation_lowUserId_fkey(lowUserId>id)>User:NO_ACTION',
+  'Conversation_requesterUserId_fkey(requesterUserId>id)>User:NO_ACTION',
+  'MessageAttachment_assetId_fkey(assetId>id)>Asset:NO_ACTION',
+  'MessageAttachment_conversationId_fkey(conversationId>id)>Conversation:NO_ACTION',
+  'MessageAttachment_message_fkey(messageId>id,conversationId>conversationId)>Message:NO_ACTION',
+  'MessageAttachment_uploaderUserId_fkey(uploaderUserId>id)>User:NO_ACTION',
+  'MessageReadState_participant_fkey(conversationId>conversationId,userId>userId)>ConversationParticipant:NO_ACTION',
+  'Message_conversationId_fkey(conversationId>id)>Conversation:NO_ACTION',
+  'Message_senderUserId_fkey(senderUserId>id)>User:NO_ACTION',
+  'MessagingBlock_blockedUserId_fkey(blockedUserId>id)>User:NO_ACTION',
+  'MessagingBlock_blockerUserId_fkey(blockerUserId>id)>User:NO_ACTION',
+  'MessagingModerationDecision_moderatorUserId_fkey(moderatorUserId>id)>User:NO_ACTION',
+  'MessagingModerationDecision_reportId_fkey(reportId>id)>MessagingReport:NO_ACTION',
+  'MessagingReport_conversationId_fkey(conversationId>id)>Conversation:NO_ACTION',
+  'MessagingReport_message_fkey(messageId>id,conversationId>conversationId)>Message:NO_ACTION',
+  'MessagingReport_reporterUserId_fkey(reporterUserId>id)>User:NO_ACTION',
+].sort();
+
+/**
+ * Every unique index on a Phase-24 table, exactly: the keys; one membership
+ * per account; the order, the operation and the conversation-carrying key of a
+ * message; one release token per attachment; one decision per report — and the
+ * SEVEN FILTERED claims: one direct conversation per kind, Course and pair, one
+ * OPEN support conversation per person, one ACTIVE support claim, one teacher,
+ * learner and requester per conversation, an asset attached once, one
+ * attachment per place, and one OPEN report per reporter and target.
+ */
+const MESSAGING_UNIQUE = [
+  "ConversationParticipant_claim_key(conversationId) WHERE ([role]=N'support' AND [leftAt] IS NULL)",
+  'ConversationParticipant_member_key(conversationId,userId)',
+  'ConversationParticipant_pkey(id)',
+  "ConversationParticipant_role_key(conversationId,role) WHERE ([role] IN (N'teacher', N'learner', N'requester'))",
+  "Conversation_direct_key(kind,courseId,lowUserId,highUserId) WHERE ([kind]<>N'support')",
+  'Conversation_pkey(id)',
+  "Conversation_support_key(requesterUserId) WHERE ([kind]=N'support' AND [state]=N'open')",
+  'MessageAttachment_assetId_key(assetId) WHERE ([assetId] IS NOT NULL)',
+  'MessageAttachment_pkey(id)',
+  'MessageAttachment_position_key(messageId,position) WHERE ([messageId] IS NOT NULL)',
+  'MessageAttachment_releaseToken_key(releaseToken)',
+  'MessageReadState_pkey(conversationId,userId)',
+  'Message_conversation_key(id,conversationId)',
+  'Message_operation_key(conversationId,senderUserId,operationId)',
+  'Message_order_key(conversationId,sequence)',
+  'Message_pkey(id)',
+  'MessagingActivation_pkey(capability)',
+  'MessagingBlock_pkey(blockerUserId,blockedUserId)',
+  'MessagingModerationDecision_pkey(id)',
+  'MessagingModerationDecision_reportId_key(reportId)',
+  "MessagingReport_open_key(reporterUserId,conversationId,messageId) WHERE ([state]=N'open')",
+  'MessagingReport_pkey(id)',
+].sort();
+
+/**
+ * Every column of every Phase-24 table, in order. Stated whole so a
+ * `targetType`/`relationshipType`/`scopeType` pair, a copied email, name,
+ * phone, Course title or address, an age, guardian, retention, strike or ban
+ * column, or a presence or typing state cannot arrive unnoticed.
+ */
+const MESSAGING_COLUMNS: Readonly<Record<string, string>> = {
+  MessagingActivation: 'capability,authority,authorisedBy,reference,activatedAt',
+  Conversation:
+    'id,kind,courseId,lowUserId,highUserId,requesterUserId,state,closedReason,closedAt,disposingAt,lastSequence,activityAt,createdAt,version',
+  ConversationParticipant: 'id,conversationId,userId,role,joinedAt,leftAt',
+  Message:
+    'id,conversationId,sequence,senderUserId,operationId,body,payloadDigest,moderation,withheldAt,sentAt',
+  MessageAttachment:
+    'id,conversationId,uploaderUserId,releaseToken,state,assetId,messageId,position,mediaType,byteSize,displayName,createdAt,attachedAt',
+  MessageReadState: 'conversationId,userId,lastReadSequence,updatedAt',
+  MessagingBlock: 'blockerUserId,blockedUserId,createdAt',
+  MessagingReport:
+    'id,conversationId,messageId,reporterUserId,reason,atSequence,state,createdAt,resolvedAt,version',
+  MessagingModerationDecision: 'id,reportId,moderatorUserId,action,decidedAt',
+};
+
+/**
+ * Storage's Asset as Phase 7 left it, and the ONE column Phase 24 adds: the
+ * release digest. No owner, user, conversation or target column arrives.
+ */
+const ASSET_COLUMNS_BEFORE_MESSAGING =
+  'id,storageKey,mediaType,byteSize,checksum,state,rejection,displayName,scanAttempts,createdAt,updatedAt';
+const ASSET_COLUMNS_WITH_MESSAGING = `${ASSET_COLUMNS_BEFORE_MESSAGING},releaseDigest`;
+
+/**
+ * Whether Phase 24 is applied, ALL OR NOTHING: either every one of its nine
+ * tables exists or none does.
+ */
+async function messagingPresent(session: SqlSession): Promise<boolean> {
+  const names = MESSAGING_TABLES.map((table) => `N'${table}'`).join(',');
+  const [row] = await session.query<{ present: number }>(
+    `SELECT COUNT(*) AS [present] FROM sys.tables WHERE [name] IN (${names});`,
+  );
+  const present = Number(row?.present ?? -1);
+  if (present !== 0 && present !== MESSAGING_TABLES.length)
+    fail(
+      `Phase 24 is half applied: ${String(present)} of ${String(MESSAGING_TABLES.length)} ` +
+        `Messaging tables exist.`,
+    );
+  return present === MESSAGING_TABLES.length;
+}
+
+/**
+ * Storage's Asset, described: its columns in order, its unique indexes (with
+ * any filter) and its trusted CHECKs. Phase 24 adds exactly the release digest,
+ * its filtered unique key and its CHECK, and its rollback removes exactly them.
+ */
+async function assetShape(session: SqlSession): Promise<{
+  columns: string;
+  digest: string;
+  unique: string;
+  checks: string;
+}> {
+  const [row] = await session.query<{
+    columns: string | null;
+    digest: string | null;
+    unique: string | null;
+    checks: string | null;
+  }>(`
+    SELECT
+      (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id]) FROM sys.columns c
+        WHERE c.[object_id] = OBJECT_ID(N'[dbo].[Asset]')) AS [columns],
+      (SELECT t.[name] + N'(' + CAST(c.[max_length] / 2 AS NVARCHAR(8)) + N'):' + CAST(c.[is_nullable] AS NVARCHAR(1))
+         FROM sys.columns c JOIN sys.types t ON t.[user_type_id] = c.[user_type_id]
+        WHERE c.[object_id] = OBJECT_ID(N'[dbo].[Asset]') AND c.[name] = N'releaseDigest') AS [digest],
+      (SELECT STRING_AGG(i.[name] + ISNULL(N' WHERE ' + i.[filter_definition], N''), N' | ')
+          WITHIN GROUP (ORDER BY i.[name])
+         FROM sys.indexes i WHERE i.[object_id] = OBJECT_ID(N'[dbo].[Asset]') AND i.[is_unique] = 1) AS [unique],
+      (SELECT STRING_AGG([name] + CASE WHEN [is_disabled] = 0 AND [is_not_trusted] = 0 THEN N'' ELSE N'!' END, N',')
+          WITHIN GROUP (ORDER BY [name])
+         FROM sys.check_constraints WHERE [parent_object_id] = OBJECT_ID(N'[dbo].[Asset]')) AS [checks];
+  `);
+  return {
+    columns: row?.columns ?? '',
+    digest: row?.digest ?? '',
+    unique: row?.unique ?? '',
+    checks: row?.checks ?? '',
+  };
+}
+
+/**
+ * Phase 24 — what only the catalogue can prove about Messaging:
+ *
+ *   1. NOTHING IS SEEDED: all nine tables are empty after deploy — and above
+ *      all NO activation row, so a migrated database has every kind of
+ *      messaging OFF;
+ *   2. every column of every table is exactly as stated — no type, target,
+ *      scope or relationship column, no copied email, name, phone, address or
+ *      Course title, no age, guardian, retention, strike, ban, presence or
+ *      typing column (an attachment's own file `displayName` and `mediaType`
+ *      aside) — and the unique indexes are exactly the twenty-two above, the
+ *      seven claims FILTERED;
+ *   3. every foreign key is exactly one of the twenty above, ALL NO ACTION and
+ *      trusted: User, Course and Asset the only external edges, a message
+ *      reached by attachments and reports through the composite key that
+ *      carries its conversation; no other owner references a Messaging table or
+ *      holds a conversation, participant, message, moderation or attachment
+ *      column;
+ *   4. the CHECKs are exactly the eleven named rules, all trusted; the triggers
+ *      are exactly the eight in `MESSAGING_TRIGGER_NUMBERS`, enabled, each
+ *      raising exactly its own numbers from 51300–51309 on the table it guards;
+ *      and Messaging has no procedure;
+ *   5. Storage's Asset gained ONLY `releaseDigest` — NVARCHAR(64), nullable —
+ *      with its filtered unique key and its trusted CHECK, and nothing that
+ *      names an owner;
+ *   6. the vocabulary is exactly `messaging.moderate` and `messaging.support`,
+ *      described as the compiled catalogue describes them, externally gated,
+ *      bundled into NO role and held by NOBODY; no provisioning record exists
+ *      (no bundle changed — the Phase-20 precedent); and the protected bundle
+ *      is exactly the compiled bundle.
+ *
+ * The rules themselves are proved as BEHAVIOUR by `assertMessagingRules`, and
+ * through the runtime login by `db:test:permissions`.
+ */
+async function assertMessagingFoundation(
+  session: SqlSession,
+  stage: 'deploy' | 're-deploy' = 'deploy',
+): Promise<void> {
+  const tables = MESSAGING_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
+    ',',
+  );
+  const names = MESSAGING_TABLES.map((table) => `N'${table}'`).join(',');
+  if (!(await messagingPresent(session)))
+    fail(`The Phase-24 Messaging tables are missing after ${stage}.`);
+
+  // ---- 1. nothing seeded, and no activation above all ----------------------------
+  const counts = await session.query<{ name: string; total: number }>(
+    MESSAGING_TABLES.map(
+      (table) =>
+        `SELECT N'${table}' AS [name], COUNT_BIG(*) AS [total] FROM [dbo].[${table}]`,
+    ).join(' UNION ALL ') + ';',
+  );
+  const seeded = counts.filter((row) => Number(row.total) !== 0);
+  if (MESSAGING_TABLES.length !== 9 || counts.length !== 9 || seeded.length > 0)
+    fail(
+      `The Messaging migration must create nine empty tables and seed nothing — above all ` +
+        `no activation, so messaging is OFF; found ${String(counts.length)} tables after ` +
+        `${stage}, seeded: ${JSON.stringify(seeded)}.`,
+    );
+
+  // ---- 2. exact columns, exact unique indexes with exactly seven filtered ----------
+  const shapes = await session.query<{ name: string; columns: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) AS [name],
+      STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id]) AS [columns]
+    FROM sys.columns c WHERE c.[object_id] IN (${tables})
+    GROUP BY c.[object_id];
+  `);
+  const shapeFindings = MESSAGING_TABLES.filter(
+    (table) =>
+      shapes.find((row) => row.name === table)?.columns !== MESSAGING_COLUMNS[table],
+  );
+  if (shapes.length !== 9 || shapeFindings.length > 0)
+    fail(
+      `Messaging columns differ from the reviewed shape in ${shapeFindings.join(', ')}: ` +
+        `${JSON.stringify(shapes.filter((row) => shapeFindings.includes(row.name)))}.`,
+    );
+
+  const generic = await session.query<{ name: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] AS [name] FROM sys.columns c
+    WHERE c.[object_id] IN (${tables})
+      AND (c.[name] LIKE N'%Type' OR c.[name] LIKE N'%target%' OR c.[name] LIKE N'%entity%'
+           OR c.[name] LIKE N'%scope%' OR c.[name] LIKE N'%relationship%' OR c.[name] LIKE N'%email%'
+           OR c.[name] LIKE N'%phone%' OR c.[name] LIKE N'%name%' OR c.[name] LIKE N'%title%'
+           OR c.[name] LIKE N'%address%' OR c.[name] LIKE N'%guardian%' OR c.[name] LIKE N'%birth%'
+           OR c.[name] LIKE N'%adult%' OR c.[name] LIKE N'%retention%' OR c.[name] LIKE N'%strike%'
+           OR c.[name] LIKE N'%banned%' OR c.[name] LIKE N'%escalat%' OR c.[name] LIKE N'%vetting%'
+           OR c.[name] LIKE N'%presence%' OR c.[name] LIKE N'%typing%' OR c.[name] LIKE N'%socket%'
+           OR c.[name] LIKE N'%online%' OR c.[name] LIKE N'%storageKey%')
+      -- An attachment's own file facts, which Storage measured: the format it
+      -- was verified as and the file name the uploader gave. Neither names a
+      -- person or a target.
+      AND NOT (OBJECT_NAME(c.[object_id]) = N'MessageAttachment'
+               AND c.[name] IN (N'mediaType', N'displayName'));
+  `);
+  if (generic.length > 0)
+    fail(
+      `A Messaging table may carry no type, target, scope, relationship, contact, name, ` +
+        `title, age, guardian, retention, strike, ban, presence, typing or storage-key ` +
+        `column; found ${JSON.stringify(generic)}.`,
+    );
+
+  const unique = await session.query<{
+    name: string;
+    columns: string;
+    filter: string | null;
+  }>(`
+    SELECT i.[name], i.[filter_definition] AS [filter],
+      STRING_AGG(COL_NAME(ic.[object_id], ic.[column_id]), N',')
+        WITHIN GROUP (ORDER BY ic.[key_ordinal]) AS [columns]
+    FROM sys.indexes i
+    JOIN sys.index_columns ic ON ic.[object_id] = i.[object_id] AND ic.[index_id] = i.[index_id]
+    WHERE i.[is_unique] = 1 AND ic.[key_ordinal] > 0 AND i.[object_id] IN (${tables})
+    GROUP BY i.[object_id], i.[name], i.[filter_definition];
+  `);
+  const describedUnique = unique
+    .map(
+      (row) =>
+        `${row.name}(${row.columns})` +
+        (row.filter === null ? '' : ` WHERE ${row.filter}`),
+    )
+    .sort();
+  if (
+    describedUnique.join(' | ') !== MESSAGING_UNIQUE.join(' | ') ||
+    unique.filter((row) => row.filter !== null).length !== 7
+  )
+    fail(
+      `Messaging unique indexes must be exactly the reviewed twenty-two, the seven claims ` +
+        `filtered; found ${describedUnique.join(' | ')}.`,
+    );
+
+  // ---- 3. exact keys, all NO ACTION and trusted; nothing foreign holds the context -
+  const keys = await session.query<{
+    name: string;
+    columns: string;
+    target: string;
+    deletes: string;
+    updates: string;
+    trusted: number;
+  }>(`
+    SELECT fk.[name], OBJECT_NAME(fk.[referenced_object_id]) AS [target],
+      fk.[delete_referential_action_desc] AS [deletes], fk.[update_referential_action_desc] AS [updates],
+      CASE WHEN fk.[is_disabled] = 0 AND fk.[is_not_trusted] = 0 THEN 1 ELSE 0 END AS [trusted],
+      STRING_AGG(COL_NAME(c.[parent_object_id], c.[parent_column_id]) + N'>'
+        + COL_NAME(c.[referenced_object_id], c.[referenced_column_id]), N',')
+        WITHIN GROUP (ORDER BY c.[constraint_column_id]) AS [columns]
+    FROM sys.foreign_keys fk
+    JOIN sys.foreign_key_columns c ON c.[constraint_object_id] = fk.[object_id]
+    WHERE fk.[parent_object_id] IN (${tables})
+    GROUP BY fk.[name], fk.[referenced_object_id], fk.[delete_referential_action_desc],
+      fk.[update_referential_action_desc], fk.[is_disabled], fk.[is_not_trusted];
+  `);
+  const describedKeys = keys
+    .map((row) => `${row.name}(${row.columns})>${row.target}:${row.deletes}`)
+    .sort();
+  if (
+    describedKeys.join(',') !== MESSAGING_KEYS.join(',') ||
+    keys.some((row) => row.updates !== 'NO_ACTION' || Number(row.trusted) !== 1)
+  )
+    fail(
+      `Messaging keys must be exactly the reviewed twenty, none cascading and all ` +
+        `trusted; found ${describedKeys.join(', ')}.`,
+    );
+
+  const [isolation] = await session.query<{ inbound: number; foreign: string | null }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE [referenced_object_id] IN (${tables}) AND [parent_object_id] NOT IN (${tables})) AS [inbound],
+      (SELECT STRING_AGG(OBJECT_NAME(c.[object_id]) + N'.' + c.[name], N',') FROM sys.columns c
+        WHERE (c.[name] LIKE N'%conversation%' OR c.[name] LIKE N'%participant%' OR c.[name] LIKE N'%message%'
+               OR c.[name] LIKE N'%moderat%' OR c.[name] LIKE N'%attachment%' OR c.[name] LIKE N'%releaseToken%'
+               OR c.[name] LIKE N'%blocked%' OR c.[name] LIKE N'%blocker%')
+          AND OBJECT_NAME(c.[object_id]) NOT IN (${names})
+          -- An email provider's own message identifier names a delivery attempt,
+          -- never a Messaging Message.
+          AND NOT (OBJECT_NAME(c.[object_id]) = N'EmailDelivery' AND c.[name] = N'providerMessageId')
+          AND OBJECTPROPERTY(c.[object_id], 'IsUserTable') = 1) AS [foreign];
+  `);
+  if (Number(isolation?.inbound) !== 0 || (isolation?.foreign ?? null) !== null)
+    fail(
+      `No other owner may reference or hold Messaging schema; found ` +
+        `${JSON.stringify(isolation ?? null)}.`,
+    );
+
+  // ---- 4. eleven trusted CHECKs, eight triggers by number, no procedure -------------
+  const checks = await session.query<{ name: string; trusted: number }>(`
+    SELECT [name], CASE WHEN [is_disabled] = 0 AND [is_not_trusted] = 0 THEN 1 ELSE 0 END AS [trusted]
+    FROM sys.check_constraints WHERE [parent_object_id] IN (${tables});
+  `);
+  const expectedChecks = EXPECTED_CHECK_CONSTRAINTS.filter((entry) =>
+    MESSAGING_TABLES.includes(entry.table),
+  )
+    .map((entry) => entry.constraint)
+    .sort();
+  if (
+    expectedChecks.length !== 11 ||
+    checks
+      .map((row) => row.name)
+      .sort()
+      .join(',') !== expectedChecks.join(',') ||
+    checks.some((row) => Number(row.trusted) !== 1)
+  )
+    fail(
+      `Messaging must carry exactly its eleven trusted CHECKs; found ${JSON.stringify(checks)}.`,
+    );
+
+  const triggers = await session.query<{
+    name: string;
+    tableName: string;
+    disabled: number;
+    definition: string | null;
+  }>(`
+    SELECT t.[name], OBJECT_NAME(t.[parent_id]) AS [tableName], CAST(t.[is_disabled] AS INT) AS [disabled],
+      OBJECT_DEFINITION(t.[object_id]) AS [definition]
+    FROM sys.triggers t WHERE t.[parent_id] IN (${tables});
+  `);
+  const describedTriggers = triggers
+    .map((row) => `${row.name}@${row.tableName}:${raisedNumbers(row.definition)}`)
+    .sort()
+    .join(',');
+  const expectedTriggers = Object.entries(MESSAGING_TRIGGER_NUMBERS)
+    .map(([name, [table, numbers]]) => `${name}@${table}:${numbers}`)
+    .sort()
+    .join(',');
+  if (
+    describedTriggers !== expectedTriggers ||
+    triggers.length !== 8 ||
+    triggers.some((row) => Number(row.disabled) !== 0)
+  )
+    fail(
+      `Messaging triggers must be exactly eight, enabled, raising exactly their own ` +
+        `51300–51309 numbers; found ${describedTriggers}.`,
+    );
+
+  const [procedures] = await session.query<{ total: number }>(`
+    SELECT COUNT(*) AS [total] FROM sys.procedures
+    WHERE [name] LIKE N'Messag%' OR [name] LIKE N'Conversation%' OR [name] LIKE N'Support%'
+       OR [name] LIKE N'Moderat%';
+  `);
+  if (Number(procedures?.total) !== 0)
+    fail('Phase 24 writes through its owner adapter; it must create no procedure.');
+
+  // ---- 5. Storage gained the release digest and nothing else ------------------------
+  const asset = await assetShape(session);
+  if (
+    asset.columns !== ASSET_COLUMNS_WITH_MESSAGING ||
+    asset.digest !== 'nvarchar(64):1' ||
+    asset.unique !==
+      'Asset_pkey | Asset_releaseDigest_key WHERE ([releaseDigest] IS NOT NULL) | Asset_storageKey_key' ||
+    asset.checks !== 'Asset_clean_measured_ck,Asset_releaseDigest_ck,Asset_state_ck'
+  )
+    fail(
+      `Storage's Asset must gain exactly a nullable NVARCHAR(64) releaseDigest with its ` +
+        `filtered unique key and trusted CHECK; found ${JSON.stringify(asset)}.`,
+    );
+
+  // ---- 6. two gated keys, bundled into no role, held by nobody, no audit row --------
+  const permissions = await session.query<{
+    key: string;
+    description: string;
+    bundled: number;
+    held: number;
+    holders: number;
+  }>(`
+    SELECT p.[key], p.[description],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp JOIN [dbo].[Role] r ON r.[id] = rp.[roleId]
+        WHERE r.[key] = N'platform-administrator' AND rp.[permissionKey] = p.[key]) AS [bundled],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp WHERE rp.[permissionKey] = p.[key]) AS [held],
+      (SELECT COUNT(*) FROM [dbo].[RoleAssignment] ra JOIN [dbo].[RolePermission] rp ON rp.[roleId] = ra.[roleId]
+        WHERE rp.[permissionKey] = p.[key]) AS [holders]
+    FROM [dbo].[Permission] p
+    WHERE p.[key] LIKE N'messag%' OR p.[key] LIKE N'conversation%' OR p.[key] LIKE N'support%'
+       OR p.[key] LIKE N'moderat%' OR p.[key] LIKE N'chat%'
+    ORDER BY p.[key];
+  `);
+  const described = new Map(
+    PERMISSION_CATALOGUE.map((entry) => [entry.key as string, entry.description]),
+  );
+  const compiled = new Set<string>(PLATFORM_ADMINISTRATOR_PERMISSIONS);
+  const gated = new Set<string>(EXTERNALLY_GATED_PERMISSIONS);
+  if (
+    permissions.map((row) => row.key).join(',') !== MESSAGING_PERMISSIONS.join(',') ||
+    !MESSAGING_PERMISSIONS.every((key) => gated.has(key) && !compiled.has(key)) ||
+    permissions.some(
+      (row) =>
+        row.description !== described.get(row.key) ||
+        Number(row.bundled) !== 0 ||
+        Number(row.held) !== 0 ||
+        Number(row.holders) !== 0,
+    )
+  )
+    fail(
+      `The Messaging vocabulary must be exactly ${MESSAGING_PERMISSIONS.join(', ')}, described ` +
+        `as the compiled catalogue describes them, externally gated, bundled into no role and ` +
+        `held by nobody; found ${JSON.stringify(permissions)}.`,
+    );
+
+  const [audit] = await session.query<{ total: number }>(`
+    SELECT COUNT(*) AS [total] FROM [dbo].[AuditLog]
+    WHERE [action] LIKE N'messaging.%' OR [authorisingSource] = N'${MESSAGING_MIGRATION}';
+  `);
+  if (Number(audit?.total ?? -1) !== 0)
+    fail(
+      'Phase 24 changes no bundle, so it must write no provisioning record (the Phase-20 ' +
+        `precedent); found ${String(audit?.total)}.`,
+    );
+
+  const bundled = await assertProtectedBundleExcludesGated(session);
+  if (bundled !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length)
+    fail(
+      `The protected bundle holds ${String(bundled)} keys; the compiled bundle holds ` +
+        `${String(PLATFORM_ADMINISTRATOR_PERMISSIONS.length)}.`,
+    );
+
+  report(
+    'messaging schema',
+    'nine empty tables of the reviewed shape and NO activation, twenty-two unique keys ' +
+      'with seven filtered claims, twenty trusted NO ACTION keys, 11 CHECKs, eight triggers ' +
+      'raising 51300–51309, no procedure, Asset gained only its release digest, two gated ' +
+      `keys held by nobody and no provisioning record, ${String(bundled)} bundled`,
+  );
+}
+
+/**
+ * After the Phase-24 rollback: no Messaging table, trigger, key, CHECK or
+ * index, no Messaging permission or grant of one, no audit row — and Storage's
+ * Asset exactly as Phase 7 left it, its digest column, key and CHECK gone. The
+ * protected bundle is still the compiled bundle (the two gated keys were never
+ * in it). The caller then proves the owners Messaging referenced are intact.
+ */
+async function assertMessagingRemoved(session: SqlSession): Promise<void> {
+  const names = MESSAGING_TABLES.map((table) => `N'${table}'`).join(',');
+  const triggerNames = Object.keys(MESSAGING_TRIGGER_NUMBERS)
+    .map((name) => `N'${name}'`)
+    .join(',');
+  const keys = MESSAGING_PERMISSIONS.map((key) => `N'${key}'`).join(',');
+  const [row] = await session.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables WHERE [name] IN (${names})) AS [tables],
+      (SELECT COUNT(*) FROM sys.triggers WHERE [name] IN (${triggerNames})) AS [triggers],
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [keys],
+      (SELECT COUNT(*) FROM sys.check_constraints
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [checks],
+      (SELECT COUNT(*) FROM sys.indexes
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [indexes],
+      (SELECT COUNT(*) FROM [dbo].[Permission] WHERE [key] IN (${keys})) AS [permissions],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] WHERE [permissionKey] IN (${keys})) AS [granted],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog] WHERE [action] LIKE N'messaging.%') AS [audit];
+  `);
+  if (Object.values(row ?? { missing: 1 }).some((value) => Number(value) !== 0))
+    fail(
+      `The Phase-24 rollback left a Messaging object: ${JSON.stringify(row ?? null)}.`,
+    );
+  if (await messagingPresent(session))
+    fail('The Phase-24 rollback left the Messaging schema in place.');
+
+  const asset = await assetShape(session);
+  if (
+    asset.columns !== ASSET_COLUMNS_BEFORE_MESSAGING ||
+    asset.digest !== '' ||
+    asset.unique !== 'Asset_pkey | Asset_storageKey_key' ||
+    asset.checks !== 'Asset_clean_measured_ck,Asset_state_ck'
+  )
+    fail(
+      `The Phase-24 rollback must leave Storage's Asset exactly as Phase 7 made it; found ` +
+        `${JSON.stringify(asset)}.`,
+    );
+
+  const bundled = await assertProtectedBundleExcludesGated(session);
+  const expected = compiledBundleAt('before-messaging').length;
+  if (bundled !== expected || expected !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length)
+    fail(
+      `After the Phase-24 rollback the protected bundle holds ${String(bundled)} keys; the ` +
+        `compiled bundle — which never held a Messaging key — holds ${String(expected)}.`,
+    );
+  report(
+    'messaging rollback',
+    `every Messaging table, key, index, CHECK, trigger and permission removed, Asset as ` +
+      `Phase 7 made it; ${String(bundled)} keys still bundled`,
+  );
+}
+
+/**
+ * Phase 24 — THE RULES, proved as behaviour against the re-deployed schema
+ * with NON_MESSAGING_FIXTURE sentinels only, through the migration login (the
+ * runtime's own posture is `db:test:permissions`'s):
+ *
+ *   - FAIL CLOSED: before its kind's activation row exists, no conversation of
+ *     that kind can be created (51302); the fixture activations then written
+ *     are of the closed kinds, evidenced when approved (…_ck), one per kind
+ *     (the key) and immutable (51300). A message to a conversation whose kind
+ *     is not activated cannot be reached as behaviour — it needs a
+ *     conversation, which cannot exist before the activation that cannot be
+ *     removed — so that half of 51303 is proved by the trigger body's numbers
+ *     in `assertMessagingFoundation`;
+ *   - a conversation has its kind's shape (…_shape_ck), starts open, empty and
+ *     unmarked (51302), is one per kind, Course and pair and one OPEN support
+ *     conversation per person (the filtered keys); its identity never changes,
+ *     its order never goes backwards, a closed one never reopens, a disposal
+ *     mark is never cleared and it is removed only once marked (51302);
+ *     `resolved` is support's alone (…_ck);
+ *   - a participant fits its conversation's kind and people (51301), once per
+ *     account, one requester and one ACTIVE support claim (the keys); it is
+ *     never re-keyed, never rejoins — a support claim aside — and leaves only
+ *     through disposal (51301);
+ *   - a message is written one at a time, visible, by a CURRENT participant of
+ *     an OPEN conversation at the sequence just allocated (51303), once per
+ *     place and per operation (the keys), within its bounds (…_ck); it is
+ *     never rewritten nor returned to view once withheld (51304), and leaves
+ *     only through disposal (51305);
+ *   - an attachment starts pending, becomes ready with Storage's facts, is
+ *     attached once to one of its own uploader's messages in its own
+ *     conversation (the composite key), one per place and an asset once (the
+ *     filtered keys), and is otherwise only released (51306); Storage's
+ *     release digest is lower-case hex and names one asset (…_ck, the key);
+ *   - a read position moves forward only and never past the last message
+ *     (51307), once per participant (the key and the composite key);
+ *   - a block is of someone else, once (…_ck, the key);
+ *   - a report is filed open by a current participant within what the
+ *     conversation held (51308), on a message of THAT conversation (the
+ *     composite key), one OPEN report per reporter and target — two
+ *     conversation-level reports collide too, because their NULLs are equal —
+ *     and its target never changes nor does a resolved report reopen (51308);
+ *   - a decision is made once, on an open report, withholding only a reported
+ *     message, and is permanent (51309);
+ *   - every one of the twenty foreign keys refuses a reference to nothing, and
+ *     nothing cascades: a Course, an Asset, an account, a report, a
+ *     participant and a message are never deleted from under what names them.
+ *
+ * Every row the proofs write is then removed through the disposal path itself
+ * — close and mark, release the attachments, then children first — EXCEPT the
+ * three immutable activations and the one support conversation that carries
+ * the permanent moderation decisions (51309): like canonical history, those
+ * die only with this disposable database, and exactly they remain.
+ */
+async function assertMessagingRules(session: SqlSession): Promise<void> {
+  const run = randomUUID().replaceAll('-', '').slice(0, 16);
+  const at = '2026-10-08T00:00:00';
+  const later = '2026-10-08T01:00:00';
+  let refusals = 0;
+  const refuse = async (
+    label: string,
+    statement: string,
+    numbers: readonly number[],
+    rule: string,
+  ): Promise<void> => {
+    await expectRefusal(session, label, statement, numbers, rule);
+    refusals += 1;
+  };
+  const count = async (statement: string): Promise<number> => {
+    const [row] = await session.query<{ total: number }>(statement);
+    return Number(row?.total ?? -1);
+  };
+  const sha256 = (text: string): string =>
+    createHash('sha256').update(text).digest('hex');
+  const digest = (label: string): string =>
+    sha256(`NON_MESSAGING_FIXTURE ${label} ${run}`);
+  // Identifiers that sort before and after every real one, so a reference to
+  // nothing can be placed in the low or the high slot of a direct conversation
+  // deliberately.
+  const FIRST = '00000000-0000-4000-8000-000000000000';
+  const LAST = 'ffffffff-ffff-4fff-bfff-ffffffffffff';
+
+  // ---- the accounts and the Course the proofs name ---------------------------------
+  const teacher = randomUUID();
+  const learner = randomUUID();
+  const peerA = randomUUID();
+  const peerB = randomUUID();
+  const requester = randomUUID();
+  const staffOne = randomUUID();
+  const staffTwo = randomUUID();
+  const moderator = randomUUID();
+  const outsider = randomUUID();
+  const blockedOnly = randomUUID();
+  const users = [
+    [teacher, 'teacher'],
+    [learner, 'learner'],
+    [peerA, 'peer-a'],
+    [peerB, 'peer-b'],
+    [requester, 'requester'],
+    [staffOne, 'staff-one'],
+    [staffTwo, 'staff-two'],
+    [moderator, 'moderator'],
+    [outsider, 'outsider'],
+    [blockedOnly, 'blocked-only'],
+  ] as const;
+  for (const [user, label] of users)
+    await session.query(
+      `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled]) VALUES (N'${user}',N'NON_MESSAGING_FIXTURE ${label}',N'${label}-${run}@messaging-proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);`,
+    );
+  // A direct conversation names its two accounts in BINARY order.
+  const pair = (one: string, two: string): readonly [string, string] =>
+    one < two ? [one, two] : [two, one];
+  const course = randomUUID();
+  await expectAccepted(
+    session,
+    'A draft Course for the direct conversations to name',
+    `INSERT INTO [dbo].[Course] ([id],[slug],[primaryLocale],[state],[level],[format],[languageCode],[publishedAt],[version],[updatedAt]) VALUES (N'${course}',N'non-messaging-fixture-${run}',N'en',N'draft',NULL,N'live',N'en',NULL,1,'${at}');`,
+  );
+
+  // ---- conversations ------------------------------------------------------------------
+  const conversation = (
+    id: string,
+    kind: string,
+    courseId: string | null,
+    lowId: string | null,
+    highId: string | null,
+    person: string | null,
+  ): string => {
+    const value = (text: string | null): string =>
+      text === null ? 'NULL' : `N'${text}'`;
+    return `INSERT INTO [dbo].[Conversation] ([id],[kind],[courseId],[lowUserId],[highUserId],[requesterUserId]) VALUES (N'${id}',N'${kind}',${value(courseId)},${value(lowId)},${value(highId)},${value(person)});`;
+  };
+  const direct = (
+    id: string,
+    kind: 'teacher-student' | 'student-student',
+    one: string,
+    two: string,
+    courseId = course,
+  ): string => {
+    const [low, high] = pair(one, two);
+    return conversation(id, kind, courseId, low, high, null);
+  };
+  const support = (id: string, person: string): string =>
+    conversation(id, 'support', null, null, null, person);
+  const taught = randomUUID();
+  const peers = randomUUID();
+  const asked = randomUUID();
+  const emptySupport = randomUUID();
+  const askedAgain = randomUUID();
+
+  // ---- fail closed: no conversation of a kind before its activation (51302) --------
+  const OFF = 'is not activated';
+  if ((await count('SELECT COUNT(*) AS [total] FROM [dbo].[MessagingActivation];')) !== 0)
+    fail('The Messaging rules must start with no activation row.');
+  await refuse(
+    'A teacher-student conversation before activation',
+    direct(taught, 'teacher-student', teacher, learner),
+    [51302],
+    OFF,
+  );
+  await refuse(
+    'A support conversation before activation',
+    support(asked, requester),
+    [51302],
+    OFF,
+  );
+  const activation = (
+    capability: string,
+    authority: string,
+    reference: string | null,
+  ): string =>
+    `INSERT INTO [dbo].[MessagingActivation] ([capability],[authority],[authorisedBy],[reference]) VALUES (N'${capability}',N'${authority}',N'NON_MESSAGING_FIXTURE operator',${reference === null ? 'NULL' : `N'${reference}'`});`;
+  await refuse(
+    'An activation of a kind that does not exist',
+    activation('group', 'fixture', null),
+    [547],
+    'MessagingActivation_ck',
+  );
+  await refuse(
+    'An approved activation without evidence',
+    activation('support', 'approved', null),
+    [547],
+    'MessagingActivation_evidence_ck',
+  );
+  await expectAccepted(
+    session,
+    'The fixture activations of support and teacher-student messaging',
+    `${activation('support', 'fixture', null)}
+     ${activation('teacher-student', 'fixture', null)}`,
+  );
+  await refuse(
+    'A student-student conversation while only its kind is not activated',
+    direct(peers, 'student-student', peerA, peerB),
+    [51302],
+    OFF,
+  );
+  await expectAccepted(
+    session,
+    'The fixture activation of student-student messaging',
+    activation('student-student', 'fixture', null),
+  );
+  await refuse(
+    'A second activation of one kind',
+    activation('support', 'fixture', null),
+    [2627],
+    'MessagingActivation_pkey',
+  );
+  await refuse(
+    'An activation re-labelled',
+    "UPDATE [dbo].[MessagingActivation] SET [authority]=N'approved',[reference]=N'urn:example:forged' WHERE [capability]=N'support';",
+    [51300],
+    'immutable',
+  );
+  await refuse(
+    'An activation removed',
+    "DELETE FROM [dbo].[MessagingActivation] WHERE [capability]=N'teacher-student';",
+    [51300],
+    'immutable',
+  );
+
+  // ---- a conversation's shape, start, keys and identity (51302) ---------------------
+  const [low, high] = pair(teacher, learner);
+  await refuse(
+    'A support conversation naming a Course',
+    conversation(randomUUID(), 'support', course, null, null, requester),
+    [547],
+    'Conversation_shape_ck',
+  );
+  await refuse(
+    'A direct conversation naming its accounts out of order',
+    conversation(randomUUID(), 'teacher-student', course, high, low, null),
+    [547],
+    'Conversation_shape_ck',
+  );
+  await refuse(
+    'A direct conversation that also names a requester',
+    conversation(randomUUID(), 'teacher-student', course, low, high, requester),
+    [547],
+    'Conversation_shape_ck',
+  );
+  await refuse(
+    'A conversation closed without its instant',
+    `INSERT INTO [dbo].[Conversation] ([id],[kind],[requesterUserId],[state]) VALUES (N'${randomUUID()}',N'support',N'${outsider}',N'closed');`,
+    [547],
+    'Conversation_ck',
+  );
+  const START = 'starts open, empty and unmarked';
+  await refuse(
+    'A conversation created closed',
+    `INSERT INTO [dbo].[Conversation] ([id],[kind],[requesterUserId],[state],[closedReason],[closedAt]) VALUES (N'${randomUUID()}',N'support',N'${outsider}',N'closed',N'resolved','${at}');`,
+    [51302],
+    START,
+  );
+  await refuse(
+    'A conversation created with messages already counted',
+    `INSERT INTO [dbo].[Conversation] ([id],[kind],[requesterUserId],[lastSequence]) VALUES (N'${randomUUID()}',N'support',N'${outsider}',3);`,
+    [51302],
+    START,
+  );
+  await refuse(
+    'A direct conversation on a Course that does not exist',
+    direct(randomUUID(), 'teacher-student', teacher, learner, randomUUID()),
+    [547],
+    'Conversation_courseId_fkey',
+  );
+  await refuse(
+    'A direct conversation whose lower account does not exist',
+    conversation(randomUUID(), 'teacher-student', course, FIRST, teacher, null),
+    [547],
+    'Conversation_lowUserId_fkey',
+  );
+  await refuse(
+    'A direct conversation whose higher account does not exist',
+    conversation(randomUUID(), 'teacher-student', course, teacher, LAST, null),
+    [547],
+    'Conversation_highUserId_fkey',
+  );
+  await refuse(
+    'A support conversation for an account that does not exist',
+    support(randomUUID(), randomUUID()),
+    [547],
+    'Conversation_requesterUserId_fkey',
+  );
+  await expectAccepted(
+    session,
+    'A teacher-student, a student-student and two support conversations',
+    `${direct(taught, 'teacher-student', teacher, learner)}
+     ${direct(peers, 'student-student', peerA, peerB)}
+     ${support(asked, requester)}
+     ${support(emptySupport, outsider)}`,
+  );
+  await refuse(
+    'A second teacher-student conversation between the same two on the same Course',
+    direct(randomUUID(), 'teacher-student', learner, teacher),
+    [2601],
+    'Conversation_direct_key',
+  );
+  await refuse(
+    'A second open support conversation for one person',
+    support(randomUUID(), requester),
+    [2601],
+    'Conversation_support_key',
+  );
+  const IDENTITY = 'identity cannot change';
+  await refuse(
+    "A conversation's kind rewritten",
+    `UPDATE [dbo].[Conversation] SET [kind]=N'student-student' WHERE [id]=N'${taught}';`,
+    [51302],
+    IDENTITY,
+  );
+  await refuse(
+    "A conversation's creation instant rewritten",
+    `UPDATE [dbo].[Conversation] SET [createdAt]=DATEADD(minute,-1,[createdAt]) WHERE [id]=N'${taught}';`,
+    [51302],
+    IDENTITY,
+  );
+  await refuse(
+    'A direct conversation resolved as if it were support',
+    `UPDATE [dbo].[Conversation] SET [state]=N'closed',[closedReason]=N'resolved',[closedAt]='${at}' WHERE [id]=N'${peers}';`,
+    [547],
+    'Conversation_ck',
+  );
+  await refuse(
+    'A conversation removed without its disposal',
+    `DELETE FROM [dbo].[Conversation] WHERE [id]=N'${emptySupport}';`,
+    [51302],
+    'removed only through its disposal',
+  );
+
+  // ---- participants (51301) -------------------------------------------------------------
+  const member = (
+    id: string,
+    conversationId: string,
+    userId: string,
+    role: string,
+    leftAt: string | null = null,
+  ): string =>
+    `INSERT INTO [dbo].[ConversationParticipant] ([id],[conversationId],[userId],[role],[joinedAt],[leftAt]) VALUES (N'${id}',N'${conversationId}',N'${userId}',N'${role}','${at}',${leftAt === null ? 'NULL' : `'${leftAt}'`});`;
+  const FIT = 'does not fit its conversation';
+  await refuse(
+    'A peer in a teacher-student conversation',
+    member(randomUUID(), taught, learner, 'peer'),
+    [51301],
+    FIT,
+  );
+  await refuse(
+    'A learner the conversation does not name',
+    member(randomUUID(), taught, outsider, 'learner'),
+    [51301],
+    FIT,
+  );
+  await refuse(
+    'A teacher in a student-student conversation',
+    member(randomUUID(), peers, peerA, 'teacher'),
+    [51301],
+    FIT,
+  );
+  await refuse(
+    'A requester who is not the person asking',
+    member(randomUUID(), asked, outsider, 'requester'),
+    [51301],
+    FIT,
+  );
+  await refuse(
+    'The person asking as their own support staff',
+    member(randomUUID(), asked, requester, 'support'),
+    [51301],
+    FIT,
+  );
+  await refuse(
+    'A participant role outside the vocabulary',
+    member(randomUUID(), asked, staffOne, 'admin'),
+    [547],
+    'ConversationParticipant_ck',
+  );
+  await refuse(
+    'A participant who left before joining',
+    `INSERT INTO [dbo].[ConversationParticipant] ([id],[conversationId],[userId],[role],[joinedAt],[leftAt]) VALUES (N'${randomUUID()}',N'${asked}',N'${staffOne}',N'support','${later}','${at}');`,
+    [547],
+    'ConversationParticipant_ck',
+  );
+  await refuse(
+    'A participant account that does not exist',
+    member(randomUUID(), asked, randomUUID(), 'support'),
+    [547],
+    'ConversationParticipant_userId_fkey',
+  );
+  await refuse(
+    'A participant of a conversation that does not exist',
+    member(randomUUID(), randomUUID(), staffOne, 'support'),
+    [547],
+    'ConversationParticipant_conversationId_fkey',
+  );
+  const pTeacher = randomUUID();
+  const pLearner = randomUUID();
+  const pPeerA = randomUUID();
+  const pPeerB = randomUUID();
+  const pRequester = randomUUID();
+  const pStaffOne = randomUUID();
+  const pStaffTwo = randomUUID();
+  const pEmpty = randomUUID();
+  await expectAccepted(
+    session,
+    'The teacher and learner, the two peers, the requesters, one active claim and one released claim',
+    `${member(pTeacher, taught, teacher, 'teacher')}
+     ${member(pLearner, taught, learner, 'learner')}
+     ${member(pPeerA, peers, peerA, 'peer')}
+     ${member(pPeerB, peers, peerB, 'peer')}
+     ${member(pRequester, asked, requester, 'requester')}
+     ${member(pStaffOne, asked, staffOne, 'support')}
+     ${member(pStaffTwo, asked, staffTwo, 'support', at)}
+     ${member(pEmpty, emptySupport, outsider, 'requester')}`,
+  );
+  await refuse(
+    'One account a participant twice',
+    member(randomUUID(), peers, peerA, 'peer'),
+    [2627],
+    'ConversationParticipant_member_key',
+  );
+  await refuse(
+    'A second requester',
+    member(randomUUID(), asked, outsider, 'requester'),
+    [2601],
+    'ConversationParticipant_role_key',
+  );
+  await refuse(
+    'A second active support claim',
+    `UPDATE [dbo].[ConversationParticipant] SET [leftAt]=NULL WHERE [id]=N'${pStaffTwo}';`,
+    [2601],
+    'ConversationParticipant_claim_key',
+  );
+  const REKEY = 'cannot be re-keyed';
+  await refuse(
+    "A participant's role rewritten",
+    `UPDATE [dbo].[ConversationParticipant] SET [role]=N'teacher' WHERE [id]=N'${pPeerA}';`,
+    [51301],
+    REKEY,
+  );
+  await refuse(
+    'A participant moved to another conversation',
+    `UPDATE [dbo].[ConversationParticipant] SET [conversationId]=N'${emptySupport}' WHERE [id]=N'${pStaffOne}';`,
+    [51301],
+    REKEY,
+  );
+  await expectAccepted(
+    session,
+    'A peer leaves, and the support claim passes from one member of staff to the other',
+    `UPDATE [dbo].[ConversationParticipant] SET [leftAt]='${later}' WHERE [id]=N'${pPeerB}';
+     UPDATE [dbo].[ConversationParticipant] SET [leftAt]='${later}' WHERE [id]=N'${pStaffOne}';
+     UPDATE [dbo].[ConversationParticipant] SET [leftAt]=NULL WHERE [id]=N'${pStaffTwo}';`,
+  );
+  await refuse(
+    'A peer who left rejoins',
+    `UPDATE [dbo].[ConversationParticipant] SET [leftAt]=NULL WHERE [id]=N'${pPeerB}';`,
+    [51301],
+    'only a support claim may return',
+  );
+  await refuse(
+    'A participant removed without disposal',
+    `DELETE FROM [dbo].[ConversationParticipant] WHERE [id]=N'${pPeerB}';`,
+    [51301],
+    'removed only through its conversation',
+  );
+
+  // ---- messages (51303, 51304, 51305) ------------------------------------------------
+  // The allocator bumps the conversation's own `lastSequence` first and the
+  // message takes exactly that place.
+  const message = (
+    id: string,
+    conversationId: string,
+    sequence: number,
+    sender: string,
+    label: string,
+    body = `N'NON_MESSAGING_FIXTURE ${label}'`,
+    payloadDigest = digest(label),
+  ): string =>
+    `INSERT INTO [dbo].[Message] ([id],[conversationId],[sequence],[senderUserId],[operationId],[body],[payloadDigest]) VALUES (N'${id}',N'${conversationId}',${String(sequence)},N'${sender}',N'${randomUUID()}',${body},N'${payloadDigest}');`;
+  const send = (
+    id: string,
+    conversationId: string,
+    sender: string,
+    label: string,
+    operation = randomUUID(),
+  ): string =>
+    `UPDATE [dbo].[Conversation] SET [lastSequence]=[lastSequence]+1,[activityAt]=SYSUTCDATETIME(),[version]=[version]+1 WHERE [id]=N'${conversationId}';
+     INSERT INTO [dbo].[Message] ([id],[conversationId],[sequence],[senderUserId],[operationId],[body],[payloadDigest])
+       SELECT N'${id}',N'${conversationId}',c.[lastSequence],N'${sender}',N'${operation}',N'NON_MESSAGING_FIXTURE ${label}',N'${digest(label)}'
+       FROM [dbo].[Conversation] c WHERE c.[id]=N'${conversationId}';`;
+  const NEEDS = 'needs an open, activated conversation';
+  const opTeacher = randomUUID();
+  const mTeacher = randomUUID();
+  const mLearner = randomUUID();
+  const mPlain = randomUUID();
+  const mRequester = randomUUID();
+  const mStaff = randomUUID();
+  const mPeer = randomUUID();
+  await expectAccepted(
+    session,
+    'Messages in order in the teacher-student, support and student-student conversations',
+    `${send(mTeacher, taught, teacher, 'teacher message', opTeacher)}
+     ${send(mLearner, taught, learner, 'learner message')}
+     ${send(mPlain, taught, teacher, 'plain message')}
+     ${send(mRequester, asked, requester, 'requester message')}
+     ${send(mStaff, asked, staffTwo, 'staff message')}
+     ${send(mPeer, peers, peerA, 'peer message')}`,
+  );
+  const [order] = await session.query<{ sequences: string | null; last: number }>(`
+    SELECT (SELECT STRING_AGG(CAST([sequence] AS NVARCHAR(8)), N',') WITHIN GROUP (ORDER BY [sequence])
+              FROM [dbo].[Message] WHERE [conversationId]=N'${taught}') AS [sequences],
+           (SELECT [lastSequence] FROM [dbo].[Conversation] WHERE [id]=N'${taught}') AS [last];
+  `);
+  if (order?.sequences !== '1,2,3' || Number(order.last) !== 3)
+    fail(
+      `Messages must take the allocated places 1, 2, 3; found ${JSON.stringify(order)}.`,
+    );
+  await refuse(
+    'A message at a place that was not allocated',
+    message(randomUUID(), taught, 7, teacher, 'gap'),
+    [51303],
+    NEEDS,
+  );
+  await refuse(
+    'A message at a place already taken',
+    message(randomUUID(), taught, 3, learner, 'taken'),
+    [2627],
+    'Message_order_key',
+  );
+  await refuse(
+    'A second message of one operation',
+    send(randomUUID(), taught, teacher, 'replayed', opTeacher),
+    [2627],
+    'Message_operation_key',
+  );
+  await refuse(
+    'Two messages written at once',
+    `UPDATE [dbo].[Conversation] SET [lastSequence]=[lastSequence]+1 WHERE [id]=N'${taught}';
+     INSERT INTO [dbo].[Message] ([id],[conversationId],[sequence],[senderUserId],[operationId],[body],[payloadDigest])
+       SELECT v.[id],N'${taught}',c.[lastSequence] + v.[offset],N'${teacher}',v.[op],N'NON_MESSAGING_FIXTURE pair',N'${digest('pair')}'
+       FROM [dbo].[Conversation] c
+       CROSS JOIN (VALUES (N'${randomUUID()}',0,N'${randomUUID()}'),(N'${randomUUID()}',1,N'${randomUUID()}')) AS v([id],[offset],[op])
+       WHERE c.[id]=N'${taught}';`,
+    [51303],
+    'one at a time',
+  );
+  await refuse(
+    'A message from someone who is not a participant',
+    send(randomUUID(), taught, outsider, 'outsider'),
+    [51303],
+    NEEDS,
+  );
+  await refuse(
+    'A message from a peer who has left',
+    send(randomUUID(), peers, peerB, 'departed'),
+    [51303],
+    NEEDS,
+  );
+  await refuse(
+    'A message from staff whose claim was released',
+    send(randomUUID(), asked, staffOne, 'released claim'),
+    [51303],
+    NEEDS,
+  );
+  await refuse(
+    'A message written already withheld',
+    `UPDATE [dbo].[Conversation] SET [lastSequence]=[lastSequence]+1 WHERE [id]=N'${taught}';
+     INSERT INTO [dbo].[Message] ([id],[conversationId],[sequence],[senderUserId],[operationId],[body],[payloadDigest],[moderation],[withheldAt])
+       SELECT N'${randomUUID()}',N'${taught}',c.[lastSequence],N'${teacher}',N'${randomUUID()}',N'NON_MESSAGING_FIXTURE hidden',N'${digest('hidden')}',N'withheld','${at}'
+       FROM [dbo].[Conversation] c WHERE c.[id]=N'${taught}';`,
+    [51303],
+    NEEDS,
+  );
+  await refuse(
+    'A message at place zero',
+    message(randomUUID(), taught, 0, teacher, 'zero'),
+    [547],
+    'Message_ck',
+  );
+  await refuse(
+    'A message body beyond its bound',
+    message(
+      randomUUID(),
+      taught,
+      99,
+      teacher,
+      'long',
+      "REPLICATE(CAST(N'a' AS NVARCHAR(MAX)),8001)",
+    ),
+    [547],
+    'Message_ck',
+  );
+  await refuse(
+    'A message digest that is not lower-case SHA-256 hex',
+    message(
+      randomUUID(),
+      taught,
+      99,
+      teacher,
+      'upper',
+      undefined,
+      digest('upper').toUpperCase(),
+    ),
+    [547],
+    'Message_ck',
+  );
+  await refuse(
+    'A message withheld without its instant',
+    `UPDATE [dbo].[Message] SET [moderation]=N'withheld' WHERE [id]=N'${mPlain}';`,
+    [547],
+    'Message_ck',
+  );
+  await refuse(
+    'A message to a conversation that does not exist',
+    message(randomUUID(), randomUUID(), 1, teacher, 'nowhere'),
+    [547],
+    'Message_conversationId_fkey',
+  );
+  await refuse(
+    'A message from an account that does not exist',
+    message(randomUUID(), taught, 99, randomUUID(), 'nobody'),
+    [547],
+    'Message_senderUserId_fkey',
+  );
+  const SENT = 'never changes once sent';
+  await refuse(
+    "A message's body rewritten",
+    `UPDATE [dbo].[Message] SET [body]=N'NON_MESSAGING_FIXTURE rewritten' WHERE [id]=N'${mPlain}';`,
+    [51304],
+    SENT,
+  );
+  await refuse(
+    "A message's sender rewritten",
+    `UPDATE [dbo].[Message] SET [senderUserId]=N'${learner}' WHERE [id]=N'${mPlain}';`,
+    [51304],
+    SENT,
+  );
+  await refuse(
+    "A message's sending instant rewritten",
+    `UPDATE [dbo].[Message] SET [sentAt]=DATEADD(minute,-1,[sentAt]) WHERE [id]=N'${mPlain}';`,
+    [51304],
+    SENT,
+  );
+  await expectAccepted(
+    session,
+    'A message withheld',
+    `UPDATE [dbo].[Message] SET [moderation]=N'withheld',[withheldAt]='${at}' WHERE [id]=N'${mPlain}';`,
+  );
+  await refuse(
+    'A withheld message returned to view',
+    `UPDATE [dbo].[Message] SET [moderation]=N'visible',[withheldAt]=NULL WHERE [id]=N'${mPlain}';`,
+    [51304],
+    SENT,
+  );
+  await refuse(
+    'A message removed without disposal',
+    `DELETE FROM [dbo].[Message] WHERE [id]=N'${mPeer}';`,
+    [51305],
+    'removed only through its conversation',
+  );
+  await refuse(
+    "A conversation's order moved backwards",
+    `UPDATE [dbo].[Conversation] SET [lastSequence]=1 WHERE [id]=N'${taught}';`,
+    [51302],
+    IDENTITY,
+  );
+
+  // ---- attachments and Storage's release digest (51306) ------------------------------
+  // The consumer generates the token and keeps it; Storage keeps only its digest.
+  const tokenPng = digest('token-png');
+  const tokenPdf = digest('token-pdf');
+  const assetPng = randomUUID();
+  const assetPdf = randomUUID();
+  const assetJpeg = randomUUID();
+  const assetLoose = randomUUID();
+  const assets = [assetPng, assetPdf, assetJpeg, assetLoose];
+  const asset = (id: string, label: string, releaseDigest: string | null): string =>
+    `INSERT INTO [dbo].[Asset] ([id],[storageKey],[state],[updatedAt],[releaseDigest]) VALUES (N'${id}',N'proof/messaging/${run}/${label}',N'uploading',SYSUTCDATETIME(),${releaseDigest === null ? 'NULL' : `N'${releaseDigest}'`});`;
+  await refuse(
+    'A release digest that is not lower-case SHA-256 hex',
+    asset(randomUUID(), 'upper', sha256(tokenPng).toUpperCase()),
+    [547],
+    'Asset_releaseDigest_ck',
+  );
+  await expectAccepted(
+    session,
+    'Four assets: two releasable by their tokens, two stored without a token',
+    `${asset(assetPng, 'png', sha256(tokenPng))}
+     ${asset(assetPdf, 'pdf', sha256(tokenPdf))}
+     ${asset(assetJpeg, 'jpeg', null)}
+     ${asset(assetLoose, 'loose', null)}`,
+  );
+  await refuse(
+    'One release digest on two assets',
+    asset(randomUUID(), 'again', sha256(tokenPng)),
+    [2601],
+    'Asset_releaseDigest_key',
+  );
+  const pending = (
+    id: string,
+    conversationId: string,
+    uploader: string,
+    token: string,
+  ): string =>
+    `INSERT INTO [dbo].[MessageAttachment] ([id],[conversationId],[uploaderUserId],[releaseToken],[state]) VALUES (N'${id}',N'${conversationId}',N'${uploader}',N'${token}',N'pending');`;
+  const ready = (id: string, assetId: string, mediaType: string): string =>
+    `UPDATE [dbo].[MessageAttachment] SET [state]=N'ready',[assetId]=N'${assetId}',[mediaType]=N'${mediaType}',[byteSize]=2048,[displayName]=N'NON_MESSAGING_FIXTURE file' WHERE [id]=N'${id}';`;
+  const attach = (id: string, messageId: string, position: number): string =>
+    `UPDATE [dbo].[MessageAttachment] SET [state]=N'attached',[messageId]=N'${messageId}',[position]=${String(position)},[attachedAt]='${at}' WHERE [id]=N'${id}';`;
+  await refuse(
+    'An attachment created ready',
+    `INSERT INTO [dbo].[MessageAttachment] ([id],[conversationId],[uploaderUserId],[releaseToken],[state],[assetId],[mediaType],[byteSize]) VALUES (N'${randomUUID()}',N'${taught}',N'${teacher}',N'${digest('created-ready')}',N'ready',N'${assetLoose}',N'image/png',10);`,
+    [51306],
+    'starts pending',
+  );
+  await refuse(
+    'A pending attachment that already names an asset',
+    `INSERT INTO [dbo].[MessageAttachment] ([id],[conversationId],[uploaderUserId],[releaseToken],[state],[assetId]) VALUES (N'${randomUUID()}',N'${taught}',N'${teacher}',N'${digest('pending-asset')}',N'pending',N'${assetLoose}');`,
+    [547],
+    'MessageAttachment_ck',
+  );
+  await refuse(
+    'An attachment token that is not lower-case hex',
+    pending(randomUUID(), taught, teacher, digest('bad-token').toUpperCase()),
+    [547],
+    'MessageAttachment_ck',
+  );
+  await refuse(
+    'An upload to a conversation that does not exist',
+    pending(randomUUID(), randomUUID(), teacher, digest('no-conversation')),
+    [547],
+    'MessageAttachment_conversationId_fkey',
+  );
+  await refuse(
+    'An upload by an account that does not exist',
+    pending(randomUUID(), taught, randomUUID(), digest('no-uploader')),
+    [547],
+    'MessageAttachment_uploaderUserId_fkey',
+  );
+  const attPng = randomUUID();
+  const attPdf = randomUUID();
+  const attOther = randomUUID();
+  const attLoose = randomUUID();
+  await expectAccepted(
+    session,
+    "Four pending uploads: three of the teacher's and one of the learner's",
+    `${pending(attPng, taught, teacher, tokenPng)}
+     ${pending(attPdf, taught, teacher, tokenPdf)}
+     ${pending(attOther, taught, teacher, digest('token-other'))}
+     ${pending(attLoose, taught, learner, digest('token-loose'))}`,
+  );
+  await refuse(
+    'One release token on two attachments',
+    pending(randomUUID(), taught, learner, tokenPng),
+    [2627],
+    'MessageAttachment_releaseToken_key',
+  );
+  await refuse(
+    'An attachment in a format outside the three',
+    `UPDATE [dbo].[MessageAttachment] SET [state]=N'ready',[assetId]=N'${assetPng}',[mediaType]=N'image/gif',[byteSize]=2048 WHERE [id]=N'${attPng}';`,
+    [547],
+    'MessageAttachment_ck',
+  );
+  await refuse(
+    'An attachment beyond five mebibytes',
+    `UPDATE [dbo].[MessageAttachment] SET [state]=N'ready',[assetId]=N'${assetPng}',[mediaType]=N'image/png',[byteSize]=5242881 WHERE [id]=N'${attPng}';`,
+    [547],
+    'MessageAttachment_ck',
+  );
+  await refuse(
+    'An attachment naming an asset that does not exist',
+    ready(attPng, randomUUID(), 'image/png'),
+    [547],
+    'MessageAttachment_assetId_fkey',
+  );
+  await expectAccepted(
+    session,
+    'Three uploads made ready with their verified assets',
+    `${ready(attPng, assetPng, 'image/png')}
+     ${ready(attPdf, assetPdf, 'application/pdf')}
+     ${ready(attLoose, assetLoose, 'image/jpeg')}`,
+  );
+  await refuse(
+    'One asset made ready for two attachments',
+    ready(attOther, assetPng, 'image/png'),
+    [2601],
+    'MessageAttachment_assetId_key',
+  );
+  const LIFECYCLE = 'does not fit its lifecycle';
+  await refuse(
+    'A ready attachment re-pointed at another asset',
+    `UPDATE [dbo].[MessageAttachment] SET [assetId]=N'${assetJpeg}' WHERE [id]=N'${attPdf}';`,
+    [51306],
+    LIFECYCLE,
+  );
+  await refuse(
+    'A ready attachment returned to pending',
+    `UPDATE [dbo].[MessageAttachment] SET [state]=N'pending',[assetId]=NULL,[mediaType]=NULL,[byteSize]=NULL WHERE [id]=N'${attPdf}';`,
+    [51306],
+    LIFECYCLE,
+  );
+  await refuse(
+    "An attachment's uploader rewritten",
+    `UPDATE [dbo].[MessageAttachment] SET [uploaderUserId]=N'${learner}' WHERE [id]=N'${attOther}';`,
+    [51306],
+    LIFECYCLE,
+  );
+  await refuse(
+    "An upload attached to someone else's message",
+    attach(attLoose, mTeacher, 0),
+    [51306],
+    'belongs to a message of the person who uploaded it',
+  );
+  await refuse(
+    'An upload attached to a message of another conversation',
+    attach(attPng, mRequester, 0),
+    [547],
+    'MessageAttachment_message_fkey',
+  );
+  await refuse(
+    'An attachment at a fifth place',
+    attach(attPng, mTeacher, 4),
+    [547],
+    'MessageAttachment_ck',
+  );
+  await expectAccepted(
+    session,
+    "Two uploads attached to the teacher's message at places 0 and 1, a third made ready",
+    `${attach(attPng, mTeacher, 0)}
+     ${attach(attPdf, mTeacher, 1)}
+     ${ready(attOther, assetJpeg, 'image/jpeg')}`,
+  );
+  await refuse(
+    'Two attachments at one place of a message',
+    attach(attOther, mTeacher, 0),
+    [2601],
+    'MessageAttachment_position_key',
+  );
+  await refuse(
+    'An attached upload re-pointed at another message',
+    `UPDATE [dbo].[MessageAttachment] SET [messageId]=N'${mPlain}' WHERE [id]=N'${attPng}';`,
+    [51306],
+    LIFECYCLE,
+  );
+  await refuse(
+    'A sent attachment released outside disposal',
+    `UPDATE [dbo].[MessageAttachment] SET [state]=N'releasing',[assetId]=NULL,[messageId]=NULL,[position]=NULL WHERE [id]=N'${attPdf}';`,
+    [51306],
+    'released only through',
+  );
+  await refuse(
+    'An attachment removed before it is released',
+    `DELETE FROM [dbo].[MessageAttachment] WHERE [id]=N'${attOther}';`,
+    [51306],
+    'removed only once released',
+  );
+  await expectAccepted(
+    session,
+    'An unsent upload released and removed',
+    `UPDATE [dbo].[MessageAttachment] SET [state]=N'releasing',[assetId]=NULL WHERE [id]=N'${attOther}';
+     DELETE FROM [dbo].[MessageAttachment] WHERE [id]=N'${attOther}';`,
+  );
+
+  // ---- read positions (51307) ----------------------------------------------------------
+  const readAt = (conversationId: string, userId: string, sequence: number): string =>
+    `INSERT INTO [dbo].[MessageReadState] ([conversationId],[userId],[lastReadSequence]) VALUES (N'${conversationId}',N'${userId}',${String(sequence)});`;
+  await refuse(
+    'A read position for someone who is not a participant',
+    readAt(taught, outsider, 0),
+    [547],
+    'MessageReadState_participant_fkey',
+  );
+  await refuse(
+    'A read position below zero',
+    readAt(taught, learner, -1),
+    [547],
+    'MessageReadState_ck',
+  );
+  await refuse(
+    'A read position past the last message',
+    readAt(taught, learner, 99),
+    [51307],
+    'cannot pass the last message',
+  );
+  await expectAccepted(
+    session,
+    'Read positions recorded, then moved forward',
+    `${readAt(taught, learner, 1)}
+     ${readAt(taught, teacher, 0)}
+     UPDATE [dbo].[MessageReadState] SET [lastReadSequence]=3,[updatedAt]=SYSUTCDATETIME() WHERE [conversationId]=N'${taught}' AND [userId]=N'${learner}';`,
+  );
+  await refuse(
+    'A second read position for one participant',
+    readAt(taught, learner, 3),
+    [2627],
+    'MessageReadState_pkey',
+  );
+  await refuse(
+    'A read position moved backwards',
+    `UPDATE [dbo].[MessageReadState] SET [lastReadSequence]=2 WHERE [conversationId]=N'${taught}' AND [userId]=N'${learner}';`,
+    [51307],
+    'never moves backwards',
+  );
+
+  // ---- blocks ---------------------------------------------------------------------------
+  const block = (blocker: string, blocked: string): string =>
+    `INSERT INTO [dbo].[MessagingBlock] ([blockerUserId],[blockedUserId]) VALUES (N'${blocker}',N'${blocked}');`;
+  await refuse('A block of oneself', block(teacher, teacher), [547], 'MessagingBlock_ck');
+  await refuse(
+    'A block of an account that does not exist',
+    block(teacher, randomUUID()),
+    [547],
+    'MessagingBlock_blockedUserId_fkey',
+  );
+  await refuse(
+    'A block by an account that does not exist',
+    block(randomUUID(), teacher),
+    [547],
+    'MessagingBlock_blockerUserId_fkey',
+  );
+  await expectAccepted(
+    session,
+    'Two blocks, one of an account Messaging names nowhere else',
+    `${block(learner, teacher)}
+     ${block(peerA, blockedOnly)}`,
+  );
+  await refuse(
+    'A block made twice',
+    block(learner, teacher),
+    [2627],
+    'MessagingBlock_pkey',
+  );
+
+  // ---- reports (51308) and decisions (51309) --------------------------------------------
+  const filed = (
+    id: string,
+    conversationId: string,
+    messageId: string | null,
+    reporter: string,
+    atSequence: number,
+    reason = 'harassment',
+  ): string =>
+    `INSERT INTO [dbo].[MessagingReport] ([id],[conversationId],[messageId],[reporterUserId],[reason],[atSequence]) VALUES (N'${id}',N'${conversationId}',${messageId === null ? 'NULL' : `N'${messageId}'`},N'${reporter}',N'${reason}',${String(atSequence)});`;
+  const FILED = 'filed open, by a current participant';
+  await refuse(
+    'A report by someone who is not a participant',
+    filed(randomUUID(), asked, mStaff, outsider, 0),
+    [51308],
+    FILED,
+  );
+  await refuse(
+    'A report by staff whose claim was released',
+    filed(randomUUID(), asked, mStaff, staffOne, 0),
+    [51308],
+    FILED,
+  );
+  await refuse(
+    'A report beyond what the conversation held',
+    filed(randomUUID(), asked, mStaff, requester, 99),
+    [51308],
+    FILED,
+  );
+  await refuse(
+    'A report filed already resolved',
+    `INSERT INTO [dbo].[MessagingReport] ([id],[conversationId],[messageId],[reporterUserId],[reason],[atSequence],[state],[resolvedAt]) VALUES (N'${randomUUID()}',N'${asked}',N'${mStaff}',N'${requester}',N'spam',0,N'resolved','${at}');`,
+    [51308],
+    FILED,
+  );
+  await refuse(
+    'A report for a reason outside the vocabulary',
+    filed(randomUUID(), asked, mStaff, requester, 0, 'rude'),
+    [547],
+    'MessagingReport_ck',
+  );
+  await refuse(
+    'A report of a message in another conversation',
+    filed(randomUUID(), asked, mTeacher, requester, 0),
+    [547],
+    'MessagingReport_message_fkey',
+  );
+  await refuse(
+    'A report of a conversation that does not exist',
+    filed(randomUUID(), randomUUID(), null, requester, 0),
+    [547],
+    'MessagingReport_conversationId_fkey',
+  );
+  await refuse(
+    'A report by an account that does not exist',
+    filed(randomUUID(), asked, null, randomUUID(), 0),
+    [547],
+    'MessagingReport_reporterUserId_fkey',
+  );
+  const rWithhold = randomUUID();
+  const rConversation = randomUUID();
+  const rDismiss = randomUUID();
+  const rResolved = randomUUID();
+  await expectAccepted(
+    session,
+    'Four reports in the support conversation: of both messages, of the conversation, and a second of one message by staff',
+    `${filed(rWithhold, asked, mStaff, requester, 2)}
+     ${filed(rConversation, asked, null, requester, 2)}
+     ${filed(rDismiss, asked, mRequester, staffTwo, 2, 'spam')}
+     ${filed(rResolved, asked, mRequester, requester, 2, 'other')}`,
+  );
+  await refuse(
+    'A second open report of one message by one person',
+    filed(randomUUID(), asked, mStaff, requester, 2),
+    [2601],
+    'MessagingReport_open_key',
+  );
+  await refuse(
+    'A second open report of one conversation by one person',
+    filed(randomUUID(), asked, null, requester, 2),
+    [2601],
+    'MessagingReport_open_key',
+  );
+  const TARGET = 'target cannot change';
+  await refuse(
+    "A report's reason rewritten",
+    `UPDATE [dbo].[MessagingReport] SET [reason]=N'safety' WHERE [id]=N'${rWithhold}';`,
+    [51308],
+    TARGET,
+  );
+  await refuse(
+    "A report's target rewritten",
+    `UPDATE [dbo].[MessagingReport] SET [messageId]=N'${mStaff}' WHERE [id]=N'${rDismiss}';`,
+    [51308],
+    TARGET,
+  );
+  await refuse(
+    'A report resolved without its instant',
+    `UPDATE [dbo].[MessagingReport] SET [state]=N'resolved' WHERE [id]=N'${rResolved}';`,
+    [547],
+    'MessagingReport_ck',
+  );
+  await expectAccepted(
+    session,
+    'A report resolved',
+    `UPDATE [dbo].[MessagingReport] SET [state]=N'resolved',[resolvedAt]='${at}',[version]=2 WHERE [id]=N'${rResolved}';`,
+  );
+  await refuse(
+    'A resolved report reopened',
+    `UPDATE [dbo].[MessagingReport] SET [state]=N'open',[resolvedAt]=NULL WHERE [id]=N'${rResolved}';`,
+    [51308],
+    TARGET,
+  );
+  const decide = (id: string, reportId: string, action: string, by = moderator): string =>
+    `INSERT INTO [dbo].[MessagingModerationDecision] ([id],[reportId],[moderatorUserId],[action]) VALUES (N'${id}',N'${reportId}',N'${by}',N'${action}');`;
+  const DECISION = 'needs an open report';
+  await refuse(
+    'A decision outside the three actions',
+    decide(randomUUID(), rWithhold, 'ban'),
+    [547],
+    'MessagingModerationDecision_ck',
+  );
+  await refuse(
+    'A decision on a report that does not exist',
+    decide(randomUUID(), randomUUID(), 'dismiss'),
+    [547],
+    'MessagingModerationDecision_reportId_fkey',
+  );
+  await refuse(
+    'A decision by an account that does not exist',
+    decide(randomUUID(), rWithhold, 'dismiss', randomUUID()),
+    [547],
+    'MessagingModerationDecision_moderatorUserId_fkey',
+  );
+  await refuse(
+    'Withholding on a report that names no message',
+    decide(randomUUID(), rConversation, 'withhold-message'),
+    [51309],
+    DECISION,
+  );
+  await refuse(
+    'A decision on a resolved report',
+    decide(randomUUID(), rResolved, 'dismiss'),
+    [51309],
+    DECISION,
+  );
+  const dWithhold = randomUUID();
+  const dClose = randomUUID();
+  const dDismiss = randomUUID();
+  await expectAccepted(
+    session,
+    'Three decisions — withhold, close and dismiss — each carried out and its report resolved',
+    `${decide(dWithhold, rWithhold, 'withhold-message')}
+     UPDATE [dbo].[Message] SET [moderation]=N'withheld',[withheldAt]='${at}' WHERE [id]=N'${mStaff}';
+     ${decide(dClose, rConversation, 'close-conversation')}
+     UPDATE [dbo].[Conversation] SET [state]=N'closed',[closedReason]=N'moderation',[closedAt]='${at}',[version]=[version]+1 WHERE [id]=N'${asked}';
+     ${decide(dDismiss, rDismiss, 'dismiss')}
+     UPDATE [dbo].[MessagingReport] SET [state]=N'resolved',[resolvedAt]='${at}',[version]=2 WHERE [id] IN (N'${rWithhold}',N'${rConversation}',N'${rDismiss}');`,
+  );
+  await refuse(
+    'A second decision on one report',
+    decide(randomUUID(), rWithhold, 'dismiss'),
+    [2627],
+    'MessagingModerationDecision_reportId_key',
+  );
+  await refuse(
+    'A decision rewritten',
+    `UPDATE [dbo].[MessagingModerationDecision] SET [action]=N'dismiss' WHERE [id]=N'${dWithhold}';`,
+    [51309],
+    'permanent',
+  );
+  await refuse(
+    'A decision removed',
+    `DELETE FROM [dbo].[MessagingModerationDecision] WHERE [id]=N'${dDismiss}';`,
+    [51309],
+    'permanent',
+  );
+  const rAgain = randomUUID();
+  await expectAccepted(
+    session,
+    'Once its report is resolved, the same message may be reported again',
+    filed(rAgain, asked, mStaff, requester, 2),
+  );
+  await refuse(
+    'A message to a conversation moderation closed',
+    send(randomUUID(), asked, requester, 'after close'),
+    [51303],
+    NEEDS,
+  );
+  await refuse(
+    'A closed conversation reopened',
+    `UPDATE [dbo].[Conversation] SET [state]=N'open',[closedReason]=NULL,[closedAt]=NULL WHERE [id]=N'${asked}';`,
+    [51302],
+    IDENTITY,
+  );
+  await expectAccepted(
+    session,
+    'With the support conversation closed, the person asking may open a new one',
+    support(askedAgain, requester),
+  );
+
+  // ---- nothing cascades ------------------------------------------------------------------
+  const messagingRows = async (): Promise<number> =>
+    count(
+      `SELECT (${MESSAGING_TABLES.map((table) => `SELECT COUNT_BIG(*) FROM [dbo].[${table}]`).join(') + (')}) AS [total];`,
+    );
+  const before = await messagingRows();
+  // The Course's own slug reservation names it too, so it is set aside inside a
+  // transaction the refusal rolls back: only Messaging's key can refuse.
+  await refuse(
+    'A Course deleted under its conversations',
+    `BEGIN TRAN;
+     BEGIN TRY
+       DELETE FROM [dbo].[CourseSlugHistory] WHERE [courseId]=N'${course}';
+       DELETE FROM [dbo].[Course] WHERE [id]=N'${course}';
+       COMMIT TRAN;
+     END TRY
+     BEGIN CATCH
+       IF @@TRANCOUNT > 0 ROLLBACK TRAN;
+       THROW;
+     END CATCH`,
+    [547],
+    'Conversation_courseId_fkey',
+  );
+  await refuse(
+    'An asset deleted under its attachment',
+    `DELETE FROM [dbo].[Asset] WHERE [id]=N'${assetPng}';`,
+    [547],
+    'MessageAttachment_assetId_fkey',
+  );
+  await refuse(
+    'An account deleted under its block',
+    `DELETE FROM [dbo].[User] WHERE [id]=N'${blockedOnly}';`,
+    [547],
+    'MessagingBlock_blockedUserId_fkey',
+  );
+  await refuse(
+    'A report deleted under its decision',
+    `DELETE FROM [dbo].[MessagingReport] WHERE [id]=N'${rDismiss}';`,
+    [547],
+    'MessagingModerationDecision_reportId_fkey',
+  );
+  await refuse(
+    'A participant deleted under its read position',
+    `DELETE FROM [dbo].[ConversationParticipant] WHERE [id]=N'${pLearner}';`,
+    [547],
+    'MessageReadState_participant_fkey',
+  );
+  await refuse(
+    'A message deleted under its attachments',
+    `DELETE FROM [dbo].[Message] WHERE [id]=N'${mTeacher}';`,
+    [547],
+    'MessageAttachment_message_fkey',
+  );
+  if ((await messagingRows()) !== before)
+    fail('A refused deletion changed a Messaging row.');
+  if (
+    (await count(
+      `SELECT (SELECT COUNT(*) FROM [dbo].[Course] WHERE [id]=N'${course}') + (SELECT COUNT(*) FROM [dbo].[CourseSlugHistory] WHERE [courseId]=N'${course}') AS [total];`,
+    )) !== 2
+  )
+    fail('A refused Course deletion changed the Course or its slug reservation.');
+
+  // ---- disposal: close and mark, release, children first ---------------------------------
+  await refuse(
+    'A disposal mark cleared',
+    `UPDATE [dbo].[Conversation] SET [state]=N'closed',[closedReason]=N'account-closed',[closedAt]='${later}',[disposingAt]='${later}' WHERE [id]=N'${emptySupport}';
+     UPDATE [dbo].[Conversation] SET [disposingAt]=NULL WHERE [id]=N'${emptySupport}';`,
+    [51302],
+    IDENTITY,
+  );
+  const marked = [taught, peers, emptySupport, askedAgain]
+    .map((id) => `N'${id}'`)
+    .join(',');
+  const accounts = [teacher, learner, peerA, peerB, outsider, blockedOnly]
+    .map((id) => `N'${id}'`)
+    .join(',');
+  await expectAccepted(
+    session,
+    'Every conversation but the moderated one disposed of through its own path, children first',
+    `UPDATE [dbo].[Conversation] SET [state]=N'closed',[closedReason]=COALESCE([closedReason],N'account-closed'),[closedAt]=COALESCE([closedAt],'${later}'),[disposingAt]=COALESCE([disposingAt],'${later}') WHERE [id] IN (${marked});
+     UPDATE [dbo].[MessageAttachment] SET [state]=N'releasing',[assetId]=NULL,[messageId]=NULL,[position]=NULL WHERE [conversationId] IN (${marked});
+     DELETE FROM [dbo].[MessageAttachment] WHERE [conversationId] IN (${marked});
+     DELETE FROM [dbo].[MessageReadState] WHERE [conversationId] IN (${marked});
+     DELETE FROM [dbo].[Message] WHERE [conversationId] IN (${marked});
+     DELETE FROM [dbo].[ConversationParticipant] WHERE [conversationId] IN (${marked});
+     DELETE FROM [dbo].[Conversation] WHERE [id] IN (${marked});
+     DELETE FROM [dbo].[MessagingBlock] WHERE [blockerUserId] IN (${accounts});
+     DELETE FROM [dbo].[Asset] WHERE [id] IN (${assets.map((id) => `N'${id}'`).join(',')});
+     DELETE FROM [dbo].[CourseSlugHistory] WHERE [courseId]=N'${course}';
+     DELETE FROM [dbo].[Course] WHERE [id]=N'${course}';
+     DELETE FROM [dbo].[User] WHERE [id] IN (${accounts});`,
+  );
+
+  // ---- exactly the permanent residue remains ----------------------------------------------
+  const residue = await session.query<{ name: string; total: number; outside: number }>(
+    MESSAGING_TABLES.map((table) => {
+      const scoped =
+        table === 'MessagingActivation'
+          ? '0'
+          : table === 'MessagingModerationDecision'
+            ? `(SELECT COUNT_BIG(*) FROM [dbo].[${table}] d JOIN [dbo].[MessagingReport] r ON r.[id]=d.[reportId] WHERE r.[conversationId]<>N'${asked}')`
+            : table === 'MessagingBlock'
+              ? `(SELECT COUNT_BIG(*) FROM [dbo].[${table}])`
+              : table === 'Conversation'
+                ? `(SELECT COUNT_BIG(*) FROM [dbo].[${table}] WHERE [id]<>N'${asked}')`
+                : `(SELECT COUNT_BIG(*) FROM [dbo].[${table}] WHERE [conversationId]<>N'${asked}')`;
+      return `SELECT N'${table}' AS [name], (SELECT COUNT_BIG(*) FROM [dbo].[${table}]) AS [total], ${scoped} AS [outside]`;
+    }).join(' UNION ALL ') + ';',
+  );
+  const expectedResidue: Readonly<Record<string, number>> = {
+    MessagingActivation: 3,
+    Conversation: 1,
+    ConversationParticipant: 3,
+    Message: 2,
+    MessageAttachment: 0,
+    MessageReadState: 0,
+    MessagingBlock: 0,
+    MessagingReport: 5,
+    MessagingModerationDecision: 3,
+  };
+  const [left] = await session.query<{
+    assets: number;
+    courses: number;
+    accounts: number;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[Asset] WHERE [storageKey] LIKE N'proof/messaging/${run}/%') AS [assets],
+      (SELECT COUNT(*) FROM [dbo].[Course] WHERE [id]=N'${course}') AS [courses],
+      (SELECT COUNT(*) FROM [dbo].[User] WHERE [email] LIKE N'%-${run}@messaging-proof.invalid') AS [accounts];
+  `);
+  if (
+    residue.length !== 9 ||
+    residue.some(
+      (row) =>
+        Number(row.total) !== expectedResidue[row.name] || Number(row.outside) !== 0,
+    ) ||
+    Number(left?.assets ?? -1) !== 0 ||
+    Number(left?.courses ?? -1) !== 0 ||
+    Number(left?.accounts ?? -1) !== 4
+  )
+    fail(
+      `The Messaging rule proofs must leave exactly the activations and the moderated support ` +
+        `conversation; found ${JSON.stringify(residue)} and ${JSON.stringify(left ?? null)}.`,
+    );
+
+  report(
+    'messaging rules',
+    `fail closed per kind, immutable activations, typed conversation shapes, one direct ` +
+      `conversation per pair and one open support conversation per person, fitting and ` +
+      `never re-keyed participants with one active claim, allocated and immutable messages, ` +
+      `withholding never reversed, attachments through their lifecycle to their own ` +
+      `uploader's message, forward read positions, blocks, one open report per target, ` +
+      `permanent decisions, every key refusing nothing, no cascade, disposal children ` +
+      `first; ${String(refusals)} refusals by name, every text a NON_MESSAGING_FIXTURE ` +
+      `sentinel, every row but the activations and the moderated conversation removed`,
+  );
+}
+
 /**
  * The Phase-13 rollback restores the two editorial keys' Phase-6 descriptions
  * exactly — Article and Page, and no News family.
@@ -12850,6 +14851,7 @@ try {
   await assertPersonalisationFoundation(session);
   await assertLearningFoundation(session);
   await assertClassesFoundation(session);
+  await assertMessagingFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -12897,6 +14899,27 @@ try {
     }
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
+    }
+    if (migration.id === MESSAGING_MIGRATION) {
+      // Phase 24 widened no search vocabulary and changed no bundle, so neither
+      // narrows here — and the whole Phase-23 state it was applied on is back:
+      // no Messaging object and no Messaging key, Storage's Asset exactly as
+      // Phase 7 made it, Learning's two slices whole with nothing of Messaging
+      // naming a Course, Personalisation and Fatwa whole, and every owner a
+      // Messaging key once named — Identity's accounts, Learning's Course and
+      // Storage's Asset with the Media and Quran references into it —
+      // untouched by the drop.
+      await assertSearchVocabulary(session, 'phase22');
+      await assertMessagingRemoved(session);
+      await assertClassesFoundation(session, 'before-messaging');
+      await assertLearningFoundation(session, 'before-messaging');
+      await assertPersonalisationFoundation(session, 'before-messaging');
+      await assertFatwaFoundation(session, 'before-messaging');
+      await assertTaxonomyFoundation(session);
+      await assertPeopleFoundation(session);
+      await assertAudioFoundation(session);
+      await assertPhotoFoundation(session);
+      await assertQuranFoundation(session);
     }
     if (migration.id === CLASSES_MIGRATION) {
       // Phase 23 widened no search vocabulary, so none narrows here — and the
@@ -13085,6 +15108,7 @@ try {
   await assertPersonalisationFoundation(session);
   await assertLearningFoundation(session, 're-deploy');
   await assertClassesFoundation(session, 're-deploy');
+  await assertMessagingFoundation(session, 're-deploy');
   // The membership rules as BEHAVIOUR, on the re-deployed schema: what was
   // rolled back and re-applied enforces exactly what the first deploy did.
   await assertCollectionMembership(session);
@@ -13108,12 +15132,18 @@ try {
   // paths are written and then removed again, children first, so the
   // re-deployed Learning schema ends as empty as the migration left it.
   await assertLearningRules(session);
-  // And the live-class rules, last: 51281 is proved BEFORE the fixture
-  // activation is written, because that row is immutable (51280) and so, like
-  // canonical history, dies only with this disposable database; every other
-  // synthetic row — accounts, roles, Courses, scopes, windows, sessions,
-  // bookings, marks and intents — is removed again, children first.
+  // And the live-class rules: 51281 is proved BEFORE the fixture activation is
+  // written, because that row is immutable (51280) and so, like canonical
+  // history, dies only with this disposable database; every other synthetic
+  // row — accounts, roles, Courses, scopes, windows, sessions, bookings, marks
+  // and intents — is removed again, children first.
   await assertClassesRules(session);
+  // And the Messaging rules, last: each kind's 51302 is proved BEFORE its
+  // fixture activation is written, because those rows are immutable (51300);
+  // they and the one moderated support conversation — whose decisions are
+  // permanent (51309) — die only with this disposable database, and every
+  // other synthetic row is removed through the disposal path, children first.
+  await assertMessagingRules(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

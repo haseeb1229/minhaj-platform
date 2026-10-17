@@ -343,7 +343,8 @@ before storage.
 **Socket.IO 4.8.3** — LOCKED, **introduced and compatibility-validated in Phase 25**, when the
 owning Messaging/realtime work actually introduces it — not in Phase 0B (§1.5).
 
-Runs in `apps/realtime`, which is created in the Messaging phase. **SQL Server is the
+Runs in `apps/realtime`, which is created in Phase 25 (Messaging's realtime runtime); Phase 24 delivered
+Messaging without it. **SQL Server is the
 persistence layer**; the process transports and does not own data, reaching it only through
 the Messaging-owned services hosted in `packages/server-core` (ARCHITECTURE.md §3.1).
 **No Redis initially.**

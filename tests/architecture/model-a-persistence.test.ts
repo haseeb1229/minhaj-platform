@@ -585,6 +585,10 @@ describe('F1 — the production database package publishes no raw capability', (
       // learner's own rows are read and written only with the account in the
       // predicate.
       learning: { kind: 'context', slug: 'learning' },
+      // Phase 24. Messaging is a bounded CONTEXT; its adapter is hosted here and
+      // owned there. It reads and writes only Messaging's own tables, and names
+      // Learning's, Identity's and Storage's rows only as foreign-key targets.
+      messaging: { kind: 'context', slug: 'messaging' },
       email: { kind: 'layer0', concern: 'email' },
       'rate-limiting': { kind: 'layer0', concern: 'rate-limiting' },
       auditing: { kind: 'layer0', concern: 'auditing' },

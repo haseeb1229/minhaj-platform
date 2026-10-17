@@ -15,3 +15,4 @@ export { createClassAdmin } from './admin.ts';
 export { createClassLearner } from './learner-classes.ts';
 export { createClassPublicReader } from './public-classes.ts';
 export { createClassCommunication } from './communication.ts';
+export { createLearningRelationshipReader } from './relationships.ts';

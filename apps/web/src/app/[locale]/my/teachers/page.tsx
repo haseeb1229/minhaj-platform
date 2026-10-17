@@ -1,15 +1,21 @@
 import { getTranslations } from 'next-intl/server';
 
 import { TeacherName } from '@/components/live-learning/parts';
+import { messagingMessages } from '@/components/messaging/parts';
+import { messagingRead } from '@/components/messaging/read';
 import { classLinks } from '@/components/my-classes/parts';
 import { LearningTitle } from '@/components/my-learning/parts';
+import { pickLabel } from '@/components/my-learning/presentation';
 import { learningRead } from '@/components/my-learning/read';
 import { PersonalFrame, PersonalLinks, PersonalTime } from '@/components/personal/parts';
 import { Alert, EmptyState, Panel, TextLink } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
 import { teacherProfilesFor } from '@/composition/learning-teachers';
+import { messagingRuntime } from '@/composition/messaging';
 import { requireLocale } from '@/config/route-locale';
+import { ActionForm } from '../../(identity)/form-state';
 import { requireActiveSession } from '../guard';
+import { startTeachingAction } from '../messages/actions';
 
 /**
  * My Teachers — the teachers the person has a GENUINE relationship with
@@ -19,8 +25,13 @@ import { requireActiveSession } from '../guard';
  * answers the name and the profile address, and a teacher with no published
  * profile is "Teacher", in words, with no link.
  *
- * NOTHING HERE MESSAGES, RATES OR CONTACTS A TEACHER: messaging is a later
- * phase and no frame for it is drawn (ROUTE_MAP.md §5.2).
+ * MESSAGING A TEACHER (Phase 24). Beside each Course a teacher teaches the
+ * person NOW, a "Message" button opens — or returns to — that relationship's
+ * conversation. Which pairs qualify is Messaging's own answer
+ * (`startable`), read separately: a past teacher, a Course the person has
+ * left, or messaging that is not switched on shows no button, and an outage
+ * there never hides this list. Nothing here rates or otherwise contacts a
+ * teacher.
  */
 export const metadata = { robots: { index: false, follow: false } };
 
@@ -50,6 +61,16 @@ export default async function MyTeachersPage({
     return { teachers, profiles };
   });
 
+  const startable = await messagingRead('messaging-startable', () =>
+    messagingRuntime().service.startable({ accountId: session.account.id }),
+  );
+  const current = new Set(
+    startable.ok
+      ? startable.value.map((entry) => `${entry.counterpartAccountId}:${entry.courseId}`)
+      : [],
+  );
+  const m = await getTranslations({ locale, namespace: 'messages' });
+
   if (!read.ok)
     return (
       <PersonalFrame title={t('teachers.title')} description={description} back={back}>
@@ -62,6 +83,9 @@ export default async function MyTeachersPage({
 
   return (
     <PersonalFrame title={t('teachers.title')} description={description} back={back}>
+      {startable.ok || startable.failure !== 'unavailable' ? null : (
+        <Alert tone="error">{m('start.unavailable')}</Alert>
+      )}
       {teachers.length === 0 ? (
         <>
           <EmptyState>{t('teachers.empty')}</EmptyState>
@@ -89,11 +113,37 @@ export default async function MyTeachersPage({
                     <ul className="flex flex-col gap-1 ps-4">
                       {teacher.courses.map((course) => (
                         <li key={course.id} className="list-disc">
-                          <LearningTitle
-                            labels={course.labels}
-                            primaryLocale={course.primaryLocale}
-                            locale={locale}
-                          />
+                          <div className="flex min-w-0 flex-col gap-2 wrap-anywhere">
+                            <LearningTitle
+                              labels={course.labels}
+                              primaryLocale={course.primaryLocale}
+                              locale={locale}
+                            />
+                            {current.has(`${teacher.teacherAccountId}:${course.id}`) ? (
+                              <ActionForm
+                                action={startTeachingAction}
+                                submitLabel={m('start.submit', {
+                                  name:
+                                    profiles.get(teacher.teacherAccountId)?.name ??
+                                    t('teachers.unnamed'),
+                                  course:
+                                    pickLabel(course.labels, locale, course.primaryLocale)
+                                      ?.title ?? m('start.someCourse'),
+                                })}
+                                pendingLabel={m('common.working')}
+                                tone="secondary"
+                                messages={messagingMessages(m)}
+                              >
+                                <input type="hidden" name="locale" value={locale} />
+                                <input
+                                  type="hidden"
+                                  name="counterpartAccountId"
+                                  value={teacher.teacherAccountId}
+                                />
+                                <input type="hidden" name="courseId" value={course.id} />
+                              </ActionForm>
+                            ) : null}
+                          </div>
                         </li>
                       ))}
                     </ul>

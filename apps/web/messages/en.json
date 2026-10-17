@@ -455,7 +455,8 @@
       "hadith": "Hadith",
       "fatwa": "Fatwa",
       "newsletter": "Newsletter",
-      "learning": "Learning"
+      "learning": "Learning",
+      "messaging": "Messaging"
     },
     "global": {
       "title": "Global Network",
@@ -4468,7 +4469,12 @@
       "learningExportHeading": "Download your learning data",
       "learningExportBody": "Download a copy of what Learning keeps for your account, as a separate JSON file:",
       "learningExportContents": "Your course enrolments, the lessons you marked complete, your trial-class requests, your trial bookings, the classes you took part in or taught, your attendance, and any teaching windows and scopes of your own — listed by reference, never as copies of the courses and never a meeting link.",
-      "learningExportLink": "Download your learning data"
+      "learningExportLink": "Download your learning data",
+      "messagingExportHeading": "Download your messaging data",
+      "messagingExportBody": "Download a copy of what Messaging keeps for your account, as a separate JSON file:",
+      "messagingExportContents": "The conversations you take part in, the messages you sent with their text, the details of the files you attached (never the files themselves), how far you have read, the people you blocked and the reports you made. Messages other people sent are never included.",
+      "messagingExportClosure": "Closing your account closes your conversations and removes your read positions, any blocks between you and others, and files you uploaded but did not send. The person you were talking to may still be able to read what you both wrote, but cannot reply. A conversation is removed once nobody left can read it — unless a report refers to it, in which case it is kept as evidence.",
+      "messagingExportLink": "Download your messaging data"
     },
     "home": {
       "unavailable": "Your saved items, history and notifications can’t be shown right now. Your account settings below still work.",
@@ -5052,7 +5058,8 @@
       "resources": "Resources",
       "attendance": "Attendance",
       "availability": "Availability",
-      "profile": "Profile"
+      "profile": "Profile",
+      "messages": "Messages"
     },
     "common": {
       "working": "Working…",
@@ -5488,6 +5495,363 @@
       "none": "You have no upcoming class.",
       "next": "Next class:",
       "link": "Go to My classes"
+    }
+  },
+  "messages": {
+    "title": "Messages",
+    "description": "Your conversations with your teachers and with Minhaj Support. Only the people in a conversation can read it.",
+    "fixture": "Messaging here is running on a test configuration. Conversations on this deployment are not real.",
+    "notActivated": "Messaging is not switched on yet. When it is, your conversations will appear here.",
+    "supportName": "Minhaj Support",
+    "you": "You",
+    "nav": {
+      "label": "Messages pages",
+      "messages": "Messages",
+      "support": "Support",
+      "teachers": "My teachers",
+      "account": "My Minhaj",
+      "students": "Students"
+    },
+    "unnamed": {
+      "teacher": "Teacher",
+      "learner": "Learner"
+    },
+    "kind": {
+      "support": "Support conversation"
+    },
+    "list": {
+      "heading": "Conversations",
+      "empty": "You have no conversations yet.",
+      "beyond": "There are no more conversations.",
+      "stale": "That page of conversations is no longer available.",
+      "first": "Newest conversations",
+      "more": "Older conversations",
+      "pages": "Conversation pages",
+      "unread": "{count, plural, one {# unread message} other {# unread messages}}",
+      "noMessages": "No messages yet",
+      "lastActivity": "Last message:",
+      "course": "Course:"
+    },
+    "badge": {
+      "terminal": "Read only",
+      "moderation": "Closed by a moderator",
+      "resolved": "Resolved",
+      "closed": "Closed"
+    },
+    "start": {
+      "heading": "Message your teacher",
+      "help": "You can write to a teacher of a course you are enrolled on now.",
+      "unavailable": "Your teachers can’t be shown right now.",
+      "empty": "You have no current teacher to message.",
+      "someCourse": "this course",
+      "submit": "Message {name} about {course}"
+    },
+    "support": {
+      "teaser": "A question about your account or the platform? Write to the support team.",
+      "link": "Go to Support",
+      "title": "Support",
+      "description": "Your own conversation with the Minhaj Support team. Only you and the support team can read it.",
+      "notActivated": "Support conversations are not available yet.",
+      "contactInstead": "You can still reach us through the contact form.",
+      "contactLink": "Contact us",
+      "openHeading": "Your support conversation",
+      "startHelp": "You have no open support conversation. Start one and the support team will answer here.",
+      "start": "Start a support conversation",
+      "continue": "Continue your support conversation",
+      "earlierHeading": "Earlier support conversations",
+      "earlierEmpty": "You have no earlier support conversations.",
+      "threadDescription": "Your conversation with the Minhaj Support team."
+    },
+    "teacher": {
+      "description": "Your conversations with the learners on the courses you teach. Only you and the learner can read each one.",
+      "notActivated": "Messaging with learners is not switched on yet.",
+      "empty": "You have no conversations yet.",
+      "startHelp": "To write to a learner, open their page from your students:",
+      "message": "Message {name} about {course}"
+    },
+    "thread": {
+      "back": "Back to messages",
+      "fallbackTitle": "Conversation",
+      "heading": "Messages",
+      "label": "Messages with {name}",
+      "empty": "No messages yet. Write the first one below.",
+      "beyond": "There are no older messages.",
+      "older": "Older messages",
+      "newest": "Newest messages",
+      "pages": "Message pages",
+      "replyNewest": "Go to the newest messages to reply",
+      "attachments": "Attachments",
+      "unnamedFile": "Attached file",
+      "image": "Attached image",
+      "download": "Download {name} ({size})",
+      "messageFrom": "Message from {name}",
+      "reported": "Reported message",
+      "withheldBadge": "Withheld",
+      "withheld": "This message was withheld by a moderator."
+    },
+    "ended": {
+      "title": "Conversation ended",
+      "body": "This conversation has ended because the teaching relationship it belonged to is no longer current. It can no longer be read or answered."
+    },
+    "state": {
+      "terminal": "The other person’s account has been closed. You can read this conversation, but no one can reply.",
+      "moderation": "A moderator closed this conversation. It can be read but not answered.",
+      "resolved": "This support conversation was resolved. To ask something new, start a new support conversation.",
+      "closed": "This conversation is closed and can no longer be answered.",
+      "blockedByMe": "You have blocked this person. Unblock them to send messages again.",
+      "blocked": "Messages can’t be sent in this conversation.",
+      "unclaimed": "Claim this conversation before replying."
+    },
+    "composer": {
+      "heading": "Write a message",
+      "label": "Message",
+      "help": "Plain text only. Links are not turned into previews.",
+      "counter": "{count} of {max} characters",
+      "over": "This message is {count} characters too long.",
+      "submit": "Send",
+      "pending": "Sending…",
+      "sent": "Message sent.",
+      "attach": "Attach files",
+      "attachHelp": "JPEG, PNG or PDF — up to {files} files, {size} MB each.",
+      "attachments": "Files to send",
+      "uploading": "Uploading {name}",
+      "ready": "{name} is ready to send.",
+      "uploadFailed": "{name} could not be attached.",
+      "remove": "Remove {name}",
+      "removed": "{name} was removed.",
+      "tooManyFiles": "A message can carry at most {files} files."
+    },
+    "catchUp": {
+      "button": "Check for new messages",
+      "checking": "Checking…",
+      "none": "No new messages.",
+      "found": "New messages: {count}. They are shown above.",
+      "more": "More are waiting — check again after reading."
+    },
+    "read": {
+      "mark": "Mark as read",
+      "done": "Marked as read."
+    },
+    "safety": {
+      "heading": "Safety",
+      "block": "Block {name}",
+      "blockHelp": "Blocking stops messages in both directions. You can unblock later from this conversation.",
+      "blockSubmit": "Block",
+      "blockDone": "Blocked. No messages can be sent in this conversation now.",
+      "blockConfirm": "I want to block this person.",
+      "unblockHelp": "You have blocked {name}.",
+      "unblockSubmit": "Unblock {name}",
+      "unblockDone": "Unblocked.",
+      "reportMessage": "Report this message",
+      "reportConversation": "Report this conversation",
+      "reportHelp": "A moderator will review the reported messages. Reporting does not notify the other person.",
+      "reportSubmit": "Send report",
+      "reportDone": "Thank you. Your report has been received.",
+      "reportConfirm": "I want to report this to a moderator.",
+      "reason": "Reason",
+      "reasonChoose": "Choose a reason",
+      "reasons": {
+        "harassment": "Harassment or bullying",
+        "spam": "Spam",
+        "inappropriate": "Inappropriate content",
+        "safety": "A safety concern",
+        "other": "Something else"
+      }
+    },
+    "common": {
+      "working": "Working…"
+    },
+    "home": {
+      "heading": "Messages",
+      "unavailable": "Your messages can’t be shown right now.",
+      "none": "You have no unread messages.",
+      "unread": "{count, plural, one {You have # unread message.} other {You have # unread messages.}}",
+      "link": "Go to Messages"
+    },
+    "failure": {
+      "load": "This can’t be shown right now. Please try again shortly.",
+      "invalid": "Please check what you entered and try again.",
+      "notFound": "That conversation isn’t available.",
+      "ended": "This conversation has ended.",
+      "closed": "This conversation is closed.",
+      "blocked": "Messages can’t be sent in this conversation.",
+      "terminal": "This conversation can be read but no longer answered.",
+      "unclaimed": "Claim this conversation before replying.",
+      "operationConflict": "This message was already sent. Reload the page to see it before writing again.",
+      "conflict": "Someone changed this just now. Reload the page and try again.",
+      "rateLimited": "Too many attempts. Please wait a little and try again.",
+      "tooMany": "You have too many files waiting to be sent. Send or remove some first.",
+      "tooLarge": "That file is too large.",
+      "unsupported": "That kind of file can’t be sent. Use JPEG, PNG or PDF.",
+      "notCleared": "That file did not pass the safety check and was not attached.",
+      "denied": "You can’t do that.",
+      "confirmRequired": "Please tick the box to confirm.",
+      "noSession": "Your session has ended. Please sign in again.",
+      "unavailable": "That didn’t work just now. Please try again shortly."
+    }
+  },
+  "adminMessaging": {
+    "title": "Messaging",
+    "unknown": "Something went wrong. Please try again.",
+    "reload": "Try again",
+    "loading": "Loading…",
+    "pending": "Working…",
+    "stale": "That page link is no longer valid.",
+    "first": "First page",
+    "next": "Next page",
+    "beyond": "There is nothing more to show.",
+    "pages": "Pages",
+    "surface": {
+      "support": "Support queue",
+      "moderation": "Moderation queue",
+      "reports": "All reports"
+    },
+    "filter": {
+      "label": "Show",
+      "open": "Open",
+      "resolved": "Resolved"
+    },
+    "failure": {
+      "denied": "You don’t have permission to do that.",
+      "invalid": "That request was not valid.",
+      "notFound": "That item no longer exists.",
+      "conflict": "Someone else changed this first. Reload the page to see the current state.",
+      "closed": "This conversation is already closed.",
+      "rateLimited": "Too many actions in a short time. Please wait and try again.",
+      "confirmRequired": "Please tick the box to confirm.",
+      "load": "This can’t be shown right now. Please try again shortly."
+    },
+    "conversationState": {
+      "open": "Open",
+      "resolved": "Resolved",
+      "closed": "Closed",
+      "moderation": "Closed by a moderator"
+    },
+    "reportState": {
+      "open": "Open",
+      "resolved": "Decided"
+    },
+    "target": {
+      "conversation": "Whole conversation",
+      "message": "One message"
+    },
+    "kind": {
+      "teacher-student": "Teacher and learner",
+      "student-student": "Two learners",
+      "support": "Support"
+    },
+    "reason": {
+      "harassment": "Harassment or bullying",
+      "spam": "Spam",
+      "inappropriate": "Inappropriate content",
+      "safety": "A safety concern",
+      "other": "Something else"
+    },
+    "support": {
+      "title": "Support queue",
+      "description": "Support conversations by state and last activity. Names and messages are not listed here; opening a conversation is recorded in the audit log.",
+      "empty": "No support conversation is open.",
+      "emptyResolved": "No support conversation has been resolved yet.",
+      "captionOpen": "Open support conversations",
+      "captionResolved": "Resolved support conversations",
+      "column": {
+        "conversation": "Conversation",
+        "state": "State",
+        "lastActivity": "Last activity",
+        "claim": "Claimed by",
+        "reply": "Reply"
+      },
+      "open": "Open {id}",
+      "claimedByMe": "You",
+      "claimed": "Another staff member",
+      "unclaimed": "Nobody yet",
+      "awaiting": "Reply owed",
+      "notAwaiting": "Answered",
+      "back": "Back to the support queue"
+    },
+    "conversation": {
+      "fallbackTitle": "Support conversation",
+      "title": "Support conversation {id}",
+      "audited": "Opening this conversation, and each page of its history, is recorded in the audit log.",
+      "requester": "The person asking",
+      "requesterTerm": "Person asking",
+      "staff": "Support staff",
+      "claim": "Claim this conversation",
+      "claimed": "Claimed. You can now reply.",
+      "claimHelp": "Claiming makes you the one who answers. Only one staff member can hold a claim.",
+      "empty": "No message has been written yet.",
+      "replyNeedsClaim": "Only the staff member who has claimed this conversation can reply.",
+      "resolveHeading": "Resolve",
+      "resolveHelp": "Resolving closes this conversation. The person can read it and start a new one if they need to.",
+      "resolve": "Resolve conversation",
+      "resolved": "Resolved.",
+      "resolveConfirm": "I want to resolve and close this conversation."
+    },
+    "reports": {
+      "title": "All reports",
+      "description": "Every report, with its reason and state. Reported content is shown only on a report’s own page, and opening it is recorded in the audit log.",
+      "empty": "There are no open reports.",
+      "emptyResolved": "No report has been decided yet.",
+      "captionOpen": "Open reports",
+      "captionResolved": "Decided reports",
+      "column": {
+        "report": "Report",
+        "reason": "Reason",
+        "target": "Reported",
+        "kind": "Conversation",
+        "state": "State",
+        "filed": "Filed"
+      },
+      "open": "Report {id}"
+    },
+    "moderation": {
+      "title": "Moderation queue",
+      "description": "Open reports, the longest-waiting first. Review the evidence of each and decide it.",
+      "empty": "There is nothing waiting for review.",
+      "caption": "Open reports, oldest first",
+      "column": {
+        "review": "Review"
+      },
+      "review": "Review report {id}"
+    },
+    "evidence": {
+      "backQueue": "Back to the moderation queue",
+      "backReports": "All reports",
+      "fallbackTitle": "Report",
+      "title": "Report {id}",
+      "audited": "Opening this evidence is recorded in the audit log. Only the messages this report covers are shown.",
+      "participant": "Participant",
+      "reporter": "Reported by",
+      "conversation": "Conversation",
+      "messages": "Evidence",
+      "windowConversation": "The messages up to the moment the report was filed.",
+      "windowMessage": "The reported message, highlighted, with the messages around it.",
+      "empty": "No message is left in this report’s evidence."
+    },
+    "decision": {
+      "heading": "Decision",
+      "help": "Decide this report once. The decision is recorded in the audit log.",
+      "submit": "Record decision",
+      "saved": "Decision recorded.",
+      "action": "Decision",
+      "confirm": "I have reviewed the evidence and want to record this decision.",
+      "byYou": "Decided by you.",
+      "byModerator": "Decided by a moderator.",
+      "done": {
+        "dismiss": "Dismissed on",
+        "withhold-message": "Message withheld on",
+        "close-conversation": "Conversation closed on"
+      },
+      "option": {
+        "dismiss": "Dismiss",
+        "withhold-message": "Withhold the message",
+        "close-conversation": "Close the conversation"
+      },
+      "explain": {
+        "dismiss": "Nothing changes. The report is marked decided.",
+        "withhold-message": "The message is hidden from the people in the conversation and kept as evidence.",
+        "close-conversation": "No one can send further messages. The history stays readable."
+      }
     }
   }
 }

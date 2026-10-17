@@ -53,8 +53,8 @@
 | 20 | Fatwa | 2, 5, **17** |
 | 21 | Personalisation & Notifications | 2, **10**, 18, 19 |
 | 22 | Learning: courses & paths | 5, 6, **17** |
-| 23 | Teacher Experience & Live Classes | 22, **safeguarding decision** *(manual Meet flow — no Google API credential required)* |
-| 24 | Messaging: domain & shared server services | 2, **7**, 22, 23, **safeguarding decision** |
+| 23 | Teacher Experience & Live Classes | 22 · **activation:** safeguarding (OPEN_DECISIONS §2.1), Meet capability (§5.3) *(manual Meet flow — no Google API credential required)* |
+| 24 | Messaging: domain & shared server services | 2, **7**, 22, 23 · **activation:** safeguarding (OPEN_DECISIONS §2.1), student↔student (§2.5), support/moderation ownership (§6.6) |
 | 25 | Messaging: realtime runtime | 24 |
 | 26 | Membership | 2, 5, 16 |
 | 27 | Donations *(separate; may be deferred)* | 2 |
@@ -1913,6 +1913,47 @@ relationship authorisation proven and student-to-student messaging **disabled by
 
 **Exit — production activation:** reached when the safeguarding and student-to-student policies
 exist and any behaviour they require has been implemented and tested.
+
+**Phase-24 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+```
+MESSAGING DOMAIN (non-realtime)               COMPLETE (this phase, policy-independent)
+SERVER-CORE MESSAGING + RELATIONSHIPS HOSTS   COMPLETE (one implementation for both processes)
+TEACHER↔STUDENT MECHANICS                     COMPLETE — production activation BLOCKED
+STUDENT↔STUDENT                               DEFAULT DENY — peer policy refuses every pair
+AUTHENTICATED SUPPORT / MODERATION            ENGINEERED — no staff, no activation
+ATTACHMENTS                                   COMPLETE — owner-safe Storage release
+REAL messaging.support / messaging.moderate   NONE
+MESSAGING ACTIVATION (production)             BLOCKED — no activation row exists
+SAFEGUARDING / PEER / SUPPORT-OWNERSHIP GATES  OPEN — OPEN_DECISIONS.md §2.1, §2.5, §6.6 (§2.2 for retention)
+PHASE 25 REALTIME                             NOT STARTED
+```
+
+- **Where the code lives.** Messaging's application services are hosted in
+  `packages/server-core/src/messaging` and Learning's current-relationship answer in
+  `packages/server-core/src/relationships` (ARCHITECTURE.md §3.1.3); the adapter is
+  `packages/database/src/adapters/messaging`; Layer 4 wiring is `apps/web/src/composition/messaging.ts`.
+  No `apps/realtime`, socket, presence, typing state or polling exists.
+- **Permissions:** `messaging.support` and `messaging.moderate` are catalogued and **externally
+  gated** — bundled into no role, held by nobody, no session invalidated; no `messaging.read` or
+  `messaging.administer` exists. Ordinary messaging is authorised by the current relationship alone.
+- **Activation is a row per kind** (`MessagingActivation`: `support`, `teacher-student`,
+  `student-student`), operator-written, immutable, enforced by the database; engineering closure records
+  none. Student-to-student also needs the peer policy, which denies every pair in production.
+- **Bounds (engineering, not policy):** 4,000 code points per message; JPEG, PNG or PDF, at most four
+  per message and 5 MiB each; history pages of 30, catch-up pages of 50, lists of 25; an unsent upload
+  is released after 24 hours.
+- **The account-closure terminal-history rule** is canonical in DOMAIN_MODEL.md §15.6: only a verified
+  closure lets the remaining participant keep read-only history, and only while their own half of the
+  relationship is current; ordinary revocation, withdrawal, a block or a moderator's closure never do.
+- **Delivered routes:** `/my/messages`, `/my/messages/{id}`, `/my/messages/support`, `/teacher/messages`,
+  `/teacher/messages/{id}`, `/admin/messaging/{support,moderation,reports}` with their detail pages, the
+  `/api/messaging/*` catch-up, upload and discard routes, the three `/assets/messaging/*` byte routes and
+  `/api/my/export/messaging` (ROUTE_MAP.md §5.1, §6, §7, §8).
+- **Not delivered:** realtime delivery (Phase 25), edit/delete/unsend, group or public conversations,
+  message email or notification, a learner directory, real support or moderation staff, and every
+  policy the open gates reserve.
 
 ---
 

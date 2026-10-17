@@ -16,6 +16,7 @@ import { dispatchAfterResponse } from '@/composition/dispatch';
 import { fatwaRuntime } from '@/composition/fatwa';
 import { identityRuntime } from '@/composition/identity';
 import { learningRuntime } from '@/composition/learning';
+import { messagingRuntime } from '@/composition/messaging';
 import { peopleRuntime } from '@/composition/people';
 import { personalisationRuntime } from '@/composition/personalisation';
 import { applySetCookies, requestContext } from '@/composition/request';
@@ -681,6 +682,22 @@ export async function closeAccountAction(
     learningPending = true;
   }
 
+  // THE SIXTH OWNER. Messaging closes this account's direct and support
+  // conversations, takes it out of any support claim, removes its read
+  // positions, its blocks either way and its unsent uploads, and disposes of
+  // every conversation whose every participant is now closed — keeping only
+  // a conversation a report holds as evidence. Messaging refuses unless
+  // Identity reports the account closed, which it now does. Idempotent; the
+  // closure sweep finishes what this leaves.
+  let messagingPending: boolean;
+  try {
+    const messaging = await messagingRuntime().service.disposeAccount(session.account.id);
+    const sweep = await messagingRuntime().service.reconcileClosedAccounts();
+    messagingPending = !messaging.complete || !sweep.complete;
+  } catch {
+    messagingPending = true;
+  }
+
   // The closure notice is enqueued against the address the account HAD, before
   // the tombstone replaces it. It goes out after this response.
   dispatchAfterResponse();
@@ -697,7 +714,8 @@ export async function closeAccountAction(
     reconciliationFailed ||
     questionsPending ||
     personalPending ||
-    learningPending
+    learningPending ||
+    messagingPending
   )
     return { status: 'error', failure: 'closure-pending' };
 
