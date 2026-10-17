@@ -187,7 +187,7 @@ delivered by Phase 23 (DOMAIN_MODEL.md §13.5); class recording is not in scope.
 
 A first-party persistent messaging system — distinct from Google Meet — with SQL Server
 persistence. The messaging domain owns all conversation and authorisation rules; a small
-separate realtime process is introduced later purely as a transport and presence adapter,
+separate realtime process (delivered in Phase 25) is purely a transport and presence adapter,
 and messaging works without it.
 
 ### 2.7 Legacy migration

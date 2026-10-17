@@ -184,6 +184,10 @@ retention rule, and ships **no activation**: `MessagingActivation` holds no row 
 teacher↔student and support messaging are OFF, and student-to-student stays off behind a peer
 policy that denies every pair.
 
+**Still OPEN after Phase 25.** Phase 25 added the realtime transport over the same services — live
+delivery, ephemeral presence and typing, all re-authorised per event and per recipient — and decided
+nothing above. No activation row exists, so nothing is delivered live in production.
+
 **Why it matters:** It **materially changes** consent flows, messaging policy, moderation and
 data handling. Far cheaper to know before Phase 23 than after.
 
@@ -270,7 +274,8 @@ policy must exist before it is enabled.
 **Still OPEN after Phase 24.** The mechanics exist and are proven only against a disposable test
 policy: the `student-student` conversation kind, its activation row (absent) and a peer-policy seam
 whose production wiring refuses every pair. No "same Course" or other relationship is recorded as
-approved policy, no learner directory exists, and no permission or setting can enable it.
+approved policy, no learner directory exists, and no permission or setting can enable it. Phase 25
+added no realtime shortcut: the transport asks the same peer policy, which still refuses every pair.
 
 ---
 
@@ -617,6 +622,7 @@ Support conversations, the support queue, reports and moderation exist as engine
 with every content and evidence access audited, but the `support` activation row is absent, so no
 support conversation can start, and nobody can read a report's evidence until the organisation names
 holders through the ordinary audited `permissions.grant` lifecycle. No response-time promise exists.
+Phase 25 keeps support staff off the realtime transport entirely, so their audited access is unchanged.
 
 ---
 

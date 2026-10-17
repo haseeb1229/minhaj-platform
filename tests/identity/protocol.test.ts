@@ -671,7 +671,20 @@ describe('the mutation surface', () => {
 
 describe('session cookie security', () => {
   it('derives `Secure` from the ORIGIN SCHEME, not from NODE_ENV', async () => {
-    const source = await sourceOf('apps/web/src/composition/identity.ts');
+    // ONE definition, since Phase 25: the web process and the realtime process
+    // both build their authentication adapter from this function, so a cookie
+    // one accepts is exactly a cookie the other accepts.
+    const source = await sourceOf('apps/web/src/composition/identity-mechanics.ts');
+    for (const root of [
+      'apps/web/src/composition/identity.ts',
+      'apps/web/src/composition/realtime.ts',
+    ]) {
+      const composition = await sourceOf(root);
+      expect(composition, root).toMatch(
+        /createAuthMechanicsAdapter\(\s*authMechanicsConfiguration\(environment, limiter\),?\s*\)/u,
+      );
+      expect(composition, root).not.toMatch(/useSecureCookies/u);
+    }
 
     // `Secure` is a statement about the scheme a cookie may travel over, so
     // the scheme decides it. Keying it on `NODE_ENV` is wrong in BOTH

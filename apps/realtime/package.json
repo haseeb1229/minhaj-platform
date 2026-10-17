@@ -1,0 +1,24 @@
+{
+  "name": "@minhaj/realtime",
+  "version": "0.0.0",
+  "private": true,
+  "description": "One Minhaj realtime transport (Phase 25) — Socket.IO over the Messaging and Identity services hosted in @minhaj/server-core. A transport adapter: it owns no data and no business rule, and never reaches the database.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "react-server": "./src/index.ts",
+      "node": "./src/index.ts",
+      "browser": "./src/client-import-error.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@minhaj/contracts": "*",
+    "@minhaj/server-core": "*",
+    "server-only": "0.0.1",
+    "socket.io": "4.8.3"
+  }
+}

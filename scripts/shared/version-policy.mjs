@@ -114,6 +114,26 @@ export const lockedStack = Object.freeze([
     expected: '1.55.1',
     introduced: 'Phase 2 — Identity & Access',
   },
+  {
+    // The realtime transport, introduced at its owning point (§1.5): the
+    // server in `apps/realtime`. It moved here from `deferredStack` in Phase
+    // 25, so absence is now a FAILURE — the realtime process is delivered, and
+    // a manifest that stops declaring it is a broken process rather than a
+    // package that has not arrived yet.
+    name: 'socket.io',
+    kind: 'exact',
+    expected: '4.8.3',
+    introduced: 'Phase 25 — realtime runtime',
+  },
+  {
+    // The same product, shipped as a second package, in the authenticated
+    // Messaging pages of `apps/web` only. Locking the server and leaving the
+    // client unconstrained would be a hole rather than a decision.
+    name: 'socket.io-client',
+    kind: 'exact',
+    expected: '4.8.3',
+    introduced: 'Phase 25 — realtime runtime',
+  },
   { name: 'typescript', kind: 'range', expected: '5.9', introduced: 'Phase 0B' },
   { name: 'zod', kind: 'range', expected: '4.5', introduced: 'Phase 0B' },
   { name: 'vitest', kind: 'range', expected: '4.1', introduced: 'Phase 0B' },
@@ -135,20 +155,6 @@ export const lockedStack = Object.freeze([
  * the architecture deliberately left to the phase that installs it.
  */
 export const deferredStack = Object.freeze([
-  {
-    name: 'socket.io',
-    kind: 'exact',
-    expected: '4.8.3',
-    introduced: 'Phase 25 — realtime runtime',
-  },
-  {
-    // The same product, shipped as a second package. Locking the server and
-    // leaving the client unconstrained would be a hole rather than a decision.
-    name: 'socket.io-client',
-    kind: 'exact',
-    expected: '4.8.3',
-    introduced: 'Phase 25 — realtime runtime',
-  },
   {
     // `playwright` itself stays DEFERRED even though the browser suite now
     // exists. `@playwright/test` depends on it at an exact matching version

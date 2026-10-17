@@ -124,7 +124,7 @@ Validation happens **at genuine introduction**, in the phase that owns it
 | ESLint | **10.x** | LOCKED | Development | Phase 0B |
 | Prettier | **3.x** | LOCKED | Development | Phase 0B |
 | Docker / Compose | current stable | LOCKED | Infrastructure | Phase 0B (local) |
-| NGINX | stable | LOCKED | Infrastructure | Deployment phase |
+| NGINX | stable — **1.30.6** (`nginx:1.30.6-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5`) | LOCKED | Infrastructure | **Phase 25** — the `/socket.io/` WebSocket seam; production edge in the deployment phases |
 | Linux self-hosting | — | LOCKED | Infrastructure | Deployment phase |
 
 **Ranges vs pins.** Where an `x` appears (TypeScript 5.9.x, Better Auth 1.7.x, Zod 4.5.x,
@@ -343,8 +343,10 @@ before storage.
 **Socket.IO 4.8.3** — LOCKED, **introduced and compatibility-validated in Phase 25**, when the
 owning Messaging/realtime work actually introduces it — not in Phase 0B (§1.5).
 
-Runs in `apps/realtime`, which is created in Phase 25 (Messaging's realtime runtime); Phase 24 delivered
-Messaging without it. **SQL Server is the
+**Delivered in Phase 25**: `socket.io` 4.8.3 in `apps/realtime` (with `engine.io` 6.6.11 and `ws` 8.21.3
+beneath it) and `socket.io-client` 4.8.3 in `apps/web`'s authenticated Messaging pages only — all MIT
+licensed, from the npm registry, recorded in the lockfile. Runs in `apps/realtime`; Phase 24 delivered
+Messaging without it. WebSocket transport only; connection-state recovery off. **SQL Server is the
 persistence layer**; the process transports and does not own data, reaching it only through
 the Messaging-owned services hosted in `packages/server-core` (ARCHITECTURE.md §3.1).
 **No Redis initially.**

@@ -66,6 +66,17 @@ export function withQuery(path: string, params: Readonly<Record<string, string |
   return encoded === '' ? path : `${path}?${encoded}`;
 }
 
+/**
+ * Replaces each `{token}` of a label the server handed a client island with
+ * its value; an unknown token stays as written.
+ */
+export function fill(template: string, values: Readonly<Record<string, string>>): string {
+  return template.replace(
+    /\{(\w+)\}/gu,
+    (whole, token: string) => values[token] ?? whole,
+  );
+}
+
 /** Unicode code points — the unit the message bound is stated in, not UTF-16 units. */
 export function codePointLength(text: string): number {
   return [...text].length;

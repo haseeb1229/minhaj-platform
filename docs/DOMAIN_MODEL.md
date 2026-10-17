@@ -1888,6 +1888,26 @@ message edit, delete or unsend, group or public conversations, calls, email or n
 messages, an approved student-to-student policy, real support staff or moderators, any strike, ban,
 escalation or retention rule, and every policy OPEN_DECISIONS.md §2.1, §2.2, §2.5 and §6.6 reserve.
 
+### 15.7 As delivered (Phase 25 — the realtime transport; no new aggregate)
+
+Phase 25 adds a TRANSPORT and nothing to the model: no aggregate, table, column, key or trigger.
+SQL Server remains the only record of a message, its order and its read state.
+
+- **Live delivery is a read.** A message is committed by the Phase-24 send first; what a connected
+  person then receives is that committed row read FOR THEM, through the same access decision, at the
+  moment of delivery. A transport room is how candidate sockets are found, never authority: a teacher
+  whose assignment was revoked, a withdrawn learner, a blocked pair, a closed or moderated
+  conversation receive nothing new on the next event.
+- **Presence and typing are contact, not data.** Held in the realtime process's memory only,
+  per conversation; shown to the other person only while that person could send to the conversation
+  now (the send gate, so a blocked pair see neither); typing carries a boolean, never text; both vanish
+  on disconnect, on a short expiry and on a restart.
+- **Person-facing only.** Teachers, learners and support requesters use the transport; a support
+  staff member's reading stays the audited administration surface (§15.5).
+- **Recovery is catch-up.** A client that missed anything — a dropped connection, a restarted
+  process — asks for the messages after the highest sequence it holds; nothing is lost and nothing is
+  delivered twice.
+
 ---
 
 ## 16. Migration & Provenance

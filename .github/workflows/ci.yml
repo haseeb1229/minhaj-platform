@@ -231,6 +231,89 @@ jobs:
       - name: Build the runtime stage
         run: docker build --target dev -t minhaj-web-dev -f docker/web.Dockerfile .
 
+      # -----------------------------------------------------------------
+      # Phase 25 — the realtime image and the NGINX WebSocket seam.
+      #
+      # The PACKAGED process: built from `docker/realtime.Dockerfile`, started
+      # as it would be deployed (`NODE_ENV=production`, so every development
+      # default is refused), and proved to answer its probes. Then the pinned
+      # NGINX image renders the repository's template and must pass
+      # `nginx -t`, and a smoke run inside the network shows the proxy
+      # sending HTTP to a web upstream and the WebSocket upgrade to the
+      # realtime process, whose own handshake gate answers it.
+      #
+      # This job has no database, so nothing here completes a session — the
+      # values below are visibly synthetic and nothing authenticates with
+      # them. The full 101 upgrade with a real session through NGINX is proved
+      # in the Database foundation job.
+      # -----------------------------------------------------------------
+      - name: Build the realtime image
+        run: docker build -t minhaj-realtime -f docker/realtime.Dockerfile .
+
+      - name: Start the realtime image and prove its health
+        run: |
+          docker network create minhaj-ci-seam
+          docker run -d --name minhaj-realtime-ci --network minhaj-ci-seam \
+            -e AUTH_BASE_URL=http://127.0.0.1:8080 \
+            -e AUTH_SECRETS=1:ci-realtime-image-only-not-a-secret-0001 \
+            -e RATE_LIMIT_DIGEST_KEY=ci-realtime-image-only-rate-0001 \
+            -e EMAIL_DIGEST_KEY=ci-realtime-image-only-email-0001 \
+            -e NEWSLETTER_TOKEN_KEY=ci-realtime-image-only-news-0001 \
+            -e 'DATABASE_URL=sqlserver://database.invalid:1433;database=RealtimeImageOnly;user=image_only;password=ImageOnly1!aZ;encrypt=true;trustServerCertificate=true' \
+            minhaj-realtime
+          for attempt in $(seq 1 30); do
+            STATUS=$(docker inspect --format '{{.State.Health.Status}}' minhaj-realtime-ci)
+            if [ "$STATUS" = healthy ]; then
+              echo "realtime healthy after ${attempt} attempt(s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo 'the realtime image never became healthy' >&2
+          docker logs minhaj-realtime-ci 2>&1 | tail -40 >&2
+          exit 1
+
+      # A stand-in WEB upstream: this job proves routing, not the web
+      # application (which the browser job serves through the same proxy).
+      - name: Validate the NGINX seam configuration
+        run: |
+          docker run -d --name minhaj-web-upstream-ci --network minhaj-ci-seam minhaj-realtime \
+            node -e "require('node:http').createServer((q, s) => s.end('web-upstream')).listen(3000)"
+          docker run --rm --network minhaj-ci-seam \
+            -e NGINX_ENVSUBST_FILTER='^MINHAJ_' \
+            -e MINHAJ_PUBLIC_HOST=127.0.0.1 \
+            -e MINHAJ_WEB_UPSTREAM=minhaj-web-upstream-ci:3000 \
+            -e MINHAJ_REALTIME_UPSTREAM=minhaj-realtime-ci:3200 \
+            -v "$PWD/docker/nginx/templates:/etc/nginx/templates:ro" \
+            nginx:1.30.6-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5 nginx -t
+
+      - name: WebSocket-through-proxy smoke
+        run: |
+          docker run -d --name minhaj-proxy-ci --network minhaj-ci-seam \
+            -e NGINX_ENVSUBST_FILTER='^MINHAJ_' \
+            -e MINHAJ_PUBLIC_HOST=127.0.0.1 \
+            -e MINHAJ_WEB_UPSTREAM=minhaj-web-upstream-ci:3000 \
+            -e MINHAJ_REALTIME_UPSTREAM=minhaj-realtime-ci:3200 \
+            -v "$PWD/docker/nginx/templates:/etc/nginx/templates:ro" \
+            nginx:1.30.6-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5
+          for attempt in $(seq 1 30); do
+            if docker exec minhaj-proxy-ci wget -q -O /dev/null --header 'Host: 127.0.0.1' http://127.0.0.1:8080/en; then
+              break
+            fi
+            sleep 1
+          done
+          docker run --rm --network minhaj-ci-seam \
+            -v "$PWD/scripts/realtime-seam-smoke.mjs:/smoke/realtime-seam-smoke.mjs:ro" \
+            minhaj-realtime node /smoke/realtime-seam-smoke.mjs \
+            minhaj-realtime-ci:3200 minhaj-proxy-ci:8080 http://127.0.0.1:8080
+
+      - name: Stop the realtime seam
+        if: always()
+        run: |
+          docker logs minhaj-proxy-ci 2>&1 | tail -20 || true
+          docker rm -f minhaj-proxy-ci minhaj-web-upstream-ci minhaj-realtime-ci || true
+          docker network rm minhaj-ci-seam || true
+
       # A compose file that does not parse is a broken developer setup.
       #
       # `MSSQL_SA_PASSWORD` is declared `${...:?}` so the stack fails closed
@@ -513,6 +596,44 @@ jobs:
           node scripts/assert-messaging-proofs.mjs messaging-report.json
 
       # -----------------------------------------------------------------
+      # Phase 25 — the realtime process's live proofs.
+      #
+      # The REAL realtime process, spawned from its composition entry against
+      # a disposable database as the runtime principal, driven by real
+      # socket.io-client WebSockets carrying real Better Auth sessions: the
+      # handshake (cookie only, exact Origin, active account), every event and
+      # every outbound frame decided for its person now (the outbound leak
+      # matrix), commit-before-announce, SIGKILL and restart with exact
+      # catch-up, presence and typing never persisted, and the pinned NGINX
+      # image in front of it (Docker is the runner's own). They skip without a
+      # database, so the assertion below fails the job if any did not run.
+      # -----------------------------------------------------------------
+      - name: Realtime proof (real process, real SQL Server, NGINX seam)
+        run: |
+          npm run test:realtime -- --reporter=json --outputFile=realtime-report.json
+          node scripts/assert-realtime-proofs.mjs realtime-report.json
+
+      # The proofs remove the proxy containers they start and prove them gone;
+      # this checks INDEPENDENTLY, with a marker so a failed inspection cannot
+      # read as "none".
+      - name: Verify no realtime proof container survives
+        if: always()
+        run: |
+          set -eu
+          SCAN=$(docker ps --all --filter 'name=minhaj-realtime-proof-proxy-' --format '{{.Names}}'; echo CONTAINER_SCAN_COMPLETE)
+          if [ "$(printf '%s\n' "$SCAN" | grep -Fxc CONTAINER_SCAN_COMPLETE || true)" -ne 1 ]; then
+            echo 'The container inspection produced no conclusive result.'
+            exit 1
+          fi
+          LEFT=$(printf '%s\n' "$SCAN" | grep -Fvx CONTAINER_SCAN_COMPLETE || true)
+          if [ -n "$(printf '%s' "$LEFT" | tr -d '[:space:]')" ]; then
+            echo 'Realtime proof containers survived the run:'
+            printf '%s\n' "$LEFT"
+            exit 1
+          fi
+          echo 'No realtime proof container remains.'
+
+      # -----------------------------------------------------------------
       # Phase 17 — the search foundation's live proofs.
       #
       # Real SQL Server Full-Text Search: the Arabic, Urdu, English and mixed-
@@ -718,8 +839,15 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Phase 25: the harness puts the pinned NGINX image in front of the web
+      # and realtime processes, as the browser's front door. Pulled here so the
+      # download is not spent inside Playwright's server-readiness window.
+      - name: Pull the pinned NGINX image
+        run: docker pull nginx:1.30.6-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5
+
       # `scripts/browser-server.mjs` starts the application against a
-      # disposable database and drops it on the way out; Playwright starts and
+      # disposable database — the web server, the realtime process and NGINX
+      # in front of both — and drops it on the way out; Playwright starts and
       # stops that script.
       - name: Browser flows
         run: npm run test:browser

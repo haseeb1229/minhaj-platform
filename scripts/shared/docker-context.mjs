@@ -244,7 +244,9 @@ function fixedCorpus() {
     '',
     'docker',
     'apps/web',
+    'apps/realtime',
     'packages/database',
+    'docker/nginx',
     'tests/fixtures',
     'a/b/c/d/e',
     'apps/web/src/app/[locale]',
@@ -327,6 +329,7 @@ export const requiredContextPaths = Object.freeze([
   'package.json',
   'package-lock.json',
   'apps/web/package.json',
+  'apps/realtime/package.json',
   'packages/database/package.json',
   'packages/server-core/src/logging/redaction.ts',
   'packages/server-core/src/logging/logger.ts',
@@ -345,6 +348,12 @@ export const requiredContextPaths = Object.freeze([
   '.dockerignore',
   'docker/web.Dockerfile',
   'docker/compose.yaml',
+  // Phase 25: the realtime image's own Dockerfile, the composition entry it
+  // runs, and the proxy template the test stage's packaging suite reads.
+  'docker/realtime.Dockerfile',
+  'docker/nginx/templates/default.conf.template',
+  'apps/realtime/src/index.ts',
+  'apps/web/src/composition/realtime-main.ts',
   '.github/workflows/ci.yml',
   // The Round 6 and Round 7 fixture trees, whose whole point is that their
   // directory names look generated. The re-includes that admit them are the

@@ -847,6 +847,30 @@ socket input Zod-validated. **Typing state is ephemeral and never persisted.** (
 
 ---
 
+### 12.6 As delivered (Phase 25)
+
+- **Handshake.** WebSocket transport only. The `Origin` must equal the canonical application origin
+  exactly — a missing or other origin is refused even with a valid cookie, which is the Cross-Site
+  WebSocket Hijacking defence. The person is the session the browser's own cookie resolves through
+  the SAME `SessionService`; query strings and Socket.IO auth payloads never authenticate, and no
+  token is issued for the socket. Disabled, suspended and closed accounts are refused.
+- **Every event, now.** Strict Zod parse, a per-connection budget, then the session re-resolved for
+  the same active account — or the event is refused and the socket disconnected — then the Messaging
+  service decides. Nothing about authority is cached for a connection's lifetime.
+- **Every outbound event, now.** Before a message, presence or typing frame reaches a socket, that
+  socket's session is re-resolved and Messaging decides for THAT recipient (the message is read from
+  SQL for them). Room membership grants nothing; a revoked teacher, a withdrawn learner, a blocked
+  pair, a closed or moderated conversation and a revoked support key receive nothing new.
+- **Bounds.** Frames are capped at 64 KiB — no attachment bytes travel the socket — with 20
+  subscriptions and per-event budgets per connection, on the single instance (no cross-instance
+  claim). Unknown events are ignored; malformed input never reaches a service.
+- **Privacy.** Presence and typing are process memory only, never persisted, logged or audited;
+  typing carries no text. Logs carry operation, outcome and a correlation id — never a cookie,
+  header, token, body or name. Support staff do not use the socket, so their audited access remains
+  the only one.
+- **Proxy.** NGINX proxies only the canonical host, sets Host and forwarding headers itself and
+  clears client-supplied `X-Forwarded-Host`/`Forwarded`; the socket path is GET-only and uncached.
+
 ## 13. Audit requirements
 
 Audit logging is a **domain requirement**, distinct from application logging.

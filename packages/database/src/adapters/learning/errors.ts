@@ -12,8 +12,11 @@ import 'server-only';
  * are built from, in `./shared.ts`, which the entry never names.
  */
 export class LearningDataError extends Error {
-  constructor(readonly reason: string) {
+  readonly reason: string;
+
+  constructor(reason: string) {
     super(reason);
+    this.reason = reason;
     this.name = 'LearningDataError';
   }
 }

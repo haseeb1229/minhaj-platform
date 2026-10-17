@@ -9,10 +9,12 @@ import type { MessagingSurface } from '@minhaj/contracts/messaging';
 
 import { ActionForm, type FormActionState } from '@/app/[locale]/(identity)/form-state';
 import { PersonalFrame, PersonalLinks } from '@/components/personal/parts';
+import { displayTimeZone } from '@/components/personal/presentation';
 import { TeacherFrame } from '@/components/teacher/parts';
 import { Alert, EmptyState, TextLink } from '@/components/ui';
 import { messagingRuntime } from '@/composition/messaging';
 import { CatchUpButton } from './catch-up.client';
+import { LiveConversation, LiveStatus, LiveThread, type LiveLabels } from './live.client';
 import { MarkReadOnView } from './mark-read.client';
 import {
   Composer,
@@ -23,10 +25,12 @@ import {
   ReportMessage,
   SafetyPanel,
   SendState,
+  ThreadItems,
   UnreadBadge,
   counterpartName,
   messagingLinks,
   messagingMessages,
+  threadLabels,
   type MessagingTranslator,
   type ThreadMessage,
 } from './parts';
@@ -57,7 +61,33 @@ import { courseListings, messagingRead, participantNames } from './read';
  * DELIVERY IS ON REFRESH. "Check for new messages" asks the durable catch-up
  * read and re-renders; nothing polls. The newest page, once shown, is marked
  * read — by the island after mount, or by a plain form without JavaScript.
+ *
+ * AND LIVE WHEN IT CAN BE (Phase 25). The newest page of a conversation that
+ * still takes part in delivery is wrapped in the realtime island: the history
+ * rendered here stays the base, live messages are appended after it, the
+ * composer sends through the socket while it is connected, and the status line
+ * says in words whether live updates are on. Everything above still holds
+ * with the transport down or JavaScript off. An older page, an ended, closed
+ * or read-only conversation has no island: nothing can arrive there.
  */
+
+/** The words the realtime island speaks with. */
+function liveLabels(t: MessagingTranslator): LiveLabels {
+  const name = { name: '{name}' };
+  return {
+    connecting: t('live.connecting'),
+    live: t('live.live'),
+    reconnecting: t('live.reconnecting'),
+    unavailable: t('live.unavailable'),
+    online: t('live.online', name),
+    offline: t('live.offline', name),
+    typing: t('live.typing', name),
+    arrived: t('live.arrived', name),
+    more: t('live.more'),
+    reportReload: t('live.reportReload'),
+    you: t('you'),
+  };
+}
 
 type Action = (state: FormActionState, form: FormData) => Promise<FormActionState>;
 
@@ -160,6 +190,8 @@ export async function ConversationScreen({
   const path = conversationPath(surface, locale, summary.id);
   const newest = before === null;
   const lastShown = history.messages.at(-1)?.sequence ?? summary.lastSequence;
+  const deliverable = summary.access === 'available' && summary.state === 'open';
+  const live = newest && deliverable;
 
   const messages: ThreadMessage[] = history.messages.map((message) => ({
     id: message.id,
@@ -171,6 +203,40 @@ export async function ConversationScreen({
     sentAt: message.sentAt,
     attachments: message.attachments,
   }));
+
+  const report = (message: ThreadMessage) =>
+    message.own || message.withheld ? null : (
+      <ReportMessage
+        action={actions.report}
+        locale={locale}
+        conversationId={summary.id}
+        messageId={message.id}
+        t={t}
+      />
+    );
+
+  // The island wraps the send state, the thread and the composer — so the
+  // composer reaches its context — and nothing else; the safety acts stay
+  // plain forms outside it.
+  const withLive = (children: ReactNode) =>
+    live ? (
+      <LiveConversation
+        conversationId={summary.id}
+        path={path}
+        floor={lastShown}
+        baseIds={messages.map((message) => message.id)}
+        locale={locale}
+        timeZone={displayTimeZone(timeZone)}
+        counterpart={name}
+        presence={direct}
+        labels={liveLabels(t)}
+        thread={threadLabels(t)}
+      >
+        {children}
+      </LiveConversation>
+    ) : (
+      children
+    );
 
   const description = (
     <>
@@ -198,87 +264,103 @@ export async function ConversationScreen({
       }
       description={description}
     >
-      <SendState view={view} t={t} />
+      {withLive(
+        <>
+          <SendState view={view} t={t} />
 
-      <section aria-labelledby="thread-heading" className="flex min-w-0 flex-col gap-4">
-        <h2 id="thread-heading" className="text-lg font-semibold tracking-tight">
-          {t('thread.heading')}
-        </h2>
-        <HistoryNav path={path} before={history.before} current={before} t={t} />
-        {messages.length === 0 ? (
-          <EmptyState>{newest ? t('thread.empty') : t('thread.beyond')}</EmptyState>
-        ) : (
-          <MessageThread
-            messages={messages}
-            label={t('thread.label', { name })}
-            attachmentHref={participantAttachmentHref}
-            locale={locale}
-            timeZone={timeZone}
-            t={t}
-            after={(message) =>
-              message.own || message.withheld ? null : (
-                <ReportMessage
-                  action={actions.report}
+          <section
+            aria-labelledby="thread-heading"
+            className="flex min-w-0 flex-col gap-4"
+          >
+            <h2 id="thread-heading" className="text-lg font-semibold tracking-tight">
+              {t('thread.heading')}
+            </h2>
+            <HistoryNav path={path} before={history.before} current={before} t={t} />
+            {live ? (
+              <>
+                <LiveThread
+                  label={t('thread.label', { name })}
+                  empty={<EmptyState>{t('thread.empty')}</EmptyState>}
+                >
+                  {messages.length === 0 ? undefined : (
+                    <ThreadItems
+                      messages={messages}
+                      attachmentHref={participantAttachmentHref}
+                      locale={locale}
+                      timeZone={timeZone}
+                      t={t}
+                      after={report}
+                    />
+                  )}
+                </LiveThread>
+                <LiveStatus />
+              </>
+            ) : messages.length === 0 ? (
+              <EmptyState>{newest ? t('thread.empty') : t('thread.beyond')}</EmptyState>
+            ) : (
+              <MessageThread
+                messages={messages}
+                label={t('thread.label', { name })}
+                attachmentHref={participantAttachmentHref}
+                locale={locale}
+                timeZone={timeZone}
+                t={t}
+                after={report}
+              />
+            )}
+            {live ? (
+              <CatchUpButton
+                conversationId={summary.id}
+                after={lastShown}
+                locale={locale}
+                labels={{
+                  button: t('catchUp.button'),
+                  checking: t('catchUp.checking'),
+                  none: t('catchUp.none'),
+                  found: t('catchUp.found', { count: '{count}' }),
+                  more: t('catchUp.more'),
+                  failures: messagingMessages(t),
+                }}
+              />
+            ) : null}
+            {newest && summary.unread > 0 ? (
+              <>
+                <MarkReadOnView
+                  action={actions.markRead}
                   locale={locale}
                   conversationId={summary.id}
-                  messageId={message.id}
-                  t={t}
+                  sequence={lastShown}
                 />
-              )
-            }
-          />
-        )}
-        {newest && summary.access === 'available' && summary.state === 'open' ? (
-          <CatchUpButton
-            conversationId={summary.id}
-            after={lastShown}
-            locale={locale}
-            labels={{
-              button: t('catchUp.button'),
-              checking: t('catchUp.checking'),
-              none: t('catchUp.none'),
-              found: t('catchUp.found', { count: '{count}' }),
-              more: t('catchUp.more'),
-              failures: messagingMessages(t),
-            }}
-          />
-        ) : null}
-        {newest && summary.unread > 0 ? (
-          <>
-            <MarkReadOnView
-              action={actions.markRead}
+                <ActionForm
+                  action={actions.markRead}
+                  submitLabel={t('read.mark')}
+                  pendingLabel={t('common.working')}
+                  tone="secondary"
+                  messages={messagingMessages(t, { success: t('read.done') })}
+                >
+                  <input type="hidden" name="locale" value={locale} />
+                  <input type="hidden" name="conversationId" value={summary.id} />
+                  <input type="hidden" name="sequence" value={String(lastShown)} />
+                </ActionForm>
+              </>
+            ) : null}
+          </section>
+
+          {newest && view.canSend ? (
+            <Composer
+              action={actions.send}
               locale={locale}
               conversationId={summary.id}
-              sequence={lastShown}
+              t={t}
             />
-            <ActionForm
-              action={actions.markRead}
-              submitLabel={t('read.mark')}
-              pendingLabel={t('common.working')}
-              tone="secondary"
-              messages={messagingMessages(t, { success: t('read.done') })}
-            >
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="conversationId" value={summary.id} />
-              <input type="hidden" name="sequence" value={String(lastShown)} />
-            </ActionForm>
-          </>
-        ) : null}
-      </section>
-
-      {newest && view.canSend ? (
-        <Composer
-          action={actions.send}
-          locale={locale}
-          conversationId={summary.id}
-          t={t}
-        />
-      ) : null}
-      {!newest && view.canSend ? (
-        <p>
-          <TextLink href={path}>{t('thread.replyNewest')}</TextLink>
-        </p>
-      ) : null}
+          ) : null}
+          {!newest && view.canSend ? (
+            <p>
+              <TextLink href={path}>{t('thread.replyNewest')}</TextLink>
+            </p>
+          ) : null}
+        </>,
+      )}
 
       <SafetyPanel
         view={view}

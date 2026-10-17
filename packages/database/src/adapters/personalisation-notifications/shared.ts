@@ -21,8 +21,11 @@ export type Client = Prisma.TransactionClient;
  * never a note, a title, an address or a target.
  */
 export class PersonalDataError extends Error {
-  constructor(readonly reason: string) {
+  readonly reason: string;
+
+  constructor(reason: string) {
     super(reason);
+    this.reason = reason;
     this.name = 'PersonalDataError';
   }
 }

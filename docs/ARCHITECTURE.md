@@ -100,6 +100,7 @@ is the only split in the system.
 A process that exists before the domain it serves inevitably accretes logic that belongs
 elsewhere. `apps/realtime` is introduced in the Messaging phase, after the shared server
 boundary below is built and proven — not in Phase 0B merely because it appears on a diagram.
+**Delivered in Phase 25**, after Phase 24 proved that boundary (§3.6).
 
 ---
 
@@ -384,6 +385,33 @@ still works through the web application — delivery degrades from instant to on
 Socket.IO runs single-instance when introduced. Horizontally scaling the realtime tier would
 require an adapter; that is accepted until measured volume justifies it, and is revisitable
 without domain change.
+
+### 3.6 As delivered (Phase 25)
+
+```
+browser ──▶ NGINX ──▶ /socket.io/ (WebSocket upgrade) ──▶ apps/realtime (transport)
+                │                                            │ injected: SessionService.resolve,
+                └──▶ everything else ──▶ apps/web            │           RealtimeMessaging
+                                                             ▼
+                        realtime process composition root (Layer 4, composition workspace)
+                        identity-mechanics.ts · messaging-wiring.ts — shared with apps/web
+                                                             ▼
+                        server-core: session · authorization · messaging · relationships
+                                                             ▼
+                        context-owned adapters in packages/database ──▶ SQL Server
+```
+
+- **The transport holds no capability.** `apps/realtime` imports Node, Socket.IO, the contracts and
+  `server-core`, and is checked transitively under the `realtime` role (§6.4): no database package,
+  Prisma, driver or adapter is reachable from it by any chain, and no exception exists.
+- **The process still needs Layer 4.** Wiring ports to adapters is composition, so the realtime
+  process has its own composition root in the composition workspace. It is plain-Node runnable
+  (explicit `.ts` paths, `--conditions=react-server`), builds Better Auth's configuration and
+  Messaging's dependencies through the SAME two builders the web process uses, and hands the transport
+  `SessionService.resolve` and `RealtimeMessaging` — a narrowed view over the same
+  `createMessagingService`. It holds no Storage capability: attachment bytes stay HTTP.
+- **Single instance, no Redis** (§3.5). Presence, typing and rooms are process memory; correctness
+  never depends on them, because delivery re-reads SQL per recipient and recovery is durable catch-up.
 
 ### 3.5.1 Horizontal scaling of the web tier is conditional, not automatic
 
@@ -737,7 +765,7 @@ operator and a page never depends on provider uptime.
 minhaj-platform/
 ├── apps/
 │   ├── web/                Next.js 16 application
-│   └── realtime/           Introduced in the Messaging phase — NOT in Phase 0B
+│   └── realtime/           The realtime transport — delivered in Phase 25 (§3.6)
 ├── packages/
 │   ├── server-core/        Server-only HOST for selected context-owned services
 │   │                    (owns nothing; never in a client bundle)
@@ -1073,7 +1101,9 @@ Linux host · Docker Compose · NGINX stable reverse proxy · self-hosted Node a
 
 NGINX terminates TLS, applies security headers and coarse rate limiting, serves static
 assets, proxies HTTP to `web`, and upgrades WebSocket connections to `realtime` once that
-process exists.
+process exists. **Phase 25 delivered the upgrade seam** — `docker/nginx/templates/default.conf.template`
+on `nginx:1.30.6-alpine` pinned by digest, proven in CI — and nothing more of the production edge:
+TLS, DNS, the full security-header set and deployment automation remain Phases 28 and 34.
 
 **On the two labelled paths.** `web` reaches SQL Server through **bounded-context services and
 their persistence ports** — `server-core` is on that path only for the explicitly admitted

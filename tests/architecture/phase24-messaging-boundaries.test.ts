@@ -134,12 +134,20 @@ function model(schema: string, name: string): string {
  * Non-realtime
  * ========================================================================= */
 
-describe('Phase 24 is not realtime', () => {
-  it('has no realtime app', async () => {
-    expect(await exists('apps/realtime')).toBe(false);
-  });
+describe('Phase 24 Messaging stays transport-free; Phase 25 owns the socket', () => {
+  // Phase 25 introduced the realtime transport. The socket libraries are
+  // admitted exactly where they belong — the server in `apps/realtime`, the
+  // client in the web workspace's Messaging client islands — and nowhere else;
+  // the Phase-24 domain service itself still opens no socket (the realtime
+  // boundary file guards the transport).
+  const SOCKET_PACKAGE =
+    /^(?:socket\.io(?:-client|-adapter)?|ws|engine\.io(?:-client)?|@socket\.io\/.*)$/u;
+  const ADMITTED: Readonly<Record<string, string>> = {
+    'apps/realtime/package.json': 'socket.io',
+    'apps/web/package.json': 'socket.io-client',
+  };
 
-  it('declares no socket dependency in any workspace manifest', async () => {
+  it('declares a socket dependency only where Phase 25 admits it', async () => {
     const manifests = [
       'package.json',
       ...(await walk('apps')).filter((file) => file.endsWith('/package.json')),
@@ -157,26 +165,37 @@ describe('Phase 24 is not realtime', () => {
         'optionalDependencies',
         'peerDependencies',
       ].flatMap((field) => Object.keys(declared[field] ?? {}));
-      for (const name of names)
-        expect(name, `${manifest} declares ${name}`).not.toMatch(
-          /^(?:socket\.io(?:-client|-adapter)?|ws|engine\.io(?:-client)?|@socket\.io\/.*)$/u,
-        );
+      for (const name of names.filter((declared) => SOCKET_PACKAGE.test(declared)))
+        expect(ADMITTED[manifest], `${manifest} declares ${name}`).toBe(name);
     }
   });
 
-  it('imports no socket library, opens no socket and polls nothing', async () => {
+  it('imports a socket library only from the transport and the Messaging client islands', async () => {
     const files = [...(await sources('apps')), ...(await sources('packages'))];
     expect(files.length).toBeGreaterThan(100);
     for (const file of files)
-      for (const specifier of imports(await read(file)))
-        expect(specifier, `${file} imports ${specifier}`).not.toMatch(
-          /^(?:socket\.io(?:-client)?|ws|engine\.io(?:-client)?)(?:\/|$)/u,
-        );
+      for (const specifier of imports(await read(file))) {
+        if (
+          !/^(?:socket\.io(?:-client)?|ws|engine\.io(?:-client)?)(?:\/|$)/u.test(
+            specifier,
+          )
+        )
+          continue;
+        const admitted =
+          (specifier === 'socket.io' && file.startsWith('apps/realtime/src/')) ||
+          (specifier === 'socket.io-client' &&
+            /^apps\/web\/src\/components\/messaging\/[^/]+\.client\.tsx?$/u.test(file));
+        expect(admitted, `${file} imports ${specifier}`).toBe(true);
+      }
 
-    // No socket, stream or timer drives a Messaging surface: new messages
-    // arrive when the person asks (the catch-up read), never pushed or polled.
+    // No raw socket, event stream or polling timer drives a Messaging
+    // surface or the domain service: live delivery is the Phase-25 transport's,
+    // through socket.io-client in the client island, and durable catch-up is
+    // read on request. The island itself is checked by its own boundary file.
     const messaging = [
-      ...(await sources('apps/web/src/components/messaging')),
+      ...(await sources('apps/web/src/components/messaging')).filter(
+        (file) => !/\.client\.tsx?$/u.test(file),
+      ),
       ...(await Promise.all(SURFACES.map(sources))).flat(),
       ...(await Promise.all(ROUTES.map(sources))).flat(),
       ...(await sources(SERVICE)),

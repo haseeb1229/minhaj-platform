@@ -5628,6 +5628,18 @@
       "found": "New messages: {count}. They are shown above.",
       "more": "More are waiting — check again after reading."
     },
+    "live": {
+      "connecting": "Connecting to live updates…",
+      "live": "Live updates are on: new messages appear here as they arrive.",
+      "reconnecting": "Live updates were interrupted. Reconnecting…",
+      "unavailable": "Live updates unavailable — messages still send and appear on refresh.",
+      "online": "{name} has this conversation open.",
+      "offline": "{name} does not have this conversation open.",
+      "typing": "{name} is typing…",
+      "arrived": "New message from {name}.",
+      "more": "More new messages are waiting. Reload the page to see them all.",
+      "reportReload": "Reload the page to report this message"
+    },
     "read": {
       "mark": "Mark as read",
       "done": "Marked as read."

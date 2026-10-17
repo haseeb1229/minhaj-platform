@@ -73,8 +73,11 @@ export type MessagingRefusalReason = (typeof MESSAGING_REFUSAL_REASONS)[number];
 
 /** A refusal Messaging chose to give. Anything else thrown is an outage. */
 export class MessagingRefusal extends Error {
-  constructor(readonly reason: MessagingRefusalReason) {
+  readonly reason: MessagingRefusalReason;
+
+  constructor(reason: MessagingRefusalReason) {
     super(`Messaging refused: ${reason}`);
+    this.reason = reason;
     this.name = 'MessagingRefusal';
   }
 }

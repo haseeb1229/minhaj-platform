@@ -18,8 +18,11 @@ import { requestSearchIndexing } from '../../search-intent.ts';
 import { createScholarlyPersistence, createScholarlyPublicReader } from './scholarly.ts';
 
 class LibraryDataError extends Error {
-  constructor(readonly reason: string) {
+  readonly reason: string;
+
+  constructor(reason: string) {
     super(reason);
+    this.reason = reason;
   }
 }
 function refuse(error: unknown): never {

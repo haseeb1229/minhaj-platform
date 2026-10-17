@@ -12,6 +12,13 @@ import { fileURLToPath } from 'node:url';
  * behind. The same applies to its temporary storage root. Global teardown runs
  * in Playwright's own process and closes both gaps. The database helper checks
  * its exact disposable name; the storage path is checked below before removal.
+ *
+ * PHASE 25. The run also owns a realtime process and an NGINX container. A
+ * spec may have restarted the realtime process from its own worker, which no
+ * process-tree termination reaches, so this teardown stops the CURRENT one
+ * (positively identified by its marker, never by PID alone) and removes the
+ * proxy (only by its generated name), and proves both gone — BEFORE the
+ * database either of them could still be using is dropped.
  */
 async function removeBrowserStorageRoot(value: unknown): Promise<void> {
   if (typeof value !== 'string') {
@@ -50,6 +57,21 @@ async function removeBrowserStorageRoot(value: unknown): Promise<void> {
   await rm(root, { recursive: true, force: true });
 }
 
+/** Stops the run's realtime process and removes its proxy, proving both gone. */
+async function stopRunProcesses(marker: unknown, proxyContainer: unknown): Promise<void> {
+  if (typeof marker !== 'string' || typeof proxyContainer !== 'string') {
+    throw new Error(
+      'Browser environment does not identify its realtime process and proxy.',
+    );
+  }
+  const { recordedRealtimePid, removeFrontDoor, stopOwnRealtime } =
+    await import('../../scripts/shared/realtime-harness.mjs');
+
+  const pid = recordedRealtimePid();
+  if (pid !== null) await stopOwnRealtime(pid, marker);
+  await removeFrontDoor(proxyContainer);
+}
+
 export default async function globalTeardown(): Promise<void> {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const repoRoot = path.resolve(here, '..', '..');
@@ -66,9 +88,20 @@ export default async function globalTeardown(): Promise<void> {
   const environment = JSON.parse(source) as {
     databaseName?: unknown;
     storageRoot?: unknown;
+    proxyContainer?: unknown;
+    realtime?: { marker?: unknown };
   };
   if (typeof environment.databaseName !== 'string') {
     throw new Error('Browser environment does not identify its disposable database.');
+  }
+
+  // A failure here is reported, but only AFTER the database is dropped: a
+  // process that would not stop must not also leave the database behind.
+  let stopFailure: unknown = null;
+  try {
+    await stopRunProcesses(environment.realtime?.marker, environment.proxyContainer);
+  } catch (error) {
+    stopFailure = error;
   }
 
   const { loadLocalDatabaseEnvironment } =
@@ -95,5 +128,7 @@ export default async function globalTeardown(): Promise<void> {
   }
 
   await removeBrowserStorageRoot(environment.storageRoot);
+  await rm(path.join(repoRoot, 'test-results', 'browser-realtime.json'), { force: true });
   await rm(environmentFile, { force: true });
+  if (stopFailure !== null) throw stopFailure;
 }

@@ -1,13 +1,25 @@
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import type { Browser, BrowserContext, Locator, Page, Request } from '@playwright/test';
 
 import { PLATFORM_ADMINISTRATOR_PERMISSIONS } from '../../packages/contracts/src/identity/permissions.ts';
 import { syntheticPng } from '../../packages/database/src/lifecycle/phase12-fixture.ts';
 import type { SqlSession } from '../../packages/database/src/lifecycle/sql-connection.ts';
+import {
+  composerBox,
+  copy,
+  expectHeadingsInOrder,
+  expectLabelledControls,
+  expectVisibleFocus,
+  mainHeading,
+  messageFrom,
+  overflowOf,
+  plural,
+  send,
+  seedTeaching,
+  sendButton,
+  tabTo,
+} from './messaging-pages';
 import {
   accountIdFor,
   baseUrl,
@@ -45,7 +57,11 @@ import {
  *
  * NOTHING HERE DEPENDS ON REALTIME. Delivery is on request — a reload or the
  * "Check for new messages" press — which is the whole of this phase's
- * transport.
+ * transport. Since Phase 25 the browser run has a realtime process behind its
+ * front door, so every context here REFUSES the WebSocket: each page is then
+ * exactly the page without live updates — which is also the degraded state
+ * Phase 25 promises — and "nothing pushed it here" stays a true statement.
+ * Live delivery is `realtime.spec.ts`'s to prove.
  *
  * ONE SERIAL FILE, AND A DEPENDENT PROJECT. Every step reads what the one
  * before it did. A teacher–student conversation exists only on a published
@@ -103,56 +119,6 @@ const LONG_TOKEN = 'x'.repeat(300);
 const LONG_URL = `https://example.invalid/${'unbroken-path-segment-'.repeat(12)}?${'query=value&'.repeat(12)}end`;
 const LONG_FILENAME = `${'synthetic-attachment-with-a-long-name-'.repeat(4)}${run}.png`;
 
-/* ===========================================================================
- * Copy, read from the catalogues the pages render
- * ========================================================================= */
-
-const MESSAGES = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-  '..',
-  'apps',
-  'web',
-  'messages',
-);
-
-type UiLocale = 'en' | 'ur' | 'ar';
-
-const CATALOGUE: Readonly<Record<UiLocale, unknown>> = {
-  en: JSON.parse(readFileSync(path.join(MESSAGES, 'en.json'), 'utf8')),
-  ur: JSON.parse(readFileSync(path.join(MESSAGES, 'ur.json'), 'utf8')),
-  ar: JSON.parse(readFileSync(path.join(MESSAGES, 'ar.json'), 'utf8')),
-};
-
-/** One message by its dotted key, with `{name}` placeholders filled. */
-function copy(
-  key: string,
-  values: Readonly<Record<string, string | number>> = {},
-  locale: UiLocale = 'en',
-): string {
-  let node: unknown = CATALOGUE[locale];
-  for (const part of key.split('.'))
-    node =
-      typeof node === 'object' && node !== null
-        ? (node as Record<string, unknown>)[part]
-        : undefined;
-  if (typeof node !== 'string') throw new Error(`No copy ${locale}:${key}`);
-  return Object.entries(values).reduce(
-    (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
-    node,
-  );
-}
-
-/** An English `{count, plural, one {…} other {…}}` message, for one count. */
-function plural(key: string, count: number): string {
-  const match = /one \{([^}]*)\} other \{([^}]*)\}/u.exec(copy(key));
-  if (match === null) throw new Error(`No plural forms in ${key}`);
-  return (count === 1 ? (match[1] ?? '') : (match[2] ?? '')).replaceAll(
-    '#',
-    String(count),
-  );
-}
-
 /** A SQL Server Unicode literal. Values are this file's own constants. */
 const n = (value: string) => `N'${value.replaceAll("'", "''")}'`;
 
@@ -161,124 +127,9 @@ async function scalar(statement: string): Promise<number> {
   return Number(row?.value ?? Number.NaN);
 }
 
-/* ===========================================================================
- * Page helpers
- * ========================================================================= */
-
-/** Moves focus by Tab alone until it lands on `target`. */
-async function tabTo(page: Page, target: Locator): Promise<void> {
-  const handle = await target.elementHandle();
-  if (handle === null) throw new Error('The keyboard target is not on the page.');
-  let reached = false;
-  for (let step = 0; step < 200 && !reached; step += 1) {
-    await page.keyboard.press('Tab');
-    reached = await handle.evaluate((element) => document.activeElement === element);
-  }
-  expect(reached, 'reached by Tab alone').toBe(true);
-}
-
-/** The focused element shows a visible focus indicator. */
-async function expectVisibleFocus(target: Locator, where: string): Promise<void> {
-  const focus = await target.evaluate((element) => {
-    const style = globalThis.getComputedStyle(element);
-    return {
-      visible: element.matches(':focus-visible'),
-      outline: style.outlineStyle,
-      width: Number.parseFloat(style.outlineWidth),
-      shadow: style.boxShadow,
-    };
-  });
-  expect(focus.visible, where).toBe(true);
-  expect(
-    (focus.outline !== 'none' && focus.width > 0) || focus.shadow !== 'none',
-    `${where} ${JSON.stringify(focus)}`,
-  ).toBe(true);
-}
-
-/** Horizontal overflow of the document, in CSS pixels (≤ 0 means none). */
-function overflowOf(page: Page): Promise<number> {
-  return page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-}
-
-/** Exactly one `h1`, first, and no level skipped on the way down. */
-async function expectHeadingsInOrder(page: Page, where: string): Promise<void> {
-  const levels = await page
-    .locator('main')
-    .first()
-    .locator('h1, h2, h3, h4, h5, h6')
-    .evaluateAll((headings) => headings.map((heading) => Number(heading.tagName[1])));
-  expect(levels[0], where).toBe(1);
-  expect(
-    levels.filter((level) => level === 1),
-    where,
-  ).toHaveLength(1);
-  for (let index = 1; index < levels.length; index += 1)
-    expect(
-      (levels[index] ?? 0) - (levels[index - 1] ?? 0),
-      `${where} ${JSON.stringify(levels)}`,
-    ).toBeLessThanOrEqual(1);
-}
-
-/** Every visible form control in the main region has an accessible label. */
-async function expectLabelledControls(page: Page, where: string): Promise<void> {
-  const unlabelled = await page
-    .locator('main')
-    .first()
-    .locator('input:not([type="hidden"]), select, textarea')
-    .evaluateAll((controls) =>
-      controls
-        .filter((control) => {
-          const element = control as HTMLInputElement;
-          const named =
-            (element.labels?.length ?? 0) > 0 ||
-            (element.getAttribute('aria-label') ?? '').trim() !== '' ||
-            (element.getAttribute('aria-labelledby') ?? '').trim() !== '';
-          return !named;
-        })
-        .map((control) => control.outerHTML.slice(0, 120)),
-    );
-  expect(unlabelled, where).toEqual([]);
-}
-
-/** The page's own first-level heading, once a streamed page has settled. */
-function mainHeading(page: Page): Locator {
-  return page.getByRole('main').getByRole('heading', { level: 1 }).first();
-}
-
 /** An administration screen's own section heading — it streams behind a loading state. */
 function sectionHeading(page: Page, text: string): Locator {
   return page.getByRole('main').getByRole('heading', { name: text, exact: true });
-}
-
-/** The composer's message box. */
-function composerBox(page: Page): Locator {
-  return page
-    .getByRole('main')
-    .getByRole('textbox', { name: copy('messages.composer.label'), exact: true });
-}
-
-/** The composer's submit button. */
-function sendButton(page: Page): Locator {
-  return page
-    .getByRole('main')
-    .getByRole('button', { name: copy('messages.composer.submit'), exact: true });
-}
-
-/** One message in a thread, by who sent it and something it says. */
-function messageFrom(page: Page, sender: string, text: string): Locator {
-  return page
-    .getByRole('main')
-    .getByRole('article', { name: copy('messages.thread.messageFrom', { name: sender }) })
-    .filter({ hasText: text });
-}
-
-/** Writes and sends one message through the composer, and waits for the page to say so. */
-async function send(page: Page, body: string): Promise<void> {
-  await composerBox(page).fill(body);
-  await sendButton(page).click();
-  await expect(page.getByRole('main')).toContainText(copy('messages.composer.sent'));
 }
 
 /** Presses "Check for new messages" and waits for the announced count. */
@@ -350,6 +201,8 @@ async function account(
     extraHTTPHeaders: { 'x-forwarded-for': `100.64.252.${String(index)}` },
   });
   contexts.push(context);
+  // The transport is refused, never reached: these proofs are of delivery on request.
+  await context.routeWebSocket(/\/socket\.io\//u, (socket) => socket.close());
   const page = await context.newPage();
   const { email } = await registerAndSignIn(page, prefix);
   const id = await accountIdFor(sql, email);
@@ -394,48 +247,17 @@ let conversationId: string;
 let supportId: string;
 let reportId: string;
 
-/**
- * Learning's facts, written as its owner's fixtures: one published live Course
- * with a whole syllabus, the learner's enrolment on it, and the teacher's
- * current scope on it under their live `teaching.perform` assignment — the
- * exact shape the teaching relationship is read from — and one scheduled
- * class of that Course, because My Teachers lists the teachers of a person's
- * classes.
- */
 async function seedLearning(): Promise<void> {
-  const [assignment] = await sql.query<{ id: string }>(`
-    SELECT TOP (1) ra.[id] AS [id] FROM [dbo].[RoleAssignment] ra
-      JOIN [dbo].[RolePermission] rp ON rp.[roleId]=ra.[roleId] AND rp.[permissionKey]=N'teaching.perform'
-      WHERE ra.[userId]=N'${teacher.id}' AND ra.[revokedAt] IS NULL;`);
-  if (assignment === undefined) throw new Error('The teacher holds no teaching role.');
-  // A scheduled class of the Course, ten days out, in UTC wall-clock time.
-  const day = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10);
-  const [starts, ends] = [`${day}T10:00`, `${day}T11:00`];
-
-  await sql.query(`
-    INSERT INTO [dbo].[Course] ([id],[slug],[primaryLocale],[state],[level],[format],[languageCode],[publishedAt],[version],[updatedAt]) VALUES
-      (N'${ids.course}', N'non-messaging-fixture-${run}', N'en', N'draft', N'beginner', N'live', N'en', NULL, 1, SYSUTCDATETIME());
-    INSERT INTO [dbo].[CourseLabel] ([courseId],[locale],[title],[summary],[description]) VALUES
-      (N'${ids.course}', N'en', ${n(TEXT.course)}, N'', N'');
-    INSERT INTO [dbo].[CourseModule] ([id],[courseId],[position]) VALUES
-      (N'${ids.module}', N'${ids.course}', 0);
-    INSERT INTO [dbo].[CourseModuleLabel] ([moduleId],[locale],[title],[summary]) VALUES
-      (N'${ids.module}', N'en', ${n(TEXT.module)}, N'');
-    INSERT INTO [dbo].[Lesson] ([id],[courseId],[moduleId],[position]) VALUES
-      (N'${ids.lesson}', N'${ids.course}', N'${ids.module}', 0);
-    INSERT INTO [dbo].[LessonLabel] ([lessonId],[locale],[title],[summary],[body]) VALUES
-      (N'${ids.lesson}', N'en', ${n(TEXT.lesson)}, N'', ${n(`${TEXT.lesson} body`)});
-    UPDATE [dbo].[Course] SET [state]=N'published', [publishedAt]=SYSUTCDATETIME(), [version]=2, [updatedAt]=SYSUTCDATETIME()
-      WHERE [id]=N'${ids.course}';
-    INSERT INTO [dbo].[Enrolment] ([userId],[courseId],[enrolledAt]) VALUES
-      (N'${learner.id}', N'${ids.course}', SYSUTCDATETIME());
-    INSERT INTO [dbo].[CourseTeachingAssignment] ([id],[courseId],[userId],[roleAssignmentId],[grantedAt]) VALUES
-      (N'${ids.scope}', N'${ids.course}', N'${teacher.id}', N'${assignment.id}', SYSUTCDATETIME());
-    IF NOT EXISTS (SELECT 1 FROM [dbo].[LiveLearningActivation])
-      INSERT INTO [dbo].[LiveLearningActivation] ([id],[authority],[authorisedBy]) VALUES (1, N'fixture', N'${SENTINEL} browser operator');
-    INSERT INTO [dbo].[ClassSession] ([id],[courseId],[kind],[scopeId],[startsAt],[endsAt],[timeZone],[startsLocal],[endsLocal],[state]) VALUES
-      (N'${ids.session}', N'${ids.course}', N'course', N'${ids.scope}', '${starts}:00', '${ends}:00', N'UTC', N'${starts}', N'${ends}', N'scheduled');
-  `);
+  await seedTeaching(sql, {
+    learnerId: learner.id,
+    teacherId: teacher.id,
+    ids,
+    slug: `non-messaging-fixture-${run}`,
+    course: TEXT.course,
+    module: TEXT.module,
+    lesson: TEXT.lesson,
+    operator: `${SENTINEL} browser operator`,
+  });
 }
 
 test.beforeAll(async ({ browser }) => {

@@ -27,8 +27,11 @@ export type Client = Prisma.TransactionClient;
  * its refusal list; nothing here carries a question, a ruling or a name.
  */
 export class FatwaDataError extends Error {
-  constructor(readonly reason: string) {
+  readonly reason: string;
+
+  constructor(reason: string) {
     super(reason);
+    this.reason = reason;
     this.name = 'FatwaDataError';
   }
 }

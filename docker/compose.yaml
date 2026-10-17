@@ -5,8 +5,11 @@
 # SQL Server is the only Phase 1 service added to the Phase 0B stack:
 #
 #   - SQL Server 2022 Developer is the local database target.
-#   - `realtime` is created in the Messaging phase, not scaffolded in advance.
-#   - NGINX belongs to the deployment phase.
+#   - Phase 25 adds `realtime` (the Socket.IO process) and `proxy`, the NGINX
+#     WebSocket SEAM in front of web and realtime. Both sit behind the
+#     `realtime` profile, so `docker compose up sqlserver` or `clamav` starts
+#     exactly what it always did. TLS, DNS and the full deployment shape
+#     remain the deployment phase's.
 #   - Redis is explicitly not adopted (TECH_STACK.md 15).
 #
 # Services are added by the phase that genuinely needs them.
@@ -100,6 +103,8 @@ services:
       NODE_ENV: development
       PORT: '3000'
       LOG_LEVEL: debug
+      # The schema's own default, unless the proxy profile names its origin.
+      AUTH_BASE_URL: ${MINHAJ_PUBLIC_ORIGIN:-http://localhost:3000}
       # Required for file watching to work across a bind mount.
       WATCHPACK_POLLING: 'true'
       # Inside the container the storage root is a named volume, deliberately
@@ -121,6 +126,66 @@ services:
       - minhaj-storage-data:/var/lib/minhaj/storage
     working_dir: /app
     init: true
+
+  # Phase 25 — the realtime process: Socket.IO over the SAME Messaging and
+  # Identity services the web process uses, composed by its own Layer-4 root
+  # (`apps/web/src/composition/realtime-main.ts`). It owns no data and no rule.
+  #
+  # Behind the `realtime` profile with `proxy`: `docker compose --profile
+  # realtime up` starts both. Not published on the host — the browser reaches it
+  # only through the proxy, at the same origin as the web pages, which is what
+  # its exact-Origin handshake check assumes.
+  #
+  # ONE PUBLIC ORIGIN FOR BOTH PROCESSES. A session cookie is verified against
+  # `AUTH_BASE_URL`, and the handshake admits only that origin, so web and
+  # realtime read the same `MINHAJ_PUBLIC_ORIGIN`. Its default is the web
+  # process's own default, so the stack without the profile behaves exactly as
+  # before; browse through the proxy with
+  # `MINHAJ_PUBLIC_ORIGIN=http://localhost:8080`.
+  realtime:
+    profiles: [realtime]
+    build:
+      context: ..
+      dockerfile: docker/realtime.Dockerfile
+    image: minhaj-platform-realtime:local
+    pull_policy: build
+    container_name: minhaj-realtime
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug
+      AUTH_BASE_URL: ${MINHAJ_PUBLIC_ORIGIN:-http://localhost:3000}
+      # The RUNTIME principal's URL as this container sees SQL Server (host
+      # `sqlserver`, port 1433) — never the migration principal's. Unset, the
+      # process refuses to start and names the variable.
+      DATABASE_URL: ${MINHAJ_CONTAINER_DATABASE_URL:-}
+      REALTIME_HOST: 0.0.0.0
+      REALTIME_PORT: '3200'
+    expose:
+      - '3200'
+    init: true
+
+  # Phase 25 — the NGINX WebSocket SEAM: ordinary HTTP to `web`, `/socket.io/`
+  # upgraded to `realtime`, forwarding headers set by NGINX and never passed
+  # through (`nginx/templates/default.conf.template`). TLS termination, DNS and
+  # the rest of the deployment front door are the deployment phase's.
+  #
+  # Pinned by digest: a proxy is the trust boundary every request crosses.
+  proxy:
+    profiles: [realtime]
+    image: nginx:1.30.6-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5
+    container_name: minhaj-proxy
+    environment:
+      NGINX_ENVSUBST_FILTER: '^MINHAJ_'
+      MINHAJ_PUBLIC_HOST: localhost
+      MINHAJ_WEB_UPSTREAM: web:3000
+      MINHAJ_REALTIME_UPSTREAM: realtime:3200
+    ports:
+      - '127.0.0.1:${MINHAJ_PROXY_PORT:-8080}:8080'
+    volumes:
+      - ./nginx/templates:/etc/nginx/templates:ro
+    depends_on:
+      - web
+      - realtime
 
 volumes:
   minhaj-sqlserver-data:

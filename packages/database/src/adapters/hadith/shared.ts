@@ -26,8 +26,11 @@ import { requestSearchIndexingMany } from '../../search-intent.ts';
 export type Client = Prisma.TransactionClient;
 
 export class HadithDataError extends Error {
-  constructor(readonly reason: string) {
+  readonly reason: string;
+
+  constructor(reason: string) {
     super(reason);
+    this.reason = reason;
   }
 }
 

@@ -1973,6 +1973,44 @@ handshake authentication enforced · **cross-conversation access fails** · **ty
 never persisted** · socket input Zod-validated.
 **Exit:** Realtime delivery working as a **transport adapter that owns no business rules**.
 
+**Phase-25 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+```
+REALTIME TRANSPORT (apps/realtime)             COMPLETE — Socket.IO 4.8.3, WebSocket only
+SAME SERVICES                                  COMPLETE — server-core Identity session/authorisation + Messaging
+PER-EVENT AND PER-RECIPIENT CURRENT AUTH       COMPLETE
+PRESENCE / TYPING                              EPHEMERAL, IN MEMORY, NEVER PERSISTED
+NGINX /socket.io/ WEBSOCKET SEAM               COMPLETE — pinned image, proven in CI
+NEW TABLE / MIGRATION                          NONE — persistent database unchanged at Phase 24
+REDIS / SCALE-OUT                              NONE — single realtime instance
+MESSAGING ACTIVATION (production)              BLOCKED — unchanged
+SAFEGUARDING / PEER / SUPPORT-OWNERSHIP GATES   OPEN — OPEN_DECISIONS.md §2.1, §2.5, §6.6 (§2.2)
+```
+
+- **Composition seam.** `apps/realtime` is the transport only: Socket.IO, the event handlers, the
+  per-connection budgets, and ephemeral presence and typing. It reaches nothing but Node, Socket.IO,
+  `@minhaj/contracts` and `@minhaj/server-core`, and is handed two composed services. The realtime
+  PROCESS's Layer-4 composition root lives in the composition workspace
+  (`apps/web/src/composition/realtime.ts`, started by `realtime-main.ts`) and wires the same adapters
+  through the same builders the web process uses (`identity-mechanics.ts`, `messaging-wiring.ts`), so
+  both processes verify a session and decide a conversation identically (ARCHITECTURE.md §3.6).
+- **Events.** `conversation:subscribe`, `conversation:unsubscribe`, `conversation:catch-up`,
+  `message:send`, `message:read` and `typing:set` in; `message:created`, `presence:changed` and
+  `typing:changed` out — each strict-Zod-validated and acknowledged. Starting a conversation,
+  attachments, blocking, reporting, support administration and moderation have no event and stay on
+  their audited web paths; support staff do not use the socket at all.
+- **Durability.** A send commits through `MessagingService.send` (the same operation-id idempotency)
+  before any delivery; a delivery is the committed row read for its recipient. Catch-up from the
+  durable sequence is the only recovery; connection-state recovery is off.
+- **Bounds.** 64 KiB frames, 20 subscriptions per connection, per-connection budgets per event, a
+  6-second typing TTL — engineering bounds, not policy.
+- **Degradation.** With the realtime process stopped the web application lists, reads and sends as
+  in Phase 24; after a restart clients reconnect with bounded backoff and catch up exactly once.
+- **NGINX.** The seam only — HTTP to `web`, `/socket.io/` upgraded to `realtime`, Host and
+  forwarding headers set by the proxy. TLS, DNS, full security headers and deployment automation stay
+  with Phases 28 and 34.
+
 ---
 
 ### Phase 26 — Membership

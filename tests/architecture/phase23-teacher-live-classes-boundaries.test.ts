@@ -275,12 +275,11 @@ describe('the context depends on its contracts alone', () => {
 });
 
 describe('V1 is manual Google Meet over service mail — no realtime, no Google API', () => {
-  it('has no realtime app, and Learning carries no message model of its own', async () => {
+  it('Learning carries no message model of its own', async () => {
     // Phase 24 delivered Messaging — its `Conversation` and `Message` models
-    // and the teacher's messages route — as its OWN context; its boundary file
-    // guards them. What stays true here: no realtime transport exists, and no
-    // thread or chat model was ever folded into Learning's classes.
-    expect(await exists('apps/realtime')).toBe(false);
+    // and the teacher's messages route — as its OWN context, and Phase 25 its
+    // realtime transport; their boundary files guard them. What stays true
+    // here: no thread or chat model was ever folded into Learning's classes.
     const schema = await read(SCHEMA);
     for (const name of ['MessageThread', 'ChatMessage', 'ClassMessage', 'SessionChat'])
       expect(schema, name).not.toMatch(new RegExp(`^\\s*model ${name}\\b`, 'mu'));

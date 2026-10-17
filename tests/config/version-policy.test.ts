@@ -78,6 +78,7 @@ function baseWorkspaces(): { name: string; directory: string; manifest: Manifest
           'next-intl': '4.14.3',
           react: '19.2.8',
           'react-dom': '19.2.8',
+          'socket.io-client': '4.8.3',
         },
         devDependencies: { tailwindcss: '4.3.3' },
       },
@@ -101,6 +102,11 @@ function baseWorkspaces(): { name: string; directory: string; manifest: Manifest
       directory: 'packages/server-core',
       manifest: { dependencies: { pino: '10.3.1' } },
     },
+    {
+      name: '@minhaj/realtime',
+      directory: 'apps/realtime',
+      manifest: { dependencies: { 'socket.io': '4.8.3' } },
+    },
   ];
 }
 
@@ -120,6 +126,8 @@ function baseLock(): { packages: Record<string, { version?: string }> } {
       'node_modules/better-auth': { version: '1.7.4' },
       'node_modules/resend': { version: '6.27.0' },
       'node_modules/@playwright/test': { version: '1.55.1' },
+      'node_modules/socket.io': { version: '4.8.3' },
+      'node_modules/socket.io-client': { version: '4.8.3' },
       'node_modules/typescript': { version: '5.9.3' },
       'node_modules/zod': { version: '4.5.4' },
       'node_modules/vitest': { version: '4.1.11' },
@@ -486,8 +494,8 @@ describe('F13.6 — deferred packages: absent is correct, present is contracted'
 
     expect(
       failuresFor((state) => {
-        web(state).dependencies!['socket.io'] = '4.8.3';
-        state.lock.packages['node_modules/socket.io'] = { version: '4.8.3' };
+        web(state).dependencies!['react-hook-form'] = '7.66.0';
+        state.lock.packages['node_modules/react-hook-form'] = { version: '7.66.0' };
       }),
     ).toEqual([]);
   });
@@ -502,10 +510,10 @@ describe('F13.6 — deferred packages: absent is correct, present is contracted'
 
     expect(
       failuresFor((state) => {
-        web(state).dependencies!['socket.io'] = '4.9.0';
-        state.lock.packages['node_modules/socket.io'] = { version: '4.9.0' };
+        web(state).dependencies!['react-hook-form'] = '8.0.0';
+        state.lock.packages['node_modules/react-hook-form'] = { version: '8.0.0' };
       }).join('\n'),
-    ).toMatch(/socket\.io/);
+    ).toMatch(/react-hook-form/);
   });
 
   it('rejects a deferred package introduced as a prerelease', () => {
@@ -737,8 +745,12 @@ describe('F13.9 — the transcribed policy matches TECH_STACK.md', () => {
       (entry) => entry.name,
     );
 
-    expect(names).toContain('socket.io');
     expect(names).toContain('playwright');
+
+    // socket.io and socket.io-client were here until Phase 25, which introduced
+    // the realtime transport at its owning point; their absence now fails.
+    expect(names).not.toContain('socket.io');
+    expect(names).not.toContain('socket.io-client');
 
     // better-auth was here until Phase 2, and next-intl until Phase 3A.
     // TECH_STACK.md §1.5 places validation at genuine introduction, and this
@@ -787,6 +799,38 @@ describe('F13.9 — the transcribed policy matches TECH_STACK.md', () => {
 
     expect(failures.join('\n')).toMatch(/next-intl/);
     expect(failures.join('\n')).toMatch(/declared by no workspace/);
+  });
+
+  /**
+   * Socket.IO at its owning point (TECH_STACK.md §1.5, DELIVERY_PLAN.md
+   * Phase 25). The same inversion next-intl made in Phase 3A: absence used to
+   * pass and now fails, because the realtime process is delivered.
+   */
+  it('locks socket.io and socket.io-client EXACTLY at 4.8.3, introduced in Phase 25', () => {
+    for (const name of ['socket.io', 'socket.io-client'])
+      expect(policyFor(name), name).toEqual(
+        expect.objectContaining({ kind: 'exact', expected: '4.8.3' }),
+      );
+    expect(policyFor('socket.io')?.introduced).toMatch(/Phase 25/);
+  });
+
+  it('FAILS when socket.io is absent, where absence used to pass', () => {
+    const failures = failuresFor((state) => {
+      for (const workspace of state.workspaces)
+        delete workspace.manifest.dependencies?.['socket.io'];
+      delete state.lock.packages['node_modules/socket.io'];
+    });
+    expect(failures.join('\n')).toMatch(/socket\.io/);
+  });
+
+  it('FAILS when socket.io drifts from the exact 4.8.3', () => {
+    const failures = failuresFor((state) => {
+      for (const workspace of state.workspaces)
+        if (workspace.manifest.dependencies?.['socket.io'] !== undefined)
+          workspace.manifest.dependencies['socket.io'] = '4.8.4';
+      state.lock.packages['node_modules/socket.io'] = { version: '4.8.4' };
+    });
+    expect(failures.join('\n')).toMatch(/socket\.io/);
   });
 
   it('accepts the installed 4.14.x patch', () => {

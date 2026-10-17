@@ -17,8 +17,11 @@ import type { MediaLabel } from '@minhaj/contracts/media';
 export type Client = Prisma.TransactionClient;
 
 export class MediaDataError extends Error {
-  constructor(readonly reason: string) {
+  readonly reason: string;
+
+  constructor(reason: string) {
     super(reason);
+    this.reason = reason;
   }
 }
 

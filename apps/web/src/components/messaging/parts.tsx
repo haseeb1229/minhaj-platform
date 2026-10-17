@@ -9,7 +9,6 @@ import type { CourseListing } from '@minhaj/contracts/learning';
 import {
   MESSAGING_LIMITS,
   REPORT_REASONS,
-  type AttachmentView,
   type ConversationSummary,
   type ConversationView,
   type MessagingSurface,
@@ -21,7 +20,14 @@ import { ConfirmField } from '@/components/personal/parts';
 import { displayTimeZone } from '@/components/personal/presentation';
 import { Alert, Field, Panel, Select, StatusBadge, TextLink } from '@/components/ui';
 import { MessageComposer, type ComposerLabels } from './composer.client';
-import { conversationPath, formatBytes, isImageType } from './presentation';
+import { conversationPath } from './presentation';
+import {
+  ThreadItem,
+  ThreadList,
+  ThreadTime,
+  type ThreadLabels,
+  type ThreadMessage,
+} from './thread';
 
 /**
  * The parts every Messaging surface shares — a person's own, a teacher's, and
@@ -107,14 +113,22 @@ export function MessagingTime({
   readonly timeZone: string | null;
 }) {
   return (
-    <time dateTime={value.toISOString()}>
-      {new Intl.DateTimeFormat(locale, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-        timeZone: displayTimeZone(timeZone),
-      }).format(value)}
-    </time>
+    <ThreadTime value={value} locale={locale} timeZone={displayTimeZone(timeZone)} />
   );
+}
+
+/** The words a thread speaks with — the same ones the realtime island is handed. */
+export function threadLabels(t: MessagingTranslator): ThreadLabels {
+  return {
+    messageFrom: t('thread.messageFrom', { name: '{name}' }),
+    reported: t('thread.reported'),
+    withheldBadge: t('thread.withheldBadge'),
+    withheld: t('thread.withheld'),
+    attachments: t('thread.attachments'),
+    unnamedFile: t('thread.unnamedFile'),
+    image: t('thread.image'),
+    download: t('thread.download', { name: '{name}', size: '{size}' }),
+  };
 }
 
 /**
@@ -268,76 +282,12 @@ export function ConversationList({
   );
 }
 
-/**
- * A message's attachments: an image shown inline from its authorised route,
- * a PDF as a named download with its size. The address names the attachment
- * and is re-decided on every request; nothing here is a storage key.
- */
-export function AttachmentList({
-  attachments,
-  href,
-  locale,
-  t,
-}: {
-  readonly attachments: readonly AttachmentView[];
-  readonly href: (attachmentId: string) => string;
-  readonly locale: Locale;
-  readonly t: MessagingTranslator;
-}) {
-  if (attachments.length === 0) return null;
-  return (
-    <ul aria-label={t('thread.attachments')} className="flex min-w-0 flex-col gap-2">
-      {attachments.map((attachment) => {
-        const address = href(attachment.id);
-        const name = attachment.displayName ?? t('thread.unnamedFile');
-        const size = formatBytes(attachment.byteSize, locale);
-        return (
-          <li key={attachment.id} className="min-w-0">
-            {isImageType(attachment.mediaType) ? (
-              <a href={address} className="inline-block max-w-full">
-                <img
-                  src={address}
-                  alt={attachment.displayName ?? t('thread.image')}
-                  loading="lazy"
-                  decoding="async"
-                  className="max-h-72 max-w-full rounded-[var(--radius-control)] border border-[color:var(--color-border)]"
-                />
-              </a>
-            ) : (
-              <a
-                href={address}
-                download
-                className="inline-flex min-h-11 max-w-full items-center font-medium text-[color:var(--color-action)] underline underline-offset-2"
-              >
-                <span dir="auto" className="min-w-0 wrap-anywhere">
-                  {t('thread.download', { name, size })}
-                </span>
-              </a>
-            )}
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-/** What a thread shows of one message, whichever view drew it. */
-export interface ThreadMessage {
-  readonly id: string;
-  readonly sequence: number;
-  readonly own: boolean;
-  readonly sender: string;
-  readonly body: string | null;
-  readonly withheld: boolean;
-  readonly sentAt: Date;
-  readonly attachments: readonly AttachmentView[];
-  /** Evidence only: this is the reported message. */
-  readonly highlighted?: boolean;
-}
+export type { ThreadMessage } from './thread';
 
 /**
  * Messages, oldest first: who sent each, when, its text and its attachments.
- * `after` adds a per-message act (a report form) beneath a message.
+ * `after` adds a per-message act (a report form) beneath a message. The
+ * markup is `thread.tsx`'s, shared with the realtime island.
  */
 export function MessageThread({
   messages,
@@ -357,55 +307,48 @@ export function MessageThread({
   readonly after?: (message: ThreadMessage) => ReactNode;
 }) {
   return (
-    <ol aria-label={label} className="flex min-w-0 flex-col gap-3">
-      {messages.map((message) => (
-        <li
-          key={message.id}
-          className={`flex min-w-0 ${message.own ? 'justify-end' : 'justify-start'}`}
-        >
-          <article
-            aria-label={t('thread.messageFrom', { name: message.sender })}
-            className={`flex min-w-0 max-w-full flex-col gap-2 rounded-[var(--radius-panel)] p-3 sm:max-w-[80%] ${
-              message.highlighted === true
-                ? 'border-2 border-[color:var(--color-warning)] bg-[color:var(--color-warning-surface)]'
-                : message.own
-                  ? 'border border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)]'
-                  : 'border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)]'
-            }`}
-          >
-            <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[color:var(--color-foreground-muted)]">
-              <span dir="auto" className="font-semibold wrap-anywhere">
-                {message.sender}
-              </span>
-              <MessagingTime value={message.sentAt} locale={locale} timeZone={timeZone} />
-              {message.highlighted === true ? (
-                <StatusBadge tone="caution">{t('thread.reported')}</StatusBadge>
-              ) : null}
-              {message.withheld && message.body !== null ? (
-                <StatusBadge tone="neutral">{t('thread.withheldBadge')}</StatusBadge>
-              ) : null}
-            </p>
-            {message.body === null ? (
-              <p className="text-sm text-[color:var(--color-foreground-muted)] italic">
-                {t('thread.withheld')}
-              </p>
-            ) : message.body === '' ? null : (
-              <p dir="auto" className="min-w-0 whitespace-pre-line wrap-anywhere">
-                {message.body}
-              </p>
-            )}
-            <AttachmentList
-              attachments={message.attachments}
-              href={attachmentHref}
-              locale={locale}
-              t={t}
-            />
-            {after === undefined ? null : after(message)}
-          </article>
-        </li>
-      ))}
-    </ol>
+    <ThreadList label={label}>
+      <ThreadItems
+        messages={messages}
+        attachmentHref={attachmentHref}
+        locale={locale}
+        timeZone={timeZone}
+        t={t}
+        {...(after === undefined ? {} : { after })}
+      />
+    </ThreadList>
   );
+}
+
+/** A thread's items without their list — for the realtime island to extend. */
+export function ThreadItems({
+  messages,
+  attachmentHref,
+  locale,
+  timeZone,
+  t,
+  after,
+}: {
+  readonly messages: readonly ThreadMessage[];
+  readonly attachmentHref: (attachmentId: string) => string;
+  readonly locale: Locale;
+  readonly timeZone: string | null;
+  readonly t: MessagingTranslator;
+  readonly after?: (message: ThreadMessage) => ReactNode;
+}) {
+  const labels = threadLabels(t);
+  const zone = displayTimeZone(timeZone);
+  return messages.map((message) => (
+    <ThreadItem
+      key={message.id}
+      message={message}
+      labels={labels}
+      attachmentHref={attachmentHref}
+      locale={locale}
+      timeZone={zone}
+      after={after === undefined ? null : after(message)}
+    />
+  ));
 }
 
 /**

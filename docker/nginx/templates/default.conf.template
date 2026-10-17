@@ -1,0 +1,151 @@
+# =============================================================================
+# The front door — Phase 25: the WebSocket proxy SEAM (ARCHITECTURE.md §10.1)
+# =============================================================================
+#
+# ONE ORIGIN, TWO PROCESSES. Ordinary HTTP goes to `web`; `/socket.io/` is
+# upgraded to `realtime`. The browser therefore sees a single origin, which is
+# what lets the realtime process refuse every cross-origin handshake (exact
+# `Origin` match) and send no CORS header at all.
+#
+# WHAT THIS IS NOT YET. TLS termination, certificates, DNS, security headers,
+# coarse rate limiting and static-asset serving belong to the deployment phase
+# (DELIVERY_PLAN.md Phase 28). This file is the routing seam those land on, and
+# it is exercised for real by the browser suite and the realtime proofs.
+#
+# A TEMPLATE. The official image renders `/etc/nginx/templates/*.template`
+# into `conf.d/` with `envsubst` at start, substituting ONLY variables that are
+# defined (and, with `NGINX_ENVSUBST_FILTER=^MINHAJ_`, only these). A missing
+# variable survives as literal `${...}` text, which nginx rejects — so an
+# unconfigured proxy fails to start rather than routing somewhere implicit.
+#
+#   MINHAJ_PUBLIC_HOST        the one host name this server answers for
+#   MINHAJ_WEB_UPSTREAM       host:port of the web process
+#   MINHAJ_REALTIME_UPSTREAM  host:port of the realtime process
+#
+# FORWARDING HEADERS ARE SET HERE, NEVER PASSED THROUGH. The web process reads
+# the first `X-Forwarded-For` entry for its per-client budgets when
+# `TRUST_PROXY_HEADERS=true`, so that header must be the address NGINX saw,
+# not one the client wrote. Every forwarding header a client could forge —
+# `X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host`,
+# `X-Forwarded-Port`, `X-Real-IP`, `Forwarded` — is overwritten or cleared.
+# `X-Forwarded-Host` matters beyond logging: Next compares a Server Action's
+# `Origin` with it before `Host`, so a forwarded client value would let any
+# origin pass that check.
+#
+# `Host` IS `$http_host`, AND ONLY A KNOWN HOST REACHES IT. `$host` drops the
+# port, and the public origin carries one wherever it is not 80/443 (the
+# browser suite, local Compose): Next would then see `Origin: host:port`
+# against `Host: host` and refuse every Server Action. The request line's own
+# Host is forwarded instead — but only after `server_name` has matched it
+# exactly; any other Host lands on the default server below and is refused.
+# =============================================================================
+
+server_tokens off;
+
+# The access log names the PATH, never the query string — a client may put
+# anything in a query, including a token the transport ignores — and never a
+# header or a cookie. Set per server below: a server-level `access_log`
+# replaces the image's `main` format, which logs the full request line.
+log_format minhaj_access '$remote_addr [$time_local] "$request_method $uri $server_protocol" '
+                         '$status $body_bytes_sent $request_time';
+
+# `Connection: upgrade` only when the client asked to upgrade; otherwise the
+# upstream connection is closed normally rather than held open.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+upstream minhaj_web {
+    server ${MINHAJ_WEB_UPSTREAM};
+    keepalive 16;
+    # Below Node's own 5 s keep-alive, so NGINX never reuses a connection the
+    # web server has already closed.
+    keepalive_timeout 4s;
+}
+
+upstream minhaj_realtime {
+    server ${MINHAJ_REALTIME_UPSTREAM};
+}
+
+# Any Host other than the public one: refused, never proxied.
+server {
+    listen 8080 default_server;
+    server_name _;
+    access_log /var/log/nginx/access.log minhaj_access;
+    return 421;
+}
+
+server {
+    listen 8080;
+    server_name ${MINHAJ_PUBLIC_HOST};
+    access_log /var/log/nginx/access.log minhaj_access;
+
+    # The largest legitimate upload is Storage's per-object ceiling (64 MiB,
+    # STORAGE_MAX_BYTES) plus multipart framing. The application enforces the
+    # real, per-kind limits; this only refuses what no limit could admit.
+    client_max_body_size 72m;
+
+    # -------------------------------------------------------------------------
+    # Realtime — WebSocket only (the transport refuses long-polling)
+    # -------------------------------------------------------------------------
+    location /socket.io/ {
+        # An upgrade is a GET. Nothing else has any business on this path.
+        limit_except GET {
+            deny all;
+        }
+
+        proxy_pass http://minhaj_realtime;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host "";
+        proxy_set_header X-Forwarded-Port "";
+        proxy_set_header Forwarded "";
+
+        # Frames are delivered as they arrive, never held, never cached.
+        proxy_buffering off;
+        proxy_cache off;
+
+        # Bounded. Socket.IO pings every 25 s and gives up after 20 s more, so
+        # a live connection is never idle for 75 s; a dead one is released.
+        proxy_connect_timeout 15s;
+        proxy_read_timeout 75s;
+        proxy_send_timeout 75s;
+
+        # A WebSocket handshake has no body.
+        client_max_body_size 1k;
+    }
+
+    # -------------------------------------------------------------------------
+    # Everything else — the web application
+    # -------------------------------------------------------------------------
+    location / {
+        proxy_pass http://minhaj_web;
+        proxy_http_version 1.1;
+        # Keep-alive to the upstream: no hop-by-hop header is forwarded.
+        proxy_set_header Connection "";
+
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host "";
+        proxy_set_header X-Forwarded-Port "";
+        proxy_set_header Forwarded "";
+
+        # Pages STREAM: React flushes the shell and resolves Suspense
+        # boundaries later in the same response. A buffering proxy would hold
+        # that shell until a buffer filled and change what a visitor sees.
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_connect_timeout 15s;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+}

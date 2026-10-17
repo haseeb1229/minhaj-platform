@@ -81,12 +81,18 @@ export default defineConfig({
    * with both. A failed Learning run therefore skips the Messaging proofs —
    * visibly, in the report — rather than letting them prove anything against
    * a half-built state.
+   *
+   * Realtime (Phase 25) needs the same Course-and-activation shape, and
+   * `messaging.spec.ts` proves Messaging's switched-off state before IT writes
+   * the activation; so the realtime proofs run after Messaging in turn, for
+   * the same reason Messaging runs after Learning. Their conversations are
+   * their own, so nothing either spec proves reads the other's.
    */
   projects: [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testIgnore: ['**/learning.spec.ts', '**/messaging.spec.ts'],
+      testIgnore: ['**/learning.spec.ts', '**/messaging.spec.ts', '**/realtime.spec.ts'],
     },
     {
       name: 'learning',
@@ -98,6 +104,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
       testMatch: '**/messaging.spec.ts',
       dependencies: ['learning'],
+    },
+    {
+      name: 'realtime',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: '**/realtime.spec.ts',
+      dependencies: ['messaging'],
     },
   ],
 

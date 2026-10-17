@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -327,5 +327,232 @@ describe('N5 — no image layer may carry a real environment file', () => {
 
       expect(trimmed, `'${trimmed}' must have no value`).toMatch(/^[A-Z0-9_]+=$/);
     }
+  });
+});
+
+/* ===========================================================================
+ * Phase 25 — the realtime image and the NGINX WebSocket seam
+ * ========================================================================= */
+
+/** A file's directives with its `#` comment lines removed. */
+async function directives(...segments: string[]): Promise<string> {
+  const source = await readFile(path.join(repoRoot, ...segments), 'utf8');
+  return source
+    .split(/\r?\n/)
+    .filter((line) => !line.trim().startsWith('#'))
+    .join('\n');
+}
+
+/** The body of one stage of a named Dockerfile, comments removed. */
+async function stageOf(file: string, name: string): Promise<string> {
+  const lines = (await directives('docker', file)).split('\n');
+  const start = lines.findIndex((line) =>
+    new RegExp(`^FROM\\s+\\S+\\s+AS\\s+${name}\\s*$`, 'i').test(line.trim()),
+  );
+  expect(start, `${file} must declare a '${name}' stage`).toBeGreaterThan(-1);
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => /^FROM\s/i.test(line.trim()));
+  return (end === -1 ? rest : rest.slice(0, end)).join('\n');
+}
+
+/** Every workspace manifest on disk, as `<dir>/<name>/package.json`. */
+async function workspaceManifests(): Promise<string[]> {
+  const found: string[] = [];
+  for (const parent of ['apps', 'packages']) {
+    for (const entry of await readdir(path.join(repoRoot, parent))) {
+      const manifest = path.join(repoRoot, parent, entry, 'package.json');
+      if ((await stat(manifest).catch(() => null))?.isFile() === true)
+        found.push(`${parent}/${entry}/package.json`);
+    }
+  }
+  return found.sort();
+}
+
+describe('Phase 25 — every dependency install sees every workspace', () => {
+  it.each([
+    ['web.Dockerfile', 'deps'],
+    ['realtime.Dockerfile', 'build'],
+    ['realtime.Dockerfile', 'runtime'],
+  ])('%s %s copies each workspace manifest before `npm ci`', async (file, name) => {
+    const body = await stageOf(file, name);
+    const install = body.search(/^RUN npm ci/m);
+    expect(install).toBeGreaterThan(-1);
+    const before = body.slice(0, install);
+    const manifests = await workspaceManifests();
+    expect(manifests).toContain('apps/realtime/package.json');
+    for (const manifest of manifests)
+      expect(before, `${file} ${name} must copy ${manifest}`).toContain(
+        `COPY ${manifest} `,
+      );
+  });
+});
+
+describe('Phase 25 — the realtime runtime image carries only what it runs', () => {
+  it('uses the same exact Node image as the web image', async () => {
+    const web = await directives('docker', 'web.Dockerfile');
+    const realtime = await directives('docker', 'realtime.Dockerfile');
+    const base = /^FROM (node:24\.20\.0-\S+)/m.exec(web)?.[1];
+    expect(base).toBe('node:24.20.0-bookworm-slim');
+    const images = [...realtime.matchAll(/^FROM (\S+)/gm)].map((match) => match[1]);
+    expect(images).toEqual([base, base]);
+  });
+
+  it('installs production dependencies only and takes the generated client from the build stage', async () => {
+    const build = await stageOf('realtime.Dockerfile', 'build');
+    const runtime = await stageOf('realtime.Dockerfile', 'runtime');
+    expect(build).toContain(
+      'prisma generate --schema packages/database/prisma/schema.prisma',
+    );
+    expect(runtime).toMatch(/^RUN npm ci --omit=dev/m);
+    expect(runtime).toContain('COPY --from=build /app/node_modules/.prisma');
+  });
+
+  it('carries no tests, fixtures, environment files, scripts, docs, CI or lifecycle tooling', async () => {
+    const runtime = await stageOf('realtime.Dockerfile', 'runtime');
+    for (const forbidden of [
+      'tests',
+      'fixtures',
+      'scripts',
+      'docs',
+      '.github',
+      'migrations',
+      'packages/database/sql',
+      'playwright',
+      'COPY apps ',
+      'COPY packages ',
+      'apps/web/src/app',
+      'apps/web/src/contexts',
+    ])
+      expect(runtime, `the realtime runtime must not carry ${forbidden}`).not.toContain(
+        forbidden,
+      );
+    // No environment file is named by any COPY (the HEALTHCHECK reads `process.env`).
+    expect(runtime).not.toMatch(/^COPY .*.env/m);
+  });
+
+  it('copies the transport and the four composition modules the process imports', async () => {
+    const runtime = await stageOf('realtime.Dockerfile', 'runtime');
+    expect(runtime).toContain('COPY apps/realtime/src ./apps/realtime/src');
+    for (const module of [
+      'realtime-main.ts',
+      'realtime.ts',
+      'identity-mechanics.ts',
+      'messaging-wiring.ts',
+    ])
+      expect(runtime).toContain(`apps/web/src/composition/${module}`);
+  });
+
+  it('runs unprivileged, directly under Node, from the composition entry', async () => {
+    const runtime = await stageOf('realtime.Dockerfile', 'runtime');
+    expect(runtime).toMatch(/^USER node$/m);
+    expect(runtime).toContain(
+      'CMD ["node", "--conditions=react-server", "apps/web/src/composition/realtime-main.ts"]',
+    );
+    expect(runtime).toMatch(/^ENV NODE_ENV=production$/m);
+  });
+});
+
+describe('Phase 25 — the NGINX seam sets, never forwards, what a client could forge', () => {
+  const template = () =>
+    directives('docker', 'nginx', 'templates', 'default.conf.template');
+
+  /** One `location` block, braces balanced. */
+  async function location(prefix: string): Promise<string> {
+    const source = await template();
+    const start = source.indexOf(`location ${prefix} {`);
+    expect(start, `the template must route ${prefix}`).toBeGreaterThan(-1);
+    let depth = 0;
+    for (let index = source.indexOf('{', start); index < source.length; index += 1) {
+      if (source[index] === '{') depth += 1;
+      if (source[index] === '}') depth -= 1;
+      if (depth === 0) return source.slice(start, index + 1);
+    }
+    throw new Error(`unterminated location ${prefix}`);
+  }
+
+  it('upgrades `/socket.io/` to the realtime upstream over HTTP/1.1, unbuffered', async () => {
+    const socket = await location('/socket.io/');
+    expect(socket).toContain('proxy_pass http://minhaj_realtime;');
+    expect(socket).toContain('proxy_http_version 1.1;');
+    expect(socket).toContain('proxy_set_header Upgrade $http_upgrade;');
+    expect(socket).toContain('proxy_set_header Connection $connection_upgrade;');
+    expect(socket).toContain('proxy_buffering off;');
+    expect(socket).toContain('proxy_cache off;');
+    expect(socket).toMatch(/proxy_read_timeout \d+s;/);
+    expect(socket).toMatch(/proxy_send_timeout \d+s;/);
+    expect(await template()).toMatch(/map \$http_upgrade \$connection_upgrade/);
+  });
+
+  it('sends everything else to the web upstream', async () => {
+    expect(await location('/')).toContain('proxy_pass http://minhaj_web;');
+  });
+
+  it.each(['/socket.io/', '/'])(
+    'overwrites every forwarding header on %s',
+    async (prefix) => {
+      const block = await location(prefix);
+      expect(block).toContain('proxy_set_header X-Forwarded-For $remote_addr;');
+      expect(block).toContain('proxy_set_header X-Real-IP $remote_addr;');
+      expect(block).toContain('proxy_set_header X-Forwarded-Proto $scheme;');
+      expect(block).toContain('proxy_set_header X-Forwarded-Host "";');
+      expect(block).toContain('proxy_set_header Forwarded "";');
+      expect(block).toContain('proxy_set_header Host $http_host;');
+      // The client's own header is never appended to or passed on.
+      expect(block).not.toContain('$proxy_add_x_forwarded_for');
+      expect(block).not.toContain('$http_x_forwarded_for');
+    },
+  );
+
+  it('answers only for the configured host and refuses any other', async () => {
+    const source = await template();
+    expect(source).toContain('server_name ${MINHAJ_PUBLIC_HOST};');
+    expect(source).toMatch(
+      /listen 8080 default_server;\s*server_name _;[^}]*return 421;/,
+    );
+  });
+
+  it('logs no query string, header or cookie', async () => {
+    const source = await template();
+    const format = /log_format minhaj_access ([^;]+);/.exec(source)?.[1] ?? '';
+    expect(format).toContain('$uri');
+    for (const leaky of ['$request ', '$args', '$query_string', '$http_', '$cookie_'])
+      expect(format).not.toContain(leaky);
+  });
+});
+
+describe('Phase 25 — compose adds realtime and the proxy behind a profile', () => {
+  /** One top-level service's block. */
+  async function service(name: string): Promise<string> {
+    const compose = await directives('docker', 'compose.yaml');
+    const lines = compose.split('\n');
+    const start = lines.indexOf(`  ${name}:`);
+    expect(start, `compose must declare ${name}`).toBeGreaterThan(-1);
+    const rest = lines.slice(start + 1);
+    const end = rest.findIndex((line) => /^ {2}\S|^\S/.test(line));
+    return (end === -1 ? rest : rest.slice(0, end)).join('\n');
+  }
+
+  it.each(['realtime', 'proxy'])('keeps %s out of the default stack', async (name) => {
+    expect(await service(name)).toContain('profiles: [realtime]');
+  });
+
+  it.each(['sqlserver', 'clamav', 'web'])(
+    'leaves %s in the default stack',
+    async (name) => {
+      expect(await service(name)).not.toContain('profiles:');
+    },
+  );
+
+  it('builds realtime from its own Dockerfile and pins the proxy by digest', async () => {
+    expect(await service('realtime')).toContain('dockerfile: docker/realtime.Dockerfile');
+    expect(await service('proxy')).toContain(
+      'image: nginx:1.30.6-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5',
+    );
+  });
+
+  it('keeps the persistent volumes exactly as they were', async () => {
+    const compose = await directives('docker', 'compose.yaml');
+    expect(compose).toContain('name: minhaj-platform-sqlserver-data');
+    expect(compose).toContain('name: minhaj-platform-storage-data');
   });
 });

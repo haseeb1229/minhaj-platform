@@ -1,22 +1,14 @@
 import 'server-only';
 
-import {
-  createAuditWriter,
-  createLearningRelationshipReader,
-  createMessagingPersistence,
-  createRateLimiter,
-  rateLimitKey,
-} from '@minhaj/database';
 import type { MessagingAttachmentStoragePort } from '@minhaj/contracts/messaging';
 import {
   createMessagingService,
-  denyAllPeers,
   type MessagingService,
 } from '@minhaj/server-core/messaging';
-import { createLearningRelationshipService } from '@minhaj/server-core/relationships';
 
 import { serverEnv } from '@/config/server-env';
 import { identityRuntime } from './identity';
+import { messagingDependencies } from './messaging-wiring.ts';
 import { storageRuntime } from './storage';
 
 /**
@@ -67,12 +59,6 @@ let runtime: MessagingRuntime | null = null;
 
 export function messagingRuntime(): MessagingRuntime {
   if (runtime) return runtime;
-  const environment = serverEnv();
-  const configuration = {
-    digestKey: environment.RATE_LIMIT_DIGEST_KEY,
-    digestKeyVersion: environment.RATE_LIMIT_DIGEST_KEY_VERSION,
-  };
-
   // Storage, narrowed and lazy: each call awaits the one shared service.
   const storage: MessagingAttachmentStoragePort = {
     store: async (bytes, policy) => (await storageRuntime()).store(bytes, policy),
@@ -82,32 +68,23 @@ export function messagingRuntime(): MessagingRuntime {
   };
 
   return (runtime = {
-    service: createMessagingService({
-      persistence: createMessagingPersistence(),
-      teaching: createLearningRelationshipService({
-        reader: createLearningRelationshipReader(),
+    // The SAME wiring the realtime process uses (`./messaging-wiring.ts`).
+    service: createMessagingService(
+      messagingDependencies({
+        environment: serverEnv(),
         identity: {
           liveTeachingAssignments: (accountId) =>
             identityRuntime().administration.liveAssignmentsCarrying(
               accountId,
               'teaching.perform',
             ),
+          permits: (accountId, permission) =>
+            identityRuntime().authorization.hasPermission(accountId, permission),
+          closedAccounts: (ids) => identityRuntime().administration.closedAccounts(ids),
         },
+        storage,
       }),
-      authority: {
-        permits: (accountId, permission) =>
-          identityRuntime().authorization.hasPermission(accountId, permission),
-      },
-      // Identity's OWN answer about its own lifecycle, and nothing more.
-      accounts: {
-        closedAccounts: (ids) => identityRuntime().administration.closedAccounts(ids),
-      },
-      peers: denyAllPeers,
-      storage,
-      audit: createAuditWriter(),
-      limiter: createRateLimiter(configuration),
-      limitKey: (purpose, subject) => rateLimitKey({ purpose, subject, configuration }),
-    }),
+    ),
 
     async names(accountIds) {
       const unique = [...new Set(accountIds)].slice(0, NAMES_MAX);

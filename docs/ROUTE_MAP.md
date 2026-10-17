@@ -660,11 +660,12 @@ Categories only; no endpoint contracts in this phase.
 | Webhooks | `/api/webhooks/{provider}` | **Signature-verified, idempotent, replay-resistant** |
 | Health | `/api/health` · `/api/ready` | Unprefixed operational probes |
 
-**Realtime** (Messaging phase onward): `/socket.io/*`, reverse-proxied with WebSocket
+**Realtime** (delivered in Phase 25): `/socket.io/*`, reverse-proxied with WebSocket
 upgrade. Not part of the Next.js route tree. It causes persistence **only** by invoking the
 Messaging-owned services hosted in `packages/server-core`, and **never holds raw database
 capability** — no client, delegate, transaction handle, raw-query facility or persistence
-adapter, directly or through any intermediate package (ARCHITECTURE.md §3.1.1–§3.1.2).
+adapter, directly or through any intermediate package (ARCHITECTURE.md §3.1.1–§3.1.2). WebSocket transport only, the exact application `Origin`, the session cookie
+re-resolved on every event, and no Next route, page, sitemap entry or public content behind it.
 
 **Every endpoint carries endpoint-appropriate server-side validation and the controls
 appropriate to its protocol class** (SECURITY_BASELINE.md §7). **Authorisation is re-checked

@@ -22,8 +22,10 @@
 # selects the former; the default build produces the latter.
 #
 # Phase 0B provides a local development runtime. The production multi-stage
-# build, the NGINX reverse proxy and the realtime process belong to the
-# deployment phase (ARCHITECTURE.md 10.1). Nothing here deploys anything.
+# build belongs to the deployment phase (ARCHITECTURE.md 10.1). Phase 25 adds
+# the realtime process (`realtime.Dockerfile`) and the NGINX WebSocket seam
+# (`nginx/`); TLS and the deployment front door stay later. Nothing here
+# deploys anything.
 #
 # No secrets are present here or in compose. Configuration arrives as
 # environment variables at run time and is validated at startup with Zod.
@@ -46,10 +48,12 @@ WORKDIR /app
 # Manifests first, so a source edit does not invalidate the dependency layer.
 # The workspace manifests are all that `npm ci` needs to resolve the tree.
 COPY package.json package-lock.json ./
+COPY apps/realtime/package.json ./apps/realtime/
 COPY apps/web/package.json ./apps/web/
 COPY packages/config/package.json ./packages/config/
 COPY packages/contracts/package.json ./packages/contracts/
 COPY packages/database/package.json ./packages/database/
+COPY packages/search/package.json ./packages/search/
 COPY packages/server-core/package.json ./packages/server-core/
 COPY packages/storage/package.json ./packages/storage/
 

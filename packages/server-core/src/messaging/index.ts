@@ -23,3 +23,5 @@ export type {
   SupportConversationView,
 } from './types.ts';
 export { MESSAGING_RATE_RULES, createMessagingService, denyAllPeers } from './service.ts';
+export { createRealtimeMessaging, realtimeOver } from './realtime.ts';
+export type { RealtimeConversation, RealtimeMessaging } from './realtime.ts';
