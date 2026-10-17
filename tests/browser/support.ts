@@ -692,9 +692,20 @@ export async function asTwoVisitors(
  * and flight rows in whatever order those reads finish, so two renders of the
  * same content can emit the same rows in a different order under load. Byte
  * order is therefore not the property; what is said is. Every flight row is
- * decoded and the rows sorted, and the markup outside scripts is split at its
- * streamed segments and sorted — so ANY per-visitor value, anywhere, still
- * differs, and only the interleaving is set aside.
+ * decoded and the rows sorted, and the markup outside scripts is compared as
+ * the sorted multiset of its tags and text — so ANY per-visitor value, in a
+ * text node, an attribute or a row, still differs, and only the interleaving
+ * is set aside.
+ *
+ * WHY TOKENS, NOT SEGMENTS. A boundary that resolves before the shell flushes
+ * is rendered in place; one that resolves after is streamed as a hidden
+ * `S:n` segment behind a `B:n` placeholder. Which happens is a race between a
+ * page's reads and its shell — on a `force-dynamic` page, two concurrent
+ * requests can land either side of it (metadata in the head for one, streamed
+ * with the content beside it for the other: CI run 39018618139). Splitting at
+ * segments set aside their ORDER but not that content can move across them,
+ * so the streaming scaffolding itself — boundary comments, `B:n` templates and
+ * the `S:n` wrappers with their closing tags — is removed, and nothing else.
  */
 export function knowledgeOf(html: string): string {
   const rows: string[] = [];
@@ -706,8 +717,23 @@ export function knowledgeOf(html: string): string {
   }
   const markup = html
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gu, '')
-    .split(/(?=<div hidden id="S:)/u);
-  return JSON.stringify({ markup: markup.sort(), rows: rows.sort() });
+    .replace(/<template id="B:\d+"><\/template>/gu, '');
+  const tokens: string[] = [];
+  let segments = 0;
+  for (const [token] of markup.matchAll(/<[^>]*>|[^<]+/gu)) {
+    if (/^<!--\/?\$[?!]?-->$/u.test(token)) continue;
+    if (/^<div hidden id="S:\d+">$/u.test(token)) {
+      segments += 1;
+      continue;
+    }
+    tokens.push(token);
+  }
+  for (let removed = 0; removed < segments; removed += 1) {
+    const index = tokens.lastIndexOf('</div>');
+    if (index < 0) throw new Error('A streamed segment without its closing tag.');
+    tokens.splice(index, 1);
+  }
+  return JSON.stringify({ markup: tokens.sort(), rows: rows.sort() });
 }
 
 /** Where two documents first differ, with a little context either side. */

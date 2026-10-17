@@ -218,9 +218,19 @@ test('works from the keyboard, with the form state kept after searching', async 
 }) => {
   await page.goto('/en/search');
   const box = page.getByLabel('Search for', { exact: true });
-  await box.focus();
-  await page.keyboard.type(WORD);
-  await page.keyboard.press('Enter');
+  // READINESS IS THE BOX HOLDING THE WHOLE WORD. A boundary that resolves
+  // after the shell is moved into place by the streaming runtime, and moving a
+  // focused field blurs it — so keys typed at that moment reach the document,
+  // not the box (CI run 39018618139: an empty box and focus on the root).
+  // The precondition is re-established until it holds; the submission itself
+  // is still the keyboard's, from the box.
+  await expect(async () => {
+    await box.fill('');
+    await box.focus();
+    await page.keyboard.type(WORD);
+    await expect(box).toHaveValue(WORD, { timeout: 1_000 });
+  }).toPass();
+  await box.press('Enter');
 
   await expect(page).toHaveURL(new RegExp(`q=${WORD}`));
   await expect(page.getByLabel('Search for', { exact: true })).toHaveValue(WORD);
