@@ -92,13 +92,13 @@ const FUTURE_DOMAIN_TABLES = [
   // by the Phase-23 recovery fixture. `Message` left in Phase 24, which
   // delivers it inside Messaging's `Conversation`, proved by the Phase-24
   // recovery fixture, and `Membership` in Phase 26, which delivers it with the
-  // other `Membership*` tables, proved by the Phase-26 recovery fixture.
-  // `Donation` stays: Membership carries no payment concept of any kind.
+  // other `Membership*` tables, proved by the Phase-26 recovery fixture, and
+  // `Donation` in Phase 27, which delivers it with the other `Donation*`
+  // tables, proved by the Phase-27 recovery fixture.
   'Quran',
   'Book',
   'Scholar',
   'Teacher',
-  'Donation',
   'MigrationProvenance',
 ];
 
@@ -343,6 +343,26 @@ export const PHASE26_TABLES = [
   'MembershipCommunicationIntent',
 ];
 
+/**
+ * Tables the Phase-27 migration creates: donation campaigns with their words
+ * and per-currency policy, the owner's provider activation, donations, the
+ * provider-event dedup record, refunds, and the linked donor's durable
+ * payment-acknowledgement intent.
+ *
+ * Checked as REQUIRED whenever the Phase-27 migration is among those the caller
+ * expects.
+ */
+export const PHASE27_TABLES = [
+  'DonationCampaign',
+  'DonationCampaignTranslation',
+  'DonationCampaignCurrency',
+  'DonationActivation',
+  'Donation',
+  'DonationProviderEvent',
+  'DonationRefund',
+  'DonationCommunicationIntent',
+];
+
 async function userTables(session: SqlSession): Promise<string[]> {
   const rows = await session.query<{ name: string }>(`
     SELECT t.name FROM sys.tables t
@@ -560,6 +580,18 @@ export async function verifyRestoredSchema(
     if (missing.length > 0)
       throw new Error(
         `Restored database is missing Phase-26 Membership tables: ${missing.join(', ')}`,
+      );
+  }
+
+  // Phase 27. A restore that carried the Donations migration's history row but
+  // not its campaigns, activation, donations, events, refunds or owed mail
+  // would report an applied migration over a database that has lost what was
+  // given, what was refunded and which provider events were already applied.
+  if (expectedMigrationIds.some((id) => id.includes('phase27'))) {
+    const missing = PHASE27_TABLES.filter((table) => !tables.includes(table));
+    if (missing.length > 0)
+      throw new Error(
+        `Restored database is missing Phase-27 Donations tables: ${missing.join(', ')}`,
       );
   }
   const columns = await auditColumns(restored);

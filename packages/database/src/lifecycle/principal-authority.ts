@@ -645,6 +645,20 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[membershipapplication]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[membership]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[membershipcommunicationintent]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  // Phase 27: Donations. The activation is the owner's and read-only; a
+  // campaign and its words are archived, never deleted; a donation, a
+  // provider event and a refund are financial history and never deleted. Only
+  // a currency policy (an operator's removal) and an intent (a closed
+  // account's disposition) are removed. Identifying columns carry column
+  // DENYs.
+  '[dbo].[donationcampaign]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[donationcampaigntranslation]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[donationcampaigncurrency]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  '[dbo].[donationactivation]': ['SELECT'],
+  '[dbo].[donation]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[donationproviderevent]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[donationrefund]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[donationcommunicationintent]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
 
   // Phase 7 — storage custody metadata. DELETE is genuinely the operation
   // here: reconciliation removes rows a crash left mid-upload, which is

@@ -32,6 +32,16 @@
  * realtime listen on internal ports, and `AUTH_BASE_URL` is the NGINX origin,
  * so a session cookie, a Server Action's Origin check and the realtime
  * handshake's exact-Origin check all see what a deployment's would.
+ *
+ * THE PAYMENT PROVIDER, SIMULATED (Phase 27). Donations are configured for the
+ * `fixture` environment against the repository's Stripe simulator, started in
+ * THIS process on 127.0.0.1 with synthetic `sk_fixture_`/`whsec_fixture_`
+ * secrets. The browser is sent to its hosted page and back, and its signed
+ * webhooks arrive at the front door — the public origin — exactly where a
+ * provider's would. A loopback control surface with a per-run token lets a
+ * spec hold, release or drop those webhooks; both stop with this process.
+ * Whether giving is ACTIVATED stays the database's decision: the migrated
+ * database holds no activation row, and the Donations spec writes one.
  */
 
 import { spawn } from 'node:child_process';
@@ -55,6 +65,8 @@ import {
   upstreamBindAddress,
   waitForStatus,
 } from './shared/realtime-harness.mjs';
+import { startStripeSimulator } from './shared/stripe-simulator.mjs';
+import { startSimulatorControl } from './shared/stripe-simulator-control.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..');
@@ -88,6 +100,18 @@ const SECRETS = {
   RATE_LIMIT_DIGEST_KEY: 'synthetic-browser-rate-limit-0001',
   EMAIL_DIGEST_KEY: 'synthetic-browser-email-digest-0001',
   NEWSLETTER_TOKEN_KEY: 'synthetic-browser-newsletter-token-0001',
+};
+
+/**
+ * The simulated payment provider's synthetic configuration (Phase 27). The
+ * simulator refuses anything but `sk_fixture_`/`whsec_fixture_` values, and
+ * the adapter refuses them outside the `fixture` environment. The account key
+ * is a non-secret label, recorded for the spec's activation row.
+ */
+const DONATIONS_FIXTURE = {
+  secretKey: 'sk_fixture_browser_suite_0001',
+  webhookSecret: 'whsec_fixture_browser_suite_0001',
+  accountKey: 'acct_fixture_browser_suite',
 };
 
 /** The FRONT DOOR's port — NGINX, at the base URL the specs use. */
@@ -159,6 +183,27 @@ async function main() {
   const publicOrigin = `http://127.0.0.1:${String(port)}`;
 
   /**
+   * THE SIMULATED PROVIDER (Phase 27), before the web server, which is
+   * configured with its origin. Its webhooks go to the FRONT DOOR — the
+   * loopback public origin on every platform — as a provider's would.
+   */
+  const simulator = await startStripeSimulator({
+    webhookUrl: `${publicOrigin}/api/webhooks/stripe`,
+    ...DONATIONS_FIXTURE,
+  });
+  const simulatorControl = await startSimulatorControl(simulator.control);
+
+  /** Web only: the realtime process has no use for a payment provider. */
+  const donationsEnvironment = {
+    DONATIONS_PROVIDER: 'stripe',
+    DONATIONS_PROVIDER_ENVIRONMENT: 'fixture',
+    DONATIONS_PROVIDER_ACCOUNT: DONATIONS_FIXTURE.accountKey,
+    DONATIONS_STRIPE_SECRET_KEY: DONATIONS_FIXTURE.secretKey,
+    DONATIONS_STRIPE_WEBHOOK_SECRET: DONATIONS_FIXTURE.webhookSecret,
+    DONATIONS_FIXTURE_PROVIDER_ORIGIN: simulator.origin,
+  };
+
+  /**
    * What BOTH server processes run under: the deployed posture, the run's
    * disposable database and storage, and its synthetic secrets. The realtime
    * process verifies the web's session cookies, so it must share the origin
@@ -227,6 +272,15 @@ async function main() {
           marker,
           environment: realtimeEnvironment,
         },
+        // What the Donations spec needs: where the hosted checkout is, how to
+        // reach the control surface, and the account its activation names.
+        // Never the simulator's secrets.
+        donations: {
+          simulatorOrigin: simulator.origin,
+          controlOrigin: simulatorControl.origin,
+          controlToken: simulatorControl.token,
+          accountKey: DONATIONS_FIXTURE.accountKey,
+        },
         ...SECRETS,
       },
       null,
@@ -249,6 +303,7 @@ async function main() {
       env: {
         ...process.env,
         ...applicationEnvironment,
+        ...donationsEnvironment,
         npm_lifecycle_event: 'start',
         PORT: String(webPort),
       },
@@ -290,6 +345,15 @@ async function main() {
 
     try {
       await removeFrontDoor(proxyContainer);
+    } catch (error) {
+      failed = true;
+      console.error(error instanceof Error ? error.message : String(error));
+    }
+
+    // In-process, so they also end with this process however it stops.
+    try {
+      await simulatorControl.close();
+      await simulator.close();
     } catch (error) {
       failed = true;
       console.error(error instanceof Error ? error.message : String(error));

@@ -5,8 +5,10 @@ import { after } from 'next/server';
 import type { DeliveryRecord } from '@minhaj/contracts/platform';
 
 import { failureLabel, isTransientDatabaseFailure } from './failure-label';
+import { isDonationDeliveryPurpose } from '@/contexts/donations';
 import { isLearningDeliveryPurpose } from '@/contexts/learning';
 import { isMembershipDeliveryPurpose } from '@/contexts/membership';
+import { donationsRuntime } from './donations';
 import { identityRuntime } from './identity';
 import { learningRuntime } from './learning';
 import { appLogger } from './logging';
@@ -86,7 +88,13 @@ export async function dispatchOnce(): Promise<DispatchSummary> {
     // applicant, closed — become deliveries by the same tick, after
     // Membership re-checks that the record still stands where the message
     // says and Identity resolves each recipient's current address.
-    (await membershipRuntime().communication.relayPendingIntents(BATCH));
+    (await membershipRuntime().communication.relayPendingIntents(BATCH)) +
+    // THE FIFTH OWNER (Phase 27). Donations' committed payment
+    // acknowledgements — a verified capture, a partial or full refund of a
+    // LINKED donation — become deliveries by the same tick, after Donations
+    // re-checks that the fact still holds for the same linked donor and
+    // Identity resolves each recipient's current address.
+    (await donationsRuntime().communication.relayPendingIntents(BATCH));
 
   const claimed = await deliveries.claimDue({
     limit: BATCH,
@@ -127,11 +135,12 @@ export async function dispatchOnce(): Promise<DispatchSummary> {
     // no expiry extension, and no bearer material was ever written anywhere
     // else to be read back (ARCHITECTURE.md §4.6.1).
     //
-    // FOUR OWNERS, ONE PROVIDER. The newsletter confirmation is
+    // FIVE OWNERS, ONE PROVIDER. The newsletter confirmation is
     // Personalisation's marketing message; a class confirmation, change or
     // reminder is Learning's service mail; an application or Membership
-    // update is Membership's service mail; everything else is Identity's
-    // security and account service mail. Each owner resolves only its own,
+    // update is Membership's service mail; a payment acknowledgement is
+    // Donations' service mail; everything else is Identity's security and
+    // account service mail. Each owner resolves only its own,
     // and only the newsletter is ever withheld by a marketing suppression.
     const newsletter = delivery.purpose === 'newsletter.confirmation';
     const resolution = newsletter
@@ -140,7 +149,9 @@ export async function dispatchOnce(): Promise<DispatchSummary> {
         ? await learningRuntime().communication.resolveDelivery(delivery)
         : isMembershipDeliveryPurpose(delivery.purpose)
           ? await membershipRuntime().communication.resolveDelivery(delivery)
-          : await identity.resolveDelivery(delivery);
+          : isDonationDeliveryPurpose(delivery.purpose)
+            ? await donationsRuntime().communication.resolveDelivery(delivery)
+            : await identity.resolveDelivery(delivery);
 
     if (resolution.outcome === 'nothing-owed') {
       // Nothing is owed any more: the token was used or expired, the account

@@ -708,6 +708,69 @@ try {
     );
   }
 
+  // Phase 27 gives the operator ROLE nothing over Donations: campaigns are
+  // administered only through the runtime under `donations.administer`, the
+  // activation is written by the owner alone, and a donation, its provider
+  // events, its refunds and the mail owed about it are financial records — so
+  // the operator can neither read who gave what, nor activate payments, mark a
+  // donation paid, refund it, forge a provider event or erase anything.
+  const donationProbes: Readonly<Record<string, readonly [string, string, string]>> = {
+    DonationCampaign: [
+      `INSERT INTO [dbo].[DonationCampaign] ([id], [primaryLocale], [displayOrder]) VALUES (N'injected', N'en', 0);`,
+      `UPDATE [dbo].[DonationCampaign] SET [state] = N'published';`,
+      `DELETE FROM [dbo].[DonationCampaign];`,
+    ],
+    DonationCampaignTranslation: [
+      `INSERT INTO [dbo].[DonationCampaignTranslation] ([campaignId], [locale], [title], [summary], [description]) VALUES (N'injected', N'en', N'injected', N'injected', N'injected');`,
+      `UPDATE [dbo].[DonationCampaignTranslation] SET [title] = N'injected';`,
+      `DELETE FROM [dbo].[DonationCampaignTranslation];`,
+    ],
+    DonationCampaignCurrency: [
+      `INSERT INTO [dbo].[DonationCampaignCurrency] ([campaignId], [currency], [currencyExponent], [minimumMinor], [maximumMinor]) VALUES (N'injected', 'USD', 2, 1, 100);`,
+      `UPDATE [dbo].[DonationCampaignCurrency] SET [maximumMinor] = 999999999999;`,
+      `DELETE FROM [dbo].[DonationCampaignCurrency];`,
+    ],
+    DonationActivation: [
+      `INSERT INTO [dbo].[DonationActivation] ([id], [provider], [environment], [accountKey], [authority], [authorisedBy], [reference]) VALUES (1, N'stripe', N'production', N'acct_injected', N'approved', N'injected', N'injected');`,
+      `UPDATE [dbo].[DonationActivation] SET [authority] = N'approved';`,
+      `DELETE FROM [dbo].[DonationActivation];`,
+    ],
+    Donation: [
+      `INSERT INTO [dbo].[Donation] ([id], [campaignId], [operationId], [requestDigest], [statusTokenDigest], [locale], [checkoutLabel], [currency], [currencyExponent], [expectedMinor], [provider], [environment], [accountKey]) VALUES (N'injected', N'injected', N'injected', REPLICATE('0', 64), REPLICATE('1', 64), N'en', N'injected', 'USD', 2, 100, N'stripe', N'fixture', N'acct_injected');`,
+      `UPDATE [dbo].[Donation] SET [state] = N'succeeded', [capturedMinor] = [expectedMinor];`,
+      `DELETE FROM [dbo].[Donation];`,
+    ],
+    DonationProviderEvent: [
+      `INSERT INTO [dbo].[DonationProviderEvent] ([id], [provider], [environment], [accountKey], [eventId], [eventType], [occurredAt], [receivedAt], [payloadDigest]) VALUES (N'injected', N'stripe', N'fixture', N'acct_injected', N'evt_injected', N'injected', SYSUTCDATETIME(), SYSUTCDATETIME(), REPLICATE('0', 64));`,
+      `UPDATE [dbo].[DonationProviderEvent] SET [result] = N'applied', [processedAt] = SYSUTCDATETIME();`,
+      `DELETE FROM [dbo].[DonationProviderEvent];`,
+    ],
+    DonationRefund: [
+      `INSERT INTO [dbo].[DonationRefund] ([id], [donationId], [operationId], [requestDigest], [currency], [currencyExponent], [amountMinor], [provider], [environment], [accountKey], [requestedByUserId], [requestedAt]) VALUES (N'injected', N'injected', N'injected', REPLICATE('0', 64), 'USD', 2, 100, N'stripe', N'fixture', N'acct_injected', N'injected', SYSUTCDATETIME());`,
+      `UPDATE [dbo].[DonationRefund] SET [state] = N'succeeded';`,
+      `DELETE FROM [dbo].[DonationRefund];`,
+    ],
+    DonationCommunicationIntent: [
+      `INSERT INTO [dbo].[DonationCommunicationIntent] ([id], [purpose], [donationId], [recipientUserId], [dueAt], [idempotencyKey]) VALUES (N'injected', N'donation.succeeded', N'injected', N'injected', SYSUTCDATETIME(), N'injected');`,
+      `UPDATE [dbo].[DonationCommunicationIntent] SET [state] = N'abandoned';`,
+      `DELETE FROM [dbo].[DonationCommunicationIntent];`,
+    ],
+  };
+  for (const [table, [insert, update, remove]] of Object.entries(donationProbes)) {
+    await expectDenied(operatorSession, `operator SELECT on ${table} denied`, () =>
+      operatorSession.query(`SELECT TOP 1 1 AS probe FROM [dbo].[${table}];`),
+    );
+    await expectDenied(operatorSession, `operator INSERT on ${table} denied`, () =>
+      operatorSession.query(insert),
+    );
+    await expectDenied(operatorSession, `operator UPDATE on ${table} denied`, () =>
+      operatorSession.query(update),
+    );
+    await expectDenied(operatorSession, `operator DELETE on ${table} denied`, () =>
+      operatorSession.query(remove),
+    );
+  }
+
   await expectDenied(operatorSession, 'operator INSERT on RoleAssignment denied', () =>
     operatorSession.query(`
       INSERT INTO [dbo].[RoleAssignment] ([userId], [roleId])

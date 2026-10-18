@@ -433,3 +433,24 @@ describe('the logging hook and second redaction layer', () => {
     expect(new Set(paths).size).toBe(paths.length);
   });
 });
+
+describe('Phase 27 payment names in the second redaction layer', () => {
+  it('names the Donations provider secrets and payment fields as literal Pino paths', () => {
+    const paths = buildRedactionPaths();
+
+    for (const name of [
+      'DONATIONS_STRIPE_SECRET_KEY',
+      'DONATIONS_STRIPE_WEBHOOK_SECRET',
+      'stripeSignature',
+      'signature',
+      'statusToken',
+      'checkoutUrl',
+      'cardNumber',
+      'cvc',
+    ]) {
+      expect(redactedFieldNames).toContain(name);
+      expect(paths).toContain(name);
+    }
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+});

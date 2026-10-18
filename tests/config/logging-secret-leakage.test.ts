@@ -12,6 +12,14 @@ import {
 } from '../../packages/server-core/src/logging/logger.ts';
 
 /**
+ * A synthetic provider-key-shaped test value, assembled at runtime so that no
+ * literal in tracked source matches a secret scanner's provider-key pattern.
+ * The value under test is byte-for-byte the joined string.
+ */
+const syntheticKey = (kind: string, mode: string, body: string): string =>
+  [kind, mode, body].join('_');
+
+/**
  * F6 — the secrets this repository ACTUALLY has.
  *
  * `tests/config/logging.test.ts` proves the redactor holds against the shapes
@@ -534,5 +542,135 @@ describe('F6.7 — child-logger context is value-sanitised as well as allowliste
     expect(lines[0]).toContain('req-88');
     expect(lines[0]).toContain('/en/verify-email/');
     expect(lines[0]).not.toContain(SENTINEL.verificationToken);
+  });
+});
+
+describe('F6.8 — Phase 27 payment material never reaches a log', () => {
+  /**
+   * The Donations webhook route logs only `{ provider, status, reason }`, and
+   * the platform never collects card data. These assertions make sure a
+   * mistaken call site — logging a request, a provider payload, a config
+   * record or a URL — still cannot carry a signature, a provider credential,
+   * a status token, a checkout URL or a card detail out.
+   */
+  const PAYMENT = {
+    stripeKey: syntheticKey('sk', 'test', 'SyntheticStripeKeySentinel7f3a91'),
+    restrictedKey: syntheticKey('rk', 'live', 'SyntheticRestrictedSentinel2b8e'),
+    cliSandboxKey: syntheticKey('rkcs', 'test', 'SyntheticCliSandboxSentinel4e7c'),
+    webhookSecret: 'whsec_SyntheticWebhookSecretSentinel9c4d',
+    signature: 't=1792324800,v1=5e2f83b65e2f83b65e2f83b65e2f83b6',
+    statusToken: 'Kf3xQ9mZ2pLr7TvB1nWs8dYhSentinelStatusTok',
+    lowercaseToken: 'abcdefghijklmnopqrstuvwxyz0123456789abcdefg',
+    checkoutSession: 'cs_test_a1b2c3d4e5f6g7h8i9j0lowercaseonly',
+    pan: '4242424242424242',
+    cvc: '987',
+  } as const;
+
+  function expectNoPaymentSentinel(line: string): void {
+    for (const sentinel of Object.values(PAYMENT)) {
+      expect(line, `${sentinel} leaked into the emitted log line`).not.toContain(
+        sentinel,
+      );
+    }
+  }
+
+  it.each([
+    'stripe-signature',
+    'Stripe-Signature',
+    'signature',
+    'statusToken',
+    'status_token',
+    'checkoutUrl',
+    'checkout_url',
+    'card',
+    'cards',
+    'cardNumber',
+    'card_number',
+    'pan',
+    'cvc',
+    'cvv',
+    'expiry',
+    'iban',
+    'billing',
+    'DONATIONS_STRIPE_SECRET_KEY',
+    'DONATIONS_STRIPE_WEBHOOK_SECRET',
+    'donationsStripeSecretKey',
+  ])('classifies %s as sensitive', (name) => {
+    expect(isSensitiveKey(name)).toBe(true);
+  });
+
+  it.each([
+    'provider',
+    'reason',
+    'status',
+    'statusCode',
+    'environment',
+    'currency',
+    'state',
+  ])('leaves the diagnostic field %s alone', (name) => {
+    expect(isSensitiveKey(name)).toBe(false);
+  });
+
+  it('emits the webhook rejection shape and none of the material around it', async () => {
+    const { logger, lines } = await captureLogger();
+
+    logger.warn(
+      {
+        provider: 'stripe',
+        status: 401,
+        reason: 'invalid-signature',
+        request: { headers: { 'stripe-signature': PAYMENT.signature } },
+        'Stripe-Signature': PAYMENT.signature,
+        statusToken: PAYMENT.statusToken,
+        checkoutUrl: `https://checkout.stripe.com/c/pay/${PAYMENT.checkoutSession}`,
+        payment_method_details: {
+          card: { number: PAYMENT.pan, cvc: PAYMENT.cvc, exp_month: 12 },
+        },
+        config: {
+          DONATIONS_STRIPE_SECRET_KEY: PAYMENT.stripeKey,
+          DONATIONS_STRIPE_WEBHOOK_SECRET: PAYMENT.webhookSecret,
+        },
+      },
+      'webhook refused',
+    );
+
+    expect(lines).toHaveLength(1);
+    expectNoPaymentSentinel(lines[0] ?? '');
+    expect(lines[0]).toContain('"provider":"stripe"');
+    expect(lines[0]).toContain('"status":401');
+    expect(lines[0]).toContain('"reason":"invalid-signature"');
+  });
+
+  it('removes provider credentials recognisable by shape alone, under any key', async () => {
+    const { logger, lines } = await captureLogger();
+
+    logger.error(
+      {
+        detail: `request failed for ${PAYMENT.stripeKey}`,
+        notes: [PAYMENT.restrictedKey, `secret ${PAYMENT.webhookSecret} rejected`],
+      },
+      `provider call with ${PAYMENT.stripeKey} failed`,
+    );
+
+    expectNoPaymentSentinel(lines[0] ?? '');
+    expect(lines[0]).toContain('request failed for');
+  });
+
+  it('removes a status token from the status route, keeping the route', () => {
+    for (const token of [PAYMENT.statusToken, PAYMENT.lowercaseToken]) {
+      const sanitised = sanitiseString(`/ur/donate/status/${token}`);
+      expect(sanitised).toBe(`/ur/donate/status/${redactionPlaceholder}`);
+    }
+    expect(
+      sanitiseString(`https://minhaj.example/en/donate/status/${PAYMENT.lowercaseToken}`),
+    ).not.toContain(PAYMENT.lowercaseToken);
+  });
+
+  it('removes the session from a hosted checkout URL, keeping the origin', () => {
+    const sanitised = sanitiseString(
+      `https://checkout.stripe.com/c/pay/${PAYMENT.checkoutSession}#fidkdWxOYHwnPyd1blpxYHZx`,
+    );
+    expect(sanitised).toContain('https://checkout.stripe.com/c/pay/');
+    expect(sanitised).not.toContain(PAYMENT.checkoutSession);
   });
 });

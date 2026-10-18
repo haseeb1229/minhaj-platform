@@ -195,6 +195,15 @@ model User {
   memberships                  Membership[]
   membershipCommunications     MembershipCommunicationIntent[]
 
+  /// Phase 27 BACK-REFERENCES PRISMA REQUIRES, AND NOT DEPENDENCIES. Each is
+  /// owned on the Donations side — a linked donor, the operator who requested
+  /// a refund, and the recipient of an owed payment acknowledgement. Identity
+  /// never reads them; closure reaches them only through Donations' own
+  /// disposition, which releases the donor link and keeps every financial row.
+  donations                    Donation[]
+  donationRefundsRequested     DonationRefund[]
+  donationCommunications       DonationCommunicationIntent[]
+
   id String @id @db.NVarChar(36)
 
   // ---- Better Auth core -------------------------------------------------
@@ -5883,4 +5892,231 @@ model MembershipCommunicationIntent {
   @@index([recipientUserId, state])
   @@index([applicationId])
   @@index([membershipId])
+}
+
+// ===========================================================================
+// Phase 27 — Donations (DOMAIN_MODEL.md §17.3). Owned by the Donations
+// context; its adapter lives in packages/database/src/adapters/donations. The
+// scoped filtered unique provider references, the composite keys that pin an
+// intent to its donation's own donor and a refund intent to a refund of that
+// donation, the CHECKs (the allowlisted currency-exponent pairs, exact money
+// bounds, and the state as the derivation of the facts) and the triggers
+// (admission, forward-only facts, refund authority) are declared in the
+// migration, which the database enforces; Prisma navigates only the simple
+// relations. MONEY IS BIGINT MINOR UNITS: never a float, never a decimal.
+// No card, payer or raw provider payload is stored anywhere.
+// ===========================================================================
+
+/// A cause operators present publicly. Its own lifecycle; never deleted, and
+/// never back to draft once public.
+model DonationCampaign {
+  id String @id @db.NVarChar(36)
+  /// draft | published | archived
+  state String @default("draft") @db.NVarChar(16)
+  /// en | ur | ar — the locale whose words publication requires.
+  primaryLocale String @db.NVarChar(8)
+  displayOrder Int
+  version Int @default(1)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  publishedAt DateTime? @db.DateTime2
+  archivedAt DateTime? @db.DateTime2
+  translations DonationCampaignTranslation[]
+  currencies DonationCampaignCurrency[]
+  donations Donation[]
+  @@index([state, displayOrder, id])
+}
+
+/// One locale's operator-authored words for a campaign. Plain text.
+model DonationCampaignTranslation {
+  campaignId String @db.NVarChar(36)
+  /// en | ur | ar
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(160)
+  summary String @db.NVarChar(600)
+  description String @db.NVarChar(4000)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  campaign DonationCampaign @relation(fields: [campaignId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([campaignId, locale])
+}
+
+/// A campaign's server-owned policy for one currency: inclusive exact bounds
+/// and up to three dense suggested amounts, in ISO minor units at the
+/// currency's own exponent.
+model DonationCampaignCurrency {
+  campaignId String @db.NVarChar(36)
+  /// An ISO 4217 code from the server allowlist.
+  currency String @db.Char(3)
+  currencyExponent Int @db.TinyInt
+  minimumMinor BigInt
+  maximumMinor BigInt
+  suggested1Minor BigInt?
+  suggested2Minor BigInt?
+  suggested3Minor BigInt?
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  campaign DonationCampaign @relation(fields: [campaignId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([campaignId, currency])
+}
+
+/// The fail-closed Donations gate: at most one row (id 1), written by the
+/// owner only (the runtime holds SELECT), immutable once written. No row:
+/// no donation can be created.
+model DonationActivation {
+  id Int @id @db.TinyInt
+  /// stripe
+  provider String @db.NVarChar(16)
+  /// fixture | sandbox | production
+  environment String @db.NVarChar(16)
+  /// The NON-SECRET merchant account identifier.
+  accountKey String @db.NVarChar(64)
+  /// fixture | approved
+  authority String @db.NVarChar(16)
+  authorisedBy String @db.NVarChar(200)
+  reference String? @db.NVarChar(400)
+  activatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+}
+
+/// One payment attempt. Its expected money is the server's own immutable copy;
+/// its state is the derivation of its monotonic provider-verified facts.
+model Donation {
+  id String @id @db.NVarChar(36)
+  campaignId String @db.NVarChar(36)
+  /// Set only when an active account started it linked; released (never
+  /// re-pointed) when that account is closed.
+  donorUserId String? @db.NVarChar(36)
+  donorReleasedAt DateTime? @db.DateTime2
+  operationId String @unique(map: "Donation_operationId_key") @db.NVarChar(36)
+  /// SHA-256 hex of the canonical request.
+  requestDigest String @db.Char(64)
+  /// SHA-256 hex of the anonymous status token; the token is never stored.
+  statusTokenDigest String @unique(map: "Donation_statusTokenDigest_key") @db.Char(64)
+  /// en | ur | ar
+  locale String @db.NVarChar(8)
+  checkoutLabel String @db.NVarChar(160)
+  currency String @db.Char(3)
+  currencyExponent Int @db.TinyInt
+  expectedMinor BigInt
+  /// stripe
+  provider String @db.NVarChar(16)
+  /// fixture | sandbox | production
+  environment String @db.NVarChar(16)
+  accountKey String @db.NVarChar(64)
+  /// pending | created | ambiguous | rejected
+  createState String @default("pending") @db.NVarChar(16)
+  checkoutReference String? @db.NVarChar(255)
+  checkoutExpiresAt DateTime? @db.DateTime2
+  paymentReference String? @db.NVarChar(255)
+  /// pending | succeeded | failed | cancelled | expired | partially_refunded | refunded | disputed | charged_back
+  state String @default("pending") @db.NVarChar(24)
+  capturedMinor BigInt?
+  refundedMinor BigInt @default(0)
+  refundReservedMinor BigInt @default(0)
+  /// none | open | won | lost
+  dispute String @default("none") @db.NVarChar(8)
+  /// failed | expired | cancelled
+  closure String? @db.NVarChar(16)
+  cancelRequestedAt DateTime? @db.DateTime2
+  /// amount-mismatch | provider-mismatch | unresolved | external-refund
+  attention String? @db.NVarChar(24)
+  reconcileDueAt DateTime? @db.DateTime2
+  reconcileAttempts Int @default(0)
+  reconcileLeaseUntil DateTime? @db.DateTime2
+  version Int @default(1)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  succeededAt DateTime? @db.DateTime2
+  campaign DonationCampaign @relation(fields: [campaignId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  donor User? @relation(fields: [donorUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  events DonationProviderEvent[]
+  refunds DonationRefund[]
+  communications DonationCommunicationIntent[]
+  @@unique([id, donorUserId], map: "Donation_donor_key")
+  @@index([donorUserId, createdAt])
+  @@index([reconcileDueAt, id])
+  @@index([createdAt, id])
+  @@index([state, createdAt])
+  @@index([campaignId, createdAt])
+  @@index([environment, createdAt])
+  @@index([attention, createdAt])
+}
+
+/// The durable dedup record of one verified provider event: its scoped id,
+/// type, instants and the SHA-256 of its exact bytes — never the payload.
+model DonationProviderEvent {
+  id String @id @db.NVarChar(36)
+  provider String @db.NVarChar(16)
+  environment String @db.NVarChar(16)
+  accountKey String @db.NVarChar(64)
+  eventId String @db.NVarChar(255)
+  eventType String @db.NVarChar(64)
+  occurredAt DateTime @db.DateTime2
+  receivedAt DateTime @db.DateTime2
+  payloadDigest String @db.Char(64)
+  donationId String? @db.NVarChar(36)
+  /// applied | unchanged | ignored | unmatched | attention
+  result String? @db.NVarChar(16)
+  processedAt DateTime? @db.DateTime2
+  donation Donation? @relation(fields: [donationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@unique([provider, environment, accountKey, eventId], map: "DonationProviderEvent_event_key")
+  @@index([donationId])
+}
+
+/// A full or partial refund of a captured donation, reserved against it and
+/// moving only forward. Its requester held `donations.refund` with a live
+/// `donation-refund` step-up when it was admitted (enforced by trigger).
+model DonationRefund {
+  id String @id @db.NVarChar(36)
+  donationId String @db.NVarChar(36)
+  operationId String @unique(map: "DonationRefund_operationId_key") @db.NVarChar(36)
+  requestDigest String @db.Char(64)
+  currency String @db.Char(3)
+  currencyExponent Int @db.TinyInt
+  amountMinor BigInt
+  /// requested | pending | succeeded | failed
+  state String @default("requested") @db.NVarChar(16)
+  provider String @db.NVarChar(16)
+  environment String @db.NVarChar(16)
+  accountKey String @db.NVarChar(64)
+  refundReference String? @db.NVarChar(255)
+  requestedByUserId String @db.NVarChar(36)
+  requestedAt DateTime @db.DateTime2
+  completedAt DateTime? @db.DateTime2
+  reconcileDueAt DateTime? @db.DateTime2
+  reconcileAttempts Int @default(0)
+  reconcileLeaseUntil DateTime? @db.DateTime2
+  version Int @default(1)
+  donation Donation @relation(fields: [donationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  requestedBy User @relation(fields: [requestedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  communications DonationCommunicationIntent[]
+  @@unique([id, donationId], map: "DonationRefund_donation_key")
+  @@index([donationId, state])
+  @@index([reconcileDueAt, id])
+  @@index([requestedByUserId])
+}
+
+/// One durable payment-acknowledgement intent owed to a LINKED donor: a
+/// purpose, the recipient account, the donation (and refund) it describes, a
+/// due instant and a key — never an address, a name or a body.
+model DonationCommunicationIntent {
+  id String @id @db.NVarChar(36)
+  /// donation.succeeded | donation.partially-refunded | donation.refunded
+  purpose String @db.NVarChar(64)
+  donationId String @db.NVarChar(36)
+  refundId String? @db.NVarChar(36)
+  recipientUserId String @db.NVarChar(36)
+  dueAt DateTime @db.DateTime2
+  /// pending | relayed | abandoned
+  state String @default("pending") @db.NVarChar(16)
+  idempotencyKey String @unique(map: "DonationCommunicationIntent_idempotencyKey_key") @db.NVarChar(200)
+  claimedUntil DateTime? @db.DateTime2
+  relayedAt DateTime? @db.DateTime2
+  abandonedAt DateTime? @db.DateTime2
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  donation Donation @relation(fields: [donationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  refund DonationRefund? @relation(fields: [refundId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  recipient User @relation(fields: [recipientUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([state, dueAt])
+  @@index([recipientUserId, state])
+  @@index([donationId])
+  @@index([refundId])
 }

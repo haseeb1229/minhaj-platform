@@ -457,7 +457,8 @@
       "newsletter": "Newsletter",
       "learning": "Learning",
       "messaging": "Messaging",
-      "membership": "Membership"
+      "membership": "Membership",
+      "donations": "Donations"
     },
     "global": {
       "title": "Global Network",
@@ -646,7 +647,8 @@
       "rateLimited": "Too many attempts. Wait a little and try again.",
       "quranCanonicalEdit": "Correcting canonical Quran text needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app.",
       "hadithCanonicalEdit": "Changing sourced Hadith records, structure, verification or citations needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app.",
-      "fatwaPublication": "Publishing or withdrawing a Fatwa needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app."
+      "fatwaPublication": "Publishing or withdrawing a Fatwa needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app.",
+      "donationRefund": "Refunding a donation needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app."
     },
     "users": {
       "title": "Accounts",
@@ -4480,7 +4482,12 @@
       "membershipExportBody": "Download a copy of what Membership keeps for your account, as a separate JSON file:",
       "membershipExportContents": "Your membership applications and Memberships — the type each one is for, its status, who withdrew or ended it, and its dates — listed by reference, never with the types’ descriptions.",
       "membershipExportClosure": "Closing your account withdraws any membership application still in progress. It does not end a Membership you hold: that is an organisational relationship, which you can end from My Membership.",
-      "membershipExportLink": "Download your membership data"
+      "membershipExportLink": "Download your membership data",
+      "donationsExportHeading": "Download your donation data",
+      "donationsExportBody": "Download a copy of what Donations keeps for your account, as a separate JSON file:",
+      "donationsExportContents": "each donation you started while signed in — its campaign, currency, exact amount and any amount refunded, its state, whether it was a test, and when it began, was received and last changed. No card, bank or payment provider detail is kept, so none is included.",
+      "donationsExportClosure": "Closing your account removes the link between your account and your donations. The donation records themselves — amounts, states and refunds — are kept without it, because payments must remain accountable.",
+      "donationsExportLink": "Download your donation data"
     },
     "home": {
       "unavailable": "Your saved items, history and notifications can’t be shown right now. Your account settings below still work.",
@@ -6176,6 +6183,402 @@
       "reject": "Do not approve",
       "approveConfirm": "I approve this application, and a Membership will begin.",
       "rejectConfirm": "I do not approve this application."
+    }
+  },
+  "donations": {
+    "title": "Donate",
+    "description": "Give to the organisation’s published campaigns. Payment is taken on the payment provider’s secure page.",
+    "intro": "Your gift supports the campaigns listed below. Choose a campaign and an amount, and you will be taken to the payment provider’s secure page to pay. You don’t need an account to give.",
+    "how": {
+      "heading": "How giving works",
+      "provider": "Payment is taken on the payment provider’s own secure page, not on this site. You are sent there when you continue, and brought back here afterwards.",
+      "noDetails": "You never enter card or bank details on this site, and this site never sees or keeps them.",
+      "status": "Afterwards you see your donation’s status as the payment provider reports it. Leaving or cancelling the provider’s page takes no money.",
+      "account": "If you start your gift from My donations while signed in, it is kept in your account and an acknowledgement of payment is sent to your account’s email address."
+    },
+    "unavailable": "Online giving is not available yet. No payment can be started here at the moment; the campaigns are described below so you can read about them.",
+    "campaigns": {
+      "heading": "Campaigns",
+      "empty": "There are no campaigns open for giving at the moment.",
+      "closed": "Giving to this campaign will open when online giving is available.",
+      "noCurrency": "This campaign can’t take gifts online at the moment."
+    },
+    "campaign": {
+      "fallback": "This campaign hasn’t been translated into your language yet. It is shown in {language}.",
+      "unavailable": "Campaign no longer shown"
+    },
+    "account": {
+      "heading": "Giving with your account",
+      "body": "Want this gift kept in your account? Sign in and start it from My donations. A gift started on this page is not linked to any account, even if you are signed in.",
+      "link": "Start from My donations"
+    },
+    "form": {
+      "submit": "Continue to secure payment",
+      "pending": "Preparing your payment…",
+      "suggested": "Suggested amounts",
+      "own": "Another amount",
+      "currency": "Currency",
+      "amount": "Amount",
+      "amountHelp": "Use the digits 0–9 and a full stop for decimals, for example 25.00 — no commas or currency signs.",
+      "amountHelpSuggested": "Type an amount here to give it instead of the suggestion chosen above. Use the digits 0–9 and a full stop for decimals, for example 25.00.",
+      "limits": "Amounts accepted for this campaign",
+      "range": "From <minimum></minimum> to <maximum></maximum>",
+      "provider": "When you continue you will be taken to the payment provider’s secure page to pay. No card or bank details are entered on this site."
+    },
+    "failure": {
+      "invalid": "That amount isn’t valid. Use digits and a full stop only, with no more decimal places than the currency has.",
+      "notActivated": "Online giving isn’t available at the moment. No payment was started.",
+      "campaignUnavailable": "This campaign is no longer open for giving. Reload the page to see the current campaigns.",
+      "amountRefused": "That amount or currency isn’t accepted for this campaign. Check the amounts accepted and try again.",
+      "operationConflict": "This form was already used for a different gift. Reload the page to start again.",
+      "alreadySubmitted": "This gift was already submitted and its payment page has closed. Reload the page to start a new gift.",
+      "providerUnavailable": "The payment provider couldn’t be reached just now. Please try again in a few minutes.",
+      "rateLimited": "Too many attempts in a short time. Please wait and try again.",
+      "noSession": "Your session has ended. Sign in again.",
+      "unavailable": "Something went wrong. Please try again.",
+      "load": "This can’t be shown right now. Please try again later.",
+      "notFound": "This donation couldn’t be found.",
+      "confirmRequired": "Tick the confirmation box first."
+    },
+    "state": {
+      "pending": "Pending",
+      "succeeded": "Payment received",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "expired": "Expired",
+      "partiallyRefunded": "Partly refunded",
+      "refunded": "Refunded",
+      "disputed": "Disputed",
+      "chargedBack": "Reversed by the bank"
+    },
+    "stateHelp": {
+      "pending": "The payment provider hasn’t reported a completed payment yet. If you have just paid, it can take a moment — check again below.",
+      "succeeded": "The payment provider reports that the payment was received. Thank you.",
+      "failed": "The payment provider reports that the payment didn’t go through. No money was taken.",
+      "cancelled": "The payment was cancelled before it was completed. No money was taken.",
+      "expired": "The payment page expired before a payment was made. No money was taken.",
+      "partiallyRefunded": "The payment was received, and part of it has been refunded.",
+      "refunded": "The payment was received and has been refunded in full.",
+      "disputed": "The payment was received and is being disputed with the card issuer or bank.",
+      "chargedBack": "The payment was received and later reversed by the card issuer or bank."
+    },
+    "refundState": {
+      "requested": "Requested",
+      "pending": "In progress",
+      "succeeded": "Refunded",
+      "failed": "Not refunded"
+    },
+    "environment": {
+      "fixture": "Test (simulated)",
+      "sandbox": "Test (sandbox)",
+      "production": "Live"
+    },
+    "banner": {
+      "fixture": "TEST ENVIRONMENT — payments here are simulated for testing. No real money moves and no real card is charged.",
+      "sandbox": "TEST ENVIRONMENT — payments here use the payment provider’s sandbox. No real money moves and no real card is charged."
+    },
+    "return": {
+      "title": "Returning from payment",
+      "missing": "We can’t find a donation started in this browser.",
+      "help": "A donation’s status is remembered in this browser for one day after it is started. If you gave while signed in, the donation is in My donations.",
+      "mine": "Go to My donations",
+      "donate": "Go to the giving page"
+    },
+    "status": {
+      "title": "Donation status",
+      "intro": "The current status of one donation, as the payment provider reports it.",
+      "done": {
+        "checked": "The payment provider was asked again. The status below is its latest answer.",
+        "cancel": "Your request to cancel was sent. The status below is what the payment provider reports now."
+      },
+      "notProof": "This page does not prove payment. The status comes from the payment provider and can change — for example after a refund.",
+      "check": {
+        "heading": "Check again",
+        "help": "If you have just paid, the payment provider may still be confirming it. Ask again for the latest status.",
+        "submit": "Check again"
+      },
+      "cancel": {
+        "heading": "Cancel this donation",
+        "help": "The payment page is still open and nothing has been paid. You can cancel it so it can’t be used. If a payment completes first, the payment stands, and this page will say so.",
+        "submit": "Cancel this donation",
+        "confirm": "I want to cancel this donation."
+      },
+      "private": "Keep this page’s address private: anyone who has it can see this donation’s status. It shows nothing about who you are.",
+      "donate": "Go to the giving page",
+      "mine": "Go to My donations"
+    },
+    "working": "Working…",
+    "detail": {
+      "campaign": "Campaign",
+      "amount": "Amount",
+      "refunded": "Refunded",
+      "started": "Started",
+      "updated": "Last updated",
+      "succeeded": "Payment received"
+    }
+  },
+  "myDonations": {
+    "title": "My donations",
+    "description": "Donations you started while signed in to this account, newest first.",
+    "providerNotice": "Each status is what the payment provider reports. Gifts made on the public giving page without signing in are not shown here.",
+    "nav": {
+      "label": "Donations links",
+      "public": "The giving page",
+      "account": "My Minhaj",
+      "donations": "My donations"
+    },
+    "history": {
+      "heading": "Your donations",
+      "empty": "You haven’t given through this account yet."
+    },
+    "give": {
+      "heading": "Give from your account",
+      "help": "A gift started here is linked to your account: it appears above, and an acknowledgement of payment is sent to your account’s email address. Payment is taken on the payment provider’s secure page."
+    },
+    "failure": {
+      "load": "Your donations can’t be shown right now. Please try again later."
+    },
+    "home": {
+      "heading": "Donations",
+      "unavailable": "Your donations can’t be shown right now.",
+      "none": "You haven’t given through this account yet.",
+      "latest": "Your most recent donation:",
+      "link": "Go to My donations"
+    }
+  },
+  "adminDonations": {
+    "title": "Donations",
+    "surface": {
+      "records": "Records",
+      "campaigns": "Campaigns"
+    },
+    "unknown": "Something went wrong. The details are not shown here; please try again.",
+    "reload": "Try again",
+    "loading": "Loading…",
+    "saved": "Saved.",
+    "pending": "Saving…",
+    "previous": "Previous",
+    "next": "Next",
+    "pageOf": "Page {page} of {pages}",
+    "beyond": "There is nothing on this page. Go back to the first page.",
+    "failure": {
+      "denied": "You don’t have permission to do that.",
+      "noSession": "Your session has ended. Sign in again.",
+      "secondFactorRequired": "Finish setting up two-step verification first.",
+      "stepUpRequired": "Confirm it is you with the form above, then submit again.",
+      "accountInactive": "This account is not active.",
+      "confirmRequired": "Tick the confirmation box first.",
+      "notFound": "That record wasn’t found.",
+      "conflict": "Someone changed this since the page loaded. Reload the page, check where it stands now, and try again.",
+      "invalid": "Some values aren’t valid. Check the fields — amounts are exact decimal text in the currency’s own unit — and try again.",
+      "invalidState": "That step isn’t open for this record in its current state. Reload the page to see where it stands.",
+      "incomplete": "A campaign can be published only once it has words in its primary language and at least one currency — and a published campaign keeps at least one currency.",
+      "limit": "The limit has been reached: no more campaigns or currencies can be added.",
+      "rateLimited": "Too many requests in a short time. Please wait and try again.",
+      "overRefund": "That is more than remains refundable on this donation. Reload the page to see what remains.",
+      "providerUnavailable": "The payment provider couldn’t be reached or isn’t configured for this donation’s environment. Nothing was changed; try again later.",
+      "operationConflict": "This form was already used for a different refund. Reload the page and try again.",
+      "load": "This can’t be shown right now. Please try again later."
+    },
+    "records": {
+      "title": "Donation records",
+      "description": "Every donation, newest first, with its exact amount and the state the payment provider reported.",
+      "audited": "Viewing, opening and exporting donation records is recorded in the audit log.",
+      "heading": "Donations",
+      "export": "Export these records as CSV",
+      "exportHelp": "The export uses the filters above. Amounts are exact; provider references show only their last six characters; a donor is only “linked” or “anonymous”.",
+      "empty": "No donation matches these filters.",
+      "caption": "{total, plural, one {# donation matches.} other {# donations match.}}",
+      "column": {
+        "started": "Started",
+        "campaign": "Campaign",
+        "amount": "Amount",
+        "state": "State",
+        "donor": "Donor",
+        "attention": "Needs attention"
+      },
+      "pages": "Donation pages"
+    },
+    "donor": {
+      "linked": "Linked to an account",
+      "anonymous": "Anonymous",
+      "linkedNamed": "Linked to {name}",
+      "linkedUnnamed": "Linked to a closed or unavailable account"
+    },
+    "attention": {
+      "none": "No",
+      "amountMismatch": "Yes — the provider reported a different amount",
+      "providerMismatch": "Yes — the provider’s record does not match",
+      "unresolved": "Yes — the provider could not be reached for a long time",
+      "externalRefund": "Yes — refunded outside this platform"
+    },
+    "filter": {
+      "heading": "Filter",
+      "state": "State",
+      "campaign": "Campaign",
+      "environment": "Environment",
+      "donor": "Donor",
+      "attention": "Needs attention",
+      "any": "Any",
+      "attentionOnly": "Only those needing attention",
+      "apply": "Apply filters",
+      "clear": "Clear filters"
+    },
+    "campaign": {
+      "untitled": "Campaign without words"
+    },
+    "record": {
+      "title": "Donation record",
+      "audited": "Opening this record is recorded in the audit log.",
+      "back": "Back to the donation records",
+      "captured": "Captured",
+      "notCaptured": "Nothing captured",
+      "reserved": "Reserved for refunds",
+      "dispute": "Dispute",
+      "attention": "Needs attention",
+      "donor": "Donor",
+      "environment": "Environment",
+      "account": "Provider account",
+      "createState": "Checkout creation",
+      "checkoutReference": "Checkout reference",
+      "paymentReference": "Payment reference",
+      "none": "None",
+      "checkoutExpires": "Checkout expires",
+      "version": "Version"
+    },
+    "dispute": {
+      "none": "None",
+      "open": "Open",
+      "won": "Closed in the organisation’s favour",
+      "lost": "Closed against the organisation"
+    },
+    "createState": {
+      "pending": "Not yet requested",
+      "created": "Created",
+      "ambiguous": "Outcome unknown — being reconciled",
+      "rejected": "Refused by the provider"
+    },
+    "reconcile": {
+      "heading": "Reconciliation",
+      "due": "Next check",
+      "notScheduled": "Not scheduled",
+      "attempts": "Checks without an answer",
+      "attemptCount": "{count, plural, =0 {None} one {#} other {#}}",
+      "help": "Ask the payment provider now for this donation’s current state. Only what the provider reports is applied.",
+      "submit": "Ask the provider again",
+      "done": "The provider was asked. The record shows its latest answer."
+    },
+    "refunds": {
+      "heading": "Refunds",
+      "empty": "No refund has been requested for this donation.",
+      "reference": "Refund reference",
+      "requested": "Requested",
+      "completed": "Completed"
+    },
+    "refund": {
+      "nothingLeft": "Nothing remains refundable on this donation.",
+      "notCaptured": "This donation can’t be refunded: no payment is captured, or it has been reversed by the bank.",
+      "heading": "Refund this donation",
+      "remaining": "Refundable now: <amount></amount>",
+      "help": "The refund is reserved first, then requested from the payment provider. Its state is the provider’s answer; one that isn’t answered at once stays requested and is checked automatically — don’t submit it again.",
+      "submit": "Request the refund",
+      "accepted": "The payment provider accepted the refund request.",
+      "rejected": "The payment provider refused the refund. Nothing was refunded.",
+      "unknown": "The payment provider hasn’t answered yet. The refund stays requested and will be checked automatically.",
+      "amount": "Amount to refund ({currency})",
+      "amountHelp": "Exact decimal text in the donation’s currency, for example 10.00. Leave the full amount for a full refund.",
+      "confirm": "I confirm this refund. It returns money to the donor and can’t be undone here."
+    },
+    "campaigns": {
+      "title": "Donation campaigns",
+      "description": "Every campaign in any state, in display order. Only published campaigns appear on the giving page.",
+      "heading": "Campaigns",
+      "empty": "No campaign has been created yet.",
+      "caption": "Campaigns, in display order.",
+      "column": {
+        "title": "Campaign",
+        "state": "State",
+        "order": "Position",
+        "currencies": "Currencies"
+      },
+      "noCurrencies": "None yet"
+    },
+    "campaignState": {
+      "draft": "Draft",
+      "published": "Published",
+      "archived": "Archived"
+    },
+    "create": {
+      "heading": "Create a campaign",
+      "help": "A new campaign starts as a private draft. Add its words and at least one currency before publishing it.",
+      "submit": "Create the draft"
+    },
+    "fields": {
+      "primaryLocale": "Primary language",
+      "primaryLocaleHelp": "The language the campaign is first written in. Its words in this language are needed for publication, and are shown wherever another language has none.",
+      "displayOrder": "Display position",
+      "displayOrderHelp": "Lower numbers are listed first, from 0 to 9999.",
+      "title": "Title",
+      "summary": "Summary",
+      "description": "Description"
+    },
+    "localeName": {
+      "en": "English",
+      "ur": "Urdu",
+      "ar": "Arabic"
+    },
+    "editor": {
+      "title": "Campaign",
+      "back": "Back to the campaigns",
+      "state": "State",
+      "referenced": "Has donations",
+      "referencedYes": "Yes",
+      "referencedNo": "Not yet",
+      "version": "Version",
+      "created": "Created",
+      "updated": "Last changed",
+      "published": "Last published",
+      "archived": "Archived"
+    },
+    "lifecycle": {
+      "heading": "Publication",
+      "explain": {
+        "published": "Publishing lists the campaign on the giving page and lets people give to it. It needs words in its primary language and at least one currency.",
+        "archived": "Archiving removes the campaign from the giving page and stops new gifts at once. Donations already made are unchanged, and the campaign can be published again."
+      },
+      "to": {
+        "published": "Publish",
+        "archived": "Archive"
+      }
+    },
+    "order": {
+      "heading": "Display position",
+      "submit": "Save position"
+    },
+    "currencies": {
+      "heading": "Currencies and amounts",
+      "help": "Each currency has its own minimum, maximum and up to three suggested amounts. Changing them never changes a donation already made.",
+      "empty": "This campaign has no currency yet, so it can’t be published.",
+      "minimum": "Minimum",
+      "maximum": "Maximum",
+      "suggested": "Suggested amounts",
+      "suggestedHelp": "Optional, up to three, each between the minimum and the maximum and all different. Fill them in order.",
+      "suggestion": "Suggestion {number}",
+      "exactHelp": "Type exact decimal text in the currency’s own unit — 25.00 for USD, 2500 for JPY, 2.500 for KWD. A finer fraction is refused, never rounded.",
+      "noSuggestions": "None",
+      "save": "Save {currency}",
+      "remove": "Remove {currency}",
+      "removeConfirm": "I want to stop offering this currency for this campaign.",
+      "addHeading": "Add a currency",
+      "add": "Add the currency",
+      "currency": "Currency"
+    },
+    "translations": {
+      "heading": "Words",
+      "help": "The campaign’s title, summary and description in each interface language. Plain text only.",
+      "primary": "{language} (primary language)",
+      "missing": "No words in this language yet.",
+      "submit": "Save the {language} words"
     }
   }
 }

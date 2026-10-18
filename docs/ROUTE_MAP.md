@@ -157,7 +157,7 @@ All prefixed with `/{locale}`.
 |---|---|
 | `/` | Home |
 | `/search` | Unified search — `?q, type, topic, language, from, to, page` · **`noindex`** |
-| `/donate` | Donation entry point |
+| `/donate` | Donation entry point — delivered in Phase 27: published campaigns and an anonymous start; no per-campaign route |
 | `/sitemap` | Human-readable sitemap |
 | `/topics` · `/topics/{slug}` | **Canonical taxonomy browser and topic hub** |
 | `/people/{slug}` | **Canonical contributor profile** |
@@ -459,7 +459,7 @@ never mistaken for a delivered one.
 | `/my/classes/*`, `/my/teachers` | **Learning** (teacher slice) | **Phase 23** |
 | `/my/messages/*`, including **Support** | **Messaging** | **Phase 24** |
 | `/my/membership` | **Membership** | **Phase 26** |
-| `/my/donations` — **only** where user-linked donation history is genuinely in scope | **Donations** | **Phase 27** |
+| `/my/donations` — user-linked donation history and a linked start | **Donations** | **Phase 27** |
 
 **Delivered in Phase 21.** `/my/saved` (+ `/bookmarks`, `/notes`, `/collections`,
 `/collections/{id}`), `/my/history/reading`, `/my/history/watch`, `/my/progress/quran`,
@@ -506,6 +506,21 @@ open applications (withdrawable), its Memberships (closable by the member) and a
 applicant needs no staff key. `/my` gains a Membership panel, and `/my/settings/privacy` the
 Membership export. The public `/membership` lists published types for everyone, reads no session and
 links to `/my/membership`; there is no per-type public route.
+
+**Delivered in Phase 27.** `/my/donations` — Donations', composed at Layer 4. Private, `noindex`
+and per request, it lists only the signed-in account's own LINKED donations (bounded, newest first:
+campaign, exact amount and currency, state, refunded amount, instants, a TEST marker outside
+production) and offers the linked start form; another account's donation resolves to nothing. A
+donation is linked only when an active account starts it here — an anonymous donation never links
+later. `/my` gains a Donations panel, and `/my/settings/privacy` the Donations export.
+
+**Donor return and status (Phase 27)**, outside the cache-safe public tree because they read the
+request: `/donate/return` is the provider's success and cancel URL — a constant page that ignores
+any query string, mutates nothing and, when the browser holds the HttpOnly status cookie, redirects
+to `/donate/status/{token}`; `/donate/status/{token}` shows one donation's provider-verified status
+to the holder of its 32-byte opaque token (a malformed and an unknown token answer alike), with
+"check again" and, while the checkout is open, "cancel" as Server Actions. Both are `noindex`,
+`no-referrer`, `private, no-store`. There is no route by donation id.
 
 > **Personalised home panels appear only for owners that actually exist.** The `/my` landing
 > composes what has been delivered; it does not render an empty frame for a context that has
@@ -635,7 +650,7 @@ shows who asked and confirms a request into a Booking on a teacher's open window
 `learning.read` alone keeps the count-only view. Identity reads are audited |
 | Global | `/admin/global/{countries\|regions\|cities\|centres}` — delivered in Phase 16; a Centre's contacts and served Cities are managed on the Centre |
 | Membership | `/admin/membership` · `/applications` · `/applications/{id}` — delivered in Phase 26 under `membership.read` (every page) and `membership.administer` (every action). `/admin/membership` holds the type catalogue in every state (create; a type's editor at `?type={id}` for display order, per-locale words, publish and archive) and the bounded member list with an operator's closure; `applications` is the bounded queue (status and type filters, oldest first); `applications/{id}` is one application with its start-of-review, approve and reject decisions, version-checked. Applicants and members appear by display name only; opening an application and every listing are audited accesses. No payment, fee or dues control exists |
-| Donations | `/admin/donations` · `/campaigns` |
+| Donations | `/admin/donations` · `/{id}` · `/campaigns` · `/campaigns/{id}` — delivered in Phase 27 under `donations.read` (every page and the CSV export), `donations.administer` (campaign lifecycle and currency policy, an operator's provider re-check) and the externally gated `donations.refund` with a `donation-refund` step-up (refunds). `/admin/donations` is the bounded record list (state, campaign, environment, anonymous or linked, attention filters) with a CSV export at `/api/admin/donations/export`; `/{id}` one donation's exact money, state, redacted provider references, reconciliation state and refunds, naming a linked donor only by the display name Identity reports (listings and the export say linked or anonymous); `campaigns` the catalogue in every state. Listings, details and exports are audited accesses. No card, payer credential or raw provider event is ever shown |
 | Messaging | `/admin/messaging/{support\|moderation\|reports}` — delivered in Phase 24. `support` (+ `/support/{conversationId}`) under `messaging.support`: the queue shows metadata only, opening a conversation's content is an audited access, and claiming, replying and resolving are versioned. `moderation` (open reports, oldest first) and `reports` (+ `/reports/{reportId}`) under `messaging.moderate`: identifiers and reasons in the lists, the bounded evidence one report authorises on its own page (audited), and the immutable dismiss / withhold / close decision. Both keys are externally gated and held by nobody; a Platform Administrator holds neither |
 | Migration | `/admin/migration/{sources\|runs\|runs/{id}\|staging\|duplicates\|url-mapping\|errors\|manifests\|reconciliation}` |
 | Communications | `/admin/communications/{newsletter\|delivery}` \u2014 subscriber and suppression state; pending, failed and suppressed outbound mail |
@@ -657,7 +672,7 @@ Categories only; no endpoint contracts in this phase.
 | Auth | `/api/auth/*` | Delegated to the authentication library |
 | Search | `/api/search/*` | Search, suggestions, typeahead |
 | Content read | `/api/content/*` | Public read for progressive enhancement |
-| Personal | `/api/my/*` | Authenticated personal actions. Phase 21: `target-state` (GET) and `bookmarks`, `notes`, `collection-items`, `history`, `quran-progress` (POST) serve the private island on public content pages after hydration, and `export` (GET) returns the person's Personalisation data as a JSON download. Phase 22: `learning/state` (GET) and `learning/enrolments`, `learning/trials` (POST) serve a Course page's private island, and `export/learning` (GET) returns the person's Learning data. Phase 26: `export/membership` (GET) returns the person's Membership applications and Memberships. Every response is private and `no-store`; every POST requires the configured origin, `Sec-Fetch-Site: same-origin` where sent and the `x-minhaj-intent: personal` header (SECURITY_BASELINE.md §7.1 rule 6) |
+| Personal | `/api/my/*` | Authenticated personal actions. Phase 21: `target-state` (GET) and `bookmarks`, `notes`, `collection-items`, `history`, `quran-progress` (POST) serve the private island on public content pages after hydration, and `export` (GET) returns the person's Personalisation data as a JSON download. Phase 22: `learning/state` (GET) and `learning/enrolments`, `learning/trials` (POST) serve a Course page's private island, and `export/learning` (GET) returns the person's Learning data. Phase 26: `export/membership` (GET) returns the person's Membership applications and Memberships. Phase 27: `export/donations` (GET) returns the person's linked donations. Every response is private and `no-store`; every POST requires the configured origin, `Sec-Fetch-Site: same-origin` where sent and the `x-minhaj-intent: personal` header (SECURITY_BASELINE.md §7.1 rule 6) |
 | Messaging REST | `/api/messaging/*` | Phase 24: `conversations/{id}/messages?after={sequence}` (GET) — durable catch-up after a sequence the reader holds, the source Phase 25 reconnection uses; `conversations/{id}/attachments` (POST) — one attachment's streamed raw body, JPEG, PNG or PDF up to 5 MiB, Class A with `x-minhaj-intent: messaging-attachment`; `attachments/{id}/discard` (POST) — release an unsent upload. Every response private and `no-store`; current access re-decided on every request |
 | Teacher / Admin | `/api/teacher/*` · `/api/admin/*` | Role-gated operations |
 | Migration | `/api/admin/migration/*` | Import control and status |
@@ -665,7 +680,7 @@ Categories only; no endpoint contracts in this phase.
 | Messaging bytes | `/assets/messaging/attachments/{id}` · `/assets/messaging/support/{id}` · `/assets/messaging/evidence/{reportId}/{id}` | Phase 24: a participant's attachment, a support staff member's (audited) and a moderator's inside one report's evidence (audited). Images `inline`, PDFs `attachment`; `private, no-store`, `nosniff`, CORP same-origin; one 404 for every denial. No signed or public URL |
 | Media upload | `/api/admin/media/audio/{id}/asset` · `/api/admin/media/photos/{id}/asset` | Phase 11: one track's audio file; Phase 12: one Photo's image. `POST` only, a streamed raw body — Class A with explicit anti-CSRF (SECURITY_BASELINE.md §7.1) |
 | Quran upload | `/api/admin/quran/recitations/{id}/segments/{segmentId}/asset` | Phase 18: one recitation segment's audio file, by the same streamed Class-A pattern. Its bytes are served at `/assets/quran/recitations/…` and previewed at `/assets/quran/previews/recitations/…`; nothing is offered as a download |
-| Webhooks | `/api/webhooks/{provider}` | **Signature-verified, idempotent, replay-resistant** |
+| Webhooks | `/api/webhooks/{provider}` | **Signature-verified, idempotent, replay-resistant**. Delivered: `resend` (Phase 2) and `stripe` (Phase 27 — the sandbox engineering adapter's Class-B callback: POST only, 64 KiB raw-byte cap, signature verified before parsing, durable scoped event dedup, provider truth re-read before any state change) |
 | Health | `/api/health` · `/api/ready` | Unprefixed operational probes |
 
 **Realtime** (delivered in Phase 25): `/socket.io/*`, reverse-proxied with WebSocket

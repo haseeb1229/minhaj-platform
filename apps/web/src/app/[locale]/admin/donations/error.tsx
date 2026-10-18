@@ -1,0 +1,24 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
+
+import { Alert, Button } from '@/components/ui';
+
+/**
+ * The Donations administration error boundary. It says that something failed
+ * and offers a retry, and NOTHING about what failed — no stack, no SQL, no
+ * account, no amount, no provider reference (SECURITY_BASELINE.md §19.2). The
+ * page already logged the operation that failed, by name.
+ */
+export default function DonationsAdminError({ reset }: { readonly reset: () => void }) {
+  const t = useTranslations('adminDonations');
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Alert tone="error">{t('unknown')}</Alert>
+      <Button type="button" onClick={reset}>
+        {t('reload')}
+      </Button>
+    </div>
+  );
+}

@@ -16,6 +16,7 @@ import { dispatchAfterResponse } from '@/composition/dispatch';
 import { fatwaRuntime } from '@/composition/fatwa';
 import { identityRuntime } from '@/composition/identity';
 import { learningRuntime } from '@/composition/learning';
+import { donationsRuntime } from '@/composition/donations';
 import { membershipRuntime } from '@/composition/membership';
 import { messagingRuntime } from '@/composition/messaging';
 import { peopleRuntime } from '@/composition/people';
@@ -716,6 +717,21 @@ export async function closeAccountAction(
     membershipPending = true;
   }
 
+  // THE EIGHTH OWNER. Donations abandons this account's owed donation mail and
+  // releases the account link of its donations, which become anonymous. The
+  // financial record — amounts, states, refunds and provider events — is the
+  // organisation's and is kept untouched. Donations refuses unless Identity
+  // reports the account closed, which it now does. Idempotent; the closure
+  // sweep finishes what this leaves.
+  let donationsPending: boolean;
+  try {
+    const donations = await donationsRuntime().account.disposeAccount(session.account.id);
+    const sweep = await donationsRuntime().account.reconcileClosedAccounts();
+    donationsPending = !donations.complete || !sweep.complete;
+  } catch {
+    donationsPending = true;
+  }
+
   // The closure notice is enqueued against the address the account HAD, before
   // the tombstone replaces it. It goes out after this response.
   dispatchAfterResponse();
@@ -734,7 +750,8 @@ export async function closeAccountAction(
     personalPending ||
     learningPending ||
     messagingPending ||
-    membershipPending
+    membershipPending ||
+    donationsPending
   )
     return { status: 'error', failure: 'closure-pending' };
 

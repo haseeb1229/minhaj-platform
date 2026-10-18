@@ -196,6 +196,15 @@ ordinary messaging, which a person reaches only through their current relationsh
 (DOMAIN_MODEL.md §15.6); neither implies the other; and neither can switch Messaging on, which only
 the owner-written activation row does.
 
+**Phase 27 adds the seventh: `donations.refund`** (OPEN_DECISIONS.md §5.4). Who may return a
+donor's money is the organisation's finance decision, part of the production merchant activation that
+stays open, so the key is catalogued, externally gated, bundled into no role and held by nobody.
+Moving money is not editing a campaign: the two ordinary Donations keys — `donations.read` (records,
+refunds, reconciliation state and export) and `donations.administer` (campaign lifecycle and an
+operator's provider re-check) — confer no refund. Every refund also needs a fresh `donation-refund`
+step-up (§8.1), and the database re-checks both the live key and the live grant when the refund row is
+inserted (§14).
+
 ---
 
 ## 4. CMS publishing permissions
@@ -490,6 +499,7 @@ controls apply, and they are not alternatives:**
 | **Canonical Quran edits** | `quran.editCanonical` |
 | **Canonical Hadith edits** | `hadith.editCanonical` |
 | **Fatwa publication** | `fatwa.publish` — dedicated purpose `fatwa-publication` since Phase 20, also required to withdraw a published ruling |
+| **Donation refund** | `donations.refund` — dedicated purpose `donation-refund` since Phase 27, required for every full or partial refund and re-checked by the database |
 | **Migration publication** | `migration.publish` |
 | User account administration | Admin permissions |
 | Destructive bulk operations | Admin permissions |
@@ -972,8 +982,8 @@ changed all remain recorded (§13.2).
 
 ## 14. Webhooks and payment security
 
-No payment provider is selected in this pass. Webhook endpoints follow **protocol model B**
-(§7.2), not browser CSRF semantics. When integration exists, it **must**:
+No production payment provider is selected (OPEN_DECISIONS.md §5.4). Webhook endpoints follow
+**protocol model B** (§7.2), not browser CSRF semantics. Every integration **must**:
 
 1. **Verify the signature** of every inbound webhook before any processing.
 2. **Be idempotent** — the same event delivered twice produces one effect.
@@ -994,6 +1004,80 @@ No payment provider is selected in this pass. Webhook endpoints follow **protoco
 **The same reliability rules apply to provider events for email delivery** — authenticity
 verification, idempotency and replay resistance (ARCHITECTURE.md §4.6.1). A provider callback
 is a Class-B request wherever it appears (§7.2).
+
+**As delivered (Phase 27) — the Stripe sandbox engineering adapter.** Phase 27 meets every rule
+above against one real sandbox protocol, recorded as a **sandbox engineering adapter, not a production
+provider selection** (TECH_STACK.md §18.4):
+
+- **Signature first, over the exact bytes.** `POST /api/webhooks/stripe` accepts POST only, refuses
+  a declared body over 64 KiB before reading and stops reading at 64 KiB regardless, and never parses
+  before verifying. `Stripe-Signature: t=…,v1=…` is checked as HMAC-SHA256 over `t`, `.` and the raw
+  bytes with the endpoint secret, compared in constant time against every `v1` (rotation), ignoring
+  every other scheme; a timestamp more than 300 seconds from now either way is refused as stale. Only
+  then is the body strictly parsed. A missing, forged, wrong-secret, tampered or stale signature
+  answers 401 and writes nothing; signed but malformed JSON answers 400 and writes nothing.
+- **Scope from configuration, never from the payload.** The adapter is built for exactly one
+  provider, environment and NON-SECRET account key; an event or object whose live/test mode differs
+  is refused. Provider checkout, payment, refund and event identifiers are unique per (provider,
+  environment, account key), so a sandbox identifier can never match a live one. There is no fallback
+  between environments, and a sandbox key cannot configure production or the reverse.
+- **Durable dedup, replay-safe.** Each verified event is admitted once by its scoped event id; a
+  duplicate or replayed delivery of a completed event is acknowledged with no effect, while an event
+  whose processing failed stays admitted-not-completed and is processed when the provider retries. No
+  payload, signature or header is stored — the event row keeps identifiers, type, instants, the
+  SHA-256 of the verified bytes and the result.
+- **The event is a hint; provider truth decides.** A verified event only names which checkout,
+  payment or refund to re-read. The server retrieves it from the provider and accepts success only
+  when scope, checkout, the provider's client reference (this donation), currency and the exact
+  expected minor amount all match and a capture of exactly that amount is reported; any mismatch
+  raises an attention flag and changes nothing else.
+- **Out of order converges.** Donation facts are monotonic — captured set once, refunded only
+  grows, a dispute only moves forward — and the state is derived from them by one rule the database
+  re-checks, so any arrival order ends in the same state and a late "pending", "failed" or "expired"
+  never regresses a verified success.
+- **Reconciliation.** Missing, delayed or unanswered events are recovered by a bounded SQL-leased
+  sweep with backoff (1 minute to 24 hours, then an `unresolved` attention flag); an unknown provider
+  answer is never assumed to be success or failure. An ambiguous checkout creation is resolved only by
+  repeating it under its ORIGINAL idempotency key with byte-identical parameters, which the provider
+  answers with the original outcome, within a 20-hour window — never by a fresh attempt. An ambiguous
+  refund request is never repeated: it is found at the provider by this platform's own refund id, and
+  only after that window, with the provider still holding no such refund, is it recorded as failed and
+  its reservation released.
+- **Refunds cannot exceed the capture.** A refund is reserved against the captured amount under the
+  donation's lock; the database refuses live refunds above the capture, a refund in another currency
+  or scope, and a requester who does not hold `donations.refund` with a live `donation-refund`
+  step-up at that moment.
+- **The browser proves nothing.** Checkout is provider-hosted; the return URL is a constant page
+  that reads no query string and mutates nothing. A donor's "check again" asks the provider through
+  the same verified path.
+- **No credentials anywhere.** No card number, security code, expiry, wallet or bank credential,
+  billing address or payer email is collected, proxied, stored or logged. Secrets, signatures, status
+  tokens, checkout URLs and card-shaped field names are redacted at the logger.
+- **Activation fails closed.** Without the owner-written activation row matching the configured
+  scope, no payment can start (and the database refuses the donation row). A non-production
+  environment needs `fixture` authority; `production` needs `approved` authority with recorded
+  external evidence, which neither the runtime nor any Donations key can write. None exists.
+- **Protocol limits recorded honestly.** Stripe documents no account identifier on the objects
+  this adapter reads, so the account key scopes identifiers by configuration. The anonymous sandbox
+  the official Stripe CLI provisions issues a restricted `rkcs_test_` key that cannot read
+  `GET /v1/account`, so the proof's account key is the one Stripe's own sandbox-creation output
+  names rather than a value re-read through the API. Stripe's current currency page no longer states
+  the final-digit rule for three-decimal currencies; the adapter keeps refusing a three-decimal amount
+  whose last minor digit is not zero, the conservative direction.
+- **Proven against the real sandbox (2026-10-19), locally and never in CI.** With an anonymous
+  sandbox created by the official Stripe CLI (`stripe sandbox create`, test mode only, credentials
+  in ignored local configuration): checkout creation with the exact expected amount read back,
+  resume, cancellation, a captured test payment (Stripe's documented `pm_card_visa` test method — no
+  card number), a partial and then the remaining refund, each observed by reference and by this
+  platform's refund id. And a real Stripe-signed `checkout.session.expired`, delivered by the
+  official `stripe listen --forward-to` over its own outbound connection to a loopback-only receiver
+  (no tunnel), reached the production build's `/api/webhooks/stripe` on a disposable database: the
+  signature was verified over the raw bytes, the donation moved only after the server re-read the
+  session from Stripe, a byte-identical redelivery had no further effect, a tampered body and a
+  missing signature were refused with nothing written, and no secret, signature, token or checkout
+  URL reached the database or the server log. Payment success and dispute events were not driven
+  live (a hosted-checkout payment needs a person at Stripe's page); the deterministic signed fixtures
+  and the protocol simulator remain the authoritative CI evidence for those.
 
 **Membership and Donations are separate implementation slices** (DOMAIN_MODEL.md §17). An
 unresolved payment provider must never block Membership. **Phase 26 delivered Membership with no
@@ -1379,6 +1463,41 @@ residency rule or compliance claim is made, and no cookie banner is added.
   stays active under its own lifecycle, and a later registration is a new account that reaches
   nothing old.
 - **Logging.** By operation name only — never an account, a type's words, a decision or an export.
+
+#### 19.1.7 Phase-27 donations
+
+Engineering defaults only; OPEN_DECISIONS §2.2 and §5.4 stay open, so no retention period, legal
+hold, tax or Gift Aid rule, or compliance claim is made.
+
+- **An anonymous donation is anonymous.** It holds no account, email, phone, billing address, IP
+  address, provider shopper identity, card brand or last digits. No address is collected for a
+  receipt: an anonymous donor reads status on-site through a 32-byte status token whose SHA-256
+  digest alone is stored. The token travels in an HttpOnly, SameSite=Lax cookie scoped to
+  `/{locale}/donate` and in the donor's own `/donate/status/{token}` link (`noindex`,
+  `no-referrer`, `no-store`); it reads one donation's status and can ask the provider again or
+  abandon an open checkout — nothing else. A provider identifier is never an access token, and
+  rate-limit subjects are keyed digests.
+- **A linked donation is a choice.** It exists only when a signed-in, active account starts it from
+  `/my/donations`; it keeps the account id alone, and names are resolved through Identity when an
+  operator needs them. An anonymous donation never links later, by email or otherwise.
+- **Owner-only reads.** `/my/donations` lists only the account's own linked donations, bounded and
+  newest first; another account's donation resolves to nothing.
+- **Staff access.** `donations.read` opens records, refunds, reconciliation state and the bounded
+  CSV export; `donations.administer` operates campaigns and asks the provider for a donation's
+  current state; neither refunds. Every listing, detail and export is an audited access of
+  identifiers and filters only; provider references appear as their last six characters.
+- **Service mail for linked donors only.** Success, partial-refund and refund acknowledgements are
+  transactional intents committed with the fact they announce, re-checked at relay and send, sent to
+  the address Identity reports at that moment, and never suppressed by a newsletter unsubscribe. They
+  are payment acknowledgements, never tax receipts, and link only to `/my/donations`.
+- **Export and disposition.** `GET /api/my/export/donations` returns the account's linked donations
+  by identifier, campaign, exact amount text, state and instant — no anonymous donation, no provider
+  reference, no event. After Identity commits a closure, Donations' bounded, resumable disposition
+  removes the account's owed mail and **releases the account link** of its donations; every amount,
+  state, event and refund record is kept unchanged as financial history, and a later registration with
+  the same address reaches nothing old.
+- **Logging.** By operation and safe category only — never a token, secret, signature, payload,
+  checkout URL, email or amount tied to a person.
 
 ### 19.2 Logging
 

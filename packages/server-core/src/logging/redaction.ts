@@ -60,6 +60,9 @@ export const redactedFieldNames = Object.freeze([
   'DATABASE_MIGRATION_URL',
   'DATABASE_APP_PASSWORD',
   'MSSQL_SA_PASSWORD',
+  // Phase 27 — the Donations payment provider's two secrets.
+  'DONATIONS_STRIPE_SECRET_KEY',
+  'DONATIONS_STRIPE_WEBHOOK_SECRET',
 
   // --- Tokens ------------------------------------------------------------
   'token',
@@ -96,6 +99,26 @@ export const redactedFieldNames = Object.freeze([
   'inviteUrl',
   'email',
   'emailAddress',
+
+  // --- Payments (Phase 27; SECURITY_BASELINE.md §14, §19.2) --------------
+  // Webhook signatures (the `Stripe-Signature` header normalises to
+  // `stripesignature`), the anonymous donation status token, the hosted
+  // checkout URL, and every card or bank detail a provider payload or a
+  // mistaken call site could carry. The platform never collects card data;
+  // these names exist so that a payload it never asked for still cannot reach
+  // a log.
+  'stripeSignature',
+  'signature',
+  'statusToken',
+  'checkoutUrl',
+  'card',
+  'cardNumber',
+  'pan',
+  'cvc',
+  'cvv',
+  'expiry',
+  'iban',
+  'billing',
 
   // --- Whole payloads never logged indiscriminately ----------------------
   'body',
@@ -309,6 +332,11 @@ const tokenBearingRouteSegments = new Set([
   'magiclink',
   'callback',
   'unsubscribe',
+  // Phase 27: `/{locale}/donate/status/<token>` carries the anonymous donation
+  // status token, a bearer credential; `/c/pay/<session>` is a hosted
+  // checkout session.
+  'status',
+  'pay',
 ]);
 
 /**
@@ -490,6 +518,15 @@ const inlineSecretPattern = new RegExp(
   'gi',
 );
 
+/**
+ * Payment-provider credentials recognisable by SHAPE alone: Stripe secret and
+ * restricted keys (`sk_…`/`rk_…`, and the CLI sandbox's `rkcs_…`; live, test
+ * or the simulator's fixture prefix) and webhook signing secrets (`whsec_…`). They need no name beside
+ * them to be a secret, so they are removed wherever they occur in a string.
+ */
+const providerCredentialPattern =
+  /\b(?:(?:sk|rk|rkcs)_(?:live|test|fixture)_[A-Za-z0-9_]+|whsec_[A-Za-z0-9_+/=]+)/g;
+
 /** `name=value` pairs of a query string, sanitised WITHOUT re-encoding. */
 const queryParameterPattern = /([^=&#?]+)=([^&#]*)/g;
 
@@ -549,9 +586,17 @@ const relativeReferencePattern = /^\/[^\s]*$/;
  * log stays worth reading.
  */
 export function sanitiseString(value: string): string {
-  if (relativeReferencePattern.test(value)) return sanitiseRelativeReference(value);
+  const withoutCredentials = value.replace(
+    providerCredentialPattern,
+    redactionPlaceholder,
+  );
+  if (relativeReferencePattern.test(withoutCredentials)) {
+    return sanitiseRelativeReference(withoutCredentials);
+  }
 
-  const withSafeUrls = value.replace(embeddedUrlPattern, (url) => sanitiseUrlLike(url));
+  const withSafeUrls = withoutCredentials.replace(embeddedUrlPattern, (url) =>
+    sanitiseUrlLike(url),
+  );
 
   return withSafeUrls.replace(
     inlineSecretPattern,

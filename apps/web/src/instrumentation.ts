@@ -47,5 +47,9 @@ export async function register(): Promise<void> {
     // confirmations (SECURITY_BASELINE.md §19.1).
     const { startPersonalDataSweep } = await import('@/composition/personal-data-sweep');
     startPersonalDataSweep();
+    // Provider truth no webhook delivered: lost webhooks, ambiguous checkout
+    // creations, stale pending checkouts and unanswered refunds.
+    const { startDonationsSweep } = await import('@/composition/donations-sweep');
+    startDonationsSweep();
   }
 }

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { donationsRuntime } from './donations';
 import { fatwaRuntime } from './fatwa';
 import { learningRuntime } from './learning';
 import { appLogger } from './logging';
@@ -16,10 +17,13 @@ import { personalisationRuntime } from './personalisation';
  * leaves rows only an owner's own reconciliation removes — People's live link,
  * Fatwa's question text, Personalisation's records, Learning's enrolments,
  * progress and trial requests, Messaging's participation, read positions,
- * blocks and messages, Membership's open applications and owed mail — so each
+ * blocks and messages, Membership's open applications and owed mail,
+ * Donations' account link and owed mail — so each
  * owner's bounded, idempotent reconciliation runs here on a timer, not only
  * inside the next closure somebody else happens to make. (Membership leaves an
- * active Membership as it is: closing the account is not resigning it.)
+ * active Membership as it is: closing the account is not resigning it. Donations
+ * keeps every donation, its amounts, refunds and provider events — the
+ * organisation's financial record — and releases only the account link.)
  *
  * UNSENT UPLOADS, RELEASED. A message attachment uploaded but never sent, or
  * one whose release was interrupted, is released by Messaging's own bounded
@@ -68,6 +72,9 @@ export async function runPersonalDataSweep(): Promise<void> {
   );
   await step('closure-membership', () =>
     membershipRuntime().account.reconcileClosedAccounts(),
+  );
+  await step('closure-donations', () =>
+    donationsRuntime().account.reconcileClosedAccounts(),
   );
   await step('messaging-attachments', () =>
     messagingRuntime().service.sweepAttachments(),

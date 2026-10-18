@@ -369,6 +369,17 @@ describe('the mutation surface', () => {
         // authenticates nobody. Applying, withdrawing and closing are Server
         // Actions, so Membership adds no other handler.
         'apps/web/src/app/api/my/export/membership/route.ts',
+        // Phase 27: the payment provider's webhook — a second PROTOCOL CLASS B
+        // callback beside Resend's, POST only, verified over its raw bytes in
+        // the ledger; Donations' own export beside the other owners', through
+        // the same personal transport; and the administration's CSV export, a
+        // GET of audited records that re-resolves the session and
+        // `donations.read`. Starting, checking, cancelling and refunding a
+        // donation are Server Actions, so Donations adds no other handler, and
+        // none of the three authenticates anybody.
+        'apps/web/src/app/api/webhooks/stripe/route.ts',
+        'apps/web/src/app/api/my/export/donations/route.ts',
+        'apps/web/src/app/api/admin/donations/export/route.ts',
       ].sort(),
     );
 
@@ -409,7 +420,7 @@ describe('the mutation surface', () => {
       /if \(!isSameOriginMutation\(request, \w+\)\) return failed\('denied'\)/u,
     );
     const personal = routes.filter((entry) => entry.includes('/api/my/'));
-    expect(personal).toHaveLength(13);
+    expect(personal).toHaveLength(14);
     for (const route of personal) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');
       for (const verb of ['PUT', 'PATCH', 'DELETE'])
@@ -478,18 +489,58 @@ describe('the mutation surface', () => {
     expect(entries.map((entry) => entry.name)).not.toContain('sign-out');
   });
 
-  it('accepts only POST on the provider callback', async () => {
-    const source = await sourceOf('apps/web/src/app/api/webhooks/resend/route.ts');
+  it('accepts only POST on the provider callbacks', async () => {
+    // Phase 27 adds the payment provider's webhook beside Resend's.
+    for (const route of [
+      'apps/web/src/app/api/webhooks/resend/route.ts',
+      'apps/web/src/app/api/webhooks/stripe/route.ts',
+    ]) {
+      const source = await sourceOf(route);
 
-    expect(source).toContain('export async function POST');
+      expect(source, route).toContain('export async function POST');
 
-    // Any other verb would be a second, unreviewed entry point on a path whose
-    // whole authentication is a signature over a POST body.
-    for (const verb of ['GET', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']) {
-      expect(source, `${verb} must not be exported`).not.toContain(
-        `export async function ${verb}`,
-      );
+      // Any other verb would be a second, unreviewed entry point on a path
+      // whose whole authentication is a signature over a POST body.
+      for (const verb of ['GET', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']) {
+        expect(source, `${route}: ${verb} must not be exported`).not.toContain(
+          `export async function ${verb}`,
+        );
+      }
     }
+  });
+
+  it('reads the payment webhook as bounded raw bytes and answers with no body', async () => {
+    // Phase 27. The signature covers exactly the bytes sent, so the handler
+    // never parses or re-serialises the body; a declared length over 64 KiB is
+    // refused before a byte is read, and reading stops at the cap whatever was
+    // declared. The sender is admitted by the shared rate limiter BEFORE any
+    // of that, and every answer is an empty body.
+    const source = (await sourceOf('apps/web/src/app/api/webhooks/stripe/route.ts'))
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1');
+
+    for (const parsing of [
+      'request.json(',
+      'request.text(',
+      'request.formData(',
+      'JSON.parse(',
+    ])
+      expect(source, parsing).not.toContain(parsing);
+    expect(source).toContain('const BODY_MAX_BYTES = 64 * 1024;');
+    expect(source).toContain("request.headers.get('content-length')");
+    expect(source).toContain("request.headers.get('stripe-signature')");
+    expect(source).toContain('ledger.receiveWebhook({');
+    const admitted = source.indexOf('await admitDonationWebhook(request.headers)');
+    const declared = source.indexOf("request.headers.get('content-length')");
+    const read = source.indexOf('await boundedBody(request)');
+    const received = source.indexOf('ledger.receiveWebhook(');
+    expect(admitted).toBeGreaterThan(-1);
+    expect(declared).toBeGreaterThan(admitted);
+    expect(read).toBeGreaterThan(declared);
+    expect(received).toBeGreaterThan(read);
+    expect(source).toMatch(/new Response\(null, \{ status,/u);
+    expect(source).not.toMatch(/new Response\((?!null)/u);
+    expect(source).not.toMatch(/Response\.json\(/u);
   });
 
   it('re-checks the session inside every authenticated action', async () => {
@@ -646,11 +697,45 @@ describe('the mutation surface', () => {
     expect(closureBody.indexOf('redirect(')).toBeGreaterThan(swept);
     expect(closureBody).toMatch(/membershipPending\s*=\s*!membership\.complete/u);
     const pending = closureBody.indexOf("failure: 'closure-pending'");
-    expect(closureBody.slice(0, pending)).toMatch(/\|\|\s*membershipPending\s*\)/u);
+    expect(closureBody.slice(0, pending)).toMatch(/\|\|\s*membershipPending\s*\|\|/u);
     expect(closureBody.indexOf('redirect(')).toBeGreaterThan(pending);
     // The account-level disposition alone: no operator or member close of a
     // Membership is reached from a closing account.
     expect(closureBody).not.toMatch(/membershipRuntime\(\)\.(?:admin|applicant)\./u);
+  });
+
+  it('coordinates Donations disposition after Membership and before success', async () => {
+    // Phase 27: the eighth owner releases the account link of the account's
+    // donations — which become anonymous, every amount, state, event and
+    // refund retained — and removes its owed payment acknowledgements,
+    // refused by Donations until Identity reports the account closed; a
+    // pending disposal is reported as pending, never as a completed closure.
+    const actions = await sourceOf(ACTIONS);
+    const closureStart = actions.indexOf('export async function closeAccountAction');
+    const closureBody = actions.slice(
+      closureStart,
+      actions.indexOf('\n}', closureStart) + 2,
+    );
+    const membership = closureBody.indexOf(
+      'membershipRuntime().account.reconcileClosedAccounts(',
+    );
+    const disposed = closureBody.indexOf('donationsRuntime().account.disposeAccount(');
+    const swept = closureBody.indexOf(
+      'donationsRuntime().account.reconcileClosedAccounts(',
+    );
+    expect(membership).toBeGreaterThan(closureBody.indexOf('identity.closeAccount('));
+    expect(disposed).toBeGreaterThan(membership);
+    expect(swept).toBeGreaterThan(disposed);
+    expect(closureBody.indexOf('redirect(')).toBeGreaterThan(swept);
+    expect(closureBody).toMatch(/donationsPending\s*=\s*!donations\.complete/u);
+    const pending = closureBody.indexOf("failure: 'closure-pending'");
+    expect(closureBody.slice(0, pending)).toMatch(/\|\|\s*donationsPending\s*\)/u);
+    expect(closureBody.indexOf('redirect(')).toBeGreaterThan(pending);
+    // The account-level disposition alone: no donor or operator act — no
+    // start, cancel, reconcile or refund — is reached from a closing account.
+    expect(closureBody).not.toMatch(
+      /donationsRuntime\(\)\.(?:admin|donor|ledger|owner)\./u,
+    );
   });
 
   it('renders emailed links with a GET that consumes nothing', async () => {

@@ -228,6 +228,29 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // and `membership.administer` join the protected bundle (DOMAIN_MODEL.md
   // §17.2), asserted by `assertMembershipFoundation` and proved as behaviour
   // by `assertMembershipRules`.
+  // THE DONATIONS CONTEXT: a campaign with its words per locale and its
+  // per-currency policy, the owner's fail-closed provider activation (one
+  // immutable row the runtime can only read), the donation — one payment
+  // attempt in exact minor units with its derived state — the provider-event
+  // dedup record (no payload), the refund and the linked donor's durable
+  // acknowledgement intent, naming its donation and refund by composite keys
+  // that carry the donor and the donation. Provider references are unique
+  // within their provider scope (filtered keys). Every key is NO ACTION; NOT
+  // ONE ROW is seeded — no activation, so payments are OFF — `donations.read`
+  // and `donations.administer` join the protected bundle and `donations.refund`
+  // is catalogued, externally gated and bundled into no role (DOMAIN_MODEL.md
+  // §17.3), asserted by `assertDonationsFoundation` and proved as behaviour by
+  // `assertDonationsRules`.
+  '20261010000000_phase27_donations': [
+    'DonationCampaign',
+    'DonationCampaignTranslation',
+    'DonationCampaignCurrency',
+    'DonationActivation',
+    'Donation',
+    'DonationProviderEvent',
+    'DonationRefund',
+    'DonationCommunicationIntent',
+  ],
   '20261009000000_phase26_membership': [
     'MembershipType',
     'MembershipTypeTranslation',
@@ -568,11 +591,9 @@ const PREMATURE_TABLES = [
   'LessonVideo',
   'CourseCentre',
   // `Message` left this list when Phase 24 delivered it as Messaging's own,
-  // ordered and immutable within its Conversation, and `Membership` when Phase
-  // 26 delivered it as the organisational relationship an approval creates.
-  // `Donation` stays: Membership has no payment concept, and Donations is its
-  // own later owner's.
-  'Donation',
+  // ordered and immutable within its Conversation, `Membership` when Phase 26
+  // delivered it as the organisational relationship an approval creates, and
+  // `Donation` when Phase 27 delivered it as one payment attempt.
   'MigrationProvenance',
   // Phase 9 delivers the six scholarly and periodical aggregates and invents no
   // sub-aggregate beside them: an issue is not a set of articles, a publication
@@ -653,6 +674,28 @@ const PREMATURE_TABLES = [
   'MembershipReceipt',
   'MembershipApplicationForm',
   'MembershipDocument',
+  // Phase 27 delivers Donations as hosted-checkout payment attempts and NOT as
+  // ecommerce or a card vault: no card, payment method, wallet or billing
+  // table, no order, cart, invoice or receipt, no subscription or recurring
+  // plan, and no raw provider payload or webhook body is kept anywhere — an
+  // event keeps its digest only.
+  'DonationCard',
+  'DonationPaymentMethod',
+  'DonationBilling',
+  'DonationOrder',
+  'DonationCart',
+  'DonationInvoice',
+  'DonationReceipt',
+  'DonationSubscription',
+  'DonationRecurring',
+  'DonationPayload',
+  'DonationWebhook',
+  'PaymentMethod',
+  'Card',
+  'Cart',
+  'Order',
+  'Invoice',
+  'Subscription',
 ];
 
 /**
@@ -1409,6 +1452,25 @@ const EXPECTED_FILTERED_INDEXES: readonly {
     index: 'Membership_active_key',
     why: 'two concurrent approvals for one account and type both create an active Membership',
   },
+  // Phase 27 adds three, each scoping one provider reference by provider,
+  // environment and account: the filter is what lets every donation without a
+  // checkout or payment yet, and every refund without a provider answer yet,
+  // coexist on NULL.
+  {
+    table: 'Donation',
+    index: 'Donation_checkout_key',
+    why: 'two donations could record the same provider checkout and both apply its payment',
+  },
+  {
+    table: 'Donation',
+    index: 'Donation_payment_key',
+    why: 'two donations could claim the same provider payment and both count it as captured',
+  },
+  {
+    table: 'DonationRefund',
+    index: 'DonationRefund_reference_key',
+    why: 'two refunds could settle against the same provider refund and both release money',
+  },
 ];
 
 /** The sixteen Phase-22 tables, in the migration's order. */
@@ -1511,6 +1573,41 @@ const MEMBERSHIP_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, stri
   MembershipApplicationIntegrity: ['MembershipApplication', '51322+51323'],
   MembershipIntegrity: ['Membership', '51324'],
   MembershipIntentIntegrity: ['MembershipCommunicationIntent', '51325'],
+};
+
+/** The eight Phase-27 tables, in the migration's order. */
+const DONATIONS_TABLES = MIGRATION_EXPECTATIONS['20261010000000_phase27_donations'] ?? [];
+
+/**
+ * Each Donations trigger, the table it guards and the refusal numbers its body
+ * raises: 51340 a campaign created other than as a draft, re-keyed, returned to
+ * draft or moved off one version at a time, its words or policy re-keyed, and
+ * 51341 a campaign published — or left published — without its primary
+ * locale's words or a currency; 51342 the immutable activation; 51347 a
+ * donation created other than pending and uncaptured, 51343 one for a campaign
+ * that is not published, 51344 one the current policy refuses, 51345 one
+ * outside the activated scope and 51346 a linked one for an account that is not
+ * active; 51348 a donation's identity, request or expected money rewritten,
+ * 51349 its facts regressed, moved without a version or its reservation not
+ * the sum of its live refunds, and 51350 a donor link changed other than
+ * released for a closed account; 51351 an event re-keyed or completed twice;
+ * 51358 a refund created other than requested, 51352 one of an uncaptured or
+ * charged-back donation, 51353 one in another currency or scope, 51354 one
+ * without live refund authority and 51355 refunds beyond the captured amount;
+ * 51356 a refund moved backwards or re-keyed; 51357 an intent reopened or
+ * re-keyed.
+ */
+const DONATIONS_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, string]>> = {
+  DonationCampaignIntegrity: ['DonationCampaign', '51340+51341'],
+  DonationCampaignTranslationIntegrity: ['DonationCampaignTranslation', '51340+51341'],
+  DonationCampaignCurrencyIntegrity: ['DonationCampaignCurrency', '51340+51341'],
+  DonationActivationImmutable: ['DonationActivation', '51342'],
+  DonationAdmission: ['Donation', '51343+51344+51345+51346+51347'],
+  DonationIntegrity: ['Donation', '51348+51349+51350'],
+  DonationProviderEventIntegrity: ['DonationProviderEvent', '51351'],
+  DonationRefundAdmission: ['DonationRefund', '51352+51353+51354+51355+51358'],
+  DonationRefundIntegrity: ['DonationRefund', '51356'],
+  DonationIntentIntegrity: ['DonationCommunicationIntent', '51357'],
 };
 
 /** The fifteen Phase-21 tables, in the migration's order. */
@@ -1787,6 +1884,11 @@ const EXPECTED_TRIGGERS = [
   // its owed mail on their lifecycles — each listed, with the refusal it
   // raises, in `MEMBERSHIP_TRIGGER_NUMBERS`.
   ...Object.keys(MEMBERSHIP_TRIGGER_NUMBERS),
+  // Phase 27: the immutable activation and every rule that keeps a campaign,
+  // a donation's money and facts, a provider event, a refund and owed mail
+  // forward-only and within their authority — each listed, with the refusal
+  // it raises, in `DONATIONS_TRIGGER_NUMBERS`.
+  ...Object.keys(DONATIONS_TRIGGER_NUMBERS),
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
@@ -2209,6 +2311,26 @@ const EXPECTED_CHECK_CONSTRAINTS = [
     'Membership',
     'MembershipCommunicationIntent',
   ].map((table) => ({ table, constraint: table + '_ck' })),
+  // Phase 27. A campaign's states with exactly their instants; words never
+  // blank; a currency policy at its own exponent with dense, distinct
+  // suggestions inside its bounds; the only two lawful activations; a
+  // donation's vocabulary, its exact money, its mutually consistent facts and
+  // its state as the derivation of those facts; an event's result exactly when
+  // processed; a refund's exact money and completion; and an intent naming a
+  // refund exactly when it announces one.
+  ...[
+    'DonationCampaign',
+    'DonationCampaignTranslation',
+    'DonationCampaignCurrency',
+    'DonationActivation',
+    'DonationProviderEvent',
+    'DonationRefund',
+    'DonationCommunicationIntent',
+  ].map((table) => ({ table, constraint: table + '_ck' })),
+  ...['vocabulary', 'money', 'facts', 'state'].map((rule) => ({
+    table: 'Donation',
+    constraint: `Donation_${rule}_ck`,
+  })),
 ];
 
 /**
@@ -3443,7 +3565,11 @@ async function assertEventFoundation(
           AND NOT (c.object_id = OBJECT_ID(N'[dbo].[ProviderEvent]') AND c.name = N'eventId')
           -- Phase 21: a newsletter consent event's own vocabulary column names
           -- what happened to a subscription, never an Editorial Event.
-          AND NOT (OBJECT_NAME(c.object_id) = N'NewsletterConsentEvent' AND c.name = N'event')) AS columns;
+          AND NOT (OBJECT_NAME(c.object_id) = N'NewsletterConsentEvent' AND c.name = N'event')
+          -- Phase 27: a payment provider's webhook event id and type, named by
+          -- the provider, never an Editorial Event.
+          AND NOT (OBJECT_NAME(c.object_id) = N'DonationProviderEvent'
+                   AND c.name IN (N'eventId', N'eventType'))) AS columns;
   `);
   if (Number(ownership?.inbound) !== 0 || (ownership?.columns ?? null) !== null)
     fail(
@@ -7886,12 +8012,14 @@ async function assertProtectedBundleExcludesGated(session: SqlSession): Promise<
 
 /**
  * How far the rollback loop has gone when an earlier owner's foundation is
- * re-proved: every phase applied, Phase 26 rolled back, Phases 26 and 24,
- * Phases 26, 24 and 23, Phases 26, 24, 23 and 22, or Phases 26, 24, 23, 22 and
- * 21. (Phase 25 is transport only and has no migration.)
+ * re-proved: every phase applied, Phase 27 rolled back, Phases 27 and 26,
+ * Phases 27, 26 and 24, Phases 27, 26, 24 and 23, Phases 27, 26, 24, 23 and 22,
+ * or Phases 27, 26, 24, 23, 22 and 21. (Phase 25 is transport only and has no
+ * migration.)
  */
 type BundleStage =
   | 'current'
+  | 'before-donations'
   | 'before-membership'
   | 'before-messaging'
   | 'before-classes'
@@ -7900,8 +8028,10 @@ type BundleStage =
 
 /**
  * The compiled bundle less exactly the keys the rollbacks have removed by
- * `stage`: the two Membership keys once Phase 26 is rolled back; nothing more
- * once Phase 24 is (its two keys are externally gated and were never bundled);
+ * `stage`: the two bundled Donations keys once Phase 27 is rolled back (the
+ * gated `donations.refund` was never bundled); the two Membership keys as well
+ * once Phase 26 is; nothing more once Phase 24 is (its two keys are externally
+ * gated and were never bundled);
  * the two class keys as well once Phase 23 is, the two Learning keys as well
  * once Phase 22 is, and the two newsletter keys as well once Phase 21 is.
  */
@@ -7909,18 +8039,26 @@ function compiledBundleAt(stage: BundleStage): readonly string[] {
   const removed =
     stage === 'current'
       ? []
-      : stage === 'before-membership' || stage === 'before-messaging'
-        ? MEMBERSHIP_PERMISSIONS
-        : stage === 'before-classes'
-          ? [...MEMBERSHIP_PERMISSIONS, ...CLASSES_PERMISSIONS]
-          : stage === 'before-learning'
-            ? [...MEMBERSHIP_PERMISSIONS, ...CLASSES_PERMISSIONS, ...LEARNING_PERMISSIONS]
-            : [
-                ...MEMBERSHIP_PERMISSIONS,
-                ...CLASSES_PERMISSIONS,
-                ...LEARNING_PERMISSIONS,
-                ...NEWSLETTER_PERMISSIONS,
-              ];
+      : stage === 'before-donations'
+        ? DONATIONS_BUNDLED
+        : stage === 'before-membership' || stage === 'before-messaging'
+          ? [...DONATIONS_BUNDLED, ...MEMBERSHIP_PERMISSIONS]
+          : stage === 'before-classes'
+            ? [...DONATIONS_BUNDLED, ...MEMBERSHIP_PERMISSIONS, ...CLASSES_PERMISSIONS]
+            : stage === 'before-learning'
+              ? [
+                  ...DONATIONS_BUNDLED,
+                  ...MEMBERSHIP_PERMISSIONS,
+                  ...CLASSES_PERMISSIONS,
+                  ...LEARNING_PERMISSIONS,
+                ]
+              : [
+                  ...DONATIONS_BUNDLED,
+                  ...MEMBERSHIP_PERMISSIONS,
+                  ...CLASSES_PERMISSIONS,
+                  ...LEARNING_PERMISSIONS,
+                  ...NEWSLETTER_PERMISSIONS,
+                ];
   return PLATFORM_ADMINISTRATOR_PERMISSIONS.filter((key) => !removed.includes(key));
 }
 
@@ -8172,11 +8310,17 @@ async function assertFatwaFoundation(
     PERMISSION_CATALOGUE.map((entry) => [entry.key as string, entry.description]),
   );
   // The externally gated set is the three Fatwa keys, `teaching.perform` since
-  // Phase 23 and the two Messaging keys since Phase 24 — and nothing else.
+  // Phase 23, the two Messaging keys since Phase 24 and `donations.refund` since
+  // Phase 27 — and nothing else.
   if (
     permissions.map((row) => row.key).join(',') !== FATWA_PERMISSIONS.join(',') ||
     [...EXTERNALLY_GATED_PERMISSIONS].sort().join(',') !==
-      [...FATWA_PERMISSIONS, TEACHING_PERMISSION, ...MESSAGING_PERMISSIONS]
+      [
+        ...FATWA_PERMISSIONS,
+        TEACHING_PERMISSION,
+        ...MESSAGING_PERMISSIONS,
+        DONATIONS_REFUND_PERMISSION,
+      ]
         .sort()
         .join(',') ||
     permissions.some(
@@ -8186,7 +8330,8 @@ async function assertFatwaFoundation(
     fail(
       `The Fatwa vocabulary must be exactly ${FATWA_PERMISSIONS.join(', ')}, described as the ` +
         `compiled catalogue describes them and held by no role, and the gated set exactly ` +
-        `those three, ${TEACHING_PERMISSION} and ${MESSAGING_PERMISSIONS.join(', ')}; found ` +
+        `those three, ${TEACHING_PERMISSION}, ${MESSAGING_PERMISSIONS.join(', ')} and ` +
+        `${DONATIONS_REFUND_PERMISSION}; found ` +
         `${JSON.stringify(permissions)}.`,
     );
 
@@ -9389,12 +9534,13 @@ async function assertPersonalisationRemoved(session: SqlSession): Promise<void> 
         NEWSLETTER_PERMISSIONS.length -
         LEARNING_PERMISSIONS.length -
         CLASSES_PERMISSIONS.length -
-        MEMBERSHIP_PERMISSIONS.length
+        MEMBERSHIP_PERMISSIONS.length -
+        DONATIONS_BUNDLED.length
   )
     fail(
       `After the Phase-21 rollback the protected bundle holds ${String(bundled)} keys; the ` +
-        `compiled bundle less the two newsletter, two Learning, two class and two ` +
-        `Membership keys holds ${String(expected)}.`,
+        `compiled bundle less the two newsletter, two Learning, two class, two ` +
+        `Membership and two bundled Donations keys holds ${String(expected)}.`,
     );
   report(
     'personalisation rollback',
@@ -10262,6 +10408,7 @@ async function assertLearningFoundation(
   stage:
     | 'deploy'
     | 're-deploy'
+    | 'before-donations'
     | 'before-membership'
     | 'before-messaging'
     | 'before-classes' = 'deploy',
@@ -10272,7 +10419,10 @@ async function assertLearningFoundation(
   const names = LEARNING_TABLES.map((table) => `N'${table}'`).join(',');
   const withClasses = stage !== 'before-classes';
   const withMessaging =
-    stage === 'deploy' || stage === 're-deploy' || stage === 'before-membership';
+    stage === 'deploy' ||
+    stage === 're-deploy' ||
+    stage === 'before-donations' ||
+    stage === 'before-membership';
   const referencing = [
     ...(withClasses ? CLASSES_TABLES : []),
     ...(withMessaging ? MESSAGING_TABLES : []),
@@ -10631,12 +10781,13 @@ async function assertLearningRemoved(session: SqlSession): Promise<void> {
       PLATFORM_ADMINISTRATOR_PERMISSIONS.length -
         LEARNING_PERMISSIONS.length -
         CLASSES_PERMISSIONS.length -
-        MEMBERSHIP_PERMISSIONS.length
+        MEMBERSHIP_PERMISSIONS.length -
+        DONATIONS_BUNDLED.length
   )
     fail(
       `After the Phase-22 rollback the protected bundle holds ${String(bundled)} keys; the ` +
-        `compiled bundle less the two Learning, two class and two Membership keys holds ` +
-        `${String(expected)}.`,
+        `compiled bundle less the two Learning, two class, two Membership and two bundled ` +
+        `Donations keys holds ${String(expected)}.`,
     );
   report(
     'learning rollback',
@@ -11330,7 +11481,12 @@ async function classesPresent(session: SqlSession): Promise<boolean> {
  */
 async function assertClassesFoundation(
   session: SqlSession,
-  stage: 'deploy' | 're-deploy' | 'before-membership' | 'before-messaging' = 'deploy',
+  stage:
+    | 'deploy'
+    | 're-deploy'
+    | 'before-donations'
+    | 'before-membership'
+    | 'before-messaging' = 'deploy',
 ): Promise<void> {
   const tables = CLASSES_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
     ',',
@@ -11682,11 +11838,13 @@ async function assertClassesRemoved(session: SqlSession): Promise<void> {
     expected !==
       PLATFORM_ADMINISTRATOR_PERMISSIONS.length -
         CLASSES_PERMISSIONS.length -
-        MEMBERSHIP_PERMISSIONS.length
+        MEMBERSHIP_PERMISSIONS.length -
+        DONATIONS_BUNDLED.length
   )
     fail(
       `After the Phase-23 rollback the protected bundle holds ${String(bundled)} keys; the ` +
-        `compiled bundle less the two class and two Membership keys holds ${String(expected)}.`,
+        `compiled bundle less the two class, two Membership and two bundled Donations keys ` +
+        `holds ${String(expected)}.`,
     );
   report(
     'classes rollback',
@@ -12653,7 +12811,7 @@ async function assetShape(session: SqlSession): Promise<{
  */
 async function assertMessagingFoundation(
   session: SqlSession,
-  stage: 'deploy' | 're-deploy' | 'before-membership' = 'deploy',
+  stage: 'deploy' | 're-deploy' | 'before-donations' | 'before-membership' = 'deploy',
 ): Promise<void> {
   const tables = MESSAGING_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
     ',',
@@ -12923,11 +13081,12 @@ async function assertMessagingFoundation(
         `precedent); found ${String(audit?.total)}.`,
     );
 
-  // Once Phase 26 is rolled back the database's bundle lacks the two Membership
-  // keys the compiled bundle now carries.
+  // Once Phase 27 is rolled back the database's bundle lacks the two bundled
+  // Donations keys the compiled bundle now carries, and once Phase 26 is too it
+  // lacks the two Membership keys as well.
   const bundled = await assertProtectedBundleExcludesGated(session);
   const compiledBundle = compiledBundleAt(
-    stage === 'before-membership' ? 'before-membership' : 'current',
+    stage === 'deploy' || stage === 're-deploy' ? 'current' : stage,
   ).length;
   if (bundled !== compiledBundle)
     fail(
@@ -12994,12 +13153,16 @@ async function assertMessagingRemoved(session: SqlSession): Promise<void> {
   const expected = compiledBundleAt('before-messaging').length;
   if (
     bundled !== expected ||
-    expected !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length - MEMBERSHIP_PERMISSIONS.length
+    expected !==
+      PLATFORM_ADMINISTRATOR_PERMISSIONS.length -
+        MEMBERSHIP_PERMISSIONS.length -
+        DONATIONS_BUNDLED.length
   )
     fail(
       `After the Phase-24 rollback the protected bundle holds ${String(bundled)} keys; the ` +
-        `compiled bundle less the two Membership keys Phase 26's rollback removed first — ` +
-        `it never held a Messaging key — holds ${String(expected)}.`,
+        `compiled bundle less the two Membership and two bundled Donations keys the Phase-26 ` +
+        `and Phase-27 rollbacks removed first — it never held a Messaging key — holds ` +
+        `${String(expected)}.`,
     );
   report(
     'messaging rollback',
@@ -14422,7 +14585,7 @@ async function membershipPresent(session: SqlSession): Promise<boolean> {
  */
 async function assertMembershipFoundation(
   session: SqlSession,
-  stage: 'deploy' | 're-deploy' = 'deploy',
+  stage: 'deploy' | 're-deploy' | 'before-donations' = 'deploy',
 ): Promise<void> {
   const tables = MEMBERSHIP_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
     ',',
@@ -14635,6 +14798,12 @@ async function assertMembershipFoundation(
     fail('Phase 26 writes through its owner adapter; it must create no procedure.');
 
   // ---- 5. two ordinary keys, bundled once and provisioned once ---------------------
+  // Membership seeded NO payment, fee, dues, donation or finance key. Phase 27's
+  // three `donations.*` keys are the Donations context's own — proved exactly by
+  // `assertDonationsFoundation` — so they are set aside by EXACT name rather than
+  // read as the very key this check exists to forbid; any other such key, or a
+  // fourth `donations.*` key, still fails here.
+  const donationKeys = DONATIONS_PERMISSIONS.map((key) => `N'${key}'`).join(',');
   const permissions = await session.query<{
     key: string;
     description: string;
@@ -14649,9 +14818,10 @@ async function assertMembershipFoundation(
       (SELECT COUNT(*) FROM [dbo].[RoleAssignment] ra JOIN [dbo].[RolePermission] rp ON rp.[roleId] = ra.[roleId]
         WHERE rp.[permissionKey] = p.[key]) AS [holders]
     FROM [dbo].[Permission] p
-    WHERE p.[key] LIKE N'member%' OR p.[key] LIKE N'application%' OR p.[key] LIKE N'payment%'
+    WHERE (p.[key] LIKE N'member%' OR p.[key] LIKE N'application%' OR p.[key] LIKE N'payment%'
        OR p.[key] LIKE N'fee%' OR p.[key] LIKE N'dues%' OR p.[key] LIKE N'donat%'
-       OR p.[key] LIKE N'finance%'
+       OR p.[key] LIKE N'finance%' OR p.[key] LIKE N'refund%')
+      AND p.[key] NOT IN (${donationKeys})
     ORDER BY p.[key];
   `);
   const described = new Map(
@@ -14715,11 +14885,16 @@ async function assertMembershipFoundation(
       'The provisioning record must carry the action membership.permissions.provisioned.',
     );
 
+  // Once Phase 27 is rolled back the database's bundle lacks the two bundled
+  // Donations keys the compiled bundle now carries.
   const bundled = await assertProtectedBundleExcludesGated(session);
-  if (bundled !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length)
+  const compiledBundle = compiledBundleAt(
+    stage === 'before-donations' ? 'before-donations' : 'current',
+  ).length;
+  if (bundled !== compiledBundle)
     fail(
       `The protected bundle holds ${String(bundled)} keys; the compiled bundle holds ` +
-        `${String(PLATFORM_ADMINISTRATOR_PERMISSIONS.length)}.`,
+        `${String(compiledBundle)} at ${stage}.`,
     );
 
   report(
@@ -14772,11 +14947,15 @@ async function assertMembershipRemoved(session: SqlSession): Promise<void> {
   const expected = compiledBundleAt('before-membership').length;
   if (
     bundled !== expected ||
-    expected !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length - MEMBERSHIP_PERMISSIONS.length
+    expected !==
+      PLATFORM_ADMINISTRATOR_PERMISSIONS.length -
+        MEMBERSHIP_PERMISSIONS.length -
+        DONATIONS_BUNDLED.length
   )
     fail(
       `After the Phase-26 rollback the protected bundle holds ${String(bundled)} keys; the ` +
-        `compiled bundle less the two Membership keys holds ${String(expected)}.`,
+        `compiled bundle less the two Membership and two bundled Donations keys holds ` +
+        `${String(expected)}.`,
     );
   report(
     'membership rollback',
@@ -15417,6 +15596,2119 @@ async function assertMembershipRules(session: SqlSession): Promise<void> {
       `naming exactly their record and owed only to its own account, once-only relay, no ` +
       `cascade; ${String(refusals)} refusals by name, every text a NON_MEMBERSHIP_FIXTURE ` +
       `sentinel, every row removed`,
+  );
+}
+
+const DONATIONS_MIGRATION = '20261010000000_phase27_donations';
+
+/**
+ * The three keys Phase 27 catalogues, and only these. `donations.read` and
+ * `donations.administer` are ORDINARY and join the protected bundle by the
+ * convention every earlier phase used; `donations.refund` is EXTERNALLY GATED —
+ * who may return a donor's money is the organisation's finance decision — so it
+ * is catalogued, bundled into no role and held by nobody. A donor needs no key
+ * for their own donations.
+ */
+const DONATIONS_PERMISSIONS = [
+  'donations.administer',
+  'donations.read',
+  'donations.refund',
+];
+
+/** The two of them the protected bundle carries. */
+const DONATIONS_BUNDLED = ['donations.administer', 'donations.read'];
+
+/** The one refund authority, gated and bundled nowhere. */
+const DONATIONS_REFUND_PERMISSION = 'donations.refund';
+
+/**
+ * EVERY foreign key from a Phase-27 table, exactly, with its column mapping and
+ * its delete action. ALL are NO ACTION: nothing cascades, inside the context or
+ * out of it, and nothing financial is ever deleted from under what names it.
+ * Identity's User is the only external edge. An intent names its donation by a
+ * composite key that carries the donor, and a refund intent its refund by a
+ * composite key that carries the donation — so owed mail can only ever go to
+ * that donation's own linked donor, about that donation's own refund.
+ */
+const DONATIONS_KEYS = [
+  'DonationCampaignCurrency_campaignId_fkey(campaignId>id)>DonationCampaign:NO_ACTION',
+  'DonationCampaignTranslation_campaignId_fkey(campaignId>id)>DonationCampaign:NO_ACTION',
+  'DonationCommunicationIntent_donationId_fkey(donationId>id)>Donation:NO_ACTION',
+  'DonationCommunicationIntent_donor_fkey(donationId>id,recipientUserId>donorUserId)>Donation:NO_ACTION',
+  'DonationCommunicationIntent_recipientUserId_fkey(recipientUserId>id)>User:NO_ACTION',
+  'DonationCommunicationIntent_refundId_fkey(refundId>id)>DonationRefund:NO_ACTION',
+  'DonationCommunicationIntent_refund_fkey(refundId>id,donationId>donationId)>DonationRefund:NO_ACTION',
+  'DonationProviderEvent_donationId_fkey(donationId>id)>Donation:NO_ACTION',
+  'DonationRefund_donationId_fkey(donationId>id)>Donation:NO_ACTION',
+  'DonationRefund_requestedByUserId_fkey(requestedByUserId>id)>User:NO_ACTION',
+  'Donation_campaignId_fkey(campaignId>id)>DonationCampaign:NO_ACTION',
+  'Donation_donorUserId_fkey(donorUserId>id)>User:NO_ACTION',
+].sort();
+
+/**
+ * Every unique index on a Phase-27 table, exactly: the keys; one donation and
+ * one refund per operation (the idempotency floor beneath a duplicate submit);
+ * one donation per status-token digest; the donor- and donation-carrying keys
+ * the composite references reach through; one dedup record per scoped provider
+ * event; one intent per idempotency key — and the THREE FILTERED scoped
+ * provider references: a checkout, a payment and a refund reference each
+ * unique within its provider, environment and account.
+ */
+const DONATIONS_UNIQUE = [
+  'DonationActivation_pkey(id)',
+  'DonationCampaignCurrency_pkey(campaignId,currency)',
+  'DonationCampaignTranslation_pkey(campaignId,locale)',
+  'DonationCampaign_pkey(id)',
+  'DonationCommunicationIntent_idempotencyKey_key(idempotencyKey)',
+  'DonationCommunicationIntent_pkey(id)',
+  'DonationProviderEvent_event_key(provider,environment,accountKey,eventId)',
+  'DonationProviderEvent_pkey(id)',
+  'DonationRefund_donation_key(id,donationId)',
+  'DonationRefund_operationId_key(operationId)',
+  'DonationRefund_pkey(id)',
+  'DonationRefund_reference_key(provider,environment,accountKey,refundReference) WHERE ([refundReference] IS NOT NULL)',
+  'Donation_checkout_key(provider,environment,accountKey,checkoutReference) WHERE ([checkoutReference] IS NOT NULL)',
+  'Donation_donor_key(id,donorUserId)',
+  'Donation_operationId_key(operationId)',
+  'Donation_payment_key(provider,environment,accountKey,paymentReference) WHERE ([paymentReference] IS NOT NULL)',
+  'Donation_pkey(id)',
+  'Donation_statusTokenDigest_key(statusTokenDigest)',
+].sort();
+
+/**
+ * Every column of every Phase-27 table, in order. Stated whole so a card,
+ * security code, expiry, wallet, bank or billing column, a payer email or name,
+ * a raw provider payload, a stored status token or checkout URL, a float
+ * amount, or a `targetType`/`targetId` pair cannot arrive unnoticed.
+ */
+const DONATIONS_COLUMNS: Readonly<Record<string, string>> = {
+  DonationCampaign:
+    'id,state,primaryLocale,displayOrder,version,createdAt,updatedAt,publishedAt,archivedAt',
+  DonationCampaignTranslation: 'campaignId,locale,title,summary,description,updatedAt',
+  DonationCampaignCurrency:
+    'campaignId,currency,currencyExponent,minimumMinor,maximumMinor,suggested1Minor,suggested2Minor,suggested3Minor,updatedAt',
+  DonationActivation:
+    'id,provider,environment,accountKey,authority,authorisedBy,reference,activatedAt',
+  Donation:
+    'id,campaignId,donorUserId,donorReleasedAt,operationId,requestDigest,statusTokenDigest,locale,checkoutLabel,currency,currencyExponent,expectedMinor,provider,environment,accountKey,createState,checkoutReference,checkoutExpiresAt,paymentReference,state,capturedMinor,refundedMinor,refundReservedMinor,dispute,closure,cancelRequestedAt,attention,reconcileDueAt,reconcileAttempts,reconcileLeaseUntil,version,createdAt,updatedAt,succeededAt',
+  DonationProviderEvent:
+    'id,provider,environment,accountKey,eventId,eventType,occurredAt,receivedAt,payloadDigest,donationId,result,processedAt',
+  DonationRefund:
+    'id,donationId,operationId,requestDigest,currency,currencyExponent,amountMinor,state,provider,environment,accountKey,refundReference,requestedByUserId,requestedAt,completedAt,reconcileDueAt,reconcileAttempts,reconcileLeaseUntil,version',
+  DonationCommunicationIntent:
+    'id,purpose,donationId,refundId,recipientUserId,dueAt,state,idempotencyKey,claimedUntil,relayedAt,abandonedAt,createdAt',
+};
+
+/**
+ * Whether Phase 27 is applied, ALL OR NOTHING: either every one of its eight
+ * tables exists or none does.
+ */
+async function donationsPresent(session: SqlSession): Promise<boolean> {
+  const names = DONATIONS_TABLES.map((table) => `N'${table}'`).join(',');
+  const [row] = await session.query<{ present: number }>(
+    `SELECT COUNT(*) AS [present] FROM sys.tables WHERE [name] IN (${names});`,
+  );
+  const present = Number(row?.present ?? -1);
+  if (present !== 0 && present !== DONATIONS_TABLES.length)
+    fail(
+      `Phase 27 is half applied: ${String(present)} of ${String(DONATIONS_TABLES.length)} ` +
+        `Donations tables exist.`,
+    );
+  return present === DONATIONS_TABLES.length;
+}
+
+/**
+ * Phase 27 — what only the catalogue can prove about Donations:
+ *
+ *   1. NOTHING IS SEEDED: all eight tables are empty after deploy — no
+ *      campaign, no donation and, above all, NO ACTIVATION, so payment
+ *      initiation is off until the owner writes one;
+ *   2. every column of every table is exactly as stated; EXACT MONEY — every
+ *      amount a BIGINT of minor units, every currency CHAR(3) beside a TINYINT
+ *      exponent, and no FLOAT, REAL, MONEY, DECIMAL or NUMERIC column anywhere;
+ *      NO PAYMENT CREDENTIAL — no card, security code, expiry, wallet, bank,
+ *      billing, email, phone, name, address, payload, body, secret, URL or
+ *      stored token column, and no `targetType` / `targetId`; the unique
+ *      indexes are exactly the eighteen above, the three provider references
+ *      FILTERED;
+ *   3. every foreign key is exactly one of the twelve above, ALL NO ACTION and
+ *      trusted: Identity's User the only external edge, an intent's donation
+ *      and refund each reached by the composite key that carries the donor or
+ *      the donation; no other owner references a Donations table or holds a
+ *      donation, donor or campaign column;
+ *   4. the CHECKs are exactly the eleven named rules, all trusted; the
+ *      triggers are exactly the ten in `DONATIONS_TRIGGER_NUMBERS`, enabled,
+ *      each raising exactly its own numbers from 51340–51358 on the table it
+ *      guards; and Donations has no procedure;
+ *   5. the vocabulary is exactly `donations.administer`, `donations.read` and
+ *      `donations.refund`, described as the compiled catalogue describes them;
+ *      the first two ORDINARY, each bundled exactly once into the protected
+ *      role and held by no other; `donations.refund` EXTERNALLY GATED, held by
+ *      no role and no account; no `donation-refund` step-up grant exists;
+ *      exactly one `donations.permissions.provisioned` record names the two
+ *      bundled keys and this migration; and the protected bundle is exactly
+ *      the compiled bundle.
+ *
+ * The rules themselves are proved as BEHAVIOUR by `assertDonationsRules`, and
+ * through the runtime login by `db:test:permissions`.
+ */
+async function assertDonationsFoundation(
+  session: SqlSession,
+  stage: 'deploy' | 're-deploy' = 'deploy',
+): Promise<void> {
+  const tables = DONATIONS_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
+    ',',
+  );
+  const names = DONATIONS_TABLES.map((table) => `N'${table}'`).join(',');
+  if (!(await donationsPresent(session)))
+    fail(`The Phase-27 Donations tables are missing after ${stage}.`);
+
+  // ---- 0. provider identifiers compare by their exact bytes ----------------------
+  // A provider's identifiers are case-sensitive; under the default collation two
+  // genuine ids differing only in case would collide in a scoped unique key or
+  // match each other in a lookup.
+  const referenceCollations = await session.query<{
+    name: string;
+    collation: string | null;
+  }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] AS [name], c.[collation_name] AS [collation]
+    FROM sys.columns c
+    WHERE (c.[object_id] = OBJECT_ID(N'[dbo].[Donation]') AND c.[name] IN (N'checkoutReference', N'paymentReference'))
+       OR (c.[object_id] = OBJECT_ID(N'[dbo].[DonationRefund]') AND c.[name] = N'refundReference')
+       OR (c.[object_id] = OBJECT_ID(N'[dbo].[DonationProviderEvent]') AND c.[name] = N'eventId');
+  `);
+  if (
+    referenceCollations.length !== 4 ||
+    referenceCollations.some((row) => row.collation !== 'Latin1_General_100_BIN2')
+  )
+    fail(
+      `Every provider identifier must compare by its exact bytes after ${stage}; found ` +
+        `${JSON.stringify(referenceCollations)}.`,
+    );
+
+  // ---- 1. nothing seeded, no activation ------------------------------------------
+  const counts = await session.query<{ name: string; total: number }>(
+    DONATIONS_TABLES.map(
+      (table) =>
+        `SELECT N'${table}' AS [name], COUNT_BIG(*) AS [total] FROM [dbo].[${table}]`,
+    ).join(' UNION ALL ') + ';',
+  );
+  const seeded = counts.filter((row) => Number(row.total) !== 0);
+  if (DONATIONS_TABLES.length !== 8 || counts.length !== 8 || seeded.length > 0)
+    fail(
+      `The Donations migration must create eight empty tables — no activation — and seed ` +
+        `nothing; found ${String(counts.length)} tables after ${stage}, seeded: ` +
+        `${JSON.stringify(seeded)}.`,
+    );
+
+  // ---- 2. exact columns, exact money, no credential, three filtered references ----
+  const shapes = await session.query<{ name: string; columns: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) AS [name],
+      STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id]) AS [columns]
+    FROM sys.columns c WHERE c.[object_id] IN (${tables})
+    GROUP BY c.[object_id];
+  `);
+  const shapeFindings = DONATIONS_TABLES.filter(
+    (table) =>
+      shapes.find((row) => row.name === table)?.columns !== DONATIONS_COLUMNS[table],
+  );
+  if (shapes.length !== 8 || shapeFindings.length > 0)
+    fail(
+      `Donations columns differ from the reviewed shape in ${shapeFindings.join(', ')}: ` +
+        `${JSON.stringify(shapes.filter((row) => shapeFindings.includes(row.name)))}.`,
+    );
+
+  const money = await session.query<{ name: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] + N':' + t.[name]
+      + N'(' + CONVERT(NVARCHAR(8), c.[max_length]) + N')' AS [name]
+    FROM sys.columns c JOIN sys.types t ON t.[user_type_id] = c.[user_type_id]
+    WHERE c.[object_id] IN (${tables})
+      AND (t.[name] IN (N'float', N'real', N'money', N'smallmoney', N'decimal', N'numeric')
+           OR (c.[name] LIKE N'%Minor' AND t.[name] <> N'bigint')
+           OR (c.[name] = N'currency' AND NOT (t.[name] = N'char' AND c.[max_length] = 3))
+           OR (c.[name] = N'currencyExponent' AND t.[name] <> N'tinyint'));
+  `);
+  const [minorColumns] = await session.query<{ total: number }>(`
+    SELECT COUNT(*) AS [total] FROM sys.columns c JOIN sys.types t ON t.[user_type_id] = c.[user_type_id]
+    WHERE c.[object_id] IN (${tables}) AND c.[name] LIKE N'%Minor' AND t.[name] = N'bigint';
+  `);
+  // Five policy amounts, four donation amounts, one refund amount.
+  if (money.length > 0 || Number(minorColumns?.total) !== 10)
+    fail(
+      `Every Donations amount must be a BIGINT of minor units beside a CHAR(3) currency and a ` +
+        `TINYINT exponent, and no FLOAT, REAL, MONEY, DECIMAL or NUMERIC column may exist; ` +
+        `found ${JSON.stringify(money)} with ${String(minorColumns?.total)} BIGINT amounts.`,
+    );
+
+  const credential = await session.query<{ name: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] AS [name] FROM sys.columns c
+    WHERE c.[object_id] IN (${tables})
+      AND (c.[name] LIKE N'%card%' OR c.[name] LIKE N'%cvc%' OR c.[name] LIKE N'%cvv%'
+           OR c.[name] LIKE N'%expiry%' OR c.[name] LIKE N'%iban%' OR c.[name] LIKE N'%bank%'
+           OR c.[name] LIKE N'%wallet%' OR c.[name] LIKE N'%billing%' OR c.[name] LIKE N'%email%'
+           OR c.[name] LIKE N'%phone%' OR c.[name] LIKE N'%address%' OR c.[name] LIKE N'%name%'
+           OR c.[name] LIKE N'%password%' OR c.[name] LIKE N'%secret%' OR c.[name] LIKE N'%body%'
+           OR c.[name] LIKE N'%raw%' OR c.[name] LIKE N'%url%' OR c.[name] LIKE N'%shopper%'
+           OR c.[name] LIKE N'%customer%' OR c.[name] LIKE N'%payer%'
+           OR (c.[name] LIKE N'%payload%' AND c.[name] <> N'payloadDigest')
+           OR (c.[name] LIKE N'%token%' AND c.[name] <> N'statusTokenDigest')
+           OR c.[name] LIKE N'%target%' OR c.[name] LIKE N'%entity%'
+           OR c.[name] IN (N'targetType', N'targetId'));
+  `);
+  if (credential.length > 0)
+    fail(
+      `A Donations table may hold no card, security code, expiry, wallet, bank, billing, ` +
+        `contact, name, address, secret, payload, body, URL, token or target column; found ` +
+        `${JSON.stringify(credential)}.`,
+    );
+
+  const unique = await session.query<{
+    name: string;
+    columns: string;
+    filter: string | null;
+  }>(`
+    SELECT i.[name], i.[filter_definition] AS [filter],
+      STRING_AGG(COL_NAME(ic.[object_id], ic.[column_id]), N',')
+        WITHIN GROUP (ORDER BY ic.[key_ordinal]) AS [columns]
+    FROM sys.indexes i
+    JOIN sys.index_columns ic ON ic.[object_id] = i.[object_id] AND ic.[index_id] = i.[index_id]
+    WHERE i.[is_unique] = 1 AND ic.[key_ordinal] > 0 AND i.[object_id] IN (${tables})
+    GROUP BY i.[object_id], i.[name], i.[filter_definition];
+  `);
+  const describedUnique = unique
+    .map(
+      (row) =>
+        `${row.name}(${row.columns})` +
+        (row.filter === null ? '' : ` WHERE ${row.filter}`),
+    )
+    .sort();
+  if (
+    describedUnique.join(' | ') !== DONATIONS_UNIQUE.join(' | ') ||
+    unique.filter((row) => row.filter !== null).length !== 3
+  )
+    fail(
+      `Donations unique indexes must be exactly the reviewed eighteen, the three provider ` +
+        `references filtered; found ${describedUnique.join(' | ')}.`,
+    );
+
+  // ---- 3. exact keys, all NO ACTION and trusted; nothing foreign holds the context -
+  const keys = await session.query<{
+    name: string;
+    columns: string;
+    target: string;
+    deletes: string;
+    updates: string;
+    trusted: number;
+  }>(`
+    SELECT fk.[name], OBJECT_NAME(fk.[referenced_object_id]) AS [target],
+      fk.[delete_referential_action_desc] AS [deletes], fk.[update_referential_action_desc] AS [updates],
+      CASE WHEN fk.[is_disabled] = 0 AND fk.[is_not_trusted] = 0 THEN 1 ELSE 0 END AS [trusted],
+      STRING_AGG(COL_NAME(c.[parent_object_id], c.[parent_column_id]) + N'>'
+        + COL_NAME(c.[referenced_object_id], c.[referenced_column_id]), N',')
+        WITHIN GROUP (ORDER BY c.[constraint_column_id]) AS [columns]
+    FROM sys.foreign_keys fk
+    JOIN sys.foreign_key_columns c ON c.[constraint_object_id] = fk.[object_id]
+    WHERE fk.[parent_object_id] IN (${tables})
+    GROUP BY fk.[name], fk.[referenced_object_id], fk.[delete_referential_action_desc],
+      fk.[update_referential_action_desc], fk.[is_disabled], fk.[is_not_trusted];
+  `);
+  const describedKeys = keys
+    .map((row) => `${row.name}(${row.columns})>${row.target}:${row.deletes}`)
+    .sort();
+  if (
+    describedKeys.join(',') !== DONATIONS_KEYS.join(',') ||
+    keys.some((row) => row.updates !== 'NO_ACTION' || Number(row.trusted) !== 1)
+  )
+    fail(
+      `Donations keys must be exactly the reviewed twelve, none cascading and all ` +
+        `trusted; found ${describedKeys.join(', ')}.`,
+    );
+
+  const [isolation] = await session.query<{ inbound: number; foreign: string | null }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE [referenced_object_id] IN (${tables}) AND [parent_object_id] NOT IN (${tables})) AS [inbound],
+      (SELECT STRING_AGG(OBJECT_NAME(c.[object_id]) + N'.' + c.[name], N',') FROM sys.columns c
+        WHERE (c.[name] LIKE N'%donation%' OR c.[name] LIKE N'%donor%' OR c.[name] LIKE N'%refund%'
+               OR c.[name] LIKE N'%checkoutReference%' OR c.[name] LIKE N'%paymentReference%')
+          AND OBJECT_NAME(c.[object_id]) NOT IN (${names})
+          AND OBJECTPROPERTY(c.[object_id], 'IsUserTable') = 1) AS [foreign];
+  `);
+  if (Number(isolation?.inbound) !== 0 || (isolation?.foreign ?? null) !== null)
+    fail(
+      `No other owner may reference or hold Donations schema; found ` +
+        `${JSON.stringify(isolation ?? null)}.`,
+    );
+
+  // ---- 4. eleven trusted CHECKs, ten triggers by number, no procedure ----------------
+  const checks = await session.query<{ name: string; trusted: number }>(`
+    SELECT [name], CASE WHEN [is_disabled] = 0 AND [is_not_trusted] = 0 THEN 1 ELSE 0 END AS [trusted]
+    FROM sys.check_constraints WHERE [parent_object_id] IN (${tables});
+  `);
+  const expectedChecks = EXPECTED_CHECK_CONSTRAINTS.filter((entry) =>
+    DONATIONS_TABLES.includes(entry.table),
+  )
+    .map((entry) => entry.constraint)
+    .sort();
+  if (
+    expectedChecks.length !== 11 ||
+    checks
+      .map((row) => row.name)
+      .sort()
+      .join(',') !== expectedChecks.join(',') ||
+    checks.some((row) => Number(row.trusted) !== 1)
+  )
+    fail(
+      `Donations must carry exactly its eleven trusted CHECKs; found ${JSON.stringify(checks)}.`,
+    );
+
+  const triggers = await session.query<{
+    name: string;
+    tableName: string;
+    disabled: number;
+    definition: string | null;
+  }>(`
+    SELECT t.[name], OBJECT_NAME(t.[parent_id]) AS [tableName], CAST(t.[is_disabled] AS INT) AS [disabled],
+      OBJECT_DEFINITION(t.[object_id]) AS [definition]
+    FROM sys.triggers t WHERE t.[parent_id] IN (${tables});
+  `);
+  const describedTriggers = triggers
+    .map((row) => `${row.name}@${row.tableName}:${raisedNumbers(row.definition)}`)
+    .sort()
+    .join(',');
+  const expectedTriggers = Object.entries(DONATIONS_TRIGGER_NUMBERS)
+    .map(([name, [table, numbers]]) => `${name}@${table}:${numbers}`)
+    .sort()
+    .join(',');
+  if (
+    describedTriggers !== expectedTriggers ||
+    triggers.length !== 10 ||
+    triggers.some((row) => Number(row.disabled) !== 0)
+  )
+    fail(
+      `Donations triggers must be exactly ten, enabled, raising exactly their own ` +
+        `51340–51358 numbers; found ${describedTriggers}.`,
+    );
+
+  const [procedures] = await session.query<{ total: number }>(`
+    SELECT COUNT(*) AS [total] FROM sys.procedures
+    WHERE [name] LIKE N'Donation%' OR [name] LIKE N'Donor%' OR [name] LIKE N'Payment%'
+       OR [name] LIKE N'Refund%';
+  `);
+  if (Number(procedures?.total) !== 0)
+    fail('Phase 27 writes through its owner adapter; it must create no procedure.');
+
+  // ---- 5. two ordinary keys bundled once, one gated key held by nobody --------------
+  const permissions = await session.query<{
+    key: string;
+    description: string;
+    bundled: number;
+    held: number;
+    holders: number;
+  }>(`
+    SELECT p.[key], p.[description],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp JOIN [dbo].[Role] r ON r.[id] = rp.[roleId]
+        WHERE r.[key] = N'platform-administrator' AND rp.[permissionKey] = p.[key]) AS [bundled],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp WHERE rp.[permissionKey] = p.[key]) AS [held],
+      (SELECT COUNT(*) FROM [dbo].[RoleAssignment] ra JOIN [dbo].[RolePermission] rp ON rp.[roleId] = ra.[roleId]
+        WHERE rp.[permissionKey] = p.[key]) AS [holders]
+    FROM [dbo].[Permission] p
+    WHERE p.[key] LIKE N'donat%' OR p.[key] LIKE N'payment%' OR p.[key] LIKE N'refund%'
+       OR p.[key] LIKE N'finance%' OR p.[key] LIKE N'checkout%' OR p.[key] LIKE N'giving%'
+    ORDER BY p.[key];
+  `);
+  const described = new Map(
+    PERMISSION_CATALOGUE.map((entry) => [entry.key as string, entry.description]),
+  );
+  const compiled = new Set<string>(PLATFORM_ADMINISTRATOR_PERMISSIONS);
+  const gated = new Set<string>(EXTERNALLY_GATED_PERMISSIONS);
+  const refundGated =
+    gated.has(DONATIONS_REFUND_PERMISSION) && !compiled.has(DONATIONS_REFUND_PERMISSION);
+  if (
+    permissions.map((row) => row.key).join(',') !== DONATIONS_PERMISSIONS.join(',') ||
+    !DONATIONS_BUNDLED.every((key) => compiled.has(key) && !gated.has(key)) ||
+    !refundGated ||
+    permissions.some((row) => {
+      const ordinary = DONATIONS_BUNDLED.includes(row.key);
+      return (
+        row.description !== described.get(row.key) ||
+        Number(row.bundled) !== (ordinary ? 1 : 0) ||
+        Number(row.held) !== (ordinary ? 1 : 0) ||
+        Number(row.holders) !== 0
+      );
+    })
+  )
+    fail(
+      `The Donations vocabulary must be exactly ${DONATIONS_PERMISSIONS.join(', ')}, described ` +
+        `as the compiled catalogue describes them; the two ordinary keys each bundled once into ` +
+        `the protected role and held by no other, and ${DONATIONS_REFUND_PERMISSION} gated and ` +
+        `held by no role; found ${JSON.stringify(permissions)}.`,
+    );
+
+  const [refundGrants] = await session.query<{ total: number }>(`
+    SELECT COUNT(*) AS [total] FROM [dbo].[StepUpGrant] WHERE [purpose] = N'donation-refund';
+  `);
+  if (Number(refundGrants?.total ?? -1) !== 0)
+    fail(
+      `A migrated database must hold no donation-refund step-up grant; found ` +
+        `${String(refundGrants?.total)}.`,
+    );
+
+  const provisioning = await session.query<{
+    actorType: string;
+    actorId: string | null;
+    targetType: string;
+    roleKey: string | null;
+    afterState: string | null;
+    authorisingSource: string | null;
+  }>(`
+    SELECT a.[actorType], a.[actorId], a.[targetType], r.[key] AS [roleKey], a.[afterState], a.[authorisingSource]
+    FROM [dbo].[AuditLog] a LEFT JOIN [dbo].[Role] r ON r.[id] = a.[targetId]
+    WHERE a.[action] LIKE N'donations.%' OR a.[authorisingSource] = N'${DONATIONS_MIGRATION}';
+  `);
+  if (
+    JSON.stringify(provisioning) !==
+    JSON.stringify([
+      {
+        actorType: 'migration',
+        actorId: null,
+        targetType: 'role',
+        roleKey: 'platform-administrator',
+        afterState: '{"added":"donations.administer donations.read"}',
+        authorisingSource: DONATIONS_MIGRATION,
+      },
+    ])
+  )
+    fail(
+      `Extending the protected bundle must leave exactly one provisioning record naming the ` +
+        `two ordinary Donations keys — never the gated refund key — and this migration, and ` +
+        `nothing else of Donations; found ${JSON.stringify(provisioning)}.`,
+    );
+  const [action] = await session.query<{ total: number }>(`
+    SELECT COUNT(*) AS [total] FROM [dbo].[AuditLog]
+    WHERE [action] = N'donations.permissions.provisioned' AND [targetType] = N'role';
+  `);
+  if (Number(action?.total ?? -1) !== 1)
+    fail(
+      'The provisioning record must carry the action donations.permissions.provisioned.',
+    );
+
+  const bundled = await assertProtectedBundleExcludesGated(session);
+  if (bundled !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length)
+    fail(
+      `The protected bundle holds ${String(bundled)} keys; the compiled bundle holds ` +
+        `${String(PLATFORM_ADMINISTRATOR_PERMISSIONS.length)}.`,
+    );
+
+  report(
+    'donations schema',
+    'eight empty tables — no activation — of the reviewed shape, BIGINT minor-unit money ' +
+      'with no float or decimal and no credential, payload, URL or target column, eighteen ' +
+      'unique keys with three filtered provider references, twelve trusted NO ACTION keys, ' +
+      '11 CHECKs, ten triggers raising 51340–51358, no procedure, two bundled ordinary keys ' +
+      `provisioned once and one gated refund key held by nobody, ${String(bundled)} bundled`,
+  );
+}
+
+/**
+ * After the Phase-27 rollback: no Donations table, trigger, key, CHECK, index
+ * or default, no Donations permission, bundle entry, provisioning record or
+ * `donation-refund` step-up grant — and the protected bundle exactly the
+ * compiled bundle less the two bundled Donations keys. Identity's User is
+ * untouched by the drop. The caller then proves the earlier owners are whole at
+ * `before-donations`.
+ */
+async function assertDonationsRemoved(session: SqlSession): Promise<void> {
+  const names = DONATIONS_TABLES.map((table) => `N'${table}'`).join(',');
+  const triggerNames = Object.keys(DONATIONS_TRIGGER_NUMBERS)
+    .map((name) => `N'${name}'`)
+    .join(',');
+  const keys = DONATIONS_PERMISSIONS.map((key) => `N'${key}'`).join(',');
+  const [row] = await session.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables WHERE [name] IN (${names}) OR [name] LIKE N'Donation%') AS [tables],
+      (SELECT COUNT(*) FROM sys.triggers WHERE [name] IN (${triggerNames}) OR [name] LIKE N'Donation%') AS [triggers],
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [keys],
+      (SELECT COUNT(*) FROM sys.check_constraints
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [checks],
+      (SELECT COUNT(*) FROM sys.indexes
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [indexes],
+      (SELECT COUNT(*) FROM sys.default_constraints
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [defaults],
+      (SELECT COUNT(*) FROM [dbo].[Permission] WHERE [key] IN (${keys}) OR [key] LIKE N'donations.%') AS [permissions],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] WHERE [permissionKey] IN (${keys}) OR [permissionKey] LIKE N'donations.%') AS [bundled],
+      (SELECT COUNT(*) FROM [dbo].[StepUpGrant] WHERE [purpose] = N'donation-refund') AS [grants],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog]
+        WHERE [action] LIKE N'donations.%' OR [authorisingSource] = N'${DONATIONS_MIGRATION}') AS [audit],
+      (SELECT 1 - COUNT(*) FROM sys.tables WHERE [object_id] = OBJECT_ID(N'[dbo].[User]')) AS [identityBroken];
+  `);
+  if (Object.values(row ?? { missing: 1 }).some((value) => Number(value) !== 0))
+    fail(
+      `The Phase-27 rollback left a Donations object: ${JSON.stringify(row ?? null)}.`,
+    );
+  if (await donationsPresent(session))
+    fail('The Phase-27 rollback left the Donations schema in place.');
+  const bundled = await assertProtectedBundleExcludesGated(session);
+  const expected = compiledBundleAt('before-donations').length;
+  if (
+    bundled !== expected ||
+    expected !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length - DONATIONS_BUNDLED.length
+  )
+    fail(
+      `After the Phase-27 rollback the protected bundle holds ${String(bundled)} keys; the ` +
+        `compiled bundle less the two bundled Donations keys holds ${String(expected)}.`,
+    );
+  report(
+    'donations rollback',
+    `every Donations table, key, index, CHECK, trigger, permission, refund grant and ` +
+      `provisioning record removed, User whole; ${String(bundled)} keys still bundled`,
+  );
+}
+
+/**
+ * Phase 27 — THE RULES, proved as behaviour against the re-deployed schema with
+ * NON_DONATION_FIXTURE sentinels and synthetic provider references only,
+ * through the migration login (the runtime's own posture is
+ * `db:test:permissions`'s, where identifying columns, the activation and every
+ * DELETE of financial history are DENY besides):
+ *
+ *   - a campaign begins as a draft at version one (51340); its states carry
+ *     exactly their instants, its locale is served and its position bounded
+ *     (…_ck); it is published only with its primary locale's words AND a
+ *     currency (51341); it never returns to draft, never goes straight from
+ *     draft to archived, keeps its primary locale and creation instant and
+ *     moves one version at a time (51340) — while an archived campaign may be
+ *     republished; a published campaign keeps its primary words and at least
+ *     one currency (51341);
+ *   - words are in a served locale and never blank (…_ck), and never change
+ *     campaign or locale (51340);
+ *   - a currency policy is an allowlisted currency AT ITS OWN exponent (JPY 0,
+ *     USD 2, KWD 3; a lower-case code or a wrong exponent refused), with
+ *     positive bounds within the engineering maximum and up to three dense,
+ *     distinct suggestions inside them (…_ck), never re-keyed (51340);
+ *   - the activation is the one row, with only the two lawful pairings —
+ *     production only `approved` with a reference, every other environment
+ *     only `fixture` (…_ck) — and is immutable (51342); with no row no donation
+ *     is admitted (51345);
+ *   - a donation begins pending, uncaptured, at version one (51347), only for a
+ *     PUBLISHED campaign (51343), only for an amount the CURRENT policy admits
+ *     at the currency's own exponent (51344), only inside the activated scope —
+ *     the account key compared exactly (51345) — and, linked, only for an ACTIVE
+ *     account (51346); its vocabulary, digests and exact money are checked
+ *     (…_vocabulary_ck, …_money_ck), one per operation and per token digest;
+ *   - its facts agree (…_facts_ck), its state is EXACTLY their derivation
+ *     (…_state_ck, every branch reached), its identity, request and expected
+ *     money never change (51348), its facts only move forward one version at a
+ *     time while a scheduling-only change keeps the version, and its
+ *     reservation is always the sum of its live refunds (51349); a capture
+ *     after a recorded expiry is accepted (provider truth wins); its donor link
+ *     is only released, only for a CLOSED account, and never while owed mail
+ *     still names it (51350, the composite key);
+ *   - provider references are unique within their scope and coexist across
+ *     scopes (the filtered keys);
+ *   - a provider event is deduplicated within its scope, carries a result
+ *     exactly when processed (…_ck), and is completed once, never re-keyed
+ *     (51351);
+ *   - a refund begins requested at version one (51358), only of a captured
+ *     donation that is not charged back (51352), in its donation's currency and
+ *     scope (51353), only by an account holding `donations.refund` NOW through
+ *     a live assignment of an active role AND a live `donation-refund` step-up
+ *     on a live session (51354 — every missing piece refused), and never beyond
+ *     the captured amount across its live refunds, a failed one released
+ *     (51355); it moves only forward, keeps its identity, sets its reference and
+ *     completion once (51356) and its reference is scoped-unique;
+ *   - an intent is one of three purposes naming a refund exactly when it
+ *     announces one (…_ck), owed only to the donation's own linked donor and
+ *     about that donation's own refund (the composite keys), once per key; it
+ *     is relayed or abandoned once and never reopened or re-keyed (51357);
+ *   - nothing cascades: an account, a campaign, a donation and a refund are
+ *     never deleted from under what names them.
+ *
+ * Every row the proofs write is then removed, children first — except the
+ * immutable activation, which (like every earlier phase's activation) dies
+ * only with this disposable database — and the synthetic accounts, role,
+ * sessions and grants go with them.
+ */
+async function assertDonationsRules(session: SqlSession): Promise<void> {
+  const run = randomUUID().replaceAll('-', '').slice(0, 16);
+  const at = '2026-10-10T00:00:00';
+  const later = '2026-10-10T01:00:00';
+  const settled = '2026-10-10T02:00:00';
+  const closedAt = '2026-10-10T03:00:00';
+  let refusals = 0;
+  const refuse = async (
+    label: string,
+    statement: string,
+    numbers: readonly number[],
+    rule: string,
+  ): Promise<void> => {
+    await expectRefusal(session, label, statement, numbers, rule);
+    refusals += 1;
+  };
+  const accept = (label: string, statement: string): Promise<void> =>
+    expectAccepted(session, label, statement);
+  const digest = (seed: string): string =>
+    createHash('sha256').update(`${run}:${seed}`).digest('hex');
+  const DRAFT = 'begins as a draft and keeps its identity';
+  const KEEPS = 'keeps its identity and never returns to draft';
+  const COMPLETE = 'published only with its primary locale';
+  const WORDS = 'never changes its campaign or locale';
+  const PRIMARY = 'keeps its primary locale';
+  const POLICY = 'never changes its campaign, currency or exponent';
+  const LAST = 'keeps at least one currency';
+  const IMMUTABLE = 'activation is immutable';
+  const FRESH = 'begins pending, uncaptured, at version 1';
+  const PUBLISHED = 'needs a published campaign';
+  const ADMITS = 'does not admit this amount';
+  const ACTIVATED = 'not activated for this provider scope';
+  const ACTIVE = 'needs an active account';
+  const IDENTITY = 'keeps its identity';
+  const FORWARD = 'facts only move forward';
+  const LINK = 'only released, and only for a closed account';
+  const ONCE_EVENT = 'completed once and never re-keyed';
+  const REQUESTED = 'begins requested, at version 1';
+  const CAPTURED = 'captured donation that is not charged back';
+  const SCOPE = 'own currency and provider scope';
+  const AUTHORITY = 'Refund authority is not held now';
+  const OVER = 'may not exceed the captured amount';
+  const BACKWARDS = 'only moves forward and keeps its identity';
+  const ONCE = 'relayed or abandoned once and never re-keyed';
+  const account = 'acct_rules_fixture';
+
+  // ---- accounts, and the refund authority they may or may not hold -----------------
+  const donor = randomUUID();
+  const other = randomUUID();
+  const lonely = randomUUID();
+  const departing = randomUUID();
+  const suspended = randomUUID();
+  const refunder = randomUUID();
+  const keyOnly = randomUUID();
+  const grantOnly = randomUUID();
+  const wrongPurpose = randomUUID();
+  const expiredGrant = randomUUID();
+  const expiredSession = randomUUID();
+  const revoked = randomUUID();
+  const deactivated = randomUUID();
+  const inactiveHolder = randomUUID();
+  const users = [
+    [donor, 'donor', 'active'],
+    [other, 'other', 'active'],
+    [lonely, 'lonely', 'active'],
+    [departing, 'departing', 'active'],
+    [suspended, 'suspended', 'suspended'],
+    [refunder, 'refunder', 'active'],
+    [keyOnly, 'key-only', 'active'],
+    [grantOnly, 'grant-only', 'active'],
+    [wrongPurpose, 'wrong-purpose', 'active'],
+    [expiredGrant, 'expired-grant', 'active'],
+    [expiredSession, 'expired-session', 'active'],
+    [revoked, 'revoked', 'active'],
+    [deactivated, 'deactivated', 'active'],
+    [inactiveHolder, 'inactive-holder', 'active'],
+  ] as const;
+  for (const [user, label, status] of users)
+    await session.query(
+      `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled]) VALUES (N'${user}',N'NON_DONATION_FIXTURE ${label}',N'${label}-${run}@donations-proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'${status}',0);`,
+    );
+  const refundRole = randomUUID();
+  const deadRole = randomUUID();
+  const sessionOf = (user: string, hours: number): string =>
+    `INSERT INTO [dbo].[Session] ([id],[token],[userId],[expiresAt],[createdAt],[updatedAt]) VALUES (N'${user}',N'proof-donations-${user}',N'${user}',DATEADD(hour,${String(hours)},SYSUTCDATETIME()),SYSUTCDATETIME(),SYSUTCDATETIME());`;
+  const grantOf = (user: string, purpose: string, minutes: number): string =>
+    `INSERT INTO [dbo].[StepUpGrant] ([id],[userId],[sessionId],[purpose],[expiresAt]) VALUES (N'${randomUUID()}',N'${user}',N'${user}',N'${purpose}',DATEADD(minute,${String(minutes)},SYSUTCDATETIME()));`;
+  await accept(
+    'A synthetic refund authority, and every way of lacking it',
+    `INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system]) VALUES
+       (N'${refundRole}',N'proof-donations-refund-${run}',N'Synthetic donation refund proof role',N'Holds donations.refund for the migration proof only.',0),
+       (N'${deadRole}',N'proof-donations-dead-${run}',N'Synthetic deactivated refund proof role',N'Holds donations.refund for the migration proof only.',0);
+     INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES
+       (N'${refundRole}',N'${DONATIONS_REFUND_PERMISSION}'),(N'${deadRole}',N'${DONATIONS_REFUND_PERMISSION}');
+     INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId]) VALUES
+       (N'${refunder}',N'${refundRole}'),(N'${keyOnly}',N'${refundRole}'),(N'${wrongPurpose}',N'${refundRole}'),
+       (N'${expiredGrant}',N'${refundRole}'),(N'${expiredSession}',N'${refundRole}'),
+       (N'${deactivated}',N'${deadRole}'),(N'${inactiveHolder}',N'${refundRole}');
+     INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId],[revokedAt],[revokedReason]) VALUES
+       (N'${revoked}',N'${refundRole}',SYSUTCDATETIME(),N'Synthetic revocation for the migration proof.');
+     UPDATE [dbo].[Role] SET [deactivatedAt]=SYSUTCDATETIME() WHERE [id]=N'${deadRole}';
+     ${sessionOf(refunder, 1)}
+     ${sessionOf(keyOnly, 1)}
+     ${sessionOf(grantOnly, 1)}
+     ${sessionOf(wrongPurpose, 1)}
+     ${sessionOf(expiredGrant, 1)}
+     ${sessionOf(expiredSession, -1)}
+     ${sessionOf(revoked, 1)}
+     ${sessionOf(deactivated, 1)}
+     ${sessionOf(inactiveHolder, 1)}
+     ${grantOf(refunder, 'donation-refund', 30)}
+     ${grantOf(grantOnly, 'donation-refund', 30)}
+     ${grantOf(wrongPurpose, 'fatwa-publication', 30)}
+     ${grantOf(expiredGrant, 'donation-refund', -1)}
+     ${grantOf(expiredSession, 'donation-refund', 30)}
+     ${grantOf(revoked, 'donation-refund', 30)}
+     ${grantOf(deactivated, 'donation-refund', 30)}
+     ${grantOf(inactiveHolder, 'donation-refund', 30)}`,
+  );
+
+  // ---- statements ------------------------------------------------------------------
+  const campaign = (id: string, locale: string, order: number): string =>
+    `INSERT INTO [dbo].[DonationCampaign] ([id],[primaryLocale],[displayOrder]) VALUES (N'${id}',N'${locale}',${String(order)});`;
+  const words = (campaignId: string, locale: string, title = 'title'): string =>
+    `INSERT INTO [dbo].[DonationCampaignTranslation] ([campaignId],[locale],[title],[summary],[description]) VALUES (N'${campaignId}',N'${locale}',N'NON_DONATION_FIXTURE ${title}',N'NON_DONATION_FIXTURE summary',N'NON_DONATION_FIXTURE description');`;
+  const policy = (
+    campaignId: string,
+    currency: string,
+    exponent: number,
+    bounds: string,
+  ): string =>
+    `INSERT INTO [dbo].[DonationCampaignCurrency] ([campaignId],[currency],[currencyExponent],[minimumMinor],[maximumMinor],[suggested1Minor],[suggested2Minor],[suggested3Minor]) VALUES (N'${campaignId}',N'${currency}',${String(exponent)},${bounds});`;
+  const publish = (id: string): string =>
+    `UPDATE [dbo].[DonationCampaign] SET [state]=N'published',[publishedAt]='${at}',[archivedAt]=NULL,[version]=[version]+1,[updatedAt]='${at}' WHERE [id]=N'${id}';`;
+  const archive = (id: string): string =>
+    `UPDATE [dbo].[DonationCampaign] SET [state]=N'archived',[archivedAt]='${later}',[version]=[version]+1,[updatedAt]='${later}' WHERE [id]=N'${id}';`;
+  const exponentOf: Readonly<Record<string, number>> = { USD: 2, EUR: 2, JPY: 0, KWD: 3 };
+  const donation = (
+    id: string,
+    input: {
+      readonly campaignId: string;
+      readonly currency?: string;
+      readonly exponent?: number;
+      readonly minor?: string;
+      readonly donor?: string | null;
+      readonly environment?: string;
+      readonly accountKey?: string;
+      readonly extra?: Readonly<Record<string, string>>;
+    },
+  ): string => {
+    const currency = input.currency ?? 'USD';
+    const columns: Record<string, string> = {
+      id: `N'${id}'`,
+      campaignId: `N'${input.campaignId}'`,
+      donorUserId:
+        input.donor === undefined || input.donor === null ? 'NULL' : `N'${input.donor}'`,
+      operationId: `N'${randomUUID()}'`,
+      requestDigest: `'${digest(`request-${id}`)}'`,
+      statusTokenDigest: `'${digest(`token-${id}-${randomUUID()}`)}'`,
+      locale: `N'en'`,
+      checkoutLabel: `N'NON_DONATION_FIXTURE label'`,
+      currency: `'${currency}'`,
+      currencyExponent: String(input.exponent ?? exponentOf[currency] ?? 2),
+      expectedMinor: input.minor ?? '2500',
+      provider: `N'stripe'`,
+      environment: `N'${input.environment ?? 'fixture'}'`,
+      accountKey: `N'${input.accountKey ?? account}'`,
+      createdAt: `'${at}'`,
+      updatedAt: `'${at}'`,
+      ...input.extra,
+    };
+    return `INSERT INTO [dbo].[Donation] (${Object.keys(columns)
+      .map((name) => `[${name}]`)
+      .join(',')}) VALUES (${Object.values(columns).join(',')});`;
+  };
+  const set = (table: string, id: string, assignments: string): string =>
+    `UPDATE [dbo].[${table}] SET ${assignments} WHERE [id]=N'${id}';`;
+  const created = (reference: string): string =>
+    `[createState]=N'created',[checkoutReference]=N'${reference}',[checkoutExpiresAt]='${later}',[version]=[version]+1`;
+  const capture = (minor: string, payment: string): string =>
+    `[capturedMinor]=${minor},[paymentReference]=N'${payment}',[succeededAt]='${settled}',[state]=N'succeeded',[version]=[version]+1`;
+  const refund = (
+    id: string,
+    donationId: string,
+    minor: string,
+    requester: string,
+    extra: Readonly<Record<string, string>> = {},
+  ): string => {
+    const columns: Record<string, string> = {
+      id: `N'${id}'`,
+      donationId: `N'${donationId}'`,
+      operationId: `N'${randomUUID()}'`,
+      requestDigest: `'${digest(`refund-${id}`)}'`,
+      currency: `'USD'`,
+      currencyExponent: '2',
+      amountMinor: minor,
+      provider: `N'stripe'`,
+      environment: `N'fixture'`,
+      accountKey: `N'${account}'`,
+      requestedByUserId: `N'${requester}'`,
+      requestedAt: `'${later}'`,
+      ...extra,
+    };
+    return `INSERT INTO [dbo].[DonationRefund] (${Object.keys(columns)
+      .map((name) => `[${name}]`)
+      .join(',')}) VALUES (${Object.values(columns).join(',')});`;
+  };
+  const intent = (
+    id: string,
+    purpose: string,
+    donationId: string,
+    refundId: string | null,
+    recipient: string,
+    key: string,
+  ): string =>
+    `INSERT INTO [dbo].[DonationCommunicationIntent] ([id],[purpose],[donationId],[refundId],[recipientUserId],[dueAt],[idempotencyKey]) VALUES (N'${id}',N'${purpose}',N'${donationId}',${refundId === null ? 'NULL' : `N'${refundId}'`},N'${recipient}','${at}',N'non-donation-fixture-${run}-${key}');`;
+
+  // ---- a campaign begins as a draft and is published only when complete ------------
+  await refuse(
+    'A campaign inserted published',
+    `INSERT INTO [dbo].[DonationCampaign] ([id],[state],[primaryLocale],[displayOrder],[publishedAt]) VALUES (N'${randomUUID()}',N'published',N'en',0,'${at}');`,
+    [51340],
+    DRAFT,
+  );
+  await refuse(
+    'A campaign inserted at version two',
+    `INSERT INTO [dbo].[DonationCampaign] ([id],[primaryLocale],[displayOrder],[version]) VALUES (N'${randomUUID()}',N'en',0,2);`,
+    [51340],
+    DRAFT,
+  );
+  for (const [label, statement] of [
+    ['A campaign beyond the display bound', campaign(randomUUID(), 'en', 10000)],
+    ['A campaign in an unserved primary locale', campaign(randomUUID(), 'fr', 0)],
+    [
+      'A draft campaign carrying a publication instant',
+      `INSERT INTO [dbo].[DonationCampaign] ([id],[primaryLocale],[displayOrder],[publishedAt]) VALUES (N'${randomUUID()}',N'en',0,'${at}');`,
+    ],
+    [
+      'A campaign at version zero',
+      `INSERT INTO [dbo].[DonationCampaign] ([id],[primaryLocale],[displayOrder],[version]) VALUES (N'${randomUUID()}',N'en',0,0);`,
+    ],
+  ] as const)
+    await refuse(label, statement, [547], 'DonationCampaign_ck');
+
+  const open = randomUUID();
+  const urdu = randomUUID();
+  const draft = randomUUID();
+  const closing = randomUUID();
+  await accept(
+    'Four draft campaigns, words in three locales',
+    `${campaign(open, 'en', 0)}
+     ${campaign(urdu, 'ur', 1)}
+     ${campaign(draft, 'ar', 2)}
+     ${campaign(closing, 'en', 3)}
+     ${words(open, 'en')}
+     ${words(open, 'ar', 'عنوان')}
+     ${words(urdu, 'ur', 'عنوان')}
+     ${words(draft, 'en')}
+     ${words(closing, 'en')}`,
+  );
+  await refuse(
+    'A campaign published without its primary words',
+    publish(draft),
+    [51341],
+    COMPLETE,
+  );
+  await refuse(
+    'A campaign published with its words but no currency',
+    publish(open),
+    [51341],
+    COMPLETE,
+  );
+
+  // ---- words ------------------------------------------------------------------------
+  for (const [label, statement] of [
+    ['Words in an unserved locale', words(open, 'fr')],
+    [
+      'Words with a blank title',
+      `INSERT INTO [dbo].[DonationCampaignTranslation] ([campaignId],[locale],[title],[summary],[description]) VALUES (N'${draft}',N'ur',N'',N'NON_DONATION_FIXTURE summary',N'NON_DONATION_FIXTURE description');`,
+    ],
+    [
+      'Words with a blank description',
+      `INSERT INTO [dbo].[DonationCampaignTranslation] ([campaignId],[locale],[title],[summary],[description]) VALUES (N'${draft}',N'ur',N'NON_DONATION_FIXTURE title',N'NON_DONATION_FIXTURE summary',N'');`,
+    ],
+  ] as const)
+    await refuse(label, statement, [547], 'DonationCampaignTranslation_ck');
+  await refuse(
+    'Words moved to another locale',
+    `UPDATE [dbo].[DonationCampaignTranslation] SET [locale]=N'ur' WHERE [campaignId]=N'${open}' AND [locale]=N'ar';`,
+    [51340],
+    WORDS,
+  );
+  await refuse(
+    'Words moved to another campaign',
+    `UPDATE [dbo].[DonationCampaignTranslation] SET [campaignId]=N'${closing}' WHERE [campaignId]=N'${open}' AND [locale]=N'ar';`,
+    [51340],
+    WORDS,
+  );
+
+  // ---- currency policy: an allowlisted currency at ITS OWN exponent ------------------
+  for (const [label, statement] of [
+    ['JPY at two decimals', policy(draft, 'JPY', 2, '100,1000,NULL,NULL,NULL')],
+    ['USD at three decimals', policy(draft, 'USD', 3, '100,1000,NULL,NULL,NULL')],
+    ['KWD at two decimals', policy(draft, 'KWD', 2, '100,1000,NULL,NULL,NULL')],
+    ['A lower-case currency code', policy(draft, 'usd', 2, '100,1000,NULL,NULL,NULL')],
+    ['A currency off the allowlist', policy(draft, 'XAU', 2, '100,1000,NULL,NULL,NULL')],
+    ['A zero minimum', policy(draft, 'USD', 2, '0,1000,NULL,NULL,NULL')],
+    [
+      'A maximum beyond twelve digits',
+      policy(draft, 'USD', 2, '100,1000000000000,NULL,NULL,NULL'),
+    ],
+    ['A minimum above the maximum', policy(draft, 'USD', 2, '1001,1000,NULL,NULL,NULL')],
+    [
+      'A second suggestion without a first',
+      policy(draft, 'USD', 2, '100,1000,NULL,500,NULL'),
+    ],
+    [
+      'A third suggestion without a second',
+      policy(draft, 'USD', 2, '100,1000,200,NULL,500'),
+    ],
+    ['A suggestion below the minimum', policy(draft, 'USD', 2, '100,1000,99,NULL,NULL')],
+    [
+      'A suggestion above the maximum',
+      policy(draft, 'USD', 2, '100,1000,1001,NULL,NULL'),
+    ],
+    ['Two equal suggestions', policy(draft, 'USD', 2, '100,1000,500,500,NULL')],
+    [
+      'A third suggestion repeating the first',
+      policy(draft, 'USD', 2, '100,1000,500,600,500'),
+    ],
+  ] as const)
+    await refuse(label, statement, [547], 'DonationCampaignCurrency_ck');
+  await accept(
+    'JPY, USD and KWD policies, each at its own exponent, with dense suggestions',
+    `${policy(open, 'USD', 2, '100,100000,500,2500,10000')}
+     ${policy(open, 'JPY', 0, '100,1000000,1000,5000,NULL')}
+     ${policy(open, 'KWD', 3, '1000,500000,1250,NULL,NULL')}
+     ${policy(urdu, 'USD', 2, '100,100000,NULL,NULL,NULL')}
+     ${policy(closing, 'USD', 2, '100,100000,NULL,NULL,NULL')}
+     ${policy(closing, 'EUR', 2, '100,100000,NULL,NULL,NULL')}`,
+  );
+  await refuse(
+    'A policy moved to another currency',
+    `UPDATE [dbo].[DonationCampaignCurrency] SET [currency]='EUR' WHERE [campaignId]=N'${urdu}' AND [currency]='USD';`,
+    [51340],
+    POLICY,
+  );
+  await refuse(
+    'A policy moved to another campaign',
+    `UPDATE [dbo].[DonationCampaignCurrency] SET [campaignId]=N'${draft}' WHERE [campaignId]=N'${urdu}' AND [currency]='USD';`,
+    [51340],
+    POLICY,
+  );
+
+  // ---- the campaign lifecycle -----------------------------------------------------------
+  await accept(
+    'Campaigns published once complete',
+    `${publish(open)} ${publish(urdu)} ${publish(closing)}`,
+  );
+  await refuse(
+    'A published campaign returned to draft',
+    set(
+      'DonationCampaign',
+      open,
+      `[state]=N'draft',[publishedAt]=NULL,[version]=[version]+1`,
+    ),
+    [51340],
+    KEEPS,
+  );
+  await refuse(
+    'A draft archived without publication',
+    set(
+      'DonationCampaign',
+      draft,
+      `[state]=N'archived',[publishedAt]='${at}',[archivedAt]='${later}',[version]=[version]+1`,
+    ),
+    [51340],
+    KEEPS,
+  );
+  await refuse(
+    'A campaign moved two versions at once',
+    set('DonationCampaign', open, `[displayOrder]=5,[version]=[version]+2`),
+    [51340],
+    KEEPS,
+  );
+  await refuse(
+    'A campaign changed without a new version',
+    set('DonationCampaign', open, `[displayOrder]=5`),
+    [51340],
+    KEEPS,
+  );
+  await refuse(
+    "A campaign's primary locale changed",
+    set('DonationCampaign', open, `[primaryLocale]=N'ar',[version]=[version]+1`),
+    [51340],
+    KEEPS,
+  );
+  await refuse(
+    "A campaign's creation instant rewritten",
+    set(
+      'DonationCampaign',
+      open,
+      `[createdAt]=DATEADD(minute,-1,[createdAt]),[version]=[version]+1`,
+    ),
+    [51340],
+    KEEPS,
+  );
+  await refuse(
+    'An archived campaign without its archive instant',
+    set('DonationCampaign', closing, `[state]=N'archived',[version]=[version]+1`),
+    [547],
+    'DonationCampaign_ck',
+  );
+  await refuse(
+    "A published campaign's primary words removed",
+    `DELETE FROM [dbo].[DonationCampaignTranslation] WHERE [campaignId]=N'${open}' AND [locale]=N'en';`,
+    [51341],
+    PRIMARY,
+  );
+  await accept(
+    "A published campaign's other words removed",
+    `DELETE FROM [dbo].[DonationCampaignTranslation] WHERE [campaignId]=N'${open}' AND [locale]=N'ar';`,
+  );
+  await refuse(
+    "A published campaign's last currency removed",
+    `DELETE FROM [dbo].[DonationCampaignCurrency] WHERE [campaignId]=N'${urdu}';`,
+    [51341],
+    LAST,
+  );
+  await accept(
+    "One of a published campaign's two currencies removed",
+    `DELETE FROM [dbo].[DonationCampaignCurrency] WHERE [campaignId]=N'${closing}' AND [currency]='EUR';`,
+  );
+  await accept(
+    'A campaign archived and republished',
+    `${archive(closing)} ${publish(closing)}`,
+  );
+
+  // ---- the activation: two lawful pairings, then immutable ----------------------------
+  const activation = (values: string): string =>
+    `INSERT INTO [dbo].[DonationActivation] ([id],[provider],[environment],[accountKey],[authority],[authorisedBy],[reference]) VALUES (${values});`;
+  for (const [label, statement] of [
+    [
+      'A second activation row',
+      activation(
+        `2,N'stripe',N'fixture',N'${account}',N'fixture',N'NON_DONATION_FIXTURE owner',NULL`,
+      ),
+    ],
+    [
+      'Production under fixture authority',
+      activation(
+        `1,N'stripe',N'production',N'${account}',N'fixture',N'NON_DONATION_FIXTURE owner',N'evidence'`,
+      ),
+    ],
+    [
+      'Production approved without its evidence',
+      activation(
+        `1,N'stripe',N'production',N'${account}',N'approved',N'NON_DONATION_FIXTURE owner',NULL`,
+      ),
+    ],
+    [
+      'A sandbox approved as if production',
+      activation(
+        `1,N'stripe',N'sandbox',N'${account}',N'approved',N'NON_DONATION_FIXTURE owner',N'evidence'`,
+      ),
+    ],
+    [
+      'An unknown provider',
+      activation(
+        `1,N'paypal',N'fixture',N'${account}',N'fixture',N'NON_DONATION_FIXTURE owner',NULL`,
+      ),
+    ],
+    [
+      'An unknown environment',
+      activation(
+        `1,N'stripe',N'live',N'${account}',N'fixture',N'NON_DONATION_FIXTURE owner',NULL`,
+      ),
+    ],
+    [
+      'An account key with a space',
+      activation(
+        `1,N'stripe',N'fixture',N'acct rules',N'fixture',N'NON_DONATION_FIXTURE owner',NULL`,
+      ),
+    ],
+    [
+      'An anonymous authorisation',
+      activation(`1,N'stripe',N'fixture',N'${account}',N'fixture',N'',NULL`),
+    ],
+  ] as const)
+    await refuse(label, statement, [547], 'DonationActivation_ck');
+  await accept(
+    'Production approved with evidence is a lawful pairing (rolled back)',
+    `BEGIN TRAN;
+     ${activation(`1,N'stripe',N'production',N'${account}',N'approved',N'NON_DONATION_FIXTURE owner',N'NON_DONATION_FIXTURE evidence'`)}
+     ROLLBACK TRAN;`,
+  );
+  await refuse(
+    'A donation before any activation',
+    donation(randomUUID(), { campaignId: open }),
+    [51345],
+    ACTIVATED,
+  );
+  await accept(
+    'The fixture activation',
+    activation(
+      `1,N'stripe',N'fixture',N'${account}',N'fixture',N'NON_DONATION_FIXTURE owner',NULL`,
+    ),
+  );
+  await refuse(
+    'A second activation',
+    activation(
+      `1,N'stripe',N'sandbox',N'${account}',N'fixture',N'NON_DONATION_FIXTURE owner',NULL`,
+    ),
+    [2627],
+    'DonationActivation_pkey',
+  );
+  await refuse(
+    'The activation re-scoped',
+    `UPDATE [dbo].[DonationActivation] SET [environment]=N'sandbox';`,
+    [51342],
+    IMMUTABLE,
+  );
+  await refuse(
+    'The activation removed',
+    'DELETE FROM [dbo].[DonationActivation];',
+    [51342],
+    IMMUTABLE,
+  );
+
+  // ---- a donation is admitted only as a fresh, permitted attempt ----------------------
+  const extraFresh: readonly (readonly [string, Readonly<Record<string, string>>])[] = [
+    ['A donation inserted ambiguous', { createState: `N'ambiguous'` }],
+    ['A donation inserted at version two', { version: '2' }],
+    ['A donation inserted with attention', { attention: `N'unresolved'` }],
+    ['A donation inserted with a cancellation', { cancelRequestedAt: `'${at}'` }],
+    [
+      'A donation inserted with a payment reference',
+      { paymentReference: `N'pi_rules_inserted'` },
+    ],
+  ];
+  for (const [label, extra] of extraFresh)
+    await refuse(
+      label,
+      donation(randomUUID(), { campaignId: open, extra }),
+      [51347],
+      FRESH,
+    );
+  await refuse(
+    'A donation inserted already captured',
+    donation(randomUUID(), {
+      campaignId: open,
+      extra: {
+        createState: `N'created'`,
+        checkoutReference: `N'cs_rules_${run}_inserted'`,
+        checkoutExpiresAt: `'${later}'`,
+        capturedMinor: '2500',
+        succeededAt: `'${later}'`,
+        state: `N'succeeded'`,
+      },
+    }),
+    [51347],
+    FRESH,
+  );
+  await refuse(
+    'A donation for a draft campaign',
+    donation(randomUUID(), { campaignId: draft }),
+    [51343],
+    PUBLISHED,
+  );
+  for (const [label, input] of [
+    ['A donation below the minimum', { minor: '99' }],
+    ['A donation above the maximum', { minor: '100001' }],
+    ['A donation in a currency the campaign does not offer', { currency: 'EUR' }],
+    ['A KWD donation outside its policy', { currency: 'KWD', minor: '999' }],
+  ] as const)
+    await refuse(
+      label,
+      donation(randomUUID(), { campaignId: open, ...input }),
+      [51344],
+      ADMITS,
+    );
+  for (const [label, input] of [
+    ['A donation in another environment', { environment: 'sandbox' }],
+    ['A donation under another account', { accountKey: 'acct_rules_other' }],
+    [
+      'A donation under an account key differing only in case',
+      { accountKey: account.toUpperCase() },
+    ],
+  ] as const)
+    await refuse(
+      label,
+      donation(randomUUID(), { campaignId: open, ...input }),
+      [51345],
+      ACTIVATED,
+    );
+  await refuse(
+    'A linked donation for a suspended account',
+    donation(randomUUID(), { campaignId: open, donor: suspended }),
+    [51346],
+    ACTIVE,
+  );
+  for (const [label, extra] of [
+    ['A donation in an unserved locale', { locale: `N'fr'` }],
+    [
+      'A donation with an upper-case request digest',
+      { requestDigest: `'${digest('upper').toUpperCase()}'` },
+    ],
+    [
+      'A donation with a short token digest',
+      { statusTokenDigest: `'${digest('short').slice(0, 63)}'` },
+    ],
+    ['A donation with a blank label', { checkoutLabel: `N''` }],
+    ['A donation from an unknown provider', { provider: `N'paypal'` }],
+    ['A donation flagged in an unknown vocabulary', { attention: `N'paid'` }],
+  ] as const)
+    await refuse(
+      label,
+      donation(randomUUID(), { campaignId: open, extra }),
+      [547],
+      'Donation_vocabulary_ck',
+    );
+  for (const [label, input] of [
+    ['A donation of nothing', { minor: '0' }],
+    ['A donation beyond twelve digits', { minor: '1000000000000' }],
+    ['A JPY donation at two decimals', { currency: 'JPY', exponent: 2, minor: '5000' }],
+    ['A lower-case currency', { currency: 'usd' }],
+  ] as const)
+    await refuse(
+      label,
+      donation(randomUUID(), { campaignId: open, ...input }),
+      [547],
+      'Donation_money_ck',
+    );
+  await refuse(
+    'A donation for no campaign',
+    donation(randomUUID(), { campaignId: randomUUID() }),
+    [547],
+    'Donation_campaignId_fkey',
+  );
+
+  const linked = randomUUID();
+  const anonymous = randomUUID();
+  const yen = randomUUID();
+  const dinar = randomUUID();
+  const refundable = randomUUID();
+  const lost = randomUUID();
+  const departed = randomUUID();
+  const solitary = randomUUID();
+  const twin = randomUUID();
+  const operation = randomUUID();
+  const token = digest('shared-token');
+  await accept(
+    'Donations admitted: linked, anonymous, JPY at 0, KWD at 3, and three more',
+    `${donation(linked, { campaignId: open, donor, extra: { operationId: `N'${operation}'`, statusTokenDigest: `'${token}'` } })}
+     ${donation(anonymous, { campaignId: urdu })}
+     ${donation(yen, { campaignId: open, currency: 'JPY', minor: '5000' })}
+     ${donation(dinar, { campaignId: open, currency: 'KWD', minor: '1250' })}
+     ${donation(refundable, { campaignId: open })}
+     ${donation(lost, { campaignId: open })}
+     ${donation(departed, { campaignId: open, donor: departing })}
+     ${donation(solitary, { campaignId: open, donor: lonely })}
+     ${donation(twin, { campaignId: open })}`,
+  );
+  await refuse(
+    'A second donation under one operation',
+    donation(randomUUID(), {
+      campaignId: open,
+      extra: { operationId: `N'${operation}'` },
+    }),
+    [2627],
+    'Donation_operationId_key',
+  );
+  await refuse(
+    'A second donation under one status-token digest',
+    donation(randomUUID(), {
+      campaignId: open,
+      extra: { statusTokenDigest: `'${token}'` },
+    }),
+    [2627],
+    'Donation_statusTokenDigest_key',
+  );
+  await accept('A campaign archived', archive(closing));
+  await refuse(
+    'A donation for an archived campaign',
+    donation(randomUUID(), { campaignId: closing }),
+    [51343],
+    PUBLISHED,
+  );
+
+  // ---- a donation's identity, request and expected money never change ---------------
+  for (const [label, assignments] of [
+    ['Expected money rewritten', `[expectedMinor]=2600,[version]=[version]+1`],
+    ['Currency rewritten', `[currency]='EUR',[version]=[version]+1`],
+    [
+      'Request digest rewritten',
+      `[requestDigest]='${digest('other-request')}',[version]=[version]+1`,
+    ],
+    [
+      'Token digest rewritten',
+      `[statusTokenDigest]='${digest('other-token')}',[version]=[version]+1`,
+    ],
+    ['Locale rewritten', `[locale]=N'ar',[version]=[version]+1`],
+    [
+      'Label rewritten in case only',
+      `[checkoutLabel]=N'non_donation_fixture label',[version]=[version]+1`,
+    ],
+    ['Operation rewritten', `[operationId]=N'${randomUUID()}',[version]=[version]+1`],
+    ['Campaign rewritten', `[campaignId]=N'${open}',[version]=[version]+1`],
+    [
+      'Account key rewritten in case only',
+      `[accountKey]=N'${account.toUpperCase()}',[version]=[version]+1`,
+    ],
+    ['Creation instant rewritten', `[createdAt]='${later}',[version]=[version]+1`],
+    ['Identifier rewritten', `[id]=N'${randomUUID()}'`],
+  ] as const)
+    await refuse(label, set('Donation', anonymous, assignments), [51348], IDENTITY);
+
+  // ---- facts agree, and the state is exactly their derivation -------------------------
+  for (const [label, assignments] of [
+    [
+      'Created without a checkout reference',
+      `[createState]=N'created',[version]=[version]+1`,
+    ],
+    [
+      'A checkout reference without its expiry',
+      `[createState]=N'created',[checkoutReference]=N'cs_rules_${run}_noexpiry',[version]=[version]+1`,
+    ],
+    [
+      'A rejected create not closed as failed',
+      `[createState]=N'rejected',[version]=[version]+1`,
+    ],
+    ['A dispute on an uncaptured donation', `[dispute]=N'open',[version]=[version]+1`],
+    [
+      'A capture of a checkout never created',
+      `[capturedMinor]=2500,[succeededAt]='${settled}',[state]=N'succeeded',[version]=[version]+1`,
+    ],
+    [
+      'A released link still naming its donor',
+      `[donorReleasedAt]='${later}',[version]=[version]+1`,
+    ],
+  ] as const)
+    await refuse(label, set('Donation', linked, assignments), [547], 'Donation_facts_ck');
+  await refuse(
+    'Succeeded without a capture',
+    set('Donation', anonymous, `[state]=N'succeeded',[version]=[version]+1`),
+    [547],
+    'Donation_state_ck',
+  );
+  await refuse(
+    'Expired without a closure',
+    set('Donation', anonymous, `[state]=N'expired',[version]=[version]+1`),
+    [547],
+    'Donation_state_ck',
+  );
+
+  await accept(
+    'Checkouts recorded, each reference scoped',
+    `${set('Donation', linked, created(`cs_rules_${run}_linked`))}
+     ${set('Donation', anonymous, created(`cs_rules_${run}_anonymous`))}
+     ${set('Donation', yen, created(`cs_rules_${run}_yen`))}
+     ${set('Donation', dinar, created(`cs_rules_${run}_dinar`))}
+     ${set('Donation', refundable, created(`cs_rules_${run}_refundable`))}
+     ${set('Donation', lost, created(`cs_rules_${run}_lost`))}
+     ${set('Donation', departed, created(`cs_rules_${run}_departed`))}
+     ${set('Donation', solitary, created(`cs_rules_${run}_solitary`))}`,
+  );
+  await refuse(
+    'Two donations recording one checkout in one scope',
+    set('Donation', twin, created(`cs_rules_${run}_linked`)),
+    [2601, 2627],
+    'Donation_checkout_key',
+  );
+  await refuse(
+    'A captured amount other than the expected amount',
+    set('Donation', linked, capture('2499', `pi_rules_${run}_short`)),
+    [547],
+    'Donation_money_ck',
+  );
+  await refuse(
+    'A captured donation in a state other than its derivation',
+    set(
+      'Donation',
+      linked,
+      capture('2500', `pi_rules_${run}_linked`).replace(`N'succeeded'`, `N'refunded'`),
+    ),
+    [547],
+    'Donation_state_ck',
+  );
+  await accept(
+    'Captures: USD, JPY at its own exponent and the refundable one',
+    `${set('Donation', linked, capture('2500', `pi_rules_${run}_linked`))}
+     ${set('Donation', yen, capture('5000', `pi_rules_${run}_yen`))}
+     ${set('Donation', refundable, capture('2500', `pi_rules_${run}_refundable`))}
+     ${set('Donation', lost, capture('2500', `pi_rules_${run}_lost`))}
+     ${set('Donation', departed, capture('2500', `pi_rules_${run}_departed`))}`,
+  );
+  await refuse(
+    'Two donations claiming one payment in one scope',
+    set('Donation', solitary, capture('2500', `pi_rules_${run}_linked`)),
+    [2601, 2627],
+    'Donation_payment_key',
+  );
+  await refuse(
+    'Refunded beyond the capture',
+    set(
+      'Donation',
+      linked,
+      `[refundedMinor]=2501,[state]=N'refunded',[version]=[version]+1`,
+    ),
+    [547],
+    'Donation_money_ck',
+  );
+  await refuse(
+    'A closure on a captured donation',
+    set('Donation', linked, `[closure]=N'failed',[version]=[version]+1`),
+    [547],
+    'Donation_facts_ck',
+  );
+  await refuse(
+    'Partly refunded called refunded',
+    set(
+      'Donation',
+      linked,
+      `[refundedMinor]=1000,[state]=N'refunded',[version]=[version]+1`,
+    ),
+    [547],
+    'Donation_state_ck',
+  );
+
+  // Every branch of the derivation, reached through lawful forward steps.
+  await accept(
+    'Partly refunded, then disputed, then won, then fully refunded',
+    `${set('Donation', linked, `[refundedMinor]=1000,[state]=N'partially_refunded',[version]=[version]+1`)}
+     ${set('Donation', linked, `[dispute]=N'open',[state]=N'disputed',[version]=[version]+1`)}
+     ${set('Donation', linked, `[dispute]=N'won',[state]=N'partially_refunded',[version]=[version]+1`)}
+     ${set('Donation', linked, `[refundedMinor]=2500,[state]=N'refunded',[version]=[version]+1`)}`,
+  );
+  await accept(
+    'A dispute lost: charged back',
+    set(
+      'Donation',
+      lost,
+      `[dispute]=N'lost',[state]=N'charged_back',[version]=[version]+1`,
+    ),
+  );
+  await accept(
+    'A cancellation asked, then the checkout expired: cancelled',
+    `${set('Donation', anonymous, `[cancelRequestedAt]='${later}',[version]=[version]+1`)}
+     ${set('Donation', anonymous, `[closure]=N'expired',[state]=N'cancelled',[version]=[version]+1`)}`,
+  );
+  await accept(
+    'An expiry without a cancellation, then a late capture: provider truth wins',
+    `${set('Donation', dinar, `[closure]=N'expired',[state]=N'expired',[version]=[version]+1`)}
+     ${set('Donation', dinar, `[closure]=NULL,${capture('1250', `pi_rules_${run}_dinar`)}`)}`,
+  );
+  const rejected = randomUUID();
+  await accept(
+    'A rejected create closed as failed',
+    `${donation(rejected, { campaignId: open })}
+     ${set('Donation', rejected, `[createState]=N'rejected',[closure]=N'failed',[state]=N'failed',[version]=[version]+1`)}`,
+  );
+
+  // ---- facts only move forward, one version at a time ---------------------------------
+  for (const [label, id, assignments] of [
+    [
+      'A capture undone',
+      linked,
+      `[capturedMinor]=NULL,[succeededAt]=NULL,[refundedMinor]=0,[dispute]=N'none',[state]=N'pending',[version]=[version]+1`,
+    ],
+    [
+      'A payment reference rewritten',
+      yen,
+      `[paymentReference]=N'pi_rules_${run}_other',[version]=[version]+1`,
+    ],
+    [
+      'A checkout reference rewritten',
+      yen,
+      `[checkoutReference]=N'cs_rules_${run}_other',[version]=[version]+1`,
+    ],
+    [
+      'A checkout expiry rewritten',
+      yen,
+      `[checkoutExpiresAt]='${settled}',[version]=[version]+1`,
+    ],
+    [
+      'A success instant rewritten',
+      yen,
+      `[succeededAt]='${closedAt}',[version]=[version]+1`,
+    ],
+    [
+      'A refund total lowered',
+      linked,
+      `[refundedMinor]=1000,[state]=N'partially_refunded',[version]=[version]+1`,
+    ],
+    [
+      'A won dispute lost',
+      linked,
+      `[dispute]=N'lost',[state]=N'charged_back',[version]=[version]+1`,
+    ],
+    [
+      'A lost dispute reopened',
+      lost,
+      `[dispute]=N'open',[state]=N'disputed',[version]=[version]+1`,
+    ],
+    [
+      'A closure cleared without a capture',
+      anonymous,
+      `[closure]=NULL,[state]=N'pending',[version]=[version]+1`,
+    ],
+    [
+      'A closure changed',
+      anonymous,
+      `[closure]=N'failed',[state]=N'failed',[version]=[version]+1`,
+    ],
+    [
+      'A cancellation instant rewritten',
+      anonymous,
+      `[cancelRequestedAt]='${settled}',[version]=[version]+1`,
+    ],
+    [
+      'A finished create reopened',
+      rejected,
+      `[createState]=N'pending',[version]=[version]+1`,
+    ],
+    ['A fact changed without a new version', yen, `[attention]=N'amount-mismatch'`],
+    [
+      'A fact moved two versions at once',
+      yen,
+      `[attention]=N'amount-mismatch',[version]=[version]+2`,
+    ],
+    [
+      'A reservation unbacked by any refund',
+      refundable,
+      `[refundReservedMinor]=100,[version]=[version]+1`,
+    ],
+  ] as const)
+    await refuse(label, set('Donation', id, assignments), [51349], FORWARD);
+  await accept(
+    'A scheduling-only change keeps the version, a flagged one moves it',
+    `${set('Donation', yen, `[reconcileDueAt]='${later}',[reconcileAttempts]=[reconcileAttempts]+1,[reconcileLeaseUntil]='${later}'`)}
+     ${set('Donation', yen, `[attention]=N'amount-mismatch',[reconcileDueAt]=NULL,[version]=[version]+1`)}`,
+  );
+
+  // ---- provider events: deduplicated within scope, completed once --------------------
+  const event = (
+    id: string,
+    eventId: string,
+    input: {
+      readonly environment?: string;
+      readonly result?: string;
+      readonly processedAt?: string;
+    } = {},
+  ): string =>
+    `INSERT INTO [dbo].[DonationProviderEvent] ([id],[provider],[environment],[accountKey],[eventId],[eventType],[occurredAt],[receivedAt],[payloadDigest],[result],[processedAt]) VALUES (N'${id}',N'stripe',N'${input.environment ?? 'fixture'}',N'${account}',N'${eventId}',N'checkout.session.completed','${at}','${later}','${digest(`event-${id}`)}',${input.result === undefined ? 'NULL' : `N'${input.result}'`},${input.processedAt === undefined ? 'NULL' : `'${input.processedAt}'`});`;
+  for (const [label, statement] of [
+    [
+      'An event processed without a result',
+      event(randomUUID(), `evt_rules_${run}_a`, { processedAt: settled }),
+    ],
+    [
+      'An event with a result but never processed',
+      event(randomUUID(), `evt_rules_${run}_b`, { result: 'applied' }),
+    ],
+    [
+      'An event with an unknown result',
+      event(randomUUID(), `evt_rules_${run}_c`, { result: 'paid', processedAt: settled }),
+    ],
+    [
+      'An event in an unknown environment',
+      event(randomUUID(), `evt_rules_${run}_d`, { environment: 'live' }),
+    ],
+    [
+      'An event whose digest is not hex',
+      `INSERT INTO [dbo].[DonationProviderEvent] ([id],[provider],[environment],[accountKey],[eventId],[eventType],[occurredAt],[receivedAt],[payloadDigest]) VALUES (N'${randomUUID()}',N'stripe',N'fixture',N'${account}',N'evt_rules_${run}_e',N'checkout.session.completed','${at}','${later}','${'z'.repeat(64)}');`,
+    ],
+  ] as const)
+    await refuse(label, statement, [547], 'DonationProviderEvent_ck');
+  const applied = randomUUID();
+  await accept(
+    'One event per scope, the same id coexisting in another environment',
+    `${event(applied, `evt_rules_${run}_1`)}
+     ${event(randomUUID(), `evt_rules_${run}_1`, { environment: 'sandbox' })}`,
+  );
+  await refuse(
+    'A duplicate delivery of one event in one scope',
+    event(randomUUID(), `evt_rules_${run}_1`),
+    [2627],
+    'DonationProviderEvent_event_key',
+  );
+  await accept(
+    'An event completed against its donation',
+    set(
+      'DonationProviderEvent',
+      applied,
+      `[result]=N'applied',[processedAt]='${settled}',[donationId]=N'${linked}'`,
+    ),
+  );
+  for (const [label, assignments] of [
+    ['An event completed twice', `[result]=N'unchanged'`],
+    ['A completion instant rewritten', `[processedAt]='${closedAt}'`],
+    ['An event moved to another donation', `[donationId]=N'${yen}'`],
+    ['An event id rewritten', `[eventId]=N'evt_rules_${run}_9'`],
+    ['An event digest rewritten', `[payloadDigest]='${digest('other-event')}'`],
+    ['An event re-scoped to another account', `[accountKey]=N'acct_rules_other'`],
+  ] as const)
+    await refuse(
+      label,
+      set('DonationProviderEvent', applied, assignments),
+      [51351],
+      ONCE_EVENT,
+    );
+
+  // ---- refunds: admitted only as fresh, authorised, within the capture --------------
+  for (const [label, extra] of [
+    ['A refund inserted pending', { state: `N'pending'` }],
+    ['A refund inserted at version two', { version: '2' }],
+    [
+      'A refund inserted with its provider reference',
+      { refundReference: `N're_rules_${run}_x'` },
+    ],
+    [
+      'A refund inserted already settled',
+      { state: `N'succeeded'`, completedAt: `'${settled}'` },
+    ],
+  ] as const)
+    await refuse(
+      label,
+      refund(randomUUID(), refundable, '100', refunder, extra),
+      [51358],
+      REQUESTED,
+    );
+  await refuse(
+    'A refund of an uncaptured donation',
+    refund(randomUUID(), rejected, '100', refunder),
+    [51352],
+    CAPTURED,
+  );
+  await refuse(
+    'A refund of a charged-back donation',
+    refund(randomUUID(), lost, '100', refunder),
+    [51352],
+    CAPTURED,
+  );
+  for (const [label, extra] of [
+    ['A refund in another currency', { currency: `'EUR'` }],
+    ['A refund in another environment', { environment: `N'sandbox'` }],
+    ['A refund under another account', { accountKey: `N'acct_rules_other'` }],
+  ] as const)
+    await refuse(
+      label,
+      refund(randomUUID(), refundable, '100', refunder, extra),
+      [51353],
+      SCOPE,
+    );
+  for (const [label, requester] of [
+    ['A refund by an account with no refund key', donor],
+    ['A refund by a key holder without a step-up', keyOnly],
+    ['A refund by a step-up holder without the key', grantOnly],
+    ['A refund under a step-up for another purpose', wrongPurpose],
+    ['A refund under an expired step-up', expiredGrant],
+    ['A refund under a step-up whose session expired', expiredSession],
+    ['A refund under a revoked assignment', revoked],
+    ['A refund under a deactivated role', deactivated],
+  ] as const)
+    await refuse(
+      label,
+      refund(randomUUID(), refundable, '100', requester),
+      [51354],
+      AUTHORITY,
+    );
+  await accept(
+    'A key holder becomes inactive',
+    `UPDATE [dbo].[User] SET [status]=N'suspended' WHERE [id]=N'${inactiveHolder}';`,
+  );
+  await refuse(
+    'A refund by a suspended key holder with a live step-up',
+    refund(randomUUID(), refundable, '100', inactiveHolder),
+    [51354],
+    AUTHORITY,
+  );
+  for (const [label, statement] of [
+    ['A refund of nothing', refund(randomUUID(), refundable, '0', refunder)],
+    [
+      'A refund with a malformed request digest',
+      refund(randomUUID(), refundable, '100', refunder, {
+        requestDigest: `'${'G'.repeat(64)}'`,
+      }),
+    ],
+    [
+      'A refund in a lower-case currency',
+      refund(randomUUID(), refundable, '100', refunder, { currency: `'usd'` }),
+    ],
+  ] as const)
+    await refuse(label, statement, [547], 'DonationRefund_ck');
+  await refuse(
+    'A refund requested by nobody',
+    refund(randomUUID(), refundable, '100', randomUUID()),
+    [547],
+    'DonationRefund_requestedByUserId_fkey',
+  );
+  await refuse(
+    'A refund beyond the capture',
+    refund(randomUUID(), refundable, '2501', refunder),
+    [51355],
+    OVER,
+  );
+  const first = randomUUID();
+  const second = randomUUID();
+  const third = randomUUID();
+  await accept(
+    'A partial refund reserved, the reservation the sum of live refunds',
+    `${refund(first, refundable, '1000', refunder)}
+     ${set('Donation', refundable, `[refundReservedMinor]=1000,[version]=[version]+1`)}`,
+  );
+  await refuse(
+    'A reservation other than the sum of live refunds',
+    set('Donation', refundable, `[refundReservedMinor]=999,[version]=[version]+1`),
+    [51349],
+    FORWARD,
+  );
+  await refuse(
+    'A second refund beyond what remains',
+    refund(randomUUID(), refundable, '1501', refunder),
+    [51355],
+    OVER,
+  );
+  await accept(
+    'The rest refunded exactly',
+    `${refund(second, refundable, '1500', refunder)}
+     ${set('Donation', refundable, `[refundReservedMinor]=2500,[version]=[version]+1`)}`,
+  );
+  await accept(
+    'A refund the provider refused, its reservation released',
+    `${set('DonationRefund', first, `[state]=N'failed',[completedAt]='${settled}',[version]=[version]+1`)}
+     ${set('Donation', refundable, `[refundReservedMinor]=1500,[version]=[version]+1`)}`,
+  );
+  await accept(
+    'A failed refund no longer counts against the capture',
+    `${refund(third, refundable, '1000', refunder)}
+     ${set('Donation', refundable, `[refundReservedMinor]=2500,[version]=[version]+1`)}`,
+  );
+  await accept(
+    'Refunds move forward: accepted with a reference, then settled; scheduling keeps the version',
+    `${set('DonationRefund', second, `[state]=N'pending',[refundReference]=N're_rules_${run}_second',[version]=[version]+1`)}
+     ${set('DonationRefund', second, `[reconcileDueAt]='${later}',[reconcileAttempts]=1`)}
+     ${set('DonationRefund', second, `[state]=N'succeeded',[completedAt]='${settled}',[reconcileDueAt]=NULL,[version]=[version]+1`)}`,
+  );
+  await refuse(
+    'Two refunds settling against one provider refund in one scope',
+    set(
+      'DonationRefund',
+      third,
+      `[refundReference]=N're_rules_${run}_second',[version]=[version]+1`,
+    ),
+    [2601, 2627],
+    'DonationRefund_reference_key',
+  );
+  for (const [label, id, assignments] of [
+    [
+      'A settled refund reopened',
+      second,
+      `[state]=N'pending',[completedAt]=NULL,[version]=[version]+1`,
+    ],
+    ['A succeeded refund failed', second, `[state]=N'failed',[version]=[version]+1`],
+    [
+      'A refund reference rewritten',
+      second,
+      `[refundReference]=N're_rules_${run}_other',[version]=[version]+1`,
+    ],
+    [
+      'A completion instant rewritten',
+      second,
+      `[completedAt]='${closedAt}',[version]=[version]+1`,
+    ],
+    ['A refund amount rewritten', third, `[amountMinor]=900,[version]=[version]+1`],
+    [
+      'A refund requester rewritten',
+      third,
+      `[requestedByUserId]=N'${keyOnly}',[version]=[version]+1`,
+    ],
+    [
+      'A refund moved to another donation',
+      third,
+      `[donationId]=N'${yen}',[version]=[version]+1`,
+    ],
+    ['A refund state moved without a version', third, `[state]=N'pending'`],
+  ] as const)
+    await refuse(label, set('DonationRefund', id, assignments), [51356], BACKWARDS);
+  for (const [label, assignments] of [
+    [
+      'A settled refund without its instant',
+      `[state]=N'succeeded',[version]=[version]+1`,
+    ],
+    ['An unknown refund state', `[state]=N'refunded',[version]=[version]+1`],
+    ['A blank refund reference', `[refundReference]=N'',[version]=[version]+1`],
+  ] as const)
+    await refuse(
+      label,
+      set('DonationRefund', third, assignments),
+      [547],
+      'DonationRefund_ck',
+    );
+  await accept(
+    'The refunds settled: the donation refunded exactly its capture',
+    `${set('DonationRefund', third, `[state]=N'succeeded',[refundReference]=N're_rules_${run}_third',[completedAt]='${settled}',[version]=[version]+1`)}
+     ${set('Donation', refundable, `[refundedMinor]=2500,[state]=N'refunded',[version]=[version]+1`)}`,
+  );
+
+  // ---- intents: owed to the linked donor, about the donation's own refund -------------
+  const succeededIntent = randomUUID();
+  const refundIntent = randomUUID();
+  const ownRefund = randomUUID();
+  await accept(
+    "A refund of the linked donation, and the donor's two intents",
+    `${refund(ownRefund, linked, '100', refunder)}
+     ${set('Donation', linked, `[refundReservedMinor]=100,[version]=[version]+1`)}
+     ${intent(succeededIntent, 'donation.succeeded', linked, null, donor, 'succeeded')}
+     ${intent(refundIntent, 'donation.partially-refunded', linked, ownRefund, donor, 'refunded')}`,
+  );
+  for (const [label, statement] of [
+    [
+      'A success intent naming a refund',
+      intent(randomUUID(), 'donation.succeeded', linked, ownRefund, donor, 'shape-1'),
+    ],
+    [
+      'A refund intent naming no refund',
+      intent(randomUUID(), 'donation.refunded', linked, null, donor, 'shape-2'),
+    ],
+    [
+      'A tax-receipt purpose',
+      intent(randomUUID(), 'donation.tax-receipt', linked, null, donor, 'shape-3'),
+    ],
+  ] as const)
+    await refuse(label, statement, [547], 'DonationCommunicationIntent_ck');
+  await refuse(
+    'A relayed intent without its instant',
+    set('DonationCommunicationIntent', succeededIntent, `[state]=N'relayed'`),
+    [547],
+    'DonationCommunicationIntent_ck',
+  );
+  await refuse(
+    'An intent owed to another account',
+    intent(randomUUID(), 'donation.succeeded', linked, null, other, 'foreign-1'),
+    [547],
+    'DonationCommunicationIntent_donor_fkey',
+  );
+  await refuse(
+    'An intent for an anonymous donation',
+    intent(randomUUID(), 'donation.succeeded', anonymous, null, donor, 'foreign-2'),
+    [547],
+    'DonationCommunicationIntent_donor_fkey',
+  );
+  await refuse(
+    "A refund intent naming another donation's refund",
+    intent(randomUUID(), 'donation.refunded', linked, second, donor, 'foreign-3'),
+    [547],
+    'DonationCommunicationIntent_refund_fkey',
+  );
+  await refuse(
+    'A second intent under one idempotency key',
+    intent(randomUUID(), 'donation.succeeded', linked, null, donor, 'succeeded'),
+    [2627],
+    'DonationCommunicationIntent_idempotencyKey_key',
+  );
+  await accept(
+    'An intent claimed and relayed, another abandoned',
+    `${set('DonationCommunicationIntent', succeededIntent, `[claimedUntil]='${later}'`)}
+     ${set('DonationCommunicationIntent', succeededIntent, `[state]=N'relayed',[relayedAt]='${later}',[claimedUntil]=NULL`)}
+     ${set('DonationCommunicationIntent', refundIntent, `[state]=N'abandoned',[abandonedAt]='${later}'`)}`,
+  );
+  for (const [label, id, assignments] of [
+    ['A relayed intent reopened', succeededIntent, `[state]=N'pending',[relayedAt]=NULL`],
+    [
+      'An abandoned intent relayed',
+      refundIntent,
+      `[state]=N'relayed',[relayedAt]='${later}'`,
+    ],
+    [
+      'An intent re-purposed',
+      succeededIntent,
+      `[purpose]=N'donation.refunded',[refundId]=N'${ownRefund}'`,
+    ],
+    ["An intent's due instant rewritten", succeededIntent, `[dueAt]='${later}'`],
+    [
+      "An intent's key rewritten",
+      succeededIntent,
+      `[idempotencyKey]=N'non-donation-fixture-${run}-rekeyed'`,
+    ],
+  ] as const)
+    await refuse(
+      label,
+      set('DonationCommunicationIntent', id, assignments),
+      [51357],
+      ONCE,
+    );
+
+  // ---- a donor link is only released, only for a CLOSED account -----------------------
+  await refuse(
+    'A donor link moved to another account',
+    set('Donation', departed, `[donorUserId]=N'${other}',[version]=[version]+1`),
+    [51350],
+    LINK,
+  );
+  await refuse(
+    'An anonymous donation given a donor',
+    set('Donation', yen, `[donorUserId]=N'${other}',[version]=[version]+1`),
+    [51350],
+    LINK,
+  );
+  await refuse(
+    'A donor link dropped without its release instant',
+    set('Donation', departed, `[donorUserId]=NULL,[version]=[version]+1`),
+    [51350],
+    LINK,
+  );
+  await refuse(
+    'A donor link released for an account still active',
+    set(
+      'Donation',
+      departed,
+      `[donorUserId]=NULL,[donorReleasedAt]='${closedAt}',[version]=[version]+1`,
+    ),
+    [51350],
+    LINK,
+  );
+  await refuse(
+    'A release instant on a donation that was never linked',
+    set('Donation', yen, `[donorReleasedAt]='${closedAt}',[version]=[version]+1`),
+    [51350],
+    LINK,
+  );
+  await accept(
+    'Two accounts closed',
+    `UPDATE [dbo].[User] SET [status]=N'closed',[closedAt]='${closedAt}' WHERE [id] IN (N'${departing}',N'${donor}');`,
+  );
+  await refuse(
+    'A linked donation begun for a closed account',
+    donation(randomUUID(), { campaignId: open, donor: departing }),
+    [51346],
+    ACTIVE,
+  );
+  await refuse(
+    'A donor link released while owed mail still names it',
+    set(
+      'Donation',
+      linked,
+      `[donorUserId]=NULL,[donorReleasedAt]='${closedAt}',[version]=[version]+1`,
+    ),
+    [547],
+    'DonationCommunicationIntent_donor_fkey',
+  );
+  await accept(
+    "A closed account's link released; the donation's money and history untouched",
+    set(
+      'Donation',
+      departed,
+      `[donorUserId]=NULL,[donorReleasedAt]='${closedAt}',[version]=[version]+1`,
+    ),
+  );
+  await refuse(
+    'A release instant rewritten',
+    set('Donation', departed, `[donorReleasedAt]='${settled}',[version]=[version]+1`),
+    [51350],
+    LINK,
+  );
+  const [kept] = await session.query<{
+    state: string;
+    captured: string;
+    payment: string | null;
+  }>(
+    `SELECT [state], CONVERT(NVARCHAR(20), [capturedMinor]) AS [captured], [paymentReference] AS [payment] FROM [dbo].[Donation] WHERE [id]=N'${departed}';`,
+  );
+  if (
+    kept?.state !== 'succeeded' ||
+    kept.captured !== '2500' ||
+    kept.payment !== `pi_rules_${run}_departed`
+  )
+    fail(
+      `A released donation must keep its money and history; found ${JSON.stringify(kept ?? null)}.`,
+    );
+
+  // ---- nothing cascades --------------------------------------------------------------
+  const count = async (statement: string): Promise<number> => {
+    const [row] = await session.query<{ total: number }>(statement);
+    return Number(row?.total ?? -1);
+  };
+  const donationRows = (): Promise<number> =>
+    count(
+      `SELECT (${DONATIONS_TABLES.map(
+        (table) => `SELECT COUNT_BIG(*) FROM [dbo].[${table}]`,
+      ).join(') + (')}) AS [total];`,
+    );
+  const before = await donationRows();
+  await refuse(
+    'An account deleted under its donation',
+    `DELETE FROM [dbo].[User] WHERE [id]=N'${lonely}';`,
+    [547],
+    'Donation_donorUserId_fkey',
+  );
+  await refuse(
+    'A campaign deleted under its donations',
+    `DELETE FROM [dbo].[DonationCampaign] WHERE [id]=N'${urdu}';`,
+    [547],
+    '_campaignId_fkey',
+  );
+  await refuse(
+    'A donation deleted under its refunds',
+    `DELETE FROM [dbo].[Donation] WHERE [id]=N'${refundable}';`,
+    [547],
+    'DonationRefund_donationId_fkey',
+  );
+  await refuse(
+    'A refund deleted under its owed mail',
+    `DELETE FROM [dbo].[DonationRefund] WHERE [id]=N'${ownRefund}';`,
+    [547],
+    'DonationCommunicationIntent_refund',
+  );
+  if ((await donationRows()) !== before)
+    fail('A refused deletion changed a Donations row.');
+
+  // ---- every fixture row removed, children first, without a cascade -----------------
+  const accounts = users.map(([user]) => `N'${user}'`).join(',');
+  const campaigns = [open, urdu, draft, closing].map((id) => `N'${id}'`).join(',');
+  await accept(
+    'Every Donations fixture row removed, children first, then its authority and accounts',
+    `DELETE FROM [dbo].[DonationCommunicationIntent] WHERE [donationId] IN (SELECT [id] FROM [dbo].[Donation] WHERE [campaignId] IN (${campaigns}));
+     DELETE FROM [dbo].[DonationProviderEvent] WHERE [accountKey]=N'${account}';
+     DELETE FROM [dbo].[DonationRefund] WHERE [donationId] IN (SELECT [id] FROM [dbo].[Donation] WHERE [campaignId] IN (${campaigns}));
+     DELETE FROM [dbo].[Donation] WHERE [campaignId] IN (${campaigns});
+     UPDATE [dbo].[DonationCampaign] SET [state]=N'archived',[archivedAt]='${closedAt}',[version]=[version]+1 WHERE [id] IN (${campaigns}) AND [state]=N'published';
+     DELETE FROM [dbo].[DonationCampaignCurrency] WHERE [campaignId] IN (${campaigns});
+     DELETE FROM [dbo].[DonationCampaignTranslation] WHERE [campaignId] IN (${campaigns});
+     DELETE FROM [dbo].[DonationCampaign] WHERE [id] IN (${campaigns});
+     DELETE FROM [dbo].[StepUpGrant] WHERE [userId] IN (${accounts});
+     DELETE FROM [dbo].[Session] WHERE [userId] IN (${accounts});
+     DELETE FROM [dbo].[RoleAssignment] WHERE [roleId] IN (N'${refundRole}',N'${deadRole}');
+     DELETE FROM [dbo].[RolePermission] WHERE [roleId] IN (N'${refundRole}',N'${deadRole}');
+     DELETE FROM [dbo].[Role] WHERE [id] IN (N'${refundRole}',N'${deadRole}');
+     DELETE FROM [dbo].[User] WHERE [id] IN (${accounts});`,
+  );
+  const [left] = await session.query<{
+    donations: number;
+    activation: number;
+    accounts: number;
+    holders: number;
+    grants: number;
+  }>(`
+    SELECT
+      (${DONATIONS_TABLES.filter((table) => table !== 'DonationActivation')
+        .map((table) => `SELECT COUNT_BIG(*) FROM [dbo].[${table}]`)
+        .join(') + (')}) AS [donations],
+      (SELECT COUNT(*) FROM [dbo].[DonationActivation]) AS [activation],
+      (SELECT COUNT(*) FROM [dbo].[User] WHERE [email] LIKE N'%-${run}@donations-proof.invalid') AS [accounts],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] WHERE [permissionKey] = N'${DONATIONS_REFUND_PERMISSION}') AS [holders],
+      (SELECT COUNT(*) FROM [dbo].[StepUpGrant] WHERE [purpose] = N'donation-refund') AS [grants];
+  `);
+  if (
+    Number(left?.donations ?? -1) !== 0 ||
+    Number(left?.activation ?? -1) !== 1 ||
+    Number(left?.accounts ?? -1) !== 0 ||
+    Number(left?.holders ?? -1) !== 0 ||
+    Number(left?.grants ?? -1) !== 0
+  )
+    fail(
+      `The Donations rule proofs left a fixture row behind (the immutable activation alone ` +
+        `may stay): ${JSON.stringify(left ?? null)}.`,
+    );
+
+  report(
+    'donations rules',
+    `draft-first campaigns published only complete and never back to draft, fixed words, ` +
+      `currency policy at each currency's own exponent (JPY 0, USD 2, KWD 3), the two lawful ` +
+      `activations and their immutability, donations admitted only fresh, published, ` +
+      `policy-admitted, activated and active, the state exactly the derivation of forward-only ` +
+      `facts, scoped provider references, events completed once, refunds only by live ` +
+      `donations.refund with a live donation-refund step-up and never beyond the capture, ` +
+      `intents owed only to the linked donor, links released only for closed accounts, no ` +
+      `cascade; ${String(refusals)} refusals by name, every text a NON_DONATION_FIXTURE ` +
+      `sentinel, every row but the immutable activation removed`,
   );
 }
 
@@ -16101,6 +18393,7 @@ try {
   await assertClassesFoundation(session);
   await assertMessagingFoundation(session);
   await assertMembershipFoundation(session);
+  await assertDonationsFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -16148,6 +18441,25 @@ try {
     }
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
+    }
+    if (migration.id === DONATIONS_MIGRATION) {
+      // Phase 27 widened no search vocabulary, so none narrows here — and the
+      // whole Phase-26 state it was applied on is back: the protected bundle the
+      // compiled bundle less the two bundled Donations keys, no Donations object
+      // and no `donation-refund` grant, and Membership, Messaging, Learning's two
+      // slices, Personalisation and Fatwa whole at `before-donations`, with
+      // Identity's accounts — the only owner a Donations key named — untouched
+      // by the drop.
+      await assertSearchVocabulary(session, 'phase22');
+      await assertDonationsRemoved(session);
+      await assertMembershipFoundation(session, 'before-donations');
+      await assertMessagingFoundation(session, 'before-donations');
+      await assertClassesFoundation(session, 'before-donations');
+      await assertLearningFoundation(session, 'before-donations');
+      await assertPersonalisationFoundation(session, 'before-donations');
+      await assertFatwaFoundation(session, 'before-donations');
+      await assertTaxonomyFoundation(session);
+      await assertPeopleFoundation(session);
     }
     if (migration.id === MEMBERSHIP_MIGRATION) {
       // Phase 26 widened no search vocabulary, so none narrows here — and the
@@ -16376,6 +18688,7 @@ try {
   await assertClassesFoundation(session, 're-deploy');
   await assertMessagingFoundation(session, 're-deploy');
   await assertMembershipFoundation(session, 're-deploy');
+  await assertDonationsFoundation(session, 're-deploy');
   // The membership rules as BEHAVIOUR, on the re-deployed schema: what was
   // rolled back and re-applied enforces exactly what the first deploy did.
   await assertCollectionMembership(session);
@@ -16416,6 +18729,12 @@ try {
   // first, so the re-deployed Membership schema ends as empty as the migration
   // left it.
   await assertMembershipRules(session);
+  // And the Donations rules, last: 51345 is proved BEFORE the fixture
+  // activation is written, because that row is immutable (51342) and so dies
+  // only with this disposable database; every other synthetic row — accounts,
+  // the refund role, sessions and step-up grants, campaigns, donations, events,
+  // refunds and intents — is removed again, children first.
+  await assertDonationsRules(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

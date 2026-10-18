@@ -11,6 +11,14 @@ import {
 } from '../../packages/contracts/src/env/server.ts';
 
 /**
+ * A synthetic provider-key-shaped test value, assembled at runtime so that no
+ * literal in tracked source matches a secret scanner's provider-key pattern.
+ * The value under test is byte-for-byte the joined string.
+ */
+const syntheticKey = (kind: string, mode: string, body: string): string =>
+  [kind, mode, body].join('_');
+
+/**
  * Environment validation (SECURITY_BASELINE.md §18.1, §9.1).
  *
  * Configuration is validated at startup with Zod so the process fails fast, and
@@ -266,6 +274,9 @@ describe('the environment schemas stay minimal', () => {
   });
 
   it('keeps the schemas minimal for this phase', () => {
+    // A bare `STRIPE_SECRET_KEY` stays absent: Phase 27's provider credential
+    // is namespaced under the Donations context and is meaningful only beside
+    // its declared environment (see the payment-provider block below).
     const forbidden = [
       'DATABASE_URL',
       'BETTER_AUTH_SECRET',
@@ -282,6 +293,75 @@ describe('the environment schemas stay minimal', () => {
     for (const name of forbidden) {
       expect(declared).not.toContain(name);
     }
+  });
+});
+
+/**
+ * Phase 27 — the Donations payment provider.
+ *
+ * CAPABILITY-CONDITIONAL: nothing is required, and absence leaves online giving
+ * honestly unavailable. The two vocabulary variables are validated at startup;
+ * the credential SET is validated together, against its environment, by the
+ * adapter at composition — so a partial set starts the application and leaves
+ * Donations unavailable rather than failing a deploy or guessing.
+ */
+describe('the Donations payment-provider configuration', () => {
+  const DONATIONS = {
+    DONATIONS_PROVIDER: 'stripe',
+    DONATIONS_PROVIDER_ENVIRONMENT: 'sandbox',
+    DONATIONS_PROVIDER_ACCOUNT: 'acct_synthetic_sentinel',
+    DONATIONS_STRIPE_SECRET_KEY: syntheticKey(
+      'sk',
+      'test',
+      'SyntheticSandboxSentinel0001',
+    ),
+    DONATIONS_STRIPE_WEBHOOK_SECRET: 'whsec_SyntheticSandboxSentinel0001',
+  } as const;
+
+  it('requires none of it', () => {
+    const parsed = parseServerEnv({});
+    for (const key of serverEnvKeys.filter((name) => name.startsWith('DONATIONS_'))) {
+      expect(parsed, key).not.toHaveProperty(key);
+    }
+  });
+
+  it('carries a supplied set through unchanged', () => {
+    expect(parseServerEnv(DONATIONS)).toEqual({ ...SERVER_DEFAULTS, ...DONATIONS });
+  });
+
+  it.each([
+    ['DONATIONS_PROVIDER', 'paypal-sentinel-value'],
+    ['DONATIONS_PROVIDER_ENVIRONMENT', 'staging-sentinel-value'],
+  ])('rejects an unknown %s without printing it', (name, value) => {
+    try {
+      parseServerEnv({ ...DONATIONS, [name]: value });
+      expect.unreachable('expected validation to fail');
+    } catch (error) {
+      expect((error as Error).message).toContain(name);
+      expect((error as Error).message).not.toContain(value);
+    }
+  });
+
+  it('leaves the credential set to the adapter: a partial set still starts', () => {
+    expect(() =>
+      parseServerEnv({
+        DONATIONS_PROVIDER: 'stripe',
+        DONATIONS_PROVIDER_ENVIRONMENT: 'sandbox',
+      }),
+    ).not.toThrow();
+  });
+
+  it('names its two secrets as secrets, and keeps every one out of the prerender projection', () => {
+    for (const secret of [
+      'DONATIONS_STRIPE_SECRET_KEY',
+      'DONATIONS_STRIPE_WEBHOOK_SECRET',
+    ]) {
+      expect(serverEnvKeys).toContain(secret);
+      expect(SECRET_NAME_FRAGMENTS.some((fragment) => secret.includes(fragment))).toBe(
+        true,
+      );
+    }
+    expect(prerenderEnvKeys.some((key) => key.startsWith('DONATIONS_'))).toBe(false);
   });
 });
 

@@ -199,14 +199,17 @@ test.describe('the privileged administrator', () => {
 
     const main = page.getByRole('main');
 
-    // A DELIVERED route, a RESERVED placeholder and a DEFERRED domain, each
-    // reported as what it is. The third is the one that matters: the shell
-    // must be able to say "not built yet" about a promised domain without
-    // linking to it anywhere.
+    // A DELIVERED route and a RESERVED placeholder, each reported as what it
+    // is. Donate was the last DEFERRED domain; since Phase 27 delivered it, the
+    // status reports it delivered at its own path, and no route is left
+    // claiming "not built yet".
     await expect(main).toContainText('Delivered');
     await expect(main).toContainText('Reserved');
-    await expect(main).toContainText('Deferred');
-    await expect(main).toContainText('No route yet');
+    await expect(main.getByRole('row').filter({ hasText: '/en/donate' })).toContainText(
+      'Delivered',
+    );
+    await expect(main).not.toContainText('Deferred');
+    await expect(main).not.toContainText('No route yet');
 
     // The posture this deployment is actually in, stated on the screen.
     await expect(main).toContainText('Public indexing is disabled');

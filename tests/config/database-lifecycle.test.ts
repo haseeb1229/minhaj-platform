@@ -301,6 +301,17 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'MembershipApplication',
       'Membership',
       'MembershipCommunicationIntent',
+      // Phase 27 — Donations: campaigns with their words and per-currency
+      // policy, the owner's activation, donations, the provider-event dedup
+      // record, refunds and the linked donor's acknowledgement intent.
+      'DonationCampaign',
+      'DonationCampaignTranslation',
+      'DonationCampaignCurrency',
+      'DonationActivation',
+      'Donation',
+      'DonationProviderEvent',
+      'DonationRefund',
+      'DonationCommunicationIntent',
     ]) {
       expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }
@@ -313,9 +324,10 @@ describe('Phase 1 Chunk 2 migration convention', () => {
     // is still no phase's. `PrivateCollection` and `Notification` left it when
     // Phase 21 delivered them, `Course` when Phase 22 did, and `ClassSession`,
     // `Availability`, `Attendance` and `Booking` when Phase 23 did, `Message`
-    // when Phase 24 delivered Messaging, and `Membership` when Phase 26
-    // delivered it; a bare `Teacher` and a Course-level `CourseProgress` are
-    // still no delivered phase's, and `Donation` stays its own later owner's.)
+    // when Phase 24 delivered Messaging, `Membership` when Phase 26 delivered
+    // it, and `Donation` when Phase 27 delivered Donations; a bare `Teacher`
+    // and a Course-level `CourseProgress` are still no delivered phase's, and
+    // no phase creates a card, order, cart, invoice or subscription table.)
     for (const table of [
       'Quran',
       'Book',
@@ -323,8 +335,15 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'Scholar',
       'Teacher',
       'CourseProgress',
-      'Donation',
       'MigrationProvenance',
+      'DonationCard',
+      'DonationPaymentMethod',
+      'DonationOrder',
+      'DonationCart',
+      'DonationInvoice',
+      'DonationSubscription',
+      'DonationPayload',
+      'PaymentMethod',
     ]) {
       expect(forward).not.toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }

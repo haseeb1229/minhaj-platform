@@ -336,7 +336,8 @@ describeLive('Phase 3B — taxonomy administration is permission-checked', () =>
       // SECURITY_BASELINE.md §8.1 names the operations that cost a step-up
       // grant; §8.2 says the requirement is "deliberately not universal". The
       // vocabulary names exactly the operations §8.1 lists — Phase 2's three
-      // and Phase 18's canonical Quran edit — and none of them is "editing the
+      // and the canonical-edit, Fatwa-publication and donation-refund purposes
+      // later owners added — and none of them is "editing the
       // subject taxonomy", so requiring one here would mean stretching a scope
       // past what it names.
       const { STEP_UP_PURPOSES } =
@@ -349,6 +350,7 @@ describeLive('Phase 3B — taxonomy administration is permission-checked', () =>
         'quran-canonical-edit',
         'hadith-canonical-edit',
         'fatwa-publication',
+        'donation-refund',
       ]);
     });
 

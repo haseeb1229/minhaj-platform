@@ -258,3 +258,29 @@ export {
   createMembershipExport,
   createMembershipStaff,
 } from './adapters/membership/index.ts';
+
+/* ---- Donations (context-owned) ------------------------------------------ */
+
+export {
+  DonationsDataError,
+  createDonationActivationReader,
+  createDonationCampaigns,
+  createDonationCatalogueReader,
+  createDonationCommunication,
+  createDonationDisposition,
+  createDonationDonor,
+  createDonationLedger,
+  createDonationOwner,
+  createDonationRefunds,
+  createDonationStaff,
+} from './adapters/donations/index.ts';
+
+/* ---- Donations payment provider (Stripe sandbox engineering adapter) */
+
+export {
+  STRIPE_CAPABILITIES,
+  STRIPE_ORIGINS,
+  createStripePaymentProvider,
+  validateStripeConfig,
+  type StripeProviderConfig,
+} from './adapters/donations-stripe/index.ts';

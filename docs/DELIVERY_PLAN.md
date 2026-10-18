@@ -2125,6 +2125,86 @@ sufficient to prove the software.**
 **Exit — production activation:** requires the organisation's own merchant and provider account
 readiness, which is **separately gated** (OPEN_DECISIONS.md §5.4).
 
+**Phase-27 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+```
+DONATIONS CONTEXT                              COMPLETE — apps/web/src/contexts/donations
+PAYMENTPROVIDER ABSTRACTION                    COMPLETE — @minhaj/contracts/donations
+SANDBOX ENGINEERING ADAPTER                    STRIPE — NOT PRODUCTION PROVIDER SELECTION
+PUBLIC GIVING (/donate)                        COMPLETE — published campaigns, anonymous start, no session
+DONOR RETURN / STATUS                          COMPLETE — constant return page, opaque status token
+LINKED GIVING (/my/donations)                  COMPLETE — history, linked start, export
+OPERATORS (/admin/donations/*)                 COMPLETE — donations.read / donations.administer
+REFUNDS                                        COMPLETE — donations.refund (gated, no holder) + donation-refund step-up
+WEBHOOK / DEDUP / OUT-OF-ORDER / RECONCILE     COMPLETE — verified, durable, convergent, SQL-leased sweep
+DURABLE SERVICE COMMUNICATION                  COMPLETE — three transactional purposes, linked donors only
+EXPORT / ACCOUNT-CLOSURE DISPOSITION           COMPLETE — link released, financial history kept
+PRODUCTION PROVIDER / MERCHANT / ACTIVATION    OPEN — OPEN_DECISIONS.md §5.4; no activation row exists
+RECURRING / SAVED CARDS / GIFT AID / TAX       NONE — not built
+REAL CAMPAIGNS / DONATIONS                     NONE — persistent database holds no Donations rows
+JURISDICTION AND RETENTION                     OPEN — OPEN_DECISIONS.md §2.2
+```
+
+- **Where the code lives.** The context is `apps/web/src/contexts/donations` (public, donor, owner,
+  admin, ledger, account and communication services); its contracts, the `PaymentProvider` port
+  and exact money are `@minhaj/contracts/donations`; its persistence adapter is
+  `packages/database/src/adapters/donations` and its payment adapter
+  `packages/database/src/adapters/donations-stripe`, both owned by Donations. Layer-4 wiring is
+  `apps/web/src/composition/donations.ts`; the public page reads through `donations-read.ts`, which
+  reaches no Identity and no secret. One migration, `20261010000000_phase27_donations`, adds eight
+  tables (DOMAIN_MODEL.md §17.3.1).
+- **Sandbox, not selection.** Safepay, the preferred candidate, failed required properties of its
+  current official material (webhook HMAC over re-serialised parsed JSON, no timestamp, no constant-
+  time comparison, no documented refund API); JazzCash has no verifiable public documentation. The
+  Stripe sandbox satisfies every required property and is recorded as the engineering adapter only
+  (TECH_STACK.md §18.4). CI and the browser suite use a deterministic loopback Stripe-protocol
+  simulator with synthetic secrets; the live sandbox proof (`npm run donations:sandbox:proof`) needs
+  credentials in ignored local configuration and never runs in CI.
+- **Real sandbox evidence.** On 2026-10-19 the adapter was proven against an anonymous sandbox the
+  official Stripe CLI provisioned (test mode only): checkout create, read-back, resume and
+  cancellation, a captured test payment with partial and full refunds, and a real Stripe-signed webhook
+  delivered by `stripe listen --forward-to` to the production build on a disposable database, verified,
+  applied once, deduplicated and tamper-refused (SECURITY_BASELINE.md §14). Payment-success and dispute
+  events were not driven live; the signed fixtures and the simulator stay the authoritative CI proof.
+- **Money.** `bigint` ISO minor units with the stored exponent, parsed from decimal text without
+  rounding; zero-, two- and three-decimal currencies are proven. The client requests; the server
+  creates the immutable expected amount from the campaign's current policy.
+- **Lifecycle.** A donation's state is derived from monotonic facts by one rule the database
+  re-checks: `pending`, `succeeded`, `failed`, `cancelled`, `expired`, `partially_refunded`,
+  `refunded`, `disputed`, `charged_back`. Out-of-order and duplicate provider news converges; a
+  mismatch never succeeds and raises an attention flag.
+- **Redirect is not authority.** Success is only a verified webhook followed by a server-to-server
+  read, or the reconciliation sweep's read. The return URL is constant, carries no token and reads no
+  query string.
+- **Idempotency.** A form's operation id makes a duplicate submission the same donation; an
+  ambiguous checkout creation is repeated only under its original idempotency key with byte-identical
+  parameters; a refund is never repeated and is resolved by finding it at the provider.
+- **Activation.** Fail closed: no `DonationActivation` row, no payment. Fixture and sandbox need
+  `fixture` authority; production needs `approved` authority with external evidence, which neither
+  the runtime nor any Donations key can write.
+- **Permissions:** `donations.read` and `donations.administer` — ordinary keys in the protected
+  Platform Administrator bundle (the migration revoked the bundle holders' sessions and step-up grants
+  and wrote one provisioning audit row); `donations.refund` — externally gated, bundled into no role,
+  held by nobody, and every refund also needs the new `donation-refund` step-up, re-checked by the
+  database. A donor needs no key.
+- **Not discoverable.** No Search kind, no dynamic sitemap segment, no per-campaign route, no
+  `Product` or `Offer` structured data; `/donate` joins the static pages partition through the shell
+  registry under the unchanged pre-adoption `noindex` posture, and is `noindex` in any non-production
+  environment.
+- **Delivered routes:** `/donate`, `/donate/return`, `/donate/status/{token}`, `/my/donations`,
+  `/admin/donations`, `/admin/donations/{id}`, `/admin/donations/campaigns`,
+  `/admin/donations/campaigns/{id}`, `/api/my/export/donations`, `/api/admin/donations/export` and
+  `/api/webhooks/stripe` (ROUTE_MAP.md §3.1, §5.1, §7, §8).
+- **Proof that cannot silently skip.** The live-SQL Donations suites and the offline protocol suites
+  run in the `Database foundation` job, and `scripts/assert-donations-proofs.mjs` fails the job if any
+  required file is missing, ran nothing, or skipped a test.
+- **Membership untouched.** No Membership file, table or key changed; the Phase-26 guard still refuses
+  any payment concept in Membership and any edge between the two.
+- **Not delivered:** recurring giving, saved instruments, Gift Aid, tax receipts, donor walls,
+  targets or progress bars, an anonymous donor email, real campaign content (operators enter it), a
+  production provider or merchant account, and any refund holder.
+
 ---
 
 ### Phase 28 — Staging Foundation

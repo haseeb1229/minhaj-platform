@@ -106,6 +106,12 @@ import {
   verifyRestoredPhase26,
   writePhase26Fixture,
 } from '../src/lifecycle/phase26-fixture.ts';
+import {
+  capturePhase27Fixture,
+  newPhase27Fixture,
+  verifyRestoredPhase27,
+  writePhase27Fixture,
+} from '../src/lifecycle/phase27-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -239,6 +245,7 @@ const learningFixture = newPhase22Fixture();
 const classesFixture = newPhase23Fixture();
 const messagingFixture = newPhase24Fixture();
 const membershipFixture = newPhase26Fixture();
+const donationsFixture = newPhase27Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -556,6 +563,18 @@ try {
   const membershipSnapshot = await capturePhase26Fixture(admin, membershipFixture);
   report('membership fixture', `run ${membershipFixture.runId}`);
 
+  // Phase-27 Donations, with NON_DONATION_FIXTURE sentinels, `.invalid`
+  // addresses and synthetic `fixture`-environment provider references only:
+  // published, archived and draft campaigns with USD, JPY, KWD and PKR policies;
+  // the fixture activation; an anonymous pending donation, a linked donation
+  // captured and partially refunded, an anonymous JPY capture and an ambiguous
+  // KWD create due for reconciliation; a processed and a crashed provider
+  // event; a synthetic refund authority with a live donation-refund step-up;
+  // a relayed and a pending acknowledgement. No card or payload of any kind.
+  await writePhase27Fixture(admin, donationsFixture);
+  const donationsSnapshot = await capturePhase27Fixture(admin, donationsFixture);
+  report('donations fixture', `run ${donationsFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -712,6 +731,10 @@ try {
   report(
     'membership recovery',
     await verifyRestoredPhase26(restored, membershipFixture, membershipSnapshot),
+  );
+  report(
+    'donations recovery',
+    await verifyRestoredPhase27(restored, donationsFixture, donationsSnapshot),
   );
 
   // ---- restored security posture -------------------------------------------
@@ -1221,6 +1244,75 @@ try {
           `${table} ALTER`,
           `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
         ]),
+        // Phase 27. A restored runtime can neither erase a donation, a provider
+        // event, a refund or a campaign, rewrite a donation's expected money,
+        // scope or token digest or a refund's amount or requester, switch on or
+        // re-scope payments through the activation, catalogue a Donations key,
+        // nor alter a Donations table.
+        ['Donation DELETE', 'DELETE FROM [dbo].[Donation];'],
+        [
+          'Donation expected money UPDATE',
+          'UPDATE [dbo].[Donation] SET [expectedMinor]=[expectedMinor];',
+        ],
+        [
+          'Donation currency UPDATE',
+          'UPDATE [dbo].[Donation] SET [currency]=[currency];',
+        ],
+        [
+          'Donation scope UPDATE',
+          'UPDATE [dbo].[Donation] SET [accountKey]=[accountKey];',
+        ],
+        [
+          'Donation token digest UPDATE',
+          'UPDATE [dbo].[Donation] SET [statusTokenDigest]=[statusTokenDigest];',
+        ],
+        ['DonationProviderEvent DELETE', 'DELETE FROM [dbo].[DonationProviderEvent];'],
+        [
+          'DonationProviderEvent event id UPDATE',
+          'UPDATE [dbo].[DonationProviderEvent] SET [eventId]=[eventId];',
+        ],
+        ['DonationRefund DELETE', 'DELETE FROM [dbo].[DonationRefund];'],
+        [
+          'DonationRefund amount UPDATE',
+          'UPDATE [dbo].[DonationRefund] SET [amountMinor]=[amountMinor];',
+        ],
+        [
+          'DonationRefund requester UPDATE',
+          'UPDATE [dbo].[DonationRefund] SET [requestedByUserId]=[requestedByUserId];',
+        ],
+        ['DonationCampaign DELETE', 'DELETE FROM [dbo].[DonationCampaign];'],
+        [
+          'DonationActivation INSERT',
+          "INSERT INTO [dbo].[DonationActivation] ([id],[provider],[environment],[accountKey],[authority],[authorisedBy],[reference]) VALUES (1,N'stripe',N'production',N'acct_forged',N'approved',N'forged',N'forged');",
+        ],
+        [
+          'DonationActivation UPDATE',
+          "UPDATE [dbo].[DonationActivation] SET [authority]=N'approved';",
+        ],
+        ['DonationActivation DELETE', 'DELETE FROM [dbo].[DonationActivation];'],
+        [
+          'DonationCommunicationIntent recipient UPDATE',
+          'UPDATE [dbo].[DonationCommunicationIntent] SET [recipientUserId]=[recipientUserId];',
+        ],
+        [
+          'donations.* Permission INSERT',
+          "INSERT INTO [dbo].[Permission] ([key],[description]) VALUES (N'donations.payout',N'forged');",
+        ],
+        ...(
+          [
+            'DonationCampaign',
+            'DonationCampaignTranslation',
+            'DonationCampaignCurrency',
+            'DonationActivation',
+            'Donation',
+            'DonationProviderEvent',
+            'DonationRefund',
+            'DonationCommunicationIntent',
+          ] as const
+        ).map((table): [string, string] => [
+          `${table} ALTER`,
+          `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+        ]),
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -1352,6 +1444,40 @@ try {
         );
       }
       await verifyRestoredPhase26(restored, membershipFixture, membershipSnapshot);
+
+      // Phase 27. The restored runtime holds UPDATE on a donation's facts and a
+      // refund's state, so undoing the capture and moving the settled refund
+      // backwards are refused by the restored triggers themselves (51349,
+      // 51356), not by a grant — proof the money rules came back armed.
+      for (const [label, statement, expected, rule] of [
+        [
+          'restored capture undone',
+          `UPDATE [dbo].[Donation] SET [capturedMinor]=NULL,[succeededAt]=NULL,[refundedMinor]=0,[refundReservedMinor]=0,[state]=N'pending',[version]=[version]+1 WHERE [id]=N'${donationsFixture.linkedId}';`,
+          51349,
+          'DonationIntegrity',
+        ],
+        [
+          'restored refund moved backwards',
+          `UPDATE [dbo].[DonationRefund] SET [state]=N'pending',[completedAt]=NULL,[version]=[version]+1 WHERE [id]=N'${donationsFixture.refundId}';`,
+          51356,
+          'DonationRefundIntegrity',
+        ],
+      ] as const) {
+        try {
+          await app.query(statement);
+          fail(`Restored database PERMITTED the ${label}.`);
+        } catch (error) {
+          const number = (error as { number?: number }).number;
+          if (number !== expected) {
+            fail(
+              `The ${label} was rejected for the WRONG reason ` +
+                `(error ${number ?? 'unknown'}): ${(error as Error).message.split('\n')[0]}`,
+            );
+          }
+          report(label, `refused by ${rule}, error ${String(expected)}`);
+        }
+      }
+      await verifyRestoredPhase27(restored, donationsFixture, donationsSnapshot);
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 
       // Phase 17. The full-text catalogue and index live INSIDE the database,

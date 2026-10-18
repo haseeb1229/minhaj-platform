@@ -634,6 +634,31 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     description:
       'Create, edit, publish and archive membership types, begin review of an application, approve or reject it, and close a Membership. Grants no Identity key.',
   }),
+
+  /* ---- Phase 27 — Donations ----------------------------------------------- */
+  //
+  // MOVING MONEY IS NOT EDITING A CAMPAIGN. Two ordinary keys, bundled into
+  // the protected role by the usual convention: reading financial records and
+  // operating campaigns and reconciliation. Refund authority is a THIRD key,
+  // externally gated — who may return a donor's money is the organisation's
+  // finance decision, part of the production merchant activation that stays
+  // open (OPEN_DECISIONS.md §5.4) — and each refund also needs a fresh
+  // `donation-refund` step-up. A donor needs no key for their own donations.
+  Object.freeze({
+    key: 'donations.read',
+    description:
+      'View donation campaigns, donation records, refunds and reconciliation state, and export the bounded financial record. Every listing, detail and export is audited. Changes nothing.',
+  }),
+  Object.freeze({
+    key: 'donations.administer',
+    description:
+      'Create, edit, publish and archive donation campaigns and their currency policy, and ask the provider for the current state of a donation. Moves no money and grants no refund.',
+  }),
+  Object.freeze({
+    key: 'donations.refund',
+    description:
+      'Request a full or partial refund of a captured donation, within what remains refundable, after a fresh donation-refund step-up. Every request is audited.',
+  }),
 ]);
 
 /** Every catalogue key, as a union. Mistyping one is a compile error. */
@@ -692,6 +717,9 @@ export const EXTERNALLY_GATED_PERMISSIONS = Object.freeze([
   // decision (OPEN_DECISIONS.md §6.6). Catalogued, bundled into no role.
   'messaging.support',
   'messaging.moderate',
+  // Phase 27: who may return a donor's money is the organisation's finance
+  // decision (OPEN_DECISIONS.md §5.4). Catalogued, bundled into no role.
+  'donations.refund',
 ] as const satisfies readonly PermissionKey[]);
 
 const EXTERNALLY_GATED: ReadonlySet<string> = new Set(EXTERNALLY_GATED_PERMISSIONS);
@@ -748,6 +776,11 @@ export const PLATFORM_ADMINISTRATOR_PERMISSIONS: readonly PermissionKey[] = Obje
  * under `fatwa.publish` — the highest-consequence act on the platform — so no
  * grant earned for privilege administration or canonical text authorises it,
  * and a `fatwa-publication` grant authorises nothing else.
+ *
+ * PHASE 27 ADDS THE SEVENTH. A refund moves real money back out of the
+ * organisation's account, so it needs its own fresh proof: a grant earned to
+ * publish a Fatwa or administer a role must not also authorise returning a
+ * donation, and a `donation-refund` grant authorises nothing else.
  */
 export const STEP_UP_PURPOSES = Object.freeze([
   /** Role lifecycle, permission bundles, assignment grant and revoke. */
@@ -762,6 +795,8 @@ export const STEP_UP_PURPOSES = Object.freeze([
   'hadith-canonical-edit',
   /** Fatwa publication, correction publication and withdrawal (Phase 20). */
   'fatwa-publication',
+  /** A full or partial donation refund (Phase 27). */
+  'donation-refund',
 ] as const);
 
 export type StepUpPurpose = (typeof STEP_UP_PURPOSES)[number];

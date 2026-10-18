@@ -400,6 +400,19 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'MembershipApplication',
       'Membership',
       'MembershipCommunicationIntent',
+      // Phase 27 — Donations: a campaign with its words and per-currency
+      // policy, the owner's fail-closed activation, the donation (one payment
+      // attempt in exact minor units), the provider-event dedup record, the
+      // refund and the linked donor's acknowledgement intent. No card,
+      // payment method, order, cart, invoice or subscription model.
+      'DonationCampaign',
+      'DonationCampaignTranslation',
+      'DonationCampaignCurrency',
+      'DonationActivation',
+      'Donation',
+      'DonationProviderEvent',
+      'DonationRefund',
+      'DonationCommunicationIntent',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name
@@ -555,6 +568,20 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'LearningContent',
       'CourseItem',
       'PathEnrolment',
+      // Phase 27 is hosted checkout, not ecommerce or a card vault: no card,
+      // payment method, wallet or billing model, no order, cart, invoice or
+      // receipt, no subscription or recurring plan, and no raw provider payload.
+      'DonationCard',
+      'DonationPaymentMethod',
+      'PaymentMethod',
+      'Card',
+      'Order',
+      'Cart',
+      'Invoice',
+      'DonationReceipt',
+      'Subscription',
+      'DonationSubscription',
+      'DonationPayload',
     ]) {
       expect(models, `${domain} arrives with its owning slice`).not.toContain(domain);
     }

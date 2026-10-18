@@ -1,3 +1,4 @@
+import { PAYMENT_ENVIRONMENTS, PAYMENT_PROVIDERS } from '../donations/values.ts';
 import { correspondenceRetentionDaysSchema } from '../editorial/values.ts';
 /**
  * Server environment SCHEMA and PARSER — implementation, not public API.
@@ -51,10 +52,11 @@ import { logLevelSchema, nodeEnvSchema, parseEnvironment } from './shared.ts';
 /**
  * Server environment schema for the capabilities delivered so far.
  *
- * Deliberately minimal. Database, authentication, OAuth, email, storage and
- * payment configuration belong to the phases that introduce them
- * (DELIVERY_PLAN.md); inventing their variables now would produce configuration
- * for systems that do not exist and credentials nobody has issued.
+ * Deliberately minimal. Each capability's configuration arrives with the phase
+ * that introduces it (DELIVERY_PLAN.md) — Phase 27 brought the Donations
+ * payment provider's — and nothing is declared ahead of its consumer, because
+ * that would produce configuration for systems that do not exist and
+ * credentials nobody has issued.
  *
  * Secret-bearing variables live only here, never in the client schema. Synthetic
  * development defaults are rejected in production below.
@@ -200,6 +202,50 @@ export const serverEnvSchema = z.object({
     .union([z.literal('true'), z.literal('false')])
     .default('false')
     .transform((value) => value === 'true'),
+
+  // -------------------------------------------------------------------------
+  // Phase 27 — Donations payment provider
+  // -------------------------------------------------------------------------
+  //
+  // CAPABILITY-CONDITIONAL, like the Resend credentials. A build, a test run
+  // and CI need none of them, and their absence leaves online giving honestly
+  // UNAVAILABLE — never a pretend checkout. The selected adapter is a SANDBOX
+  // ENGINEERING ADAPTER, not a production provider selection.
+  //
+  // The two vocabulary variables are validated here, so a typo stops startup
+  // like any other invalid value. The credentials, account and origin are
+  // validated TOGETHER, against the declared environment, by the adapter's
+  // `validateStripeConfig` at composition: a partial or mismatched set leaves
+  // Donations unavailable with an operator-visible reason, and nothing ever
+  // falls back from one environment to another. Real payment still needs the
+  // database activation record on top of all of this.
+
+  /** The payment provider adapter. Absent: online giving is unavailable. */
+  DONATIONS_PROVIDER: z.enum(PAYMENT_PROVIDERS).optional(),
+
+  /**
+   * `fixture` (the local simulator), `sandbox` (the provider's test mode) or
+   * `production` (real money — refused until an approved activation exists).
+   */
+  DONATIONS_PROVIDER_ENVIRONMENT: z.enum(PAYMENT_ENVIRONMENTS).optional(),
+
+  /** The NON-SECRET merchant account label every provider reference is scoped by. */
+  DONATIONS_PROVIDER_ACCOUNT: z.string().min(1).optional(),
+
+  /** The provider API secret (`sk_test_`/`rk_test_`/`rkcs_test_` in sandbox). Secret. */
+  DONATIONS_STRIPE_SECRET_KEY: z.string().min(1).optional(),
+
+  /**
+   * The webhook endpoint signing secret (`whsec_`). Secret. Without it every
+   * webhook is REFUSED, never accepted unverified (SECURITY_BASELINE.md §7.2).
+   */
+  DONATIONS_STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+
+  /**
+   * The local simulator's loopback origin, `fixture` environment only. Never
+   * consulted for `sandbox` or `production`, whose origins are fixed.
+   */
+  DONATIONS_FIXTURE_PROVIDER_ORIGIN: z.string().min(1).optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

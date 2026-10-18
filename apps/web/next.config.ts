@@ -77,8 +77,19 @@ const buildPrerenderEnv = parsePrerenderEnv(process.env);
  * (`@minhaj/contracts/media`), and nothing broader. No provider SCRIPT is
  * allowed anywhere: the player is an iframe, and the provider's own document
  * runs under the provider's policy, not this one (ARCHITECTURE.md §4.7.1).
+ *
+ * THE PHASE-27 GIVING EXCEPTION IS ONE DIRECTIVE ON TWO ROUTES. Starting a
+ * donation ends in a redirect to the payment provider's hosted checkout, and a
+ * browser enforces `form-action` on the redirect that follows a form
+ * submission — so the two pages that render a giving form, `/donate` and
+ * `/my/donations`, alone receive a policy whose `form-action` also names the
+ * provider's exact checkout origin. Nothing is framed, scripted or fetched
+ * from it, and every other page keeps `form-action 'self'`.
  */
-function contentSecurityPolicy(frameSources: readonly string[]): string {
+function contentSecurityPolicy(
+  frameSources: readonly string[],
+  formTargets: readonly string[] = [],
+): string {
   return [
     "default-src 'self'",
     "base-uri 'self'",
@@ -87,7 +98,9 @@ function contentSecurityPolicy(frameSources: readonly string[]): string {
     frameSources.length === 0
       ? "frame-src 'none'"
       : `frame-src ${frameSources.join(' ')}`,
-    "form-action 'self'",
+    formTargets.length === 0
+      ? "form-action 'self'"
+      : `form-action 'self' ${formTargets.join(' ')}`,
     "script-src 'self' 'unsafe-inline'",
     "style-src 'self'",
     // `data:` for images only, and deliberately not for scripts or objects: it
@@ -106,6 +119,36 @@ const CONTENT_SECURITY_POLICY = contentSecurityPolicy([]);
 const PLAYER_CONTENT_SECURITY_POLICY = contentSecurityPolicy(
   VIDEO_PROVIDERS.map((provider) => PROVIDER_EMBED_ORIGINS[provider]),
 );
+
+/**
+ * The payment provider's hosted checkout origin — the SANDBOX ENGINEERING
+ * ADAPTER's (Stripe), NOT a production provider selection. The Donations
+ * service independently refuses any checkout address not on exactly the
+ * configured provider's origin; this only lets the browser follow it.
+ */
+const DONATION_CHECKOUT_ORIGIN = 'https://checkout.stripe.com';
+
+const DONATION_CONTENT_SECURITY_POLICY = contentSecurityPolicy(
+  [],
+  [DONATION_CHECKOUT_ORIGIN],
+);
+
+/** The only routes that render a giving form. Exact shapes, nothing beneath them. */
+const DONATION_FORM_ROUTES: readonly string[] = [
+  '/:locale(en|ur|ar)/donate',
+  '/:locale(en|ur|ar)/my/donations',
+];
+
+/**
+ * The giving pages whose ADDRESS OR STATE IS A BEARER: the anonymous status
+ * page (its token is in the path) and the provider's return page (it reads
+ * this browser's status cookie). Never stored by any cache, and never sent as
+ * a `Referer` — a status address must not leave in a link someone follows.
+ */
+const DONATION_PRIVATE_ROUTES: readonly string[] = [
+  '/:locale(en|ur|ar)/donate/status/:token*',
+  '/:locale(en|ur|ar)/donate/return',
+];
 
 /**
  * The only routes that render the provider player. Matched by exact shape, so
@@ -202,6 +245,19 @@ const nextConfig: NextConfig = {
         source,
         headers: [
           { key: 'Content-Security-Policy', value: PLAYER_CONTENT_SECURITY_POLICY },
+        ],
+      })),
+      ...DONATION_FORM_ROUTES.map((source) => ({
+        source,
+        headers: [
+          { key: 'Content-Security-Policy', value: DONATION_CONTENT_SECURITY_POLICY },
+        ],
+      })),
+      ...DONATION_PRIVATE_ROUTES.map((source) => ({
+        source,
+        headers: [
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'Cache-Control', value: 'private, no-store' },
         ],
       })),
     ];

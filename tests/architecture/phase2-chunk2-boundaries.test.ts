@@ -370,13 +370,15 @@ describe('Phase 2 Chunk 2 — what the delivered code does NOT contain', () => {
       const messagingOwner = file.includes('20261008000000_phase24_messaging');
       // Membership's two keys are Phase 26's and appear in its migration alone.
       const membershipOwner = file.includes('20261009000000_phase26_membership');
+      // Donations' three keys are Phase 27's and appear in its migration alone.
+      const donationsOwner = file.includes('20261010000000_phase27_donations');
       for (const domain of [
         ...(fatwaOwner ? [] : ['fatwa.', 'question.']),
         ...(learningOwner ? [] : ['learning.']),
         ...(classesOwner ? [] : ['teaching.']),
         ...(messagingOwner ? [] : ['messaging.']),
         ...(membershipOwner ? [] : ['membership.']),
-        'donations.',
+        ...(donationsOwner ? [] : ['donations.']),
       ]) {
         expect(source, `${file} must not seed ${domain}*`).not.toContain(`n'${domain}`);
       }
@@ -610,6 +612,13 @@ const PERMISSION_MIGRATIONS = [
     id: '20261009000000_phase26_membership',
     keys: ['membership.administer', 'membership.read'],
   },
+  {
+    // Two ordinary keys bundled into the protected role, and
+    // `donations.refund` catalogued, externally gated and bundled into no role.
+    phase: 'Phase 27',
+    id: '20261010000000_phase27_donations',
+    keys: ['donations.administer', 'donations.read', 'donations.refund'],
+  },
 ] as const;
 
 describe('the permission catalogue is one definition, appended only by owners', () => {
@@ -659,7 +668,6 @@ describe('the permission catalogue is one definition, appended only by owners', 
     const declared = await declaredPermissions();
 
     for (const domain of [
-      'donations.',
       'migration.',
       'editorial.',
       // Library shipped in Phase 8, Search in Phase 17, Media in Phase 10,
@@ -723,9 +731,30 @@ describe('the permission catalogue is one definition, appended only by owners', 
       'fee.',
       'dues.',
       'finance.',
+      // Phase 27 shipped `donations.read`, `donations.administer` and the gated
+      // `donations.refund` and nothing else: no donor, payout, provider,
+      // checkout, campaign, receipt or tax key — a donor reaches their own
+      // donations by ownership and a status token, never by a grant.
+      'donation.',
+      'donor.',
+      'refund.',
+      'payout.',
+      'provider.',
+      'checkout.',
+      'campaign.',
+      'receipt.',
+      'tax.',
+      'giving.',
     ]) {
       expect(declared.some((key) => key.startsWith(domain))).toBe(false);
     }
+    // Donations has exactly three keys: two ordinary and bundled, and the
+    // refund authority, the organisation's to grant.
+    expect(declared.filter((key) => key.startsWith('donations.'))).toEqual([
+      'donations.administer',
+      'donations.read',
+      'donations.refund',
+    ]);
     // Membership has exactly two keys, both ordinary and bundled.
     expect(declared.filter((key) => key.startsWith('membership.'))).toEqual([
       'membership.administer',

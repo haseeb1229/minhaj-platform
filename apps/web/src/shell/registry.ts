@@ -120,11 +120,12 @@ export function pathFor(locale: string, route: AvailableRoute): string {
  * The primary navigation, in the canonical order of
  * INFORMATION_ARCHITECTURE.md §2.2.
  *
- * ALL TWELVE ARE RECORDED, and one of them is `deferred`. Recording them is
- * not a promise to show them: it states the accepted final order in one place,
- * gives the administrative status surface something true to report, and makes
+ * ALL TWELVE ARE RECORDED, and since Phase 27 delivered Donations none of them
+ * is `deferred`. Recording them states the accepted final order in one place,
+ * gives the administrative status surface something true to report, and keeps
  * "a deferred domain renders no anchor" a property a test asserts over the
- * whole set rather than something a reviewer checks by eye.
+ * whole set — for any capability a later decision adds before it is built —
+ * rather than something a reviewer checks by eye.
  */
 const PRIMARY: readonly ShellRoute[] = Object.freeze([
   Object.freeze({
@@ -311,11 +312,23 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     availability: 'delivered' as const,
     indexing: 'excluded' as const,
   }),
+  /**
+   * DELIVERED BY PHASE 27. The giving page explains how a gift is taken — on
+   * the payment provider's hosted page, never with payment details entered
+   * here — and lists the published campaigns, read without an account. Giving
+   * linked to an account starts under `/my`; no campaign has an address of its
+   * own, and the provider's return and status pages are private, `noindex`
+   * and never in a sitemap. While the provider is a test environment the page
+   * itself says `noindex`, whatever this eligibility says.
+   */
   Object.freeze({
     key: 'donate',
     label: 'nav.donate',
+    path: '/donate',
     placements: Object.freeze(['primary'] as const),
-    availability: 'deferred' as const,
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'eligible' as const,
   }),
 ]);
 

@@ -593,6 +593,14 @@ describe('F1 — the production database package publishes no raw capability', (
       // owned there. It reads and writes only Membership's own tables, and names
       // User rows only as foreign-key targets.
       membership: { kind: 'context', slug: 'membership' },
+      // Phase 27. Donations is a bounded CONTEXT; its adapter is hosted here and
+      // owned there. It reads and writes only Donations' own tables, and names
+      // User rows only as foreign-key targets.
+      donations: { kind: 'context', slug: 'donations' },
+      // Phase 27. The Stripe payment adapter (SANDBOX ENGINEERING ADAPTER, not a
+      // production provider selection) is owned by Donations, a bounded CONTEXT,
+      // and holds no database capability at all.
+      'donations-stripe': { kind: 'context', slug: 'donations' },
       email: { kind: 'layer0', concern: 'email' },
       'rate-limiting': { kind: 'layer0', concern: 'rate-limiting' },
       auditing: { kind: 'layer0', concern: 'auditing' },

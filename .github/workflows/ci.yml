@@ -614,6 +614,27 @@ jobs:
           node scripts/assert-membership-proofs.mjs membership-report.json
 
       # -----------------------------------------------------------------
+      # Phase 27 — Donations' live proofs.
+      #
+      # Real SQL Server, as the least-privilege runtime principal, with the
+      # REAL webhook route, services and Stripe adapter against the local
+      # Stripe-protocol simulator (pure Node on 127.0.0.1, synthetic
+      # `sk_fixture_`/`whsec_fixture_` values — no network, no credentials):
+      # exact money in 0-, 2- and 3-decimal currencies, provider truth as the
+      # only thing that moves a donation, signed webhooks applied exactly once
+      # in any order and unsigned ones writing nothing, ambiguous creates and
+      # unanswered refunds resolved under their original idempotency key,
+      # refunds within the captured amount under database-checked authority,
+      # one donation per operation under real concurrency, and account-closure
+      # disposition that keeps the financial record. They skip without a
+      # database, so the assertion below fails the job if any did not run.
+      # -----------------------------------------------------------------
+      - name: Donations proof (real SQL Server, runtime principal)
+        run: |
+          npm run test:donations -- --reporter=json --outputFile=donations-report.json
+          node scripts/assert-donations-proofs.mjs donations-report.json
+
+      # -----------------------------------------------------------------
       # Phase 25 — the realtime process's live proofs.
       #
       # The REAL realtime process, spawned from its composition entry against

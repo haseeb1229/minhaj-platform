@@ -49,7 +49,9 @@
           "concern": "search"
         },
         "messaging": "messaging",
-        "membership": "membership"
+        "membership": "membership",
+        "donations": "donations",
+        "donations-stripe": "donations"
       }
     }
   },

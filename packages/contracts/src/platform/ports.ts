@@ -116,11 +116,19 @@ export type MembershipDeliveryPurpose =
   | 'membership.application.withdrawn'
   | 'membership.closed';
 
+/**
+ * Donations' payment acknowledgement mail to a linked donor (Phase 27) —
+ * transactional, never marketing. Mirrors `DONATION_COMMUNICATION_PURPOSES`.
+ */
+export type DonationDeliveryPurpose =
+  'donation.succeeded' | 'donation.partially-refunded' | 'donation.refunded';
+
 export type DeliveryPurpose =
   | IdentityDeliveryPurpose
   | 'newsletter.confirmation'
   | LearningDeliveryPurpose
-  | MembershipDeliveryPurpose;
+  | MembershipDeliveryPurpose
+  | DonationDeliveryPurpose;
 
 export type DeliveryStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'suppressed';
 

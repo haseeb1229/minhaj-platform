@@ -20,6 +20,7 @@ export type {
   IdentityDeliveryPurpose,
   LearningDeliveryPurpose,
   MembershipDeliveryPurpose,
+  DonationDeliveryPurpose,
   DeliveryRecord,
   DeliveryRejected,
   DeliveryStatus,

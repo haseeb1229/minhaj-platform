@@ -783,6 +783,7 @@ try {
     learningProvisioned: number;
     classesProvisioned: number;
     membershipProvisioned: number;
+    donationsProvisioned: number;
   }>(`
     SELECT COUNT_BIG(*) AS total,
            SUM(CASE WHEN [action] = N'phase1.permission.probe' THEN 1 ELSE 0 END) AS probe,
@@ -828,18 +829,21 @@ try {
              AS classesProvisioned,
            SUM(CASE WHEN [action] = N'membership.permissions.provisioned'
                      AND [actorType] = N'migration' THEN 1 ELSE 0 END)
-             AS membershipProvisioned
+             AS membershipProvisioned,
+           SUM(CASE WHEN [action] = N'donations.permissions.provisioned'
+                     AND [actorType] = N'migration' THEN 1 ELSE 0 END)
+             AS donationsProvisioned
     FROM [dbo].[AuditLog];
   `);
 
-  // Exactly fifteen rows: the Phase-3B through Phase-26 privilege extensions
+  // Exactly sixteen rows: the Phase-3B through Phase-27 privilege extensions
   // (Phase 10's and Phase 16's included; Phases 20 and 24 bundle nothing and so
   // record nothing), and this run's probe. Naming every migration action is load-bearing:
   // deriving the expected total from whatever provisioning rows happened to
   // survive would pass if a phase omitted its own audit, and each privilege
   // extension must be able to show that it paid for itself
   // (SECURITY_BASELINE.md §8.1).
-  const EXPECTED_AUDIT_ROWS = 15;
+  const EXPECTED_AUDIT_ROWS = 16;
 
   if (
     Number(survivor?.taxonomyProvisioned ?? 0) !== 1 ||
@@ -856,6 +860,7 @@ try {
     Number(survivor?.learningProvisioned ?? 0) !== 1 ||
     Number(survivor?.classesProvisioned ?? 0) !== 1 ||
     Number(survivor?.membershipProvisioned ?? 0) !== 1 ||
+    Number(survivor?.donationsProvisioned ?? 0) !== 1 ||
     Number(survivor?.probe ?? 0) !== 1 ||
     Number(survivor?.tampered ?? -1) !== 0 ||
     Number(survivor?.total ?? 0) !== EXPECTED_AUDIT_ROWS
@@ -867,7 +872,7 @@ try {
         `1 library provisioning, 1 search provisioning, 1 media provisioning, ` +
         `1 global provisioning, 1 quran provisioning, 1 hadith provisioning, 1 newsletter provisioning, ` +
         `1 learning provisioning, 1 classes provisioning, 1 membership provisioning, ` +
-        `1 probe and ` +
+        `1 donations provisioning, 1 probe and ` +
         `0 tampered; found ${survivor?.total ?? 0} rows, ` +
         `${survivor?.taxonomyProvisioned ?? 0} taxonomy provisioning, ` +
         `${survivor?.navigationProvisioned ?? 0} navigation provisioning, ` +
@@ -883,12 +888,13 @@ try {
         `${survivor?.learningProvisioned ?? 0} learning provisioning, ` +
         `${survivor?.classesProvisioned ?? 0} classes provisioning, ` +
         `${survivor?.membershipProvisioned ?? 0} membership provisioning, ` +
+        `${survivor?.donationsProvisioned ?? 0} donations provisioning, ` +
         `${survivor?.probe ?? 0} probe, ${survivor?.tampered ?? 0} tampered`,
     );
   } else {
     pass(
       'audit rows unmodified',
-      'the probe row and all fourteen exact migration records are intact after ' +
+      'the probe row and all fifteen exact migration records are intact after ' +
         'UPDATE/DELETE attempts',
     );
   }
@@ -7261,6 +7267,740 @@ try {
       'Membership effective posture exact',
       membershipPostureFindings.join('; ') || 'tables missing',
     );
+  }
+
+  // ---- Phase 27: Donations, in three postures -------------------------------------
+  //
+  // A CAMPAIGN and its WORDS are archived, never deleted: INSERT and UPDATE of
+  // what moves (state, position, instants, version; the words themselves) and
+  // never their identity, primary locale, creation instant, campaign or
+  // locale. A CURRENCY POLICY is the one campaign row an operator removes, so
+  // it holds all four verbs; its campaign, currency and exponent are DENY.
+  //
+  // THE ACTIVATION is the owner's: the runtime may only read it, so no runtime
+  // path can switch payments on, re-scope them or relabel a fixture approved.
+  //
+  // A DONATION, a PROVIDER EVENT and a REFUND are financial history: INSERT and
+  // UPDATE of their facts, never DELETE, and never their identity, request,
+  // token digest, locale, label, expected money, provider scope, requester or
+  // creation instant. An INTENT is owed mail, removed by a closed account's
+  // disposition, so it holds all four verbs; what it names, its due instant and
+  // its key are DENY.
+  //
+  // Naming an account grants nothing on Identity's tables, and refund
+  // authority is RE-CHECKED BY THE TRIGGER beneath the runtime's own insert:
+  // the runtime cannot write a refund for an account without `donations.refund`
+  // and a live `donation-refund` step-up, whatever it claims.
+  //
+  // Every statement below is REAL SQL as the runtime principal over synthetic
+  // NON_DONATION_FIXTURE rows; the accounts, the activation and the refund
+  // authority are Identity's and the owner's rows, written with administrative
+  // authority.
+  {
+    const run = randomUUID().replaceAll('-', '').slice(0, 16);
+    const at = '2026-10-10T00:00:00';
+    const later = '2026-10-10T01:00:00';
+    const settled = '2026-10-10T02:00:00';
+    const closedAt = '2026-10-10T03:00:00';
+    const accountKey = 'acct_permissions_fixture';
+    const hex = (seed: string): string =>
+      createHash('sha256').update(`${run}:${seed}`).digest('hex');
+    const donor = randomUUID();
+    const other = randomUUID();
+    const refunder = randomUUID();
+    const refundRole = randomUUID();
+    await admin.query(`
+      ${[donor, other, refunder]
+        .map(
+          (id) =>
+            `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled])
+               VALUES (N'${id}',N'NON_DONATION_FIXTURE account',N'${id}@donations-proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);`,
+        )
+        .join('\n')}
+      INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system])
+        VALUES (N'${refundRole}',N'proof-donations-permissions-${run}',N'Synthetic refund proof role',N'Holds donations.refund for the permission proof only.',0);
+      INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES (N'${refundRole}',N'donations.refund');
+      INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId]) VALUES (N'${refunder}',N'${refundRole}');
+      INSERT INTO [dbo].[Session] ([id],[token],[userId],[expiresAt],[createdAt],[updatedAt])
+        VALUES (N'${refunder}',N'proof-donations-${refunder}',N'${refunder}',DATEADD(hour,1,SYSUTCDATETIME()),SYSUTCDATETIME(),SYSUTCDATETIME());
+      INSERT INTO [dbo].[StepUpGrant] ([id],[userId],[sessionId],[purpose],[expiresAt])
+        VALUES (N'${randomUUID()}',N'${refunder}',N'${refunder}',N'donation-refund',DATEADD(minute,30,SYSUTCDATETIME()));
+    `);
+
+    const open = randomUUID();
+    const draft = randomUUID();
+    const linked = randomUUID();
+    const anonymous = randomUUID();
+    const yen = randomUUID();
+    const eventRow = randomUUID();
+    const firstRefund = randomUUID();
+    const settledRefund = randomUUID();
+    const succeededIntent = randomUUID();
+    const operation = randomUUID();
+    const campaignRow = (id: string, locale: string, order: number): string =>
+      `INSERT INTO [dbo].[DonationCampaign] ([id],[primaryLocale],[displayOrder]) VALUES (N'${id}',N'${locale}',${String(order)});`;
+    const words = (campaignId: string, locale: string): string =>
+      `INSERT INTO [dbo].[DonationCampaignTranslation] ([campaignId],[locale],[title],[summary],[description]) VALUES (N'${campaignId}',N'${locale}',N'NON_DONATION_FIXTURE title',N'NON_DONATION_FIXTURE summary',N'NON_DONATION_FIXTURE description');`;
+    const policy = (
+      campaignId: string,
+      currency: string,
+      exponent: number,
+      bounds: string,
+    ): string =>
+      `INSERT INTO [dbo].[DonationCampaignCurrency] ([campaignId],[currency],[currencyExponent],[minimumMinor],[maximumMinor],[suggested1Minor],[suggested2Minor],[suggested3Minor]) VALUES (N'${campaignId}',N'${currency}',${String(exponent)},${bounds});`;
+    const donation = (
+      id: string,
+      input: {
+        readonly currency?: string;
+        readonly exponent?: number;
+        readonly minor?: string;
+        readonly donor?: string;
+        readonly campaignId?: string;
+        readonly environment?: string;
+        readonly operationId?: string;
+      } = {},
+    ): string =>
+      `INSERT INTO [dbo].[Donation] ([id],[campaignId],[donorUserId],[operationId],[requestDigest],[statusTokenDigest],[locale],[checkoutLabel],[currency],[currencyExponent],[expectedMinor],[provider],[environment],[accountKey]) VALUES (N'${id}',N'${input.campaignId ?? open}',${input.donor === undefined ? 'NULL' : `N'${input.donor}'`},N'${input.operationId ?? randomUUID()}','${hex(`request-${id}`)}','${hex(`token-${id}`)}',N'en',N'NON_DONATION_FIXTURE label','${input.currency ?? 'USD'}',${String(input.exponent ?? 2)},${input.minor ?? '2500'},N'stripe',N'${input.environment ?? 'fixture'}',N'${accountKey}');`;
+    const refund = (
+      id: string,
+      donationId: string,
+      minor: string,
+      requester: string,
+      state = 'requested',
+    ): string =>
+      `INSERT INTO [dbo].[DonationRefund] ([id],[donationId],[operationId],[requestDigest],[currency],[currencyExponent],[amountMinor],[state],[provider],[environment],[accountKey],[requestedByUserId],[requestedAt]) VALUES (N'${id}',N'${donationId}',N'${randomUUID()}','${hex(`refund-${id}`)}','USD',2,${minor},N'${state}',N'stripe',N'fixture',N'${accountKey}',N'${requester}','${later}');`;
+    const intent = (
+      id: string,
+      purpose: string,
+      donationId: string,
+      refundId: string | null,
+      recipient: string,
+      key: string,
+    ): string =>
+      `INSERT INTO [dbo].[DonationCommunicationIntent] ([id],[purpose],[donationId],[refundId],[recipientUserId],[dueAt],[idempotencyKey]) VALUES (N'${id}',N'${purpose}',N'${donationId}',${refundId === null ? 'NULL' : `N'${refundId}'`},N'${recipient}','${at}',N'dp-${run}-${key}');`;
+    const update = (table: string, id: string, assignments: string): string =>
+      `UPDATE [dbo].[${table}] SET ${assignments} WHERE [id]=N'${id}';`;
+
+    // The activation is the owner's, written here as the owner: the runtime
+    // proves below it can neither write nor change one.
+    await admin.query(
+      `INSERT INTO [dbo].[DonationActivation] ([id],[provider],[environment],[accountKey],[authority],[authorisedBy]) VALUES (1,N'stripe',N'fixture',N'${accountKey}',N'fixture',N'NON_DONATION_FIXTURE owner');`,
+    );
+
+    for (const [label, statement, detail] of [
+      [
+        'DonationCampaign, words and policy INSERT',
+        `${campaignRow(open, 'en', 0)}
+         ${campaignRow(draft, 'ar', 1)}
+         ${words(open, 'en')}
+         ${words(open, 'ur')}
+         ${words(draft, 'en')}
+         ${policy(open, 'USD', 2, '100,100000,500,2500,10000')}
+         ${policy(open, 'JPY', 0, '100,1000000,1000,NULL,NULL')}
+         ${policy(open, 'KWD', 3, '1000,500000,NULL,NULL,NULL')}
+         ${policy(open, 'EUR', 2, '100,100000,NULL,NULL,NULL')}`,
+        'two draft campaigns, their words and four policies at their own exponents',
+      ],
+      [
+        'DonationCampaign publish, reorder, words and policy UPDATE, policy DELETE',
+        `UPDATE [dbo].[DonationCampaign] SET [state]=N'published',[publishedAt]='${at}',[version]=[version]+1,[updatedAt]='${at}' WHERE [id]=N'${open}';
+         UPDATE [dbo].[DonationCampaign] SET [displayOrder]=5,[version]=[version]+1,[updatedAt]='${later}' WHERE [id]=N'${open}';
+         UPDATE [dbo].[DonationCampaignTranslation] SET [title]=N'NON_DONATION_FIXTURE retitled',[updatedAt]='${later}' WHERE [campaignId]=N'${open}' AND [locale]=N'en';
+         UPDATE [dbo].[DonationCampaignCurrency] SET [maximumMinor]=200000,[suggested3Minor]=NULL,[updatedAt]='${later}' WHERE [campaignId]=N'${open}' AND [currency]='USD';
+         DELETE FROM [dbo].[DonationCampaignCurrency] WHERE [campaignId]=N'${open}' AND [currency]='EUR';
+         UPDATE [dbo].[DonationCampaign] SET [version]=[version]+1,[updatedAt]='${later}' WHERE [id]=N'${open}';`,
+        'published with its words and currencies, reordered, retitled, one policy narrowed and one removed',
+      ],
+      [
+        'Donation INSERT (linked, anonymous, JPY)',
+        `${donation(linked, { donor, operationId: operation })}
+         ${donation(anonymous)}
+         ${donation(yen, { currency: 'JPY', exponent: 0, minor: '5000' })}`,
+        'pending attempts admitted inside the activated scope',
+      ],
+      [
+        'Donation checkout, capture and scheduling UPDATE',
+        `${update('Donation', linked, `[createState]=N'created',[checkoutReference]=N'cs_perm_${run}_linked',[checkoutExpiresAt]='${later}',[reconcileDueAt]='${later}',[version]=[version]+1,[updatedAt]='${at}'`)}
+         ${update('Donation', linked, `[capturedMinor]=2500,[paymentReference]=N'pi_perm_${run}_linked',[succeededAt]='${settled}',[state]=N'succeeded',[reconcileDueAt]=NULL,[version]=[version]+1,[updatedAt]='${settled}'`)}
+         ${update('Donation', anonymous, `[createState]=N'ambiguous',[reconcileDueAt]='${later}',[version]=[version]+1`)}
+         ${update('Donation', anonymous, `[reconcileAttempts]=1,[reconcileLeaseUntil]='${later}'`)}`,
+        'a checkout recorded and captured; an ambiguous create rescheduled without a version',
+      ],
+      [
+        'DonationProviderEvent admit and complete',
+        `INSERT INTO [dbo].[DonationProviderEvent] ([id],[provider],[environment],[accountKey],[eventId],[eventType],[occurredAt],[receivedAt],[payloadDigest]) VALUES (N'${eventRow}',N'stripe',N'fixture',N'${accountKey}',N'evt_perm_${run}',N'checkout.session.completed','${at}','${later}','${hex('event')}');
+         ${update('DonationProviderEvent', eventRow, `[result]=N'applied',[processedAt]='${settled}',[donationId]=N'${linked}'`)}`,
+        'one event admitted by scope and id, completed once against its donation',
+      ],
+      [
+        'DonationRefund reserve, accept and settle',
+        `${refund(firstRefund, linked, '1000', refunder)}
+         ${update('Donation', linked, `[refundReservedMinor]=1000,[version]=[version]+1`)}
+         ${update('DonationRefund', firstRefund, `[state]=N'pending',[refundReference]=N're_perm_${run}_first',[version]=[version]+1`)}
+         ${update('DonationRefund', firstRefund, `[state]=N'succeeded',[completedAt]='${settled}',[version]=[version]+1`)}
+         ${update('Donation', linked, `[refundedMinor]=1000,[state]=N'partially_refunded',[version]=[version]+1`)}`,
+        'a partial refund by a live donations.refund holder with a live donation-refund step-up',
+      ],
+      [
+        'DonationRefund failed and its reservation released',
+        `${refund(settledRefund, linked, '500', refunder)}
+         ${update('Donation', linked, `[refundReservedMinor]=1500,[version]=[version]+1`)}
+         ${update('DonationRefund', settledRefund, `[state]=N'failed',[completedAt]='${settled}',[version]=[version]+1`)}
+         ${update('Donation', linked, `[refundReservedMinor]=1000,[version]=[version]+1`)}`,
+        'a refused refund failed and released in the same work',
+      ],
+      [
+        'DonationCommunicationIntent INSERT, claim and relay',
+        `${intent(succeededIntent, 'donation.succeeded', linked, null, donor, 'succeeded')}
+         ${intent(randomUUID(), 'donation.partially-refunded', linked, firstRefund, donor, 'refunded')}
+         ${update('DonationCommunicationIntent', succeededIntent, `[claimedUntil]='${later}'`)}
+         ${update('DonationCommunicationIntent', succeededIntent, `[state]=N'relayed',[relayedAt]='${later}',[claimedUntil]=NULL`)}`,
+        'two acknowledgements owed to the linked donor, one claimed and relayed',
+      ],
+      [
+        'sys.sp_getapplock EXECUTE (transaction owner)',
+        `BEGIN TRAN;
+         DECLARE @held INT;
+         EXEC @held = sys.sp_getapplock @Resource=N'donations:campaign:${open}', @LockMode=N'Exclusive', @LockOwner=N'Transaction', @LockTimeout=5000;
+         IF @held < 0 BEGIN ROLLBACK TRAN; THROW 50000, N'sp_getapplock refused the runtime principal.', 1; END;
+         SELECT [id] FROM [dbo].[DonationCampaign] WITH (UPDLOCK, ROWLOCK) WHERE [id]=N'${open}';
+         SELECT [id] FROM [dbo].[Donation] WITH (UPDLOCK, HOLDLOCK, ROWLOCK) WHERE [id]=N'${linked}';
+         SELECT [id] FROM [dbo].[DonationRefund] WITH (UPDLOCK, HOLDLOCK, ROWLOCK) WHERE [id]=N'${firstRefund}';
+         COMMIT TRAN;`,
+        'the campaign serialisation lock and the donation-then-refund locking reads are reachable',
+      ],
+      [
+        'Donation reconcile lease (READPAST, OUTPUT INTO)',
+        `DECLARE @claimed TABLE ([id] NVARCHAR(36));
+         UPDATE d SET d.[reconcileLeaseUntil]='${settled}'
+         OUTPUT inserted.[id] INTO @claimed
+         FROM [dbo].[Donation] AS d WITH (READPAST, UPDLOCK, ROWLOCK)
+         WHERE d.[id]=N'${anonymous}' AND d.[reconcileDueAt] <= '${settled}';
+         SELECT [id] FROM @claimed;`,
+        'the sweep lease is one statement the runtime can run',
+      ],
+    ] as const)
+      await expectAllowed(app, label, statement, detail);
+
+    // The schema's own rules hold for the runtime as for the owner.
+    for (const [label, statement, number] of [
+      [
+        'DonationCampaign inserted published',
+        `INSERT INTO [dbo].[DonationCampaign] ([id],[state],[primaryLocale],[displayOrder],[publishedAt]) VALUES (N'${randomUUID()}',N'published',N'en',0,'${at}');`,
+        51340,
+      ],
+      [
+        'DonationCampaign returned to draft',
+        update(
+          'DonationCampaign',
+          open,
+          `[state]=N'draft',[publishedAt]=NULL,[version]=[version]+1`,
+        ),
+        51340,
+      ],
+      [
+        'DonationCampaign published without its primary words',
+        update(
+          'DonationCampaign',
+          draft,
+          `[state]=N'published',[publishedAt]='${at}',[version]=[version]+1`,
+        ),
+        51341,
+      ],
+      [
+        "Published campaign's last currency removed",
+        `DELETE FROM [dbo].[DonationCampaignCurrency] WHERE [campaignId]=N'${open}';`,
+        51341,
+      ],
+      [
+        'Donation for a draft campaign',
+        donation(randomUUID(), { campaignId: draft }),
+        51343,
+      ],
+      [
+        'Donation above the policy maximum',
+        donation(randomUUID(), { minor: '200001' }),
+        51344,
+      ],
+      [
+        'Donation outside the activated scope',
+        donation(randomUUID(), { environment: 'sandbox' }),
+        51345,
+      ],
+      [
+        'Donation capture undone',
+        update(
+          'Donation',
+          linked,
+          `[capturedMinor]=NULL,[succeededAt]=NULL,[refundedMinor]=0,[refundReservedMinor]=0,[state]=N'pending',[version]=[version]+1`,
+        ),
+        51349,
+      ],
+      [
+        'Donation fact changed without a version',
+        update('Donation', yen, `[attention]=N'unresolved'`),
+        51349,
+      ],
+      [
+        'Anonymous donation given a donor',
+        update('Donation', anonymous, `[donorUserId]=N'${other}',[version]=[version]+1`),
+        51350,
+      ],
+      [
+        'Donation release instant on a never-linked donation',
+        update('Donation', yen, `[donorReleasedAt]='${closedAt}',[version]=[version]+1`),
+        51350,
+      ],
+      [
+        'DonationProviderEvent completed twice',
+        update('DonationProviderEvent', eventRow, `[result]=N'unchanged'`),
+        51351,
+      ],
+      [
+        'DonationRefund of an uncaptured donation',
+        refund(randomUUID(), anonymous, '100', refunder),
+        51352,
+      ],
+      [
+        'DonationRefund without refund authority',
+        refund(randomUUID(), linked, '100', donor),
+        51354,
+      ],
+      [
+        'DonationRefund beyond the capture',
+        refund(randomUUID(), linked, '1501', refunder),
+        51355,
+      ],
+      [
+        'DonationRefund inserted pending',
+        refund(randomUUID(), linked, '100', refunder, 'pending'),
+        51358,
+      ],
+      [
+        'DonationRefund moved backwards',
+        update(
+          'DonationRefund',
+          firstRefund,
+          `[state]=N'pending',[completedAt]=NULL,[version]=[version]+1`,
+        ),
+        51356,
+      ],
+      [
+        'Relayed DonationCommunicationIntent reopened',
+        update(
+          'DonationCommunicationIntent',
+          succeededIntent,
+          `[state]=N'pending',[relayedAt]=NULL`,
+        ),
+        51357,
+      ],
+    ] as const)
+      await expectRefusedByInvariant(app, label, statement, number);
+    for (const [label, statement, expected, constraint] of [
+      [
+        'Donation state other than its derivation',
+        update('Donation', anonymous, `[state]=N'succeeded',[version]=[version]+1`),
+        CONSTRAINT_VIOLATION,
+        'Donation_state_ck',
+      ],
+      [
+        'Donation captured other than its expected amount',
+        update(
+          'Donation',
+          yen,
+          `[createState]=N'created',[checkoutReference]=N'cs_perm_${run}_yen',[checkoutExpiresAt]='${later}',[capturedMinor]=4999,[succeededAt]='${settled}',[state]=N'succeeded',[version]=[version]+1`,
+        ),
+        CONSTRAINT_VIOLATION,
+        'Donation_money_ck',
+      ],
+      [
+        'DonationCampaignCurrency JPY at two decimals',
+        policy(draft, 'JPY', 2, '100,1000,NULL,NULL,NULL'),
+        CONSTRAINT_VIOLATION,
+        'DonationCampaignCurrency_ck',
+      ],
+      [
+        'Second donation under one operation',
+        donation(randomUUID(), { operationId: operation }),
+        DUPLICATE_KEY,
+        'Donation_operationId_key',
+      ],
+      [
+        'Second donation claiming one payment',
+        update(
+          'Donation',
+          yen,
+          `[createState]=N'created',[checkoutReference]=N'cs_perm_${run}_yen',[checkoutExpiresAt]='${later}',[capturedMinor]=5000,[paymentReference]=N'pi_perm_${run}_linked',[succeededAt]='${settled}',[state]=N'succeeded',[version]=[version]+1`,
+        ),
+        DUPLICATE_KEY,
+        'Donation_payment_key',
+      ],
+      [
+        'Duplicate provider event in one scope',
+        `INSERT INTO [dbo].[DonationProviderEvent] ([id],[provider],[environment],[accountKey],[eventId],[eventType],[occurredAt],[receivedAt],[payloadDigest]) VALUES (N'${randomUUID()}',N'stripe',N'fixture',N'${accountKey}',N'evt_perm_${run}',N'checkout.session.completed','${at}','${later}','${hex('event-2')}');`,
+        DUPLICATE_KEY,
+        'DonationProviderEvent_event_key',
+      ],
+      [
+        'DonationCommunicationIntent owed to another account',
+        intent(randomUUID(), 'donation.succeeded', linked, null, other, 'foreign'),
+        CONSTRAINT_VIOLATION,
+        'DonationCommunicationIntent_donor_fkey',
+      ],
+      [
+        'DonationCommunicationIntent for a tax receipt',
+        intent(randomUUID(), 'donation.tax-receipt', linked, null, donor, 'shape'),
+        CONSTRAINT_VIOLATION,
+        'DonationCommunicationIntent_ck',
+      ],
+    ] as const)
+      await expectRefusedByConstraint(app, label, statement, expected, constraint);
+
+    // Nothing financial is ever deleted; what identifies each row is never
+    // rewritten; the activation is out of reach; and the runtime can neither
+    // catalogue a Donations key nor rewrite how one is described.
+    const columnDenials: readonly (readonly [string, readonly string[]])[] = [
+      ['DonationCampaign', ['id', 'primaryLocale', 'createdAt']],
+      ['DonationCampaignTranslation', ['campaignId', 'locale']],
+      ['DonationCampaignCurrency', ['campaignId', 'currency', 'currencyExponent']],
+      [
+        'Donation',
+        [
+          'id',
+          'campaignId',
+          'operationId',
+          'requestDigest',
+          'statusTokenDigest',
+          'locale',
+          'checkoutLabel',
+          'currency',
+          'currencyExponent',
+          'expectedMinor',
+          'provider',
+          'environment',
+          'accountKey',
+          'createdAt',
+        ],
+      ],
+      [
+        'DonationProviderEvent',
+        [
+          'id',
+          'provider',
+          'environment',
+          'accountKey',
+          'eventId',
+          'eventType',
+          'occurredAt',
+          'receivedAt',
+          'payloadDigest',
+        ],
+      ],
+      [
+        'DonationRefund',
+        [
+          'id',
+          'donationId',
+          'operationId',
+          'requestDigest',
+          'currency',
+          'currencyExponent',
+          'amountMinor',
+          'provider',
+          'environment',
+          'accountKey',
+          'requestedByUserId',
+          'requestedAt',
+        ],
+      ],
+      [
+        'DonationCommunicationIntent',
+        [
+          'id',
+          'purpose',
+          'donationId',
+          'refundId',
+          'recipientUserId',
+          'dueAt',
+          'idempotencyKey',
+          'createdAt',
+        ],
+      ],
+    ];
+    for (const [table, columns] of columnDenials)
+      for (const column of columns)
+        await expectDenied(
+          app,
+          `${table} ${column} UPDATE denied`,
+          `UPDATE [dbo].[${table}] SET [${column}]=[${column}];`,
+        );
+    for (const [label, statement] of [
+      ['DonationCampaign DELETE denied', 'DELETE FROM [dbo].[DonationCampaign];'],
+      [
+        'DonationCampaignTranslation DELETE denied',
+        'DELETE FROM [dbo].[DonationCampaignTranslation];',
+      ],
+      ['Donation DELETE denied', 'DELETE FROM [dbo].[Donation];'],
+      [
+        'DonationProviderEvent DELETE denied',
+        'DELETE FROM [dbo].[DonationProviderEvent];',
+      ],
+      ['DonationRefund DELETE denied', 'DELETE FROM [dbo].[DonationRefund];'],
+      [
+        'DonationActivation INSERT denied',
+        `INSERT INTO [dbo].[DonationActivation] ([id],[provider],[environment],[accountKey],[authority],[authorisedBy],[reference]) VALUES (1,N'stripe',N'production',N'acct_forged',N'approved',N'forged',N'forged');`,
+      ],
+      [
+        'DonationActivation UPDATE denied',
+        "UPDATE [dbo].[DonationActivation] SET [authority]=N'approved';",
+      ],
+      ['DonationActivation DELETE denied', 'DELETE FROM [dbo].[DonationActivation];'],
+      [
+        'donations.* Permission INSERT denied',
+        "INSERT INTO [dbo].[Permission] ([key],[description]) VALUES (N'donations.payout',N'forged');",
+      ],
+      [
+        'donations.refund key UPDATE denied',
+        "UPDATE [dbo].[Permission] SET [key]=[key] WHERE [key]=N'donations.refund';",
+      ],
+      [
+        'donations.refund description UPDATE denied',
+        "UPDATE [dbo].[Permission] SET [description]=N'forged' WHERE [key]=N'donations.refund';",
+      ],
+      [
+        'donations.read Permission DELETE denied',
+        "DELETE FROM [dbo].[Permission] WHERE [key]=N'donations.read';",
+      ],
+      ['Donor account DELETE denied', `DELETE FROM [dbo].[User] WHERE [id]=N'${donor}';`],
+    ] as const)
+      await expectDenied(app, label, statement);
+
+    // A closed account's disposition: the owed mail is abandoned and removed,
+    // the link released; every donation, event and refund stays as history.
+    await admin.query(
+      `UPDATE [dbo].[User] SET [status]=N'closed',[closedAt]='${closedAt}' WHERE [id]=N'${donor}';`,
+    );
+    await expectAllowed(
+      app,
+      'Intents abandoned and DELETE, donor link released (dispose)',
+      `UPDATE [dbo].[DonationCommunicationIntent] SET [state]=N'abandoned',[abandonedAt]='${closedAt}',[claimedUntil]=NULL WHERE [recipientUserId]=N'${donor}' AND [state]=N'pending';
+       DELETE TOP (100) FROM [dbo].[DonationCommunicationIntent] WHERE [recipientUserId]=N'${donor}';
+       UPDATE TOP (100) [dbo].[Donation] SET [donorUserId]=NULL,[donorReleasedAt]='${closedAt}',[version]=[version]+1,[updatedAt]='${closedAt}' WHERE [donorUserId]=N'${donor}';`,
+      "the closed account's owed mail removed and its donation made anonymous",
+    );
+
+    const [donationsState] = await admin.query<Record<string, number | string | null>>(`
+      SELECT
+        (SELECT STRING_AGG([state], N',') WITHIN GROUP (ORDER BY [displayOrder])
+           FROM [dbo].[DonationCampaign] WHERE [id] IN (N'${open}',N'${draft}')) AS [campaigns],
+        (SELECT STRING_AGG(CONVERT(NVARCHAR(3), [currency]), N',') WITHIN GROUP (ORDER BY [currency])
+           FROM [dbo].[DonationCampaignCurrency] WHERE [campaignId]=N'${open}') AS [currencies],
+        (SELECT STRING_AGG([state] + N':' + CONVERT(NVARCHAR(20), [expectedMinor]) + N':'
+                  + CONVERT(NVARCHAR(20), [refundedMinor]) + N':' + CONVERT(NVARCHAR(20), [refundReservedMinor])
+                  + N':' + CASE WHEN [donorUserId] IS NULL THEN N'anonymous' ELSE N'linked' END, N',')
+                  WITHIN GROUP (ORDER BY [expectedMinor], [state])
+           FROM [dbo].[Donation] WHERE [id] IN (N'${linked}',N'${anonymous}',N'${yen}')) AS [donations],
+        (SELECT STRING_AGG([state], N',') WITHIN GROUP (ORDER BY [state])
+           FROM [dbo].[DonationRefund] WHERE [donationId]=N'${linked}') AS [refunds],
+        (SELECT COUNT(*) FROM [dbo].[DonationProviderEvent] WHERE [accountKey]=N'${accountKey}') AS [events],
+        (SELECT COUNT(*) FROM [dbo].[DonationCommunicationIntent]) AS [intents],
+        (SELECT COUNT(*) FROM [dbo].[RolePermission] rp JOIN [dbo].[Role] r ON r.[id]=rp.[roleId]
+          WHERE r.[key]=N'platform-administrator' AND rp.[permissionKey] LIKE N'donations.%') AS [bundled],
+        (SELECT COUNT(*) FROM [dbo].[RolePermission] rp JOIN [dbo].[Role] r ON r.[id]=rp.[roleId]
+          WHERE r.[system]=1 AND rp.[permissionKey]=N'donations.refund') AS [refundBundled],
+        (SELECT COUNT(*) FROM [dbo].[Permission] WHERE [key] LIKE N'donations.%') AS [catalogued];
+    `);
+    const expectedDonationsState = {
+      campaigns: 'draft,published',
+      currencies: 'JPY,KWD,USD',
+      donations:
+        'partially_refunded:2500:1000:1000:anonymous,pending:2500:0:0:anonymous,pending:5000:0:0:anonymous',
+      refunds: 'failed,succeeded',
+      events: 1,
+      intents: 0,
+      bundled: 2,
+      refundBundled: 0,
+      catalogued: 3,
+    };
+    if (JSON.stringify(donationsState) === JSON.stringify(expectedDonationsState)) {
+      pass(
+        'Donations state as written',
+        'exact money kept, refunds and events kept as history, owed mail disposed, link released',
+      );
+    } else {
+      fail('Donations state as written', JSON.stringify(donationsState));
+    }
+
+    const DONATIONS_TABLES = [
+      'DonationCampaign',
+      'DonationCampaignTranslation',
+      'DonationCampaignCurrency',
+      'DonationActivation',
+      'Donation',
+      'DonationProviderEvent',
+      'DonationRefund',
+      'DonationCommunicationIntent',
+    ] as const;
+    for (const table of DONATIONS_TABLES) {
+      await assertObjectVisible(app, table);
+      await expectDenied(
+        app,
+        `${table} ALTER denied`,
+        `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+      );
+    }
+    for (const [trigger, table] of [
+      ['DonationCampaignIntegrity', 'DonationCampaign'],
+      ['DonationCampaignTranslationIntegrity', 'DonationCampaignTranslation'],
+      ['DonationCampaignCurrencyIntegrity', 'DonationCampaignCurrency'],
+      ['DonationActivationImmutable', 'DonationActivation'],
+      ['DonationAdmission', 'Donation'],
+      ['DonationIntegrity', 'Donation'],
+      ['DonationProviderEventIntegrity', 'DonationProviderEvent'],
+      ['DonationRefundAdmission', 'DonationRefund'],
+      ['DonationRefundIntegrity', 'DonationRefund'],
+      ['DonationIntentIntegrity', 'DonationCommunicationIntent'],
+    ] as const) {
+      await expectDenied(
+        app,
+        `${trigger} DISABLE denied`,
+        `DISABLE TRIGGER [dbo].[${trigger}] ON [dbo].[${table}];`,
+      );
+      await expectDenied(
+        app,
+        `${trigger} ALTER denied`,
+        `ALTER TABLE [dbo].[${table}] DISABLE TRIGGER [${trigger}];`,
+      );
+    }
+
+    // THE EXACT EFFECTIVE POSTURE, table by table and column by column, for the
+    // eight Phase-27 tables AND for every Identity table a Donations row or
+    // trigger names, which Phase 27 must leave as it found them.
+    const POSTURE: Readonly<
+      Record<string, readonly [string, string | readonly string[] | null]>
+    > = {
+      DonationCampaign: ['INSERT,SELECT', ['id', 'primaryLocale', 'createdAt']],
+      DonationCampaignTranslation: ['INSERT,SELECT', ['campaignId', 'locale']],
+      DonationCampaignCurrency: [
+        LEARNER_DATA,
+        ['campaignId', 'currency', 'currencyExponent'],
+      ],
+      DonationActivation: ['SELECT', ''],
+      Donation: [
+        'INSERT,SELECT',
+        [
+          'id',
+          'campaignId',
+          'operationId',
+          'requestDigest',
+          'statusTokenDigest',
+          'locale',
+          'checkoutLabel',
+          'currency',
+          'currencyExponent',
+          'expectedMinor',
+          'provider',
+          'environment',
+          'accountKey',
+          'createdAt',
+        ],
+      ],
+      DonationProviderEvent: [
+        'INSERT,SELECT',
+        [
+          'id',
+          'provider',
+          'environment',
+          'accountKey',
+          'eventId',
+          'eventType',
+          'occurredAt',
+          'receivedAt',
+          'payloadDigest',
+        ],
+      ],
+      DonationRefund: [
+        'INSERT,SELECT',
+        [
+          'id',
+          'donationId',
+          'operationId',
+          'requestDigest',
+          'currency',
+          'currencyExponent',
+          'amountMinor',
+          'provider',
+          'environment',
+          'accountKey',
+          'requestedByUserId',
+          'requestedAt',
+        ],
+      ],
+      DonationCommunicationIntent: [
+        LEARNER_DATA,
+        [
+          'id',
+          'purpose',
+          'donationId',
+          'refundId',
+          'recipientUserId',
+          'dueAt',
+          'idempotencyKey',
+          'createdAt',
+        ],
+      ],
+      User: ['INSERT,SELECT', null],
+      RoleAssignment: ['INSERT,SELECT', null],
+      Permission: ['SELECT', ''],
+      RolePermission: [LEARNER_DATA, ''],
+    };
+    const posture = await app.query<{
+      name: string;
+      held: string | null;
+      updatable: string | null;
+      columns: string | null;
+    }>(`
+      SELECT t.[name],
+        (SELECT STRING_AGG(p.[permission], N',') WITHIN GROUP (ORDER BY p.[permission])
+           FROM (VALUES (N'ALTER'),(N'CONTROL'),(N'DELETE'),(N'INSERT'),(N'REFERENCES'),
+                        (N'SELECT'),(N'TAKE OWNERSHIP')) AS p([permission])
+          WHERE HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', p.[permission]) = 1) AS [held],
+        (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+           FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])
+            AND HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', N'UPDATE', c.[name], N'COLUMN') = 1) AS [updatable],
+        (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+           FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])) AS [columns]
+      FROM (VALUES ${Object.keys(POSTURE)
+        .map((table) => `(N'${table}')`)
+        .join(',')}) AS t([name]);
+    `);
+    const findings = posture.flatMap((row) => {
+      const [verbs, scope] = POSTURE[row.name] ?? ['?', '?'];
+      const expectedColumns =
+        scope === null
+          ? (row.updatable ?? '')
+          : typeof scope === 'string'
+            ? scope
+            : (row.columns ?? '')
+                .split(',')
+                .filter((column) => !scope.includes(column))
+                .join(',');
+      return (row.held ?? '') === verbs && (row.updatable ?? '') === expectedColumns
+        ? []
+        : [`${row.name}: ${row.held ?? '(none)'} / UPDATE ${row.updatable ?? '(none)'}`];
+    });
+    if (
+      posture.length === Object.keys(POSTURE).length &&
+      Object.keys(POSTURE).length === DONATIONS_TABLES.length + 4 &&
+      findings.length === 0
+    ) {
+      pass(
+        'Donations effective posture exact',
+        `${String(posture.length)} tables, object verbs and UPDATE columns as granted`,
+      );
+    } else {
+      fail('Donations effective posture exact', findings.join('; ') || 'tables missing');
+    }
   }
 
   // ---- the ungranted object was not merely unreadable, it is unchanged -----

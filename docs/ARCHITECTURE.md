@@ -732,13 +732,25 @@ six Membership purposes keep the **transactional** suppression scope, so a newsl
 never silences them. Membership never calls the provider. No dependency edge is added: Membership
 depends on Layer 0 and, through Layer-4 answers, on Identity.
 
+**As delivered (Phase 27): a fifth owner.** Donations commits a durable
+`DonationCommunicationIntent` — purpose (`donation.succeeded`, `donation.partially-refunded`,
+`donation.refunded`), the linked donor's account, the ONE donation and, for a refund, the ONE refund it
+describes (typed keys, never a target pair), due instant, idempotency key — in the same transaction
+that records the verified capture or the settled refund. Anonymous donors are owed no mail; no address
+is collected for one. The Layer-4 dispatcher relays due intents beside the other owners; Donations
+re-checks that the fact still holds for the same linked donor, Identity resolves the current address
+and locale, and the message — a payment acknowledgement, never a tax receipt — links only to
+`/my/donations`. The purposes keep the **transactional** suppression scope. Donations never calls the
+email provider. No dependency edge is added: Donations depends on Layer 0 and, through Layer-4
+answers, on Identity.
+
 ### 4.7 Integration abstractions
 
 | Integration | V1 | Later |
 |---|---|---|
 | Live class | `MeetingProvider` storing provider + manually entered URL, with validation (DOMAIN_MODEL.md §13.1). **Delivered in Phase 23** as a pure Layer-0 contract: one provider (Google Meet), standard-parser validation and canonicalisation, no network, no credential | Google Calendar/Meet API provisioning |
 | Video | `VideoProvider` — YouTube/Vimeo metadata and embed | Additional providers |
-| Payment | `PaymentProvider` interface only | Provider selection is an open decision |
+| Payment | `PaymentProvider` (`@minhaj/contracts/donations`) — **delivered in Phase 27** with one **sandbox engineering adapter, Stripe** (hosted Checkout; native `fetch` + `node:crypto`, no SDK), hosted in `packages/database/src/adapters/donations-stripe` and owned by Donations: create, resume and cancel a hosted checkout; observe a checkout's payment, refunds and disputes server-to-server; verify a webhook over its exact bytes; request and observe a refund. Provider units, enums, headers and signatures never cross the port; an unknown outcome is `unknown`, never guessed, and a money-moving call is never retried by the adapter. A deterministic loopback Stripe-protocol simulator serves CI and the browser suite | Production provider selection stays OPEN (OPEN_DECISIONS.md §5.4); a sandbox adapter is not a production selection |
 | Email | `EmailProvider` interface, **first adapter Resend** (§4.6) | An adopting organisation supplies its own provider adapter |
 
 ### 4.7.1 Third-party embeds — privacy and loading

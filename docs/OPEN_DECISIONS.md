@@ -222,7 +222,10 @@ an engineering lifecycle, not a retention period, which this decision still owns
 Membership's export and disposition (SECURITY_BASELINE.md §19.1.6): a closed account's open
 applications are withdrawn and its owed mail removed, while an active organisational Membership is
 kept under its own lifecycle rather than treated as a resignation — an engineering default, not a
-retention period, which this decision still owns.
+retention period, which this decision still owns. Phase 27 added Donations' export and disposition
+(SECURITY_BASELINE.md §19.1.7): a closed account's owed donation mail is removed and the account link of
+its donations released, while every amount, state, provider event and refund record is kept unchanged
+as financial history — an engineering default, not a retention period, which this decision still owns.
 
 ### 2.3 Legal document content
 **Owner:** Minhaj · **Gates:** **Phase 6 — publication.** Phase 4 reserves the routes only ·
@@ -531,6 +534,17 @@ arrangements.
 > path — no amount, currency, fee, dues, transaction, checkout, invoice or provider concept exists in
 > its contracts, tables or surfaces, and an architecture test refuses one. This gate stays Phase 27's
 > alone.
+>
+> **As delivered (Phase 27) — STILL OPEN.** Donations is engineering-complete against a provider
+> sandbox: Stripe was chosen as the **sandbox engineering adapter, not as the production provider**
+> (TECH_STACK.md §18.4). Nothing here selects a production provider, merchant account, supported
+> currency or region, recurring donations (none exist), Gift Aid or any equivalent (none exists), or
+> the people who may refund. Real payment initiation is impossible without an owner-written
+> `DonationActivation` row: a non-production environment needs `fixture` authority, and
+> `production` needs `approved` authority with recorded external evidence, which neither the runtime
+> nor any Donations key can write. The persistent database holds no activation row, no campaign and no
+> donation. `donations.refund` is externally gated and held by nobody; naming its holders is part of
+> this decision.
 
 **Category C/E · Gate: activation for Phase 27; never implementation.**
 

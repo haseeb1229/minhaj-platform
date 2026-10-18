@@ -127,6 +127,11 @@ describe('the catalogues agree on their keys', () => {
       'membership.types.fallback',
       'myMembership.memberships.help',
       'adminMembership.application.audited',
+      'donations.how.noDetails',
+      'donations.status.notProof',
+      'donations.banner.sandbox',
+      'myDonations.give.help',
+      'adminDonations.record.audited',
     ]) {
       const value = (locale: Catalogue) =>
         Object.fromEntries(leaves(locale))[key] as string;
@@ -186,6 +191,15 @@ describe('the catalogues agree on their keys', () => {
         'membership.types.fallback',
         'myMembership.memberships.help',
         'adminMembership.application.audited',
+        // Phase 27: that no card or bank detail is entered here, that the
+        // status page is not proof of payment, that a test environment moves
+        // no real money, what giving from an account links, and that opening
+        // a donation record is audited — each read in the reader's language.
+        'donations.how.noDetails',
+        'donations.status.notProof',
+        'donations.banner.sandbox',
+        'myDonations.give.help',
+        'adminDonations.record.audited',
       ]) {
         expect(String(prose[key]), `${locale} ${key}`).toMatch(/\p{Script=Arabic}/u);
       }

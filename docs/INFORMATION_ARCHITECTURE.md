@@ -97,7 +97,7 @@ entering a menu.
 | 9 | Global | Mega menu |
 | 10 | Search | Overlay / dedicated page |
 | 11 | My Minhaj | Account entry point |
-| 12 | Donate | Prominent call to action |
+| 12 | Donate | Prominent call to action — `/donate`, delivered in Phase 27; says honestly when online giving is not available |
 
 **Note on "Watch".** The label is *Watch*, but the domain covers both video and audio.
 Audio lectures and Quran recitation live here, and the mega menu carries an explicit
@@ -416,7 +416,9 @@ Messaging (non-realtime; DOMAIN_MODEL.md §15.6) — a support conversation, nev
 — with an unread-messages panel on the Home overview. Since Phase 26 Membership is delivered by
 Membership — the person's own applications with their status, withdrawal of an open one, their
 Memberships with self-closure, and the published types they may apply for — with a Membership panel
-on the Home overview. Certificates and Learning Streaks stay with no phase at all and are absent
+on the Home overview. Since Phase 27 Donations are delivered by Donations — the person's own linked
+donations with their provider-verified status and refunds, and a linked start — with a Donations
+panel on the Home overview. Certificates and Learning Streaks stay with no phase at all and are absent
 rather than empty. Bookmarks cover exactly Quran ayat, Hadith, articles,
 videos and books; history is off until the person turns it on; notifications are in-app only.
 
@@ -543,7 +545,9 @@ Admin
 ├── Membership                Delivered in Phase 26 — membership.read / membership.administer
 │   ├── Types                 Every state; words per locale, publish and archive; members
 │   └── Applications          Queue and detail: review, approve, reject — no payment control
-├── Donations                 Configuration and records
+├── Donations                 Delivered in Phase 27 — donations.read / donations.administer / donations.refund
+│   ├── Records               Filters, detail, reconcile, CSV export; refunds need the gated key + step-up
+│   └── Campaigns             Every state; words per locale, currency policy, publish and archive
 ├── Messaging                 Delivered in Phase 24 — messaging.support / messaging.moderate
 │   ├── Support Queue         Metadata only; opening a conversation is an audited access
 │   └── Moderation            Open reports, Reports, and one report's bounded evidence

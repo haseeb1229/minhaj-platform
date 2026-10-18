@@ -553,6 +553,17 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'MembershipApplication',
         'Membership',
         'MembershipCommunicationIntent',
+        // Phase 27 — Donations: campaigns with their words and per-currency
+        // policy, the owner's activation, donations, the provider-event dedup
+        // record, refunds and the linked donor's acknowledgement intent.
+        'DonationCampaign',
+        'DonationCampaignTranslation',
+        'DonationCampaignCurrency',
+        'DonationActivation',
+        'Donation',
+        'DonationProviderEvent',
+        'DonationRefund',
+        'DonationCommunicationIntent',
       ].sort(),
     );
   });

@@ -115,6 +115,7 @@ Validation happens **at genuine introduction**, in the phase that owns it
 | Socket.IO | **4.8.3** | LOCKED | Runtime | **Phase 25 — realtime runtime** |
 | Google Meet | — | LOCKED | Runtime (external) | Live class phase |
 | YouTube / Vimeo embeds | — | LOCKED | Runtime (external) | Media phase |
+| **Stripe** (sandbox **engineering** `PaymentProvider` adapter — **not a production provider selection**) | HTTPS API, `Stripe-Version: 2026-09-30.endive`; **no SDK** | ENGINEERING ADAPTER behind the abstraction; the production provider stays OPEN (OPEN_DECISIONS.md §5.4) | Runtime (external) | **Phase 27 — Donations** |
 | SQL Server Full-Text Search | — | LOCKED | Runtime | Search foundation phase |
 | StorageService abstraction | — | LOCKED | Runtime | Storage foundation phase |
 | Native `fetch` + Cheerio | current stable Cheerio | LOCKED | Development | Migration phase |
@@ -507,6 +508,8 @@ explicit authorisation boundaries.
 | **Prisma 8 RC/preview** | The 7.10.x line is the target |
 | **TypeScript 6** | Not during this project phase |
 | **Vitest 5** | Not during this project foundation |
+| **Payment provider SDKs** (Stripe, Safepay, JazzCash or other) | Native `fetch` and `node:crypto` implement the narrow protocol exactly; an SDK would add a dependency and a second HTTP stack for nothing the adapter needs |
+| **Card fields, embedded payment iframes, saved instruments** | Checkout is provider-hosted; One Minhaj never sees, proxies or stores a card number, security code, expiry or wallet/bank credential, and no CSP frame source is widened for payment |
 
 ---
 
@@ -639,3 +642,34 @@ from the moment it exists and is never a cleanup target; tests use disposable te
 The `@minhaj/search` workspace uses Node's `node:crypto` for projection checksums and the
 already-locked Zod through `@minhaj/contracts`. **No corpus or dataset was introduced**: the
 tokenisation fixtures are short synthetic, non-religious sentences written for the proof.
+
+### 18.4 Phase-27 payment sandbox adapter inventory
+
+**SANDBOX ENGINEERING ADAPTER — NOT PRODUCTION PROVIDER SELECTION.** Phase 27 proves the
+provider-neutral Donations lifecycle against one real provider sandbox. Which provider, merchant
+account, currencies and regions Minhaj uses in production remains OPEN (OPEN_DECISIONS.md §5.4); a
+production deployment needs its own adapter decision and an `approved` activation row, and this
+choice does not make one.
+
+| Item | Exact version / value | Use and provenance |
+| --- | --- | --- |
+| Stripe HTTPS API | `Stripe-Version: 2026-09-30.endive` (GA), `https://api.stripe.com`, hosted Checkout on `https://checkout.stripe.com` | Called by `packages/database/src/adapters/donations-stripe` with Node's native `fetch` (bounded timeout, streamed response cap, Zod-validated reads) and `node:crypto` (`Stripe-Signature` HMAC-SHA256 over `t.` + the exact raw body, timing-safe, 300-second tolerance). Used under Stripe's own services terms through a sandbox account the organisation or engineer creates; no Stripe package, SDK or licence-bearing code is vendored. |
+| Local Stripe-protocol simulator | repository file `scripts/shared/stripe-simulator.mjs` | Deterministic, loopback-only, synthetic secrets; serves the adapter's subset of the protocol to CI and the browser suite, which never need credentials or internet. |
+
+**Why Stripe and not the preferred candidate.** Safepay was checked first against its current
+official material and failed required properties: its official Node SDK verifies webhooks by HMAC
+over `JSON.stringify` of the already-parsed `data` object (so verification needs the body parsed
+and re-serialised, not the exact bytes), carries no timestamp, compares with `===`, and documents no
+refund API. JazzCash publishes no verifiable public developer documentation, signs parsed and sorted
+form fields, and its refund API is undocumented. Stripe documents every required property: a
+separate sandbox with no financial effect, hosted checkout, raw-byte timestamped signatures with
+constant-time comparison, durable event ids, server-side retrieval, full and partial refunds,
+idempotency keys retained for 24 hours, and an explicit zero- and three-decimal currency table.
+
+**No npm dependency was introduced.** The live sandbox proof
+(`npm run donations:sandbox:proof`) reads credentials only from ignored local configuration and is
+never run in CI. The anonymous sandbox it ran against was provisioned with the official **Stripe CLI
+1.54.0** (`@stripe/cli`, MIT, installed globally on the engineering workstation — a tool, not a
+project dependency), whose `stripe sandbox create` issues a test-mode `rkcs_test_` restricted key that
+the adapter accepts in the sandbox environment only, and whose `stripe listen --forward-to` delivered
+real signed events to a loopback receiver (SECURITY_BASELINE.md §14).

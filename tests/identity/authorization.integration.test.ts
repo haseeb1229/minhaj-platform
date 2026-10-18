@@ -381,6 +381,18 @@ describe.skipIf(!databaseConfigured)(
        * key, and an applicant needs neither for their own application.
        */
       const PHASE_26_KEYS = ['membership.administer', 'membership.read'];
+      /**
+       * Phase 27: Donations' read and administer pair, both ORDINARY and
+       * bundled into the protected role, and `donations.refund` — moving money
+       * back out — EXTERNALLY GATED: catalogued and grantable, bundled into no
+       * role. A donor needs no key for their own donations.
+       */
+      const PHASE_27_KEYS = [
+        'donations.administer',
+        'donations.read',
+        'donations.refund',
+      ];
+      const PHASE_27_BUNDLED = ['donations.administer', 'donations.read'];
 
       /**
        * The capability-projection sources, each arrived with its OWNER.
@@ -399,9 +411,10 @@ describe.skipIf(!databaseConfigured)(
         'fatwa.publish',
         'teaching.perform',
         // Not capability-projection sources, but gated the same way and held by
-        // no role (Phase 24).
+        // no role (Phase 24, and Phase 27's refund authority).
         'messaging.support',
         'messaging.moderate',
+        'donations.refund',
       ];
 
       it('is exactly what the delivered migrations seeded', async () => {
@@ -427,6 +440,7 @@ describe.skipIf(!databaseConfigured)(
             ...PHASE_23_KEYS,
             ...PHASE_24_KEYS,
             ...PHASE_26_KEYS,
+            ...PHASE_27_KEYS,
           ].sort(),
         );
 
@@ -463,7 +477,6 @@ describe.skipIf(!databaseConfigured)(
         // Taxonomy HAS shipped — which is the whole rule: a domain leaves it at
         // its owning phase and not before.
         for (const domain of [
-          'donations.',
           'migration.',
           // `teaching.perform` shipped with Phase 23 and is the only teaching
           // key: no other `teaching.*` vocabulary exists.
@@ -518,6 +531,17 @@ describe.skipIf(!databaseConfigured)(
           'fee.',
           'dues.',
           'finance.',
+          // Phase 27 shipped `donations.read`, `donations.administer` and the
+          // gated `donations.refund`: no donor, payout, provider, checkout,
+          // receipt or tax key.
+          'donation.',
+          'donor.',
+          'refund.',
+          'payout.',
+          'provider.',
+          'checkout.',
+          'receipt.',
+          'tax.',
         ]) {
           expect(keys.some((key) => key.startsWith(domain))).toBe(false);
         }
@@ -529,6 +553,9 @@ describe.skipIf(!databaseConfigured)(
         );
         expect(keys.filter((key) => key.startsWith('membership.')).sort()).toEqual(
           PHASE_26_KEYS,
+        );
+        expect(keys.filter((key) => key.startsWith('donations.')).sort()).toEqual(
+          PHASE_27_KEYS,
         );
       });
 
@@ -596,6 +623,37 @@ describe.skipIf(!databaseConfigured)(
         expect(Number(provisioned?.total)).toBe(1);
         expect(provisioned?.added).toBe(
           '{"added":"membership.administer membership.read"}',
+        );
+      });
+
+      it('gives the protected role the two ordinary Donations keys, never the refund key', async () => {
+        // Phase 27's read and administer keys are ordinary: the migration
+        // extended the bundle and recorded exactly which keys it added. The
+        // refund authority is gated: no role holds it, and the provisioning
+        // record does not name it.
+        const role = await harness.administration.findRole('platform-administrator');
+
+        expect(role).not.toBeNull();
+        expect(role?.system).toBe(true);
+        for (const key of PHASE_27_BUNDLED) {
+          expect(role?.permissions, `${key} must be bundled`).toContain(key);
+        }
+        expect(role?.permissions).not.toContain('donations.refund');
+        const [held] = await database.admin.query<{ total: number }>(
+          `SELECT COUNT_BIG(*) AS total FROM [dbo].[RolePermission] WHERE [permissionKey] = N'donations.refund';`,
+        );
+        expect(Number(held?.total)).toBe(0);
+        const [provisioned] = await database.admin.query<{
+          total: number;
+          added: string | null;
+        }>(
+          `SELECT COUNT_BIG(*) AS total, MAX([afterState]) AS added FROM [dbo].[AuditLog]
+           WHERE [action] = N'donations.permissions.provisioned'
+             AND [authorisingSource] = N'20261010000000_phase27_donations';`,
+        );
+        expect(Number(provisioned?.total)).toBe(1);
+        expect(provisioned?.added).toBe(
+          '{"added":"donations.administer donations.read"}',
         );
       });
 

@@ -140,7 +140,7 @@ describe('a deferred capability cannot be linked', () => {
     }
   });
 
-  it('records the one deferred domain rather than forgetting it', () => {
+  it('records no deferred domain once the last one is delivered', () => {
     // Recording them is what lets the administrative status surface tell the
     // truth about the roadmap, and what lets the assertions above range over
     // the whole set instead of over whatever somebody remembered to add.
@@ -148,14 +148,46 @@ describe('a deferred capability cannot be linked', () => {
     // `library` LEFT THIS LIST IN PHASE 8, `search` IN PHASE 17, `watch` IN
     // PHASE 10, `news-events` IN PHASE 13, `global` IN PHASE 16, `quran` IN
     // PHASE 18, `hadith` IN PHASE 19, `fatwa` IN PHASE 20, `learn` IN
-    // PHASE 22 and `membership` IN PHASE 26, when each was delivered. Each is
-    // asserted delivered below rather than silently dropped.
-    for (const key of ['donate']) {
-      const route = routeByKey(key);
-
-      expect(route, key).not.toBeNull();
-      expect(route?.availability, key).toBe('deferred');
+    // PHASE 22, `membership` IN PHASE 26 and `donate` IN PHASE 27, when each
+    // was delivered. Each is asserted delivered rather than silently dropped,
+    // and the structural rules above stay in force for any capability a later
+    // decision records before it is built.
+    expect(SHELL_ROUTES.filter((entry) => !isAvailable(entry))).toEqual([]);
+    for (const key of [
+      'library',
+      'search',
+      'watch',
+      'news-events',
+      'global',
+      'quran',
+      'hadith',
+      'fatwa',
+      'learn',
+      'membership',
+      'donate',
+    ]) {
+      expect(routeByKey(key)?.availability, key).toBe('delivered');
     }
+  });
+
+  it('delivers Donations at /donate, public, in the primary navigation and eligible', () => {
+    // Phase 27: one genuine giving page in all three locales — how a gift is
+    // taken and the published campaigns — read without an account. Giving
+    // linked to an account starts under `/my`; no campaign has an address of
+    // its own, and the provider's return and status pages are private, so no
+    // other Donations route exists to register.
+    const route = requireRoute('donate');
+    expect(route.path).toBe('/donate');
+    expect(route.visibility).toBe('public');
+    expect(route.availability).toBe('delivered');
+    expect(route.indexing).toBe('eligible');
+    expect(route.placements).toEqual(['primary']);
+    expect(linksIn('primary').map((entry) => entry.key)).toContain('donate');
+    expect(
+      SHELL_ROUTES.filter(
+        (entry) => entry.key.startsWith('donate.') || entry.key.startsWith('donations'),
+      ),
+    ).toEqual([]);
   });
 
   it('delivers Membership at /membership, public, in the utility navigation and eligible', () => {
@@ -568,8 +600,11 @@ describe('a deferred capability cannot be linked', () => {
     }
   });
 
-  it('refuses to resolve a deferred route as a renderable one', () => {
-    expect(() => requireRoute('donate')).toThrow(/deferred/);
+  it('refuses to resolve an unregistered route as a renderable one', () => {
+    // Phase 27 delivered the last deferred domain, so no registered key throws
+    // `deferred` any more; the type keeps a deferred route pathless, and an
+    // unknown key still fails loudly rather than rendering a guess.
+    expect(() => requireRoute('donate')).not.toThrow();
     expect(() => requireRoute('no-such-route')).toThrow(/registered/);
   });
 
@@ -646,6 +681,10 @@ describe('indexing eligibility is honest', () => {
     ).toEqual([
       // Phase 15: the Collections listing. Its `?offset=` pages are not routes.
       'collections',
+      // Phase 27: the giving page. No campaign has an address of its own, and
+      // the page itself says `noindex` while the provider is a test
+      // environment.
+      'donate',
       // Phase 14: the Events listing. Its queries and each Event's gallery
       // view are not routes.
       'events',

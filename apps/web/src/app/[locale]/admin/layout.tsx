@@ -119,6 +119,12 @@ const SURFACES: readonly {
   // `membership.administer`. Both keys are ordinary, bundled into the Platform
   // Administrator role.
   { key: 'membership', permission: 'membership.read', path: 'membership' },
+  // Phase 27. One entry for Donations: `donations.read` opens its records and
+  // campaigns; every campaign change and reconciliation re-checks
+  // `donations.administer`, and a refund needs the externally gated
+  // `donations.refund` with its own step-up. The refund key alone opens
+  // nothing here, so it does not show the entry.
+  { key: 'donations', permission: 'donations.read', path: 'donations' },
   // Phase 4. A READ-ONLY view of the public shell's effective navigation; the
   // registry behind it is code, so there is no editing surface to reach.
   { key: 'navigation', permission: 'navigation.read', path: 'system/navigation' },

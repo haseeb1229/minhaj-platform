@@ -24,7 +24,8 @@ import { setHistoryAction } from './actions';
  * handler, never rendered into this page. "Download your learning data" is
  * Learning's own export (Phase 22), from its own handler, and "Download your
  * messaging data" is Messaging's (Phase 24), from its own, and "Download your
- * membership data" is Membership's (Phase 26), from its own, so no document
+ * membership data" is Membership's (Phase 26), from its own, and "Download
+ * your donation data" is Donations' (Phase 27), from its own, so no document
  * claims what another context keeps. Closing the account is Identity's,
  * on its own page behind its own password check: this page explains what
  * closing removes and links there, and builds no second closure form. The
@@ -203,6 +204,28 @@ export default async function PrivacyPage({
             className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-4 py-2 text-sm font-medium hover:bg-[color:var(--color-surface-sunken)]"
           >
             {t('privacy.membershipExportLink')}
+          </a>
+        </p>
+      </section>
+
+      <section className="flex flex-col gap-3" aria-labelledby="privacy-donations-export">
+        <span id="privacy-donations-export">
+          <SectionHeading>{t('privacy.donationsExportHeading')}</SectionHeading>
+        </span>
+        <p className="text-sm">{t('privacy.donationsExportBody')}</p>
+        <ul className="flex list-disc flex-col gap-1 ps-5 text-sm">
+          <li>{t('privacy.donationsExportContents')}</li>
+        </ul>
+        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+          {t('privacy.donationsExportClosure')}
+        </p>
+        <p>
+          <a
+            href="/api/my/export/donations"
+            download
+            className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-4 py-2 text-sm font-medium hover:bg-[color:var(--color-surface-sunken)]"
+          >
+            {t('privacy.donationsExportLink')}
           </a>
         </p>
       </section>

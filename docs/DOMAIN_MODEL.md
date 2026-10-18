@@ -2069,8 +2069,9 @@ separate explicit decision rather than an implied one.
 
 ### 17.3 Donations
 
-**DonationCampaign** · **Donation**, behind a `PaymentProvider` abstraction. **No provider is
-selected in Phase 0A, and none is selected since.** **No card or payment credential data is
+**DonationCampaign** · **Donation**, behind a `PaymentProvider` abstraction. **No production
+provider is selected**: Phase 27 proves the lifecycle against one sandbox engineering adapter, which
+is not a production selection (OPEN_DECISIONS.md §5.4). **No card or payment credential data is
 ever stored.** Webhook requirements — signature verification, idempotency, replay resistance,
 and server-side verification of amount, currency and status — are in SECURITY_BASELINE.md §14.
 
@@ -2099,6 +2100,57 @@ change rather than a remodelling:
 **Money follows §19.6.** And nothing here introduces ecommerce: **no cart, no order, no
 shipping, no inventory, no subscription engine, and no Gift Aid or tax-receipt jurisdiction
 logic.**
+
+#### 17.3.1 As delivered (Phase 27)
+
+Eight Donations-owned tables (migration `20261010000000_phase27_donations`), with no card,
+payment-method, order, cart, invoice, subscription or raw-payload table and no generic target pair:
+
+- **DonationCampaign** `draft → published → archived → published` (never back to draft), with
+  **DonationCampaignTranslation** (title, summary, description per locale) and
+  **DonationCampaignCurrency** — the server-owned money policy per ISO currency: inclusive exact
+  minimum and maximum and up to three suggested exact amounts. Publication needs the primary
+  locale's words and at least one currency. No target, progress bar, donor wall, slug or
+  per-campaign route.
+- **Exact money.** `BIGINT` minor units with the currency and the ISO exponent stored beside every
+  amount; a CHECK admits only the allowlisted (currency, exponent) pairs — zero (JPY, KRW), two, and
+  three decimals (BHD, JOD, KWD, OMR, TND). Amounts are parsed from decimal text straight into
+  `bigint`, never rounded, never through binary floating point; provider units are converted inside
+  the provider adapter.
+- **Donation** — one payment attempt: the campaign, an optional linked account, the request's
+  operation id (unique — a duplicate submission is the same donation) and digest, the status-token
+  digest, the immutable expected money, the interface locale and donor-visible label it began with,
+  and its provider scope (provider, environment, NON-SECRET account key). Its state is DERIVED from
+  monotonic facts — a capture set once and only of exactly the expected amount, a refunded total that
+  only grows and never exceeds the capture, a dispute that only moves forward
+  (`none → open → won | lost`), and a closure (`failed`, `expired`, `cancelled`) only while nothing
+  is captured — by one rule the database re-checks: `pending`, `succeeded`, `failed`, `cancelled`,
+  `expired`, `partially_refunded`, `refunded`, `disputed`, `charged_back`. Late or stale provider
+  news therefore converges and never regresses verified success; a mismatch of scope, reference,
+  currency or amount raises an attention flag and never succeeds.
+- **DonationProviderEvent** — durable dedup per (provider, environment, account key, event id),
+  keeping identifiers, type, instants, the digest of the verified bytes and the result; never the
+  payload.
+- **DonationRefund** — a full or partial refund, reserved against the capture under the donation's
+  lock, moving only forward (`requested → pending → succeeded | failed`); live refunds can never
+  exceed the capture, and the requester must hold `donations.refund` with a live `donation-refund`
+  step-up when the row is written.
+- **DonationActivation** — one owner-written row; none means giving is unavailable.
+- **DonationCommunicationIntent** — durable service mail for LINKED donors only.
+
+**Redirect is not authority.** The provider's return URL is a constant page that reads no query
+string; only a verified webhook or a server-to-server read of the provider changes a donation.
+Reconciliation of missing, delayed or ambiguous outcomes is a bounded SQL-leased sweep; an ambiguous
+create is resolved only under its original idempotency key, never by a second attempt.
+
+**Anonymous and linked.** An anonymous donation holds no personal data and is read through an opaque
+status token; a linked donation exists only when an active account starts it from `/my/donations`,
+and an anonymous one never links later. After account closure the link is released and the
+financial record kept (SECURITY_BASELINE.md §19.1.7). **Donations depends on Layer 0 and Identity
+only** — never Membership, which has no payment concept, nor any content context.
+
+**No recurring giving, saved instruments, Gift Aid, tax receipts or production provider** exist;
+those remain OPEN_DECISIONS.md §5.4.
 
 ---
 

@@ -288,6 +288,14 @@ const CONTENT_ROUTE_FILES = [
   // is proven below to reach no session, no identity service, no logger and no
   // authentication library. Applying happens under `/my`, never here.
   'apps/web/src/app/[locale]/(public)/membership/page.tsx',
+  // Phase 27 — Donations. The giving page lists the campaigns an operator
+  // publishes and archives, and whether giving is activated, through
+  // Donations' PUBLIC root, so it cannot be prerendered; it is proven below to
+  // reach no session, no identity service, no logger and no authentication
+  // library. The provider's return page and the anonymous status page read a
+  // cookie or a bearer token and the limiter's address, so they live OUTSIDE
+  // this group, in `(donation)`.
+  'apps/web/src/app/[locale]/(public)/donate/page.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [
@@ -299,6 +307,10 @@ const PUBLIC_ACTION_FILES = [
   // reads no session; it reaches the shared mail infrastructure to enqueue
   // and dispatch the confirmation, which is why it is not the Phase-6 graph.
   'apps/web/src/app/[locale]/(public)/newsletter/actions.ts',
+  // Phase 27 — starting an anonymous donation. It reads no session and no
+  // cookie; the one cookie operation in the giving flow — WRITING the status
+  // token — lives in its own narrow writer, proven below.
+  'apps/web/src/app/[locale]/(public)/donate/actions.ts',
 ];
 
 /** Is this file one of the declared data-backed content routes? */
@@ -992,6 +1004,13 @@ describe('a public CONTENT route reads data, and still reads no session', () => 
       // holds every applicant's applications and Memberships. The public
       // Membership page uses `@/composition/membership-read`.
       '@/composition/membership',
+      // Phase 27: the AUTHENTICATED Donations runtime wires Identity in and
+      // holds every donor's donations, the provider secrets and the ledger;
+      // the status-cookie writer and the webhook admission read the request.
+      // The public giving page uses `@/composition/donations-read`.
+      '@/composition/donations',
+      '@/composition/donation-status-cookie',
+      '@/composition/donations-webhook-admission',
       '@/contexts/identity-access',
       '@/config/server-env',
       '@minhaj/contracts/env/server',
@@ -1330,7 +1349,18 @@ describe('the base security headers', () => {
     expect(config).toContain('"frame-src \'none\'"');
     expect(config).toContain("'/:locale(en|ur|ar)/watch/videos/:slug'");
     expect(config).toContain("'/:locale(en|ur|ar)/admin/media/videos/:id'");
-    expect(config.match(/'\/:locale\(en\|ur\|ar\)\//g) ?? []).toHaveLength(2);
+    // Phase 27 adds four exact shapes and nothing broader: the two pages that
+    // render a giving form (their `form-action` also names the provider's
+    // hosted checkout), and the two whose address or state is a bearer
+    // (`no-referrer`, `private, no-store`).
+    for (const route of [
+      "'/:locale(en|ur|ar)/donate',",
+      "'/:locale(en|ur|ar)/my/donations',",
+      "'/:locale(en|ur|ar)/donate/status/:token*',",
+      "'/:locale(en|ur|ar)/donate/return',",
+    ])
+      expect(config, route).toContain(route);
+    expect(config.match(/'\/:locale\(en\|ur\|ar\)\//g) ?? []).toHaveLength(6);
     expect(config).toContain('autoplay=()');
     for (const origin of [
       'youtube',
@@ -1368,6 +1398,38 @@ describe('the base security headers', () => {
     // at length why the one allowance exists and why the other does not, and
     // the explanation must not be what the count measures.
     expect(code(config).match(/'unsafe-inline'/g) ?? []).toHaveLength(1);
+  });
+
+  it('widens form-action to the hosted checkout on the two giving pages only', async () => {
+    // Phase 27. A giving form ends in a redirect to the payment provider's
+    // hosted checkout, and a browser enforces `form-action` on that redirect.
+    // The origin is named ONCE, as an exact HTTPS origin, used only as a form
+    // target, and handed only to the policy of the two giving routes — never
+    // a frame, script, connect or image source, never the base policy.
+    const config = code(
+      await readFile(path.join(repoRoot, 'apps', 'web', 'next.config.ts'), 'utf8'),
+    );
+
+    expect(config.match(/checkout\.stripe\.com/g) ?? []).toHaveLength(1);
+    expect(config).toContain(
+      "const DONATION_CHECKOUT_ORIGIN = 'https://checkout.stripe.com';",
+    );
+    expect(config.match(/DONATION_CHECKOUT_ORIGIN/g) ?? []).toHaveLength(2);
+    expect(config).toMatch(
+      /const DONATION_CONTENT_SECURITY_POLICY = contentSecurityPolicy\(\s*\[\],\s*\[DONATION_CHECKOUT_ORIGIN\],?\s*\);/u,
+    );
+    expect(config).toContain(
+      'const CONTENT_SECURITY_POLICY = contentSecurityPolicy([]);',
+    );
+    expect(config).toMatch(/formTargets\.length === 0\s*\?\s*"form-action 'self'"/u);
+    expect(config).toContain("`form-action 'self' ${formTargets.join(' ')}`");
+    expect(config.match(/DONATION_CONTENT_SECURITY_POLICY/g) ?? []).toHaveLength(2);
+    expect(config).toMatch(
+      /DONATION_FORM_ROUTES\.map\(\(source\) => \(\{\s*source,\s*headers: \[\s*\{ key: 'Content-Security-Policy', value: DONATION_CONTENT_SECURITY_POLICY \},\s*\],/u,
+    );
+    expect(config).toMatch(
+      /DONATION_PRIVATE_ROUTES\.map\(\(source\) => \(\{\s*source,\s*headers: \[\s*\{ key: 'Referrer-Policy', value: 'no-referrer' \},\s*\{ key: 'Cache-Control', value: 'private, no-store' \},\s*\],/u,
+    );
   });
 });
 
@@ -1412,6 +1474,88 @@ describe('Phase 21 private island and newsletter action', () => {
         specifier,
       ).toBe(false);
     expect(specifiersIn(raw)).toContain('@/composition/request-address');
+  });
+});
+
+describe('Phase 27 anonymous giving action', () => {
+  const ACTION = 'apps/web/src/app/[locale]/(public)/donate/actions.ts';
+  const WRITER = 'apps/web/src/composition/donation-status-cookie.ts';
+
+  it('reads no session and no cookie in the anonymous giving action', async () => {
+    const raw = await readFile(path.join(repoRoot, ACTION), 'utf8');
+    const source = code(raw);
+    expect(source.trimStart()).toMatch(/^['"]use server['"]/);
+    for (const call of [
+      'requireOwnSession',
+      'requireActiveSession',
+      'personalGate',
+      'session.resolve',
+      'cookies(',
+      'headers(',
+    ])
+      expect(source, call).not.toContain(call);
+    for (const specifier of specifiersIn(raw))
+      expect(
+        [
+          '@/composition/authorization',
+          '@/composition/identity',
+          '@/composition/request',
+          'next/headers',
+          'next/cookies',
+        ].includes(specifier),
+        specifier,
+      ).toBe(false);
+    expect(specifiersIn(raw)).toContain('@/composition/request-address');
+    expect(specifiersIn(raw)).toContain('@/composition/donation-status-cookie');
+    // Anonymous, in so many words, and sent only where the service said.
+    expect(source).toMatch(/account:\s*null/u);
+    expect(source).toContain('redirect(checkoutUrl)');
+  });
+
+  it('confines the one cookie operation to a writer that can only set', async () => {
+    // The giving flow's only cookie operation is WRITING the status token. It
+    // lives in this narrow module, outside the public tree: one `cookies()`
+    // call, used once to `.set`, and no way to read, enumerate or delete any
+    // cookie — and no session, identity or authorisation module reachable.
+    const raw = await readFile(path.join(repoRoot, WRITER), 'utf8');
+    const source = code(raw);
+    expect(source.match(/\bcookies\(\)/g) ?? []).toHaveLength(1);
+    expect(source.match(/\.set\(/g) ?? []).toHaveLength(1);
+    expect(source).toMatch(/\(await cookies\(\)\)\.set\(DONATION_STATUS_COOKIE,/u);
+    for (const reading of ['.get(', '.getAll(', '.has(', '.delete(', 'headers('])
+      expect(source, reading).not.toContain(reading);
+    expect(source).toContain('httpOnly: true');
+    expect(source).toContain("sameSite: 'lax'");
+    for (const specifier of specifiersIn(raw))
+      expect(
+        [
+          '@/composition/authorization',
+          '@/composition/identity',
+          '@/composition/request',
+          '@/contexts/identity-access',
+          'better-auth',
+        ].includes(specifier),
+        specifier,
+      ).toBe(false);
+  });
+
+  it('keeps the cookie-reading return and status pages out of the public tree', async () => {
+    for (const file of [
+      'apps/web/src/app/[locale]/(donation)/donate/return/page.tsx',
+      'apps/web/src/app/[locale]/(donation)/donate/status/[token]/page.tsx',
+    ]) {
+      await expect(stat(path.join(repoRoot, file))).resolves.toBeDefined();
+      const source = code(await readFile(path.join(repoRoot, file), 'utf8'));
+      expect(source, file).toContain('force-dynamic');
+      expect(source, file).toContain('index: false');
+      expect(source, file).toContain("referrer: 'no-referrer'");
+      // A GET that never mutates: neither page writes a cookie or calls an
+      // act — the status page's two acts are Server Actions.
+      expect(source, file).not.toContain('.set(');
+      expect(source, file).not.toMatch(/donor\.(?:check|cancel|start)\(/u);
+    }
+    for (const area of ['donate/return', 'donate/status'])
+      await expect(stat(path.join(PUBLIC_GROUP, area))).rejects.toThrow();
   });
 });
 

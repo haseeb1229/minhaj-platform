@@ -313,6 +313,20 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/membership/parts.tsx',
     'apps/web/src/components/membership/presentation.ts',
     'apps/web/src/components/membership/read.ts',
+    // Phase 27. Donations' shared parts. The badges, amounts, campaign words,
+    // giving form and pure presentation decisions read nothing at all — the
+    // anonymous `/donate` page renders them from what its public reader
+    // returned, through the request-cached public read — and the private read
+    // and action helpers are reached only from the guarded `/my` and
+    // `/admin/donations` pages, the token-bound status page and the Server
+    // Actions. The status cookie is written outside this tree.
+    'apps/web/src/components/donations/action-support.ts',
+    'apps/web/src/components/donations/operation-id-field.tsx',
+    'apps/web/src/components/donations/parts.tsx',
+    'apps/web/src/components/donations/presentation.ts',
+    'apps/web/src/components/donations/public-read.ts',
+    'apps/web/src/components/donations/read.ts',
+    'apps/web/src/components/donations/start-form.tsx',
     // Phase 21. The private island public content pages place (session-free
     // by construction: it reads personal state only through `/api/my/*`
     // after hydration), and the My Minhaj Personalisation parts, which read

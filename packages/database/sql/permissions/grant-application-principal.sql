@@ -972,3 +972,32 @@ IF OBJECT_ID(N'[dbo].[Membership]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT,
 -- An INTENT is claimed, relayed or abandoned, and removed only by a closed
 -- account's disposition; what it names and its key never change.
 IF OBJECT_ID(N'[dbo].[MembershipCommunicationIntent]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[MembershipCommunicationIntent] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[MembershipCommunicationIntent] ([id], [purpose], [recipientUserId], [applicationId], [membershipId], [dueAt], [idempotencyKey], [createdAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[MembershipCommunicationIntent] TO [$(app_login)]; END;
+
+-- Phase 27: Donations.
+-- A CAMPAIGN is created, edited, published and archived — never deleted, and
+-- its identity, primary locale and creation instant never change.
+IF OBJECT_ID(N'[dbo].[DonationCampaign]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[DonationCampaign] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[DonationCampaign] ([id], [primaryLocale], [createdAt]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[DonationCampaign] TO [$(app_login)]; END;
+-- A campaign's WORDS are added and replaced per locale, never removed or moved.
+IF OBJECT_ID(N'[dbo].[DonationCampaignTranslation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[DonationCampaignTranslation] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[DonationCampaignTranslation] ([campaignId], [locale]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[DonationCampaignTranslation] TO [$(app_login)]; END;
+-- A CURRENCY POLICY is added, replaced and removed by an operator; it never
+-- moves to another campaign, currency or exponent. Removing one never touches
+-- a donation: each holds its own copy of its expected money.
+IF OBJECT_ID(N'[dbo].[DonationCampaignCurrency]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[DonationCampaignCurrency] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[DonationCampaignCurrency] ([campaignId], [currency], [currencyExponent]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[DonationCampaignCurrency] TO [$(app_login)]; END;
+-- THE ACTIVATION is the owner's: SELECT and nothing else, so no runtime
+-- permission can switch payments on, change their scope, or re-label a
+-- fixture as approved.
+IF OBJECT_ID(N'[dbo].[DonationActivation]',N'U') IS NOT NULL BEGIN GRANT SELECT ON OBJECT::[dbo].[DonationActivation] TO [$(app_login)]; DENY INSERT, UPDATE, DELETE, ALTER ON OBJECT::[dbo].[DonationActivation] TO [$(app_login)]; END;
+-- A DONATION is financial history: never deleted, and its identity, request,
+-- token digest, locale, label, expected money, provider scope and creation
+-- instant never change. Its facts move forward under the triggers, and its
+-- donor link is only released for a closed account.
+IF OBJECT_ID(N'[dbo].[Donation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Donation] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[Donation] ([id], [campaignId], [operationId], [requestDigest], [statusTokenDigest], [locale], [checkoutLabel], [currency], [currencyExponent], [expectedMinor], [provider], [environment], [accountKey], [createdAt]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Donation] TO [$(app_login)]; END;
+-- A PROVIDER EVENT is admitted once and completed once: never deleted, and
+-- nothing that identifies it ever changes.
+IF OBJECT_ID(N'[dbo].[DonationProviderEvent]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[DonationProviderEvent] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[DonationProviderEvent] ([id], [provider], [environment], [accountKey], [eventId], [eventType], [occurredAt], [receivedAt], [payloadDigest]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[DonationProviderEvent] TO [$(app_login)]; END;
+-- A REFUND moves only forward and is never deleted; its donation, request,
+-- money, scope, requester and request instant never change.
+IF OBJECT_ID(N'[dbo].[DonationRefund]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[DonationRefund] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[DonationRefund] ([id], [donationId], [operationId], [requestDigest], [currency], [currencyExponent], [amountMinor], [provider], [environment], [accountKey], [requestedByUserId], [requestedAt]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[DonationRefund] TO [$(app_login)]; END;
+-- An INTENT is claimed, relayed or abandoned, and removed only by a closed
+-- account's disposition; what it names and its key never change.
+IF OBJECT_ID(N'[dbo].[DonationCommunicationIntent]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[DonationCommunicationIntent] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[DonationCommunicationIntent] ([id], [purpose], [donationId], [refundId], [recipientUserId], [dueAt], [idempotencyKey], [createdAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[DonationCommunicationIntent] TO [$(app_login)]; END;
