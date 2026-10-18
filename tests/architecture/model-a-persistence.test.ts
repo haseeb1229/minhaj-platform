@@ -589,6 +589,10 @@ describe('F1 — the production database package publishes no raw capability', (
       // owned there. It reads and writes only Messaging's own tables, and names
       // Learning's, Identity's and Storage's rows only as foreign-key targets.
       messaging: { kind: 'context', slug: 'messaging' },
+      // Phase 26. Membership is a bounded CONTEXT; its adapter is hosted here and
+      // owned there. It reads and writes only Membership's own tables, and names
+      // User rows only as foreign-key targets.
+      membership: { kind: 'context', slug: 'membership' },
       email: { kind: 'layer0', concern: 'email' },
       'rate-limiting': { kind: 'layer0', concern: 'rate-limiting' },
       auditing: { kind: 'layer0', concern: 'auditing' },

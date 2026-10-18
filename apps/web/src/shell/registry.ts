@@ -340,11 +340,20 @@ const UTILITY: readonly ShellRoute[] = Object.freeze([
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
   }),
+  /**
+   * DELIVERED BY PHASE 26. The Membership page explains what Membership is and
+   * how an application is considered, and lists the published types — a
+   * genuine page in all three locales, read without an account. Applying
+   * happens under `/my`; no type has an address of its own.
+   */
   Object.freeze({
     key: 'membership',
     label: 'nav.membership',
+    path: '/membership',
     placements: Object.freeze(['utility'] as const),
-    availability: 'deferred' as const,
+    visibility: 'public' as const,
+    availability: 'delivered' as const,
+    indexing: 'eligible' as const,
   }),
   Object.freeze({
     key: 'contact-help',

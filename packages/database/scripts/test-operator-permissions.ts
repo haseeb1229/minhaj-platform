@@ -661,6 +661,53 @@ try {
     operatorSession.query(`DELETE FROM [dbo].[MessagingReport];`),
   );
 
+  // Phase 26 gives the operator ROLE nothing over Membership: types are
+  // administered, and applications decided, only through the runtime under
+  // `membership.administer`, and an application, a Membership and the mail
+  // owed about them are an account's own — so the operator can neither read
+  // who applied or belongs, nor approve, close, publish or erase anything.
+  const membershipProbes: Readonly<Record<string, readonly [string, string, string]>> = {
+    MembershipType: [
+      `INSERT INTO [dbo].[MembershipType] ([id], [primaryLocale], [displayOrder]) VALUES (N'injected', N'en', 0);`,
+      `UPDATE [dbo].[MembershipType] SET [state] = N'published';`,
+      `DELETE FROM [dbo].[MembershipType];`,
+    ],
+    MembershipTypeTranslation: [
+      `INSERT INTO [dbo].[MembershipTypeTranslation] ([membershipTypeId], [locale], [title], [summary], [description]) VALUES (N'injected', N'en', N'injected', N'injected', N'injected');`,
+      `UPDATE [dbo].[MembershipTypeTranslation] SET [title] = N'injected';`,
+      `DELETE FROM [dbo].[MembershipTypeTranslation];`,
+    ],
+    MembershipApplication: [
+      `INSERT INTO [dbo].[MembershipApplication] ([id], [applicantUserId], [membershipTypeId], [submittedAt]) VALUES (N'injected', N'injected', N'injected', SYSUTCDATETIME());`,
+      `UPDATE [dbo].[MembershipApplication] SET [status] = N'approved';`,
+      `DELETE FROM [dbo].[MembershipApplication];`,
+    ],
+    Membership: [
+      `INSERT INTO [dbo].[Membership] ([id], [memberUserId], [membershipTypeId], [sourceApplicationId], [activatedAt]) VALUES (N'injected', N'injected', N'injected', N'injected', SYSUTCDATETIME());`,
+      `UPDATE [dbo].[Membership] SET [status] = N'closed';`,
+      `DELETE FROM [dbo].[Membership];`,
+    ],
+    MembershipCommunicationIntent: [
+      `INSERT INTO [dbo].[MembershipCommunicationIntent] ([id], [purpose], [recipientUserId], [applicationId], [dueAt], [idempotencyKey]) VALUES (N'injected', N'membership.application.submitted', N'injected', N'injected', SYSUTCDATETIME(), N'injected');`,
+      `UPDATE [dbo].[MembershipCommunicationIntent] SET [state] = N'abandoned';`,
+      `DELETE FROM [dbo].[MembershipCommunicationIntent];`,
+    ],
+  };
+  for (const [table, [insert, update, remove]] of Object.entries(membershipProbes)) {
+    await expectDenied(operatorSession, `operator SELECT on ${table} denied`, () =>
+      operatorSession.query(`SELECT TOP 1 1 AS probe FROM [dbo].[${table}];`),
+    );
+    await expectDenied(operatorSession, `operator INSERT on ${table} denied`, () =>
+      operatorSession.query(insert),
+    );
+    await expectDenied(operatorSession, `operator UPDATE on ${table} denied`, () =>
+      operatorSession.query(update),
+    );
+    await expectDenied(operatorSession, `operator DELETE on ${table} denied`, () =>
+      operatorSession.query(remove),
+    );
+  }
+
   await expectDenied(operatorSession, 'operator INSERT on RoleAssignment denied', () =>
     operatorSession.query(`
       INSERT INTO [dbo].[RoleAssignment] ([userId], [roleId])

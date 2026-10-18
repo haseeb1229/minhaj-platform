@@ -717,6 +717,21 @@ old reminder intent and commits a new one, so the old time cannot fire. The four
 keep the **transactional** suppression scope. No dependency edge is added: Learning still depends on
 Layer 0 and, through Layer-4 answers, on Identity and People.
 
+**As delivered (Phase 26): a fourth owner.** Membership commits a durable
+`MembershipCommunicationIntent` — purpose, the recipient account, the ONE application or Membership it
+describes (typed keys, never a target pair), due instant, idempotency key — in the same transaction as
+a submission, the start of review, an approval, a rejection, an applicant's withdrawal or a
+Membership's closure. The Layer-4 dispatcher relays due intents each tick beside Identity's and
+Learning's: Membership re-checks that the message is still owed (the application still stands at the
+status the message describes, or the Membership is closed), Identity resolves the account's current
+address and locale through its public interface — a closed, disabled or suspended account is owed
+nothing — and the shared delivery row is enqueued under the intent's own key. At send time Membership
+re-checks and renders a short factual message naming the type, with a link to the person's own
+`/my/membership` page and never a state-changing link. An account-closure withdrawal owes nothing. The
+six Membership purposes keep the **transactional** suppression scope, so a newsletter unsubscribe
+never silences them. Membership never calls the provider. No dependency edge is added: Membership
+depends on Layer 0 and, through Layer-4 answers, on Identity.
+
 ### 4.7 Integration abstractions
 
 | Integration | V1 | Later |

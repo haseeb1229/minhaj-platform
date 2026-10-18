@@ -456,7 +456,8 @@
       "fatwa": "Fatwa",
       "newsletter": "Newsletter",
       "learning": "Learning",
-      "messaging": "Messaging"
+      "messaging": "Messaging",
+      "membership": "Membership"
     },
     "global": {
       "title": "Global Network",
@@ -4461,7 +4462,7 @@
       "exportScope": "Saved items are listed by reference, not as copies of the content. Your account details and your questions are not part of this file.",
       "exportLink": "Download my data",
       "closureHeading": "Closing your account",
-      "closureBody": "Closing your account removes everything listed above — saved items, notes, collections, history, your reading position, interests, notifications, your course enrolments, lesson progress and trial-class requests. Closing is done from your Security settings, with your password.",
+      "closureBody": "Closing your account removes everything listed above — saved items, notes, collections, history, your reading position, interests, notifications, your course enrolments, lesson progress and trial-class requests. It also withdraws any membership application still in progress; it does not end a Membership you hold. Closing is done from your Security settings, with your password.",
       "closureLink": "Go to account closure",
       "newsletterHeading": "Newsletter",
       "newsletterBody": "The newsletter is independent of your account: signing up for an account never subscribes you, and closing it does not unsubscribe you. Manage it from the links in its emails.",
@@ -4474,7 +4475,12 @@
       "messagingExportBody": "Download a copy of what Messaging keeps for your account, as a separate JSON file:",
       "messagingExportContents": "The conversations you take part in, the messages you sent with their text, the details of the files you attached (never the files themselves), how far you have read, the people you blocked and the reports you made. Messages other people sent are never included.",
       "messagingExportClosure": "Closing your account closes your conversations and removes your read positions, any blocks between you and others, and files you uploaded but did not send. The person you were talking to may still be able to read what you both wrote, but cannot reply. A conversation is removed once nobody left can read it — unless a report refers to it, in which case it is kept as evidence.",
-      "messagingExportLink": "Download your messaging data"
+      "messagingExportLink": "Download your messaging data",
+      "membershipExportHeading": "Download your membership data",
+      "membershipExportBody": "Download a copy of what Membership keeps for your account, as a separate JSON file:",
+      "membershipExportContents": "Your membership applications and Memberships — the type each one is for, its status, who withdrew or ended it, and its dates — listed by reference, never with the types’ descriptions.",
+      "membershipExportClosure": "Closing your account withdraws any membership application still in progress. It does not end a Membership you hold: that is an organisational relationship, which you can end from My Membership.",
+      "membershipExportLink": "Download your membership data"
     },
     "home": {
       "unavailable": "Your saved items, history and notifications can’t be shown right now. Your account settings below still work.",
@@ -5864,6 +5870,312 @@
         "withhold-message": "The message is hidden from the people in the conversation and kept as evidence.",
         "close-conversation": "No one can send further messages. The history stays readable."
       }
+    }
+  },
+  "membership": {
+    "title": "Membership",
+    "description": "What Membership is, the types of membership open for application, and how an application is considered.",
+    "intro": "Membership is an organisational relationship, separate from an account on this website. It begins only when an application is approved, and the member can end it at any time.",
+    "signedOut": "Reading this page needs no account. Applying needs one, and you apply from My Minhaj. Nothing else on this website requires an application or a Membership.",
+    "process": {
+      "heading": "How an application works",
+      "apply": "Sign in, open My Membership and choose the type you want to apply for. An application records your account and the type you chose — nothing else is asked.",
+      "review": "An administrator takes the application under review. Until it is decided, you can withdraw it at any time.",
+      "decision": "The application is then approved or not approved. Applying does not guarantee approval. An approval begins your Membership.",
+      "mail": "You are sent an email when your application is received, when its review starts and when it is decided.",
+      "close": "You can end a Membership from My Membership at any time. Closing your account on this website withdraws any application still in progress, but does not end a Membership."
+    },
+    "types": {
+      "heading": "Types of membership",
+      "empty": "No type of membership is open for application at the moment.",
+      "fallback": "This type of membership is described in {language}; it has not been translated into this language.",
+      "guidance": "How to join"
+    },
+    "cta": {
+      "heading": "Apply",
+      "body": "Applications are made from My Minhaj. If you are not signed in, you will be asked to sign in first.",
+      "link": "Go to My Membership"
+    },
+    "status": {
+      "application": {
+        "submitted": "Submitted",
+        "underReview": "Under review",
+        "approved": "Approved",
+        "rejected": "Not approved",
+        "withdrawn": "Withdrawn"
+      },
+      "membership": {
+        "active": "Active",
+        "closed": "Ended"
+      }
+    },
+    "typeState": {
+      "draft": "Draft",
+      "published": "Published",
+      "archived": "Archived"
+    },
+    "withdrawalSource": {
+      "applicant": "withdrawn by the applicant",
+      "accountClosure": "withdrawn when the account was closed"
+    },
+    "closureSource": {
+      "member": "ended by the member",
+      "operator": "ended by an administrator"
+    },
+    "typeUnavailable": "A type of membership that is no longer shown"
+  },
+  "myMembership": {
+    "title": "My Membership",
+    "description": "Your applications and Memberships. Only you, and the administrators who consider applications, can see them.",
+    "decisionNotice": "Each application is considered by an administrator. Applying does not guarantee approval.",
+    "working": "Working…",
+    "done": {
+      "submitted": "Your application was submitted. It is listed under “Applications in progress”.",
+      "existing": "You already had an application in progress for this type, so no second one was made.",
+      "withdrawn": "Your application was withdrawn.",
+      "closed": "Your Membership was ended. Your account is unchanged."
+    },
+    "open": {
+      "heading": "Applications in progress",
+      "empty": "You have no application in progress.",
+      "submittedHelp": "Received, and waiting for an administrator to start the review.",
+      "reviewHelp": "An administrator is reviewing this application."
+    },
+    "memberships": {
+      "heading": "Your Memberships",
+      "help": "A Membership is separate from your account. Ending it leaves your account open, and closing your account does not end it.",
+      "empty": "You do not hold a Membership."
+    },
+    "apply": {
+      "heading": "Apply for membership",
+      "help": "Applying records your account and the type you choose — nothing else is asked. You can withdraw an application while it is in progress.",
+      "empty": "No type of membership is open for application at the moment.",
+      "submit": "Apply: {title}",
+      "inProgress": "You have an application in progress for this type.",
+      "member": "You hold an active Membership of this type."
+    },
+    "history": {
+      "heading": "Earlier applications",
+      "empty": "You have no earlier applications.",
+      "membership": "This application began a Membership."
+    },
+    "when": {
+      "submitted": "Submitted",
+      "reviewStarted": "Review started",
+      "decided": "Decided",
+      "withdrawn": "Withdrawn",
+      "began": "Began",
+      "ended": "Ended"
+    },
+    "withdraw": {
+      "submit": "Withdraw application",
+      "confirm": "I want to withdraw this application. I can apply again later."
+    },
+    "close": {
+      "submit": "End this Membership",
+      "confirm": "I want to end this Membership. It cannot be reopened; I would need to apply again."
+    },
+    "failure": {
+      "load": "Your membership details can’t be shown right now. Please try again later.",
+      "conflict": "This changed since the page loaded. Reload the page and try again.",
+      "invalid": "That request wasn’t valid. Reload the page and try again.",
+      "invalidState": "That step isn’t possible any more. Reload the page to see where things stand.",
+      "typeUnavailable": "This type of membership isn’t open for application at the moment.",
+      "alreadyMember": "You already hold an active Membership of this type.",
+      "notFound": "That application or Membership wasn’t found.",
+      "rateLimited": "Too many requests in a short time. Please wait a while and try again.",
+      "confirmRequired": "Tick the confirmation box first.",
+      "noSession": "Your session has ended. Please sign in again.",
+      "unavailable": "That couldn’t be completed just now. Please try again later."
+    },
+    "nav": {
+      "label": "Membership pages",
+      "membership": "My Membership",
+      "public": "About membership",
+      "account": "My Minhaj"
+    },
+    "home": {
+      "heading": "Membership",
+      "unavailable": "Your membership details can’t be shown right now.",
+      "none": "You hold no Membership and have no application in progress.",
+      "active": "{count, plural, one {You hold # active Membership.} other {You hold # active Memberships.}}",
+      "open": "{count, plural, one {You have # application in progress.} other {You have # applications in progress.}}",
+      "link": "Go to My Membership"
+    }
+  },
+  "adminMembership": {
+    "title": "Membership",
+    "loading": "Loading…",
+    "unknown": "Something went wrong. The details are not shown here; please try again.",
+    "reload": "Try again",
+    "saved": "Saved.",
+    "pending": "Saving…",
+    "beyond": "There is nothing on this page. Go back to the first page.",
+    "previous": "Previous",
+    "next": "Next",
+    "pageOf": "Page {page} of {pages}",
+    "surface": {
+      "types": "Types and members",
+      "applications": "Applications"
+    },
+    "person": {
+      "fallback": "Closed or unavailable account"
+    },
+    "localeName": {
+      "en": "English",
+      "ur": "Urdu",
+      "ar": "Arabic"
+    },
+    "failure": {
+      "denied": "You don’t have permission to do that.",
+      "notFound": "That record wasn’t found.",
+      "conflict": "Someone changed this since the page loaded. Reload the page, check where it stands now, and try again.",
+      "invalid": "Some values aren’t valid. Check the fields and try again.",
+      "invalidState": "That step isn’t open for this record in its current state. Reload the page to see where it stands.",
+      "typeUnavailable": "This type is not published, so its applications can’t be approved. Publish it again, or do not approve the application.",
+      "alreadyMember": "The applicant already holds an active Membership of this type.",
+      "applicantClosed": "The applicant’s account is closed, so the application can’t be taken under review or approved. It can still be not approved.",
+      "incomplete": "A type can be published only once it has words in its primary language.",
+      "limit": "No more types can be created: the limit has been reached.",
+      "rateLimited": "Too many requests in a short time. Please wait and try again.",
+      "confirmRequired": "Tick the confirmation box first.",
+      "load": "This can’t be shown right now. Please try again later.",
+      "noSession": "Your session has ended. Sign in again.",
+      "secondFactorRequired": "Finish setting up two-step verification first.",
+      "accountInactive": "This account is not active."
+    },
+    "types": {
+      "title": "Membership types and members",
+      "description": "Only published types appear on the public Membership page and take applications.",
+      "heading": "Types",
+      "empty": "No type of membership has been created yet.",
+      "caption": "Types of membership, in display order",
+      "column": {
+        "title": "Type",
+        "state": "State",
+        "order": "Position",
+        "open": "In progress",
+        "active": "Active members"
+      },
+      "selected": "(being edited)",
+      "openCount": "{count, plural, one {# application} other {# applications}}"
+    },
+    "editor": {
+      "heading": "Editing",
+      "back": "Close the editor",
+      "state": "State",
+      "version": "Version",
+      "created": "Created",
+      "updated": "Last changed",
+      "published": "Last published",
+      "archived": "Archived"
+    },
+    "fields": {
+      "primaryLocale": "Primary language",
+      "primaryLocaleHelp": "The language the type is first written in. Its words in this language are needed for publication, and are shown wherever another language has none.",
+      "displayOrder": "Display position",
+      "displayOrderHelp": "Lower numbers are listed first, from 0 to 9999.",
+      "title": "Title",
+      "summary": "Summary",
+      "description": "Description",
+      "guidance": "Joining guidance (optional)",
+      "guidanceHelp": "Short, practical guidance for applicants. Leave it empty for none."
+    },
+    "lifecycle": {
+      "heading": "Publication",
+      "explain": {
+        "published": "Publishing lists the type on the public Membership page and lets people apply. Its primary language must have words.",
+        "archived": "Archiving removes the type from the public page and stops new applications and approvals. Existing Memberships are unchanged, and the type can be published again."
+      },
+      "to": {
+        "published": "Publish",
+        "archived": "Archive"
+      }
+    },
+    "order": {
+      "heading": "Display position",
+      "submit": "Save position"
+    },
+    "labels": {
+      "heading": "Words in each language",
+      "help": "Each language is saved on its own. Where a language has no words, public pages show the primary language’s words with a notice.",
+      "primary": "{language} (primary language)",
+      "missing": "No words in this language yet.",
+      "submit": "Save the {language} words"
+    },
+    "create": {
+      "heading": "Create a type",
+      "help": "A new type starts as a draft, written in its primary language. Add other languages and publish it from its editor.",
+      "submit": "Create draft"
+    },
+    "members": {
+      "heading": "Members",
+      "description": "People who hold, or held, a Membership, most recently begun first. Listing members is recorded in the audit log.",
+      "filter": "Membership status",
+      "forType": "Only members of the type being edited are shown.",
+      "allTypes": "Show members of every type",
+      "empty": "No Membership matches.",
+      "pages": "Member pages",
+      "member": "Member",
+      "type": "Type",
+      "began": "Began",
+      "ended": "Ended",
+      "close": "End this Membership",
+      "closeConfirm": "I want to end this Membership. It cannot be reopened; the person can apply again, and their account is not affected."
+    },
+    "applications": {
+      "title": "Applications",
+      "description": "Oldest first. Listing applications is recorded in the audit log.",
+      "status": "Status",
+      "type": "Type",
+      "allTypes": "Every type",
+      "filterOpen": "In progress (submitted or under review)",
+      "filterAll": "Every status",
+      "apply": "Show",
+      "invalidFilter": "That type filter isn’t recognised, so nothing is listed.",
+      "reset": "Show applications in progress",
+      "caption": "Applications — {status} — oldest first",
+      "column": {
+        "applicant": "Applicant",
+        "type": "Type",
+        "status": "Status",
+        "submitted": "Submitted",
+        "detail": "Application"
+      },
+      "open": "Open application",
+      "empty": "No application matches.",
+      "pages": "Application pages"
+    },
+    "application": {
+      "title": "Application",
+      "audited": "Opening an application is recorded in the audit log: who opened it, and when.",
+      "back": "Back to applications",
+      "applicant": "Applicant",
+      "type": "Type",
+      "status": "Status",
+      "submitted": "Submitted",
+      "reviewStarted": "Review started",
+      "decided": "Decided",
+      "withdrawn": "Withdrawn",
+      "membership": "Resulting Membership",
+      "membershipNone": "None",
+      "membershipCreated": "A Membership began on approval — see the members of this type",
+      "version": "Version",
+      "terminal": "This application is finished and can no longer change."
+    },
+    "review": {
+      "heading": "Start the review",
+      "help": "The applicant is told by email that their application is being reviewed. A decision can be made only after the review has started.",
+      "submit": "Start review",
+      "confirm": "I am starting the review of this application."
+    },
+    "decide": {
+      "heading": "Decision",
+      "help": "Approving begins a Membership of this type for the applicant. Not approving finishes the application, and the person may apply again. The applicant is told by email either way.",
+      "approve": "Approve",
+      "reject": "Do not approve",
+      "approveConfirm": "I approve this application, and a Membership will begin.",
+      "rejectConfirm": "I do not approve this application."
     }
   }
 }

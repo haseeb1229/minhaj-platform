@@ -218,7 +218,11 @@ applies to Phase 33. Phase 22 added Learning's export and closure disposition on
 the same privacy-minimising defaults (§19.1.4) and decided nothing above either. Phase 24 added
 Messaging's export and disposition (§19.1.5): a reported conversation is kept as evidence and every
 other conversation is disposed once all its non-support participants have closed their accounts —
-an engineering lifecycle, not a retention period, which this decision still owns.
+an engineering lifecycle, not a retention period, which this decision still owns. Phase 26 added
+Membership's export and disposition (SECURITY_BASELINE.md §19.1.6): a closed account's open
+applications are withdrawn and its owed mail removed, while an active organisational Membership is
+kept under its own lifecycle rather than treated as a resignation — an engineering default, not a
+retention period, which this decision still owns.
 
 ### 2.3 Legal document content
 **Owner:** Minhaj · **Gates:** **Phase 6 — publication.** Phase 4 reserves the routes only ·
@@ -522,6 +526,11 @@ Provider(s) · supported currencies and regions · recurring donations · Gift A
 arrangements.
 
 > **This blocks Donations only. Membership (Phase 26) is independent and proceeds without it.**
+>
+> **As delivered (Phase 26):** Membership closed with no provider selected and no payment code
+> path — no amount, currency, fee, dues, transaction, checkout, invoice or provider concept exists in
+> its contracts, tables or surfaces, and an architecture test refuses one. This gate stays Phase 27's
+> alone.
 
 **Category C/E · Gate: activation for Phase 27; never implementation.**
 

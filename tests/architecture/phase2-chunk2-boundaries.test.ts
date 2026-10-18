@@ -368,12 +368,14 @@ describe('Phase 2 Chunk 2 — what the delivered code does NOT contain', () => {
         file.includes('20261006000000_phase22_learning') || classesOwner;
       // Messaging's two keys are Phase 24's and appear in its migration alone.
       const messagingOwner = file.includes('20261008000000_phase24_messaging');
+      // Membership's two keys are Phase 26's and appear in its migration alone.
+      const membershipOwner = file.includes('20261009000000_phase26_membership');
       for (const domain of [
         ...(fatwaOwner ? [] : ['fatwa.', 'question.']),
         ...(learningOwner ? [] : ['learning.']),
         ...(classesOwner ? [] : ['teaching.']),
         ...(messagingOwner ? [] : ['messaging.']),
-        'membership.',
+        ...(membershipOwner ? [] : ['membership.']),
         'donations.',
       ]) {
         expect(source, `${file} must not seed ${domain}*`).not.toContain(`n'${domain}`);
@@ -602,6 +604,12 @@ const PERMISSION_MIGRATIONS = [
     id: '20261008000000_phase24_messaging',
     keys: ['messaging.moderate', 'messaging.support'],
   },
+  {
+    // Two ordinary keys, bundled into the protected role.
+    phase: 'Phase 26',
+    id: '20261009000000_phase26_membership',
+    keys: ['membership.administer', 'membership.read'],
+  },
 ] as const;
 
 describe('the permission catalogue is one definition, appended only by owners', () => {
@@ -651,7 +659,6 @@ describe('the permission catalogue is one definition, appended only by owners', 
     const declared = await declaredPermissions();
 
     for (const domain of [
-      'membership.',
       'donations.',
       'migration.',
       'editorial.',
@@ -706,9 +713,24 @@ describe('the permission catalogue is one definition, appended only by owners', 
       'attachment.',
       'report.',
       'moderation.',
+      // Phase 26 shipped `membership.read` and `membership.administer` and
+      // nothing else: no review, publish, finance or payment key, and none
+      // reaching an applicant's own application or Membership — those are
+      // reached by ownership, never by a grant.
+      'member.',
+      'application.',
+      'payment.',
+      'fee.',
+      'dues.',
+      'finance.',
     ]) {
       expect(declared.some((key) => key.startsWith(domain))).toBe(false);
     }
+    // Membership has exactly two keys, both ordinary and bundled.
+    expect(declared.filter((key) => key.startsWith('membership.'))).toEqual([
+      'membership.administer',
+      'membership.read',
+    ]);
     // Messaging has exactly two keys, both the organisation's to grant.
     expect(declared.filter((key) => key.startsWith('messaging.'))).toEqual([
       'messaging.moderate',

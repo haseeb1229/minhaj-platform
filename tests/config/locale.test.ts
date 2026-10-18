@@ -304,6 +304,15 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/messaging/read.ts',
     'apps/web/src/components/messaging/requests.client.ts',
     'apps/web/src/components/messaging/thread.tsx',
+    // Phase 26. Membership's shared parts. The badges, type words and times
+    // read nothing at all — the anonymous `/membership` page renders them from
+    // what its public reader returned — and the read and action helpers are
+    // reached only from the guarded `/my` and `/admin/membership` pages and
+    // their Server Actions, which resolve the session first.
+    'apps/web/src/components/membership/action-support.ts',
+    'apps/web/src/components/membership/parts.tsx',
+    'apps/web/src/components/membership/presentation.ts',
+    'apps/web/src/components/membership/read.ts',
     // Phase 21. The private island public content pages place (session-free
     // by construction: it reads personal state only through `/api/my/*`
     // after hydration), and the My Minhaj Personalisation parts, which read

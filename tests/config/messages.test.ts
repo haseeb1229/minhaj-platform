@@ -123,6 +123,10 @@ describe('the catalogues agree on their keys', () => {
       'messages.ended.body',
       'messages.thread.withheld',
       'adminMessaging.evidence.audited',
+      'membership.process.decision',
+      'membership.types.fallback',
+      'myMembership.memberships.help',
+      'adminMembership.application.audited',
     ]) {
       const value = (locale: Catalogue) =>
         Object.fromEntries(leaves(locale))[key] as string;
@@ -175,6 +179,13 @@ describe('the catalogues agree on their keys', () => {
         'messages.thread.withheld',
         'adminMessaging.conversation.audited',
         'adminMessaging.evidence.audited',
+        // Phase 26: that applying guarantees no approval, that a type is not
+        // translated, that a Membership is not the account, and that opening
+        // an application is audited — each read in the reader's own language.
+        'membership.process.decision',
+        'membership.types.fallback',
+        'myMembership.memberships.help',
+        'adminMembership.application.audited',
       ]) {
         expect(String(prose[key]), `${locale} ${key}`).toMatch(/\p{Script=Arabic}/u);
       }

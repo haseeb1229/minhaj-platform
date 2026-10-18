@@ -364,6 +364,11 @@ describe('the mutation surface', () => {
         'apps/web/src/app/api/messaging/conversations/[conversationId]/attachments/route.ts',
         'apps/web/src/app/api/messaging/conversations/[conversationId]/messages/route.ts',
         'apps/web/src/app/api/messaging/attachments/[attachmentId]/discard/route.ts',
+        // Phase 26: Membership's own export beside the other owners', through
+        // the same personal transport — a GET of the person's own data that
+        // authenticates nobody. Applying, withdrawing and closing are Server
+        // Actions, so Membership adds no other handler.
+        'apps/web/src/app/api/my/export/membership/route.ts',
       ].sort(),
     );
 
@@ -404,7 +409,7 @@ describe('the mutation surface', () => {
       /if \(!isSameOriginMutation\(request, \w+\)\) return failed\('denied'\)/u,
     );
     const personal = routes.filter((entry) => entry.includes('/api/my/'));
-    expect(personal).toHaveLength(12);
+    expect(personal).toHaveLength(13);
     for (const route of personal) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');
       for (const verb of ['PUT', 'PATCH', 'DELETE'])
@@ -612,8 +617,40 @@ describe('the mutation surface', () => {
     expect(closureBody.indexOf('redirect(')).toBeGreaterThan(swept);
     expect(closureBody).toMatch(/messagingPending\s*=\s*!messaging\.complete/u);
     const pending = closureBody.indexOf("failure: 'closure-pending'");
-    expect(closureBody.slice(0, pending)).toMatch(/\|\|\s*messagingPending\s*\)/u);
+    expect(closureBody.slice(0, pending)).toMatch(/\|\|\s*messagingPending\s*\|\|/u);
     expect(closureBody.indexOf('redirect(')).toBeGreaterThan(pending);
+  });
+
+  it('coordinates Membership disposition after Messaging and before success', async () => {
+    // Phase 26: the seventh owner withdraws the account's open applications
+    // and removes its owed Membership mail — never closing an active
+    // Membership — refused by Membership until Identity reports the account
+    // closed, and a pending disposal is reported as pending, never as a
+    // completed closure.
+    const actions = await sourceOf(ACTIONS);
+    const closureStart = actions.indexOf('export async function closeAccountAction');
+    const closureBody = actions.slice(
+      closureStart,
+      actions.indexOf('\n}', closureStart) + 2,
+    );
+    const messaged = closureBody.indexOf(
+      'messagingRuntime().service.reconcileClosedAccounts(',
+    );
+    const disposed = closureBody.indexOf('membershipRuntime().account.disposeAccount(');
+    const swept = closureBody.indexOf(
+      'membershipRuntime().account.reconcileClosedAccounts(',
+    );
+    expect(messaged).toBeGreaterThan(closureBody.indexOf('identity.closeAccount('));
+    expect(disposed).toBeGreaterThan(messaged);
+    expect(swept).toBeGreaterThan(disposed);
+    expect(closureBody.indexOf('redirect(')).toBeGreaterThan(swept);
+    expect(closureBody).toMatch(/membershipPending\s*=\s*!membership\.complete/u);
+    const pending = closureBody.indexOf("failure: 'closure-pending'");
+    expect(closureBody.slice(0, pending)).toMatch(/\|\|\s*membershipPending\s*\)/u);
+    expect(closureBody.indexOf('redirect(')).toBeGreaterThan(pending);
+    // The account-level disposition alone: no operator or member close of a
+    // Membership is reached from a closing account.
+    expect(closureBody).not.toMatch(/membershipRuntime\(\)\.(?:admin|applicant)\./u);
   });
 
   it('renders emailed links with a GET that consumes nothing', async () => {

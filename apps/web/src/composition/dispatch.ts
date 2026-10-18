@@ -6,9 +6,11 @@ import type { DeliveryRecord } from '@minhaj/contracts/platform';
 
 import { failureLabel, isTransientDatabaseFailure } from './failure-label';
 import { isLearningDeliveryPurpose } from '@/contexts/learning';
+import { isMembershipDeliveryPurpose } from '@/contexts/membership';
 import { identityRuntime } from './identity';
 import { learningRuntime } from './learning';
 import { appLogger } from './logging';
+import { membershipRuntime } from './membership';
 import { personalisationRuntime } from './personalisation';
 
 /**
@@ -78,7 +80,13 @@ export async function dispatchOnce(): Promise<DispatchSummary> {
     // confirmed trial, a moved or cancelled class, a due reminder — become
     // deliveries by the same tick, after Learning re-checks what is still
     // owed and Identity resolves each recipient's current address.
-    (await learningRuntime().communication.relayPendingIntents(BATCH));
+    (await learningRuntime().communication.relayPendingIntents(BATCH)) +
+    // THE FOURTH OWNER (Phase 26). Membership's committed application and
+    // Membership intents — received, under review, decided, withdrawn by the
+    // applicant, closed — become deliveries by the same tick, after
+    // Membership re-checks that the record still stands where the message
+    // says and Identity resolves each recipient's current address.
+    (await membershipRuntime().communication.relayPendingIntents(BATCH));
 
   const claimed = await deliveries.claimDue({
     limit: BATCH,
@@ -119,9 +127,10 @@ export async function dispatchOnce(): Promise<DispatchSummary> {
     // no expiry extension, and no bearer material was ever written anywhere
     // else to be read back (ARCHITECTURE.md §4.6.1).
     //
-    // THREE OWNERS, ONE PROVIDER. The newsletter confirmation is
+    // FOUR OWNERS, ONE PROVIDER. The newsletter confirmation is
     // Personalisation's marketing message; a class confirmation, change or
-    // reminder is Learning's service mail; everything else is Identity's
+    // reminder is Learning's service mail; an application or Membership
+    // update is Membership's service mail; everything else is Identity's
     // security and account service mail. Each owner resolves only its own,
     // and only the newsletter is ever withheld by a marketing suppression.
     const newsletter = delivery.purpose === 'newsletter.confirmation';
@@ -129,7 +138,9 @@ export async function dispatchOnce(): Promise<DispatchSummary> {
       ? await personalisationRuntime().newsletter.resolveDelivery(delivery)
       : isLearningDeliveryPurpose(delivery.purpose)
         ? await learningRuntime().communication.resolveDelivery(delivery)
-        : await identity.resolveDelivery(delivery);
+        : isMembershipDeliveryPurpose(delivery.purpose)
+          ? await membershipRuntime().communication.resolveDelivery(delivery)
+          : await identity.resolveDelivery(delivery);
 
     if (resolution.outcome === 'nothing-owed') {
       // Nothing is owed any more: the token was used or expired, the account

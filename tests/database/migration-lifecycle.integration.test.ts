@@ -546,6 +546,13 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'MessagingBlock',
         'MessagingReport',
         'MessagingModerationDecision',
+        // Phase 26 — Membership: types and their words, applications, the
+        // Membership an approval creates and the applicant service-mail intent.
+        'MembershipType',
+        'MembershipTypeTranslation',
+        'MembershipApplication',
+        'Membership',
+        'MembershipCommunicationIntent',
       ].sort(),
     );
   });

@@ -294,6 +294,13 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'MessagingBlock',
       'MessagingReport',
       'MessagingModerationDecision',
+      // Phase 26 — Membership: types and their words, applications, the
+      // Membership an approval creates and the applicant service-mail intent.
+      'MembershipType',
+      'MembershipTypeTranslation',
+      'MembershipApplication',
+      'Membership',
+      'MembershipCommunicationIntent',
     ]) {
       expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }
@@ -305,9 +312,10 @@ describe('Phase 1 Chunk 2 migration convention', () => {
     // `Fatwa` when Phase 20 delivered the ruling; a context-less `Question`
     // is still no phase's. `PrivateCollection` and `Notification` left it when
     // Phase 21 delivered them, `Course` when Phase 22 did, and `ClassSession`,
-    // `Availability`, `Attendance` and `Booking` when Phase 23 did, and
-    // `Message` when Phase 24 delivered Messaging; a bare `Teacher` and a
-    // Course-level `CourseProgress` are still no delivered phase's.)
+    // `Availability`, `Attendance` and `Booking` when Phase 23 did, `Message`
+    // when Phase 24 delivered Messaging, and `Membership` when Phase 26
+    // delivered it; a bare `Teacher` and a Course-level `CourseProgress` are
+    // still no delivered phase's, and `Donation` stays its own later owner's.)
     for (const table of [
       'Quran',
       'Book',
@@ -315,7 +323,6 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'Scholar',
       'Teacher',
       'CourseProgress',
-      'Membership',
       'Donation',
       'MigrationProvenance',
     ]) {

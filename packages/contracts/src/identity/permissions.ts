@@ -25,7 +25,7 @@
  * `fatwa.publish` among them; Phase 21 appended the two newsletter keys;
  * Phase 22 appended Learning's two catalogue keys; Phase 23 appended
  * `teaching.perform` and the two class keys; Phase 24 appended Messaging's two
- * externally gated keys. `teaching.perform` and the
+ * externally gated keys; Phase 26 appended Membership's two ordinary keys. `teaching.perform` and the
  * rest are named by DOMAIN_MODEL.md §4.4 as INDICATIVE examples of the shape;
  * they belong to slices that do not exist yet — `teaching.perform` to Phase
  * 23's teacher experience, whose holders OPEN_DECISIONS.md §6.3 reserves to the
@@ -612,6 +612,27 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     key: 'messaging.moderate',
     description:
       'Review reported messages and conversations: read the bounded evidence one report authorises, then withhold a message, close a conversation or dismiss. Every evidence read is audited.',
+  }),
+
+  /* ---- Phase 26 — Membership ---------------------------------------------- */
+  //
+  // TWO ORDINARY KEYS, bundled into the protected role by the usual
+  // convention, and nothing else: no review, publish, finance or payment key
+  // exists, because Membership has no separate review workflow and no payment
+  // concept (DOMAIN_MODEL.md §17.2). An applicant needs NO key for their own
+  // application or Membership — they reach it through ownership. Neither key
+  // reads an applicant's address or profile: an operator sees an account's
+  // display name, resolved by Identity at Layer 4, and every read that names
+  // an applicant or member is audited.
+  Object.freeze({
+    key: 'membership.read',
+    description:
+      'View membership types in every state, the application queue and members, with who applied. Every read that names an applicant or member is audited. Changes nothing.',
+  }),
+  Object.freeze({
+    key: 'membership.administer',
+    description:
+      'Create, edit, publish and archive membership types, begin review of an application, approve or reject it, and close a Membership. Grants no Identity key.',
   }),
 ]);
 

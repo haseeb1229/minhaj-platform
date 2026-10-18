@@ -956,3 +956,19 @@ IF OBJECT_ID(N'[dbo].[Asset]',N'U') IS NOT NULL AND COL_LENGTH(N'dbo.Asset', N'r
 --
 -- A MODERATION DECISION is made once and is permanent.
 IF OBJECT_ID(N'[dbo].[MessagingModerationDecision]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT ON OBJECT::[dbo].[MessagingModerationDecision] TO [$(app_login)]; DENY UPDATE, DELETE, ALTER ON OBJECT::[dbo].[MessagingModerationDecision] TO [$(app_login)]; END;
+
+-- Phase 26: Membership.
+-- A TYPE is created, edited, published and archived — never deleted, and its
+-- identity, primary locale and creation instant never change.
+IF OBJECT_ID(N'[dbo].[MembershipType]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[MembershipType] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[MembershipType] ([id], [primaryLocale], [createdAt]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[MembershipType] TO [$(app_login)]; END;
+-- A type's WORDS are added and replaced per locale, never removed or moved.
+IF OBJECT_ID(N'[dbo].[MembershipTypeTranslation]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[MembershipTypeTranslation] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[MembershipTypeTranslation] ([membershipTypeId], [locale]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[MembershipTypeTranslation] TO [$(app_login)]; END;
+-- An APPLICATION moves along its lifecycle and is never deleted: its applicant,
+-- type and submission instant never change.
+IF OBJECT_ID(N'[dbo].[MembershipApplication]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[MembershipApplication] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[MembershipApplication] ([id], [applicantUserId], [membershipTypeId], [submittedAt]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[MembershipApplication] TO [$(app_login)]; END;
+-- A MEMBERSHIP is created by an approval and closed, never deleted: its member,
+-- type, source application and activation instant never change.
+IF OBJECT_ID(N'[dbo].[Membership]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE ON OBJECT::[dbo].[Membership] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[Membership] ([id], [memberUserId], [membershipTypeId], [sourceApplicationId], [activatedAt]) TO [$(app_login)]; DENY DELETE, ALTER ON OBJECT::[dbo].[Membership] TO [$(app_login)]; END;
+-- An INTENT is claimed, relayed or abandoned, and removed only by a closed
+-- account's disposition; what it names and its key never change.
+IF OBJECT_ID(N'[dbo].[MembershipCommunicationIntent]',N'U') IS NOT NULL BEGIN GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::[dbo].[MembershipCommunicationIntent] TO [$(app_login)]; DENY UPDATE ON OBJECT::[dbo].[MembershipCommunicationIntent] ([id], [purpose], [recipientUserId], [applicationId], [membershipId], [dueAt], [idempotencyKey], [createdAt]) TO [$(app_login)]; DENY ALTER ON OBJECT::[dbo].[MembershipCommunicationIntent] TO [$(app_login)]; END;

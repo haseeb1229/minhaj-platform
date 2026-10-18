@@ -375,6 +375,12 @@ describe.skipIf(!databaseConfigured)(
        * answers support and who moderates is the organisation's decision.
        */
       const PHASE_24_KEYS = ['messaging.moderate', 'messaging.support'];
+      /**
+       * Phase 26: Membership's read and administer pair, both ORDINARY and
+       * bundled into the protected role. Neither is a payment, fee or finance
+       * key, and an applicant needs neither for their own application.
+       */
+      const PHASE_26_KEYS = ['membership.administer', 'membership.read'];
 
       /**
        * The capability-projection sources, each arrived with its OWNER.
@@ -420,6 +426,7 @@ describe.skipIf(!databaseConfigured)(
             ...PHASE_22_KEYS,
             ...PHASE_23_KEYS,
             ...PHASE_24_KEYS,
+            ...PHASE_26_KEYS,
           ].sort(),
         );
 
@@ -456,7 +463,6 @@ describe.skipIf(!databaseConfigured)(
         // Taxonomy HAS shipped — which is the whole rule: a domain leaves it at
         // its owning phase and not before.
         for (const domain of [
-          'membership.',
           'donations.',
           'migration.',
           // `teaching.perform` shipped with Phase 23 and is the only teaching
@@ -504,6 +510,14 @@ describe.skipIf(!databaseConfigured)(
           'message.',
           'attachment.',
           'report.',
+          // Phase 26 shipped `membership.read` and `membership.administer`: no
+          // application, payment, fee, dues or finance key.
+          'member.',
+          'application.',
+          'payment.',
+          'fee.',
+          'dues.',
+          'finance.',
         ]) {
           expect(keys.some((key) => key.startsWith(domain))).toBe(false);
         }
@@ -512,6 +526,9 @@ describe.skipIf(!databaseConfigured)(
         ]);
         expect(keys.filter((key) => key.startsWith('messaging.')).sort()).toEqual(
           PHASE_24_KEYS,
+        );
+        expect(keys.filter((key) => key.startsWith('membership.')).sort()).toEqual(
+          PHASE_26_KEYS,
         );
       });
 
@@ -556,6 +573,30 @@ describe.skipIf(!databaseConfigured)(
         for (const key of PHASE_3B_KEYS) {
           expect(role?.permissions, `${key} must be bundled`).toContain(key);
         }
+      });
+
+      it('gives the protected role the appended Membership keys, by migration', async () => {
+        // Phase 26's two keys are ordinary: the migration extended the bundle
+        // and recorded which keys it added, and nothing at runtime did.
+        const role = await harness.administration.findRole('platform-administrator');
+
+        expect(role).not.toBeNull();
+        expect(role?.system).toBe(true);
+        for (const key of PHASE_26_KEYS) {
+          expect(role?.permissions, `${key} must be bundled`).toContain(key);
+        }
+        const [provisioned] = await database.admin.query<{
+          total: number;
+          added: string | null;
+        }>(
+          `SELECT COUNT_BIG(*) AS total, MAX([afterState]) AS added FROM [dbo].[AuditLog]
+           WHERE [action] = N'membership.permissions.provisioned'
+             AND [authorisingSource] = N'20261009000000_phase26_membership';`,
+        );
+        expect(Number(provisioned?.total)).toBe(1);
+        expect(provisioned?.added).toBe(
+          '{"added":"membership.administer membership.read"}',
+        );
       });
 
       it('offers no operation that could create or remove a permission', () => {

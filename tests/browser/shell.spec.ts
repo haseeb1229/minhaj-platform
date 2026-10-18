@@ -459,8 +459,8 @@ test.describe('navigation is honest about what exists', () => {
       '/global/events',
       // `/search` and `/topics` are delivered by Phase 17, and are asserted
       // present below.
+      // `/membership` is delivered by Phase 26, in the utility navigation.
       '/donate',
-      '/membership',
       '/people',
     ];
 
@@ -492,6 +492,8 @@ test.describe('navigation is honest about what exists', () => {
         '/global/find-a-centre',
         // Phase 21: the newsletter, in the footer.
         '/newsletter',
+        // Phase 26: Membership, in the utility navigation.
+        '/membership',
       ]) {
         expect(hrefs, `${path} exposes delivered ${delivered}`).toContain(
           `/en${delivered}`,

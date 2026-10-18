@@ -392,6 +392,14 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'MessagingBlock',
       'MessagingReport',
       'MessagingModerationDecision',
+      // Phase 26 — Membership: a type with its words per locale, an account's
+      // application, the Membership an approval creates, and the durable
+      // applicant service-mail intent. No payment model of any kind.
+      'MembershipType',
+      'MembershipTypeTranslation',
+      'MembershipApplication',
+      'Membership',
+      'MembershipCommunicationIntent',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name

@@ -2020,6 +2020,53 @@ unresolved payment provider must never block it. **Membership contains no paymen
 whatsoever**; joining is an organisational act, and any future fee arrangement would be a
 separate explicit decision rather than an implied one.
 
+#### 17.2.1 As delivered (Phase 26)
+
+- **MembershipType** is Membership's own public catalogue: `draft → published → archived`,
+  and `archived → published` again; **never back to draft once public, never deleted**. Its
+  words are translation rows (`MembershipTypeTranslation` — title, summary, description and
+  optional joining guidance per locale, plain text). **Publication requires the type's
+  primary-locale words** (the database refuses otherwise). A draft is invisible and takes no
+  application; an archived type takes no new application and no approval but stays resolvable
+  for the records that name it. **No slug and no per-type route** — the public surface is
+  `/membership` alone.
+- **MembershipApplication** is the signed-in account's request for one type: `submitted →
+  under_review → approved | rejected`, and `submitted | under_review → withdrawn`, one version
+  at a time; a decided or withdrawn application never changes again, and **no decision happens
+  without review**. It holds the applicant account, the type, its status, a withdrawal source
+  (`applicant` or `account-closure`) and its instants — **no name, address, contact, age,
+  guardian, document, free text, note or upload**, and nothing of the account is copied.
+- **Membership** is created **only** by an approval and is `active → closed` (by the member or
+  by an operator), never reopened in place and never deleted. It names its **own approved
+  application by a composite key carrying the applicant and the type**, so it can belong to no
+  other account or type. Re-joining after a closure, a rejection or a withdrawal is a new
+  application and, if approved, a new Membership; no waiting period, ban, number, card, expiry,
+  renewal or dues exists.
+- **Invariants in the database.** At most **one open application** and at most **one active
+  Membership** per account and type (filtered unique keys); **exactly one Membership per
+  application**; an application only on a published type and never while an active Membership
+  of that type exists; a Membership only from an approved application on a published type.
+  Every write on an account's records of a type serialises on that account and type before its
+  first protected write (§19.8).
+- **Approval is one transaction**: the application becomes approved, the Membership is
+  created, the audit row and the applicant's service-mail intent are written — or none of them
+  are.
+- **Service communication** is Membership's `MembershipCommunicationIntent`: one per lifecycle
+  point (`membership.application.submitted`, `.under-review`, `.approved`, `.rejected`,
+  `.withdrawn`, and `membership.closed`), committed in the transaction that owes it, keyed by
+  purpose and record so a retried transition owes nothing twice, and naming exactly the one
+  application or Membership it describes by a composite key that carries its recipient
+  (ARCHITECTURE.md §4.6.1).
+- **Account closure is not resignation.** After Identity closes the account, Membership's
+  disposition withdraws its open applications (`account-closure`) and removes its owed mail; an
+  **active Membership stays active** under its own lifecycle, its self-service simply ends with
+  the account, and a later registration with the same address is a new account that reaches
+  nothing old. This is an engineering default, not a retention rule (OPEN_DECISIONS.md §2.2).
+- **The permitted edges to People and Global Network are unused.** Nothing in the accepted
+  contract names a Person, a Centre or a place for a member, so none is created or referenced:
+  a member is not a public contributor, and a Membership is not a Centre affiliation. The
+  allowlist row stands; an allowed edge need not be consumed.
+
 ### 17.3 Donations
 
 **DonationCampaign** · **Donation**, behind a `PaymentProvider` abstraction. **No provider is

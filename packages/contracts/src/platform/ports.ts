@@ -104,8 +104,23 @@ export type LearningDeliveryPurpose =
   | 'learning.session-cancelled'
   | 'learning.class-reminder';
 
+/**
+ * Membership's applicant service mail (Phase 26) — transactional, never
+ * marketing. Mirrors `MEMBERSHIP_COMMUNICATION_PURPOSES`.
+ */
+export type MembershipDeliveryPurpose =
+  | 'membership.application.submitted'
+  | 'membership.application.under-review'
+  | 'membership.application.approved'
+  | 'membership.application.rejected'
+  | 'membership.application.withdrawn'
+  | 'membership.closed';
+
 export type DeliveryPurpose =
-  IdentityDeliveryPurpose | 'newsletter.confirmation' | LearningDeliveryPurpose;
+  | IdentityDeliveryPurpose
+  | 'newsletter.confirmation'
+  | LearningDeliveryPurpose
+  | MembershipDeliveryPurpose;
 
 export type DeliveryStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'suppressed';
 

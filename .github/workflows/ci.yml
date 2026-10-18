@@ -596,6 +596,24 @@ jobs:
           node scripts/assert-messaging-proofs.mjs messaging-report.json
 
       # -----------------------------------------------------------------
+      # Phase 26 — Membership's live proofs.
+      #
+      # Real SQL Server, as the least-privilege runtime principal: the
+      # application lifecycle refused out of order by the service and by the
+      # database, approval creating exactly one Membership in one transaction,
+      # one open application and one active Membership per account and type
+      # under real concurrency, owner-only reads and writes, durable
+      # exactly-once service-mail intent, and account-closure disposition that
+      # withdraws open applications but never resigns a Membership. They skip
+      # without a database, so the assertion below fails the job if any of them
+      # did not run.
+      # -----------------------------------------------------------------
+      - name: Membership proof (real SQL Server, runtime principal)
+        run: |
+          npm run test:membership -- --reporter=json --outputFile=membership-report.json
+          node scripts/assert-membership-proofs.mjs membership-report.json
+
+      # -----------------------------------------------------------------
       # Phase 25 — the realtime process's live proofs.
       #
       # The REAL realtime process, spawned from its composition entry against

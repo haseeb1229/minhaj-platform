@@ -283,6 +283,11 @@ const CONTENT_ROUTE_FILES = [
   'apps/web/src/app/[locale]/(public)/learn/live/page.tsx',
   'apps/web/src/app/[locale]/(public)/learn/teachers/page.tsx',
   'apps/web/src/app/[locale]/(public)/learn/teachers/[slug]/route.ts',
+  // Phase 26 — Membership. The page lists the types an operator publishes and
+  // archives, through Membership's PUBLIC root, so it cannot be prerendered; it
+  // is proven below to reach no session, no identity service, no logger and no
+  // authentication library. Applying happens under `/my`, never here.
+  'apps/web/src/app/[locale]/(public)/membership/page.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [
@@ -983,6 +988,10 @@ describe('a public CONTENT route reads data, and still reads no session', () => 
       // holds every learner's enrolments, progress and trial requests. Public
       // Learn routes use `@/composition/learning-read`.
       '@/composition/learning',
+      // Phase 26: the AUTHENTICATED Membership runtime wires Identity in and
+      // holds every applicant's applications and Memberships. The public
+      // Membership page uses `@/composition/membership-read`.
+      '@/composition/membership',
       '@/contexts/identity-access',
       '@/config/server-env',
       '@minhaj/contracts/env/server',

@@ -48,7 +48,8 @@
           "kind": "layer0",
           "concern": "search"
         },
-        "messaging": "messaging"
+        "messaging": "messaging",
+        "membership": "membership"
       }
     }
   },

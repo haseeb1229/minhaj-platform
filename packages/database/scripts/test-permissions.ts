@@ -782,6 +782,7 @@ try {
     newsletterProvisioned: number;
     learningProvisioned: number;
     classesProvisioned: number;
+    membershipProvisioned: number;
   }>(`
     SELECT COUNT_BIG(*) AS total,
            SUM(CASE WHEN [action] = N'phase1.permission.probe' THEN 1 ELSE 0 END) AS probe,
@@ -824,18 +825,21 @@ try {
              AS learningProvisioned,
            SUM(CASE WHEN [action] = N'learning.classes.permissions.provisioned'
                      AND [actorType] = N'migration' THEN 1 ELSE 0 END)
-             AS classesProvisioned
+             AS classesProvisioned,
+           SUM(CASE WHEN [action] = N'membership.permissions.provisioned'
+                     AND [actorType] = N'migration' THEN 1 ELSE 0 END)
+             AS membershipProvisioned
     FROM [dbo].[AuditLog];
   `);
 
-  // Exactly fourteen rows: the Phase-3B through Phase-23 privilege extensions
-  // (Phase 10's and Phase 16's included; Phase 20 bundles nothing and so
-  // records nothing), and this run's probe. Naming every migration action is load-bearing:
+  // Exactly fifteen rows: the Phase-3B through Phase-26 privilege extensions
+  // (Phase 10's and Phase 16's included; Phases 20 and 24 bundle nothing and so
+  // record nothing), and this run's probe. Naming every migration action is load-bearing:
   // deriving the expected total from whatever provisioning rows happened to
   // survive would pass if a phase omitted its own audit, and each privilege
   // extension must be able to show that it paid for itself
   // (SECURITY_BASELINE.md §8.1).
-  const EXPECTED_AUDIT_ROWS = 14;
+  const EXPECTED_AUDIT_ROWS = 15;
 
   if (
     Number(survivor?.taxonomyProvisioned ?? 0) !== 1 ||
@@ -851,6 +855,7 @@ try {
     Number(survivor?.newsletterProvisioned ?? 0) !== 1 ||
     Number(survivor?.learningProvisioned ?? 0) !== 1 ||
     Number(survivor?.classesProvisioned ?? 0) !== 1 ||
+    Number(survivor?.membershipProvisioned ?? 0) !== 1 ||
     Number(survivor?.probe ?? 0) !== 1 ||
     Number(survivor?.tampered ?? -1) !== 0 ||
     Number(survivor?.total ?? 0) !== EXPECTED_AUDIT_ROWS
@@ -861,7 +866,8 @@ try {
         `1 navigation provisioning, 1 people provisioning, 1 editorial provisioning, ` +
         `1 library provisioning, 1 search provisioning, 1 media provisioning, ` +
         `1 global provisioning, 1 quran provisioning, 1 hadith provisioning, 1 newsletter provisioning, ` +
-        `1 learning provisioning, 1 classes provisioning, 1 probe and ` +
+        `1 learning provisioning, 1 classes provisioning, 1 membership provisioning, ` +
+        `1 probe and ` +
         `0 tampered; found ${survivor?.total ?? 0} rows, ` +
         `${survivor?.taxonomyProvisioned ?? 0} taxonomy provisioning, ` +
         `${survivor?.navigationProvisioned ?? 0} navigation provisioning, ` +
@@ -876,12 +882,13 @@ try {
         `${survivor?.newsletterProvisioned ?? 0} newsletter provisioning, ` +
         `${survivor?.learningProvisioned ?? 0} learning provisioning, ` +
         `${survivor?.classesProvisioned ?? 0} classes provisioning, ` +
+        `${survivor?.membershipProvisioned ?? 0} membership provisioning, ` +
         `${survivor?.probe ?? 0} probe, ${survivor?.tampered ?? 0} tampered`,
     );
   } else {
     pass(
       'audit rows unmodified',
-      'the probe row and all thirteen exact migration records are intact after ' +
+      'the probe row and all fourteen exact migration records are intact after ' +
         'UPDATE/DELETE attempts',
     );
   }
@@ -6693,6 +6700,566 @@ try {
     fail(
       'Messaging effective posture exact',
       messagingPostureFindings.join('; ') || 'tables missing',
+    );
+  }
+
+  // ---- Phase 26: Membership, in three postures ---------------------------------
+  //
+  // A TYPE, its WORDS, an APPLICATION and a MEMBERSHIP are history: INSERT and
+  // UPDATE of what moves (a type's state, position, instants and version; a
+  // translation's words; an application's status, instants and version; a
+  // Membership's closure and version) and never DELETE; what identifies each —
+  // a type's id, primary locale and creation instant; a translation's type and
+  // locale; an application's applicant, type and submission instant; a
+  // Membership's member, type, source application and activation instant — is
+  // never UPDATEd.
+  //
+  // An INTENT is the owed mail and is removed by a closed account's
+  // disposition, so it holds all four verbs; what it names, its due instant
+  // and its key carry a column DENY.
+  //
+  // Naming an account grants nothing on Identity's table, and no Identity
+  // table's posture moves: the runtime still cannot catalogue a Membership key
+  // or rewrite its description.
+  //
+  // Every statement below is REAL SQL as the runtime principal over synthetic
+  // NON_MEMBERSHIP_FIXTURE rows; the two accounts are Identity's rows, written
+  // with administrative authority.
+  const membershipRun = randomUUID().replaceAll('-', '').slice(0, 16);
+  const membershipAt = '2026-10-09T00:00:00';
+  const membershipLater = '2026-10-09T01:00:00';
+  const membershipDecided = '2026-10-09T02:00:00';
+  const membershipClosed = '2026-10-09T03:00:00';
+  const membershipApplicant = randomUUID();
+  const membershipOther = randomUUID();
+  await admin.query(`
+    ${[membershipApplicant, membershipOther]
+      .map(
+        (id) =>
+          `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled])
+             VALUES (N'${id}',N'NON_MEMBERSHIP_FIXTURE account',N'${id}@membership-proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);`,
+      )
+      .join('\n')}
+  `);
+  const typeOpen = randomUUID();
+  const typeUrdu = randomUUID();
+  const typeDraft = randomUUID();
+  const appApproved = randomUUID();
+  const appSecond = randomUUID();
+  const appWithdrawn = randomUUID();
+  const appOpen = randomUUID();
+  const appRejected = randomUUID();
+  const membershipFirst = randomUUID();
+  const intentApproved = randomUUID();
+  const intentClosed = randomUUID();
+  const membershipType = (id: string, locale: string, order: number): string =>
+    `INSERT INTO [dbo].[MembershipType] ([id],[primaryLocale],[displayOrder]) VALUES (N'${id}',N'${locale}',${String(order)});`;
+  const membershipWords = (typeId: string, locale: string): string =>
+    `INSERT INTO [dbo].[MembershipTypeTranslation] ([membershipTypeId],[locale],[title],[summary],[description],[guidance]) VALUES (N'${typeId}',N'${locale}',N'NON_MEMBERSHIP_FIXTURE title',N'NON_MEMBERSHIP_FIXTURE summary',N'NON_MEMBERSHIP_FIXTURE description',N'NON_MEMBERSHIP_FIXTURE guidance');`;
+  const membershipPublish = (id: string): string =>
+    `UPDATE [dbo].[MembershipType] SET [state]=N'published',[publishedAt]='${membershipAt}',[version]=[version]+1,[updatedAt]='${membershipAt}' WHERE [id]=N'${id}';`;
+  const membershipApply = (id: string, user: string, typeId: string): string =>
+    `INSERT INTO [dbo].[MembershipApplication] ([id],[applicantUserId],[membershipTypeId],[submittedAt]) VALUES (N'${id}',N'${user}',N'${typeId}','${membershipAt}');`;
+  const membershipReview = (id: string): string =>
+    `UPDATE [dbo].[MembershipApplication] SET [status]=N'under_review',[reviewStartedAt]='${membershipLater}',[version]=[version]+1,[updatedAt]='${membershipLater}' WHERE [id]=N'${id}';`;
+  const membershipDecide = (id: string, outcome: 'approved' | 'rejected'): string =>
+    `UPDATE [dbo].[MembershipApplication] SET [status]=N'${outcome}',[decidedAt]='${membershipDecided}',[version]=[version]+1,[updatedAt]='${membershipDecided}' WHERE [id]=N'${id}';`;
+  const membershipRow = (
+    id: string,
+    user: string,
+    typeId: string,
+    applicationId: string,
+  ): string =>
+    `INSERT INTO [dbo].[Membership] ([id],[memberUserId],[membershipTypeId],[sourceApplicationId],[activatedAt]) VALUES (N'${id}',N'${user}',N'${typeId}',N'${applicationId}','${membershipDecided}');`;
+  const membershipIntent = (
+    id: string,
+    purpose: string,
+    recipient: string,
+    record: { readonly application?: string; readonly membership?: string },
+    key: string,
+  ): string =>
+    `INSERT INTO [dbo].[MembershipCommunicationIntent] ([id],[purpose],[recipientUserId],[applicationId],[membershipId],[dueAt],[idempotencyKey]) VALUES (N'${id}',N'${purpose}',N'${recipient}',${record.application === undefined ? 'NULL' : `N'${record.application}'`},${record.membership === undefined ? 'NULL' : `N'${record.membership}'`},'${membershipAt}',N'mp-${membershipRun}-${key}');`;
+
+  for (const [label, statement, detail] of [
+    [
+      'MembershipType and words INSERT',
+      `${membershipType(typeOpen, 'en', 0)}
+       ${membershipType(typeUrdu, 'ur', 1)}
+       ${membershipType(typeDraft, 'ar', 2)}
+       ${membershipWords(typeOpen, 'en')}
+       ${membershipWords(typeOpen, 'ur')}
+       ${membershipWords(typeUrdu, 'ur')}
+       ${membershipWords(typeDraft, 'en')}`,
+      'three draft types and their words, one Urdu-primary',
+    ],
+    [
+      'MembershipType publish, reorder and words UPDATE',
+      `${membershipPublish(typeOpen)}
+       ${membershipPublish(typeUrdu)}
+       UPDATE [dbo].[MembershipType] SET [displayOrder]=5,[version]=[version]+1,[updatedAt]='${membershipLater}' WHERE [id]=N'${typeOpen}';
+       UPDATE [dbo].[MembershipTypeTranslation] SET [title]=N'NON_MEMBERSHIP_FIXTURE retitled',[guidance]=NULL,[updatedAt]='${membershipLater}' WHERE [membershipTypeId]=N'${typeOpen}' AND [locale]=N'en';`,
+      'two types published with their primary words, one reordered and retitled',
+    ],
+    [
+      'MembershipApplication submit, review and decide',
+      `${membershipApply(appApproved, membershipApplicant, typeOpen)}
+       ${membershipReview(appApproved)}
+       ${membershipDecide(appApproved, 'approved')}
+       ${membershipApply(appSecond, membershipApplicant, typeOpen)}
+       ${membershipReview(appSecond)}
+       ${membershipDecide(appSecond, 'approved')}
+       ${membershipApply(appRejected, membershipOther, typeUrdu)}
+       ${membershipReview(appRejected)}
+       ${membershipDecide(appRejected, 'rejected')}`,
+      'two approvals and a rejection, each reviewed first',
+    ],
+    [
+      'MembershipApplication withdraw and re-apply',
+      `${membershipApply(appWithdrawn, membershipOther, typeOpen)}
+       UPDATE [dbo].[MembershipApplication] SET [status]=N'withdrawn',[withdrawalSource]=N'applicant',[withdrawnAt]='${membershipLater}',[version]=[version]+1 WHERE [id]=N'${appWithdrawn}';
+       ${membershipApply(appOpen, membershipOther, typeOpen)}`,
+      'an application withdrawn by its applicant, then a new one open',
+    ],
+    [
+      'Membership INSERT from its approval',
+      membershipRow(membershipFirst, membershipApplicant, typeOpen, appApproved),
+      "an active Membership naming the applicant's own approved application",
+    ],
+    [
+      'MembershipCommunicationIntent INSERT, claim and relay',
+      `${membershipIntent(intentApproved, 'membership.application.approved', membershipApplicant, { application: appApproved }, 'approved')}
+       UPDATE [dbo].[MembershipCommunicationIntent] SET [claimedUntil]='${membershipLater}' WHERE [id]=N'${intentApproved}';
+       UPDATE [dbo].[MembershipCommunicationIntent] SET [state]=N'relayed',[relayedAt]='${membershipLater}',[claimedUntil]=NULL WHERE [id]=N'${intentApproved}';`,
+      'a pending intent owed to the applicant, claimed and relayed',
+    ],
+    [
+      'sys.sp_getapplock EXECUTE (transaction owner)',
+      `BEGIN TRAN;
+       DECLARE @held INT;
+       EXEC @held = sys.sp_getapplock @Resource=N'membership:${membershipApplicant}:${typeOpen}', @LockMode=N'Exclusive', @LockOwner=N'Transaction', @LockTimeout=5000;
+       IF @held < 0 BEGIN ROLLBACK TRAN; THROW 50000, N'sp_getapplock refused the runtime principal.', 1; END;
+       SELECT [id] FROM [dbo].[MembershipType] WITH (HOLDLOCK) WHERE [id]=N'${typeOpen}';
+       SELECT [id] FROM [dbo].[Membership] WITH (UPDLOCK, HOLDLOCK) WHERE [memberUserId]=N'${membershipApplicant}' AND [membershipTypeId]=N'${typeOpen}';
+       COMMIT TRAN;`,
+      'the account-and-type serialisation lock and its locking reads are reachable',
+    ],
+  ] as const)
+    await expectAllowed(app, label, statement, detail);
+
+  // The schema's own rules hold for the runtime as for the owner.
+  await expectRefusedByInvariant(
+    app,
+    'MembershipType inserted published',
+    `INSERT INTO [dbo].[MembershipType] ([id],[state],[primaryLocale],[displayOrder],[publishedAt]) VALUES (N'${randomUUID()}',N'published',N'en',0,'${membershipAt}');`,
+    51320,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'MembershipType returned to draft',
+    `UPDATE [dbo].[MembershipType] SET [state]=N'draft',[publishedAt]=NULL,[version]=[version]+1 WHERE [id]=N'${typeOpen}';`,
+    51320,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'MembershipType change skipping a version',
+    `UPDATE [dbo].[MembershipType] SET [displayOrder]=6,[version]=[version]+2 WHERE [id]=N'${typeOpen}';`,
+    51320,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'MembershipType published without its primary words',
+    membershipPublish(typeDraft),
+    51321,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'MembershipApplication decided without review',
+    `UPDATE [dbo].[MembershipApplication] SET [status]=N'approved',[reviewStartedAt]='${membershipLater}',[decidedAt]='${membershipDecided}',[version]=[version]+1 WHERE [id]=N'${appOpen}';`,
+    51322,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'MembershipApplication decided twice',
+    `UPDATE [dbo].[MembershipApplication] SET [status]=N'rejected',[version]=[version]+1 WHERE [id]=N'${appApproved}';`,
+    51322,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'MembershipApplication inserted under review',
+    `INSERT INTO [dbo].[MembershipApplication] ([id],[applicantUserId],[membershipTypeId],[status],[submittedAt],[reviewStartedAt]) VALUES (N'${randomUUID()}',N'${membershipApplicant}',N'${typeUrdu}',N'under_review','${membershipAt}','${membershipLater}');`,
+    51322,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'MembershipApplication on a draft type',
+    membershipApply(randomUUID(), membershipApplicant, typeDraft),
+    51323,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'MembershipApplication while an active Membership exists',
+    membershipApply(randomUUID(), membershipApplicant, typeOpen),
+    51323,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Membership from an open application',
+    membershipRow(randomUUID(), membershipOther, typeOpen, appOpen),
+    51324,
+  );
+  await expectRefusedByConstraint(
+    app,
+    'Second active Membership of one account and type',
+    membershipRow(randomUUID(), membershipApplicant, typeOpen, appSecond),
+    DUPLICATE_KEY,
+    'Membership_active_key',
+  );
+  await expectAllowed(
+    app,
+    'Membership closed by its member and its closure intent INSERT',
+    `UPDATE [dbo].[Membership] SET [status]=N'closed',[closureSource]=N'member',[closedAt]='${membershipClosed}',[version]=[version]+1,[updatedAt]='${membershipClosed}' WHERE [id]=N'${membershipFirst}';
+     ${membershipIntent(intentClosed, 'membership.closed', membershipApplicant, { membership: membershipFirst }, 'closed')}`,
+    'the Membership closed, never deleted, and the closure owed to its member',
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Closed Membership reopened',
+    `UPDATE [dbo].[Membership] SET [status]=N'active',[closureSource]=NULL,[closedAt]=NULL,[version]=[version]+1 WHERE [id]=N'${membershipFirst}';`,
+    51324,
+  );
+  await expectRefusedByInvariant(
+    app,
+    'Relayed MembershipCommunicationIntent reopened',
+    `UPDATE [dbo].[MembershipCommunicationIntent] SET [state]=N'pending',[relayedAt]=NULL WHERE [id]=N'${intentApproved}';`,
+    51325,
+  );
+  await expectRefusedByConstraint(
+    app,
+    'Second open application of one account and type',
+    membershipApply(randomUUID(), membershipOther, typeOpen),
+    DUPLICATE_KEY,
+    'MembershipApplication_open_key',
+  );
+  await expectRefusedByConstraint(
+    app,
+    "Membership naming another account's application",
+    membershipRow(randomUUID(), membershipOther, typeOpen, appSecond),
+    CONSTRAINT_VIOLATION,
+    'Membership_sourceApplication_fkey',
+  );
+  await expectAllowed(
+    app,
+    'Second Membership after the first closed',
+    membershipRow(randomUUID(), membershipApplicant, typeOpen, appSecond),
+    'a re-admission from its own later approval',
+  );
+  await expectRefusedByConstraint(
+    app,
+    'MembershipCommunicationIntent owed to another account',
+    membershipIntent(
+      randomUUID(),
+      'membership.application.approved',
+      membershipOther,
+      { application: appApproved },
+      'foreign',
+    ),
+    CONSTRAINT_VIOLATION,
+    'MembershipCommunicationIntent_application_fkey',
+  );
+  await expectRefusedByConstraint(
+    app,
+    'MembershipCommunicationIntent naming the wrong record',
+    membershipIntent(
+      randomUUID(),
+      'membership.closed',
+      membershipApplicant,
+      { application: appApproved },
+      'shape',
+    ),
+    CONSTRAINT_VIOLATION,
+    'MembershipCommunicationIntent_ck',
+  );
+  await expectRefusedByConstraint(
+    app,
+    'MembershipApplication in a payment status',
+    `INSERT INTO [dbo].[MembershipApplication] ([id],[applicantUserId],[membershipTypeId],[status],[submittedAt]) VALUES (N'${randomUUID()}',N'${membershipApplicant}',N'${typeUrdu}',N'paid','${membershipAt}');`,
+    CONSTRAINT_VIOLATION,
+    'MembershipApplication_ck',
+  );
+  await expectRefusedByConstraint(
+    app,
+    'MembershipType beyond the display bound',
+    `INSERT INTO [dbo].[MembershipType] ([id],[primaryLocale],[displayOrder]) VALUES (N'${randomUUID()}',N'en',10000);`,
+    CONSTRAINT_VIOLATION,
+    'MembershipType_ck',
+  );
+
+  // A type, its words, an application and a Membership are never deleted;
+  // what identifies each is never rewritten; and the runtime can neither
+  // catalogue a Membership key nor rewrite how one is described.
+  for (const [label, statement] of [
+    ['MembershipType DELETE denied', 'DELETE FROM [dbo].[MembershipType];'],
+    [
+      'MembershipTypeTranslation DELETE denied',
+      'DELETE FROM [dbo].[MembershipTypeTranslation];',
+    ],
+    ['MembershipApplication DELETE denied', 'DELETE FROM [dbo].[MembershipApplication];'],
+    ['Membership DELETE denied', 'DELETE FROM [dbo].[Membership];'],
+    ['MembershipType id UPDATE denied', 'UPDATE [dbo].[MembershipType] SET [id]=[id];'],
+    [
+      'MembershipType primary locale UPDATE denied',
+      'UPDATE [dbo].[MembershipType] SET [primaryLocale]=[primaryLocale];',
+    ],
+    [
+      'MembershipType creation UPDATE denied',
+      'UPDATE [dbo].[MembershipType] SET [createdAt]=[createdAt];',
+    ],
+    [
+      'MembershipTypeTranslation type UPDATE denied',
+      'UPDATE [dbo].[MembershipTypeTranslation] SET [membershipTypeId]=[membershipTypeId];',
+    ],
+    [
+      'MembershipTypeTranslation locale UPDATE denied',
+      'UPDATE [dbo].[MembershipTypeTranslation] SET [locale]=[locale];',
+    ],
+    [
+      'MembershipApplication id UPDATE denied',
+      'UPDATE [dbo].[MembershipApplication] SET [id]=[id];',
+    ],
+    [
+      'MembershipApplication applicant UPDATE denied',
+      'UPDATE [dbo].[MembershipApplication] SET [applicantUserId]=[applicantUserId];',
+    ],
+    [
+      'MembershipApplication type UPDATE denied',
+      'UPDATE [dbo].[MembershipApplication] SET [membershipTypeId]=[membershipTypeId];',
+    ],
+    [
+      'MembershipApplication submission UPDATE denied',
+      'UPDATE [dbo].[MembershipApplication] SET [submittedAt]=[submittedAt];',
+    ],
+    ['Membership id UPDATE denied', 'UPDATE [dbo].[Membership] SET [id]=[id];'],
+    [
+      'Membership member UPDATE denied',
+      'UPDATE [dbo].[Membership] SET [memberUserId]=[memberUserId];',
+    ],
+    [
+      'Membership type UPDATE denied',
+      'UPDATE [dbo].[Membership] SET [membershipTypeId]=[membershipTypeId];',
+    ],
+    [
+      'Membership source application UPDATE denied',
+      'UPDATE [dbo].[Membership] SET [sourceApplicationId]=[sourceApplicationId];',
+    ],
+    [
+      'Membership activation UPDATE denied',
+      'UPDATE [dbo].[Membership] SET [activatedAt]=[activatedAt];',
+    ],
+    [
+      'MembershipCommunicationIntent purpose UPDATE denied',
+      'UPDATE [dbo].[MembershipCommunicationIntent] SET [purpose]=[purpose];',
+    ],
+    [
+      'MembershipCommunicationIntent recipient UPDATE denied',
+      'UPDATE [dbo].[MembershipCommunicationIntent] SET [recipientUserId]=[recipientUserId];',
+    ],
+    [
+      'MembershipCommunicationIntent application UPDATE denied',
+      'UPDATE [dbo].[MembershipCommunicationIntent] SET [applicationId]=[applicationId];',
+    ],
+    [
+      'MembershipCommunicationIntent Membership UPDATE denied',
+      'UPDATE [dbo].[MembershipCommunicationIntent] SET [membershipId]=[membershipId];',
+    ],
+    [
+      'MembershipCommunicationIntent due UPDATE denied',
+      'UPDATE [dbo].[MembershipCommunicationIntent] SET [dueAt]=[dueAt];',
+    ],
+    [
+      'MembershipCommunicationIntent key UPDATE denied',
+      'UPDATE [dbo].[MembershipCommunicationIntent] SET [idempotencyKey]=[idempotencyKey];',
+    ],
+    [
+      'membership.* Permission INSERT denied',
+      "INSERT INTO [dbo].[Permission] ([key],[description]) VALUES (N'membership.finance',N'forged');",
+    ],
+    [
+      'membership.read key UPDATE denied',
+      "UPDATE [dbo].[Permission] SET [key]=[key] WHERE [key]=N'membership.read';",
+    ],
+    [
+      'membership.administer description UPDATE denied',
+      "UPDATE [dbo].[Permission] SET [description]=N'forged' WHERE [key]=N'membership.administer';",
+    ],
+    [
+      'membership.read Permission DELETE denied',
+      "DELETE FROM [dbo].[Permission] WHERE [key]=N'membership.read';",
+    ],
+    [
+      'Member account DELETE denied',
+      `DELETE FROM [dbo].[User] WHERE [id]=N'${membershipApplicant}';`,
+    ],
+  ] as const)
+    await expectDenied(app, label, statement);
+
+  // A closed account's disposition: the owed mail is removed; every type,
+  // application and Membership stays as history.
+  await expectAllowed(
+    app,
+    'MembershipApplication withdrawn by closure, then intents DELETE (dispose)',
+    `UPDATE [dbo].[MembershipApplication] SET [status]=N'withdrawn',[withdrawalSource]=N'account-closure',[withdrawnAt]='${membershipLater}',[version]=[version]+1 WHERE [id]=N'${appOpen}';
+     DELETE TOP (100) FROM [dbo].[MembershipCommunicationIntent] WHERE [recipientUserId]=N'${membershipApplicant}';`,
+    "the open application withdrawn and the account's owed mail removed",
+  );
+
+  const [membershipState] = await admin.query<Record<string, number | string | null>>(`
+    SELECT
+      (SELECT STRING_AGG([state], N',') WITHIN GROUP (ORDER BY [displayOrder])
+         FROM [dbo].[MembershipType] WHERE [id] IN (N'${typeOpen}',N'${typeUrdu}',N'${typeDraft}')) AS [types],
+      (SELECT COUNT(*) FROM [dbo].[MembershipTypeTranslation]
+         WHERE [membershipTypeId] IN (N'${typeOpen}',N'${typeUrdu}',N'${typeDraft}')) AS [words],
+      (SELECT STRING_AGG([status], N',') WITHIN GROUP (ORDER BY [status])
+         FROM [dbo].[MembershipApplication] WHERE [applicantUserId] IN (N'${membershipApplicant}',N'${membershipOther}')) AS [applications],
+      (SELECT STRING_AGG([status], N',') WITHIN GROUP (ORDER BY [status])
+         FROM [dbo].[Membership] WHERE [memberUserId]=N'${membershipApplicant}') AS [memberships],
+      (SELECT COUNT(*) FROM [dbo].[MembershipCommunicationIntent]) AS [intents],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp JOIN [dbo].[Role] r ON r.[id]=rp.[roleId]
+        WHERE r.[key]=N'platform-administrator' AND rp.[permissionKey] IN (N'membership.read',N'membership.administer')) AS [bundled],
+      (SELECT COUNT(*) FROM [dbo].[Permission] WHERE [key] LIKE N'membership.%') AS [catalogued];
+  `);
+  const expectedMembershipState = {
+    types: 'published,draft,published',
+    words: 4,
+    applications: 'approved,approved,rejected,withdrawn,withdrawn',
+    memberships: 'active,closed',
+    intents: 0,
+    bundled: 2,
+    catalogued: 2,
+  };
+  if (JSON.stringify(membershipState) === JSON.stringify(expectedMembershipState)) {
+    pass(
+      'Membership state as written',
+      'types, words, applications and Memberships kept as history, owed mail disposed',
+    );
+  } else {
+    fail('Membership state as written', JSON.stringify(membershipState));
+  }
+
+  const MEMBERSHIP_TABLES = [
+    'MembershipType',
+    'MembershipTypeTranslation',
+    'MembershipApplication',
+    'Membership',
+    'MembershipCommunicationIntent',
+  ] as const;
+  for (const table of MEMBERSHIP_TABLES) {
+    await assertObjectVisible(app, table);
+    await expectDenied(
+      app,
+      `${table} ALTER denied`,
+      `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+    );
+  }
+  for (const [trigger, table] of [
+    ['MembershipTypeIntegrity', 'MembershipType'],
+    ['MembershipTypeTranslationIntegrity', 'MembershipTypeTranslation'],
+    ['MembershipApplicationIntegrity', 'MembershipApplication'],
+    ['MembershipIntegrity', 'Membership'],
+    ['MembershipIntentIntegrity', 'MembershipCommunicationIntent'],
+  ] as const) {
+    await expectDenied(
+      app,
+      `${trigger} DISABLE denied`,
+      `DISABLE TRIGGER [dbo].[${trigger}] ON [dbo].[${table}];`,
+    );
+    await expectDenied(
+      app,
+      `${trigger} ALTER denied`,
+      `ALTER TABLE [dbo].[${table}] DISABLE TRIGGER [${trigger}];`,
+    );
+  }
+
+  // THE EXACT EFFECTIVE POSTURE, table by table and column by column, for the
+  // five Phase-26 tables AND for every Identity table a Membership key names,
+  // which Phase 26 must leave as it found them.
+  const MEMBERSHIP_POSTURE: Readonly<
+    Record<string, readonly [string, string | readonly string[] | null]>
+  > = {
+    MembershipType: ['INSERT,SELECT', ['id', 'primaryLocale', 'createdAt']],
+    MembershipTypeTranslation: ['INSERT,SELECT', ['membershipTypeId', 'locale']],
+    MembershipApplication: [
+      'INSERT,SELECT',
+      ['id', 'applicantUserId', 'membershipTypeId', 'submittedAt'],
+    ],
+    Membership: [
+      'INSERT,SELECT',
+      ['id', 'memberUserId', 'membershipTypeId', 'sourceApplicationId', 'activatedAt'],
+    ],
+    MembershipCommunicationIntent: [
+      LEARNER_DATA,
+      [
+        'id',
+        'purpose',
+        'recipientUserId',
+        'applicationId',
+        'membershipId',
+        'dueAt',
+        'idempotencyKey',
+        'createdAt',
+      ],
+    ],
+    User: ['INSERT,SELECT', null],
+    Permission: ['SELECT', ''],
+    RolePermission: [LEARNER_DATA, ''],
+  };
+  const membershipPosture = await app.query<{
+    name: string;
+    held: string | null;
+    updatable: string | null;
+    columns: string | null;
+  }>(`
+    SELECT t.[name],
+      (SELECT STRING_AGG(p.[permission], N',') WITHIN GROUP (ORDER BY p.[permission])
+         FROM (VALUES (N'ALTER'),(N'CONTROL'),(N'DELETE'),(N'INSERT'),(N'REFERENCES'),
+                      (N'SELECT'),(N'TAKE OWNERSHIP')) AS p([permission])
+        WHERE HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', p.[permission]) = 1) AS [held],
+      (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+         FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])
+          AND HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', N'UPDATE', c.[name], N'COLUMN') = 1) AS [updatable],
+      (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+         FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])) AS [columns]
+    FROM (VALUES ${Object.keys(MEMBERSHIP_POSTURE)
+      .map((table) => `(N'${table}')`)
+      .join(',')}) AS t([name]);
+  `);
+  const membershipPostureFindings = membershipPosture.flatMap((row) => {
+    const [verbs, scope] = MEMBERSHIP_POSTURE[row.name] ?? ['?', '?'];
+    const expectedColumns =
+      scope === null
+        ? (row.updatable ?? '')
+        : typeof scope === 'string'
+          ? scope
+          : (row.columns ?? '')
+              .split(',')
+              .filter((column) => !scope.includes(column))
+              .join(',');
+    return (row.held ?? '') === verbs && (row.updatable ?? '') === expectedColumns
+      ? []
+      : [`${row.name}: ${row.held ?? '(none)'} / UPDATE ${row.updatable ?? '(none)'}`];
+  });
+  if (
+    membershipPosture.length === Object.keys(MEMBERSHIP_POSTURE).length &&
+    Object.keys(MEMBERSHIP_POSTURE).length === MEMBERSHIP_TABLES.length + 3 &&
+    membershipPostureFindings.length === 0
+  ) {
+    pass(
+      'Membership effective posture exact',
+      `${String(membershipPosture.length)} tables, object verbs and UPDATE columns as granted`,
+    );
+  } else {
+    fail(
+      'Membership effective posture exact',
+      membershipPostureFindings.join('; ') || 'tables missing',
     );
   }
 

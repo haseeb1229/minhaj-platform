@@ -147,15 +147,32 @@ describe('a deferred capability cannot be linked', () => {
     //
     // `library` LEFT THIS LIST IN PHASE 8, `search` IN PHASE 17, `watch` IN
     // PHASE 10, `news-events` IN PHASE 13, `global` IN PHASE 16, `quran` IN
-    // PHASE 18, `hadith` IN PHASE 19, `fatwa` IN PHASE 20 and `learn` IN
-    // PHASE 22, when each was delivered. Each is asserted delivered below
-    // rather than silently dropped.
+    // PHASE 18, `hadith` IN PHASE 19, `fatwa` IN PHASE 20, `learn` IN
+    // PHASE 22 and `membership` IN PHASE 26, when each was delivered. Each is
+    // asserted delivered below rather than silently dropped.
     for (const key of ['donate']) {
       const route = routeByKey(key);
 
       expect(route, key).not.toBeNull();
       expect(route?.availability, key).toBe('deferred');
     }
+  });
+
+  it('delivers Membership at /membership, public, in the utility navigation and eligible', () => {
+    // Phase 26: one genuine page in all three locales — the explanation and
+    // the published types — read without an account. Applying happens under
+    // `/my`, and no type has an address of its own, so no other Membership
+    // route exists to register.
+    const route = requireRoute('membership');
+    expect(route.path).toBe('/membership');
+    expect(route.visibility).toBe('public');
+    expect(route.availability).toBe('delivered');
+    expect(route.indexing).toBe('eligible');
+    expect(route.placements).toEqual(['utility']);
+    expect(linksIn('utility').map((entry) => entry.key)).toContain('membership');
+    expect(SHELL_ROUTES.filter((entry) => entry.key.startsWith('membership.'))).toEqual(
+      [],
+    );
   });
 
   it('delivers the Quran at /quran, public, linked, and excluded from the build-bound sitemap', () => {
@@ -669,6 +686,8 @@ describe('indexing eligibility is honest', () => {
       'media.archive',
       'media.galleries',
       'media.photos',
+      // Phase 26: the Membership page. No type has an address of its own.
+      'membership',
       // Phase 13: News and Events, the three other News families and the News
       // archive. `?sort=latest` and the archive's queries are not routes.
       'news-events',

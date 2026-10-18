@@ -16,6 +16,7 @@ import { dispatchAfterResponse } from '@/composition/dispatch';
 import { fatwaRuntime } from '@/composition/fatwa';
 import { identityRuntime } from '@/composition/identity';
 import { learningRuntime } from '@/composition/learning';
+import { membershipRuntime } from '@/composition/membership';
 import { messagingRuntime } from '@/composition/messaging';
 import { peopleRuntime } from '@/composition/people';
 import { personalisationRuntime } from '@/composition/personalisation';
@@ -698,6 +699,23 @@ export async function closeAccountAction(
     messagingPending = true;
   }
 
+  // THE SEVENTH OWNER. Membership withdraws this account's open applications
+  // (owing no message) and removes its owed Membership mail, in its own
+  // bounded batches. An active Membership is NOT closed: closing the login
+  // account is not resigning the organisational relationship. Membership
+  // refuses unless Identity reports the account closed, which it now does.
+  // Idempotent; the closure sweep finishes what this leaves.
+  let membershipPending: boolean;
+  try {
+    const membership = await membershipRuntime().account.disposeAccount(
+      session.account.id,
+    );
+    const sweep = await membershipRuntime().account.reconcileClosedAccounts();
+    membershipPending = !membership.complete || !sweep.complete;
+  } catch {
+    membershipPending = true;
+  }
+
   // The closure notice is enqueued against the address the account HAD, before
   // the tombstone replaces it. It goes out after this response.
   dispatchAfterResponse();
@@ -715,7 +733,8 @@ export async function closeAccountAction(
     questionsPending ||
     personalPending ||
     learningPending ||
-    messagingPending
+    messagingPending ||
+    membershipPending
   )
     return { status: 'error', failure: 'closure-pending' };
 

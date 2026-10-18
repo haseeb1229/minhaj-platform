@@ -91,12 +91,13 @@ const FUTURE_DOMAIN_TABLES = [
   // `teaching.perform` scoped by the typed `CourseTeachingAssignment`, proved
   // by the Phase-23 recovery fixture. `Message` left in Phase 24, which
   // delivers it inside Messaging's `Conversation`, proved by the Phase-24
-  // recovery fixture.
+  // recovery fixture, and `Membership` in Phase 26, which delivers it with the
+  // other `Membership*` tables, proved by the Phase-26 recovery fixture.
+  // `Donation` stays: Membership carries no payment concept of any kind.
   'Quran',
   'Book',
   'Scholar',
   'Teacher',
-  'Membership',
   'Donation',
   'MigrationProvenance',
 ];
@@ -326,6 +327,22 @@ export const PHASE24_TABLES = [
   'MessagingModerationDecision',
 ];
 
+/**
+ * Tables the Phase-26 migration creates: membership types with their words per
+ * locale, an account's applications, the Membership an approval creates, and
+ * the durable applicant service-mail intent.
+ *
+ * Checked as REQUIRED whenever the Phase-26 migration is among those the caller
+ * expects.
+ */
+export const PHASE26_TABLES = [
+  'MembershipType',
+  'MembershipTypeTranslation',
+  'MembershipApplication',
+  'Membership',
+  'MembershipCommunicationIntent',
+];
+
 async function userTables(session: SqlSession): Promise<string[]> {
   const rows = await session.query<{ name: string }>(`
     SELECT t.name FROM sys.tables t
@@ -531,6 +548,18 @@ export async function verifyRestoredSchema(
     if (missing.length > 0)
       throw new Error(
         `Restored database is missing Phase-24 Messaging tables: ${missing.join(', ')}`,
+      );
+  }
+
+  // Phase 26. A restore that carried the Membership migration's history row but
+  // not its types, applications, Memberships or owed mail would report an
+  // applied migration over a database that has lost who belongs to the
+  // organisation, and on whose approval.
+  if (expectedMigrationIds.some((id) => id.includes('phase26'))) {
+    const missing = PHASE26_TABLES.filter((table) => !tables.includes(table));
+    if (missing.length > 0)
+      throw new Error(
+        `Restored database is missing Phase-26 Membership tables: ${missing.join(', ')}`,
       );
   }
   const columns = await auditColumns(restored);

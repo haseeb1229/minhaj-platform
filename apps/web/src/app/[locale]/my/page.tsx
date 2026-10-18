@@ -1,8 +1,10 @@
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
+import { isOpenApplication } from '@minhaj/contracts/membership';
 import { targetKey, type PersonalTarget } from '@minhaj/contracts/personalisation';
 
+import { membershipRead } from '@/components/membership/read';
 import { ClassSchedule } from '@/components/my-classes/parts';
 import { LearningTitle } from '@/components/my-learning/parts';
 import { messagingRead } from '@/components/messaging/read';
@@ -25,6 +27,7 @@ import {
   TextLink,
 } from '@/components/ui';
 import { learningRuntime } from '@/composition/learning';
+import { membershipRuntime } from '@/composition/membership';
 import { messagingRuntime } from '@/composition/messaging';
 import { personalisationRuntime } from '@/composition/personalisation';
 import {
@@ -48,16 +51,17 @@ import { SignOutForm } from './sign-out-form';
  * sections the person said they are interested in — and Learning's panel
  * (Phase 22): how many Courses the person is enrolled on and a way back into
  * the one they enrolled on most recently — and, from Phase 23, their next
- * upcoming class — and, from Phase 24, how many messages are waiting unread.
- * It renders no frame for membership or donations, because those belong to
- * work that has not shipped. A promised surface must never be mistaken for a
- * delivered one (§5.1, §5.2).
+ * upcoming class — and, from Phase 24, how many messages are waiting unread —
+ * and, from Phase 26, Membership's panel: how many Memberships the person
+ * holds and how many applications are in progress. It renders no frame for
+ * donations, because that belongs to work that has not shipped. A promised
+ * surface must never be mistaken for a delivered one (§5.1, §5.2).
  *
  * THE PANELS ARE THE PERSON'S OWN, read with the session's account and
  * resolved through each content owner now. If they cannot be read, the page
- * says so and the account itself stays fully reachable. Learning's and
- * Messaging's panels are read separately, so one owner's outage never blanks
- * another's.
+ * says so and the account itself stays fully reachable. Learning's,
+ * Messaging's and Membership's panels are read separately, so one owner's
+ * outage never blanks another's.
  */
 export const metadata = { robots: { index: false, follow: false } };
 
@@ -138,6 +142,7 @@ export default async function MyPage({
   const l = await getTranslations({ locale, namespace: 'myLearning' });
   const c = await getTranslations({ locale, namespace: 'myClasses' });
   const m = await getTranslations({ locale, namespace: 'messages' });
+  const ms = await getTranslations({ locale, namespace: 'myMembership' });
   const session = await requireActiveSession(locale, `/${locale}/my`);
   const timeZone = session.account.timezone;
 
@@ -159,6 +164,17 @@ export default async function MyPage({
   const unreadMessages = await messagingRead('messaging-home', () =>
     messagingRuntime().service.unreadTotal({ accountId: session.account.id }),
   );
+
+  // The person's Memberships and applications in progress — Membership's own read.
+  const membership = await membershipRead('membership-home', async () => {
+    const own = await membershipRuntime().applicant.state({
+      accountId: session.account.id,
+    });
+    return {
+      active: own.memberships.filter((entry) => entry.status === 'active').length,
+      open: own.applications.filter((entry) => isOpenApplication(entry.status)).length,
+    };
+  });
 
   const read = await personalRead('personal-home', () =>
     personalPanels(session.account.id),
@@ -304,6 +320,33 @@ export default async function MyPage({
           )}
           <p>
             <TextLink href={`/${locale}/my/messages`}>{m('home.link')}</TextLink>
+          </p>
+        </div>
+      </Panel>
+
+      <Panel>
+        <div className="flex flex-col gap-2">
+          <SectionHeading>{ms('home.heading')}</SectionHeading>
+          {!membership.ok ? (
+            <Alert tone="error">{ms('home.unavailable')}</Alert>
+          ) : membership.value.active === 0 && membership.value.open === 0 ? (
+            <p className="text-sm">{ms('home.none')}</p>
+          ) : (
+            <>
+              {membership.value.active === 0 ? null : (
+                <p className="text-sm">
+                  {ms('home.active', { count: membership.value.active })}
+                </p>
+              )}
+              {membership.value.open === 0 ? null : (
+                <p className="text-sm">
+                  {ms('home.open', { count: membership.value.open })}
+                </p>
+              )}
+            </>
+          )}
+          <p>
+            <TextLink href={`/${locale}/my/membership`}>{ms('home.link')}</TextLink>
           </p>
         </div>
       </Panel>
@@ -455,6 +498,7 @@ export default async function MyPage({
         <TextLink href={`/${locale}/my/classes`}>{c('nav.classes')}</TextLink>
         <TextLink href={`/${locale}/my/teachers`}>{c('nav.teachers')}</TextLink>
         <TextLink href={`/${locale}/my/messages`}>{m('nav.messages')}</TextLink>
+        <TextLink href={`/${locale}/my/membership`}>{ms('nav.membership')}</TextLink>
         <TextLink href={`/${locale}/my/questions`}>{t('my.questions')}</TextLink>
         <TextLink href={`/${locale}/my/settings/profile`}>{t('my.profile')}</TextLink>
         <TextLink href={`/${locale}/my/settings/security`}>{t('my.security')}</TextLink>

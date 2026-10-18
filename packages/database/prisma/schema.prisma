@@ -186,6 +186,15 @@ model User {
   messagingReports       MessagingReport[]
   moderationDecisions    MessagingModerationDecision[]
 
+  /// Phase 26 BACK-REFERENCES PRISMA REQUIRES, AND NOT DEPENDENCIES. Each is
+  /// owned on the Membership side — an applicant, a member and the recipient
+  /// of an owed service mail. Identity never reads them; closure reaches them
+  /// only through Membership's own disposition, which never closes a
+  /// Membership merely because the login account closed.
+  membershipApplications       MembershipApplication[]
+  memberships                  Membership[]
+  membershipCommunications     MembershipCommunicationIntent[]
+
   id String @id @db.NVarChar(36)
 
   // ---- Better Auth core -------------------------------------------------
@@ -5754,4 +5763,124 @@ model MessagingModerationDecision {
   report MessagingReport @relation(fields: [reportId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   moderator User @relation(fields: [moderatorUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   @@index([moderatorUserId])
+}
+
+// ===========================================================================
+// Phase 26 — Membership (DOMAIN_MODEL.md §17.2). Owned by the Membership
+// context; its adapter lives in packages/database/src/adapters/membership.
+// The composite keys that pin a Membership to its own approved application
+// and an intent to its own recipient, the filtered unique keys (one OPEN
+// application and one ACTIVE Membership per account and type), the CHECKs and
+// the transition triggers are declared in the migration, which the database
+// enforces; Prisma navigates only the simple relations. NO PAYMENT CONCEPT
+// EXISTS HERE: no amount, currency, fee, provider or transaction column.
+// ===========================================================================
+
+/// A kind of organisational membership, as operators describe it publicly.
+/// Its own lifecycle; never deleted, and never back to draft once public.
+model MembershipType {
+  id String @id @db.NVarChar(36)
+  /// draft | published | archived
+  state String @default("draft") @db.NVarChar(16)
+  /// en | ur | ar — the locale whose words publication requires.
+  primaryLocale String @db.NVarChar(8)
+  displayOrder Int
+  version Int @default(1)
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  publishedAt DateTime? @db.DateTime2
+  archivedAt DateTime? @db.DateTime2
+  translations MembershipTypeTranslation[]
+  applications MembershipApplication[]
+  memberships Membership[]
+  @@index([state, displayOrder, id])
+}
+
+/// One locale's operator-authored words for a type. Plain text.
+model MembershipTypeTranslation {
+  membershipTypeId String @db.NVarChar(36)
+  /// en | ur | ar
+  locale String @db.NVarChar(8)
+  title String @db.NVarChar(160)
+  summary String @db.NVarChar(600)
+  description String @db.NVarChar(4000)
+  guidance String? @db.NVarChar(2000)
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  membershipType MembershipType @relation(fields: [membershipTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([membershipTypeId, locale])
+}
+
+/// An account's request to establish a Membership of one type. The account
+/// is the applicant; nothing of it is copied. No free text, no upload.
+model MembershipApplication {
+  id String @id @db.NVarChar(36)
+  applicantUserId String @db.NVarChar(36)
+  membershipTypeId String @db.NVarChar(36)
+  /// submitted | under_review | approved | rejected | withdrawn
+  status String @default("submitted") @db.NVarChar(16)
+  /// applicant | account-closure — set exactly when withdrawn.
+  withdrawalSource String? @db.NVarChar(16)
+  version Int @default(1)
+  submittedAt DateTime @db.DateTime2
+  reviewStartedAt DateTime? @db.DateTime2
+  decidedAt DateTime? @db.DateTime2
+  withdrawnAt DateTime? @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  applicant User @relation(fields: [applicantUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  membershipType MembershipType @relation(fields: [membershipTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  membership Membership?
+  communications MembershipCommunicationIntent[]
+  @@index([applicantUserId, submittedAt])
+  @@index([status, submittedAt, id])
+  @@index([membershipTypeId, status])
+}
+
+/// The organisational relationship an approval creates. Closing it never
+/// edits the application's decision; a closed Membership is history.
+model Membership {
+  id String @id @db.NVarChar(36)
+  memberUserId String @db.NVarChar(36)
+  membershipTypeId String @db.NVarChar(36)
+  sourceApplicationId String @unique @db.NVarChar(36)
+  /// active | closed
+  status String @default("active") @db.NVarChar(16)
+  /// member | operator — set exactly when closed.
+  closureSource String? @db.NVarChar(16)
+  version Int @default(1)
+  activatedAt DateTime @db.DateTime2
+  closedAt DateTime? @db.DateTime2
+  updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  member User @relation(fields: [memberUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  membershipType MembershipType @relation(fields: [membershipTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sourceApplication MembershipApplication @relation(fields: [sourceApplicationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  communications MembershipCommunicationIntent[]
+  @@index([memberUserId, activatedAt])
+  @@index([status, activatedAt, id])
+  @@index([membershipTypeId, status])
+}
+
+/// One durable applicant service-mail intent: a purpose, the recipient
+/// account, the ONE typed record it describes, a due instant and a key —
+/// never an address, a name or a body. Relayed by the Layer-4 dispatcher.
+model MembershipCommunicationIntent {
+  id String @id @db.NVarChar(36)
+  /// membership.application.{submitted|under-review|approved|rejected|withdrawn} | membership.closed
+  purpose String @db.NVarChar(64)
+  recipientUserId String @db.NVarChar(36)
+  applicationId String? @db.NVarChar(36)
+  membershipId String? @db.NVarChar(36)
+  dueAt DateTime @db.DateTime2
+  /// pending | relayed | abandoned
+  state String @default("pending") @db.NVarChar(16)
+  idempotencyKey String @unique @db.NVarChar(200)
+  claimedUntil DateTime? @db.DateTime2
+  relayedAt DateTime? @db.DateTime2
+  createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  recipient User @relation(fields: [recipientUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  application MembershipApplication? @relation(fields: [applicationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  membership Membership? @relation(fields: [membershipId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@index([state, dueAt])
+  @@index([recipientUserId, state])
+  @@index([applicationId])
+  @@index([membershipId])
 }

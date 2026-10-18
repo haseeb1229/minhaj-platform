@@ -39,7 +39,8 @@
     "./fatwa": "./src/fatwa/index.ts",
     "./personalisation": "./src/personalisation/index.ts",
     "./learning": "./src/learning/index.ts",
-    "./messaging": "./src/messaging/index.ts"
+    "./messaging": "./src/messaging/index.ts",
+    "./membership": "./src/membership/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"

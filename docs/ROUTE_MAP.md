@@ -499,6 +499,14 @@ teaches them a Course. Nothing here is realtime: new messages arrive on refresh 
 "check for new messages" catch-up. `/my` gains an unread-messages panel, and
 `/my/settings/privacy` the Messaging export.
 
+**Delivered in Phase 26.** `/my/membership` — Membership's, composed at Layer 4. Private, `noindex`
+and per request, it reads and writes only the signed-in account's own applications and Memberships;
+a guessed id answers like a missing one. It lists the published types the account may apply for, its
+open applications (withdrawable), its Memberships (closable by the member) and a bounded history. An
+applicant needs no staff key. `/my` gains a Membership panel, and `/my/settings/privacy` the
+Membership export. The public `/membership` lists published types for everyone, reads no session and
+links to `/my/membership`; there is no per-type public route.
+
 > **Personalised home panels appear only for owners that actually exist.** The `/my` landing
 > composes what has been delivered; it does not render an empty frame for a context that has
 > not shipped.
@@ -626,7 +634,7 @@ teaching scopes) under `learning.classes.read` / `learning.classes.administer`; 
 shows who asked and confirms a request into a Booking on a teacher's open window under the same keys —
 `learning.read` alone keeps the count-only view. Identity reads are audited |
 | Global | `/admin/global/{countries\|regions\|cities\|centres}` — delivered in Phase 16; a Centre's contacts and served Cities are managed on the Centre |
-| Membership | `/admin/membership` · `/applications` |
+| Membership | `/admin/membership` · `/applications` · `/applications/{id}` — delivered in Phase 26 under `membership.read` (every page) and `membership.administer` (every action). `/admin/membership` holds the type catalogue in every state (create; a type's editor at `?type={id}` for display order, per-locale words, publish and archive) and the bounded member list with an operator's closure; `applications` is the bounded queue (status and type filters, oldest first); `applications/{id}` is one application with its start-of-review, approve and reject decisions, version-checked. Applicants and members appear by display name only; opening an application and every listing are audited accesses. No payment, fee or dues control exists |
 | Donations | `/admin/donations` · `/campaigns` |
 | Messaging | `/admin/messaging/{support\|moderation\|reports}` — delivered in Phase 24. `support` (+ `/support/{conversationId}`) under `messaging.support`: the queue shows metadata only, opening a conversation's content is an audited access, and claiming, replying and resolving are versioned. `moderation` (open reports, oldest first) and `reports` (+ `/reports/{reportId}`) under `messaging.moderate`: identifiers and reasons in the lists, the bounded evidence one report authorises on its own page (audited), and the immutable dismiss / withhold / close decision. Both keys are externally gated and held by nobody; a Platform Administrator holds neither |
 | Migration | `/admin/migration/{sources\|runs\|runs/{id}\|staging\|duplicates\|url-mapping\|errors\|manifests\|reconciliation}` |
@@ -649,7 +657,7 @@ Categories only; no endpoint contracts in this phase.
 | Auth | `/api/auth/*` | Delegated to the authentication library |
 | Search | `/api/search/*` | Search, suggestions, typeahead |
 | Content read | `/api/content/*` | Public read for progressive enhancement |
-| Personal | `/api/my/*` | Authenticated personal actions. Phase 21: `target-state` (GET) and `bookmarks`, `notes`, `collection-items`, `history`, `quran-progress` (POST) serve the private island on public content pages after hydration, and `export` (GET) returns the person's Personalisation data as a JSON download. Phase 22: `learning/state` (GET) and `learning/enrolments`, `learning/trials` (POST) serve a Course page's private island, and `export/learning` (GET) returns the person's Learning data. Every response is private and `no-store`; every POST requires the configured origin, `Sec-Fetch-Site: same-origin` where sent and the `x-minhaj-intent: personal` header (SECURITY_BASELINE.md §7.1 rule 6) |
+| Personal | `/api/my/*` | Authenticated personal actions. Phase 21: `target-state` (GET) and `bookmarks`, `notes`, `collection-items`, `history`, `quran-progress` (POST) serve the private island on public content pages after hydration, and `export` (GET) returns the person's Personalisation data as a JSON download. Phase 22: `learning/state` (GET) and `learning/enrolments`, `learning/trials` (POST) serve a Course page's private island, and `export/learning` (GET) returns the person's Learning data. Phase 26: `export/membership` (GET) returns the person's Membership applications and Memberships. Every response is private and `no-store`; every POST requires the configured origin, `Sec-Fetch-Site: same-origin` where sent and the `x-minhaj-intent: personal` header (SECURITY_BASELINE.md §7.1 rule 6) |
 | Messaging REST | `/api/messaging/*` | Phase 24: `conversations/{id}/messages?after={sequence}` (GET) — durable catch-up after a sequence the reader holds, the source Phase 25 reconnection uses; `conversations/{id}/attachments` (POST) — one attachment's streamed raw body, JPEG, PNG or PDF up to 5 MiB, Class A with `x-minhaj-intent: messaging-attachment`; `attachments/{id}/discard` (POST) — release an unsent upload. Every response private and `no-store`; current access re-decided on every request |
 | Teacher / Admin | `/api/teacher/*` · `/api/admin/*` | Role-gated operations |
 | Migration | `/api/admin/migration/*` | Import control and status |

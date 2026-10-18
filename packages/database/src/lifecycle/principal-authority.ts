@@ -636,6 +636,15 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[messagingblock]': ['SELECT', 'INSERT', 'DELETE'],
   '[dbo].[messagingreport]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[messagingmoderationdecision]': ['SELECT', 'INSERT'],
+  // Phase 26: Membership. A type, its words, an application and a Membership
+  // are history — archived, decided, withdrawn or closed, and never deleted;
+  // only an intent is removed, by a closed account's disposition. Identifying
+  // columns carry column DENYs.
+  '[dbo].[membershiptype]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[membershiptypetranslation]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[membershipapplication]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[membership]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[membershipcommunicationintent]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
 
   // Phase 7 — storage custody metadata. DELETE is genuinely the operation
   // here: reconciliation removes rows a crash left mid-upload, which is

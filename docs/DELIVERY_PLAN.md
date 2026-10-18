@@ -2027,6 +2027,61 @@ provider selected and no payment code path** · service communication is deliver
 **Exit:** Membership functional and **independent of Donations**. **Payment remains
 irrelevant to this phase** — an unresolved provider never blocks membership.
 
+**Phase-26 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+```
+MEMBERSHIP CONTEXT                             COMPLETE — apps/web/src/contexts/membership
+PUBLIC MEMBERSHIP INFORMATION (/membership)    COMPLETE — published types only, no session
+APPLICANT SELF-SERVICE (/my/membership)        COMPLETE — apply, withdraw, close own Membership
+REVIEW AND DECISION (/admin/membership/*)      COMPLETE — membership.read / membership.administer
+DURABLE SERVICE COMMUNICATION                  COMPLETE — six transactional purposes, shared dispatcher
+EXPORT / ACCOUNT-CLOSURE DISPOSITION           COMPLETE — closure withdraws open applications only
+PAYMENT PROVIDER / PAYMENT CODE PATH           NONE — not selected, not needed, refused by test
+PEOPLE / GLOBAL NETWORK EDGES                  PERMITTED, UNUSED — no Person, Centre or place named
+REAL MEMBERSHIP TYPES / APPLICATIONS           NONE — persistent database holds no Membership rows
+JURISDICTION AND RETENTION                     OPEN — OPEN_DECISIONS.md §2.2
+PHASE 27 DONATIONS                             NOT STARTED
+```
+
+- **Where the code lives.** The context is `apps/web/src/contexts/membership` (public, applicant,
+  admin, account and communication services); its contracts are `@minhaj/contracts/membership`; its
+  adapter is `packages/database/src/adapters/membership`; Layer-4 wiring is
+  `apps/web/src/composition/membership.ts` and, for the public page, `membership-read.ts`, which
+  reaches no Identity. One migration, `20261009000000_phase26_membership`, adds five tables
+  (DOMAIN_MODEL.md §17.2.1).
+- **Lifecycles.** MembershipType `draft → published → archived → published`, never back to draft;
+  application `submitted → under_review → approved | rejected`, `submitted | under_review →
+  withdrawn`; Membership `active → closed`. No other status exists — in particular no payment,
+  pending-payment or expiry status.
+- **Invariants.** One open application and one active Membership per account and type; one
+  Membership per application; approval creates the Membership in the same transaction as the
+  decision, the audit row and the applicant's intent. An archived type takes no new application
+  and no approval (a rejection still may). Re-applying after a closure, rejection or withdrawal is
+  allowed; no waiting period exists.
+- **Permissions:** `membership.read` (every operator page) and `membership.administer` (every
+  operator act) — ordinary keys in the protected Platform Administrator bundle; the migration
+  revoked the bundle holders' sessions and step-up grants and wrote one provisioning audit row. No
+  review, publish, finance or payment key, no externally gated key and no step-up purpose exist.
+  An applicant needs no key: ownership decides.
+- **Service communication:** `membership.application.{submitted,under-review,approved,rejected,
+  withdrawn}` and `membership.closed`, committed in the transaction that owes them, relayed by the
+  shared dispatcher, rendered at send time with a link to `/my/membership` only, transactional
+  scope. An account-closure withdrawal owes nothing (ARCHITECTURE.md §4.6.1).
+- **Account closure ≠ resignation.** Disposition withdraws open applications (`account-closure`)
+  and removes owed mail; an active Membership stays active (SECURITY_BASELINE.md §19.1.6).
+- **Not discoverable.** No Search kind, no dynamic sitemap segment, no per-type route; `/membership`
+  joins the static `pages` sitemap partition through the shell registry like every other delivered
+  utility route, under the unchanged pre-adoption `noindex` posture.
+- **Delivered routes:** `/membership`, `/my/membership`, `/admin/membership`,
+  `/admin/membership/applications`, `/admin/membership/applications/{id}` and
+  `/api/my/export/membership` (ROUTE_MAP.md §3.1, §5.1, §7, §8).
+- **Proof that cannot silently skip.** The live-SQL Membership suites run in the `Database
+  foundation` job, and `scripts/assert-membership-proofs.mjs` fails the job if any of them skipped.
+- **Not delivered:** any fee, dues, payment or donation link; a membership number, card, expiry or
+  renewal; an application questionnaire, document upload or operator note; a Person or Centre link
+  for members; real MembershipType content, which operators enter.
+
 ---
 
 ### Phase 27 — Donations

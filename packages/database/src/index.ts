@@ -245,3 +245,16 @@ export {
   MessagingDataError,
   createMessagingPersistence,
 } from './adapters/messaging/index.ts';
+
+/* ---- Membership (context-owned) ----------------------------------------- */
+
+export {
+  MembershipDataError,
+  createMembershipApplicant,
+  createMembershipCatalogue,
+  createMembershipCatalogueReader,
+  createMembershipCommunication,
+  createMembershipDisposition,
+  createMembershipExport,
+  createMembershipStaff,
+} from './adapters/membership/index.ts';

@@ -75,7 +75,7 @@ request for a new primary item is answered first by asking which mega menu it be
 |---|---|
 | Language switcher | English / اردو / العربية — preserves current route |
 | Find a Centre | Direct link into the Global centre finder |
-| Membership | Membership information and joining |
+| Membership | Membership information and joining — `/membership`, delivered in Phase 26 |
 | Contact / Help | Contact routes and help centre |
 
 The language switcher is placed in utility navigation deliberately: it is a
@@ -356,6 +356,7 @@ My Minhaj
 ├── My Questions
 │   ├── Submitted
 │   └── Answered
+├── Membership                Applications, their status, and Memberships
 ├── Notifications
 └── Settings
     ├── Profile
@@ -412,8 +413,11 @@ Since Phase 23 My Classes (Upcoming, Past, Class Detail with the meeting link un
 rule and the person's attendance record) and Teachers → My Teachers and Find a Teacher are delivered
 by Learning. Since Phase 24 Messages → Conversations and Messages → Support are delivered by
 Messaging (non-realtime; DOMAIN_MODEL.md §15.6) — a support conversation, never a ticket or CRM record
-— with an unread-messages panel on the Home overview. Certificates and Learning Streaks stay with no
-phase at all and are absent rather than empty. Bookmarks cover exactly Quran ayat, Hadith, articles,
+— with an unread-messages panel on the Home overview. Since Phase 26 Membership is delivered by
+Membership — the person's own applications with their status, withdrawal of an open one, their
+Memberships with self-closure, and the published types they may apply for — with a Membership panel
+on the Home overview. Certificates and Learning Streaks stay with no phase at all and are absent
+rather than empty. Bookmarks cover exactly Quran ayat, Hadith, articles,
 videos and books; history is off until the person turns it on; notifications are in-app only.
 
 **Naming note.** *Saved → Collections* are private, user-owned lists. Editorial
@@ -536,7 +540,9 @@ Admin
 │   ├── Countries, Regions & Cities
 │   ├── Centres
 │   └── Centre Contacts
-├── Membership
+├── Membership                Delivered in Phase 26 — membership.read / membership.administer
+│   ├── Types                 Every state; words per locale, publish and archive; members
+│   └── Applications          Queue and detail: review, approve, reject — no payment control
 ├── Donations                 Configuration and records
 ├── Messaging                 Delivered in Phase 24 — messaging.support / messaging.moderate
 │   ├── Support Queue         Metadata only; opening a conversation is an audited access

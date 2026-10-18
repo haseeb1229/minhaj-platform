@@ -45,6 +45,7 @@
     "test:storage": "vitest run tests/storage",
     "test:search": "vitest run tests/search",
     "test:messaging": "vitest run tests/messaging",
+    "test:membership": "vitest run tests/membership",
     "test:realtime": "vitest run tests/realtime",
     "build": "npm run build --workspaces --if-present",
     "realtime:start": "node --conditions=react-server apps/web/src/composition/realtime-main.ts",

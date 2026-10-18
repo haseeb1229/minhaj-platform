@@ -906,7 +906,8 @@ append-only discipline provide real protection today.
 | **User management** | Creation, suspension, deletion, email change |
 | **Migration** | Import runs, approvals, merges, **publications and rollbacks** |
 | **Administrative** | Configuration changes, bulk operations, redirect changes |
-| **Data access** | Access to private Fatwa questions, student personal data, and **moderation evidence** |
+| **Data access** | Access to private Fatwa questions, student personal data, **moderation evidence**, and **membership applications and member lists** (Phase 26) |
+| **Membership** | Type creation, edit, publication and archiving; the start of review; approval and rejection; an operator's closure of a Membership — by identifier and state (Phase 26) |
 
 Each record captures actor, action, target type and identifier, before and after state where
 applicable, timestamp, IP address, and the authorising source where relevant.
@@ -995,7 +996,9 @@ verification, idempotency and replay resistance (ARCHITECTURE.md §4.6.1). A pro
 is a Class-B request wherever it appears (§7.2).
 
 **Membership and Donations are separate implementation slices** (DOMAIN_MODEL.md §17). An
-unresolved payment provider must never block Membership.
+unresolved payment provider must never block Membership. **Phase 26 delivered Membership with no
+payment code path**: no provider, amount, currency, fee, transaction, webhook or payment state, and
+no Donations dependency in either direction (§19.1.6).
 
 ---
 
@@ -1023,7 +1026,8 @@ per-instance. That is why the abstraction exists and why a shared strategy is re
 Sign-in (credential stuffing) · registration · password reset and verification resend (email
 bombing) · search (expensive query denial of service) · Fatwa question submission · message
 send (flooding) · contact, feedback and newsletter (spam) · file upload · admin bulk
-operations.
+operations · membership application, withdrawal, self-closure and export (per account,
+Phase 26).
 
 Progressive backoff on repeated failures; account lockout with a documented,
 administrator-assisted recovery path. **Rate-limit responses never leak whether an account
@@ -1339,6 +1343,42 @@ named (DOMAIN_MODEL.md §15.6).
   participant has left through closure and no report names it; a reported conversation is kept as
   evidence pending §2.2. A new registration is a new account and reaches nothing old.
 - **Logging.** By operation name only — never a body, filename, token, storage key or address.
+
+#### 19.1.6 Phase-26 membership
+
+Engineering defaults only; OPEN_DECISIONS §2.2 stays open, so no retention period, legal hold,
+residency rule or compliance claim is made, and no cookie banner is added.
+
+- **Application and member state is personal.** Which account applied for which type, when, and
+  what was decided is private. The public `/membership` page carries none of it: it reads no session
+  and renders the same for every visitor.
+- **Minimised.** An application holds the applicant account, the type, its status, a withdrawal
+  source and its instants. **No questionnaire exists** — no name, address, phone, email, age, date of
+  birth, guardian, identity document, occupation, free text, note, photograph or upload is asked for
+  or copied; the account already is the applicant. **No payment data of any kind exists.**
+- **Owner-only self-service.** `/my/membership` reads and writes only the signed-in account's own
+  applications and Memberships, with the account in every query's own predicate; a guessed id
+  answers like a missing one. An applicant needs no staff key.
+- **Staff access.** `membership.read` opens the type catalogue in every state, the application queue
+  and the member list; `membership.administer` creates, edits, publishes and archives types, begins
+  review, approves or rejects, and closes a Membership. Both are ordinary keys in the protected
+  Platform Administrator bundle; `people.*`, `global.*` and `content.*` confer nothing here. An
+  operator sees an applicant's display name, resolved by Identity at Layer 4 — never an address.
+- **Audited access.** Opening an application and every queue or member listing records an audit row
+  of identifiers and filters only (§13.2 "data access"); type changes, review, decisions and an
+  operator's closure are audited by identifier and state, never with words, a name or an address.
+- **Service mail.** Membership commits durable intent in the transaction that owes it; the
+  dispatcher relays it only while the message is still owed and Identity resolves an active
+  recipient. It is transactional mail: a marketing unsubscribe never suppresses it. The intent and
+  the message carry no address, body or token, and the message links only to `/my/membership`.
+- **Export and disposition.** `GET /api/my/export/membership` returns the person's applications and
+  Memberships by typed identifier and instant, private, `no-store`, rate-limited and never written to
+  disk. After Identity commits a closure, Membership's bounded, idempotent, resumable disposition
+  (reported as pending until complete) withdraws the account's open applications and removes its owed
+  mail. **Closing the account is not resigning the organisational Membership**: an active Membership
+  stays active under its own lifecycle, and a later registration is a new account that reaches
+  nothing old.
+- **Logging.** By operation name only — never an account, a type's words, a decision or an export.
 
 ### 19.2 Logging
 

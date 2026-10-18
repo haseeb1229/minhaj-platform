@@ -13,9 +13,9 @@ import { linksIn, pathFor } from '@/shell/registry';
  * describes a six-column footer that is "the comprehensive index that the mega
  * menus deliberately are not" — and almost every entry in it belongs to Quran,
  * Hadith, Learn, Library, Watch, Fatwa, News, Global, Membership or Donations.
- * None of those has shipped, so none of them is linked. The columns arrive with
- * the domains they index; what is here is the structure they will arrive into,
- * and every link in it resolves today.
+ * A column arrives only with the domains it indexes, and nothing is linked
+ * before its owner has shipped it; what is here is the structure they arrive
+ * into, and every link in it resolves today.
  *
  * SERVER-RENDERED AND SESSION-FREE, like the header, for the same reason.
  *

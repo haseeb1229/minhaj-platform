@@ -114,6 +114,11 @@ const SURFACES: readonly {
     permission: ['messaging.support', 'messaging.moderate'],
     path: 'messaging',
   },
+  // Phase 26. One entry for Membership: `membership.read` opens its types,
+  // members and applications, and every action re-checks
+  // `membership.administer`. Both keys are ordinary, bundled into the Platform
+  // Administrator role.
+  { key: 'membership', permission: 'membership.read', path: 'membership' },
   // Phase 4. A READ-ONLY view of the public shell's effective navigation; the
   // registry behind it is code, so there is no editing surface to reach.
   { key: 'navigation', permission: 'navigation.read', path: 'system/navigation' },

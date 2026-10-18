@@ -217,6 +217,24 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // externally gated and bundled into no role (DOMAIN_MODEL.md §15), asserted
   // by `assertMessagingFoundation` and proved as behaviour by
   // `assertMessagingRules`.
+  // THE MEMBERSHIP CONTEXT: a type with its words per locale, an account's
+  // application along its lifecycle, the Membership an approval creates —
+  // naming its OWN approved application by a composite key that carries the
+  // applicant and the type — and the durable applicant service-mail intent,
+  // naming exactly one application or Membership by a composite key that
+  // carries its recipient. One OPEN application and one ACTIVE Membership per
+  // account and type (filtered keys). Every key is NO ACTION; NOT ONE ROW is
+  // seeded; no payment, fee or donation column exists; and `membership.read`
+  // and `membership.administer` join the protected bundle (DOMAIN_MODEL.md
+  // §17.2), asserted by `assertMembershipFoundation` and proved as behaviour
+  // by `assertMembershipRules`.
+  '20261009000000_phase26_membership': [
+    'MembershipType',
+    'MembershipTypeTranslation',
+    'MembershipApplication',
+    'Membership',
+    'MembershipCommunicationIntent',
+  ],
   '20261008000000_phase24_messaging': [
     'MessagingActivation',
     'Conversation',
@@ -550,8 +568,10 @@ const PREMATURE_TABLES = [
   'LessonVideo',
   'CourseCentre',
   // `Message` left this list when Phase 24 delivered it as Messaging's own,
-  // ordered and immutable within its Conversation.
-  'Membership',
+  // ordered and immutable within its Conversation, and `Membership` when Phase
+  // 26 delivered it as the organisational relationship an approval creates.
+  // `Donation` stays: Membership has no payment concept, and Donations is its
+  // own later owner's.
   'Donation',
   'MigrationProvenance',
   // Phase 9 delivers the six scholarly and periodical aggregates and invents no
@@ -622,6 +642,17 @@ const PREMATURE_TABLES = [
   // it stays absent. `EventSchedule` left this list when Phase 14 delivered it.
   'CentreEvent',
   'EventCentre',
+  // Phase 26 delivers Membership with NO payment concept: no fee, dues,
+  // invoice, receipt or payment table beside it, and no application form,
+  // profile or document table — an application holds an account, a type, its
+  // status and its instants, nothing more.
+  'MembershipPayment',
+  'MembershipFee',
+  'MembershipDues',
+  'MembershipInvoice',
+  'MembershipReceipt',
+  'MembershipApplicationForm',
+  'MembershipDocument',
 ];
 
 /**
@@ -1365,6 +1396,19 @@ const EXPECTED_FILTERED_INDEXES: readonly {
     index: 'MessagingReport_open_key',
     why: 'one person could hold two open reports of the same target',
   },
+  // Phase 26 adds two, and each is the race itself: the filter is what lets a
+  // decided or withdrawn application and a closed Membership stay as history
+  // beside the open or active one.
+  {
+    table: 'MembershipApplication',
+    index: 'MembershipApplication_open_key',
+    why: 'two concurrent submissions by one account for one type both commit',
+  },
+  {
+    table: 'Membership',
+    index: 'Membership_active_key',
+    why: 'two concurrent approvals for one account and type both create an active Membership',
+  },
 ];
 
 /** The sixteen Phase-22 tables, in the migration's order. */
@@ -1445,6 +1489,28 @@ const MESSAGING_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, strin
   MessagingReadStateIntegrity: ['MessageReadState', '51307'],
   MessagingReportIntegrity: ['MessagingReport', '51308'],
   MessagingDecisionIntegrity: ['MessagingModerationDecision', '51309'],
+};
+
+/** The five Phase-26 tables, in the migration's order. */
+const MEMBERSHIP_TABLES =
+  MIGRATION_EXPECTATIONS['20261009000000_phase26_membership'] ?? [];
+
+/**
+ * Each Membership trigger, the table it guards and the refusal numbers its body
+ * raises: 51320 a type created other than as a draft, re-keyed or returned to
+ * draft, and 51321 one published without its primary locale's words; 51320 a
+ * translation re-keyed; 51322 an application off its lifecycle or changed once
+ * final, and 51323 one on a type that is not published or while its account
+ * holds an active Membership of it; 51324 a Membership not made active from its
+ * own approved application on a published type, re-keyed or reopened; 51325 an
+ * intent reopened or re-keyed.
+ */
+const MEMBERSHIP_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, string]>> = {
+  MembershipTypeIntegrity: ['MembershipType', '51320+51321'],
+  MembershipTypeTranslationIntegrity: ['MembershipTypeTranslation', '51320'],
+  MembershipApplicationIntegrity: ['MembershipApplication', '51322+51323'],
+  MembershipIntegrity: ['Membership', '51324'],
+  MembershipIntentIntegrity: ['MembershipCommunicationIntent', '51325'],
 };
 
 /** The fifteen Phase-21 tables, in the migration's order. */
@@ -1717,6 +1783,10 @@ const EXPECTED_TRIGGERS = [
   // conversation typed, activated, ordered and immutable — each listed, with
   // the refusal it raises, in `MESSAGING_TRIGGER_NUMBERS`.
   ...Object.keys(MESSAGING_TRIGGER_NUMBERS),
+  // Phase 26: every rule that keeps a type, an application, a Membership and
+  // its owed mail on their lifecycles — each listed, with the refusal it
+  // raises, in `MEMBERSHIP_TRIGGER_NUMBERS`.
+  ...Object.keys(MEMBERSHIP_TRIGGER_NUMBERS),
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
@@ -2125,6 +2195,19 @@ const EXPECTED_CHECK_CONSTRAINTS = [
     'MessagingBlock',
     'MessagingReport',
     'MessagingModerationDecision',
+  ].map((table) => ({ table, constraint: table + '_ck' })),
+  // Phase 26. A type's closed states with exactly the instants each implies, a
+  // served primary locale and a bounded position; words in a served locale and
+  // never blank; an application's closed statuses with exactly their ordered
+  // instants and a withdrawal source exactly when withdrawn; a Membership's
+  // active or closed shape with who closed it; and an intent's six purposes,
+  // naming exactly the one record its purpose describes.
+  ...[
+    'MembershipType',
+    'MembershipTypeTranslation',
+    'MembershipApplication',
+    'Membership',
+    'MembershipCommunicationIntent',
   ].map((table) => ({ table, constraint: table + '_ck' })),
 ];
 
@@ -3232,7 +3315,10 @@ const EDITORIAL_DESCRIPTIONS = {
 
 /**
  * The two editorial descriptions are EXACTLY a phase's wording, and no
- * `event.*`, `collection.*` or membership key exists.
+ * `event.*`, `collection.*` or Collection-member key exists. Phase 26's
+ * `membership.*` keys are the Membership context's, not a Collection's
+ * members, so they are set aside by name rather than read as the very key
+ * this check exists to forbid.
  */
 async function assertEditorialDescriptions(
   session: SqlSession,
@@ -3242,7 +3328,8 @@ async function assertEditorialDescriptions(
     SELECT [key], [description] FROM [dbo].[Permission]
     WHERE [key] IN (N'content.read', N'content.author') OR [key] LIKE N'event%'
        OR [key] LIKE N'schedule%' OR [key] LIKE N'occurrence%'
-       OR [key] LIKE N'collection%' OR [key] LIKE N'member%'
+       OR [key] LIKE N'collection%'
+       OR ([key] LIKE N'member%' AND [key] NOT LIKE N'membership.%')
     ORDER BY [key];
   `);
   const expected = EDITORIAL_DESCRIPTIONS[stage];
@@ -7799,11 +7886,13 @@ async function assertProtectedBundleExcludesGated(session: SqlSession): Promise<
 
 /**
  * How far the rollback loop has gone when an earlier owner's foundation is
- * re-proved: every phase applied, Phase 24 rolled back, Phases 24 and 23,
- * Phases 24, 23 and 22, or Phases 24, 23, 22 and 21.
+ * re-proved: every phase applied, Phase 26 rolled back, Phases 26 and 24,
+ * Phases 26, 24 and 23, Phases 26, 24, 23 and 22, or Phases 26, 24, 23, 22 and
+ * 21. (Phase 25 is transport only and has no migration.)
  */
 type BundleStage =
   | 'current'
+  | 'before-membership'
   | 'before-messaging'
   | 'before-classes'
   | 'before-learning'
@@ -7811,20 +7900,27 @@ type BundleStage =
 
 /**
  * The compiled bundle less exactly the keys the rollbacks have removed by
- * `stage`: nothing once Phase 24 is rolled back (its two keys are externally
- * gated and were never bundled), the two class keys once Phase 23 is, the two
- * Learning keys as well once Phase 22 is, and the two newsletter keys as well
- * once Phase 21 is.
+ * `stage`: the two Membership keys once Phase 26 is rolled back; nothing more
+ * once Phase 24 is (its two keys are externally gated and were never bundled);
+ * the two class keys as well once Phase 23 is, the two Learning keys as well
+ * once Phase 22 is, and the two newsletter keys as well once Phase 21 is.
  */
 function compiledBundleAt(stage: BundleStage): readonly string[] {
   const removed =
-    stage === 'current' || stage === 'before-messaging'
+    stage === 'current'
       ? []
-      : stage === 'before-classes'
-        ? CLASSES_PERMISSIONS
-        : stage === 'before-learning'
-          ? [...CLASSES_PERMISSIONS, ...LEARNING_PERMISSIONS]
-          : [...CLASSES_PERMISSIONS, ...LEARNING_PERMISSIONS, ...NEWSLETTER_PERMISSIONS];
+      : stage === 'before-membership' || stage === 'before-messaging'
+        ? MEMBERSHIP_PERMISSIONS
+        : stage === 'before-classes'
+          ? [...MEMBERSHIP_PERMISSIONS, ...CLASSES_PERMISSIONS]
+          : stage === 'before-learning'
+            ? [...MEMBERSHIP_PERMISSIONS, ...CLASSES_PERMISSIONS, ...LEARNING_PERMISSIONS]
+            : [
+                ...MEMBERSHIP_PERMISSIONS,
+                ...CLASSES_PERMISSIONS,
+                ...LEARNING_PERMISSIONS,
+                ...NEWSLETTER_PERMISSIONS,
+              ];
   return PLATFORM_ADMINISTRATOR_PERMISSIONS.filter((key) => !removed.includes(key));
 }
 
@@ -9292,12 +9388,13 @@ async function assertPersonalisationRemoved(session: SqlSession): Promise<void> 
       PLATFORM_ADMINISTRATOR_PERMISSIONS.length -
         NEWSLETTER_PERMISSIONS.length -
         LEARNING_PERMISSIONS.length -
-        CLASSES_PERMISSIONS.length
+        CLASSES_PERMISSIONS.length -
+        MEMBERSHIP_PERMISSIONS.length
   )
     fail(
       `After the Phase-21 rollback the protected bundle holds ${String(bundled)} keys; the ` +
-        `compiled bundle less the two newsletter, two Learning and two class keys holds ` +
-        `${String(expected)}.`,
+        `compiled bundle less the two newsletter, two Learning, two class and two ` +
+        `Membership keys holds ${String(expected)}.`,
     );
   report(
     'personalisation rollback',
@@ -10153,21 +10250,29 @@ async function learningPresent(session: SqlSession): Promise<boolean> {
  * reference a Learning table; while they are present, the only inbound keys
  * and the only foreign Course columns are theirs — and, while Phase 24 is
  * applied (not at `before-messaging`), Messaging's: a direct conversation
- * names its Course by a typed key.
+ * names its Course by a typed key. At `before-membership` everything of Phase
+ * 24 and earlier is present and only the protected bundle has lost the two
+ * Membership keys.
  *
  * The rules themselves are proved as BEHAVIOUR by `assertLearningRules`, and
  * through the runtime login by `db:test:permissions`.
  */
 async function assertLearningFoundation(
   session: SqlSession,
-  stage: 'deploy' | 're-deploy' | 'before-messaging' | 'before-classes' = 'deploy',
+  stage:
+    | 'deploy'
+    | 're-deploy'
+    | 'before-membership'
+    | 'before-messaging'
+    | 'before-classes' = 'deploy',
 ): Promise<void> {
   const tables = LEARNING_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
     ',',
   );
   const names = LEARNING_TABLES.map((table) => `N'${table}'`).join(',');
   const withClasses = stage !== 'before-classes';
-  const withMessaging = stage === 'deploy' || stage === 're-deploy';
+  const withMessaging =
+    stage === 'deploy' || stage === 're-deploy' || stage === 'before-membership';
   const referencing = [
     ...(withClasses ? CLASSES_TABLES : []),
     ...(withMessaging ? MESSAGING_TABLES : []),
@@ -10462,11 +10567,12 @@ async function assertLearningFoundation(
         `added keys and this migration; found ${JSON.stringify(provisioning)}.`,
     );
 
-  // Once Phase 23 is rolled back the database's bundle lacks the two class keys
-  // the compiled bundle now carries.
+  // Once Phase 26 is rolled back the database's bundle lacks the two Membership
+  // keys the compiled bundle now carries, and once Phase 23 is too it lacks the
+  // two class keys as well.
   const bundled = await assertProtectedBundleExcludesGated(session);
   const compiledBundle = compiledBundleAt(
-    withClasses ? 'current' : 'before-classes',
+    stage === 'deploy' || stage === 're-deploy' ? 'current' : stage,
   ).length;
   if (bundled !== compiledBundle)
     fail(
@@ -10524,11 +10630,13 @@ async function assertLearningRemoved(session: SqlSession): Promise<void> {
     expected !==
       PLATFORM_ADMINISTRATOR_PERMISSIONS.length -
         LEARNING_PERMISSIONS.length -
-        CLASSES_PERMISSIONS.length
+        CLASSES_PERMISSIONS.length -
+        MEMBERSHIP_PERMISSIONS.length
   )
     fail(
       `After the Phase-22 rollback the protected bundle holds ${String(bundled)} keys; the ` +
-        `compiled bundle less the two Learning and two class keys holds ${String(expected)}.`,
+        `compiled bundle less the two Learning, two class and two Membership keys holds ` +
+        `${String(expected)}.`,
     );
   report(
     'learning rollback',
@@ -11222,7 +11330,7 @@ async function classesPresent(session: SqlSession): Promise<boolean> {
  */
 async function assertClassesFoundation(
   session: SqlSession,
-  stage: 'deploy' | 're-deploy' | 'before-messaging' = 'deploy',
+  stage: 'deploy' | 're-deploy' | 'before-membership' | 'before-messaging' = 'deploy',
 ): Promise<void> {
   const tables = CLASSES_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
     ',',
@@ -11505,11 +11613,16 @@ async function assertClassesFoundation(
         `two class keys and this migration; found ${JSON.stringify(provisioning)}.`,
     );
 
+  // Once Phase 26 is rolled back the database's bundle lacks the two Membership
+  // keys the compiled bundle now carries.
   const bundled = await assertProtectedBundleExcludesGated(session);
-  if (bundled !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length)
+  const compiledBundle = compiledBundleAt(
+    stage === 'deploy' || stage === 're-deploy' ? 'current' : stage,
+  ).length;
+  if (bundled !== compiledBundle)
     fail(
       `The protected bundle holds ${String(bundled)} keys; the compiled bundle holds ` +
-        `${String(PLATFORM_ADMINISTRATOR_PERMISSIONS.length)}.`,
+        `${String(compiledBundle)} at ${stage}.`,
     );
 
   report(
@@ -11566,11 +11679,14 @@ async function assertClassesRemoved(session: SqlSession): Promise<void> {
   const expected = compiledBundleAt('before-classes').length;
   if (
     bundled !== expected ||
-    expected !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length - CLASSES_PERMISSIONS.length
+    expected !==
+      PLATFORM_ADMINISTRATOR_PERMISSIONS.length -
+        CLASSES_PERMISSIONS.length -
+        MEMBERSHIP_PERMISSIONS.length
   )
     fail(
       `After the Phase-23 rollback the protected bundle holds ${String(bundled)} keys; the ` +
-        `compiled bundle less the two class keys holds ${String(expected)}.`,
+        `compiled bundle less the two class and two Membership keys holds ${String(expected)}.`,
     );
   report(
     'classes rollback',
@@ -12537,7 +12653,7 @@ async function assetShape(session: SqlSession): Promise<{
  */
 async function assertMessagingFoundation(
   session: SqlSession,
-  stage: 'deploy' | 're-deploy' = 'deploy',
+  stage: 'deploy' | 're-deploy' | 'before-membership' = 'deploy',
 ): Promise<void> {
   const tables = MESSAGING_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
     ',',
@@ -12807,11 +12923,16 @@ async function assertMessagingFoundation(
         `precedent); found ${String(audit?.total)}.`,
     );
 
+  // Once Phase 26 is rolled back the database's bundle lacks the two Membership
+  // keys the compiled bundle now carries.
   const bundled = await assertProtectedBundleExcludesGated(session);
-  if (bundled !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length)
+  const compiledBundle = compiledBundleAt(
+    stage === 'before-membership' ? 'before-membership' : 'current',
+  ).length;
+  if (bundled !== compiledBundle)
     fail(
       `The protected bundle holds ${String(bundled)} keys; the compiled bundle holds ` +
-        `${String(PLATFORM_ADMINISTRATOR_PERMISSIONS.length)}.`,
+        `${String(compiledBundle)} at ${stage}.`,
     );
 
   report(
@@ -12871,10 +12992,14 @@ async function assertMessagingRemoved(session: SqlSession): Promise<void> {
 
   const bundled = await assertProtectedBundleExcludesGated(session);
   const expected = compiledBundleAt('before-messaging').length;
-  if (bundled !== expected || expected !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length)
+  if (
+    bundled !== expected ||
+    expected !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length - MEMBERSHIP_PERMISSIONS.length
+  )
     fail(
       `After the Phase-24 rollback the protected bundle holds ${String(bundled)} keys; the ` +
-        `compiled bundle — which never held a Messaging key — holds ${String(expected)}.`,
+        `compiled bundle less the two Membership keys Phase 26's rollback removed first — ` +
+        `it never held a Messaging key — holds ${String(expected)}.`,
     );
   report(
     'messaging rollback',
@@ -14172,6 +14297,1129 @@ async function assertMessagingRules(session: SqlSession): Promise<void> {
   );
 }
 
+const MEMBERSHIP_MIGRATION = '20261009000000_phase26_membership';
+
+/**
+ * The two keys Phase 26 catalogues, and only these: both ORDINARY, bundled
+ * into the protected role by the convention every earlier phase used. No
+ * review, publish, finance or payment key exists, and an applicant needs
+ * neither key for their own application or Membership.
+ */
+const MEMBERSHIP_PERMISSIONS = ['membership.administer', 'membership.read'];
+
+/**
+ * EVERY foreign key from a Phase-26 table, exactly, with its column mapping and
+ * its delete action. ALL are NO ACTION: nothing cascades, inside the context or
+ * out of it. Identity's User is the only external edge. A Membership reaches
+ * its source application by a composite key that carries the applicant and
+ * the type, and an intent its application or Membership by a composite key
+ * that carries the recipient — so neither can name another account's record.
+ */
+const MEMBERSHIP_KEYS = [
+  'MembershipApplication_applicantUserId_fkey(applicantUserId>id)>User:NO_ACTION',
+  'MembershipApplication_membershipTypeId_fkey(membershipTypeId>id)>MembershipType:NO_ACTION',
+  'MembershipCommunicationIntent_applicationId_fkey(applicationId>id)>MembershipApplication:NO_ACTION',
+  'MembershipCommunicationIntent_application_fkey(applicationId>id,recipientUserId>applicantUserId)>MembershipApplication:NO_ACTION',
+  'MembershipCommunicationIntent_membershipId_fkey(membershipId>id)>Membership:NO_ACTION',
+  'MembershipCommunicationIntent_membership_fkey(membershipId>id,recipientUserId>memberUserId)>Membership:NO_ACTION',
+  'MembershipCommunicationIntent_recipientUserId_fkey(recipientUserId>id)>User:NO_ACTION',
+  'MembershipTypeTranslation_membershipTypeId_fkey(membershipTypeId>id)>MembershipType:NO_ACTION',
+  'Membership_memberUserId_fkey(memberUserId>id)>User:NO_ACTION',
+  'Membership_membershipTypeId_fkey(membershipTypeId>id)>MembershipType:NO_ACTION',
+  'Membership_sourceApplicationId_fkey(sourceApplicationId>id)>MembershipApplication:NO_ACTION',
+  'Membership_sourceApplication_fkey(sourceApplicationId>id,memberUserId>applicantUserId,membershipTypeId>membershipTypeId)>MembershipApplication:NO_ACTION',
+].sort();
+
+/**
+ * Every unique index on a Phase-26 table, exactly: the keys; the application's
+ * applicant-carrying keys the composite references reach through; one
+ * Membership per approved application and the member-carrying key an intent
+ * reaches through; one intent per idempotency key — and the TWO FILTERED
+ * claims: one OPEN application and one ACTIVE Membership per account and type.
+ */
+const MEMBERSHIP_UNIQUE = [
+  'MembershipApplication_applicant_key(id,applicantUserId)',
+  'MembershipApplication_applicant_type_key(id,applicantUserId,membershipTypeId)',
+  "MembershipApplication_open_key(applicantUserId,membershipTypeId) WHERE ([status] IN (N'submitted', N'under_review'))",
+  'MembershipApplication_pkey(id)',
+  'MembershipCommunicationIntent_idempotencyKey_key(idempotencyKey)',
+  'MembershipCommunicationIntent_pkey(id)',
+  'MembershipTypeTranslation_pkey(membershipTypeId,locale)',
+  'MembershipType_pkey(id)',
+  "Membership_active_key(memberUserId,membershipTypeId) WHERE ([status]=N'active')",
+  'Membership_member_key(id,memberUserId)',
+  'Membership_pkey(id)',
+  'Membership_sourceApplicationId_key(sourceApplicationId)',
+].sort();
+
+/**
+ * Every column of every Phase-26 table, in order. Stated whole so an amount,
+ * currency, fee, dues, price, invoice, receipt, provider, transaction or
+ * payment-state column, a `targetType`/`targetId` pair, or a copied name,
+ * address, phone, age, guardian, document, note or free-text answer cannot
+ * arrive unnoticed.
+ */
+const MEMBERSHIP_COLUMNS: Readonly<Record<string, string>> = {
+  MembershipType:
+    'id,state,primaryLocale,displayOrder,version,createdAt,updatedAt,publishedAt,archivedAt',
+  MembershipTypeTranslation:
+    'membershipTypeId,locale,title,summary,description,guidance,updatedAt',
+  MembershipApplication:
+    'id,applicantUserId,membershipTypeId,status,withdrawalSource,version,submittedAt,reviewStartedAt,decidedAt,withdrawnAt,updatedAt',
+  Membership:
+    'id,memberUserId,membershipTypeId,sourceApplicationId,status,closureSource,version,activatedAt,closedAt,updatedAt',
+  MembershipCommunicationIntent:
+    'id,purpose,recipientUserId,applicationId,membershipId,dueAt,state,idempotencyKey,claimedUntil,relayedAt,createdAt',
+};
+
+/**
+ * Whether Phase 26 is applied, ALL OR NOTHING: either every one of its five
+ * tables exists or none does.
+ */
+async function membershipPresent(session: SqlSession): Promise<boolean> {
+  const names = MEMBERSHIP_TABLES.map((table) => `N'${table}'`).join(',');
+  const [row] = await session.query<{ present: number }>(
+    `SELECT COUNT(*) AS [present] FROM sys.tables WHERE [name] IN (${names});`,
+  );
+  const present = Number(row?.present ?? -1);
+  if (present !== 0 && present !== MEMBERSHIP_TABLES.length)
+    fail(
+      `Phase 26 is half applied: ${String(present)} of ${String(MEMBERSHIP_TABLES.length)} ` +
+        `Membership tables exist.`,
+    );
+  return present === MEMBERSHIP_TABLES.length;
+}
+
+/**
+ * Phase 26 — what only the catalogue can prove about Membership:
+ *
+ *   1. NOTHING IS SEEDED: all five tables are empty after deploy — no type,
+ *      application, Membership or owed mail;
+ *   2. every column of every table is exactly as stated — and above all NO
+ *      payment concept: no amount, currency, fee, dues, price, invoice,
+ *      receipt, provider, transaction or donation column, no `targetType` or
+ *      `targetId`, and nothing copied of the applicant (no name, contact,
+ *      address, age, guardian, document, note or free text) — and the unique
+ *      indexes are exactly the twelve above, the two claims FILTERED;
+ *   3. every foreign key is exactly one of the twelve above, ALL NO ACTION and
+ *      trusted: Identity's User the only external edge, a Membership's source
+ *      application and an intent's record each reached by the composite key
+ *      that carries the account; no other owner references a Membership table
+ *      or holds a membership or applicant column;
+ *   4. the CHECKs are exactly the five named rules, all trusted; the triggers
+ *      are exactly the five in `MEMBERSHIP_TRIGGER_NUMBERS`, enabled, each
+ *      raising exactly its own numbers from 51320–51325 on the table it
+ *      guards; and Membership has no procedure;
+ *   5. the vocabulary is exactly `membership.administer` and `membership.read`,
+ *      described as the compiled catalogue describes them, ordinary, each
+ *      bundled exactly once into the protected role and held by no other, with
+ *      exactly one `membership.permissions.provisioned` record naming the two
+ *      keys and this migration; and the protected bundle is exactly the
+ *      compiled bundle.
+ *
+ * The rules themselves are proved as BEHAVIOUR by `assertMembershipRules`, and
+ * through the runtime login by `db:test:permissions`.
+ */
+async function assertMembershipFoundation(
+  session: SqlSession,
+  stage: 'deploy' | 're-deploy' = 'deploy',
+): Promise<void> {
+  const tables = MEMBERSHIP_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
+    ',',
+  );
+  const names = MEMBERSHIP_TABLES.map((table) => `N'${table}'`).join(',');
+  if (!(await membershipPresent(session)))
+    fail(`The Phase-26 Membership tables are missing after ${stage}.`);
+
+  // ---- 1. nothing seeded --------------------------------------------------------
+  const counts = await session.query<{ name: string; total: number }>(
+    MEMBERSHIP_TABLES.map(
+      (table) =>
+        `SELECT N'${table}' AS [name], COUNT_BIG(*) AS [total] FROM [dbo].[${table}]`,
+    ).join(' UNION ALL ') + ';',
+  );
+  const seeded = counts.filter((row) => Number(row.total) !== 0);
+  if (MEMBERSHIP_TABLES.length !== 5 || counts.length !== 5 || seeded.length > 0)
+    fail(
+      `The Membership migration must create five empty tables and seed nothing; found ` +
+        `${String(counts.length)} tables after ${stage}, seeded: ${JSON.stringify(seeded)}.`,
+    );
+
+  // ---- 2. exact columns, no payment or copied applicant data, two filtered keys ----
+  const shapes = await session.query<{ name: string; columns: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) AS [name],
+      STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id]) AS [columns]
+    FROM sys.columns c WHERE c.[object_id] IN (${tables})
+    GROUP BY c.[object_id];
+  `);
+  const shapeFindings = MEMBERSHIP_TABLES.filter(
+    (table) =>
+      shapes.find((row) => row.name === table)?.columns !== MEMBERSHIP_COLUMNS[table],
+  );
+  if (shapes.length !== 5 || shapeFindings.length > 0)
+    fail(
+      `Membership columns differ from the reviewed shape in ${shapeFindings.join(', ')}: ` +
+        `${JSON.stringify(shapes.filter((row) => shapeFindings.includes(row.name)))}.`,
+    );
+
+  const generic = await session.query<{ name: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] AS [name] FROM sys.columns c
+    WHERE c.[object_id] IN (${tables})
+      AND (c.[name] LIKE N'%amount%' OR c.[name] LIKE N'%currency%' OR c.[name] LIKE N'%fee%'
+           OR c.[name] LIKE N'%dues%' OR c.[name] LIKE N'%price%' OR c.[name] LIKE N'%payment%'
+           OR c.[name] LIKE N'%invoice%' OR c.[name] LIKE N'%receipt%' OR c.[name] LIKE N'%provider%'
+           OR c.[name] LIKE N'%transaction%' OR c.[name] LIKE N'%donat%' OR c.[name] LIKE N'%checkout%'
+           OR c.[name] LIKE N'%target%' OR c.[name] LIKE N'%entity%' OR c.[name] LIKE N'%kind%'
+           OR c.[name] LIKE N'%Type' OR c.[name] IN (N'targetType', N'targetId'));
+  `);
+  if (generic.length > 0)
+    fail(
+      `A Membership table may carry no amount, currency, fee, dues, price, payment, ` +
+        `invoice, receipt, provider, transaction, donation, type or target column; found ` +
+        `${JSON.stringify(generic)}.`,
+    );
+
+  // DATA-MINIMISED: the applicant's application, Membership and owed mail copy
+  // nothing of the account. (A type's own words — its title, summary,
+  // description and guidance — are the organisation's, not an applicant's.)
+  const personal = await session.query<{ name: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] AS [name] FROM sys.columns c
+    WHERE c.[object_id] IN (OBJECT_ID(N'[dbo].[MembershipApplication]'), OBJECT_ID(N'[dbo].[Membership]'),
+                            OBJECT_ID(N'[dbo].[MembershipCommunicationIntent]'))
+      AND (c.[name] LIKE N'%name%' OR c.[name] LIKE N'%email%' OR c.[name] LIKE N'%phone%'
+           OR c.[name] LIKE N'%address%' OR c.[name] LIKE N'%birth%' OR c.[name] LIKE N'%guardian%'
+           OR c.[name] LIKE N'%document%' OR c.[name] LIKE N'%note%' OR c.[name] LIKE N'%comment%'
+           OR c.[name] LIKE N'%answer%' OR c.[name] LIKE N'%text%' OR c.[name] LIKE N'%body%'
+           OR c.[name] LIKE N'%upload%' OR c.[name] LIKE N'%asset%' OR c.[name] LIKE N'%profile%'
+           OR c.[name] LIKE N'%reason%' OR c.[name] LIKE N'%title%');
+  `);
+  if (personal.length > 0)
+    fail(
+      `An application, a Membership and its owed mail hold no name, contact, address, age, ` +
+        `guardian, document, note, free text, upload or reason; found ${JSON.stringify(personal)}.`,
+    );
+
+  const unique = await session.query<{
+    name: string;
+    columns: string;
+    filter: string | null;
+  }>(`
+    SELECT i.[name], i.[filter_definition] AS [filter],
+      STRING_AGG(COL_NAME(ic.[object_id], ic.[column_id]), N',')
+        WITHIN GROUP (ORDER BY ic.[key_ordinal]) AS [columns]
+    FROM sys.indexes i
+    JOIN sys.index_columns ic ON ic.[object_id] = i.[object_id] AND ic.[index_id] = i.[index_id]
+    WHERE i.[is_unique] = 1 AND ic.[key_ordinal] > 0 AND i.[object_id] IN (${tables})
+    GROUP BY i.[object_id], i.[name], i.[filter_definition];
+  `);
+  const describedUnique = unique
+    .map(
+      (row) =>
+        `${row.name}(${row.columns})` +
+        (row.filter === null ? '' : ` WHERE ${row.filter}`),
+    )
+    .sort();
+  if (
+    describedUnique.join(' | ') !== MEMBERSHIP_UNIQUE.join(' | ') ||
+    unique.filter((row) => row.filter !== null).length !== 2
+  )
+    fail(
+      `Membership unique indexes must be exactly the reviewed twelve, the two claims ` +
+        `filtered; found ${describedUnique.join(' | ')}.`,
+    );
+
+  // ---- 3. exact keys, all NO ACTION and trusted; nothing foreign holds the context -
+  const keys = await session.query<{
+    name: string;
+    columns: string;
+    target: string;
+    deletes: string;
+    updates: string;
+    trusted: number;
+  }>(`
+    SELECT fk.[name], OBJECT_NAME(fk.[referenced_object_id]) AS [target],
+      fk.[delete_referential_action_desc] AS [deletes], fk.[update_referential_action_desc] AS [updates],
+      CASE WHEN fk.[is_disabled] = 0 AND fk.[is_not_trusted] = 0 THEN 1 ELSE 0 END AS [trusted],
+      STRING_AGG(COL_NAME(c.[parent_object_id], c.[parent_column_id]) + N'>'
+        + COL_NAME(c.[referenced_object_id], c.[referenced_column_id]), N',')
+        WITHIN GROUP (ORDER BY c.[constraint_column_id]) AS [columns]
+    FROM sys.foreign_keys fk
+    JOIN sys.foreign_key_columns c ON c.[constraint_object_id] = fk.[object_id]
+    WHERE fk.[parent_object_id] IN (${tables})
+    GROUP BY fk.[name], fk.[referenced_object_id], fk.[delete_referential_action_desc],
+      fk.[update_referential_action_desc], fk.[is_disabled], fk.[is_not_trusted];
+  `);
+  const describedKeys = keys
+    .map((row) => `${row.name}(${row.columns})>${row.target}:${row.deletes}`)
+    .sort();
+  if (
+    describedKeys.join(',') !== MEMBERSHIP_KEYS.join(',') ||
+    keys.some((row) => row.updates !== 'NO_ACTION' || Number(row.trusted) !== 1)
+  )
+    fail(
+      `Membership keys must be exactly the reviewed twelve, none cascading and all ` +
+        `trusted; found ${describedKeys.join(', ')}.`,
+    );
+
+  const [isolation] = await session.query<{ inbound: number; foreign: string | null }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE [referenced_object_id] IN (${tables}) AND [parent_object_id] NOT IN (${tables})) AS [inbound],
+      (SELECT STRING_AGG(OBJECT_NAME(c.[object_id]) + N'.' + c.[name], N',') FROM sys.columns c
+        WHERE (c.[name] LIKE N'%membership%' OR c.[name] LIKE N'%applicant%'
+               OR c.[name] LIKE N'%memberUser%' OR c.[name] LIKE N'%sourceApplication%')
+          AND OBJECT_NAME(c.[object_id]) NOT IN (${names})
+          AND OBJECTPROPERTY(c.[object_id], 'IsUserTable') = 1) AS [foreign];
+  `);
+  if (Number(isolation?.inbound) !== 0 || (isolation?.foreign ?? null) !== null)
+    fail(
+      `No other owner may reference or hold Membership schema; found ` +
+        `${JSON.stringify(isolation ?? null)}.`,
+    );
+
+  // ---- 4. five trusted CHECKs, five triggers by number, no procedure ----------------
+  const checks = await session.query<{ name: string; trusted: number }>(`
+    SELECT [name], CASE WHEN [is_disabled] = 0 AND [is_not_trusted] = 0 THEN 1 ELSE 0 END AS [trusted]
+    FROM sys.check_constraints WHERE [parent_object_id] IN (${tables});
+  `);
+  const expectedChecks = EXPECTED_CHECK_CONSTRAINTS.filter((entry) =>
+    MEMBERSHIP_TABLES.includes(entry.table),
+  )
+    .map((entry) => entry.constraint)
+    .sort();
+  if (
+    expectedChecks.length !== 5 ||
+    checks
+      .map((row) => row.name)
+      .sort()
+      .join(',') !== expectedChecks.join(',') ||
+    checks.some((row) => Number(row.trusted) !== 1)
+  )
+    fail(
+      `Membership must carry exactly its five trusted CHECKs; found ${JSON.stringify(checks)}.`,
+    );
+
+  const triggers = await session.query<{
+    name: string;
+    tableName: string;
+    disabled: number;
+    definition: string | null;
+  }>(`
+    SELECT t.[name], OBJECT_NAME(t.[parent_id]) AS [tableName], CAST(t.[is_disabled] AS INT) AS [disabled],
+      OBJECT_DEFINITION(t.[object_id]) AS [definition]
+    FROM sys.triggers t WHERE t.[parent_id] IN (${tables});
+  `);
+  const describedTriggers = triggers
+    .map((row) => `${row.name}@${row.tableName}:${raisedNumbers(row.definition)}`)
+    .sort()
+    .join(',');
+  const expectedTriggers = Object.entries(MEMBERSHIP_TRIGGER_NUMBERS)
+    .map(([name, [table, numbers]]) => `${name}@${table}:${numbers}`)
+    .sort()
+    .join(',');
+  if (
+    describedTriggers !== expectedTriggers ||
+    triggers.length !== 5 ||
+    triggers.some((row) => Number(row.disabled) !== 0)
+  )
+    fail(
+      `Membership triggers must be exactly five, enabled, raising exactly their own ` +
+        `51320–51325 numbers; found ${describedTriggers}.`,
+    );
+
+  const [procedures] = await session.query<{ total: number }>(`
+    SELECT COUNT(*) AS [total] FROM sys.procedures
+    WHERE [name] LIKE N'Membership%' OR [name] LIKE N'Member%' OR [name] LIKE N'Application%';
+  `);
+  if (Number(procedures?.total) !== 0)
+    fail('Phase 26 writes through its owner adapter; it must create no procedure.');
+
+  // ---- 5. two ordinary keys, bundled once and provisioned once ---------------------
+  const permissions = await session.query<{
+    key: string;
+    description: string;
+    bundled: number;
+    held: number;
+    holders: number;
+  }>(`
+    SELECT p.[key], p.[description],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp JOIN [dbo].[Role] r ON r.[id] = rp.[roleId]
+        WHERE r.[key] = N'platform-administrator' AND rp.[permissionKey] = p.[key]) AS [bundled],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp WHERE rp.[permissionKey] = p.[key]) AS [held],
+      (SELECT COUNT(*) FROM [dbo].[RoleAssignment] ra JOIN [dbo].[RolePermission] rp ON rp.[roleId] = ra.[roleId]
+        WHERE rp.[permissionKey] = p.[key]) AS [holders]
+    FROM [dbo].[Permission] p
+    WHERE p.[key] LIKE N'member%' OR p.[key] LIKE N'application%' OR p.[key] LIKE N'payment%'
+       OR p.[key] LIKE N'fee%' OR p.[key] LIKE N'dues%' OR p.[key] LIKE N'donat%'
+       OR p.[key] LIKE N'finance%'
+    ORDER BY p.[key];
+  `);
+  const described = new Map(
+    PERMISSION_CATALOGUE.map((entry) => [entry.key as string, entry.description]),
+  );
+  const compiled = new Set<string>(PLATFORM_ADMINISTRATOR_PERMISSIONS);
+  const gated = new Set<string>(EXTERNALLY_GATED_PERMISSIONS);
+  if (
+    permissions.map((row) => row.key).join(',') !== MEMBERSHIP_PERMISSIONS.join(',') ||
+    !MEMBERSHIP_PERMISSIONS.every((key) => compiled.has(key) && !gated.has(key)) ||
+    permissions.some(
+      (row) =>
+        row.description !== described.get(row.key) ||
+        Number(row.bundled) !== 1 ||
+        Number(row.held) !== 1 ||
+        Number(row.holders) !== 0,
+    )
+  )
+    fail(
+      `The Membership vocabulary must be exactly ${MEMBERSHIP_PERMISSIONS.join(', ')}, ` +
+        `described as the compiled catalogue describes them, ordinary, each bundled once into ` +
+        `the protected role and held by no other; found ${JSON.stringify(permissions)}.`,
+    );
+
+  const provisioning = await session.query<{
+    actorType: string;
+    actorId: string | null;
+    targetType: string;
+    roleKey: string | null;
+    afterState: string | null;
+    authorisingSource: string | null;
+  }>(`
+    SELECT a.[actorType], a.[actorId], a.[targetType], r.[key] AS [roleKey], a.[afterState], a.[authorisingSource]
+    FROM [dbo].[AuditLog] a LEFT JOIN [dbo].[Role] r ON r.[id] = a.[targetId]
+    WHERE a.[action] LIKE N'membership.%' OR a.[authorisingSource] = N'${MEMBERSHIP_MIGRATION}';
+  `);
+  if (
+    JSON.stringify(provisioning) !==
+    JSON.stringify([
+      {
+        actorType: 'migration',
+        actorId: null,
+        targetType: 'role',
+        roleKey: 'platform-administrator',
+        afterState: '{"added":"membership.administer membership.read"}',
+        authorisingSource: MEMBERSHIP_MIGRATION,
+      },
+    ])
+  )
+    fail(
+      `Extending the protected bundle must leave exactly one provisioning record naming the ` +
+        `two Membership keys and this migration, and nothing else of Membership; found ` +
+        `${JSON.stringify(provisioning)}.`,
+    );
+  const [action] = await session.query<{ total: number }>(`
+    SELECT COUNT(*) AS [total] FROM [dbo].[AuditLog]
+    WHERE [action] = N'membership.permissions.provisioned' AND [targetType] = N'role';
+  `);
+  if (Number(action?.total ?? -1) !== 1)
+    fail(
+      'The provisioning record must carry the action membership.permissions.provisioned.',
+    );
+
+  const bundled = await assertProtectedBundleExcludesGated(session);
+  if (bundled !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length)
+    fail(
+      `The protected bundle holds ${String(bundled)} keys; the compiled bundle holds ` +
+        `${String(PLATFORM_ADMINISTRATOR_PERMISSIONS.length)}.`,
+    );
+
+  report(
+    'membership schema',
+    'five empty tables of the reviewed shape with no payment, target or applicant-copy ' +
+      'column, twelve unique keys with two filtered claims, twelve trusted NO ACTION keys, ' +
+      '5 CHECKs, five triggers raising 51320–51325, no procedure, two bundled ordinary keys ' +
+      `provisioned once, ${String(bundled)} bundled`,
+  );
+}
+
+/**
+ * After the Phase-26 rollback: no Membership table, trigger, key, CHECK or
+ * index, no Membership permission, bundle entry or provisioning record — and
+ * the protected bundle exactly the compiled bundle less the two Membership
+ * keys. Identity's User is untouched by the drop. The caller then proves the
+ * earlier owners are whole at `before-membership`.
+ */
+async function assertMembershipRemoved(session: SqlSession): Promise<void> {
+  const names = MEMBERSHIP_TABLES.map((table) => `N'${table}'`).join(',');
+  const triggerNames = Object.keys(MEMBERSHIP_TRIGGER_NUMBERS)
+    .map((name) => `N'${name}'`)
+    .join(',');
+  const keys = MEMBERSHIP_PERMISSIONS.map((key) => `N'${key}'`).join(',');
+  const [row] = await session.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables WHERE [name] IN (${names}) OR [name] LIKE N'Membership%') AS [tables],
+      (SELECT COUNT(*) FROM sys.triggers WHERE [name] IN (${triggerNames}) OR [name] LIKE N'Membership%') AS [triggers],
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [keys],
+      (SELECT COUNT(*) FROM sys.check_constraints
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [checks],
+      (SELECT COUNT(*) FROM sys.indexes
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [indexes],
+      (SELECT COUNT(*) FROM sys.default_constraints
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [defaults],
+      (SELECT COUNT(*) FROM [dbo].[Permission] WHERE [key] IN (${keys}) OR [key] LIKE N'membership.%') AS [permissions],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] WHERE [permissionKey] IN (${keys}) OR [permissionKey] LIKE N'membership.%') AS [bundled],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog]
+        WHERE [action] LIKE N'membership.%' OR [authorisingSource] = N'${MEMBERSHIP_MIGRATION}') AS [audit],
+      (SELECT 1 - COUNT(*) FROM sys.tables WHERE [object_id] = OBJECT_ID(N'[dbo].[User]')) AS [identityBroken];
+  `);
+  if (Object.values(row ?? { missing: 1 }).some((value) => Number(value) !== 0))
+    fail(
+      `The Phase-26 rollback left a Membership object: ${JSON.stringify(row ?? null)}.`,
+    );
+  if (await membershipPresent(session))
+    fail('The Phase-26 rollback left the Membership schema in place.');
+  const bundled = await assertProtectedBundleExcludesGated(session);
+  const expected = compiledBundleAt('before-membership').length;
+  if (
+    bundled !== expected ||
+    expected !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length - MEMBERSHIP_PERMISSIONS.length
+  )
+    fail(
+      `After the Phase-26 rollback the protected bundle holds ${String(bundled)} keys; the ` +
+        `compiled bundle less the two Membership keys holds ${String(expected)}.`,
+    );
+  report(
+    'membership rollback',
+    `every Membership table, key, index, CHECK, trigger, permission and provisioning ` +
+      `record removed, User whole; ${String(bundled)} keys still bundled`,
+  );
+}
+
+/**
+ * Phase 26 — THE RULES, proved as behaviour against the re-deployed schema
+ * with NON_MEMBERSHIP_FIXTURE sentinels only, through the migration login (the
+ * runtime's own posture is `db:test:permissions`'s, where the identifying
+ * columns are DENY besides):
+ *
+ *   - a type begins as a draft at version one (51320); its states carry
+ *     exactly their instants, its locale is served and its position bounded
+ *     (…_ck); it is published only with its primary locale's words (51321);
+ *     it never returns to draft, never goes straight from draft to archived,
+ *     keeps its primary locale and creation instant and moves one version at
+ *     a time (51320) — while an archived type may be republished;
+ *   - words are in a served locale and never blank (…_ck), and never change
+ *     their type or locale (51320);
+ *   - an application is made only as `submitted` at version one (51322), only
+ *     on a PUBLISHED type and only while its account holds no ACTIVE
+ *     Membership of it (51323); one OPEN application per account and type (the
+ *     filtered key); it moves only submitted → under review | withdrawn and
+ *     under review → approved | rejected | withdrawn, one version at a time,
+ *     keeps its applicant, type and submission instant, and never changes once
+ *     decided or withdrawn (51322); its instants and withdrawal source fit its
+ *     status (…_ck); re-application after a withdrawal or a closed Membership
+ *     is allowed;
+ *   - a Membership is made only ACTIVE at version one, from an APPROVED
+ *     application, on a PUBLISHED type (51324), only from its OWN application
+ *     — the same applicant and the same type (the composite key) — once per
+ *     application (the key) and once ACTIVE per account and type (the
+ *     filtered key); it keeps its member, type, source and activation instant,
+ *     moves only active → closed one version at a time and never reopens
+ *     (51324); its closure carries who closed it (…_ck);
+ *   - an intent is one of six purposes naming exactly the one record its
+ *     purpose describes (…_ck), owed only to that record's own applicant or
+ *     member (the composite keys), once per idempotency key (the key); it is
+ *     relayed or abandoned once and never reopened or re-keyed (51325);
+ *   - nothing cascades: an account, a type, an application and a Membership
+ *     are never deleted from under what names them.
+ *
+ * Every row the proofs write is then removed, children first, which shows the
+ * context can be emptied without a cascade; the synthetic accounts go with it.
+ */
+async function assertMembershipRules(session: SqlSession): Promise<void> {
+  const run = randomUUID().replaceAll('-', '').slice(0, 16);
+  const at = '2026-10-09T00:00:00';
+  const later = '2026-10-09T01:00:00';
+  const decided = '2026-10-09T02:00:00';
+  const closedAt = '2026-10-09T03:00:00';
+  let refusals = 0;
+  const refuse = async (
+    label: string,
+    statement: string,
+    numbers: readonly number[],
+    rule: string,
+  ): Promise<void> => {
+    await expectRefusal(session, label, statement, numbers, rule);
+    refusals += 1;
+  };
+  const count = async (statement: string): Promise<number> => {
+    const [row] = await session.query<{ total: number }>(statement);
+    return Number(row?.total ?? -1);
+  };
+  const DRAFT = 'begins as a draft';
+  const KEEPS = 'keeps its identity and never returns to draft';
+  const WORDS = 'only with its primary locale';
+  const LOCALE = 'never changes its type or locale';
+  const LIFECYCLE = 'moves only along its lifecycle';
+  const SUBMITTED = 'begins as submitted';
+  const OPEN = 'needs a published type and no active Membership';
+  const ACTIVE = 'begins active, from its own approved application';
+  const REOPEN = 'closed Membership never reopens';
+  const ONCE = 'relayed or abandoned once and never re-keyed';
+
+  // ---- the accounts the proofs name -----------------------------------------------
+  const applicant = randomUUID();
+  const other = randomUUID();
+  const third = randomUUID();
+  const users = [
+    [applicant, 'applicant'],
+    [other, 'other'],
+    [third, 'third'],
+  ] as const;
+  for (const [user, label] of users)
+    await session.query(
+      `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled]) VALUES (N'${user}',N'NON_MEMBERSHIP_FIXTURE ${label}',N'${label}-${run}@membership-proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);`,
+    );
+
+  const type = (id: string, locale: string, order: number): string =>
+    `INSERT INTO [dbo].[MembershipType] ([id],[primaryLocale],[displayOrder]) VALUES (N'${id}',N'${locale}',${String(order)});`;
+  const words = (typeId: string, locale: string, title = 'title'): string =>
+    `INSERT INTO [dbo].[MembershipTypeTranslation] ([membershipTypeId],[locale],[title],[summary],[description],[guidance]) VALUES (N'${typeId}',N'${locale}',N'NON_MEMBERSHIP_FIXTURE ${title}',N'NON_MEMBERSHIP_FIXTURE summary',N'NON_MEMBERSHIP_FIXTURE description',NULL);`;
+  const publish = (id: string): string =>
+    `UPDATE [dbo].[MembershipType] SET [state]=N'published',[publishedAt]='${at}',[archivedAt]=NULL,[version]=[version]+1,[updatedAt]='${at}' WHERE [id]=N'${id}';`;
+  const archive = (id: string): string =>
+    `UPDATE [dbo].[MembershipType] SET [state]=N'archived',[archivedAt]='${later}',[version]=[version]+1,[updatedAt]='${later}' WHERE [id]=N'${id}';`;
+  const apply = (id: string, user: string, typeId: string): string =>
+    `INSERT INTO [dbo].[MembershipApplication] ([id],[applicantUserId],[membershipTypeId],[submittedAt]) VALUES (N'${id}',N'${user}',N'${typeId}','${at}');`;
+  const review = (id: string): string =>
+    `UPDATE [dbo].[MembershipApplication] SET [status]=N'under_review',[reviewStartedAt]='${later}',[version]=[version]+1 WHERE [id]=N'${id}';`;
+  const decide = (id: string, outcome: 'approved' | 'rejected'): string =>
+    `UPDATE [dbo].[MembershipApplication] SET [status]=N'${outcome}',[decidedAt]='${decided}',[version]=[version]+1 WHERE [id]=N'${id}';`;
+  const withdraw = (id: string, source: 'applicant' | 'account-closure'): string =>
+    `UPDATE [dbo].[MembershipApplication] SET [status]=N'withdrawn',[withdrawalSource]=N'${source}',[withdrawnAt]='${later}',[version]=[version]+1 WHERE [id]=N'${id}';`;
+  const member = (
+    id: string,
+    user: string,
+    typeId: string,
+    applicationId: string,
+  ): string =>
+    `INSERT INTO [dbo].[Membership] ([id],[memberUserId],[membershipTypeId],[sourceApplicationId],[activatedAt]) VALUES (N'${id}',N'${user}',N'${typeId}',N'${applicationId}','${decided}');`;
+  const close = (id: string, source: 'member' | 'operator'): string =>
+    `UPDATE [dbo].[Membership] SET [status]=N'closed',[closureSource]=N'${source}',[closedAt]='${closedAt}',[version]=[version]+1 WHERE [id]=N'${id}';`;
+  const intent = (
+    id: string,
+    purpose: string,
+    recipient: string,
+    record: { readonly application?: string; readonly membership?: string },
+    key: string,
+  ): string =>
+    `INSERT INTO [dbo].[MembershipCommunicationIntent] ([id],[purpose],[recipientUserId],[applicationId],[membershipId],[dueAt],[idempotencyKey]) VALUES (N'${id}',N'${purpose}',N'${recipient}',${record.application === undefined ? 'NULL' : `N'${record.application}'`},${record.membership === undefined ? 'NULL' : `N'${record.membership}'`},'${at}',N'non-membership-fixture-${run}-${key}');`;
+
+  // ---- a type begins as a draft and is published only with its words ---------------
+  await refuse(
+    'A type inserted published',
+    `INSERT INTO [dbo].[MembershipType] ([id],[state],[primaryLocale],[displayOrder],[publishedAt]) VALUES (N'${randomUUID()}',N'published',N'en',0,'${at}');`,
+    [51320],
+    DRAFT,
+  );
+  await refuse(
+    'A type inserted at version two',
+    `INSERT INTO [dbo].[MembershipType] ([id],[primaryLocale],[displayOrder],[version]) VALUES (N'${randomUUID()}',N'en',0,2);`,
+    [51320],
+    DRAFT,
+  );
+  for (const [label, statement] of [
+    [
+      'A type beyond the display bound',
+      `INSERT INTO [dbo].[MembershipType] ([id],[primaryLocale],[displayOrder]) VALUES (N'${randomUUID()}',N'en',10000);`,
+    ],
+    [
+      'A type in an unserved primary locale',
+      `INSERT INTO [dbo].[MembershipType] ([id],[primaryLocale],[displayOrder]) VALUES (N'${randomUUID()}',N'fr',0);`,
+    ],
+    [
+      'A draft type carrying a publication instant',
+      `INSERT INTO [dbo].[MembershipType] ([id],[primaryLocale],[displayOrder],[publishedAt]) VALUES (N'${randomUUID()}',N'en',0,'${at}');`,
+    ],
+  ] as const)
+    await refuse(label, statement, [547], 'MembershipType_ck');
+
+  const typeOpen = randomUUID();
+  const typeUrdu = randomUUID();
+  const typeDraft = randomUUID();
+  const typeLate = randomUUID();
+  await expectAccepted(
+    session,
+    'Four draft types with their words, one of them in Urdu',
+    `${type(typeOpen, 'en', 0)}
+     ${type(typeUrdu, 'ur', 1)}
+     ${type(typeDraft, 'ar', 2)}
+     ${type(typeLate, 'en', 3)}
+     ${words(typeOpen, 'en')}
+     ${words(typeOpen, 'ur', 'عنوان')}
+     ${words(typeUrdu, 'ur', 'عنوان')}
+     ${words(typeDraft, 'en')}
+     ${words(typeLate, 'en')}`,
+  );
+  for (const [label, statement] of [
+    ['Words in an unserved locale', words(typeOpen, 'fr')],
+    [
+      'Words with a blank title',
+      `INSERT INTO [dbo].[MembershipTypeTranslation] ([membershipTypeId],[locale],[title],[summary],[description],[guidance]) VALUES (N'${typeDraft}',N'ar',N'',N'NON_MEMBERSHIP_FIXTURE summary',N'NON_MEMBERSHIP_FIXTURE description',NULL);`,
+    ],
+    [
+      'Words with blank guidance',
+      `INSERT INTO [dbo].[MembershipTypeTranslation] ([membershipTypeId],[locale],[title],[summary],[description],[guidance]) VALUES (N'${typeDraft}',N'ar',N'NON_MEMBERSHIP_FIXTURE title',N'NON_MEMBERSHIP_FIXTURE summary',N'NON_MEMBERSHIP_FIXTURE description',N'');`,
+    ],
+  ] as const)
+    await refuse(label, statement, [547], 'MembershipTypeTranslation_ck');
+  await refuse(
+    'A type published without its primary locale words',
+    publish(typeDraft),
+    [51321],
+    WORDS,
+  );
+  await expectAccepted(
+    session,
+    'Three types published with their primary locale words',
+    `${publish(typeOpen)} ${publish(typeUrdu)} ${publish(typeLate)}`,
+  );
+  await refuse(
+    'A published type returned to draft',
+    `UPDATE [dbo].[MembershipType] SET [state]=N'draft',[publishedAt]=NULL,[version]=[version]+1 WHERE [id]=N'${typeOpen}';`,
+    [51320],
+    KEEPS,
+  );
+  await refuse(
+    'A draft type archived without publication',
+    `UPDATE [dbo].[MembershipType] SET [state]=N'archived',[publishedAt]='${at}',[archivedAt]='${later}',[version]=[version]+1 WHERE [id]=N'${typeDraft}';`,
+    [51320],
+    KEEPS,
+  );
+  await refuse(
+    'A type change that skips a version',
+    `UPDATE [dbo].[MembershipType] SET [displayOrder]=5,[version]=[version]+2 WHERE [id]=N'${typeOpen}';`,
+    [51320],
+    KEEPS,
+  );
+  await refuse(
+    "A type's primary locale rewritten",
+    `UPDATE [dbo].[MembershipType] SET [primaryLocale]=N'ar',[version]=[version]+1 WHERE [id]=N'${typeOpen}';`,
+    [51320],
+    KEEPS,
+  );
+  await refuse(
+    "A type's creation instant rewritten",
+    `UPDATE [dbo].[MembershipType] SET [createdAt]=DATEADD(minute,-1,[createdAt]),[version]=[version]+1 WHERE [id]=N'${typeOpen}';`,
+    [51320],
+    KEEPS,
+  );
+  await refuse(
+    'Words moved to another locale',
+    `UPDATE [dbo].[MembershipTypeTranslation] SET [locale]=N'ar' WHERE [membershipTypeId]=N'${typeOpen}' AND [locale]=N'ur';`,
+    [51320],
+    LOCALE,
+  );
+  await refuse(
+    'Words moved to another type',
+    `UPDATE [dbo].[MembershipTypeTranslation] SET [membershipTypeId]=N'${typeLate}' WHERE [membershipTypeId]=N'${typeOpen}' AND [locale]=N'ur';`,
+    [51320],
+    LOCALE,
+  );
+  await expectAccepted(
+    session,
+    'Words replaced, a type reordered, and an archived type republished and archived again',
+    `UPDATE [dbo].[MembershipTypeTranslation] SET [title]=N'NON_MEMBERSHIP_FIXTURE retitled',[updatedAt]='${later}' WHERE [membershipTypeId]=N'${typeOpen}' AND [locale]=N'en';
+     UPDATE [dbo].[MembershipType] SET [displayOrder]=4,[version]=[version]+1 WHERE [id]=N'${typeOpen}';
+     ${archive(typeLate)} ${publish(typeLate)}`,
+  );
+
+  // ---- an application is made submitted, on a published type ----------------------
+  await refuse(
+    'An application on a draft type',
+    apply(randomUUID(), applicant, typeDraft),
+    [51323],
+    OPEN,
+  );
+  await refuse(
+    'An application inserted under review',
+    `INSERT INTO [dbo].[MembershipApplication] ([id],[applicantUserId],[membershipTypeId],[status],[submittedAt],[reviewStartedAt]) VALUES (N'${randomUUID()}',N'${applicant}',N'${typeOpen}',N'under_review','${at}','${later}');`,
+    [51322],
+    SUBMITTED,
+  );
+  for (const [label, statement] of [
+    [
+      'An application in a payment status',
+      `INSERT INTO [dbo].[MembershipApplication] ([id],[applicantUserId],[membershipTypeId],[status],[submittedAt]) VALUES (N'${randomUUID()}',N'${applicant}',N'${typeOpen}',N'paid','${at}');`,
+    ],
+    [
+      'A submitted application carrying a withdrawal source',
+      `INSERT INTO [dbo].[MembershipApplication] ([id],[applicantUserId],[membershipTypeId],[withdrawalSource],[submittedAt]) VALUES (N'${randomUUID()}',N'${applicant}',N'${typeOpen}',N'applicant','${at}');`,
+    ],
+    [
+      'A review that began before its submission',
+      `INSERT INTO [dbo].[MembershipApplication] ([id],[applicantUserId],[membershipTypeId],[status],[submittedAt],[reviewStartedAt]) VALUES (N'${randomUUID()}',N'${applicant}',N'${typeOpen}',N'under_review','${later}','${at}');`,
+    ],
+  ] as const)
+    await refuse(label, statement, [547], 'MembershipApplication_ck');
+
+  // Two approvals of one account and type BEFORE either Membership exists, so
+  // the second Membership reaches the filtered claim rather than 51323.
+  const appA = randomUUID();
+  const appB = randomUUID();
+  const appC = randomUUID();
+  await expectAccepted(
+    session,
+    'Two applications of one account and type approved in turn, and another account applying',
+    `${apply(appA, applicant, typeOpen)} ${review(appA)} ${decide(appA, 'approved')}
+     ${apply(appB, applicant, typeOpen)} ${review(appB)} ${decide(appB, 'approved')}
+     ${apply(appC, other, typeOpen)}`,
+  );
+  await refuse(
+    'A second open application of one account and type',
+    apply(randomUUID(), other, typeOpen),
+    [2601, 2627],
+    'MembershipApplication_open_key',
+  );
+  await refuse(
+    'A decision without a review',
+    `UPDATE [dbo].[MembershipApplication] SET [status]=N'approved',[reviewStartedAt]='${later}',[decidedAt]='${decided}',[version]=[version]+1 WHERE [id]=N'${appC}';`,
+    [51322],
+    LIFECYCLE,
+  );
+  await refuse(
+    'A transition that keeps its version',
+    `UPDATE [dbo].[MembershipApplication] SET [status]=N'under_review',[reviewStartedAt]='${later}' WHERE [id]=N'${appC}';`,
+    [51322],
+    LIFECYCLE,
+  );
+  await refuse(
+    'A decided application decided again',
+    `UPDATE [dbo].[MembershipApplication] SET [status]=N'rejected',[version]=[version]+1 WHERE [id]=N'${appA}';`,
+    [51322],
+    LIFECYCLE,
+  );
+  await refuse(
+    'An approved application withdrawn',
+    `UPDATE [dbo].[MembershipApplication] SET [status]=N'withdrawn',[decidedAt]=NULL,[withdrawalSource]=N'applicant',[withdrawnAt]='${closedAt}',[version]=[version]+1 WHERE [id]=N'${appA}';`,
+    [51322],
+    LIFECYCLE,
+  );
+  await refuse(
+    "An application's applicant rewritten",
+    `UPDATE [dbo].[MembershipApplication] SET [applicantUserId]=N'${third}',[status]=N'under_review',[reviewStartedAt]='${later}',[version]=[version]+1 WHERE [id]=N'${appC}';`,
+    [51322],
+    LIFECYCLE,
+  );
+  await refuse(
+    "An application's submission instant rewritten",
+    `UPDATE [dbo].[MembershipApplication] SET [submittedAt]=DATEADD(minute,-1,[submittedAt]),[status]=N'under_review',[reviewStartedAt]='${later}',[version]=[version]+1 WHERE [id]=N'${appC}';`,
+    [51322],
+    LIFECYCLE,
+  );
+
+  // ---- a Membership is made active from its own approved application ---------------
+  const m1 = randomUUID();
+  const m2 = randomUUID();
+  await expectAccepted(
+    session,
+    'A Membership from its approved application',
+    member(m1, applicant, typeOpen, appA),
+  );
+  await refuse(
+    'A second active Membership of one account and type',
+    member(randomUUID(), applicant, typeOpen, appB),
+    [2601, 2627],
+    'Membership_active_key',
+  );
+  await refuse(
+    'An application while its account holds an active Membership of the type',
+    apply(randomUUID(), applicant, typeOpen),
+    [51323],
+    OPEN,
+  );
+  await refuse(
+    'A Membership from a submitted application',
+    member(randomUUID(), other, typeOpen, appC),
+    [51324],
+    ACTIVE,
+  );
+  await refuse(
+    "A Membership naming another account's application",
+    member(randomUUID(), other, typeOpen, appB),
+    [547],
+    'Membership_sourceApplication_fkey',
+  );
+  await refuse(
+    'A Membership naming its application under another type',
+    member(randomUUID(), applicant, typeUrdu, appB),
+    [547],
+    'Membership_sourceApplication_fkey',
+  );
+  await refuse(
+    'A Membership inserted closed',
+    `INSERT INTO [dbo].[Membership] ([id],[memberUserId],[membershipTypeId],[sourceApplicationId],[status],[closureSource],[activatedAt],[closedAt]) VALUES (N'${randomUUID()}',N'${applicant}',N'${typeOpen}',N'${appB}',N'closed',N'operator','${decided}','${closedAt}');`,
+    [51324],
+    ACTIVE,
+  );
+  await refuse(
+    'A second Membership from one application',
+    `INSERT INTO [dbo].[Membership] ([id],[memberUserId],[membershipTypeId],[sourceApplicationId],[status],[closureSource],[activatedAt],[closedAt]) VALUES (N'${randomUUID()}',N'${applicant}',N'${typeOpen}',N'${appA}',N'closed',N'operator','${decided}','${closedAt}');`,
+    [2601, 2627],
+    'Membership_sourceApplicationId_key',
+  );
+  await refuse(
+    'A Membership closed by a payment',
+    `UPDATE [dbo].[Membership] SET [status]=N'closed',[closureSource]=N'payment',[closedAt]='${closedAt}',[version]=[version]+1 WHERE [id]=N'${m1}';`,
+    [547],
+    'Membership_ck',
+  );
+  await refuse(
+    "A Membership's activation instant rewritten",
+    `UPDATE [dbo].[Membership] SET [activatedAt]=DATEADD(minute,-1,[activatedAt]),[status]=N'closed',[closureSource]=N'member',[closedAt]='${closedAt}',[version]=[version]+1 WHERE [id]=N'${m1}';`,
+    [51324],
+    REOPEN,
+  );
+  await refuse(
+    'A Membership closed without a new version',
+    `UPDATE [dbo].[Membership] SET [status]=N'closed',[closureSource]=N'member',[closedAt]='${closedAt}' WHERE [id]=N'${m1}';`,
+    [51324],
+    REOPEN,
+  );
+  await expectAccepted(session, 'A Membership closed by its member', close(m1, 'member'));
+  await refuse(
+    'A closed Membership reopened',
+    `UPDATE [dbo].[Membership] SET [status]=N'active',[closureSource]=NULL,[closedAt]=NULL,[version]=[version]+1 WHERE [id]=N'${m1}';`,
+    [51324],
+    REOPEN,
+  );
+  await refuse(
+    'A closed Membership closed again',
+    `UPDATE [dbo].[Membership] SET [closureSource]=N'operator',[version]=[version]+1 WHERE [id]=N'${m1}';`,
+    [51324],
+    REOPEN,
+  );
+
+  // A type archived after an approval: the approval cannot become a Membership.
+  const appE = randomUUID();
+  await expectAccepted(
+    session,
+    'An approval on a type that is then archived',
+    `${apply(appE, third, typeLate)} ${review(appE)} ${decide(appE, 'approved')} ${archive(typeLate)}`,
+  );
+  await refuse(
+    'A Membership on an archived type',
+    member(randomUUID(), third, typeLate, appE),
+    [51324],
+    ACTIVE,
+  );
+  await refuse(
+    'An application on an archived type',
+    apply(randomUUID(), other, typeLate),
+    [51323],
+    OPEN,
+  );
+
+  const appF = randomUUID();
+  const appG = randomUUID();
+  await expectAccepted(
+    session,
+    'A second Membership after the first closed, an operator closure, re-application, a rejection and two withdrawals',
+    `${member(m2, applicant, typeOpen, appB)} ${close(m2, 'operator')}
+     ${apply(appF, applicant, typeOpen)} ${withdraw(appF, 'applicant')}
+     ${apply(appG, other, typeUrdu)} ${review(appG)} ${decide(appG, 'rejected')}
+     ${withdraw(appC, 'account-closure')}`,
+  );
+  await refuse(
+    'A withdrawn application withdrawn again',
+    `UPDATE [dbo].[MembershipApplication] SET [version]=[version]+1 WHERE [id]=N'${appF}';`,
+    [51322],
+    LIFECYCLE,
+  );
+
+  // ---- an intent names exactly its record, owed to its own applicant or member -------
+  const i1 = randomUUID();
+  const i2 = randomUUID();
+  const i3 = randomUUID();
+  await expectAccepted(
+    session,
+    'Three intents, each naming its record and owed to its own applicant or member',
+    `${intent(i1, 'membership.application.approved', applicant, { application: appA }, 'approved')}
+     ${intent(i2, 'membership.closed', applicant, { membership: m1 }, 'closed')}
+     ${intent(i3, 'membership.application.submitted', applicant, { application: appF }, 'submitted')}`,
+  );
+  for (const [label, statement] of [
+    [
+      'A closure intent naming an application',
+      intent(
+        randomUUID(),
+        'membership.closed',
+        applicant,
+        { application: appA },
+        'shape-1',
+      ),
+    ],
+    [
+      'An application intent naming a Membership',
+      intent(
+        randomUUID(),
+        'membership.application.approved',
+        applicant,
+        { membership: m1 },
+        'shape-2',
+      ),
+    ],
+    [
+      'An intent naming no record',
+      intent(randomUUID(), 'membership.application.submitted', applicant, {}, 'shape-3'),
+    ],
+    [
+      'An intent for a payment purpose',
+      intent(
+        randomUUID(),
+        'membership.payment.due',
+        applicant,
+        { application: appA },
+        'shape-4',
+      ),
+    ],
+  ] as const)
+    await refuse(label, statement, [547], 'MembershipCommunicationIntent_ck');
+  await refuse(
+    'A relayed intent without its instant',
+    `UPDATE [dbo].[MembershipCommunicationIntent] SET [state]=N'relayed' WHERE [id]=N'${i3}';`,
+    [547],
+    'MembershipCommunicationIntent_ck',
+  );
+  await refuse(
+    'An application intent owed to another account',
+    intent(
+      randomUUID(),
+      'membership.application.approved',
+      other,
+      { application: appA },
+      'foreign-1',
+    ),
+    [547],
+    'MembershipCommunicationIntent_application_fkey',
+  );
+  await refuse(
+    'A closure intent owed to another account',
+    intent(randomUUID(), 'membership.closed', other, { membership: m1 }, 'foreign-2'),
+    [547],
+    'MembershipCommunicationIntent_membership_fkey',
+  );
+  await refuse(
+    'A second intent under one idempotency key',
+    intent(
+      randomUUID(),
+      'membership.application.approved',
+      applicant,
+      { application: appA },
+      'approved',
+    ),
+    [2601, 2627],
+    'MembershipCommunicationIntent_idempotencyKey_key',
+  );
+  await expectAccepted(
+    session,
+    'An intent claimed and relayed, another abandoned',
+    `UPDATE [dbo].[MembershipCommunicationIntent] SET [claimedUntil]='${later}' WHERE [id]=N'${i1}';
+     UPDATE [dbo].[MembershipCommunicationIntent] SET [state]=N'relayed',[relayedAt]='${later}',[claimedUntil]=NULL WHERE [id]=N'${i1}';
+     UPDATE [dbo].[MembershipCommunicationIntent] SET [state]=N'abandoned' WHERE [id]=N'${i2}';`,
+  );
+  await refuse(
+    'A relayed intent reopened',
+    `UPDATE [dbo].[MembershipCommunicationIntent] SET [state]=N'pending',[relayedAt]=NULL WHERE [id]=N'${i1}';`,
+    [51325],
+    ONCE,
+  );
+  await refuse(
+    'An abandoned intent relayed',
+    `UPDATE [dbo].[MembershipCommunicationIntent] SET [state]=N'relayed',[relayedAt]='${later}' WHERE [id]=N'${i2}';`,
+    [51325],
+    ONCE,
+  );
+  await refuse(
+    'An intent re-purposed',
+    `UPDATE [dbo].[MembershipCommunicationIntent] SET [purpose]=N'membership.application.withdrawn' WHERE [id]=N'${i3}';`,
+    [51325],
+    ONCE,
+  );
+  await refuse(
+    "An intent's due instant rewritten",
+    `UPDATE [dbo].[MembershipCommunicationIntent] SET [dueAt]='${later}' WHERE [id]=N'${i3}';`,
+    [51325],
+    ONCE,
+  );
+  await refuse(
+    "An intent's key rewritten",
+    `UPDATE [dbo].[MembershipCommunicationIntent] SET [idempotencyKey]=N'non-membership-fixture-${run}-rekeyed' WHERE [id]=N'${i3}';`,
+    [51325],
+    ONCE,
+  );
+
+  // ---- nothing cascades ------------------------------------------------------------
+  const membershipRows = async (): Promise<number> =>
+    count(
+      `SELECT (${MEMBERSHIP_TABLES.map(
+        (table) => `SELECT COUNT_BIG(*) FROM [dbo].[${table}]`,
+      ).join(') + (')}) AS [total];`,
+    );
+  const before = await membershipRows();
+  await refuse(
+    'An account deleted under its application',
+    `DELETE FROM [dbo].[User] WHERE [id]=N'${third}';`,
+    [547],
+    'MembershipApplication_applicantUserId_fkey',
+  );
+  await refuse(
+    'A type deleted under its words and applications',
+    `DELETE FROM [dbo].[MembershipType] WHERE [id]=N'${typeUrdu}';`,
+    [547],
+    '_membershipTypeId_fkey',
+  );
+  await refuse(
+    'An application deleted under its Membership',
+    `DELETE FROM [dbo].[MembershipApplication] WHERE [id]=N'${appB}';`,
+    [547],
+    'Membership_sourceApplication',
+  );
+  await refuse(
+    'A Membership deleted under its owed mail',
+    `DELETE FROM [dbo].[Membership] WHERE [id]=N'${m1}';`,
+    [547],
+    'MembershipCommunicationIntent_membership',
+  );
+  if ((await membershipRows()) !== before)
+    fail('A refused deletion changed a Membership row.');
+
+  // ---- every fixture row removed, children first, without a cascade -----------------
+  const accounts = users.map(([user]) => `N'${user}'`).join(',');
+  const types = [typeOpen, typeUrdu, typeDraft, typeLate]
+    .map((id) => `N'${id}'`)
+    .join(',');
+  await expectAccepted(
+    session,
+    'Every Membership fixture row removed, children first, then its accounts',
+    `DELETE FROM [dbo].[MembershipCommunicationIntent] WHERE [recipientUserId] IN (${accounts});
+     DELETE FROM [dbo].[Membership] WHERE [memberUserId] IN (${accounts});
+     DELETE FROM [dbo].[MembershipApplication] WHERE [applicantUserId] IN (${accounts});
+     DELETE FROM [dbo].[MembershipTypeTranslation] WHERE [membershipTypeId] IN (${types});
+     DELETE FROM [dbo].[MembershipType] WHERE [id] IN (${types});
+     DELETE FROM [dbo].[User] WHERE [id] IN (${accounts});`,
+  );
+  const [left] = await session.query<{ membership: number; accounts: number }>(`
+    SELECT
+      (${MEMBERSHIP_TABLES.map((table) => `SELECT COUNT_BIG(*) FROM [dbo].[${table}]`).join(') + (')}) AS [membership],
+      (SELECT COUNT(*) FROM [dbo].[User] WHERE [email] LIKE N'%-${run}@membership-proof.invalid') AS [accounts];
+  `);
+  if (Number(left?.membership ?? -1) !== 0 || Number(left?.accounts ?? -1) !== 0)
+    fail(
+      `The Membership rule proofs left a fixture row behind: ${JSON.stringify(left ?? null)}.`,
+    );
+
+  report(
+    'membership rules',
+    `draft-first types published only with their words and never back to draft, fixed ` +
+      `words, submitted-first applications on published types along their lifecycle with ` +
+      `one open per account and type, Memberships only from their own approval on a ` +
+      `published type with one active per account and type and no reopening, intents ` +
+      `naming exactly their record and owed only to its own account, once-only relay, no ` +
+      `cascade; ${String(refusals)} refusals by name, every text a NON_MEMBERSHIP_FIXTURE ` +
+      `sentinel, every row removed`,
+  );
+}
+
 /**
  * The Phase-13 rollback restores the two editorial keys' Phase-6 descriptions
  * exactly — Article and Page, and no News family.
@@ -14852,6 +16100,7 @@ try {
   await assertLearningFoundation(session);
   await assertClassesFoundation(session);
   await assertMessagingFoundation(session);
+  await assertMembershipFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -14899,6 +16148,23 @@ try {
     }
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
+    }
+    if (migration.id === MEMBERSHIP_MIGRATION) {
+      // Phase 26 widened no search vocabulary, so none narrows here — and the
+      // whole Phase-24 state it was applied on is back: the protected bundle the
+      // compiled bundle less the two Membership keys, no Membership object, and
+      // Messaging, Learning's two slices, Personalisation and Fatwa whole at
+      // `before-membership`, with Identity's accounts — the only owner a
+      // Membership key named — untouched by the drop.
+      await assertSearchVocabulary(session, 'phase22');
+      await assertMembershipRemoved(session);
+      await assertMessagingFoundation(session, 'before-membership');
+      await assertClassesFoundation(session, 'before-membership');
+      await assertLearningFoundation(session, 'before-membership');
+      await assertPersonalisationFoundation(session, 'before-membership');
+      await assertFatwaFoundation(session, 'before-membership');
+      await assertTaxonomyFoundation(session);
+      await assertPeopleFoundation(session);
     }
     if (migration.id === MESSAGING_MIGRATION) {
       // Phase 24 widened no search vocabulary and changed no bundle, so neither
@@ -15109,6 +16375,7 @@ try {
   await assertLearningFoundation(session, 're-deploy');
   await assertClassesFoundation(session, 're-deploy');
   await assertMessagingFoundation(session, 're-deploy');
+  await assertMembershipFoundation(session, 're-deploy');
   // The membership rules as BEHAVIOUR, on the re-deployed schema: what was
   // rolled back and re-applied enforces exactly what the first deploy did.
   await assertCollectionMembership(session);
@@ -15138,12 +16405,17 @@ try {
   // row — accounts, roles, Courses, scopes, windows, sessions, bookings, marks
   // and intents — is removed again, children first.
   await assertClassesRules(session);
-  // And the Messaging rules, last: each kind's 51302 is proved BEFORE its
+  // And the Messaging rules: each kind's 51302 is proved BEFORE its
   // fixture activation is written, because those rows are immutable (51300);
   // they and the one moderated support conversation — whose decisions are
   // permanent (51309) — die only with this disposable database, and every
   // other synthetic row is removed through the disposal path, children first.
   await assertMessagingRules(session);
+  // And the Membership rules: their synthetic accounts, types, applications,
+  // Memberships and intents are written and then removed again, children
+  // first, so the re-deployed Membership schema ends as empty as the migration
+  // left it.
+  await assertMembershipRules(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

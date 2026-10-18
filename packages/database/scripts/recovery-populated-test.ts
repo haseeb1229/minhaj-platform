@@ -100,6 +100,12 @@ import {
   verifyRestoredPhase24,
   writePhase24Fixture,
 } from '../src/lifecycle/phase24-fixture.ts';
+import {
+  capturePhase26Fixture,
+  newPhase26Fixture,
+  verifyRestoredPhase26,
+  writePhase26Fixture,
+} from '../src/lifecycle/phase26-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -232,6 +238,7 @@ const personalFixture = newPhase21Fixture();
 const learningFixture = newPhase22Fixture();
 const classesFixture = newPhase23Fixture();
 const messagingFixture = newPhase24Fixture();
+const membershipFixture = newPhase26Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -539,6 +546,16 @@ try {
   const messagingSnapshot = await capturePhase24Fixture(admin, messagingFixture);
   report('messaging fixture', `run ${messagingFixture.runId}`);
 
+  // Phase-26 Membership, with NON_MEMBERSHIP_FIXTURE sentinels and `.invalid`
+  // addresses only: published, archived and draft types with their words in
+  // all three locales; submitted, under-review, approved, rejected and
+  // withdrawn applications of three synthetic accounts; an active and a
+  // member-closed Membership, each made from its own approval; a pending and
+  // a relayed intent. No payment concept of any kind.
+  await writePhase26Fixture(admin, membershipFixture);
+  const membershipSnapshot = await capturePhase26Fixture(admin, membershipFixture);
+  report('membership fixture', `run ${membershipFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -691,6 +708,10 @@ try {
       messagingSnapshot,
       messagingReferences,
     ),
+  );
+  report(
+    'membership recovery',
+    await verifyRestoredPhase26(restored, membershipFixture, membershipSnapshot),
   );
 
   // ---- restored security posture -------------------------------------------
@@ -1149,6 +1170,57 @@ try {
           `${table} ALTER`,
           `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
         ]),
+        // Phase 26. A restored runtime can neither erase a type, its words, an
+        // application or a Membership, re-point an application or a Membership
+        // at another account, type or approval, re-key a type's words or owed
+        // mail, catalogue a Membership key, nor alter a Membership table.
+        ['MembershipType DELETE', 'DELETE FROM [dbo].[MembershipType];'],
+        [
+          'MembershipType primary locale UPDATE',
+          'UPDATE [dbo].[MembershipType] SET [primaryLocale]=[primaryLocale];',
+        ],
+        [
+          'MembershipTypeTranslation DELETE',
+          'DELETE FROM [dbo].[MembershipTypeTranslation];',
+        ],
+        [
+          'MembershipTypeTranslation locale UPDATE',
+          'UPDATE [dbo].[MembershipTypeTranslation] SET [locale]=[locale];',
+        ],
+        ['MembershipApplication DELETE', 'DELETE FROM [dbo].[MembershipApplication];'],
+        [
+          'MembershipApplication applicant UPDATE',
+          'UPDATE [dbo].[MembershipApplication] SET [applicantUserId]=[applicantUserId];',
+        ],
+        ['Membership DELETE', 'DELETE FROM [dbo].[Membership];'],
+        [
+          'Membership member UPDATE',
+          'UPDATE [dbo].[Membership] SET [memberUserId]=[memberUserId];',
+        ],
+        [
+          'Membership source application UPDATE',
+          'UPDATE [dbo].[Membership] SET [sourceApplicationId]=[sourceApplicationId];',
+        ],
+        [
+          'MembershipCommunicationIntent recipient UPDATE',
+          'UPDATE [dbo].[MembershipCommunicationIntent] SET [recipientUserId]=[recipientUserId];',
+        ],
+        [
+          'membership.* Permission INSERT',
+          "INSERT INTO [dbo].[Permission] ([key],[description]) VALUES (N'membership.finance',N'forged');",
+        ],
+        ...(
+          [
+            'MembershipType',
+            'MembershipTypeTranslation',
+            'MembershipApplication',
+            'Membership',
+            'MembershipCommunicationIntent',
+          ] as const
+        ).map((table): [string, string] => [
+          `${table} ALTER`,
+          `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+        ]),
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -1257,6 +1329,29 @@ try {
         messagingSnapshot,
         messagingReferences,
       );
+
+      // Phase 26. The restored runtime holds UPDATE on a Membership's closure,
+      // so reopening the closed Membership is refused by the restored trigger
+      // itself (51324), not by a grant — proof the lifecycle came back armed.
+      try {
+        await app.query(
+          `UPDATE [dbo].[Membership] SET [status]=N'active',[closureSource]=NULL,[closedAt]=NULL,[version]=[version]+1 WHERE [id]=N'${membershipFixture.closedId}';`,
+        );
+        fail('Restored database PERMITTED a closed Membership to reopen.');
+      } catch (error) {
+        const number = (error as { number?: number }).number;
+        if (number !== 51324) {
+          fail(
+            `Restored closed Membership reopen was rejected for the WRONG reason ` +
+              `(error ${number ?? 'unknown'}): ${(error as Error).message.split('\n')[0]}`,
+          );
+        }
+        report(
+          'restored Membership reopen',
+          'refused by MembershipIntegrity, error 51324',
+        );
+      }
+      await verifyRestoredPhase26(restored, membershipFixture, membershipSnapshot);
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 
       // Phase 17. The full-text catalogue and index live INSIDE the database,
