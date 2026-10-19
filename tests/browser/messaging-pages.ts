@@ -86,22 +86,38 @@ export async function tabTo(page: Page, target: Locator): Promise<void> {
   expect(reached, 'reached by Tab alone').toBe(true);
 }
 
-/** The focused element shows a visible focus indicator. */
+/**
+ * The focused element shows a visible focus indicator.
+ *
+ * POLLED, BRIEFLY. Under `prefers-reduced-motion: reduce` the global stylesheet
+ * gives every element a 0.01ms transition, and the initial
+ * `transition-property` is `all` — so the outline width moves from 0 to its
+ * focus value over that 0.01ms. A single synchronous read in the same frame
+ * as the focus change can see the start of it. The indicator must appear
+ * within the bound, and an element that never shows one still fails.
+ */
 export async function expectVisibleFocus(target: Locator, where: string): Promise<void> {
-  const focus = await target.evaluate((element) => {
-    const style = globalThis.getComputedStyle(element);
-    return {
-      visible: element.matches(':focus-visible'),
-      outline: style.outlineStyle,
-      width: Number.parseFloat(style.outlineWidth),
-      shadow: style.boxShadow,
-    };
-  });
-  expect(focus.visible, where).toBe(true);
-  expect(
-    (focus.outline !== 'none' && focus.width > 0) || focus.shadow !== 'none',
-    `${where} ${JSON.stringify(focus)}`,
-  ).toBe(true);
+  const read = () =>
+    target.evaluate((element) => {
+      const style = globalThis.getComputedStyle(element);
+      return {
+        visible: element.matches(':focus-visible'),
+        outline: style.outlineStyle,
+        width: Number.parseFloat(style.outlineWidth),
+        shadow: style.boxShadow,
+      };
+    });
+  expect((await read()).visible, where).toBe(true);
+  let last = await read();
+  await expect
+    .poll(
+      async () => {
+        last = await read();
+        return (last.outline !== 'none' && last.width > 0) || last.shadow !== 'none';
+      },
+      { message: `${where} ${JSON.stringify(last)}`, timeout: 2_000 },
+    )
+    .toBe(true);
 }
 
 /** Horizontal overflow of the document, in CSS pixels (≤ 0 means none). */
