@@ -7,6 +7,7 @@ import {
   RESTORE_PREFIX,
 } from './backup.ts';
 import { DISPOSABLE_PREFIX, isDisposableDatabaseName } from './disposable-database.ts';
+import { principalRefusal, type PrincipalPolicy } from './principal-policy.ts';
 import { parseSqlServerUrl, type SqlServerConnection } from './sql-connection.ts';
 
 /**
@@ -83,7 +84,7 @@ export type LocalDatabasePolicy =
  * or recovery, and the runtime principal must never be able to provision an
  * administrator (SECURITY_BASELINE.md §8.3, §18.2).
  */
-export type LocalPrincipalPolicy = 'migration' | 'runtime' | 'operator';
+export type LocalPrincipalPolicy = PrincipalPolicy;
 
 export interface LocalTargetPolicy {
   database: LocalDatabasePolicy;
@@ -190,78 +191,10 @@ function assertApprovedPrincipal(
   runtimeLogin: string | undefined,
   operatorLogin: string | undefined,
 ): void {
-  if (user === '') {
-    throw new LocalTargetError('user', 'the configuration names no principal');
-  }
-  if (!/^[A-Za-z][A-Za-z0-9_]{1,63}$/.test(user)) {
-    throw new LocalTargetError('user', `'${user}' is not a plain SQL Server identifier`);
-  }
-
-  if (policy === 'operator') {
-    // Positively the configured operator, and positively NOT the runtime
-    // account. A bootstrap performed by the web application's own login would
-    // mean the application could perform it too, which is the entire property
-    // the separate principal exists to deny.
-    if (operatorLogin === undefined || operatorLogin === '') {
-      throw new LocalTargetError(
-        'user',
-        'DATABASE_OPERATOR_LOGIN is not configured, so the privileged-operations ' +
-          'principal cannot be positively identified',
-      );
-    }
-    if (user !== operatorLogin) {
-      throw new LocalTargetError(
-        'user',
-        `the operator connection is '${user}', not the configured ` +
-          `privileged-operations principal '${operatorLogin}'`,
-      );
-    }
-    if (runtimeLogin !== undefined && user === runtimeLogin) {
-      throw new LocalTargetError(
-        'user',
-        `the operator principal is the same account as the runtime principal ` +
-          `('${user}'); a web request must never be able to run these procedures`,
-      );
-    }
-    return;
-  }
-
-  if (policy === 'migration') {
-    // SECURITY_BASELINE.md §18.2: the runtime account must not be able to
-    // change schema, which is only true while the two accounts are distinct.
-    if (runtimeLogin === undefined || runtimeLogin === '') {
-      throw new LocalTargetError(
-        'user',
-        'DATABASE_APP_LOGIN is not configured, so separation between the ' +
-          'migration and runtime principals cannot be proven',
-      );
-    }
-    if (user === runtimeLogin) {
-      throw new LocalTargetError(
-        'user',
-        `the migration principal is the same account as the runtime principal ` +
-          `('${user}'); migration authority must be held separately`,
-      );
-    }
-    return;
-  }
-
-  // The runtime path must be the least-privilege account, positively — not
-  // merely "some account that is not sa".
-  if (runtimeLogin === undefined || runtimeLogin === '') {
-    throw new LocalTargetError(
-      'user',
-      'DATABASE_APP_LOGIN is not configured, so the runtime principal cannot be ' +
-        'positively identified',
-    );
-  }
-  if (user !== runtimeLogin) {
-    throw new LocalTargetError(
-      'user',
-      `the runtime connection is '${user}', not the configured least-privilege ` +
-        `principal '${runtimeLogin}'`,
-    );
-  }
+  // The three-principal rule lives in `./principal-policy.ts`, shared with the
+  // staging guard, so local and staging cannot come to disagree about it.
+  const refusal = principalRefusal(user, policy, { runtimeLogin, operatorLogin });
+  if (refusal !== undefined) throw new LocalTargetError('user', refusal);
 }
 
 /**

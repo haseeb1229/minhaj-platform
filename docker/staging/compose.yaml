@@ -1,0 +1,211 @@
+# =============================================================================
+# Staging stack — Phase 28 (ARCHITECTURE.md §10.6)
+# =============================================================================
+#
+# PRODUCTION-SHAPED, NOT THE LOCAL STACK. `docker/compose.yaml` is the local
+# development stack (dev target, NODE_ENV=development, live source bind
+# mounts) and stays exactly that. This file is what runs on the staging host:
+#
+#   proxy     pinned NGINX — the ONLY published service (80 and 443)
+#   web       the production web runtime, by IMAGE DIGEST from the private ACR
+#   realtime  the realtime runtime, by IMAGE DIGEST, same reviewed commit
+#   sqlserver SQL Server 2022 Developer + FTS, built on the host from the same
+#             reviewed `sqlserver/Dockerfile` the local stack uses
+#   clamav    the scanner sidecar — signatures update here, still NO storage
+#   ops       explicit operator commands only (profile `ops`); never a service
+#   certbot   ACME issuance and renewal only (profile `acme`)
+#
+# IT IS NEVER RUN FROM A CHECKOUT. The deploy script extracts this directory
+# from the exact-SHA operations image into `/srv/minhaj/releases/<sha>/` and
+# runs it there with that release's `release.env`, which pins every image by
+# digest. Nothing here reads the repository, and nothing here depends on the
+# GitHub repository being public.
+#
+# NO SECRET IS IN THIS FILE. Secrets live in root-only files under
+# `/etc/minhaj/secrets/` on the host, created there by `bin/bootstrap-host.sh`
+# and never printed. Non-secret identity (environment id, public host) lives
+# in `/etc/minhaj/staging.env`.
+#
+# MIGRATIONS ARE NOT A STARTUP STEP. No service below migrates, provisions,
+# seeds or resets on start. Those are `ops` commands an operator runs on
+# purpose (`bin/migrate.sh`, `bin/reset.sh`), each behind the staging target
+# guard.
+# =============================================================================
+
+name: minhaj-staging
+
+services:
+  proxy:
+    # Pinned by digest, exactly the Phase 25 seam's image: no opportunistic
+    # upgrade at the trust boundary.
+    image: nginx:1.30.6-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5
+    restart: unless-stopped
+    environment:
+      NGINX_ENVSUBST_FILTER: '^MINHAJ_'
+      MINHAJ_PUBLIC_HOST: ${MINHAJ_PUBLIC_HOST:?release.env must set MINHAJ_PUBLIC_HOST}
+      MINHAJ_WEB_UPSTREAM: web:3000
+      MINHAJ_REALTIME_UPSTREAM: realtime:3200
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx:/etc/nginx/templates:ro
+      - /srv/minhaj/tls:/etc/nginx/tls:ro
+      - /srv/minhaj/edge-auth:/etc/nginx/edge-auth:ro
+      - /srv/minhaj/acme:/var/www/acme:ro
+    depends_on:
+      web:
+        condition: service_healthy
+      realtime:
+        condition: service_healthy
+    networks: [edge]
+
+  web:
+    image: ${MINHAJ_WEB_IMAGE:?release.env must pin MINHAJ_WEB_IMAGE by digest}
+    restart: unless-stopped
+    # tini as PID 1, so the wrapper's signal forwarding is what the shutdown
+    # actually exercises.
+    init: true
+    env_file:
+      - /etc/minhaj/secrets/app.env
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      LOG_LEVEL: info
+      # MUST equal the origin the image was BUILT for: canonical, cookie and
+      # same-origin decisions all derive from it. `bin/deploy.sh` refuses a
+      # release whose public host differs from the host's staging identity.
+      AUTH_BASE_URL: https://${MINHAJ_PUBLIC_HOST}
+      PUBLIC_INDEXING_ENABLED: 'false'
+      # NGINX overwrites every forwarding header (see the staging template), so
+      # the first X-Forwarded-For entry is the address NGINX saw.
+      TRUST_PROXY_HEADERS: 'true'
+      STORAGE_ROOT: /var/lib/minhaj/storage
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: '3310'
+    volumes:
+      # The AUTHORITATIVE staging store: its own host path on the data disk,
+      # never the local developer volume and never shared with anything else.
+      - /srv/minhaj/storage:/var/lib/minhaj/storage
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      clamav:
+        condition: service_healthy
+    networks: [edge, backend]
+
+  realtime:
+    image: ${MINHAJ_REALTIME_IMAGE:?release.env must pin MINHAJ_REALTIME_IMAGE by digest}
+    restart: unless-stopped
+    init: true
+    env_file:
+      - /etc/minhaj/secrets/app.env
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      AUTH_BASE_URL: https://${MINHAJ_PUBLIC_HOST}
+      REALTIME_HOST: 0.0.0.0
+      REALTIME_PORT: '3200'
+    expose:
+      - '3200'
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks: [edge, backend]
+
+  sqlserver:
+    build:
+      context: ./sqlserver
+    # Built on the host from the reviewed Dockerfile; never pulled, never
+    # republished (Microsoft's image is not redistributed through our registry).
+    # `never`: compose does not rebuild it on `up`, so an application deploy
+    # cannot recreate the database container. bin/ builds it once, if absent.
+    image: minhaj-platform-sqlserver-fts:16.0.4265.3
+    pull_policy: never
+    # The SQL target guard's server fingerprint: SERVERPROPERTY('MachineName').
+    hostname: minhaj-staging-sql
+    restart: unless-stopped
+    env_file:
+      - /etc/minhaj/secrets/sqlserver.env
+    environment:
+      ACCEPT_EULA: 'Y'
+      # Developer edition: permitted ONLY because this environment is
+      # development, test, demonstration and acceptance. It is not the
+      # production licence decision (OPEN_DECISIONS.md §4.1, Phase 34).
+      MSSQL_PID: Developer
+      # Documented SQL Server on Linux setting. 3 GiB of the host's 8 GiB,
+      # leaving room for the OS, ClamAV, web, realtime and NGINX.
+      MSSQL_MEMORY_LIMIT_MB: '3072'
+    volumes:
+      - /srv/minhaj/sqlserver:/var/opt/mssql
+    # The password reaches sqlcmd through its environment, not argv (argv is
+    # visible in the host's process table).
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'SQLCMDPASSWORD="$${MSSQL_SA_PASSWORD}" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -Q "SELECT 1" -b -o /dev/null',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    # Internal only: no published port, no route to the internet.
+    networks: [backend]
+
+  clamav:
+    # The accepted 1.5.2, pinned by digest for staging.
+    image: clamav/clamav:1.5.2@sha256:1b6443c4a7b456baa1abfaf9796815f8d21e2fb558dbaed5b682fd4552d8b0c3
+    restart: unless-stopped
+    # Signature updates ARE enabled here (unlike the local stack): staging
+    # scans real uploads from its testers.
+    volumes:
+      - clamav-signatures:/var/lib/clamav
+    healthcheck:
+      test: ['CMD-SHELL', 'clamdcheck.sh || exit 1']
+      interval: 15s
+      timeout: 10s
+      retries: 40
+      start_period: 180s
+    # NO STORAGE MOUNT — bytes arrive over clamd's INSTREAM, exactly as locally.
+    # `updates` is egress for freshclam only; nothing publishes it.
+    networks: [backend, updates]
+
+  ops:
+    profiles: [ops]
+    image: ${MINHAJ_OPS_IMAGE:?release.env must pin MINHAJ_OPS_IMAGE by digest}
+    env_file:
+      - /etc/minhaj/staging.env
+      - /etc/minhaj/secrets/ops.env
+    environment:
+      STORAGE_ROOT: /var/lib/minhaj/storage
+      MINHAJ_RESTORE_STORAGE_ROOT: /var/lib/minhaj/restore-storage
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: '3310'
+    volumes:
+      - /srv/minhaj/storage:/var/lib/minhaj/storage
+      - /srv/minhaj/restore/storage:/var/lib/minhaj/restore-storage
+    networks: [backend]
+
+  certbot:
+    profiles: [acme]
+    image: certbot/certbot:v5.8.0@sha256:f70ad0adbb7e117f0fe42a63c553f28ea451edabc0148757b6efcd9735acaa20
+    volumes:
+      - /srv/minhaj/letsencrypt:/etc/letsencrypt
+      - /srv/minhaj/acme:/var/www/acme
+    networks: [updates]
+
+networks:
+  # Published only through `proxy`'s ports.
+  edge: {}
+  # No external route at all: SQL Server, the scanner's socket and the
+  # operator commands are reachable only from inside this network.
+  backend:
+    internal: true
+  # Outbound only: signature updates and ACME.
+  updates: {}
+
+volumes:
+  # Derived and re-downloadable; not authoritative, not backed up.
+  clamav-signatures:
+    name: minhaj-staging-clamav-signatures

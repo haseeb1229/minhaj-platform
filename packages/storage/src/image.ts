@@ -65,12 +65,18 @@ export type ImageRejection = 'unreadable' | 'dimensions-too-large';
 
 /** Raised when the bytes are not an admissible still image. */
 export class ImageRefused extends Error {
-  constructor(readonly rejection: ImageRejection) {
+  // A declared field rather than a constructor parameter property: Node's
+  // type stripping refuses parameter properties, and the staging ops commands
+  // load this package under plain `node` without a transform.
+  readonly rejection: ImageRejection;
+
+  constructor(rejection: ImageRejection) {
     super(
       rejection === 'unreadable'
         ? 'The image is malformed or not a supported still image.'
         : 'The image declares more pixels than are permitted.',
     );
+    this.rejection = rejection;
   }
 }
 
@@ -107,12 +113,12 @@ class ByteSource {
   private offset = 0;
   private received = 0;
   private readonly iterator: AsyncIterator<Uint8Array>;
+  // Declared, not a parameter property: see `ImageRefused`.
+  private readonly maxBytes: number;
 
-  constructor(
-    input: AsyncIterable<Uint8Array>,
-    private readonly maxBytes: number,
-  ) {
+  constructor(input: AsyncIterable<Uint8Array>, maxBytes: number) {
     this.iterator = input[Symbol.asyncIterator]();
+    this.maxBytes = maxBytes;
   }
 
   private get available(): number {

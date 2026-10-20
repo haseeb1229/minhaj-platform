@@ -1,0 +1,12 @@
+# Persistent: a run missed while the VM was deallocated happens at next boot,
+# so "deallocate when idle" never silently skips the daily backup.
+[Unit]
+Description=Daily One Minhaj staging backup
+
+[Timer]
+OnCalendar=*-*-* 01:30:00 UTC
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

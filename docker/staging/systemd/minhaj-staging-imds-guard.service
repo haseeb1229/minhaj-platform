@@ -1,0 +1,17 @@
+# One Minhaj staging — containers may not reach the Azure Instance Metadata
+# Service (169.254.169.254). The VM's managed identity can pull images and read
+# and write the backups; only host processes may use it. DOCKER-USER sees
+# forwarded container traffic only, so the host itself is unaffected. Ordered
+# before Docker so no container ever starts without the rule; Docker keeps an
+# existing DOCKER-USER chain and never alters its rules.
+[Unit]
+Description=Block container access to the Azure metadata service
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/bash -c 'iptables -N DOCKER-USER 2>/dev/null || true; iptables -C DOCKER-USER -d 169.254.169.254/32 -m comment --comment minhaj-imds-guard -j DROP 2>/dev/null || iptables -I DOCKER-USER -d 169.254.169.254/32 -m comment --comment minhaj-imds-guard -j DROP'
+
+[Install]
+WantedBy=multi-user.target

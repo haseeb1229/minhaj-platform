@@ -32,6 +32,10 @@ import type { SqlSession } from './sql-connection.ts';
  * engineering control. Production backup storage, retention, scheduling,
  * offsite copies and RPO/RTO targets are external decisions gating Phases 28
  * and 34 (§4.4) and are deliberately absent.
+ *
+ * Phase 28 reuses the SAME mechanics for staging through an explicit naming
+ * policy (`STAGING_BACKUP_NAMING` below). That adds a second namespace, not a
+ * second implementation, and still decides no retention or offsite policy.
  */
 
 /**
@@ -64,12 +68,94 @@ export const RESTORE_PREFIX = 'MinhajPhase1Restore_';
 /** `minhaj-phase1-<32 hex>.bak`; the only file name that is ever written or deleted. */
 const BACKUP_FILE_NAME = /^minhaj-phase1-[0-9a-f]{32}\.bak$/;
 
-export function isRestoreDatabaseName(name: string): boolean {
-  return RESTORE_NAME.test(name);
+/**
+ * The names one environment's backup tooling may write, restore into and drop.
+ *
+ * ## Why the naming is a POLICY and not a parameter
+ *
+ * Phase 28 brings a second environment — staging — with its own source
+ * database, its own artifact names and its own restore namespace. The
+ * primitives below are the same SQL Server mechanics in both, and duplicating
+ * them would be a second BACKUP/RESTORE implementation to keep correct. What
+ * differs is exactly the set of names each destructive path may touch, so that
+ * set is passed as one reviewed, frozen object — never as loose strings a
+ * caller could assemble into a name nobody approved.
+ *
+ * The namespaces are DISJOINT by construction: a Phase 1 guard refuses every
+ * staging name and the staging guard refuses every Phase 1 name, so a staging
+ * cleanup can never drop a local rehearsal database or the reverse.
+ *
+ * Every function taking a policy defaults to `PHASE1_BACKUP_NAMING`, so the
+ * local tooling and its tests behave exactly as before.
+ */
+export interface BackupNamingPolicy {
+  /** How refusals name the environment: `Phase 1` or `staging`. */
+  readonly label: string;
+  /** The artifact file-name stem, before the 32 hex characters. */
+  readonly fileStem: string;
+  /** The ONLY artifact file names this policy writes, reads or deletes. */
+  readonly fileName: RegExp;
+  readonly restorePrefix: string;
+  /** The ONLY database names this policy restores into or drops. */
+  readonly restoreName: RegExp;
+  /** `BACKUP ... WITH NAME`, recorded in `msdb.dbo.backupset`. */
+  readonly backupSetName: string;
+  /** Throws unless `database` is a source this policy may back up. */
+  readonly assertSource: (database: string) => void;
 }
 
-export function newRestoreDatabaseName(): string {
-  return `${RESTORE_PREFIX}${randomUUID().replaceAll('-', '')}`;
+export const PHASE1_BACKUP_NAMING: BackupNamingPolicy = Object.freeze({
+  label: 'Phase 1',
+  fileStem: 'minhaj-phase1-',
+  fileName: BACKUP_FILE_NAME,
+  restorePrefix: RESTORE_PREFIX,
+  restoreName: RESTORE_NAME,
+  backupSetName: 'Minhaj Phase 1 recovery proof',
+  assertSource: (database: string) => assertBackupSourceDatabase(database),
+});
+
+/** The one staging source database (DELIVERY_PLAN.md Phase 28). */
+export const STAGING_SOURCE_DATABASE = 'MinhajStaging';
+
+export const STAGING_RESTORE_PREFIX = 'MinhajStagingRestore_';
+
+/**
+ * Staging: `minhaj-staging-<32 hex>.bak` artifacts of `MinhajStaging` only,
+ * restored into `MinhajStagingRestore_<32 hex>` only.
+ *
+ * ONE source and no disposable alternative. Staging has no rehearsal-built
+ * source database, so the only thing its tooling ever backs up is the live
+ * staging database itself — and a restore is never written over it.
+ */
+export const STAGING_BACKUP_NAMING: BackupNamingPolicy = Object.freeze({
+  label: 'staging',
+  fileStem: 'minhaj-staging-',
+  fileName: /^minhaj-staging-[0-9a-f]{32}\.bak$/,
+  restorePrefix: STAGING_RESTORE_PREFIX,
+  restoreName: /^MinhajStagingRestore_[0-9a-f]{32}$/,
+  backupSetName: 'Minhaj staging backup',
+  assertSource: (database: string) => {
+    if (database !== STAGING_SOURCE_DATABASE) {
+      throw new Error(
+        `Refusing to back up '${database}': the only valid staging source is ` +
+          `${STAGING_SOURCE_DATABASE}. System databases, restore targets, local ` +
+          `databases and unknown databases are never valid sources.`,
+      );
+    }
+  },
+});
+
+export function isRestoreDatabaseName(
+  name: string,
+  naming: BackupNamingPolicy = PHASE1_BACKUP_NAMING,
+): boolean {
+  return naming.restoreName.test(name);
+}
+
+export function newRestoreDatabaseName(
+  naming: BackupNamingPolicy = PHASE1_BACKUP_NAMING,
+): string {
+  return `${naming.restorePrefix}${randomUUID().replaceAll('-', '')}`;
 }
 
 /**
@@ -78,13 +164,17 @@ export function newRestoreDatabaseName(): string {
  *
  * The rejected set deliberately includes `MinhajPlatform`: the source database
  * is never a restore target, because a restore that overwrites its own source
- * destroys the very data the test claims to be proving recoverable.
+ * destroys the very data the test claims to be proving recoverable. The same
+ * holds for `MinhajStaging` under the staging policy.
  */
-export function assertRestoreDatabaseName(name: string): void {
-  if (!isRestoreDatabaseName(name)) {
+export function assertRestoreDatabaseName(
+  name: string,
+  naming: BackupNamingPolicy = PHASE1_BACKUP_NAMING,
+): void {
+  if (!isRestoreDatabaseName(name, naming)) {
     throw new Error(
-      `Refusing to operate destructively on '${name}': not a disposable Phase 1 ` +
-        `restore database. Expected ${RESTORE_PREFIX}<32 hex characters>.`,
+      `Refusing to operate destructively on '${name}': not a disposable ${naming.label} ` +
+        `restore database. Expected ${naming.restorePrefix}<32 hex characters>.`,
     );
   }
 }
@@ -139,25 +229,54 @@ export interface BackupTarget {
  * logs, directory listings and error messages, so it must never be able to
  * carry a credential (SECURITY_BASELINE.md §18.1).
  */
-export function newBackupTarget(): BackupTarget {
-  const fileName = `minhaj-phase1-${randomUUID().replaceAll('-', '')}.bak`;
+export function newBackupTarget(
+  naming: BackupNamingPolicy = PHASE1_BACKUP_NAMING,
+): BackupTarget {
+  const fileName = `${naming.fileStem}${randomUUID().replaceAll('-', '')}.bak`;
   return { fileName, path: `${BACKUP_DIRECTORY}/${fileName}` };
 }
 
 /**
- * Throws unless `path` is a Phase 1 backup artifact in the Phase 1 backup
- * directory. Guards deletion, so no other file on the volume can be a target.
+ * Throws unless `path` is a backup artifact of this naming policy, directly in
+ * the backup directory. Guards deletion, so no other file on the volume can be
+ * a target — and a staging artifact is never a Phase 1 one, or the reverse.
  */
-export function assertBackupPath(path: string): void {
+export function assertBackupPath(
+  path: string,
+  naming: BackupNamingPolicy = PHASE1_BACKUP_NAMING,
+): void {
   const prefix = `${BACKUP_DIRECTORY}/`;
   const fileName = path.startsWith(prefix) ? path.slice(prefix.length) : '';
 
-  if (!BACKUP_FILE_NAME.test(fileName)) {
+  if (!naming.fileName.test(fileName)) {
     throw new Error(
-      `Refusing to operate on '${path}': not a Phase 1 backup artifact. ` +
-        `Expected ${prefix}minhaj-phase1-<32 hex characters>.bak`,
+      `Refusing to operate on '${path}': not a ${naming.label} backup artifact. ` +
+        `Expected ${prefix}${naming.fileStem}<32 hex characters>.bak`,
     );
   }
+}
+
+/**
+ * The server-side path of a NAMED existing artifact, validated.
+ *
+ * For the commands that take a file name an operator typed (the staging
+ * restore proof): the name is checked against the policy's exact grammar
+ * before it is joined to anything, so it cannot carry a directory, a
+ * traversal, a wildcard or a quote.
+ */
+export function backupTargetFor(
+  fileName: string,
+  naming: BackupNamingPolicy = PHASE1_BACKUP_NAMING,
+): BackupTarget {
+  if (!naming.fileName.test(fileName)) {
+    throw new Error(
+      `Refusing backup file name '${fileName}': not a ${naming.label} backup ` +
+        `artifact. Expected ${naming.fileStem}<32 hex characters>.bak`,
+    );
+  }
+  const target = { fileName, path: `${BACKUP_DIRECTORY}/${fileName}` };
+  assertBackupPath(target.path, naming);
+  return target;
 }
 
 /** One row of `RESTORE FILELISTONLY` — the backup's own record of its files. */
@@ -173,6 +292,8 @@ export interface BackupHeader {
   /** 1 = full database backup. */
   backupType: number;
   hasBackupChecksums: boolean;
+  /** When the server finished writing the set, ISO 8601; `null` if unreported. */
+  backupFinishDate: string | null;
 }
 
 export interface BackupResult {
@@ -200,9 +321,10 @@ export async function backupDatabase(
   admin: SqlSession,
   database: string,
   target: BackupTarget,
+  naming: BackupNamingPolicy = PHASE1_BACKUP_NAMING,
 ): Promise<BackupResult> {
-  assertBackupSourceDatabase(database);
-  assertBackupPath(target.path);
+  naming.assertSource(database);
+  assertBackupPath(target.path, naming);
 
   // The server writes the artifact; the directory may not exist on a fresh
   // volume, and SQL Server does not create it. `xp_create_subdir` is the
@@ -213,15 +335,36 @@ export async function backupDatabase(
     BACKUP DATABASE [${database}]
     TO DISK = N'${target.path}'
     WITH FORMAT, INIT, CHECKSUM, STATS = 100,
-         NAME = N'Minhaj Phase 1 recovery proof';
+         NAME = N'${naming.backupSetName}';
   `);
+
+  return verifyBackupArtifact(admin, database, target, naming);
+}
+
+/**
+ * Re-reads an EXISTING artifact and proves it is one verified full backup of
+ * `database`: `VERIFYONLY ... WITH CHECKSUM`, then `HEADERONLY` (exactly one
+ * full set, of that database) and `FILELISTONLY`.
+ *
+ * Shared by the backup path, which runs it on what it just wrote, and by the
+ * staging restore proof, which runs it on a named artifact before restoring —
+ * an artifact nobody can read back is not evidence of anything.
+ */
+export async function verifyBackupArtifact(
+  admin: SqlSession,
+  database: string,
+  target: BackupTarget,
+  naming: BackupNamingPolicy = PHASE1_BACKUP_NAMING,
+): Promise<BackupResult> {
+  naming.assertSource(database);
+  assertBackupPath(target.path, naming);
 
   // Re-reads the artifact and validates its checksums. A backup nobody can
   // read back is not evidence of anything.
   await admin.query(`RESTORE VERIFYONLY FROM DISK = N'${target.path}' WITH CHECKSUM;`);
 
-  const header = await readBackupHeader(admin, target.path);
-  const files = await readBackupFileList(admin, target.path);
+  const header = await readBackupHeader(admin, target.path, naming);
+  const files = await readBackupFileList(admin, target.path, naming);
 
   if (header.databaseName !== database) {
     throw new Error(
@@ -235,15 +378,20 @@ export async function backupDatabase(
   return { target, header, files };
 }
 
-/** Reads `RESTORE HEADERONLY` for an existing Phase 1 artifact. */
-async function readBackupHeader(admin: SqlSession, path: string): Promise<BackupHeader> {
-  assertBackupPath(path);
+/** Reads `RESTORE HEADERONLY` for an existing artifact of this policy. */
+async function readBackupHeader(
+  admin: SqlSession,
+  path: string,
+  naming: BackupNamingPolicy,
+): Promise<BackupHeader> {
+  assertBackupPath(path, naming);
 
   const rows = await admin.query<{
     DatabaseName: string;
     BackupSize: number | string;
     BackupType: number;
     HasBackupChecksums: number | boolean;
+    BackupFinishDate: Date | string | null;
   }>(`RESTORE HEADERONLY FROM DISK = N'${path}';`);
 
   const [row] = rows;
@@ -261,6 +409,10 @@ async function readBackupHeader(admin: SqlSession, path: string): Promise<Backup
     backupSize: Number(row.BackupSize),
     backupType: Number(row.BackupType),
     hasBackupChecksums: Boolean(row.HasBackupChecksums),
+    backupFinishDate:
+      row.BackupFinishDate === null || row.BackupFinishDate === undefined
+        ? null
+        : new Date(row.BackupFinishDate).toISOString(),
   };
 }
 
@@ -276,8 +428,9 @@ async function readBackupHeader(admin: SqlSession, path: string): Promise<Backup
 async function readBackupFileList(
   admin: SqlSession,
   path: string,
+  naming: BackupNamingPolicy,
 ): Promise<BackupFile[]> {
-  assertBackupPath(path);
+  assertBackupPath(path, naming);
 
   const rows = await admin.query<{ LogicalName: string; Type: string }>(
     `RESTORE FILELISTONLY FROM DISK = N'${path}';`,
@@ -302,18 +455,19 @@ export async function restoreDatabaseFromBackup(
   master: SqlSession,
   path: string,
   restoreDatabase: string,
+  naming: BackupNamingPolicy = PHASE1_BACKUP_NAMING,
 ): Promise<void> {
-  assertBackupPath(path);
+  assertBackupPath(path, naming);
   // Rejects the source database, the system databases, and malformed input.
-  assertRestoreDatabaseName(restoreDatabase);
+  assertRestoreDatabaseName(restoreDatabase, naming);
 
-  const files = await readBackupFileList(master, path);
+  const files = await readBackupFileList(master, path, naming);
   if (files.length === 0) {
     throw new Error(`Backup artifact at ${path} lists no files to restore.`);
   }
 
   // Physical destinations are built from the VALIDATED restore name, so every
-  // path below is `MinhajPhase1Restore_<hex>` — never a live data file.
+  // path below is `<restore prefix><hex>` — never a live data file.
   const moves = files.map((file, index) => {
     const extension = file.type === 'L' ? 'ldf' : 'mdf';
     const suffix = index === 0 ? '' : `_${index}`;
@@ -343,8 +497,9 @@ export async function restoreDatabaseFromBackup(
 export async function dropRestoreDatabase(
   master: SqlSession,
   restoreDatabase: string,
+  naming: BackupNamingPolicy = PHASE1_BACKUP_NAMING,
 ): Promise<void> {
-  assertRestoreDatabaseName(restoreDatabase);
+  assertRestoreDatabaseName(restoreDatabase, naming);
 
   await master.query(`
     IF DB_ID(N'${restoreDatabase}') IS NOT NULL
@@ -365,8 +520,9 @@ export async function dropRestoreDatabase(
 export async function deleteBackupArtifact(
   admin: SqlSession,
   path: string,
+  naming: BackupNamingPolicy = PHASE1_BACKUP_NAMING,
 ): Promise<void> {
-  assertBackupPath(path);
+  assertBackupPath(path, naming);
 
   // `xp_delete_files` is the supported server-side deletion for backup
   // artifacts and refuses anything that is not a backup file.
@@ -391,8 +547,9 @@ export async function deleteBackupArtifact(
 export async function backupArtifactExists(
   admin: SqlSession,
   path: string,
+  naming: BackupNamingPolicy = PHASE1_BACKUP_NAMING,
 ): Promise<boolean> {
-  assertBackupPath(path);
+  assertBackupPath(path, naming);
 
   const rows = await admin.query<{
     fileExists: number | null;

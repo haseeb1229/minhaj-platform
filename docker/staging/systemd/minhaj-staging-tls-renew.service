@@ -1,0 +1,9 @@
+# One Minhaj staging — Let's Encrypt renewal (acts only inside the renewal window).
+[Unit]
+Description=One Minhaj staging TLS renewal
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /srv/minhaj/releases/current/bin/tls.sh renew

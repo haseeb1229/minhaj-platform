@@ -1,0 +1,10 @@
+[Unit]
+Description=Twice-daily One Minhaj staging TLS renewal check
+
+[Timer]
+OnCalendar=*-*-* 03,15:17:00 UTC
+Persistent=true
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target

@@ -393,11 +393,38 @@ contractual and staffing implications.
 **If unanswered:** Local development and Phase 1 proceed normally. **Staging (Phase 28) and
 production (Phase 34) cannot.**
 
+#### Phase 28 — the staging rows, resolved for pre-adoption staging only
+
+The owner decided the **staging** rows above for a **developer-controlled pre-adoption staging
+environment** (ARCHITECTURE.md §10.6). These answers are **not** Minhaj's production decisions
+and close nothing for Phase 34.
+
+| Staging decision | Resolution |
+|---|---|
+| Staging SQL Server instance and access | SQL Server 2022 **Developer** + FTS (16.0.4265.3) in a container on the staging VM, reachable only on the host's internal Docker network. Developer edition is permitted **only** because the environment is development, test, demonstration and acceptance |
+| Hosting arrangement | One Azure for Students VM (`Standard_B2as_v2`, Ubuntu 24.04 LTS, x86, Central India) running Docker Compose — IaaS only. Operated **deallocated when idle** |
+| DBA ownership and responsibility | **Muhammad Haseeb** (owner, deployer, DBA, backup operator and restore verifier) until handover |
+| Backup and restore responsibility | Same owner; daily automated backup, restore proven by `bin/restore-proof.sh` |
+| Network and firewall access | Inbound 443 and 80 (ACME and redirect) only; SSH from the operator's current IP only; SQL Server, ClamAV and realtime never published (SECURITY_BASELINE.md §21.3) |
+| Connection details | Generated on the host into root-only files; never in the repository, CI or chat |
+
+**Still open:** the **production** SQL Server instance, hosting, licensing, HA/DR, network,
+connection details and DBA — all Phase 34.
+
 ### 4.2 Staging environment
 **Owner:** Minhaj · **Gates:** Phase 28 · **Priority:** High
 
 **Why it matters:** Migration dry-runs and religious QA must **never** run against production.
 Phase 28 delivers staging **before** migration needs it.
+
+**Resolved for Phase 28 (pre-adoption staging).** Staging is `https://minhaj.haseebliaqat.me` —
+a dedicated host name, distinct from the pre-adoption presentation origin — owned and operated
+by the developer before adoption, with the DNS `A` record for that one name only, Let's Encrypt
+TLS, NGINX Basic Authentication as the environment gate in front of normal Identity and RBAC,
+staging email disabled and Donations unavailable (no payment provider configured). GitHub
+Actions deploys it through the protected `staging` environment with OIDC (ARCHITECTURE.md
+§10.6). On adoption, staging is re-provisioned on adopter-owned infrastructure; the Azure for
+Students subscription is not transferable.
 
 ### 4.3 Production hosting
 **Owner:** Minhaj · **Gates:** Phase 34 · **Priority:** High
@@ -416,6 +443,15 @@ snapshot retention periods** (MIGRATION_STRATEGY.md §8.3).
 **Interim position:** Daily backups with tested restores and conservative retention defaults.
 **A backup that has never been restored is not a backup.** **Local restore rehearsal in
 Phase 1 is engineering-controlled and proceeds regardless** (§4.1).
+
+**Narrowed for Phase 28 staging — an INTERIM staging policy, not a production or legal
+retention decision:** daily backup of SQL **and** authoritative Storage together · **RPO 24 hours**
+· **RTO 4 hours** · **14-day retention** · copies in a private Azure Blob container separate from
+the VM's disks · restore proven into isolated targets. The Blob copies share the staging
+subscription with the VM; that correlated-failure risk is **accepted for staging only**, with a
+documented export of the latest verified set before credit expiry, subscription disablement or
+handover (ARCHITECTURE.md §10.6). **Production** frequency, retention, off-site posture, RPO, RTO
+and log, audit and raw-snapshot retention remain open for Phase 34.
 
 ---
 
@@ -763,10 +799,10 @@ gates. A decision may gate more than one thing.
 | 3.2 | Source, API or export access | **C** | Content acceptance quality | 30 | Higher parsing effort; **an export is a source, never the target** (MIGRATION_STRATEGY.md §1.3) |
 | 3.3 | Migration scope per source | **C** | Content acceptance | 30 | Scope undetermined |
 | 3.4 | Legacy domain control and DNS | **C/E** | Launch | 35 | Legacy links break at launch |
-| 4.1 | **Staging/production** SQL Server infrastructure and ownership | **E** | Implementation (28, 34) · launch | **28, 34** | Staging and production blocked. **Phase 1 proceeds on local Developer edition** |
-| 4.2 | Staging environment | **E** | Implementation | 28 | Migration cannot run safely |
+| 4.1 | **Staging/production** SQL Server infrastructure and ownership | **E** | Implementation (28, 34) · launch | **28, 34** | **Staging rows resolved for pre-adoption staging (Phase 28).** Production remains blocked until decided (34). **Phase 1 proceeds on local Developer edition** |
+| 4.2 | Staging environment | **E** | Implementation | 28 | **Resolved for pre-adoption staging (Phase 28)** — `minhaj.haseebliaqat.me`; re-provisioned on adopter-owned infrastructure at handover |
 | 4.3 | Production hosting | **E** | Launch | 34 | Deployment blocked |
-| 4.4 | Backup, retention and recovery targets | **C/E** | Launch | 28, 34 | Conservative defaults; **local restore rehearsal proceeds** |
+| 4.4 | Backup, retention and recovery targets | **C/E** | Launch | 28, 34 | **Staging: interim daily / RPO 24 h / RTO 4 h / 14 days (Phase 28).** Production: conservative defaults until decided; **local restore rehearsal proceeds** |
 | 5.1 | Transactional email provider **evidence** | **B** | **Implementation** | ~~2, and transitively everything downstream of 2~~ | **CLOSED ON EVIDENCE.** Domain, DKIM, sending/SPF configuration, DMARC, restricted credential and a real controlled-inbox delivery all demonstrated. **Official adopter-controlled production email remains a separate later activation** |
 | 5.2 | Google **OAuth application credentials** | **C/E** | Activation | **2G** | **Google sign-in blocked.** Base auth (2) and the **manual Meet flow (23)** proceed without them |
 | 5.3 | Teachers can create/use Google Meet meetings | **C** | Activation | 23 | Live classes not activated — **an organisational capability, not an API credential** |

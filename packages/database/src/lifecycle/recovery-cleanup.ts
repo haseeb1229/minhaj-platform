@@ -128,36 +128,7 @@ export async function cleanUpRecoveryResources(
   // Verified independently of the DROP above: this is the check that catches a
   // drop which reported success and left the database in place.
   await attempt(outcome, 'restore database residue', async () => {
-    const rows = await master.query<{ present: number | null }>(
-      `SELECT CASE WHEN DB_ID(N'${restoreDatabase}') IS NULL THEN 0 ELSE 1 END AS present;`,
-    );
-
-    // Absence must be POSITIVELY established. No row, a NULL, or a value that
-    // is neither 0 nor 1 means the inspection did not answer — and an
-    // unanswered inspection is a cleanup failure, never a clean result.
-    if (rows.length !== 1) {
-      throw new Error(
-        `the residue inspection returned ${rows.length} rows; ${restoreDatabase} ` +
-          `is in an unknown state`,
-      );
-    }
-    const present = rows[0]?.present;
-    if (present === null || present === undefined) {
-      throw new Error(
-        `the residue inspection returned no value; ${restoreDatabase} is in an ` +
-          `unknown state`,
-      );
-    }
-    if (present !== 0 && present !== 1) {
-      throw new Error(
-        `the residue inspection reported '${String(present)}'; only 0 or 1 is an ` +
-          `answer about ${restoreDatabase}`,
-      );
-    }
-    if (present !== 0) {
-      throw new Error(`${restoreDatabase} still exists after the drop attempt`);
-    }
-
+    await assertDatabaseAbsent(master, restoreDatabase);
     return `${restoreDatabase} absent, DB_ID is NULL`;
   });
 
@@ -191,6 +162,47 @@ export async function cleanUpRecoveryResources(
   await closeQuietly(outcome, 'master session close', master);
 
   return outcome;
+}
+
+/**
+ * Throws unless SQL Server POSITIVELY reports `database` absent.
+ *
+ * Shared by the Phase 1 rehearsal's cleanup and the staging restore proof's,
+ * so both read the probe the same strict way. Absence must be established, not
+ * inferred: no row, a NULL, or a value that is neither 0 nor 1 means the
+ * inspection did not answer — and an unanswered inspection is a cleanup
+ * failure, never a clean result. Callers pass only a name a destructive guard
+ * has already validated, so the name is safe to embed.
+ */
+export async function assertDatabaseAbsent(
+  master: SqlSession,
+  database: string,
+): Promise<void> {
+  const rows = await master.query<{ present: number | null }>(
+    `SELECT CASE WHEN DB_ID(N'${database}') IS NULL THEN 0 ELSE 1 END AS present;`,
+  );
+
+  if (rows.length !== 1) {
+    throw new Error(
+      `the residue inspection returned ${rows.length} rows; ${database} ` +
+        `is in an unknown state`,
+    );
+  }
+  const present = rows[0]?.present;
+  if (present === null || present === undefined) {
+    throw new Error(
+      `the residue inspection returned no value; ${database} is in an unknown state`,
+    );
+  }
+  if (present !== 0 && present !== 1) {
+    throw new Error(
+      `the residue inspection reported '${String(present)}'; only 0 or 1 is an ` +
+        `answer about ${database}`,
+    );
+  }
+  if (present !== 0) {
+    throw new Error(`${database} still exists after the drop attempt`);
+  }
 }
 
 /**

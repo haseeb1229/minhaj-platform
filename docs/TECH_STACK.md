@@ -464,7 +464,12 @@ wrong rule or a wrong design.
 **Linux host** · **Docker / Docker Compose** · **NGINX stable** · **self-hosted Node
 applications** · **npm workspaces** · **GitHub Actions** — LOCKED.
 
-**No Vercel. No Kubernetes. No Azure.**
+**No Vercel. No Kubernetes. No Azure platform services in the application.** The pre-adoption
+staging environment (Phase 28, ARCHITECTURE.md §10.6) runs the same locked shape on an Azure
+virtual machine — with Azure Blob Storage holding its backups and a private Azure Container
+Registry holding its images — by explicit owner decision for that environment only. The code
+has no Azure dependency and runs unchanged on any Linux Docker host; production hosting remains
+open (OPEN_DECISIONS.md §4.3).
 
 **Turborepo is not adopted** — no demonstrated orchestration need; reconsider only if build
 times measurably degrade.
@@ -495,7 +500,7 @@ explicit authorisation boundaries.
 | **Redux / global state libraries** | Server Components, URL state and local React state suffice |
 | **Turborepo** | No demonstrated orchestration need |
 | **Vercel** | Self-hosted Linux Docker required; no platform lock-in |
-| **Azure (all services)** | Explicitly excluded |
+| **Azure platform services as application dependencies** (App Service, Azure SQL, Functions, managed identity SDKs in the app, …) | Self-hosted Linux Docker is the architecture. Phase 28 staging uses Azure only as IaaS hosting (a VM, Blob backup storage, a private registry) by owner decision — §13, §18.5 |
 | **Azure Communication Services** | Google Meet meets the requirement |
 | **Jitsi / custom WebRTC** | Self-hosting video infrastructure is a major programme with no justification |
 | **Custom video hosting** | Provider embeds suffice; bandwidth and transcoding unjustifiable |
@@ -544,7 +549,8 @@ Node.js 24.20.0 · Next.js 16.3.8 · React 19.2.8 · Tailwind CSS 4.3.3 · shadc
 source) · Motion 13.1.x · next-intl 4.14.x · Prisma ORM 7.10.0 · @prisma/client 7.10.0 ·
 **@prisma/adapter-mssql 7.10.0** · Better Auth 1.7.x · **Resend (first `EmailProvider`
 adapter)** · Zod 4.5.x · React Hook Form 7.x · Tiptap 3.x · Socket.IO 4.8.3 · Pino 10.3.1
-**Infrastructure:** Microsoft SQL Server 2022 · NGINX · Docker
+**Infrastructure:** Microsoft SQL Server 2022 · NGINX · Docker · ClamAV · Let's Encrypt
+(certbot, staging edge — §18.5)
 **External services:** Google OAuth · Google Meet · YouTube / Vimeo
 
 ### Development — builds and tests, does not ship
@@ -673,3 +679,21 @@ never run in CI. The anonymous sandbox it ran against was provisioned with the o
 project dependency), whose `stripe sandbox create` issues a test-mode `rkcs_test_` restricted key that
 the adapter accepts in the sandbox environment only, and whose `stripe listen --forward-to` delivered
 real signed events to a loopback receiver (SECURITY_BASELINE.md §14).
+
+### 18.5 Phase-28 staging infrastructure inventory
+
+**PRE-ADOPTION STAGING ONLY — NOT A PRODUCTION HOSTING OR LICENSING DECISION.** Every item below
+serves the developer-controlled staging environment (ARCHITECTURE.md §10.6). **No npm dependency
+was introduced and no locked application version changed.**
+
+| Item | Exact version / value | Use and provenance |
+| --- | --- | --- |
+| Let's Encrypt client (`certbot/certbot`) | v5.8.0, pinned by digest `sha256:f70ad0adbb7e117f0fe42a63c553f28ea451edabc0148757b6efcd9735acaa20` | Apache-2.0; [EFF certbot](https://github.com/certbot/certbot). Staging-host only, run as a one-shot container (`acme` profile) for HTTP-01 webroot issuance and the twice-daily renewal timer. No account e-mail is registered. |
+| ClamAV (`clamav/clamav`) | 1.5.2 — the accepted version — now pinned by digest `sha256:1b6443c4a7b456baa1abfaf9796815f8d21e2fb558dbaed5b682fd4552d8b0c3` for staging | As §18.2. Signature updates enabled on staging. A newer 1.5.x exists and is a separate maintenance decision, not part of Phase 28. |
+| NGINX | 1.30.6-alpine, the Phase 25 digest unchanged | The staging template (`docker/nginx/staging/`) extends the seam; no upgrade. |
+| SQL Server 2022 Developer + FTS | 16.0.4265.3, the §18.3 image, built on the staging host | **Developer edition is permitted for this non-production development, test, demonstration and acceptance environment only.** It is not the production licence (OPEN_DECISIONS.md §4.1). `MSSQL_MEMORY_LIMIT_MB=3072` is the documented SQL Server on Linux setting. |
+| Host OS image | Canonical `ubuntu-24_04-lts:server` 24.04.202610160 (x64, Gen2, Trusted Launch) | No Marketplace plan or charge. |
+| Host Docker | Docker Engine 29.9.1, Compose plugin v5.6.0, Buildx 0.38.0 (Docker's signed apt repository, key fingerprint `9DC8 5822 9FC7 DD38 854A E2D8 8D81 803C 0EBF CD88`, versions held) | Container runtime on the staging host. |
+| Host tools | `jq`, `openssl`, `curl`, `apache2-utils` (`htpasswd -B`, bcrypt cost 6 — see SECURITY_BASELINE.md §21.1) from Ubuntu's archive | Shell tooling for the staging scripts; the environment credential is hashed on the host. |
+| Azure (owner's Azure for Students subscription) | VM `Standard_B2as_v2`, 2 × 64 GiB Standard SSD, one Standard static IPv4, StorageV2 LRS (private `backups` container, 14-day lifecycle), Container Registry **Standard** (the subscription's included 12-month free allocation, ABAC repository permissions), a user-assigned identity with GitHub OIDC federation, a Cost Management budget | IaaS hosting for staging only; the subscription's spending limit stays on and it is never transferred. |
+| GitHub Actions used by `staging-deploy.yml` | `actions/checkout` v5.1.0 (`fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09`), `azure/login` v3.1.0 (`a641126d1b8aa4d1fa005f4f92df94a3a4c4c906`) | Pinned by commit SHA in the secret-adjacent deploy workflow; `azure/login` is MIT, [source](https://github.com/Azure/login). |

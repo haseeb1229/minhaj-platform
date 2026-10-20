@@ -355,6 +355,13 @@ export const requiredContextPaths = Object.freeze([
   'apps/realtime/src/index.ts',
   'apps/web/src/composition/realtime-main.ts',
   '.github/workflows/ci.yml',
+  // Phase 28: the operations image's Dockerfile and the staging deploy bundle
+  // it carries, and the deploy workflow the test stage's staging suite reads.
+  'docker/ops.Dockerfile',
+  'docker/staging/compose.yaml',
+  'docker/nginx/staging/default.conf.template',
+  'docker/sqlserver/Dockerfile',
+  '.github/workflows/staging-deploy.yml',
   // The Round 6 and Round 7 fixture trees, whose whole point is that their
   // directory names look generated. The re-includes that admit them are the
   // very negations this module probes for secrets — both properties have to

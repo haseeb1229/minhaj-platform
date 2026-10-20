@@ -502,7 +502,10 @@ does not decide it.
 
 Executed **against staging**, well before launch. **A staging foundation milestone precedes
 any live-source migration** (DELIVERY_PLAN.md) — the prior revision required staging in the
-migration phase while delivering it only in final operations.
+migration phase while delivering it only in final operations. **That milestone is Phase 28**
+(ARCHITECTURE.md §10.6); it adds no migration objects and runs no migration. Before migrated
+content first lands there (Phase 30), the staging reset guard and the backup-before-reset rule
+already apply, and the restore proof covers SQL and Storage together.
 
 Sequenced from lowest to highest risk:
 

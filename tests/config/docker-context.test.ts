@@ -293,6 +293,13 @@ describe('F7.6 — the evaluator matches Docker’s own precedence rules', () =>
     expect(isInContext(patterns, '.github/workflows/ci.yml')).toBe(true);
   });
 
+  // Phase 28: the staging deploy workflow is the one other test-stage input.
+  it('re-includes the staging deploy workflow, and only by its exact name', () => {
+    expect(isInContext(patterns, '.github/workflows/staging-deploy.yml')).toBe(true);
+    expect(isInContext(patterns, '.github/workflows/staging-deploy.yaml')).toBe(false);
+    expect(isInContext(patterns, '.github/workflows/staging-deploy.yml.bak')).toBe(false);
+  });
+
   it.each([
     '.github/UNRELATED_SENTINEL',
     '.github/CODEOWNERS',

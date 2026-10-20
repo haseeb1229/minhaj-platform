@@ -1620,3 +1620,120 @@ coverage:
   hold; **already-completed external effects are not blindly replayed** (ARCHITECTURE.md §10.4)
 
 **A permission check without a negative test is an untested permission check.**
+
+---
+
+## 21. Staging environment security (Phase 28)
+
+The staging environment (ARCHITECTURE.md §10.6) is a **complete deployment of the platform**
+that real people use for testing, demonstration and acceptance. It is therefore secured as a
+real environment, and every rule below is an exit criterion of Phase 28.
+
+### 21.1 Two independent layers: the environment gate and the application
+
+**Layer 1 — the environment gate.** NGINX HTTP Basic Authentication over HTTPS
+(`docker/nginx/staging/default.conf.template`) admits only people holding the staging
+credential. It covers **every** path the host serves — pages, `/my`, `/admin`, assets, APIs,
+sitemaps, unknown paths and the `/socket.io/` WebSocket handshake. The one exemption is
+`/robots.txt`, which must be readable by the crawlers it addresses and reveals nothing (plus
+the port-80 ACME challenge, which serves only the CA's token files).
+
+**Layer 2 — the application.** Behind the gate, Identity sessions, RBAC, step-up and every
+rule in this document apply exactly as anywhere else. **The environment credential is not an
+application credential**: NGINX clears `Authorization` before proxying, so the application
+never sees it, and holding it grants no role, permission or session. `/my` still requires a
+session, `/admin` still requires a permission, and the realtime handshake still requires an
+authenticated session after the edge has admitted the connection.
+
+- The credential is 40 random characters, stored as a **bcrypt** hash (cost 6 — NGINX re-checks
+  it on every request, so a slower hash would cost the server on every asset while adding no
+  strength to a random credential), generated on the staging host, stored in a root-only file
+  and **never printed, committed, logged or sent to CI**. An operator reads it on the host.
+- A per-client request budget on the gated server bounds credential guessing and the hashing
+  work an unauthenticated client can demand (`limit_req`, 429 when exceeded).
+- A TLS client that negotiated the approved name but sends a different `Host` is answered
+  `421` by the catch-all server, never proxied.
+- **No `return` directive is used in a gated location**: NGINX evaluates `return` before
+  `auth_basic`, so one would answer unauthenticated callers. This is asserted by test.
+- Basic Authentication was explicitly approved by the owner for this **pre-adoption** staging
+  environment. It is not a production access-control decision.
+
+### 21.2 Non-indexability is not access control
+
+The whole environment is non-indexable — `X-Robots-Tag: noindex, nofollow, noarchive` on
+**every** response at the edge (401s, 404s, redirects, assets and the handshake included), a
+robots file that disallows `/` and advertises no sitemap, and the application's own
+build-time posture (`PUBLIC_INDEXING_ENABLED=false`: `noindex` metadata, no canonical or
+hreflang towards any official origin, sitemaps 404). **None of this is relied on to keep
+anyone out**; §21.1 does that.
+
+### 21.3 Network exposure
+
+Only **443** (HTTPS) and **80** (ACME challenge and a fixed-host redirect to HTTPS) are open to
+the internet. **SSH is open only to the operator's current IPv4 address**, key-only, with root
+login, passwords and forwarding disabled; the host key was verified through the Azure control
+plane before first use, and `StrictHostKeyChecking=no` is never used. SQL Server, ClamAV and the
+realtime process publish no port; SQL Server and the operator commands sit on a Docker network
+with **no route out at all**. A TLS client asking for any host name other than the approved one
+is refused at the handshake. **Containers cannot reach the Azure Instance Metadata Service**: a
+`DOCKER-USER` rule, installed at boot before Docker starts any container, drops container
+traffic to it, so a compromised web, realtime, scanner or certbot process cannot mint the VM's
+managed-identity tokens. Docker starts only once the data disk is mounted.
+
+### 21.4 Deployment identity and secrets
+
+- **GitHub → Azure** is OIDC federation to a user-assigned managed identity, trusted only for
+  this repository's `staging` environment (immutable repository and owner ids in the subject).
+  **No client secret exists.** It holds exactly two rights: a custom role, assigned on the
+  staging VM alone, that can read that VM and invoke Run Command on it; and push (write) on the
+  registry's `minhaj/` repositories. It cannot create, delete, resize, start or reconfigure any
+  resource.
+- **GitHub → registry** uses a short-lived token exchanged from that identity, limited by an
+  ABAC condition to the `minhaj/` repositories. **The registry has no admin user and no
+  anonymous pull.**
+- **VM → registry and VM → backup storage** use the VM's own system-assigned identity:
+  pull-only on `minhaj/`, and read, list and write on the private `backups` container only. **No registry
+  password, storage key or SAS exists on the host**; storage-account shared-key access is
+  disabled.
+- The deploy workflow runs **only** on deliberate dispatch, for one **exact, CI-green commit**,
+  serialised, with no `pull_request_target`, no fork access, no repository secret, actions
+  pinned by commit SHA and images deployed **by digest**.
+- Every staging secret (SQL `sa`, the runtime and operator principals, `AUTH_SECRETS`, the HMAC
+  keys, the environment credential) is **generated on the staging host**, root-only, and
+  **distinct from every other environment's**. None is a build argument, an image layer or a
+  workflow value.
+
+### 21.5 Target guards and data isolation
+
+Every mutating staging operation proves its target with **independent signals**, never a name
+alone: the host's identity file (`environment=staging` and an environment id), the Azure
+Instance Metadata Service (this VM's resource id and its `environment=staging` tag), the data
+disk's marker, and — for SQL — host `sqlserver:1433`, database `MinhajStaging`, the server's
+machine name and a database-level fingerprint carrying the same environment id. Local names
+(`MinhajPlatform`, `MinhajPhase1*`) are refused outright. Migrations, provisioning, seed and
+reset run **only** as explicit operator commands from the exact-SHA operations image — never at
+container start, never during a deploy unless the operator chose `migrate-and-deploy`. The
+runtime and operator principals cannot reset. **Staging email is disabled, no payment provider
+is configured, no production credential exists, and no real person's data is seeded.**
+
+### 21.6 `PUBLIC_TO_PRIVATE_HANDOFF_CHECK`
+
+The repository is public during active engineering. If it becomes private, the **runtime is
+unaffected** — images are in the private registry and the VM pulls with its own identity — but
+the following are re-checked **before** the visibility change:
+
+1. GitHub Actions minutes, storage and billing for a private repository on the owner's plan;
+2. environment features on the plan: the **required-reviewer rule is not available to private
+   repositories on Free, Pro or Team plans** — it is extra protection today, never the only
+   deploy control, and is removed or replaced deliberately if GitHub requires it;
+3. the remaining controls stay in force: deliberate dispatch, exact SHA, the `feature/phase-*`
+   environment branch rule, OIDC federation and least-privilege roles, the concurrency lock.
+   Note what each control rests on: the exact-SHA and CI-green checks run from the dispatched
+   branch's own copy of the workflow, so they guard against mistakes, not against someone who
+   can push a branch; the controls a pushed branch **cannot** rewrite are the `staging`
+   environment's protection rules, the federated credential's subject, and who may push and
+   dispatch at all (today, the owner alone);
+4. one staging deployment is re-proven from the private repository.
+
+**A repository transfer or rename changes the OIDC subject**: the federated credential must be
+updated deliberately; it does not follow the repository.

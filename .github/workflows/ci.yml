@@ -214,7 +214,8 @@ jobs:
   container:
     name: Container image
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Phase 28 added a second full production `next build` (the runtime image).
+    timeout-minutes: 45
 
     steps:
       - name: Check out
@@ -230,6 +231,137 @@ jobs:
       # Proves the lean runtime stage still builds after the split.
       - name: Build the runtime stage
         run: docker build --target dev -t minhaj-web-dev -f docker/web.Dockerfile .
+
+      # -----------------------------------------------------------------
+      # Phase 28 — the PRODUCTION web runtime and the operations image.
+      #
+      # The runtime image is origin-specific, so it is built here for an
+      # origin that can never resolve (`.invalid`, RFC 2606): what is proved
+      # is the packaging, not a deployment. No secret is a build argument.
+      # -----------------------------------------------------------------
+      - name: Build the production web runtime
+        run: docker build --target runtime --build-arg AUTH_BASE_URL=https://staging.invalid -t minhaj-web-runtime -f docker/web.Dockerfile .
+
+      # Started as staging would start it, with production posture and
+      # visibly synthetic values nothing authenticates with; the database
+      # host cannot resolve, so the proof shows the server comes up and
+      # serves its prerendered surface without one. Then the negative half:
+      # the same image without a real signing secret must refuse to start.
+      - name: Prove the production web runtime
+        run: |
+          set -eu
+          docker run -d --name minhaj-web-runtime-ci -p 127.0.0.1:3000:3000 \
+            -e AUTH_BASE_URL=https://staging.invalid \
+            -e AUTH_SECRETS=1:ci-web-runtime-only-not-a-secret-0001 \
+            -e RATE_LIMIT_DIGEST_KEY=ci-web-runtime-only-rate-0001 \
+            -e EMAIL_DIGEST_KEY=ci-web-runtime-only-email-0001 \
+            -e NEWSLETTER_TOKEN_KEY=ci-web-runtime-only-news-0001 \
+            -e 'DATABASE_URL=sqlserver://database.invalid:1433;database=WebRuntimeImageOnly;user=image_only;password=ImageOnly1!aZ;encrypt=true;trustServerCertificate=true' \
+            -e STORAGE_ROOT=/tmp/minhaj-storage \
+            minhaj-web-runtime
+          HEALTHY=0
+          for attempt in $(seq 1 60); do
+            STATUS=$(docker inspect --format '{{.State.Health.Status}}' minhaj-web-runtime-ci)
+            if [ "$STATUS" = healthy ]; then
+              echo "web runtime healthy after ${attempt} attempt(s)"
+              HEALTHY=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$HEALTHY" -ne 1 ]; then
+            echo 'the web runtime never became healthy' >&2
+            docker logs minhaj-web-runtime-ci 2>&1 | tail -40 >&2
+            exit 1
+          fi
+
+          # The build-bound posture: a non-indexable origin disallows everything.
+          ROBOTS=$(curl -fsS http://127.0.0.1:3000/robots.txt)
+          printf '%s\n' "$ROBOTS"
+          printf '%s\n' "$ROBOTS" | grep -Fxq 'Disallow: /'
+
+          # What the image must NOT carry, checked inside the running container,
+          # node_modules included. Each probe ends with a marker, so a failed
+          # inspection cannot read as "nothing found".
+          #
+          # Next renames its server process to "next-server (vX)", so the
+          # process proof reads every command line: PID 1 must be exactly the
+          # wrapper with no --dev, a production server must be running, and
+          # nothing may be the development server. The production BUILD_ID is
+          # what "next start" serves from; "next dev" never needs one.
+          SCAN=$(docker exec minhaj-web-runtime-ci sh -c '
+            set -eu
+            for forbidden in /app/tests /app/.github /app/docs /app/scripts \
+              /app/packages/database/scripts /app/packages/database/sql \
+              /app/packages/database/prisma /app/apps/web/src \
+              /app/apps/web/.next/cache /app/apps/web/.next/dev; do
+              if [ -e "$forbidden" ]; then echo "PRESENT $forbidden"; fi
+            done
+            find /app \( -name ".env" -o -name ".env.*" \) -print | sed "s/^/PRESENT /"
+            if [ ! -f /app/apps/web/.next/BUILD_ID ]; then echo "ABSENT production BUILD_ID"; fi
+            for cmdline in /proc/[0-9]*/cmdline; do
+              if [ "$cmdline" = "/proc/$$/cmdline" ]; then continue; fi
+              printf "PROCESS %s " "${cmdline%/cmdline}"
+              tr "\0" " " < "$cmdline" 2>/dev/null || true
+              echo
+            done
+            echo SCAN_COMPLETE
+          ')
+          printf '%s\n' "$SCAN"
+          if [ "$(printf '%s\n' "$SCAN" | grep -Fxc SCAN_COMPLETE || true)" -ne 1 ]; then
+            echo 'The runtime image inspection produced no conclusive result.' >&2
+            exit 1
+          fi
+          if printf '%s\n' "$SCAN" | grep -Eq '^(PRESENT|ABSENT) '; then
+            echo 'The runtime image carries content it must not, or lacks its build.' >&2
+            exit 1
+          fi
+          printf '%s\n' "$SCAN" | grep -Fxq 'PROCESS /proc/1 node apps/web/scripts/start.mjs '
+          printf '%s\n' "$SCAN" | grep -Eq '^PROCESS /proc/[0-9]+ next-server '
+          if printf '%s\n' "$SCAN" | grep -Eq '^PROCESS .*(next dev|--dev|next-dev)'; then
+            echo 'The runtime image is running the development server.' >&2
+            exit 1
+          fi
+
+          # FAIL CLOSED: no AUTH_SECRETS in production. The wrapper must exit 1
+          # with its own diagnostic — a timeout or a crash elsewhere is not the
+          # refusal being proved, so both the status and the message are read.
+          set +e
+          REFUSAL=$(timeout 120 docker run --rm --name minhaj-web-runtime-refusal-ci \
+            -e AUTH_BASE_URL=https://staging.invalid \
+            -e RATE_LIMIT_DIGEST_KEY=ci-web-runtime-only-rate-0001 \
+            -e EMAIL_DIGEST_KEY=ci-web-runtime-only-email-0001 \
+            -e NEWSLETTER_TOKEN_KEY=ci-web-runtime-only-news-0001 \
+            minhaj-web-runtime 2>&1)
+          REFUSAL_STATUS=$?
+          set -e
+          printf '%s\n' "$REFUSAL"
+          if [ "$REFUSAL_STATUS" -ne 1 ]; then
+            echo "Expected the refusal to exit 1, got ${REFUSAL_STATUS}." >&2
+            exit 1
+          fi
+          printf '%s\n' "$REFUSAL" | grep -Fq 'AUTH_SECRETS: must be set in production'
+          printf '%s\n' "$REFUSAL" | grep -Fq 'No listener was started.'
+
+      - name: Stop the production web runtime
+        if: always()
+        run: |
+          docker logs minhaj-web-runtime-ci 2>&1 | tail -20 || true
+          docker rm -f minhaj-web-runtime-ci minhaj-web-runtime-refusal-ci || true
+
+      # The operations image carries the migration tooling the runtimes do
+      # not. Proved harmlessly: the Prisma CLI answers, the repository's
+      # offline wrapper validates the schema (against a synthetic URL nothing
+      # connects to), and the deploy bundle is where the host expects it.
+      - name: Build the operations image
+        run: |
+          set -eu
+          docker build -t minhaj-ops -f docker/ops.Dockerfile .
+          docker run --rm minhaj-ops node_modules/prisma/build/index.js --version
+          docker run --rm \
+            -e 'DATABASE_MIGRATION_URL=sqlserver://127.0.0.1:14330;database=OpsImageOnly;user=image_only;password=OpsImageOnly1!aZ;encrypt=true;trustServerCertificate=true' \
+            minhaj-ops packages/database/scripts/prisma-cli.ts validate
+          docker run --rm minhaj-ops -e "const fs = require('node:fs'); for (const p of ['/opt/minhaj-staging/compose.yaml', '/opt/minhaj-staging/nginx/default.conf.template', '/opt/minhaj-staging/sqlserver/Dockerfile', '/app/packages/database/prisma/migrations']) { if (!fs.existsSync(p)) { console.error('missing ' + p); process.exit(1); } } console.log('operations bundle present');"
 
       # -----------------------------------------------------------------
       # Phase 25 — the realtime image and the NGINX WebSocket seam.
@@ -330,6 +462,41 @@ jobs:
         env:
           MSSQL_SA_PASSWORD: ComposeConfigOnly1!aZ
         run: docker compose -f docker/compose.yaml config
+
+      # Phase 28 — the staging front door, run for real on the pinned NGINX
+      # against echo upstreams, with a throwaway certificate and credential
+      # generated inside the step and deleted afterwards. It proves the
+      # CONFIGURATION: the environment gate on every path, the credential never
+      # forwarded, X-Robots-Tag on every status, the public robots file, the
+      # port-80 ACME-and-redirect contract and SNI refusal. The real staging
+      # host is proven by the staging deploy workflow.
+      - name: Prove the staging edge configuration
+        run: bash scripts/staging-edge-proof.sh
+
+      - name: Validate the staging host scripts
+        run: |
+          set -eu
+          for script in docker/staging/bin/*.sh scripts/staging-edge-proof.sh; do
+            bash -n "$script"
+          done
+
+      # The staging stack reads its secrets from root-only files that exist only
+      # on the staging host. Empty placeholders stand in so `config` can resolve
+      # the paths: they hold no value, and nothing starts. The image references
+      # are well-formed digests of nothing, which is all interpolation needs.
+      - name: Validate the staging compose stack
+        env:
+          MINHAJ_PUBLIC_HOST: staging.invalid
+          MINHAJ_WEB_IMAGE: crminhajstgcin.azurecr.io/minhaj/web@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          MINHAJ_REALTIME_IMAGE: crminhajstgcin.azurecr.io/minhaj/realtime@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          MINHAJ_OPS_IMAGE: crminhajstgcin.azurecr.io/minhaj/ops@sha256:0000000000000000000000000000000000000000000000000000000000000000
+        run: |
+          set -eu
+          sudo install -d -m 0755 /etc/minhaj/secrets
+          for file in staging.env secrets/app.env secrets/sqlserver.env secrets/ops.env; do
+            sudo install -m 0644 /dev/null "/etc/minhaj/$file"
+          done
+          docker compose -f docker/staging/compose.yaml --profile ops --profile acme config --quiet
 
   # ---------------------------------------------------------------------------
   # The Phase 1 database foundation, proven against a REAL SQL Server 2022

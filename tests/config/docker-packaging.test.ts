@@ -276,6 +276,15 @@ describe('N5 — no image layer may carry a real environment file', () => {
       expect(isIncluded(await patterns(), '.github/workflows/ci.yml')).toBe(true);
     });
 
+    // Phase 28: the staging suite reads the protected deploy workflow, so it
+    // is admitted by its exact name — and a generic `deploy.yml` still is not.
+    it('admits the staging deploy workflow the staging suite reads', async () => {
+      expect(isIncluded(await patterns(), '.github/workflows/staging-deploy.yml')).toBe(
+        true,
+      );
+      expect(isIncluded(await patterns(), '.github/workflows/deploy.yml')).toBe(false);
+    });
+
     it.each([
       ['unrelated top-level content', '.github/UNRELATED_SENTINEL'],
       ['a CODEOWNERS file', '.github/CODEOWNERS'],
@@ -305,13 +314,18 @@ describe('N5 — no image layer may carry a real environment file', () => {
       const negations = lines.filter((line) => line.startsWith('!.github'));
 
       expect(negations).toContain('!.github/workflows/ci.yml');
+      expect(negations).toContain('!.github/workflows/staging-deploy.yml');
       expect(negations).not.toContain('!.github/');
       expect(negations).not.toContain('!.github/**');
       // `!.github/workflows/` is permitted: it only makes the directory
       // traversable, and `.github/workflows/*` immediately re-excludes its
       // contents. Any other negation would widen the contract.
       for (const negation of negations) {
-        expect(['!.github/workflows/', '!.github/workflows/ci.yml']).toContain(negation);
+        expect([
+          '!.github/workflows/',
+          '!.github/workflows/ci.yml',
+          '!.github/workflows/staging-deploy.yml',
+        ]).toContain(negation);
       }
     });
   });
@@ -373,9 +387,12 @@ describe('Phase 25 — every dependency install sees every workspace', () => {
     ['web.Dockerfile', 'deps'],
     ['realtime.Dockerfile', 'build'],
     ['realtime.Dockerfile', 'runtime'],
+    ['web.Dockerfile', 'runtime'],
+    ['ops.Dockerfile', 'ops'],
   ])('%s %s copies each workspace manifest before `npm ci`', async (file, name) => {
     const body = await stageOf(file, name);
-    const install = body.search(/^RUN npm ci/m);
+    // A command-scoped `NODE_ENV=…` prefix is still the install.
+    const install = body.search(/^RUN (?:NODE_ENV=\S+ )?npm ci/m);
     expect(install).toBeGreaterThan(-1);
     const before = body.slice(0, install);
     const manifests = await workspaceManifests();
@@ -554,5 +571,224 @@ describe('Phase 25 — compose adds realtime and the proxy behind a profile', ()
     const compose = await directives('docker', 'compose.yaml');
     expect(compose).toContain('name: minhaj-platform-sqlserver-data');
     expect(compose).toContain('name: minhaj-platform-storage-data');
+  });
+});
+
+/* ===========================================================================
+ * Phase 28 — the production web runtime and the operations image
+ * ========================================================================= */
+
+/** The exact CMD line of a stage, or `undefined`. */
+function cmdOf(body: string): string | undefined {
+  return /^CMD (.+)$/m.exec(body)?.[1];
+}
+
+describe('Phase 28 — the test stage carries the staging suite input', () => {
+  it('copies the staging deploy workflow beside the CI workflow', async () => {
+    const test = await stage('test');
+    expect(test).toMatch(/^COPY \.github\/workflows\/staging-deploy\.yml /m);
+  });
+});
+
+describe('Phase 28 — the web build stage is bound to one declared origin', () => {
+  it('takes the origin and indexing posture as build arguments, indexing off by default', async () => {
+    const build = await stageOf('web.Dockerfile', 'build');
+    expect(build).toMatch(/^ARG AUTH_BASE_URL$/m);
+    expect(build).toMatch(/^ARG PUBLIC_INDEXING_ENABLED=false$/m);
+  });
+
+  it('refuses an empty origin before it builds anything', async () => {
+    const build = await stageOf('web.Dockerfile', 'build');
+    const guard = build.search(/^RUN if \[ -z "\$AUTH_BASE_URL" \]; then/m);
+    expect(guard).toBeGreaterThan(-1);
+    expect(build.slice(guard)).toMatch(/exit 1/);
+    // The guard runs before the build, so an unset origin costs nothing.
+    expect(guard).toBeLessThan(build.search(/npm run build/));
+  });
+
+  it('accepts no secret as a build argument', async () => {
+    const source = await directives('docker', 'web.Dockerfile');
+    const args = [...source.matchAll(/^ARG (\w+)/gm)].map((match) => match[1]);
+    // The public origin is declared twice — once to build for it, once to label
+    // the runtime image with it — and is the only value besides the posture.
+    expect([...new Set(args)].sort()).toEqual([
+      'AUTH_BASE_URL',
+      'PUBLIC_INDEXING_ENABLED',
+    ]);
+  });
+
+  it('builds for production and ships no build cache', async () => {
+    const build = await stageOf('web.Dockerfile', 'build');
+    expect(build).toContain(
+      'prisma generate --schema packages/database/prisma/schema.prisma',
+    );
+    expect(build).toMatch(/^ENV NODE_ENV=production$/m);
+    expect(build).toContain('npm run build --workspace @minhaj/web');
+    expect(build).toContain('rm -rf apps/web/.next/cache');
+    // The build reads source, never the suite or its inputs.
+    for (const forbidden of ['COPY tests', 'fixtures', '.github', '.env', 'docs'])
+      expect(build, `the build stage must not copy ${forbidden}`).not.toContain(
+        forbidden,
+      );
+  });
+});
+
+describe('Phase 28 — the production web runtime carries only what it runs', () => {
+  it('uses the same exact Node image, and every web stage derives from it', async () => {
+    const web = await directives('docker', 'web.Dockerfile');
+    const images = [...web.matchAll(/^FROM (\S+) AS (\w+)$/gm)].map(
+      ([, image, name]) => `${name}:${image}`,
+    );
+    expect(images).toEqual([
+      'deps:node:24.20.0-bookworm-slim',
+      'test:deps',
+      'dev:deps',
+      'build:deps',
+      'runtime:node:24.20.0-bookworm-slim',
+    ]);
+  });
+
+  it('installs production dependencies only and takes the generated client from the build stage', async () => {
+    const runtime = await stageOf('web.Dockerfile', 'runtime');
+    expect(runtime).toMatch(/^RUN npm ci --omit=dev && npm cache clean --force$/m);
+    expect(runtime).toContain('COPY --from=build /app/node_modules/.prisma');
+    expect(runtime).toMatch(
+      /^COPY --from=build --chown=node:node \/app\/apps\/web\/\.next /m,
+    );
+    // The runtime itself never generates, builds or installs development tools.
+    expect(runtime).not.toContain('prisma generate');
+    expect(runtime).not.toContain('npm run build');
+  });
+
+  it('copies the start wrapper, its validator, the config and the one package source they load', async () => {
+    const runtime = await stageOf('web.Dockerfile', 'runtime');
+    expect(runtime).toContain('apps/web/scripts/start.mjs');
+    expect(runtime).toContain('apps/web/scripts/validate-env.mjs');
+    expect(runtime).toContain('COPY apps/web/next.config.ts ');
+    expect(runtime).toContain('COPY packages/contracts/src ./packages/contracts/src');
+    const sources = [...runtime.matchAll(/^COPY (packages\/\S+)/gm)].map(
+      (match) => match[1],
+    );
+    expect(sources.filter((source) => !source.endsWith('/package.json'))).toEqual([
+      'packages/contracts/src',
+    ]);
+  });
+
+  it('carries no tests, fixtures, environment files, docs, CI or lifecycle tooling', async () => {
+    const runtime = await stageOf('web.Dockerfile', 'runtime');
+    for (const forbidden of [
+      'tests',
+      'fixtures',
+      'docs',
+      '.github',
+      'migrations',
+      'packages/database/scripts',
+      'packages/database/sql',
+      'packages/database/prisma',
+      'playwright',
+      'COPY apps ',
+      'COPY packages ',
+      'COPY scripts',
+      'apps/web/src',
+    ])
+      expect(runtime, `the web runtime must not carry ${forbidden}`).not.toContain(
+        forbidden,
+      );
+    expect(runtime).not.toMatch(/^COPY .*\.env/m);
+  });
+
+  it('runs unprivileged, in production, through the fail-fast wrapper directly under Node', async () => {
+    const runtime = await stageOf('web.Dockerfile', 'runtime');
+    expect(runtime).toMatch(/^ENV NODE_ENV=production$/m);
+    expect(runtime).toMatch(/^USER node$/m);
+    expect(runtime).toMatch(/^EXPOSE 3000$/m);
+    // Exactly the wrapper: not npm (which would swallow SIGTERM), not `next`
+    // (which would skip validation), and never the development server.
+    expect(cmdOf(runtime)).toBe('["node", "apps/web/scripts/start.mjs"]');
+    expect(runtime).not.toMatch(/next dev|--dev|npm run dev|"dev"/);
+  });
+
+  it('declares a health check that asks the server for a prerendered page', async () => {
+    const runtime = await stageOf('web.Dockerfile', 'runtime');
+    expect(runtime).toMatch(/^HEALTHCHECK /m);
+    expect(runtime).toContain('/robots.txt');
+  });
+
+  /**
+   * The wrapper resolves Next from `<app>/../../node_modules`, so the runtime's
+   * layout must put `apps/web` two levels below the directory `npm ci` ran in.
+   */
+  it('keeps the layout the wrapper resolves Next from', async () => {
+    const runtime = await stageOf('web.Dockerfile', 'runtime');
+    expect(runtime).toMatch(/^WORKDIR \/app$/m);
+    const wrapper = await readFile(
+      path.join(repoRoot, 'apps', 'web', 'scripts', 'start.mjs'),
+      'utf8',
+    );
+    expect(wrapper).toMatch(
+      /path\.join\(\s*appRoot,\s*'\.\.',\s*'\.\.',\s*'node_modules',\s*'next',/,
+    );
+  });
+});
+
+describe('Phase 28 — the operations image is a tool, never a service', () => {
+  it('uses the same exact Node image as the web image', async () => {
+    const ops = await directives('docker', 'ops.Dockerfile');
+    expect([...ops.matchAll(/^FROM (\S+)/gm)].map((match) => match[1])).toEqual([
+      'node:24.20.0-bookworm-slim',
+    ]);
+  });
+
+  it('carries the Prisma CLI, the schema with its migrations, and the generated client', async () => {
+    const ops = await stageOf('ops.Dockerfile', 'ops');
+    // The full install is scoped to its one command; the image then runs in
+    // production posture.
+    expect(ops).toMatch(/^RUN NODE_ENV=development npm ci /m);
+    expect(ops).toMatch(/^ENV NODE_ENV=production$/m);
+    expect(ops).toContain('COPY packages/database/prisma ./packages/database/prisma');
+    expect(ops).toContain('COPY packages/database/prisma.config.ts ');
+    expect(ops).toContain('COPY packages/database/scripts ');
+    expect(ops).toContain(
+      'prisma generate --schema packages/database/prisma/schema.prisma',
+    );
+  });
+
+  it('carries the staging deploy bundle under /opt/minhaj-staging', async () => {
+    const ops = await stageOf('ops.Dockerfile', 'ops');
+    expect(ops).toContain(
+      'COPY docker/staging/compose.yaml /opt/minhaj-staging/compose.yaml',
+    );
+    expect(ops).toContain('COPY docker/staging/bin /opt/minhaj-staging/bin');
+    expect(ops).toContain('COPY docker/staging/systemd /opt/minhaj-staging/systemd');
+    expect(ops).toContain('COPY docker/nginx/staging /opt/minhaj-staging/nginx');
+    expect(ops).toContain(
+      'COPY docker/sqlserver/Dockerfile /opt/minhaj-staging/sqlserver/Dockerfile',
+    );
+  });
+
+  it('names no script to run, so nothing — a migration least of all — runs on start', async () => {
+    const ops = await stageOf('ops.Dockerfile', 'ops');
+    expect(ops).toContain('ENTRYPOINT ["node", "--conditions=react-server"]');
+    expect(ops).not.toMatch(/^CMD /m);
+    expect(ops).not.toMatch(/^ENTRYPOINT .*(\.ts|\.mjs|migrate|prisma)/m);
+    expect(ops).not.toMatch(/^HEALTHCHECK /m);
+    expect(ops).not.toMatch(/^EXPOSE /m);
+  });
+
+  it('runs unprivileged and carries no tests, fixtures, environment files or CI', async () => {
+    const ops = await stageOf('ops.Dockerfile', 'ops');
+    expect(ops).toMatch(/^USER node$/m);
+    for (const forbidden of [
+      'tests',
+      'fixtures',
+      '.github',
+      'docs/',
+      'COPY apps ',
+      'COPY packages ',
+    ])
+      expect(ops, `the operations image must not carry ${forbidden}`).not.toContain(
+        forbidden,
+      );
+    expect(ops).not.toMatch(/^COPY .*\.env/m);
   });
 });

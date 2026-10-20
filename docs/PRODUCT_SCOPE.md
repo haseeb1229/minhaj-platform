@@ -60,6 +60,11 @@ This is an **environment and launch-state safeguard**, not a mode of the softwar
 indexing and canonical production SEO are enabled only at the approved official-origin launch
 transition (DELIVERY_PLAN.md, Phase 35).
 
+**Staging is a separate environment** (Phase 28): `minhaj.haseebliaqat.me`, behind an
+environment access gate, used for testing, demonstration, acceptance and — from Phase 30 —
+migration dry-runs (ARCHITECTURE.md §10.6). It runs the **same complete application**, is
+equally non-indexable, and is no more an official or reduced build than the presentation origin.
+
 Commercial questions — source ownership, licensing, portfolio rights, retention of a clone,
 future reuse — are **outside technical architecture** and are deliberately not recorded in
 this baseline.

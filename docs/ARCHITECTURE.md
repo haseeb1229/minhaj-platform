@@ -1112,7 +1112,11 @@ infrastructure.
 ### 10.1 Production
 
 Linux host · Docker Compose · NGINX stable reverse proxy · self-hosted Node applications.
-**No Vercel. No Kubernetes. No Azure.**
+**No Vercel. No Kubernetes. No Azure platform services in the application architecture** — no
+App Service, Azure SQL, Communication Services or other managed runtime the code would depend
+on. The developer-controlled pre-adoption **staging** environment runs this same self-hosted
+shape on an Azure **virtual machine** by explicit owner decision (§10.6); that is IaaS hosting
+of a Linux host, not an application dependency, and production hosting remains open.
 
 ```
 ┌────────────────────────── Linux host ───────────────────────────┐
@@ -1129,8 +1133,11 @@ Linux host · Docker Compose · NGINX stable reverse proxy · self-hosted Node a
 NGINX terminates TLS, applies security headers and coarse rate limiting, serves static
 assets, proxies HTTP to `web`, and upgrades WebSocket connections to `realtime` once that
 process exists. **Phase 25 delivered the upgrade seam** — `docker/nginx/templates/default.conf.template`
-on `nginx:1.30.6-alpine` pinned by digest, proven in CI — and nothing more of the production edge:
-TLS, DNS, the full security-header set and deployment automation remain Phases 28 and 34.
+on `nginx:1.30.6-alpine` pinned by digest, proven in CI. **Phase 28 extended that seam into the
+staging front door** — TLS from Let's Encrypt, the environment access gate, whole-site
+`X-Robots-Tag` and exact-SHA deployment automation (§10.6). The production edge — the full
+security-header set (Phase 33), production TLS, DNS, monitoring and rollback runbooks (Phase 34)
+— is not claimed by it.
 
 **On the two labelled paths.** `web` reaches SQL Server through **bounded-context services and
 their persistence ports** — `server-core` is on that path only for the explicitly admitted
@@ -1145,7 +1152,7 @@ touched during Phase 0A.**
 | Environment | Purpose |
 |---|---|
 | Local | Developer workstation; SQL Server 2022 Developer edition |
-| **Staging** | Production-shaped; migration dry-runs and editorial/religious QA |
+| **Staging** | Production-shaped; migration dry-runs and editorial/religious QA. **Delivered in Phase 28** as a developer-controlled, pre-adoption environment at `https://minhaj.haseebliaqat.me` (§10.6) — distinct from the pre-adoption presentation origin, and not production |
 | **Pre-adoption / presentation** | The **same application** on a developer-controlled origin, before official adoption. **Non-indexable**, claims no official adoption, and is **not a reduced build** (PRODUCT_SCOPE.md, *Product status and acceptance*) |
 | Production | Live platform on the official origin |
 
@@ -1167,7 +1174,8 @@ on deploy.
 ### 10.4 Backups and complete recovery
 
 SQL Server backups with **tested restores**, plus storage volume backups. **A backup that has
-never been restored is not a backup.** Retention and RPO/RTO targets are an open decision.
+never been restored is not a backup.** Production retention and RPO/RTO targets are an open
+decision; staging runs an approved interim policy (§10.6).
 
 **Product recovery is not database recovery.** The platform has **two authoritative stores**,
 and restoring one of them is a partial recovery that looks complete:
@@ -1251,6 +1259,100 @@ generic-CMS engine is introduced. A future product reuses this foundation by **f
 adapting** it — Quran, Hadith, Fatwa authority, the Minhaj information architecture, religious
 safeguards and organisation-specific semantics are **not genericised for hypothetical future
 clients**.
+
+### 10.6 Staging — delivered in Phase 28
+
+**What it is.** A complete, production-shaped deployment of the platform at
+`https://minhaj.haseebliaqat.me`, owned and operated by the developer **before** adoption, for
+development, testing, demonstration and acceptance. It is **not production**, it is not the
+pre-adoption presentation origin, and it carries no claim of official adoption. Every
+infrastructure choice below is an owner decision for this environment only (OPEN_DECISIONS.md
+§4.1, §4.2, §4.4); production hosting, licensing, HA/DR and operations remain Phase 34's.
+
+```
+Internet ──443/80──▶ Azure VM (Ubuntu 24.04 LTS, x86, Standard_B2as_v2, Central India)
+                      │  NSG: 443 + 80 public · 22 from the operator's IP only · all else denied
+                      ▼
+                    proxy  nginx 1.30.6 (pinned digest) — TLS · environment gate · X-Robots-Tag
+                      ├──▶ web       production runtime image, by digest ─┐
+                      └──▶ realtime  runtime image, by digest ────────────┤  internal network
+                                                                          ├──▶ sqlserver (2022 Developer + FTS)
+                                                                          └──▶ clamav (INSTREAM; no storage mount)
+                    data disk /srv/minhaj: SQL files · authoritative Storage · releases · TLS
+                    off-VM: private Blob container (backups) · private registry (images)
+```
+
+**Images.** `docker/web.Dockerfile`'s `runtime` stage is the production web image: `next start`
+through the validated start wrapper, production dependencies only, non-root, no tests,
+fixtures, docs or `.env`, a health check, and — by design — **built for one origin**, because the
+canonical origin and the indexing posture are bound at build time (§10.5.3). `realtime` is the
+Phase 25 runtime image unchanged. `docker/ops.Dockerfile` is the **operations image**: the
+Prisma CLI and the staging lifecycle commands, never a running service. All three are built by
+the staging deploy workflow from one exact commit, pushed to a **private** registry tagged with
+the full SHA and deployed **by digest**. SQL Server is built on the host from the reviewed
+`docker/sqlserver/Dockerfile`; Microsoft's, NGINX's and ClamAV's images are never republished.
+
+**Deployment.** `.github/workflows/staging-deploy.yml`, dispatched deliberately for one commit
+that is the head of a `feature/phase-*` branch and has all five ordinary CI jobs green. GitHub
+reaches Azure by OIDC federation (no secret); the VM is told what to run through Azure Run
+Command (no inbound SSH from GitHub). On the VM, `docker/staging/bin/fetch-release.sh` pulls the
+digests with the VM's own identity and extracts that commit's bundle (`docker/staging/` plus the
+staging NGINX template and SQL Server Dockerfile) from the operations image; the bundle's
+`deploy.sh` proves the host, switches web, realtime and proxy, smoke-tests the real edge and
+**restores the previous known-good release** on failure. **Migrations are separate**: they run
+only from `bin/migrate.sh`, or when the operator dispatches `migrate-and-deploy`, after a backup,
+and never at container start. A rollback changes images only; it never reverses a migration.
+Nothing at runtime clones source or depends on the repository being public.
+
+**Target guards.** Every mutating operation requires independent proof that the target is this
+staging environment — its identity file, the Azure metadata service's resource id and tag, the
+data-disk marker, and for SQL the host, database name, server machine name and a database
+fingerprint (SECURITY_BASELINE.md §21.5). A database name alone is never enough.
+
+**Recovery is SQL + Storage (§10.4).** `bin/backup.sh` takes, in one set, a checksummed
+`BACKUP DATABASE` of `MinhajStaging` and an archive of the authoritative storage root, binds them
+in a manifest with SHA-256 for each, and uploads all three to the private Blob container — off
+the VM's disks. `bin/restore-proof.sh` downloads a set **from Blob**, verifies it, restores SQL
+into a new `MinhajStagingRestore_<hex>` database and Storage into an isolated restore root —
+never over the live ones — verifies migration history, schema, least privilege and the synthetic
+fixture, proves every durable Asset row's bytes and checksum are present in the restored
+Storage, and removes the restored copies. Interim staging policy: **daily, RPO 24 h, RTO 4 h,
+14-day retention** (OPEN_DECISIONS.md §4.4). Search projections and caches are rebuilt, not
+restored. Each set records the release whose schema it captured, and is proven with that
+release's operations image.
+
+**Recovery to service — stated accurately.** Phase 28's tested evidence is the isolated restore
+proof above. Restoring a set **as the live database** — after losing the VM or its data disk —
+is a documented manual DBA procedure, not yet an automated command: bootstrap the replacement
+host with `--environment-id` set to the id in the set's manifest (the restored database's
+fingerprint and the Blob prefix both carry it), deploy, restore the SQL backup into
+`MinhajStaging` and the Storage archive into the storage root, re-map the runtime and operator
+users to their logins (`staging-provision`, then `ALTER USER … WITH LOGIN` for any orphaned
+user), and prove the result with `status.sh`. The 4-hour RTO is the owner's interim target for
+that procedure; a timed, automated recovery drill belongs to Phase 34.
+
+**Correlated-failure risk — accepted for staging only.** The VM and the Blob backups are in the
+same Azure for Students subscription, which is disabled when its credit or term ends. Before the
+credit runs out, the term ends, or the project is handed over, the **latest verified set is
+exported off the subscription**: the operator downloads the manifest, SQL backup and Storage
+archive, verifies their SHA-256 against the manifest, and keeps them in owner-controlled storage
+outside Azure. Independent off-site production DR is Phase 34's.
+
+**Seed and reset.** `bin/seed.sh` adds exactly one unmistakably synthetic stored asset, used by
+the recovery proof. `bin/reset.sh` is the only destructive operation: an exact,
+environment-bound confirmation, a fresh backup first, the full target proof, then database and
+storage-root only.
+
+**Operating posture.** Deallocated when idle (`az vm deallocate` — an operating-system shutdown
+alone still bills compute); the disks, static IP and Blob storage continue to bill while
+deallocated. The daily backup timer is persistent, so a run missed while deallocated happens at
+the next boot. A Cost Management budget alerts the owner; the subscription's spending limit
+stays on.
+
+**Portability.** Nothing above is tied to the developer's accounts: on adoption the same images,
+compose file, scripts and backup sets are deployed to adopter-owned infrastructure with new
+identities, secrets, registry and DNS (§10.5). The Azure for Students subscription itself is
+never transferred.
 
 ---
 

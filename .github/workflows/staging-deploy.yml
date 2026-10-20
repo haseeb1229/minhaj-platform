@@ -1,0 +1,271 @@
+# =============================================================================
+# Staging deploy — Phase 28 (ARCHITECTURE.md §10.6, SECURITY_BASELINE.md §21)
+# =============================================================================
+#
+# A DELIBERATE, EXACT-SHA, PROTECTED deployment of one reviewed commit to the
+# pre-adoption Azure staging environment. It is not part of ordinary CI and
+# never runs on push or pull request.
+#
+#   gate    the requested SHA must be the dispatched branch's head, the branch
+#           must be `feature/phase-*`, and the ordinary CI run for that exact
+#           commit must have all five jobs green.
+#   images  build web (for the staging origin), realtime and ops from that
+#           commit, push them to the PRIVATE registry tagged with the full SHA,
+#           and record their immutable digests.
+#   deploy  send that commit's `fetch-release.sh` to the VM through Azure Run
+#           Command (no inbound SSH from GitHub, no key in GitHub). The VM
+#           pulls the digests with its OWN managed identity, extracts the
+#           commit's bundle and runs its deploy, which proves the host and the
+#           edge and rolls back on failure. Migrations run only when the
+#           operator asks (`migrate`), as their own guarded step.
+#   verify  prove the public edge from outside: valid TLS, the environment
+#           gate, robots and X-Robots-Tag.
+#
+# CREDENTIALS. Azure access is GitHub OIDC federated to the `staging`
+# environment of this repository only — no client secret exists. Registry
+# access is a short-lived token exchanged from that identity — no admin user,
+# no password, no PAT. The `staging` environment holds identifiers only.
+# Nothing here reads a repository secret. A fork or pull request cannot run
+# this workflow and cannot obtain the federated identity.
+#
+# The environment's required-reviewer rule is extra protection while the
+# repository is public; the controls above stand on their own when it is not
+# (the PUBLIC_TO_PRIVATE_HANDOFF_CHECK, SECURITY_BASELINE.md §21.6).
+# =============================================================================
+
+name: Staging deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full 40-character commit SHA to deploy (the head of the selected branch, CI-green)
+        required: true
+        type: string
+      mode:
+        description: deploy, or migrate-and-deploy to run the explicit migration step first
+        required: true
+        type: choice
+        default: deploy
+        options:
+          - deploy
+          - migrate-and-deploy
+
+permissions: {}
+
+# One staging deployment at a time, and never cancel one halfway.
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: false
+
+env:
+  REGISTRY: crminhajstgcin.azurecr.io
+  PUBLIC_HOST: minhaj.haseebliaqat.me
+
+jobs:
+  gate:
+    name: Exact-SHA gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+    steps:
+      - name: Require the dispatched branch head to be the requested commit
+        env:
+          REQUESTED: ${{ inputs.sha }}
+          HEAD_SHA: ${{ github.sha }}
+          REF: ${{ github.ref }}
+        run: |
+          set -eu
+          printf '%s' "$REQUESTED" | grep -Eqx '[0-9a-f]{40}' \
+            || { echo "::error::sha must be a full 40-character lowercase commit SHA"; exit 1; }
+          [ "$REQUESTED" = "$HEAD_SHA" ] \
+            || { echo "::error::requested $REQUESTED but $REF is at $HEAD_SHA"; exit 1; }
+          case "$REF" in
+            refs/heads/feature/phase-*) ;;
+            *) echo "::error::staging deploys come only from feature/phase-* branches"; exit 1 ;;
+          esac
+
+      - name: Require all five ordinary CI jobs green on that exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED: ${{ inputs.sha }}
+        run: |
+          set -eu
+          run_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$REQUESTED&event=push&status=success&per_page=1" \
+            --jq '.workflow_runs[0].id // empty')"
+          [ -n "$run_id" ] || { echo "::error::no successful CI push run exists for $REQUESTED"; exit 1; }
+          green="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" \
+            --jq '[.jobs[] | select(.conclusion == "success") | .name] | join("\n")')"
+          for job in 'Verify' 'Container image' 'Database foundation' 'Dependency audit' 'Browser flows'; do
+            printf '%s\n' "$green" | grep -qxF "$job" \
+              || { echo "::error::CI run $run_id has no successful '$job' job"; exit 1; }
+          done
+          echo "CI run $run_id: all five jobs succeeded for $REQUESTED"
+
+  images:
+    name: Build and push exact-SHA images
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      web: ${{ steps.push.outputs.web }}
+      realtime: ${{ steps.push.outputs.realtime }}
+      ops: ${{ steps.push.outputs.ops }}
+    steps:
+      - name: Check out the requested commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ inputs.sha }}
+          persist-credentials: false
+
+      - name: Confirm the checkout is the requested commit
+        env:
+          REQUESTED: ${{ inputs.sha }}
+        run: |
+          set -eu
+          [ "$(git rev-parse HEAD)" = "$REQUESTED" ] || { echo "::error::checkout is not $REQUESTED"; exit 1; }
+
+      - name: Sign in to Azure (OIDC, no secret)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log Docker in to the private registry (short-lived exchanged token)
+        run: |
+          set -eu
+          aad="$(az account get-access-token --resource https://management.azure.com/ --query accessToken -o tsv)"
+          echo "::add-mask::$aad"
+          refresh="$(printf '%s' "$aad" | curl -fsS --max-time 20 -X POST "https://$REGISTRY/oauth2/exchange" \
+            --data-urlencode 'grant_type=access_token' \
+            --data-urlencode "service=$REGISTRY" \
+            --data-urlencode 'access_token@-' | jq -r '.refresh_token')"
+          unset aad
+          echo "::add-mask::$refresh"
+          [ -n "$refresh" ] && [ "$refresh" != null ] || { echo "::error::the registry refused the deploy identity"; exit 1; }
+          printf '%s' "$refresh" | docker login "$REGISTRY" \
+            --username 00000000-0000-0000-0000-000000000000 --password-stdin > /dev/null
+
+      - name: Build and push web, realtime and ops for this commit
+        id: push
+        env:
+          REQUESTED: ${{ inputs.sha }}
+        run: |
+          set -eu
+          docker buildx create --name minhaj-staging --driver docker-container --use > /dev/null
+          build() {
+            name="$1"
+            shift
+            docker buildx build --platform linux/amd64 --provenance=false --sbom=false --push \
+              --metadata-file "$RUNNER_TEMP/$name.json" \
+              -t "$REGISTRY/minhaj/$name:$REQUESTED" "$@" .
+            digest="$(jq -r '."containerimage.digest"' "$RUNNER_TEMP/$name.json")"
+            printf '%s' "$digest" | grep -Eqx 'sha256:[0-9a-f]{64}' \
+              || { echo "::error::no digest recorded for $name"; exit 1; }
+            docker buildx imagetools inspect "$REGISTRY/minhaj/$name@$digest" > /dev/null
+            echo "$name=$digest" >> "$GITHUB_OUTPUT"
+            echo "$name $REGISTRY/minhaj/$name@$digest"
+          }
+          # The web image is ORIGIN-SPECIFIC: indexing posture and the canonical
+          # origin are bound at build time. No secret is ever a build argument.
+          build web -f docker/web.Dockerfile --target runtime \
+            --build-arg "AUTH_BASE_URL=https://$PUBLIC_HOST" --build-arg PUBLIC_INDEXING_ENABLED=false
+          build realtime -f docker/realtime.Dockerfile
+          build ops -f docker/ops.Dockerfile
+
+      - name: Remove the registry credential
+        if: always()
+        run: docker logout "$REGISTRY" > /dev/null 2>&1 || true
+
+  deploy:
+    name: Deploy to Azure staging
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out the requested commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ inputs.sha }}
+          persist-credentials: false
+
+      - name: Sign in to Azure (OIDC, no secret)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # Starting the VM costs credit, so it is the operator's deliberate act
+      # (deallocate-when-idle), never this workflow's.
+      - name: Require the staging VM to be running
+        env:
+          RG: ${{ vars.STAGING_RESOURCE_GROUP }}
+          VM: ${{ vars.STAGING_VM_NAME }}
+        run: |
+          set -eu
+          state="$(az vm get-instance-view -g "$RG" -n "$VM" \
+            --query "instanceView.statuses[?starts_with(code, 'PowerState/')].code | [0]" -o tsv)"
+          [ "$state" = PowerState/running ] \
+            || { echo "::error::$VM is $state; start it deliberately (az vm start) and re-run"; exit 1; }
+
+      - name: Fetch and deploy the release on the VM (Azure Run Command)
+        env:
+          RG: ${{ vars.STAGING_RESOURCE_GROUP }}
+          VM: ${{ vars.STAGING_VM_NAME }}
+          REQUESTED: ${{ inputs.sha }}
+          MODE: ${{ inputs.mode }}
+          WEB: ${{ needs.images.outputs.web }}
+          REALTIME: ${{ needs.images.outputs.realtime }}
+          OPS: ${{ needs.images.outputs.ops }}
+        run: |
+          set -eu
+          message="$(az vm run-command invoke -g "$RG" -n "$VM" --command-id RunShellScript \
+            --scripts @docker/staging/bin/fetch-release.sh \
+            --parameters "$REQUESTED" "$WEB" "$REALTIME" "$OPS" "$MODE" \
+            --query 'value[0].message' -o tsv)"
+          printf '%s\n' "$message"
+          printf '%s\n' "$message" | grep -qxF "minhaj-staging: DEPLOYED $REQUESTED" \
+            || { echo "::error::the VM did not report a successful deployment of $REQUESTED"; exit 1; }
+
+  verify:
+    name: Verify the public edge
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - name: TLS, environment gate, robots and X-Robots-Tag from the internet
+        run: |
+          set -eu
+          base="https://$PUBLIC_HOST"
+          probe() { curl -sS --max-time 20 -o /dev/null -D - "$base$1" | tr -d '\r'; }
+          expect() {
+            headers="$(probe "$1")"
+            status="$(printf '%s\n' "$headers" | awk 'NR == 1 { print $2 }')"
+            [ "$status" = "$2" ] || { echo "::error::$1 returned $status, expected $2"; exit 1; }
+            printf '%s\n' "$headers" | grep -qi '^x-robots-tag: noindex, nofollow' \
+              || { echo "::error::$1 has no X-Robots-Tag noindex"; exit 1; }
+            echo "$1 -> $status with X-Robots-Tag"
+          }
+          # curl verifies the certificate chain and host name by default: a
+          # self-signed or wrong certificate fails here.
+          expect /robots.txt 200
+          curl -fsS --max-time 20 "$base/robots.txt" | grep -qx 'Disallow: /' \
+            || { echo "::error::robots.txt does not disallow /"; exit 1; }
+          for path in /en /ur /ar /signin /my /admin /sitemap.xml /no-such-page /assets/synthetic; do
+            expect "$path" 401
+          done
+          [ "$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "http://$PUBLIC_HOST/en")" = 301 ] \
+            || { echo "::error::HTTP does not redirect to HTTPS"; exit 1; }
+          echo "public edge verified"

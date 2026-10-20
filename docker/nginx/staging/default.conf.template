@@ -1,0 +1,209 @@
+# =============================================================================
+# The staging front door — Phase 28 (ARCHITECTURE.md §10.6)
+# =============================================================================
+#
+# THE PHASE 25 SEAM, EXTENDED — NOT REPLACED. Routing is unchanged: ordinary
+# HTTP goes to `web`, `/socket.io/` is upgraded to `realtime`, one origin for
+# both. The forwarding-header rules are the seam's rules, repeated verbatim
+# (`docker/nginx/templates/default.conf.template` explains each one). Phase 28
+# adds exactly four things around them:
+#
+#   1. TLS on the approved staging host, from Let's Encrypt (HTTP-01 webroot).
+#   2. HTTP Basic Authentication as the ENVIRONMENT gate (SECURITY_BASELINE.md
+#      §21). It answers "may this person see staging at all", never "what may
+#      this user do": Identity sessions, RBAC and step-up still decide every
+#      application question behind it, and the credential never reaches the
+#      application (`Authorization` is cleared before proxying).
+#   3. Whole-environment non-indexability: `X-Robots-Tag` on EVERY response
+#      this server produces — 401s, 404s, redirects, assets and the WebSocket
+#      handshake included — and a robots file that disallows everything. This
+#      is defence in depth over the application's own build-time noindex
+#      (`PUBLIC_INDEXING_ENABLED=false`); it is NOT access control.
+#   4. Port 80 answers ONLY the ACME challenge and a redirect to HTTPS.
+#
+# WHY THIS FILE IS NOT IN `templates/`. Every consumer of the local seam (CI's
+# `nginx -t`, the realtime proof, the browser harness) mounts that whole
+# directory with only the three seam variables set. A staging template there
+# would be rendered without its certificate and credential and break them all.
+#
+# NO `return` IN AN AUTHENTICATED LOCATION. `return` runs in the rewrite phase,
+# BEFORE `auth_basic` (access phase) is consulted, so a `return` there answers
+# unauthenticated callers. The only `return`s below are the deliberately
+# public robots file and the port-80 redirect.
+#
+#   MINHAJ_PUBLIC_HOST        the approved staging host name, exactly
+#   MINHAJ_WEB_UPSTREAM       host:port of the web process
+#   MINHAJ_REALTIME_UPSTREAM  host:port of the realtime process
+#
+# Mounted read-only by `docker/staging/compose.yaml`; never committed:
+#   /etc/nginx/tls/fullchain.pem, /etc/nginx/tls/privkey.pem
+#   /etc/nginx/edge-auth/htpasswd   (bcrypt, generated on the host)
+# =============================================================================
+
+server_tokens off;
+
+log_format minhaj_access '$remote_addr [$time_local] "$request_method $uri $server_protocol" '
+                         '$status $body_bytes_sent $request_time';
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+upstream minhaj_web {
+    server ${MINHAJ_WEB_UPSTREAM};
+    keepalive 16;
+    keepalive_timeout 4s;
+}
+
+upstream minhaj_realtime {
+    server ${MINHAJ_REALTIME_UPSTREAM};
+}
+
+# -----------------------------------------------------------------------------
+# Port 80 — the ACME challenge and a redirect, nothing else
+# -----------------------------------------------------------------------------
+server {
+    listen 80 default_server;
+    server_name _;
+    access_log /var/log/nginx/access.log minhaj_access;
+
+    add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+
+    # Let's Encrypt's HTTP-01 validation must be reachable without credentials
+    # (the validator cannot authenticate). Only the token files certbot writes
+    # are served, and nothing in this directory is application content.
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/acme;
+        default_type text/plain;
+        try_files $uri =404;
+    }
+
+    # A fixed target host: the redirect can never be steered elsewhere by a
+    # client-supplied Host header.
+    location / {
+        return 301 https://${MINHAJ_PUBLIC_HOST}$request_uri;
+    }
+}
+
+# Per-client budget for the gated server. Basic Authentication is checked on
+# every request, so this bounds how fast anyone can guess the credential and
+# how much hashing work an unauthenticated client can demand. A page's assets
+# arrive as a burst, hence the generous burst allowance.
+limit_req_zone $binary_remote_addr zone=minhaj_edge:10m rate=20r/s;
+limit_req_status 429;
+
+# -----------------------------------------------------------------------------
+# Any TLS host other than the approved one: the handshake is refused
+# -----------------------------------------------------------------------------
+server {
+    listen 443 ssl default_server;
+    server_name _;
+    ssl_reject_handshake on;
+
+    # A client that completed the handshake for the approved name and then
+    # sent a different Host lands here: it is answered, never proxied.
+    add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+    return 421;
+}
+
+# -----------------------------------------------------------------------------
+# The approved staging host
+# -----------------------------------------------------------------------------
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${MINHAJ_PUBLIC_HOST};
+    access_log /var/log/nginx/access.log minhaj_access;
+
+    ssl_certificate /etc/nginx/tls/fullchain.pem;
+    ssl_certificate_key /etc/nginx/tls/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:minhaj_tls:5m;
+    ssl_session_timeout 1h;
+    ssl_session_tickets off;
+
+    # `always`: on 401, 404 and 5xx too. A crawler that is refused still sees
+    # the instruction, and no status code is a gap in it.
+    add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+
+    # The environment gate covers EVERYTHING in this server unless a location
+    # below turns it off — pages, /my, /admin, assets, APIs and the WebSocket
+    # handshake alike.
+    auth_basic "One Minhaj staging";
+    auth_basic_user_file /etc/nginx/edge-auth/htpasswd;
+
+    limit_req zone=minhaj_edge burst=200 nodelay;
+
+    client_max_body_size 72m;
+
+    # The one deliberately public path: robots must be readable by the crawlers
+    # it addresses, and it reveals nothing. Served HERE rather than by the
+    # application, so it holds whatever the deployed build emits.
+    location = /robots.txt {
+        auth_basic off;
+        default_type text/plain;
+        return 200 "User-agent: *\nDisallow: /\n";
+    }
+
+    # -------------------------------------------------------------------------
+    # Realtime — WebSocket only, behind the same environment gate
+    # -------------------------------------------------------------------------
+    location /socket.io/ {
+        limit_except GET {
+            deny all;
+        }
+
+        proxy_pass http://minhaj_realtime;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host "";
+        proxy_set_header X-Forwarded-Port "";
+        proxy_set_header Forwarded "";
+        # The environment credential is NOT an application credential.
+        proxy_set_header Authorization "";
+
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_connect_timeout 15s;
+        proxy_read_timeout 75s;
+        proxy_send_timeout 75s;
+
+        client_max_body_size 1k;
+    }
+
+    # -------------------------------------------------------------------------
+    # Everything else — the web application
+    # -------------------------------------------------------------------------
+    location / {
+        proxy_pass http://minhaj_web;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host "";
+        proxy_set_header X-Forwarded-Port "";
+        proxy_set_header Forwarded "";
+        proxy_set_header Authorization "";
+
+        # The edge owns this header for the whole environment; an application
+        # copy on some responses would only duplicate it.
+        proxy_hide_header X-Robots-Tag;
+
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_connect_timeout 15s;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+}

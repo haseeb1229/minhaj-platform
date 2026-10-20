@@ -2222,6 +2222,24 @@ staging database with restore-tested backups · **entire staging site `noindex` 
 verified · staging data is isolated from production.
 **Exit:** A usable staging environment exists **before** migration needs it.
 
+> **Delivered (Phase 28).** The entry gate was satisfied by an explicit owner decision for a
+> **developer-controlled pre-adoption staging environment** (OPEN_DECISIONS.md §4.1, §4.2,
+> §4.4): `https://minhaj.haseebliaqat.me` on an Azure for Students virtual machine running the
+> locked self-hosted shape — pinned NGINX, the production web runtime, realtime, SQL Server 2022
+> Developer + FTS and ClamAV — with backups in private Blob storage and images in a private
+> registry (ARCHITECTURE.md §10.6). Delivered: the production `runtime` stage of
+> `docker/web.Dockerfile` and the `docker/ops.Dockerfile` operations image; `docker/staging/`
+> (compose, host scripts, timers) and the staging NGINX template; the protected exact-SHA
+> `staging-deploy.yml` workflow (OIDC, private registry, deploy by digest, previous-release
+> restore); staging target guards and the `staging:db:*` operator commands (create, migrate,
+> provision, seed, backup, restore proof, reset, inspect); the environment gate and whole-site
+> `noindex`/`Disallow` (SECURITY_BASELINE.md §21); and SQL **plus** Storage backup with an actual
+> isolated restore. **No schema change**: staging is migrated with the accepted history, 27
+> migrations ending at `20261010000000_phase27_donations`. Email is disabled, no payment provider
+> is configured, gated religious, safeguarding and messaging capabilities stay fail-closed, and
+> the only seed is one synthetic, non-religious asset. Production hosting, licensing, HA/DR,
+> monitoring and the rollback runbook remain **Phase 34**; no Phase 29 work is included.
+
 ---
 
 ### Phase 29 — Migration & Provenance Framework

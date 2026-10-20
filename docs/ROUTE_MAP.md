@@ -809,7 +809,7 @@ A **sitemap index** at `/sitemap.xml` referencing partitioned child sitemaps:
 | Authentication routes | **`noindex, nofollow`** |
 | `/my/*`, `/teacher/*`, `/admin/*` | **`noindex, nofollow`** + private cache + `Disallow` |
 | API routes | **`Disallow`** |
-| Staging environment | **Entire site `noindex` + `Disallow`** |
+| Staging environment | **Entire site `noindex` + `Disallow`** — at the edge as well as in the build: `X-Robots-Tag: noindex, nofollow, noarchive` on every response (401s and 404s included) and a robots file served by NGINX that disallows `/` and names no sitemap, behind an environment access gate (SECURITY_BASELINE.md §21, ARCHITECTURE.md §10.6) |
 | **Pre-adoption / presentation origin** | **Entire site `noindex` + `Disallow`**, no submitted sitemaps, and **no canonical URLs pointing at the official origin** — until the approved launch transition (PRODUCT_SCOPE.md, *Product status and acceptance*) |
 | **Deferred or unavailable capability** | **Never listed in a sitemap** and never linked as dead navigation (§5.2) |
 | Unpublished, staged or draft content | **Never publicly reachable at all** |

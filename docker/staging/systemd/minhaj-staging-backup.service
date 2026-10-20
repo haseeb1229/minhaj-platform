@@ -1,0 +1,11 @@
+# One Minhaj staging — daily SQL + authoritative Storage backup to Azure Blob.
+# Interim staging policy (OPEN_DECISIONS.md §4.4): daily, RPO 24 h, RTO 4 h,
+# 14-day retention enforced by the storage account's lifecycle rule.
+[Unit]
+Description=One Minhaj staging backup (SQL + Storage)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /srv/minhaj/releases/current/bin/backup.sh

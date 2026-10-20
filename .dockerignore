@@ -47,6 +47,10 @@ coverage/
 # cannot read its own input is the defect this section exists to prevent, and
 # the test must not be weakened to accommodate a missing file.
 #
+# Phase 28: `tests/config/staging-foundation.test.ts` reads the protected
+# staging deploy workflow for the same reason, so it is the one other file
+# admitted. Any OTHER workflow — a future `deploy.yml` included — stays out.
+#
 # The exclusions below are DELIBERATELY `dir/*` rather than `dir/`. Docker
 # applies the last matching pattern, and a negation on a DIRECTORY re-admits
 # everything beneath it: `.github/` followed by `!.github/` re-included the
@@ -58,11 +62,12 @@ coverage/
 #
 # Read as a whole: exclude everything in `.github`, re-admit only the
 # `workflows` directory so it can be descended into, exclude everything in it,
-# then re-admit exactly one file.
+# then re-admit exactly the two named files.
 .github/*
 !.github/workflows/
 .github/workflows/*
 !.github/workflows/ci.yml
+!.github/workflows/staging-deploy.yml
 
 # --- Secrets ----------------------------------------------------------------
 # Real environment files must never enter an image layer. `.env.example` is
