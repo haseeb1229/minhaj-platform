@@ -399,7 +399,12 @@ describe('Phase 28 — the staging host scripts', () => {
     expect(trapAt).toBeGreaterThan(reset.indexOf('stop web realtime'));
     expect(reset.indexOf('ops staging-reset')).toBeGreaterThan(trapAt);
     const migrate = code(await readFile(path.join(binDir, 'migrate.sh'), 'utf8'));
-    expect(migrate).toContain("jq -er '.databaseExists'");
+    expect(migrate).toContain("jq -r '.databaseExists'");
+    // `false` is a valid answer; anything other than true/false is refused.
+    expect(migrate).not.toContain('jq -er');
+    expect(migrate).toContain(
+      '*) die "staging-inspect did not say whether MinhajStaging exists" ;;',
+    );
   });
 
   it('bind the web image to the origin it was built for', async () => {

@@ -37,9 +37,10 @@ dir="$(current_release_dir)"
 ensure_sqlserver_image "$dir"
 release_compose "$dir" up -d --wait --wait-timeout 600 sqlserver clamav
 
-# An assignment, so a failed inspect stops here rather than reading as "no
-# database" and skipping the backup.
-exists="$(ops_json staging-inspect | jq -er '.databaseExists')"
+# An assignment, so a failed inspect stops here (pipefail) rather than reading
+# as "no database" and skipping the backup. Plain `-r`, not `-e`: `false` is a
+# valid answer, and `jq -e` reports it as a failure.
+exists="$(ops_json staging-inspect | jq -r '.databaseExists')"
 case "$exists" in
   true)
     log "MinhajStaging exists; taking a backup set before migrating"

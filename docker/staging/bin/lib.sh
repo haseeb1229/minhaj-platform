@@ -157,10 +157,15 @@ current_release_sha() {
 }
 
 # docker compose for one release, with that release's pinned images.
+#
+# `--progress quiet`: pull and build progress would otherwise flood the output,
+# and Azure Run Command returns only the LAST 4 KB of it — an error must never
+# be pushed out of that window by progress bars.
 release_compose() {
   local dir="$1"
   shift
-  docker compose --project-directory "$dir" -f "$dir/compose.yaml" --env-file "$dir/release.env" "$@"
+  docker compose --progress quiet --project-directory "$dir" -f "$dir/compose.yaml" \
+    --env-file "$dir/release.env" "$@"
 }
 
 # -----------------------------------------------------------------------------
