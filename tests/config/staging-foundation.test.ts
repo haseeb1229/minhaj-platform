@@ -288,6 +288,10 @@ describe('Phase 28 — the staging deploy workflow', () => {
     // Downstream jobs build and deploy exactly the gate's commit.
     expect(workflow).not.toContain('inputs.');
     expect(workflow).toContain('ref: ${{ needs.gate.outputs.sha }}');
+    // Built once per commit: a re-deploy reuses the exact-SHA tag's digest
+    // instead of rebuilding (and overwriting) it.
+    expect(workflow).toContain('docker buildx imagetools inspect "$ref" --format');
+    expect(workflow).toContain('already built for $REQUESTED; reusing $digest');
     for (const job of [
       'Verify',
       'Container image',
@@ -300,7 +304,8 @@ describe('Phase 28 — the staging deploy workflow', () => {
     expect(workflow).toMatch(
       /concurrency:\n\s+group: staging-deploy\n\s+cancel-in-progress: false/,
     );
-    expect(workflow).toContain('-t "$REGISTRY/minhaj/$name:$REQUESTED"');
+    expect(workflow).toContain('ref="$REGISTRY/minhaj/$name:$REQUESTED"');
+    expect(workflow).toContain('-t "$ref"');
     expect(workflow).not.toMatch(/:latest\b/);
     expect(workflow).toContain('--scripts @docker/staging/bin/fetch-release.sh');
   });

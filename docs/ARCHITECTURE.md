@@ -1289,7 +1289,8 @@ canonical origin and the indexing posture are bound at build time (§10.5.3). `r
 Phase 25 runtime image unchanged. `docker/ops.Dockerfile` is the **operations image**: the
 Prisma CLI and the staging lifecycle commands, never a running service. All three are built by
 the staging deploy workflow from one exact commit, pushed to a **private** registry tagged with
-the full SHA and deployed **by digest**. SQL Server is built on the host from the reviewed
+the full SHA and deployed **by digest**. Each commit is built **once**: re-deploying it reuses the
+digests its exact-SHA tag already names, and that tag is never overwritten. SQL Server is built on the host from the reviewed
 `docker/sqlserver/Dockerfile`; Microsoft's, NGINX's and ClamAV's images are never republished.
 
 **Deployment.** `.github/workflows/staging-deploy.yml`, triggered deliberately by the operator

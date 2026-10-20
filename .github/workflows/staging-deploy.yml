@@ -182,13 +182,25 @@ jobs:
         run: |
           set -eu
           docker buildx create --name minhaj-staging --driver docker-container --use > /dev/null
+          # BUILT ONCE PER COMMIT. Builds are not bit-for-bit reproducible, so
+          # rebuilding a commit would give it a second set of digests — and the
+          # host refuses one release name standing for two different images. A
+          # re-deploy of a commit therefore reuses the digest its exact-SHA tag
+          # already names, and that tag is never overwritten.
           build() {
             name="$1"
             shift
-            docker buildx build --platform linux/amd64 --provenance=false --sbom=false --push \
-              --metadata-file "$RUNNER_TEMP/$name.json" \
-              -t "$REGISTRY/minhaj/$name:$REQUESTED" "$@" .
-            digest="$(jq -r '."containerimage.digest"' "$RUNNER_TEMP/$name.json")"
+            ref="$REGISTRY/minhaj/$name:$REQUESTED"
+            existing="$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' 2> /dev/null \
+              | jq -r '.digest // empty' || true)"
+            if printf '%s' "$existing" | grep -Eqx 'sha256:[0-9a-f]{64}'; then
+              digest="$existing"
+              echo "$name already built for $REQUESTED; reusing $digest"
+            else
+              docker buildx build --platform linux/amd64 --provenance=false --sbom=false --push \
+                --metadata-file "$RUNNER_TEMP/$name.json" -t "$ref" "$@" .
+              digest="$(jq -r '."containerimage.digest"' "$RUNNER_TEMP/$name.json")"
+            fi
             printf '%s' "$digest" | grep -Eqx 'sha256:[0-9a-f]{64}' \
               || { echo "::error::no digest recorded for $name"; exit 1; }
             docker buildx imagetools inspect "$REGISTRY/minhaj/$name@$digest" > /dev/null
