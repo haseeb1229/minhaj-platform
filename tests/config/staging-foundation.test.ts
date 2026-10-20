@@ -238,11 +238,14 @@ describe('Phase 28 — the staging stack (compose)', () => {
 describe('Phase 28 — the staging deploy workflow', () => {
   const load = async () => read('.github', 'workflows', 'staging-deploy.yml');
 
-  it('runs only when dispatched on purpose — never on push, PR or pull_request_target', async () => {
+  it('runs only from a deliberate deploy tag — never a branch push, PR or pull_request_target', async () => {
     const workflow = code(await load());
     const triggers = /^on:\n([\s\S]*?)^\S/m.exec(workflow)![1]!;
-    expect(triggers).toMatch(/^ {2}workflow_dispatch:$/m);
-    expect(triggers.match(/^ {2}[a-z_]+:$/gm)).toEqual(['  workflow_dispatch:']);
+    expect(triggers.match(/^ {2}[a-z_]+:$/gm)).toEqual(['  push:']);
+    expect(triggers.match(/^ {4}[a-z_-]+:$/gm)).toEqual(['    tags:']);
+    expect(triggers).toContain("- 'staging/deploy/*'");
+    expect(triggers).toContain("- 'staging/migrate-and-deploy/*'");
+    expect(triggers).not.toMatch(/branches/);
     expect(workflow).not.toContain('pull_request');
   });
 
@@ -279,7 +282,12 @@ describe('Phase 28 — the staging deploy workflow', () => {
   it('deploys one exact, CI-green commit, serialised, by digest', async () => {
     const workflow = code(await load());
     expect(workflow).toContain("grep -Eqx '[0-9a-f]{40}'");
-    expect(workflow).toContain('[ "$REQUESTED" = "$HEAD_SHA" ]');
+    // The tagged commit must be the head of a reviewed phase branch.
+    expect(workflow).toContain('select(.name | startswith("feature/phase-"))');
+    expect(workflow).toContain('is not the head of any feature/phase-* branch');
+    // Downstream jobs build and deploy exactly the gate's commit.
+    expect(workflow).not.toContain('inputs.');
+    expect(workflow).toContain('ref: ${{ needs.gate.outputs.sha }}');
     for (const job of [
       'Verify',
       'Container image',

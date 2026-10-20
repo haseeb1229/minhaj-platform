@@ -1292,15 +1292,18 @@ the staging deploy workflow from one exact commit, pushed to a **private** regis
 the full SHA and deployed **by digest**. SQL Server is built on the host from the reviewed
 `docker/sqlserver/Dockerfile`; Microsoft's, NGINX's and ClamAV's images are never republished.
 
-**Deployment.** `.github/workflows/staging-deploy.yml`, dispatched deliberately for one commit
-that is the head of a `feature/phase-*` branch and has all five ordinary CI jobs green. GitHub
+**Deployment.** `.github/workflows/staging-deploy.yml`, triggered deliberately by the operator
+pushing a deploy tag — `staging/deploy/<UTC time>` or `staging/migrate-and-deploy/<UTC time>` —
+onto one commit that is the head of a `feature/phase-*` branch and has all five ordinary CI jobs
+green. (A tag rather than `workflow_dispatch`, because a dispatchable workflow must exist on the
+default branch, which this project does not change.) GitHub
 reaches Azure by OIDC federation (no secret); the VM is told what to run through Azure Run
 Command (no inbound SSH from GitHub). On the VM, `docker/staging/bin/fetch-release.sh` pulls the
 digests with the VM's own identity and extracts that commit's bundle (`docker/staging/` plus the
 staging NGINX template and SQL Server Dockerfile) from the operations image; the bundle's
 `deploy.sh` proves the host, switches web, realtime and proxy, smoke-tests the real edge and
 **restores the previous known-good release** on failure. **Migrations are separate**: they run
-only from `bin/migrate.sh`, or when the operator dispatches `migrate-and-deploy`, after a backup,
+only from `bin/migrate.sh`, or when the operator pushes a `migrate-and-deploy` tag, after a backup,
 and never at container start. A rollback changes images only; it never reverses a migration.
 Nothing at runtime clones source or depends on the repository being public.
 

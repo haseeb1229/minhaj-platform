@@ -1695,9 +1695,11 @@ managed-identity tokens. Docker starts only once the data disk is mounted.
   pull-only on `minhaj/`, and read, list and write on the private `backups` container only. **No registry
   password, storage key or SAS exists on the host**; storage-account shared-key access is
   disabled.
-- The deploy workflow runs **only** on deliberate dispatch, for one **exact, CI-green commit**,
-  serialised, with no `pull_request_target`, no fork access, no repository secret, actions
-  pinned by commit SHA and images deployed **by digest**.
+- The deploy workflow runs **only** when the operator pushes a deploy tag onto one **exact,
+  CI-green commit** that is the head of a `feature/phase-*` branch — never on a branch push or a
+  pull request — serialised, with no `pull_request_target`, no fork access, no repository
+  secret, actions pinned by commit SHA and images deployed **by digest**. The `staging`
+  environment admits only the two deploy-tag patterns.
 - Every staging secret (SQL `sa`, the runtime and operator principals, `AUTH_SECRETS`, the HMAC
   keys, the environment credential) is **generated on the staging host**, root-only, and
   **distinct from every other environment's**. None is a build argument, an image layer or a
@@ -1726,13 +1728,13 @@ the following are re-checked **before** the visibility change:
 2. environment features on the plan: the **required-reviewer rule is not available to private
    repositories on Free, Pro or Team plans** — it is extra protection today, never the only
    deploy control, and is removed or replaced deliberately if GitHub requires it;
-3. the remaining controls stay in force: deliberate dispatch, exact SHA, the `feature/phase-*`
-   environment branch rule, OIDC federation and least-privilege roles, the concurrency lock.
-   Note what each control rests on: the exact-SHA and CI-green checks run from the dispatched
-   branch's own copy of the workflow, so they guard against mistakes, not against someone who
-   can push a branch; the controls a pushed branch **cannot** rewrite are the `staging`
-   environment's protection rules, the federated credential's subject, and who may push and
-   dispatch at all (today, the owner alone);
+3. the remaining controls stay in force: the deliberate deploy tag, exact SHA, the environment's
+   deploy-tag rule, OIDC federation and least-privilege roles, the concurrency lock. Note what
+   each control rests on: the branch-head and CI-green checks run from the tagged commit's own
+   copy of the workflow, so they guard against mistakes, not against someone who can push; the
+   controls a pushed commit **cannot** rewrite are the `staging` environment's protection rules,
+   the federated credential's subject, and who may push branches and tags at all (today, the
+   owner alone);
 4. one staging deployment is re-proven from the private repository.
 
 **A repository transfer or rename changes the OIDC subject**: the federated credential must be
