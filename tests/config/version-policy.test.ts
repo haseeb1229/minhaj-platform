@@ -74,7 +74,7 @@ function baseWorkspaces(): { name: string; directory: string; manifest: Manifest
       directory: 'apps/web',
       manifest: {
         dependencies: {
-          next: '16.3.8',
+          next: '16.4.2',
           'next-intl': '4.14.3',
           react: '19.2.8',
           'react-dom': '19.2.8',
@@ -114,7 +114,7 @@ function baseLock(): { packages: Record<string, { version?: string }> } {
   return {
     packages: {
       '': {},
-      'node_modules/next': { version: '16.3.8' },
+      'node_modules/next': { version: '16.4.2' },
       'node_modules/next-intl': { version: '4.14.3' },
       'node_modules/react': { version: '19.2.8' },
       'node_modules/react-dom': { version: '19.2.8' },
@@ -338,7 +338,7 @@ describe('F13.4 — every workspace is inspected', () => {
    * The hoisting hole, reproduced exactly. `apps/web` declares its own Next,
    * the lockfile gives it its own nested copy, and the ROOT `node_modules`
    * still holds the compliant version — so the old resolver-based checker saw
-   * 16.3.8 and passed.
+   * that compliant root copy and passed.
    */
   it('catches a workspace-local version that hoisting used to hide', () => {
     const failures = failuresFor((state) => {
@@ -457,7 +457,7 @@ describe('F13.5 — the lockfile is authoritative and must agree', () => {
   it('does not compare a workspace-local direct install to an unrelated root copy', () => {
     expect(
       failuresFor((state) => {
-        state.lock.packages['apps/web/node_modules/next'] = { version: '16.3.8' };
+        state.lock.packages['apps/web/node_modules/next'] = { version: '16.4.2' };
         state.lock.packages['node_modules/next'] = { version: '15.5.0' };
         state.installed = { next: '15.5.0' };
       }),

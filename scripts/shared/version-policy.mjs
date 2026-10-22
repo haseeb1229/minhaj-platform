@@ -42,7 +42,7 @@
  * (TECH_STACK.md §16 rule 5).
  */
 export const lockedStack = Object.freeze([
-  { name: 'next', kind: 'exact', expected: '16.3.8', introduced: 'Phase 0B' },
+  { name: 'next', kind: 'exact', expected: '16.4.2', introduced: 'Phase 0B' },
   { name: 'react', kind: 'exact', expected: '19.2.8', introduced: 'Phase 0B' },
   { name: 'react-dom', kind: 'exact', expected: '19.2.8', introduced: 'Phase 0B' },
   { name: 'tailwindcss', kind: 'exact', expected: '4.3.3', introduced: 'Phase 0B' },

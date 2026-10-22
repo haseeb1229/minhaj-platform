@@ -95,7 +95,7 @@ Validation happens **at genuine introduction**, in the phase that owns it
 | Technology | Version | Status | Role | Installed |
 |---|---|---|---|---|
 | Node.js | **24.20.0 LTS** | LOCKED | Runtime | Phase 0B |
-| Next.js | **16.3.8** | LOCKED | Runtime | Phase 0B |
+| Next.js | **16.4.2** | LOCKED | Runtime | Phase 0B |
 | React | **19.2.8** | LOCKED | Runtime | Phase 0B |
 | TypeScript | **5.9.x** strict | LOCKED | Development | Phase 0B |
 | Tailwind CSS | **4.3.3** | LOCKED | Runtime | Phase 0B |
@@ -153,7 +153,7 @@ is 24.20.0, and the workstation is aligned to it during Phase 0B setup.*
 
 ## 4. Web application
 
-**Next.js 16.3.8** · **React 19.2.8** · **TypeScript 5.9.x strict** — all LOCKED.
+**Next.js 16.4.2** · **React 19.2.8** · **TypeScript 5.9.x strict** — all LOCKED.
 
 > **Next.js moved from 16.3.3 to 16.3.8 as a security patch within the locked 16.3 line**
 > (October 2026): advisories published after 16.3.3 was locked — among them a critical
@@ -161,6 +161,16 @@ is 24.20.0, and the workstation is aligned to it during Phase 0B setup.*
 > image-optimisation SSRF defects — are fixed in 16.3.8, and the required `npm audit
 > --audit-level=high` gate fails without it. No API, configuration or behaviour change was
 > adopted; the flagged transitive packages moved only within their declared ranges.
+>
+> **Next.js then moved from 16.3.8 to 16.4.2 by explicit owner decision**: Vercel's
+> 2026-10-14 security release made every Next.js 16.0.0–16.4.0 unsafe — unauthenticated RCE
+> through `use cache` functions returning typed arrays (GHSA-673q-mjm6-r5xr), RCE through SVG
+> image optimisation (GHSA-2464-fhr4-w9xw) and a Server Actions denial of service
+> (GHSA-p3m5-59mp-jv5r) — with no 16.3.x fix, and 16.4.1 the first patched release. 16.4.2
+> is the current stable patch of the 16.4 line. React stays **19.2.8**: the related React
+> Server Components advisories affect only the `react-server-dom-*` packages, which this
+> repository does not install; the App Router uses the copy Next.js vendors, patched in 16.4.1.
+> No 16.4 feature, configuration or behaviour change was adopted.
 
 **Why Next.js.** Server Components suit a content platform whose overwhelming majority of
 pages are read-only and anonymously cacheable — most of the site ships no client JavaScript.
@@ -545,7 +555,7 @@ explicit authorisation boundaries.
 ## 17. Summary — runtime vs development vs administration
 
 ### Runtime — ships in production
-Node.js 24.20.0 · Next.js 16.3.8 · React 19.2.8 · Tailwind CSS 4.3.3 · shadcn/ui (copied
+Node.js 24.20.0 · Next.js 16.4.2 · React 19.2.8 · Tailwind CSS 4.3.3 · shadcn/ui (copied
 source) · Motion 13.1.x · next-intl 4.14.x · Prisma ORM 7.10.0 · @prisma/client 7.10.0 ·
 **@prisma/adapter-mssql 7.10.0** · Better Auth 1.7.x · **Resend (first `EmailProvider`
 adapter)** · Zod 4.5.x · React Hook Form 7.x · Tiptap 3.x · Socket.IO 4.8.3 · Pino 10.3.1
