@@ -604,7 +604,7 @@ third-party scholarly material for a long time.
 | Direct dependency | Exact version | Use and provenance |
 | --- | --- | --- |
 | `@tiptap/core`, `@tiptap/pm`, `@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/static-renderer` | 3.31.3 each | MIT; [Tiptap source](https://github.com/ueberdosis/tiptap). StarterKit defines the shared schema, React/core/pm power the lazy editor, static-renderer produces authoritative server HTML. React 19 peer support and the locked Node 24 runtime are checked against installed manifests and the production build. |
-| `sanitize-html` | 2.17.7 | MIT; [source](https://github.com/apostrophecms/sanitize-html). Server-only allowlist sanitisation after schema-validated rendering. |
+| `sanitize-html` | 2.18.1 | MIT; [source](https://github.com/apostrophecms/sanitize-html). Server-only allowlist sanitisation after schema-validated rendering. |
 | `@types/sanitize-html` | 2.16.1 | MIT; [DefinitelyTyped source](https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/sanitize-html). Development-only type declarations. |
 
 Only Article/Page authoring imports the Tiptap client island. The supported schema is bounded

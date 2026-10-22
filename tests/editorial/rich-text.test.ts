@@ -95,4 +95,58 @@ describe('Editorial structured rich text', () => {
     ])
       expect(html).not.toContain(unsafe);
   });
+
+  // The sanitize-html advisory classes published in October 2026 (fixed in
+  // 2.18.1): an SVG/SMIL animation rewriting a link to `javascript:`, a
+  // `<meta http-equiv=refresh>` carrying a `javascript:`/`data:` URL, and a
+  // discard region (`script`, `noscript`) ending early on an implied close.
+  // The editorial allowlist admits none of these elements, so whatever the
+  // library version, the output must stay inert: no scriptable element, no
+  // unsafe scheme, and any surviving link re-validated and `noopener`.
+  it.each([
+    [
+      'SMIL animation rewriting a link',
+      '<p>a<svg xmlns:x="http://www.w3.org/1999/xlink"><a x:href="#"><animate attributeName="x:href" values="javascript:alert(1)"/><set attributeName="href" to="javascript:alert(1)"/><text>t</text></a></svg>b</p>',
+    ],
+    [
+      'namespace-prefixed SVG link',
+      '<p><svg><svg:a xmlns:svg="http://www.w3.org/2000/svg" href="javascript:alert(1)">z</svg:a></svg></p>',
+    ],
+    [
+      'meta refresh to javascript:',
+      '<meta http-equiv="refresh" content="0;url=javascript:alert(1)"><p>m</p>',
+    ],
+    [
+      'meta refresh to data:',
+      '<meta http-equiv="refresh" content="0; URL=data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg=="><p>m</p>',
+    ],
+    [
+      'discard region closed early by an implied close',
+      '<noscript><p>one<p>two</noscript><script><p>x</script><style><p>y</style><p>after</p>',
+    ],
+    [
+      'link inside a discard region',
+      '<p>x<noscript><a href="javascript:alert(1)">l</a><a href="https://example.invalid" target="_blank">k</a></noscript>y</p>',
+    ],
+  ])('keeps the %s inert', (_name, payload) => {
+    const html = sanitizeEditorialHtml(payload);
+    for (const unsafe of [
+      '<svg',
+      '<animate',
+      '<set',
+      '<meta',
+      'http-equiv',
+      '<noscript',
+      '<script',
+      '<style',
+      'javascript:',
+      'data:',
+      'target=',
+    ])
+      expect(html).not.toContain(unsafe);
+    for (const [, href] of html.matchAll(/href="([^"]*)"/g))
+      expect(safeEditorialLink(href!)).toBeTruthy();
+    for (const anchor of html.match(/<a\b[^>]*>/g) ?? [])
+      expect(anchor).toContain('rel="noopener noreferrer"');
+  });
 });
