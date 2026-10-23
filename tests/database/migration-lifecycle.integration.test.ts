@@ -564,6 +564,29 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'DonationProviderEvent',
         'DonationRefund',
         'DonationCommunicationIntent',
+        // Phase 29 — Migration & Provenance: fixture sources and their hosts,
+        // runs and their items, legacy records, raw snapshots, staged revisions
+        // with their categories and links, topic mappings, errors, duplicate
+        // candidates, asset provenance, legacy mappings, manifests with their
+        // entries, and promotions.
+        'MigrationSource',
+        'MigrationSourceHost',
+        'MigrationRun',
+        'MigrationRecord',
+        'MigrationRunItem',
+        'MigrationRawSnapshot',
+        'MigrationStagedRecord',
+        'MigrationStagedCategory',
+        'MigrationStagedLink',
+        'MigrationTopicMapping',
+        'MigrationError',
+        'MigrationDuplicateCandidate',
+        'MigrationAssetProvenance',
+        'MigrationLegacyMapping',
+        'MigrationPublishManifest',
+        'MigrationManifestEntry',
+        'MigrationPromotion',
+        'MigrationPromotionEntry',
       ].sort(),
     );
   });

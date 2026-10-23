@@ -193,6 +193,14 @@ whitespace and typography handling for Arabic and Urdu, reference-format normali
 **Arabic and Urdu text handling is a first-class correctness concern.** Incorrect Unicode
 normalisation can silently alter religious text.
 
+> **Decided in Phase 29 — conservative Unicode.** **No NFC or NFKC is applied to stored text**:
+> Arabic and Urdu bytes are preserved exactly as the source wrote them. Normalisation removes only
+> what is never content — C0 control characters (tab and newline kept) — turns CRLF and lone CR into
+> LF, collapses ASCII whitespace in a title and trims its ends. A **folded comparison key**
+> (`titleKey`: NFKC, lower-cased, punctuation and symbols removed) is computed **only** as a
+> duplicate-candidate signal for a person; it is stored beside the revision for matching, and is
+> never shown or published as content.
+
 **Server-side HTML sanitisation happens here — before staging, not at render time**
 (SECURITY_BASELINE.md §10.2).
 
@@ -609,3 +617,52 @@ for re-import of records whose parsing is later found faulty.
 | Delta overwhelms launch | Continuous small deltas, not a final catch-up |
 | Authorisation ambiguity | No ingestion without recorded written authorisation per source |
 | **Asset licensing unclear** | **Per-asset provenance and licensing evidence (§4.9)** |
+
+---
+
+## 13. As delivered (Phase 29) — the generic framework, not a migration
+
+> **Phase 29 delivered the framework and proved it against synthetic fixtures. It migrated
+> nothing.** No real legacy source was contacted, no real page or asset was fetched or copied, and
+> no real record exists in any Migration table. Real source adapters, live access and initial
+> ingestion are **Phase 30**, gated on written authorisation recorded per source (§1.1,
+> OPEN_DECISIONS.md §3.1).
+
+| Delivered in Phase 29 — generic | Phase 30 and later — real |
+|---|---|
+| The Migration & Provenance context, its eighteen tables and their invariants (DOMAIN_MODEL.md §16.5) | Per-source adapters for the real Minhaj sites and any export Minhaj supplies (§3.1, OPEN_DECISIONS.md §3.2) |
+| The source-adapter contract (§3.2), and two **fixture** adapters: a synthetic legacy video site and a synthetic executable export | Recording each source's written authorisation; an `authorised` source can be neither registered nor run in Phase 29 |
+| The whole pipeline of §4 for one content kind, `media.video` (metadata only — §4.9), publishing a Media Video through Media's public service | Further content kinds, each with its own Layer-4 publisher, in the risk order of §10.1 |
+| SSRF-safe fetching, retry classification and `Retry-After` (§4.2, §8.1) against a loopback fixture server | Fetching real hosts, with the per-source politeness each authorisation allows |
+| Sanitisation before staging, inert raw evidence, incidental personal-data flagging and snapshot disposal (§8.2, §8.3) | A raw-snapshot **retention period** (OPEN_DECISIONS.md §2.2) |
+| Deduplication, topic mapping, link rewriting with unresolved-link reporting, disappearance classification, per-acquisition rights (§4.5, §4.8, §5) | Resolving real duplicates, mappings and religious QA (§4.11) |
+| Run reconciliation (§6.1), reversible manifests (§6.3, §7.1–§7.2), the reviewed promotion manifest carried into a local checksummed **bundle** (§10.1.1) | Promotion into production and serving legacy 301s (Phase 35; §7.3, §9) |
+
+**What the fixtures prove, and how.**
+
+- **One external key per record.** A record is identified per source by its canonical URL (lower-case
+  scheme and host, no fragment or default port, query parameters sorted) or export identifier.
+  Re-fetching identical bytes is recorded `unchanged`; changed evidence becomes a new staged revision
+  for review, superseding the earlier pending or approved revision; a Video already published is
+  never overwritten by it (§5.1).
+- **Resumable, bounded runs.** Sequential, checkpointed batches of at most 25 under a lease, one
+  open run per source; an interrupted run resumes without refetching or restaging (§5.1).
+- **Hard identity only.** The same `provider:providerVideoId` collapses automatically; a folded-title
+  match is a candidate for a person; a cross-language pair is never merged (§5.2).
+- **Absence is an observation.** After a complete discovery, unseen records are marked `missing` and
+  classified by a person; nothing is deleted, unpublished or redirected because of it (§5.3).
+- **Byte identity is not rights identity.** Identical bytes may share one stored asset, but every
+  acquisition keeps its own licence, holder, evidence and visibility (§5.2).
+- **Unicode is conservative** (§4.6).
+- **The executable export is a source.** `synthetic-export.sql` runs only in an in-memory,
+  query-only `node:sqlite` database — another engine and schema — and is read through an export
+  adapter, never restored into SQL Server or adopted as the target schema (§1.3).
+- **Promotion carries content only.** The bundle schema is closed — content, provenance, mappings and
+  checksums, never an account, session, credential or configuration — and each entry file is adopted,
+  never overwritten, when an interrupted promotion resumes (§10.1.1).
+
+**Runs and promotions are operator commands**, not browser actions: `npm run migration:run-fixture`
+and `npm run migration:promote`. Every human decision — review, duplicates, mappings, errors,
+disappearances, rights, manifests and promotion approval — is made in `/admin/migration`
+(ROUTE_MAP.md §7). Publication needs `migration.publish` with a `migration-publication` step-up
+(§8.4), which nobody holds yet.

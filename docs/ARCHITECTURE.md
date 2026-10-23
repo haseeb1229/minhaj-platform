@@ -819,6 +819,69 @@ created only when a component is genuinely shared, not speculatively.
 the application** (DOMAIN_MODEL.md §16.4). `scripts/migration/` holds only the source-adapter
 executables and tooling.
 
+### 5.1 As delivered (Phase 29) — Migration & Provenance
+
+```
+/admin/migration/* · /api/admin/migration/*          scripts/migration/* (plain Node CLIs)
+        │                                                     │
+composition/migration.ts (web root)         composition/migration-runner.ts (tooling root)
+        └──────────────▶ composition/migration-wiring.ts ◀────┘   one wiring, seven services
+                           │            │
+                           │            └─▶ composition/migration-targets.ts
+                           │                  Media's public service · Personalisation's videoHeld
+                           ▼
+         contexts/migration-provenance (ports only) ──▶ adapters/migration-provenance ──▶ SQL Server
+```
+
+- **The context** is `apps/web/src/contexts/migration-provenance`, reached only through its
+  `index.ts`. It imports its own modules, `@minhaj/contracts`, `zod`, `sanitize-html`, Node built-ins
+  and `server-only` — **no other context and no database capability** — and uses relative imports
+  only, so the same code runs in Next and in plain Node (`--conditions=react-server`). Identity's
+  live authority, Taxonomy's existing Topics, the publication target, Storage, the fetch boundary
+  and the source adapters all arrive as ports from `@minhaj/contracts/migration`.
+- **The adapter** is `packages/database/src/adapters/migration-provenance`, owned by Migration
+  (§4.1). It reads and writes Migration's eighteen tables only, writes each operator act's audit row
+  in the same transaction, and exposes the seven port factories and one refusal type — never Prisma.
+  User, Topic, Asset and Video are reached only as the typed foreign keys Migration's rows hold.
+- **Layer 4, twice, from one wiring.** `migration-wiring.ts` builds the seven services (sources,
+  pipeline, decisions, raw evidence, publication, promotion, read) for both processes and binds
+  Storage itself, so no caller can hand a run another place to put acquired bytes. The web root
+  `migration.ts` supplies Identity's live authorisation, Taxonomy's public reference read, the
+  foundation Storage service and the Media target. The tooling root `migration-runner.ts` — needed
+  because the CLIs and the staging proof run outside the Next bundler, as the realtime process does
+  (§3.6) — supplies the same answers node-loadably: server-core's `AuthorizationService` over
+  Identity's authorisation reader (also the only minter of the privileged actor it can re-verify),
+  Taxonomy's and People's public services, and `@minhaj/storage`. Both name packages and explicit
+  `.ts` paths only, never the `@/` alias.
+- **The one publication target** is Media's Video, in `migration-targets.ts`, through
+  `createMediaService(...).saveVideo` / `video` / `videos` — never Media's tables. Media's strict
+  schema, references, `media.administer` authority, audit row and search intent apply to a migrated
+  Video exactly as to a hand-made one; a refusal is final; a resumed publication adopts the Video an
+  interrupted one made only when it is published with the same slug and provider identity; rollback
+  archives at the recorded version.
+- **Personalisation's held-video read.** Before a rollback withdraws a Video, Layer 4 asks
+  Personalisation's own public `createHoldingService(...).videoHeld` — one bit, answered from
+  `SavedItem` and `WatchHistory` by two bounded `EXISTS` probes in Personalisation's adapter,
+  naming no account, count or instant. A held Video is left for a person. This adds no context
+  edge: Layer 4 composes both.
+- **No target dependency.** Migration names no target type; Media holds no Migration concept; the
+  only bridge is Layer-4 composition (§6.3 rule 7).
+- **The tooling, `scripts/migration/`, holds no database capability.** It imports no Prisma, driver
+  or `@minhaj/database`, and reaches the application only through `migration-runner.ts`. It contains:
+  `safe-fetch.ts`, the SSRF-safe transport (`node:http` / `node:https` with an injected resolver and a
+  connection pinned to the validated address; SECURITY_BASELINE.md §10.5); `fixture-server.ts`, a
+  deterministic synthetic legacy site on `127.0.0.1` answering only `*.fixture.invalid` hosts;
+  `adapters/fixture-video.ts` over `adapters/html-source.ts` (Cheerio with parse5, handing markup on
+  exactly as written); `adapters/fixture-export.ts` over `export/export-source.ts`, which executes
+  `synthetic-export.sql` into an in-memory, query-only `node:sqlite` database — the only use of that
+  engine; `promotion-bundle.ts`, the Phase-29 promotion destination; `canonical-json.ts`; and the
+  `run-fixture.ts`, `promote.ts` and `staging-fixture-proof.ts` entries.
+- **Operations image.** `docker/ops.Dockerfile` additionally carries `packages/server-core/src`, the
+  three node-runnable migration composition files, the five contexts that graph composes through
+  their public interfaces (migration-provenance, media, people-contributors,
+  personalisation-notifications, taxonomy) and `scripts/migration`, so `staging-migration-proof` can
+  run the fixture proof as the runtime principal (§10.6). No page, route or component is included.
+
 ---
 
 ## 6. Dependency rules
@@ -1346,6 +1409,13 @@ outside Azure. Independent off-site production DR is Phase 34's.
 the recovery proof. `bin/reset.sh` is the only destructive operation: an exact,
 environment-bound confirmation, a fresh backup first, the full target proof, then database and
 storage-root only.
+
+**Migration fixture proof (Phase 29).** `bin/migration-proof.sh` runs `staging-migration-proof` in
+the release's exact-SHA operations image after the full staging guard: it writes one disposable
+synthetic operator, runs the Phase-29 fixture proof as the runtime principal against a loopback
+fixture server inside the container — no legacy host, no DNS, no outbound request — and revokes
+the operator's assignment, session and grant afterwards, also on failure (§5.1). Its audit rows
+and the archived synthetic Videos stay as the record of what was proved.
 
 **Operating posture.** Deallocated when idle (`az vm deallocate` — an operating-system shutdown
 alone still bills compute); the disks, static IP and Blob storage continue to bill while

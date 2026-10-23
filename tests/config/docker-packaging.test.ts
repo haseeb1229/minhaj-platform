@@ -775,6 +775,54 @@ describe('Phase 28 — the operations image is a tool, never a service', () => {
     expect(ops).not.toMatch(/^EXPOSE /m);
   });
 
+  it('carries the migration tooling and exactly the node-runnable composition graph it loads', async () => {
+    const ops = await stageOf('ops.Dockerfile', 'ops');
+    expect(ops).toContain('COPY scripts/migration ./scripts/migration');
+    expect(ops).toContain('COPY packages/server-core/src ./packages/server-core/src');
+    for (const module of [
+      'migration-runner.ts',
+      'migration-wiring.ts',
+      'migration-targets.ts',
+    ])
+      expect(ops).toContain(`apps/web/src/composition/${module}`);
+    // Every module the tooling reaches inside the web workspace is copied, and
+    // nothing of the web application beyond them: no page, route or component,
+    // and no composition root that the bundler alone can load.
+    const reached = new Set<string>();
+    const queue = [
+      'scripts/migration/run-fixture.ts',
+      'scripts/migration/promote.ts',
+      'scripts/migration/staging-fixture-proof.ts',
+    ];
+    while (queue.length > 0) {
+      const file = queue.pop()!;
+      if (reached.has(file)) continue;
+      reached.add(file);
+      const source = await readFile(path.join(repoRoot, file), 'utf8');
+      for (const [, specifier] of source.matchAll(/from '(\.{1,2}\/[^']+\.ts)'/gu)) {
+        const target = path.posix.normalize(
+          path.posix.join(path.posix.dirname(file), specifier!),
+        );
+        if (target.startsWith('apps/web/src/') || target.startsWith('scripts/migration/'))
+          queue.push(target);
+      }
+    }
+    const copied = [...ops.matchAll(/(apps\/web\/src\/[a-z/.-]+)/gu)].map(
+      (match) => match[1]!,
+    );
+    for (const file of reached)
+      if (file.startsWith('apps/web/src/'))
+        expect(
+          copied.some((entry) => file === entry || file.startsWith(`${entry}/`)),
+          `${file} is loaded by the migration tooling but not copied`,
+        ).toBe(true);
+    for (const entry of copied)
+      expect(entry, 'the operations image copies only what the tooling loads').toMatch(
+        /^apps\/web\/src\/(?:composition\/migration-(?:runner|wiring|targets)\.ts|contexts\/[a-z-]+|composition\/)$/u,
+      );
+    expect(ops).not.toMatch(/apps\/web\/src\/(?:app|components|i18n|config)\b/u);
+  });
+
   it('runs unprivileged and carries no tests, fixtures, environment files or CI', async () => {
     const ops = await stageOf('ops.Dockerfile', 'ops');
     expect(ops).toMatch(/^USER node$/m);

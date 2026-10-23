@@ -274,8 +274,9 @@ describe('the vocabulary is exactly what the documents name', () => {
 
   it('adds one step-up purpose, for canonical Quran edits alone', () => {
     // Phase 19 appends Hadith's own purpose after it, Phase 20 Fatwa
-    // publication's and Phase 27 a donation refund's; the Quran's is still the
-    // one Phase 18 added, and no Quran purpose was added beside it.
+    // publication's, Phase 27 a donation refund's and Phase 29 migration
+    // publication's; the Quran's is still the one Phase 18 added, and no Quran
+    // purpose was added beside it.
     expect([...STEP_UP_PURPOSES]).toEqual([
       'privilege-administration',
       'account-administration',
@@ -284,6 +285,7 @@ describe('the vocabulary is exactly what the documents name', () => {
       'hadith-canonical-edit',
       'fatwa-publication',
       'donation-refund',
+      'migration-publication',
     ]);
     expect(STEP_UP_PURPOSES.filter((purpose) => purpose.startsWith('quran-'))).toEqual([
       'quran-canonical-edit',

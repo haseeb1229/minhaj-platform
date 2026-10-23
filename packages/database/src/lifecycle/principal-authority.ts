@@ -659,6 +659,30 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[donationproviderevent]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[donationrefund]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[donationcommunicationintent]': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  // Phase 29: Migration & Provenance. NOTHING is deleted: a source is
+  // deactivated, a record that vanished is marked missing, a raw snapshot is
+  // disposed of by clearing its body, and every decision moves forward. A
+  // source's hosts and a revision's categories and links are written once and
+  // never updated. Identifying, provenance and evidence columns carry column
+  // DENYs.
+  '[dbo].[migrationsource]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[migrationsourcehost]': ['SELECT', 'INSERT'],
+  '[dbo].[migrationrun]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[migrationrecord]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[migrationrunitem]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[migrationrawsnapshot]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[migrationstagedrecord]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[migrationstagedcategory]': ['SELECT', 'INSERT'],
+  '[dbo].[migrationstagedlink]': ['SELECT', 'INSERT'],
+  '[dbo].[migrationtopicmapping]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[migrationerror]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[migrationduplicatecandidate]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[migrationassetprovenance]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[migrationlegacymapping]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[migrationpublishmanifest]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[migrationmanifestentry]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[migrationpromotion]': ['SELECT', 'INSERT', 'UPDATE'],
+  '[dbo].[migrationpromotionentry]': ['SELECT', 'INSERT', 'UPDATE'],
 
   // Phase 7 — storage custody metadata. DELETE is genuinely the operation
   // here: reconciliation removes rows a crash left mid-upload, which is

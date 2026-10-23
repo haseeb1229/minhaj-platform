@@ -148,14 +148,15 @@ describe('the Fatwa permission vocabulary', () => {
   it('keeps every externally gated key out of the protected administrator bundle', () => {
     // The three Fatwa keys are gated; Phase 23 added `teaching.perform` as the
     // fourth gated key (OPEN_DECISIONS.md §6.3), Phase 24 `messaging.support`
-    // and `messaging.moderate` (§6.6), Phase 27 `donations.refund` (§5.4), and
-    // nothing else is.
+    // and `messaging.moderate` (§6.6), Phase 27 `donations.refund` (§5.4),
+    // Phase 29 `migration.publish` (§3.4), and nothing else is.
     expect([...EXTERNALLY_GATED_PERMISSIONS].sort()).toEqual([
       'donations.refund',
       'fatwa.answer',
       'fatwa.publish',
       'messaging.moderate',
       'messaging.support',
+      'migration.publish',
       'question.receive',
       'teaching.perform',
     ]);

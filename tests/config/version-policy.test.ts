@@ -59,6 +59,7 @@ function baseRootManifest(): Manifest {
     overrides: { 'deepmerge-ts': '8.0.0', mysql2: '3.23.1' },
     devDependencies: {
       '@playwright/test': '1.55.1',
+      cheerio: '1.2.0',
       eslint: '^10.9.1',
       prettier: '^3.9.6',
       typescript: '~5.9.3',
@@ -128,6 +129,7 @@ function baseLock(): { packages: Record<string, { version?: string }> } {
       'node_modules/@playwright/test': { version: '1.55.1' },
       'node_modules/socket.io': { version: '4.8.3' },
       'node_modules/socket.io-client': { version: '4.8.3' },
+      'node_modules/cheerio': { version: '1.2.0' },
       'node_modules/typescript': { version: '5.9.3' },
       'node_modules/zod': { version: '4.5.4' },
       'node_modules/vitest': { version: '4.1.11' },
@@ -831,6 +833,31 @@ describe('F13.9 — the transcribed policy matches TECH_STACK.md', () => {
       state.lock.packages['node_modules/socket.io'] = { version: '4.8.4' };
     });
     expect(failures.join('\n')).toMatch(/socket\.io/);
+  });
+
+  /**
+   * Cheerio at its owning point (TECH_STACK.md §2 "Native fetch + Cheerio",
+   * §11; Phase 29). Development tooling for the migration source adapters,
+   * pinned exactly because it parses hostile legacy markup.
+   */
+  it('locks cheerio EXACTLY at 1.2.0, introduced in Phase 29', () => {
+    expect(policyFor('cheerio')).toEqual(
+      expect.objectContaining({ kind: 'exact', expected: '1.2.0' }),
+    );
+    expect(policyFor('cheerio')?.introduced).toMatch(/Phase 29/);
+  });
+
+  it('FAILS when cheerio is absent or drifts from the exact 1.2.0', () => {
+    const absent = failuresFor((state) => {
+      delete state.rootManifest.devDependencies?.['cheerio'];
+      delete state.lock.packages['node_modules/cheerio'];
+    });
+    const drifted = failuresFor((state) => {
+      state.rootManifest.devDependencies!['cheerio'] = '^1.2.0';
+      state.lock.packages['node_modules/cheerio'] = { version: '1.2.1' };
+    });
+    expect(absent.join('\n')).toMatch(/cheerio/);
+    expect(drifted.join('\n')).toMatch(/cheerio/);
   });
 
   it('accepts the installed 4.14.x patch', () => {

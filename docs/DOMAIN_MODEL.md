@@ -1956,6 +1956,84 @@ workflows that no import path may bypass.
 The prior revision placed migration "outside application modules" while giving it persistent
 records, admin routes and an API — a contradiction now resolved.
 
+### 16.5 As delivered (Phase 29 — the framework over fixtures; no real source)
+
+Eighteen Migration-owned tables (migration `20261011000000_phase29_migration_provenance`). Every
+foreign key is `NO ACTION` — nothing cascades — and there is **no `targetType` / `targetId` pair
+anywhere**:
+
+| Aggregate (§16.1) | Tables |
+|---|---|
+| **LegacySource** | `MigrationSource` (key, authority kind `fixture` \| `authorised`, access method `http` \| `export`, content kind, politeness bounds) · `MigrationSourceHost` (its exact hosts, fixed at creation) |
+| **ImportRun** | `MigrationRun` (operator, transform provenance, discovery cursor, lease, reconciliation verdict) · `MigrationRunItem` (one record's outcome in one run) |
+| **MigrationStatus** | `MigrationRecord` — the stable identity of one legacy record per (source, external key), its lifecycle status, source observation (`observed`) and any disappearance classification |
+| **RawSnapshot** | `MigrationRawSnapshot` |
+| **StagedRecord** | `MigrationStagedRecord` (one immutable revision) · `MigrationStagedCategory` · `MigrationStagedLink` · `MigrationTopicMapping` (legacy category → Topic, per source) · `MigrationDuplicateCandidate` |
+| **ImportError** | `MigrationError` |
+| **AssetProvenance** | `MigrationAssetProvenance` — one row per acquisition |
+| **LegacyMapping** | `MigrationLegacyMapping` |
+| **PublishManifest** | `MigrationPublishManifest` · `MigrationManifestEntry` |
+| **Promotion manifest** (MIGRATION_STRATEGY.md §10.1.1) | `MigrationPromotion` · `MigrationPromotionEntry` |
+
+**MigrationStatus** is `discovered`, `fetched`, `staged`, `rejected`, `errored`, `excluded`,
+`approved`, `published`, `merged`; its observation (`observed`) is `present` or `missing`, and a missing record's
+disappearance is `withdrawn`, `moved`, `source-error`, `transient-failure`, `access-failure` or
+`unresolved` (MIGRATION_STRATEGY.md §5.3).
+
+**Invariants the database holds**, beneath the service's own checks:
+
+- **Raw evidence is append-only and bound to SHA-256.** A CHECK requires a held body to be exactly
+  the bytes its `checksum` and `byteSize` name. A snapshot is never deleted or rewritten; the only
+  change it accepts is a deliberate **disposal of the body**, which records who, when and why and
+  keeps the metadata and checksum.
+- **A staged revision is immutable; its review only moves forward.** It begins `pending` at
+  version 1 from a snapshot of its own record whose checksum it carries, in a run of its own source;
+  its payload, checksums and provenance (adapter, parser, normaliser and code revision) never change;
+  only a `valid` revision with no flagged personal data may be `approved`. A later revision of the
+  same record supersedes an earlier pending or approved one.
+- **One open run per source** (a filtered unique index), held by a lease every checkpoint proves.
+- **One active legacy mapping per legacy URL** within a source; a disabled mapping stays as history.
+- **One live manifest entry per staged revision** — a revision is `publishing`, `published` or
+  `rollback-refused` in at most one manifest, so neither a second manifest nor a resumed one can make
+  a second target.
+- **Typed target references.** A manifest entry and a legacy mapping name what they made by the
+  typed, nullable `videoId` foreign key to Media's `Video` — the SavedItem pattern — and a legacy
+  mapping must name exactly one target (today, always a Video).
+- **Same record, same source.** Composite keys make every snapshot, staged revision, run item,
+  error, acquisition, manifest and legacy mapping provably belong to the same record and source as
+  its parent; a staged category or link may name only a topic or legacy mapping of its own source.
+- **Fixture authority is fixed at creation.** A `fixture` source carries no authorisation
+  reference or date and names only `*.fixture.invalid` hosts; an `authorised` source must carry both.
+  Its key, authority kind, access method, content kind and hosts never change.
+- **Absence is an observation.** A complete discovery marks unseen records `missing`; records are
+  never deleted, and nothing is unpublished or redirected because of absence. A person classifies it.
+- **Only hard identity collapses.** A record whose first valid staging carries the same
+  `provider:providerVideoId` as an earlier record, in no different language, collapses
+  automatically into the earliest (`collapsed`, signal `provider-id` only); a folded-title match is
+  only ever an `open` candidate for a person; **a cross-language pair is never merged** (CHECK). A
+  merge keeps every legacy address and can be reopened.
+- **Identical bytes are not identical rights.** Acquisitions are unique per (source, URL digest,
+  checksum); the same bytes may share one stored `Asset`, but each acquisition keeps its own licence,
+  rights holder, evidence and visibility, and only `organisation-owned` or `licensed` material a
+  person decided may become `public-eligible`.
+- **Errors say what happened.** An `access-denied` error is never retry-eligible, and only a
+  retry-eligible error may have a retry requested.
+- **Manifests and promotions move only forward** (`draft → publishing → published → rolling-back →
+  rolled-back`, or `discarded`; a promotion `draft → approved → promoting → promoted`, withdrawable
+  until it completes). An entry is added only to a draft and only for an approved revision of the
+  manifest's source; a promotion carries only published entries. **Publishing, rolling back and
+  approving a promotion are refused by trigger** unless the actor holds `migration.publish` now with a
+  live `migration-publication` step-up.
+
+**One content kind.** `media.video` is the only kind, because it is the only one with a Layer-4
+publisher; Migration's staged payload is its own shape, translated into Media's input only at Layer 4
+(§16.3). Phase 30 adds kinds with their publishers.
+
+**Migration & Provenance imports no context.** It depends only on Layer 0: Identity's authority,
+Taxonomy's existing Topics, the publication target, Storage and the source adapters all reach it as
+ports composed at Layer 4 or by `scripts/migration/` (ARCHITECTURE.md §5.1). No target context and
+no other context reaches Migration.
+
 ---
 
 ## 17. Global Network, Membership, Donations

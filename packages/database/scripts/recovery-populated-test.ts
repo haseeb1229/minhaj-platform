@@ -112,6 +112,12 @@ import {
   verifyRestoredPhase27,
   writePhase27Fixture,
 } from '../src/lifecycle/phase27-fixture.ts';
+import {
+  capturePhase29Fixture,
+  newPhase29Fixture,
+  verifyRestoredPhase29,
+  writePhase29Fixture,
+} from '../src/lifecycle/phase29-fixture.ts';
 import 'server-only';
 
 import { getApplicationPrincipalCredentials } from '../src/config.ts';
@@ -246,6 +252,7 @@ const classesFixture = newPhase23Fixture();
 const messagingFixture = newPhase24Fixture();
 const membershipFixture = newPhase26Fixture();
 const donationsFixture = newPhase27Fixture();
+const migrationFixture = newPhase29Fixture();
 
 // Re-validated rather than assumed: a retarget that silently did nothing must
 // fail here, not at the point where CREATE DATABASE runs.
@@ -575,6 +582,22 @@ try {
   const donationsSnapshot = await capturePhase27Fixture(admin, donationsFixture);
   report('donations fixture', `run ${donationsFixture.runId}`);
 
+  // Phase-29 Migration & Provenance, with NON_MIGRATION_FIXTURE sentinels,
+  // `*.fixture.invalid` addresses and sentinel raw bytes only: a fixture source
+  // and its hosts; a completed, balanced run with staged and errored items; a
+  // published, a staged and a missing-and-classified record; two raw snapshots
+  // holding real bytes and one disposed of; superseded, approved and pending
+  // revisions; a Topic mapping and links of all four dispositions; an error and
+  // a duplicate candidate; one Asset acquired under two licences; a published
+  // manifest whose entry made a Video, its active legacy mapping and a promoted
+  // promotion, under a synthetic migration.publish holder with a live
+  // migration-publication step-up. No real legacy content of any kind.
+  await writePhase29Fixture(admin, migrationFixture, {
+    topicId: taxonomyFixture.childTopicId,
+  });
+  const migrationSnapshot = await capturePhase29Fixture(admin, migrationFixture);
+  report('migration fixture', `run ${migrationFixture.runId}`);
+
   // ---- REAL backup ---------------------------------------------------------
   const backup = await backupDatabase(admin, sourceDatabase, target);
   report('BACKUP DATABASE', backup.target.path);
@@ -735,6 +758,10 @@ try {
   report(
     'donations recovery',
     await verifyRestoredPhase27(restored, donationsFixture, donationsSnapshot),
+  );
+  report(
+    'migration recovery',
+    await verifyRestoredPhase29(restored, migrationFixture, migrationSnapshot),
   );
 
   // ---- restored security posture -------------------------------------------
@@ -1313,6 +1340,89 @@ try {
           `${table} ALTER`,
           `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
         ]),
+        // Phase 29. A restored runtime can neither erase raw evidence, a
+        // record, a revision, a decision, a legacy mapping, a manifest or a
+        // promotion, rewrite a snapshot's checksum, a revision's payload, a
+        // source's authority or address, a mapping's address or target, or a
+        // published entry's revision, add or move a host, catalogue a
+        // Migration key, nor alter a Migration table.
+        ['MigrationSource DELETE', 'DELETE FROM [dbo].[MigrationSource];'],
+        [
+          'MigrationSource authority UPDATE',
+          'UPDATE [dbo].[MigrationSource] SET [authorityKind]=[authorityKind];',
+        ],
+        [
+          'MigrationSource address UPDATE',
+          'UPDATE [dbo].[MigrationSource] SET [baseUrl]=[baseUrl];',
+        ],
+        [
+          'MigrationSourceHost UPDATE',
+          'UPDATE [dbo].[MigrationSourceHost] SET [host]=[host];',
+        ],
+        ['MigrationSourceHost DELETE', 'DELETE FROM [dbo].[MigrationSourceHost];'],
+        ['MigrationRecord DELETE', 'DELETE FROM [dbo].[MigrationRecord];'],
+        ['MigrationRawSnapshot DELETE', 'DELETE FROM [dbo].[MigrationRawSnapshot];'],
+        [
+          'MigrationRawSnapshot checksum UPDATE',
+          'UPDATE [dbo].[MigrationRawSnapshot] SET [checksum]=[checksum];',
+        ],
+        ['MigrationStagedRecord DELETE', 'DELETE FROM [dbo].[MigrationStagedRecord];'],
+        [
+          'MigrationStagedRecord payload UPDATE',
+          'UPDATE [dbo].[MigrationStagedRecord] SET [payload]=[payload];',
+        ],
+        [
+          'MigrationStagedLink UPDATE',
+          'UPDATE [dbo].[MigrationStagedLink] SET [href]=[href];',
+        ],
+        ['MigrationError DELETE', 'DELETE FROM [dbo].[MigrationError];'],
+        [
+          'MigrationAssetProvenance DELETE',
+          'DELETE FROM [dbo].[MigrationAssetProvenance];',
+        ],
+        ['MigrationLegacyMapping DELETE', 'DELETE FROM [dbo].[MigrationLegacyMapping];'],
+        [
+          'MigrationLegacyMapping target UPDATE',
+          'UPDATE [dbo].[MigrationLegacyMapping] SET [videoId]=[videoId];',
+        ],
+        [
+          'MigrationPublishManifest DELETE',
+          'DELETE FROM [dbo].[MigrationPublishManifest];',
+        ],
+        [
+          'MigrationManifestEntry revision UPDATE',
+          'UPDATE [dbo].[MigrationManifestEntry] SET [stagedRecordId]=[stagedRecordId];',
+        ],
+        ['MigrationPromotion DELETE', 'DELETE FROM [dbo].[MigrationPromotion];'],
+        [
+          'migration.* Permission INSERT',
+          "INSERT INTO [dbo].[Permission] ([key],[description]) VALUES (N'migration.scrape',N'forged');",
+        ],
+        ...(
+          [
+            'MigrationSource',
+            'MigrationSourceHost',
+            'MigrationRun',
+            'MigrationRecord',
+            'MigrationRunItem',
+            'MigrationRawSnapshot',
+            'MigrationStagedRecord',
+            'MigrationStagedCategory',
+            'MigrationStagedLink',
+            'MigrationTopicMapping',
+            'MigrationError',
+            'MigrationDuplicateCandidate',
+            'MigrationAssetProvenance',
+            'MigrationLegacyMapping',
+            'MigrationPublishManifest',
+            'MigrationManifestEntry',
+            'MigrationPromotion',
+            'MigrationPromotionEntry',
+          ] as const
+        ).map((table): [string, string] => [
+          `${table} ALTER`,
+          `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+        ]),
         ['DDL', 'CREATE TABLE [dbo].[ShouldNotExist] ([id] INT NOT NULL);'],
       ];
 
@@ -1478,6 +1588,48 @@ try {
         }
       }
       await verifyRestoredPhase27(restored, donationsFixture, donationsSnapshot);
+
+      // Phase 29. The restored runtime holds UPDATE on a snapshot's body (to
+      // dispose of it), a revision's review and a manifest's rollback columns,
+      // so rewriting held evidence with its own bytes, moving an approval
+      // backwards and rolling a publication back without live authority are
+      // refused by the restored triggers themselves (51372, 51374, 51378), not
+      // by a grant — proof the evidence and publication rules came back armed.
+      for (const [label, statement, expected, rule] of [
+        [
+          'restored raw evidence rewritten',
+          `UPDATE [dbo].[MigrationRawSnapshot] SET [body]=[body] WHERE [id]=N'${migrationFixture.heldSnapshotId}';`,
+          51372,
+          'MigrationRawSnapshotIntegrity',
+        ],
+        [
+          'restored approval moved backwards',
+          `UPDATE [dbo].[MigrationStagedRecord] SET [review]=N'rejected',[version]=[version]+1 WHERE [id]=N'${migrationFixture.approvedId}';`,
+          51374,
+          'MigrationStagedRecordIntegrity',
+        ],
+        [
+          'restored rollback without authority',
+          `UPDATE [dbo].[MigrationPublishManifest] SET [state]=N'rolling-back',[rollbackByUserId]=N'${migrationFixture.operatorId}',[rollbackReason]=N'NON_MIGRATION_FIXTURE forged',[rollbackStartedAt]=SYSUTCDATETIME(),[version]=[version]+1 WHERE [id]=N'${migrationFixture.manifestId}';`,
+          51378,
+          'MigrationPublishManifestIntegrity',
+        ],
+      ] as const) {
+        try {
+          await app.query(statement);
+          fail(`Restored database PERMITTED the ${label}.`);
+        } catch (error) {
+          const number = (error as { number?: number }).number;
+          if (number !== expected) {
+            fail(
+              `The ${label} was rejected for the WRONG reason ` +
+                `(error ${number ?? 'unknown'}): ${(error as Error).message.split('\n')[0]}`,
+            );
+          }
+          report(label, `refused by ${rule}, error ${String(expected)}`);
+        }
+      }
+      await verifyRestoredPhase29(restored, migrationFixture, migrationSnapshot);
       report('fixture intact', 'unchanged after UPDATE/DELETE/DDL attempts');
 
       // Phase 17. The full-text catalogue and index live INSIDE the database,

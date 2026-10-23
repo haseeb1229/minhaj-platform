@@ -94,7 +94,10 @@ const FUTURE_DOMAIN_TABLES = [
   // recovery fixture, and `Membership` in Phase 26, which delivers it with the
   // other `Membership*` tables, proved by the Phase-26 recovery fixture, and
   // `Donation` in Phase 27, which delivers it with the other `Donation*`
-  // tables, proved by the Phase-27 recovery fixture.
+  // tables, proved by the Phase-27 recovery fixture. Phase 29 delivers
+  // Migration & Provenance as the eighteen `Migration*` tables, proved by the
+  // Phase-29 recovery fixture; a single generic `MigrationProvenance` table is
+  // still no phase's, so — like `Quran` — it stays here.
   'Quran',
   'Book',
   'Scholar',
@@ -363,6 +366,37 @@ export const PHASE27_TABLES = [
   'DonationCommunicationIntent',
 ];
 
+/**
+ * Tables the Phase-29 migration creates: fixture legacy sources and their
+ * hosts, import runs with their per-record items, the stable legacy records,
+ * raw snapshots, staged revisions with their categories and links, topic
+ * mappings, import errors, duplicate candidates, asset provenance, legacy URL
+ * mappings, publish manifests with their entries, and reviewed promotions.
+ *
+ * Checked as RE'UIRED whenever the Phase-29 migration is among those the caller
+ * expects.
+ */
+export const PHASE29_TABLES = [
+  'MigrationSource',
+  'MigrationSourceHost',
+  'MigrationRun',
+  'MigrationRecord',
+  'MigrationRunItem',
+  'MigrationRawSnapshot',
+  'MigrationStagedRecord',
+  'MigrationStagedCategory',
+  'MigrationStagedLink',
+  'MigrationTopicMapping',
+  'MigrationError',
+  'MigrationDuplicateCandidate',
+  'MigrationAssetProvenance',
+  'MigrationLegacyMapping',
+  'MigrationPublishManifest',
+  'MigrationManifestEntry',
+  'MigrationPromotion',
+  'MigrationPromotionEntry',
+];
+
 async function userTables(session: SqlSession): Promise<string[]> {
   const rows = await session.query<{ name: string }>(`
     SELECT t.name FROM sys.tables t
@@ -592,6 +626,19 @@ export async function verifyRestoredSchema(
     if (missing.length > 0)
       throw new Error(
         `Restored database is missing Phase-27 Donations tables: ${missing.join(', ')}`,
+      );
+  }
+
+  // Phase 29. A restore that carried the Migration & Provenance migration's
+  // history row but not its sources, runs, raw evidence, staged revisions,
+  // decisions, legacy mappings or manifests would report an applied migration
+  // over a database that has lost where migrated content came from and which
+  // legacy addresses redirect where.
+  if (expectedMigrationIds.some((id) => id.includes('phase29'))) {
+    const missing = PHASE29_TABLES.filter((table) => !tables.includes(table));
+    if (missing.length > 0)
+      throw new Error(
+        `Restored database is missing Phase-29 Migration & Provenance tables: ${missing.join(', ')}`,
       );
   }
   const columns = await auditColumns(restored);

@@ -396,21 +396,23 @@ describe('Phase 2 — what the delivered code does NOT contain', () => {
       // Phase 22's and Phase 23's (its two class keys) alone. Teaching
       // authority is Phase 23's and seeded in its migration alone,
       // Membership's two keys are Phase 26's and seeded in its migration alone,
-      // and Donations' three keys are Phase 27's and seeded in its migration
-      // alone.
+      // Donations' three keys are Phase 27's and seeded in its migration
+      // alone, and Migration & Provenance's three keys are Phase 29's and seeded
+      // in its migration alone.
       const fatwaOwner = file.includes('20261004000000_phase20_fatwa');
       const classesOwner = file.includes('20261007000000_phase23_teacher_live_classes');
       const learningOwner =
         file.includes('20261006000000_phase22_learning') || classesOwner;
       const membershipOwner = file.includes('20261009000000_phase26_membership');
       const donationsOwner = file.includes('20261010000000_phase27_donations');
+      const migrationOwner = file.includes('20261011000000_phase29_migration_provenance');
       for (const domain of [
         ...(fatwaOwner ? [] : ['fatwa.']),
         ...(learningOwner ? [] : ['learning.']),
         ...(classesOwner ? [] : ['teaching.']),
         ...(membershipOwner ? [] : ['membership.']),
         ...(donationsOwner ? [] : ['donations.']),
-        'migration.',
+        ...(migrationOwner ? [] : ['migration.']),
       ]) {
         expect(source, `${file} must not seed ${domain}*`).not.toContain(`'${domain}`);
       }

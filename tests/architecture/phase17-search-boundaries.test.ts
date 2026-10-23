@@ -85,8 +85,9 @@ describe('search is Layer 0, not a bounded context', () => {
     // The delivered contexts — Media joined at Phase 10, Global Network at
     // Phase 16, Quran at Phase 18, Hadith at Phase 19, Fatwa at Phase 20,
     // Personalisation & Notifications at Phase 21, Learning at Phase 22,
-    // Membership at Phase 26, Donations at Phase 27 — and never one for Search.
-    expect(contexts).toHaveLength(14);
+    // Membership at Phase 26, Donations at Phase 27, Migration & Provenance at
+    // Phase 29 — and never one for Search.
+    expect(contexts).toHaveLength(15);
   });
 
   it('depends on no bounded context and holds no database capability', async () => {

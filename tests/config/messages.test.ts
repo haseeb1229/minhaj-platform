@@ -132,6 +132,8 @@ describe('the catalogues agree on their keys', () => {
       'donations.banner.sandbox',
       'myDonations.give.help',
       'adminDonations.record.audited',
+      'adminMigration.staged.inert',
+      'adminMigration.missing.absenceIsNotDeletion',
     ]) {
       const value = (locale: Catalogue) =>
         Object.fromEntries(leaves(locale))[key] as string;
@@ -200,6 +202,11 @@ describe('the catalogues agree on their keys', () => {
         'donations.banner.sandbox',
         'myDonations.give.help',
         'adminDonations.record.audited',
+        // Phase 29: that legacy content on the review page is inert text, and
+        // that a missing record is an observation, never a deletion — each
+        // read in the reviewer's language.
+        'adminMigration.staged.inert',
+        'adminMigration.missing.absenceIsNotDeletion',
       ]) {
         expect(String(prose[key]), `${locale} ${key}`).toMatch(/\p{Script=Arabic}/u);
       }

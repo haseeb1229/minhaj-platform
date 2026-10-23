@@ -118,7 +118,7 @@ Validation happens **at genuine introduction**, in the phase that owns it
 | **Stripe** (sandbox **engineering** `PaymentProvider` adapter — **not a production provider selection**) | HTTPS API, `Stripe-Version: 2026-09-30.endive`; **no SDK** | ENGINEERING ADAPTER behind the abstraction; the production provider stays OPEN (OPEN_DECISIONS.md §5.4) | Runtime (external) | **Phase 27 — Donations** |
 | SQL Server Full-Text Search | — | LOCKED | Runtime | Search foundation phase |
 | StorageService abstraction | — | LOCKED | Runtime | Storage foundation phase |
-| Native `fetch` + Cheerio | current stable Cheerio | LOCKED | Development | Migration phase |
+| Native `fetch` + Cheerio | **1.2.0** | LOCKED | Development | **Phase 29 — Migration & Provenance** |
 | Playwright | **1.55.x** | LOCKED | Development | **Phase 2 — first browser-critical phase** |
 | Pino | **10.3.1** | LOCKED | Runtime | Phase 0B |
 | Vitest | **4.1.x** | LOCKED | Development | Phase 0B |
@@ -435,8 +435,9 @@ part of the production security design** — **no scanner is selected or install
 ## 11. Migration tooling
 
 **Node.js native `fetch`** — LOCKED, built in.
-**Cheerio** (current stable) — LOCKED, installed in the migration phase. Fast and sufficient
-for the majority of legacy pages.
+**Cheerio 1.2.0** — LOCKED, installed in Phase 29 as a development-only dependency of the
+`scripts/migration/` tooling (MIT; it brings parse5, htmlparser2 and undici). Fast and
+sufficient for the majority of legacy pages; Phase 29 parses only synthetic fixtures with it.
 **Playwright 1.55.x** — LOCKED, **only where JavaScript rendering is genuinely required**.
 Never the default; dramatically heavier and pointless against static markup. **It is introduced
 and compatibility-validated in Phase 2** (§1.5), so by the time migration tooling needs it the
@@ -564,7 +565,7 @@ adapter)** · Zod 4.5.x · React Hook Form 7.x · Tiptap 3.x · Socket.IO 4.8.3 
 **External services:** Google OAuth · Google Meet · YouTube / Vimeo
 
 ### Development — builds and tests, does not ship
-TypeScript 5.9.x · Vitest 4.1.x · Playwright 1.55.x · ESLint 10.x · Prettier 3.x · Cheerio ·
+TypeScript 5.9.x · Vitest 4.1.x · Playwright 1.55.x · ESLint 10.x · Prettier 3.x · Cheerio 1.2.0 ·
 npm workspaces · GitHub Actions
 
 ### Administration — workstation tools, NOT application dependencies
@@ -707,3 +708,17 @@ was introduced and no locked application version changed.**
 | Host tools | `jq`, `openssl`, `curl`, `apache2-utils` (`htpasswd -B`, bcrypt cost 6 — see SECURITY_BASELINE.md §21.1) from Ubuntu's archive | Shell tooling for the staging scripts; the environment credential is hashed on the host. |
 | Azure (owner's Azure for Students subscription) | VM `Standard_B2as_v2`, 2 × 64 GiB Standard SSD, one Standard static IPv4, StorageV2 LRS (private `backups` container, 14-day lifecycle), Container Registry **Standard** (the subscription's included 12-month free allocation, ABAC repository permissions), a user-assigned identity with GitHub OIDC federation, a Cost Management budget | IaaS hosting for staging only; the subscription's spending limit stays on and it is never transferred. |
 | GitHub Actions used by `staging-deploy.yml` | `actions/checkout` v5.1.0 (`fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09`), `azure/login` v3.1.0 (`a641126d1b8aa4d1fa005f4f92df94a3a4c4c906`) | Pinned by commit SHA in the secret-adjacent deploy workflow; `azure/login` is MIT, [source](https://github.com/Azure/login). |
+
+### 18.6 Phase-29 migration tooling inventory
+
+| Direct dependency | Exact version | Use and provenance |
+| --- | --- | --- |
+| `cheerio` | 1.2.0 (pinned exactly; version policy) | MIT; [source](https://github.com/cheeriojs/cheerio). **Development-only** (`devDependencies`): the HTML reader of the `scripts/migration/` fixture adapters, never imported by the application. Its notable transitive packages, all development-only in the lockfile: `parse5` 7.3.0 (MIT, the HTML-specification parser the adapters read with source locations), `htmlparser2` 10.1.0 (MIT), `undici` 7.30.1 (MIT), `cheerio-select` 2.1.0 with `css-select` 5.2.2, `css-what` 6.2.2, `nth-check` 2.1.1, `domhandler` 5.0.3, `domutils` 3.2.2 and `entities` (BSD-2-Clause), `encoding-sniffer` 0.2.1 with `iconv-lite` 0.6.3, `whatwg-encoding` 3.1.1 and `whatwg-mimetype` 4.0.0 (MIT), and `boolbase` 1.0.0 (ISC). Phase 29 parses only synthetic fixtures with it. |
+
+**No other npm dependency was introduced.** The safe fetch boundary uses Node's `node:http`,
+`node:https` and `node:net` — a request whose `lookup` is pinned to the validated address, which the
+global `fetch` does not offer — and the synthetic executable export runs in Node's built-in
+`node:sqlite`, in memory. Sanitisation reuses the already-locked `sanitize-html` 2.18.1 (§18.1).
+**No corpus, dataset or legacy asset was introduced**: every fixture page, export row and asset is
+synthetic, written for the proof; the pages and assets are served from loopback under
+`*.fixture.invalid`, and the export exists only in memory.

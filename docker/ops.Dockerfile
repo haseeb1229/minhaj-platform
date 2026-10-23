@@ -8,7 +8,8 @@
 # WHAT THIS IS. A tool image an operator runs on purpose, one command at a
 # time, and that exits: `docker run --rm ... minhaj-ops <script>`, where the
 # script is one of the database lifecycle commands under
-# `packages/database/scripts/` (migrate, provision, inspect, back up). It is
+# `packages/database/scripts/` (migrate, provision, inspect, back up, the
+# migration proof) or a migration command under `scripts/migration/`. It is
 # never a long-running service and has no default command — the entrypoint is
 # Node under the `react-server` condition, and the operator names the script.
 #
@@ -61,8 +62,8 @@ ENV NODE_ENV=production
 # the schema with its migration history, and the Prisma config — plus the
 # workspace package SOURCE it and its operator scripts import: contracts
 # everywhere, and storage for the staging seed and restore proof, which write
-# the synthetic fixture's bytes. Nothing imports server-core or search, so
-# neither is here. The packages ship TypeScript, run by Node's type stripping.
+# the synthetic fixture's bytes. Nothing imports search, so it is not here. The
+# packages ship TypeScript, run by Node's type stripping.
 COPY packages/database/prisma.config.ts ./packages/database/
 COPY packages/database/prisma ./packages/database/prisma
 COPY packages/database/sql ./packages/database/sql
@@ -70,6 +71,25 @@ COPY packages/database/src ./packages/database/src
 COPY packages/database/scripts ./packages/database/scripts
 COPY packages/contracts/src ./packages/contracts/src
 COPY packages/storage/src ./packages/storage/src
+
+# Phase 29 — the migration tooling (the fixture runner, the promotion command
+# and the proof `staging-migration-proof` starts as a child process as the
+# runtime principal) and EXACTLY the node-runnable composition graph it loads:
+# the tooling's own Layer-4 root with the wiring and Media publication target
+# it shares with the web process, the five bounded contexts that graph
+# composes through their public interfaces, and the server-core authorisation
+# service that answers it. No page, route, component or other web source.
+COPY packages/server-core/src ./packages/server-core/src
+COPY apps/web/src/composition/migration-runner.ts \
+     apps/web/src/composition/migration-wiring.ts \
+     apps/web/src/composition/migration-targets.ts \
+     ./apps/web/src/composition/
+COPY apps/web/src/contexts/migration-provenance ./apps/web/src/contexts/migration-provenance
+COPY apps/web/src/contexts/media ./apps/web/src/contexts/media
+COPY apps/web/src/contexts/people-contributors ./apps/web/src/contexts/people-contributors
+COPY apps/web/src/contexts/personalisation-notifications ./apps/web/src/contexts/personalisation-notifications
+COPY apps/web/src/contexts/taxonomy ./apps/web/src/contexts/taxonomy
+COPY scripts/migration ./scripts/migration
 
 # Generated from the schema alone; no database URL is read.
 RUN npx prisma generate --schema packages/database/prisma/schema.prisma
@@ -83,7 +103,8 @@ COPY docker/nginx/staging /opt/minhaj-staging/nginx
 COPY docker/sqlserver/Dockerfile /opt/minhaj-staging/sqlserver/Dockerfile
 
 # Unprivileged. The commands talk to SQL Server over the network and write
-# nothing inside the container.
+# nothing inside the container beyond the migration proof's own temporary
+# bundle directories, which it removes before it exits.
 USER node
 
 ENTRYPOINT ["node", "--conditions=react-server"]

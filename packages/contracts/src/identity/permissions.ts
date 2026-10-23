@@ -659,6 +659,34 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     description:
       'Request a full or partial refund of a captured donation, within what remains refundable, after a fresh donation-refund step-up. Every request is audited.',
   }),
+
+  /* ---- Phase 29 — Migration & Provenance ------------------------------------ */
+  //
+  // PREPARING IS NOT PUBLISHING. Two ordinary keys, bundled into the protected
+  // role by the usual convention: reading the migration area, and operating it
+  // — sources, runs, review, duplicates, mappings, errors, rights and the
+  // audited raw-evidence reads. Publishing migrated content into the live
+  // platform, reversing a publication and approving a promotion is a THIRD
+  // key, externally gated — who may do that is the organisation's decision
+  // (OPEN_DECISIONS.md §3.4) — and each act also needs a fresh
+  // `migration-publication` step-up. It never substitutes for a target
+  // domain's own approval, and never for religious review
+  // (MIGRATION_STRATEGY.md §8.4).
+  Object.freeze({
+    key: 'migration.read',
+    description:
+      'View migration sources, runs, staged records, duplicates, mappings, errors, manifests, promotions and reconciliation. Never raw snapshot bodies. Changes nothing.',
+  }),
+  Object.freeze({
+    key: 'migration.administer',
+    description:
+      'Operate fixture sources and runs; review staged records; decide duplicates, mappings, errors, disappearances and asset rights; read raw evidence (audited); prepare manifests. Publishes nothing.',
+  }),
+  Object.freeze({
+    key: 'migration.publish',
+    description:
+      "Publish a reviewed migration manifest through its targets' own interfaces, roll one back, and approve a promotion, after a migration-publication step-up. Never replaces target or religious approval.",
+  }),
 ]);
 
 /** Every catalogue key, as a union. Mistyping one is a compile error. */
@@ -720,6 +748,10 @@ export const EXTERNALLY_GATED_PERMISSIONS = Object.freeze([
   // Phase 27: who may return a donor's money is the organisation's finance
   // decision (OPEN_DECISIONS.md §5.4). Catalogued, bundled into no role.
   'donations.refund',
+  // Phase 29: who may publish migrated content into the live platform is the
+  // organisation's decision (OPEN_DECISIONS.md §3.4). Catalogued, bundled
+  // into no role.
+  'migration.publish',
 ] as const satisfies readonly PermissionKey[]);
 
 const EXTERNALLY_GATED: ReadonlySet<string> = new Set(EXTERNALLY_GATED_PERMISSIONS);
@@ -781,6 +813,12 @@ export const PLATFORM_ADMINISTRATOR_PERMISSIONS: readonly PermissionKey[] = Obje
  * organisation's account, so it needs its own fresh proof: a grant earned to
  * publish a Fatwa or administer a role must not also authorise returning a
  * donation, and a `donation-refund` grant authorises nothing else.
+ *
+ * PHASE 29 ADDS THE EIGHTH. Publishing migrated content into the live
+ * platform, reversing a publication and approving a promotion is its own
+ * operation under `migration.publish` (MIGRATION_STRATEGY.md §8.4), so a grant
+ * earned to refund a donation or edit canon does not authorise it, and a
+ * `migration-publication` grant authorises nothing else.
  */
 export const STEP_UP_PURPOSES = Object.freeze([
   /** Role lifecycle, permission bundles, assignment grant and revoke. */
@@ -797,6 +835,8 @@ export const STEP_UP_PURPOSES = Object.freeze([
   'fatwa-publication',
   /** A full or partial donation refund (Phase 27). */
   'donation-refund',
+  /** Migration publication, its rollback, and promotion approval (Phase 29). */
+  'migration-publication',
 ] as const);
 
 export type StepUpPurpose = (typeof STEP_UP_PURPOSES)[number];

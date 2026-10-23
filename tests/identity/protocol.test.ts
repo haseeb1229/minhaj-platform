@@ -380,6 +380,14 @@ describe('the mutation surface', () => {
         'apps/web/src/app/api/webhooks/stripe/route.ts',
         'apps/web/src/app/api/my/export/donations/route.ts',
         'apps/web/src/app/api/admin/donations/export/route.ts',
+        // Phase 29: Migration's two private administrative READS — one run's
+        // status as JSON under `migration.read`, and one raw snapshot's bytes
+        // as an inert attachment under `migration.administer`. Each is a GET
+        // that re-resolves the session and the key; every Migration mutation
+        // is a Server Action, so Migration adds no other handler, and neither
+        // authenticates anybody.
+        'apps/web/src/app/api/admin/migration/runs/[id]/route.ts',
+        'apps/web/src/app/api/admin/migration/snapshots/[id]/route.ts',
       ].sort(),
     );
 

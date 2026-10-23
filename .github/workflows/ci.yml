@@ -742,6 +742,28 @@ jobs:
           npm run test:storage -- --reporter=json --outputFile=storage-report.json
           node scripts/assert-storage-proofs.mjs storage-report.json
 
+      # -----------------------------------------------------------------
+      # Phase 29 — Migration & Provenance, against CONTROLLED FIXTURES ONLY.
+      #
+      # Real SQL Server as the least-privilege runtime principal, the real
+      # scanner (synthetic fixture assets are quarantined and scanned), and a
+      # fixture source served on 127.0.0.1 behind `*.fixture.invalid` — no
+      # live legacy source and no network: SSRF and DNS-rebinding refusals,
+      # safe retry and Retry-After, immutable raw evidence, sanitisation
+      # before staging, interrupted runs resumed without duplicates,
+      # reconciliation, publication through Media's public interface and its
+      # rollback, promotion resume and withdrawal, and the end-to-end staging
+      # fixture proof. Placed while the scanner is running; the assertion
+      # fails the job if any suite skipped.
+      # -----------------------------------------------------------------
+      - name: Migration & Provenance proof (fixtures only, runtime principal, real scanner)
+        env:
+          CLAMAV_HOST: 127.0.0.1
+          CLAMAV_PORT: '3310'
+        run: |
+          npm run test:migration -- --reporter=json --outputFile=migration-report.json
+          node scripts/assert-migration-proofs.mjs migration-report.json
+
       - name: Stop the malware scanner
         if: always()
         run: docker rm -f minhaj-clamav-ci || true

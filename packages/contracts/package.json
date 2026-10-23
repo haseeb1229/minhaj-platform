@@ -41,7 +41,8 @@
     "./learning": "./src/learning/index.ts",
     "./messaging": "./src/messaging/index.ts",
     "./membership": "./src/membership/index.ts",
-    "./donations": "./src/donations/index.ts"
+    "./donations": "./src/donations/index.ts",
+    "./migration": "./src/migration/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"

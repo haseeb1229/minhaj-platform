@@ -1,0 +1,622 @@
+import { z } from 'zod';
+
+import { localeSchema, type Locale } from '../env/shared.ts';
+
+/**
+ * Migration & Provenance — values (DOMAIN_MODEL.md §16, MIGRATION_STRATEGY.md).
+ *
+ * LAYER 0 AND BROWSER-SAFE. Vocabularies, bounds and input schemas only; the
+ * rules that give them force live in the Migration & Provenance context and,
+ * for every invariant the database can hold, in the Phase-29 migration's
+ * CHECKs and triggers — each vocabulary here is transcribed there.
+ *
+ * NO TARGET VOCABULARY. Nothing here names Media, Editorial or any other
+ * target's types: a staged record is Migration's own normalised shape, and
+ * only the Layer-4 publisher translates it into a target's input
+ * (MIGRATION_STRATEGY.md §2.2).
+ */
+
+/* ===========================================================================
+ * Content kinds and sources
+ * ========================================================================= */
+
+/**
+ * The content kinds a source may yield and a staged record may carry.
+ *
+ * ONE KIND, BECAUSE ONE TARGET IS WIRED. A kind exists only where Layer 4 has
+ * a publisher for it, so nothing can be staged that the framework cannot
+ * carry to a target through that target's own public interface. Video
+ * metadata is the first: provider identifiers and words, never video bytes
+ * (MIGRATION_STRATEGY.md §4.9). Phase 30 adds kinds with their publishers.
+ */
+export const MIGRATION_CONTENT_KINDS = Object.freeze(['media.video'] as const);
+export type MigrationContentKind = (typeof MIGRATION_CONTENT_KINDS)[number];
+export const migrationContentKindSchema = z.enum(MIGRATION_CONTENT_KINDS);
+
+/**
+ * WHO VOUCHES FOR A SOURCE.
+ *
+ * `fixture` — a synthetic source on controlled local infrastructure, for
+ * engineering proof. It carries NO authorisation evidence and may name only
+ * `*.fixture.invalid` hosts.
+ *
+ * `authorised` — a real source whose written authorisation is recorded. It is
+ * modelled so Phase 30 has somewhere to record that authorisation; Phase 29
+ * creates none, runs none and activates none (OPEN_DECISIONS.md §3.1).
+ *
+ * Fixed at creation, in SQL as well as here: a fixture never becomes a real
+ * source by an edit.
+ */
+export const SOURCE_AUTHORITY_KINDS = Object.freeze(['fixture', 'authorised'] as const);
+export type SourceAuthorityKind = (typeof SOURCE_AUTHORITY_KINDS)[number];
+
+export const SOURCE_ACCESS_METHODS = Object.freeze(['http', 'export'] as const);
+export type SourceAccessMethod = (typeof SOURCE_ACCESS_METHODS)[number];
+export const sourceAccessMethodSchema = z.enum(SOURCE_ACCESS_METHODS);
+
+export const SOURCE_STATES = Object.freeze(['active', 'inactive'] as const);
+export type SourceState = (typeof SOURCE_STATES)[number];
+export const sourceStateSchema = z.enum(SOURCE_STATES);
+
+/**
+ * RFC 6761 reserves `.invalid`: it never resolves in the public DNS. A fixture
+ * host under it can only ever reach whatever the fixture resolver maps it to.
+ */
+export const FIXTURE_HOST_SUFFIX = '.fixture.invalid';
+
+export function isFixtureHost(host: string): boolean {
+  return (
+    host.length > FIXTURE_HOST_SUFFIX.length &&
+    host.endsWith(FIXTURE_HOST_SUFFIX) &&
+    /^[a-z0-9.-]+$/.test(host) &&
+    !host.startsWith('.') &&
+    !host.includes('..')
+  );
+}
+
+/* ===========================================================================
+ * Bounds
+ * ========================================================================= */
+
+export const MIGRATION_LIMITS = Object.freeze({
+  /** One page of any operator list. */
+  page: 25,
+  /** The deepest offset a list accepts. */
+  maxOffset: 100_000,
+  /** Records discovered, fetched or staged per batch — the checkpoint unit. */
+  batch: 25,
+  /** Entries in one publish manifest. */
+  manifestEntries: 200,
+  /** Entries in one promotion. */
+  promotionEntries: 500,
+  /** The ceiling on a single response body, in bytes (SQL CHECK too). */
+  maxBodyBytes: 8 * 1024 * 1024,
+  /** A staged payload's JSON length (SQL CHECK too). */
+  payload: 200_000,
+  /** How much of a raw body the escaped operator preview shows. */
+  rawPreviewBytes: 64 * 1024,
+  /** Hosts one source may name. */
+  hosts: 8,
+  /** Links recorded per staged revision. */
+  links: 200,
+  /** Categories per staged revision. */
+  categories: 24,
+  /** Assets per record. */
+  assets: 8,
+  /** A safe error detail. */
+  detail: 500,
+  /** A free-text operator note or reason. */
+  note: 500,
+  title: 240,
+  description: 4000,
+  url: 2000,
+  externalKey: 400,
+  key: 64,
+  name: 200,
+});
+
+/** The politeness and safety bounds one source runs under. */
+export interface SourcePolicy {
+  /** Minimum interval between two requests to the source. */
+  readonly minIntervalMs: number;
+  readonly maxConcurrency: number;
+  /** Attempts per request, including the first. */
+  readonly maxAttempts: number;
+  readonly timeoutMs: number;
+  readonly maxBodyBytes: number;
+  readonly maxRedirects: number;
+}
+
+export const sourcePolicySchema = z
+  .object({
+    minIntervalMs: z.number().int().min(0).max(600_000),
+    maxConcurrency: z.number().int().min(1).max(4),
+    maxAttempts: z.number().int().min(1).max(6),
+    timeoutMs: z.number().int().min(1000).max(60_000),
+    maxBodyBytes: z.number().int().min(1024).max(MIGRATION_LIMITS.maxBodyBytes),
+    maxRedirects: z.number().int().min(0).max(5),
+  })
+  .strict();
+
+/* ===========================================================================
+ * Lifecycle vocabularies — transcribed into the Phase-29 CHECKs
+ * ========================================================================= */
+
+/** MigrationStatus (DOMAIN_MODEL.md §16.1): one record across the pipeline. */
+export const RECORD_STATUSES = Object.freeze([
+  'discovered',
+  'fetched',
+  'staged',
+  'rejected',
+  'errored',
+  'excluded',
+  'approved',
+  'published',
+  'merged',
+] as const);
+export type RecordStatus = (typeof RECORD_STATUSES)[number];
+
+export const RECORD_OBSERVATIONS = Object.freeze(['present', 'missing'] as const);
+export type RecordObservation = (typeof RECORD_OBSERVATIONS)[number];
+
+/**
+ * How a person classifies a record a source stopped returning
+ * (MIGRATION_STRATEGY.md §5.3). Absence is an OBSERVATION; none of these
+ * deletes or unpublishes anything.
+ */
+export const DISAPPEARANCE_CLASSES = Object.freeze([
+  'withdrawn',
+  'moved',
+  'source-error',
+  'transient-failure',
+  'access-failure',
+  'unresolved',
+] as const);
+export type DisappearanceClass = (typeof DISAPPEARANCE_CLASSES)[number];
+export const disappearanceClassSchema = z.enum(DISAPPEARANCE_CLASSES);
+
+export const RUN_STATES = Object.freeze(['open', 'completed', 'cancelled'] as const);
+export type RunState = (typeof RUN_STATES)[number];
+
+export const RECONCILIATION_STATES = Object.freeze([
+  'pending',
+  'balanced',
+  'unbalanced',
+] as const);
+export type ReconciliationState = (typeof RECONCILIATION_STATES)[number];
+
+export const ITEM_OUTCOMES = Object.freeze([
+  'pending',
+  'staged',
+  'unchanged',
+  'rejected',
+  'errored',
+  'excluded',
+] as const);
+export type ItemOutcome = (typeof ITEM_OUTCOMES)[number];
+
+export const ERROR_STAGES = Object.freeze([
+  'discover',
+  'fetch',
+  'parse',
+  'normalize',
+  'validate',
+  'asset',
+  'publish',
+  'rollback',
+  'promote',
+] as const);
+export type ErrorStage = (typeof ERROR_STAGES)[number];
+
+export const ERROR_CLASSIFICATIONS = Object.freeze([
+  'network',
+  'timeout',
+  'rate-limited',
+  'server-error',
+  'not-found',
+  'gone',
+  'access-denied',
+  'client-error',
+  'redirect-refused',
+  'address-refused',
+  'scope-refused',
+  'too-large',
+  'unsupported-type',
+  'parse-failed',
+  'validation-failed',
+  'asset-rejected',
+  'asset-unavailable',
+  'target-refused',
+  'target-unavailable',
+  'approval-withdrawn',
+] as const);
+export type ErrorClassification = (typeof ERROR_CLASSIFICATIONS)[number];
+
+export const ERROR_RESOLUTIONS = Object.freeze([
+  'open',
+  'retry-requested',
+  'dismissed',
+  'resolved',
+] as const);
+export type ErrorResolution = (typeof ERROR_RESOLUTIONS)[number];
+
+export const REVIEW_STATES = Object.freeze([
+  'pending',
+  'approved',
+  'rejected',
+  'superseded',
+] as const);
+export type ReviewState = (typeof REVIEW_STATES)[number];
+
+export const VALIDATION_STATES = Object.freeze(['valid', 'invalid'] as const);
+export type ValidationState = (typeof VALIDATION_STATES)[number];
+
+export const PERSONAL_DATA_STATES = Object.freeze(['none', 'flagged'] as const);
+export type PersonalDataState = (typeof PERSONAL_DATA_STATES)[number];
+
+export const LINK_DISPOSITIONS = Object.freeze([
+  'rewritten',
+  'unresolved',
+  'external',
+  'dropped',
+] as const);
+export type LinkDisposition = (typeof LINK_DISPOSITIONS)[number];
+
+export const TOPIC_MAPPING_STATES = Object.freeze([
+  'unmapped',
+  'confirmed',
+  'excluded',
+] as const);
+export type TopicMappingState = (typeof TOPIC_MAPPING_STATES)[number];
+
+export const DUPLICATE_SIGNALS = Object.freeze([
+  'provider-id',
+  'asset-checksum',
+  'identifier',
+  'title-similarity',
+] as const);
+export type DuplicateSignal = (typeof DUPLICATE_SIGNALS)[number];
+
+export const DUPLICATE_STATES = Object.freeze([
+  'open',
+  'collapsed',
+  'merged',
+  'distinct',
+] as const);
+export type DuplicateState = (typeof DUPLICATE_STATES)[number];
+
+export const ASSET_LICENCES = Object.freeze([
+  'unknown',
+  'organisation-owned',
+  'licensed',
+  'third-party',
+] as const);
+export type AssetLicence = (typeof ASSET_LICENCES)[number];
+export const assetLicenceSchema = z.enum(ASSET_LICENCES);
+
+export const ASSET_VISIBILITIES = Object.freeze([
+  'restricted',
+  'public-eligible',
+] as const);
+export type AssetVisibility = (typeof ASSET_VISIBILITIES)[number];
+export const assetVisibilitySchema = z.enum(ASSET_VISIBILITIES);
+
+export const LEGACY_MAPPING_STATES = Object.freeze(['active', 'disabled'] as const);
+export type LegacyMappingState = (typeof LEGACY_MAPPING_STATES)[number];
+
+export const MANIFEST_STATES = Object.freeze([
+  'draft',
+  'publishing',
+  'published',
+  'rolling-back',
+  'rolled-back',
+  'discarded',
+] as const);
+export type ManifestState = (typeof MANIFEST_STATES)[number];
+
+export const MANIFEST_ENTRY_STATES = Object.freeze([
+  'pending',
+  'publishing',
+  'published',
+  'refused',
+  'rolled-back',
+  'rollback-refused',
+] as const);
+export type ManifestEntryState = (typeof MANIFEST_ENTRY_STATES)[number];
+
+export const PROMOTION_STATES = Object.freeze([
+  'draft',
+  'approved',
+  'promoting',
+  'promoted',
+  'withdrawn',
+] as const);
+export type PromotionState = (typeof PROMOTION_STATES)[number];
+
+export const PROMOTION_DESTINATIONS = Object.freeze(['bundle'] as const);
+export type PromotionDestination = (typeof PROMOTION_DESTINATIONS)[number];
+
+/* ===========================================================================
+ * Identifiers and operator input
+ * ========================================================================= */
+
+export const migrationIdSchema = z
+  .string()
+  .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+
+export const migrationVersionSchema = z.number().int().min(1).max(2_000_000_000);
+
+export const migrationOffsetSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(MIGRATION_LIMITS.maxOffset);
+
+export const sourceKeySchema = z
+  .string()
+  .min(3)
+  .max(MIGRATION_LIMITS.key)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+
+const note = z.string().trim().max(MIGRATION_LIMITS.note);
+const optionalText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform((value) => (value.length === 0 ? null : value))
+    .nullable();
+
+export const languageCodeSchema = z
+  .string()
+  .min(2)
+  .max(16)
+  .regex(/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/);
+
+/**
+ * Registering a FIXTURE source. There is no authority field: Phase 29 creates
+ * fixture sources only, so the kind is not the operator's to choose, and a
+ * request carrying an authorisation reference is refused before it is read.
+ */
+export const fixtureSourceCreateSchema = z
+  .object({
+    key: sourceKeySchema,
+    name: z.string().trim().min(1).max(MIGRATION_LIMITS.name),
+    contentKind: migrationContentKindSchema,
+    accessMethod: sourceAccessMethodSchema,
+    /** An `http(s)://<host>.fixture.invalid/` base, or null for an export. */
+    baseUrl: z.string().trim().max(MIGRATION_LIMITS.url).nullable(),
+    /** Every host the source may reach, each `*.fixture.invalid`. */
+    hosts: z.array(z.string().trim().toLowerCase().max(253)).max(MIGRATION_LIMITS.hosts),
+    defaultLanguageCode: languageCodeSchema.nullable(),
+    policy: sourcePolicySchema,
+    licensingEvidence: optionalText(2000),
+    policyNotes: optionalText(2000),
+  })
+  .strict();
+export type FixtureSourceCreate = z.output<typeof fixtureSourceCreateSchema>;
+
+/** What an operator may change on a source: never its kind, key or hosts. */
+export const sourceUpdateSchema = z
+  .object({
+    id: migrationIdSchema,
+    expectedVersion: migrationVersionSchema,
+    name: z.string().trim().min(1).max(MIGRATION_LIMITS.name),
+    state: sourceStateSchema,
+    defaultLanguageCode: languageCodeSchema.nullable(),
+    policy: sourcePolicySchema,
+    licensingEvidence: optionalText(2000),
+    policyNotes: optionalText(2000),
+  })
+  .strict();
+export type SourceUpdate = z.output<typeof sourceUpdateSchema>;
+
+export const reviewDecisionSchema = z
+  .object({
+    stagedRecordId: migrationIdSchema,
+    expectedVersion: migrationVersionSchema,
+    decision: z.enum(['approve', 'reject', 'withdraw-approval']),
+    note,
+  })
+  .strict();
+export type ReviewDecision = z.output<typeof reviewDecisionSchema>;
+
+export const duplicateDecisionSchema = z
+  .object({
+    candidateId: migrationIdSchema,
+    expectedVersion: migrationVersionSchema,
+    decision: z.enum(['merge', 'distinct', 'reopen']),
+    note,
+  })
+  .strict();
+export type DuplicateDecision = z.output<typeof duplicateDecisionSchema>;
+
+export const topicMappingDecisionSchema = z
+  .object({
+    mappingId: migrationIdSchema,
+    expectedVersion: migrationVersionSchema,
+    decision: z.enum(['confirm', 'exclude', 'reopen']),
+    topicId: migrationIdSchema.nullable(),
+  })
+  .strict();
+export type TopicMappingDecision = z.output<typeof topicMappingDecisionSchema>;
+
+export const errorDecisionSchema = z
+  .object({
+    errorId: migrationIdSchema,
+    expectedVersion: migrationVersionSchema,
+    decision: z.enum(['retry', 'dismiss']),
+  })
+  .strict();
+export type ErrorDecision = z.output<typeof errorDecisionSchema>;
+
+export const disappearanceDecisionSchema = z
+  .object({
+    recordId: migrationIdSchema,
+    expectedVersion: migrationVersionSchema,
+    classification: disappearanceClassSchema,
+    note,
+  })
+  .strict();
+export type DisappearanceDecision = z.output<typeof disappearanceDecisionSchema>;
+
+export const rightsDecisionSchema = z
+  .object({
+    provenanceId: migrationIdSchema,
+    expectedVersion: migrationVersionSchema,
+    licence: assetLicenceSchema,
+    visibility: assetVisibilitySchema,
+    licenceEvidence: optionalText(1000),
+    rightsHolder: optionalText(200),
+  })
+  .strict();
+export type RightsDecision = z.output<typeof rightsDecisionSchema>;
+
+export const legacyMappingDecisionSchema = z
+  .object({
+    mappingId: migrationIdSchema,
+    expectedVersion: migrationVersionSchema,
+    state: z.enum(LEGACY_MAPPING_STATES),
+  })
+  .strict();
+export type LegacyMappingDecision = z.output<typeof legacyMappingDecisionSchema>;
+
+export const snapshotDisposalSchema = z
+  .object({
+    snapshotId: migrationIdSchema,
+    reason: z.string().trim().min(1).max(MIGRATION_LIMITS.note),
+  })
+  .strict();
+export type SnapshotDisposal = z.output<typeof snapshotDisposalSchema>;
+
+export const manifestCreateSchema = z
+  .object({
+    runId: migrationIdSchema,
+    stagedRecordIds: z
+      .array(migrationIdSchema)
+      .min(1)
+      .max(MIGRATION_LIMITS.manifestEntries)
+      .refine((ids) => new Set(ids).size === ids.length),
+  })
+  .strict();
+export type ManifestCreate = z.output<typeof manifestCreateSchema>;
+
+export const manifestCommandSchema = z
+  .object({
+    manifestId: migrationIdSchema,
+    expectedVersion: migrationVersionSchema,
+  })
+  .strict();
+export type ManifestCommand = z.output<typeof manifestCommandSchema>;
+
+export const rollbackCommandSchema = manifestCommandSchema
+  .extend({ reason: z.string().trim().min(1).max(MIGRATION_LIMITS.note) })
+  .strict();
+export type RollbackCommand = z.output<typeof rollbackCommandSchema>;
+
+export const promotionCreateSchema = z
+  .object({
+    manifestEntryIds: z
+      .array(migrationIdSchema)
+      .min(1)
+      .max(MIGRATION_LIMITS.promotionEntries)
+      .refine((ids) => new Set(ids).size === ids.length),
+  })
+  .strict();
+export type PromotionCreate = z.output<typeof promotionCreateSchema>;
+
+export const promotionCommandSchema = z
+  .object({
+    promotionId: migrationIdSchema,
+    expectedVersion: migrationVersionSchema,
+  })
+  .strict();
+export type PromotionCommand = z.output<typeof promotionCommandSchema>;
+
+/* ===========================================================================
+ * The staged video payload — Migration's own normalised shape
+ * ========================================================================= */
+
+export const MIGRATION_VIDEO_PROVIDERS = Object.freeze(['youtube', 'vimeo'] as const);
+export type MigrationVideoProvider = (typeof MIGRATION_VIDEO_PROVIDERS)[number];
+
+/** Descriptive words for one locale — never a translation the pipeline made. */
+export interface StagedLabel {
+  readonly locale: Locale;
+  readonly title: string;
+  /** Plain text, derived from the sanitised description. */
+  readonly description: string;
+}
+
+/**
+ * A staged Video, as normalisation produced it from a raw snapshot.
+ *
+ * `descriptionHtml` IS ALREADY SANITISED — the allowlist ran before this value
+ * was stored (SECURITY_BASELINE.md §10.2). The raw markup it came from stays
+ * only in the immutable snapshot.
+ */
+export interface StagedVideoPayload {
+  readonly kind: 'media.video';
+  readonly slug: string;
+  readonly primaryLocale: Locale;
+  readonly languageCode: string;
+  readonly provider: MigrationVideoProvider;
+  readonly providerVideoId: string;
+  readonly labels: readonly StagedLabel[];
+  readonly descriptionHtml: string;
+  readonly publishedOn: string | null;
+  readonly durationSeconds: number | null;
+  readonly legacyIdentifier: string | null;
+}
+
+export const stagedVideoPayloadSchema = z
+  .object({
+    kind: z.literal('media.video'),
+    slug: z
+      .string()
+      .min(2)
+      .max(120)
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    primaryLocale: localeSchema,
+    languageCode: languageCodeSchema,
+    provider: z.enum(MIGRATION_VIDEO_PROVIDERS),
+    providerVideoId: z
+      .string()
+      .min(1)
+      .max(64)
+      .regex(/^[A-Za-z0-9_-]+$/),
+    labels: z
+      .array(
+        z
+          .object({
+            locale: localeSchema,
+            title: z.string().min(1).max(MIGRATION_LIMITS.title),
+            description: z.string().max(MIGRATION_LIMITS.description),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(3),
+    descriptionHtml: z.string().max(MIGRATION_LIMITS.payload / 2),
+    publishedOn: z.iso.date().nullable(),
+    durationSeconds: z.number().int().min(1).max(360_000).nullable(),
+    legacyIdentifier: z.string().max(200).nullable(),
+  })
+  .strict();
+
+/** Machine-readable validation issue codes — never free text from a source. */
+export const VALIDATION_ISSUES = Object.freeze([
+  'title-missing',
+  'title-too-long',
+  'language-missing',
+  'language-invalid',
+  'provider-missing',
+  'provider-invalid',
+  'provider-id-invalid',
+  'primary-label-missing',
+  'date-implausible',
+  'duration-invalid',
+  'slug-invalid',
+  'description-too-long',
+] as const);
+export type ValidationIssue = (typeof VALIDATION_ISSUES)[number];

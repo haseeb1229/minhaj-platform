@@ -228,6 +228,40 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // and `membership.administer` join the protected bundle (DOMAIN_MODEL.md
   // §17.2), asserted by `assertMembershipFoundation` and proved as behaviour
   // by `assertMembershipRules`.
+  // THE MIGRATION & PROVENANCE CONTEXT: a legacy source with its fixed hosts,
+  // an import run with its per-record items, the stable legacy record, the raw
+  // snapshot (evidence bound to its SHA-256, disposed of but never deleted),
+  // the staged revision with its categories and extracted links, the topic
+  // mapping, the import error, the duplicate candidate, the asset provenance,
+  // the legacy URL mapping, the publish manifest with its entries and the
+  // reviewed promotion. Composite keys keep every child inside its own record
+  // and source; one OPEN run per source, one ACTIVE mapping per legacy URL and
+  // one LIVE manifest entry per staged revision (filtered keys). Every key is
+  // NO ACTION; NOT ONE ROW is seeded — no source exists, so nothing can run —
+  // `migration.read` and `migration.administer` join the protected bundle and
+  // `migration.publish` is catalogued, externally gated and bundled into no
+  // role (DOMAIN_MODEL.md §16), asserted by `assertMigrationFoundation` and
+  // proved as behaviour by `assertMigrationRules`.
+  '20261011000000_phase29_migration_provenance': [
+    'MigrationSource',
+    'MigrationSourceHost',
+    'MigrationRun',
+    'MigrationRecord',
+    'MigrationRunItem',
+    'MigrationRawSnapshot',
+    'MigrationStagedRecord',
+    'MigrationStagedCategory',
+    'MigrationStagedLink',
+    'MigrationTopicMapping',
+    'MigrationError',
+    'MigrationDuplicateCandidate',
+    'MigrationAssetProvenance',
+    'MigrationLegacyMapping',
+    'MigrationPublishManifest',
+    'MigrationManifestEntry',
+    'MigrationPromotion',
+    'MigrationPromotionEntry',
+  ],
   // THE DONATIONS CONTEXT: a campaign with its words per locale and its
   // per-currency policy, the owner's fail-closed provider activation (one
   // immutable row the runtime can only read), the donation — one payment
@@ -593,7 +627,9 @@ const PREMATURE_TABLES = [
   // `Message` left this list when Phase 24 delivered it as Messaging's own,
   // ordered and immutable within its Conversation, `Membership` when Phase 26
   // delivered it as the organisational relationship an approval creates, and
-  // `Donation` when Phase 27 delivered it as one payment attempt.
+  // `Donation` when Phase 27 delivered it as one payment attempt. Phase 29
+  // delivers Migration & Provenance as the eighteen `Migration*` tables; a
+  // single generic `MigrationProvenance` table is still no phase's.
   'MigrationProvenance',
   // Phase 9 delivers the six scholarly and periodical aggregates and invents no
   // sub-aggregate beside them: an issue is not a set of articles, a publication
@@ -696,6 +732,17 @@ const PREMATURE_TABLES = [
   'Order',
   'Invoice',
   'Subscription',
+  // Phase 29 contacts no live source and so keeps no credential, cookie or
+  // session for one, no crawl queue that would let a runtime scrape, and no
+  // generic target table: a published record names its target by a typed key.
+  // Written authorisation per source is Phase 30's (OPEN_DECISIONS.md §3.1).
+  'MigrationCredential',
+  'MigrationCookie',
+  'MigrationSession',
+  'MigrationCrawlQueue',
+  'MigrationTarget',
+  'MigrationAuthorisation',
+  'ScrapeQueue',
 ];
 
 /**
@@ -1471,6 +1518,24 @@ const EXPECTED_FILTERED_INDEXES: readonly {
     index: 'DonationRefund_reference_key',
     why: 'two refunds could settle against the same provider refund and both release money',
   },
+  // Phase 29 adds three: the filter is what lets finished runs, disabled
+  // mappings and refused or rolled-back entries stay as history beside the one
+  // that is live.
+  {
+    table: 'MigrationRun',
+    index: 'MigrationRun_open_key',
+    why: 'two runners could open two runs of one source and fork its accounting',
+  },
+  {
+    table: 'MigrationLegacyMapping',
+    index: 'MigrationLegacyMapping_active_key',
+    why: 'one legacy URL could redirect to two canonical addresses at once',
+  },
+  {
+    table: 'MigrationManifestEntry',
+    index: 'MigrationManifestEntry_live_key',
+    why: 'one staged revision could be published twice through two manifests and create two targets',
+  },
 ];
 
 /** The sixteen Phase-22 tables, in the migration's order. */
@@ -1608,6 +1673,51 @@ const DONATIONS_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, strin
   DonationRefundAdmission: ['DonationRefund', '51352+51353+51354+51355+51358'],
   DonationRefundIntegrity: ['DonationRefund', '51356'],
   DonationIntentIntegrity: ['DonationCommunicationIntent', '51357'],
+};
+
+/** The eighteen Phase-29 tables, in the migration's order. */
+const MIGRATION_TABLES =
+  MIGRATION_EXPECTATIONS['20261011000000_phase29_migration_provenance'] ?? [];
+
+/**
+ * Each Migration & Provenance trigger, the table it guards and the refusal
+ * numbers its body raises: 51370 a source re-keyed, re-kinded or moved off one
+ * version at a time; 51371 a host changed or removed, or a fixture host outside
+ * `*.fixture.invalid`; 51372 a raw snapshot rewritten or deleted and 51373 one
+ * created without its body; 51374 a staged revision created other than pending
+ * at version one from its snapshot's checksum, rewritten, or reviewed out of
+ * order; 51375 a run re-identified or a finished run changed; 51376 a record
+ * re-identified; 51377 a run item re-identified, for another source's record,
+ * or moved out of a terminal outcome other than an error's retry; 51378 a
+ * manifest published or rolled back without live publication authority, or
+ * moved out of order; 51379 an entry for an unapproved revision, outside a
+ * draft or outside its manifest's phase; 51380 a legacy mapping re-targeted,
+ * or naming an entry of an unrelated record; 51374 and 51380 a revision's
+ * category or link changed, removed, or naming another source's mapping;
+ * 51381 a promotion approved without live publication authority, moved out of
+ * order or carrying an unpublished entry; 51382 an acquisition re-identified;
+ * 51383 an error reopened or a duplicate pair re-identified; 51384 a topic
+ * mapping re-keyed.
+ */
+const MIGRATION_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, string]>> = {
+  MigrationSourceIntegrity: ['MigrationSource', '51370'],
+  MigrationSourceHostIntegrity: ['MigrationSourceHost', '51371'],
+  MigrationRunIntegrity: ['MigrationRun', '51375'],
+  MigrationRecordIntegrity: ['MigrationRecord', '51376'],
+  MigrationRunItemIntegrity: ['MigrationRunItem', '51377'],
+  MigrationRawSnapshotIntegrity: ['MigrationRawSnapshot', '51372+51373'],
+  MigrationStagedRecordIntegrity: ['MigrationStagedRecord', '51374'],
+  MigrationTopicMappingIntegrity: ['MigrationTopicMapping', '51384'],
+  MigrationErrorIntegrity: ['MigrationError', '51383'],
+  MigrationDuplicateCandidateIntegrity: ['MigrationDuplicateCandidate', '51383'],
+  MigrationAssetProvenanceIntegrity: ['MigrationAssetProvenance', '51382'],
+  MigrationLegacyMappingIntegrity: ['MigrationLegacyMapping', '51380'],
+  MigrationStagedCategoryIntegrity: ['MigrationStagedCategory', '51374'],
+  MigrationStagedLinkIntegrity: ['MigrationStagedLink', '51380'],
+  MigrationPublishManifestIntegrity: ['MigrationPublishManifest', '51378'],
+  MigrationManifestEntryIntegrity: ['MigrationManifestEntry', '51379'],
+  MigrationPromotionIntegrity: ['MigrationPromotion', '51381'],
+  MigrationPromotionEntryIntegrity: ['MigrationPromotionEntry', '51381'],
 };
 
 /** The fifteen Phase-21 tables, in the migration's order. */
@@ -1889,6 +1999,12 @@ const EXPECTED_TRIGGERS = [
   // forward-only and within their authority — each listed, with the refusal
   // it raises, in `DONATIONS_TRIGGER_NUMBERS`.
   ...Object.keys(DONATIONS_TRIGGER_NUMBERS),
+  // Phase 29: every rule that keeps a source's authority fixed, raw evidence
+  // append-only, a staged revision's payload immutable, runs and records
+  // re-identifiable never, and publication and promotion gated on live
+  // authority — each listed, with the refusal it raises, in
+  // `MIGRATION_TRIGGER_NUMBERS`.
+  ...Object.keys(MIGRATION_TRIGGER_NUMBERS),
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
@@ -2331,6 +2447,20 @@ const EXPECTED_CHECK_CONSTRAINTS = [
     table: 'Donation',
     constraint: `Donation_${rule}_ck`,
   })),
+  // Phase 29. A fixture source carries no authorisation evidence and only a
+  // `*.fixture.invalid` address, bounded politeness; a host is a bare DNS name;
+  // a run reconciles only once completed; a missing record's classification
+  // comes with who decided; an item's terminal outcome carries its evidence; a
+  // held snapshot body IS the bytes its checksum names; only a valid revision
+  // free of flagged personal data is approved; a rewritten link names its
+  // mapping; an access-denied error is never retry-eligible; a cross-language
+  // pair is never merged; only owned or licensed material is public-eligible;
+  // a legacy mapping names exactly one typed target; and every manifest,
+  // entry and promotion phase carries exactly the instants and people it
+  // implies.
+  ...MIGRATION_TABLES.filter((table) => table !== 'MigrationStagedCategory').map(
+    (table) => ({ table, constraint: table + '_ck' }),
+  ),
 ];
 
 /**
@@ -8012,13 +8142,15 @@ async function assertProtectedBundleExcludesGated(session: SqlSession): Promise<
 
 /**
  * How far the rollback loop has gone when an earlier owner's foundation is
- * re-proved: every phase applied, Phase 27 rolled back, Phases 27 and 26,
- * Phases 27, 26 and 24, Phases 27, 26, 24 and 23, Phases 27, 26, 24, 23 and 22,
- * or Phases 27, 26, 24, 23, 22 and 21. (Phase 25 is transport only and has no
+ * re-proved: every phase applied, Phase 29 rolled back, Phases 29 and 27,
+ * Phases 29, 27 and 26, Phases 29, 27, 26 and 24, Phases 29, 27, 26, 24 and 23,
+ * Phases 29, 27, 26, 24, 23 and 22, or Phases 29, 27, 26, 24, 23, 22 and 21.
+ * (Phase 25 is transport only and Phase 28 is deployment only; neither has a
  * migration.)
  */
 type BundleStage =
   | 'current'
+  | 'before-migration'
   | 'before-donations'
   | 'before-membership'
   | 'before-messaging'
@@ -8028,37 +8160,54 @@ type BundleStage =
 
 /**
  * The compiled bundle less exactly the keys the rollbacks have removed by
- * `stage`: the two bundled Donations keys once Phase 27 is rolled back (the
- * gated `donations.refund` was never bundled); the two Membership keys as well
+ * `stage`: the two bundled Migration keys once Phase 29 is rolled back (the
+ * gated `migration.publish` was never bundled); the two bundled Donations keys
+ * as well once Phase 27 is (the gated `donations.refund` was never bundled);
+ * the two Membership keys as well
  * once Phase 26 is; nothing more once Phase 24 is (its two keys are externally
  * gated and were never bundled);
  * the two class keys as well once Phase 23 is, the two Learning keys as well
  * once Phase 22 is, and the two newsletter keys as well once Phase 21 is.
  */
 function compiledBundleAt(stage: BundleStage): readonly string[] {
-  const removed =
-    stage === 'current'
-      ? []
-      : stage === 'before-donations'
-        ? DONATIONS_BUNDLED
-        : stage === 'before-membership' || stage === 'before-messaging'
-          ? [...DONATIONS_BUNDLED, ...MEMBERSHIP_PERMISSIONS]
-          : stage === 'before-classes'
-            ? [...DONATIONS_BUNDLED, ...MEMBERSHIP_PERMISSIONS, ...CLASSES_PERMISSIONS]
-            : stage === 'before-learning'
-              ? [
-                  ...DONATIONS_BUNDLED,
-                  ...MEMBERSHIP_PERMISSIONS,
-                  ...CLASSES_PERMISSIONS,
-                  ...LEARNING_PERMISSIONS,
-                ]
-              : [
-                  ...DONATIONS_BUNDLED,
-                  ...MEMBERSHIP_PERMISSIONS,
-                  ...CLASSES_PERMISSIONS,
-                  ...LEARNING_PERMISSIONS,
-                  ...NEWSLETTER_PERMISSIONS,
-                ];
+  // Each rollback removes its own keys on top of every later phase's.
+  const removedByStage: Readonly<Record<BundleStage, readonly string[]>> = {
+    current: [],
+    'before-migration': MIGRATION_BUNDLED,
+    'before-donations': [...MIGRATION_BUNDLED, ...DONATIONS_BUNDLED],
+    'before-membership': [
+      ...MIGRATION_BUNDLED,
+      ...DONATIONS_BUNDLED,
+      ...MEMBERSHIP_PERMISSIONS,
+    ],
+    'before-messaging': [
+      ...MIGRATION_BUNDLED,
+      ...DONATIONS_BUNDLED,
+      ...MEMBERSHIP_PERMISSIONS,
+    ],
+    'before-classes': [
+      ...MIGRATION_BUNDLED,
+      ...DONATIONS_BUNDLED,
+      ...MEMBERSHIP_PERMISSIONS,
+      ...CLASSES_PERMISSIONS,
+    ],
+    'before-learning': [
+      ...MIGRATION_BUNDLED,
+      ...DONATIONS_BUNDLED,
+      ...MEMBERSHIP_PERMISSIONS,
+      ...CLASSES_PERMISSIONS,
+      ...LEARNING_PERMISSIONS,
+    ],
+    'before-personalisation': [
+      ...MIGRATION_BUNDLED,
+      ...DONATIONS_BUNDLED,
+      ...MEMBERSHIP_PERMISSIONS,
+      ...CLASSES_PERMISSIONS,
+      ...LEARNING_PERMISSIONS,
+      ...NEWSLETTER_PERMISSIONS,
+    ],
+  };
+  const removed = removedByStage[stage];
   return PLATFORM_ADMINISTRATOR_PERMISSIONS.filter((key) => !removed.includes(key));
 }
 
@@ -8310,8 +8459,8 @@ async function assertFatwaFoundation(
     PERMISSION_CATALOGUE.map((entry) => [entry.key as string, entry.description]),
   );
   // The externally gated set is the three Fatwa keys, `teaching.perform` since
-  // Phase 23, the two Messaging keys since Phase 24 and `donations.refund` since
-  // Phase 27 — and nothing else.
+  // Phase 23, the two Messaging keys since Phase 24, `donations.refund` since
+  // Phase 27 and `migration.publish` since Phase 29 — and nothing else.
   if (
     permissions.map((row) => row.key).join(',') !== FATWA_PERMISSIONS.join(',') ||
     [...EXTERNALLY_GATED_PERMISSIONS].sort().join(',') !==
@@ -8320,6 +8469,7 @@ async function assertFatwaFoundation(
         TEACHING_PERMISSION,
         ...MESSAGING_PERMISSIONS,
         DONATIONS_REFUND_PERMISSION,
+        MIGRATION_PUBLISH_PERMISSION,
       ]
         .sort()
         .join(',') ||
@@ -8330,8 +8480,8 @@ async function assertFatwaFoundation(
     fail(
       `The Fatwa vocabulary must be exactly ${FATWA_PERMISSIONS.join(', ')}, described as the ` +
         `compiled catalogue describes them and held by no role, and the gated set exactly ` +
-        `those three, ${TEACHING_PERMISSION}, ${MESSAGING_PERMISSIONS.join(', ')} and ` +
-        `${DONATIONS_REFUND_PERMISSION}; found ` +
+        `those three, ${TEACHING_PERMISSION}, ${MESSAGING_PERMISSIONS.join(', ')}, ` +
+        `${DONATIONS_REFUND_PERMISSION} and ${MIGRATION_PUBLISH_PERMISSION}; found ` +
         `${JSON.stringify(permissions)}.`,
     );
 
@@ -9535,12 +9685,14 @@ async function assertPersonalisationRemoved(session: SqlSession): Promise<void> 
         LEARNING_PERMISSIONS.length -
         CLASSES_PERMISSIONS.length -
         MEMBERSHIP_PERMISSIONS.length -
-        DONATIONS_BUNDLED.length
+        DONATIONS_BUNDLED.length -
+        MIGRATION_BUNDLED.length
   )
     fail(
       `After the Phase-21 rollback the protected bundle holds ${String(bundled)} keys; the ` +
         `compiled bundle less the two newsletter, two Learning, two class, two ` +
-        `Membership and two bundled Donations keys holds ${String(expected)}.`,
+        `Membership, two bundled Donations and two bundled Migration keys holds ` +
+        `${String(expected)}.`,
     );
   report(
     'personalisation rollback',
@@ -10408,6 +10560,7 @@ async function assertLearningFoundation(
   stage:
     | 'deploy'
     | 're-deploy'
+    | 'before-migration'
     | 'before-donations'
     | 'before-membership'
     | 'before-messaging'
@@ -10421,6 +10574,7 @@ async function assertLearningFoundation(
   const withMessaging =
     stage === 'deploy' ||
     stage === 're-deploy' ||
+    stage === 'before-migration' ||
     stage === 'before-donations' ||
     stage === 'before-membership';
   const referencing = [
@@ -10782,12 +10936,13 @@ async function assertLearningRemoved(session: SqlSession): Promise<void> {
         LEARNING_PERMISSIONS.length -
         CLASSES_PERMISSIONS.length -
         MEMBERSHIP_PERMISSIONS.length -
-        DONATIONS_BUNDLED.length
+        DONATIONS_BUNDLED.length -
+        MIGRATION_BUNDLED.length
   )
     fail(
       `After the Phase-22 rollback the protected bundle holds ${String(bundled)} keys; the ` +
-        `compiled bundle less the two Learning, two class, two Membership and two bundled ` +
-        `Donations keys holds ${String(expected)}.`,
+        `compiled bundle less the two Learning, two class, two Membership, two bundled ` +
+        `Donations and two bundled Migration keys holds ${String(expected)}.`,
     );
   report(
     'learning rollback',
@@ -11484,6 +11639,7 @@ async function assertClassesFoundation(
   stage:
     | 'deploy'
     | 're-deploy'
+    | 'before-migration'
     | 'before-donations'
     | 'before-membership'
     | 'before-messaging' = 'deploy',
@@ -11839,11 +11995,13 @@ async function assertClassesRemoved(session: SqlSession): Promise<void> {
       PLATFORM_ADMINISTRATOR_PERMISSIONS.length -
         CLASSES_PERMISSIONS.length -
         MEMBERSHIP_PERMISSIONS.length -
-        DONATIONS_BUNDLED.length
+        DONATIONS_BUNDLED.length -
+        MIGRATION_BUNDLED.length
   )
     fail(
       `After the Phase-23 rollback the protected bundle holds ${String(bundled)} keys; the ` +
-        `compiled bundle less the two class, two Membership and two bundled Donations keys ` +
+        `compiled bundle less the two class, two Membership, two bundled Donations and two ` +
+        `bundled Migration keys ` +
         `holds ${String(expected)}.`,
     );
   report(
@@ -12811,7 +12969,12 @@ async function assetShape(session: SqlSession): Promise<{
  */
 async function assertMessagingFoundation(
   session: SqlSession,
-  stage: 'deploy' | 're-deploy' | 'before-donations' | 'before-membership' = 'deploy',
+  stage:
+    | 'deploy'
+    | 're-deploy'
+    | 'before-migration'
+    | 'before-donations'
+    | 'before-membership' = 'deploy',
 ): Promise<void> {
   const tables = MESSAGING_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
     ',',
@@ -13156,12 +13319,14 @@ async function assertMessagingRemoved(session: SqlSession): Promise<void> {
     expected !==
       PLATFORM_ADMINISTRATOR_PERMISSIONS.length -
         MEMBERSHIP_PERMISSIONS.length -
-        DONATIONS_BUNDLED.length
+        DONATIONS_BUNDLED.length -
+        MIGRATION_BUNDLED.length
   )
     fail(
       `After the Phase-24 rollback the protected bundle holds ${String(bundled)} keys; the ` +
-        `compiled bundle less the two Membership and two bundled Donations keys the Phase-26 ` +
-        `and Phase-27 rollbacks removed first — it never held a Messaging key — holds ` +
+        `compiled bundle less the two Membership, two bundled Donations and two bundled ` +
+        `Migration keys the Phase-26, Phase-27 and Phase-29 rollbacks removed first — it ` +
+        `never held a Messaging key — holds ` +
         `${String(expected)}.`,
     );
   report(
@@ -14585,7 +14750,7 @@ async function membershipPresent(session: SqlSession): Promise<boolean> {
  */
 async function assertMembershipFoundation(
   session: SqlSession,
-  stage: 'deploy' | 're-deploy' | 'before-donations' = 'deploy',
+  stage: 'deploy' | 're-deploy' | 'before-migration' | 'before-donations' = 'deploy',
 ): Promise<void> {
   const tables = MEMBERSHIP_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
     ',',
@@ -14885,11 +15050,12 @@ async function assertMembershipFoundation(
       'The provisioning record must carry the action membership.permissions.provisioned.',
     );
 
-  // Once Phase 27 is rolled back the database's bundle lacks the two bundled
-  // Donations keys the compiled bundle now carries.
+  // Once Phase 29 is rolled back the database's bundle lacks the two bundled
+  // Migration keys the compiled bundle now carries, and once Phase 27 is too it
+  // lacks the two bundled Donations keys as well.
   const bundled = await assertProtectedBundleExcludesGated(session);
   const compiledBundle = compiledBundleAt(
-    stage === 'before-donations' ? 'before-donations' : 'current',
+    stage === 'deploy' || stage === 're-deploy' ? 'current' : stage,
   ).length;
   if (bundled !== compiledBundle)
     fail(
@@ -14950,11 +15116,13 @@ async function assertMembershipRemoved(session: SqlSession): Promise<void> {
     expected !==
       PLATFORM_ADMINISTRATOR_PERMISSIONS.length -
         MEMBERSHIP_PERMISSIONS.length -
-        DONATIONS_BUNDLED.length
+        DONATIONS_BUNDLED.length -
+        MIGRATION_BUNDLED.length
   )
     fail(
       `After the Phase-26 rollback the protected bundle holds ${String(bundled)} keys; the ` +
-        `compiled bundle less the two Membership and two bundled Donations keys holds ` +
+        `compiled bundle less the two Membership, two bundled Donations and two bundled ` +
+        `Migration keys holds ` +
         `${String(expected)}.`,
     );
   report(
@@ -15754,7 +15922,7 @@ async function donationsPresent(session: SqlSession): Promise<boolean> {
  */
 async function assertDonationsFoundation(
   session: SqlSession,
-  stage: 'deploy' | 're-deploy' = 'deploy',
+  stage: 'deploy' | 're-deploy' | 'before-migration' = 'deploy',
 ): Promise<void> {
   const tables = DONATIONS_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
     ',',
@@ -16093,11 +16261,16 @@ async function assertDonationsFoundation(
       'The provisioning record must carry the action donations.permissions.provisioned.',
     );
 
+  // Once Phase 29 is rolled back the database's bundle lacks the two bundled
+  // Migration keys the compiled bundle now carries.
   const bundled = await assertProtectedBundleExcludesGated(session);
-  if (bundled !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length)
+  const compiledBundle = compiledBundleAt(
+    stage === 'before-migration' ? 'before-migration' : 'current',
+  ).length;
+  if (bundled !== compiledBundle)
     fail(
       `The protected bundle holds ${String(bundled)} keys; the compiled bundle holds ` +
-        `${String(PLATFORM_ADMINISTRATOR_PERMISSIONS.length)}.`,
+        `${String(compiledBundle)} at ${stage}.`,
     );
 
   report(
@@ -16114,7 +16287,8 @@ async function assertDonationsFoundation(
  * After the Phase-27 rollback: no Donations table, trigger, key, CHECK, index
  * or default, no Donations permission, bundle entry, provisioning record or
  * `donation-refund` step-up grant — and the protected bundle exactly the
- * compiled bundle less the two bundled Donations keys. Identity's User is
+ * compiled bundle less the two bundled Donations keys (and the two bundled
+ * Migration keys Phase 29's rollback removed first). Identity's User is
  * untouched by the drop. The caller then proves the earlier owners are whole at
  * `before-donations`.
  */
@@ -16153,11 +16327,15 @@ async function assertDonationsRemoved(session: SqlSession): Promise<void> {
   const expected = compiledBundleAt('before-donations').length;
   if (
     bundled !== expected ||
-    expected !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length - DONATIONS_BUNDLED.length
+    expected !==
+      PLATFORM_ADMINISTRATOR_PERMISSIONS.length -
+        DONATIONS_BUNDLED.length -
+        MIGRATION_BUNDLED.length
   )
     fail(
       `After the Phase-27 rollback the protected bundle holds ${String(bundled)} keys; the ` +
-        `compiled bundle less the two bundled Donations keys holds ${String(expected)}.`,
+        `compiled bundle less the two bundled Donations and two bundled Migration keys ` +
+        `holds ${String(expected)}.`,
     );
   report(
     'donations rollback',
@@ -17712,6 +17890,2868 @@ async function assertDonationsRules(session: SqlSession): Promise<void> {
   );
 }
 
+const MIGRATION_PROVENANCE_MIGRATION = '20261011000000_phase29_migration_provenance';
+
+/**
+ * The three keys Phase 29 catalogues, and only these. `migration.read` and
+ * `migration.administer` are ORDINARY and join the protected bundle by the
+ * convention every earlier phase used; `migration.publish` is EXTERNALLY
+ * GATED — who may publish migrated content into the live platform is the
+ * organisation's decision (OPEN_DECISIONS.md §3.4) — so it is catalogued,
+ * bundled into no role and held by nobody.
+ */
+const MIGRATION_PERMISSIONS = [
+  'migration.administer',
+  'migration.publish',
+  'migration.read',
+];
+
+/** The two of them the protected bundle carries. */
+const MIGRATION_BUNDLED = ['migration.administer', 'migration.read'];
+
+/** The one publication authority, gated and bundled nowhere. */
+const MIGRATION_PUBLISH_PERMISSION = 'migration.publish';
+
+/**
+ * EVERY foreign key from a Phase-29 table, exactly, with its column mapping and
+ * its delete action. ALL are NO ACTION: nothing cascades, inside the context or
+ * out of it, and no evidence is ever deleted from under what names it. The
+ * external edges are Identity's User, Taxonomy's Topic, Media's Video and
+ * Storage's Asset — each a typed key, never a target pair. The COMPOSITE keys
+ * are the same-source rule: a snapshot, an error, an acquisition and a legacy
+ * mapping reach their record and run THROUGH their source; a record is first
+ * and last seen by its own source's runs; a record's latest snapshot and
+ * current revision, an item's evidence, and an entry's revision are their own
+ * record's.
+ */
+const MIGRATION_KEYS = [
+  'MigrationAssetProvenance_assetId_fkey(assetId>id)>Asset:NO_ACTION',
+  'MigrationAssetProvenance_decidedByUserId_fkey(decidedByUserId>id)>User:NO_ACTION',
+  'MigrationAssetProvenance_recordId_fkey(recordId>id,sourceId>sourceId)>MigrationRecord:NO_ACTION',
+  'MigrationAssetProvenance_runId_fkey(runId>id,sourceId>sourceId)>MigrationRun:NO_ACTION',
+  'MigrationAssetProvenance_sourceId_fkey(sourceId>id)>MigrationSource:NO_ACTION',
+  'MigrationDuplicateCandidate_decidedByUserId_fkey(decidedByUserId>id)>User:NO_ACTION',
+  'MigrationDuplicateCandidate_otherRecordId_fkey(otherRecordId>id)>MigrationRecord:NO_ACTION',
+  'MigrationDuplicateCandidate_recordId_fkey(recordId>id)>MigrationRecord:NO_ACTION',
+  'MigrationError_recordId_fkey(recordId>id,sourceId>sourceId)>MigrationRecord:NO_ACTION',
+  'MigrationError_resolvedByUserId_fkey(resolvedByUserId>id)>User:NO_ACTION',
+  'MigrationError_runId_fkey(runId>id,sourceId>sourceId)>MigrationRun:NO_ACTION',
+  'MigrationError_sourceId_fkey(sourceId>id)>MigrationSource:NO_ACTION',
+  'MigrationLegacyMapping_changedByUserId_fkey(changedByUserId>id)>User:NO_ACTION',
+  'MigrationLegacyMapping_createdByUserId_fkey(createdByUserId>id)>User:NO_ACTION',
+  'MigrationLegacyMapping_manifestEntryId_fkey(manifestEntryId>id)>MigrationManifestEntry:NO_ACTION',
+  'MigrationLegacyMapping_recordId_fkey(recordId>id,sourceId>sourceId)>MigrationRecord:NO_ACTION',
+  'MigrationLegacyMapping_sourceId_fkey(sourceId>id)>MigrationSource:NO_ACTION',
+  'MigrationLegacyMapping_videoId_fkey(videoId>id)>Video:NO_ACTION',
+  'MigrationManifestEntry_manifestId_fkey(manifestId>id)>MigrationPublishManifest:NO_ACTION',
+  'MigrationManifestEntry_recordId_fkey(recordId>id)>MigrationRecord:NO_ACTION',
+  'MigrationManifestEntry_stagedRecordId_fkey(stagedRecordId>id,recordId>recordId)>MigrationStagedRecord:NO_ACTION',
+  'MigrationManifestEntry_videoId_fkey(videoId>id)>Video:NO_ACTION',
+  'MigrationPromotionEntry_manifestEntryId_fkey(manifestEntryId>id)>MigrationManifestEntry:NO_ACTION',
+  'MigrationPromotionEntry_promotionId_fkey(promotionId>id)>MigrationPromotion:NO_ACTION',
+  'MigrationPromotion_approvedByUserId_fkey(approvedByUserId>id)>User:NO_ACTION',
+  'MigrationPromotion_createdByUserId_fkey(createdByUserId>id)>User:NO_ACTION',
+  'MigrationPromotion_withdrawnByUserId_fkey(withdrawnByUserId>id)>User:NO_ACTION',
+  'MigrationPublishManifest_createdByUserId_fkey(createdByUserId>id)>User:NO_ACTION',
+  'MigrationPublishManifest_publishedByUserId_fkey(publishedByUserId>id)>User:NO_ACTION',
+  'MigrationPublishManifest_rollbackByUserId_fkey(rollbackByUserId>id)>User:NO_ACTION',
+  'MigrationPublishManifest_runId_fkey(runId>id,sourceId>sourceId)>MigrationRun:NO_ACTION',
+  'MigrationPublishManifest_sourceId_fkey(sourceId>id)>MigrationSource:NO_ACTION',
+  'MigrationRawSnapshot_disposedByUserId_fkey(disposedByUserId>id)>User:NO_ACTION',
+  'MigrationRawSnapshot_recordId_fkey(recordId>id,sourceId>sourceId)>MigrationRecord:NO_ACTION',
+  'MigrationRawSnapshot_runId_fkey(runId>id,sourceId>sourceId)>MigrationRun:NO_ACTION',
+  'MigrationRawSnapshot_sourceId_fkey(sourceId>id)>MigrationSource:NO_ACTION',
+  'MigrationRecord_classifiedByUserId_fkey(classifiedByUserId>id)>User:NO_ACTION',
+  'MigrationRecord_currentStagedRecordId_fkey(currentStagedRecordId>id,id>recordId)>MigrationStagedRecord:NO_ACTION',
+  'MigrationRecord_firstObservedRunId_fkey(firstObservedRunId>id,sourceId>sourceId)>MigrationRun:NO_ACTION',
+  'MigrationRecord_lastObservedRunId_fkey(lastObservedRunId>id,sourceId>sourceId)>MigrationRun:NO_ACTION',
+  'MigrationRecord_latestSnapshotId_fkey(latestSnapshotId>id,id>recordId)>MigrationRawSnapshot:NO_ACTION',
+  'MigrationRecord_mergedIntoRecordId_fkey(mergedIntoRecordId>id)>MigrationRecord:NO_ACTION',
+  'MigrationRecord_sourceId_fkey(sourceId>id)>MigrationSource:NO_ACTION',
+  'MigrationRunItem_errorId_fkey(errorId>id)>MigrationError:NO_ACTION',
+  'MigrationRunItem_recordId_fkey(recordId>id)>MigrationRecord:NO_ACTION',
+  'MigrationRunItem_runId_fkey(runId>id)>MigrationRun:NO_ACTION',
+  'MigrationRunItem_snapshotId_fkey(snapshotId>id,recordId>recordId)>MigrationRawSnapshot:NO_ACTION',
+  'MigrationRunItem_stagedRecordId_fkey(stagedRecordId>id,recordId>recordId)>MigrationStagedRecord:NO_ACTION',
+  'MigrationRun_operatorUserId_fkey(operatorUserId>id)>User:NO_ACTION',
+  'MigrationRun_sourceId_fkey(sourceId>id)>MigrationSource:NO_ACTION',
+  'MigrationSourceHost_sourceId_fkey(sourceId>id)>MigrationSource:NO_ACTION',
+  'MigrationSource_createdByUserId_fkey(createdByUserId>id)>User:NO_ACTION',
+  'MigrationSource_updatedByUserId_fkey(updatedByUserId>id)>User:NO_ACTION',
+  'MigrationStagedCategory_stagedRecordId_fkey(stagedRecordId>id)>MigrationStagedRecord:NO_ACTION',
+  'MigrationStagedCategory_topicMappingId_fkey(topicMappingId>id)>MigrationTopicMapping:NO_ACTION',
+  'MigrationStagedLink_legacyMappingId_fkey(legacyMappingId>id)>MigrationLegacyMapping:NO_ACTION',
+  'MigrationStagedLink_stagedRecordId_fkey(stagedRecordId>id)>MigrationStagedRecord:NO_ACTION',
+  'MigrationStagedRecord_recordId_fkey(recordId>id)>MigrationRecord:NO_ACTION',
+  'MigrationStagedRecord_reviewedByUserId_fkey(reviewedByUserId>id)>User:NO_ACTION',
+  'MigrationStagedRecord_runId_fkey(runId>id)>MigrationRun:NO_ACTION',
+  'MigrationStagedRecord_snapshotId_fkey(snapshotId>id,recordId>recordId)>MigrationRawSnapshot:NO_ACTION',
+  'MigrationTopicMapping_decidedByUserId_fkey(decidedByUserId>id)>User:NO_ACTION',
+  'MigrationTopicMapping_sourceId_fkey(sourceId>id)>MigrationSource:NO_ACTION',
+  'MigrationTopicMapping_suggestedTopicId_fkey(suggestedTopicId>id)>Topic:NO_ACTION',
+  'MigrationTopicMapping_topicId_fkey(topicId>id)>Topic:NO_ACTION',
+].sort();
+
+/**
+ * Every unique index on a Phase-29 table, exactly: the keys; one source per
+ * key; one record per source and external key; the record-, run- and
+ * source-carrying keys the composite references reach through; one item per
+ * run and record and per run and position; one revision number per record;
+ * one acquisition per source, original address and bytes; one pair per signal;
+ * one entry per manifest position and per manifest revision; one promotion
+ * entry per position and per manifest entry — and the THREE FILTERED keys:
+ * one OPEN run per source, one ACTIVE mapping per legacy address, and one LIVE
+ * manifest entry per staged revision.
+ */
+const MIGRATION_UNIQUE = [
+  'MigrationAssetProvenance_acquisition_key(sourceId,originalUrlDigest,checksum)',
+  'MigrationAssetProvenance_pkey(id)',
+  'MigrationDuplicateCandidate_pair_key(recordId,otherRecordId,signal)',
+  'MigrationDuplicateCandidate_pkey(id)',
+  'MigrationError_pkey(id)',
+  "MigrationLegacyMapping_active_key(sourceId,legacyUrlDigest) WHERE ([state]=N'active')",
+  'MigrationLegacyMapping_pkey(id)',
+  "MigrationManifestEntry_live_key(stagedRecordId) WHERE ([state] IN (N'publishing', N'published', N'rollback-refused'))",
+  'MigrationManifestEntry_manifest_position_key(manifestId,position)',
+  'MigrationManifestEntry_manifest_staged_key(manifestId,stagedRecordId)',
+  'MigrationManifestEntry_pkey(id)',
+  'MigrationPromotionEntry_pkey(id)',
+  'MigrationPromotionEntry_promotion_entry_key(promotionId,manifestEntryId)',
+  'MigrationPromotionEntry_promotion_position_key(promotionId,position)',
+  'MigrationPromotion_pkey(id)',
+  'MigrationPublishManifest_pkey(id)',
+  'MigrationRawSnapshot_pkey(id)',
+  'MigrationRawSnapshot_record_key(id,recordId)',
+  'MigrationRecord_id_source_key(id,sourceId)',
+  'MigrationRecord_pkey(id)',
+  'MigrationRecord_source_key(sourceId,externalKey)',
+  'MigrationRunItem_pkey(id)',
+  'MigrationRunItem_run_position_key(runId,position)',
+  'MigrationRunItem_run_record_key(runId,recordId)',
+  "MigrationRun_open_key(sourceId) WHERE ([state]=N'open')",
+  'MigrationRun_pkey(id)',
+  'MigrationRun_source_key(id,sourceId)',
+  'MigrationSourceHost_pkey(sourceId,host)',
+  'MigrationSource_key_key(key)',
+  'MigrationSource_pkey(id)',
+  'MigrationStagedCategory_pkey(stagedRecordId,topicMappingId)',
+  'MigrationStagedLink_pkey(stagedRecordId,position)',
+  'MigrationStagedRecord_pkey(id)',
+  'MigrationStagedRecord_record_key(id,recordId)',
+  'MigrationStagedRecord_record_revision_key(recordId,revision)',
+  'MigrationTopicMapping_pkey(id)',
+  'MigrationTopicMapping_source_category_key(sourceId,categoryKey)',
+].sort();
+
+/**
+ * Every column of every Phase-29 table, in order. Stated whole so a stored
+ * credential, cookie or session for a legacy host, a crawl queue, a
+ * `targetType`/`targetId` pair or a second copy of the raw body cannot arrive
+ * unnoticed.
+ */
+const MIGRATION_COLUMNS: Readonly<Record<string, string>> = {
+  MigrationSource:
+    'id,key,name,authorityKind,accessMethod,contentKind,baseUrl,authorisationReference,authorisedOn,licensingEvidence,policyNotes,defaultLanguageCode,minIntervalMs,maxConcurrency,maxAttempts,timeoutMs,maxBodyBytes,maxRedirects,state,version,createdAt,createdByUserId,updatedAt,updatedByUserId',
+  MigrationSourceHost: 'sourceId,host',
+  MigrationRun:
+    'id,sourceId,operatorUserId,state,adapterKey,adapterVersion,parserKey,parserVersion,normalizerVersion,codeRevision,discoveryCursor,discoveryComplete,leaseToken,leaseExpiresAt,startedAt,endedAt,reconciliation,reconciledAt,reconciliationDetail,version',
+  MigrationRecord:
+    'id,sourceId,externalKey,originalUrl,legacyIdentifier,contentKind,status,observed,disappearance,disappearanceNote,classifiedByUserId,classifiedAt,mergedIntoRecordId,latestSnapshotId,currentStagedRecordId,firstObservedRunId,lastObservedRunId,version,createdAt,updatedAt',
+  MigrationRunItem:
+    'id,runId,recordId,position,outcome,fetched,parsed,attempts,nextAttemptAt,snapshotId,stagedRecordId,errorId,updatedAt',
+  MigrationRawSnapshot:
+    'id,sourceId,recordId,runId,requestedUrl,finalUrl,httpStatus,contentType,headers,body,byteSize,checksum,fetchedAt,fetcherKey,fetcherVersion,personalData,disposedAt,disposedByUserId,disposalReason',
+  MigrationStagedRecord:
+    'id,recordId,snapshotId,runId,revision,contentKind,title,titleKey,dedupeKey,languageCode,payload,payloadChecksum,adapterKey,adapterVersion,parserKey,parserVersion,normalizerVersion,codeRevision,inputChecksum,producedAt,validation,issues,personalData,review,reviewedByUserId,reviewedAt,reviewNote,version',
+  MigrationStagedCategory: 'stagedRecordId,topicMappingId',
+  MigrationStagedLink:
+    'stagedRecordId,position,href,disposition,rewrittenTo,legacyMappingId',
+  MigrationTopicMapping:
+    'id,sourceId,categoryKey,label,state,topicId,suggestedTopicId,decidedByUserId,decidedAt,version',
+  MigrationError:
+    'id,sourceId,runId,recordId,stage,classification,retryEligible,httpStatus,attempt,detail,occurredAt,resolution,resolvedByUserId,resolvedAt,version',
+  MigrationDuplicateCandidate:
+    'id,recordId,otherRecordId,signal,score,crossLanguage,state,decidedByUserId,decidedAt,note,version,createdAt',
+  MigrationAssetProvenance:
+    'id,sourceId,recordId,runId,originalUrl,originalUrlDigest,assetId,checksum,byteSize,mediaType,licence,licenceEvidence,rightsHolder,visibility,acquiredAt,decidedByUserId,decidedAt,version',
+  MigrationLegacyMapping:
+    'id,sourceId,recordId,legacyUrl,legacyUrlDigest,videoId,canonicalPath,state,manifestEntryId,createdAt,createdByUserId,changedAt,changedByUserId,version',
+  MigrationPublishManifest:
+    'id,sourceId,runId,state,createdByUserId,createdAt,publishedByUserId,publishStartedAt,publishedAt,rollbackByUserId,rollbackReason,rollbackStartedAt,rolledBackAt,version',
+  MigrationManifestEntry:
+    'id,manifestId,position,stagedRecordId,recordId,state,videoId,targetVersion,canonicalPath,refusal,publishedAt,rolledBackAt,version',
+  MigrationPromotion:
+    'id,state,destination,createdByUserId,createdAt,approvedByUserId,approvedAt,withdrawnByUserId,withdrawnAt,completedAt,version',
+  MigrationPromotionEntry:
+    'id,promotionId,position,manifestEntryId,state,promotedAt,destinationRef',
+};
+
+/**
+ * Whether Phase 29 is applied, ALL OR NOTHING: either every one of its
+ * eighteen tables exists or none does.
+ */
+async function migrationPresent(session: SqlSession): Promise<boolean> {
+  const names = MIGRATION_TABLES.map((table) => `N'${table}'`).join(',');
+  const [row] = await session.query<{ present: number }>(
+    `SELECT COUNT(*) AS [present] FROM sys.tables WHERE [name] IN (${names});`,
+  );
+  const present = Number(row?.present ?? -1);
+  if (present !== 0 && present !== MIGRATION_TABLES.length)
+    fail(
+      `Phase 29 is half applied: ${String(present)} of ${String(MIGRATION_TABLES.length)} ` +
+        `Migration & Provenance tables exist.`,
+    );
+  return present === MIGRATION_TABLES.length;
+}
+
+/**
+ * Phase 29 — what only the catalogue can prove about Migration & Provenance:
+ *
+ *   1. NOTHING IS SEEDED: all eighteen tables are empty after deploy — no
+ *      source, so no run can start and nothing can be fetched;
+ *   2. every column of every table is exactly as stated; the raw body is ONE
+ *      VARBINARY(MAX) column on the snapshot and the staged payload ONE
+ *      NVARCHAR(MAX) column on the revision; no credential, cookie, session,
+ *      password, secret, bearer or stored token column (a run's lease token
+ *      aside), and no `targetType` / `targetId`; the unique indexes are exactly
+ *      the thirty-seven above, three of them FILTERED;
+ *   3. every foreign key is exactly one of the sixty-five above, ALL NO ACTION
+ *      and trusted: Identity's User, Taxonomy's Topic, Media's Video and
+ *      Storage's Asset the only external edges; no other owner references a
+ *      Migration table or holds a migration-record, snapshot, staged-revision or
+ *      legacy-mapping column;
+ *   4. the CHECKs are exactly the seventeen named rules, all trusted; the
+ *      triggers are exactly the eighteen in `MIGRATION_TRIGGER_NUMBERS`,
+ *      enabled, each raising exactly its own numbers from 51370–51384 on the
+ *      table it guards; and Migration & Provenance has no procedure;
+ *   5. the vocabulary is exactly `migration.administer`, `migration.publish`
+ *      and `migration.read`, described as the compiled catalogue describes
+ *      them; the first and last ORDINARY, each bundled exactly once into the
+ *      protected role and held by no other; `migration.publish` EXTERNALLY
+ *      GATED, held by no role and no account; no `migration-publication`
+ *      step-up grant exists; exactly one `migration.permissions.provisioned`
+ *      record names the two bundled keys and this migration; and the protected
+ *      bundle is exactly the compiled bundle.
+ *
+ * The rules themselves are proved as BEHAVIOUR by `assertMigrationRules`, the
+ * bundle extension's invalidation by `assertMigrationBundleExtension`, and the
+ * runtime's own posture by `db:test:permissions`.
+ */
+async function assertMigrationFoundation(
+  session: SqlSession,
+  stage: 'deploy' | 're-deploy' = 'deploy',
+): Promise<void> {
+  const tables = MIGRATION_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
+    ',',
+  );
+  const names = MIGRATION_TABLES.map((table) => `N'${table}'`).join(',');
+  if (!(await migrationPresent(session)))
+    fail(`The Phase-29 Migration & Provenance tables are missing after ${stage}.`);
+
+  // ---- 1. nothing seeded -----------------------------------------------------------
+  const counts = await session.query<{ name: string; total: number }>(
+    MIGRATION_TABLES.map(
+      (table) =>
+        `SELECT N'${table}' AS [name], COUNT_BIG(*) AS [total] FROM [dbo].[${table}]`,
+    ).join(' UNION ALL ') + ';',
+  );
+  const seeded = counts.filter((row) => Number(row.total) !== 0);
+  if (MIGRATION_TABLES.length !== 18 || counts.length !== 18 || seeded.length > 0)
+    fail(
+      `The Migration & Provenance migration must create eighteen empty tables — no source — ` +
+        `and seed nothing; found ${String(counts.length)} tables after ${stage}, seeded: ` +
+        `${JSON.stringify(seeded)}.`,
+    );
+
+  // ---- 2. exact columns, one raw body, no credential, three filtered keys ------------
+  const shapes = await session.query<{ name: string; columns: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) AS [name],
+      STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id]) AS [columns]
+    FROM sys.columns c WHERE c.[object_id] IN (${tables})
+    GROUP BY c.[object_id];
+  `);
+  const shapeFindings = MIGRATION_TABLES.filter(
+    (table) =>
+      shapes.find((row) => row.name === table)?.columns !== MIGRATION_COLUMNS[table],
+  );
+  if (shapes.length !== 18 || shapeFindings.length > 0)
+    fail(
+      `Migration & Provenance columns differ from the reviewed shape in ` +
+        `${shapeFindings.join(', ')}: ` +
+        `${JSON.stringify(shapes.filter((row) => shapeFindings.includes(row.name)))}.`,
+    );
+
+  const [bodies] = await session.query<{
+    binary: string | null;
+    maximal: string | null;
+  }>(`
+    SELECT
+      (SELECT STRING_AGG(OBJECT_NAME(c.[object_id]) + N'.' + c.[name] + N':' + t.[name]
+                + N'(' + CONVERT(NVARCHAR(8), c.[max_length]) + N')', N',')
+         FROM sys.columns c JOIN sys.types t ON t.[user_type_id] = c.[user_type_id]
+        WHERE c.[object_id] IN (${tables}) AND t.[name] IN (N'varbinary', N'binary', N'image')) AS [binary],
+      (SELECT STRING_AGG(OBJECT_NAME(c.[object_id]) + N'.' + c.[name], N',')
+                WITHIN GROUP (ORDER BY OBJECT_NAME(c.[object_id]), c.[name])
+         FROM sys.columns c
+        WHERE c.[object_id] IN (${tables}) AND c.[max_length] = -1) AS [maximal];
+  `);
+  if (
+    bodies?.binary !== 'MigrationRawSnapshot.body:varbinary(-1)' ||
+    bodies.maximal !== 'MigrationRawSnapshot.body,MigrationStagedRecord.payload'
+  )
+    fail(
+      `The raw body must be the one VARBINARY(MAX) column on the snapshot and the staged ` +
+        `payload the one other MAX column; found ${JSON.stringify(bodies ?? null)}.`,
+    );
+
+  const credential = await session.query<{ name: string }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] AS [name] FROM sys.columns c
+    WHERE c.[object_id] IN (${tables})
+      AND (c.[name] LIKE N'%password%' OR c.[name] LIKE N'%secret%' OR c.[name] LIKE N'%cookie%'
+           OR c.[name] LIKE N'%credential%' OR c.[name] LIKE N'%session%' OR c.[name] LIKE N'%bearer%'
+           OR c.[name] LIKE N'%apiKey%' OR c.[name] LIKE N'%login%'
+           OR (c.[name] LIKE N'%token%' AND c.[name] <> N'leaseToken')
+           OR c.[name] IN (N'targetType', N'targetId', N'entityType', N'entityId'));
+  `);
+  if (credential.length > 0)
+    fail(
+      `A Migration & Provenance table may hold no credential, cookie, session, password, ` +
+        `secret, token or target-pair column; found ${JSON.stringify(credential)}.`,
+    );
+
+  const unique = await session.query<{
+    name: string;
+    columns: string;
+    filter: string | null;
+  }>(`
+    SELECT i.[name], i.[filter_definition] AS [filter],
+      STRING_AGG(COL_NAME(ic.[object_id], ic.[column_id]), N',')
+        WITHIN GROUP (ORDER BY ic.[key_ordinal]) AS [columns]
+    FROM sys.indexes i
+    JOIN sys.index_columns ic ON ic.[object_id] = i.[object_id] AND ic.[index_id] = i.[index_id]
+    WHERE i.[is_unique] = 1 AND ic.[key_ordinal] > 0 AND i.[object_id] IN (${tables})
+    GROUP BY i.[object_id], i.[name], i.[filter_definition];
+  `);
+  const describedUnique = unique
+    .map(
+      (row) =>
+        `${row.name}(${row.columns})` +
+        (row.filter === null ? '' : ` WHERE ${row.filter}`),
+    )
+    .sort();
+  if (
+    describedUnique.join(' | ') !== MIGRATION_UNIQUE.join(' | ') ||
+    unique.filter((row) => row.filter !== null).length !== 3
+  )
+    fail(
+      `Migration & Provenance unique indexes must be exactly the reviewed thirty-seven, three ` +
+        `of them filtered; found ${describedUnique.join(' | ')}.`,
+    );
+
+  // ---- 3. exact keys, all NO ACTION and trusted; nothing foreign holds the context ----
+  const keys = await session.query<{
+    name: string;
+    columns: string;
+    target: string;
+    deletes: string;
+    updates: string;
+    trusted: number;
+  }>(`
+    SELECT fk.[name], OBJECT_NAME(fk.[referenced_object_id]) AS [target],
+      fk.[delete_referential_action_desc] AS [deletes], fk.[update_referential_action_desc] AS [updates],
+      CASE WHEN fk.[is_disabled] = 0 AND fk.[is_not_trusted] = 0 THEN 1 ELSE 0 END AS [trusted],
+      STRING_AGG(COL_NAME(c.[parent_object_id], c.[parent_column_id]) + N'>'
+        + COL_NAME(c.[referenced_object_id], c.[referenced_column_id]), N',')
+        WITHIN GROUP (ORDER BY c.[constraint_column_id]) AS [columns]
+    FROM sys.foreign_keys fk
+    JOIN sys.foreign_key_columns c ON c.[constraint_object_id] = fk.[object_id]
+    WHERE fk.[parent_object_id] IN (${tables})
+    GROUP BY fk.[name], fk.[referenced_object_id], fk.[delete_referential_action_desc],
+      fk.[update_referential_action_desc], fk.[is_disabled], fk.[is_not_trusted];
+  `);
+  const describedKeys = keys
+    .map((row) => `${row.name}(${row.columns})>${row.target}:${row.deletes}`)
+    .sort();
+  if (
+    MIGRATION_KEYS.length !== 65 ||
+    describedKeys.join(',') !== MIGRATION_KEYS.join(',') ||
+    keys.some((row) => row.updates !== 'NO_ACTION' || Number(row.trusted) !== 1)
+  )
+    fail(
+      `Migration & Provenance keys must be exactly the reviewed sixty-five, none cascading ` +
+        `and all trusted; found ${describedKeys.join(', ')}.`,
+    );
+
+  const [isolation] = await session.query<{ inbound: number; foreign: string | null }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE [referenced_object_id] IN (${tables}) AND [parent_object_id] NOT IN (${tables})) AS [inbound],
+      (SELECT STRING_AGG(OBJECT_NAME(c.[object_id]) + N'.' + c.[name], N',') FROM sys.columns c
+        WHERE (c.[name] LIKE N'%migrationRecord%' OR c.[name] LIKE N'%rawSnapshot%'
+               OR c.[name] LIKE N'%stagedRecord%' OR c.[name] LIKE N'%legacyMapping%'
+               OR c.[name] LIKE N'%manifestEntry%' OR c.[name] LIKE N'%migrationSource%')
+          AND OBJECT_NAME(c.[object_id]) NOT IN (${names})
+          AND OBJECTPROPERTY(c.[object_id], 'IsUserTable') = 1) AS [foreign];
+  `);
+  if (Number(isolation?.inbound) !== 0 || (isolation?.foreign ?? null) !== null)
+    fail(
+      `No other owner may reference or hold Migration & Provenance schema; found ` +
+        `${JSON.stringify(isolation ?? null)}.`,
+    );
+
+  // ---- 4. seventeen trusted CHECKs, eighteen triggers by number, no procedure --------
+  const checks = await session.query<{ name: string; trusted: number }>(`
+    SELECT [name], CASE WHEN [is_disabled] = 0 AND [is_not_trusted] = 0 THEN 1 ELSE 0 END AS [trusted]
+    FROM sys.check_constraints WHERE [parent_object_id] IN (${tables});
+  `);
+  const expectedChecks = EXPECTED_CHECK_CONSTRAINTS.filter((entry) =>
+    MIGRATION_TABLES.includes(entry.table),
+  )
+    .map((entry) => entry.constraint)
+    .sort();
+  if (
+    expectedChecks.length !== 17 ||
+    checks
+      .map((row) => row.name)
+      .sort()
+      .join(',') !== expectedChecks.join(',') ||
+    checks.some((row) => Number(row.trusted) !== 1)
+  )
+    fail(
+      `Migration & Provenance must carry exactly its seventeen trusted CHECKs; found ` +
+        `${JSON.stringify(checks)}.`,
+    );
+
+  const triggers = await session.query<{
+    name: string;
+    tableName: string;
+    disabled: number;
+    definition: string | null;
+  }>(`
+    SELECT t.[name], OBJECT_NAME(t.[parent_id]) AS [tableName], CAST(t.[is_disabled] AS INT) AS [disabled],
+      OBJECT_DEFINITION(t.[object_id]) AS [definition]
+    FROM sys.triggers t WHERE t.[parent_id] IN (${tables});
+  `);
+  const describedTriggers = triggers
+    .map((row) => `${row.name}@${row.tableName}:${raisedNumbers(row.definition)}`)
+    .sort()
+    .join(',');
+  const expectedTriggers = Object.entries(MIGRATION_TRIGGER_NUMBERS)
+    .map(([name, [table, numbers]]) => `${name}@${table}:${numbers}`)
+    .sort()
+    .join(',');
+  if (
+    describedTriggers !== expectedTriggers ||
+    triggers.length !== 18 ||
+    triggers.some((row) => Number(row.disabled) !== 0)
+  )
+    fail(
+      `Migration & Provenance triggers must be exactly eighteen, enabled, raising exactly ` +
+        `their own 51370–51384 numbers; found ${describedTriggers}.`,
+    );
+
+  const [procedures] = await session.query<{ total: number }>(`
+    SELECT COUNT(*) AS [total] FROM sys.procedures
+    WHERE [name] LIKE N'Migration%' OR [name] LIKE N'Legacy%' OR [name] LIKE N'Provenance%';
+  `);
+  if (Number(procedures?.total) !== 0)
+    fail('Phase 29 writes through its owner adapter; it must create no procedure.');
+
+  // ---- 5. two ordinary keys bundled once, one gated key held by nobody ----------------
+  const permissions = await session.query<{
+    key: string;
+    description: string;
+    bundled: number;
+    held: number;
+    holders: number;
+  }>(`
+    SELECT p.[key], p.[description],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp JOIN [dbo].[Role] r ON r.[id] = rp.[roleId]
+        WHERE r.[key] = N'platform-administrator' AND rp.[permissionKey] = p.[key]) AS [bundled],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] rp WHERE rp.[permissionKey] = p.[key]) AS [held],
+      (SELECT COUNT(*) FROM [dbo].[RoleAssignment] ra JOIN [dbo].[RolePermission] rp ON rp.[roleId] = ra.[roleId]
+        WHERE rp.[permissionKey] = p.[key]) AS [holders]
+    FROM [dbo].[Permission] p
+    WHERE p.[key] LIKE N'migrat%' OR p.[key] LIKE N'legacy%' OR p.[key] LIKE N'provenance%'
+       OR p.[key] LIKE N'import%' OR p.[key] LIKE N'crawl%' OR p.[key] LIKE N'scrape%'
+       OR p.[key] LIKE N'promotion%' OR p.[key] LIKE N'manifest%'
+    ORDER BY p.[key];
+  `);
+  const described = new Map(
+    PERMISSION_CATALOGUE.map((entry) => [entry.key as string, entry.description]),
+  );
+  const compiled = new Set<string>(PLATFORM_ADMINISTRATOR_PERMISSIONS);
+  const gated = new Set<string>(EXTERNALLY_GATED_PERMISSIONS);
+  const publishGated =
+    gated.has(MIGRATION_PUBLISH_PERMISSION) &&
+    !compiled.has(MIGRATION_PUBLISH_PERMISSION);
+  if (
+    permissions.map((row) => row.key).join(',') !== MIGRATION_PERMISSIONS.join(',') ||
+    !MIGRATION_BUNDLED.every((key) => compiled.has(key) && !gated.has(key)) ||
+    !publishGated ||
+    permissions.some((row) => {
+      const ordinary = MIGRATION_BUNDLED.includes(row.key);
+      return (
+        row.description !== described.get(row.key) ||
+        Number(row.bundled) !== (ordinary ? 1 : 0) ||
+        Number(row.held) !== (ordinary ? 1 : 0) ||
+        Number(row.holders) !== 0
+      );
+    })
+  )
+    fail(
+      `The Migration vocabulary must be exactly ${MIGRATION_PERMISSIONS.join(', ')}, described ` +
+        `as the compiled catalogue describes them; the two ordinary keys each bundled once into ` +
+        `the protected role and held by no other, and ${MIGRATION_PUBLISH_PERMISSION} gated and ` +
+        `held by no role; found ${JSON.stringify(permissions)}.`,
+    );
+
+  const [publicationGrants] = await session.query<{ total: number }>(`
+    SELECT COUNT(*) AS [total] FROM [dbo].[StepUpGrant] WHERE [purpose] = N'migration-publication';
+  `);
+  if (Number(publicationGrants?.total ?? -1) !== 0)
+    fail(
+      `A migrated database must hold no migration-publication step-up grant; found ` +
+        `${String(publicationGrants?.total)}.`,
+    );
+
+  const provisioning = await session.query<{
+    action: string;
+    actorType: string;
+    actorId: string | null;
+    targetType: string;
+    roleKey: string | null;
+    afterState: string | null;
+    authorisingSource: string | null;
+  }>(`
+    SELECT a.[action], a.[actorType], a.[actorId], a.[targetType], r.[key] AS [roleKey], a.[afterState], a.[authorisingSource]
+    FROM [dbo].[AuditLog] a LEFT JOIN [dbo].[Role] r ON r.[id] = a.[targetId]
+    WHERE a.[action] LIKE N'migration.%' OR a.[authorisingSource] = N'${MIGRATION_PROVENANCE_MIGRATION}';
+  `);
+  if (
+    JSON.stringify(provisioning) !==
+    JSON.stringify([
+      {
+        action: 'migration.permissions.provisioned',
+        actorType: 'migration',
+        actorId: null,
+        targetType: 'role',
+        roleKey: 'platform-administrator',
+        afterState: '{"added":"migration.administer migration.read"}',
+        authorisingSource: MIGRATION_PROVENANCE_MIGRATION,
+      },
+    ])
+  )
+    fail(
+      `Extending the protected bundle must leave exactly one provisioning record naming the ` +
+        `two ordinary Migration keys — never the gated publish key — and this migration, and ` +
+        `nothing else of Migration & Provenance; found ${JSON.stringify(provisioning)}.`,
+    );
+
+  const bundled = await assertProtectedBundleExcludesGated(session);
+  if (bundled !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length)
+    fail(
+      `The protected bundle holds ${String(bundled)} keys; the compiled bundle holds ` +
+        `${String(PLATFORM_ADMINISTRATOR_PERMISSIONS.length)}.`,
+    );
+
+  report(
+    'migration schema',
+    'eighteen empty tables — no source — of the reviewed shape, one raw VARBINARY(MAX) body ' +
+      'and no credential, cookie, session or target column, thirty-seven unique keys with ' +
+      'three filtered, sixty-five trusted NO ACTION keys, 17 CHECKs, eighteen triggers raising ' +
+      '51370–51384, no procedure, two bundled ordinary keys provisioned once and one gated ' +
+      `publish key held by nobody, ${String(bundled)} bundled`,
+  );
+}
+
+/**
+ * After the Phase-29 rollback: no Migration & Provenance table, trigger, key,
+ * CHECK, index or default, no Migration permission, bundle entry, provisioning
+ * record or `migration-publication` step-up grant — and the protected bundle
+ * exactly the compiled bundle less the two bundled Migration keys. Identity's
+ * User, Taxonomy's Topic, Media's Video and Storage's Asset are untouched by
+ * the drop. The caller then proves the earlier owners are whole at
+ * `before-migration`.
+ */
+async function assertMigrationRemoved(session: SqlSession): Promise<void> {
+  const names = MIGRATION_TABLES.map((table) => `N'${table}'`).join(',');
+  const triggerNames = Object.keys(MIGRATION_TRIGGER_NUMBERS)
+    .map((name) => `N'${name}'`)
+    .join(',');
+  const keys = MIGRATION_PERMISSIONS.map((key) => `N'${key}'`).join(',');
+  const [row] = await session.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables WHERE [name] IN (${names}) OR [name] LIKE N'Migration%') AS [tables],
+      (SELECT COUNT(*) FROM sys.triggers WHERE [name] IN (${triggerNames}) OR [name] LIKE N'Migration%') AS [triggers],
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [keys],
+      (SELECT COUNT(*) FROM sys.check_constraints
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [checks],
+      (SELECT COUNT(*) FROM sys.indexes
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [indexes],
+      (SELECT COUNT(*) FROM sys.default_constraints
+        WHERE LEFT([name], CHARINDEX(N'_', [name] + N'_') - 1) IN (${names})) AS [defaults],
+      (SELECT COUNT(*) FROM [dbo].[Permission] WHERE [key] IN (${keys}) OR [key] LIKE N'migration.%') AS [permissions],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] WHERE [permissionKey] IN (${keys}) OR [permissionKey] LIKE N'migration.%') AS [bundled],
+      (SELECT COUNT(*) FROM [dbo].[StepUpGrant] WHERE [purpose] = N'migration-publication') AS [grants],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog]
+        WHERE [action] LIKE N'migration.%' OR [authorisingSource] = N'${MIGRATION_PROVENANCE_MIGRATION}') AS [audit],
+      (SELECT 4 - COUNT(*) FROM sys.tables
+        WHERE [object_id] IN (OBJECT_ID(N'[dbo].[User]'), OBJECT_ID(N'[dbo].[Topic]'),
+                              OBJECT_ID(N'[dbo].[Video]'), OBJECT_ID(N'[dbo].[Asset]'))) AS [ownersBroken];
+  `);
+  if (Object.values(row ?? { missing: 1 }).some((value) => Number(value) !== 0))
+    fail(
+      `The Phase-29 rollback left a Migration & Provenance object: ` +
+        `${JSON.stringify(row ?? null)}.`,
+    );
+  if (await migrationPresent(session))
+    fail('The Phase-29 rollback left the Migration & Provenance schema in place.');
+  const bundled = await assertProtectedBundleExcludesGated(session);
+  const expected = compiledBundleAt('before-migration').length;
+  if (
+    bundled !== expected ||
+    expected !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length - MIGRATION_BUNDLED.length
+  )
+    fail(
+      `After the Phase-29 rollback the protected bundle holds ${String(bundled)} keys; the ` +
+        `compiled bundle less the two bundled Migration keys holds ${String(expected)}.`,
+    );
+  report(
+    'migration rollback',
+    `every Migration & Provenance table, key, index, CHECK, trigger, permission, publication ` +
+      `grant and provisioning record removed, User, Topic, Video and Asset whole; ` +
+      `${String(bundled)} keys still bundled`,
+  );
+}
+
+/**
+ * Phase 29 — THE BUNDLE EXTENSION AS BEHAVIOUR. Extending the protected
+ * Platform Administrator bundle is a privilege change, so the migration must
+ * revoke every live holder's sessions and step-up grants in the same
+ * transaction and record exactly which keys it added (SECURITY_BASELINE.md
+ * §8.1). A first deploy cannot show that — nobody holds the role yet — so this
+ * rolls Phase 29 alone back on the re-deployed database, seeds a synthetic
+ * holder of the protected role and a synthetic non-holder, each with a live
+ * session and step-up grant, and re-applies Phase 29 through the REAL Prisma
+ * CLI:
+ *
+ *   - the holder's sessions and grants are gone; the non-holder's survive;
+ *   - exactly one `migration.permissions.provisioned` record names the two
+ *     ordinary keys, and the protected bundle is the compiled bundle again;
+ *   - the migration is in the history again and nothing else was re-applied.
+ *
+ * Both synthetic accounts are removed again afterwards: this disposable
+ * database was never bootstrapped, so the final-administrator rule does not
+ * hold the synthetic holder in place.
+ */
+async function assertMigrationBundleExtension(
+  session: SqlSession,
+  migration: Migration,
+): Promise<void> {
+  if (!(await migrationPresent(session)))
+    fail('The bundle-extension proof needs Phase 29 applied first.');
+  const run = randomUUID().replaceAll('-', '').slice(0, 16);
+  const holder = randomUUID();
+  const bystander = randomUUID();
+  const historyBefore = await appliedMigrationNames(session);
+
+  // The earlier owners' rule proofs have left synthetic roles holding their
+  // gated keys by now, so the protected role's own bundle is compared directly
+  // rather than through the whole-catalogue gate the deploy stages use.
+  const protectedBundle = async (): Promise<string> => {
+    const rows = await session.query<{ permissionKey: string }>(`
+      SELECT rp.[permissionKey] FROM [dbo].[RolePermission] rp
+      JOIN [dbo].[Role] r ON r.[id] = rp.[roleId]
+      WHERE r.[key] = N'platform-administrator' ORDER BY rp.[permissionKey];
+    `);
+    return rows.map((row) => row.permissionKey).join(',');
+  };
+  const bundleAt = (stage: BundleStage): string =>
+    [...compiledBundleAt(stage)].sort().join(',');
+
+  await rollbackMigration(session, migration);
+  if (await migrationPresent(session))
+    fail('Rolling Phase 29 back alone left its schema in place.');
+  if ((await protectedBundle()) !== bundleAt('before-migration'))
+    fail(
+      'Rolling Phase 29 back alone must leave the protected bundle exactly the compiled ' +
+        'bundle less the two bundled Migration keys.',
+    );
+
+  await expectAccepted(
+    session,
+    'A synthetic protected-role holder and a bystander, each with a live session and grant',
+    `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled]) VALUES
+       (N'${holder}',N'NON_MIGRATION_FIXTURE holder',N'holder-${run}@migration-proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0),
+       (N'${bystander}',N'NON_MIGRATION_FIXTURE bystander',N'bystander-${run}@migration-proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);
+     INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId])
+       SELECT N'${holder}', [id] FROM [dbo].[Role] WHERE [key] = N'platform-administrator';
+     INSERT INTO [dbo].[Session] ([id],[token],[userId],[expiresAt],[createdAt],[updatedAt]) VALUES
+       (N'${holder}',N'proof-migration-bundle-${holder}',N'${holder}',DATEADD(hour,1,SYSUTCDATETIME()),SYSUTCDATETIME(),SYSUTCDATETIME()),
+       (N'${bystander}',N'proof-migration-bundle-${bystander}',N'${bystander}',DATEADD(hour,1,SYSUTCDATETIME()),SYSUTCDATETIME(),SYSUTCDATETIME());
+     INSERT INTO [dbo].[StepUpGrant] ([id],[userId],[sessionId],[purpose],[expiresAt]) VALUES
+       (N'${randomUUID()}',N'${holder}',N'${holder}',N'privilege-administration',DATEADD(minute,30,SYSUTCDATETIME())),
+       (N'${randomUUID()}',N'${bystander}',N'${bystander}',N'account-administration',DATEADD(minute,30,SYSUTCDATETIME()));`,
+  );
+
+  const redeploy = await deployMigrations(disposableUrl, environment.values);
+  if (!redeploy.output.includes(migration.id))
+    fail(`Re-applying ${migration.id} alone did not report it.\n${redeploy.output}`);
+  const historyAfter = await appliedMigrationNames(session);
+  if (historyAfter.slice().sort().join(',') !== historyBefore.slice().sort().join(','))
+    fail(
+      `Re-applying Phase 29 alone changed the history: ${historyBefore.join(', ')} -> ` +
+        `${historyAfter.join(', ')}.`,
+    );
+
+  const [after] = await session.query<Record<string, number | string | null>>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[Session] WHERE [userId] = N'${holder}') AS [holderSessions],
+      (SELECT COUNT(*) FROM [dbo].[StepUpGrant] WHERE [userId] = N'${holder}') AS [holderGrants],
+      (SELECT COUNT(*) FROM [dbo].[Session] WHERE [userId] = N'${bystander}') AS [bystanderSessions],
+      (SELECT COUNT(*) FROM [dbo].[StepUpGrant] WHERE [userId] = N'${bystander}') AS [bystanderGrants],
+      (SELECT COUNT(*) FROM [dbo].[RoleAssignment] ra JOIN [dbo].[Role] r ON r.[id] = ra.[roleId]
+        WHERE ra.[userId] = N'${holder}' AND r.[key] = N'platform-administrator' AND ra.[revokedAt] IS NULL) AS [stillHolder],
+      (SELECT COUNT(*) FROM [dbo].[AuditLog]
+        WHERE [action] = N'migration.permissions.provisioned'
+          AND [authorisingSource] = N'${MIGRATION_PROVENANCE_MIGRATION}') AS [provisioned],
+      (SELECT MAX([afterState]) FROM [dbo].[AuditLog]
+        WHERE [action] = N'migration.permissions.provisioned') AS [added];
+  `);
+  const expected = {
+    holderSessions: 0,
+    holderGrants: 0,
+    bystanderSessions: 1,
+    bystanderGrants: 1,
+    stillHolder: 1,
+    provisioned: 1,
+    added: '{"added":"migration.administer migration.read"}',
+  };
+  if (JSON.stringify(after) !== JSON.stringify(expected))
+    fail(
+      `Extending the protected bundle must revoke exactly its holders' sessions and step-up ` +
+        `grants and record the two keys once; found ${JSON.stringify(after ?? null)}.`,
+    );
+  const bundle = await protectedBundle();
+  if (bundle !== bundleAt('current'))
+    fail(
+      `After re-applying Phase 29 the protected bundle must be exactly the compiled bundle; ` +
+        `found ${bundle}.`,
+    );
+  const bundled = bundle.split(',').length;
+
+  await expectAccepted(
+    session,
+    'The synthetic holder and bystander removed again',
+    `DELETE FROM [dbo].[StepUpGrant] WHERE [userId] IN (N'${holder}', N'${bystander}');
+     DELETE FROM [dbo].[Session] WHERE [userId] IN (N'${holder}', N'${bystander}');
+     DELETE FROM [dbo].[RoleAssignment] WHERE [userId] = N'${holder}';
+     DELETE FROM [dbo].[User] WHERE [id] IN (N'${holder}', N'${bystander}');`,
+  );
+  report(
+    'migration bundle',
+    "re-applied alone through the real Prisma CLI: the protected role's live holder lost " +
+      'its session and step-up grant, a non-holder kept both, and one provisioning record ' +
+      `named migration.administer and migration.read; ${String(bundled)} bundled`,
+  );
+}
+
+/**
+ * Phase 29 — THE RULES, proved as behaviour against the re-deployed schema
+ * with NON_MIGRATION_FIXTURE sentinels and `*.fixture.invalid` addresses only,
+ * through the migration login (the runtime's own posture is
+ * `db:test:permissions`'s, where identity, provenance and evidence columns and
+ * every DELETE are DENY besides):
+ *
+ *   - a FIXTURE source carries no authorisation evidence and only a
+ *     `*.fixture.invalid` base address; an http source has an address and an
+ *     export source none; key, politeness and kind are bounded (…_ck); a source
+ *     begins at version one and never changes its key, authority kind, access
+ *     method, kind or creation, moving one version at a time (51370);
+ *   - a host is a bare lower-case DNS name (…_ck); a fixture source names only
+ *     `*.fixture.invalid` hosts, and a host is never changed or removed
+ *     (51371);
+ *   - a run begins open, unreconciled, at version one; keeps its source,
+ *     operator, transform provenance and start; and once finished is never
+ *     changed (51375); it reconciles only once completed (…_ck); ONE OPEN RUN
+ *     PER SOURCE (the filtered key);
+ *   - a record is first and last seen by its own source's runs (the composite
+ *     keys); is classified only while missing, with who decided (…_ck); and
+ *     keeps its source, key, kind and first sighting (51376);
+ *   - a raw snapshot's body IS the bytes its SHA-256 names (…_ck); it is
+ *     created with its body (51373), of a record and run of its own source (the
+ *     composite keys); it is never rewritten — not even with its own bytes —
+ *     and never deleted; the only change it accepts is a disposal of its body,
+ *     once, with who, when and why (51372);
+ *   - a staged revision begins pending at version one from a snapshot of its
+ *     own record whose checksum it carries (51374, the composite key); its
+ *     payload and provenance never change, and its review moves only forward
+ *     (51374); only a valid revision free of flagged personal data is approved
+ *     (…_ck);
+ *   - a run item names a record of its own run's source; keeps its run,
+ *     record and position; and leaves a terminal outcome only to retry an
+ *     error (51377); its terminal outcome carries its evidence (…_ck);
+ *   - a topic mapping is confirmed exactly when it names a Topic and who
+ *     decided (…_ck) and never changes its source or category (51384); a
+ *     rewritten link names its legacy mapping and a site-relative address
+ *     (…_ck);
+ *   - an ACCESS-DENIED error is never retry-eligible, and a retry is requested
+ *     only of a retry-eligible error (…_ck); an error keeps what happened and
+ *     its resolution only moves forward (51383);
+ *   - a duplicate pair is two records; only the same provider video collapses
+ *     automatically, and a CROSS-LANGUAGE pair is never merged (…_ck); a pair
+ *     keeps its evidence (51383);
+ *   - two acquisitions of ONE stored Asset keep their own licences; only owned
+ *     or licensed material decided by a person is public-eligible (…_ck); an
+ *     acquisition keeps what it acquired (51382);
+ *   - a manifest begins a draft (51378); it is published and rolled back ONLY
+ *     by an account holding `migration.publish` NOW through a live assignment
+ *     of an active role, as an active account, AND a live
+ *     `migration-publication` step-up on a live session (51378 — every missing
+ *     piece refused, and accepted with all of them); its phases move only
+ *     forward (51378);
+ *   - an entry names an APPROVED, valid revision of its manifest's source and
+ *     joins only a draft; it moves only in its manifest's own phase, and what
+ *     it made is recorded once (51379); ONE LIVE ENTRY PER STAGED REVISION
+ *     (the filtered key);
+ *   - a legacy mapping names exactly one Video and a site-relative path
+ *     (…_ck); ONE ACTIVE MAPPING PER LEGACY URL (the filtered key); it keeps
+ *     its address and target (51380);
+ *   - a promotion begins a draft; is approved only under the same live
+ *     authority; carries only PUBLISHED entries, added while it is a draft;
+ *     promotes each entry once while it is promoting; and moves only forward
+ *     (51381);
+ *   - nothing cascades: an Asset an acquisition names is never deleted from
+ *     under it.
+ *
+ * The rows are evidence and history — a raw snapshot cannot be deleted at all
+ * — so, like the canonical proofs above, they die with this disposable
+ * database.
+ */
+async function assertMigrationRules(session: SqlSession): Promise<void> {
+  const run = randomUUID().replaceAll('-', '').slice(0, 16);
+  const at = '2026-10-11T00:00:00';
+  const later = '2026-10-11T01:00:00';
+  const settled = '2026-10-11T02:00:00';
+  let refusals = 0;
+  const refuse = async (
+    label: string,
+    statement: string,
+    numbers: readonly number[],
+    rule: string,
+  ): Promise<void> => {
+    await expectRefusal(session, label, statement, numbers, rule);
+    refusals += 1;
+  };
+  const accept = (label: string, statement: string): Promise<void> =>
+    expectAccepted(session, label, statement);
+  const sha = (value: string | Buffer): string =>
+    createHash('sha256').update(value).digest('hex');
+  const SOURCE_FRESH = 'A source begins at version 1';
+  const SOURCE_KEEPS = 'A source keeps its identity and authority';
+  const HOST_FIXED = 'A source host is never changed or removed';
+  const HOST_FIXTURE = 'A fixture source names only *.fixture.invalid hosts';
+  const RUN_FRESH = 'A run begins open, unreconciled, at version 1';
+  const RUN_KEEPS = 'a finished run is never changed';
+  const RECORD_KEEPS = 'A record keeps its source, key, kind and first sighting';
+  const ITEM_SOURCE = "A run item is a record of its own run's source";
+  const ITEM_KEEPS = 'A run item keeps its place';
+  const SNAPSHOT_DELETED = 'A raw snapshot is never deleted';
+  const SNAPSHOT_KEEPS = 'A raw snapshot is never rewritten';
+  const SNAPSHOT_BODY = 'A snapshot is created with its body';
+  const STAGED_FRESH = 'A staged revision begins pending at version 1';
+  const STAGED_KEEPS = 'A staged revision keeps its payload and provenance';
+  const TOPIC_KEEPS = 'A topic mapping keeps its source and category';
+  const ERROR_KEEPS = 'An error keeps what happened';
+  const PAIR_KEEPS = 'A duplicate candidate keeps its pair and evidence';
+  const ACQUISITION_KEEPS = 'An acquisition keeps what it acquired';
+  const LEGACY_KEEPS = 'A legacy mapping keeps its address and target';
+  const MANIFEST_FRESH = 'A manifest begins a draft';
+  const MANIFEST_KEEPS = 'A manifest keeps its identity and moves only forward';
+  const PUBLICATION = 'Migration publication authority is not held now';
+  const ENTRY_JOINS = 'An entry names an approved revision';
+  const ENTRY_MOVES = "An entry moves only in its manifest's own phase";
+  const PROMOTION_FRESH = 'A promotion begins a draft';
+  const PROMOTION_KEEPS = 'A promotion keeps its identity and moves only forward';
+  const APPROVAL = 'Promotion approval authority is not held now';
+  const PROMOTION_CARRIES = 'A promotion carries only published entries';
+  const PROMOTED_ONCE = 'A promotion entry is promoted once';
+
+  // ---- accounts, and the publication authority they may or may not hold ---------------
+  const operator = randomUUID();
+  const publisher = randomUUID();
+  const keyOnly = randomUUID();
+  const grantOnly = randomUUID();
+  const wrongPurpose = randomUUID();
+  const expiredGrant = randomUUID();
+  const expiredSession = randomUUID();
+  const revoked = randomUUID();
+  const deactivated = randomUUID();
+  const suspended = randomUUID();
+  for (const [user, label] of [
+    [operator, 'operator'],
+    [publisher, 'publisher'],
+    [keyOnly, 'key-only'],
+    [grantOnly, 'grant-only'],
+    [wrongPurpose, 'wrong-purpose'],
+    [expiredGrant, 'expired-grant'],
+    [expiredSession, 'expired-session'],
+    [revoked, 'revoked'],
+    [deactivated, 'deactivated'],
+    [suspended, 'suspended'],
+  ] as const)
+    await session.query(
+      `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled]) VALUES (N'${user}',N'NON_MIGRATION_FIXTURE ${label}',N'${label}-${run}@migration-proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);`,
+    );
+  const publishRole = randomUUID();
+  const deadRole = randomUUID();
+  const sessionOf = (user: string, hours: number): string =>
+    `INSERT INTO [dbo].[Session] ([id],[token],[userId],[expiresAt],[createdAt],[updatedAt]) VALUES (N'${user}',N'proof-migration-${user}',N'${user}',DATEADD(hour,${String(hours)},SYSUTCDATETIME()),SYSUTCDATETIME(),SYSUTCDATETIME());`;
+  const grantOf = (user: string, purpose: string, minutes: number): string =>
+    `INSERT INTO [dbo].[StepUpGrant] ([id],[userId],[sessionId],[purpose],[expiresAt]) VALUES (N'${randomUUID()}',N'${user}',N'${user}',N'${purpose}',DATEADD(minute,${String(minutes)},SYSUTCDATETIME()));`;
+  await accept(
+    'A synthetic publication authority, and every way of lacking it',
+    `INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system]) VALUES
+       (N'${publishRole}',N'proof-migration-publish-${run}',N'Synthetic migration publication proof role',N'Holds migration.publish for the migration proof only.',0),
+       (N'${deadRole}',N'proof-migration-dead-${run}',N'Synthetic deactivated publication proof role',N'Holds migration.publish for the migration proof only.',0);
+     INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES
+       (N'${publishRole}',N'${MIGRATION_PUBLISH_PERMISSION}'),(N'${deadRole}',N'${MIGRATION_PUBLISH_PERMISSION}');
+     INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId]) VALUES
+       (N'${publisher}',N'${publishRole}'),(N'${keyOnly}',N'${publishRole}'),(N'${wrongPurpose}',N'${publishRole}'),
+       (N'${expiredGrant}',N'${publishRole}'),(N'${expiredSession}',N'${publishRole}'),
+       (N'${deactivated}',N'${deadRole}'),(N'${suspended}',N'${publishRole}');
+     INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId],[revokedAt],[revokedReason]) VALUES
+       (N'${revoked}',N'${publishRole}',SYSUTCDATETIME(),N'Synthetic revocation for the migration proof.');
+     UPDATE [dbo].[Role] SET [deactivatedAt]=SYSUTCDATETIME() WHERE [id]=N'${deadRole}';
+     ${sessionOf(publisher, 1)}
+     ${sessionOf(keyOnly, 1)}
+     ${sessionOf(grantOnly, 1)}
+     ${sessionOf(wrongPurpose, 1)}
+     ${sessionOf(expiredGrant, 1)}
+     ${sessionOf(expiredSession, -1)}
+     ${sessionOf(revoked, 1)}
+     ${sessionOf(deactivated, 1)}
+     ${sessionOf(suspended, 1)}
+     ${grantOf(publisher, 'migration-publication', 30)}
+     ${grantOf(grantOnly, 'migration-publication', 30)}
+     ${grantOf(wrongPurpose, 'donation-refund', 30)}
+     ${grantOf(expiredGrant, 'migration-publication', -1)}
+     ${grantOf(expiredSession, 'migration-publication', 30)}
+     ${grantOf(revoked, 'migration-publication', 30)}
+     ${grantOf(deactivated, 'migration-publication', 30)}
+     ${grantOf(suspended, 'migration-publication', 30)}
+     UPDATE [dbo].[User] SET [status]=N'suspended' WHERE [id]=N'${suspended}';`,
+  );
+
+  // ---- Media's Videos, Storage's Asset and Taxonomy's Topic, as their owners write them --
+  const video = randomUUID();
+  const otherVideo = randomUUID();
+  const asset = randomUUID();
+  const assetBytes = Buffer.from(`NON_MIGRATION_FIXTURE asset ${run}`, 'utf8');
+  await accept(
+    "Media's Videos and Storage's Asset for the targets",
+    `INSERT INTO [dbo].[Video] ([id],[slug],[primaryLocale],[state],[provider],[providerVideoId],[availability],[languageCode],[version],[updatedAt]) VALUES
+       (N'${video}',N'proof-migration-${run}',N'en',N'published',N'youtube','m${run.slice(0, 10)}',N'available',N'en',1,SYSUTCDATETIME()),
+       (N'${otherVideo}',N'proof-migration-other-${run}',N'ur',N'published',N'youtube','n${run.slice(0, 10)}',N'available',N'ur',1,SYSUTCDATETIME());
+     INSERT INTO [dbo].[Asset] ([id],[storageKey],[mediaType],[byteSize],[checksum],[state],[displayName],[updatedAt])
+       VALUES (N'${asset}',N'${run.slice(0, 2)}/${run.slice(2, 4)}/${run}${run}',N'image/png',${String(assetBytes.byteLength)},N'${sha(assetBytes)}',N'clean',NULL,SYSUTCDATETIME());`,
+  );
+  const [topicRow] = await session.query<{ id: string }>(
+    `SELECT TOP 1 [id] FROM [dbo].[Topic] ORDER BY [slug];`,
+  );
+  if (topicRow === undefined) fail('The Migration rules need a canonical Topic.');
+  const topic = topicRow.id;
+
+  // ---- statements ----------------------------------------------------------------------
+  const host = `legacy-${run}.fixture.invalid`;
+  const source = (
+    id: string,
+    key: string,
+    extra: Readonly<Record<string, string>> = {},
+  ): string => {
+    const columns: Record<string, string> = {
+      id: `N'${id}'`,
+      key: `N'${key}'`,
+      name: `N'NON_MIGRATION_FIXTURE source'`,
+      authorityKind: `N'fixture'`,
+      accessMethod: `N'http'`,
+      contentKind: `N'media.video'`,
+      baseUrl: `N'https://${host}/'`,
+      minIntervalMs: '1000',
+      maxConcurrency: '1',
+      maxAttempts: '3',
+      timeoutMs: '10000',
+      maxBodyBytes: '1048576',
+      maxRedirects: '2',
+      state: `N'active'`,
+      createdAt: `'${at}'`,
+      createdByUserId: `N'${operator}'`,
+      updatedAt: `'${at}'`,
+      updatedByUserId: `N'${operator}'`,
+      ...extra,
+    };
+    return `INSERT INTO [dbo].[MigrationSource] (${Object.keys(columns)
+      .map((name) => `[${name}]`)
+      .join(',')}) VALUES (${Object.values(columns).join(',')});`;
+  };
+  const set = (table: string, id: string, assignments: string): string =>
+    `UPDATE [dbo].[${table}] SET ${assignments} WHERE [id]=N'${id}';`;
+  const runRow = (
+    id: string,
+    sourceId: string,
+    extra: Readonly<Record<string, string>> = {},
+  ): string => {
+    const columns: Record<string, string> = {
+      id: `N'${id}'`,
+      sourceId: `N'${sourceId}'`,
+      operatorUserId: `N'${operator}'`,
+      state: `N'open'`,
+      adapterKey: `N'fixture-video'`,
+      adapterVersion: `N'1'`,
+      parserKey: `N'fixture-video'`,
+      parserVersion: `N'1'`,
+      normalizerVersion: `N'1'`,
+      codeRevision: `N'proof'`,
+      startedAt: `'${at}'`,
+      ...extra,
+    };
+    return `INSERT INTO [dbo].[MigrationRun] (${Object.keys(columns)
+      .map((name) => `[${name}]`)
+      .join(',')}) VALUES (${Object.values(columns).join(',')});`;
+  };
+  const recordRow = (
+    id: string,
+    sourceId: string,
+    firstRun: string,
+    key: string,
+    extra: Readonly<Record<string, string>> = {},
+  ): string => {
+    const columns: Record<string, string> = {
+      id: `N'${id}'`,
+      sourceId: `N'${sourceId}'`,
+      externalKey: `N'${key}'`,
+      originalUrl: `N'https://${host}/videos/${key}'`,
+      contentKind: `N'media.video'`,
+      status: `N'discovered'`,
+      firstObservedRunId: `N'${firstRun}'`,
+      lastObservedRunId: `N'${firstRun}'`,
+      createdAt: `'${at}'`,
+      updatedAt: `'${at}'`,
+      ...extra,
+    };
+    return `INSERT INTO [dbo].[MigrationRecord] (${Object.keys(columns)
+      .map((name) => `[${name}]`)
+      .join(',')}) VALUES (${Object.values(columns).join(',')});`;
+  };
+  const body = Buffer.from(`<p>NON_MIGRATION_FIXTURE raw body ${run}</p>`, 'utf8');
+  const snapshot = (
+    id: string,
+    recordId: string,
+    sourceId: string,
+    runId: string,
+    extra: Readonly<Record<string, string>> = {},
+  ): string => {
+    const columns: Record<string, string> = {
+      id: `N'${id}'`,
+      sourceId: `N'${sourceId}'`,
+      recordId: `N'${recordId}'`,
+      runId: `N'${runId}'`,
+      requestedUrl: `N'https://${host}/videos/${id}'`,
+      finalUrl: `N'https://${host}/videos/${id}'`,
+      httpStatus: '200',
+      contentType: `N'text/html'`,
+      headers: `N'{"content-type":"text/html"}'`,
+      body: `0x${body.toString('hex')}`,
+      byteSize: String(body.byteLength),
+      checksum: `'${sha(body)}'`,
+      fetchedAt: `'${at}'`,
+      fetcherKey: `N'fixture-fetch'`,
+      fetcherVersion: `N'1'`,
+      personalData: `N'none'`,
+      ...extra,
+    };
+    return `INSERT INTO [dbo].[MigrationRawSnapshot] (${Object.keys(columns)
+      .map((name) => `[${name}]`)
+      .join(',')}) VALUES (${Object.values(columns).join(',')});`;
+  };
+  const payload = (title: string): string =>
+    JSON.stringify({
+      title,
+      provider: 'youtube',
+      providerVideoId: `m${run.slice(0, 10)}`,
+    });
+  const staged = (
+    id: string,
+    recordId: string,
+    snapshotId: string,
+    runId: string,
+    revision: number,
+    extra: Readonly<Record<string, string>> = {},
+  ): string => {
+    const content = payload(`NON_MIGRATION_FIXTURE title ${String(revision)}`);
+    const columns: Record<string, string> = {
+      id: `N'${id}'`,
+      recordId: `N'${recordId}'`,
+      snapshotId: `N'${snapshotId}'`,
+      runId: `N'${runId}'`,
+      revision: String(revision),
+      contentKind: `N'media.video'`,
+      title: `N'NON_MIGRATION_FIXTURE title'`,
+      titleKey: `N'non migration fixture title'`,
+      dedupeKey: `N'youtube:m${run.slice(0, 10)}'`,
+      languageCode: `N'en'`,
+      payload: `N'${content}'`,
+      payloadChecksum: `'${sha(content)}'`,
+      adapterKey: `N'fixture-video'`,
+      adapterVersion: `N'1'`,
+      parserKey: `N'fixture-video'`,
+      parserVersion: `N'1'`,
+      normalizerVersion: `N'1'`,
+      codeRevision: `N'proof'`,
+      inputChecksum: `'${sha(body)}'`,
+      producedAt: `'${at}'`,
+      validation: `N'valid'`,
+      personalData: `N'none'`,
+      ...extra,
+    };
+    return `INSERT INTO [dbo].[MigrationStagedRecord] (${Object.keys(columns)
+      .map((name) => `[${name}]`)
+      .join(',')}) VALUES (${Object.values(columns).join(',')});`;
+  };
+  const approve = (id: string): string =>
+    set(
+      'MigrationStagedRecord',
+      id,
+      `[review]=N'approved',[reviewedByUserId]=N'${operator}',[reviewedAt]='${later}',[version]=[version]+1`,
+    );
+  const item = (id: string, runId: string, recordId: string, position: number): string =>
+    `INSERT INTO [dbo].[MigrationRunItem] ([id],[runId],[recordId],[position],[updatedAt]) VALUES (N'${id}',N'${runId}',N'${recordId}',${String(position)},'${at}');`;
+
+  // ---- a FIXTURE source: no evidence, only a *.fixture.invalid address -----------------
+  const fixture = randomUUID();
+  const other = randomUUID();
+  const exported = randomUUID();
+  for (const [label, statement] of [
+    [
+      'A fixture source carrying an authorisation reference',
+      source(randomUUID(), `proof-a-${run}`, {
+        authorisationReference: `N'NON_MIGRATION_FIXTURE forged'`,
+        authorisedOn: `'2026-10-11'`,
+      }),
+    ],
+    [
+      'A fixture source at a real address',
+      source(randomUUID(), `proof-b-${run}`, { baseUrl: `N'https://example.org/'` }),
+    ],
+    [
+      'A fixture source under a look-alike suffix',
+      source(randomUUID(), `proof-c-${run}`, {
+        baseUrl: `N'https://legacy.fixture.invalid.example.org/'`,
+      }),
+    ],
+    [
+      'An http source with no address',
+      source(randomUUID(), `proof-d-${run}`, { baseUrl: 'NULL' }),
+    ],
+    [
+      'An export source with an address',
+      source(randomUUID(), `proof-e-${run}`, { accessMethod: `N'export'` }),
+    ],
+    [
+      'An authorised source without its written authorisation',
+      source(randomUUID(), `proof-f-${run}`, { authorityKind: `N'authorised'` }),
+    ],
+    ['An upper-case source key', source(randomUUID(), `Proof-G-${run}`)],
+    [
+      'A source retrying seven times',
+      source(randomUUID(), `proof-h-${run}`, { maxAttempts: '7' }),
+    ],
+    [
+      'A source fetching five at once',
+      source(randomUUID(), `proof-i-${run}`, { maxConcurrency: '5' }),
+    ],
+    [
+      'A source of another content kind',
+      source(randomUUID(), `proof-j-${run}`, { contentKind: `N'editorial.article'` }),
+    ],
+  ] as const)
+    await refuse(label, statement, [547], 'MigrationSource_ck');
+  // The address's AUTHORITY — between the scheme and the next slash — is what
+  // must be a lower-case *.fixture.invalid name; a suffix later in the path, a
+  // port, an upper-case name or no path at all is refused.
+  for (const [label, url] of [
+    [
+      'A real host behind a fixture-looking path',
+      'https://example.org/x.fixture.invalid/',
+    ],
+    [
+      'A plain-http real host behind a fixture-looking path',
+      'http://evil.test/a.fixture.invalid/',
+    ],
+    ['An upper-case fixture host', `https://Legacy-${run}.fixture.invalid/`],
+    ['A fixture host with a port', `https://legacy-${run}.fixture.invalid:443/`],
+    ['A fixture address with no path', `http://legacy-${run}.fixture.invalid`],
+  ] as const)
+    await refuse(
+      label,
+      source(randomUUID(), `proof-url-${randomUUID().slice(0, 8)}`, {
+        baseUrl: `N'${url}'`,
+      }),
+      [547],
+      'MigrationSource_ck',
+    );
+  await accept(
+    'A hyphenated plain-http fixture address',
+    source(randomUUID(), `proof-hyphen-${run}`, {
+      baseUrl: `N'http://legacy-${run}.fixture.invalid/'`,
+    }),
+  );
+  await refuse(
+    'A source inserted at version two',
+    source(randomUUID(), `proof-k-${run}`, { version: '2' }),
+    [51370],
+    SOURCE_FRESH,
+  );
+  await accept(
+    'Fixture sources: two by http, one by export',
+    `${source(fixture, `proof-${run}`)}
+     ${source(other, `proof-other-${run}`, { baseUrl: `N'https://other-${run}.fixture.invalid/'` })}
+     ${source(exported, `proof-export-${run}`, { accessMethod: `N'export'`, baseUrl: 'NULL' })}`,
+  );
+  await refuse(
+    'A second source under one key',
+    source(randomUUID(), `proof-${run}`),
+    [2627, 2601],
+    'MigrationSource_key_key',
+  );
+  for (const [label, assignments] of [
+    [
+      'A fixture source re-kinded as authorised',
+      `[authorityKind]=N'authorised',[authorisationReference]=N'NON_MIGRATION_FIXTURE forged',[authorisedOn]='2026-10-11',[version]=[version]+1`,
+    ],
+    ['A source re-keyed', `[key]=N'proof-rekeyed-${run}',[version]=[version]+1`],
+    [
+      'A source re-accessed by export',
+      `[accessMethod]=N'export',[baseUrl]=NULL,[version]=[version]+1`,
+    ],
+    ['A source re-created', `[createdAt]='${later}',[version]=[version]+1`],
+    ['A source re-attributed', `[createdByUserId]=N'${publisher}',[version]=[version]+1`],
+    ['A source edited without a version', `[name]=N'NON_MIGRATION_FIXTURE renamed'`],
+    [
+      'A source moved two versions',
+      `[name]=N'NON_MIGRATION_FIXTURE renamed',[version]=[version]+2`,
+    ],
+  ] as const)
+    await refuse(
+      label,
+      set('MigrationSource', fixture, assignments),
+      [51370],
+      SOURCE_KEEPS,
+    );
+  await accept(
+    'A source renamed, slowed and deactivated one version at a time',
+    `${set('MigrationSource', fixture, `[name]=N'NON_MIGRATION_FIXTURE renamed',[minIntervalMs]=2000,[state]=N'inactive',[version]=[version]+1,[updatedAt]='${later}'`)}
+     ${set('MigrationSource', fixture, `[state]=N'active',[version]=[version]+1,[updatedAt]='${later}'`)}`,
+  );
+
+  // ---- hosts: bare DNS names, fixed, and only *.fixture.invalid for a fixture -----------
+  const hostRow = (sourceId: string, name: string): string =>
+    `INSERT INTO [dbo].[MigrationSourceHost] ([sourceId],[host]) VALUES (N'${sourceId}',N'${name}');`;
+  await accept(
+    'Fixture hosts under *.fixture.invalid',
+    `${hostRow(fixture, host)}
+     ${hostRow(fixture, `media-${run}.fixture.invalid`)}
+     ${hostRow(other, `other-${run}.fixture.invalid`)}`,
+  );
+  // A DNS label may carry a hyphen; refusing one would refuse ordinary host names.
+  await accept(
+    'A fixture host with hyphens in several labels',
+    hostRow(fixture, `cdn-${run}.mirror-a.fixture.invalid`),
+  );
+  for (const [label, name] of [
+    ['A fixture host under .example.invalid', `legacy-${run}.example.invalid`],
+    ['The bare fixture.invalid name', 'fixture.invalid'],
+    ['A host merely ending in fixture.invalid', `evil${run}fixture.invalid`],
+    ['A host under a look-alike suffix', 'legacy.fixture.invalid.example.org'],
+  ] as const)
+    await refuse(label, hostRow(fixture, name), [51371], HOST_FIXTURE);
+  for (const [label, name] of [
+    ['An upper-case host', `Upper${run}.fixture.invalid`],
+    ['A host with a port', `legacy-${run}.fixture.invalid:443`],
+    ['A host with a leading dot', `.legacy-${run}.fixture.invalid`],
+    ['A host with a trailing dot', `legacy-${run}.fixture.invalid.`],
+    ['A host with a path', `legacy-${run}.fixture.invalid/videos`],
+  ] as const)
+    await refuse(label, hostRow(fixture, name), [547], 'MigrationSourceHost_ck');
+  await refuse(
+    'A host named twice',
+    hostRow(fixture, host),
+    [2627, 2601],
+    'MigrationSourceHost_pkey',
+  );
+  await refuse(
+    'A host re-pointed',
+    `UPDATE [dbo].[MigrationSourceHost] SET [host]=N'moved-${run}.fixture.invalid' WHERE [sourceId]=N'${fixture}' AND [host]=N'${host}';`,
+    [51371],
+    HOST_FIXED,
+  );
+  await refuse(
+    'A host removed',
+    `DELETE FROM [dbo].[MigrationSourceHost] WHERE [sourceId]=N'${fixture}' AND [host]=N'${host}';`,
+    [51371],
+    HOST_FIXED,
+  );
+
+  // ---- runs: one open per source, provenance fixed, a finished run frozen ---------------
+  const firstRun = randomUUID();
+  const otherRun = randomUUID();
+  await refuse(
+    'A run inserted completed',
+    runRow(randomUUID(), exported, {
+      state: `N'completed'`,
+      endedAt: `'${later}'`,
+      discoveryComplete: '1',
+    }),
+    [51375],
+    RUN_FRESH,
+  );
+  await refuse(
+    'A run inserted at version two',
+    runRow(randomUUID(), exported, { version: '2' }),
+    [51375],
+    RUN_FRESH,
+  );
+  for (const [label, extra] of [
+    ['An open run already ended', { endedAt: `'${later}'` }],
+    [
+      'An open run reconciled',
+      { reconciliation: `N'balanced'`, reconciledAt: `'${later}'` },
+    ],
+    ['A lease with no expiry', { leaseToken: `N'${randomUUID()}'` }],
+    ['A run in an unknown state', { state: `N'paused'` }],
+  ] as const)
+    await refuse(label, runRow(randomUUID(), exported, extra), [547], 'MigrationRun_ck');
+  await accept(
+    'One open run for each of two sources',
+    `${runRow(firstRun, fixture)} ${runRow(otherRun, other)}`,
+  );
+  await refuse(
+    'A second open run of one source',
+    runRow(randomUUID(), fixture),
+    [2601, 2627],
+    'MigrationRun_open_key',
+  );
+  for (const [label, assignments] of [
+    ['A run re-versioned by its adapter', `[adapterVersion]=N'2'`],
+    ['A run given another operator', `[operatorUserId]=N'${publisher}'`],
+    ['A run re-started', `[startedAt]='${later}'`],
+    ['A run given another code revision', `[codeRevision]=N'forged'`],
+  ] as const)
+    await refuse(label, set('MigrationRun', firstRun, assignments), [51375], RUN_KEEPS);
+  await accept(
+    'A run leased and its discovery completed',
+    set(
+      'MigrationRun',
+      firstRun,
+      `[leaseToken]=N'${randomUUID()}',[leaseExpiresAt]='${later}',[discoveryCursor]=N'page-2',[discoveryComplete]=1,[version]=[version]+1`,
+    ),
+  );
+  await refuse(
+    'A complete discovery reopened',
+    set('MigrationRun', firstRun, `[discoveryComplete]=0,[version]=[version]+1`),
+    [51375],
+    RUN_KEEPS,
+  );
+
+  // ---- records: each seen by its own source's runs ----------------------------------------
+  const record = randomUUID();
+  const vanished = randomUUID();
+  const twin = randomUUID();
+  const urdu = randomUUID();
+  const foreign = randomUUID();
+  const spare = randomUUID();
+  await accept(
+    'Records of each source, first seen by their own runs',
+    `${recordRow(record, fixture, firstRun, `video-${run}`)}
+     ${recordRow(vanished, fixture, firstRun, `gone-${run}`)}
+     ${recordRow(twin, fixture, firstRun, `twin-${run}`)}
+     ${recordRow(urdu, fixture, firstRun, `urdu-${run}`)}
+     ${recordRow(spare, fixture, firstRun, `spare-${run}`)}
+     ${recordRow(foreign, other, otherRun, `other-${run}`)}`,
+  );
+  await refuse(
+    "A record first seen by another source's run",
+    recordRow(randomUUID(), fixture, otherRun, `stray-${run}`, {
+      lastObservedRunId: `N'${firstRun}'`,
+    }),
+    [547],
+    'MigrationRecord_firstObservedRunId_fkey',
+  );
+  await refuse(
+    'A second record under one external key',
+    recordRow(randomUUID(), fixture, firstRun, `video-${run}`),
+    [2627, 2601],
+    'MigrationRecord_source_key',
+  );
+  for (const [label, extra] of [
+    ['A present record with a disappearance', { disappearance: `N'withdrawn'` }],
+    ['A merged record naming nothing', { status: `N'merged'` }],
+    ['A record of another content kind', { contentKind: `N'editorial.article'` }],
+    [
+      'A missing record classified by nobody',
+      {
+        observed: `N'missing'`,
+        disappearance: `N'withdrawn'`,
+        classifiedAt: `'${later}'`,
+      },
+    ],
+  ] as const)
+    await refuse(
+      label,
+      recordRow(randomUUID(), fixture, firstRun, `bad-${randomUUID()}`, extra),
+      [547],
+      'MigrationRecord_ck',
+    );
+  await refuse(
+    'A record merged into itself',
+    set(
+      'MigrationRecord',
+      spare,
+      `[status]=N'merged',[mergedIntoRecordId]=[id],[version]=[version]+1`,
+    ),
+    [547],
+    'MigrationRecord_ck',
+  );
+  for (const [label, assignments] of [
+    ['A record re-keyed', `[externalKey]=N'rekeyed-${run}'`],
+    ['A record re-created', `[createdAt]='${later}'`],
+  ] as const)
+    await refuse(
+      label,
+      set('MigrationRecord', record, `${assignments},[version]=[version]+1`),
+      [51376],
+      RECORD_KEEPS,
+    );
+
+  // ---- raw snapshots: the bytes their checksum names, never rewritten or deleted -------
+  const held = randomUUID();
+  const doomed = randomUUID();
+  const twinSnapshot = randomUUID();
+  const urduSnapshot = randomUUID();
+  const foreignSnapshot = randomUUID();
+  const loose = randomUUID();
+  for (const [label, extra] of [
+    [
+      'A body that is not its checksum',
+      { checksum: `'${sha('NON_MIGRATION_FIXTURE other')}'` },
+    ],
+    ['A body that is not its size', { byteSize: String(body.byteLength + 1) }],
+    ['An upper-case checksum', { checksum: `'${sha(body).toUpperCase()}'` }],
+    ['Headers that are not JSON', { headers: `N'content-type: text/html'` }],
+    ['An impossible status', { httpStatus: '700' }],
+    ['An unknown personal-data flag', { personalData: `N'unknown'` }],
+  ] as const)
+    await refuse(
+      label,
+      snapshot(randomUUID(), record, fixture, firstRun, extra),
+      [547],
+      'MigrationRawSnapshot_ck',
+    );
+  await refuse(
+    'A snapshot created without its body',
+    snapshot(randomUUID(), record, fixture, firstRun, {
+      body: 'NULL',
+      disposedAt: `'${at}'`,
+      disposedByUserId: `N'${operator}'`,
+      disposalReason: `N'NON_MIGRATION_FIXTURE never held'`,
+    }),
+    [51373],
+    SNAPSHOT_BODY,
+  );
+  await refuse(
+    "A snapshot from another source's run",
+    snapshot(randomUUID(), record, fixture, otherRun),
+    [547],
+    'MigrationRawSnapshot_runId_fkey',
+  );
+  await refuse(
+    "A snapshot of another source's record",
+    snapshot(randomUUID(), record, other, otherRun),
+    [547],
+    'MigrationRawSnapshot_recordId_fkey',
+  );
+  await accept(
+    'Snapshots holding exactly the bytes their checksums name',
+    `${snapshot(held, record, fixture, firstRun)}
+     ${snapshot(doomed, vanished, fixture, firstRun)}
+     ${snapshot(twinSnapshot, twin, fixture, firstRun)}
+     ${snapshot(urduSnapshot, urdu, fixture, firstRun)}
+     ${snapshot(foreignSnapshot, foreign, other, otherRun)}
+     ${snapshot(loose, spare, fixture, firstRun)}`,
+  );
+  for (const [label, assignments] of [
+    ['A snapshot status rewritten', `[httpStatus]=201`],
+    ['A snapshot body rewritten with its own bytes', `[body]=[body]`],
+    ['A snapshot re-dated', `[fetchedAt]='${later}'`],
+    [
+      'A disposal that also rewrites the checksum',
+      `[body]=NULL,[checksum]=REPLICATE('0',64),[disposedAt]='${later}',[disposedByUserId]=N'${operator}',[disposalReason]=N'NON_MIGRATION_FIXTURE disposal'`,
+    ],
+    [
+      'A disposal that also moves the address',
+      `[body]=NULL,[finalUrl]=N'https://${host}/moved',[disposedAt]='${later}',[disposedByUserId]=N'${operator}',[disposalReason]=N'NON_MIGRATION_FIXTURE disposal'`,
+    ],
+  ] as const)
+    await refuse(
+      label,
+      set('MigrationRawSnapshot', held, assignments),
+      [51372],
+      SNAPSHOT_KEEPS,
+    );
+  await refuse(
+    'A body replaced by other bytes',
+    set('MigrationRawSnapshot', held, `[body]=0x00`),
+    [547],
+    'MigrationRawSnapshot_ck',
+  );
+  await refuse(
+    'A disposal without a reason',
+    set(
+      'MigrationRawSnapshot',
+      doomed,
+      `[body]=NULL,[disposedAt]='${later}',[disposedByUserId]=N'${operator}'`,
+    ),
+    [547],
+    'MigrationRawSnapshot_ck',
+  );
+  await accept(
+    'A body disposed of, its checksum and row kept',
+    set(
+      'MigrationRawSnapshot',
+      doomed,
+      `[body]=NULL,[disposedAt]='${later}',[disposedByUserId]=N'${operator}',[disposalReason]=N'NON_MIGRATION_FIXTURE disposal'`,
+    ),
+  );
+  await refuse(
+    'A disposed snapshot disposed of again',
+    set(
+      'MigrationRawSnapshot',
+      doomed,
+      `[disposalReason]=N'NON_MIGRATION_FIXTURE again'`,
+    ),
+    [51372],
+    SNAPSHOT_KEEPS,
+  );
+  await refuse(
+    'A snapshot deleted',
+    `DELETE FROM [dbo].[MigrationRawSnapshot] WHERE [id]=N'${loose}';`,
+    [51372],
+    SNAPSHOT_DELETED,
+  );
+
+  // ---- staged revisions: from their own record's snapshot, payload fixed -----------------
+  const revision = randomUUID();
+  const vanishedRevision = randomUUID();
+  const twinRevision = randomUUID();
+  const urduRevision = randomUUID();
+  const foreignRevision = randomUUID();
+  const invalid = randomUUID();
+  await refuse(
+    'A revision of bytes its snapshot does not hold',
+    staged(randomUUID(), record, held, firstRun, 9, {
+      inputChecksum: `'${sha('NON_MIGRATION_FIXTURE other')}'`,
+    }),
+    [51374],
+    STAGED_FRESH,
+  );
+  await refuse(
+    'A revision inserted approved',
+    staged(randomUUID(), record, held, firstRun, 9, {
+      review: `N'approved'`,
+      reviewedByUserId: `N'${operator}'`,
+      reviewedAt: `'${later}'`,
+    }),
+    [51374],
+    STAGED_FRESH,
+  );
+  await refuse(
+    'A revision inserted at version two',
+    staged(randomUUID(), record, held, firstRun, 9, { version: '2' }),
+    [51374],
+    STAGED_FRESH,
+  );
+  await refuse(
+    'A pending revision carrying a reviewer',
+    staged(randomUUID(), record, held, firstRun, 9, {
+      reviewedByUserId: `N'${operator}'`,
+    }),
+    [51374],
+    STAGED_FRESH,
+  );
+  await refuse(
+    "A revision produced in another source's run",
+    staged(randomUUID(), record, held, otherRun, 9),
+    [51374],
+    STAGED_FRESH,
+  );
+  await refuse(
+    "A revision of another record's snapshot",
+    staged(randomUUID(), record, twinSnapshot, firstRun, 9),
+    [547],
+    'MigrationStagedRecord_snapshotId_fkey',
+  );
+  for (const [label, extra] of [
+    ['A payload that is not JSON', { payload: `N'not json'` }],
+    ['A payload checksum that is not hex', { payloadChecksum: `'${'z'.repeat(64)}'` }],
+    ['An unknown validation', { validation: `N'unknown'` }],
+  ] as const)
+    await refuse(
+      label,
+      staged(randomUUID(), record, held, firstRun, 9, extra),
+      [547],
+      'MigrationStagedRecord_ck',
+    );
+  await accept(
+    'Pending revisions, one invalid',
+    `${staged(revision, record, held, firstRun, 1)}
+     ${staged(vanishedRevision, vanished, doomed, firstRun, 1)}
+     ${staged(twinRevision, twin, twinSnapshot, firstRun, 1)}
+     ${staged(urduRevision, urdu, urduSnapshot, firstRun, 1, { languageCode: `N'ur'`, dedupeKey: `N'youtube:n${run.slice(0, 10)}'` })}
+     ${staged(foreignRevision, foreign, foreignSnapshot, otherRun, 1)}
+     ${staged(invalid, record, held, firstRun, 2, { validation: `N'invalid'`, issues: `N'["title-missing"]'` })}`,
+  );
+  await refuse(
+    'A second revision under one number',
+    staged(randomUUID(), record, held, firstRun, 1),
+    [2627, 2601],
+    'MigrationStagedRecord_record_revision_key',
+  );
+  for (const [label, assignments] of [
+    ['A payload rewritten', `[payload]=N'{"title":"forged"}'`],
+    ['A title rewritten', `[title]=N'NON_MIGRATION_FIXTURE forged'`],
+    ['An input checksum rewritten', `[inputChecksum]=REPLICATE('0',64)`],
+    ['A personal-data flag cleared', `[personalData]=N'flagged'`],
+    ['A revision re-parsed by another parser', `[parserVersion]=N'2'`],
+  ] as const)
+    await refuse(
+      label,
+      set('MigrationStagedRecord', revision, `${assignments},[version]=[version]+1`),
+      [51374],
+      STAGED_KEEPS,
+    );
+  await refuse(
+    'A review moved without a version',
+    set(
+      'MigrationStagedRecord',
+      revision,
+      `[review]=N'approved',[reviewedByUserId]=N'${operator}',[reviewedAt]='${later}'`,
+    ),
+    [51374],
+    STAGED_KEEPS,
+  );
+  await refuse(
+    'An invalid revision approved',
+    approve(invalid),
+    [547],
+    'MigrationStagedRecord_ck',
+  );
+  await accept(
+    'A revision approved, the approval withdrawn, and approved again',
+    `${approve(revision)}
+     ${set('MigrationStagedRecord', revision, `[review]=N'pending',[version]=[version]+1`)}
+     ${approve(revision)}
+     ${approve(twinRevision)}
+     ${approve(urduRevision)}
+     ${approve(foreignRevision)}
+     ${set('MigrationStagedRecord', invalid, `[review]=N'rejected',[reviewedByUserId]=N'${operator}',[reviewedAt]='${later}',[version]=[version]+1`)}`,
+  );
+  await refuse(
+    'An approval moved to rejected',
+    set('MigrationStagedRecord', revision, `[review]=N'rejected',[version]=[version]+1`),
+    [51374],
+    STAGED_KEEPS,
+  );
+  await refuse(
+    'A rejection moved back to pending',
+    set('MigrationStagedRecord', invalid, `[review]=N'pending',[version]=[version]+1`),
+    [51374],
+    STAGED_KEEPS,
+  );
+
+  // ---- run items: their own source, their own place, forward-only -------------------------
+  const recordItem = randomUUID();
+  const vanishedItem = randomUUID();
+  const twinItem = randomUUID();
+  await refuse(
+    "An item for another source's record",
+    item(randomUUID(), firstRun, foreign, 9),
+    [51377],
+    ITEM_SOURCE,
+  );
+  await accept(
+    'Items in discovery order',
+    `${item(recordItem, firstRun, record, 0)}
+     ${item(vanishedItem, firstRun, vanished, 1)}
+     ${item(twinItem, firstRun, twin, 2)}
+     ${item(randomUUID(), firstRun, urdu, 3)}`,
+  );
+  await refuse(
+    'Two items at one position',
+    item(randomUUID(), firstRun, spare, 0),
+    [2627, 2601],
+    'MigrationRunItem_run_position_key',
+  );
+  await refuse(
+    'A record twice in one run',
+    item(randomUUID(), firstRun, record, 9),
+    [2627, 2601],
+    'MigrationRunItem_run_record_key',
+  );
+  for (const [label, assignments] of [
+    [
+      'A staged item with no revision',
+      `[outcome]=N'staged',[fetched]=1,[parsed]=1,[snapshotId]=N'${twinSnapshot}'`,
+    ],
+    ['A parsed item never fetched', `[parsed]=1`],
+    ['An errored item with no error', `[outcome]=N'errored'`],
+  ] as const)
+    await refuse(
+      label,
+      set('MigrationRunItem', twinItem, assignments),
+      [547],
+      'MigrationRunItem_ck',
+    );
+  await refuse(
+    "An item holding another record's snapshot",
+    set('MigrationRunItem', twinItem, `[fetched]=1,[snapshotId]=N'${held}'`),
+    [547],
+    'MigrationRunItem_snapshotId_fkey',
+  );
+  await accept(
+    'Items fetched, parsed and staged',
+    `${set('MigrationRunItem', recordItem, `[outcome]=N'staged',[fetched]=1,[parsed]=1,[attempts]=1,[snapshotId]=N'${held}',[stagedRecordId]=N'${revision}',[updatedAt]='${later}'`)}
+     ${set('MigrationRunItem', twinItem, `[outcome]=N'staged',[fetched]=1,[parsed]=1,[attempts]=1,[snapshotId]=N'${twinSnapshot}',[stagedRecordId]=N'${twinRevision}',[updatedAt]='${later}'`)}
+     ${set('MigrationRecord', record, `[status]=N'staged',[latestSnapshotId]=N'${held}',[currentStagedRecordId]=N'${revision}',[version]=[version]+1,[updatedAt]='${later}'`)}`,
+  );
+  await refuse(
+    'A staged item reopened',
+    set('MigrationRunItem', recordItem, `[outcome]=N'pending'`),
+    [51377],
+    ITEM_KEEPS,
+  );
+  await refuse(
+    'An item moved to another position',
+    set('MigrationRunItem', recordItem, `[position]=99`),
+    [51377],
+    ITEM_KEEPS,
+  );
+  await refuse(
+    "A record's current revision from another record",
+    set(
+      'MigrationRecord',
+      twin,
+      `[currentStagedRecordId]=N'${revision}',[version]=[version]+1`,
+    ),
+    [547],
+    'MigrationRecord_currentStagedRecordId_fkey',
+  );
+
+  // ---- errors: access is never retried, resolutions move forward ---------------------------
+  const failure = randomUUID();
+  const denied = randomUUID();
+  const errorRow = (
+    id: string,
+    classification: string,
+    eligible: number,
+    extra: Readonly<Record<string, string>> = {},
+  ): string => {
+    const columns: Record<string, string> = {
+      id: `N'${id}'`,
+      sourceId: `N'${fixture}'`,
+      runId: `N'${firstRun}'`,
+      recordId: `N'${vanished}'`,
+      stage: `N'fetch'`,
+      classification: `N'${classification}'`,
+      retryEligible: String(eligible),
+      httpStatus: classification === 'access-denied' ? '403' : '503',
+      attempt: '1',
+      occurredAt: `'${at}'`,
+      ...extra,
+    };
+    return `INSERT INTO [dbo].[MigrationError] (${Object.keys(columns)
+      .map((name) => `[${name}]`)
+      .join(',')}) VALUES (${Object.values(columns).join(',')});`;
+  };
+  for (const [label, statement] of [
+    [
+      'An access-denied error marked retry-eligible',
+      errorRow(randomUUID(), 'access-denied', 1),
+    ],
+    [
+      'A retry requested of an error that is not retry-eligible',
+      errorRow(randomUUID(), 'not-found', 0, {
+        resolution: `N'retry-requested'`,
+        resolvedByUserId: `N'${operator}'`,
+        resolvedAt: `'${later}'`,
+      }),
+    ],
+    ['An error at attempt zero', errorRow(randomUUID(), 'network', 1, { attempt: '0' })],
+    ['An error of an unknown class', errorRow(randomUUID(), 'teapot', 0)],
+  ] as const)
+    await refuse(label, statement, [547], 'MigrationError_ck');
+  await refuse(
+    "An error in another source's run",
+    errorRow(randomUUID(), 'network', 1, { runId: `N'${otherRun}'` }),
+    [547],
+    'MigrationError_runId_fkey',
+  );
+  await accept(
+    'A retryable server error and a final access refusal',
+    `${errorRow(failure, 'server-error', 1)} ${errorRow(denied, 'access-denied', 0)}`,
+  );
+  await refuse(
+    'An access refusal retried',
+    set(
+      'MigrationError',
+      denied,
+      `[resolution]=N'retry-requested',[resolvedByUserId]=N'${operator}',[resolvedAt]='${later}',[version]=[version]+1`,
+    ),
+    [547],
+    'MigrationError_ck',
+  );
+  for (const [label, assignments] of [
+    ['An error re-classified', `[classification]=N'network'`],
+    ['An error re-described', `[detail]=N'NON_MIGRATION_FIXTURE forged'`],
+  ] as const)
+    await refuse(
+      label,
+      set('MigrationError', failure, `${assignments},[version]=[version]+1`),
+      [51383],
+      ERROR_KEEPS,
+    );
+  await accept(
+    'A retry requested and resolved; an access refusal dismissed; an item errored and retried',
+    `${set('MigrationError', failure, `[resolution]=N'retry-requested',[resolvedByUserId]=N'${operator}',[resolvedAt]='${later}',[version]=[version]+1`)}
+     ${set('MigrationError', failure, `[resolution]=N'resolved',[resolvedAt]='${settled}',[version]=[version]+1`)}
+     ${set('MigrationError', denied, `[resolution]=N'dismissed',[resolvedByUserId]=N'${operator}',[resolvedAt]='${later}',[version]=[version]+1`)}
+     ${set('MigrationRunItem', vanishedItem, `[outcome]=N'errored',[attempts]=1,[errorId]=N'${failure}'`)}
+     ${set('MigrationRunItem', vanishedItem, `[outcome]=N'pending',[nextAttemptAt]='${later}'`)}
+     ${set('MigrationRunItem', vanishedItem, `[outcome]=N'excluded',[nextAttemptAt]=NULL`)}`,
+  );
+  await refuse(
+    'A resolved error reopened',
+    set(
+      'MigrationError',
+      failure,
+      `[resolution]=N'open',[resolvedByUserId]=NULL,[resolvedAt]=NULL,[version]=[version]+1`,
+    ),
+    [51383],
+    ERROR_KEEPS,
+  );
+
+  // ---- absence is an observation: a vanished record is classified, never deleted ----------
+  await accept(
+    'A vanished record marked missing and classified',
+    set(
+      'MigrationRecord',
+      vanished,
+      `[observed]=N'missing',[disappearance]=N'withdrawn',[disappearanceNote]=N'NON_MIGRATION_FIXTURE note',[classifiedByUserId]=N'${operator}',[classifiedAt]='${later}',[version]=[version]+1`,
+    ),
+  );
+
+  // ---- duplicates: only a provider identity collapses; a cross-language pair never merges --
+  const collapsed = randomUUID();
+  const titled = randomUUID();
+  const pair = (
+    id: string,
+    left: string,
+    right: string,
+    signal: string,
+    crossLanguage: number,
+    state: string,
+    decided = false,
+  ): string =>
+    `INSERT INTO [dbo].[MigrationDuplicateCandidate] ([id],[recordId],[otherRecordId],[signal],[score],[crossLanguage],[state],[decidedByUserId],[decidedAt],[createdAt]) VALUES (N'${id}',N'${left}',N'${right}',N'${signal}',90,${String(crossLanguage)},N'${state}',${decided ? `N'${operator}','${later}'` : 'NULL,NULL'},'${at}');`;
+  for (const [label, statement] of [
+    [
+      'A record paired with itself',
+      pair(randomUUID(), record, record, 'identifier', 0, 'open'),
+    ],
+    [
+      'A title-similarity pair collapsed automatically',
+      pair(randomUUID(), twin, record, 'title-similarity', 0, 'collapsed'),
+    ],
+    [
+      'A cross-language pair merged',
+      pair(randomUUID(), urdu, record, 'identifier', 1, 'merged', true),
+    ],
+    [
+      'A merge decided by nobody',
+      pair(randomUUID(), urdu, twin, 'identifier', 0, 'merged'),
+    ],
+    [
+      'A score above one hundred',
+      `INSERT INTO [dbo].[MigrationDuplicateCandidate] ([id],[recordId],[otherRecordId],[signal],[score],[crossLanguage],[state],[createdAt]) VALUES (N'${randomUUID()}',N'${twin}',N'${urdu}',N'title-similarity',101,0,N'open','${at}');`,
+    ],
+  ] as const)
+    await refuse(label, statement, [547], 'MigrationDuplicateCandidate_ck');
+  await accept(
+    'The same provider video collapsed; a cross-language title match left open',
+    `${pair(collapsed, twin, record, 'provider-id', 0, 'collapsed')}
+     ${pair(titled, urdu, record, 'title-similarity', 1, 'open')}`,
+  );
+  await refuse(
+    'One pair recorded twice',
+    pair(randomUUID(), twin, record, 'provider-id', 0, 'collapsed'),
+    [2627, 2601],
+    'MigrationDuplicateCandidate_pair_key',
+  );
+  await refuse(
+    'A cross-language pair merged by decision',
+    set(
+      'MigrationDuplicateCandidate',
+      titled,
+      `[state]=N'merged',[decidedByUserId]=N'${operator}',[decidedAt]='${later}',[version]=[version]+1`,
+    ),
+    [547],
+    'MigrationDuplicateCandidate_ck',
+  );
+  for (const [label, assignments] of [
+    ['A pair re-labelled single-language', `[crossLanguage]=0`],
+    ['A pair re-signalled', `[signal]=N'identifier'`],
+    ['A pair re-scored', `[score]=10`],
+  ] as const)
+    await refuse(
+      label,
+      set('MigrationDuplicateCandidate', titled, `${assignments},[version]=[version]+1`),
+      [51383],
+      PAIR_KEEPS,
+    );
+  await accept(
+    'A cross-language pair decided distinct',
+    set(
+      'MigrationDuplicateCandidate',
+      titled,
+      `[state]=N'distinct',[decidedByUserId]=N'${operator}',[decidedAt]='${later}',[note]=N'NON_MIGRATION_FIXTURE note',[version]=[version]+1`,
+    ),
+  );
+
+  // ---- asset provenance: one stored Asset, two acquisitions, two licences --------------------
+  const owned = randomUUID();
+  const borrowed = randomUUID();
+  const acquisition = (
+    id: string,
+    recordId: string,
+    url: string,
+    licence: string,
+    extra: Readonly<Record<string, string>> = {},
+  ): string => {
+    const columns: Record<string, string> = {
+      id: `N'${id}'`,
+      sourceId: `N'${fixture}'`,
+      recordId: `N'${recordId}'`,
+      runId: `N'${firstRun}'`,
+      originalUrl: `N'${url}'`,
+      originalUrlDigest: `'${sha(url)}'`,
+      assetId: `N'${asset}'`,
+      checksum: `'${sha(assetBytes)}'`,
+      byteSize: String(assetBytes.byteLength),
+      mediaType: `N'image/png'`,
+      licence: `N'${licence}'`,
+      acquiredAt: `'${at}'`,
+      ...extra,
+    };
+    return `INSERT INTO [dbo].[MigrationAssetProvenance] (${Object.keys(columns)
+      .map((name) => `[${name}]`)
+      .join(',')}) VALUES (${Object.values(columns).join(',')});`;
+  };
+  const firstUrl = `https://media-${run}.fixture.invalid/a.png`;
+  const secondUrl = `https://media-${run}.fixture.invalid/copy/a.png`;
+  for (const [label, licence, extra] of [
+    [
+      'Unknown rights made public-eligible',
+      'unknown',
+      {
+        visibility: `N'public-eligible'`,
+        decidedByUserId: `N'${operator}'`,
+        decidedAt: `'${later}'`,
+      },
+    ],
+    [
+      'Owned material made public-eligible by nobody',
+      'organisation-owned',
+      { visibility: `N'public-eligible'` },
+    ],
+    [
+      'A decision with no instant',
+      'organisation-owned',
+      { decidedByUserId: `N'${operator}'` },
+    ],
+  ] as const)
+    await refuse(
+      label,
+      acquisition(
+        randomUUID(),
+        record,
+        `https://media-${run}.fixture.invalid/${randomUUID()}`,
+        licence,
+        extra,
+      ),
+      [547],
+      'MigrationAssetProvenance_ck',
+    );
+  await refuse(
+    'An unknown licence vocabulary',
+    acquisition(
+      randomUUID(),
+      record,
+      `https://media-${run}.fixture.invalid/${randomUUID()}`,
+      'stolen',
+    ),
+    [547],
+    'MigrationAssetProvenance_ck',
+  );
+  await refuse(
+    "An acquisition for another source's record",
+    acquisition(
+      randomUUID(),
+      foreign,
+      `https://media-${run}.fixture.invalid/${randomUUID()}`,
+      'unknown',
+    ),
+    [547],
+    'MigrationAssetProvenance_recordId_fkey',
+  );
+  await accept(
+    'One stored Asset acquired twice under two licences',
+    `${acquisition(owned, record, firstUrl, 'organisation-owned')}
+     ${acquisition(borrowed, twin, secondUrl, 'third-party', { rightsHolder: `N'NON_MIGRATION_FIXTURE rights holder'` })}`,
+  );
+  await refuse(
+    'One acquisition recorded twice',
+    acquisition(randomUUID(), record, firstUrl, 'organisation-owned'),
+    [2627, 2601],
+    'MigrationAssetProvenance_acquisition_key',
+  );
+  await refuse(
+    'Third-party material made public-eligible',
+    set(
+      'MigrationAssetProvenance',
+      borrowed,
+      `[visibility]=N'public-eligible',[decidedByUserId]=N'${operator}',[decidedAt]='${later}',[version]=[version]+1`,
+    ),
+    [547],
+    'MigrationAssetProvenance_ck',
+  );
+  for (const [label, assignments] of [
+    ['An acquisition re-checksummed', `[checksum]=REPLICATE('0',64)`],
+    ['An acquisition re-addressed', `[originalUrl]=N'${secondUrl}'`],
+    ['An acquisition re-dated', `[acquiredAt]='${later}'`],
+  ] as const)
+    await refuse(
+      label,
+      set('MigrationAssetProvenance', owned, `${assignments},[version]=[version]+1`),
+      [51382],
+      ACQUISITION_KEEPS,
+    );
+  await accept(
+    'Owned material cleared for release by a person',
+    set(
+      'MigrationAssetProvenance',
+      owned,
+      `[visibility]=N'public-eligible',[decidedByUserId]=N'${operator}',[decidedAt]='${later}',[version]=[version]+1`,
+    ),
+  );
+  await refuse(
+    'An Asset deleted from under its acquisitions',
+    `DELETE FROM [dbo].[Asset] WHERE [id]=N'${asset}';`,
+    [547],
+    'MigrationAssetProvenance_assetId_fkey',
+  );
+
+  // ---- topic mappings and categories ------------------------------------------------------------
+  const lectures = randomUUID();
+  const misc = randomUUID();
+  const mapping = (
+    id: string,
+    key: string,
+    extra: Readonly<Record<string, string>> = {},
+  ): string => {
+    const columns: Record<string, string> = {
+      id: `N'${id}'`,
+      sourceId: `N'${fixture}'`,
+      categoryKey: `N'${key}'`,
+      label: `N'NON_MIGRATION_FIXTURE ${key}'`,
+      ...extra,
+    };
+    return `INSERT INTO [dbo].[MigrationTopicMapping] (${Object.keys(columns)
+      .map((name) => `[${name}]`)
+      .join(',')}) VALUES (${Object.values(columns).join(',')});`;
+  };
+  for (const [label, extra] of [
+    [
+      'A confirmed mapping naming no Topic',
+      {
+        state: `N'confirmed'`,
+        decidedByUserId: `N'${operator}'`,
+        decidedAt: `'${later}'`,
+      },
+    ],
+    [
+      'A confirmed mapping decided by nobody',
+      { state: `N'confirmed'`, topicId: `N'${topic}'` },
+    ],
+    ['A mapping in an unknown state', { state: `N'maybe'` }],
+  ] as const)
+    await refuse(
+      label,
+      mapping(randomUUID(), `bad-${randomUUID()}`, extra),
+      [547],
+      'MigrationTopicMapping_ck',
+    );
+  await accept(
+    'Two legacy categories, unmapped',
+    `${mapping(lectures, `lectures-${run}`)} ${mapping(misc, `misc-${run}`)}`,
+  );
+  await refuse(
+    'One category mapped twice',
+    mapping(randomUUID(), `lectures-${run}`),
+    [2627, 2601],
+    'MigrationTopicMapping_source_category_key',
+  );
+  await refuse(
+    'A mapping re-keyed',
+    set(
+      'MigrationTopicMapping',
+      lectures,
+      `[categoryKey]=N'rekeyed-${run}',[version]=[version]+1`,
+    ),
+    [51384],
+    TOPIC_KEEPS,
+  );
+  await refuse(
+    'A mapping relabelled without a version',
+    set('MigrationTopicMapping', lectures, `[label]=N'NON_MIGRATION_FIXTURE relabelled'`),
+    [51384],
+    TOPIC_KEEPS,
+  );
+  await accept(
+    "One category confirmed onto Taxonomy's Topic, one excluded; a revision categorised",
+    `${set('MigrationTopicMapping', lectures, `[state]=N'confirmed',[topicId]=N'${topic}',[decidedByUserId]=N'${operator}',[decidedAt]='${later}',[version]=[version]+1`)}
+     ${set('MigrationTopicMapping', misc, `[state]=N'excluded',[decidedByUserId]=N'${operator}',[decidedAt]='${later}',[version]=[version]+1`)}
+     INSERT INTO [dbo].[MigrationStagedCategory] ([stagedRecordId],[topicMappingId]) VALUES (N'${revision}',N'${lectures}');`,
+  );
+  await refuse(
+    'A revision categorised twice',
+    `INSERT INTO [dbo].[MigrationStagedCategory] ([stagedRecordId],[topicMappingId]) VALUES (N'${revision}',N'${lectures}');`,
+    [2627, 2601],
+    'MigrationStagedCategory_pkey',
+  );
+  const foreignMapping = randomUUID();
+  await accept(
+    "The other source's own category",
+    `INSERT INTO [dbo].[MigrationTopicMapping] ([id],[sourceId],[categoryKey],[label]) VALUES (N'${foreignMapping}',N'${other}',N'lectures-${run}',N'NON_MIGRATION_FIXTURE other lectures');`,
+  );
+  await refuse(
+    "A revision categorised by another source's mapping",
+    `INSERT INTO [dbo].[MigrationStagedCategory] ([stagedRecordId],[topicMappingId]) VALUES (N'${revision}',N'${foreignMapping}');`,
+    [51374],
+    'A staged category names a topic mapping of its own source',
+  );
+  await refuse(
+    'A category re-pointed',
+    `UPDATE [dbo].[MigrationStagedCategory] SET [topicMappingId]=N'${misc}' WHERE [stagedRecordId]=N'${revision}';`,
+    [51374],
+    'A staged category is never changed or removed',
+  );
+  await refuse(
+    'A category removed',
+    `DELETE FROM [dbo].[MigrationStagedCategory] WHERE [stagedRecordId]=N'${revision}';`,
+    [51374],
+    'A staged category is never changed or removed',
+  );
+
+  // ---- manifests: draft first, published only under live authority ----------------------------
+  const manifest = randomUUID();
+  const contested = randomUUID();
+  const reversible = randomUUID();
+  const fourth = randomUUID();
+  const manifestRow = (
+    id: string,
+    extra: Readonly<Record<string, string>> = {},
+  ): string => {
+    const columns: Record<string, string> = {
+      id: `N'${id}'`,
+      sourceId: `N'${fixture}'`,
+      runId: `N'${firstRun}'`,
+      state: `N'draft'`,
+      createdByUserId: `N'${operator}'`,
+      createdAt: `'${at}'`,
+      ...extra,
+    };
+    return `INSERT INTO [dbo].[MigrationPublishManifest] (${Object.keys(columns)
+      .map((name) => `[${name}]`)
+      .join(',')}) VALUES (${Object.values(columns).join(',')});`;
+  };
+  const entryRow = (
+    id: string,
+    manifestId: string,
+    position: number,
+    stagedId: string,
+    recordId: string,
+    extra: Readonly<Record<string, string>> = {},
+  ): string => {
+    const columns: Record<string, string> = {
+      id: `N'${id}'`,
+      manifestId: `N'${manifestId}'`,
+      position: String(position),
+      stagedRecordId: `N'${stagedId}'`,
+      recordId: `N'${recordId}'`,
+      ...extra,
+    };
+    return `INSERT INTO [dbo].[MigrationManifestEntry] (${Object.keys(columns)
+      .map((name) => `[${name}]`)
+      .join(',')}) VALUES (${Object.values(columns).join(',')});`;
+  };
+  const publishBy = (id: string, actor: string): string =>
+    set(
+      'MigrationPublishManifest',
+      id,
+      `[state]=N'publishing',[publishedByUserId]=N'${actor}',[publishStartedAt]='${later}',[version]=[version]+1`,
+    );
+  await refuse(
+    'A manifest inserted publishing',
+    manifestRow(randomUUID(), {
+      state: `N'publishing'`,
+      publishedByUserId: `N'${publisher}'`,
+      publishStartedAt: `'${later}'`,
+    }),
+    [51378],
+    MANIFEST_FRESH,
+  );
+  await refuse(
+    'A manifest inserted at version two',
+    manifestRow(randomUUID(), { version: '2' }),
+    [51378],
+    MANIFEST_FRESH,
+  );
+  for (const [label, extra] of [
+    ['A draft naming its publisher', { publishedByUserId: `N'${publisher}'` }],
+    ['A manifest in an unknown state', { state: `N'live'` }],
+  ] as const)
+    await refuse(
+      label,
+      manifestRow(randomUUID(), extra),
+      [547],
+      'MigrationPublishManifest_ck',
+    );
+  await refuse(
+    "A manifest of another source's run",
+    manifestRow(randomUUID(), { runId: `N'${otherRun}'` }),
+    [547],
+    'MigrationPublishManifest_runId_fkey',
+  );
+  await accept(
+    'Four draft manifests',
+    `${manifestRow(manifest)} ${manifestRow(contested)} ${manifestRow(reversible)} ${manifestRow(fourth)}`,
+  );
+
+  // ---- entries: approved revisions of the manifest's own source, added to a draft ----------
+  const published = randomUUID();
+  const republished = randomUUID();
+  const refused = randomUUID();
+  const rival = randomUUID();
+  const reversed = randomUUID();
+  await refuse(
+    'An entry for a pending revision',
+    entryRow(randomUUID(), manifest, 9, vanishedRevision, vanished),
+    [51379],
+    ENTRY_JOINS,
+  );
+  await refuse(
+    "An entry for another source's approved revision",
+    entryRow(randomUUID(), manifest, 9, foreignRevision, foreign),
+    [51379],
+    ENTRY_JOINS,
+  );
+  await refuse(
+    'An entry inserted publishing',
+    entryRow(randomUUID(), manifest, 9, revision, record, { state: `N'publishing'` }),
+    [51379],
+    ENTRY_JOINS,
+  );
+  await refuse(
+    'An entry pairing a revision with another record',
+    entryRow(randomUUID(), manifest, 9, revision, twin),
+    [547],
+    'MigrationManifestEntry_stagedRecordId_fkey',
+  );
+  await refuse(
+    'A pending entry carrying a refusal',
+    entryRow(randomUUID(), manifest, 9, revision, record, {
+      refusal: `N'target-refused'`,
+    }),
+    [547],
+    'MigrationManifestEntry_ck',
+  );
+  await accept(
+    'Approved revisions entered in drafts',
+    `${entryRow(published, manifest, 0, revision, record)}
+     ${entryRow(refused, manifest, 1, twinRevision, twin)}
+     ${entryRow(rival, contested, 0, revision, record)}
+     ${entryRow(reversed, reversible, 0, urduRevision, urdu)}
+     ${entryRow(republished, fourth, 0, twinRevision, twin)}`,
+  );
+  await refuse(
+    'One revision entered twice in one manifest',
+    entryRow(randomUUID(), manifest, 9, revision, record),
+    [2627, 2601],
+    'MigrationManifestEntry_manifest_staged_key',
+  );
+  await refuse(
+    'Two entries at one position',
+    entryRow(randomUUID(), manifest, 0, urduRevision, urdu),
+    [2627, 2601],
+    'MigrationManifestEntry_manifest_position_key',
+  );
+  await refuse(
+    'An entry published while its manifest is a draft',
+    set(
+      'MigrationManifestEntry',
+      published,
+      `[state]=N'publishing',[version]=[version]+1`,
+    ),
+    [51379],
+    ENTRY_MOVES,
+  );
+
+  // ---- publication authority: every missing piece refused ------------------------------------
+  for (const [label, actor] of [
+    ['Published by an operator holding no key', operator],
+    ['Published by a holder with no step-up', keyOnly],
+    ['Published with a step-up but no key', grantOnly],
+    ['Published with another purpose step-up', wrongPurpose],
+    ['Published with an expired step-up', expiredGrant],
+    ['Published on an expired session', expiredSession],
+    ['Published by a revoked holder', revoked],
+    ['Published through a deactivated role', deactivated],
+    ['Published by a suspended holder', suspended],
+  ] as const)
+    await refuse(label, publishBy(manifest, actor), [51378], PUBLICATION);
+  await refuse(
+    'A draft published without passing through publishing',
+    set(
+      'MigrationPublishManifest',
+      manifest,
+      `[state]=N'published',[publishedByUserId]=N'${publisher}',[publishStartedAt]='${later}',[publishedAt]='${later}',[version]=[version]+1`,
+    ),
+    [51378],
+    MANIFEST_KEEPS,
+  );
+  await accept(
+    'Published by a live migration.publish holder with a live migration-publication step-up',
+    `${publishBy(manifest, publisher)} ${publishBy(contested, publisher)} ${publishBy(reversible, publisher)} ${publishBy(fourth, publisher)}`,
+  );
+  await refuse(
+    'An entry added once publishing began',
+    entryRow(randomUUID(), manifest, 9, urduRevision, urdu),
+    [51379],
+    ENTRY_JOINS,
+  );
+  await accept(
+    'One entry published to its Video, one refused by its target',
+    `${set('MigrationManifestEntry', published, `[state]=N'publishing',[version]=[version]+1`)}
+     ${set('MigrationManifestEntry', published, `[state]=N'published',[videoId]=N'${video}',[targetVersion]=1,[canonicalPath]=N'/watch/videos/proof-migration-${run}',[publishedAt]='${settled}',[version]=[version]+1`)}
+     ${set('MigrationManifestEntry', refused, `[state]=N'refused',[refusal]=N'target-refused',[version]=[version]+1`)}
+     ${set('MigrationManifestEntry', republished, `[state]=N'published',[videoId]=N'${video}',[targetVersion]=2,[canonicalPath]=N'/watch/videos/proof-migration-${run}',[publishedAt]='${settled}',[version]=[version]+1`)}
+     ${set('MigrationPublishManifest', fourth, `[state]=N'published',[publishedAt]='${settled}',[version]=[version]+1`)}`,
+  );
+  await refuse(
+    'A published entry re-targeted',
+    set(
+      'MigrationManifestEntry',
+      published,
+      `[videoId]=N'${otherVideo}',[version]=[version]+1`,
+    ),
+    [51379],
+    ENTRY_MOVES,
+  );
+  await refuse(
+    'A published entry carrying no target',
+    set('MigrationManifestEntry', reversed, `[state]=N'published',[version]=[version]+1`),
+    [547],
+    'MigrationManifestEntry_ck',
+  );
+  await refuse(
+    'One revision live through a second manifest',
+    set('MigrationManifestEntry', rival, `[state]=N'publishing',[version]=[version]+1`),
+    [2601, 2627],
+    'MigrationManifestEntry_live_key',
+  );
+  await accept(
+    'A manifest published',
+    set(
+      'MigrationPublishManifest',
+      manifest,
+      `[state]=N'published',[publishedAt]='${settled}',[version]=[version]+1`,
+    ),
+  );
+  await refuse(
+    'A published manifest back to publishing',
+    set(
+      'MigrationPublishManifest',
+      manifest,
+      `[state]=N'publishing',[publishedAt]=NULL,[version]=[version]+1`,
+    ),
+    [51378],
+    MANIFEST_KEEPS,
+  );
+  await refuse(
+    'A manifest re-attributed',
+    set(
+      'MigrationPublishManifest',
+      manifest,
+      `[createdByUserId]=N'${publisher}',[version]=[version]+1`,
+    ),
+    [51378],
+    MANIFEST_KEEPS,
+  );
+
+  // ---- rollback: the same live authority, phase by phase --------------------------------------
+  await accept(
+    'A second manifest published to the other Video',
+    `${set('MigrationManifestEntry', reversed, `[state]=N'published',[videoId]=N'${otherVideo}',[targetVersion]=1,[canonicalPath]=N'/watch/videos/proof-migration-other-${run}',[publishedAt]='${settled}',[version]=[version]+1`)}
+     ${set('MigrationPublishManifest', reversible, `[state]=N'published',[publishedAt]='${settled}',[version]=[version]+1`)}`,
+  );
+  const rollbackBy = (actor: string): string =>
+    set(
+      'MigrationPublishManifest',
+      reversible,
+      `[state]=N'rolling-back',[rollbackByUserId]=N'${actor}',[rollbackReason]=N'NON_MIGRATION_FIXTURE reason',[rollbackStartedAt]='${settled}',[version]=[version]+1`,
+    );
+  await refuse(
+    'Rolled back by a holder with no step-up',
+    rollbackBy(keyOnly),
+    [51378],
+    PUBLICATION,
+  );
+  await refuse(
+    'Rolled back with a step-up but no key',
+    rollbackBy(grantOnly),
+    [51378],
+    PUBLICATION,
+  );
+  await refuse(
+    'An entry rolled back before its manifest',
+    set(
+      'MigrationManifestEntry',
+      reversed,
+      `[state]=N'rolled-back',[rolledBackAt]='${settled}',[version]=[version]+1`,
+    ),
+    [51379],
+    ENTRY_MOVES,
+  );
+  await accept(
+    'Rolled back by a live holder, entry by entry',
+    `${rollbackBy(publisher)}
+     ${set('MigrationManifestEntry', reversed, `[state]=N'rolled-back',[rolledBackAt]='${settled}',[version]=[version]+1`)}
+     ${set('MigrationPublishManifest', reversible, `[state]=N'rolled-back',[rolledBackAt]='${settled}',[version]=[version]+1`)}`,
+  );
+  await refuse(
+    'A rolled-back manifest published again',
+    set(
+      'MigrationPublishManifest',
+      reversible,
+      `[state]=N'published',[rollbackByUserId]=NULL,[rollbackReason]=NULL,[rollbackStartedAt]=NULL,[rolledBackAt]=NULL,[version]=[version]+1`,
+    ),
+    [51378],
+    MANIFEST_KEEPS,
+  );
+
+  // ---- legacy mappings: one active per legacy URL, address and target fixed ------------------
+  const active = randomUUID();
+  const retired = randomUUID();
+  const legacyUrl = `https://${host}/videos/video-${run}`;
+  const legacy = (
+    id: string,
+    url: string,
+    extra: Readonly<Record<string, string>> = {},
+  ): string => {
+    const columns: Record<string, string> = {
+      id: `N'${id}'`,
+      sourceId: `N'${fixture}'`,
+      recordId: `N'${record}'`,
+      legacyUrl: `N'${url}'`,
+      legacyUrlDigest: `'${sha(url)}'`,
+      videoId: `N'${video}'`,
+      canonicalPath: `N'/watch/videos/proof-migration-${run}'`,
+      state: `N'active'`,
+      manifestEntryId: `N'${published}'`,
+      createdAt: `'${settled}'`,
+      createdByUserId: `N'${operator}'`,
+      ...extra,
+    };
+    return `INSERT INTO [dbo].[MigrationLegacyMapping] (${Object.keys(columns)
+      .map((name) => `[${name}]`)
+      .join(',')}) VALUES (${Object.values(columns).join(',')});`;
+  };
+  for (const [label, extra] of [
+    ['A mapping naming no target', { videoId: 'NULL' }],
+    ['A mapping to another site', { canonicalPath: `N'//evil.example/watch'` }],
+    [
+      'A mapping to an absolute address',
+      { canonicalPath: `N'https://example.org/watch'` },
+    ],
+    ['A disabled mapping with no change trail', { state: `N'disabled'` }],
+  ] as const)
+    await refuse(
+      label,
+      legacy(randomUUID(), `${legacyUrl}/${randomUUID()}`, extra),
+      [547],
+      'MigrationLegacyMapping_ck',
+    );
+  await refuse(
+    "A mapping for another source's record",
+    legacy(randomUUID(), `${legacyUrl}/${randomUUID()}`, { recordId: `N'${foreign}'` }),
+    [547],
+    'MigrationLegacyMapping_recordId_fkey',
+  );
+  await accept(
+    'An active mapping, and a second address retired',
+    `${legacy(active, legacyUrl)}
+     ${legacy(retired, `https://${host}/old/${run}`)}
+     ${set('MigrationLegacyMapping', retired, `[state]=N'disabled',[changedAt]='${settled}',[changedByUserId]=N'${operator}',[version]=[version]+1`)}`,
+  );
+  await refuse(
+    'A second active mapping for one legacy URL',
+    legacy(randomUUID(), legacyUrl),
+    [2601, 2627],
+    'MigrationLegacyMapping_active_key',
+  );
+  await accept(
+    'A disabled mapping kept beside the active one as history',
+    legacy(randomUUID(), legacyUrl, {
+      state: `N'disabled'`,
+      changedAt: `'${settled}'`,
+      changedByUserId: `N'${operator}'`,
+    }),
+  );
+  for (const [label, assignments] of [
+    ['A mapping re-targeted', `[videoId]=N'${otherVideo}'`],
+    ['A mapping re-addressed', `[legacyUrl]=N'https://${host}/forged'`],
+    ['A mapping re-pathed', `[canonicalPath]=N'/watch/videos/forged'`],
+    ['A mapping re-attributed', `[createdByUserId]=N'${publisher}'`],
+  ] as const)
+    await refuse(
+      label,
+      set('MigrationLegacyMapping', active, `${assignments},[version]=[version]+1`),
+      [51380],
+      LEGACY_KEEPS,
+    );
+  await refuse(
+    'A mapping naming an entry of an unrelated record',
+    legacy(randomUUID(), `https://${host}/videos/twin-${run}`, {
+      recordId: `N'${twin}'`,
+    }),
+    [51380],
+    "A legacy mapping names its entry's record",
+  );
+  await accept(
+    'A record merged into the published one, mapped through its entry',
+    `${set('MigrationRecord', spare, `[status]=N'merged',[mergedIntoRecordId]=N'${record}',[version]=[version]+1`)}
+     ${legacy(randomUUID(), `https://${host}/videos/spare-${run}`, { recordId: `N'${spare}'` })}`,
+  );
+  await refuse(
+    'A mapping disabled without a version',
+    set(
+      'MigrationLegacyMapping',
+      active,
+      `[state]=N'disabled',[changedAt]='${settled}',[changedByUserId]=N'${operator}'`,
+    ),
+    [51380],
+    LEGACY_KEEPS,
+  );
+
+  // ---- links: rewritten only through a mapping, to a site-relative address ------------------
+  const link = (position: number, extra: Readonly<Record<string, string>>): string => {
+    const columns: Record<string, string> = {
+      stagedRecordId: `N'${revision}'`,
+      position: String(position),
+      href: `N'https://${host}/videos/video-${run}'`,
+      ...extra,
+    };
+    return `INSERT INTO [dbo].[MigrationStagedLink] (${Object.keys(columns)
+      .map((name) => `[${name}]`)
+      .join(',')}) VALUES (${Object.values(columns).join(',')});`;
+  };
+  for (const [label, extra] of [
+    [
+      'A rewritten link naming no mapping',
+      { disposition: `N'rewritten'`, rewrittenTo: `N'/watch/videos/proof'` },
+    ],
+    [
+      'An unresolved link with a rewrite',
+      { disposition: `N'unresolved'`, rewrittenTo: `N'/watch/videos/proof'` },
+    ],
+    [
+      'A link rewritten to an absolute address',
+      {
+        disposition: `N'rewritten'`,
+        rewrittenTo: `N'https://example.org/'`,
+        legacyMappingId: `N'${active}'`,
+      },
+    ],
+    ['A link kept verbatim', { disposition: `N'kept'` }],
+  ] as const)
+    await refuse(label, link(9, extra), [547], 'MigrationStagedLink_ck');
+  await accept(
+    'Links rewritten through a mapping, external, unresolved and dropped',
+    `${link(0, { disposition: `N'rewritten'`, rewrittenTo: `N'/watch/videos/proof-migration-${run}'`, legacyMappingId: `N'${active}'` })}
+     ${link(1, { disposition: `N'external'`, href: `N'https://elsewhere.fixture.invalid/x'` })}
+     ${link(2, { disposition: `N'unresolved'`, href: `N'/legacy/unknown'` })}
+     ${link(3, { disposition: `N'dropped'`, href: `N'javascript:void(0)'` })}`,
+  );
+  const foreignLegacy = randomUUID();
+  await accept(
+    "The other source's own legacy mapping",
+    legacy(foreignLegacy, `https://other-${run}.fixture.invalid/videos/${run}`, {
+      sourceId: `N'${other}'`,
+      recordId: `N'${foreign}'`,
+      manifestEntryId: 'NULL',
+    }),
+  );
+  await refuse(
+    "A link rewritten through another source's mapping",
+    link(9, {
+      disposition: `N'rewritten'`,
+      rewrittenTo: `N'/watch/videos/proof-migration-${run}'`,
+      legacyMappingId: `N'${foreignLegacy}'`,
+    }),
+    [51380],
+    'A staged link is rewritten only by a legacy mapping of its own source',
+  );
+  await refuse(
+    'A link re-pointed',
+    `UPDATE [dbo].[MigrationStagedLink] SET [href]=N'/legacy/forged' WHERE [stagedRecordId]=N'${revision}' AND [position]=2;`,
+    [51380],
+    'A staged link is never changed or removed',
+  );
+  await refuse(
+    'A link removed',
+    `DELETE FROM [dbo].[MigrationStagedLink] WHERE [stagedRecordId]=N'${revision}' AND [position]=3;`,
+    [51380],
+    'A staged link is never changed or removed',
+  );
+
+  // ---- promotions: draft first, approved only under live authority, published entries only --
+  const promotion = randomUUID();
+  const abandoned = randomUUID();
+  const promoted = randomUUID();
+  const promotionRow = (
+    id: string,
+    extra: Readonly<Record<string, string>> = {},
+  ): string => {
+    const columns: Record<string, string> = {
+      id: `N'${id}'`,
+      state: `N'draft'`,
+      destination: `N'bundle'`,
+      createdByUserId: `N'${operator}'`,
+      createdAt: `'${at}'`,
+      ...extra,
+    };
+    return `INSERT INTO [dbo].[MigrationPromotion] (${Object.keys(columns)
+      .map((name) => `[${name}]`)
+      .join(',')}) VALUES (${Object.values(columns).join(',')});`;
+  };
+  const promotionEntry = (
+    id: string,
+    promotionId: string,
+    position: number,
+    entryId: string,
+  ): string =>
+    `INSERT INTO [dbo].[MigrationPromotionEntry] ([id],[promotionId],[position],[manifestEntryId]) VALUES (N'${id}',N'${promotionId}',${String(position)},N'${entryId}');`;
+  const approveBy = (actor: string): string =>
+    set(
+      'MigrationPromotion',
+      promotion,
+      `[state]=N'approved',[approvedByUserId]=N'${actor}',[approvedAt]='${settled}',[version]=[version]+1`,
+    );
+  await refuse(
+    'A promotion inserted approved',
+    promotionRow(randomUUID(), {
+      state: `N'approved'`,
+      approvedByUserId: `N'${publisher}'`,
+      approvedAt: `'${settled}'`,
+    }),
+    [51381],
+    PROMOTION_FRESH,
+  );
+  await refuse(
+    'A promotion to a remote destination',
+    promotionRow(randomUUID(), { destination: `N'remote'` }),
+    [547],
+    'MigrationPromotion_ck',
+  );
+  await accept(
+    'Two draft promotions',
+    `${promotionRow(promotion)} ${promotionRow(abandoned)}`,
+  );
+  await refuse(
+    'A promotion carrying a refused entry',
+    promotionEntry(randomUUID(), promotion, 9, refused),
+    [51381],
+    PROMOTION_CARRIES,
+  );
+  await refuse(
+    'A promotion carrying a rolled-back entry',
+    promotionEntry(randomUUID(), promotion, 9, reversed),
+    [51381],
+    PROMOTION_CARRIES,
+  );
+  await accept(
+    'A promotion carrying a published entry',
+    promotionEntry(promoted, promotion, 0, published),
+  );
+  for (const [label, actor] of [
+    ['Approved by an operator holding no key', operator],
+    ['Approved by a holder with no step-up', keyOnly],
+    ['Approved with a step-up but no key', grantOnly],
+    ['Approved with an expired step-up', expiredGrant],
+    ['Approved through a deactivated role', deactivated],
+  ] as const)
+    await refuse(label, approveBy(actor), [51381], APPROVAL);
+  await refuse(
+    'A draft promoted without approval',
+    set(
+      'MigrationPromotion',
+      promotion,
+      `[state]=N'promoting',[approvedByUserId]=N'${publisher}',[approvedAt]='${settled}',[version]=[version]+1`,
+    ),
+    [51381],
+    PROMOTION_KEEPS,
+  );
+  await accept('Approved by a live holder', approveBy(publisher));
+  await refuse(
+    'An entry added after approval',
+    promotionEntry(randomUUID(), promotion, 1, republished),
+    [51381],
+    PROMOTION_CARRIES,
+  );
+  const promote = set(
+    'MigrationPromotionEntry',
+    promoted,
+    `[state]=N'promoted',[promotedAt]='${settled}',[destinationRef]=N'bundle/${promoted}.json'`,
+  );
+  await refuse(
+    'An entry promoted before promoting began',
+    promote,
+    [51381],
+    PROMOTED_ONCE,
+  );
+  await accept(
+    'Promoted entry by entry and completed',
+    `${set('MigrationPromotion', promotion, `[state]=N'promoting',[version]=[version]+1`)}
+     ${promote}
+     ${set('MigrationPromotion', promotion, `[state]=N'promoted',[completedAt]='${settled}',[version]=[version]+1`)}`,
+  );
+  await refuse(
+    'A promoted entry promoted again',
+    set('MigrationPromotionEntry', promoted, `[destinationRef]=N'bundle/forged.json'`),
+    [51381],
+    PROMOTED_ONCE,
+  );
+  await refuse(
+    'A completed promotion withdrawn',
+    set(
+      'MigrationPromotion',
+      promotion,
+      `[state]=N'withdrawn',[withdrawnByUserId]=N'${operator}',[withdrawnAt]='${settled}',[completedAt]=NULL,[version]=[version]+1`,
+    ),
+    [51381],
+    PROMOTION_KEEPS,
+  );
+  await accept(
+    'A draft promotion withdrawn',
+    set(
+      'MigrationPromotion',
+      abandoned,
+      `[state]=N'withdrawn',[withdrawnByUserId]=N'${operator}',[withdrawnAt]='${settled}',[version]=[version]+1`,
+    ),
+  );
+  await refuse(
+    'A withdrawn promotion approved',
+    set(
+      'MigrationPromotion',
+      abandoned,
+      `[state]=N'approved',[approvedByUserId]=N'${publisher}',[approvedAt]='${settled}',[withdrawnByUserId]=NULL,[withdrawnAt]=NULL,[version]=[version]+1`,
+    ),
+    [51381],
+    PROMOTION_KEEPS,
+  );
+
+  // ---- the run completes, balanced, and is then frozen; the source may run again ------------
+  await accept(
+    'The run completed and reconciled in one step',
+    set(
+      'MigrationRun',
+      firstRun,
+      `[state]=N'completed',[endedAt]='${settled}',[leaseToken]=NULL,[leaseExpiresAt]=NULL,[reconciliation]=N'balanced',[reconciledAt]='${settled}',[reconciliationDetail]=N'{"balanced":true}',[version]=[version]+1`,
+    ),
+  );
+  await refuse(
+    'A finished run re-cursored',
+    set('MigrationRun', firstRun, `[discoveryCursor]=N'page-3',[version]=[version]+1`),
+    [51375],
+    RUN_KEEPS,
+  );
+  await refuse(
+    'A finished run reopened',
+    set(
+      'MigrationRun',
+      firstRun,
+      `[state]=N'open',[endedAt]=NULL,[reconciliation]=N'pending',[reconciledAt]=NULL,[version]=[version]+1`,
+    ),
+    [51375],
+    RUN_KEEPS,
+  );
+  await accept(
+    'A second run of the source once the first has ended',
+    runRow(randomUUID(), fixture),
+  );
+
+  // ---- every row is still a sentinel, every address .invalid --------------------------------
+  const [labelled] = await session.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[MigrationSource] WHERE [id] IN (N'${fixture}',N'${other}',N'${exported}')
+         AND ([name] NOT LIKE N'NON[_]MIGRATION[_]FIXTURE%' OR [authorityKind] <> N'fixture'
+              OR ([baseUrl] IS NOT NULL AND [baseUrl] NOT LIKE N'https://%.fixture.invalid/'))) AS [sources],
+      (SELECT COUNT(*) FROM [dbo].[MigrationSourceHost] WHERE [sourceId] IN (N'${fixture}',N'${other}')
+         AND [host] NOT LIKE N'%.fixture.invalid') AS [hosts],
+      (SELECT COUNT(*) FROM [dbo].[MigrationRawSnapshot] WHERE [sourceId] IN (N'${fixture}',N'${other}')
+         AND [requestedUrl] NOT LIKE N'https://%.fixture.invalid/%') AS [snapshots];
+  `);
+  if (JSON.stringify(labelled) !== '{"sources":0,"hosts":0,"snapshots":0}')
+    fail(
+      `The Migration rule proofs wrote a row that is not an unmistakable fixture: ` +
+        `${JSON.stringify(labelled ?? null)}.`,
+    );
+
+  report(
+    'migration rules',
+    `fixture sources fixed as fixtures with *.fixture.invalid hosts, one open run per source ` +
+      `frozen once finished, records of their own source, raw bodies bound to their checksums ` +
+      `and never rewritten or deleted, revisions from their own snapshot with immutable ` +
+      `payloads and forward-only review, items forward-only, access refusals never retried, ` +
+      `cross-language pairs never merged, two licences over one Asset, manifests published ` +
+      `and rolled back only under live migration.publish with a live migration-publication ` +
+      `step-up, one live entry per revision, one active mapping per legacy URL, promotions of ` +
+      `published entries only, no cascade; ${String(refusals)} refusals by name, every text a ` +
+      `NON_MIGRATION_FIXTURE sentinel, rows kept as evidence until this database is dropped`,
+  );
+}
+
 /**
  * The Phase-13 rollback restores the two editorial keys' Phase-6 descriptions
  * exactly — Article and Page, and no News family.
@@ -18394,6 +21434,7 @@ try {
   await assertMessagingFoundation(session);
   await assertMembershipFoundation(session);
   await assertDonationsFoundation(session);
+  await assertMigrationFoundation(session);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -18442,10 +21483,35 @@ try {
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
     }
+    if (migration.id === MIGRATION_PROVENANCE_MIGRATION) {
+      // Phase 29 widened no search vocabulary, so none narrows here — and the
+      // whole Phase-27 state it was applied on is back: the protected bundle the
+      // compiled bundle less the two bundled Migration keys, no Migration &
+      // Provenance object and no `migration-publication` grant, and Donations,
+      // Membership, Messaging, Learning's two slices, Personalisation and Fatwa
+      // whole at `before-migration`, with every owner a Migration row named —
+      // Identity's accounts, Taxonomy's Topic, Media's Video and Storage's
+      // Asset — untouched by the drop.
+      await assertSearchVocabulary(session, 'phase22');
+      await assertMigrationRemoved(session);
+      await assertDonationsFoundation(session, 'before-migration');
+      await assertMembershipFoundation(session, 'before-migration');
+      await assertMessagingFoundation(session, 'before-migration');
+      await assertClassesFoundation(session, 'before-migration');
+      await assertLearningFoundation(session, 'before-migration');
+      await assertPersonalisationFoundation(session, 'before-migration');
+      await assertFatwaFoundation(session, 'before-migration');
+      await assertTaxonomyFoundation(session);
+      await assertPeopleFoundation(session);
+      await assertMediaFoundation(session);
+      await assertAudioFoundation(session);
+      await assertPhotoFoundation(session);
+    }
     if (migration.id === DONATIONS_MIGRATION) {
       // Phase 27 widened no search vocabulary, so none narrows here — and the
       // whole Phase-26 state it was applied on is back: the protected bundle the
-      // compiled bundle less the two bundled Donations keys, no Donations object
+      // compiled bundle less the two bundled Donations keys (and the two bundled
+      // Migration keys Phase 29's rollback removed first), no Donations object
       // and no `donation-refund` grant, and Membership, Messaging, Learning's two
       // slices, Personalisation and Fatwa whole at `before-donations`, with
       // Identity's accounts — the only owner a Donations key named — untouched
@@ -18689,6 +21755,7 @@ try {
   await assertMessagingFoundation(session, 're-deploy');
   await assertMembershipFoundation(session, 're-deploy');
   await assertDonationsFoundation(session, 're-deploy');
+  await assertMigrationFoundation(session, 're-deploy');
   // The membership rules as BEHAVIOUR, on the re-deployed schema: what was
   // rolled back and re-applied enforces exactly what the first deploy did.
   await assertCollectionMembership(session);
@@ -18735,6 +21802,19 @@ try {
   // the refund role, sessions and step-up grants, campaigns, donations, events,
   // refunds and intents — is removed again, children first.
   await assertDonationsRules(session);
+  // And Phase 29's bundle extension as behaviour: rolled back alone and
+  // re-applied through the real Prisma CLI over a live holder of the protected
+  // role, whose sessions and step-up grants it must revoke.
+  const migrationProvenance = migrations.find(
+    (entry) => entry.id === MIGRATION_PROVENANCE_MIGRATION,
+  );
+  if (migrationProvenance === undefined)
+    fail(`${MIGRATION_PROVENANCE_MIGRATION} is not among the migrations on disk.`);
+  await assertMigrationBundleExtension(session, migrationProvenance);
+  // And the Migration & Provenance rules, last: raw snapshots can never be
+  // deleted and every decision is history, so — like the canonical proofs —
+  // their synthetic rows die with this disposable database.
+  await assertMigrationRules(session);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

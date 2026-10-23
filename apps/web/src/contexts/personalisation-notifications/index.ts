@@ -49,3 +49,7 @@ export {
   type NewsletterService,
 } from './application/newsletter-service.ts';
 export { NEWSLETTER_MAIL_LOCALES } from './application/newsletter-mail.ts';
+export {
+  createHoldingService,
+  type HoldingService,
+} from './application/holding-service.ts';

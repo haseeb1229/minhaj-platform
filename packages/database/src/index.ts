@@ -215,6 +215,7 @@ export {
   createPersonalDisposition,
   createPersonalExport,
   createPersonalHistory,
+  createPersonalHoldings,
   createPersonalNotifications,
   createPersonalPurge,
   createPersonalSaved,
@@ -274,6 +275,19 @@ export {
   createDonationRefunds,
   createDonationStaff,
 } from './adapters/donations/index.ts';
+
+/* ---- Migration & Provenance (context-owned) ----------------------------- */
+
+export {
+  MigrationDataError,
+  createMigrationDecisions,
+  createMigrationPipeline,
+  createMigrationPromotion,
+  createMigrationPublication,
+  createMigrationRaw,
+  createMigrationReader,
+  createMigrationSources,
+} from './adapters/migration-provenance/index.ts';
 
 /* ---- Donations payment provider (Stripe sandbox engineering adapter) */
 

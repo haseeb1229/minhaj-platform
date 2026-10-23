@@ -771,6 +771,120 @@ try {
     );
   }
 
+  // Phase 29 gives the operator ROLE nothing over Migration & Provenance:
+  // sources, runs, raw evidence, staged revisions, decisions, legacy mappings,
+  // manifests and promotions are operated only through the runtime under
+  // `migration.administer`, and publication only under the gated
+  // `migration.publish` — so the operator can neither read raw legacy bodies,
+  // add a host, re-label a fixture source, rewrite evidence, publish a
+  // manifest, approve a promotion nor erase anything.
+  const migrationProbes: Readonly<Record<string, readonly [string, string, string]>> = {
+    MigrationSource: [
+      `INSERT INTO [dbo].[MigrationSource] ([id], [key], [name], [authorityKind], [accessMethod], [contentKind], [baseUrl], [minIntervalMs], [maxConcurrency], [maxAttempts], [timeoutMs], [maxBodyBytes], [maxRedirects], [state], [createdAt], [createdByUserId], [updatedAt], [updatedByUserId]) VALUES (N'injected', N'injected', N'injected', N'fixture', N'http', N'media.video', N'https://injected.fixture.invalid/', 1000, 1, 3, 10000, 1048576, 2, N'active', SYSUTCDATETIME(), N'injected', SYSUTCDATETIME(), N'injected');`,
+      `UPDATE [dbo].[MigrationSource] SET [authorityKind] = N'authorised';`,
+      `DELETE FROM [dbo].[MigrationSource];`,
+    ],
+    MigrationSourceHost: [
+      `INSERT INTO [dbo].[MigrationSourceHost] ([sourceId], [host]) VALUES (N'injected', N'injected.fixture.invalid');`,
+      `UPDATE [dbo].[MigrationSourceHost] SET [host] = N'injected.fixture.invalid';`,
+      `DELETE FROM [dbo].[MigrationSourceHost];`,
+    ],
+    MigrationRun: [
+      `INSERT INTO [dbo].[MigrationRun] ([id], [sourceId], [operatorUserId], [state], [adapterKey], [adapterVersion], [parserKey], [parserVersion], [normalizerVersion], [codeRevision], [startedAt]) VALUES (N'injected', N'injected', N'injected', N'open', N'injected', N'1', N'injected', N'1', N'1', N'injected', SYSUTCDATETIME());`,
+      `UPDATE [dbo].[MigrationRun] SET [reconciliation] = N'balanced';`,
+      `DELETE FROM [dbo].[MigrationRun];`,
+    ],
+    MigrationRecord: [
+      `INSERT INTO [dbo].[MigrationRecord] ([id], [sourceId], [externalKey], [contentKind], [status], [firstObservedRunId], [lastObservedRunId], [createdAt], [updatedAt]) VALUES (N'injected', N'injected', N'injected', N'media.video', N'discovered', N'injected', N'injected', SYSUTCDATETIME(), SYSUTCDATETIME());`,
+      `UPDATE [dbo].[MigrationRecord] SET [status] = N'published';`,
+      `DELETE FROM [dbo].[MigrationRecord];`,
+    ],
+    MigrationRunItem: [
+      `INSERT INTO [dbo].[MigrationRunItem] ([id], [runId], [recordId], [position], [updatedAt]) VALUES (N'injected', N'injected', N'injected', 0, SYSUTCDATETIME());`,
+      `UPDATE [dbo].[MigrationRunItem] SET [outcome] = N'excluded';`,
+      `DELETE FROM [dbo].[MigrationRunItem];`,
+    ],
+    MigrationRawSnapshot: [
+      `INSERT INTO [dbo].[MigrationRawSnapshot] ([id], [sourceId], [recordId], [runId], [requestedUrl], [finalUrl], [body], [byteSize], [checksum], [fetchedAt], [fetcherKey], [fetcherVersion], [personalData]) VALUES (N'injected', N'injected', N'injected', N'injected', N'https://injected.fixture.invalid/', N'https://injected.fixture.invalid/', 0x00, 1, REPLICATE('0', 64), SYSUTCDATETIME(), N'injected', N'1', N'none');`,
+      `UPDATE [dbo].[MigrationRawSnapshot] SET [body] = NULL, [disposedAt] = SYSUTCDATETIME();`,
+      `DELETE FROM [dbo].[MigrationRawSnapshot];`,
+    ],
+    MigrationStagedRecord: [
+      `INSERT INTO [dbo].[MigrationStagedRecord] ([id], [recordId], [snapshotId], [runId], [revision], [contentKind], [title], [titleKey], [payload], [payloadChecksum], [adapterKey], [adapterVersion], [parserKey], [parserVersion], [normalizerVersion], [codeRevision], [inputChecksum], [producedAt], [validation], [personalData]) VALUES (N'injected', N'injected', N'injected', N'injected', 1, N'media.video', N'injected', N'injected', N'{}', REPLICATE('0', 64), N'injected', N'1', N'injected', N'1', N'1', N'injected', REPLICATE('0', 64), SYSUTCDATETIME(), N'valid', N'none');`,
+      `UPDATE [dbo].[MigrationStagedRecord] SET [review] = N'approved';`,
+      `DELETE FROM [dbo].[MigrationStagedRecord];`,
+    ],
+    MigrationStagedCategory: [
+      `INSERT INTO [dbo].[MigrationStagedCategory] ([stagedRecordId], [topicMappingId]) VALUES (N'injected', N'injected');`,
+      `UPDATE [dbo].[MigrationStagedCategory] SET [topicMappingId] = N'injected';`,
+      `DELETE FROM [dbo].[MigrationStagedCategory];`,
+    ],
+    MigrationStagedLink: [
+      `INSERT INTO [dbo].[MigrationStagedLink] ([stagedRecordId], [position], [href], [disposition]) VALUES (N'injected', 0, N'/injected', N'unresolved');`,
+      `UPDATE [dbo].[MigrationStagedLink] SET [disposition] = N'dropped';`,
+      `DELETE FROM [dbo].[MigrationStagedLink];`,
+    ],
+    MigrationTopicMapping: [
+      `INSERT INTO [dbo].[MigrationTopicMapping] ([id], [sourceId], [categoryKey], [label]) VALUES (N'injected', N'injected', N'injected', N'injected');`,
+      `UPDATE [dbo].[MigrationTopicMapping] SET [state] = N'excluded';`,
+      `DELETE FROM [dbo].[MigrationTopicMapping];`,
+    ],
+    MigrationError: [
+      `INSERT INTO [dbo].[MigrationError] ([id], [sourceId], [runId], [stage], [classification], [retryEligible], [attempt], [occurredAt]) VALUES (N'injected', N'injected', N'injected', N'fetch', N'network', 1, 1, SYSUTCDATETIME());`,
+      `UPDATE [dbo].[MigrationError] SET [resolution] = N'dismissed';`,
+      `DELETE FROM [dbo].[MigrationError];`,
+    ],
+    MigrationDuplicateCandidate: [
+      `INSERT INTO [dbo].[MigrationDuplicateCandidate] ([id], [recordId], [otherRecordId], [signal], [crossLanguage], [state], [createdAt]) VALUES (N'injected', N'injected', N'other', N'identifier', 0, N'open', SYSUTCDATETIME());`,
+      `UPDATE [dbo].[MigrationDuplicateCandidate] SET [state] = N'merged';`,
+      `DELETE FROM [dbo].[MigrationDuplicateCandidate];`,
+    ],
+    MigrationAssetProvenance: [
+      `INSERT INTO [dbo].[MigrationAssetProvenance] ([id], [sourceId], [runId], [originalUrl], [originalUrlDigest], [assetId], [checksum], [byteSize], [mediaType], [licence], [acquiredAt]) VALUES (N'injected', N'injected', N'injected', N'https://injected.fixture.invalid/', REPLICATE('0', 64), N'injected', REPLICATE('0', 64), 1, N'image/png', N'unknown', SYSUTCDATETIME());`,
+      `UPDATE [dbo].[MigrationAssetProvenance] SET [visibility] = N'public-eligible';`,
+      `DELETE FROM [dbo].[MigrationAssetProvenance];`,
+    ],
+    MigrationLegacyMapping: [
+      `INSERT INTO [dbo].[MigrationLegacyMapping] ([id], [sourceId], [recordId], [legacyUrl], [legacyUrlDigest], [videoId], [canonicalPath], [state], [createdAt], [createdByUserId]) VALUES (N'injected', N'injected', N'injected', N'https://injected.fixture.invalid/', REPLICATE('0', 64), N'injected', N'/injected', N'active', SYSUTCDATETIME(), N'injected');`,
+      `UPDATE [dbo].[MigrationLegacyMapping] SET [state] = N'disabled';`,
+      `DELETE FROM [dbo].[MigrationLegacyMapping];`,
+    ],
+    MigrationPublishManifest: [
+      `INSERT INTO [dbo].[MigrationPublishManifest] ([id], [sourceId], [runId], [state], [createdByUserId], [createdAt]) VALUES (N'injected', N'injected', N'injected', N'draft', N'injected', SYSUTCDATETIME());`,
+      `UPDATE [dbo].[MigrationPublishManifest] SET [state] = N'publishing';`,
+      `DELETE FROM [dbo].[MigrationPublishManifest];`,
+    ],
+    MigrationManifestEntry: [
+      `INSERT INTO [dbo].[MigrationManifestEntry] ([id], [manifestId], [position], [stagedRecordId], [recordId]) VALUES (N'injected', N'injected', 0, N'injected', N'injected');`,
+      `UPDATE [dbo].[MigrationManifestEntry] SET [state] = N'published';`,
+      `DELETE FROM [dbo].[MigrationManifestEntry];`,
+    ],
+    MigrationPromotion: [
+      `INSERT INTO [dbo].[MigrationPromotion] ([id], [state], [destination], [createdByUserId], [createdAt]) VALUES (N'injected', N'draft', N'bundle', N'injected', SYSUTCDATETIME());`,
+      `UPDATE [dbo].[MigrationPromotion] SET [state] = N'approved';`,
+      `DELETE FROM [dbo].[MigrationPromotion];`,
+    ],
+    MigrationPromotionEntry: [
+      `INSERT INTO [dbo].[MigrationPromotionEntry] ([id], [promotionId], [position], [manifestEntryId]) VALUES (N'injected', N'injected', 0, N'injected');`,
+      `UPDATE [dbo].[MigrationPromotionEntry] SET [state] = N'promoted';`,
+      `DELETE FROM [dbo].[MigrationPromotionEntry];`,
+    ],
+  };
+  for (const [table, [insert, update, remove]] of Object.entries(migrationProbes)) {
+    await expectDenied(operatorSession, `operator SELECT on ${table} denied`, () =>
+      operatorSession.query(`SELECT TOP 1 1 AS probe FROM [dbo].[${table}];`),
+    );
+    await expectDenied(operatorSession, `operator INSERT on ${table} denied`, () =>
+      operatorSession.query(insert),
+    );
+    await expectDenied(operatorSession, `operator UPDATE on ${table} denied`, () =>
+      operatorSession.query(update),
+    );
+    await expectDenied(operatorSession, `operator DELETE on ${table} denied`, () =>
+      operatorSession.query(remove),
+    );
+  }
+
   await expectDenied(operatorSession, 'operator INSERT on RoleAssignment denied', () =>
     operatorSession.query(`
       INSERT INTO [dbo].[RoleAssignment] ([userId], [roleId])

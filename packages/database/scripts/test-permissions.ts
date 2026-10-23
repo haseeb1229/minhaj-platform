@@ -784,6 +784,7 @@ try {
     classesProvisioned: number;
     membershipProvisioned: number;
     donationsProvisioned: number;
+    migrationProvisioned: number;
   }>(`
     SELECT COUNT_BIG(*) AS total,
            SUM(CASE WHEN [action] = N'phase1.permission.probe' THEN 1 ELSE 0 END) AS probe,
@@ -832,18 +833,21 @@ try {
              AS membershipProvisioned,
            SUM(CASE WHEN [action] = N'donations.permissions.provisioned'
                      AND [actorType] = N'migration' THEN 1 ELSE 0 END)
-             AS donationsProvisioned
+             AS donationsProvisioned,
+           SUM(CASE WHEN [action] = N'migration.permissions.provisioned'
+                     AND [actorType] = N'migration' THEN 1 ELSE 0 END)
+             AS migrationProvisioned
     FROM [dbo].[AuditLog];
   `);
 
-  // Exactly sixteen rows: the Phase-3B through Phase-27 privilege extensions
+  // Exactly seventeen rows: the Phase-3B through Phase-29 privilege extensions
   // (Phase 10's and Phase 16's included; Phases 20 and 24 bundle nothing and so
   // record nothing), and this run's probe. Naming every migration action is load-bearing:
   // deriving the expected total from whatever provisioning rows happened to
   // survive would pass if a phase omitted its own audit, and each privilege
   // extension must be able to show that it paid for itself
   // (SECURITY_BASELINE.md §8.1).
-  const EXPECTED_AUDIT_ROWS = 16;
+  const EXPECTED_AUDIT_ROWS = 17;
 
   if (
     Number(survivor?.taxonomyProvisioned ?? 0) !== 1 ||
@@ -861,6 +865,7 @@ try {
     Number(survivor?.classesProvisioned ?? 0) !== 1 ||
     Number(survivor?.membershipProvisioned ?? 0) !== 1 ||
     Number(survivor?.donationsProvisioned ?? 0) !== 1 ||
+    Number(survivor?.migrationProvisioned ?? 0) !== 1 ||
     Number(survivor?.probe ?? 0) !== 1 ||
     Number(survivor?.tampered ?? -1) !== 0 ||
     Number(survivor?.total ?? 0) !== EXPECTED_AUDIT_ROWS
@@ -872,7 +877,7 @@ try {
         `1 library provisioning, 1 search provisioning, 1 media provisioning, ` +
         `1 global provisioning, 1 quran provisioning, 1 hadith provisioning, 1 newsletter provisioning, ` +
         `1 learning provisioning, 1 classes provisioning, 1 membership provisioning, ` +
-        `1 donations provisioning, 1 probe and ` +
+        `1 donations provisioning, 1 migration provisioning, 1 probe and ` +
         `0 tampered; found ${survivor?.total ?? 0} rows, ` +
         `${survivor?.taxonomyProvisioned ?? 0} taxonomy provisioning, ` +
         `${survivor?.navigationProvisioned ?? 0} navigation provisioning, ` +
@@ -889,12 +894,13 @@ try {
         `${survivor?.classesProvisioned ?? 0} classes provisioning, ` +
         `${survivor?.membershipProvisioned ?? 0} membership provisioning, ` +
         `${survivor?.donationsProvisioned ?? 0} donations provisioning, ` +
+        `${survivor?.migrationProvisioned ?? 0} migration provisioning, ` +
         `${survivor?.probe ?? 0} probe, ${survivor?.tampered ?? 0} tampered`,
     );
   } else {
     pass(
       'audit rows unmodified',
-      'the probe row and all fifteen exact migration records are intact after ' +
+      'the probe row and all sixteen exact migration records are intact after ' +
         'UPDATE/DELETE attempts',
     );
   }
@@ -8000,6 +8006,804 @@ try {
       );
     } else {
       fail('Donations effective posture exact', findings.join('; ') || 'tables missing');
+    }
+  }
+
+  // ---- Phase 29: Migration & Provenance, in four postures --------------------------
+  //
+  // NOTHING IS DELETED. A source is deactivated, a vanished record is marked
+  // missing, a raw snapshot's body is disposed of, and every decision moves
+  // forward — so no Migration table holds DELETE, and identity, provenance and
+  // evidence columns are DENY.
+  //
+  // A SOURCE's key, authority kind, access method, content kind, base address,
+  // authorisation evidence and creation are fixed at creation: a fixture can
+  // never be re-labelled an authorised source by an edit. Its HOSTS, a
+  // revision's CATEGORIES and its LINKS are written once and never changed.
+  //
+  // RAW EVIDENCE is append-only: of a snapshot only the disposal columns move
+  // (and the body, which the trigger lets go only to NULL); of a staged revision
+  // only the review columns.
+  //
+  // PUBLICATION AND PROMOTION are re-checked BY THE TRIGGER beneath the
+  // runtime's own update: the runtime cannot publish a manifest or approve a
+  // promotion for an account without `migration.publish` and a live
+  // `migration-publication` step-up, whatever it claims.
+  //
+  // Every statement below is REAL SQL as the runtime principal over synthetic
+  // NON_MIGRATION_FIXTURE rows and `*.fixture.invalid` addresses; the accounts,
+  // the publication authority, the Video and the Asset are Identity's, Media's
+  // and Storage's rows, written with administrative authority.
+  {
+    const run = randomUUID().replaceAll('-', '').slice(0, 16);
+    const at = '2026-10-11T00:00:00';
+    const later = '2026-10-11T01:00:00';
+    const settled = '2026-10-11T02:00:00';
+    const sha = (value: string | Buffer): string =>
+      createHash('sha256').update(value).digest('hex');
+    const operator = randomUUID();
+    const publisher = randomUUID();
+    const plain = randomUUID();
+    const publishRole = randomUUID();
+    await admin.query(`
+      ${[operator, publisher, plain]
+        .map(
+          (id) =>
+            `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled])
+               VALUES (N'${id}',N'NON_MIGRATION_FIXTURE account',N'${id}@migration-proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);`,
+        )
+        .join('\n')}
+      INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system])
+        VALUES (N'${publishRole}',N'proof-migration-permissions-${run}',N'Synthetic migration publication proof role',N'Holds migration.publish for the permission proof only.',0);
+      INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES (N'${publishRole}',N'migration.publish');
+      INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId]) VALUES (N'${publisher}',N'${publishRole}');
+      INSERT INTO [dbo].[Session] ([id],[token],[userId],[expiresAt],[createdAt],[updatedAt])
+        VALUES (N'${publisher}',N'proof-migration-${publisher}',N'${publisher}',DATEADD(hour,1,SYSUTCDATETIME()),SYSUTCDATETIME(),SYSUTCDATETIME());
+      INSERT INTO [dbo].[StepUpGrant] ([id],[userId],[sessionId],[purpose],[expiresAt])
+        VALUES (N'${randomUUID()}',N'${publisher}',N'${publisher}',N'migration-publication',DATEADD(minute,30,SYSUTCDATETIME()));
+    `);
+
+    // Media's Video and Storage's Asset, written as their owners would: the
+    // runtime below only names them.
+    const video = randomUUID();
+    const asset = randomUUID();
+    const assetBytes = Buffer.from(`NON_MIGRATION_FIXTURE asset ${run}`, 'utf8');
+    await admin.query(`
+      INSERT INTO [dbo].[Video] ([id],[slug],[primaryLocale],[state],[provider],[providerVideoId],[availability],[languageCode],[version],[updatedAt])
+        VALUES (N'${video}',N'proof-migration-${run}',N'en',N'published',N'youtube','p${run.slice(0, 10)}',N'available',N'en',1,SYSUTCDATETIME());
+      INSERT INTO [dbo].[Asset] ([id],[storageKey],[mediaType],[byteSize],[checksum],[state],[displayName],[updatedAt])
+        VALUES (N'${asset}',N'${run.slice(0, 2)}/${run.slice(2, 4)}/${run}${run}',N'image/png',${String(assetBytes.byteLength)},N'${sha(assetBytes)}',N'clean',NULL,SYSUTCDATETIME());
+    `);
+    const [topicRow] = await admin.query<{ id: string }>(
+      `SELECT TOP 1 [id] FROM [dbo].[Topic] ORDER BY [slug];`,
+    );
+    const topic = topicRow?.id ?? '';
+
+    const source = randomUUID();
+    const otherSource = randomUUID();
+    const host = `legacy-${run}.fixture.invalid`;
+    const firstRun = randomUUID();
+    const otherRun = randomUUID();
+    const record = randomUUID();
+    const missing = randomUUID();
+    const otherRecord = randomUUID();
+    const snapshot = randomUUID();
+    const disposed = randomUUID();
+    const staged = randomUUID();
+    const pendingStaged = randomUUID();
+    const item = randomUUID();
+    const missingItem = randomUUID();
+    const mapping = randomUUID();
+    const error = randomUUID();
+    const duplicate = randomUUID();
+    const acquisition = randomUUID();
+    const manifest = randomUUID();
+    const secondManifest = randomUUID();
+    const entry = randomUUID();
+    const secondEntry = randomUUID();
+    const legacy = randomUUID();
+    const retired = randomUUID();
+    const promotion = randomUUID();
+    const promotionEntry = randomUUID();
+    const body = Buffer.from(`<p>NON_MIGRATION_FIXTURE raw body ${run}</p>`, 'utf8');
+    const payload = JSON.stringify({ title: 'NON_MIGRATION_FIXTURE title', run });
+    const sourceRow = (id: string, key: string, baseUrl: string): string =>
+      `INSERT INTO [dbo].[MigrationSource] ([id],[key],[name],[authorityKind],[accessMethod],[contentKind],[baseUrl],[minIntervalMs],[maxConcurrency],[maxAttempts],[timeoutMs],[maxBodyBytes],[maxRedirects],[state],[createdAt],[createdByUserId],[updatedAt],[updatedByUserId]) VALUES (N'${id}',N'${key}',N'NON_MIGRATION_FIXTURE source',N'fixture',N'http',N'media.video',N'${baseUrl}',1000,1,3,10000,1048576,2,N'active','${at}',N'${operator}','${at}',N'${operator}');`;
+    const runRow = (id: string, sourceId: string): string =>
+      `INSERT INTO [dbo].[MigrationRun] ([id],[sourceId],[operatorUserId],[state],[adapterKey],[adapterVersion],[parserKey],[parserVersion],[normalizerVersion],[codeRevision],[startedAt]) VALUES (N'${id}',N'${sourceId}',N'${operator}',N'open',N'fixture-video',N'1',N'fixture-video',N'1',N'1',N'proof',SYSUTCDATETIME());`;
+    const recordRow = (
+      id: string,
+      sourceId: string,
+      runId: string,
+      key: string,
+    ): string =>
+      `INSERT INTO [dbo].[MigrationRecord] ([id],[sourceId],[externalKey],[originalUrl],[contentKind],[status],[firstObservedRunId],[lastObservedRunId],[createdAt],[updatedAt]) VALUES (N'${id}',N'${sourceId}',N'${key}',N'https://${host}/videos/${key}',N'media.video',N'discovered',N'${runId}',N'${runId}','${at}','${at}');`;
+    const snapshotRow = (
+      id: string,
+      recordId: string,
+      sourceId = source,
+      runId = firstRun,
+      checksum = sha(body),
+    ): string =>
+      `INSERT INTO [dbo].[MigrationRawSnapshot] ([id],[sourceId],[recordId],[runId],[requestedUrl],[finalUrl],[httpStatus],[contentType],[headers],[body],[byteSize],[checksum],[fetchedAt],[fetcherKey],[fetcherVersion],[personalData]) VALUES (N'${id}',N'${sourceId}',N'${recordId}',N'${runId}',N'https://${host}/videos/${id}',N'https://${host}/videos/${id}',200,N'text/html',N'{"content-type":"text/html"}',0x${body.toString('hex')},${String(body.byteLength)},'${checksum}','${at}',N'fixture-fetch',N'1',N'none');`;
+    const stagedRow = (
+      id: string,
+      recordId: string,
+      snapshotId: string,
+      revision: number,
+    ): string =>
+      `INSERT INTO [dbo].[MigrationStagedRecord] ([id],[recordId],[snapshotId],[runId],[revision],[contentKind],[title],[titleKey],[dedupeKey],[languageCode],[payload],[payloadChecksum],[adapterKey],[adapterVersion],[parserKey],[parserVersion],[normalizerVersion],[codeRevision],[inputChecksum],[producedAt],[validation],[personalData]) VALUES (N'${id}',N'${recordId}',N'${snapshotId}',N'${firstRun}',${String(revision)},N'media.video',N'NON_MIGRATION_FIXTURE title',N'non migration fixture title',N'youtube:p${run.slice(0, 10)}',N'en',N'${payload}','${sha(payload)}',N'fixture-video',N'1',N'fixture-video',N'1',N'1',N'proof','${sha(body)}','${at}',N'valid',N'none');`;
+    const update = (table: string, id: string, assignments: string): string =>
+      `UPDATE [dbo].[${table}] SET ${assignments} WHERE [id]=N'${id}';`;
+
+    for (const [label, statement, detail] of [
+      [
+        'MigrationSource and hosts INSERT',
+        `${sourceRow(source, `perm-${run}`, `https://${host}/`)}
+         ${sourceRow(otherSource, `perm-other-${run}`, `https://other-${run}.fixture.invalid/`)}
+         INSERT INTO [dbo].[MigrationSourceHost] ([sourceId],[host]) VALUES (N'${source}',N'${host}'),(N'${source}',N'media-${run}.fixture.invalid'),(N'${otherSource}',N'other-${run}.fixture.invalid');`,
+        'two fixture sources and their *.fixture.invalid hosts',
+      ],
+      [
+        'MigrationSource policy UPDATE',
+        update(
+          'MigrationSource',
+          source,
+          `[name]=N'NON_MIGRATION_FIXTURE renamed',[minIntervalMs]=2000,[policyNotes]=N'NON_MIGRATION_FIXTURE notes',[state]=N'inactive',[version]=[version]+1,[updatedAt]='${later}',[updatedByUserId]=N'${operator}'`,
+        ),
+        'renamed, slowed and deactivated one version at a time',
+      ],
+      [
+        'MigrationRun, records, evidence and staging',
+        `${runRow(firstRun, source)}
+         ${runRow(otherRun, otherSource)}
+         ${recordRow(record, source, firstRun, `video-${run}`)}
+         ${recordRow(missing, source, firstRun, `gone-${run}`)}
+         ${recordRow(otherRecord, otherSource, otherRun, `other-${run}`)}
+         ${snapshotRow(snapshot, record)}
+         ${snapshotRow(disposed, missing)}
+         ${stagedRow(staged, record, snapshot, 1)}
+         ${stagedRow(pendingStaged, missing, disposed, 1)}
+         INSERT INTO [dbo].[MigrationRunItem] ([id],[runId],[recordId],[position],[updatedAt]) VALUES (N'${item}',N'${firstRun}',N'${record}',0,'${at}'),(N'${missingItem}',N'${firstRun}',N'${missing}',1,'${at}');`,
+        'an open run per source, three records, two snapshots, two pending revisions and two items',
+      ],
+      [
+        'MigrationRun lease and record lifecycle UPDATE',
+        `${update('MigrationRun', firstRun, `[leaseToken]=N'${randomUUID()}',[leaseExpiresAt]='${later}',[discoveryCursor]=N'page-2',[version]=[version]+1`)}
+         ${update('MigrationRunItem', item, `[outcome]=N'staged',[fetched]=1,[parsed]=1,[attempts]=1,[snapshotId]=N'${snapshot}',[stagedRecordId]=N'${staged}',[updatedAt]='${later}'`)}
+         ${update('MigrationRecord', record, `[status]=N'staged',[latestSnapshotId]=N'${snapshot}',[currentStagedRecordId]=N'${staged}',[version]=[version]+1,[updatedAt]='${later}'`)}`,
+        'a leased run, a staged item, a record pointing at its own evidence',
+      ],
+      [
+        'MigrationTopicMapping and categories',
+        `INSERT INTO [dbo].[MigrationTopicMapping] ([id],[sourceId],[categoryKey],[label]) VALUES (N'${mapping}',N'${source}',N'lectures-${run}',N'NON_MIGRATION_FIXTURE lectures');
+         ${update('MigrationTopicMapping', mapping, `[state]=N'confirmed',[topicId]=N'${topic}',[decidedByUserId]=N'${operator}',[decidedAt]='${later}',[version]=[version]+1`)}
+         INSERT INTO [dbo].[MigrationStagedCategory] ([stagedRecordId],[topicMappingId]) VALUES (N'${staged}',N'${mapping}');
+         INSERT INTO [dbo].[MigrationStagedLink] ([stagedRecordId],[position],[href],[disposition]) VALUES (N'${staged}',0,N'https://elsewhere.fixture.invalid/x',N'external'),(N'${staged}',1,N'/legacy/unknown',N'unresolved');`,
+        "a category confirmed onto Taxonomy's Topic; an external and an unresolved link",
+      ],
+      [
+        'MigrationError, duplicate and asset decisions',
+        `INSERT INTO [dbo].[MigrationError] ([id],[sourceId],[runId],[recordId],[stage],[classification],[retryEligible],[httpStatus],[attempt],[occurredAt]) VALUES (N'${error}',N'${source}',N'${firstRun}',N'${missing}',N'fetch',N'server-error',1,503,1,'${at}');
+         ${update('MigrationError', error, `[resolution]=N'retry-requested',[resolvedByUserId]=N'${operator}',[resolvedAt]='${later}',[version]=[version]+1`)}
+         INSERT INTO [dbo].[MigrationDuplicateCandidate] ([id],[recordId],[otherRecordId],[signal],[score],[crossLanguage],[state],[createdAt]) VALUES (N'${duplicate}',N'${missing}',N'${record}',N'title-similarity',90,0,N'open','${at}');
+         ${update('MigrationDuplicateCandidate', duplicate, `[state]=N'distinct',[decidedByUserId]=N'${operator}',[decidedAt]='${later}',[note]=N'NON_MIGRATION_FIXTURE note',[version]=[version]+1`)}
+         INSERT INTO [dbo].[MigrationAssetProvenance] ([id],[sourceId],[recordId],[runId],[originalUrl],[originalUrlDigest],[assetId],[checksum],[byteSize],[mediaType],[licence],[acquiredAt]) VALUES (N'${acquisition}',N'${source}',N'${record}',N'${firstRun}',N'https://media-${run}.fixture.invalid/a.png','${sha(`https://media-${run}.fixture.invalid/a.png`)}',N'${asset}','${sha(assetBytes)}',${String(assetBytes.byteLength)},N'image/png',N'unknown','${at}');
+         ${update('MigrationAssetProvenance', acquisition, `[licence]=N'organisation-owned',[visibility]=N'public-eligible',[decidedByUserId]=N'${operator}',[decidedAt]='${later}',[version]=[version]+1`)}`,
+        'a retry requested, a pair kept distinct, an acquisition cleared for release',
+      ],
+      [
+        'MigrationRawSnapshot disposal UPDATE',
+        update(
+          'MigrationRawSnapshot',
+          disposed,
+          `[body]=NULL,[disposedAt]='${later}',[disposedByUserId]=N'${operator}',[disposalReason]=N'NON_MIGRATION_FIXTURE disposal'`,
+        ),
+        'the body disposed of; the checksum and the row kept',
+      ],
+      [
+        'MigrationStagedRecord review and record missing',
+        `${update('MigrationStagedRecord', staged, `[review]=N'approved',[reviewedByUserId]=N'${operator}',[reviewedAt]='${later}',[reviewNote]=N'NON_MIGRATION_FIXTURE review',[version]=[version]+1`)}
+         ${update('MigrationRecord', missing, `[observed]=N'missing',[disappearance]=N'withdrawn',[disappearanceNote]=N'NON_MIGRATION_FIXTURE note',[classifiedByUserId]=N'${operator}',[classifiedAt]='${later}',[version]=[version]+1,[updatedAt]='${later}'`)}`,
+        'a revision approved and a vanished record classified, never deleted',
+      ],
+      [
+        'MigrationRun completed and reconciled',
+        `${update('MigrationRunItem', missingItem, `[outcome]=N'excluded',[updatedAt]='${later}'`)}
+         ${update('MigrationRun', firstRun, `[state]=N'completed',[endedAt]='${later}',[discoveryComplete]=1,[leaseToken]=NULL,[leaseExpiresAt]=NULL,[reconciliation]=N'balanced',[reconciledAt]='${later}',[reconciliationDetail]=N'{"balanced":true}',[version]=[version]+1`)}`,
+        'a complete, balanced run',
+      ],
+      [
+        'MigrationPublishManifest published by a live holder',
+        `INSERT INTO [dbo].[MigrationPublishManifest] ([id],[sourceId],[runId],[state],[createdByUserId],[createdAt]) VALUES (N'${manifest}',N'${source}',N'${firstRun}',N'draft',N'${operator}','${at}'),(N'${secondManifest}',N'${source}',N'${firstRun}',N'draft',N'${operator}','${at}');
+         INSERT INTO [dbo].[MigrationManifestEntry] ([id],[manifestId],[position],[stagedRecordId],[recordId]) VALUES (N'${entry}',N'${manifest}',0,N'${staged}',N'${record}'),(N'${secondEntry}',N'${secondManifest}',0,N'${staged}',N'${record}');
+         ${update('MigrationPublishManifest', manifest, `[state]=N'publishing',[publishedByUserId]=N'${publisher}',[publishStartedAt]='${later}',[version]=[version]+1`)}
+         ${update('MigrationManifestEntry', entry, `[state]=N'publishing',[version]=[version]+1`)}
+         ${update('MigrationManifestEntry', entry, `[state]=N'published',[videoId]=N'${video}',[targetVersion]=1,[canonicalPath]=N'/watch/videos/proof-migration-${run}',[publishedAt]='${settled}',[version]=[version]+1`)}
+         ${update('MigrationPublishManifest', manifest, `[state]=N'published',[publishedAt]='${settled}',[version]=[version]+1`)}
+         ${update('MigrationPublishManifest', secondManifest, `[state]=N'publishing',[publishedByUserId]=N'${publisher}',[publishStartedAt]='${settled}',[version]=[version]+1`)}`,
+        'manifests published by a live migration.publish holder with a live migration-publication step-up',
+      ],
+      [
+        'MigrationLegacyMapping and rewritten link',
+        `INSERT INTO [dbo].[MigrationLegacyMapping] ([id],[sourceId],[recordId],[legacyUrl],[legacyUrlDigest],[videoId],[canonicalPath],[state],[manifestEntryId],[createdAt],[createdByUserId]) VALUES (N'${legacy}',N'${source}',N'${record}',N'https://${host}/videos/video-${run}','${sha(`https://${host}/videos/video-${run}`)}',N'${video}',N'/watch/videos/proof-migration-${run}',N'active',N'${entry}','${settled}',N'${operator}'),(N'${retired}',N'${source}',N'${record}',N'https://${host}/old/${run}','${sha(`https://${host}/old/${run}`)}',N'${video}',N'/watch/videos/proof-migration-${run}',N'active',N'${entry}','${settled}',N'${operator}');
+         ${update('MigrationLegacyMapping', retired, `[state]=N'disabled',[changedAt]='${settled}',[changedByUserId]=N'${operator}',[version]=[version]+1`)}
+         INSERT INTO [dbo].[MigrationStagedLink] ([stagedRecordId],[position],[href],[disposition],[rewrittenTo],[legacyMappingId]) VALUES (N'${staged}',2,N'https://${host}/videos/video-${run}',N'rewritten',N'/watch/videos/proof-migration-${run}',N'${legacy}');`,
+        'one active and one disabled legacy mapping, a link rewritten through the active one',
+      ],
+      [
+        'MigrationPromotion approved by a live holder and promoted',
+        `INSERT INTO [dbo].[MigrationPromotion] ([id],[state],[destination],[createdByUserId],[createdAt]) VALUES (N'${promotion}',N'draft',N'bundle',N'${operator}','${at}');
+         INSERT INTO [dbo].[MigrationPromotionEntry] ([id],[promotionId],[position],[manifestEntryId]) VALUES (N'${promotionEntry}',N'${promotion}',0,N'${entry}');
+         ${update('MigrationPromotion', promotion, `[state]=N'approved',[approvedByUserId]=N'${publisher}',[approvedAt]='${settled}',[version]=[version]+1`)}
+         ${update('MigrationPromotion', promotion, `[state]=N'promoting',[version]=[version]+1`)}
+         ${update('MigrationPromotionEntry', promotionEntry, `[state]=N'promoted',[promotedAt]='${settled}',[destinationRef]=N'bundle/${promotionEntry}.json'`)}
+         ${update('MigrationPromotion', promotion, `[state]=N'promoted',[completedAt]='${settled}',[version]=[version]+1`)}`,
+        'a promotion approved by a live holder and promoted entry by entry',
+      ],
+    ] as const)
+      await expectAllowed(app, label, statement, detail);
+
+    // The schema's own rules hold for the runtime as for the owner.
+    const refusedManifest = randomUUID();
+    await admin.query(
+      `INSERT INTO [dbo].[MigrationPublishManifest] ([id],[sourceId],[runId],[state],[createdByUserId],[createdAt]) VALUES (N'${refusedManifest}',N'${source}',N'${firstRun}',N'draft',N'${operator}','${at}');`,
+    );
+    const draftPromotion = randomUUID();
+    await admin.query(
+      `INSERT INTO [dbo].[MigrationPromotion] ([id],[state],[destination],[createdByUserId],[createdAt]) VALUES (N'${draftPromotion}',N'draft',N'bundle',N'${operator}','${at}');`,
+    );
+    for (const [label, statement, number] of [
+      [
+        'MigrationSource moved by two versions',
+        update(
+          'MigrationSource',
+          source,
+          `[name]=N'NON_MIGRATION_FIXTURE skip',[version]=[version]+2`,
+        ),
+        51370,
+      ],
+      [
+        'MigrationSourceHost outside *.fixture.invalid',
+        `INSERT INTO [dbo].[MigrationSourceHost] ([sourceId],[host]) VALUES (N'${source}',N'legacy-${run}.example.invalid');`,
+        51371,
+      ],
+      [
+        // The same bytes written back: the CHECK still holds, so only the
+        // trigger can refuse it — a held body is never written at all.
+        'MigrationRawSnapshot body rewritten in place',
+        update('MigrationRawSnapshot', snapshot, `[body]=[body]`),
+        51372,
+      ],
+      [
+        'Disposed MigrationRawSnapshot disposed again',
+        update(
+          'MigrationRawSnapshot',
+          disposed,
+          `[disposalReason]=N'NON_MIGRATION_FIXTURE again'`,
+        ),
+        51372,
+      ],
+      [
+        'MigrationStagedRecord review moved backwards',
+        update(
+          'MigrationStagedRecord',
+          staged,
+          `[review]=N'rejected',[reviewedAt]='${settled}',[version]=[version]+1`,
+        ),
+        51374,
+      ],
+      [
+        'Finished MigrationRun changed',
+        update('MigrationRun', firstRun, `[discoveryCursor]=N'page-3'`),
+        51375,
+      ],
+      [
+        'Terminal MigrationRunItem reopened',
+        update('MigrationRunItem', item, `[outcome]=N'pending',[updatedAt]='${settled}'`),
+        51377,
+      ],
+      [
+        'MigrationPublishManifest published without authority',
+        update(
+          'MigrationPublishManifest',
+          refusedManifest,
+          `[state]=N'publishing',[publishedByUserId]=N'${plain}',[publishStartedAt]='${settled}',[version]=[version]+1`,
+        ),
+        51378,
+      ],
+      [
+        'MigrationManifestEntry for an unapproved revision',
+        `INSERT INTO [dbo].[MigrationManifestEntry] ([id],[manifestId],[position],[stagedRecordId],[recordId]) VALUES (N'${randomUUID()}',N'${refusedManifest}',0,N'${pendingStaged}',N'${missing}');`,
+        51379,
+      ],
+      [
+        // Its address and target are column DENYs; what the runtime may move,
+        // it moves one version at a time.
+        'MigrationLegacyMapping moved without a version',
+        update(
+          'MigrationLegacyMapping',
+          legacy,
+          `[state]=N'disabled',[changedAt]='${settled}',[changedByUserId]=N'${operator}'`,
+        ),
+        51380,
+      ],
+      [
+        'MigrationPromotion approved without authority',
+        update(
+          'MigrationPromotion',
+          draftPromotion,
+          `[state]=N'approved',[approvedByUserId]=N'${plain}',[approvedAt]='${settled}',[version]=[version]+1`,
+        ),
+        51381,
+      ],
+      [
+        'MigrationPromotionEntry for an unpublished entry',
+        `INSERT INTO [dbo].[MigrationPromotionEntry] ([id],[promotionId],[position],[manifestEntryId]) VALUES (N'${randomUUID()}',N'${draftPromotion}',0,N'${secondEntry}');`,
+        51381,
+      ],
+      [
+        'Requested MigrationError reopened',
+        update(
+          'MigrationError',
+          error,
+          `[resolution]=N'open',[resolvedByUserId]=NULL,[resolvedAt]=NULL,[version]=[version]+1`,
+        ),
+        51383,
+      ],
+    ] as const)
+      await expectRefusedByInvariant(app, label, statement, number);
+    for (const [label, statement, expected, constraint] of [
+      [
+        'Second open MigrationRun for one source',
+        runRow(randomUUID(), otherSource),
+        DUPLICATE_KEY,
+        'MigrationRun_open_key',
+      ],
+      [
+        'Second active mapping for one legacy URL',
+        `INSERT INTO [dbo].[MigrationLegacyMapping] ([id],[sourceId],[recordId],[legacyUrl],[legacyUrlDigest],[videoId],[canonicalPath],[state],[createdAt],[createdByUserId]) VALUES (N'${randomUUID()}',N'${source}',N'${record}',N'https://${host}/videos/video-${run}','${sha(`https://${host}/videos/video-${run}`)}',N'${video}',N'/watch/videos/proof-migration-${run}',N'active','${settled}',N'${operator}');`,
+        DUPLICATE_KEY,
+        'MigrationLegacyMapping_active_key',
+      ],
+      [
+        // Both manifests are publishing, so only the filtered key can refuse.
+        'Second live entry for one staged revision',
+        update(
+          'MigrationManifestEntry',
+          secondEntry,
+          `[state]=N'publishing',[version]=[version]+1`,
+        ),
+        DUPLICATE_KEY,
+        'MigrationManifestEntry_live_key',
+      ],
+      [
+        'MigrationRawSnapshot body replaced',
+        update('MigrationRawSnapshot', snapshot, `[body]=0x00`),
+        CONSTRAINT_VIOLATION,
+        'MigrationRawSnapshot_ck',
+      ],
+      [
+        'MigrationRawSnapshot body not its checksum',
+        snapshotRow(
+          randomUUID(),
+          record,
+          source,
+          firstRun,
+          sha('NON_MIGRATION_FIXTURE other'),
+        ),
+        CONSTRAINT_VIOLATION,
+        'MigrationRawSnapshot_ck',
+      ],
+      [
+        "MigrationRawSnapshot of another source's record",
+        snapshotRow(randomUUID(), otherRecord, source, firstRun),
+        CONSTRAINT_VIOLATION,
+        'MigrationRawSnapshot_recordId_fkey',
+      ],
+      [
+        'Access-denied MigrationError retry-eligible',
+        `INSERT INTO [dbo].[MigrationError] ([id],[sourceId],[runId],[recordId],[stage],[classification],[retryEligible],[httpStatus],[attempt],[occurredAt]) VALUES (N'${randomUUID()}',N'${source}',N'${firstRun}',N'${record}',N'fetch',N'access-denied',1,403,1,'${at}');`,
+        CONSTRAINT_VIOLATION,
+        'MigrationError_ck',
+      ],
+      [
+        'Cross-language MigrationDuplicateCandidate merged',
+        `INSERT INTO [dbo].[MigrationDuplicateCandidate] ([id],[recordId],[otherRecordId],[signal],[crossLanguage],[state],[decidedByUserId],[decidedAt],[createdAt]) VALUES (N'${randomUUID()}',N'${record}',N'${missing}',N'identifier',1,N'merged',N'${operator}','${later}','${at}');`,
+        CONSTRAINT_VIOLATION,
+        'MigrationDuplicateCandidate_ck',
+      ],
+      [
+        'Fixture MigrationSource outside *.fixture.invalid',
+        sourceRow(randomUUID(), `perm-real-${run}`, 'https://example.org/'),
+        CONSTRAINT_VIOLATION,
+        'MigrationSource_ck',
+      ],
+    ] as const)
+      await expectRefusedByConstraint(app, label, statement, expected, constraint);
+
+    // Nothing is ever deleted; what identifies each row, its provenance and its
+    // evidence are never rewritten; and the runtime can neither catalogue a
+    // Migration key nor rewrite how one is described. The DENY lists are the
+    // grant script's own, column for column.
+    const MIGRATION_COLUMN_DENIALS: Readonly<Record<string, readonly string[]>> = {
+      MigrationSource: [
+        'id',
+        'key',
+        'authorityKind',
+        'accessMethod',
+        'contentKind',
+        'baseUrl',
+        'authorisationReference',
+        'authorisedOn',
+        'createdAt',
+        'createdByUserId',
+      ],
+      MigrationRun: [
+        'id',
+        'sourceId',
+        'operatorUserId',
+        'adapterKey',
+        'adapterVersion',
+        'parserKey',
+        'parserVersion',
+        'normalizerVersion',
+        'codeRevision',
+        'startedAt',
+      ],
+      MigrationRecord: [
+        'id',
+        'sourceId',
+        'externalKey',
+        'contentKind',
+        'firstObservedRunId',
+        'createdAt',
+      ],
+      MigrationRunItem: ['id', 'runId', 'recordId', 'position'],
+      MigrationRawSnapshot: [
+        'id',
+        'sourceId',
+        'recordId',
+        'runId',
+        'requestedUrl',
+        'finalUrl',
+        'httpStatus',
+        'contentType',
+        'headers',
+        'byteSize',
+        'checksum',
+        'fetchedAt',
+        'fetcherKey',
+        'fetcherVersion',
+        'personalData',
+      ],
+      MigrationStagedRecord: [
+        'id',
+        'recordId',
+        'snapshotId',
+        'runId',
+        'revision',
+        'contentKind',
+        'title',
+        'titleKey',
+        'dedupeKey',
+        'languageCode',
+        'payload',
+        'payloadChecksum',
+        'adapterKey',
+        'adapterVersion',
+        'parserKey',
+        'parserVersion',
+        'normalizerVersion',
+        'codeRevision',
+        'inputChecksum',
+        'producedAt',
+        'validation',
+        'issues',
+        'personalData',
+      ],
+      MigrationTopicMapping: ['id', 'sourceId', 'categoryKey'],
+      MigrationError: [
+        'id',
+        'sourceId',
+        'runId',
+        'recordId',
+        'stage',
+        'classification',
+        'retryEligible',
+        'httpStatus',
+        'attempt',
+        'detail',
+        'occurredAt',
+      ],
+      MigrationDuplicateCandidate: [
+        'id',
+        'recordId',
+        'otherRecordId',
+        'signal',
+        'score',
+        'crossLanguage',
+        'createdAt',
+      ],
+      MigrationAssetProvenance: [
+        'id',
+        'sourceId',
+        'recordId',
+        'runId',
+        'originalUrl',
+        'originalUrlDigest',
+        'assetId',
+        'checksum',
+        'byteSize',
+        'mediaType',
+        'acquiredAt',
+      ],
+      MigrationLegacyMapping: [
+        'id',
+        'sourceId',
+        'recordId',
+        'legacyUrl',
+        'legacyUrlDigest',
+        'videoId',
+        'canonicalPath',
+        'manifestEntryId',
+        'createdAt',
+        'createdByUserId',
+      ],
+      MigrationPublishManifest: [
+        'id',
+        'sourceId',
+        'runId',
+        'createdByUserId',
+        'createdAt',
+      ],
+      MigrationManifestEntry: [
+        'id',
+        'manifestId',
+        'position',
+        'stagedRecordId',
+        'recordId',
+      ],
+      MigrationPromotion: ['id', 'destination', 'createdByUserId', 'createdAt'],
+      MigrationPromotionEntry: ['id', 'promotionId', 'position', 'manifestEntryId'],
+    };
+    for (const [table, columns] of Object.entries(MIGRATION_COLUMN_DENIALS))
+      for (const column of columns)
+        await expectDenied(
+          app,
+          `${table} ${column} UPDATE denied`,
+          `UPDATE [dbo].[${table}] SET [${column}]=[${column}];`,
+        );
+    // Written once: a host, a category and a link are never changed or removed.
+    const WRITE_ONCE = [
+      'MigrationSourceHost',
+      'MigrationStagedCategory',
+      'MigrationStagedLink',
+    ];
+    for (const [table, column] of [
+      ['MigrationSourceHost', 'host'],
+      ['MigrationStagedCategory', 'topicMappingId'],
+      ['MigrationStagedLink', 'href'],
+    ] as const)
+      await expectDenied(
+        app,
+        `${table} UPDATE denied`,
+        `UPDATE [dbo].[${table}] SET [${column}]=[${column}];`,
+      );
+    const MIGRATION_TABLES = [
+      'MigrationSource',
+      'MigrationSourceHost',
+      'MigrationRun',
+      'MigrationRecord',
+      'MigrationRunItem',
+      'MigrationRawSnapshot',
+      'MigrationStagedRecord',
+      'MigrationStagedCategory',
+      'MigrationStagedLink',
+      'MigrationTopicMapping',
+      'MigrationError',
+      'MigrationDuplicateCandidate',
+      'MigrationAssetProvenance',
+      'MigrationLegacyMapping',
+      'MigrationPublishManifest',
+      'MigrationManifestEntry',
+      'MigrationPromotion',
+      'MigrationPromotionEntry',
+    ] as const;
+    for (const table of MIGRATION_TABLES)
+      await expectDenied(app, `${table} DELETE denied`, `DELETE FROM [dbo].[${table}];`);
+    for (const [label, statement] of [
+      [
+        'MigrationSourceHost re-pointed denied',
+        `UPDATE [dbo].[MigrationSourceHost] SET [host]=N'www.example.org' WHERE [sourceId]=N'${source}';`,
+      ],
+      [
+        'MigrationSource re-kinded authorised denied',
+        `UPDATE [dbo].[MigrationSource] SET [authorityKind]=N'authorised',[authorisationReference]=N'forged',[authorisedOn]='2026-10-11' WHERE [id]=N'${source}';`,
+      ],
+      [
+        'MigrationSource base address rewritten denied',
+        `UPDATE [dbo].[MigrationSource] SET [baseUrl]=N'https://example.org/' WHERE [id]=N'${source}';`,
+      ],
+      [
+        'MigrationRawSnapshot checksum rewritten denied',
+        `UPDATE [dbo].[MigrationRawSnapshot] SET [checksum]=REPLICATE('0',64) WHERE [id]=N'${snapshot}';`,
+      ],
+      [
+        'MigrationStagedRecord payload rewritten denied',
+        `UPDATE [dbo].[MigrationStagedRecord] SET [payload]=N'{}' WHERE [id]=N'${staged}';`,
+      ],
+      [
+        'migration.* Permission INSERT denied',
+        "INSERT INTO [dbo].[Permission] ([key],[description]) VALUES (N'migration.scrape',N'forged');",
+      ],
+      [
+        'migration.publish description UPDATE denied',
+        "UPDATE [dbo].[Permission] SET [description]=N'forged' WHERE [key]=N'migration.publish';",
+      ],
+      [
+        'migration.read Permission DELETE denied',
+        "DELETE FROM [dbo].[Permission] WHERE [key]=N'migration.read';",
+      ],
+    ] as const)
+      await expectDenied(app, label, statement);
+
+    const [migrationState] = await admin.query<Record<string, number | string | null>>(`
+      SELECT
+        (SELECT STRING_AGG([state] + N':' + [authorityKind], N',') WITHIN GROUP (ORDER BY [key])
+           FROM [dbo].[MigrationSource] WHERE [id] IN (N'${source}',N'${otherSource}')) AS [sources],
+        (SELECT COUNT(*) FROM [dbo].[MigrationSourceHost] WHERE [sourceId] IN (N'${source}',N'${otherSource}')) AS [hosts],
+        (SELECT STRING_AGG(CASE WHEN [body] IS NULL THEN N'disposed' ELSE N'held' END, N',')
+                  WITHIN GROUP (ORDER BY CASE WHEN [body] IS NULL THEN 1 ELSE 0 END)
+           FROM [dbo].[MigrationRawSnapshot] WHERE [id] IN (N'${snapshot}',N'${disposed}')) AS [snapshots],
+        (SELECT COUNT(*) FROM [dbo].[MigrationRawSnapshot]
+          WHERE [id] IN (N'${snapshot}',N'${disposed}') AND [checksum]='${sha(body)}') AS [checksums],
+        (SELECT STRING_AGG([review], N',') WITHIN GROUP (ORDER BY [review])
+           FROM [dbo].[MigrationStagedRecord] WHERE [id] IN (N'${staged}',N'${pendingStaged}')) AS [reviews],
+        (SELECT STRING_AGG([state], N',') WITHIN GROUP (ORDER BY [state])
+           FROM [dbo].[MigrationManifestEntry] WHERE [stagedRecordId]=N'${staged}') AS [entries],
+        (SELECT STRING_AGG([state], N',') WITHIN GROUP (ORDER BY [state])
+           FROM [dbo].[MigrationLegacyMapping] WHERE [recordId]=N'${record}') AS [mappings],
+        (SELECT [state] FROM [dbo].[MigrationPromotion] WHERE [id]=N'${promotion}') AS [promotion],
+        (SELECT COUNT(*) FROM [dbo].[RolePermission] rp JOIN [dbo].[Role] r ON r.[id]=rp.[roleId]
+          WHERE r.[key]=N'platform-administrator' AND rp.[permissionKey] LIKE N'migration.%') AS [bundled],
+        (SELECT COUNT(*) FROM [dbo].[RolePermission] rp JOIN [dbo].[Role] r ON r.[id]=rp.[roleId]
+          WHERE r.[system]=1 AND rp.[permissionKey]=N'migration.publish') AS [publishBundled],
+        (SELECT COUNT(*) FROM [dbo].[Permission] WHERE [key] LIKE N'migration.%') AS [catalogued];
+    `);
+    const expectedMigrationState = {
+      sources: 'inactive:fixture,active:fixture',
+      hosts: 3,
+      snapshots: 'held,disposed',
+      checksums: 2,
+      reviews: 'approved,pending',
+      entries: 'pending,published',
+      mappings: 'active,disabled',
+      promotion: 'promoted',
+      bundled: 2,
+      publishBundled: 0,
+      catalogued: 3,
+    };
+    if (JSON.stringify(migrationState) === JSON.stringify(expectedMigrationState)) {
+      pass(
+        'Migration state as written',
+        'fixtures stay fixtures, evidence kept with its checksum, history never deleted',
+      );
+    } else {
+      fail('Migration state as written', JSON.stringify(migrationState));
+    }
+
+    for (const table of MIGRATION_TABLES) {
+      await assertObjectVisible(app, table);
+      await expectDenied(
+        app,
+        `${table} ALTER denied`,
+        `ALTER TABLE [dbo].[${table}] ADD [probe] INT NULL;`,
+      );
+    }
+    for (const [trigger, table] of [
+      ['MigrationSourceIntegrity', 'MigrationSource'],
+      ['MigrationSourceHostIntegrity', 'MigrationSourceHost'],
+      ['MigrationRunIntegrity', 'MigrationRun'],
+      ['MigrationRecordIntegrity', 'MigrationRecord'],
+      ['MigrationRunItemIntegrity', 'MigrationRunItem'],
+      ['MigrationRawSnapshotIntegrity', 'MigrationRawSnapshot'],
+      ['MigrationStagedRecordIntegrity', 'MigrationStagedRecord'],
+      ['MigrationTopicMappingIntegrity', 'MigrationTopicMapping'],
+      ['MigrationErrorIntegrity', 'MigrationError'],
+      ['MigrationDuplicateCandidateIntegrity', 'MigrationDuplicateCandidate'],
+      ['MigrationAssetProvenanceIntegrity', 'MigrationAssetProvenance'],
+      ['MigrationLegacyMappingIntegrity', 'MigrationLegacyMapping'],
+      ['MigrationStagedCategoryIntegrity', 'MigrationStagedCategory'],
+      ['MigrationStagedLinkIntegrity', 'MigrationStagedLink'],
+      ['MigrationPublishManifestIntegrity', 'MigrationPublishManifest'],
+      ['MigrationManifestEntryIntegrity', 'MigrationManifestEntry'],
+      ['MigrationPromotionIntegrity', 'MigrationPromotion'],
+      ['MigrationPromotionEntryIntegrity', 'MigrationPromotionEntry'],
+    ] as const) {
+      await expectDenied(
+        app,
+        `${trigger} DISABLE denied`,
+        `DISABLE TRIGGER [dbo].[${trigger}] ON [dbo].[${table}];`,
+      );
+      await expectDenied(
+        app,
+        `${trigger} ALTER denied`,
+        `ALTER TABLE [dbo].[${table}] DISABLE TRIGGER [${trigger}];`,
+      );
+    }
+
+    // THE EXACT EFFECTIVE POSTURE, table by table and column by column, for the
+    // eighteen Phase-29 tables AND for every other owner's table a Migration
+    // row or trigger names — Identity's accounts and authority, Taxonomy's
+    // Topic, Media's Video and Storage's Asset — which Phase 29 must leave as it
+    // found them.
+    const POSTURE: Readonly<
+      Record<string, readonly [string, string | readonly string[] | null]>
+    > = {
+      ...Object.fromEntries(
+        MIGRATION_TABLES.map((table) => [
+          table,
+          [
+            'INSERT,SELECT',
+            WRITE_ONCE.includes(table) ? '' : (MIGRATION_COLUMN_DENIALS[table] ?? []),
+          ] as const,
+        ]),
+      ),
+      User: ['INSERT,SELECT', null],
+      RoleAssignment: ['INSERT,SELECT', null],
+      Permission: ['SELECT', ''],
+      RolePermission: [LEARNER_DATA, ''],
+      Topic: ['INSERT,SELECT', null],
+      Video: ['INSERT,SELECT', null],
+      Asset: [LEARNER_DATA, null],
+    };
+    const posture = await app.query<{
+      name: string;
+      held: string | null;
+      updatable: string | null;
+      columns: string | null;
+    }>(`
+      SELECT t.[name],
+        (SELECT STRING_AGG(p.[permission], N',') WITHIN GROUP (ORDER BY p.[permission])
+           FROM (VALUES (N'ALTER'),(N'CONTROL'),(N'DELETE'),(N'INSERT'),(N'REFERENCES'),
+                        (N'SELECT'),(N'TAKE OWNERSHIP')) AS p([permission])
+          WHERE HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', p.[permission]) = 1) AS [held],
+        (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+           FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])
+            AND HAS_PERMS_BY_NAME(N'dbo.' + t.[name], N'OBJECT', N'UPDATE', c.[name], N'COLUMN') = 1) AS [updatable],
+        (SELECT STRING_AGG(c.[name], N',') WITHIN GROUP (ORDER BY c.[column_id])
+           FROM sys.columns c WHERE c.[object_id] = OBJECT_ID(N'dbo.' + t.[name])) AS [columns]
+      FROM (VALUES ${Object.keys(POSTURE)
+        .map((table) => `(N'${table}')`)
+        .join(',')}) AS t([name]);
+    `);
+    const findings = posture.flatMap((row) => {
+      const [verbs, scope] = POSTURE[row.name] ?? ['?', '?'];
+      const expectedColumns =
+        scope === null
+          ? (row.updatable ?? '')
+          : typeof scope === 'string'
+            ? scope
+            : (row.columns ?? '')
+                .split(',')
+                .filter((column) => !scope.includes(column))
+                .join(',');
+      return (row.held ?? '') === verbs && (row.updatable ?? '') === expectedColumns
+        ? []
+        : [`${row.name}: ${row.held ?? '(none)'} / UPDATE ${row.updatable ?? '(none)'}`];
+    });
+    if (
+      posture.length === Object.keys(POSTURE).length &&
+      Object.keys(POSTURE).length === MIGRATION_TABLES.length + 7 &&
+      findings.length === 0
+    ) {
+      pass(
+        'Migration effective posture exact',
+        `${String(posture.length)} tables, object verbs and UPDATE columns as granted`,
+      );
+    } else {
+      fail('Migration effective posture exact', findings.join('; ') || 'tables missing');
     }
   }
 

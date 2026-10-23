@@ -138,8 +138,8 @@ describe('the externally gated keys are nobody’s by default', () => {
   it('keeps every Fatwa key out of the protected Platform Administrator bundle', () => {
     // The three Fatwa keys are gated; since Phase 23 `teaching.perform` is the
     // fourth, since Phase 24 the two Messaging keys are the fifth and sixth,
-    // since Phase 27 the refund authority is the seventh, and no gated key is
-    // ever bundled.
+    // since Phase 27 the refund authority is the seventh, since Phase 29
+    // migration publication is the eighth, and no gated key is ever bundled.
     const gated: readonly string[] = EXTERNALLY_GATED_PERMISSIONS;
     for (const key of ['fatwa.answer', 'fatwa.publish', 'question.receive'])
       expect(gated, key).toContain(key);
@@ -149,6 +149,7 @@ describe('the externally gated keys are nobody’s by default', () => {
       'fatwa.publish',
       'messaging.moderate',
       'messaging.support',
+      'migration.publish',
       'question.receive',
       'teaching.perform',
     ]);
@@ -168,8 +169,8 @@ describe('the externally gated keys are nobody’s by default', () => {
   });
 
   it('adds one step-up purpose, for Fatwa publication alone', () => {
-    // Phase 27 appends a donation refund's own purpose after it; no Fatwa
-    // purpose was added beside it.
+    // Phase 27 appends a donation refund's own purpose after it and Phase 29
+    // migration publication's; no Fatwa purpose was added beside it.
     expect([...STEP_UP_PURPOSES]).toEqual([
       'privilege-administration',
       'account-administration',
@@ -178,6 +179,7 @@ describe('the externally gated keys are nobody’s by default', () => {
       'hadith-canonical-edit',
       'fatwa-publication',
       'donation-refund',
+      'migration-publication',
     ]);
   });
 });

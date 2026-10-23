@@ -134,6 +134,19 @@ export const lockedStack = Object.freeze([
     expected: '4.8.3',
     introduced: 'Phase 25 — realtime runtime',
   },
+  {
+    // Migration tooling (TECH_STACK.md §2 "Native fetch + Cheerio", §11): the
+    // HTML parser of the source adapters under `scripts/migration/`. Its §2
+    // row read "current stable" — a forward reference left for the owning
+    // phase, as Resend's was — and Phase 29 is that introduction, so the
+    // resolved patch is pinned EXACTLY. A parser that reads hostile legacy
+    // markup is not something to let float across a release. Development
+    // only: nothing in the application imports it.
+    name: 'cheerio',
+    kind: 'exact',
+    expected: '1.2.0',
+    introduced: 'Phase 29 — Migration & Provenance',
+  },
   { name: 'typescript', kind: 'range', expected: '5.9', introduced: 'Phase 0B' },
   { name: 'zod', kind: 'range', expected: '4.5', introduced: 'Phase 0B' },
   { name: 'vitest', kind: 'range', expected: '4.1', introduced: 'Phase 0B' },

@@ -51,7 +51,8 @@
         "messaging": "messaging",
         "membership": "membership",
         "donations": "donations",
-        "donations-stripe": "donations"
+        "donations-stripe": "donations",
+        "migration-provenance": "migration-provenance"
       }
     }
   },

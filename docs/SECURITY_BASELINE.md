@@ -205,6 +205,20 @@ operator's provider re-check) — confer no refund. Every refund also needs a fr
 step-up (§8.1), and the database re-checks both the live key and the live grant when the refund row is
 inserted (§14).
 
+**Phase 29 adds the eighth: `migration.publish`** (OPEN_DECISIONS.md §3.4). Who may put migrated
+content into the live platform, take it out again and approve a promotion is the organisation's
+decision, so the key is catalogued, externally gated, bundled into no role and held by nobody.
+Preparing is not publishing: the two ordinary Migration keys — `migration.read` (every migration
+screen and the run-status read; never a raw body) and `migration.administer` (fixture sources, run
+cancellation, review, duplicates, mappings, errors, disappearances, asset rights, the audited
+raw-evidence reads and disposal, preparing manifests and promotions) — join the Platform
+Administrator bundle and confer no publication. Every publish, rollback and promotion approval also
+needs a fresh `migration-publication` step-up (§8.1), checked three times: by the Server Action
+through Identity's privileged-action gate, by the service re-verifying that exact actor, and by the
+database trigger re-checking the live key and the live grant when the manifest or promotion moves.
+Migration publication never substitutes for a target's own authority — Media's `media.administer`
+still decides a migrated Video — nor for religious review (MIGRATION_STRATEGY.md §8.4).
+
 ---
 
 ## 4. CMS publishing permissions
@@ -500,7 +514,7 @@ controls apply, and they are not alternatives:**
 | **Canonical Hadith edits** | `hadith.editCanonical` |
 | **Fatwa publication** | `fatwa.publish` — dedicated purpose `fatwa-publication` since Phase 20, also required to withdraw a published ruling |
 | **Donation refund** | `donations.refund` — dedicated purpose `donation-refund` since Phase 27, required for every full or partial refund and re-checked by the database |
-| **Migration publication** | `migration.publish` |
+| **Migration publication** | `migration.publish` — dedicated purpose `migration-publication` since Phase 29, required to publish a manifest, roll one back and approve a promotion; checked by the action, re-verified by the service and re-checked by the database |
 | User account administration | Admin permissions |
 | Destructive bulk operations | Admin permissions |
 
@@ -751,6 +765,76 @@ administrator is stored XSS against the highest-privileged user in the system.
 Risk-appropriate validation and scanning before publication: type and size validation, content
 sniffing, checksum verification, and malware scanning consistent with §10.1.
 
+### 10.5 As delivered (Phase 29) — the migration framework, over fixtures only
+
+Every Phase-29 source is a `fixture` source on `*.fixture.invalid` hosts (DOMAIN_MODEL.md §16.5).
+The controls below are built for authorised sources and proven against the fixtures.
+
+- **SSRF and DNS rebinding.** `scripts/migration/safe-fetch.ts` checks, in order: the URL before any
+  network activity (`http`/`https` only, no `user:password@`, no literal IP host, the host EXACTLY one
+  of the source's hosts — no suffix or subdomain match — and only the scheme's default port); then
+  resolution through an injected resolver, where **every** returned address must pass the address
+  policy (one public and one private answer is refused outright); then a connection **pinned to the
+  validated address** through a `lookup` that can answer nothing else, so the name is never
+  re-resolved between check and connect. Redirects are never followed by the transport: each
+  `Location` goes through all three checks again, up to the source's `maxRedirects`. For an
+  authorised source only `public` addresses pass; loopback, private, link-local, cloud metadata
+  (`169.254.169.254`, `fd00:ec2::254`), shared, reserved, multicast, unspecified, documentation and
+  unparseable addresses are refused, and IPv4-mapped, IPv4-compatible and NAT64 (`64:ff9b::/96`) IPv6
+  addresses are judged by the IPv4 address they carry. One deadline covers the whole exchange; the
+  body is capped by the source's `maxBodyBytes` and the connection destroyed at the cap; only
+  allowlisted provenance headers are kept; no cookie, credential or authorisation header is sent;
+  the User-Agent is honest and identifying. In fixture mode the resolver answers only
+  `*.fixture.invalid`, the address policy admits only the loopback fixture endpoint, and the
+  connector refuses any other target — three independent refusals of a real host.
+- **Retry classification.** Only `408`, `429`, `500`, `502`, `503`, `504`, network failures and
+  timeouts are retried, within the source's `maxAttempts`. `401`/`403` are `access-denied` — never
+  retried and never retry-eligible, in the service and by CHECK; `404` is `not-found`, `410` `gone`,
+  any other `4xx` `client-error`; a policy refusal (scope, address, redirect, size) is final. A valid
+  `Retry-After` (delta-seconds or IMF-fixdate) is respected; one beyond 300 seconds defers the item
+  (`nextAttemptAt`) instead of holding the run; a malformed, past or absurd (over a day) value falls
+  back to exponential backoff with jitter (500 ms base, 30 s cap). `minIntervalMs` separates requests
+  to a source. Every wait goes through injected clocks, so the policy is proven deterministically.
+- **Sanitisation before staging** (§10.2). Normalisation runs `sanitize-html` with an allowlist of
+  `p`, `br`, `strong`, `em`, `ul`, `ol`, `li`, `blockquote` and `a` with an `http`/`https` or
+  site-relative `href` and a forced `rel="noopener noreferrer"`; `script`, `style`, `iframe`,
+  `object`, `embed`, `form`, `svg`, `math`, `noscript`, `template`, `meta`, `link`, `textarea`,
+  `select`, `option`, `title` and `head` are discarded with their contents. Links are judged by the URL
+  parser, as a browser would resolve them. The staged payload stores only the sanitised result; the
+  raw snapshot keeps the exact bytes.
+- **Raw evidence is inert** (§10.3). A snapshot is never rendered as HTML: an administrator may ask
+  for an escaped-text preview of at most 64 KiB, rendered as React-escaped text, or download it from
+  `GET /api/admin/migration/snapshots/{id}` with `Content-Type: application/octet-stream`,
+  `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`,
+  `Content-Security-Policy: sandbox; default-src 'none'` (also declared in `next.config.ts`, because a
+  configuration header would otherwise override the handler's) and `Cache-Control: private,
+  no-store`. Both need `migration.administer`; **every read is audited** in the same transaction as
+  the read itself (`migration.snapshot.read`, with purpose and byte counts). The route refuses a
+  cross-site Fetch-Metadata request first, and every refusal is the same empty 404. A legacy address
+  is shown as text, never a link. **Disposal** removes only the body, for a stated reason, and is
+  audited (`migration.snapshot.disposed`); metadata and checksum remain.
+- **Staged isolation.** Staged records are reachable only under `/admin/migration` (`migration.read`;
+  the subtree is `noindex, nofollow` and per request) — no public route, public API, sitemap segment
+  or Search kind reads one. `/api/admin/migration/*` answers GET reads only; every mutation is a
+  Class-A Server Action that re-resolves the session and re-checks its key (§7.1).
+- **Imported assets** go through the Storage foundation's custody — sniffed, size-capped (still
+  images and PDFs, 8 MiB), quarantined, scanned and cleared against the checksum scanned — and are
+  stored exactly as fetched. No route serves a migrated asset.
+- **Audit.** Every operator act writes its audit row in the same transaction: `migration.source.*`,
+  `migration.run.*` (started, resumed, completed, cancelled), `migration.staged.reviewed`,
+  `migration.duplicate.decided`, `migration.topic-mapping.decided`, `migration.legacy-mapping.decided`,
+  `migration.error.decided`, `migration.record.classified`, `migration.rights.decided`,
+  `migration.snapshot.read`, `migration.snapshot.disposed`, `migration.manifest.*` (created,
+  discarded, publication started, each entry published or refused, published, rollback started,
+  each entry rolled back or rollback-refused, rolled back) and `migration.promotion.*` (created,
+  approved, withdrawn, completed). Rows carry identifiers and states only — never a body, payload,
+  URL, header value, note or personal detail (§13.4). A refusal names a category, never content.
+- **Incidental personal data** is flagged and redacted before staging (§19.1.8).
+
+No `authorised` source exists, so no real response, page, asset or personal data has entered the
+system; activating one is Phase 30's and requires written authorisation per source
+(OPEN_DECISIONS.md §3.1).
+
 ---
 
 ## 11. Live class and meeting URL security
@@ -914,7 +998,7 @@ append-only discipline provide real protection today.
 | **Authentication** | Sign-in success and failure, password change, reset, account linking, session revocation, **step-up challenges** |
 | **Content publishing** | Publication and unpublication across all types |
 | **User management** | Creation, suspension, deletion, email change |
-| **Migration** | Import runs, approvals, merges, **publications and rollbacks** |
+| **Migration** | Import runs, approvals, merges, **publications and rollbacks** — since Phase 29 every operator act, each manifest entry's publication and rollback, promotions, and every raw-snapshot read and disposal, by identifier and state (§10.5) |
 | **Administrative** | Configuration changes, bulk operations, redirect changes |
 | **Data access** | Access to private Fatwa questions, student personal data, **moderation evidence**, and **membership applications and member lists** (Phase 26) |
 | **Membership** | Type creation, edit, publication and archiving; the start of review; approval and rejection; an operator's closure of a Membership — by identifier and state (Phase 26) |
@@ -1498,6 +1582,27 @@ hold, tax or Gift Aid rule, or compliance claim is made.
   the same address reaches nothing old.
 - **Logging.** By operation and safe category only — never a token, secret, signature, payload,
   checkout URL, email or amount tied to a person.
+
+#### 19.1.8 Phase-29 migration raw snapshots and incidental personal data
+
+Engineering defaults only. No real source has been contacted, so no real personal data is held;
+OPEN_DECISIONS.md §2.2 stays open, and **no retention period for raw snapshots is set**.
+
+- **Flagged and redacted before staging.** Normalisation detects email addresses and phone-like digit
+  runs (ASCII, Arabic-Indic and Extended Arabic-Indic digits) in titles and descriptions, replaces each
+  with `[redacted]` in the staged payload and flags the revision; **a flagged revision cannot be
+  approved** (CHECK), so it is held for a person rather than carried forward. Detection is
+  conservative: a false positive only holds a record.
+- **Raw evidence is kept exact and flagged.** The snapshot's bytes are never edited; a snapshot whose
+  decoded body carries such data is flagged, readable only under `migration.administer` through the
+  audited preview or download (§10.5), and never part of a listing, an audit row or a log.
+- **Disposal is deliberate.** An administrator may dispose of a snapshot's body for a stated reason;
+  the database admits that as the only change to a snapshot and keeps who, when, why and the
+  checksum. **Phase 29 delivers the mechanism, not a period**: when raw snapshots must be disposed of
+  remains OPEN_DECISIONS.md §2.2's decision.
+- **Operators are distinct and audited.** Migration work needs the migration keys; listing screens
+  show titles and identifiers, never bodies; staged payloads are shown as escaped text.
+- **Logging.** By operation name only — never a body, payload, header value, URL or personal detail.
 
 ### 19.2 Logging
 

@@ -551,16 +551,16 @@ Admin
 ├── Messaging                 Delivered in Phase 24 — messaging.support / messaging.moderate
 │   ├── Support Queue         Metadata only; opening a conversation is an audited access
 │   └── Moderation            Open reports, Reports, and one report's bounded evidence
-├── Migration & Provenance
-│   ├── Sources              Authorisation and licensing evidence
-│   ├── Import Runs
-│   ├── Staging Review
-│   ├── Deduplication Queue
-│   ├── URL Mapping
-│   ├── Unresolved Links     Links with no mapping, for review
-│   ├── Publish Manifests    Reversible publication records
-│   ├── Reconciliation       Counts must balance
-│   └── Import Errors        Raw snapshots render inertly
+├── Migration & Provenance    Delivered in Phase 29, fixture sources only — migration.read / migration.administer / migration.publish
+│   ├── Overview             Fixtures only, no live source; runs and promotions are command-line operations
+│   ├── Sources              Fixture registration and politeness; no authority field
+│   ├── Import Runs          Provenance, reconciliation verdict, items; cancel an open run
+│   ├── Staging Review       Queue and one revision as escaped text; raw snapshot preview and download, audited
+│   ├── Deduplication Queue  Merge, keep apart or reopen; a cross-language pair is never merged
+│   ├── URL Mapping          Legacy URL mappings, category-to-topic mappings, unresolved links
+│   ├── Import Errors        Retry or dismiss errors; classify missing records — absence deletes nothing
+│   ├── Publish Manifests    Prepare, publish and roll back (gated key + step-up); promotions
+│   └── Reconciliation       Completed runs and whether their counts balance
 ├── Communications
 │   ├── Newsletter            Subscribers, confirmation state, suppression
 │   └── Delivery Status       Pending, failed and suppressed outbound mail

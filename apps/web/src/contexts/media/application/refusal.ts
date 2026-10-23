@@ -9,8 +9,11 @@ import type { AssetRejection } from '@minhaj/contracts/platform';
  */
 
 export class MediaRefusal extends Error {
-  constructor(readonly reason: string) {
+  readonly reason: string;
+
+  constructor(reason: string) {
     super(reason);
+    this.reason = reason;
   }
 }
 

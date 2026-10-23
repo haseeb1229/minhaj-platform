@@ -362,6 +362,10 @@ export const requiredContextPaths = Object.freeze([
   'docker/nginx/staging/default.conf.template',
   'docker/sqlserver/Dockerfile',
   '.github/workflows/staging-deploy.yml',
+  // Phase 29: the migration tooling the operations image carries, and the
+  // node-runnable composition root it loads.
+  'scripts/migration/staging-fixture-proof.ts',
+  'apps/web/src/composition/migration-runner.ts',
   // The Round 6 and Round 7 fixture trees, whose whole point is that their
   // directory names look generated. The re-includes that admit them are the
   // very negations this module probes for secrets — both properties have to

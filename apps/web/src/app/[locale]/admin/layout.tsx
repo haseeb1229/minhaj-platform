@@ -125,6 +125,13 @@ const SURFACES: readonly {
   // `donations.refund` with its own step-up. The refund key alone opens
   // nothing here, so it does not show the entry.
   { key: 'donations', permission: 'donations.read', path: 'donations' },
+  // Phase 29. One entry for Migration: `migration.read` opens all of its
+  // surfaces; every preparing, reviewing or correcting act re-checks
+  // `migration.administer`, and publishing, rolling back and approving a
+  // promotion need the externally gated `migration.publish` with its own
+  // step-up. The publish key alone opens nothing here, so it does not show the
+  // entry.
+  { key: 'migration', permission: 'migration.read', path: 'migration' },
   // Phase 4. A READ-ONLY view of the public shell's effective navigation; the
   // registry behind it is code, so there is no editing surface to reach.
   { key: 'navigation', permission: 'navigation.read', path: 'system/navigation' },

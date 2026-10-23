@@ -601,6 +601,11 @@ describe('F1 — the production database package publishes no raw capability', (
       // production provider selection) is owned by Donations, a bounded CONTEXT,
       // and holds no database capability at all.
       'donations-stripe': { kind: 'context', slug: 'donations' },
+      // Phase 29. Migration & Provenance is a bounded CONTEXT; its adapter is
+      // hosted here and owned there. It reads and writes only its own
+      // `Migration*` tables, and names User, Topic, Video and Asset rows only as
+      // foreign-key targets.
+      'migration-provenance': { kind: 'context', slug: 'migration-provenance' },
       email: { kind: 'layer0', concern: 'email' },
       'rate-limiting': { kind: 'layer0', concern: 'rate-limiting' },
       auditing: { kind: 'layer0', concern: 'auditing' },

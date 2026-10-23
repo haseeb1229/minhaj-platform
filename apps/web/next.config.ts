@@ -260,6 +260,15 @@ const nextConfig: NextConfig = {
           { key: 'Cache-Control', value: 'private, no-store' },
         ],
       })),
+      // Phase 29: raw migration evidence — bytes a browser must never
+      // interpret. A config header wins over a route handler's own, so the
+      // sandbox policy that replaces the base one has to be declared here.
+      {
+        source: '/api/admin/migration/snapshots/:id',
+        headers: [
+          { key: 'Content-Security-Policy', value: "sandbox; default-src 'none'" },
+        ],
+      },
     ];
   },
 };

@@ -372,6 +372,9 @@ describe('Phase 2 Chunk 2 — what the delivered code does NOT contain', () => {
       const membershipOwner = file.includes('20261009000000_phase26_membership');
       // Donations' three keys are Phase 27's and appear in its migration alone.
       const donationsOwner = file.includes('20261010000000_phase27_donations');
+      // Migration & Provenance's three keys are Phase 29's and appear in its
+      // migration alone.
+      const migrationOwner = file.includes('20261011000000_phase29_migration_provenance');
       for (const domain of [
         ...(fatwaOwner ? [] : ['fatwa.', 'question.']),
         ...(learningOwner ? [] : ['learning.']),
@@ -379,6 +382,7 @@ describe('Phase 2 Chunk 2 — what the delivered code does NOT contain', () => {
         ...(messagingOwner ? [] : ['messaging.']),
         ...(membershipOwner ? [] : ['membership.']),
         ...(donationsOwner ? [] : ['donations.']),
+        ...(migrationOwner ? [] : ['migration.']),
       ]) {
         expect(source, `${file} must not seed ${domain}*`).not.toContain(`n'${domain}`);
       }
@@ -460,12 +464,25 @@ async function permissionsSeededBy(migrationId: string): Promise<string[]> {
     `packages/database/prisma/migrations/${migrationId}/migration.sql`,
   );
 
-  const insert = /INSERT INTO \[dbo\]\.\[Permission\][\s\S]*?;/.exec(migration);
-  if (insert === null) return [];
+  const start = migration.indexOf('INSERT INTO [dbo].[Permission]');
+  if (start === -1) return [];
+
+  // The statement ends at the first semicolon OUTSIDE a string literal: a
+  // description may itself contain one (Phase 29's does), and stopping there
+  // would silently drop every key seeded after it. A doubled quote inside a
+  // literal toggles twice, so it never ends the literal.
+  let inString = false;
+  let end = start;
+  for (; end < migration.length; end += 1) {
+    const character = migration[end];
+    if (character === "'") inString = !inString;
+    else if (character === ';' && !inString) break;
+  }
+  const insert = migration.slice(start, end);
 
   // A key may be camelCase after its dot: `quran.editCanonical` is named by
   // DOMAIN_MODEL.md §4.4 and SECURITY_BASELINE.md §8.1 themselves.
-  return [...insert[0].matchAll(/\(N'([a-z]+\.[a-zA-Z.]+)',\s*N'/g)]
+  return [...insert.matchAll(/\(N'([a-z]+\.[a-zA-Z.]+)',\s*N'/g)]
     .map((match) => match[1])
     .filter((key): key is string => key !== undefined)
     .sort();
@@ -619,6 +636,13 @@ const PERMISSION_MIGRATIONS = [
     id: '20261010000000_phase27_donations',
     keys: ['donations.administer', 'donations.read', 'donations.refund'],
   },
+  {
+    // Two ordinary keys bundled into the protected role, and
+    // `migration.publish` catalogued, externally gated and bundled into no role.
+    phase: 'Phase 29',
+    id: '20261011000000_phase29_migration_provenance',
+    keys: ['migration.administer', 'migration.publish', 'migration.read'],
+  },
 ] as const;
 
 describe('the permission catalogue is one definition, appended only by owners', () => {
@@ -668,7 +692,6 @@ describe('the permission catalogue is one definition, appended only by owners', 
     const declared = await declaredPermissions();
 
     for (const domain of [
-      'migration.',
       'editorial.',
       // Library shipped in Phase 8, Search in Phase 17, Media in Phase 10,
       // Global in Phase 16, Quran in Phase 18, Hadith in Phase 19 and Fatwa in
@@ -745,9 +768,28 @@ describe('the permission catalogue is one definition, appended only by owners', 
       'receipt.',
       'tax.',
       'giving.',
+      // Phase 29 shipped `migration.read`, `migration.administer` and the gated
+      // `migration.publish` and nothing else: no source, crawl, scrape, import,
+      // legacy, provenance or promotion key — operating fixtures, reviewing,
+      // publishing and promoting are reached through those three alone.
+      'source.',
+      'crawl.',
+      'scrape.',
+      'import.',
+      'legacy.',
+      'provenance.',
+      'promotion.',
+      'manifest.',
     ]) {
       expect(declared.some((key) => key.startsWith(domain))).toBe(false);
     }
+    // Migration & Provenance has exactly three keys: two ordinary and bundled,
+    // and publication authority, the organisation's to grant.
+    expect(declared.filter((key) => key.startsWith('migration.'))).toEqual([
+      'migration.administer',
+      'migration.publish',
+      'migration.read',
+    ]);
     // Donations has exactly three keys: two ordinary and bundled, and the
     // refund authority, the organisation's to grant.
     expect(declared.filter((key) => key.startsWith('donations.'))).toEqual([

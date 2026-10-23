@@ -393,6 +393,18 @@ describe.skipIf(!databaseConfigured)(
         'donations.refund',
       ];
       const PHASE_27_BUNDLED = ['donations.administer', 'donations.read'];
+      /**
+       * Phase 29: Migration & Provenance's read and administer pair, both
+       * ORDINARY and bundled into the protected role, and `migration.publish`
+       * — putting migrated content into the live platform — EXTERNALLY GATED:
+       * catalogued and grantable, bundled into no role.
+       */
+      const PHASE_29_KEYS = [
+        'migration.administer',
+        'migration.publish',
+        'migration.read',
+      ];
+      const PHASE_29_BUNDLED = ['migration.administer', 'migration.read'];
 
       /**
        * The capability-projection sources, each arrived with its OWNER.
@@ -411,10 +423,12 @@ describe.skipIf(!databaseConfigured)(
         'fatwa.publish',
         'teaching.perform',
         // Not capability-projection sources, but gated the same way and held by
-        // no role (Phase 24, and Phase 27's refund authority).
+        // no role (Phase 24, Phase 27's refund authority and Phase 29's
+        // publication authority).
         'messaging.support',
         'messaging.moderate',
         'donations.refund',
+        'migration.publish',
       ];
 
       it('is exactly what the delivered migrations seeded', async () => {
@@ -441,6 +455,7 @@ describe.skipIf(!databaseConfigured)(
             ...PHASE_24_KEYS,
             ...PHASE_26_KEYS,
             ...PHASE_27_KEYS,
+            ...PHASE_29_KEYS,
           ].sort(),
         );
 
@@ -477,7 +492,6 @@ describe.skipIf(!databaseConfigured)(
         // Taxonomy HAS shipped — which is the whole rule: a domain leaves it at
         // its owning phase and not before.
         for (const domain of [
-          'migration.',
           // `teaching.perform` shipped with Phase 23 and is the only teaching
           // key: no other `teaching.*` vocabulary exists.
           'editorial.',
@@ -542,6 +556,17 @@ describe.skipIf(!databaseConfigured)(
           'checkout.',
           'receipt.',
           'tax.',
+          // Phase 29 shipped `migration.read`, `migration.administer` and the
+          // gated `migration.publish`: no source, crawl, scrape, import,
+          // legacy, provenance, manifest or promotion key.
+          'source.',
+          'crawl.',
+          'scrape.',
+          'import.',
+          'legacy.',
+          'provenance.',
+          'manifest.',
+          'promotion.',
         ]) {
           expect(keys.some((key) => key.startsWith(domain))).toBe(false);
         }
@@ -556,6 +581,9 @@ describe.skipIf(!databaseConfigured)(
         );
         expect(keys.filter((key) => key.startsWith('donations.')).sort()).toEqual(
           PHASE_27_KEYS,
+        );
+        expect(keys.filter((key) => key.startsWith('migration.')).sort()).toEqual(
+          PHASE_29_KEYS,
         );
       });
 
@@ -654,6 +682,37 @@ describe.skipIf(!databaseConfigured)(
         expect(Number(provisioned?.total)).toBe(1);
         expect(provisioned?.added).toBe(
           '{"added":"donations.administer donations.read"}',
+        );
+      });
+
+      it('gives the protected role the two ordinary Migration keys, never the publish key', async () => {
+        // Phase 29's read and administer keys are ordinary: the migration
+        // extended the bundle and recorded exactly which keys it added. The
+        // publication authority is gated: no role holds it, and the
+        // provisioning record does not name it.
+        const role = await harness.administration.findRole('platform-administrator');
+
+        expect(role).not.toBeNull();
+        expect(role?.system).toBe(true);
+        for (const key of PHASE_29_BUNDLED) {
+          expect(role?.permissions, `${key} must be bundled`).toContain(key);
+        }
+        expect(role?.permissions).not.toContain('migration.publish');
+        const [held] = await database.admin.query<{ total: number }>(
+          `SELECT COUNT_BIG(*) AS total FROM [dbo].[RolePermission] WHERE [permissionKey] = N'migration.publish';`,
+        );
+        expect(Number(held?.total)).toBe(0);
+        const [provisioned] = await database.admin.query<{
+          total: number;
+          added: string | null;
+        }>(
+          `SELECT COUNT_BIG(*) AS total, MAX([afterState]) AS added FROM [dbo].[AuditLog]
+           WHERE [action] = N'migration.permissions.provisioned'
+             AND [authorisingSource] = N'20261011000000_phase29_migration_provenance';`,
+        );
+        expect(Number(provisioned?.total)).toBe(1);
+        expect(provisioned?.added).toBe(
+          '{"added":"migration.administer migration.read"}',
         );
       });
 

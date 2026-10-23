@@ -11,4 +11,5 @@ export { createPersonalSettings } from './settings.ts';
 export { createPersonalNotifications } from './notifications.ts';
 export { createPersonalExport } from './export.ts';
 export { createPersonalDisposition, createPersonalPurge } from './disposition.ts';
+export { createPersonalHoldings } from './holdings.ts';
 export { createNewsletter } from './newsletter.ts';

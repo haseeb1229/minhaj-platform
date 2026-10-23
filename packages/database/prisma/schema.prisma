@@ -203,6 +203,24 @@ model User {
   donations                    Donation[]
   donationRefundsRequested     DonationRefund[]
   donationCommunications       DonationCommunicationIntent[]
+  migrationSourcesCreated      MigrationSource[]            @relation("MigrationSourceCreator")
+  migrationSourcesUpdated      MigrationSource[]            @relation("MigrationSourceUpdater")
+  migrationRuns                MigrationRun[]
+  migrationClassifications     MigrationRecord[]
+  migrationSnapshotDisposals   MigrationRawSnapshot[]
+  migrationReviews             MigrationStagedRecord[]
+  migrationTopicDecisions      MigrationTopicMapping[]
+  migrationErrorDecisions      MigrationError[]
+  migrationDuplicateDecisions  MigrationDuplicateCandidate[]
+  migrationRightsDecisions     MigrationAssetProvenance[]
+  migrationMappingsCreated     MigrationLegacyMapping[]     @relation("MigrationMappingCreator")
+  migrationMappingsChanged     MigrationLegacyMapping[]     @relation("MigrationMappingChanger")
+  migrationManifestsCreated    MigrationPublishManifest[]   @relation("MigrationManifestCreator")
+  migrationManifestsPublished  MigrationPublishManifest[]   @relation("MigrationManifestPublisher")
+  migrationManifestsRolledBack MigrationPublishManifest[]   @relation("MigrationManifestRollback")
+  migrationPromotionsCreated   MigrationPromotion[]         @relation("MigrationPromotionCreator")
+  migrationPromotionsApproved  MigrationPromotion[]         @relation("MigrationPromotionApprover")
+  migrationPromotionsWithdrawn MigrationPromotion[]         @relation("MigrationPromotionWithdrawer")
 
   id String @id @db.NVarChar(36)
 
@@ -868,6 +886,8 @@ model Topic {
   publicationTopics PublicationTopic[]
   magazineTopics MagazineTopic[]
   magazineIssueTopics MagazineIssueTopic[]
+  migrationMappings MigrationTopicMapping[] @relation("MigrationTopicMappingTopic")
+  migrationSuggestions MigrationTopicMapping[] @relation("MigrationTopicMappingSuggestion")
   encyclopediaTopics EncyclopediaTopic[]
   videoTopics VideoTopic[]
   audioTrackTopics AudioTrackTopic[]
@@ -2164,6 +2184,7 @@ model Asset {
   photos Photo[] @relation("PhotoAsset")
   quranRecitationSegments QuranRecitationSegment[] @relation("QuranRecitationSegmentAsset")
   messageAttachments MessageAttachment[] @relation("MessageAttachmentAsset")
+  migrationProvenance MigrationAssetProvenance[]
   id String @id @db.NVarChar(36)
 
   /// Server-generated and opaque. Never derived from caller input.
@@ -2767,6 +2788,8 @@ model Video {
   collectionItems CollectionItem[]
   savedItems SavedItem[]
   watchHistory WatchHistory[]
+  migrationMappings MigrationLegacyMapping[]
+  migrationEntries MigrationManifestEntry[]
   @@unique([provider, providerVideoId])
   @@index([state, publishedOn, slug])
   @@index([state, isFeatured, publishedOn])
@@ -6119,4 +6142,538 @@ model DonationCommunicationIntent {
   @@index([recipientUserId, state])
   @@index([donationId])
   @@index([refundId])
+}
+
+/* ===========================================================================
+ * Phase 29 — Migration & Provenance (DOMAIN_MODEL.md §16)
+ *
+ * The control and provenance data of the migration framework. Owned by the
+ * Migration & Provenance context; its adapter lives in
+ * `src/adapters/migration-provenance`. Every reference to another owner's
+ * record is a TYPED foreign key (User, Topic, Asset, Video) — never a
+ * `targetType` / `targetId` pair — and nothing cascades.
+ * ========================================================================= */
+
+/// LegacySource: one registered origin. Phase 29 registers FIXTURE sources
+/// only — a synthetic `*.fixture.invalid` host that resolves to controlled
+/// local infrastructure — and stores no real authorisation evidence.
+model MigrationSource {
+  id String @id @db.NVarChar(36)
+  key String @unique(map: "MigrationSource_key_key") @db.NVarChar(64)
+  name String @db.NVarChar(200)
+  /// fixture | authorised — immutable once created.
+  authorityKind String @db.NVarChar(16)
+  /// http | export — immutable once created.
+  accessMethod String @db.NVarChar(16)
+  /// media.video
+  contentKind String @db.NVarChar(32)
+  baseUrl String? @db.NVarChar(2000)
+  authorisationReference String? @db.NVarChar(400)
+  authorisedOn DateTime? @db.Date
+  licensingEvidence String? @db.NVarChar(2000)
+  policyNotes String? @db.NVarChar(2000)
+  defaultLanguageCode String? @db.NVarChar(16)
+  minIntervalMs Int
+  maxConcurrency Int
+  maxAttempts Int
+  timeoutMs Int
+  maxBodyBytes Int
+  maxRedirects Int
+  /// active | inactive
+  state String @db.NVarChar(16)
+  version Int @default(1)
+  createdAt DateTime @db.DateTime2
+  createdByUserId String @db.NVarChar(36)
+  updatedAt DateTime @db.DateTime2
+  updatedByUserId String @db.NVarChar(36)
+  createdBy User @relation("MigrationSourceCreator", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  updatedBy User @relation("MigrationSourceUpdater", fields: [updatedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  hosts MigrationSourceHost[]
+  runs MigrationRun[]
+  records MigrationRecord[]
+  snapshots MigrationRawSnapshot[]
+  topicMappings MigrationTopicMapping[]
+  errors MigrationError[]
+  assets MigrationAssetProvenance[]
+  legacyMappings MigrationLegacyMapping[]
+  manifests MigrationPublishManifest[]
+  @@index([state, key])
+}
+
+/// One authorised host of a source. Fixture sources may name only
+/// `*.fixture.invalid` hosts (refused in SQL otherwise).
+model MigrationSourceHost {
+  sourceId String @db.NVarChar(36)
+  host String @db.NVarChar(253)
+  source MigrationSource @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([sourceId, host])
+}
+
+/// ImportRun: one execution against one source. At most one OPEN run per
+/// source (a filtered key in the migration); an open run whose lease lapsed
+/// is resumed, never duplicated.
+model MigrationRun {
+  id String @id @db.NVarChar(36)
+  sourceId String @db.NVarChar(36)
+  operatorUserId String @db.NVarChar(36)
+  /// open | completed | cancelled
+  state String @db.NVarChar(16)
+  adapterKey String @db.NVarChar(64)
+  adapterVersion String @db.NVarChar(32)
+  parserKey String @db.NVarChar(64)
+  parserVersion String @db.NVarChar(32)
+  normalizerVersion String @db.NVarChar(32)
+  codeRevision String @db.NVarChar(64)
+  discoveryCursor String? @db.NVarChar(400)
+  discoveryComplete Boolean @default(false)
+  leaseToken String? @db.NVarChar(36)
+  leaseExpiresAt DateTime? @db.DateTime2
+  startedAt DateTime @db.DateTime2
+  endedAt DateTime? @db.DateTime2
+  /// pending | balanced | unbalanced
+  reconciliation String @default("pending") @db.NVarChar(16)
+  reconciledAt DateTime? @db.DateTime2
+  reconciliationDetail String? @db.NVarChar(2000)
+  version Int @default(1)
+  source MigrationSource @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  operator User @relation(fields: [operatorUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items MigrationRunItem[]
+  firstSeen MigrationRecord[] @relation("MigrationRecordFirstSeen")
+  lastSeen MigrationRecord[] @relation("MigrationRecordLastSeen")
+  snapshots MigrationRawSnapshot[]
+  staged MigrationStagedRecord[]
+  errors MigrationError[]
+  assets MigrationAssetProvenance[]
+  manifests MigrationPublishManifest[]
+  @@index([sourceId, startedAt, id])
+  @@index([state, startedAt, id])
+}
+
+/// The stable identity of one legacy record (source + external key) and its
+/// lifecycle across every run — MigrationStatus (DOMAIN_MODEL.md §16.1).
+model MigrationRecord {
+  id String @id @db.NVarChar(36)
+  sourceId String @db.NVarChar(36)
+  externalKey String @db.NVarChar(400)
+  originalUrl String? @db.NVarChar(2000)
+  legacyIdentifier String? @db.NVarChar(200)
+  contentKind String @db.NVarChar(32)
+  /// discovered | fetched | staged | rejected | errored | excluded | approved | published | merged
+  status String @db.NVarChar(16)
+  /// present | missing — absence is an observation, never a deletion.
+  observed String @default("present") @db.NVarChar(16)
+  /// withdrawn | moved | source-error | transient-failure | access-failure | unresolved
+  disappearance String? @db.NVarChar(24)
+  disappearanceNote String? @db.NVarChar(500)
+  classifiedByUserId String? @db.NVarChar(36)
+  classifiedAt DateTime? @db.DateTime2
+  mergedIntoRecordId String? @db.NVarChar(36)
+  latestSnapshotId String? @db.NVarChar(36)
+  currentStagedRecordId String? @db.NVarChar(36)
+  firstObservedRunId String @db.NVarChar(36)
+  lastObservedRunId String @db.NVarChar(36)
+  version Int @default(1)
+  createdAt DateTime @db.DateTime2
+  updatedAt DateTime @db.DateTime2
+  source MigrationSource @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  classifiedBy User? @relation(fields: [classifiedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  mergedInto MigrationRecord? @relation("MigrationRecordMerge", fields: [mergedIntoRecordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  merged MigrationRecord[] @relation("MigrationRecordMerge")
+  latestSnapshot MigrationRawSnapshot? @relation("MigrationRecordLatestSnapshot", fields: [latestSnapshotId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  currentStaged MigrationStagedRecord? @relation("MigrationRecordCurrentStaged", fields: [currentStagedRecordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  firstSeenRun MigrationRun @relation("MigrationRecordFirstSeen", fields: [firstObservedRunId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  lastSeenRun MigrationRun @relation("MigrationRecordLastSeen", fields: [lastObservedRunId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items MigrationRunItem[]
+  snapshots MigrationRawSnapshot[] @relation("MigrationSnapshotRecord")
+  staged MigrationStagedRecord[] @relation("MigrationStagedRecordRecord")
+  errors MigrationError[]
+  duplicates MigrationDuplicateCandidate[] @relation("MigrationDuplicateRecord")
+  duplicateOf MigrationDuplicateCandidate[] @relation("MigrationDuplicateOther")
+  assets MigrationAssetProvenance[]
+  legacyMappings MigrationLegacyMapping[]
+  entries MigrationManifestEntry[]
+  @@unique([sourceId, externalKey], map: "MigrationRecord_source_key")
+  @@index([sourceId, status, id])
+  @@index([sourceId, observed, id])
+}
+
+/// One record's accounting within one run — the unit reconciliation counts.
+model MigrationRunItem {
+  id String @id @db.NVarChar(36)
+  runId String @db.NVarChar(36)
+  recordId String @db.NVarChar(36)
+  position Int
+  /// pending | staged | unchanged | rejected | errored | excluded
+  outcome String @default("pending") @db.NVarChar(16)
+  fetched Boolean @default(false)
+  parsed Boolean @default(false)
+  attempts Int @default(0)
+  nextAttemptAt DateTime? @db.DateTime2
+  snapshotId String? @db.NVarChar(36)
+  stagedRecordId String? @db.NVarChar(36)
+  errorId String? @db.NVarChar(36)
+  updatedAt DateTime @db.DateTime2
+  run MigrationRun @relation(fields: [runId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  record MigrationRecord @relation(fields: [recordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  snapshot MigrationRawSnapshot? @relation(fields: [snapshotId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  staged MigrationStagedRecord? @relation(fields: [stagedRecordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  error MigrationError? @relation(fields: [errorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@unique([runId, recordId], map: "MigrationRunItem_run_record_key")
+  @@unique([runId, position], map: "MigrationRunItem_run_position_key")
+  @@index([runId, outcome, position])
+}
+
+/// RawSnapshot: the immutable evidence of what a source returned. Its body is
+/// bound to its checksum by a CHECK; only a deliberate, audited disposal may
+/// remove the body, and nothing may delete the row.
+model MigrationRawSnapshot {
+  id String @id @db.NVarChar(36)
+  sourceId String @db.NVarChar(36)
+  recordId String @db.NVarChar(36)
+  runId String @db.NVarChar(36)
+  requestedUrl String @db.NVarChar(2000)
+  finalUrl String @db.NVarChar(2000)
+  httpStatus Int?
+  contentType String? @db.NVarChar(200)
+  headers String? @db.NVarChar(4000)
+  body Bytes? @db.VarBinary(Max)
+  byteSize Int
+  checksum String @db.Char(64)
+  fetchedAt DateTime @db.DateTime2
+  fetcherKey String @db.NVarChar(64)
+  fetcherVersion String @db.NVarChar(32)
+  /// none | flagged
+  personalData String @db.NVarChar(16)
+  disposedAt DateTime? @db.DateTime2
+  disposedByUserId String? @db.NVarChar(36)
+  disposalReason String? @db.NVarChar(500)
+  source MigrationSource @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  record MigrationRecord @relation("MigrationSnapshotRecord", fields: [recordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  run MigrationRun @relation(fields: [runId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  disposedBy User? @relation(fields: [disposedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  latestOf MigrationRecord[] @relation("MigrationRecordLatestSnapshot")
+  items MigrationRunItem[]
+  staged MigrationStagedRecord[]
+  @@unique([id, recordId], map: "MigrationRawSnapshot_record_key")
+  @@index([recordId, fetchedAt, id])
+  @@index([runId])
+}
+
+/// StagedRecord: one normalised, SANITISED candidate revision of a record,
+/// with the parser and adapter provenance that produced it. Its payload is
+/// immutable; only its review moves.
+model MigrationStagedRecord {
+  id String @id @db.NVarChar(36)
+  recordId String @db.NVarChar(36)
+  snapshotId String @db.NVarChar(36)
+  runId String @db.NVarChar(36)
+  revision Int
+  contentKind String @db.NVarChar(32)
+  title String @db.NVarChar(240)
+  /// The folded title duplicate detection compares, within one content kind.
+  titleKey String @db.NVarChar(240)
+  /// A hard identity, e.g. `youtube:<id>` — the same provider video is the same video.
+  dedupeKey String? @db.NVarChar(200)
+  languageCode String? @db.NVarChar(16)
+  payload String @db.NVarChar(Max)
+  payloadChecksum String @db.Char(64)
+  adapterKey String @db.NVarChar(64)
+  adapterVersion String @db.NVarChar(32)
+  parserKey String @db.NVarChar(64)
+  parserVersion String @db.NVarChar(32)
+  normalizerVersion String @db.NVarChar(32)
+  codeRevision String @db.NVarChar(64)
+  inputChecksum String @db.Char(64)
+  producedAt DateTime @db.DateTime2
+  /// valid | invalid
+  validation String @db.NVarChar(16)
+  issues String? @db.NVarChar(2000)
+  /// none | flagged
+  personalData String @db.NVarChar(16)
+  /// pending | approved | rejected | superseded
+  review String @default("pending") @db.NVarChar(16)
+  reviewedByUserId String? @db.NVarChar(36)
+  reviewedAt DateTime? @db.DateTime2
+  reviewNote String? @db.NVarChar(500)
+  version Int @default(1)
+  record MigrationRecord @relation("MigrationStagedRecordRecord", fields: [recordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  snapshot MigrationRawSnapshot @relation(fields: [snapshotId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  run MigrationRun @relation(fields: [runId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reviewedBy User? @relation(fields: [reviewedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  currentOf MigrationRecord[] @relation("MigrationRecordCurrentStaged")
+  items MigrationRunItem[]
+  categories MigrationStagedCategory[]
+  links MigrationStagedLink[]
+  entries MigrationManifestEntry[]
+  @@unique([recordId, revision], map: "MigrationStagedRecord_record_revision_key")
+  @@index([review, producedAt, id])
+  @@index([runId, review, id])
+  @@index([contentKind, titleKey])
+  @@index([dedupeKey])
+}
+
+/// A staged revision's legacy category, joined to its source's reviewable
+/// topic mapping — so a proposed Topic is always the CURRENT confirmed one.
+model MigrationStagedCategory {
+  stagedRecordId String @db.NVarChar(36)
+  topicMappingId String @db.NVarChar(36)
+  staged MigrationStagedRecord @relation(fields: [stagedRecordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  mapping MigrationTopicMapping @relation(fields: [topicMappingId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([stagedRecordId, topicMappingId])
+  @@index([topicMappingId])
+}
+
+/// Every link extracted from a staged revision and what became of it.
+model MigrationStagedLink {
+  stagedRecordId String @db.NVarChar(36)
+  position Int
+  href String @db.NVarChar(2000)
+  /// rewritten | unresolved | external | dropped
+  disposition String @db.NVarChar(16)
+  rewrittenTo String? @db.NVarChar(400)
+  legacyMappingId String? @db.NVarChar(36)
+  staged MigrationStagedRecord @relation(fields: [stagedRecordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  mapping MigrationLegacyMapping? @relation(fields: [legacyMappingId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@id([stagedRecordId, position])
+  @@index([disposition, stagedRecordId])
+}
+
+/// One legacy category and its explicit, reviewable mapping to a canonical
+/// Topic. A suggestion never decides; only a person confirms.
+model MigrationTopicMapping {
+  id String @id @db.NVarChar(36)
+  sourceId String @db.NVarChar(36)
+  categoryKey String @db.NVarChar(200)
+  label String @db.NVarChar(200)
+  /// unmapped | confirmed | excluded
+  state String @default("unmapped") @db.NVarChar(16)
+  topicId String? @db.NVarChar(36)
+  suggestedTopicId String? @db.NVarChar(36)
+  decidedByUserId String? @db.NVarChar(36)
+  decidedAt DateTime? @db.DateTime2
+  version Int @default(1)
+  source MigrationSource @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  topic Topic? @relation("MigrationTopicMappingTopic", fields: [topicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  suggestedTopic Topic? @relation("MigrationTopicMappingSuggestion", fields: [suggestedTopicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  decidedBy User? @relation(fields: [decidedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  staged MigrationStagedCategory[]
+  @@unique([sourceId, categoryKey], map: "MigrationTopicMapping_source_category_key")
+  @@index([state, sourceId, id])
+}
+
+/// ImportError: one classified failure, its retry eligibility and its human
+/// resolution. Detail is safe text — never a raw body.
+model MigrationError {
+  id String @id @db.NVarChar(36)
+  sourceId String @db.NVarChar(36)
+  runId String @db.NVarChar(36)
+  recordId String? @db.NVarChar(36)
+  stage String @db.NVarChar(16)
+  classification String @db.NVarChar(32)
+  retryEligible Boolean
+  httpStatus Int?
+  attempt Int
+  detail String? @db.NVarChar(500)
+  occurredAt DateTime @db.DateTime2
+  /// open | retry-requested | dismissed | resolved
+  resolution String @default("open") @db.NVarChar(16)
+  resolvedByUserId String? @db.NVarChar(36)
+  resolvedAt DateTime? @db.DateTime2
+  version Int @default(1)
+  source MigrationSource @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  run MigrationRun @relation(fields: [runId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  record MigrationRecord? @relation(fields: [recordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  resolvedBy User? @relation(fields: [resolvedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items MigrationRunItem[]
+  @@index([resolution, occurredAt, id])
+  @@index([runId, occurredAt, id])
+}
+
+/// A duplicate candidate between two records. Only a hard identity (the same
+/// provider video) collapses automatically; everything else waits for a
+/// person, and a cross-language pair is never merged.
+model MigrationDuplicateCandidate {
+  id String @id @db.NVarChar(36)
+  recordId String @db.NVarChar(36)
+  otherRecordId String @db.NVarChar(36)
+  /// provider-id | asset-checksum | identifier | title-similarity
+  signal String @db.NVarChar(24)
+  score Int?
+  crossLanguage Boolean
+  /// open | collapsed | merged | distinct
+  state String @db.NVarChar(16)
+  decidedByUserId String? @db.NVarChar(36)
+  decidedAt DateTime? @db.DateTime2
+  note String? @db.NVarChar(500)
+  version Int @default(1)
+  createdAt DateTime @db.DateTime2
+  record MigrationRecord @relation("MigrationDuplicateRecord", fields: [recordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other MigrationRecord @relation("MigrationDuplicateOther", fields: [otherRecordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  decidedBy User? @relation(fields: [decidedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@unique([recordId, otherRecordId, signal], map: "MigrationDuplicateCandidate_pair_key")
+  @@index([state, createdAt, id])
+  @@index([otherRecordId])
+}
+
+/// AssetProvenance: the rights of ONE acquisition. Identical bytes may share
+/// one stored Asset; each acquisition keeps its own licence, holder and
+/// visibility, and none is ever merged into another.
+model MigrationAssetProvenance {
+  id String @id @db.NVarChar(36)
+  sourceId String @db.NVarChar(36)
+  recordId String? @db.NVarChar(36)
+  runId String @db.NVarChar(36)
+  originalUrl String @db.NVarChar(2000)
+  originalUrlDigest String @db.Char(64)
+  assetId String @db.NVarChar(36)
+  checksum String @db.Char(64)
+  byteSize BigInt
+  mediaType String @db.NVarChar(120)
+  /// unknown | organisation-owned | licensed | third-party
+  licence String @db.NVarChar(24)
+  licenceEvidence String? @db.NVarChar(1000)
+  rightsHolder String? @db.NVarChar(200)
+  /// restricted | public-eligible
+  visibility String @default("restricted") @db.NVarChar(16)
+  acquiredAt DateTime @db.DateTime2
+  decidedByUserId String? @db.NVarChar(36)
+  decidedAt DateTime? @db.DateTime2
+  version Int @default(1)
+  source MigrationSource @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  record MigrationRecord? @relation(fields: [recordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  run MigrationRun @relation(fields: [runId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  decidedBy User? @relation(fields: [decidedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@unique([sourceId, originalUrlDigest, checksum], map: "MigrationAssetProvenance_acquisition_key")
+  @@index([checksum])
+  @@index([assetId])
+  @@index([recordId])
+}
+
+/// LegacyMapping: one legacy SOURCE URL and the canonical address of the
+/// record migration published for it — never native slug history.
+model MigrationLegacyMapping {
+  id String @id @db.NVarChar(36)
+  sourceId String @db.NVarChar(36)
+  recordId String @db.NVarChar(36)
+  legacyUrl String @db.NVarChar(2000)
+  legacyUrlDigest String @db.Char(64)
+  videoId String? @db.NVarChar(36)
+  canonicalPath String @db.NVarChar(400)
+  /// active | disabled
+  state String @db.NVarChar(16)
+  manifestEntryId String? @db.NVarChar(36)
+  createdAt DateTime @db.DateTime2
+  createdByUserId String @db.NVarChar(36)
+  changedAt DateTime? @db.DateTime2
+  changedByUserId String? @db.NVarChar(36)
+  version Int @default(1)
+  source MigrationSource @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  record MigrationRecord @relation(fields: [recordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  video Video? @relation(fields: [videoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  entry MigrationManifestEntry? @relation(fields: [manifestEntryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy User @relation("MigrationMappingCreator", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  changedBy User? @relation("MigrationMappingChanger", fields: [changedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  links MigrationStagedLink[]
+  @@index([sourceId, legacyUrlDigest])
+  @@index([state, createdAt, id])
+  @@index([manifestEntryId])
+}
+
+/// PublishManifest: exactly what one publication of one run published, and
+/// the record that makes it reversible.
+model MigrationPublishManifest {
+  id String @id @db.NVarChar(36)
+  sourceId String @db.NVarChar(36)
+  runId String @db.NVarChar(36)
+  /// draft | publishing | published | rolling-back | rolled-back | discarded
+  state String @db.NVarChar(16)
+  createdByUserId String @db.NVarChar(36)
+  createdAt DateTime @db.DateTime2
+  publishedByUserId String? @db.NVarChar(36)
+  publishStartedAt DateTime? @db.DateTime2
+  publishedAt DateTime? @db.DateTime2
+  rollbackByUserId String? @db.NVarChar(36)
+  rollbackReason String? @db.NVarChar(500)
+  rollbackStartedAt DateTime? @db.DateTime2
+  rolledBackAt DateTime? @db.DateTime2
+  version Int @default(1)
+  source MigrationSource @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  run MigrationRun @relation(fields: [runId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy User @relation("MigrationManifestCreator", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  publishedBy User? @relation("MigrationManifestPublisher", fields: [publishedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  rollbackBy User? @relation("MigrationManifestRollback", fields: [rollbackByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  entries MigrationManifestEntry[]
+  @@index([state, createdAt, id])
+  @@index([runId])
+}
+
+/// One staged revision in a manifest and exactly what its publication made.
+model MigrationManifestEntry {
+  id String @id @db.NVarChar(36)
+  manifestId String @db.NVarChar(36)
+  position Int
+  stagedRecordId String @db.NVarChar(36)
+  recordId String @db.NVarChar(36)
+  /// pending | publishing | published | refused | rolled-back | rollback-refused
+  state String @default("pending") @db.NVarChar(16)
+  videoId String? @db.NVarChar(36)
+  targetVersion Int?
+  canonicalPath String? @db.NVarChar(400)
+  refusal String? @db.NVarChar(32)
+  publishedAt DateTime? @db.DateTime2
+  rolledBackAt DateTime? @db.DateTime2
+  version Int @default(1)
+  manifest MigrationPublishManifest @relation(fields: [manifestId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  staged MigrationStagedRecord @relation(fields: [stagedRecordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  record MigrationRecord @relation(fields: [recordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  video Video? @relation(fields: [videoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  legacyMappings MigrationLegacyMapping[]
+  promotions MigrationPromotionEntry[]
+  @@unique([manifestId, position], map: "MigrationManifestEntry_manifest_position_key")
+  @@unique([manifestId, stagedRecordId], map: "MigrationManifestEntry_manifest_staged_key")
+  @@index([stagedRecordId])
+  @@index([state, manifestId])
+}
+
+/// The reviewed promotion manifest (MIGRATION_STRATEGY.md §10.1.1): an
+/// explicitly approved set of published content — never accounts,
+/// credentials or configuration — moved to a destination resumably.
+model MigrationPromotion {
+  id String @id @db.NVarChar(36)
+  /// draft | approved | promoting | promoted | withdrawn
+  state String @db.NVarChar(16)
+  /// bundle
+  destination String @db.NVarChar(32)
+  createdByUserId String @db.NVarChar(36)
+  createdAt DateTime @db.DateTime2
+  approvedByUserId String? @db.NVarChar(36)
+  approvedAt DateTime? @db.DateTime2
+  withdrawnByUserId String? @db.NVarChar(36)
+  withdrawnAt DateTime? @db.DateTime2
+  completedAt DateTime? @db.DateTime2
+  version Int @default(1)
+  createdBy User @relation("MigrationPromotionCreator", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  approvedBy User? @relation("MigrationPromotionApprover", fields: [approvedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  withdrawnBy User? @relation("MigrationPromotionWithdrawer", fields: [withdrawnByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  entries MigrationPromotionEntry[]
+  @@index([state, createdAt, id])
+}
+
+/// One published manifest entry carried by a promotion, and whether the
+/// destination has it — the checkpoint a resumed promotion continues from.
+model MigrationPromotionEntry {
+  id String @id @db.NVarChar(36)
+  promotionId String @db.NVarChar(36)
+  position Int
+  manifestEntryId String @db.NVarChar(36)
+  /// pending | promoted
+  state String @default("pending") @db.NVarChar(16)
+  promotedAt DateTime? @db.DateTime2
+  destinationRef String? @db.NVarChar(200)
+  promotion MigrationPromotion @relation(fields: [promotionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  entry MigrationManifestEntry @relation(fields: [manifestEntryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@unique([promotionId, position], map: "MigrationPromotionEntry_promotion_position_key")
+  @@unique([promotionId, manifestEntryId], map: "MigrationPromotionEntry_promotion_entry_key")
+  @@index([manifestEntryId])
 }

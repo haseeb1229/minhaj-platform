@@ -226,6 +226,11 @@ retention period, which this decision still owns. Phase 27 added Donations' expo
 (SECURITY_BASELINE.md §19.1.7): a closed account's owed donation mail is removed and the account link of
 its donations released, while every amount, state, provider event and refund record is kept unchanged
 as financial history — an engineering default, not a retention period, which this decision still owns.
+Phase 29 added the **disposal mechanism for migration raw snapshots** (SECURITY_BASELINE.md §19.1.8):
+an administrator may dispose of a snapshot's body for a stated reason, audited, keeping its metadata
+and checksum. **How long raw snapshots — including any carrying incidental personal data — may be
+kept before disposal is not decided**; Phase 29 sets no period and disposes of nothing
+automatically, and this decision still owns that period.
 
 ### 2.3 Legal document content
 **Owner:** Minhaj · **Gates:** **Phase 6 — publication.** Phase 4 reserves the routes only ·
@@ -317,6 +322,16 @@ it**, working exclusively against:
 ever contacted.** The requirement for written authorisation before real source access is
 absolute and is not weakened by this clarification.
 
+> **As delivered (Phase 29) — STILL OPEN, and critical for Phase 30.** The framework is delivered
+> and proven against synthetic fixtures only (DELIVERY_PLAN.md Phase 29): **no real legacy source
+> was contacted and no real asset copied**, and no authorisation is recorded for any source. The
+> model has a place for one — an `authorised` source must carry a written authorisation reference
+> and date — but Phase 29 can neither register, activate nor run such a source
+> (`real-source-not-authorised`), and the only fetcher its tooling builds refuses every host
+> outside `*.fixture.invalid`. Recording each source's written authorisation remains mandatory
+> before any Phase 30 adapter, access, fetch, asset copy or ingestion. The production promotion
+> destination and production infrastructure also remain open (§4.1, §4.3, §4.4; Phases 34–35).
+
 ### 3.2 Source, API or export access
 **Owner:** Minhaj · **Gates:** Phase 30 · **Priority:** High
 
@@ -333,11 +348,18 @@ records from published HTML.
 **If unanswered:** Migration proceeds via authorised public-content ingestion, with higher
 parsing effort and review burden.
 
+**Still OPEN after Phase 29.** The framework accepts an `export` access method and proves it against
+a synthetic executable export, run in an isolated in-memory engine and never restored as the target
+(MIGRATION_STRATEGY.md §1.3, §13). No real export, API or source access has been provided or used.
+
 ### 3.3 Migration scope per source
 **Owner:** Minhaj · **Gates:** Phase 30 · **Priority:** Medium
 
 What to migrate, what to leave behind, what is obsolete or superseded, and what Minhaj wishes
 to retire rather than carry forward.
+
+**Still OPEN after Phase 29**, which decides no scope: its only content kind is video metadata over
+fixtures, and every further kind arrives with its own publisher in Phase 30.
 
 ### 3.4 Legacy domain control and cutover
 **Owner:** Minhaj · **Gates:** Phase 35 · **Priority:** Medium
@@ -348,6 +370,12 @@ domains redirect to Minhaj.org · timing · whether any legacy site continues op
 
 **Why it matters:** Preserving inbound links and citations depends on access this project does
 not control.
+
+**Still OPEN after Phase 29.** Phase 29 writes legacy URL mappings at publication but serves no
+legacy 301 and touches no DNS or legacy hosting. **Who publishes migrated content, approves a
+promotion and owns cutover and its rollback** (MIGRATION_STRATEGY.md §7.3, §10.1.1) is still
+undecided: `migration.publish`, which publication, rollback and promotion approval require, is
+externally gated, bundled into no role and held by nobody (SECURITY_BASELINE.md §3.5).
 
 ---
 
@@ -795,7 +823,7 @@ gates. A decision may gate more than one thing.
 | 2.3.1 | Correspondence retention period | **D** | Activation | 6 | Public intake stays disabled until the privacy/legal and support owners approve a period |
 | 2.4 | Content licensing and attribution | **D** | Content acceptance | 8, 18, 19, 30 | Affected material is not published or migrated |
 | 2.5 | Student↔student messaging policy | **D** | Activation | 24 | Disabled by default |
-| 3.1 | Written migration authorisation per source | **D** | **Implementation of live-source work**; activation | **30 only** | **No live ingestion.** **Phase 29 framework proceeds on fixtures** |
+| 3.1 | Written migration authorisation per source | **D** | **Implementation of live-source work**; activation | **30 only** | **No live ingestion.** **Phase 29 framework delivered on fixtures only; no source authorised** |
 | 3.2 | Source, API or export access | **C** | Content acceptance quality | 30 | Higher parsing effort; **an export is a source, never the target** (MIGRATION_STRATEGY.md §1.3) |
 | 3.3 | Migration scope per source | **C** | Content acceptance | 30 | Scope undetermined |
 | 3.4 | Legacy domain control and DNS | **C/E** | Launch | 35 | Legacy links break at launch |

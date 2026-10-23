@@ -312,6 +312,29 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'DonationProviderEvent',
       'DonationRefund',
       'DonationCommunicationIntent',
+      // Phase 29 — Migration & Provenance: fixture sources and their hosts,
+      // runs and their items, legacy records, raw snapshots, staged revisions
+      // with their categories and links, topic mappings, errors, duplicate
+      // candidates, asset provenance, legacy mappings, manifests with their
+      // entries, and promotions.
+      'MigrationSource',
+      'MigrationSourceHost',
+      'MigrationRun',
+      'MigrationRecord',
+      'MigrationRunItem',
+      'MigrationRawSnapshot',
+      'MigrationStagedRecord',
+      'MigrationStagedCategory',
+      'MigrationStagedLink',
+      'MigrationTopicMapping',
+      'MigrationError',
+      'MigrationDuplicateCandidate',
+      'MigrationAssetProvenance',
+      'MigrationLegacyMapping',
+      'MigrationPublishManifest',
+      'MigrationManifestEntry',
+      'MigrationPromotion',
+      'MigrationPromotionEntry',
     ]) {
       expect(forward).toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }
@@ -327,7 +350,10 @@ describe('Phase 1 Chunk 2 migration convention', () => {
     // when Phase 24 delivered Messaging, `Membership` when Phase 26 delivered
     // it, and `Donation` when Phase 27 delivered Donations; a bare `Teacher`
     // and a Course-level `CourseProgress` are still no delivered phase's, and
-    // no phase creates a card, order, cart, invoice or subscription table.)
+    // no phase creates a card, order, cart, invoice or subscription table.
+    // Phase 29 delivers Migration & Provenance as its own `Migration*` tables,
+    // never one generic `MigrationProvenance` table, and keeps no credential,
+    // cookie or crawl queue for a legacy host.)
     for (const table of [
       'Quran',
       'Book',
@@ -344,6 +370,10 @@ describe('Phase 1 Chunk 2 migration convention', () => {
       'DonationSubscription',
       'DonationPayload',
       'PaymentMethod',
+      'MigrationCredential',
+      'MigrationCookie',
+      'MigrationCrawlQueue',
+      'MigrationTarget',
     ]) {
       expect(forward).not.toMatch(new RegExp(`CREATE TABLE \\[dbo\\]\\.\\[${table}\\]`));
     }

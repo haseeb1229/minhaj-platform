@@ -1011,6 +1011,10 @@ describe('a public CONTENT route reads data, and still reads no session', () => 
       '@/composition/donations',
       '@/composition/donation-status-cookie',
       '@/composition/donations-webhook-admission',
+      // Phase 29: the Migration runtime wires Identity in and holds every
+      // source, raw snapshot and staged record. It has no public reader; the
+      // migrated content itself is read through its target's own public read.
+      '@/composition/migration',
       '@/contexts/identity-access',
       '@/config/server-env',
       '@minhaj/contracts/env/server',

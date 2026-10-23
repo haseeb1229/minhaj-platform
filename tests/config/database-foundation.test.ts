@@ -413,6 +413,30 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'DonationProviderEvent',
       'DonationRefund',
       'DonationCommunicationIntent',
+      // Phase 29 — Migration & Provenance: fixture legacy sources and their
+      // hosts, runs with their per-record items, the stable legacy record, raw
+      // snapshots, staged revisions with their categories and links, topic
+      // mappings, import errors, duplicate candidates, asset provenance,
+      // legacy URL mappings, publish manifests with their entries and reviewed
+      // promotions. No credential, cookie, crawl-queue or generic target model.
+      'MigrationSource',
+      'MigrationSourceHost',
+      'MigrationRun',
+      'MigrationRecord',
+      'MigrationRunItem',
+      'MigrationRawSnapshot',
+      'MigrationStagedRecord',
+      'MigrationStagedCategory',
+      'MigrationStagedLink',
+      'MigrationTopicMapping',
+      'MigrationError',
+      'MigrationDuplicateCandidate',
+      'MigrationAssetProvenance',
+      'MigrationLegacyMapping',
+      'MigrationPublishManifest',
+      'MigrationManifestEntry',
+      'MigrationPromotion',
+      'MigrationPromotionEntry',
     ]);
 
     // Asserted against declared MODELS, not raw text: the schema comments name
@@ -582,6 +606,18 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'Subscription',
       'DonationSubscription',
       'DonationPayload',
+      // Phase 29 contacts no live source: no credential, cookie or session for
+      // a legacy host, no crawl or scrape queue, a published record names its
+      // target by a typed key rather than a generic target model, and written
+      // authorisation per source is Phase 30's.
+      'MigrationProvenance',
+      'MigrationCredential',
+      'MigrationCookie',
+      'MigrationSession',
+      'MigrationCrawlQueue',
+      'MigrationTarget',
+      'MigrationAuthorisation',
+      'ScrapeQueue',
     ]) {
       expect(models, `${domain} arrives with its owning slice`).not.toContain(domain);
     }

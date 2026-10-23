@@ -2283,6 +2283,96 @@ do not merge two assets whose rights, provenance, owner or visibility differ**.
 **Exit:** Framework proven **against controlled fixtures — never against a live Minhaj site**.
 **No real legacy source has been contacted and no real asset copied.**
 
+> **Delivered (Phase 29) — FIXTURE-ONLY.** The framework is delivered and proven against synthetic
+> fixtures alone. Every source it can register is a `fixture` source naming only
+> `*.fixture.invalid` hosts (RFC 6761: `.invalid` never resolves publicly), served by a loopback
+> fixture server or by an in-memory synthetic export. **No real legacy source was contacted** — no
+> request, `robots.txt`, sitemap, favicon or browser visit — **and no real asset was copied.**
+> **Phase 30's per-source written-authorisation gate is unchanged and absolute** (OPEN_DECISIONS.md
+> §3.1): the service refuses to register, activate or run any non-fixture source
+> (`real-source-not-authorised`), and nothing in Phase 29 records an authorisation.
+
+**Phase-29 continuity — decisions made while delivering, recorded here rather than left in
+review history:**
+
+```
+MIGRATION & PROVENANCE CONTEXT                 COMPLETE — apps/web/src/contexts/migration-provenance
+PORTS, VOCABULARIES, SSRF POLICY               COMPLETE — @minhaj/contracts/migration
+PERSISTENCE                                    COMPLETE — 18 Migration* tables, CHECKs, triggers 51370–51384
+PIPELINE                                       COMPLETE — bounded, checkpointed, leased, resumable; fixtures only
+SAFE FETCH / SSRF / DNS REBINDING              COMPLETE — pinned validated address, re-validated per redirect
+RETRY CLASSIFICATION / RETRY-AFTER             COMPLETE — transient only; 401/403 never; long pauses defer
+SANITISATION BEFORE STAGING / INERT RAW        COMPLETE — allowlist before storage; escaped preview or attachment
+DEDUP / LINKS / TOPICS / RIGHTS / ABSENCE      COMPLETE — human decisions, version-checked and audited
+RECONCILIATION                                 COMPLETE — an unbalanced run blocks every manifest of it
+REVERSIBLE PUBLICATION                         COMPLETE — Media Video through Media's public service
+PROMOTION MANIFEST                             COMPLETE — reviewed, approved, carried into a checksummed bundle
+ADMINISTRATION (/admin/migration/*)            COMPLETE — migration.read / migration.administer / migration.publish
+MIGRATION.PUBLISH HOLDERS                      NONE — externally gated, bundled into no role (OPEN_DECISIONS.md §3.4)
+REAL SOURCES / LIVE INGESTION / REAL ASSETS    NONE — OPEN_DECISIONS.md §3.1 gates Phase 30
+CONTENT KINDS BEYOND media.video               NONE — each arrives with its Layer-4 publisher
+LEGACY 301 SERVING / SYSTEM REDIRECTS SURFACE  NONE — mapping data exists; 301s go live in Phase 35
+PRODUCTION PROMOTION DESTINATION               NONE — Phase 35; the local bundle is Phase 29's destination
+RAW SNAPSHOT RETENTION PERIOD                  OPEN — disposal mechanism delivered, no period (OPEN_DECISIONS.md §2.2)
+```
+
+- **Where the code lives.** The context is `apps/web/src/contexts/migration-provenance` — source,
+  pipeline, decision, raw-evidence, publication, promotion and read services over pure domain rules
+  for normalisation, link rewriting, retry and reconciliation. Its vocabularies, bounds, input
+  schemas, SSRF address and URL policy, every port and the source-adapter contract are
+  `@minhaj/contracts/migration`; its persistence adapter is
+  `packages/database/src/adapters/migration-provenance`, owned by Migration. Layer 4 is one wiring
+  shared by two roots: `apps/web/src/composition/migration-wiring.ts`, composed by `migration.ts`
+  (web) and by the node-runnable `migration-runner.ts` (tooling), with the Media Video target in
+  `migration-targets.ts`. The tooling is `scripts/migration/`. One migration,
+  `20261011000000_phase29_migration_provenance`, with its rollback script, adds eighteen tables
+  (DOMAIN_MODEL.md §16.5).
+- **Fixture authority is fixed at creation.** The registration schema has no authority field; the
+  database CHECK binds a `fixture` source to no authorisation evidence and to `*.fixture.invalid`
+  hosts, and the runtime principal is denied UPDATE of a source's authority, access method, base
+  URL and authorisation columns, so a fixture can never become a real source by an edit.
+- **One content kind, one real target.** `media.video` only: provider identifiers and words, never
+  video bytes. Publication creates a `published` Video through `createMediaService(...).saveVideo`
+  under Media's own `media.administer` — a target refusal is final — at the canonical path
+  `/watch/videos/{slug}`; rollback saves it `archived` at the recorded version. A Video edited since,
+  missing, or held by a person (Personalisation's `videoHeld`) is `rollback-refused` and left for a
+  person (MIGRATION_STRATEGY.md §7.2).
+- **Pipeline.** Sequential, one item at a time, checkpointed every batch of at most 25, one open
+  run per source held by a renewable lease; an interrupted run (`--max-items`) resumes with every
+  record fetched once and nothing staged twice. Identical evidence is recorded `unchanged`; changed
+  evidence produces a new staged revision for review that supersedes the earlier pending or
+  approved one — a published Video is never overwritten by it. Every run and revision records
+  adapter, parser, normaliser and code revision.
+- **Runs and promotions are command-line operations.** `npm run migration:run-fixture` and
+  `npm run migration:promote` run under plain Node through `migration-runner.ts`; the browser
+  surfaces hold every human decision and show where runs and promotions stand, and never start one.
+- **Executable legacy export.** `scripts/migration/export/synthetic-export.sql` is executed into an
+  in-memory `node:sqlite` database — another engine and schema — made query-only, and read through
+  an export adapter. It never touches SQL Server and never becomes the target schema.
+- **Permissions:** `migration.read` and `migration.administer` — ordinary keys in the protected
+  Platform Administrator bundle (the migration revoked the bundle holders' sessions and step-up
+  grants and wrote one provisioning audit row); `migration.publish` — externally gated, bundled into
+  no role, held by nobody, and every publish, rollback and promotion approval also needs the new
+  `migration-publication` step-up, checked by the Server Action, re-verified by the service and
+  re-checked by the database trigger.
+- **Staged content is not public.** No public route, API, sitemap segment or Search kind reads a
+  staged record; the admin subtree is `noindex, nofollow` and per request. The one public form
+  migration creates is a published Video, through Media.
+- **Staging proof.** `npm run staging:migration:proof` (`docker/staging/bin/migration-proof.sh` on
+  the staging VM, from the exact-SHA operations image) writes one disposable synthetic operator,
+  runs `scripts/migration/staging-fixture-proof.ts` as the runtime principal against a loopback
+  fixture server inside the container — run, interrupt, resume, publish through Media, promote into
+  a temporary bundle, withdraw a second promotion, roll back — and revokes the operator afterwards.
+  Locally the same proof runs against a disposable database through
+  `tests/migration/staging-fixture-proof.integration.test.ts`.
+- **Delivered routes:** `/admin/migration`, `/sources`, `/runs`, `/runs/{id}`, `/staging`,
+  `/staging/{id}`, `/duplicates`, `/url-mapping`, `/errors`, `/manifests`, `/manifests/{id}`,
+  `/reconciliation`, `GET /api/admin/migration/runs/{id}` and
+  `GET /api/admin/migration/snapshots/{id}` (ROUTE_MAP.md §7, §8).
+- **Not delivered:** any real or `authorised` source, adapter or ingestion; content kinds other than
+  `media.video`; serving legacy 301s and the `/admin/system/redirects` surface; a production
+  promotion destination; a raw-snapshot retention period; and any `migration.publish` holder.
+
 ---
 
 ### Phase 30 — Source Adapters & Initial Migration

@@ -211,6 +211,19 @@ export interface PersonalPurgePort {
   releaseHadith(citationId: string, limit: number): Promise<number>;
 }
 
+/**
+ * Whether ANYBODY holds one target here — a yes or a no, and nothing else
+ * (MIGRATION_STRATEGY.md §7.2).
+ *
+ * Asked at Layer 4 before a migrated record is withdrawn automatically: a Video
+ * somebody saved or watched is left for a person to decide. The answer names
+ * no account, no count and no instant, so it cannot be turned into a reading
+ * of who holds what.
+ */
+export interface PersonalHoldingPort {
+  videoHeld(videoId: string): Promise<boolean>;
+}
+
 /* ===========================================================================
  * Newsletter
  * ========================================================================= */

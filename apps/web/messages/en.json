@@ -458,7 +458,8 @@
       "learning": "Learning",
       "messaging": "Messaging",
       "membership": "Membership",
-      "donations": "Donations"
+      "donations": "Donations",
+      "migration": "Migration"
     },
     "global": {
       "title": "Global Network",
@@ -648,7 +649,8 @@
       "quranCanonicalEdit": "Correcting canonical Quran text needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app.",
       "hadithCanonicalEdit": "Changing sourced Hadith records, structure, verification or citations needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app.",
       "fatwaPublication": "Publishing or withdrawing a Fatwa needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app.",
-      "donationRefund": "Refunding a donation needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app."
+      "donationRefund": "Refunding a donation needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app.",
+      "migrationPublication": "Publishing or rolling back migrated content, and approving a promotion, need their own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app."
     },
     "users": {
       "title": "Accounts",
@@ -6579,6 +6581,713 @@
       "primary": "{language} (primary language)",
       "missing": "No words in this language yet.",
       "submit": "Save the {language} words"
+    }
+  },
+  "adminMigration": {
+    "title": "Migration",
+    "surface": {
+      "overview": "Overview",
+      "sources": "Sources",
+      "runs": "Runs",
+      "staging": "Staging",
+      "duplicates": "Duplicates",
+      "urlMapping": "URL mapping",
+      "errors": "Errors",
+      "manifests": "Manifests",
+      "reconciliation": "Reconciliation"
+    },
+    "unknown": "Something went wrong. The details are not shown here; please try again.",
+    "reload": "Try again",
+    "loading": "Loading…",
+    "saved": "Saved.",
+    "pending": "Saving…",
+    "previous": "Previous",
+    "next": "Next",
+    "pageOf": "Page {page} of {pages}",
+    "beyond": "There is nothing on this page. Go back to the first page.",
+    "none": "None",
+    "failure": {
+      "denied": "You don’t have permission to do that.",
+      "invalid": "Some values aren’t valid. Check the fields and try again.",
+      "notFound": "That record wasn’t found.",
+      "conflict": "Someone changed this since the page loaded. Reload the page, check where it stands now, and try again.",
+      "invalidState": "That step isn’t open for this record in its current state. Reload the page to see where it stands.",
+      "realSourceNotAuthorised": "Only synthetic fixture sources can be registered or run in this phase. A real source needs recorded written authorisation first.",
+      "sourceInactive": "This source is inactive, so nothing can be run from it.",
+      "adapterMismatch": "The adapter doesn’t match this source’s kind or access method, or the open run’s code.",
+      "runBusy": "Another process is working on this source’s open run right now. Try again later.",
+      "runUnreconciled": "That run isn’t completed and balanced, so nothing from it can be published.",
+      "notPublishable": "This revision can’t be approved: it is invalid or carries personal data.",
+      "approvalWithdrawn": "The approval was withdrawn, so this can’t continue.",
+      "targetUnavailable": "The publication target didn’t answer. Nothing was assumed; the work can be resumed later.",
+      "crossLanguage": "These two records are in different languages. They are related, never duplicates, so they can’t be merged.",
+      "unsafeScope": "A host or base address is outside the synthetic fixture scope. Fixture sources may name only *.fixture.invalid hosts.",
+      "topicUnknown": "That topic doesn’t exist. Choose one from the list.",
+      "notRetryable": "This error can’t be retried. Only network, timeout, rate-limit and server errors are retried; an access failure never is.",
+      "duplicate": "A source with that key is already registered.",
+      "leaseLost": "Another process took over this run while the work was in progress.",
+      "hostRefused": "The database refused a fixture host outside *.fixture.invalid.",
+      "unavailable": "This couldn’t be completed right now. Nothing was assumed; please try again later.",
+      "noSession": "Your session has ended. Sign in again.",
+      "secondFactorRequired": "Finish setting up two-step verification first.",
+      "stepUpRequired": "Confirm it is you with the form above, then submit again.",
+      "accountInactive": "This account is not active.",
+      "confirmRequired": "Tick the confirmation box first.",
+      "load": "This can’t be shown right now. Please try again later."
+    },
+    "filter": {
+      "heading": "Filter",
+      "any": "All",
+      "apply": "Apply",
+      "clear": "Clear",
+      "source": "Source",
+      "state": "State",
+      "review": "Review state",
+      "run": "Run identifier",
+      "runHelp": "Paste a run’s identifier to see only its revisions.",
+      "outcome": "Outcome",
+      "resolution": "Resolution"
+    },
+    "overview": {
+      "description": "Bring legacy content into the platform with its provenance: register sources, follow runs, review what was staged, and publish reviewed manifests through each target’s own rules.",
+      "fixturesOnly": "This phase works only with synthetic fixture sources on controlled local infrastructure. No live legacy site is contacted.",
+      "commandLine": "Runs and promotions are carried out from the command line. These screens show where they stand and hold every human decision.",
+      "surface": {
+        "sources": "The registered sources, their hosts and politeness limits.",
+        "runs": "Each import run, what it found and how it ended.",
+        "staging": "The review queue: approve or reject staged records.",
+        "duplicates": "Possible duplicates to merge, keep apart or reopen.",
+        "urlMapping": "Legacy address mappings, category-to-topic mappings and unresolved links.",
+        "errors": "Import errors to retry or dismiss, and records that have gone missing.",
+        "manifests": "Publish manifests, their rollback, and promotions.",
+        "reconciliation": "Completed runs, whether they balance, and their counts."
+      }
+    },
+    "authority": {
+      "fixture": "Synthetic fixture",
+      "authorised": "Authorised source"
+    },
+    "access": {
+      "http": "Web pages",
+      "export": "Export file"
+    },
+    "sourceState": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "sources": {
+      "title": "Sources",
+      "description": "Legacy sources the pipeline may read, with the limits it reads them under.",
+      "fixturesOnly": "Only synthetic fixture sources can be registered. They may name only hosts ending in .fixture.invalid, which never resolve on the public internet.",
+      "heading": "Registered sources",
+      "empty": "No source is registered yet.",
+      "caption": "{total, plural, one {# source.} other {# sources.}}",
+      "details": "Source details",
+      "pages": "Source pages",
+      "column": {
+        "key": "Key",
+        "name": "Name",
+        "authority": "Authority",
+        "access": "Access",
+        "state": "State"
+      },
+      "field": {
+        "key": "Key",
+        "keyHelp": "Lower-case letters, digits and hyphens. It can’t be changed later.",
+        "name": "Name",
+        "state": "State",
+        "access": "Access method",
+        "baseUrl": "Base address",
+        "baseUrlHelp": "For web pages only: http(s)://…fixture.invalid/ — leave empty for an export file.",
+        "hosts": "Hosts",
+        "hostsHelp": "One host per line, each ending in .fixture.invalid. Hosts can’t be changed later.",
+        "language": "Default language code",
+        "languageHelp": "For example ur, ar or en. Leave empty if the source has none.",
+        "policy": "Politeness and safety limits",
+        "licensingEvidence": "Licensing evidence",
+        "policyNotes": "Policy notes",
+        "version": "Version"
+      },
+      "policy": {
+        "minIntervalMs": "Minimum interval (ms)",
+        "maxConcurrency": "Maximum concurrency",
+        "maxAttempts": "Maximum attempts",
+        "timeoutMs": "Timeout (ms)",
+        "maxBodyBytes": "Maximum body size (bytes)",
+        "maxRedirects": "Maximum redirects"
+      },
+      "create": {
+        "heading": "Register a fixture source",
+        "help": "The source is created as a synthetic fixture. There is no way to record a real source here.",
+        "submit": "Register the source",
+        "done": "The fixture source was registered."
+      },
+      "edit": {
+        "submit": "Save changes"
+      }
+    },
+    "runState": {
+      "open": "Open",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "reconciliationState": {
+      "pending": "Not reconciled",
+      "balanced": "Balanced",
+      "unbalanced": "Unbalanced"
+    },
+    "itemOutcome": {
+      "pending": "Pending",
+      "staged": "Staged",
+      "unchanged": "Unchanged",
+      "rejected": "Rejected",
+      "errored": "Errored",
+      "excluded": "Excluded"
+    },
+    "runs": {
+      "title": "Runs",
+      "description": "Import runs, newest first. A run is started and resumed from the command line.",
+      "heading": "Import runs",
+      "empty": "No run matches.",
+      "caption": "{total, plural, one {# run.} other {# runs.}}",
+      "pages": "Run pages",
+      "back": "Back to runs",
+      "column": {
+        "started": "Started",
+        "source": "Source",
+        "state": "State",
+        "reconciliation": "Reconciliation",
+        "items": "Items",
+        "ended": "Ended"
+      }
+    },
+    "run": {
+      "title": "Import run",
+      "source": "Source",
+      "started": "Started",
+      "ended": "Ended",
+      "discovery": "Discovery",
+      "discoveryComplete": "Complete",
+      "discoveryOpen": "Not complete",
+      "reconciledAt": "Reconciled",
+      "version": "Version",
+      "stagedLink": "Staged revisions of this run",
+      "errorsLink": "Errors of this run",
+      "counts": "Items by outcome",
+      "verdict": {
+        "pending": "This run has not been reconciled yet.",
+        "balanced": "Every discovered item reached an outcome and the counts balance.",
+        "unbalanced": "The counts don’t balance, so nothing from this run can be published."
+      },
+      "items": "Items",
+      "noItems": "No item matches.",
+      "itemsCaption": "{total, plural, one {# item.} other {# items.}}",
+      "itemPages": "Item pages",
+      "openStaged": "Open revision",
+      "column": {
+        "position": "Position",
+        "externalKey": "External key",
+        "outcome": "Outcome",
+        "attempts": "Attempts",
+        "staged": "Staged revision"
+      },
+      "cancel": {
+        "heading": "Cancel this run",
+        "help": "Cancelling stops the run. Nothing already staged is removed, and a later run starts afresh.",
+        "confirm": "I understand this run will stop and can’t be resumed.",
+        "submit": "Cancel the run",
+        "done": "The run was cancelled."
+      }
+    },
+    "provenance": {
+      "adapter": "Adapter",
+      "parser": "Parser",
+      "normalizer": "Normaliser version",
+      "codeRevision": "Code revision",
+      "inputChecksum": "Snapshot checksum",
+      "payloadChecksum": "Payload checksum"
+    },
+    "reviewState": {
+      "pending": "Awaiting review",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "superseded": "Superseded"
+    },
+    "validationState": {
+      "valid": "Valid",
+      "invalid": "Invalid"
+    },
+    "personalData": {
+      "none": "No personal data found",
+      "flagged": "Personal data flagged"
+    },
+    "recordStatus": {
+      "discovered": "Discovered",
+      "fetched": "Fetched",
+      "staged": "Staged",
+      "rejected": "Rejected",
+      "errored": "Errored",
+      "excluded": "Excluded",
+      "approved": "Approved",
+      "published": "Published",
+      "merged": "Merged"
+    },
+    "issue": {
+      "title-missing": "The title is missing.",
+      "title-too-long": "The title is too long.",
+      "language-missing": "The language is missing.",
+      "language-invalid": "The language code isn’t valid.",
+      "provider-missing": "The video provider is missing.",
+      "provider-invalid": "The video provider isn’t supported.",
+      "provider-id-invalid": "The provider’s video identifier isn’t valid.",
+      "primary-label-missing": "There are no words in the primary language.",
+      "date-implausible": "The publication date isn’t plausible.",
+      "duration-invalid": "The duration isn’t valid.",
+      "slug-invalid": "The address name couldn’t be formed.",
+      "description-too-long": "The description is too long."
+    },
+    "linkDisposition": {
+      "rewritten": "Rewritten",
+      "unresolved": "Unresolved",
+      "external": "External",
+      "dropped": "Dropped"
+    },
+    "staging": {
+      "title": "Staging",
+      "description": "Staged revisions awaiting a person’s review, newest first. Open one to read its payload and evidence.",
+      "heading": "Staged revisions",
+      "empty": "No staged revision matches.",
+      "caption": "{total, plural, one {# revision.} other {# revisions.}}",
+      "pages": "Staging pages",
+      "back": "Back to staging",
+      "revision": "Revision {revision}",
+      "column": {
+        "title": "Title",
+        "language": "Language",
+        "validation": "Validation",
+        "personalData": "Personal data",
+        "review": "Review",
+        "produced": "Staged"
+      }
+    },
+    "staged": {
+      "title": "Staged revision",
+      "inert": "Everything on this page that came from a legacy source is shown as plain text. No markup from it is rendered, run or followed.",
+      "revision": "Revision",
+      "recordStatus": "Record status",
+      "externalKey": "External key",
+      "originalUrl": "Legacy address",
+      "language": "Language",
+      "run": "Run",
+      "produced": "Staged",
+      "reviewed": "Reviewed",
+      "reviewNote": "Review note",
+      "version": "Version",
+      "provenance": "Provenance",
+      "validation": "Validation",
+      "noIssues": "No validation issue was found.",
+      "personalDataFlagged": "Personal data was detected in this revision. It can’t be approved; reject it.",
+      "payload": "Sanitised payload",
+      "payloadHelp": "The normalised record exactly as stored, shown as text. Its description was sanitised before staging.",
+      "categories": "Categories and their topic mappings",
+      "noCategories": "This revision has no legacy category.",
+      "mappingLink": "Decide category mappings",
+      "links": "Links",
+      "noLinks": "This revision has no link.",
+      "linksCaption": "{total, plural, one {# link.} other {# links.}}",
+      "column": {
+        "href": "Address",
+        "disposition": "Disposition",
+        "rewrittenTo": "Rewritten to"
+      }
+    },
+    "snapshot": {
+      "heading": "Raw evidence",
+      "requestedUrl": "Requested address",
+      "finalUrl": "Final address",
+      "httpStatus": "HTTP status",
+      "contentType": "Content type",
+      "size": "Size",
+      "bytes": "{count, plural, one {# byte} other {# bytes}}",
+      "checksum": "SHA-256",
+      "fetched": "Fetched",
+      "personalData": "Personal data",
+      "disposed": "Body disposed of",
+      "disposedHelp": "The body of this snapshot was disposed of. Its metadata and checksum remain.",
+      "administerOnly": "Reading raw evidence needs the migration administration permission.",
+      "audited": "Previewing or downloading raw evidence is recorded in the audit log.",
+      "showPreview": "Show an escaped text preview",
+      "download": "Download the raw bytes",
+      "preview": "Raw preview (escaped text)",
+      "previewHelp": "The snapshot’s bytes decoded as text. Nothing in it is rendered.",
+      "previewTruncated": "Only the first 64 KiB of the snapshot are shown, decoded as text. Nothing in it is rendered.",
+      "previewDisposed": "There is nothing to preview: this snapshot’s body was disposed of."
+    },
+    "review": {
+      "heading": "Review",
+      "note": "Note (optional)",
+      "approve": "Approve",
+      "reject": "Reject",
+      "withdraw-approval": "Withdraw the approval",
+      "notPublishable": "This revision is invalid or carries personal data, so it can only be rejected.",
+      "closed": "This revision’s review is closed.",
+      "done": {
+        "approve": "The revision was approved.",
+        "reject": "The revision was rejected.",
+        "withdraw-approval": "The approval was withdrawn."
+      }
+    },
+    "duplicateState": {
+      "open": "Open",
+      "collapsed": "Collapsed automatically",
+      "merged": "Merged",
+      "distinct": "Kept apart"
+    },
+    "duplicateSignal": {
+      "provider-id": "Same provider video",
+      "asset-checksum": "Same file",
+      "identifier": "Same legacy identifier",
+      "title-similarity": "Similar title"
+    },
+    "duplicates": {
+      "title": "Duplicates",
+      "description": "Records that may be the same item. Only the same provider video collapses automatically; everything else waits for a person.",
+      "heading": "Duplicate candidates",
+      "empty": "No duplicate candidate matches.",
+      "caption": "{total, plural, one {# candidate.} other {# candidates.}}",
+      "pages": "Duplicate pages",
+      "record": "Record",
+      "other": "Possible duplicate of",
+      "found": "Found",
+      "score": "Score {score}",
+      "note": "Note (optional)",
+      "merge": "Merge",
+      "distinct": "Keep apart",
+      "reopen": "Reopen",
+      "crossLanguage": "These records are in different languages. They are related, never duplicates, and can’t be merged.",
+      "collapsedHelp": "Collapsed automatically because both records name the same provider video."
+    },
+    "topicMappingState": {
+      "unmapped": "Unmapped",
+      "confirmed": "Confirmed",
+      "excluded": "Excluded"
+    },
+    "legacyMappingState": {
+      "active": "Active",
+      "disabled": "Disabled"
+    },
+    "mapping": {
+      "title": "URL mapping",
+      "description": "Where legacy addresses and legacy categories lead, and the links staging couldn’t resolve.",
+      "topicUnknown": "Unknown topic",
+      "column": {
+        "legacyUrl": "Legacy address",
+        "canonicalPath": "Canonical path",
+        "state": "State",
+        "created": "Created",
+        "action": "Action",
+        "category": "Category",
+        "topic": "Topic",
+        "record": "Record",
+        "href": "Address"
+      },
+      "legacy": {
+        "heading": "Legacy address mappings",
+        "help": "Created when a manifest is published. An active mapping records where a legacy address now leads; no redirect is served from it until launch cutover. Disabling one keeps it as history.",
+        "filter": "Legacy mapping state",
+        "empty": "No legacy mapping matches.",
+        "caption": "{total, plural, one {# mapping.} other {# mappings.}}",
+        "pages": "Legacy mapping pages",
+        "disable": "Disable",
+        "enable": "Enable"
+      },
+      "topics": {
+        "heading": "Category to topic mappings",
+        "help": "A legacy category leads to a topic only when a person confirms it.",
+        "filter": "Topic mapping state",
+        "empty": "No category mapping matches.",
+        "pages": "Category mapping pages",
+        "summary": "Source {source} · {count, plural, one {# staged revision} other {# staged revisions}}",
+        "current": "Topic: {topic}",
+        "suggested": "Suggested: {topic}",
+        "topic": "Topic",
+        "choose": "Choose a topic",
+        "confirm": "Confirm the topic",
+        "exclude": "Exclude",
+        "reopen": "Reopen",
+        "noTopics": "No topic is available to choose.",
+        "choicesUnavailable": "The topic list couldn’t be loaded. Try again later."
+      },
+      "unresolved": {
+        "heading": "Unresolved links",
+        "help": "Links in staged revisions that point to legacy addresses not yet mapped.",
+        "empty": "No unresolved link.",
+        "caption": "{total, plural, one {# link.} other {# links.}}",
+        "pages": "Unresolved link pages"
+      }
+    },
+    "errorResolution": {
+      "open": "Open",
+      "retry-requested": "Retry requested",
+      "dismissed": "Dismissed",
+      "resolved": "Resolved"
+    },
+    "errorStage": {
+      "discover": "Discovery",
+      "fetch": "Fetching",
+      "parse": "Parsing",
+      "normalize": "Normalising",
+      "validate": "Validation",
+      "asset": "Assets",
+      "publish": "Publication",
+      "rollback": "Rollback",
+      "promote": "Promotion"
+    },
+    "errorClassification": {
+      "network": "Network failure",
+      "timeout": "Timed out",
+      "rate-limited": "Rate limited",
+      "server-error": "Server error",
+      "not-found": "Not found",
+      "gone": "Gone",
+      "access-denied": "Access denied",
+      "client-error": "Request refused",
+      "redirect-refused": "Redirect refused",
+      "address-refused": "Address refused",
+      "scope-refused": "Outside the source’s scope",
+      "too-large": "Too large",
+      "unsupported-type": "Unsupported content type",
+      "parse-failed": "Couldn’t be parsed",
+      "validation-failed": "Failed validation",
+      "asset-rejected": "File rejected",
+      "asset-unavailable": "File unavailable",
+      "target-refused": "Refused by the target",
+      "target-unavailable": "Target unavailable",
+      "approval-withdrawn": "Approval withdrawn"
+    },
+    "errors": {
+      "title": "Errors",
+      "description": "What went wrong during import, in categories — never a body or a header value. Only network, timeout, rate-limit and server errors can be retried.",
+      "heading": "Import errors",
+      "empty": "No error matches.",
+      "caption": "{total, plural, one {# error.} other {# errors.}}",
+      "pages": "Error pages",
+      "forRun": "Showing errors of run",
+      "occurred": "Occurred",
+      "run": "Run",
+      "attempt": "Attempt",
+      "httpStatus": "HTTP status",
+      "detail": "Detail",
+      "retryEligible": "Retry",
+      "eligible": "Can be retried",
+      "notEligible": "Can’t be retried",
+      "retry": "Retry",
+      "retried": "A retry was requested.",
+      "dismiss": "Dismiss"
+    },
+    "disappearance": {
+      "withdrawn": "Withdrawn by the source",
+      "moved": "Moved",
+      "source-error": "Source error",
+      "transient-failure": "Temporary failure",
+      "access-failure": "Access failure",
+      "unresolved": "Unresolved"
+    },
+    "missing": {
+      "heading": "Missing records",
+      "absenceIsNotDeletion": "A missing record is an observation, not a deletion. Classifying it records why it disappeared; nothing is deleted, unpublished or redirected.",
+      "empty": "No record is missing.",
+      "pages": "Missing record pages",
+      "externalKey": "External key",
+      "source": "Source",
+      "status": "Status",
+      "classification": "Classification",
+      "unclassified": "Not classified yet",
+      "note": "Note (optional)",
+      "classify": "Save the classification"
+    },
+    "manifestState": {
+      "draft": "Draft",
+      "publishing": "Publishing",
+      "published": "Published",
+      "rolling-back": "Rolling back",
+      "rolled-back": "Rolled back",
+      "discarded": "Discarded"
+    },
+    "entryState": {
+      "pending": "Pending",
+      "publishing": "Publishing",
+      "published": "Published",
+      "refused": "Refused",
+      "rolled-back": "Rolled back",
+      "rollback-refused": "Left for a person"
+    },
+    "promotionState": {
+      "draft": "Draft",
+      "approved": "Approved",
+      "promoting": "Promoting",
+      "promoted": "Promoted",
+      "withdrawn": "Withdrawn"
+    },
+    "manifests": {
+      "title": "Manifests",
+      "description": "Publish manifests are prepared from approved revisions of a completed, balanced run, and published through each target’s own rules.",
+      "heading": "Publish manifests",
+      "empty": "No manifest matches.",
+      "caption": "{total, plural, one {# manifest.} other {# manifests.}}",
+      "pages": "Manifest pages",
+      "back": "Back to manifests",
+      "openRun": "Open run",
+      "column": {
+        "created": "Created",
+        "state": "State",
+        "run": "Run",
+        "published": "Published"
+      },
+      "create": {
+        "heading": "Prepare a manifest",
+        "help": "Choose a completed, balanced run, then the approved revisions to include.",
+        "run": "Run",
+        "chooseRun": "Choose a balanced run",
+        "showApproved": "Show approved revisions",
+        "noRuns": "No completed, balanced run is available.",
+        "noApproved": "This run has no approved revision.",
+        "revisions": "{total, plural, one {# approved revision} other {# approved revisions}}",
+        "submit": "Create the draft manifest"
+      }
+    },
+    "manifest": {
+      "title": "Publish manifest",
+      "run": "Run",
+      "created": "Created",
+      "published": "Published",
+      "rollbackReason": "Rollback reason",
+      "rolledBack": "Rolled back",
+      "version": "Version",
+      "entries": "Entries",
+      "noEntries": "This manifest has no entry.",
+      "entriesCaption": "{total, plural, one {# entry.} other {# entries.}}",
+      "openRevision": "Open revision",
+      "column": {
+        "position": "Position",
+        "revision": "Revision",
+        "state": "State",
+        "canonicalPath": "Canonical path",
+        "refusal": "Refusal"
+      },
+      "discard": {
+        "heading": "Discard this draft",
+        "confirm": "I understand this draft will be discarded. Nothing was published from it.",
+        "submit": "Discard the draft",
+        "done": "The draft was discarded."
+      }
+    },
+    "publication": {
+      "heading": "Publication",
+      "help": "Publishing and rolling back need the migration publication permission and a recent confirmation. Each target applies its own rules; a target’s refusal is final.",
+      "publisherOnly": "Publishing and rolling back need the migration publication permission.",
+      "publish": {
+        "heading": "Publish",
+        "help": "Each entry is published through its target’s own interface. If the target doesn’t answer, publication stops and can be resumed.",
+        "confirm": "I have reviewed these entries and want to publish them.",
+        "submit": "Publish the manifest",
+        "done": "The manifest was published.",
+        "refused": "Publication finished, but the target refused some entries. See each entry’s refusal."
+      },
+      "rollback": {
+        "heading": "Roll back",
+        "help": "Each published entry is withdrawn through its target. An entry edited since publication, or held by a person, is left for a person.",
+        "reason": "Reason",
+        "confirm": "I want to withdraw the content this manifest published.",
+        "submit": "Roll back the manifest",
+        "done": "The manifest was rolled back.",
+        "left": "Rollback finished, but some entries were left for a person to decide."
+      }
+    },
+    "promotions": {
+      "heading": "Promotions",
+      "help": "A promotion is the reviewed set of published content carried from staging to production. It carries content, provenance and mappings — never accounts or configuration.",
+      "commandLine": "An approved promotion is carried out from the command line. This screen shows its progress only.",
+      "empty": "No promotion yet.",
+      "pages": "Promotion pages",
+      "progress": "{promoted} of {total} entries promoted",
+      "created": "Created",
+      "approve": "Approve the promotion",
+      "confirmApprove": "I have reviewed this promotion and approve it.",
+      "approved": "The promotion was approved.",
+      "withdraw": "Withdraw",
+      "create": {
+        "heading": "Create a promotion",
+        "help": "Choose the published entries to carry to production. The promotion must then be approved.",
+        "entries": "Published entries",
+        "entry": "Entry {position}",
+        "submit": "Create the promotion",
+        "done": "The promotion was created as a draft."
+      }
+    },
+    "count": {
+      "discovered": "Discovered",
+      "pending": "Pending",
+      "fetched": "Fetched",
+      "parsed": "Parsed",
+      "staged": "Staged",
+      "unchanged": "Unchanged",
+      "rejected": "Rejected",
+      "errored": "Errored",
+      "excluded": "Excluded",
+      "inconsistent": "Inconsistent",
+      "reviewPending": "Awaiting review",
+      "approved": "Approved",
+      "reviewRejected": "Rejected in review",
+      "superseded": "Superseded",
+      "published": "Published",
+      "mapped": "Mapped",
+      "merged": "Merged"
+    },
+    "reconciliation": {
+      "title": "Reconciliation",
+      "description": "Every completed run, with the verdict it was given and the counts it was given on. An unbalanced run blocks every manifest of it.",
+      "heading": "Completed runs",
+      "empty": "No run has completed yet.",
+      "pages": "Reconciliation pages",
+      "unbalanced": "{count, plural, one {# equation doesn’t balance.} other {# equations don’t balance.}}",
+      "noCounts": "No counts were recorded for this run."
+    },
+    "licence": {
+      "unknown": "Unknown",
+      "organisation-owned": "Owned by the organisation",
+      "licensed": "Licensed",
+      "third-party": "Third party"
+    },
+    "visibility": {
+      "restricted": "Restricted",
+      "public-eligible": "Eligible for public release"
+    },
+    "assets": {
+      "heading": "Assets",
+      "help": "Files acquired for this record, each with its own rights. Identical bytes acquired from another address are a separate acquisition with separate rights.",
+      "empty": "No file was acquired for this record.",
+      "pages": "Asset pages",
+      "originalUrl": "Original address",
+      "checksum": "SHA-256",
+      "size": "Size",
+      "mediaType": "Media type",
+      "licence": "Licence",
+      "visibility": "Visibility",
+      "visibilityHelp": "Only material owned by the organisation or licensed may be eligible for public release.",
+      "rightsHolder": "Rights holder",
+      "licenceEvidence": "Licence evidence",
+      "thisAcquisitionOnly": "This decision applies to this acquisition only — even if another acquisition has exactly the same bytes, its rights stay as they are.",
+      "submit": "Save the rights decision",
+      "done": "The rights decision was saved for this acquisition."
+    },
+    "dispose": {
+      "heading": "Dispose of the raw body",
+      "help": "Removes the stored bytes of this snapshot only. Its metadata and checksum stay, and the disposal is recorded in the audit log. It can’t be undone.",
+      "reason": "Reason",
+      "confirm": "I understand the raw body will be removed permanently.",
+      "submit": "Dispose of the raw body",
+      "done": "The raw body was disposed of. Its metadata and checksum remain."
     }
   }
 }

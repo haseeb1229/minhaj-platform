@@ -24,8 +24,11 @@ export function isPersonalRefusalReason(value: unknown): value is PersonalRefusa
 }
 
 export class PersonalRefusal extends Error {
-  constructor(readonly reason: PersonalRefusalReason) {
+  readonly reason: PersonalRefusalReason;
+
+  constructor(reason: PersonalRefusalReason) {
     super(reason);
+    this.reason = reason;
     this.name = 'PersonalRefusal';
   }
 }
