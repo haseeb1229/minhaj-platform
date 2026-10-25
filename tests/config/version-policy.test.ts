@@ -937,8 +937,8 @@ describe('F13.9 — the transcribed policy matches TECH_STACK.md', () => {
 
 /**
  * Pre-Phase-30 security maintenance. Two security fixes live in version pins,
- * so the REAL repository is held to them: Node 24.22.1 (the 2026-10-20 Node 24
- * security release) and Zod 4.6.7 (GHSA-mrhx-c7xc-m3w5, first patched 4.6.6).
+ * so the REAL repository is held to them: Node 24.22.1 (the Node 24 line of the
+ * 2026-10-21 security releases) and Zod 4.6.7 (GHSA-mrhx-c7xc-m3w5, first patched 4.6.6).
  */
 describe('F13.10 — the security-maintenance pins hold in the real repository', () => {
   const read = (relative: string) => readFileSync(path.join(repoRoot, relative), 'utf8');

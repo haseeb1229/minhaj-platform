@@ -147,10 +147,13 @@ The production runtime must match. **Odd-numbered Node releases are never used i
 production.**
 
 > **Node.js moved from 24.20.0 to 24.22.1 as a security patch within the locked 24 LTS line**
-> (pre-Phase-30 security maintenance, October 2026). 24.22.1 is the 2026-10-20 Node 24
-> security release; among its fixes are High-severity defects in the bundled Brotli decoder
-> (CVE-2026-111497), NUL-byte validation of `dns.resolve*` inputs (CVE-2026-105482) and TLS
-> IP-address normalisation (CVE-2026-105483, CVE-2026-106069). One Minhaj's exposure was low — no application code decompresses Brotli
+> (pre-Phase-30 security maintenance, October 2026). 24.22.1 is the Node 24 line's fix in the
+> 2026-10-21 Node.js security releases. The official advisory rates four of its fixes High:
+> a Brotli decoder out-of-bounds write (CVE-2026-111497), NUL-byte truncation in
+> `dns.resolve*`/`dns.reverse` (CVE-2026-105482), and two `tls.checkServerIdentity` IP-form
+> confusions (CVE-2026-105483, CVE-2026-106069). It also fixes Medium and Low issues,
+> among them CVE-2026-106072 (Medium), where non-canonical IPv4 spellings let a DNS name in
+> a certificate authenticate an IP endpoint. One Minhaj's exposure was low — no application code decompresses Brotli
 > or calls `dns.resolve*`, and the migration fetcher pins its own lookup and requests
 > uncompressed bodies — but the runtime moves anyway. Every pin moves together: `engines`,
 > the version policy, CI's `NODE_VERSION`, and the web, realtime and operations images
