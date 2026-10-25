@@ -6,7 +6,7 @@
   "license": "UNLICENSED",
   "type": "module",
   "engines": {
-    "node": "24.20.0",
+    "node": "24.22.1",
     "npm": ">=11"
   },
   "workspaces": [
@@ -51,6 +51,7 @@
     "check:server-only": "node scripts/check-server-only.mjs",
     "check:versions": "node scripts/verify-versions.mjs",
     "check:docker-context": "node scripts/check-docker-context.mjs",
+    "check:dependency-audit": "node scripts/verify-dependency-audit.mjs",
     "test": "vitest run",
     "test:storage": "vitest run tests/storage",
     "test:search": "vitest run tests/search",

@@ -408,8 +408,8 @@ describe('Phase 25 — the realtime runtime image carries only what it runs', ()
   it('uses the same exact Node image as the web image', async () => {
     const web = await directives('docker', 'web.Dockerfile');
     const realtime = await directives('docker', 'realtime.Dockerfile');
-    const base = /^FROM (node:24\.20\.0-\S+)/m.exec(web)?.[1];
-    expect(base).toBe('node:24.20.0-bookworm-slim');
+    const base = /^FROM (node:24\.22\.1-\S+)/m.exec(web)?.[1];
+    expect(base).toBe('node:24.22.1-bookworm-slim');
     const images = [...realtime.matchAll(/^FROM (\S+)/gm)].map((match) => match[1]);
     expect(images).toEqual([base, base]);
   });
@@ -640,11 +640,11 @@ describe('Phase 28 — the production web runtime carries only what it runs', ()
       ([, image, name]) => `${name}:${image}`,
     );
     expect(images).toEqual([
-      'deps:node:24.20.0-bookworm-slim',
+      'deps:node:24.22.1-bookworm-slim',
       'test:deps',
       'dev:deps',
       'build:deps',
-      'runtime:node:24.20.0-bookworm-slim',
+      'runtime:node:24.22.1-bookworm-slim',
     ]);
   });
 
@@ -735,7 +735,7 @@ describe('Phase 28 — the operations image is a tool, never a service', () => {
   it('uses the same exact Node image as the web image', async () => {
     const ops = await directives('docker', 'ops.Dockerfile');
     expect([...ops.matchAll(/^FROM (\S+)/gm)].map((match) => match[1])).toEqual([
-      'node:24.20.0-bookworm-slim',
+      'node:24.22.1-bookworm-slim',
     ]);
   });
 

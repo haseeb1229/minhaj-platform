@@ -148,7 +148,15 @@ export const lockedStack = Object.freeze([
     introduced: 'Phase 29 — Migration & Provenance',
   },
   { name: 'typescript', kind: 'range', expected: '5.9', introduced: 'Phase 0B' },
-  { name: 'zod', kind: 'range', expected: '4.5', introduced: 'Phase 0B' },
+  {
+    // Moved from the 4.5 line by owner decision in the pre-Phase-30 security
+    // maintenance: GHSA-mrhx-c7xc-m3w5 (High) affects every release before
+    // 4.6.6 and has no 4.5.x backport. Every workspace declares 4.6.7 exactly.
+    name: 'zod',
+    kind: 'range',
+    expected: '4.6',
+    introduced: 'Phase 0B',
+  },
   { name: 'vitest', kind: 'range', expected: '4.1', introduced: 'Phase 0B' },
   { name: 'eslint', kind: 'range', expected: '10', introduced: 'Phase 0B' },
   { name: 'prettier', kind: 'range', expected: '3', introduced: 'Phase 0B' },
@@ -220,7 +228,7 @@ export const requiredSecurityOverrides = Object.freeze([
 ]);
 
 /** The locked runtime (TECH_STACK.md §3). */
-export const lockedNode = '24.20.0';
+export const lockedNode = '24.22.1';
 
 /** Manifest fields that declare a DIRECT dependency. */
 const dependencyFields = Object.freeze([

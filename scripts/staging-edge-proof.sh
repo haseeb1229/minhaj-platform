@@ -31,7 +31,7 @@
 set -euo pipefail
 
 readonly NGINX_IMAGE='nginx:1.30.6-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5'
-readonly NODE_IMAGE='node:24.20.0-bookworm-slim'
+readonly NODE_IMAGE='node:24.22.1-bookworm-slim'
 readonly HOST='staging.invalid'
 readonly NETWORK='minhaj-staging-edge-proof'
 readonly HTTPS_PORT=18443

@@ -2,7 +2,7 @@
 # The realtime process — Phase 25
 # =============================================================================
 #
-# Node 24.20.0 LTS, the locked runtime (TECH_STACK.md 3), the same exact image
+# Node 24.22.1 LTS, the locked runtime (TECH_STACK.md 3), the same exact image
 # `web.Dockerfile` uses.
 #
 # WHAT RUNS. `apps/web/src/composition/realtime-main.ts` under the
@@ -30,7 +30,7 @@
 # -----------------------------------------------------------------------------
 # build — install from the committed lockfile and generate the Prisma client
 # -----------------------------------------------------------------------------
-FROM node:24.20.0-bookworm-slim AS build
+FROM node:24.22.1-bookworm-slim AS build
 
 ENV NODE_ENV=development
 
@@ -57,7 +57,7 @@ RUN npx prisma generate --schema packages/database/prisma/schema.prisma
 # -----------------------------------------------------------------------------
 # runtime — what the realtime process loads, and nothing else
 # -----------------------------------------------------------------------------
-FROM node:24.20.0-bookworm-slim AS runtime
+FROM node:24.22.1-bookworm-slim AS runtime
 
 # Production: the server schema rejects every development default, so a
 # container missing a real secret exits instead of signing with a sentinel.

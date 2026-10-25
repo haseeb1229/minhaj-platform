@@ -2,7 +2,7 @@
 # The staging OPERATIONS image — Phase 28
 # =============================================================================
 #
-# Node 24.20.0 LTS, the locked runtime (TECH_STACK.md 3), the same exact image
+# Node 24.22.1 LTS, the locked runtime (TECH_STACK.md 3), the same exact image
 # `web.Dockerfile` and `realtime.Dockerfile` use.
 #
 # WHAT THIS IS. A tool image an operator runs on purpose, one command at a
@@ -32,7 +32,7 @@
 # and each script proves its target before it mutates anything.
 # =============================================================================
 
-FROM node:24.20.0-bookworm-slim AS ops
+FROM node:24.22.1-bookworm-slim AS ops
 
 WORKDIR /app
 

@@ -606,7 +606,7 @@ Phase 2 owns the concrete mechanism; **Phase 33 independently re-assures it**
 
 ### 9.1 Validation
 
-**Zod 4.5.x at every trust boundary** — Server Actions, Route Handlers, socket events, the
+**Zod 4.6.x at every trust boundary** — Server Actions, Route Handlers, socket events, the
 import pipeline, environment configuration. **Server-side validation of application-owned inputs
 is mandatory and independent**; client validation is a UX affordance with no security value.
 
@@ -1311,6 +1311,54 @@ Stable, well-maintained packages only. **No canary, beta, RC, preview or experim
 dependencies** without a written architecture decision. Automated vulnerability scanning in
 CI. Genuine Dependabot commits only. **Deliberate, reviewed and tested upgrades — never
 opportunistic majors during feature work.** Lockfiles committed and respected.
+
+#### 18.3.1 The dependency-audit gate
+
+CI's **Dependency audit** job runs the real `npm audit` over the committed lockfile through
+`scripts/verify-dependency-audit.mjs`. **Every Critical finding fails. Every High finding
+fails**, except an advisory recorded as a reviewed exception in
+`scripts/shared/dependency-audit-policy.mjs`. Moderate and lower findings are reported and do
+not fail, which is the same threshold as the `npm audit --audit-level=high` gate it replaced.
+There is no lowered threshold, no severity-wide suppression and no global ignore setting.
+An audit that cannot run, or a report the gate cannot read, fails.
+
+An exception is narrow by construction. It names one advisory on one package, with that
+advisory's severity and affected range. It also records the exact dependency chain that
+carries the package, and the one package npm reports as High only because it depends on it.
+**The exception fails the gate again** when:
+
+- the advisory is no longer reported (the exception is stale and must be removed);
+- the advisory's package, severity or affected range changes;
+- the chain changes in any way: a version, a link, a second copy, or a new dependent;
+- any manifest declares the covered packages directly;
+- committed source imports what it covers, or configures the feature it covers.
+
+**Current exception — GHSA-xcx6-jx8p-x3h5 (High), `@azure/msal-node` 5.6.0** (pre-Phase-30
+security maintenance, October 2026):
+
+- **Advisory.** MSAL Node's authorization-code flow (`acquireTokenByCode`) can disclose
+  parameters to an attacker-controlled endpoint. Affected `>=5.0.0-beta.0 <7.1.0`; patched in
+  7.1.0.
+- **How it arrives.** Only transitively, through SQL Server's driver: `mssql` 12.7.0 →
+  `tedious` 20.3.6 → `@azure/identity` 4.13.2 → `@azure/msal-node` 5.6.0. This is the code
+  path tedious uses for Azure AD sign-in to SQL Server.
+- **Why One Minhaj is not exposed.**
+  - Every environment signs in to SQL Server with SQL logins.
+  - No source imports Azure Identity or MSAL, and no committed configuration enables Azure AD
+    authentication. The gate scans committed source and configuration for both and fails if
+    either appears.
+  - Even with Azure AD enabled, tedious only builds client-secret, managed-identity,
+    username/password and default credentials. None of them runs the authorization-code flow.
+- **Why it is an exception rather than a patch.** No stable supported chain reaches a patched
+  MSAL. The newest `@azure/identity` (4.14.0) still declares `@azure/msal-node ^6.0.0`, which
+  is inside the affected range. `tedious` 20.x still requires `@azure/identity ^4.13.1`.
+  Forcing MSAL 7 with an override would break the parent's declared major range on an
+  authentication path. That is a larger runtime risk than an unused, fail-closed transitive
+  finding.
+- **Removal condition.** Remove the exception, and this entry, as soon as the owning chain
+  resolves to `@azure/msal-node` 7.1.0 or later through its own declared ranges. The gate
+  forces the review: it fails when the advisory stops being reported and when the chain
+  moves.
 
 ---
 

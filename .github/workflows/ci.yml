@@ -59,7 +59,7 @@ concurrency:
 env:
   # The locked runtime (TECH_STACK.md §3). A mismatch is a hard failure, in CI
   # and on a workstation alike.
-  NODE_VERSION: '24.20.0'
+  NODE_VERSION: '24.22.1'
 
 jobs:
   verify:
@@ -1120,5 +1120,8 @@ jobs:
         run: npm ci
 
       # Automated vulnerability scanning in CI (SECURITY_BASELINE.md §18.3).
+      # Runs the real `npm audit` and fails on every Critical and every High
+      # finding, except one reviewed advisory that fails again the moment it is
+      # stale, its dependency chain moves or the code it covers is used.
       - name: Audit
-        run: npm audit --audit-level=high
+        run: node scripts/verify-dependency-audit.mjs

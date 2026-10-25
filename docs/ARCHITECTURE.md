@@ -1434,7 +1434,7 @@ never transferred.
 
 | Concern | Approach |
 |---|---|
-| Validation | **Zod 4.5.x** at every trust boundary; server-side validation of **application-owned inputs** mandatory and independent. Opaque provider/library protocol material is validated by its protocol implementation (SECURITY_BASELINE.md §7, §9.1) |
+| Validation | **Zod 4.6.x** at every trust boundary; server-side validation of **application-owned inputs** mandatory and independent. Opaque provider/library protocol material is validated by its protocol implementation (SECURITY_BASELINE.md §7, §9.1) |
 | Mutation safety | **Four protocol security classes** (SECURITY_BASELINE.md §7). **Class A** browser mutations: Origin/Host validation, `SameSite` cookies, framework-appropriate CSRF controls, **no state-changing GET**. **Classes B, C and D** — signed machine callbacks, authentication/OAuth callbacks and emailed verification/reset links — use their own protocol guarantees, **not** browser CSRF |
 | Logging | **Pino**, structured, **logger-level redaction**; no secrets, tokens or personal content |
 | Auditing | Domain audit records for religious edits, permission grants, publication and migration publication |

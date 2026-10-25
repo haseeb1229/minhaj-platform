@@ -499,12 +499,29 @@ describe('F14.7 — every existing job is preserved', () => {
     expect(bodyOf('database')).toContain('Populated recovery proof');
     expect(bodyOf('database')).toContain('npm run db:recovery:populated');
     expect(bodyOf('database')).toContain('Least-privilege permission proof');
-    expect(bodyOf('audit')).toContain('npm audit --audit-level=high');
+    // The audit runs through the gate that fails every Critical and every
+    // non-excepted High (tests/config/dependency-audit-policy.test.ts), never
+    // through a lowered npm threshold or a generic suppression.
+    expect(bodyOf('audit')).toContain('npm ci');
+    expect(bodyOf('audit')).toContain('node scripts/verify-dependency-audit.mjs');
+    expect(bodyOf('audit')).not.toMatch(
+      /--audit-level|--omit|audit-ci|\|\| true|continue-on-error/,
+    );
+    expect(JSON.stringify(jobs['audit'])).not.toContain('continue-on-error');
+  });
+
+  it('runs the real npm audit, not a cached or partial one', () => {
+    const gate = readFileSync(
+      path.join(repoRoot, 'scripts', 'verify-dependency-audit.mjs'),
+      'utf8',
+    );
+    expect(gate).toContain("spawnSync('npm audit --json'");
+    expect(gate).not.toMatch(/--audit-level|--omit|--production|--only/);
   });
 
   it('runs every job on the locked Node runtime', () => {
     expect(String((workflow['env'] as Record<string, Node>)['NODE_VERSION'])).toBe(
-      '24.20.0',
+      '24.22.1',
     );
   });
 });

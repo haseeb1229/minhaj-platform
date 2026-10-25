@@ -94,7 +94,7 @@ Validation happens **at genuine introduction**, in the phase that owns it
 
 | Technology | Version | Status | Role | Installed |
 |---|---|---|---|---|
-| Node.js | **24.20.0 LTS** | LOCKED | Runtime | Phase 0B |
+| Node.js | **24.22.1 LTS** | LOCKED | Runtime | Phase 0B |
 | Next.js | **16.4.2** | LOCKED | Runtime | Phase 0B |
 | React | **19.2.8** | LOCKED | Runtime | Phase 0B |
 | TypeScript | **5.9.x** strict | LOCKED | Development | Phase 0B |
@@ -109,7 +109,7 @@ Validation happens **at genuine introduction**, in the phase that owns it
 | **@prisma/adapter-mssql** | **7.10.0** | LOCKED | Runtime | **Phase 1 — Database Foundation** |
 | Better Auth | **1.7.x** | LOCKED | Runtime | **Phase 2 — Identity & Access** |
 | **Resend** (first `EmailProvider` adapter) | **6.27.0** | LOCKED as the **first/development adapter**, behind the abstraction | Runtime | **Phase 2** |
-| Zod | **4.5.x** | LOCKED | Runtime | Phase 0B |
+| Zod | **4.6.x** | LOCKED | Runtime | Phase 0B |
 | React Hook Form | **7.x** | LOCKED | Runtime | **When needed** |
 | Tiptap | **3.x** | LOCKED | Runtime | **When needed** |
 | Socket.IO | **4.8.3** | LOCKED | Runtime | **Phase 25 — realtime runtime** |
@@ -128,7 +128,7 @@ Validation happens **at genuine introduction**, in the phase that owns it
 | NGINX | stable — **1.30.6** (`nginx:1.30.6-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5`) | LOCKED | Infrastructure | **Phase 25** — the `/socket.io/` WebSocket seam; production edge in the deployment phases |
 | Linux self-hosting | — | LOCKED | Infrastructure | Deployment phase |
 
-**Ranges vs pins.** Where an `x` appears (TypeScript 5.9.x, Better Auth 1.7.x, Zod 4.5.x,
+**Ranges vs pins.** Where an `x` appears (TypeScript 5.9.x, Better Auth 1.7.x, Zod 4.6.x,
 Motion 13.1.x, next-intl 4.14.x, React Hook Form 7.x, Tiptap 3.x, Playwright 1.55.x, Vitest
 4.1.x, ESLint 10.x, Prettier 3.x), the **range is the locked architectural choice** and the
 **exact resolved patch is recorded in the committed lockfile**.
@@ -137,7 +137,7 @@ Motion 13.1.x, next-intl 4.14.x, React Hook Form 7.x, Tiptap 3.x, Playwright 1.5
 
 ## 3. Runtime
 
-**Node.js 24.20.0 LTS** — LOCKED.
+**Node.js 24.22.1 LTS** — LOCKED.
 
 LTS is required for production: predictable security patching and a defined support window.
 Node 24 provides native `fetch` (used by migration tooling), modern ECMAScript, and current
@@ -146,8 +146,15 @@ framework requirements.
 The production runtime must match. **Odd-numbered Node releases are never used in
 production.**
 
-*Workstation note: the development machine currently reports Node v24.18.0. The locked target
-is 24.20.0, and the workstation is aligned to it during Phase 0B setup.*
+> **Node.js moved from 24.20.0 to 24.22.1 as a security patch within the locked 24 LTS line**
+> (pre-Phase-30 security maintenance, October 2026). 24.22.1 is the 2026-10-20 Node 24
+> security release; among its fixes are High-severity defects in the bundled Brotli decoder
+> (CVE-2026-111497), NUL-byte validation of `dns.resolve*` inputs (CVE-2026-105482) and TLS
+> IP-address normalisation (CVE-2026-105483, CVE-2026-106069). One Minhaj's exposure was low — no application code decompresses Brotli
+> or calls `dns.resolve*`, and the migration fetcher pins its own lookup and requests
+> uncompressed bodies — but the runtime moves anyway. Every pin moves together: `engines`,
+> the version policy, CI's `NODE_VERSION`, and the web, realtime and operations images
+> (`node:24.22.1-bookworm-slim`). No Node 26 or odd-numbered release.
 
 ---
 
@@ -334,7 +341,15 @@ schema.
 Access adapter sub-layer. **Permissions are the single enforcement path**
 (DOMAIN_MODEL.md §4.4); capability labels are derived projections, never stored booleans.
 
-**Zod 4.5.x** — LOCKED. Every trust boundary — Server Actions, Route Handlers, socket events,
+> **Zod moved from the 4.5 line to 4.6.x by explicit owner decision** (pre-Phase-30 security
+> maintenance, October 2026). GHSA-mrhx-c7xc-m3w5 (High) lets an oversized array exhaust
+> memory while Zod collects one issue per failing element; every release before 4.6.6 is
+> affected and there is no 4.5.x backport. Every workspace declares **4.6.7 exactly**, and
+> the version policy rejects 4.5.x, 4.7.x, prereleases and any caret that could leave 4.6.
+> Better Auth 1.7.4 declares `zod ^4.5.4`, so the family stays compatible. No schema was
+> changed and no validation was relaxed.
+
+**Zod 4.6.x** — LOCKED. Every trust boundary — Server Actions, Route Handlers, socket events,
 import pipeline, environment configuration validated at startup. Schemas shared via
 `packages/contracts`, with **server-side validation always authoritative**.
 
@@ -556,10 +571,10 @@ explicit authorisation boundaries.
 ## 17. Summary — runtime vs development vs administration
 
 ### Runtime — ships in production
-Node.js 24.20.0 · Next.js 16.4.2 · React 19.2.8 · Tailwind CSS 4.3.3 · shadcn/ui (copied
+Node.js 24.22.1 · Next.js 16.4.2 · React 19.2.8 · Tailwind CSS 4.3.3 · shadcn/ui (copied
 source) · Motion 13.1.x · next-intl 4.14.x · Prisma ORM 7.10.0 · @prisma/client 7.10.0 ·
 **@prisma/adapter-mssql 7.10.0** · Better Auth 1.7.x · **Resend (first `EmailProvider`
-adapter)** · Zod 4.5.x · React Hook Form 7.x · Tiptap 3.x · Socket.IO 4.8.3 · Pino 10.3.1
+adapter)** · Zod 4.6.x · React Hook Form 7.x · Tiptap 3.x · Socket.IO 4.8.3 · Pino 10.3.1
 **Infrastructure:** Microsoft SQL Server 2022 · NGINX · Docker · ClamAV · Let's Encrypt
 (certbot, staging edge — §18.5)
 **External services:** Google OAuth · Google Meet · YouTube / Vimeo
@@ -628,7 +643,7 @@ No font, icon, image, religious corpus or third-party content was introduced wit
 
 | Tool | Exact version | Use and provenance |
 | --- | --- | --- |
-| ClamAV (`clamav/clamav`) | 1.5.2 | GPL-2.0; [Cisco Talos images](https://github.com/Cisco-Talos/clamav-docker), [engine source](https://github.com/Cisco-Talos/clamav). The malware scanner SECURITY_BASELINE.md §10.1 rule 4 requires and defers to "the phase that implements the storage foundation". Self-hosted, Linux, Docker Compose, no paid cloud service and no Azure dependency. Pinned to an exact version tag, never `latest`, matching the `node:24.20.0-bookworm-slim` precedent. |
+| ClamAV (`clamav/clamav`) | 1.5.2 | GPL-2.0; [Cisco Talos images](https://github.com/Cisco-Talos/clamav-docker), [engine source](https://github.com/Cisco-Talos/clamav). The malware scanner SECURITY_BASELINE.md §10.1 rule 4 requires and defers to "the phase that implements the storage foundation". Self-hosted, Linux, Docker Compose, no paid cloud service and no Azure dependency. Pinned to an exact version tag, never `latest`, matching the `node:24.22.1-bookworm-slim` precedent. |
 
 **No new npm dependency was introduced.** The storage foundation uses Node built-ins —
 `node:crypto` for SHA-256 and key generation, `node:fs` and `node:stream` for streaming, and

@@ -2,7 +2,7 @@
 # apps/web — multi-stage image
 # =============================================================================
 #
-# Node 24.20.0 LTS, the locked runtime (TECH_STACK.md 3). Pinned exactly so the
+# Node 24.22.1 LTS, the locked runtime (TECH_STACK.md 3). Pinned exactly so the
 # container matches the production target regardless of the workstation.
 #
 # FIVE STAGES, and the separation is the point (Review #3, N5):
@@ -52,7 +52,7 @@
 # -----------------------------------------------------------------------------
 # deps — install from the committed lockfile
 # -----------------------------------------------------------------------------
-FROM node:24.20.0-bookworm-slim AS deps
+FROM node:24.22.1-bookworm-slim AS deps
 
 ENV NODE_ENV=development
 
@@ -237,7 +237,7 @@ RUN NODE_OPTIONS=--max-old-space-size=4096 npm run build --workspace @minhaj/web
 # -----------------------------------------------------------------------------
 # runtime — the production server, and nothing else
 # -----------------------------------------------------------------------------
-FROM node:24.20.0-bookworm-slim AS runtime
+FROM node:24.22.1-bookworm-slim AS runtime
 
 # Production: the server schema rejects every development default, so a
 # container missing a real secret exits instead of signing with a sentinel.

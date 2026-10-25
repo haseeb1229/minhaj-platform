@@ -93,7 +93,7 @@ function baseWorkspaces(): { name: string; directory: string; manifest: Manifest
           '@prisma/client': '7.10.0',
           'better-auth': '1.7.4',
           resend: '6.27.0',
-          zod: '4.5.4',
+          zod: '4.6.7',
         },
         devDependencies: { prisma: '7.10.0' },
       },
@@ -131,7 +131,7 @@ function baseLock(): { packages: Record<string, { version?: string }> } {
       'node_modules/socket.io-client': { version: '4.8.3' },
       'node_modules/cheerio': { version: '1.2.0' },
       'node_modules/typescript': { version: '5.9.3' },
-      'node_modules/zod': { version: '4.5.4' },
+      'node_modules/zod': { version: '4.6.7' },
       'node_modules/vitest': { version: '4.1.11' },
       'node_modules/eslint': { version: '10.9.1' },
       'node_modules/prettier': { version: '3.9.6' },
@@ -247,17 +247,28 @@ describe('F13.2 — frozen exact pins stay exact', () => {
     expect(failures.join('\n')).toMatch(/next/);
   });
 
-  it('rejects a wrong MINOR where the contract fixes the minor', () => {
-    // `zod` is locked to the 4.5.x range: 4.6.0 is a different architectural
-    // choice, not a patch.
+  it.each([
+    // 4.5.x is the line GHSA-mrhx-c7xc-m3w5 left unpatched; going back to it is
+    // a security regression, not a patch choice.
+    ['4.5.4', 'the vulnerable former line'],
+    // 4.7.0 is a different architectural choice, not a patch.
+    ['4.7.0', 'the next minor'],
+  ])('rejects zod %s (%s) where the contract fixes the 4.6 minor', (version) => {
     const failures = failuresFor((state) => {
-      state.workspaces.find(
-        (w) => w.directory === 'packages/database',
-      )!.manifest.dependencies!['zod'] = '4.6.0';
-      state.lock.packages['node_modules/zod'] = { version: '4.6.0' };
+      database(state).dependencies!['zod'] = version;
+      state.lock.packages['node_modules/zod'] = { version };
     });
 
-    expect(failures.join('\n')).toMatch(/zod.*4\.5\.x/s);
+    expect(failures.join('\n')).toMatch(/zod.*4\.6\.x/s);
+  });
+
+  it('accepts the exact 4.6.7 declaration and rejects a caret that could leave 4.6', () => {
+    const zod = policyFor('zod');
+
+    expect(zod).toMatchObject({ kind: 'range', expected: '4.6' });
+    expect(specifierViolation(zod, '4.6.7')).toBeNull();
+    expect(specifierViolation(zod, '^4.6.7')).toMatch(/does not fix/);
+    expect(specifierViolation(zod, '4.6.7-rc.1')).toMatch(/prerelease/);
   });
 
   it('rejects a caret that would float past the fixed minor', () => {
@@ -299,16 +310,16 @@ describe('F13.3 — prereleases are rejected everywhere', () => {
   });
 
   it('rejects a prerelease even when semver ordering would place it in range', () => {
-    // `4.5.5-rc.1` sits inside the 4.5 line by ordering alone. §15 excludes it
+    // `4.6.8-rc.1` sits inside the 4.6 line by ordering alone. §15 excludes it
     // regardless: the rule is about stability, not arithmetic.
-    expect(versionSatisfies('4.5.5-rc.1', { kind: 'range', expected: '4.5' })).toBe(
+    expect(versionSatisfies('4.6.8-rc.1', { kind: 'range', expected: '4.6' })).toBe(
       false,
     );
   });
 
   it('rejects a prerelease resolved by the LOCKFILE even when the manifest looks clean', () => {
     const failures = failuresFor((state) => {
-      state.lock.packages['node_modules/zod'] = { version: '4.5.5-rc.1' };
+      state.lock.packages['node_modules/zod'] = { version: '4.6.8-rc.1' };
     });
 
     expect(failures.join('\n')).toMatch(/prerelease/);
@@ -330,7 +341,7 @@ describe('F13.4 — every workspace is inspected', () => {
     const failures = failuresFor((state) => {
       state.workspaces.find(
         (w) => w.directory === 'packages/server-core',
-      )!.manifest.dependencies!['zod'] = '4.5.2';
+      )!.manifest.dependencies!['zod'] = '4.6.6';
     });
 
     expect(failures.join('\n')).toMatch(/zod.*conflicting declarations/s);
@@ -921,5 +932,94 @@ describe('F13.9 — the transcribed policy matches TECH_STACK.md', () => {
         expect.objectContaining({ kind: 'exact', expected: '7.10.0' }),
       );
     }
+  });
+});
+
+/**
+ * Pre-Phase-30 security maintenance. Two security fixes live in version pins,
+ * so the REAL repository is held to them: Node 24.22.1 (the 2026-10-20 Node 24
+ * security release) and Zod 4.6.7 (GHSA-mrhx-c7xc-m3w5, first patched 4.6.6).
+ */
+describe('F13.10 — the security-maintenance pins hold in the real repository', () => {
+  const read = (relative: string) => readFileSync(path.join(repoRoot, relative), 'utf8');
+
+  it('runs every Node pin on the locked runtime, with no 24.20.0 left behind', () => {
+    expect(lockedNode).toBe('24.22.1');
+
+    const pins: [string, string | undefined][] = [
+      [
+        'package.json engines',
+        (JSON.parse(read('package.json')) as Manifest).engines?.node,
+      ],
+      [
+        'package-lock.json root engines',
+        (
+          JSON.parse(read('package-lock.json')) as {
+            packages: Record<string, { engines?: Record<string, string> }>;
+          }
+        ).packages['']?.engines?.['node'],
+      ],
+      [
+        'ci.yml NODE_VERSION',
+        /^ {2}NODE_VERSION: '([^']+)'$/m.exec(read('.github/workflows/ci.yml'))?.[1],
+      ],
+      [
+        'staging edge proof image',
+        /^readonly NODE_IMAGE='node:([^-']+)-/m.exec(
+          read('scripts/staging-edge-proof.sh'),
+        )?.[1],
+      ],
+    ];
+
+    for (const dockerfile of ['web', 'realtime', 'ops']) {
+      const source = read(`docker/${dockerfile}.Dockerfile`);
+      const nodeImages = [...source.matchAll(/^FROM node:(\S+?)-bookworm-slim\b/gm)];
+
+      expect(
+        nodeImages.length,
+        `${dockerfile}.Dockerfile builds on Node`,
+      ).toBeGreaterThan(0);
+      for (const [, version] of nodeImages)
+        pins.push([`${dockerfile}.Dockerfile`, version]);
+      expect(source).not.toContain('24.20.0');
+    }
+
+    for (const [where, version] of pins) expect(version, where).toBe(lockedNode);
+  });
+
+  it('declares zod exactly 4.6.7 in every workspace and resolves nothing older', () => {
+    const lock = JSON.parse(read('package-lock.json')) as {
+      packages: Record<
+        string,
+        { version?: string; dependencies?: Record<string, string> }
+      >;
+    };
+
+    const declarations = Object.entries(lock.packages)
+      .filter(([key]) => !key.includes('node_modules'))
+      .flatMap(([key]) => {
+        const manifestPath = key === '' ? 'package.json' : `${key}/package.json`;
+        if (!existsSync(path.join(repoRoot, manifestPath))) return [];
+        const manifest = JSON.parse(read(manifestPath)) as Manifest;
+        return ['dependencies', 'devDependencies', 'optionalDependencies'].flatMap(
+          (field) => {
+            const spec = manifest[field as keyof Manifest] as
+              Record<string, string> | undefined;
+            return spec?.['zod'] === undefined ? [] : [[manifestPath, spec['zod']]];
+          },
+        );
+      });
+
+    // contracts, database and storage declare it today; a new declaration is
+    // held to the same pin the moment it appears.
+    expect(declarations.length).toBeGreaterThanOrEqual(3);
+    for (const [manifestPath, spec] of declarations)
+      expect(spec, manifestPath).toBe('4.6.7');
+
+    const resolved = Object.entries(lock.packages).filter(([key]) =>
+      key.endsWith('node_modules/zod'),
+    );
+    expect(resolved.length).toBeGreaterThan(0);
+    for (const [key, entry] of resolved) expect(entry.version, key).toBe('4.6.7');
   });
 });
