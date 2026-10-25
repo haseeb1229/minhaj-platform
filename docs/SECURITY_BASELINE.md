@@ -1802,6 +1802,26 @@ authenticated session after the edge has admitted the connection.
   it on every request, so a slower hash would cost the server on every asset while adding no
   strength to a random credential), generated on the staging host, stored in a root-only file
   and **never printed, committed, logged or sent to CI**. An operator reads it on the host.
+- **The credential is replaceable, and a suspected disclosure means immediate rotation.**
+  `docker/staging/bin/rotate-edge-credential.sh` replaces it on the staging host itself, run
+  as root on the host or through Azure Run Command with no parameters:
+  - **Preconditions.** It proves the staging host, takes the host lock, and requires the live
+    files to have their provisioned owners and modes.
+  - **Generation.** It generates the new value from the host's CSPRNG and hashes it with bcrypt
+    from stdin.
+  - **Switch.** It switches the htpasswd file first, then the root-only netrc, each by
+    same-filesystem rename, and reloads only the NGINX proxy. No database, application or
+    other secret changes.
+  - **Secrecy.** Neither the old nor the new value enters CI, chat, a URL, an argument or a
+    log. Probes authenticate only through `--netrc-file` and report status codes only.
+  - **Proof.** It must show the previous credential refused, the new one admitted, an
+    unauthenticated request refused, `robots.txt` readable, and the application layer
+    unchanged behind the gate.
+  - **No restore.** A replaced credential is **never restored**. If any step or proof fails
+    after the switch, the command **stops the edge proxy** and staging fails closed until the
+    operator investigates (or deallocates the VM).
+  - **History.** Earlier disclosure in tool output or a Run Command result is contained by the
+    rotation, not by attempting to rewrite that output.
 - A per-client request budget on the gated server bounds credential guessing and the hashing
   work an unauthenticated client can demand (`limit_req`, 429 when exceeded).
 - A TLS client that negotiated the approved name but sends a different `Host` is answered

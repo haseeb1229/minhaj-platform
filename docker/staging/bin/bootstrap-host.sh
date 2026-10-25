@@ -35,7 +35,8 @@
 #
 # The operator reads the edge credential, when needed, with
 #   sudo cat /etc/minhaj/secrets/edge.netrc
-# on the host itself. It is never sent anywhere by these scripts.
+# on the host itself. It is never sent anywhere by these scripts. This script
+# only CREATES it; bin/rotate-edge-credential.sh replaces it.
 # =============================================================================
 
 . "$(dirname "$(readlink -f "$0")")/lib.sh"

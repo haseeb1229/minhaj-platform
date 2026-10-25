@@ -439,3 +439,149 @@ describe('Phase 28 — the staging host scripts', () => {
     expect(deploy).toContain('assert_imds_guard');
   });
 });
+
+/**
+ * The environment (edge) credential must be replaceable the moment it may have
+ * been disclosed, without reprovisioning anything else and without the old or
+ * new value ever leaving the host. These are STRUCTURAL assertions over the
+ * script; the staging run that executes it is the runtime proof.
+ */
+describe('Pre-Phase-30 — the staging edge credential rotation', () => {
+  const binDir = path.join(repoRoot, 'docker', 'staging', 'bin');
+  const load = async () =>
+    code(await readFile(path.join(binDir, 'rotate-edge-credential.sh'), 'utf8'));
+
+  it('proves the staging host, requires root and serialises on the host lock', async () => {
+    const rotate = await load();
+    expect(rotate).toContain('[ "$(id -u)" -eq 0 ]');
+    const preflightAt = rotate.indexOf('\nstaging_preflight\n');
+    const lockAt = rotate.indexOf('\nhost_lock\n');
+    expect(preflightAt).toBeGreaterThan(0);
+    expect(lockAt).toBeGreaterThan(preflightAt);
+    // Nothing secret is touched before the host is proven and locked.
+    expect(rotate.indexOf('mktemp')).toBeGreaterThan(lockAt);
+    expect(rotate.indexOf('new_password)')).toBeGreaterThan(lockAt);
+    // Run Command delivers the file alone: helpers come from the deployed
+    // release, and only if root owns them and nobody else can write them.
+    expect(rotate).toContain(
+      'lib="$(readlink -f /srv/minhaj/releases/current)/bin/lib.sh"',
+    );
+    expect(rotate).toContain(
+      '[ "$(stat -c \'%u\' "$lib")" = 0 ] && [ -z "$(find "$lib" -perm /022)" ]',
+    );
+  });
+
+  it('accepts no input: the credential is generated on the host, never passed in', async () => {
+    const rotate = await load();
+    expect(rotate).toContain('[ "$#" -eq 0 ]');
+    expect(rotate).toContain("openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | cut -c1-40");
+    expect(rotate).toContain('[ "${#value}" -eq 40 ] || return 1');
+    // Nothing is read from stdin, a positional argument or the environment.
+    expect(rotate).not.toMatch(/\bread\b|\$\{?[A-Z_]*PASSWORD/);
+    expect(rotate.match(/^[ \t]*password=.*$/gm)).toEqual([
+      'password="$(new_password)" || die "could not generate a new credential"',
+    ]);
+  });
+
+  it('rotates only the edge credential and never reruns bootstrap', async () => {
+    const rotate = await load();
+    expect(rotate).not.toMatch(
+      /(?:bash|exec|\.)\s+[^\n]*bootstrap-host|sqlserver\.env|ops\.env|app\.env|AUTH_SECRETS|DATABASE_|staging-provision|migrate\.sh|reset\.sh/,
+    );
+    // Only the proxy is reloaded, or stopped when failing closed.
+    for (const match of rotate.matchAll(/release_compose "\$release" (\S+)[^\n]*/g)) {
+      expect(['ps', 'stop', 'exec'], match[0]).toContain(match[1]);
+      if (match[1] !== 'ps') expect(match[0]).toMatch(/\bproxy\b/);
+    }
+  });
+
+  it('hashes with bcrypt from stdin and installs root-only files with the provisioned modes', async () => {
+    const rotate = await load();
+    expect(rotate).toContain(
+      'printf \'%s\' "$password" | htpasswd -i -B -C 6 -c "$staged_htpasswd" "$EDGE_USER"',
+    );
+    expect(rotate).toContain(
+      'printf \'%s\' "$password" | htpasswd -v -i "$staged_htpasswd" "$EDGE_USER"',
+    );
+    expect(rotate).toContain('unset password');
+    expect(rotate).toContain('umask 077');
+    expect(rotate).toContain('chown root:"$NGINX_GID" "$staged_htpasswd"');
+    expect(rotate).toContain('chmod 0640 "$staged_htpasswd"');
+    expect(rotate).toContain('chmod 0600 "$work/edge.netrc"');
+    expect(rotate).toContain('assert_root_only "$EDGE_NETRC"');
+    // Prepared beside the live files, switched by rename: htpasswd FIRST, so
+    // the previous credential stops working before anything else changes.
+    expect(rotate).toContain('work="$(mktemp -d "$SECRETS_DIR/.rotate.XXXXXX")"');
+    expect(rotate).toContain(
+      'staged_htpasswd="$(mktemp "$MINHAJ_SRV/edge-auth/.htpasswd.XXXXXX")"',
+    );
+    const htpasswdAt = rotate.indexOf('mv -f -- "$staged_htpasswd" "$EDGE_HTPASSWD"');
+    const netrcAt = rotate.indexOf('mv -f -- "$work/edge.netrc" "$EDGE_NETRC"');
+    expect(htpasswdAt).toBeGreaterThan(0);
+    expect(netrcAt).toBeGreaterThan(htpasswdAt);
+  });
+
+  it('never prints, embeds or passes a credential', async () => {
+    const rotate = await load();
+    expect(rotate).not.toMatch(/set -[a-z]*x/);
+    expect(rotate).not.toMatch(/curl[^\n]*\s-u\s|--user\b|Authorization:/);
+    expect(rotate).not.toMatch(/https:\/\/[^"\s]*@/);
+    expect(rotate).not.toMatch(/\bcat\b[^\n]*netrc|redirect_url|url_effective|-D -/);
+    expect(rotate).not.toMatch(/\b(?:log|echo|die)\b[^\n]*\$\{?password/);
+    // The value goes to exactly three places: the new netrc file and htpasswd's
+    // stdin (hash, then verify). Nothing else.
+    const uses = rotate.split('\n').filter((line) => line.includes('$password'));
+    expect(uses).toHaveLength(3);
+    for (const line of uses) {
+      expect(line).toMatch(/^printf .*(?:> "\$work\/edge\.netrc"$|\| htpasswd -[iv] )/);
+    }
+    // Probes report a status code and nothing else.
+    expect(rotate).toContain("-o /dev/null -w '%{http_code}'");
+    expect(rotate).toContain('args+=(--netrc-file "$netrc")');
+  });
+
+  it('removes every temporary secret and never restores the previous credential', async () => {
+    const rotate = await load();
+    expect(rotate).toContain('trap on_exit EXIT');
+    expect(rotate).toContain('rm -rf -- "$work"');
+    expect(rotate).toContain('rm -f -- "$staged_htpasswd"');
+    expect(rotate).toContain('cp -- "$EDGE_NETRC" "$work/previous.netrc"');
+    // The copy of the previous credential is only ever read by a probe; it is
+    // never moved or copied back into a live location.
+    expect(rotate).not.toMatch(
+      /(?:mv|cp|ln)\b[^\n]*previous\.netrc"\s+"\$(?:EDGE|MINHAJ)/,
+    );
+    expect(rotate).not.toMatch(/previous\.netrc[^\n]*htpasswd/);
+    // After the switch a failed proof stops the edge rather than reopening it.
+    expect(rotate).toContain('if [ "$switched" = 1 ] && [ "$verified" != 1 ]; then');
+    expect(rotate).toContain('release_compose "$release" stop proxy');
+    expect(rotate.indexOf('switched=1\nmv -f')).toBeGreaterThan(0);
+    expect(rotate.indexOf('verified=1')).toBeGreaterThan(
+      rotate.indexOf('[ "$failed" = 0 ]'),
+    );
+  });
+
+  it('proves previous refused, new admitted, unauthenticated refused and the app layer unchanged', async () => {
+    const rotate = await load();
+    for (const [label, expected] of [
+      ['unauthenticated /en', "'401 1'"],
+      ['previous credential /en', "'401'"],
+      ['new credential /en (status, noindex)', "'200 1'"],
+      ['robots.txt (status, noindex)', "'200 1'"],
+      ['robots.txt disallows /', "'1'"],
+      ['new credential /en/signin', "'200'"],
+      ['new credential /en/my without a session', "'30[2378]'"],
+      ['new credential /en/admin without a session', "'30[2378]'"],
+      ['new credential /en/admin/migration without a session', "'30[2378]'"],
+      ['new credential migration API without a session', "'404'"],
+      ['new credential realtime handshake without a session', "'400|401|403'"],
+    ]) {
+      const at = rotate.indexOf(`check '${label}'`);
+      expect(at, label).toBeGreaterThan(0);
+      expect(
+        rotate.slice(at, rotate.indexOf('\n', rotate.indexOf(expected, at)) + 1),
+        label,
+      ).toContain(expected);
+    }
+  });
+});
