@@ -1,7 +1,12 @@
 # Security Baseline — One Minhaj Platform
 
-**Status:** Phase 0A Architecture Freeze — revised after independent architecture audit
-**Document type:** Planning only. No security controls are implemented in this phase.
+**Status:** Living canonical baseline for the current accepted repository. Updated in the same
+task as any accepted change that directly affects it (DELIVERY_PLAN.md §5.1).
+**Origin:** Phase 0A Architecture Freeze, revised after independent architecture audit, and
+revised continuously through the delivered phases.
+**Document type:** Security requirements and the record of delivered controls. The numbered rules
+are the requirements every phase is held to; the "As delivered" notes record the controls
+accepted phases have implemented and proven.
 
 Security is designed in from the beginning. It is not a hardening pass appended before
 launch. **Security controls are exit criteria of every feature phase**; the later hardening
@@ -205,9 +210,11 @@ operator's provider re-check) — confer no refund. Every refund also needs a fr
 step-up (§8.1), and the database re-checks both the live key and the live grant when the refund row is
 inserted (§14).
 
-**Phase 29 adds the eighth: `migration.publish`** (OPEN_DECISIONS.md §3.4). Who may put migrated
-content into the live platform, take it out again and approve a promotion is the organisation's
-decision, so the key is catalogued, externally gated, bundled into no role and held by nobody.
+**Phase 29 adds the eighth: `migration.publish`** (OPEN_DECISIONS.md §3.5). Who may publish
+migrated content — into staging first, which Phase 30's exit needs — take it out again and approve
+a promotion is the organisation's decision, so the key is catalogued, externally gated, bundled
+into no role and held by nobody. Who approves production promotion and executes the legacy cutover
+and its rollback is a separate Phase-35 decision (OPEN_DECISIONS.md §3.4).
 Preparing is not publishing: the two ordinary Migration keys — `migration.read` (every migration
 screen and the run-status read; never a raw body) and `migration.administer` (fixture sources, run
 cancellation, review, duplicates, mappings, errors, disappearances, asset rights, the audited
@@ -1471,7 +1478,7 @@ made, and the platform is not declared adults-only.
   Progress, and nothing confirms, schedules or assigns a request.
 - **Profiles and attribution grant nothing.** A Course's teachers are public attribution to People;
   no TeacherProfile, attribution or Learning key is teaching authority, which remains Phase 23's
-  `teaching.perform` (not catalogued).
+  `teaching.perform` (not yet catalogued in Phase 22; Phase 23 catalogued it, §3.5).
 - **Minimised by default.** A learner record holds the account, the Course or lesson and an instant —
   no name, address, contact, age, note or free text is copied or asked. Progress is recorded only by
   the learner's explicit act, never inferred from a view.

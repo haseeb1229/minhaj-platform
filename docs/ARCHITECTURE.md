@@ -1,7 +1,12 @@
 # Architecture — One Minhaj Platform
 
-**Status:** Phase 0A Architecture Freeze — revised after independent architecture audit
-**Document type:** Planning only. No code, no scaffolding, no dependencies.
+**Status:** Living canonical baseline for the current accepted repository. Updated in the same
+task as any accepted change that directly affects it (DELIVERY_PLAN.md §5.1).
+**Origin:** Phase 0A Architecture Freeze, revised after independent architecture audit, and
+revised continuously through the delivered phases.
+**Document type:** Architecture contract and the record of its delivered shape. The conceptual
+sections state the rules every phase is built against; the "As delivered" sections record the
+accepted implementation.
 
 ---
 
@@ -150,8 +155,8 @@ processes.
 The services hosted here **belong to** their bounded contexts — Identity & Access, Messaging,
 Learning and others as applicable. Placing an implementation in this package changes **where
 it is exported from**, never **who owns it**. The same Messaging authorisation implementation
-is hosted here so both the web process and the future realtime transport call it, while
-**Messaging remains its semantic owner** and the sole place its rules may change.
+is hosted here so both the web process and the realtime transport (delivered in Phase 25, §3.6)
+call it, while **Messaging remains its semantic owner** and the sole place its rules may change.
 
 ```
 packages/server-core/
@@ -346,8 +351,9 @@ logging:
 
 Both take only injected ports and import nothing but `server-only`, Node built-ins and
 `@minhaj/contracts`; Layer 4 (`apps/web/src/composition/messaging.ts`) wires the adapters, Identity
-and Storage. No new context edge exists beyond the allowlisted `Messaging → Learning`, and no
-realtime process, socket, presence or typing state exists yet (Phase 25).
+and Storage. No new context edge exists beyond the allowlisted `Messaging → Learning`, and at
+Phase 24 no realtime process, socket, presence or typing state existed yet (Phase 25 delivered
+them, §3.6).
 
 ### 3.2 Division of responsibility
 
@@ -802,6 +808,8 @@ minhaj-platform/
 │   │                    provisioning and recovery tooling is classified separately
 │   │                    from runtime persistence adapters.
 │   ├── contracts/          Shared types and Zod schemas
+│   ├── storage/            StorageService — Layer 0, delivered in Phase 7 (§4.2)
+│   ├── search/             SearchService — Layer 0, delivered in Phase 17 (§4.3)
 │   ├── ui/                 Only if genuinely shared
 │   └── config/             Shared ESLint, TypeScript, Prettier config
 ├── scripts/

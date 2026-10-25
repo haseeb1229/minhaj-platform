@@ -1,7 +1,12 @@
 # Technology Stack — One Minhaj Platform
 
-**Status:** Phase 0A Architecture Freeze — revised after independent architecture audit
-**Document type:** Locked stack decisions. **No dependencies are installed in this phase.**
+**Status:** Living canonical baseline for the current accepted repository. Updated in the same
+task as any accepted change that directly affects it (DELIVERY_PLAN.md §5.1).
+**Origin:** Phase 0A Architecture Freeze, revised after independent architecture audit, and
+revised continuously through the delivered phases.
+**Document type:** Locked stack decisions and the accepted dependency record. Each dependency is
+installed in its owning phase (§1.3, §1.5); the exact resolved versions are in the committed
+lockfile, and the "As delivered" notes and §18 inventories record what has been introduced.
 
 ---
 
@@ -79,7 +84,7 @@ Validation happens **at genuine introduction**, in the phase that owns it
 | **next-intl 4.14.x** | **Phase 3A** — the Localisation Foundation, its owning point |
 | **Playwright 1.55.x** | **Phase 2** — the first genuinely browser-critical phase (ARCHITECTURE.md §13.10) |
 | **Socket.IO 4.8.3** | **Phase 25** — when the owning Messaging/realtime work introduces it |
-| Motion · React Hook Form · Tiptap · Cheerio · shadcn/ui source | First genuine use, in the phase that needs them |
+| Motion · React Hook Form · Tiptap · Cheerio · shadcn/ui source | First genuine use, in the phase that needs them — Tiptap in Phase 6 (§18.1), Cheerio in Phase 29 (§18.6) |
 
 **The policy at every one of those points is identical** (§1.2, §16):
 
@@ -111,14 +116,14 @@ Validation happens **at genuine introduction**, in the phase that owns it
 | **Resend** (first `EmailProvider` adapter) | **6.27.0** | LOCKED as the **first/development adapter**, behind the abstraction | Runtime | **Phase 2** |
 | Zod | **4.6.x** | LOCKED | Runtime | Phase 0B |
 | React Hook Form | **7.x** | LOCKED | Runtime | **When needed** |
-| Tiptap | **3.x** | LOCKED | Runtime | **When needed** |
+| Tiptap | **3.x** | LOCKED | Runtime | **Phase 6** — first genuine use (§18.1) |
 | Socket.IO | **4.8.3** | LOCKED | Runtime | **Phase 25 — realtime runtime** |
 | Google Meet | — | LOCKED | Runtime (external) | Live class phase |
 | YouTube / Vimeo embeds | — | LOCKED | Runtime (external) | Media phase |
 | **Stripe** (sandbox **engineering** `PaymentProvider` adapter — **not a production provider selection**) | HTTPS API, `Stripe-Version: 2026-09-30.endive`; **no SDK** | ENGINEERING ADAPTER behind the abstraction; the production provider stays OPEN (OPEN_DECISIONS.md §5.4) | Runtime (external) | **Phase 27 — Donations** |
 | SQL Server Full-Text Search | — | LOCKED | Runtime | Search foundation phase |
 | StorageService abstraction | — | LOCKED | Runtime | Storage foundation phase |
-| Native `fetch` + Cheerio | **1.2.0** | LOCKED | Development | **Phase 29 — Migration & Provenance** |
+| Cheerio (migration HTML parsing; the source fetch boundary is Node's `node:http`/`node:https`/`node:net`, not global `fetch` — §11, §18.6) | **1.2.0** | LOCKED | Development | **Phase 29 — Migration & Provenance** |
 | Playwright | **1.55.x** | LOCKED | Development | **Phase 2 — first browser-critical phase** |
 | Pino | **10.3.1** | LOCKED | Runtime | Phase 0B |
 | Vitest | **4.1.x** | LOCKED | Development | Phase 0B |
@@ -140,8 +145,9 @@ Motion 13.1.x, next-intl 4.14.x, React Hook Form 7.x, Tiptap 3.x, Playwright 1.5
 **Node.js 24.22.1 LTS** — LOCKED.
 
 LTS is required for production: predictable security patching and a defined support window.
-Node 24 provides native `fetch` (used by migration tooling), modern ECMAScript, and current
-framework requirements.
+Node 24 provides native `fetch` (used by the Donations payment adapter, §18.4), the `node:http`,
+`node:https` and `node:net` clients the migration source fetch boundary is built on (§18.6),
+modern ECMAScript, and current framework requirements.
 
 The production runtime must match. **Odd-numbered Node releases are never used in
 production.**
@@ -153,8 +159,9 @@ production.**
 > `dns.resolve*`/`dns.reverse` (CVE-2026-105482), and two `tls.checkServerIdentity` IP-form
 > confusions (CVE-2026-105483, CVE-2026-106069). It also fixes Medium and Low issues,
 > among them CVE-2026-106072 (Medium), where non-canonical IPv4 spellings let a DNS name in
-> a certificate authenticate an IP endpoint. One Minhaj's exposure was low — no application code decompresses Brotli
-> or calls `dns.resolve*`, and the migration fetcher pins its own lookup and requests
+> a certificate authenticate an IP endpoint. (The 24.22.1 release notes group 106069 and
+> 106072 under one fix labelled High; the advisory's per-CVE ratings are recorded here.) One
+> Minhaj's exposure was low — no application code decompresses Brotli or calls `dns.resolve*`, and the migration fetcher pins its own lookup and requests
 > uncompressed bodies — but the runtime moves anyway. Every pin moves together: `engines`,
 > the version policy, CI's `NODE_VERSION`, and the web, realtime and operations images
 > (`node:24.22.1-bookworm-slim`). No Node 26 or odd-numbered release.
@@ -360,8 +367,8 @@ import pipeline, environment configuration validated at startup. Schemas shared 
 highly interactive forms. **Not forced onto simple server forms**, better served by Server
 Actions with progressive enhancement.
 
-**Tiptap 3.x** — LOCKED, **installed when needed**. **Editorial content only.** **Religious
-canonical texts require specialised structured editors with validation and mandatory review
+**Tiptap 3.x** — LOCKED, **installed when needed** — in Phase 6 (§18.1). **Editorial content
+only.** **Religious canonical texts require specialised structured editors with validation and mandatory review
 workflows, never arbitrary WYSIWYG editing.** All editor output is sanitised server-side
 before storage.
 
@@ -445,18 +452,23 @@ The abstraction exists precisely so this decision stays reversible.
 **StorageService abstraction** — LOCKED. Local/company filesystem for V1; S3-compatible via
 adapter later. **No Azure dependency.** **Large PDFs and video files are never database
 BLOBs.** Untrusted uploads are **quarantined before publication**, with **malware scanning
-part of the production security design** — **no scanner is selected or installed in Phase 0A**
-(SECURITY_BASELINE.md §10).
+part of the production security design** — **no scanner was selected or installed in Phase 0A**;
+Phase 7 selected ClamAV (§18.2, SECURITY_BASELINE.md §10).
 
 ---
 
 ## 11. Migration tooling
 
-**Node.js native `fetch`** — LOCKED, built in.
+**The source fetch boundary is Node's `node:http`, `node:https` and `node:net`** — built in, no
+dependency. As delivered in Phase 29 (`scripts/migration/safe-fetch.ts`, SECURITY_BASELINE.md
+§10.5) it is **not** the global `fetch`: it validates every resolved address, pins the request's
+`lookup` to the validated address, which the global `fetch` does not offer, and re-validates every
+redirect (§18.6).
 **Cheerio 1.2.0** — LOCKED, installed in Phase 29 as a development-only dependency of the
 `scripts/migration/` tooling (MIT; it brings parse5, htmlparser2 and undici). Fast and
 sufficient for the majority of legacy pages; Phase 29 parses only synthetic fixtures with it.
-**Playwright 1.55.x** — LOCKED, **only where JavaScript rendering is genuinely required**.
+**Playwright 1.55.x** — LOCKED, **only where JavaScript rendering is genuinely required** and
+the source is authorised — never a way around access, authentication or anti-bot controls.
 Never the default; dramatically heavier and pointless against static markup. **It is introduced
 and compatibility-validated in Phase 2** (§1.5), so by the time migration tooling needs it the
 dependency already exists and is proven.

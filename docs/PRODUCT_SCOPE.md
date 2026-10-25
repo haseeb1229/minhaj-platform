@@ -1,10 +1,14 @@
 # Product Scope — One Minhaj Platform
 
-**Status:** Phase 0A Architecture Freeze — revised after independent architecture audit,
-and again at the pre-Phase-2 product-completeness review
-**Intended organisation:** Minhaj-ul-Quran International
+**Status:** Living canonical baseline for the current accepted repository. Updated in the same
+task as any accepted change that directly affects it (DELIVERY_PLAN.md §5.1).
+**Origin:** Phase 0A Architecture Freeze, revised after independent architecture audit, again at
+the pre-Phase-2 product-completeness review, and continuously through the delivered phases.
+**Intended organisation:** Minhaj-ul-Quran International (possible adoption; not officially
+commissioned or adopted — *Current implementation status* below)
 **Target product:** One Minhaj
-**Document type:** Planning only. No implementation is authorised by this document.
+**Document type:** Product scope and acceptance baseline. It authorises no implementation by
+itself; phases are authorised and delivered through DELIVERY_PLAN.md.
 
 ---
 
@@ -125,7 +129,7 @@ The following must be fully usable by an anonymous visitor:
 | Hadith | Browse collections, books and chapters, search, Hadith by topic, Hadith sciences, commentary, and linked material |
 | Learn | Canonical topics, course catalogue, learning paths, teacher directory, training and resources (browsing; enrolment is authenticated) |
 | Library | All resources, works and editions, contributors, topics, languages, collections, articles, research, research papers, publications, encyclopedias, magazines and journals, **readable long-form access to available editions**, **rights-aware downloads**, printed-book/sale-point information |
-| Watch / Listen | Video and audio catalogue with embedded third-party players, series, programs, speakers, playlists, recitations |
+| Watch / Listen | Video catalogue with embedded third-party players; non-Quran audio played from the platform's own storage; series, programs, speakers, playlists; Quran recitations (Quran-owned) |
 | Fatwa | Search, categories, topics, browse all (with latest/popular as query-based views), how-it-works (asking a question is authenticated) |
 | News & Events | Latest, news, events, press releases, statements, media coverage, photo galleries, collections, newsletter, archive |
 | Collections | Curated historical and campaign archives |
@@ -202,7 +206,9 @@ export or API access subsequently supplied by Minhaj. Legacy source and provenan
 owned by a dedicated **Migration & Provenance** boundary, so every domain — including Quran
 and Hadith — carries provenance for 301 redirects and traceability. Migration publishes into
 target domains **through their public interfaces**, so every domain rule, including religious
-approval, applies to migrated content exactly as to hand-authored content.
+approval, applies to migrated content exactly as to hand-authored content. Legacy-domain 301s
+are served only from the Phase-35 cutover; before it, Phase 30 proves mapping resolution in
+staging or a controlled harness (ROUTE_MAP.md §9.7).
 
 ---
 

@@ -1,11 +1,17 @@
 # Domain Model — One Minhaj Platform
 
-**Status:** Phase 0A Architecture Freeze — revised after independent architecture audit
-**Document type:** Conceptual modelling only. No schema, no migrations, no code.
+**Status:** Living canonical baseline for the current accepted repository. Updated in the same
+task as any accepted change that directly affects it (DELIVERY_PLAN.md §5.1).
+**Origin:** Phase 0A Architecture Freeze, revised after independent architecture audit, and
+revised continuously through the delivered phases.
+**Document type:** Conceptual domain model. Conceptual sections remain conceptual; "As delivered"
+sections record the accepted implementation of each owning phase. This document is not itself a
+schema, migration or code.
 
 This document describes bounded contexts, aggregates and relationships at a conceptual
 level. Field lists are indicative of intent, not a schema specification. Physical modelling
-belongs to the implementation phase of each owning slice.
+belongs to the implementation phase of each owning slice: the physical schema lives in
+`packages/database/prisma/schema.prisma` and its migrations, introduced by each owning phase.
 
 ---
 
@@ -785,7 +791,7 @@ records. Corrected:
 | Concern | Owner |
 |---|---|
 | **The logical Recitation work** — reciter, style, Quran-specific metadata, and its mapping to Surah / Ayah / range | **Quran** |
-| The binary audio file and provider reference | **Storage abstraction** |
+| The binary audio file (a Storage `Asset` per segment, §8.3) | **Storage abstraction** |
 | Playback and catalogue **projections** for browsing | **Media** — read-only projections |
 
 > **There must be no separately authorable AudioTrack duplicating a Quran Recitation.**
@@ -1092,7 +1098,9 @@ audio only (§8.1). **Photo**, **Gallery**, **GalleryItem** — event galleries 
 historical archive.
 
 **Rules:**
-- Provider metadata is stored and the provider player embedded. **No video files are hosted.**
+- For Video, provider metadata is stored and the provider player embedded. **No video files are
+  hosted.** Non-Quran audio is not a provider reference: an AudioTrack's file is a storage-backed
+  `Asset` (Phase 11, below).
 - One Video entity; appearance under Watch, Quran, Hadith and Events comes from
   relationships.
 - **Media does not author Quran recitations** (§8.1).
@@ -1283,7 +1291,8 @@ for the Google Meet provider only **HTTPS `meet.google.com`** URLs are accepted;
 URLs are **disclosed only to authorised participants and administrators**, never placed in
 public caches, and not logged unnecessarily.
 
-**Class recording is out of scope for V1.** Class metadata and history are in scope later.
+**Class recording is out of scope for V1.** Class metadata and history are in scope, delivered by
+Phase 23 (§13.5).
 
 ### 13.2 Teaching authorisation
 
@@ -1702,8 +1711,8 @@ notes, history or notifications — no permission grants it.
 
 **Ownership is unaffected by where an implementation is hosted.** Selected Messaging
 application services are exported through `packages/server-core` so that both the web process
-and the future realtime transport call the same implementation. That package is a
-**server-only host and export surface — not a bounded context, not a second domain layer, and
+and the realtime transport (delivered in Phase 25, §15.7) call the same implementation. That
+package is a **server-only host and export surface — not a bounded context, not a second domain layer, and
 not an owner of any rule** (ARCHITECTURE.md §3.1). **Messaging remains the semantic owner**
 and the only place these rules may change.
 
@@ -1712,7 +1721,7 @@ returns raw persistence capability** to its caller. It persists internally throu
 own persistence port, whose adapter — wherever it is physically implemented — remains owned by
 Messaging (ARCHITECTURE.md §3.1.1).
 
-The future realtime process is a **transport, presence and event-delivery adapter**. It does
+The realtime process (Phase 25) is a **transport, presence and event-delivery adapter**. It does
 not own data, does not reimplement rules, and **never acquires raw database capability**
 (ARCHITECTURE.md §3.1.2).
 
@@ -1925,7 +1934,7 @@ yet must not depend on Editorial.
 | **ImportRun** | One execution: operator, timing, stage counts, status |
 | **StagedRecord** | A normalised candidate awaiting review, with validation results and proposed topic mappings |
 | **ImportError** | A failure with context, classification and retry eligibility |
-| **LegacyMapping** | Original URL and identifier → canonical new URL. **Drives 301 redirects and traceability** |
+| **LegacyMapping** | Original URL and identifier → canonical new URL. **Drives 301 redirects and traceability** — Phase 30 proves each mapping's resolution in staging or a controlled harness; live legacy-domain 301s begin only at the Phase-35 cutover (ROUTE_MAP.md §9.7) |
 | **PublishManifest** | The reversible record of what one run published, enabling reconciliation and rollback |
 | **AssetProvenance** | Per-asset authorisation and licensing evidence |
 | **MigrationStatus** | Per-record lifecycle state across the pipeline |

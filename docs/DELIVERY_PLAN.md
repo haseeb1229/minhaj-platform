@@ -1,7 +1,14 @@
 # Delivery Plan — One Minhaj Platform
 
-**Status:** Phase 0A Architecture Freeze — revised after independent architecture audit
-**Document type:** Planning only.
+**Status:** Living canonical baseline for the current accepted repository. Updated in the same
+task as any accepted change that directly affects it (§5.1).
+**Origin:** Phase 0A Architecture Freeze, revised after independent architecture audit, and
+revised continuously through the delivered phases.
+**Document type:** Delivery plan and phase record. Each phase's entry, deliverables, tests and
+exit are its contract; "Delivered" and continuity notes record what each phase actually delivered,
+and any status table inside them is a **snapshot at that phase's exit** unless it says otherwise.
+Phases 0B–29 are delivered, except Phase 2G, which remains separately deferred; Phase 30 has not
+started.
 
 ---
 
@@ -19,7 +26,7 @@
    is final assurance — **not the first time security is implemented**.
 6. **Each phase has entry criteria, bounded deliverables, required tests and exit criteria.**
 7. **Nothing is scaffolded before the domain it serves exists.**
-8. **Commits only when explicitly requested after review** (§5).
+8. **Commits only when explicitly requested after review** (§6).
 
 ---
 
@@ -227,6 +234,14 @@ capability stays **fail-closed** in the meantime (§4, Phases 18–20 and 23–2
 
 ## 4. Phase definitions
 
+> **Reading the delivered-state records.** Phases 0A–29 have been delivered and are on `main`;
+> Phase 2G remains separately deferred. Each phase's entry, deliverables, tests and exit are the
+> plan it was delivered against. Each **"Phase-N continuity"** record, and the status block at
+> its head, is a **historical snapshot at that phase's exit**: where it describes a later phase
+> as not started, or a route or capability as absent until a later owner ships, that later phase
+> may since have delivered it — the later phase's own record is authoritative. Statements about
+> the phase's own decisions remain current unless a later record changes them.
+
 ### Phase 0A — Architecture Freeze
 **Entry:** Project initiated.
 **Deliverables:** Ten `/docs` documents; independent audit; adjudicated correction pass.
@@ -240,7 +255,8 @@ capability stays **fail-closed** in the meantime (§4, Phases 18–20 and 23–2
 
 **Deliverables**
 - npm workspace monorepo (ARCHITECTURE.md §5)
-- `apps/web` — Next.js 16.3.3, App Router, TypeScript strict
+- `apps/web` — Next.js 16.3.3 at introduction (since moved within 16.x by recorded decisions;
+  the current pin is in TECH_STACK.md), App Router, TypeScript strict
 - `packages/config`, `packages/contracts`, **`packages/server-core`** (structure only — a
   server-only host for context-owned services; it owns no rules)
 - **ESLint bounded-context rules transcribed from DOMAIN_MODEL.md §3.1**
@@ -559,7 +575,8 @@ privilege** · capability projections reflect only actual grants · **grants are
 **Exit:** One contributor identity model. **Author is delivered exactly once, before its
 consumers.**
 
-> **PHASE-2 MAINTENANCE GATE — MUST BE RESOLVED BEFORE PHASE 6 STARTS.** The Phase-5
+> **PHASE-2 MAINTENANCE GATE — HISTORICAL; RESOLVED BEFORE PHASE 6.** *As recorded at
+> Phase-5 exit ("MUST BE RESOLVED BEFORE PHASE 6 STARTS"):* The Phase-5
 > actual-diff review confirmed two inherited Identity & Access defects that are outside
 > Phase 5 ownership and unchanged by this phase: (1) `changePassword` catches every
 > `auth.changePassword` failure and reports `invalid-credentials`, so infrastructure and
@@ -571,6 +588,28 @@ consumers.**
 > where appropriate), and add regression proofs for both. These are recorded here as a
 > hard entry gate; they are not reassigned to Phase 5 and are not evidence that Phase 5 may
 > broaden into Identity implementation work.
+>
+> **Resolution.** Closed by `84148f9 fix(identity): harden phase 2 maintenance` on
+> `fix/phase-2-maintenance-pre-phase-6`, which is an ancestor of `main` and landed before
+> Phase 6 (`2a8fa81`). (1) In
+> `apps/web/src/contexts/identity-access/application/identity-service.ts`, `changePassword`
+> maps a failure through `mapPasswordChangeFailure`: only the structured `invalid-credentials`
+> class is reported as such, and every other mechanism, infrastructure or reconciliation
+> failure is `unavailable`. (2) In
+> `packages/database/src/adapters/identity-access/final-administrator.ts`,
+> `withProtectedInvariantMutation` takes the protected invariant lock before the mutation in
+> the same transaction, and `classifyProtectedMutationError` separates the semantic refusal
+> `51020` from the transient `51021` and `1205`, retried as a whole transaction at most three
+> times and then surfaced as `ProtectedMutationUnavailableError`; `authorization.ts` reports
+> `final-administrator` only for the semantic refusal, and the service maps exhaustion to
+> `unavailable`. **Proofs:** `tests/identity/final-administrator.test.ts` (refusal
+> classification and the exhausted-serialisation error, database-free);
+> `tests/identity/crash-ordering.integration.test.ts` — *password-change failure
+> classification* and *protected-mutation exhaustion classification*; and
+> `tests/identity/invariant-concurrency.integration.test.ts` — *repeats the mutual revoke with
+> no deadlock and no false refusal* and the *transient serialisation* bounded-retry cases. The
+> two integration suites need live SQL: they skip in the database-less `Verify` job and are not
+> among the suites the `Database foundation` job runs, so they are local live-SQL proofs.
 
 ---
 
@@ -628,9 +667,11 @@ Self-approval has no exception path. Storage (7), News/Events/Collections (13–
 live migration (30), formal SEO/accessibility acceptance (32) and performance/operations (34)
 remain with their existing owners; Phase 2G remains separately deferred.
 
-Phase-6 local implementation remains unstaged, uncommitted and unpushed pending independent
-targeted actual-diff review. The separate whole-baseline architecture milestone still follows
-Phase-6 remote-green; the builder run does not consume it.
+*Historical note, superseded:* when this record was written, the Phase-6 local implementation
+was unstaged, uncommitted and unpushed pending independent targeted actual-diff review, and the
+separate whole-baseline architecture milestone was to follow Phase-6 remote-green; the builder
+run did not consume it. Phase 6 has since been committed and is on `main`
+(`2a8fa81 feat: establish phase 6 editorial core`).
 
 ---
 
@@ -803,7 +844,8 @@ review history:**
 
 - **Two aggregates, non-Quran only.** AudioTrack and AudioSeries (DOMAIN_MODEL.md §11); an
   AudioSeries is not the Video `Series`. Nothing can describe a recitation, and
-  `/listen/recitations` has no route until Quran ships its catalogue.
+  `/listen/recitations` has no route until Quran ships its catalogue (Phase 18 has since
+  delivered it as a projection of Quran's reader).
 - **Two independent allows.** A track's bytes are served on `/assets/media/audio/{track}/{asset}`
   only when Media's policy allows (the exact asset recorded on that track, the track
   published) AND Storage's custody allows (clean, bytes present). The administrator's preview,
@@ -878,7 +920,7 @@ review history:**
 - **Permissions.** No new key: `media.read` and `media.administer`, re-described. Admin
   surfaces: `/admin/media/photos` and `/admin/media/galleries`. Until News & Events and
   Collections ship their entry points (INFORMATION_ARCHITECTURE.md §2.2), the Watch landing links
-  the photograph surfaces.
+  the photograph surfaces — superseded at Phase 13, when `/news` took over those links.
 - **Recovery is SQL and bytes**, rehearsed together; no derived image exists to rebuild.
 - **Not delivered, and not owed by this phase:** Event galleries (Phase 14); photo downloads;
   display derivatives (Phase 34's decision); any other image format; face, object or location
@@ -1323,6 +1365,8 @@ PRODUCTION ACTIVATION        BLOCKED until those close
   the owner's collection. `/quran/articles` stays absent (Editorial exposes no by-topic Article
   read), and `/quran/courses` and `/quran/teachers` stay absent and unlinked (Learning has not
   shipped; no deterministic teacher relation exists). The topic hub gains a bounded Quran section.
+  *(At Phase-18 exit; Phase 22 has since delivered `/quran/courses` — `/quran/teachers` stays
+  absent.)*
 - **Admin.** `/admin/quran/{surahs,ayat,translations,transliterations,tafsir,recitations,tajweed}`
   — `tajweed` is added to ROUTE_MAP.md §7. Canonical text is read-only; the purpose-built correction
   flow (plain right-to-left text field, never Tiptap) appears only to `quran.editCanonical` holders
@@ -1469,7 +1513,8 @@ PRODUCTION ACTIVATION             BLOCKED until those close
   the owner's own public by-topic read for the migration-seeded `hadith` topic, canonical to the
   owner's collection. `/hadith/articles` (Editorial exposes no by-topic Article read),
   `/hadith/courses` (Phase 22) and `/hadith/scholars` (no deterministic People–Hadith relation) stay
-  absent and unlinked. The topic hub gains a bounded Hadith section.
+  absent and unlinked. The topic hub gains a bounded Hadith section. *(At Phase-19 exit; Phase 22
+  has since delivered `/hadith/courses` — `/hadith/scholars` stays absent.)*
 - **Admin.** `/admin/hadith/{collections,books,chapters,records,commentary,sciences}` — `sciences`
   is added to ROUTE_MAP.md §7. Registered sources, editions and activation are shown read-only.
   Canonical operations (create structure and records, correct, verify, map or withdraw a citation)
@@ -1622,7 +1667,7 @@ ONBOARDING (INTERESTS, GOALS)                 COMPLETE
 IN-APP NOTIFICATIONS AND PREFERENCES          COMPLETE to the current producer contract
 NEWSLETTER DOUBLE OPT-IN                      COMPLETE
 EXPORT AND CLOSURE DISPOSITION                COMPLETE
-COURSE PROGRESS                               DEFERRED — Learning, Phase 22
+COURSE PROGRESS                               DEFERRED at this exit — since delivered (Phase 22)
 APPLICABLE-JURISDICTION POLICY                OPEN — OPEN_DECISIONS.md §2.2
 ```
 
@@ -1690,8 +1735,8 @@ PUBLIC COURSE/PATH CATALOGUE                  COMPLETE
 MY LEARNING AND COURSE PROGRESS               COMPLETE
 SELF-ENROLMENT                                COMPLETE
 TRIAL REQUEST CREATION                        COMPLETE (request side only)
-TRIAL CONFIRMATION / SCHEDULING               NOT STARTED — Phase 23
-TEACHER EXPERIENCE, CLASSES, AVAILABILITY     NOT STARTED — Phase 23
+TRIAL CONFIRMATION / SCHEDULING               NOT STARTED at this exit — since delivered (Phase 23)
+TEACHER EXPERIENCE, CLASSES, AVAILABILITY     NOT STARTED at this exit — since delivered (Phase 23)
 SEARCH PROJECTION                             COMPLETE (`course`, `learning-path`)
 SAFEGUARDING / MEET / TEACHER-GRANT GATES      OPEN — OPEN_DECISIONS.md §2.1, §5.3, §6.3
 ```
@@ -1741,7 +1786,9 @@ SAFEGUARDING / MEET / TEACHER-GRANT GATES      OPEN — OPEN_DECISIONS.md §2.1,
 - **Not delivered, and not owed by this phase:** `/learn/live`, `/learn/teachers`, `/learn/training`
   and `/learn/resources` (no truthful delivered contract), the teacher area, My Classes and My
   Teachers, `/admin/learning/classes`, trial confirmation, under-18 rules, and any import of real
-  courses (Phase 30).
+  courses (Phase 30). *(Phase 23 has since delivered `/learn/live`, `/learn/teachers`, the
+  teacher area, My Classes and My Teachers, `/admin/learning/classes` and trial confirmation;
+  `/learn/training` and `/learn/resources` remain absent.)*
 
 ---
 
@@ -1830,7 +1877,7 @@ PUBLIC /learn/live, /learn/teachers           COMPLETE — activation-aware
 REAL teaching.perform HOLDERS                 NONE
 LIVE-LEARNING ACTIVATION (production)         BLOCKED — no activation row exists
 SAFEGUARDING / MEET / TEACHER-GRANT GATES      OPEN — OPEN_DECISIONS.md §2.1, §5.3, §6.3
-PHASE 24 MESSAGING                            NOT STARTED
+PHASE 24 MESSAGING                            NOT STARTED at this exit — since delivered (Phase 24)
 ```
 
 - **Permissions:** `teaching.perform` is catalogued and **externally gated** — bundled into no
@@ -1927,7 +1974,7 @@ ATTACHMENTS                                   COMPLETE — owner-safe Storage re
 REAL messaging.support / messaging.moderate   NONE
 MESSAGING ACTIVATION (production)             BLOCKED — no activation row exists
 SAFEGUARDING / PEER / SUPPORT-OWNERSHIP GATES  OPEN — OPEN_DECISIONS.md §2.1, §2.5, §6.6 (§2.2 for retention)
-PHASE 25 REALTIME                             NOT STARTED
+PHASE 25 REALTIME                             NOT STARTED at this exit — since delivered (Phase 25)
 ```
 
 - **Where the code lives.** Messaging's application services are hosted in
@@ -2041,7 +2088,7 @@ PAYMENT PROVIDER / PAYMENT CODE PATH           NONE — not selected, not needed
 PEOPLE / GLOBAL NETWORK EDGES                  PERMITTED, UNUSED — no Person, Centre or place named
 REAL MEMBERSHIP TYPES / APPLICATIONS           NONE — persistent database holds no Membership rows
 JURISDICTION AND RETENTION                     OPEN — OPEN_DECISIONS.md §2.2
-PHASE 27 DONATIONS                             NOT STARTED
+PHASE 27 DONATIONS                             NOT STARTED at this exit — since delivered (Phase 27)
 ```
 
 - **Where the code lives.** The context is `apps/web/src/contexts/membership` (public, applicant,
@@ -2234,11 +2281,12 @@ verified · staging data is isolated from production.
 > restore); staging target guards and the `staging:db:*` operator commands (create, migrate,
 > provision, seed, backup, restore proof, reset, inspect); the environment gate and whole-site
 > `noindex`/`Disallow` (SECURITY_BASELINE.md §21); and SQL **plus** Storage backup with an actual
-> isolated restore. **No schema change**: staging is migrated with the accepted history, 27
-> migrations ending at `20261010000000_phase27_donations`. Email is disabled, no payment provider
+> isolated restore. **No schema change**: at Phase-28 delivery staging was migrated with the
+> accepted history as it then stood — 27 migrations ending at `20261010000000_phase27_donations`
+> (Phase 29 later added the 28th). Email is disabled, no payment provider
 > is configured, gated religious, safeguarding and messaging capabilities stay fail-closed, and
 > the only seed is one synthetic, non-religious asset. Production hosting, licensing, HA/DR,
-> monitoring and the rollback runbook remain **Phase 34**; no Phase 29 work is included.
+> monitoring and the rollback runbook remain **Phase 34**; no Phase 29 work was included.
 
 ---
 
@@ -2308,7 +2356,7 @@ RECONCILIATION                                 COMPLETE — an unbalanced run bl
 REVERSIBLE PUBLICATION                         COMPLETE — Media Video through Media's public service
 PROMOTION MANIFEST                             COMPLETE — reviewed, approved, carried into a checksummed bundle
 ADMINISTRATION (/admin/migration/*)            COMPLETE — migration.read / migration.administer / migration.publish
-MIGRATION.PUBLISH HOLDERS                      NONE — externally gated, bundled into no role (OPEN_DECISIONS.md §3.4)
+MIGRATION.PUBLISH HOLDERS                      NONE — externally gated, bundled into no role (OPEN_DECISIONS.md §3.5)
 REAL SOURCES / LIVE INGESTION / REAL ASSETS    NONE — OPEN_DECISIONS.md §3.1 gates Phase 30
 CONTENT KINDS BEYOND media.video               NONE — each arrives with its Layer-4 publisher
 LEGACY 301 SERVING / SYSTEM REDIRECTS SURFACE  NONE — mapping data exists; 301s go live in Phase 35
@@ -2387,18 +2435,33 @@ implementation exit** (§3.1). Staging available.
 > **⚠ Written authorisation recorded per source is mandatory before this phase begins.** It
 > gates **live-source adapters and access, fetching any real legacy Minhaj source, copying any
 > real asset, and running live ingestion**. A source without recorded written authorisation is
-> **not contacted** (OPEN_DECISIONS.md §3.1).
+> **not contacted** (OPEN_DECISIONS.md §3.1). The minimum per-source decision record is
+> OPEN_DECISIONS.md §3.1.1.
+
+> **The other Phase-30 decisions gate later moments, not the start** (OPEN_DECISIONS.md §3.6):
+> per-source scope and asset rights gate that source's ingestion (OPEN_DECISIONS.md §3.3, §2.4); a
+> missing export or API is **not** a start blocker — authorised public-content ingestion is the
+> fallback (§3.2 there); religious source, review and conflict authority gate the acceptance of
+> affected religious content (§1.1–§1.6 there); and a `migration.publish` holder (§3.5 there) is
+> needed before real content can be **published in staging** — this phase's exit. **A Phase 30
+> meant to complete in one run needs all of these supplied before it starts.** Production DNS,
+> legacy hosting, promotion and cutover are Phase 35's alone (§3.4 there) and are not entry
+> criteria here.
 
 **Deliverables:** Per-source adapters · migration executed **against staging** in the risk
-order of MIGRATION_STRATEGY.md §10.1 · deduplication resolved · URL mapping complete ·
-**unresolved-link report reviewed** · **reconciliation balanced** · **domain-specific
+order of MIGRATION_STRATEGY.md §10.1 · deduplication resolved · **URL mapping complete and
+reviewed** · **unresolved-link report reviewed** · **reconciliation balanced** · **domain-specific
 editorial and religious QA completed**.
 
 **Tests:** **No religious content published without human approval** · duplicates resolved with
 **all legacy URLs preserved** · **counts reconcile** · **no private data ingested** · asset
-checksums and **per-asset licensing evidence** verified · 301s resolve correctly.
-**Exit:** Content migrated, reviewed, approved and published **in staging**. **Religious content
-signed off by Minhaj religious authority.** Completes on review capacity, not a date.
+checksums and **per-asset licensing evidence** verified · **every in-scope legacy URL resolves
+deterministically through `LegacyMapping` to its intended canonical target, with no chain in the
+mapping, proven in staging or through a controlled resolver or test harness**
+(MIGRATION_STRATEGY.md §9.5). **No real legacy domain is claimed to serve a 301** — that is Phase 35.
+**Exit:** Content migrated, reviewed, approved and published **in staging**, by a holder of
+`migration.publish` under the `migration-publication` step-up. **Religious content signed off by
+Minhaj religious authority.** Completes on review capacity, not a date.
 
 ---
 
@@ -2430,7 +2493,10 @@ legacy-redirect portion of acceptance**.
 > - **Final migration and legacy-redirect acceptance** is verified here, and **cannot precede
 >   the existence of the canonical legacy URL mapping**. `LegacyMapping` rows are produced by
 >   migration publication (DOMAIN_MODEL.md §16.1, MIGRATION_STRATEGY.md §9.1), so the
->   legacy-301 acceptance criteria below require **Phase 30**.
+>   legacy-301 acceptance criteria below require **Phase 30**. They acceptance-test the
+>   **software redirect contract** — mapping to a single-hop 301 at the canonical target —
+>   through controlled routes, fixtures or resolvers. **This phase does not claim that any legacy
+>   host has been cut over**; serving legacy-domain 301s is Phase 35's (MIGRATION_STRATEGY.md §9.5).
 >
 > The non-redirect acceptance criteria — canonical correctness, `hreflang`, sitemaps, structured
 > data, `noindex`, WCAG 2.2 AA and RTL QA — depend only on the in-scope public domains.
@@ -2451,7 +2517,8 @@ alternative.
 **every `hreflang` target is a genuine canonical language version** · **untranslated content
 excluded from alternates** · sitemap partitioning and
 **genuine `lastmod`** · **`noindex` on all private and search surfaces** · **structured data
-valid with no over-claiming** · **legacy 301s correct with no chains** · **WCAG 2.2 AA across
+valid with no over-claiming** · **the legacy-redirect contract correct with no chains, through
+controlled routes or resolvers** · **WCAG 2.2 AA across
 all surfaces** · **Quran reader, book reader, PDF and media criteria met** · **RTL correct on
 every page, not merely those checked during development**.
 **Exit:** SEO and accessibility **acceptance-tested before launch**.
@@ -2527,12 +2594,15 @@ recovery** — not a database-only one.
 
 ### Phase 35 — Launch: Delta Migration & Cutover
 **Entry:** Phases 30, 31, 32, 33, 34 complete. **Organisational go-live approval. DNS and
-legacy hosting access arranged.** **Cutover rollback runbook written and rehearsed.**
+legacy hosting access arranged.** **Production promotion approver, cutover owner and rollback
+owner named** (OPEN_DECISIONS.md §3.4). **Cutover rollback runbook written and rehearsed.**
 
 **Deliverables:** Delta migration **with unchanged review requirements** · **promotion of the
 accepted corpus from staging to production through the reviewed promotion manifest**
-(MIGRATION_STRATEGY.md §10.1.1) · final URL mapping verification · **301 redirects live** ·
-legacy domain cutover per organisational decision · unmapped-URL logging · **the transition to
+(MIGRATION_STRATEGY.md §10.1.1) · final URL mapping verification · **legacy-domain 301s
+activated and served** — the first phase in which any legacy domain serves one
+(MIGRATION_STRATEGY.md §9.5) · DNS and legacy-host cutover per organisational decision, verified
+live afterwards · unmapped-URL logging · **the transition to
 official-origin indexing** — `noindex` lifted, canonical URLs moved to the official origin and
 sitemaps submitted **only at this point** (PRODUCT_SCOPE.md, *Product status and acceptance*) ·
 post-launch monitoring.
@@ -2556,7 +2626,8 @@ post-launch monitoring.
 > Donations (Phase 27), is not a launch prerequisite and never becomes one by implication.
 
 **Tests:** **Delta religious content reviewed to the same standard as initial content** ·
-**legacy URLs 301 to correct canonical destinations with no chains** · unmapped URLs return the
+**legacy URLs 301 to correct canonical destinations with no chains, verified live on the legacy
+domains after cutover** · unmapped URLs return the
 helpful 404 · **search indexes complete** · **the site works fully signed out** ·
 **cutover rollback rehearsed against defined triggers**.
 **Exit:** Platform live. Legacy URLs preserved. **Religious content verified.** Monitoring
@@ -2572,7 +2643,8 @@ A phase is complete only when **all** hold:
 2. All phase tests passing
 3. **All standing requirements (§3) satisfied — including security and cache-leakage**
 4. CI green — type check, lint, **boundary rules**, tests, build
-5. Documentation updated where architecture changed
+5. **Documentation parity** — every canonical document **directly affected** by the work is
+   current before closure (below)
 6. Exit criteria explicitly verified, not assumed
 7. Reviewer approval obtained
 8. **The phase's gate status is stated honestly** (§3.1) — an engineering implementation exit
@@ -2581,13 +2653,30 @@ A phase is complete only when **all** hold:
 **Phases 18, 19, 20 and 30 additionally require sign-off from Minhaj religious authority** for
 the content they handle. That is not an engineering judgement and cannot be substituted by one.
 
+### 5.1 Documentation parity — a standing rule
+
+The ten documents in `/docs` are a **living system contract**, not a Phase-0A snapshot.
+
+- **Every accepted implementation, security, dependency, infrastructure or operational change
+  updates every directly affected canonical document in the same task or phase, before it
+  closes** — a phase, a maintenance fix, a dependency patch or an incident closure alike.
+- A correction found after a commit has been pushed is made in a **new normal commit**.
+- **History is preserved by labelling it historical** — "at Phase-N exit", "historical,
+  resolved" — never by leaving a false present-tense statement, and never by deleting useful
+  evidence.
+- Unrelated documents are not churned for style.
+- **The repository, its tests, CI and runtime evidence outrank stale prose.** Where a document
+  and the implementation disagree, the authoritative intent is investigated and reconciled —
+  neither side is silently made to match the other.
+
 ---
 
 ## 6. Review and commit workflow
 
 ```
-implement / document → inspect git diff → run required validation
-   → review results → user / reviewer approval → commit ONLY when explicitly requested
+implement / document → reconcile directly affected canonical docs (§5.1) → inspect git diff
+   → run required validation → review results → user / reviewer approval
+   → commit ONLY when explicitly requested
 ```
 
 - **No commit unless the user explicitly requests it after reviewing the work.**
@@ -2624,3 +2713,5 @@ implement / document → inspect git diff → run required validation
 | **Google credential delays block live classes** | **The manual Meet flow needs no application API credential; within the current V1 plan only Google sign-in (Phase 2G) requires them. A future approved Google API integration would carry its own requirements** |
 | ~~**The transactional email provider gate is the earliest broadly-blocking external decision**~~ **CLOSED ON EVIDENCE** | It gated Phase 2 and therefore everything downstream of Phase 2, including 3B, 4, 5, 6 and 29. The **development / pre-adoption** sending gate is now closed on demonstrated evidence — verified sender domain, DKIM, sending/SPF configuration, DMARC, a restricted sender credential and a successful controlled real-inbox delivery. **Official adopter-controlled production email remains a separate later activation** (OPEN_DECISIONS.md §5.1) |
 | Opportunistic dependency upgrades destabilise work | Versioning policy: **stop, investigate, report** — never automatic substitution |
+| **Canonical documents drift from the delivered state** | The documentation-parity rule (§5.1): directly affected documents are reconciled in the same task, and historical snapshots are labelled as such |
+| **Phase 30 stops part-way on a missing external decision** | Its gates are classified by timing (OPEN_DECISIONS.md §3.6); every decision a one-run Phase 30 needs — per-source authorisation, scope, rights, religious review and the `migration.publish` holder — is requested before it starts |

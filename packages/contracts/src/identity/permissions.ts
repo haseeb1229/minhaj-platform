@@ -668,7 +668,7 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
   // audited raw-evidence reads. Publishing migrated content into the live
   // platform, reversing a publication and approving a promotion is a THIRD
   // key, externally gated — who may do that is the organisation's decision
-  // (OPEN_DECISIONS.md §3.4) — and each act also needs a fresh
+  // (OPEN_DECISIONS.md §3.5) — and each act also needs a fresh
   // `migration-publication` step-up. It never substitutes for a target
   // domain's own approval, and never for religious review
   // (MIGRATION_STRATEGY.md §8.4).
@@ -749,7 +749,7 @@ export const EXTERNALLY_GATED_PERMISSIONS = Object.freeze([
   // decision (OPEN_DECISIONS.md §5.4). Catalogued, bundled into no role.
   'donations.refund',
   // Phase 29: who may publish migrated content into the live platform is the
-  // organisation's decision (OPEN_DECISIONS.md §3.4). Catalogued, bundled
+  // organisation's decision (OPEN_DECISIONS.md §3.5). Catalogued, bundled
   // into no role.
   'migration.publish',
 ] as const satisfies readonly PermissionKey[]);

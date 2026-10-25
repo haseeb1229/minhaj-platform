@@ -1,7 +1,14 @@
 # Migration Strategy — One Minhaj Platform
 
-**Status:** Phase 0A Architecture Freeze — revised after independent architecture audit
-**Document type:** Planning only. **No content is fetched, scraped or migrated in this phase.**
+**Status:** Living canonical baseline for the current accepted repository. Updated in the same
+task as any accepted change that directly affects it (DELIVERY_PLAN.md §5.1).
+**Origin:** Phase 0A Architecture Freeze, revised after independent architecture audit, and
+revised continuously through the delivered phases.
+**Document type:** Migration strategy and contract. §1–§12 are the strategy every migration
+phase follows; §13 records what Phase 29 actually delivered. **This document never itself
+authorises contact with any source** (§1.1). As of the current baseline the framework exists and
+is proven against synthetic fixtures only: **no real legacy source has been contacted and no real
+content or asset has been migrated.**
 
 ---
 
@@ -30,6 +37,12 @@ presentation, without the original data model.
 **No ingestion of any source begins until written authorisation from Minhaj-ul-Quran
 International is recorded for that source.** Minhaj owning a site is not itself the
 authorisation; explicit confirmation is required and tracked per source.
+
+The minimum decision record Minhaj supplies for each source before Phase 30 contacts it — identity,
+authorisation, permitted access, approved scope, asset rights, access restrictions, privacy,
+religious review and publication — is defined in **OPEN_DECISIONS.md §3.1.1**. When each Phase-30
+decision gates (contact, ingestion, religious acceptance, staging publication, or only Phase-35
+cutover) is classified in **OPEN_DECISIONS.md §3.6**.
 
 ### 1.2 Absolute prohibitions
 
@@ -121,8 +134,13 @@ identify content type, parse source-specific markup, extract assets and internal
 outcomes. Source-specific knowledge lives in exactly one place. A change to one legacy site's
 markup affects one adapter.
 
-**Tooling:** Node.js native `fetch`; **Cheerio** for server-rendered HTML; **Playwright
-1.55.x only where JavaScript rendering is genuinely required** — never as the default.
+**Tooling:** a **hardened source-fetch boundary**, not generic global `fetch` — built on Node's
+low-level `node:http`, `node:https` and `node:net`, because only they let the fetcher resolve and
+validate a host's addresses, pin the request's lookup to the validated address, and re-validate
+after every redirect (§8.1; `scripts/migration/safe-fetch.ts`; TECH_STACK.md §18.6). **Cheerio**
+parses server-rendered HTML. **Playwright 1.55.x only where JavaScript rendering is genuinely
+required and the source is authorised** — never as the default, and **never as a means of passing
+an authentication, anti-bot, rate-limit or other access restriction** (§1.2).
 
 ---
 
@@ -235,6 +253,13 @@ automatically license every third-party image or document on it.
 
 **Video files are never downloaded.** Only provider identifiers and metadata are stored.
 
+**Non-Quran audio is not a provider reference.** Media's AudioTrack holds its recording as a
+**storage-backed `Asset`** (DOMAIN_MODEL.md §11, as delivered in Phase 11), so migrating it means
+authorised audio metadata **plus** the authorised audio file, acquired as above only where the
+rights evidence permits. Photos for Galleries are acquired the same way. **Quran recitations are
+not Media audio**: they are Quran-owned (DOMAIN_MODEL.md §8.1) and migrate only on the Quran review
+path — an AudioTrack never carries one.
+
 ### 4.10 Staging
 
 Records land in a staging area **completely isolated from published content**: visible only to
@@ -250,12 +275,15 @@ The gate separating this from a bulk data load.
 
 | Content type | Review requirement |
 |---|---|
-| **Quran text, translation, tafsir** | **Highest.** Verified against authoritative sources by authorised personnel. Automated import to published state is **prohibited** |
+| **Quran text, translation, tafsir, recitation** | **Highest.** Verified against authoritative sources by authorised personnel. Automated import to published state is **prohibited** |
 | **Hadith** | **Highest.** Text, reference numbers, chains and gradings verified. Gradings **never inferred or generated** |
 | **Fatwa** | Verified as genuinely issued by an authorised Minhaj scholar, correctly attributed. Questions with personal data excluded |
 | Works, research, publications | Editorial review: metadata, contributors, completeness, asset integrity |
 | Articles, news, events | Editorial review: accuracy, dating, duplication |
-| Video and audio metadata | Provider references resolve; attribution correct |
+| Video metadata | Provider references resolve; attribution correct |
+| Non-Quran audio, photos and galleries | Metadata and attribution correct; per-asset rights evidence present; asset integrity verified; **no audio is a Quran recitation** |
+| Public Learning catalogue | Course and path metadata only; **no enrolment, progress or other private learner data** |
+| Collections | Every member resolves to an already-published record of its owning domain; none is guessed |
 | Contributor profiles | Biographical accuracy |
 
 **No religious content is published by an automated process. Ever.** Bulk tooling may assist
@@ -264,8 +292,9 @@ reviewers with batching and comparison; each religious record requires human con
 ### 4.12 Publish
 
 An approved record becomes a live domain record **through the target domain's public
-interface** (§2.2). On publication: canonical URL assigned · **`LegacyMapping` written for
-301 redirects** · **entry added to the run's `PublishManifest`** · search projection indexed ·
+interface** (§2.2). On publication: canonical URL assigned · **`LegacyMapping` written** — the
+data that legacy redirects resolve from, live legacy-domain 301s being served only from cutover
+(§9.5) · **entry added to the run's `PublishManifest`** · search projection indexed ·
 audit entry recording who approved it and when.
 
 ### 4.13 Reconcile
@@ -360,8 +389,9 @@ were silently lost.
 ### 6.2 Source-to-target verification
 
 After publication: record counts per source and content type compared against expectations ·
-**asset checksums verified** between source and stored copy · every published record resolves
-from its legacy URL via 301 · **unresolved-link report reviewed** · spot-check comparison of
+**asset checksums verified** between source and stored copy · every published record's legacy URL
+resolves through `LegacyMapping` to its canonical URL — proven in staging or a controlled resolver
+before cutover, and as a live 301 after it (§9.5) · **unresolved-link report reviewed** · spot-check comparison of
 published records against their raw snapshots.
 
 ### 6.3 Manifests
@@ -463,6 +493,11 @@ validation and scanning before publication.
 (SECURITY_BASELINE.md §8). Religious content additionally requires its own domain approval —
 migration publication authority does not substitute for scholarly review.
 
+**Who may hold it is an external decision** (OPEN_DECISIONS.md §3.5): nobody holds it in the
+current baseline, and real migrated content cannot be published in staging until the organisation
+names a holder. That staging publication authority is distinct from **production promotion and
+cutover authority**, which is Phase 35's (OPEN_DECISIONS.md §3.4).
+
 ---
 
 ## 9. Legacy URL mapping and 301 strategy
@@ -499,8 +534,21 @@ relevant section. **Hits are logged and reviewed** — they reveal missed conten
 ### 9.4 Domain-level cutover
 
 Whether legacy domains redirect to Minhaj.org, and when, is an **organisational decision
-requiring DNS and hosting access** (OPEN_DECISIONS.md). The platform supports it; the platform
-does not decide it.
+requiring DNS and hosting access** (OPEN_DECISIONS.md §3.4). The platform supports it; the
+platform does not decide it.
+
+### 9.5 When redirects are proven, and when they are served
+
+The rules of §9.2 are proven in three steps, and **only the last one serves a legacy domain**:
+
+| Phase | What is proven | What is **not** claimed |
+|---|---|---|
+| **Phase 30** — initial migration | Complete, reviewed `LegacyMapping` data; every in-scope legacy URL resolves **deterministically** to its intended canonical target; **no chain inside the mapping** wherever that is evaluable — proven in staging or through a controlled resolver or test harness | That any real legacy domain is serving a 301 |
+| **Phase 32** — SEO acceptance | The software redirect contract — mapping to a single-hop 301 at the canonical target, unmapped URLs to the helpful 404 — acceptance-tested through controlled routes, fixtures or resolvers | That a legacy host has been cut over |
+| **Phase 35** — launch | Legacy-domain 301s activated and served; DNS and legacy-host cutover executed; resolution re-verified **live** after cutover; rollback held ready (§7.3) | — |
+
+Canonical URL preservation is not weakened by this sequencing: the mapping is complete and proven
+before launch, and cutover only puts it in front of the legacy domains.
 
 ---
 
@@ -515,22 +563,40 @@ migration phase while delivering it only in final operations. **That milestone i
 content first lands there (Phase 30), the staging reset guard and the backup-before-reset rule
 already apply, and the restore proof covers SQL and Storage together.
 
-Sequenced from lowest to highest risk:
+Sequenced from lowest to highest risk, and so that **nothing is migrated before the records it
+refers to exist**:
 
 1. **Taxonomy first** — topics and legacy category mappings must exist before content maps to them.
-2. **Reference data** — countries, regions, cities, centres; **contributors via People & Contributors**.
-3. **Editorial content** — articles, news, events.
+2. **Reference data** — **contributors via People & Contributors**; countries, regions, cities
+   and centres via Global Network.
+3. **Editorial and public organisational content** — pages, articles, news, events.
 4. **Library** — works, editions, research, publications.
-5. **Media metadata** — video and audio provider references, series, playlists.
-6. **Fatwa** — published rulings only.
-7. **Quran and Hadith last**, with the longest review period.
+5. **Media:**
+   - **Video** — provider metadata and identifiers only, with series and playlists; no video files;
+   - **non-Quran audio** — AudioTrack and AudioSeries metadata **plus authorised storage-backed
+     audio assets** where rights permit (§4.9) — the delivered Phase-11 model, not a provider
+     reference;
+   - **Galleries** — Photo, Gallery and GalleryItem with their **authorised image assets**.
+6. **Public Learning (eLearning) catalogue** — course and path metadata only; **never enrolments,
+   progress or any other private learner data** (§11).
+7. **Collections** — only once **every member they reference already exists** as a published
+   record of its owning domain. A Collection is a curated selection of other domains' content and
+   never creates a second canonical member route (DOMAIN_MODEL.md §7.3); a Collection that names
+   later or higher-risk content (a Fatwa, an ayah, a Hadith) **waits for those mappings** rather than
+   carrying a placeholder or a guessed link.
+8. **Fatwa** — published rulings only.
+9. **Quran and Hadith last**, with the longest review period. **Quran recitations** travel with
+   Quran on its review path, never as Media audio.
 
 Quran and Hadith come last deliberately: they carry the strictest review requirements, review
 cannot be rushed, and by then the pipeline has been hardened on lower-risk content.
 
-**Exit:** all in-scope content migrated, reviewed, approved and published in staging · URL
-mappings complete · redirects verified · **reconciliation balanced** · unresolved-link report
-reviewed.
+**Exit:** all in-scope content migrated, reviewed, approved and published in staging, through a
+holder of `migration.publish` under step-up (§8.4; OPEN_DECISIONS.md §3.5) and, for religious
+content, with its own domain approval · URL mappings complete and reviewed · **every in-scope
+legacy URL resolves through the mapping to its canonical target, proven in staging or a controlled
+resolver (§9.5)** — live legacy-domain 301s are Phase 35's · **reconciliation balanced** ·
+unresolved-link report reviewed.
 
 #### 10.1.1 Promotion from staging to production
 
@@ -665,4 +731,4 @@ for re-import of records whose parsing is later found faulty.
 and `npm run migration:promote`. Every human decision — review, duplicates, mappings, errors,
 disappearances, rights, manifests and promotion approval — is made in `/admin/migration`
 (ROUTE_MAP.md §7). Publication needs `migration.publish` with a `migration-publication` step-up
-(§8.4), which nobody holds yet.
+(§8.4), which nobody holds yet (OPEN_DECISIONS.md §3.5).

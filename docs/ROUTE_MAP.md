@@ -1,7 +1,12 @@
 # Route Map & SEO Contract — One Minhaj Platform
 
-**Status:** Phase 0A Architecture Freeze — revised after independent architecture audit
-**Document type:** Proposed routing surface and SEO policy. **No routes are implemented in this phase.**
+**Status:** Living canonical baseline for the current accepted repository. Updated in the same
+task as any accepted change that directly affects it (DELIVERY_PLAN.md §5.1).
+**Origin:** Phase 0A Architecture Freeze, revised after independent architecture audit, and
+revised continuously through the delivered phases.
+**Document type:** Routing surface and SEO contract. The target routing surface is stated
+throughout; "Delivered in Phase N" notes record the routes each accepted phase implemented. This
+document authorises no implementation by itself.
 
 ---
 
@@ -399,8 +404,8 @@ request, and are not treated as one:
 | Provider redirects and `/api/auth/*` callbacks | **C — authentication callback** (§7.3) | `state` · PKCE · `nonce` · provider callback validation · **verified pre-registered redirect URI** · linking ownership checks — **not ordinary browser POST semantics** |
 | The GET half of `/verify-email` and `/reset-password` | **D — emailed link** (§7.4) | A GET **renders** confirmation or token-status UI. It **must not silently perform a protected mutation** where the contract requires an explicit confirmation action. **The token is consumed at the confirming POST, not by rendering.** This is **the platform's chosen integration contract, subject to Phase 2 compatibility proof with Better Auth** — not a claim about Better Auth's own behaviour; if it cannot be met without unsafe divergence, **Phase 2 stops for an architecture decision**. **Expired, reused and invalid tokens remain unusable regardless** |
 
-**No routes are implemented by this document**, and none of the above authorises implementation
-of Phase 2 or Phase 2G work.
+**No routes are implemented by this document.** Phase 2 delivered the email/password routes
+above; Google sign-in and its callbacks remain Phase 2G's, separately gated and not delivered.
 
 ---
 
@@ -634,14 +639,14 @@ Prefixed `/{locale}/admin`.
 | Area | Routes |
 |---|---|
 | Dashboard | `/admin` |
-| Editorial | `/admin/editorial/{articles\|pages\|news\|press-releases\|statements\|media-coverage\|events\|collections\|queue\|correspondence}` \u2014 **correspondence** covers private ContactInquiry and Feedback triage (DOMAIN_MODEL.md \u00a77.5); `news`, `press-releases`, `statements` and `media-coverage` delivered in Phase 13, `events` in Phase 14, `collections` in Phase 15, and `queue` lists every workflow-governed aggregate |
+| Editorial | `/admin/editorial/{articles\|pages\|news\|press-releases\|statements\|media-coverage\|events\|collections\|queue\|correspondence}` — **correspondence** covers private ContactInquiry and Feedback triage (DOMAIN_MODEL.md §7.5); `news`, `press-releases`, `statements` and `media-coverage` delivered in Phase 13, `events` in Phase 14, `collections` in Phase 15, and `queue` lists every workflow-governed aggregate |
 | Quran | `/admin/quran/{surahs\|ayat\|translations\|tafsir\|transliterations\|recitations\|tajweed}` — delivered in Phase 18; `tajweed` holds TajweedRule guidance. Canonical text is read-only; the correction flow on an Ayah appears only to `quran.editCanonical` holders after a `quran-canonical-edit` step-up. No corpus import surface exists |
 | Hadith | `/admin/hadith/{collections\|books\|chapters\|records\|commentary\|sciences}` — delivered in Phase 19; `sciences` holds HadithScience study material. Registered source systems, editions and activation are shown read-only (operator-only). Records are read-only by default; structure and record creation, correction, verification and citation mapping appear only to `hadith.editCanonical` holders after a `hadith-canonical-edit` step-up. Conflict evidence is shown with no resolve action. No corpus import surface exists |
 | Fatwa | `/admin/fatwa/{questions\|assignment\|drafts\|review\|published\|categories}` — delivered in Phase 20. `questions` and `assignment` under `question.receive` (a question's private text only on its detail page, recorded as an audited access); `drafts/{questionId}` under `fatwa.answer` for the current assignee only; `review/{fatwaId}` and `published/{fatwaId}` under `fatwa.publish`, publication and withdrawal behind a `fatwa-publication` step-up and never offered to the revision's author; `categories` readable by any Fatwa key and maintained under `fatwa.publish`. No import, bulk or generation surface exists |
 | Library | `/admin/library/{works\|editions\|translations\|research\|publications\|magazines\|encyclopedias\|sale-points}` — research papers at `research/papers`, and a Magazine's issues beneath it at `magazines/{id}/issues/{issueId}` (Phase 9) |
 | Media | `/admin/media/{videos\|audio\|photos\|galleries\|playlists\|series\|assets}` — `videos`, `series` and `playlists` delivered in Phase 10; `audio` in Phase 11, with audio series at `audio/series`; `photos` and `galleries` in Phase 12. There is no generic `assets` file manager: a file is managed on the record it belongs to |
 | People | `/admin/people/{persons\|authors\|speakers\|scholars\|teachers}` |
-| Identity | `/admin/identity/{users\|roles\|permissions\|assignments\|security}` \u2014 **security** covers second-factor state, bootstrap status and identity audit (SECURITY_BASELINE.md \u00a78) |
+| Identity | `/admin/identity/{users\|roles\|permissions\|assignments\|security}` — **security** covers second-factor state, bootstrap status and identity audit (SECURITY_BASELINE.md §8) |
 | Taxonomy | `/admin/taxonomy/{topics\|mapping\|languages\|tags}` |
 | Learning | `/admin/learning/{courses\|paths\|classes\|enrolments\|trials}` — `courses` (with each Course's modules and lessons), `paths`, `enrolments` and `trials` delivered in Phase 22 under `learning.read` / `learning.administer`. A published Course's syllabus is frozen until it returns to draft. `enrolments` and `trials` show counts per Course, never who; `trials` showed counts only in Phase 22. **Phase 23:** `classes` (sessions, a session's participants and
 attendance, new regular sessions, reschedule, cancel, complete, teacher replacement, and the typed
@@ -653,8 +658,8 @@ shows who asked and confirms a request into a Booking on a teacher's open window
 | Donations | `/admin/donations` · `/{id}` · `/campaigns` · `/campaigns/{id}` — delivered in Phase 27 under `donations.read` (every page and the CSV export), `donations.administer` (campaign lifecycle and currency policy, an operator's provider re-check) and the externally gated `donations.refund` with a `donation-refund` step-up (refunds). `/admin/donations` is the bounded record list (state, campaign, environment, anonymous or linked, attention filters) with a CSV export at `/api/admin/donations/export`; `/{id}` one donation's exact money, state, redacted provider references, reconciliation state and refunds, naming a linked donor only by the display name Identity reports (listings and the export say linked or anonymous); `campaigns` the catalogue in every state. Listings, details and exports are audited accesses. No card, payer credential or raw provider event is ever shown |
 | Messaging | `/admin/messaging/{support\|moderation\|reports}` — delivered in Phase 24. `support` (+ `/support/{conversationId}`) under `messaging.support`: the queue shows metadata only, opening a conversation's content is an audited access, and claiming, replying and resolving are versioned. `moderation` (open reports, oldest first) and `reports` (+ `/reports/{reportId}`) under `messaging.moderate`: identifiers and reasons in the lists, the bounded evidence one report authorises on its own page (audited), and the immutable dismiss / withhold / close decision. Both keys are externally gated and held by nobody; a Platform Administrator holds neither |
 | Migration | `/admin/migration` · `/sources` · `/runs` · `/runs/{id}` · `/staging` · `/staging/{id}` · `/duplicates` · `/url-mapping` · `/errors` · `/manifests` · `/manifests/{id}` · `/reconciliation` — delivered in Phase 29 over **fixture sources only** under `migration.read` (every page), `migration.administer` (every preparing, reviewing or correcting act) and the externally gated `migration.publish` with a `migration-publication` step-up (publish, rollback, promotion approval — checked by the action, the service and the database). `/admin/migration` is the overview; `sources` registers fixture sources (no authority field) and edits name, state, language, politeness and notes; `runs` and `runs/{id}` show each run's provenance, reconciliation and items, and cancel an open run — runs are started and resumed by the command line, never here; `staging` is the review queue and `staging/{id}` one revision as escaped text, its links, assets and rights, and the raw snapshot's metadata with an audited escaped preview (`?preview=1`), download and disposal; `duplicates` merges, separates or reopens candidates (a cross-language pair offers no merge); `url-mapping` holds the legacy URL mappings, category-to-topic mappings and unresolved links; `errors` retries or dismisses errors (an access failure never offers a retry) and classifies missing records; `manifests` prepares manifests from a completed, balanced run and lists promotions; `manifests/{id}` publishes, rolls back, discards and starts a promotion, which the command line carries once approved; `reconciliation` lists completed runs with their verdict. `noindex, nofollow`, per request; every act on an existing row carries the version shown, and every act is audited |
-| Communications | `/admin/communications/{newsletter\|delivery}` \u2014 subscriber and suppression state; pending, failed and suppressed outbound mail |
-| System | `/admin/system/{navigation\|redirects\|search\|audit\|integrations\|settings}` \u2014 **redirects** distinguishes native slug history from legacy mappings; **search** covers configuration, rebuild, indexing lag and failures; **integrations** covers provider configuration and status |
+| Communications | `/admin/communications/{newsletter\|delivery}` — subscriber and suppression state; pending, failed and suppressed outbound mail |
+| System | `/admin/system/{navigation\|redirects\|search\|audit\|integrations\|settings}` — **redirects** distinguishes native slug history from legacy mappings; **search** covers configuration, rebuild, indexing lag and failures; **integrations** covers provider configuration and status |
 
 **Route-level authorisation is never sufficient.** Every mutation re-checks permission at the
 action layer. **Privileged actions require step-up reauthentication** (SECURITY_BASELINE.md
@@ -665,7 +670,8 @@ live HTML (SECURITY_BASELINE.md §10.3).
 
 ## 8. API and integration route categories
 
-Categories only; no endpoint contracts in this phase.
+Categories, with the endpoints each delivered phase added. The full endpoint contract is each
+owning phase's handlers and tests, not this table.
 
 | Category | Base | Purpose |
 |---|---|---|
@@ -855,7 +861,11 @@ endorsement or rating.
 - **Legacy URL → canonical new URL via 301**, driven by `LegacyMapping` data
   (DOMAIN_MODEL.md §16.1) — never hardcoded. Phase 29 writes that data at publication (one active
   mapping per legacy URL, to a locale-free canonical path such as `/watch/videos/{slug}`); no legacy
-  301 is served before the Phase-35 cutover.
+  301 is served before the Phase-35 cutover. Phase 30 completes and reviews the mapping data and
+  proves each legacy URL's resolution — single-hop, to its intended canonical target — in staging
+  or a controlled resolver harness; Phase 32 may acceptance-test the redirect contract with
+  controlled fixtures; Phase 35 alone serves 301s on the legacy domains, with the DNS and
+  legacy-host cutover, live verification and rollback.
 - **Chains collapse to a single hop**; a redirect never points to another redirect.
 - **Slug changes automatically create a 301** from the previous slug; slugs are never reused.
   **This native slug history is owned by the resource's own context and delivered in the phase

@@ -17897,7 +17897,7 @@ const MIGRATION_PROVENANCE_MIGRATION = '20261011000000_phase29_migration_provena
  * `migration.administer` are ORDINARY and join the protected bundle by the
  * convention every earlier phase used; `migration.publish` is EXTERNALLY
  * GATED — who may publish migrated content into the live platform is the
- * organisation's decision (OPEN_DECISIONS.md §3.4) — so it is catalogued,
+ * organisation's decision (OPEN_DECISIONS.md §3.5) — so it is catalogued,
  * bundled into no role and held by nobody.
  */
 const MIGRATION_PERMISSIONS = [

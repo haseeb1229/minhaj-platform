@@ -1,6 +1,13 @@
 # Open Decisions — One Minhaj Platform
 
-**Status:** Phase 0A Architecture Freeze — revised after independent architecture audit
+**Status:** Living canonical baseline for the current accepted repository. Updated in the same
+task as any accepted change that directly affects it (DELIVERY_PLAN.md §5.1).
+**Origin:** Phase 0A Architecture Freeze, revised after independent architecture audit, and
+revised continuously through the delivered phases.
+**Document type:** Register of external decisions. Each entry's current status is stated in the
+entry itself; "Still OPEN after Phase N" and "As delivered" notes record what each delivered phase
+did and did not decide. **Nothing in this document records an external decision that has not
+actually been supplied.**
 
 ---
 
@@ -174,7 +181,8 @@ windows, conflict-safe trial confirmation, sessions, attendance, revocation and 
 private meeting addresses and service mail. It invented no age threshold, guardian consent, vetting,
 one-to-one or retention rule, stores no note about a learner, and ships **no activation**: the
 `LiveLearningActivation` row that switches live learning on is absent, and an `approved` row records
-this decision when it is made. Student-to-student messaging does not exist (Phase 24 not started).
+this decision when it is made. Student-to-student messaging did not exist at that point (Phase 24
+had not started; see the next note).
 
 **Still OPEN after Phase 24.** Phase 24 delivered non-realtime Messaging as policy-independent,
 default-deny mechanics (DOMAIN_MODEL.md §15.6): current-relationship authorisation on every read and
@@ -231,6 +239,11 @@ an administrator may dispose of a snapshot's body for a stated reason, audited, 
 and checksum. **How long raw snapshots — including any carrying incidental personal data — may be
 kept before disposal is not decided**; Phase 29 sets no period and disposes of nothing
 automatically, and this decision still owns that period.
+
+**This is not a universal Phase-30 gate.** It gates Phases 21 and 33. A specific Phase-30 source
+operation may still need a safe retention instruction for incidental personal data or raw
+evidence before it runs — that is part of the source's own decision record (§3.1.1, *Privacy*),
+not a reason to block Phase 30 as a whole.
 
 ### 2.3 Legal document content
 **Owner:** Minhaj · **Gates:** **Phase 6 — publication.** Phase 4 reserves the routes only ·
@@ -332,6 +345,47 @@ absolute and is not weakened by this clarification.
 > before any Phase 30 adapter, access, fetch, asset copy or ingestion. The production promotion
 > destination and production infrastructure also remain open (§4.1, §4.3, §4.4; Phases 34–35).
 
+**Current per-source status (pre-Phase-30 baseline, 2026-10-25).** No written authorisation has
+been supplied or recorded for any source, so **every anticipated source is NOT AUTHORISED**: main
+Minhaj.org, Minhaj Books, TheFatwa, Minhaj.TV, Irfan-ul-Quran, magazines and publications, the
+eLearning catalogue, and any other source not yet named. None is recorded as excluded or deferred
+either, because that is also Minhaj's decision (§3.3). Ownership of a site is never read as
+permission.
+
+#### 3.1.1 The per-source decision record
+
+**What Minhaj supplies for each in-scope source before Phase 30 contacts it.** This is the
+minimum, and it is supplied by the organisation — engineering never fills a field by inference.
+**Credentials and secrets are never written here or in any public document**; where an access
+method needs one, it is supplied out of band only when the work needs it.
+
+| Part | Minimum content |
+|---|---|
+| **Identity** | Source name · canonical host(s) or endpoint(s) · status: **in scope**, **deferred** or **explicitly excluded** |
+| **Authorisation** | Authorising organisation · the authorising person's role or capacity · a written reference · its date · an expiry or review date **only if the authorisation itself carries one** |
+| **Permitted access** | Which of: public-website ingestion · API · admin export · structured dump · a database or export supplied by Minhaj · another explicitly named method |
+| **Approved content scope** | Content types · languages · any historical range or cutoff · what is excluded, obsolete or superseded (§3.3) · whether the source keeps publishing during Stage 1 (MIGRATION_STRATEGY.md §10.2) |
+| **Assets and rights** | Whether copying assets is authorised · which asset types · licensing and attribution evidence · online-only or download restrictions (§2.4; MIGRATION_STRATEGY.md §4.9) |
+| **Politeness and access restrictions** | Any source-specific rate or concurrency ceiling · terms and `robots.txt` observations · **no bypass of authentication, anti-bot, rate-limit or other access restrictions** (MIGRATION_STRATEGY.md §1.2) |
+| **Privacy** | No private accounts · no private questions · no enrolments, progress or messages · the treatment of incidental public personal data (MIGRATION_STRATEGY.md §8.3) · any approved raw-snapshot retention requirement (§2.2, §4.4) |
+| **Religious and editorial review** (where applicable) | The authoritative source or edition (§1.1–§1.4) · the named review authority or approved review process (§1.5) · the conflict-escalation owner (§1.6) · rights and attribution · who approves publication |
+| **Publication** | The staging migration-publication actor and the `migration.publish` holder decision (§3.5) — the `migration-publication` step-up stays mandatory regardless |
+
+**Phase-35 matters — DNS, legacy hosting, production promotion and cutover — are not part of this
+record** (§3.4).
+
+**The record is evidence, not a database schema.** The delivered `MigrationSource` deliberately
+persists a narrower framework vocabulary — `authorityKind` (`fixture` | `authorised`),
+`accessMethod` (`http` | `export`), `contentKind` (currently only `media.video`), `baseUrl` and its
+hosts, `authorisationReference` and `authorisedOn`, `licensingEvidence` and `policyNotes`,
+`defaultLanguageCode`, a bounded fetch policy, and state, version and audit ownership
+(DOMAIN_MODEL.md §16.5). The richer record above lives as organisational evidence that the
+registered source **references** through `authorisationReference`, `licensingEvidence` and
+`policyNotes`. An API is reached over `http` and a supplied dump or CMS export is an `export`, so
+the business vocabulary needs no new access-method variant. If a concrete Phase-30 source contract
+proves that an invariant cannot be represented safely this way, the schema extension is
+**Phase-30 implementation work**, justified from that contract — not added in advance.
+
 ### 3.2 Source, API or export access
 **Owner:** Minhaj · **Gates:** Phase 30 · **Priority:** High
 
@@ -348,6 +402,10 @@ records from published HTML.
 **If unanswered:** Migration proceeds via authorised public-content ingestion, with higher
 parsing effort and review burden.
 
+**Not a universal Phase-30 start blocker.** Structured access is used when it is legitimately
+supplied; where it is not, the documented fallback above applies — provided the source's written
+authorisation (§3.1) permits public-website ingestion.
+
 **Still OPEN after Phase 29.** The framework accepts an `export` access method and proves it against
 a synthetic executable export, run in an isolated in-memory engine and never restored as the target
 (MIGRATION_STRATEGY.md §1.3, §13). No real export, API or source access has been provided or used.
@@ -361,21 +419,66 @@ to retire rather than carry forward.
 **Still OPEN after Phase 29**, which decides no scope: its only content kind is video metadata over
 fixtures, and every further kind arrives with its own publisher in Phase 30.
 
-### 3.4 Legacy domain control and cutover
+### 3.4 Legacy domain control, production promotion and cutover
 **Owner:** Minhaj · **Gates:** Phase 35 · **Priority:** Medium
 
-**DNS control** and **access to legacy hosting** to implement redirects · whether legacy
-domains redirect to Minhaj.org · timing · whether any legacy site continues operating ·
-**who can execute a cutover rollback** (MIGRATION_STRATEGY.md §7.3).
+**DNS control** and **access to legacy hosting** to serve legacy-domain 301s · whether legacy
+domains redirect to Minhaj.org · timing · whether any legacy site continues operating · **who
+approves the promotion manifest into production** (MIGRATION_STRATEGY.md §10.1.1) · **who executes
+the cutover** · **who can execute a cutover rollback** (MIGRATION_STRATEGY.md §7.3).
 
 **Why it matters:** Preserving inbound links and citations depends on access this project does
 not control.
 
+**This is Phase 35's decision only.** It does not gate Phase 30: Phase 30 proves legacy URL
+resolution through the mapping in staging or a controlled resolver, and serves no legacy domain
+(MIGRATION_STRATEGY.md §9.5). Staging publication authority is a separate decision (§3.5).
+
 **Still OPEN after Phase 29.** Phase 29 writes legacy URL mappings at publication but serves no
-legacy 301 and touches no DNS or legacy hosting. **Who publishes migrated content, approves a
-promotion and owns cutover and its rollback** (MIGRATION_STRATEGY.md §7.3, §10.1.1) is still
-undecided: `migration.publish`, which publication, rollback and promotion approval require, is
-externally gated, bundled into no role and held by nobody (SECURITY_BASELINE.md §3.5).
+legacy 301 and touches no DNS or legacy hosting. The production promotion approver, the cutover
+owner and the rollback owner are undecided. The in-application approval of a promotion manifest
+also requires `migration.publish` (§3.5); whether its holder may approve **production** promotion
+is part of this decision.
+
+### 3.5 Staging migration publication authority
+**Owner:** Minhaj · **Gates:** **Phase 30 exit** — real migrated content "published in staging" ·
+**Priority:** High
+
+**Who may hold `migration.publish`** · **who may perform the `migration-publication` step-up**
+it requires · **who approves the publication of migrated content in staging**. Religious content
+additionally requires its own domain and scholarly approval (§1.1–§1.6), which migration
+publication authority never substitutes for (MIGRATION_STRATEGY.md §8.4).
+
+**Why external:** Publishing migrated content puts records under Minhaj-ul-Quran's name; naming
+who may do so is an organisational decision. Engineering grants nothing on assumption, creates no
+role for it, and chooses no actor on the organisation's behalf.
+
+**Category C/D · Gate: content acceptance (Phase-30 staging exit).** It is **not** a prerequisite
+for beginning Phase 30 once written source authorisation exists (§3.1): adapters, authorised
+fetching, staging, review queues and reconciliation can proceed without a holder. It **is**
+required before any real migrated record can satisfy the Phase-30 exit. For a Phase 30 meant to
+complete in one run, supplying it up front is operationally sensible.
+
+**Current status — OPEN.** `migration.publish` is catalogued and externally gated — bundled into
+no role and held by nobody (SECURITY_BASELINE.md §3.5); every publish, rollback and promotion
+approval also needs the `migration-publication` step-up. A holder is named by the organisation and
+granted through the ordinary audited `permissions.grant` lifecycle.
+
+### 3.6 Phase-30 gates by timing
+
+The Phase-30 decisions do not all gate the same moment. Collapsing them into one start rule would
+either block work that may safely proceed or let content through that may not.
+
+| When it gates | Decision | Effect while unanswered |
+|---|---|---|
+| **A. Phase start — before contacting a real source** | §3.1 written authorisation, per source | That source is not contacted: no adapter access, fetch, asset copy or live ingestion |
+| **B. Per-source ingestion** | §3.3 scope (in scope, excluded, obsolete, superseded) · §2.4 licensing, attribution and per-asset rights · access and politeness restrictions in the authorisation itself | Out-of-scope content is not ingested; assets without rights evidence are not copied |
+| **C. Access method — not a universal blocker** | §3.2 source, API or export access | Authorised public-content ingestion is used, at higher parsing and review cost |
+| **D. Religious QA and content acceptance** | Authoritative Quran, Hadith and Fatwa sources or editions (§1.1–§1.4) · §1.5 review capacity · §1.6 conflict escalation · domain religious approval | Affected religious content is not published or accepted, even while adapter engineering proceeds under a valid authorisation |
+| **E. Phase-30 staging publication and exit** | §3.5 `migration.publish` holder, `migration-publication` step-up, publication approver | Content is staged and reviewed but cannot be published in staging, so the Phase-30 exit is not reached |
+| **F. Phase 35 only — not Phase 30** | §3.4 production DNS, legacy hosting cutover, production promotion, cutover and rollback owners, live legacy-domain 301 activation | No effect on Phase 30 |
+
+§2.2 (applicable jurisdictions) gates Phases 21 and 33, not Phase 30 as a whole; a source may still need a retention instruction in its own record (§3.1.1, *Privacy*).
 
 ---
 
@@ -823,10 +926,12 @@ gates. A decision may gate more than one thing.
 | 2.3.1 | Correspondence retention period | **D** | Activation | 6 | Public intake stays disabled until the privacy/legal and support owners approve a period |
 | 2.4 | Content licensing and attribution | **D** | Content acceptance | 8, 18, 19, 30 | Affected material is not published or migrated |
 | 2.5 | Student↔student messaging policy | **D** | Activation | 24 | Disabled by default |
-| 3.1 | Written migration authorisation per source | **D** | **Implementation of live-source work**; activation | **30 only** | **No live ingestion.** **Phase 29 framework delivered on fixtures only; no source authorised** |
-| 3.2 | Source, API or export access | **C** | Content acceptance quality | 30 | Higher parsing effort; **an export is a source, never the target** (MIGRATION_STRATEGY.md §1.3) |
-| 3.3 | Migration scope per source | **C** | Content acceptance | 30 | Scope undetermined |
-| 3.4 | Legacy domain control and DNS | **C/E** | Launch | 35 | Legacy links break at launch |
+| 3.1 | Written migration authorisation per source | **D** | **Implementation of live-source work**; activation | **30 only** — the phase-start / real-source-contact gate | **No live ingestion.** **Phase 29 framework delivered on fixtures only; no source authorised.** Minimum record: §3.1.1 |
+| 3.2 | Source, API or export access | **C** | Content acceptance quality | 30 — **not a universal start blocker** | Authorised public-content ingestion, higher parsing effort; **an export is a source, never the target** (MIGRATION_STRATEGY.md §1.3) |
+| 3.3 | Migration scope per source | **C** | Content acceptance | 30 — per-source ingestion | Scope undetermined; out-of-scope content is not ingested |
+| 3.4 | Legacy domain control, production promotion and cutover | **C/E** | Launch | **35 only** | Legacy links break at launch; **no effect on Phase 30** |
+| 3.5 | Staging migration publication authority (`migration.publish` holder) | **C/D** | Content acceptance | **30 exit** | Migrated content is staged and reviewed but not published in staging; nobody holds the grant |
+| 3.6 | Phase-30 gates by timing | — | (classification of 3.1–3.5, 1.1–1.6, 2.4) | 30 | — |
 | 4.1 | **Staging/production** SQL Server infrastructure and ownership | **E** | Implementation (28, 34) · launch | **28, 34** | **Staging rows resolved for pre-adoption staging (Phase 28).** Production remains blocked until decided (34). **Phase 1 proceeds on local Developer edition** |
 | 4.2 | Staging environment | **E** | Implementation | 28 | **Resolved for pre-adoption staging (Phase 28)** — `minhaj.haseebliaqat.me`; re-provisioned on adopter-owned infrastructure at handover |
 | 4.3 | Production hosting | **E** | Launch | 34 | Deployment blocked |
@@ -842,10 +947,12 @@ gates. A decision may gate more than one thing.
 | 6.5 | Content team structure and roles | **C** | Activation | 6 | Separation-of-duties default applies |
 | 6.6 | Support and moderation ownership | **C** | Activation | 24 | Support conversations not staffed |
 | 7.1 | Search Console and analytics access | **C** | Launch | 35 | No third-party analytics assumed |
-**§5.1 remains the earliest broadly-blocking external gate.** It gates Phase 2, and therefore
-transitively **3B, 4, 5, 6, 20, 26, 27 and 29** — 29 because its protected migration
-administration requires Identity, **not** because of any source-authorisation requirement
-(§3.1).
+
+**§5.1 was the earliest broadly-blocking external gate, and is now closed on evidence.** It gated
+Phase 2, and therefore transitively **3B, 4, 5, 6, 20, 26, 27 and 29** — 29 because its protected
+migration administration requires Identity, **not** because of any source-authorisation
+requirement (§3.1). **The earliest open external gate in the current baseline is §3.1**, which
+gates Phase 30's contact with each real source (§3.6).
 
 **Work that proceeds immediately with none of the above resolved:** Phases **0B**, **1 (on
 local SQL Server 2022 Developer edition)**, **3A (localisation foundation — no database and no
@@ -874,5 +981,6 @@ Identity dependency)** and **7 (storage foundation — infrastructure only)**.
 
 **Raise §1.1, §1.3, §1.4, §1.5 and §2.1 first.** They require religious-authority and
 safeguarding consultation that takes real time and cannot be compressed once the dependent
-phases arrive. **Raise §5.1 with them**, because it is the earliest gate that blocks a broad
-span of downstream work.
+phases arrive. **Raise §3.1 with them — with §3.3, §2.4 and §3.5 for a Phase 30 meant to complete
+in one run** — because Phase 30 is the next phase in the plan and cannot contact any source
+without it (§3.6). (§5.1 previously held this place; it is closed on evidence.)

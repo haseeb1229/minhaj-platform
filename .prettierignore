@@ -7,9 +7,9 @@ package-lock.json
 *.tsbuildinfo
 next-env.d.ts
 
-# The Phase 0A architecture documents are an approved, frozen baseline.
-# They are not reformatted by tooling; a change to them is an architecture
-# decision, made deliberately and reviewed.
+# The canonical documents began as the Phase 0A architecture freeze and are
+# now the living, hand-formatted baseline (docs/DELIVERY_PLAN.md §5.1). They
+# are not reformatted by tooling; every change to them is deliberate and reviewed.
 docs/
 
 # A fixture whose package.json is DELIBERATELY malformed. It exists to prove

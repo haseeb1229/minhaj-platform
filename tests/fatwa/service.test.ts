@@ -149,7 +149,7 @@ describe('the Fatwa permission vocabulary', () => {
     // The three Fatwa keys are gated; Phase 23 added `teaching.perform` as the
     // fourth gated key (OPEN_DECISIONS.md §6.3), Phase 24 `messaging.support`
     // and `messaging.moderate` (§6.6), Phase 27 `donations.refund` (§5.4),
-    // Phase 29 `migration.publish` (§3.4), and nothing else is.
+    // Phase 29 `migration.publish` (§3.5), and nothing else is.
     expect([...EXTERNALLY_GATED_PERMISSIONS].sort()).toEqual([
       'donations.refund',
       'fatwa.answer',

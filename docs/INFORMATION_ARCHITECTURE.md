@@ -1,7 +1,11 @@
 # Information Architecture — One Minhaj Platform
 
-**Status:** Phase 0A Architecture Freeze — revised after independent architecture audit
-**Document type:** Planning only.
+**Status:** Living canonical baseline for the current accepted repository. Updated in the same
+task as any accepted change that directly affects it (DELIVERY_PLAN.md §5.1).
+**Origin:** Phase 0A Architecture Freeze, revised after independent architecture audit, and
+revised continuously through the delivered phases.
+**Document type:** Target information architecture. The structure below is the intended IA;
+"Since Phase N" and "Delivered in Phase N" notes record what each accepted phase delivered.
 
 ---
 
