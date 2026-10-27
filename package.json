@@ -45,6 +45,7 @@
     "staging:db:reset": "node --conditions=react-server packages/database/scripts/staging-reset.ts",
     "staging:migration:proof": "node --conditions=react-server packages/database/scripts/staging-migration-proof.ts",
     "staging:migration:run": "node --conditions=react-server packages/database/scripts/staging-migration-run.ts",
+    "staging:identity:bootstrap": "node --conditions=react-server packages/database/scripts/staging-identity-bootstrap.ts",
     "typecheck": "npm run typecheck --workspaces --if-present && tsc -p tsconfig.tooling.json",
     "lint": "eslint .",
     "check:architecture": "node scripts/check-architecture.mjs",

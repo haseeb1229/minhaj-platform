@@ -1464,6 +1464,13 @@ goes through the safe fetch boundary bound to the source's exact public hosts (�
 SECURITY_BASELINE.md §10.6). Every other operator command stays on the internal `backend` network.
 Review, rights, duplicates, mappings and publication stay in `/admin/migration`.
 
+**The first staging administrator (Phase 30).** Staging began with no accounts. `bin/identity-bootstrap.sh
+--user <accountId> --ticket "<reason>"` runs `staging-identity-bootstrap` in the operations image after
+the full staging guard: the same one-time `IdentityBootstrapPlatformAdministrator` procedure as the
+local `identity:bootstrap`, executed as the operator principal, refusing once any administrator exists.
+The account must already be registered and verified (transactional email configured in the host's
+`app.env`) and enrols its second factor before any protected capability opens.
+
 **Operating posture.** Deallocated when idle (`az vm deallocate` — an operating-system shutdown
 alone still bills compute); the disks, static IP and Blob storage continue to bill while
 deallocated. The daily backup timer is persistent, so a run missed while deallocated happens at
