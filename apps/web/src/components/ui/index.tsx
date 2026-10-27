@@ -236,7 +236,7 @@ export function PageHero({
             </p>
           )}
           <h1
-            className={`font-semibold tracking-[var(--tracking-display)] text-balance ${
+            className={`font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere ${
               ink ? 'text-display' : 'text-title'
             }`}
           >
@@ -298,7 +298,7 @@ export function ActionLink({
   return (
     <a
       href={href}
-      className={`inline-flex min-h-11 items-center justify-center rounded-[var(--radius-control)] px-5 py-2 text-sm font-semibold no-underline transition-colors duration-[var(--duration-fast)] ${tones[tone]}`}
+      className={`inline-flex max-w-full min-h-11 items-center justify-center rounded-[var(--radius-control)] px-5 py-2 text-sm font-semibold wrap-anywhere no-underline transition-colors duration-[var(--duration-fast)] ${tones[tone]}`}
     >
       {children}
     </a>

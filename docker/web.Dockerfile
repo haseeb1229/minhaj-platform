@@ -100,6 +100,8 @@ COPY tests ./tests
 # defect Review #3 reported about `.env.example`.
 COPY eslint.config.js prettier.config.js vitest.config.ts playwright.config.ts ./
 COPY .prettierignore ./
+# `npm run typecheck` ends with the migration tooling's own project (Phase 30).
+COPY tsconfig.tooling.json ./
 
 # Inputs the SUITE reads. Copied ONLY into this stage: the runtime has no use
 # for any of them and should not carry them.

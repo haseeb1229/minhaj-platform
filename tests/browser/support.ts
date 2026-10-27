@@ -713,7 +713,22 @@ export function knowledgeOf(html: string): string {
     /self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)/gu,
   )) {
     const decoded = JSON.parse(`"${match[1] ?? ''}"`) as string;
-    rows.push(...decoded.split('\n').filter((row) => row !== ''));
+    rows.push(
+      ...decoded
+        .split('\n')
+        .filter((row) => row !== '')
+        // The NUMBERS React gives rows — a row's own id, and the lazy (`$L`),
+        // promise (`$@`) and plain (`"$1d"`) references to one — are assigned
+        // in the order parallel reads resolve, so they are interleaving too.
+        // They are replaced by placeholders; every element, attribute and word
+        // in the row is still compared.
+        .map((row) =>
+          row
+            .replace(/^[0-9a-f]+:/u, '#:')
+            .replace(/\$([L@])[0-9a-f]+/gu, '$$$1#')
+            .replace(/"\$[0-9a-f]+"/gu, '"$$#"'),
+        ),
+    );
   }
   const markup = html
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gu, '')
