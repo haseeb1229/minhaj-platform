@@ -69,6 +69,16 @@ environment access gate, used for testing, demonstration, acceptance and — fro
 migration dry-runs (ARCHITECTURE.md §10.6). It runs the **same complete application**, is
 equally non-indexable, and is no more an official or reduced build than the presentation origin.
 
+**The pre-adoption review corpus (Phase 30, Stage 1A).** Before the build is shown to Minhaj, staging
+carries a **bounded, representative corpus of real public content**, migrated from the authorised
+legacy sources through the very pipeline, provenance, review and domain publishers the full
+migration uses (MIGRATION_STRATEGY.md §10.1.0). It is **data, never a reduced product**: no DemoMode,
+no sample-data feature, no second import path, and nothing fabricated to fill a page — a surface a
+source cannot fill shows an honest unavailable or limited state. It is **not** the full corpus
+(that is Stage 1B, after Minhaj's review), **not** officially accepted content, and religious
+material in it is staged for review, never published by migration. All three acceptance
+dimensions above remain separate.
+
 Commercial questions — source ownership, licensing, portfolio rights, retention of a clone,
 future reuse — are **outside technical architecture** and are deliberately not recorded in
 this baseline.

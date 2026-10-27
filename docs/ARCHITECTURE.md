@@ -890,6 +890,36 @@ composition/migration.ts (web root)         composition/migration-runner.ts (too
   personalisation-notifications, taxonomy) and `scripts/migration`, so `staging-migration-proof` can
   run the fixture proof as the runtime principal (§10.6). No page, route or component is included.
 
+The diagram and the bullets above are the **Phase-29 exit** state; §5.2 records what Phase 30 changed.
+
+### 5.2 As delivered (Phase 30) — real sources and one publisher per kind
+
+- **Publication targets.** `migration-targets.ts` now builds one target per publishable kind —
+  Media Video (unchanged), Library Work-with-Edition, Magazine and Magazine Issue
+  (`migration-library-targets.ts`), Editorial news and article (`migration-editorial-targets.ts`,
+  create-and-submit into Editorial's own review) — over shared helpers in
+  `migration-target-support.ts`, and `migration-target-router.ts` routes between them **fail-closed**:
+  a review-only kind (Fatwa, Quran) is supported by nothing, a kind claimed twice is a wiring error at
+  composition, and an unsupported kind is refused before any target is asked. Both roots
+  (`migration.ts`, `migration-runner.ts`) pass the routed target; the runner stays node-loadable.
+- **Holdings.** Personalisation's holding service answers `workHeld` and `articleHeld` beside
+  `videoHeld`, each one bounded `EXISTS` over `SavedItem` and `ReadingHistory`.
+- **Library.** A `workBySlug` read (exact current slug, `library.read`) lets a resumed Work
+  publication find the Work an interrupted one made.
+- **The tooling.** `scripts/migration/` adds the real adapters (`adapters/minhaj-org.ts`,
+  `minhaj-tv.ts`, `thefatwa.ts`, `minhajbooks.ts`, `minhaj-info.ts`, `irfan-ul-quran.ts`) over two
+  shared modules (`adapters/source-support.ts`, site-independent; `adapters/markup-support.ts`,
+  listing walks and exact source slices), `robots.ts`, the source catalogue
+  (`sources/catalogue.ts`), and the `register-source.ts` and `run-source.ts` entries;
+  `safe-fetch.ts` gains the system resolver and `createAuthorisedFetcher`. Still no database
+  capability. `tsconfig.tooling.json` type-checks `scripts/migration` as part of `npm run typecheck`.
+- **Operations image.** It now also carries `migration-target-router.ts`,
+  `migration-target-support.ts`, `migration-library-targets.ts`, `migration-editorial-targets.ts` and
+  the `library` and `editorial` contexts — every module `migration-runner.ts` reaches.
+- **Staging.** The `ingest` service (§10.6) runs `staging-migration-run` — the authorised-source
+  registration and run — as the runtime principal with the one outbound network operator commands
+  have.
+
 ---
 
 ## 6. Dependency rules
@@ -1424,6 +1454,15 @@ synthetic operator, runs the Phase-29 fixture proof as the runtime principal aga
 fixture server inside the container — no legacy host, no DNS, no outbound request — and revokes
 the operator's assignment, session and grant afterwards, also on failure (§5.1). Its audit rows
 and the archived synthetic Videos stay as the record of what was proved.
+
+**Authorised-source runs (Phase 30).** `bin/migration-run.sh register|run …` runs
+`staging-migration-run` in the release's exact-SHA operations image inside the **`ingest`** compose
+service: the same image and mounts as `ops`, plus **one outbound-only network, `sources`**, used by
+nothing else. After the full staging guard it starts the registration or the bounded run as the
+runtime principal, with a named operator whose `migration.administer` is read live; every request
+goes through the safe fetch boundary bound to the source's exact public hosts (§5.2;
+SECURITY_BASELINE.md §10.6). Every other operator command stays on the internal `backend` network.
+Review, rights, duplicates, mappings and publication stay in `/admin/migration`.
 
 **Operating posture.** Deallocated when idle (`az vm deallocate` — an operating-system shutdown
 alone still bills compute); the disks, static IP and Blob storage continue to bill while

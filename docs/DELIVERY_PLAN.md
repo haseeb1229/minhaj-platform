@@ -7,8 +7,10 @@ revised continuously through the delivered phases.
 **Document type:** Delivery plan and phase record. Each phase's entry, deliverables, tests and
 exit are its contract; "Delivered" and continuity notes record what each phase actually delivered,
 and any status table inside them is a **snapshot at that phase's exit** unless it says otherwise.
-Phases 0B–29 are delivered, except Phase 2G, which remains separately deferred; Phase 30 has not
-started.
+Phases 0B–29 are delivered, except Phase 2G, which remains separately deferred. Phase 30 is in
+progress in two corpus stages (§4, Phase 30): its migration engineering is delivered; Stage 1A —
+the representative real review corpus for pre-adoption staging — runs on staging; Stage 1B, the
+full initial corpus, follows Minhaj's review and go-ahead. Phase 31 has not started.
 
 ---
 
@@ -2463,13 +2465,22 @@ mapping, proven in staging or through a controlled resolver or test harness**
 `migration.publish` under the `migration-publication` step-up. **Religious content signed off by
 Minhaj religious authority.** Completes on review capacity, not a date.
 
+> **Two corpus stages, one phase (owner roadmap decision, 2026-10-27; MIGRATION_STRATEGY.md
+> §10.1.0).** **Stage 1A** runs the complete Phase-30 machinery over a bounded, representative real
+> review corpus, so the pre-adoption build can be reviewed with real content in every built public
+> area; **Stage 1B** widens the same registrations to the full authorised corpus after Minhaj's
+> review and go-ahead. Phase-30 **engineering** may be complete at Stage 1A; the **exit above**
+> stays open until Stage 1B, its reconciliation and the required content acceptance complete.
+> **Phase 31 requires Stage 1B.** Neither stage is a new product phase, a DemoMode or a separate
+> import path, and representative content is data, never a reduced product.
+
 ---
 
 ### Phase 31 — Search Completeness Validation
 **Entry:** Phase 17, **Phase 30**, and every in-scope searchable domain complete.
 
 > **Why Phase 30 is a prerequisite.** This phase re-validates tokenisation quality **against the
-> full migrated corpus at real volume**. That corpus does not exist until initial migration has
+> full migrated corpus at real volume** — Phase 30's **Stage 1B**, not the Stage-1A review corpus. That corpus does not exist until initial migration has
 > been executed, reviewed and published. **Search Foundation (Phase 17) and search completeness
 > against the final migrated corpus are different things** and are not interchangeable.
 **Deliverables:** Final all-domain indexing verification · cross-domain relevance review ·

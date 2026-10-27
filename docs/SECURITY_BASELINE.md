@@ -838,9 +838,41 @@ The controls below are built for authorised sources and proven against the fixtu
   URL, header value, note or personal detail (§13.4). A refusal names a category, never content.
 - **Incidental personal data** is flagged and redacted before staging (§19.1.8).
 
-No `authorised` source exists, so no real response, page, asset or personal data has entered the
-system; activating one is Phase 30's and requires written authorisation per source
-(OPEN_DECISIONS.md §3.1).
+At Phase-29 exit no `authorised` source existed, so no real response, page, asset or personal data
+had entered the system; activating one was Phase 30's and required written authorisation per source
+(OPEN_DECISIONS.md §3.1). That paragraph is historical — see §10.6.
+
+### 10.6 As delivered (Phase 30) — authorised sources
+
+Phase 30 registers real sources under the owner's recorded pre-adoption attestation
+(OPEN_DECISIONS.md §3.1). Every Phase-29 control above applies unchanged; Phase 30 adds:
+
+- **Real fetching, still pinned.** An authorised source's fetcher resolves through the system
+  resolver, takes **every** address (both families) and refuses the host if any one is not public,
+  pins the connection to a validated address, re-validates every redirect hop, sends the honest
+  identifying User-Agent and no cookie or credential, and exists only for an `authorised` source
+  with a real `https` scope of exact host names — never for a fixture, a literal address, a single
+  label or `*.invalid` (checked by the service, the fetcher factory and the database CHECK and host
+  trigger). **Credentials in a URL are refused in every mode**; no source in Phase 30 uses a credential
+  of any kind.
+- **Politeness is enforced, not configured.** The database refuses an authorised source running
+  faster than one request per second or with more than one at a time; the catalogue runs every source
+  at three seconds. Access-denied is never retried; `Retry-After` is respected.
+- **`robots.txt` is honoured** for every authorised source: our product token's group or `*`, rules
+  and paths compared percent-encoded (RFC 9309), the longest rule winning; a missing file allows, and
+  any failure to read it disallows everything.
+- **Private areas are out of reach by construction.** Adapters walk only selected public listings on
+  their own hosts; they never read login, form, question-submission, sale-point/contact or comment
+  regions; TheFatwa's asker name and place are cut before parsing and a page still carrying the asker
+  marker fails. Incidental personal data in what remains is redacted and flagged, and a flagged
+  revision can never be approved (CHECK).
+- **Egress is one container wide.** On staging, real sources are read only from the `ingest` service
+  — the exact-SHA operations image with one extra outbound-only network — started by
+  `bin/migration-run.sh` after the full staging guard; every other operator container stays on the
+  internal network, and the IMDS guard and the fetcher's address policy apply to it as to all.
+- **Religious material cannot be published by migration.** Fatwa and Quran kinds are review-only;
+  manifests and the database refuse them. No scholarly approval, `fatwa.publish`, canonical Quran
+  source or activation is created or simulated.
 
 ---
 

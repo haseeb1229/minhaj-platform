@@ -5,10 +5,13 @@ task as any accepted change that directly affects it (DELIVERY_PLAN.md §5.1).
 **Origin:** Phase 0A Architecture Freeze, revised after independent architecture audit, and
 revised continuously through the delivered phases.
 **Document type:** Migration strategy and contract. §1–§12 are the strategy every migration
-phase follows; §13 records what Phase 29 actually delivered. **This document never itself
-authorises contact with any source** (§1.1). As of the current baseline the framework exists and
-is proven against synthetic fixtures only: **no real legacy source has been contacted and no real
-content or asset has been migrated.**
+phase follows; §13 records what Phase 29 delivered and §14 what Phase 30 delivered. **This
+document never itself authorises contact with any source** (§1.1). As of the current baseline the
+Phase-30 migration engineering is delivered and the seven anticipated public sources are
+registered under the owner's recorded pre-adoption attestation (OPEN_DECISIONS.md §3.1). Phase 30
+runs in two stages (§10.1): **Stage 1A**, a bounded, representative real review corpus for
+pre-adoption staging, and **Stage 1B**, the full initial corpus after Minhaj's review and go-ahead,
+which has **not** run.
 
 ---
 
@@ -37,6 +40,14 @@ presentation, without the original data model.
 **No ingestion of any source begins until written authorisation from Minhaj-ul-Quran
 International is recorded for that source.** Minhaj owning a site is not itself the
 authorisation; explicit confirmation is required and tracked per source.
+
+> **Recorded for the pre-adoption staging corpus (Phase 30, 2026-10-27).** The project owner
+> attested that the required permission exists for the seven anticipated sources' **public**
+> content, for discovery, fetching and migration into the independent pre-adoption staging
+> environment, and the reference `OWNER-ATTESTATION-2026-10-27-PREADOPTION-STAGING` is what each
+> registered source carries (OPEN_DECISIONS.md §3.1). The platform records and audits that
+> reference and date; it does not — cannot — verify the organisational decision behind it. That
+> attestation is **not** official adoption, production authority or religious corpus acceptance.
 
 The minimum decision record Minhaj supplies for each source before Phase 30 contacts it — identity,
 authorisation, permitted access, approved scope, asset rights, access restrictions, privacy,
@@ -598,6 +609,42 @@ legacy URL resolves through the mapping to its canonical target, proven in stagi
 resolver (§9.5)** — live legacy-domain 301s are Phase 35's · **reconciliation balanced** ·
 unresolved-link report reviewed.
 
+#### 10.1.0 Stage 1A and Stage 1B — one Phase 30, two corpus stages
+
+Stage 1 runs in **two stages inside Phase 30**, decided by the owner for the pre-adoption build.
+Neither is a separate product phase, and neither uses a separate code path.
+
+| Stage | What runs | When |
+|---|---|---|
+| **Stage 1A — representative review corpus** | The SAME registered sources, adapters, normalisers, provenance, review, publishers and dedupe rules, over a **bounded selection** of real public records chosen for **coverage**, so every built public area can be reviewed with real content | Before Minhaj's review of the pre-adoption build |
+| **Stage 1B — full initial corpus** | The SAME registrations with their selection **widened** to the full authorised scope, A–Z | After Minhaj's review and go-ahead |
+
+**How Stage 1A is selected.** A run is given a bounded selection — listing pages, an item limit and,
+where a source needs them, explicit items (surah numbers) — never "the first N URLs" of a whole
+site. Selection fills at least one real first page of each major listing where the source can,
+covers long and short, dated and sparse-translation cases, and English, Urdu and Arabic where the
+source genuinely has them. **Nothing is fabricated to fill a page**: a source that cannot fill a
+surface leaves an honest, polished unavailable or limited state, and the limitation is reported.
+The selection is recorded by the run itself (its discovered items) and in the operator's local
+evidence; there is no "sample data" feature and no DemoMode.
+
+**How Stage 1B expands Stage 1A without rebuilding it.** Source keys never change; each record's
+identity is its source plus a deterministic canonical external key (§5.1), so a widened discovery
+meets every Stage-1A record again as the same record: unchanged bytes are \`unchanged\`, changed
+bytes a new revision for review, published records never overwritten, duplicates still collapse
+only on hard identity, every legacy mapping kept. Runs stay bounded, checkpointed and resumable
+(§5.1). A Stage-1A record that a later, wider discovery does not see is **observed missing** and
+classified by a person (§5.3) — never deleted.
+
+**Reconciliation is per selection.** A Stage-1A run balances against what **its** selection
+discovered; records of the source not yet selected are "not selected yet", never "missing".
+
+**Exit.** Phase-30 **engineering** may be complete at Stage 1A. The **full Phase-30 corpus exit**
+of §10.1 — all in-scope content migrated, reviewed and published in staging, religious content
+signed off by Minhaj's religious authority — remains open until Stage 1B and the required content
+acceptance complete. **Phase 31 requires Stage 1B**: search completeness is claimed only against the
+full migrated corpus. Phase 35 remains the launch delta and production cutover (§10.2).
+
 #### 10.1.1 Promotion from staging to production
 
 > **Staging acceptance is not production promotion.** Content accepted in staging still has to
@@ -732,3 +779,68 @@ and `npm run migration:promote`. Every human decision — review, duplicates, ma
 disappearances, rights, manifests and promotion approval — is made in `/admin/migration`
 (ROUTE_MAP.md §7). Publication needs `migration.publish` with a `migration-publication` step-up
 (§8.4), which nobody holds yet (OPEN_DECISIONS.md §3.5).
+
+---
+
+## 14. As delivered (Phase 30) — real sources, eight kinds, Stage 1A
+
+> **Phase 30 delivered the migration engineering for the real sources, and runs Stage 1A — a
+> bounded, representative real review corpus for pre-adoption staging.** Stage 1B, the full initial
+> corpus, has **not** run (§10.1.0). Nothing here is official Minhaj adoption, religious corpus
+> acceptance or production promotion.
+
+**Sources.** The seven anticipated sources (§3.1) are registered as eleven **authorised** sources,
+one content kind each, from a committed catalogue (`scripts/migration/sources/catalogue.ts`: key,
+kind, exact hosts, `https` base, declared default language, politeness, adapter — never evidence
+or a secret). Each carries the written authorisation reference and date the operator supplies at
+registration (§1.1). A registration is created **inactive** and activated as a separate audited
+act. The database binds an authorised source to its reference and date, a real `https` base outside
+`*.invalid`, real host names only (never a literal address or a single label) and a politeness
+floor of one request at a time at least a second apart; the catalogue runs every source at three
+seconds. A fixture never becomes an authorised source, nor the reverse.
+
+| Source | Registrations (kind) | Notes |
+|---|---|---|
+| Main Minhaj.org | `minhaj-org-news-en`, `minhaj-org-news-ur` (`editorial.news`) · `minhaj-org-articles-en` (`editorial.article`) | Its "events" are news posts with no event dates, so they migrate as news; body images live on another host and are not acquired |
+| Minhaj Books | `minhajbooks-works` (`library.work`) | Book landing pages: metadata and introductions; book PDFs exceed the acquisition cap and are not acquired in Stage 1A; the sale-point tab (contact data) is never read |
+| Magazines (minhaj.info) | `minhaj-info-magazines` (`library.magazine`) · `minhaj-info-issues-mq`, `minhaj-info-issues-di` (`library.magazine-issue`) | Issue pages with their table of contents; no PDFs or covers |
+| Minhaj.TV | `minhaj-tv-videos` (`media.video`) | YouTube identifiers and metadata from `/english/` pages only (`robots.txt`); audio is a SoundCloud embed, which the storage-backed audio model (§4.9) cannot hold — **source-limited** |
+| TheFatwa | `thefatwa-rulings` (`fatwa.ruling`, review-only) | Published rulings; the asker's name and place are never read |
+| Irfan-ul-Quran | `irfan-ul-quran-ur`, `irfan-ul-quran-en` (`quran.translation`, review-only) | Translation text per surah, exactly; no Arabic text, tafsir or recitation |
+| eLearning (equranclass.com / femaletutor.com) | — | **Source-limited:** the public catalogue has no syllabus, and Learning cannot publish a course without one; a syllabus is never invented |
+
+**Eight content kinds.** `media.video`, `library.work`, `library.magazine`,
+`library.magazine-issue`, `editorial.news` and `editorial.article` are **publishable**: each has one
+strict staged-payload schema, one normaliser and one Layer-4 publisher over its owning domain's
+public service, routed fail-closed (`apps/web/src/composition/migration-target-router.ts`).
+`fatwa.ruling` and `quran.translation` are **review-only**: Fatwa exists only as the answer to a
+private question carried by distinct people, and Quran layered text hangs from an accepted canonical
+corpus and an operator-registered source — no import path exists, and none is invented. Such
+material is preserved, normalised, validated and reviewed as evidence; manifests refuse it
+(`review-only-kind`), and the database refuses it a manifest entry.
+
+**How far each domain carries a migrated record.** Media, Library (works, editions, magazines,
+issues) publish directly under the publisher's own domain keys. **Editorial refuses
+self-approval**, so a migrated news item or article is created and **submitted into Editorial's
+own review** (`in-review`) and becomes public only when a different person approves and publishes
+it; the manifest entry records that stage. A Work's PDF is attached only from a rights-cleared
+acquisition (`public-eligible`, decided by a person). A magazine issue names its magazine by the
+magazine's legacy URL and is refused until that magazine is published.
+
+**Pipeline additions.** Real DNS through the system resolver, every answer validated and the
+connection pinned (§8.1) with the honest identifying User-Agent; `robots.txt` read once per run,
+percent-encoded before matching, a missing file allowing and any other failure disallowing;
+headings h2–h4 admitted by the sanitiser (h1→h2, h5/h6→h4) and rich text staged as blocks rather than
+markup; an oversize payload staged as a rejected stub (`body-too-long`); a strict closed list of
+validation issues per kind; bounded bulk review of at most one page, each revision decided and
+audited on its own.
+
+**Typed targets.** A manifest entry and a legacy mapping name what they made by one typed,
+nullable foreign key per target table — `videoId`, `workId`, `magazineId`, `magazineIssueId`,
+`newsArticleId`, `articleId` — exactly one for a mapping, written once (migration
+`20261027000000_phase30_source_adapters`).
+
+**Operator commands.** `npm run migration:register-source` and `npm run migration:run`
+(`--pages`, `--limit`, `--items`, `--max-items`); on staging `bin/migration-run.sh` runs them in the
+exact-SHA operations image inside the `ingest` service — the one operator container with an
+outbound network — as the runtime principal. Every human decision stays in `/admin/migration`.

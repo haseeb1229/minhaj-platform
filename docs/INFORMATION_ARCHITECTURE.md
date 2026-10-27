@@ -215,9 +215,10 @@ complete canonical taxonomy browser, which is shared platform-wide.
 
 Since Phase 22 the Learn item is delivered as a primary link to the `/learn` landing, which leads to
 All Courses, Learning Paths and Trial Classes (which explains that a trial class is a request on a
-live Course, recorded and not yet scheduled) and to the catalogue filtered by Topic. The shell has no
-per-domain mega menu yet (as for Watch and Quran), so these are reached from the landing and the
-human-readable sitemap. Since Phase 23 Live Learning (`/learn/live`, the class schedule) and Find a
+live Course, recorded and not yet scheduled) and to the catalogue filtered by Topic. At Phase-22 exit
+the shell had no per-domain mega menu (historical); since the flagship presentation pass every §3
+domain has one, built in `apps/web/src/shell/menus.ts` from delivered registry routes only, so the
+curated topic subset (runtime topic addresses) is represented by All Topics. Since Phase 23 Live Learning (`/learn/live`, the class schedule) and Find a
 Teacher (`/learn/teachers`) are delivered as activation-aware pages, linked from the landing; they say
 honestly when live learning is not switched on. Training and Resources have no owner contract and are
 not linked.
@@ -323,6 +324,15 @@ Accessibility Statement · Sitemap
 legal and compliance surfaces implied by operating an authenticated, multi-jurisdiction
 platform. They are noted here as IA slots; their content is an organisational
 responsibility, not an engineering one.*
+
+**Delivered in Phase 30 (flagship presentation pass).** The footer renders all six columns from
+`apps/web/src/shell/menus.ts` with **delivered or reserved registry routes only**: reserved pages
+(the Explore pages, Volunteer) are linked because they exist and say honestly that nothing is
+published yet; entries with no static route (Scholars, Hadith by Topic, Training, Resources, Regions,
+Cities) are omitted rather than linked dead. The utility bar carries the legal links, the sitemap and the
+pre-adoption statement; the language switcher stays in the header only — a second one would
+duplicate a landmark and its pinned link names — and no copyright owner, contact detail or social
+profile is shown, since none is evidenced (OPEN_DECISIONS.md §6.1, §6.4).
 
 ---
 

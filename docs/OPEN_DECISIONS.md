@@ -345,12 +345,31 @@ absolute and is not weakened by this clarification.
 > before any Phase 30 adapter, access, fetch, asset copy or ingestion. The production promotion
 > destination and production infrastructure also remain open (§4.1, §4.3, §4.4; Phases 34–35).
 
-**Current per-source status (pre-Phase-30 baseline, 2026-10-25).** No written authorisation has
-been supplied or recorded for any source, so **every anticipated source is NOT AUTHORISED**: main
-Minhaj.org, Minhaj Books, TheFatwa, Minhaj.TV, Irfan-ul-Quran, magazines and publications, the
-eLearning catalogue, and any other source not yet named. None is recorded as excluded or deferred
-either, because that is also Minhaj's decision (§3.3). Ownership of a site is never read as
-permission.
+**Per-source status at the pre-Phase-30 baseline (2026-10-25, historical).** No written
+authorisation had been supplied or recorded for any source, so every anticipated source was then
+NOT AUTHORISED.
+
+**Current status — owner-attested for PRE-ADOPTION STAGING (2026-10-27).** The project owner
+attested, in the instruction that started Phase 30, that the required permission exists for the
+**public** content of the seven anticipated sources — main Minhaj.org, Minhaj Books, TheFatwa,
+Minhaj.TV, Irfan-ul-Quran, magazines and publications, and the eLearning catalogue — for discovery,
+contact, fetching and migration into the independent pre-adoption staging environment. The
+reference `OWNER-ATTESTATION-2026-10-27-PREADOPTION-STAGING` and its date are what every registered
+authorised source records; the owner's evidence itself stays outside the repository.
+
+- **What it covers:** public pages within the canonical boundaries of §3.1.1 and
+  MIGRATION_STRATEGY.md §3.1; public assets only where neither the attestation nor the source marks
+  them restricted, each with its own provenance and rights decision (an unclear asset is skipped).
+- **What it does not cover:** any private account, question, enrolment, progress or message area;
+  any access-control, anti-bot, authentication or rate-limit bypass; video binaries; API, export or
+  database access (none is supplied — public-website ingestion is the access method, §3.2); any
+  further source; production promotion or cutover (§3.4).
+- **What it is not:** official adoption by Minhaj-ul-Quran International, or acceptance of any
+  religious corpus (§1). The platform validates and audits the reference; it cannot prove the
+  decision behind it.
+
+A later decision by Minhaj — a per-source record as in §3.1.1, an exclusion, or a withdrawal —
+supersedes this attestation for that source.
 
 #### 3.1.1 The per-source decision record
 
@@ -479,6 +498,15 @@ either block work that may safely proceed or let content through that may not.
 | **F. Phase 35 only — not Phase 30** | §3.4 production DNS, legacy hosting cutover, production promotion, cutover and rollback owners, live legacy-domain 301 activation | No effect on Phase 30 |
 
 §2.2 (applicable jurisdictions) gates Phases 21 and 33, not Phase 30 as a whole; a source may still need a retention instruction in its own record (§3.1.1, *Privacy*).
+
+**Where the gates stand for the pre-adoption Stage 1A (2026-10-27).** **A** is satisfied for
+pre-adoption staging by the owner's attestation (§3.1). **B** is applied per source from the same
+attestation: public content only, assets only with their own rights decision. **C** is
+public-website ingestion. **D is not satisfied and is not bypassed**: Fatwa and Quran material is
+staged and reviewed as evidence only and never published by migration (MIGRATION_STRATEGY.md §14);
+no scholarly approval is recorded or simulated. **E** — see §3.5. **F** is untouched. None of this
+is a decision of Minhaj-ul-Quran International; the owner's roadmap decision only fixes the order:
+build and review first, official adoption and content acceptance afterwards.
 
 ---
 

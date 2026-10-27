@@ -2034,14 +2034,46 @@ disappearance is `withdrawn`, `moved`, `source-error`, `transient-failure`, `acc
   approving a promotion are refused by trigger** unless the actor holds `migration.publish` now with a
   live `migration-publication` step-up.
 
-**One content kind.** `media.video` is the only kind, because it is the only one with a Layer-4
-publisher; Migration's staged payload is its own shape, translated into Media's input only at Layer 4
-(§16.3). Phase 30 adds kinds with their publishers.
+**One content kind (at Phase-29 exit, historical).** `media.video` was then the only kind, because it
+was the only one with a Layer-4 publisher; Migration's staged payload is its own shape, translated into
+Media's input only at Layer 4 (§16.3). Phase 30 added kinds with their publishers (§16.6).
 
 **Migration & Provenance imports no context.** It depends only on Layer 0: Identity's authority,
 Taxonomy's existing Topics, the publication target, Storage and the source adapters all reach it as
 ports composed at Layer 4 or by `scripts/migration/` (ARCHITECTURE.md §5.1). No target context and
 no other context reaches Migration.
+
+### 16.6 As delivered (Phase 30 — eight kinds, authorised sources, typed targets)
+
+Migration `20261027000000_phase30_source_adapters` adds no table; it widens the Phase-29 ones.
+
+- **Content kinds.** `media.video`, `library.work`, `library.magazine`, `library.magazine-issue`,
+  `editorial.news`, `editorial.article` (publishable) and `fatwa.ruling`, `quran.translation`
+  (**review-only**) — one closed vocabulary in the source, record and staged-revision CHECKs. Each kind
+  has one strict staged-payload schema; rich text is staged as blocks (paragraph, heading 2–4, quote,
+  list; bold, italic, link runs), never as markup.
+- **Review-only kinds never publish.** A manifest entry names an approved, valid revision of a
+  **publishable** kind (trigger 51379), so Fatwa and Quran material — whose owning domains have no
+  import path (§8.3, §12.1) — can be reviewed as migration evidence but can never reach a target.
+- **Typed targets.** A manifest entry and a legacy mapping name what they made by one typed, nullable
+  foreign key per target: `videoId` → Video, `workId` → Work, `magazineId` → Magazine,
+  `magazineIssueId` → MagazineIssue, `newsArticleId` → NewsArticle, `articleId` → Article. A
+  mapping names **exactly one** and the same one as its entry (51380); an entry's target, stage,
+  version and path are written once (51379). Still no `targetType` / `targetId` pair anywhere.
+- **Target stage.** An entry records how far the owning domain carried the record: `public`, or
+  `in-review` where the domain itself needs a second person — Editorial refuses self-approval, so a
+  migrated news item or article is created and submitted into Editorial's review and becomes public
+  only by Editorial's own decision.
+- **Authorised sources.** `authorised` sources now exist, created only by their own path, inactive,
+  carrying the written authorisation reference and date; the CHECK also binds them to a real `https`
+  base outside `*.invalid` and to the politeness floor (one request at a time, ≥ 1 s apart), and the
+  host trigger (51371) to real host names — never `*.invalid`, a single label or a literal address.
+- **Reference resolution.** One migrated record may name another by that record's **legacy URL**
+  (a magazine issue names its magazine); it resolves only through an ACTIVE legacy mapping, so a
+  reference to something not yet published refuses rather than guesses.
+- **Holdings for rollback.** Personalisation answers `workHeld` and `articleHeld` beside
+  `videoHeld` (`SavedItem` and `ReadingHistory`); a held Work or Article is never withdrawn
+  automatically. No personal table can hold a news item, magazine or issue.
 
 ---
 
