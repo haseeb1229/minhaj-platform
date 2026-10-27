@@ -1,7 +1,11 @@
 import { notFound } from 'next/navigation';
 
 import type { Locale } from '@minhaj/contracts';
-import { MANIFEST_STATES, type PromotionRecord } from '@minhaj/contracts/migration';
+import {
+  MANIFEST_STATES,
+  isPublishableKind,
+  type PromotionRecord,
+} from '@minhaj/contracts/migration';
 
 import { ConfirmField } from '@/components/personal/parts';
 import {
@@ -46,7 +50,7 @@ import {
   type AdminMigrationCopy,
   type Query,
 } from '../shared';
-import { ManifestStateBadge, PromotionStateBadge } from '../status';
+import { ContentKindLabel, ManifestStateBadge, PromotionStateBadge } from '../status';
 
 /**
  * `/{locale}/admin/migration/manifests` — publish manifests and promotions,
@@ -54,8 +58,11 @@ import { ManifestStateBadge, PromotionStateBadge } from '../status';
  *
  * A MANIFEST IS PREPARED under `migration.administer`: a draft over APPROVED
  * revisions of one COMPLETED, BALANCED run — an unreconciled run offers
- * nothing to choose, and the service refuses one. Publishing and rolling back
- * happen on the manifest's own page under `migration.publish`.
+ * nothing to choose, and the service refuses one. A REVIEW-ONLY kind (Fatwa,
+ * Quran translation) is never offered, however it was reviewed: migration
+ * never publishes religious material, and the service and the database each
+ * refuse it a manifest entry. Publishing and rolling back happen on the
+ * manifest's own page under `migration.publish`.
  *
  * A PROMOTION is the reviewed corpus set carried from staging to production:
  * created from published entries and withdrawn under `migration.administer`,
@@ -128,6 +135,13 @@ export default async function MigrationManifestsPage({
   };
   const href = (change: Readonly<Record<string, string | null>>) =>
     withQuery(base, { ...current, ...change });
+  // Religious material is reviewed as evidence only — never offered to publish.
+  const offered =
+    approved !== null && approved.ok
+      ? approved.value.rows.filter((row) => isPublishableKind(row.contentKind))
+      : [];
+  const withheld =
+    approved !== null && approved.ok ? approved.value.rows.length - offered.length : 0;
   const balancedRuns =
     completed !== null && completed.ok
       ? completed.value.rows.filter((run) => run.reconciliation === 'balanced')
@@ -259,6 +273,8 @@ export default async function MigrationManifestsPage({
               <Alert tone="error">{copy.refusals[approved.failure]}</Alert>
             ) : approved.value.rows.length === 0 ? (
               <EmptyState>{t('manifests.create.noApproved')}</EmptyState>
+            ) : offered.length === 0 ? (
+              <EmptyState>{t('manifests.create.noPublishable')}</EmptyState>
             ) : (
               <ActionForm
                 action={createManifestAction}
@@ -272,7 +288,7 @@ export default async function MigrationManifestsPage({
                   <legend className="text-sm font-medium">
                     {t('manifests.create.revisions', { total: approved.value.total })}
                   </legend>
-                  {approved.value.rows.map((row) => (
+                  {offered.map((row) => (
                     <div key={row.id} className="flex items-start gap-2 text-sm">
                       <input
                         id={`manifest-staged-${row.id}`}
@@ -283,13 +299,21 @@ export default async function MigrationManifestsPage({
                         className="mt-1"
                       />
                       <label htmlFor={`manifest-staged-${row.id}`}>
-                        <bdi>{row.title}</bdi>
+                        <bdi>{row.title}</bdi>{' '}
+                        <span className="text-[color:var(--color-foreground-muted)]">
+                          <ContentKindLabel kind={row.contentKind} copy={copy} />
+                        </span>
                       </label>
                     </div>
                   ))}
                 </fieldset>
               </ActionForm>
             )}
+            {withheld > 0 ? (
+              <p className="text-sm">
+                {t('manifests.create.reviewOnlyWithheld', { count: withheld })}
+              </p>
+            ) : null}
           </div>
         </Panel>
       ) : null}

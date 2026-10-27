@@ -4,14 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import type { TopicView } from '@minhaj/contracts/taxonomy';
 
 import { taxonomyRuntime } from '@/composition/taxonomy';
-import {
-  Breadcrumbs,
-  Container,
-  EmptyState,
-  PageHeading,
-  Panel,
-  TextLink,
-} from '@/components/ui';
+import { Breadcrumbs, Container, EmptyState, MetaRow, PageHero } from '@/components/ui';
 import { directionOf } from '@/config/locale';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
@@ -23,6 +16,11 @@ import { requireRoute } from '@/shell/registry';
  * THE TREE, ONE BOUNDED READ. Taxonomy's own listing returns the active tree to
  * its accepted depth and row bound in one call per level, already ordered; this
  * page only nests it. Each topic links to its hub.
+ *
+ * PRESENTED AS STRUCTURE. Every top-level topic is a branch with its own
+ * heading, and its descendants hang beneath it on a rule, so the shape of the
+ * taxonomy is visible at a glance. The figures are counts of the tree this page
+ * already holds — nothing is estimated.
  *
  * DYNAMIC, because topics are records an administrator changes.
  */
@@ -44,6 +42,11 @@ export async function generateMetadata({ params }: TopicsParams): Promise<Metada
   });
 }
 
+/** The address of one topic's hub. */
+function hubPath(locale: string, topic: TopicView): string {
+  return `/${locale}/topics/${encodeURIComponent(topic.slug)}`;
+}
+
 export default async function TopicsPage({ params }: TopicsParams) {
   const locale = await requireLocale(params);
   const t = await getTranslations({ locale, namespace: 'topics' });
@@ -58,63 +61,90 @@ export default async function TopicsPage({ params }: TopicsParams) {
   const roots = childrenOf(null);
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={shell('nav.breadcrumbs')}
-          trail={[{ href: `/${locale}`, text: shell('nav.home') }, { text: t('title') }]}
-        />
-
-        <div className="flex flex-col gap-2">
-          <PageHeading>{t('title')}</PageHeading>
-          <p className="text-[color:var(--color-foreground-muted)]">{t('intro')}</p>
+    <>
+      <Container>
+        <div className="pt-6">
+          <Breadcrumbs
+            label={shell('nav.breadcrumbs')}
+            trail={[
+              { href: `/${locale}`, text: shell('nav.home') },
+              { text: t('title') },
+            ]}
+          />
         </div>
+      </Container>
 
-        {roots.length === 0 ? (
-          <EmptyState>{t('empty')}</EmptyState>
-        ) : (
-          <ul aria-label={t('title')} className="grid gap-4 sm:grid-cols-2">
-            {roots.map((root) => (
-              <Panel as="li" key={root.id}>
-                <div className="flex flex-col gap-2">
-                  <p className="font-semibold">
-                    <TextLink href={`/${locale}/topics/${encodeURIComponent(root.slug)}`}>
-                      <span
+      <PageHero eyebrow={t('index.eyebrow')} title={t('title')} lede={t('intro')}>
+        {roots.length === 0 ? null : (
+          <MetaRow
+            items={[
+              t('index.roots', { count: roots.length }),
+              t('index.total', { count: tree.length }),
+            ]}
+          />
+        )}
+      </PageHero>
+
+      <Container>
+        <div className="py-[var(--space-section)]">
+          {roots.length === 0 ? (
+            <EmptyState>{t('empty')}</EmptyState>
+          ) : (
+            <ul
+              aria-label={t('title')}
+              className="grid list-none grid-cols-1 gap-4 p-0 *:min-w-0 sm:grid-cols-2 lg:grid-cols-3"
+            >
+              {roots.map((root) => {
+                const children = childrenOf(root.id);
+                return (
+                  <li
+                    key={root.id}
+                    className="flex min-w-0 flex-col gap-3 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]"
+                  >
+                    <h2 className="text-subheading font-semibold wrap-anywhere">
+                      <a
+                        href={hubPath(locale, root)}
+                        lang={root.label.resolvedLocale}
+                        dir={directionOf(root.label.resolvedLocale)}
+                        className="inline-flex min-h-11 items-center text-[color:var(--color-foreground)] underline decoration-[color:var(--color-accent-rule)] underline-offset-4 hover:decoration-[color:var(--color-action)] active:text-[color:var(--color-action)]"
+                      >
+                        {root.label.name}
+                      </a>
+                    </h2>
+                    {root.label.description === null ? null : (
+                      <p
+                        className="line-clamp-3 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
                         lang={root.label.resolvedLocale}
                         dir={directionOf(root.label.resolvedLocale)}
                       >
-                        {root.label.name}
-                      </span>
-                    </TextLink>
-                  </p>
-                  {root.label.description === null ? null : (
-                    <p
-                      className="text-sm text-[color:var(--color-foreground-muted)]"
-                      lang={root.label.resolvedLocale}
-                      dir={directionOf(root.label.resolvedLocale)}
-                    >
-                      {root.label.description}
-                    </p>
-                  )}
-                  {childrenOf(root.id).length === 0 ? null : (
-                    <ul className="flex flex-col gap-2 ps-4 text-sm">
-                      {childrenOf(root.id).map((child) => (
-                        <Branch
-                          key={child.id}
-                          topic={child}
-                          locale={locale}
-                          tree={tree}
+                        {root.label.description}
+                      </p>
+                    )}
+                    {children.length === 0 ? null : (
+                      <>
+                        <MetaRow
+                          items={[t('index.children', { count: children.length })]}
                         />
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </Panel>
-            ))}
-          </ul>
-        )}
-      </div>
-    </Container>
+                        <ul className="flex list-none flex-col border-s-2 border-[color:var(--color-accent-rule)] p-0 ps-3">
+                          {children.map((child) => (
+                            <Branch
+                              key={child.id}
+                              topic={child}
+                              locale={locale}
+                              tree={tree}
+                            />
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </Container>
+    </>
   );
 }
 
@@ -130,17 +160,17 @@ function Branch({
 }) {
   const children = tree.filter((entry) => entry.parentId === topic.id);
   return (
-    <li className="flex flex-col gap-2">
-      <TextLink href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}>
-        <span
-          lang={topic.label.resolvedLocale}
-          dir={directionOf(topic.label.resolvedLocale)}
-        >
-          {topic.label.name}
-        </span>
-      </TextLink>
+    <li className="flex min-w-0 flex-col">
+      <a
+        href={hubPath(locale, topic)}
+        lang={topic.label.resolvedLocale}
+        dir={directionOf(topic.label.resolvedLocale)}
+        className="inline-flex min-h-11 items-center text-sm font-medium wrap-anywhere text-[color:var(--color-action)] underline-offset-4 hover:underline active:text-[color:var(--color-action-hover)]"
+      >
+        {topic.label.name}
+      </a>
       {children.length === 0 ? null : (
-        <ul className="flex flex-col gap-2 ps-5">
+        <ul className="flex list-none flex-col border-s border-[color:var(--color-border)] p-0 ps-3">
           {children.map((child) => (
             <Branch key={child.id} topic={child} locale={locale} tree={tree} />
           ))}

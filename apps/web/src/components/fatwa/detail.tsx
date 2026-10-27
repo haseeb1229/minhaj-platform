@@ -7,7 +7,7 @@ import type { FatwaAvailability, PublicFatwa } from '@minhaj/contracts/fatwa';
 
 import { contentLanguages, referenceNames } from '@/composition/public-references';
 import { BreadcrumbData } from '@/components/media/parts';
-import { Alert, PageHeading, TextLink } from '@/components/ui';
+import { Alert, DetailRow, MetaRow, TextLink, TopicChips } from '@/components/ui';
 import { categoryLabels } from './list';
 import { FatwaDate, FatwaFrame, fatwaTrail } from './parts';
 import { FatwaHistory } from './history';
@@ -36,6 +36,12 @@ import { fatwaStructuredLocales } from './read';
  *
  * CORRECTIONS ARE VISIBLE. A corrected ruling says when, and why, at the top,
  * and keeps every earlier published version readable below.
+ *
+ * READ AS A PUBLICATION. The header carries the title and one line of facts;
+ * the question sits in its own quieter panel, the ruling follows at reading
+ * size in a bounded measure, and everything about where the ruling comes
+ * from — category, dates, language, attribution — is gathered in one source
+ * panel beside it. Related links are only those this page has already read.
  *
  * ONLY A BREADCRUMB IS CLAIMED to a search engine — never `FAQPage` or
  * `Article` — and only on the ruling's own canonical-language page of an
@@ -85,6 +91,16 @@ export async function FatwaRulingPage({
     fatwaContentLocales(current.language),
   ).filter((entry) => entry === locale);
 
+  const published = <FatwaDate value={fatwa.firstPublishedAt} locale={locale} />;
+  const correctedOn = corrected ? (
+    <FatwaDate value={current.publishedAt} locale={locale} />
+  ) : null;
+  const languageLabel = (
+    <span lang={current.language} dir={direction}>
+      {languageName}
+    </span>
+  );
+
   return (
     <FatwaFrame
       locale={locale}
@@ -97,6 +113,49 @@ export async function FatwaRulingPage({
           : [{ href: categoryHref(locale, category.slug), text: category.name }]),
         { text: current.title },
       ]}
+      heading={{
+        title: (
+          <span className="wrap-anywhere" lang={current.language} dir={direction}>
+            {current.title}
+          </span>
+        ),
+        meta: (
+          <MetaRow
+            items={[
+              category === undefined ? null : category.name,
+              <>
+                {t('ruling.firstPublished')}: {published}
+              </>,
+              correctedOn === null ? null : (
+                <>
+                  {t('ruling.corrected')}: {correctedOn}
+                </>
+              ),
+              languageLabel,
+            ]}
+          />
+        ),
+        extra:
+          (corrected && current.correctionReason !== null) ||
+          current.language !== locale ? (
+            <div className="flex flex-col gap-3 pt-1">
+              {corrected && current.correctionReason !== null ? (
+                <p
+                  className="max-w-[var(--measure-prose)] rounded-[var(--radius-control)] border-s-4 border-[color:var(--color-warning)] bg-[color:var(--color-warning-surface)] px-4 py-3 text-sm whitespace-pre-wrap wrap-anywhere"
+                  dir="auto"
+                >
+                  <span className="font-semibold">{t('ruling.correctionReason')}:</span>{' '}
+                  {current.correctionReason}
+                </p>
+              ) : null}
+              {current.language === locale ? null : (
+                <Alert tone="info">
+                  {t('ruling.languageNotice', { language: languageName })}
+                </Alert>
+              )}
+            </div>
+          ) : undefined,
+      }}
     >
       <BreadcrumbData
         contentLocales={structured}
@@ -110,141 +169,127 @@ export async function FatwaRulingPage({
         ]}
       />
 
-      <header className="flex min-w-0 flex-col gap-3">
-        <PageHeading>
-          <span className="wrap-anywhere" lang={current.language} dir={direction}>
-            {current.title}
-          </span>
-        </PageHeading>
-        <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-          {category === undefined ? null : (
-            <div className="flex gap-1">
-              <dt className="text-[color:var(--color-foreground-muted)]">
-                {t('ruling.category')}:
-              </dt>
-              <dd className="wrap-anywhere">
-                <TextLink href={categoryHref(locale, category.slug)}>
-                  {category.name}
-                </TextLink>
-              </dd>
-            </div>
+      <div className="grid min-w-0 gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-14">
+        <div className="flex min-w-0 flex-col gap-10">
+          <section
+            className="flex max-w-[var(--measure-prose)] min-w-0 flex-col gap-3 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)] p-5"
+            aria-labelledby="fatwa-question"
+          >
+            <h2 id="fatwa-question" className="text-subheading font-semibold">
+              {t('ruling.question')}
+            </h2>
+            <p className="text-caption text-[color:var(--color-foreground-muted)]">
+              {t('ruling.questionNote')}
+            </p>
+            <p
+              className="whitespace-pre-wrap wrap-anywhere"
+              lang={current.language}
+              dir={direction}
+            >
+              {current.publicQuestion}
+            </p>
+          </section>
+
+          <section
+            className="flex max-w-[var(--measure-prose)] min-w-0 flex-col gap-3"
+            aria-labelledby="fatwa-ruling"
+          >
+            <h2 id="fatwa-ruling" className="text-heading font-semibold">
+              {t('ruling.answer')}
+            </h2>
+            <p
+              className="text-lede whitespace-pre-wrap wrap-anywhere"
+              lang={current.language}
+              dir={direction}
+            >
+              {current.ruling}
+            </p>
+          </section>
+
+          {topics.length === 0 ? null : (
+            <section className="flex flex-col gap-3" aria-labelledby="fatwa-topics">
+              <h2 id="fatwa-topics" className="text-subheading font-semibold">
+                {t('ruling.topics')}
+              </h2>
+              <TopicChips
+                label={t('ruling.topics')}
+                topics={topics.map((topic) => ({
+                  href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+                  text: topic.name,
+                }))}
+              />
+            </section>
           )}
-          <div className="flex gap-1">
-            <dt className="text-[color:var(--color-foreground-muted)]">
-              {t('ruling.firstPublished')}:
-            </dt>
-            <dd>
-              <FatwaDate value={fatwa.firstPublishedAt} locale={locale} />
-            </dd>
+
+          <FatwaHistory
+            locale={locale}
+            current={current}
+            previous={fatwa.previous}
+            t={t}
+          />
+        </div>
+
+        <aside aria-labelledby="fatwa-provenance" className="min-w-0">
+          <div className="flex flex-col gap-4 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]">
+            <h2 id="fatwa-provenance" className="text-subheading font-semibold">
+              {t('ruling.provenance')}
+            </h2>
+            <dl className="flex flex-col divide-y divide-[color:var(--color-border)]">
+              {category === undefined ? null : (
+                <DetailRow term={t('ruling.category')}>
+                  <TextLink href={categoryHref(locale, category.slug)}>
+                    {category.name}
+                  </TextLink>
+                </DetailRow>
+              )}
+              <DetailRow term={t('ruling.firstPublished')}>{published}</DetailRow>
+              {correctedOn === null ? null : (
+                <DetailRow term={t('ruling.corrected')}>{correctedOn}</DetailRow>
+              )}
+              <DetailRow term={t('ruling.language')}>{languageLabel}</DetailRow>
+              {answeredBy === undefined ? null : (
+                <DetailRow term={t('ruling.answeredBy')}>
+                  <span dir="auto">
+                    <TextLink
+                      href={`/${locale}/people/${encodeURIComponent(answeredBy.slug)}`}
+                    >
+                      {answeredBy.name}
+                    </TextLink>
+                  </span>
+                </DetailRow>
+              )}
+              {publishedBy === undefined ? null : (
+                <DetailRow term={t('ruling.publishedBy')}>
+                  <span dir="auto">
+                    <TextLink
+                      href={`/${locale}/people/${encodeURIComponent(publishedBy.slug)}`}
+                    >
+                      {publishedBy.name}
+                    </TextLink>
+                  </span>
+                </DetailRow>
+              )}
+            </dl>
+            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+              {t('ruling.provenanceNote')}
+            </p>
+            <p className="flex flex-col gap-1 text-sm">
+              <a
+                href={fatwaSectionPath(locale, 'how-it-works')}
+                className="inline-flex min-h-11 items-center font-medium text-[color:var(--color-action)] underline underline-offset-2"
+              >
+                {t('unavailable.howItWorks')}
+              </a>
+              <a
+                href={fatwaSectionPath(locale)}
+                className="inline-flex min-h-11 items-center font-medium text-[color:var(--color-action)] underline underline-offset-2"
+              >
+                {t('ruling.all')}
+              </a>
+            </p>
           </div>
-          {corrected ? (
-            <div className="flex gap-1">
-              <dt className="text-[color:var(--color-foreground-muted)]">
-                {t('ruling.corrected')}:
-              </dt>
-              <dd>
-                <FatwaDate value={current.publishedAt} locale={locale} />
-              </dd>
-            </div>
-          ) : null}
-        </dl>
-        {corrected && current.correctionReason !== null ? (
-          <p className="text-sm whitespace-pre-wrap wrap-anywhere" dir="auto">
-            <span className="font-semibold">{t('ruling.correctionReason')}:</span>{' '}
-            {current.correctionReason}
-          </p>
-        ) : null}
-        {current.language === locale ? null : (
-          <Alert tone="info">
-            {t('ruling.languageNotice', { language: languageName })}
-          </Alert>
-        )}
-      </header>
-
-      <section className="flex min-w-0 flex-col gap-2" aria-labelledby="fatwa-question">
-        <h2 id="fatwa-question" className="text-lg font-semibold">
-          {t('ruling.question')}
-        </h2>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('ruling.questionNote')}
-        </p>
-        <p
-          className="max-w-[var(--measure-prose)] whitespace-pre-wrap wrap-anywhere"
-          lang={current.language}
-          dir={direction}
-        >
-          {current.publicQuestion}
-        </p>
-      </section>
-
-      <section className="flex min-w-0 flex-col gap-2" aria-labelledby="fatwa-ruling">
-        <h2 id="fatwa-ruling" className="text-lg font-semibold">
-          {t('ruling.answer')}
-        </h2>
-        <p
-          className="max-w-[var(--measure-prose)] text-base leading-relaxed whitespace-pre-wrap wrap-anywhere"
-          lang={current.language}
-          dir={direction}
-        >
-          {current.ruling}
-        </p>
-      </section>
-
-      {topics.length === 0 ? null : (
-        <section className="flex flex-col gap-2" aria-labelledby="fatwa-topics">
-          <h2 id="fatwa-topics" className="text-lg font-semibold">
-            {t('ruling.topics')}
-          </h2>
-          <ul className="flex flex-wrap gap-x-6 gap-y-2">
-            {topics.map((topic) => (
-              <li key={topic.id} className="wrap-anywhere">
-                <TextLink href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}>
-                  {topic.name}
-                </TextLink>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {answeredBy === undefined && publishedBy === undefined ? null : (
-        <dl className="flex flex-col gap-1 text-sm">
-          {answeredBy === undefined ? null : (
-            <div className="flex flex-wrap gap-1">
-              <dt className="text-[color:var(--color-foreground-muted)]">
-                {t('ruling.answeredBy')}:
-              </dt>
-              <dd className="wrap-anywhere" dir="auto">
-                <TextLink
-                  href={`/${locale}/people/${encodeURIComponent(answeredBy.slug)}`}
-                >
-                  {answeredBy.name}
-                </TextLink>
-              </dd>
-            </div>
-          )}
-          {publishedBy === undefined ? null : (
-            <div className="flex flex-wrap gap-1">
-              <dt className="text-[color:var(--color-foreground-muted)]">
-                {t('ruling.publishedBy')}:
-              </dt>
-              <dd className="wrap-anywhere" dir="auto">
-                <TextLink
-                  href={`/${locale}/people/${encodeURIComponent(publishedBy.slug)}`}
-                >
-                  {publishedBy.name}
-                </TextLink>
-              </dd>
-            </div>
-          )}
-        </dl>
-      )}
-
-      <FatwaHistory locale={locale} current={current} previous={fatwa.previous} t={t} />
-
-      <p>
-        <TextLink href={fatwaSectionPath(locale)}>{t('ruling.all')}</TextLink>
-      </p>
+        </aside>
+      </div>
     </FatwaFrame>
   );
 }

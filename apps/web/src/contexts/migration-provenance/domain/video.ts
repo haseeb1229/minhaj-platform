@@ -108,7 +108,7 @@ export function providerVideoId(
 const EARLIEST_DATE = '1900-01-01';
 
 /** A real calendar date `YYYY-MM-DD`, not after `now` and not before 1900. */
-function plausibleDate(value: string, now: Date): boolean {
+export function plausibleDate(value: string, now: Date): boolean {
   if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) return false;
   const at = new Date(`${value}T00:00:00Z`);
   if (Number.isNaN(at.getTime()) || at.toISOString().slice(0, 10) !== value) return false;
@@ -116,7 +116,7 @@ function plausibleDate(value: string, now: Date): boolean {
 }
 
 /** At most `max` UTF-16 units, never splitting a surrogate pair. */
-function clip(value: string, max: number): string {
+export function clip(value: string, max: number): string {
   if (value.length <= max) return value;
   let out = '';
   for (const char of value) {

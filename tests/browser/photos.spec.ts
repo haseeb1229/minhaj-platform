@@ -246,7 +246,12 @@ test.describe('an anonymous visitor looks at photographs', () => {
     for (const href of ['/en/media/galleries', '/en/media/archive']) {
       await expect(main.locator(`a[href="${href}"]`).first()).toBeVisible();
     }
-    await expect(page.getByRole('link', { name: /download/i })).toHaveCount(0);
+    // Scoped to the page's content: the footer's "Library downloads" is
+    // navigation to another section, not a download of these photographs.
+    await expect(
+      page.getByRole('main').getByRole('link', { name: /download/i }),
+    ).toHaveCount(0);
+    await expect(page.locator('a[download]')).toHaveCount(0);
     expect(external.map((request) => request.url())).toEqual([]);
     await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(0);
   });

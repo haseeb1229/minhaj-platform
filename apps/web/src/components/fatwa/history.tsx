@@ -34,7 +34,7 @@ export function FatwaHistory({
   if (previous.length === 0) return null;
   return (
     <section className="flex flex-col gap-4" aria-labelledby="fatwa-history">
-      <h2 id="fatwa-history" className="text-lg font-semibold">
+      <h2 id="fatwa-history" className="text-subheading font-semibold">
         {t('ruling.history')}
       </h2>
       <p className="text-sm text-[color:var(--color-foreground-muted)]">
@@ -47,12 +47,12 @@ export function FatwaHistory({
           const direction = fatwaTextDirection(entry.language);
           return (
             <li key={entry.revisionId}>
-              <details className="rounded-[var(--radius-panel)] border border-[color:var(--color-border)] p-4">
-                <summary className="cursor-pointer font-medium">
+              <details className="rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] px-4 py-1">
+                <summary className="min-h-11 cursor-pointer py-3 font-medium">
                   {t('ruling.version')}:{' '}
                   <FatwaDate value={entry.publishedAt} locale={locale} />
                 </summary>
-                <div className="mt-4 flex min-w-0 flex-col gap-4">
+                <div className="flex min-w-0 flex-col gap-4 pt-2 pb-4">
                   {replacement?.correctionReason ? (
                     <div className="flex flex-col gap-1">
                       <h3 className="text-sm font-semibold">

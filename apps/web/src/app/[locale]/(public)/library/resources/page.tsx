@@ -6,16 +6,8 @@ import { libraryReadRuntime } from '@/composition/library-read';
 import { translationFor } from '@/components/editorial/public-content';
 import { directionOf } from '@/config/locale';
 import { requireLocale } from '@/config/route-locale';
-import {
-  Breadcrumbs,
-  Container,
-  EmptyState,
-  PageHeading,
-  Panel,
-  Prose,
-  SectionHeading,
-  TextLink,
-} from '@/components/ui';
+import { CardGrid, EmptyState, LinkCard, SectionHeader } from '@/components/ui';
+import { ListingFrame } from '@/components/library/frame';
 import { labelFor, workPath } from '@/components/library/presentation';
 import { listingHref, sectionTitle } from '@/components/library/scholarly';
 import {
@@ -97,116 +89,114 @@ export default async function ResourcesPage({
   ]);
 
   return (
-    <Container>
-      <div className="flex flex-col gap-10 py-12">
-        <Breadcrumbs
-          label={shell('nav.breadcrumbs')}
-          trail={[
-            { href: `/${locale}`, text: shell('nav.home') },
-            { href: `/${locale}/library`, text: t('title') },
-            { text: t('section.resources') },
-          ]}
-        />
-
-        <Prose>
-          <PageHeading>{t('section.resources')}</PageHeading>
-          <p>{t('sectionBody.resources')}</p>
-        </Prose>
-
-        <section className="flex flex-col gap-4">
-          <SectionHeading>{t('section.books')}</SectionHeading>
+    <ListingFrame
+      breadcrumbLabel={shell('nav.breadcrumbs')}
+      trail={[
+        { href: `/${locale}`, text: shell('nav.home') },
+        { href: `/${locale}/library`, text: t('title') },
+        { text: t('section.resources') },
+      ]}
+      title={t('section.resources')}
+      lede={t('sectionBody.resources')}
+    >
+      <div className="flex flex-col gap-[var(--space-section)]">
+        <section aria-labelledby="resources-books" className="flex flex-col gap-5">
+          <SectionHeader
+            id="resources-books"
+            heading={t('section.books')}
+            action={{ href: `/${locale}/library/books`, text: t('allBooks') }}
+          />
 
           {works.items.length === 0 ? (
             <EmptyState>{t('empty')}</EmptyState>
           ) : (
-            <ul aria-label={t('section.books')} className="flex flex-col gap-3">
+            <CardGrid label={t('section.books')}>
               {works.items.slice(0, PREVIEW).map((record) => {
                 const label = labelFor(record, locale);
                 return (
-                  <Panel key={record.id} as="li">
-                    <p lang={label.locale} dir={directionOf(label.locale)}>
-                      <TextLink href={workPath(locale, record.slug)}>
-                        {label.title}
-                      </TextLink>
-                    </p>
-                  </Panel>
+                  <LinkCard
+                    key={record.id}
+                    href={workPath(locale, record.slug)}
+                    title={label.title}
+                    description={label.description}
+                    lang={label.locale}
+                    dir={directionOf(label.locale)}
+                  />
                 );
               })}
-            </ul>
+            </CardGrid>
           )}
-
-          <p className="text-sm">
-            <TextLink href={`/${locale}/library/books`}>{t('allBooks')}</TextLink>
-          </p>
         </section>
 
-        <section className="flex flex-col gap-4">
-          <SectionHeading>{t('section.articles')}</SectionHeading>
+        <section aria-labelledby="resources-articles" className="flex flex-col gap-5">
+          <SectionHeader
+            id="resources-articles"
+            heading={t('section.articles')}
+            action={{ href: `/${locale}/library/articles`, text: t('allArticles') }}
+          />
 
           {articles.length === 0 ? (
             <EmptyState>{t('emptyArticles')}</EmptyState>
           ) : (
-            <ul aria-label={t('section.articles')} className="flex flex-col gap-3">
+            <CardGrid label={t('section.articles')}>
               {articles.slice(0, PREVIEW).map((record) => {
                 // EDITORIAL'S OWN RESOLUTION, not a second implementation of it.
                 // Which language version of an Article is shown is Editorial's
                 // decision, and this page uses the helper that makes it.
                 const translation = translationFor(record, locale);
                 return (
-                  <Panel key={record.slug} as="li">
-                    <p lang={translation.languageCode} dir="auto">
-                      <TextLink
-                        href={`/${locale}/library/articles/${encodeURIComponent(record.slug)}`}
-                      >
-                        {translation.title}
-                      </TextLink>
-                    </p>
-                  </Panel>
+                  <LinkCard
+                    key={record.slug}
+                    href={`/${locale}/library/articles/${encodeURIComponent(record.slug)}`}
+                    title={translation.title}
+                    description={translation.excerpt}
+                    lang={translation.languageCode}
+                    dir={translation.languageCode === 'en' ? 'ltr' : 'rtl'}
+                  />
                 );
               })}
-            </ul>
+            </CardGrid>
           )}
-
-          <p className="text-sm">
-            <TextLink href={`/${locale}/library/articles`}>{t('allArticles')}</TextLink>
-          </p>
         </section>
 
         {SCHOLARLY.map((kind, index) => {
           const page = scholarly[index];
           const title = sectionTitle(t, kind);
+          const id = `resources-${kind}`;
           return (
-            <section key={kind} className="flex flex-col gap-4">
-              <SectionHeading>{title}</SectionHeading>
+            <section key={kind} aria-labelledby={id} className="flex flex-col gap-5">
+              <SectionHeader
+                id={id}
+                heading={title}
+                action={{
+                  href: scholarlyListPath(locale, kind),
+                  text: t(`scholarly.viewAll.${kind}`),
+                }}
+              />
 
               {page === undefined || page.items.length === 0 ? (
                 <EmptyState>{t(`scholarly.empty.${kind}`)}</EmptyState>
               ) : (
-                <ul aria-label={title} className="flex flex-col gap-3">
+                <CardGrid label={title}>
                   {page.items.slice(0, PREVIEW).map((row) => {
                     const label = scholarlyLabel(row, locale);
                     return (
-                      <Panel key={row.id} as="li">
-                        <p lang={label.locale} dir={directionOf(label.locale)}>
-                          <TextLink href={listingHref(locale, row)}>
-                            {label.title}
-                          </TextLink>
-                        </p>
-                      </Panel>
+                      <LinkCard
+                        key={row.id}
+                        href={listingHref(locale, row)}
+                        title={label.title}
+                        description={label.summary}
+                        lang={label.locale}
+                        dir={directionOf(label.locale)}
+                      />
                     );
                   })}
-                </ul>
+                </CardGrid>
               )}
-
-              <p className="text-sm">
-                <TextLink href={scholarlyListPath(locale, kind)}>
-                  {t(`scholarly.viewAll.${kind}`)}
-                </TextLink>
-              </p>
             </section>
           );
         })}
       </div>
-    </Container>
+    </ListingFrame>
   );
 }

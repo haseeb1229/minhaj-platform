@@ -105,7 +105,8 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
    */
   let observation:
     | { readonly kind: 'table'; readonly name: string }
-    | { readonly kind: 'permission'; readonly key: string };
+    | { readonly kind: 'permission'; readonly key: string }
+    | { readonly kind: 'column'; readonly table: string; readonly name: string };
 
   /** How many rows the newest migration's observable effect currently has. */
   async function observationCount(): Promise<number> {
@@ -114,9 +115,13 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         ? await admin.query(
             `SELECT name FROM sys.tables WHERE name = N'${observation.name}';`,
           )
-        : await admin.query(
-            `SELECT [key] FROM [dbo].[Permission] WHERE [key] = N'${observation.key}';`,
-          );
+        : observation.kind === 'column'
+          ? await admin.query(
+              `SELECT c.name FROM sys.columns c WHERE c.object_id = OBJECT_ID(N'[dbo].[${observation.table}]') AND c.name = N'${observation.name}';`,
+            )
+          : await admin.query(
+              `SELECT [key] FROM [dbo].[Permission] WHERE [key] = N'${observation.key}';`,
+            );
 
     return rows.length;
   }
@@ -152,14 +157,22 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
 
     const created = /CREATE TABLE \[dbo\]\.\[(\w+)\]/.exec(newest.forwardSql)?.[1];
     const seeded = /\(N'([a-z]+\.[a-zA-Z]+)',\s*N'/.exec(newest.forwardSql)?.[1];
+    // A migration that widens an existing owner's table (Phase 30 adds typed
+    // target columns to two Migration tables) is observed by the first column
+    // it adds.
+    const added = /ALTER TABLE \[dbo\]\.\[(\w+)\] ADD\s+\[(\w+)\]/.exec(
+      newest.forwardSql,
+    );
 
     if (created !== undefined) observation = { kind: 'table', name: created };
     else if (seeded !== undefined) observation = { kind: 'permission', key: seeded };
+    else if (added?.[1] !== undefined && added[2] !== undefined)
+      observation = { kind: 'column', table: added[1], name: added[2] };
     else {
       throw new Error(
-        `The newest migration '${newest.id}' creates neither a table nor a ` +
-          `permission, so its rollback cannot be observed at all. A rollback ` +
-          `nobody can observe is a rollback nobody has proved.`,
+        `The newest migration '${newest.id}' creates neither a table, a ` +
+          `permission nor a column, so its rollback cannot be observed at all. A ` +
+          `rollback nobody can observe is a rollback nobody has proved.`,
       );
     }
 

@@ -1,12 +1,11 @@
 import { getTranslations } from 'next-intl/server';
 
-import type { PermissionKey } from '@minhaj/contracts/identity';
-
 import { requireOwnSession } from '@/composition/authorization';
 import { identityRuntime } from '@/composition/identity';
 import { requireLocale } from '@/config/route-locale';
 import { notFound, redirect } from 'next/navigation';
-import { Alert, Panel, SectionHeading, TextLink } from '@/components/ui';
+import { Alert, CardGrid, LinkCard, PageHeading, TextLink } from '@/components/ui';
+import { groupedSurfaces, reachableSurfaces } from './surfaces';
 
 /**
  * The administrative landing page.
@@ -16,53 +15,19 @@ import { Alert, Panel, SectionHeading, TextLink } from '@/components/ui';
  * the platform's privileged shape handed to anyone with an account
  * (SECURITY_BASELINE.md §1.5).
  *
- * Its policy is the union of the currently delivered administrative read
- * permissions. An account holding none receives the same 404 as any other
- * denied admin route; rendering even an empty shell would contradict the
- * route-map rule that every admin route is permission checked server-side.
+ * Its policy is the union of the delivered administrative read permissions —
+ * the SAME list the shell's navigation is filtered from (`./surfaces`), so a
+ * holder of one domain's key alone (Fatwa, Learning, Messaging, Membership…)
+ * finds that area here as well as in the navigation, and the two never
+ * disagree. An account holding none receives the same 404 as any other denied
+ * admin route; rendering even an empty shell would contradict the route-map
+ * rule that every admin route is permission checked server-side.
+ *
+ * Each card says what the area holds, grouped by purpose. The groups are
+ * wayfinding, never ownership: each area remains its own context's.
  */
 export const metadata = { robots: { index: false, follow: false } };
 export const dynamic = 'force-dynamic';
-
-const SURFACES: readonly {
-  key:
-    | 'users'
-    | 'roles'
-    | 'permissions'
-    | 'assignments'
-    | 'security'
-    | 'taxonomy'
-    | 'audit'
-    | 'integrations'
-    | 'delivery'
-    | 'search';
-  permission: PermissionKey;
-  path: string;
-}[] = [
-  { key: 'users', permission: 'users.read', path: 'identity/users' },
-  { key: 'roles', permission: 'roles.read', path: 'identity/roles' },
-  { key: 'permissions', permission: 'permissions.read', path: 'identity/permissions' },
-  { key: 'assignments', permission: 'assignments.read', path: 'identity/assignments' },
-  { key: 'security', permission: 'security.read', path: 'identity/security' },
-  { key: 'taxonomy', permission: 'taxonomy.read', path: 'taxonomy/topics' },
-  { key: 'audit', permission: 'audit.read', path: 'system/audit' },
-  { key: 'integrations', permission: 'integrations.read', path: 'system/integrations' },
-  { key: 'delivery', permission: 'delivery.read', path: 'communications/delivery' },
-  { key: 'search', permission: 'search.read', path: 'system/search' },
-];
-
-const DESCRIPTIONS = {
-  users: 'users.description',
-  roles: 'roles.description',
-  permissions: 'permissions.description',
-  assignments: 'assignments.description',
-  security: 'security.description',
-  taxonomy: 'taxonomy.description',
-  audit: 'audit.description',
-  integrations: 'integrations.description',
-  delivery: 'delivery.description',
-  search: 'search.description',
-} as const;
 
 export default async function AdminDashboard({
   params,
@@ -81,42 +46,46 @@ export default async function AdminDashboard({
   const held = await authorization.evaluate(active.session);
   const posture = await privilegedSecurity.describe(active.session.account.id);
 
-  const reachable = SURFACES.filter((surface) => held.can(surface.permission));
+  const reachable = reachableSurfaces(held.permissions);
   if (reachable.length === 0) notFound();
 
   return (
-    <main className="flex flex-col gap-6">
+    <main className="flex min-w-0 flex-col gap-8">
+      <header className="flex flex-col gap-2">
+        <PageHeading>{t('nav.dashboard')}</PageHeading>
+        <p className="text-foreground-muted">{t('home.description')}</p>
+      </header>
+
       {/*
        * The one thing a freshly bootstrapped administrator most needs to be
        * told, said before anything else: the role is held, and no privileged
        * change will work until the second factor and its recovery codes are
        * finished (SECURITY_BASELINE.md §8.3).
        */}
-      {reachable.length > 0 && !posture.complete ? (
+      {posture.complete ? null : (
         <Alert tone="warning">
           {t('denied.secondFactorRequired')}{' '}
           <TextLink href={`/${locale}/my/settings/security`}>
             {t('security.manage')}
           </TextLink>
         </Alert>
-      ) : null}
+      )}
 
-      <ul className="grid gap-4 sm:grid-cols-2">
-        {reachable.map((surface) => (
-          <Panel key={surface.key} as="li">
-            <div className="flex flex-col gap-2">
-              <SectionHeading>
-                <TextLink href={`/${locale}/admin/${surface.path}`}>
-                  {t(`nav.${surface.key}` as 'nav.users')}
-                </TextLink>
-              </SectionHeading>
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                {t(DESCRIPTIONS[surface.key] as 'users.description')}
-              </p>
-            </div>
-          </Panel>
-        ))}
-      </ul>
+      {groupedSurfaces(reachable).map(({ group, surfaces }) => (
+        <section key={group} className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold">{t(`groups.${group}`)}</h2>
+          <CardGrid columns={2}>
+            {surfaces.map((surface) => (
+              <LinkCard
+                key={surface.key}
+                href={`/${locale}/admin/${surface.path}`}
+                title={t(`nav.${surface.key}`)}
+                description={t(`summary.${surface.key}`)}
+              />
+            ))}
+          </CardGrid>
+        </section>
+      ))}
     </main>
   );
 }

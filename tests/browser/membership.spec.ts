@@ -810,10 +810,9 @@ test.describe('Membership administration', () => {
     test.setTimeout(240_000);
     const page = reader.page;
     // The Membership area opens under `membership.read` alone, with its entry
-    // in the administration navigation. (The `/admin` dashboard lists only its
-    // own core surfaces, so a holder of a domain key alone — Fatwa, Learning,
-    // Messaging, Membership — meets its 404 there; that is the dashboard's
-    // existing rule, not Membership's.)
+    // in the administration navigation. (The `/admin` dashboard reads the same
+    // surface list as that navigation, so it shows this holder the Membership
+    // card too.)
     expect((await page.goto('/en/admin/membership'))?.status()).toBe(200);
     await expect(
       page.getByRole('link', { name: copy('admin.nav.membership'), exact: true }),

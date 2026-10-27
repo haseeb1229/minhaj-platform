@@ -8219,7 +8219,7 @@ try {
          INSERT INTO [dbo].[MigrationManifestEntry] ([id],[manifestId],[position],[stagedRecordId],[recordId]) VALUES (N'${entry}',N'${manifest}',0,N'${staged}',N'${record}'),(N'${secondEntry}',N'${secondManifest}',0,N'${staged}',N'${record}');
          ${update('MigrationPublishManifest', manifest, `[state]=N'publishing',[publishedByUserId]=N'${publisher}',[publishStartedAt]='${later}',[version]=[version]+1`)}
          ${update('MigrationManifestEntry', entry, `[state]=N'publishing',[version]=[version]+1`)}
-         ${update('MigrationManifestEntry', entry, `[state]=N'published',[videoId]=N'${video}',[targetVersion]=1,[canonicalPath]=N'/watch/videos/proof-migration-${run}',[publishedAt]='${settled}',[version]=[version]+1`)}
+         ${update('MigrationManifestEntry', entry, `[state]=N'published',[videoId]=N'${video}',[targetStage]=N'public',[targetVersion]=1,[canonicalPath]=N'/watch/videos/proof-migration-${run}',[publishedAt]='${settled}',[version]=[version]+1`)}
          ${update('MigrationPublishManifest', manifest, `[state]=N'published',[publishedAt]='${settled}',[version]=[version]+1`)}
          ${update('MigrationPublishManifest', secondManifest, `[state]=N'publishing',[publishedByUserId]=N'${publisher}',[publishStartedAt]='${settled}',[version]=[version]+1`)}`,
         'manifests published by a live migration.publish holder with a live migration-publication step-up',
@@ -8545,6 +8545,12 @@ try {
         'legacyUrl',
         'legacyUrlDigest',
         'videoId',
+        // Phase 30's typed targets: what a mapping names is fixed with it.
+        'workId',
+        'magazineId',
+        'magazineIssueId',
+        'newsArticleId',
+        'articleId',
         'canonicalPath',
         'manifestEntryId',
         'createdAt',

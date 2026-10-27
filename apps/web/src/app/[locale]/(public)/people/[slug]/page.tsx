@@ -10,7 +10,14 @@ import { AudioPreview } from '@/components/media/listen';
 import { VideoPreview } from '@/components/media/watch';
 import { absoluteUrl } from '@/config/origin';
 import { requireLocale } from '@/config/route-locale';
-import { Alert, Breadcrumbs, Container, Prose } from '@/components/ui';
+import {
+  Alert,
+  Breadcrumbs,
+  Container,
+  MetaRow,
+  Prose,
+  SectionHeader,
+} from '@/components/ui';
 import {
   contentMetadata,
   isContentIndexable,
@@ -110,99 +117,142 @@ export default async function ContributorProfilePage({ params }: ProfileParams) 
     primaryLocale: profile.primaryLocale,
   });
 
+  const facetNames = profile.facets.map((facet) =>
+    t(`kind.${facet.kind}` as 'kind.author'),
+  );
+
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={shell('nav.breadcrumbs')}
-          trail={[
-            { href: `/${locale}`, text: shell('nav.home') },
-            { text: profile.label.name },
-          ]}
-        />
+    <>
+      <Container>
+        <div className="pt-6">
+          <Breadcrumbs
+            label={shell('nav.breadcrumbs')}
+            trail={[
+              { href: `/${locale}`, text: shell('nav.home') },
+              { text: profile.label.name },
+            ]}
+          />
+        </div>
+      </Container>
 
-        {/* THE LANGUAGE NOTICE, WHEN THE CONTENT IS NOT IN THE REQUESTED
-            LANGUAGE. ROUTE_MAP.md §9.3 requires the UI chrome to stay in the
-            requested locale while the content is shown in one that exists, WITH
-            a visible notice — never a generated translation and never a silent
-            substitution. */}
-        {profile.label.fallback ? (
-          <Alert tone="info">
-            {t('fallbackNotice', {
-              requested: locale,
-              shown: profile.label.resolvedLocale,
-            })}
-          </Alert>
-        ) : null}
-
-        <Prose>
-          {/* The name is rendered in its OWN language and direction. `lang` and
-              `dir` are on the element rather than on the page, so an Arabic name
-              inside an English page renders right-to-left without flipping the
-              page around it. */}
-          <h1
-            className="text-3xl font-semibold tracking-tight"
-            lang={profile.label.resolvedLocale}
-            dir="auto"
-          >
-            {profile.label.name}
-          </h1>
-
-          {profile.nameVariants.length === 0 ? null : (
-            <p className="text-sm text-[color:var(--color-foreground-muted)]" dir="auto">
-              <span className="font-medium">{t('alsoKnownAs')}: </span>
-              {profile.nameVariants.join(' · ')}
+      {/* THE PROFILE'S HEADER: who this is, the other spellings an
+          administrator entered, and the kinds of contribution published for
+          them — a description, never a credential or a permission. */}
+      <div className="border-b border-[color:var(--color-border)]">
+        <Container>
+          <div className="flex max-w-3xl flex-col gap-4 py-[var(--space-section)]">
+            <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+              {t('eyebrow')}
             </p>
-          )}
+            {/* The name is rendered in its OWN language and direction. `lang`
+                and `dir` are on the element rather than on the page, so an
+                Arabic name inside an English page renders right-to-left
+                without flipping the page around it. */}
+            <h1
+              className="text-title font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere"
+              lang={profile.label.resolvedLocale}
+              dir="auto"
+            >
+              {profile.label.name}
+            </h1>
+
+            {profile.nameVariants.length === 0 ? null : (
+              <p
+                className="text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+                dir="auto"
+              >
+                <span className="font-medium">{t('alsoKnownAs')}: </span>
+                {profile.nameVariants.join(' · ')}
+              </p>
+            )}
+
+            <MetaRow items={facetNames} />
+          </div>
+        </Container>
+      </div>
+
+      <Container>
+        <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
+          {/* THE LANGUAGE NOTICE, WHEN THE CONTENT IS NOT IN THE REQUESTED
+              LANGUAGE. ROUTE_MAP.md §9.3 requires the UI chrome to stay in the
+              requested locale while the content is shown in one that exists,
+              WITH a visible notice — never a generated translation and never a
+              silent substitution. */}
+          {profile.label.fallback ? (
+            <Alert tone="info">
+              {t('fallbackNotice', {
+                requested: locale,
+                shown: profile.label.resolvedLocale,
+              })}
+            </Alert>
+          ) : null}
 
           {profile.label.biography === null ? null : (
-            <p lang={profile.label.resolvedLocale} dir="auto">
-              {profile.label.biography}
-            </p>
+            <section aria-labelledby="person-biography" className="flex flex-col gap-4">
+              <h2 id="person-biography" className="text-heading font-semibold">
+                {t('biography')}
+              </h2>
+              <Prose>
+                <p
+                  className="text-lede whitespace-pre-line wrap-anywhere"
+                  lang={profile.label.resolvedLocale}
+                  dir="auto"
+                >
+                  {profile.label.biography}
+                </p>
+              </Prose>
+            </section>
           )}
-        </Prose>
 
-        {profile.facets.length === 0 ? null : (
-          <section className="flex flex-col gap-6">
-            <h2 className="text-xl font-semibold tracking-tight">{t('facets')}</h2>
+          {profile.facets.length === 0 ? null : (
+            <section aria-labelledby="person-facets" className="flex flex-col gap-5">
+              <SectionHeader
+                id="person-facets"
+                heading={t('facets')}
+                intro={t('facetsIntro')}
+              />
+              <ul className="grid list-none grid-cols-1 gap-4 p-0 *:min-w-0 sm:grid-cols-2">
+                {profile.facets.map((facet) => (
+                  <FacetPanel key={facet.kind} facet={facet} t={t} />
+                ))}
+              </ul>
+            </section>
+          )}
 
-            {profile.facets.map((facet) => (
-              <FacetPanel key={facet.kind} facet={facet} t={t} />
-            ))}
-          </section>
-        )}
+          {/* PHASE 10 — the published Videos this person speaks in, composed
+              here at Layer 4 from Media's PUBLIC read by the Person's own
+              identifier. People stores no Video and Media reads no People
+              table; a speaker credit grants nothing. Nothing renders when there
+              are none. */}
+          <VideoPreview
+            locale={locale}
+            filter={{ speaker: profile.id }}
+            heading={t('videos')}
+            headingId="person-videos"
+            more={{
+              href: `/${locale}/watch/videos?speaker=${encodeURIComponent(profile.id)}`,
+              text: t('allVideos'),
+            }}
+          />
 
-        {/* PHASE 10 — the published Videos this person speaks in, composed here
-            at Layer 4 from Media's PUBLIC read by the Person's own identifier.
-            People stores no Video and Media reads no People table; a speaker
-            credit grants nothing. Nothing renders when there are none. */}
-        <VideoPreview
-          locale={locale}
-          filter={{ speaker: profile.id }}
-          heading={t('videos')}
-          headingId="person-videos"
-          more={{
-            href: `/${locale}/watch/videos?speaker=${encodeURIComponent(profile.id)}`,
-            text: t('allVideos'),
-          }}
-        />
+          {/* PHASE 11 — the published audio this person speaks in, by the same
+              composition through Media's public read. Nothing when there is
+              none. */}
+          <AudioPreview
+            locale={locale}
+            filter={{ speaker: profile.id }}
+            heading={t('audio')}
+            headingId="person-audio"
+            more={{
+              href: `/${locale}/listen/lectures?speaker=${encodeURIComponent(profile.id)}`,
+              text: t('allAudio'),
+            }}
+          />
 
-        {/* PHASE 11 — the published audio this person speaks in, by the same
-            composition through Media's public read. Nothing when there is none. */}
-        <AudioPreview
-          locale={locale}
-          filter={{ speaker: profile.id }}
-          heading={t('audio')}
-          headingId="person-audio"
-          more={{
-            href: `/${locale}/listen/lectures?speaker=${encodeURIComponent(profile.id)}`,
-            text: t('allAudio'),
-          }}
-        />
-
-        <PersonStructuredData profile={profile} resolved={resolved} slug={slug} />
-      </div>
-    </Container>
+          <PersonStructuredData profile={profile} resolved={resolved} slug={slug} />
+        </div>
+      </Container>
+    </>
   );
 }
 
@@ -224,33 +274,39 @@ function FacetPanel({
   readonly t: ProfileTranslator;
 }) {
   return (
-    <article className="rounded-[var(--radius-panel)] border border-[color:var(--color-border)] p-5">
-      <h3 className="pb-3 text-lg font-medium">
+    <li className="flex min-w-0 flex-col gap-4 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] border-t-4 border-t-[color:var(--color-accent-rule)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]">
+      <h3 className="text-subheading font-semibold">
         {t(`kind.${facet.kind}` as 'kind.author')}
       </h3>
 
       {facet.details.length === 0 && facet.languages.length === 0 ? null : (
-        <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[12rem_1fr]">
+        <dl className="flex flex-col gap-4 text-sm">
           {facet.details.map((detail) => (
-            <div key={detail.field} className="contents">
-              <dt className="font-medium">
+            <div key={detail.field} className="flex min-w-0 flex-col gap-1">
+              <dt className="text-caption font-semibold text-[color:var(--color-foreground-muted)]">
                 {t(`field.${detail.field}` as 'field.qualifications')}
               </dt>
-              <dd lang={detail.resolvedLocale} dir="auto">
+              <dd
+                className="whitespace-pre-line wrap-anywhere"
+                lang={detail.resolvedLocale}
+                dir="auto"
+              >
                 {detail.value}
               </dd>
             </div>
           ))}
 
           {facet.languages.length === 0 ? null : (
-            <div className="contents">
-              <dt className="font-medium">{t('languages')}</dt>
+            <div className="flex min-w-0 flex-col gap-1">
+              <dt className="text-caption font-semibold text-[color:var(--color-foreground-muted)]">
+                {t('languages')}
+              </dt>
               <dd>{facet.languages.join(', ')}</dd>
             </div>
           )}
         </dl>
       )}
-    </article>
+    </li>
   );
 }
 

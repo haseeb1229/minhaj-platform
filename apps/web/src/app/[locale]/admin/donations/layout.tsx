@@ -6,7 +6,7 @@ import { getTranslations } from 'next-intl/server';
 import { requireOwnSession } from '@/composition/authorization';
 import { identityRuntime } from '@/composition/identity';
 import { requireLocale } from '@/config/route-locale';
-import { TextLink } from '@/components/ui';
+import { WorkspaceNav } from '@/components/workspace/workspace-nav';
 
 /**
  * The Donations administration shell (DELIVERY_PLAN.md Phase 27):
@@ -56,16 +56,20 @@ export default async function DonationsAdminLayout({
   return (
     <>
       {active === null ? null : (
-        <nav className="flex flex-wrap gap-4" aria-label={t('title')}>
-          {SURFACES.map((surface) => (
-            <TextLink
-              key={surface.key}
-              href={`/${locale}/admin/donations${surface.path}`}
-            >
-              {t(`surface.${surface.key}`)}
-            </TextLink>
-          ))}
-        </nav>
+        <WorkspaceNav
+          label={t('title')}
+          variant="tabs"
+          groups={[
+            {
+              key: 'donations',
+              links: SURFACES.map((surface) => ({
+                key: surface.key,
+                href: `/${locale}/admin/donations${surface.path}`,
+                text: t(`surface.${surface.key}`),
+              })),
+            },
+          ]}
+        />
       )}
 
       <NextIntlClientProvider

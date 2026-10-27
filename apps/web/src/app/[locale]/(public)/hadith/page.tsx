@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
-import { HadithLandingPage } from '@/components/hadith/landing';
-import { HadithUnavailable } from '@/components/hadith/parts';
+import { HadithLandingPage, HadithLandingUnavailable } from '@/components/hadith/landing';
 import { hadithAvailability, hadithMetadata } from '@/components/hadith/read';
 import { requireLocale } from '@/config/route-locale';
 
@@ -36,6 +35,6 @@ export async function generateMetadata({ params }: LandingParams): Promise<Metad
 export default async function HadithPage({ params }: LandingParams) {
   const locale = await requireLocale(params);
   const availability = await hadithAvailability();
-  if (!availability.active) return <HadithUnavailable locale={locale} />;
+  if (!availability.active) return <HadithLandingUnavailable locale={locale} />;
   return <HadithLandingPage locale={locale} availability={availability} />;
 }

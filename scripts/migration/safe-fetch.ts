@@ -4,9 +4,11 @@ import {
   type RequestOptions,
 } from 'node:http';
 import { request as httpsRequest } from 'node:https';
+import { lookup as dnsLookup } from 'node:dns/promises';
 import { isIP, type LookupFunction } from 'node:net';
 
 import {
+  authorisedScopeIsReal,
   checkSourceUrl,
   classifyAddress,
   fixtureScopeIsSynthetic,
@@ -61,6 +63,13 @@ export const FETCHER_VERSION = '1';
 /** Honest and identifying (MIGRATION_STRATEGY.md §4.2). */
 export const MIGRATION_USER_AGENT =
   'OneMinhajMigration/1.0 (+https://minhaj.org; fixture-only engineering proof)';
+
+/**
+ * The User-Agent of an AUTHORISED source's fetches: the platform's name, what
+ * the traffic is for and where it is reviewed — never a browser impersonation.
+ */
+export const AUTHORISED_USER_AGENT =
+  'OneMinhajMigration/1.30 (+https://minhaj.haseebliaqat.me; authorised pre-adoption migration of public content)';
 
 /** The response headers worth keeping as provenance. Everything else is dropped. */
 export const RESPONSE_HEADER_ALLOWLIST = Object.freeze([
@@ -474,5 +483,46 @@ export function createFixtureFetcher(
     resolver: fixtureResolver({ endpoint }),
     addressPolicy: fixtureAddressPolicy(endpoint),
     connector: fixtureConnector(endpoint),
+  });
+}
+
+/* ===========================================================================
+ * Authorised mode — a real source, real DNS, public addresses only
+ * ========================================================================= */
+
+/**
+ * The system resolver: EVERY address the name resolves to (both families, in
+ * the resolver's own order), so the boundary can refuse a host that answers
+ * with even one non-public address. Nothing is cached here; each hop
+ * resolves again and is validated again.
+ */
+export const systemResolver: Resolver = async (host) => {
+  const answers = await dnsLookup(host, { all: true, verbatim: true });
+  return answers.map((answer) => answer.address);
+};
+
+/**
+ * The fetcher for an AUTHORISED source: its exact hosts, its own politeness
+ * bounds, the system resolver, PUBLIC addresses only (the default policy) and
+ * the pinned Node transport. Refuses to exist for a fixture source, or for a
+ * scope that is not a real `https` one — a fixture name never reaches DNS.
+ */
+export function createAuthorisedFetcher(
+  source: SourceRecord,
+  options: { readonly resolver?: Resolver; readonly connector?: Connector } = {},
+): MigrationFetchPort {
+  if (source.authorityKind !== 'authorised')
+    throw new Error('an authorised fetcher serves authorised sources only');
+  if (
+    source.accessMethod !== 'http' ||
+    !authorisedScopeIsReal(source.baseUrl, source.hosts)
+  )
+    throw new Error('an authorised source must name a real https scope');
+  return createSafeFetcher({
+    hosts: source.hosts,
+    policy: source.policy,
+    resolver: options.resolver ?? systemResolver,
+    ...(options.connector === undefined ? {} : { connector: options.connector }),
+    userAgent: AUTHORISED_USER_AGENT,
   });
 }

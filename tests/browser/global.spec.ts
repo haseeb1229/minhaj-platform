@@ -285,7 +285,9 @@ test.describe('an anonymous visitor explores the Global Network', () => {
       );
 
     // Local Events are reached on each Centre's own page, not from the landing.
-    await expect(page.locator('a[href*="/events"]')).toHaveCount(0);
+    // Scoped to the landing's content: the shell's News and Events menu links
+    // the all-Events listing on every page.
+    await expect(page.getByRole('main').locator('a[href*="/events"]')).toHaveCount(0);
     // The seeded Countries are listed; the directory is not called empty.
     const main = page.getByRole('main');
     await expect(main.getByRole('link', { name: NAME.plainCountry })).toBeVisible();

@@ -269,6 +269,13 @@ export interface LibrarySearchRecord {
 export interface LibraryPersistencePort {
   works(offset: number): Promise<WorkPage>;
   work(id: string): Promise<WorkDetail | null>;
+  /**
+   * The Work whose CURRENT slug is exactly this one, in any state — the
+   * administrative lookup an operator (or the migration publisher resuming an
+   * interrupted publication) needs to find a record by its address. A FORMER
+   * slug resolves to nothing here: it is reserved history, not this Work's name.
+   */
+  workBySlug(slug: string): Promise<WorkDetail | null>;
   editions(offset: number): Promise<{ items: EditionRecord[]; hasMore: boolean }>;
   edition(id: string): Promise<EditionRecord | null>;
   salePoints(offset: number): Promise<{ items: SalePointRecord[]; hasMore: boolean }>;

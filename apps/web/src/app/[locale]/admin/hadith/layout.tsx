@@ -5,7 +5,7 @@ import { getTranslations } from 'next-intl/server';
 import { requireOwnSession } from '@/composition/authorization';
 import { identityRuntime } from '@/composition/identity';
 import { requireLocale } from '@/config/route-locale';
-import { TextLink } from '@/components/ui';
+import { WorkspaceNav } from '@/components/workspace/workspace-nav';
 
 /**
  * The Hadith administration shell (ROUTE_MAP.md §7:
@@ -58,13 +58,20 @@ export default async function HadithAdminLayout({
   return (
     <>
       {held.has('hadith.read') ? (
-        <nav className="flex flex-wrap gap-4" aria-label={t('title')}>
-          {SURFACES.map((surface) => (
-            <TextLink key={surface} href={`/${locale}/admin/hadith/${surface}`}>
-              {t(`surface.${surface}`)}
-            </TextLink>
-          ))}
-        </nav>
+        <WorkspaceNav
+          label={t('title')}
+          variant="tabs"
+          groups={[
+            {
+              key: 'hadith',
+              links: SURFACES.map((surface) => ({
+                key: surface,
+                href: `/${locale}/admin/hadith/${surface}`,
+                text: t(`surface.${surface}`),
+              })),
+            },
+          ]}
+        />
       ) : null}
 
       <NextIntlClientProvider

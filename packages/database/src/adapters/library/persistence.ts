@@ -277,6 +277,11 @@ export function createLibraryPersistence(): LibraryPersistencePort {
       return { items: rows.slice(0, 25).map(work), hasMore: rows.length > 25 };
     },
     work: (id) => detail(id, false),
+    async workBySlug(slug) {
+      // The unique current-slug index answers; the detail is the ordinary one.
+      const row = await db.work.findUnique({ where: { slug }, select: { id: true } });
+      return row === null ? null : detail(row.id, false);
+    },
     async editions(offset) {
       const rows = await db.edition.findMany({
         orderBy: [{ workId: 'asc' }, { id: 'asc' }],

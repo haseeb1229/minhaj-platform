@@ -7,7 +7,16 @@ import {
   editorialReadRuntime,
   editorialPublicReferences,
 } from '@/composition/editorial-read';
-import { Alert, Breadcrumbs, Container, Prose, TextLink } from '@/components/ui';
+import {
+  Alert,
+  Breadcrumbs,
+  Container,
+  MetaRow,
+  Prose,
+  TextLink,
+  TopicChips,
+} from '@/components/ui';
+import { RecordSection } from './frame';
 import { translationFor } from './presentation';
 import { absoluteUrl } from '@/config/origin';
 import {
@@ -55,13 +64,24 @@ export async function PublicContent({
   kind: 'Article' | 'WebPage';
 }) {
   const t = await getTranslations({ locale, namespace: 'editorial' });
+  const news = await getTranslations({ locale, namespace: 'news' });
   const shell = await getTranslations({ locale, namespace: 'shell' });
   const translation = translationFor(record, locale);
   const references = await editorialPublicReferences(record, locale);
   const contentLocales = record.translations.map((row) => row.languageCode);
+  const direction = translation.languageCode === 'en' ? 'ltr' : 'rtl';
+  // A date-only fact in the interface locale, never shifted by the reader's zone.
+  const published = new Intl.DateTimeFormat(locale, {
+    dateStyle: 'long',
+    timeZone: 'UTC',
+  }).format(record.publishedAt);
+  const credits = record.contributors.flatMap((credit) => {
+    const person = references.people.find((row) => row.id === credit.personId);
+    return person === undefined ? [] : [{ credit, person }];
+  });
   return (
     <Container>
-      <article className="flex flex-col gap-6 py-12">
+      <article className="flex flex-col gap-8 pt-6 pb-[var(--space-section)]">
         <Breadcrumbs
           label={shell('nav.breadcrumbs')}
           trail={[
@@ -72,51 +92,98 @@ export async function PublicContent({
             { text: translation.title },
           ]}
         />
-        {translation.languageCode !== locale ? (
-          <Alert tone="info">
-            {t('fallback', { language: translation.languageCode })}
-          </Alert>
-        ) : null}
-        <Prose>
+
+        {/* THE HEADER: what it is and when, the title, its standfirst, its byline. */}
+        <header className="flex max-w-3xl flex-col gap-4 border-b border-[color:var(--color-border)] pb-8">
+          <MetaRow
+            items={[
+              kind === 'Article' ? (
+                <span
+                  key="type"
+                  className="font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase"
+                >
+                  {t('articles')}
+                </span>
+              ) : null,
+              <time key="date" dateTime={record.publishedAt.toISOString()}>
+                {news('published')} {published}
+              </time>,
+            ]}
+          />
+          {translation.languageCode !== locale ? (
+            <Alert tone="info">
+              {t('fallback', { language: translation.languageCode })}
+            </Alert>
+          ) : null}
           <div
+            className="flex flex-col gap-4"
             lang={translation.languageCode}
-            dir={translation.languageCode === 'en' ? 'ltr' : 'rtl'}
+            dir={direction}
           >
-            <h1 className="text-3xl font-semibold tracking-tight">{translation.title}</h1>
-            {translation.excerpt ? <p>{translation.excerpt}</p> : null}
+            <h1 className="text-title font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere">
+              {translation.title}
+            </h1>
+            {translation.excerpt ? (
+              <p className="text-lede max-w-[var(--measure-prose)] text-[color:var(--color-foreground-muted)]">
+                {translation.excerpt}
+              </p>
+            ) : null}
+          </div>
+        </header>
+
+        <div
+          className={
+            credits.length === 0 && references.topics.length === 0
+              ? 'flex min-w-0 flex-col'
+              : 'grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-14'
+          }
+        >
+          <Prose>
             <div
               className="editorial-prose"
+              lang={translation.languageCode}
+              dir={direction}
               dangerouslySetInnerHTML={{ __html: translation.html }}
             />
-          </div>
-        </Prose>
-        {references.people.length ? (
-          <ul className="flex flex-wrap gap-4">
-            {record.contributors.map((credit) => {
-              const person = references.people.find((row) => row.id === credit.personId);
-              return person ? (
-                <li key={credit.personId + ':' + credit.role}>
-                  <TextLink
-                    href={'/' + locale + '/people/' + encodeURIComponent(person.slug)}
-                  >
-                    {person.name}
-                  </TextLink>{' '}
-                  — {t(credit.role as 'author')}
-                </li>
-              ) : null;
-            })}
-          </ul>
-        ) : null}
-        {references.topics.length ? (
-          <ul className="flex flex-wrap gap-4">
-            {references.topics.map((topic) => (
-              <li key={topic.id}>{topic.name}</li>
-            ))}
-          </ul>
-        ) : null}
-        <time dateTime={record.publishedAt.toISOString()}>
-          {record.publishedAt.toISOString().slice(0, 10)}
-        </time>
+          </Prose>
+
+          {credits.length === 0 && references.topics.length === 0 ? null : (
+            <aside className="flex min-w-0 flex-col gap-8">
+              {credits.length === 0 ? null : (
+                <RecordSection id="content-contributors" heading={news('contributors')}>
+                  <ul className="flex flex-col gap-2 text-sm">
+                    {credits.map(({ credit, person }) => (
+                      <li key={credit.personId + ':' + credit.role} className="min-w-0">
+                        <TextLink
+                          href={
+                            '/' + locale + '/people/' + encodeURIComponent(person.slug)
+                          }
+                        >
+                          {person.name}
+                        </TextLink>
+                        <span className="text-[color:var(--color-foreground-muted)]">
+                          {' '}
+                          — {t(credit.role as 'author')}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </RecordSection>
+              )}
+              {references.topics.length === 0 ? null : (
+                <RecordSection id="content-topics" heading={news('topics')}>
+                  <TopicChips
+                    label={news('topics')}
+                    topics={references.topics.map((topic) => ({
+                      href: '/' + locale + '/topics/' + encodeURIComponent(topic.slug),
+                      text: topic.name,
+                    }))}
+                  />
+                </RecordSection>
+              )}
+            </aside>
+          )}
+        </div>
         {isContentIndexable({ contentLocales }) ? (
           <script
             type="application/ld+json"

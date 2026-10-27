@@ -7,7 +7,8 @@ import type { Metadata } from 'next';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { Breadcrumbs, Container, Prose } from '@/components/ui';
+import { ListingIntro } from '@/components/editorial/frame';
+import { Container } from '@/components/ui';
 import { PublicationStatus } from '@/components/shell/publication-status';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
@@ -115,24 +116,22 @@ export default async function ExplorePagePage({ params }: PageParams) {
     );
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={t('nav.breadcrumbs')}
-          trail={[
-            { href: `/${locale}`, text: t('nav.home') },
-            { href: `/${locale}/explore`, text: t('explore.title') },
-            { href: `/${locale}/explore/${owner}`, text: sectionTitle },
-            { text: title },
-          ]}
-        />
-
-        <Prose>
-          <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
-        </Prose>
-
-        <PublicationStatus locale={locale} />
-      </div>
-    </Container>
+    <>
+      <ListingIntro
+        trailLabel={t('nav.breadcrumbs')}
+        trail={[
+          { href: `/${locale}`, text: t('nav.home') },
+          { href: `/${locale}/explore`, text: t('explore.title') },
+          { href: `/${locale}/explore/${owner}`, text: sectionTitle },
+          { text: title },
+        ]}
+        title={title}
+      />
+      <Container>
+        <div className="py-[var(--space-page)]">
+          <PublicationStatus locale={locale} />
+        </div>
+      </Container>
+    </>
   );
 }

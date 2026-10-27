@@ -5,12 +5,12 @@ import type { Locale } from '@minhaj/contracts';
 import { EXPLORE_SECTIONS, exploreHrefOf, exploreSlugsOf } from '@/shell/explore';
 
 /**
- * The Explore panel — the mega menu's contents and the mobile drawer's, both.
+ * The Explore index — every section and its pages, on the `/explore` landing.
  *
- * ONE PANEL, TWO HOSTS. The desktop disclosure and the mobile drawer differ in
- * how they open, not in what they contain, and rendering the link set twice
- * would be two lists to keep in step. It is a Server Component, so neither host
- * ships the labels or the route list to the browser.
+ * The header's Explore mega menu groups the same allowlist into the IA's five
+ * columns through `@/shell/menus`; this is the landing's own full index, one
+ * column per section under a real heading. It is a Server Component, so it
+ * ships neither the labels nor the route list to the browser.
  *
  * COLUMN PER SECTION, which is the shape INFORMATION_ARCHITECTURE.md §3.1 sets
  * out: a menu "presents structure and entry points; it is not an exhaustive

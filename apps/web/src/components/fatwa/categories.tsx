@@ -14,7 +14,14 @@ import { fatwaReadRuntime } from '@/composition/fatwa-read';
 import { referenceNames } from '@/composition/public-references';
 import { pageLinks } from '@/components/hadith/presentation';
 import { Pagination } from '@/components/media/parts';
-import { EmptyState, PageHeading, Panel, Prose, TextLink } from '@/components/ui';
+import {
+  ActionLink,
+  CardGrid,
+  EmptyState,
+  LinkCard,
+  MetaRow,
+  SectionHeader,
+} from '@/components/ui';
 import { categoryLabelsOf, FatwaList } from './list';
 import { FatwaFrame, fatwaTrail } from './parts';
 import {
@@ -51,30 +58,26 @@ export async function FatwaCategoriesPage({
       locale={locale}
       availability={availability}
       trail={[parts.home, parts.fatwa, { text: title }]}
+      heading={{ title, lede: t('categories.intro') }}
     >
-      <Prose>
-        <PageHeading>{title}</PageHeading>
-        <p>{t('categories.intro')}</p>
-      </Prose>
       {categories.length === 0 ? (
         <EmptyState>{t('categories.empty')}</EmptyState>
       ) : (
-        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <CardGrid label={title}>
           {categories.map((category) => (
-            <Panel key={category.id} as="li">
-              <div className="flex flex-col gap-1">
-                <h2 className="text-lg font-semibold wrap-anywhere">
-                  <TextLink href={categoryHref(locale, category.slug)}>
-                    {fatwaCategoryName(category.names, locale) ?? category.slug}
-                  </TextLink>
-                </h2>
-                <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                  {t('categories.count', { count: category.publicCount })}
-                </p>
-              </div>
-            </Panel>
+            <LinkCard
+              key={category.id}
+              href={categoryHref(locale, category.slug)}
+              title={fatwaCategoryName(category.names, locale) ?? category.slug}
+              headingLevel="h2"
+              meta={
+                <MetaRow
+                  items={[t('categories.count', { count: category.publicCount })]}
+                />
+              }
+            />
           ))}
-        </ul>
+        </CardGrid>
       )}
     </FatwaFrame>
   );
@@ -118,47 +121,53 @@ export async function FatwaCategoryPage({
         { href: fatwaSectionPath(locale, 'categories'), text: t('sections.categories') },
         { text: name },
       ]}
-    >
-      <div className="flex flex-col gap-2">
-        <PageHeading>
-          <span className="wrap-anywhere">{name}</span>
-        </PageHeading>
-        <ul className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-          <li>
-            <TextLink
+      heading={{
+        title: <span className="wrap-anywhere">{name}</span>,
+        meta: (
+          <MetaRow items={[t('categories.count', { count: category.publicCount })]} />
+        ),
+        extra: (
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <ActionLink
               href={fatwaBrowseHref(locale, { sort: 'popular', category: category.slug })}
+              tone="secondary"
             >
               {t('categories.popular')}
-            </TextLink>
-          </li>
-          {topic === undefined ? null : (
-            <li>
-              <TextLink href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}>
+            </ActionLink>
+            {topic === undefined ? null : (
+              <ActionLink
+                href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}
+                tone="secondary"
+              >
                 {t('categories.topicLink', { topic: topic.name })}
-              </TextLink>
-            </li>
-          )}
-        </ul>
-      </div>
-      {page.items.length === 0 ? (
-        <EmptyState>{t('categories.rulingsEmpty')}</EmptyState>
-      ) : (
-        <FatwaList
-          locale={locale}
-          items={page.items}
-          categories={categoryLabelsOf(categories, locale)}
+              </ActionLink>
+            )}
+          </div>
+        ),
+      }}
+    >
+      <section className="flex flex-col gap-5" aria-labelledby="fatwa-category-rulings">
+        <SectionHeader id="fatwa-category-rulings" heading={t('categories.rulings')} />
+        {page.items.length === 0 ? (
+          <EmptyState>{t('categories.rulingsEmpty')}</EmptyState>
+        ) : (
+          <FatwaList
+            locale={locale}
+            items={page.items}
+            categories={categoryLabelsOf(categories, locale)}
+            label={t('categories.rulings')}
+            headingLevel="h3"
+            t={t}
+          />
+        )}
+        <Pagination
           label={t('categories.rulings')}
-          headingLevel="h2"
-          t={t}
+          previous={links.previous === null ? null : offsetHref(path, links.previous)}
+          next={links.next === null ? null : offsetHref(path, links.next)}
+          previousLabel={t('previous')}
+          nextLabel={t('next')}
         />
-      )}
-      <Pagination
-        label={t('categories.rulings')}
-        previous={links.previous === null ? null : offsetHref(path, links.previous)}
-        next={links.next === null ? null : offsetHref(path, links.next)}
-        previousLabel={t('previous')}
-        nextLabel={t('next')}
-      />
+      </section>
     </FatwaFrame>
   );
 }

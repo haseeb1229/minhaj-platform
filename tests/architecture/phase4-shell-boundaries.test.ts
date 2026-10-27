@@ -296,6 +296,14 @@ const CONTENT_ROUTE_FILES = [
   // cookie or a bearer token and the limiter's address, so they live OUTSIDE
   // this group, in `(donation)`.
   'apps/web/src/app/[locale]/(public)/donate/page.tsx',
+  // The flagship home portal. It composes every owner's PUBLIC reader at
+  // Layer 4 — News, Events, Collections, Works, Magazines, Videos, audio,
+  // rulings, Courses, the Global directory and the Taxonomy — and renders a
+  // module only when its owner returns something, so it cannot be prerendered;
+  // it is proven below to reach no session, no identity service, no logger and
+  // no authentication library, and the browser suite proves its HTML is the
+  // same signed in and signed out. The layout around it stays prerendered.
+  'apps/web/src/app/[locale]/(public)/page.tsx',
 ];
 
 const PUBLIC_ACTION_FILES = [
@@ -478,8 +486,9 @@ describe('the anonymous public tree reads no session-derived state', () => {
   it('reaches a real graph, so nothing below passes vacuously', async () => {
     const { modules } = await publicGraph();
 
-    // The layout, the home shell, the Explore routes, the legal routes, the
-    // sitemap, the error surfaces, and everything they pull in.
+    // The layout, the Explore routes, the legal routes, the sitemap, the
+    // error surfaces, and everything they pull in. (The home page is a
+    // content route since the flagship portal; its shell is still here.)
     expect(modules.size).toBeGreaterThan(10);
     expect([...modules.keys()].map(relative)).toContain(
       'apps/web/src/components/shell/site-header.tsx',

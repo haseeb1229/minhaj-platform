@@ -310,8 +310,13 @@ test.describe('an anonymous visitor listens', () => {
       true,
     );
 
-    // No download is offered: playback grants no right to keep a copy.
-    await expect(page.getByRole('link', { name: /download/i })).toHaveCount(0);
+    // No download is offered: playback grants no right to keep a copy. (The
+    // footer's "Library downloads" is navigation to another section, not an
+    // offer of this recording.)
+    await expect(
+      page.getByRole('main').getByRole('link', { name: /download/i }),
+    ).toHaveCount(0);
+    await expect(page.locator('a[download]')).toHaveCount(0);
     await page.waitForLoadState('networkidle');
     expect(external.map((request) => request.url())).toEqual([]);
     // Pre-adoption: not indexable, so no machine-readable claim at all.

@@ -253,7 +253,8 @@ test('renders Urdu right to left, each result in its own language, without overf
   const english = page.getByRole('heading', { level: 3, name: WORK_TITLE, exact: true });
   await expect(english).toHaveAttribute('dir', 'ltr');
 
-  await page.locator('summary').click();
+  // The results' own disclosure; the closed mobile drawer holds its own.
+  await page.getByRole('main').locator('summary').click();
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
@@ -321,7 +322,12 @@ test('throttles a flood of queries at the request boundary', async ({
 
 test('the topic hub is navigable and searchable within', async ({ page }) => {
   await page.goto('/en/topics');
-  await page.getByRole('link', { name: 'Education', exact: true }).click();
+  // Scoped to the page's own content: the footer's Our Work column carries an
+  // Explore page that is also called "Education".
+  await page
+    .getByRole('main')
+    .getByRole('link', { name: 'Education', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/en\/topics\/education$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Education');
 

@@ -17,7 +17,7 @@ export const MIGRATION_REFUSAL_REASONS = Object.freeze([
   'conflict',
   /** That step is not open for the run, manifest, promotion or record in its current state. */
   'invalid-state',
-  /** Phase 29 registers, runs and activates fixture sources only. */
+  /** A real source without its written authorisation reference and date, or a fixture asked to become one. */
   'real-source-not-authorised',
   'source-inactive',
   /** The adapter is not the source's kind or access method, or not the open run's code. */
@@ -33,7 +33,7 @@ export const MIGRATION_REFUSAL_REASONS = Object.freeze([
   'target-unavailable',
   /** The pair is in two languages: related records, never duplicates. */
   'cross-language',
-  /** A host or base URL outside the synthetic fixture scope. */
+  /** A host or base URL outside the source's kind of scope: synthetic for a fixture, real `https` for an authorised source. */
   'unsafe-scope',
   /** The Topic named does not exist. */
   'topic-unknown',
@@ -43,8 +43,13 @@ export const MIGRATION_REFUSAL_REASONS = Object.freeze([
   'duplicate',
   /** The run's lease passed to another holder while this one worked. */
   'lease-lost',
-  /** The database refused a fixture source's host outside `*.fixture.invalid`. */
+  /** The database refused a host: a fixture's outside `*.fixture.invalid`, or an authorised source's inside it. */
   'host-refused',
+  /**
+   * Religious material (Fatwa, Quran) is preserved and reviewed as evidence
+   * only: migration never publishes it, and a manifest refuses it.
+   */
+  'review-only-kind',
   /** The store did not answer; nothing was assumed. */
   'unavailable',
 ] as const);

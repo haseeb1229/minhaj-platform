@@ -9,7 +9,7 @@ import type { PermissionKey } from '@minhaj/contracts/identity';
 import { requireOwnSession } from '@/composition/authorization';
 import { identityRuntime } from '@/composition/identity';
 import { requireLocale } from '@/config/route-locale';
-import { TextLink } from '@/components/ui';
+import { WorkspaceNav } from '@/components/workspace/workspace-nav';
 import { FATWA_KEYS } from './shared';
 
 /**
@@ -78,13 +78,20 @@ export default async function FatwaAdminLayout({
   return (
     <>
       {visible.length === 0 ? null : (
-        <nav className="flex flex-wrap gap-4" aria-label={t('title')}>
-          {visible.map((surface) => (
-            <TextLink key={surface.key} href={`/${locale}/admin/fatwa/${surface.key}`}>
-              {t(`surface.${surface.key}`)}
-            </TextLink>
-          ))}
-        </nav>
+        <WorkspaceNav
+          label={t('title')}
+          variant="tabs"
+          groups={[
+            {
+              key: 'fatwa',
+              links: visible.map((surface) => ({
+                key: surface.key,
+                href: `/${locale}/admin/fatwa/${surface.key}`,
+                text: t(`surface.${surface.key}`),
+              })),
+            },
+          ]}
+        />
       )}
 
       <NextIntlClientProvider

@@ -76,7 +76,7 @@ export default async function SecurityPage({
   const others = sessions.filter((entry) => !entry.current);
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10">
+    <main className="flex w-full max-w-3xl min-w-0 flex-col gap-8">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('security.title')}</PageHeading>
         <p className="text-[color:var(--color-foreground-muted)]">

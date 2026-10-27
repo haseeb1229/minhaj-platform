@@ -8,15 +8,23 @@ import { SEARCH_QUERY_MAX_LENGTH } from '@minhaj/contracts/search';
 
 import { hadithReadRuntime } from '@/composition/hadith-read';
 import {
+  ActionLink,
+  Alert,
+  Breadcrumbs,
   Button,
-  Panel,
+  CardGrid,
+  Container,
+  LinkCard,
   PageHeading,
+  PageHero,
   Prose,
-  SectionHeading,
+  SectionHeader,
   TextInput,
   TextLink,
 } from '@/components/ui';
-import { HadithFrame, hadithTrail } from './parts';
+import { directionOf } from '@/config/locale';
+import { pathFor, requireRoute } from '@/shell/registry';
+import { FixtureNotice, HadithFrame, hadithTrail } from './parts';
 import { collectionName, collectionPath, hadithPath } from './presentation';
 import { readCollections, readHadithTopic } from './read';
 import { RELATED_KINDS } from './related';
@@ -24,11 +32,12 @@ import { RELATED_KINDS } from './related';
 /**
  * `/hadith` and `/hadith/introduction` (ROUTE_MAP.md §3.4).
  *
- * A KNOWLEDGE LANDING, NOT A SHOWCASE. It says what the section holds and how
- * to enter it — by collection, by citation, by search — and lists the public
- * collections, a study page, the commentary or a related view ONLY when there
- * is something public behind it. No statistics, no featured narration, no
- * "coming soon".
+ * A KNOWLEDGE LANDING, NOT A SHOWCASE, AND COLLECTIONS FIRST. It opens with the
+ * way in — the collections, or a search — then lists the public collections
+ * themselves, and then the section's other parts: browsing and study, what the
+ * rest of the platform classifies under Hadith, and courses. A study page, the
+ * commentary or a related view is listed ONLY when there is something public
+ * behind it. No statistics, no featured narration, no "coming soon".
  */
 
 interface Entry {
@@ -36,39 +45,45 @@ interface Entry {
   readonly href: string;
 }
 
-function EntryList({
+/** One part of the section: its header and a rail of whole-card links. */
+function EntryRail({
   id,
   heading,
+  intro,
   entries,
+  columns,
   title,
   body,
+  action,
 }: {
   readonly id: string;
   readonly heading: string;
+  readonly intro: string;
   readonly entries: readonly Entry[];
+  readonly columns: 2 | 3 | 4;
   readonly title: (key: string) => string;
   readonly body: (key: string) => string;
+  readonly action?: { readonly href: string; readonly text: string };
 }) {
   if (entries.length === 0) return null;
   return (
-    <section className="flex flex-col gap-4" aria-labelledby={id}>
-      <SectionHeading>
-        <span id={id}>{heading}</span>
-      </SectionHeading>
-      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <section className="flex flex-col gap-5" aria-labelledby={id}>
+      <SectionHeader
+        id={id}
+        heading={heading}
+        intro={intro}
+        {...(action === undefined ? {} : { action })}
+      />
+      <CardGrid columns={columns}>
         {entries.map((entry) => (
-          <Panel key={entry.key} as="li">
-            <div className="flex flex-col gap-2">
-              <h3 className="text-lg font-semibold">
-                <TextLink href={entry.href}>{title(entry.key)}</TextLink>
-              </h3>
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                {body(entry.key)}
-              </p>
-            </div>
-          </Panel>
+          <LinkCard
+            key={entry.key}
+            href={entry.href}
+            title={title(entry.key)}
+            description={body(entry.key)}
+          />
         ))}
-      </ul>
+      </CardGrid>
     </section>
   );
 }
@@ -91,47 +106,54 @@ export async function HadithLandingPage({
   ]);
 
   const section = (key: string): Entry => ({ key, href: hadithPath(locale, key) });
-  const browse = [section('collections'), section('browse')];
   const study = [
+    section('browse'),
     section('introduction'),
     ...(sciences.length > 0 ? [section('sciences')] : []),
     ...(commentaries.length > 0 ? [section('commentary')] : []),
   ];
-  const related =
+  const explore =
     topic === null
       ? []
       : [
-          ...RELATED_KINDS.map(section),
+          ...RELATED_KINDS.filter((kind) => kind !== 'courses').map(section),
           { key: 'topics', href: `/${locale}/topics/${encodeURIComponent(topic.slug)}` },
         ];
+  const learn = topic === null ? [] : [section('courses')];
   const title = (key: string) => t(`sections.${key}` as 'sections.browse');
   const body = (key: string) => t(`sectionBody.${key}` as 'sectionBody.browse');
 
   return (
-    <HadithFrame
-      locale={locale}
-      availability={availability}
-      trail={[parts.home, { text: t('title') }]}
-    >
-      <Prose>
-        <PageHeading>{t('title')}</PageHeading>
-        <p>{t('intro')}</p>
-      </Prose>
+    <>
+      <Container>
+        <div className="flex flex-col gap-4 pt-6">
+          <FixtureNotice locale={locale} availability={availability} />
+          <Breadcrumbs label={parts.label} trail={[parts.home, { text: t('title') }]} />
+        </div>
+      </Container>
 
-      <Panel>
+      <PageHero
+        eyebrow={t('landing.eyebrow')}
+        title={t('title')}
+        lede={t('intro')}
+        actions={
+          <ActionLink href={hadithPath(locale, 'collections')}>
+            {t('sections.collections')}
+          </ActionLink>
+        }
+      >
         <form
           method="get"
           action={hadithPath(locale, 'search')}
           role="search"
           aria-label={t('sections.search')}
-          className="flex flex-col gap-3"
+          className="flex w-full max-w-2xl flex-col gap-2 pt-2"
         >
-          <SectionHeading>{t('sections.search')}</SectionHeading>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <label htmlFor="hadith-landing-search" className="text-sm font-medium">
-                {t('search.label')}
-              </label>
+          <label htmlFor="hadith-landing-search" className="text-sm font-medium">
+            {t('search.label')}
+          </label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="min-w-0 flex-1">
               <TextInput
                 id="hadith-landing-search"
                 type="search"
@@ -140,59 +162,164 @@ export async function HadithLandingPage({
                 autoComplete="off"
               />
             </div>
-            <Button>{t('search.submit')}</Button>
+            <Button tone="secondary">{t('search.submit')}</Button>
           </div>
         </form>
-      </Panel>
+      </PageHero>
 
-      {collections.length === 0 ? null : (
-        <section className="flex flex-col gap-4" aria-labelledby="hadith-collections">
-          <SectionHeading>
-            <span id="hadith-collections">{t('landing.collections')}</span>
-          </SectionHeading>
-          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {collections.map((collection) => {
-              const name = collectionName(collection.names, locale);
-              return (
-                <Panel key={collection.id} as="li">
-                  <h3 className="text-lg font-semibold wrap-anywhere">
-                    <TextLink href={collectionPath(locale, collection.slug)}>
-                      {name === null ? (
-                        collection.slug
-                      ) : (
-                        <span lang={name.locale}>{name.text}</span>
-                      )}
-                    </TextLink>
+      <Container>
+        <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
+          {collections.length === 0 ? null : (
+            <section className="flex flex-col gap-5" aria-labelledby="hadith-collections">
+              <SectionHeader
+                id="hadith-collections"
+                heading={t('landing.collections')}
+                intro={t('landing.collectionsIntro')}
+                action={{
+                  href: hadithPath(locale, 'collections'),
+                  text: t('landing.collectionsAll'),
+                }}
+              />
+              <CardGrid columns={3}>
+                {collections.map((collection) => {
+                  const name = collectionName(collection.names, locale);
+                  return (
+                    <LinkCard
+                      key={collection.id}
+                      href={collectionPath(locale, collection.slug)}
+                      title={name === null ? collection.slug : name.text}
+                      {...(name === null
+                        ? {}
+                        : {
+                            lang: name.locale,
+                            dir: directionOf(name.locale),
+                            ...(name.description === null
+                              ? {}
+                              : { description: name.description }),
+                          })}
+                    />
+                  );
+                })}
+              </CardGrid>
+            </section>
+          )}
+
+          <EntryRail
+            id="hadith-study"
+            heading={t('landing.study')}
+            intro={t('landing.studyIntro')}
+            entries={study}
+            columns={study.length === 4 ? 4 : 3}
+            title={title}
+            body={body}
+          />
+          <EntryRail
+            id="hadith-explore"
+            heading={t('landing.explore')}
+            intro={t('landing.exploreIntro')}
+            entries={explore}
+            columns={4}
+            title={title}
+            body={body}
+          />
+          <EntryRail
+            id="hadith-learn"
+            heading={t('landing.learn')}
+            intro={t('landing.learnIntro')}
+            entries={learn}
+            columns={2}
+            title={title}
+            body={body}
+            action={{
+              href: pathFor(locale, requireRoute('learn')),
+              text: t('landing.learnAll'),
+            }}
+          />
+        </div>
+      </Container>
+    </>
+  );
+}
+
+/**
+ * THE LANDING WHILE NO COLLECTION IS ACTIVATED.
+ *
+ * It says so first and plainly, then describes how the section is organised —
+ * in words, with no link into it, no number, no sample and no search, because
+ * there is nothing behind any of them yet. The two parts that do not depend on
+ * an activated collection point at the delivered areas that already serve them
+ * (the topic hub and Learn).
+ */
+export async function HadithLandingUnavailable({ locale }: { readonly locale: Locale }) {
+  const t = await getTranslations({ locale, namespace: 'hadith' });
+  const parts = await hadithTrail(locale);
+  const structure = [
+    { key: 'collections', href: null },
+    { key: 'study', href: null },
+    { key: 'explore', href: pathFor(locale, requireRoute('topics')) },
+    { key: 'learn', href: pathFor(locale, requireRoute('learn')) },
+  ] as const;
+
+  return (
+    <>
+      <Container>
+        <div className="pt-6">
+          <Breadcrumbs label={parts.label} trail={[parts.home, { text: t('title') }]} />
+        </div>
+      </Container>
+
+      <PageHero
+        eyebrow={t('landing.eyebrow')}
+        title={t('title')}
+        lede={t('unavailable.lede')}
+      >
+        <div className="max-w-[var(--measure-prose)]">
+          <Alert tone="info">{t('unavailable.body')}</Alert>
+        </div>
+      </PageHero>
+
+      <Container>
+        <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
+          <section className="flex flex-col gap-5" aria-labelledby="hadith-structure">
+            <SectionHeader
+              id="hadith-structure"
+              heading={t('unavailable.structureHeading')}
+              intro={t('unavailable.structureIntro')}
+            />
+            <ul className="grid list-none grid-cols-1 gap-4 p-0 *:min-w-0 sm:grid-cols-2 lg:grid-cols-4">
+              {structure.map((part) => (
+                <li
+                  key={part.key}
+                  className="flex h-full min-w-0 flex-col gap-2.5 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]"
+                >
+                  <h3 className="text-subheading font-semibold">
+                    {t(`landing.${part.key}`)}
                   </h3>
-                </Panel>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+                  <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                    {t(`unavailable.parts.${part.key}`)}
+                  </p>
+                  <p className="mt-auto pt-1 text-sm">
+                    {part.href === null ? (
+                      <span className="text-caption font-medium text-[color:var(--color-foreground-muted)]">
+                        {t('unavailable.awaiting')}
+                      </span>
+                    ) : (
+                      <TextLink href={part.href}>
+                        {t(`unavailable.go.${part.key}`)}
+                      </TextLink>
+                    )}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
 
-      <EntryList
-        id="hadith-browse"
-        heading={t('landing.browse')}
-        entries={browse}
-        title={title}
-        body={body}
-      />
-      <EntryList
-        id="hadith-study"
-        heading={t('landing.study')}
-        entries={study}
-        title={title}
-        body={body}
-      />
-      <EntryList
-        id="hadith-related"
-        heading={t('landing.related')}
-        entries={related}
-        title={title}
-        body={body}
-      />
-    </HadithFrame>
+          <p>
+            <TextLink href={`/${locale}`}>{t('unavailable.home')}</TextLink>
+          </p>
+        </div>
+      </Container>
+    </>
   );
 }
 

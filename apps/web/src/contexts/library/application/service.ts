@@ -7,6 +7,7 @@ import {
   translationInputSchema,
   salePointInputSchema,
   libraryIdSchema,
+  librarySlugSchema,
   libraryVersionSchema,
   scholarlyAdminQuerySchema,
   scholarlyKindSchema,
@@ -21,9 +22,13 @@ import {
   type ScholarlyValue,
 } from '@minhaj/contracts/library';
 
+/** A declared field, not a parameter property: plain Node loads this module too. */
 class LibraryRefusal extends Error {
-  constructor(readonly reason: string) {
+  readonly reason: string;
+
+  constructor(reason: string) {
     super(reason);
+    this.reason = reason;
   }
 }
 export function libraryFailure(error: unknown): string {
@@ -75,6 +80,13 @@ export function createLibraryService(deps: {
     async work(actor: LibraryActor, id: string) {
       await permit(actor, 'library.read');
       return store.work(libraryIdSchema.parse(id));
+    },
+    /** A Work by its CURRENT slug, any state. A former slug finds nothing. */
+    async workBySlug(actor: LibraryActor, slug: string) {
+      await permit(actor, 'library.read');
+      const found = await store.workBySlug(librarySlugSchema.parse(slug));
+      // The store's collation is case-insensitive; the slug is exact or nothing.
+      return found !== null && found.slug === slug ? found : null;
     },
     async editions(actor: LibraryActor, start = 0) {
       await permit(actor, 'library.read');

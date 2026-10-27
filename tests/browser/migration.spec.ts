@@ -466,12 +466,31 @@ test.describe('Migration administration access', () => {
     await page.goto(path('/sources'));
     await expect(main).toContainText(TEXT.sourceKey);
     await expect(main).toContainText(copy('adminMigration.authority.fixture'));
+    // Two registration doors: authorised sources by the operator command only.
+    await expect(main).toContainText(copy('adminMigration.sources.registration'));
+    await expect(
+      main.getByRole('columnheader', {
+        name: copy('adminMigration.sources.column.contentKind'),
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(main).toContainText(copy('adminMigration.contentKind.media.video'));
     await page.goto(path('/runs'));
     await expect(main).toContainText(TEXT.sourceKey);
     await expect(main).toContainText(copy('adminMigration.reconciliationState.balanced'));
     await page.goto(path('/staging'));
     await expect(main).toContainText(TEXT.hostileTitle);
     await expect(main).toContainText(TEXT.approvedTitle);
+    await expect(
+      main.getByRole('columnheader', {
+        name: copy('adminMigration.staging.column.contentKind'),
+        exact: true,
+      }),
+    ).toBeVisible();
+    // A video is publishable: nothing on the page is marked review-only.
+    await expect(main).not.toContainText(copy('adminMigration.reviewOnly.badge'));
+    // A reader is offered no bulk review either.
+    await expect(main.locator('input[type="checkbox"]')).toHaveCount(0);
     // A list row never carries a body.
     await expect(main).not.toContainText('__migrationPwned');
 
@@ -519,6 +538,13 @@ test.describe('a hostile staged record', () => {
     );
     // The title, as text.
     await expect(page.getByRole('main')).toContainText(TEXT.hostileTitle);
+    // Its content kind; a video is publishable, so no review-only notice.
+    await expect(page.getByRole('main')).toContainText(
+      copy('adminMigration.contentKind.media.video'),
+    );
+    await expect(page.getByRole('main')).not.toContainText(
+      copy('adminMigration.reviewOnly.notice'),
+    );
     // The payload, as text: the markup is READABLE, and nothing of it is live.
     const payload = page.getByTestId('staged-payload');
     await expect(payload).toContainText('<script>window.__migrationPwned=true');
@@ -593,6 +619,43 @@ test.describe('a hostile staged record', () => {
  * ========================================================================= */
 
 test.describe('Migration decisions', () => {
+  test('the staging list offers bulk review of pending rows only', async () => {
+    test.setTimeout(240_000);
+    const page = operator.page;
+    await page.goto(path('/staging'));
+    const main = page.getByRole('main');
+    // Only the pending revision is selectable, by a checkbox named for it.
+    await expect(
+      main.locator('input[type="checkbox"][name="stagedRecordId"]'),
+    ).toHaveCount(1);
+    await expect(
+      main.getByLabel(
+        copy('adminMigration.staging.bulk.select', { title: TEXT.hostileTitle }),
+        { exact: true },
+      ),
+    ).toHaveAttribute('value', ids.hostileStaged);
+    await expect(main).toContainText(copy('adminMigration.staging.bulk.notSelectable'));
+    await expectLabelledControls(page, 'staging bulk review');
+
+    // Nothing selected: refused before anything is read or decided.
+    await main
+      .getByRole('button', {
+        name: copy('adminMigration.staging.bulk.approve'),
+        exact: true,
+      })
+      .click();
+    await expect(
+      main
+        .getByRole('alert')
+        .filter({ hasText: copy('adminMigration.staging.bulk.noneSelected') }),
+    ).toBeVisible({ timeout: 60_000 });
+    expect(
+      await scalar(
+        `SELECT CONCAT([review], N':', [version]) AS [value] FROM [dbo].[MigrationStagedRecord] WHERE [id]=N'${ids.hostileStaged}';`,
+      ),
+    ).toBe('pending:1');
+  });
+
   test('an approval at a stale version is refused as a conflict', async () => {
     test.setTimeout(300_000);
     const first = operator.page;
@@ -678,6 +741,14 @@ test.describe('Migration decisions', () => {
     const page = publisher.page;
     await page.goto(path(`/manifests/${ids.manifest}`));
     const main = page.getByRole('main');
+    // Each entry shows what it became: its target and its stage.
+    for (const column of ['target', 'stage'])
+      await expect(
+        main.getByRole('columnheader', {
+          name: copy(`adminMigration.manifest.column.${column}`),
+          exact: true,
+        }),
+      ).toBeVisible();
     // The remedy is on the same screen.
     await expect(
       main.getByRole('heading', { name: copy('admin.stepUp.title'), exact: true }),

@@ -43,7 +43,12 @@ import {
   migrationRead,
   type AdminMigrationCopy,
 } from '../../shared';
-import { EntryStateBadge, ManifestStateBadge } from '../../status';
+import {
+  ContentKindLabel,
+  EntryStateBadge,
+  ManifestStateBadge,
+  TargetStageBadge,
+} from '../../status';
 
 /**
  * `/{locale}/admin/migration/manifests/{id}` — one publish manifest and its
@@ -57,6 +62,11 @@ import { EntryStateBadge, ManifestStateBadge } from '../../status';
  * and a target that does not answer leaves the manifest resumable. A rollback
  * leaves an entry edited since publication — or held by a person — for a
  * person, never forced.
+ *
+ * WHAT EACH ENTRY BECAME is shown by its target's content kind and its stage:
+ * `public`, or `in-review` — delivered into the owning domain's own review
+ * because that domain requires a second person (Editorial refuses
+ * self-approval), and public only by that domain's own decision.
  *
  * Under `migration.administer`: discarding a draft, and creating a promotion
  * from published entries (carried by the command line once approved).
@@ -162,6 +172,11 @@ export default async function MigrationManifestPage({
         <SectionHeading>
           <span id="manifest-entries">{t('manifest.entries')}</span>
         </SectionHeading>
+        {entries.some((entry) => entry.targetStage === 'in-review') ? (
+          <p className="text-sm text-[color:var(--color-foreground-muted)]">
+            {t('manifest.inReview')}
+          </p>
+        ) : null}
         {entries.length === 0 ? (
           <EmptyState>{t('manifest.noEntries')}</EmptyState>
         ) : (
@@ -171,6 +186,8 @@ export default async function MigrationManifestPage({
               t('manifest.column.position'),
               t('manifest.column.revision'),
               t('manifest.column.state'),
+              t('manifest.column.target'),
+              t('manifest.column.stage'),
               t('manifest.column.canonicalPath'),
               t('manifest.column.refusal'),
             ]}
@@ -190,6 +207,20 @@ export default async function MigrationManifestPage({
                 </DataCell>
                 <DataCell>
                   <EntryStateBadge state={entry.state} copy={copy} />
+                </DataCell>
+                <DataCell>
+                  {entry.target === null ? (
+                    t('none')
+                  ) : (
+                    <ContentKindLabel kind={entry.target.kind} copy={copy} />
+                  )}
+                </DataCell>
+                <DataCell>
+                  {entry.targetStage === null ? (
+                    t('none')
+                  ) : (
+                    <TargetStageBadge stage={entry.targetStage} copy={copy} />
+                  )}
                 </DataCell>
                 <DataCell wrap>
                   {entry.canonicalPath === null ? (

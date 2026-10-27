@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { identityRuntime } from './identity';
-import { createMediaVideoTarget } from './migration-targets';
+import { createMigrationTargets, routeMigrationTargets } from './migration-targets';
 import {
   livePermits,
   migrationAssetStorage,
@@ -28,9 +28,11 @@ import { taxonomyRuntime } from './taxonomy';
  *     from `requirePrivilegedAction`, re-verified at Migration's boundary and
  *     again by the database's own trigger.
  *   - TOPICS are Taxonomy's, through its public reference read.
- *   - THE TARGET is Media's public service (`./migration-targets.ts`), under
- *     Media's OWN live authority and the owner references Media's composition
- *     uses — so a migrated Video meets every rule a hand-made one does.
+ *   - THE TARGETS are the owning domains' public services — Media, Library
+ *     and Editorial (`./migration-targets.ts`) — one per publishable kind,
+ *     routed fail-closed (`./migration-target-router.ts`), under each
+ *     domain's OWN live authority and the owner references their compositions
+ *     use, so a migrated record meets every rule a hand-made one does.
  *   - STORAGE is the foundation's service, narrowed to acquisition. No route
  *     serves a migrated asset.
  *
@@ -50,10 +52,12 @@ export function migrationRuntime(): MigrationServices {
     topics: migrationTopics((ids, locale) =>
       taxonomyRuntime().taxonomy.topicReferences(ids, locale),
     ),
-    target: createMediaVideoTarget({
-      authority: { permits: livePermits(live) },
-      references: ownerReferences,
-    }),
+    target: routeMigrationTargets(
+      createMigrationTargets({
+        authority: { permits: livePermits(live) },
+        references: ownerReferences,
+      }),
+    ),
     storage: migrationAssetStorage(storageRuntime),
   });
   return runtime;

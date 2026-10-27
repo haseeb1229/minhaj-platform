@@ -5,21 +5,29 @@ import type {
   WorkflowAction,
 } from '@minhaj/contracts/editorial';
 
+export type EditorialRefusalReason =
+  | 'invalid'
+  | 'denied'
+  | 'conflict'
+  | 'not-found'
+  | 'duplicate-slug'
+  | 'invalid-state'
+  | 'self-approval'
+  | 'approval-required'
+  | 'unavailable'
+  | EventScheduleRefusal;
+
+/**
+ * A declared field rather than a constructor parameter property: this module
+ * is loaded by the migration tooling under plain Node, whose type stripping
+ * cannot run parameter properties.
+ */
 export class EditorialRefusal extends Error {
-  constructor(
-    readonly reason:
-      | 'invalid'
-      | 'denied'
-      | 'conflict'
-      | 'not-found'
-      | 'duplicate-slug'
-      | 'invalid-state'
-      | 'self-approval'
-      | 'approval-required'
-      | 'unavailable'
-      | EventScheduleRefusal,
-  ) {
+  readonly reason: EditorialRefusalReason;
+
+  constructor(reason: EditorialRefusalReason) {
     super(reason);
+    this.reason = reason;
   }
 }
 

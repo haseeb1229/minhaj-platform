@@ -71,8 +71,10 @@ export function MobileNav({
    * Hand-written because there is one dialog in the application and a
    * dependency for it would be a framework carried for a single consumer
    * (§56 of the phase contract). The list is recomputed on each Tab rather than
-   * cached: the drawer's contents are links that do not change, but a cached
-   * list is the kind of thing that silently stops matching the DOM.
+   * cached, and it holds only what is RENDERED: the drawer's sections are
+   * native disclosures whose closed contents have no box and cannot take
+   * focus, so a cached or unfiltered list would name a "last" element focus
+   * can never reach — and the trap would leak at exactly that edge.
    */
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Escape') {
@@ -87,8 +89,8 @@ export function MobileNav({
     if (drawer === null) return;
 
     const focusable = [
-      ...drawer.querySelectorAll<HTMLElement>('a[href], button:not([disabled])'),
-    ];
+      ...drawer.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), summary'),
+    ].filter((element) => element.getClientRects().length > 0);
 
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
@@ -113,8 +115,20 @@ export function MobileNav({
         aria-expanded={open}
         aria-controls={drawerId}
         onClick={() => setOpen(true)}
-        className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-3 py-2 text-sm font-medium lg:hidden"
+        className="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-3 py-2 text-sm font-medium transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--color-surface-sunken)] active:bg-[color:var(--color-border)] lg:hidden"
       >
+        <svg
+          aria-hidden="true"
+          focusable="false"
+          viewBox="0 0 16 16"
+          className="size-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        >
+          <path d="M2.5 4h11M2.5 8h11M2.5 12h11" />
+        </svg>
         {openLabel}
       </button>
 
@@ -137,15 +151,27 @@ export function MobileNav({
         aria-label={title}
         hidden={!open}
         onKeyDown={onKeyDown}
-        className="fixed inset-y-0 end-0 z-[var(--layer-overlay)] flex w-[min(22rem,100vw)] flex-col gap-4 overflow-y-auto border-s border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5"
+        className="fixed inset-y-0 end-0 z-[var(--layer-overlay)] flex w-[min(24rem,100vw)] flex-col gap-5 overflow-y-auto overscroll-contain border-s border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-raised)]"
       >
         <div className="flex justify-end">
           <button
             ref={closeRef}
             type="button"
             onClick={close}
-            className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-3 py-2 text-sm font-medium"
+            className="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-3 py-2 text-sm font-medium transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--color-surface-sunken)] active:bg-[color:var(--color-border)]"
           >
+            <svg
+              aria-hidden="true"
+              focusable="false"
+              viewBox="0 0 16 16"
+              className="size-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            >
+              <path d="m4 4 8 8M12 4l-8 8" />
+            </svg>
             {closeLabel}
           </button>
         </div>

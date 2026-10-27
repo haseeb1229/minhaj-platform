@@ -5,7 +5,7 @@ import { getTranslations } from 'next-intl/server';
 import type { Locale } from '@minhaj/contracts';
 import type { FatwaAvailability } from '@minhaj/contracts/fatwa';
 
-import { Alert, PageHeading, Prose, TextLink } from '@/components/ui';
+import { ActionLink, Alert } from '@/components/ui';
 import { FatwaFrame, fatwaTrail } from './parts';
 import { fatwaSectionPath } from './presentation';
 
@@ -47,45 +47,62 @@ export async function FatwaHowItWorksPage({
       locale={locale}
       availability={availability}
       trail={[parts.home, parts.fatwa, { text: title }]}
+      heading={{
+        title,
+        lede: t('howItWorks.intro'),
+        extra: (
+          <div className="pt-1">
+            <Alert tone="info">
+              {availability.active
+                ? t('howItWorks.accepting')
+                : t('howItWorks.notAccepting')}
+            </Alert>
+          </div>
+        ),
+      }}
     >
-      <Prose>
-        <PageHeading>{title}</PageHeading>
-        <p>{t('howItWorks.intro')}</p>
-        <Alert tone="info">
-          {availability.active ? t('howItWorks.accepting') : t('howItWorks.notAccepting')}
-        </Alert>
-      </Prose>
-      <ol className="flex flex-col gap-6">
+      <ol className="grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3">
         {STEPS.map((step, index) => (
-          <li key={step} className="flex max-w-[var(--measure-prose)] flex-col gap-1">
-            <h2 className="text-lg font-semibold">
-              {t('howItWorks.stepNumber', { number: index + 1 })}{' '}
-              {t(`howItWorks.steps.${step}.title`)}
+          <li
+            key={step}
+            className="flex min-w-0 flex-col gap-2 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]"
+          >
+            <h2 className="flex flex-col gap-1.5">
+              <span className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+                {t('howItWorks.stepNumber', { number: index + 1 })}
+              </span>{' '}
+              <span className="text-subheading font-semibold text-balance">
+                {t(`howItWorks.steps.${step}.title`)}
+              </span>
             </h2>
-            <p>{t(`howItWorks.steps.${step}.body`)}</p>
+            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+              {t(`howItWorks.steps.${step}.body`)}
+            </p>
           </li>
         ))}
       </ol>
-      <Prose>
-        <p>{t('howItWorks.noPromise')}</p>
-        {availability.active ? (
-          <>
-            <p>
-              <TextLink href={fatwaSectionPath(locale, 'ask')}>
+      <div className="flex flex-col gap-4 border-t border-[color:var(--color-border)] pt-6">
+        <p className="max-w-[var(--measure-prose)]">{t('howItWorks.noPromise')}</p>
+        <div className="flex flex-wrap items-center gap-3">
+          {availability.active ? (
+            <>
+              <ActionLink href={fatwaSectionPath(locale, 'ask')}>
                 {t('sections.ask')}
-              </TextLink>{' '}
-              <span className="text-sm">({t('signInRequired')})</span>
-            </p>
-            <p>
-              <TextLink href={fatwaSectionPath(locale)}>{t('ruling.all')}</TextLink>
-            </p>
-          </>
-        ) : (
-          <p>
-            <TextLink href={`/${locale}`}>{t('unavailable.home')}</TextLink>
-          </p>
-        )}
-      </Prose>
+              </ActionLink>
+              <span className="text-sm text-[color:var(--color-foreground-muted)]">
+                {t('signInRequired')}
+              </span>
+              <ActionLink href={fatwaSectionPath(locale)} tone="secondary">
+                {t('ruling.all')}
+              </ActionLink>
+            </>
+          ) : (
+            <ActionLink href={`/${locale}`} tone="secondary">
+              {t('unavailable.home')}
+            </ActionLink>
+          )}
+        </div>
+      </div>
     </FatwaFrame>
   );
 }

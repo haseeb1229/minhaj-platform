@@ -4,15 +4,8 @@ import { getTranslations } from 'next-intl/server';
 import { libraryReadRuntime } from '@/composition/library-read';
 import { directionOf } from '@/config/locale';
 import { requireLocale } from '@/config/route-locale';
-import {
-  Breadcrumbs,
-  Container,
-  EmptyState,
-  PageHeading,
-  Panel,
-  Prose,
-  TextLink,
-} from '@/components/ui';
+import { CardGrid, EmptyState, LinkCard } from '@/components/ui';
+import { ListingFrame, Pager } from '@/components/library/frame';
 import {
   labelFor,
   readLibraryQuery,
@@ -73,65 +66,53 @@ export default async function DownloadsPage({ params, searchParams }: DownloadsP
   const page = await libraryReadRuntime().works({ offset, downloads: true });
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={shell('nav.breadcrumbs')}
-          trail={[
-            { href: `/${locale}`, text: shell('nav.home') },
-            { href: `/${locale}/library`, text: t('title') },
-            { text: t('section.downloads') },
-          ]}
-        />
+    <ListingFrame
+      breadcrumbLabel={shell('nav.breadcrumbs')}
+      trail={[
+        { href: `/${locale}`, text: shell('nav.home') },
+        { href: `/${locale}/library`, text: t('title') },
+        { text: t('section.downloads') },
+      ]}
+      title={t('section.downloads')}
+      lede={t('sectionBody.downloads')}
+      notice={t('downloadsNotice')}
+    >
+      {page.items.length === 0 ? (
+        <EmptyState>{t('emptyDownloads')}</EmptyState>
+      ) : (
+        <CardGrid label={t('section.downloads')} columns={3}>
+          {page.items.map((record) => {
+            const label = labelFor(record, locale);
+            return (
+              <LinkCard
+                key={record.id}
+                href={workPath(locale, record.slug)}
+                title={label.title}
+                description={label.description}
+                headingLevel="h2"
+                lang={label.locale}
+                dir={directionOf(label.locale)}
+              />
+            );
+          })}
+        </CardGrid>
+      )}
 
-        <Prose>
-          <PageHeading>{t('section.downloads')}</PageHeading>
-          <p>{t('sectionBody.downloads')}</p>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('downloadsNotice')}
-          </p>
-        </Prose>
-
-        {page.items.length === 0 ? (
-          <EmptyState>{t('emptyDownloads')}</EmptyState>
-        ) : (
-          <ul aria-label={t('section.downloads')} className="flex flex-col gap-4">
-            {page.items.map((record) => {
-              const label = labelFor(record, locale);
-              return (
-                <Panel key={record.id} as="li">
-                  <h2
-                    className="text-lg font-semibold"
-                    lang={label.locale}
-                    dir={directionOf(label.locale)}
-                  >
-                    <TextLink href={workPath(locale, record.slug)}>
-                      {label.title}
-                    </TextLink>
-                  </h2>
-                </Panel>
-              );
-            })}
-          </ul>
-        )}
-
-        <nav className="flex gap-6" aria-label={t('section.downloads')}>
-          {offset > 0 ? (
-            <TextLink
-              href={`/${locale}/library/downloads?offset=${String(Math.max(0, offset - WORK_PAGE))}`}
-            >
-              {t('previous')}
-            </TextLink>
-          ) : null}
-          {page.hasMore ? (
-            <TextLink
-              href={`/${locale}/library/downloads?offset=${String(offset + WORK_PAGE)}`}
-            >
-              {t('next')}
-            </TextLink>
-          ) : null}
-        </nav>
-      </div>
-    </Container>
+      <Pager
+        label={t('section.downloads')}
+        previous={
+          offset > 0
+            ? `/${locale}/library/downloads?offset=${String(Math.max(0, offset - WORK_PAGE))}`
+            : null
+        }
+        next={
+          page.hasMore
+            ? `/${locale}/library/downloads?offset=${String(offset + WORK_PAGE)}`
+            : null
+        }
+        previousLabel={t('previous')}
+        nextLabel={t('next')}
+      />
+    </ListingFrame>
   );
 }

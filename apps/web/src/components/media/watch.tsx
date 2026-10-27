@@ -23,25 +23,38 @@ import {
 import { taxonomyRuntime } from '@/composition/taxonomy';
 import { paragraphsOf } from '@/components/library/scholarly-presentation';
 import {
+  ActionLink,
   Alert,
-  Breadcrumbs,
   Button,
+  CardGrid,
   Container,
   DetailRow,
   EmptyState,
   Field,
-  PageHeading,
+  FilterLink,
+  LinkCard,
+  MetaRow,
+  PageHero,
   Panel,
   Prose,
-  SectionHeading,
+  SectionHeader,
   Select,
   StatusBadge,
   TextLink,
+  TopicChips,
 } from '@/components/ui';
 import { absoluteUrl } from '@/config/origin';
 import { directionOf } from '@/config/locale';
 import { isContentIndexable, serializeStructuredData } from '@/seo/metadata';
-import { Duration, formatDate, Pagination as MediaPagination } from './parts';
+import {
+  Duration,
+  EyebrowWords,
+  formatDate,
+  MEDIA_CARD,
+  MEDIA_CARD_LINK,
+  MediaPageHeader,
+  Pagination as MediaPagination,
+} from './parts';
 import { VideoPlayer } from './player';
 import {
   mediaLabel,
@@ -90,21 +103,41 @@ function providerName(t: WatchTranslator, provider: VideoRecord['provider']): st
  * ========================================================================= */
 
 /**
- * The poster. DECORATIVE AND FIRST-PARTY: a tinted panel with a play mark,
- * drawn inline, so a grid of twenty-four videos makes no request to anybody.
+ * The poster. DECORATIVE AND FIRST-PARTY: a 16:9 ink panel with a play mark,
+ * drawn inline, so a grid of twenty-four videos makes no request to anybody and
+ * every card keeps the same shape whatever its title. A video the provider no
+ * longer serves gets a muted poster, so the grid does not promise playback.
+ * The play mark is not mirrored in a right-to-left page: it is a media symbol,
+ * not a direction.
  */
-function Poster() {
+function Poster({ muted = false }: { readonly muted?: boolean }) {
   return (
     <div
       aria-hidden="true"
-      className="flex aspect-video w-full items-center justify-center rounded-[var(--radius-control)] bg-[color:var(--color-surface-sunken)] text-[color:var(--color-foreground-muted)]"
+      className={`flex aspect-video w-full items-center justify-center ${
+        muted
+          ? 'bg-[color:var(--color-surface-sunken)] text-[color:var(--color-foreground-muted)]'
+          : 'bg-[color:var(--color-ink)] text-[color:var(--color-ink-accent)]'
+      }`}
     >
-      <svg viewBox="0 0 24 24" className="size-10" fill="currentColor">
-        <path d="M8 5.5v13l11-6.5z" />
-      </svg>
+      <span
+        className={`flex size-14 items-center justify-center rounded-full border transition-colors duration-[var(--duration-fast)] ${
+          muted
+            ? 'border-[color:var(--color-border-strong)]'
+            : 'border-[color:var(--color-ink-border)] bg-[color:var(--color-ink-raised)] group-hover:border-[color:var(--color-ink-accent)]'
+        }`}
+      >
+        <svg viewBox="0 0 24 24" className="size-6" fill="currentColor">
+          <path d="M9 6.5v11l9-5.5z" />
+        </svg>
+      </span>
     </div>
   );
 }
+
+/** The grid Media cards sit in: one column on a phone, up to three on a laptop. */
+const VIDEO_GRID =
+  'grid list-none grid-cols-1 gap-x-5 gap-y-6 p-0 *:min-w-0 sm:grid-cols-2 lg:grid-cols-3';
 
 function VideoCard({
   locale,
@@ -132,57 +165,65 @@ function VideoCard({
     return person === undefined ? [] : [person.name];
   });
 
+  const unavailable = video.availability === 'unavailable';
+  const eyebrow = [
+    episode && video.seriesPosition !== null
+      ? t('fact.episode', { number: video.seriesPosition })
+      : null,
+    video.format === null ? null : t(`format.${video.format}`),
+  ];
+
   return (
-    <Panel as="li">
-      <div className="flex min-w-0 flex-col gap-3">
-        <Poster />
-        <div className="flex flex-wrap items-center gap-2">
-          {episode && video.seriesPosition !== null ? (
-            <StatusBadge tone="neutral">
-              {t('fact.episode', { number: video.seriesPosition })}
-            </StatusBadge>
-          ) : null}
-          {video.format === null ? null : (
-            <StatusBadge tone="neutral">{t(`format.${video.format}`)}</StatusBadge>
-          )}
-          {video.availability === 'unavailable' ? (
-            <StatusBadge tone="caution">{t('unavailable')}</StatusBadge>
-          ) : null}
-        </div>
+    <li className={MEDIA_CARD}>
+      <Poster muted={unavailable} />
+      <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-4">
+        {eyebrow.every((word) => word === null) && !unavailable ? null : (
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-caption flex flex-wrap items-center gap-x-2 font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+              <EyebrowWords words={eyebrow} />
+            </p>
+            {unavailable ? (
+              <StatusBadge tone="caution">{t('unavailable')}</StatusBadge>
+            ) : null}
+          </div>
+        )}
         <Heading
-          className="text-lg font-semibold break-words"
+          className="text-subheading font-semibold wrap-anywhere"
           lang={label.locale}
           dir={directionOf(label.locale)}
         >
-          <TextLink href={videoPath(locale, video.slug)}>{label.title}</TextLink>
+          <a href={videoPath(locale, video.slug)} className={MEDIA_CARD_LINK}>
+            {label.title}
+          </a>
         </Heading>
         {speakers.length === 0 ? null : (
-          <p className="text-sm break-words" dir="auto">
-            <span className="text-[color:var(--color-foreground-muted)]">
-              {t('speakers')}:{' '}
-            </span>
+          <p
+            className="line-clamp-2 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+            dir="auto"
+          >
+            <span className="sr-only">{t('speakers')}: </span>
             {speakers.join(' · ')}
           </p>
         )}
-        <p className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-[color:var(--color-foreground-muted)]">
-          {video.durationSeconds === null ? null : (
-            <span>
-              <Duration seconds={video.durationSeconds} />
-            </span>
-          )}
-          {video.publishedOn === null ? null : (
-            <span>
-              <time dateTime={video.publishedOn}>
-                {formatDate(video.publishedOn, locale)}
-              </time>
-            </span>
-          )}
-          <span lang={video.languageCode} dir={language?.direction ?? 'auto'}>
-            {language?.name ?? video.languageCode}
-          </span>
-        </p>
+        <div className="mt-auto pt-1">
+          <MetaRow
+            items={[
+              video.durationSeconds === null ? null : (
+                <Duration seconds={video.durationSeconds} />
+              ),
+              video.publishedOn === null ? null : (
+                <time dateTime={video.publishedOn}>
+                  {formatDate(video.publishedOn, locale)}
+                </time>
+              ),
+              <span lang={video.languageCode} dir={language?.direction ?? 'auto'}>
+                {language?.name ?? video.languageCode}
+              </span>,
+            ]}
+          />
+        </div>
       </div>
-    </Panel>
+    </li>
   );
 }
 
@@ -217,7 +258,7 @@ async function VideoGrid({
   const List = ordered ? 'ol' : 'ul';
 
   return (
-    <List aria-label={label} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <List aria-label={label} className={VIDEO_GRID}>
       {videos.map((video) => (
         <VideoCard
           key={video.id}
@@ -326,18 +367,29 @@ export async function VideoListingPage({
 
   return (
     <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[trail.home, trail.watch, { text: title }]}
+      <div className="flex flex-col gap-8 py-[var(--space-page)]">
+        <MediaPageHeader
+          crumbs={{
+            label: trail.label,
+            trail: [trail.home, trail.watch, { text: title }],
+          }}
+          eyebrow={trail.watch.text}
+          title={title}
+          lede={t(`sectionBody.${section}` as 'sectionBody.videos')}
         />
 
-        <div className="flex flex-col gap-2">
-          <PageHeading>{title}</PageHeading>
-          <p className="text-[color:var(--color-foreground-muted)]">
-            {t(`sectionBody.${section}` as 'sectionBody.videos')}
-          </p>
-        </div>
+        {/* The curated views are siblings of this listing, one choice away. */}
+        <nav aria-label={t('viewsLabel')}>
+          <ul className="flex flex-wrap gap-2">
+            {['videos', ...WATCH_VIEWS].map((view) => (
+              <li key={view}>
+                <FilterLink href={`/${locale}/watch/${view}`} current={view === section}>
+                  {t(`sections.${view}` as 'sections.videos')}
+                </FilterLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
         <Panel>
           <form
@@ -564,53 +616,83 @@ export async function VideoDetailPage({
           .filter((video) => video.id !== record.id)
           .slice(0, EPISODE_PREVIEW);
 
+  const hasStory = label.description !== '' || record.transcript !== null;
+
   return (
     <Container>
-      <article className="flex flex-col gap-10 py-12">
-        <Breadcrumbs
-          label={trailParts.label}
-          trail={[
-            ...trail
-              .slice(0, -1)
-              .map((entry) => ({ href: entry.path, text: entry.name })),
-            { text: label.title },
-          ]}
+      <article className="flex flex-col gap-10 py-[var(--space-page)]">
+        <MediaPageHeader
+          crumbs={{
+            label: trailParts.label,
+            trail: [
+              ...trail
+                .slice(0, -1)
+                .map((entry) => ({ href: entry.path, text: entry.name })),
+              { text: label.title },
+            ],
+          }}
+          eyebrow={
+            <>
+              <EyebrowWords
+                words={[
+                  record.format === null ? null : t(`format.${record.format}`),
+                  record.series === null
+                    ? null
+                    : t('fact.episode', { number: record.series.position }),
+                ]}
+              />
+              {record.availability === 'unavailable' ? (
+                <StatusBadge tone="caution">{t('unavailable')}</StatusBadge>
+              ) : null}
+            </>
+          }
+          title={label.title}
+          lang={label.locale}
+          dir={direction}
+          {...(speakers.length === 0
+            ? {}
+            : {
+                lede: (
+                  <p className="text-base" dir="auto">
+                    <span>{t('speakers')}: </span>
+                    {speakers.map((person, index) => (
+                      <span key={person.slug}>
+                        {index === 0 ? null : ' · '}
+                        <TextLink
+                          href={`/${locale}/people/${encodeURIComponent(person.slug)}`}
+                        >
+                          {person.name}
+                        </TextLink>
+                      </span>
+                    ))}
+                  </p>
+                ),
+              })}
+          meta={
+            <MetaRow
+              items={[
+                record.durationSeconds === null ? null : (
+                  <Duration seconds={record.durationSeconds} />
+                ),
+                record.publishedOn === null ? null : (
+                  <time dateTime={record.publishedOn}>
+                    {formatDate(record.publishedOn, locale)}
+                  </time>
+                ),
+                <span lang={record.languageCode} dir={contentDirection}>
+                  {language?.name ?? record.languageCode}
+                </span>,
+                provider,
+              ]}
+            />
+          }
         />
 
-        <Prose>
-          <div className="flex flex-wrap items-center gap-2">
-            {record.format === null ? null : (
-              <StatusBadge tone="neutral">{t(`format.${record.format}`)}</StatusBadge>
-            )}
-            {record.availability === 'unavailable' ? (
-              <StatusBadge tone="caution">{t('unavailable')}</StatusBadge>
-            ) : null}
-          </div>
-          <h1
-            className="text-3xl font-semibold tracking-tight break-words"
-            lang={label.locale}
-            dir={direction}
-          >
-            {label.title}
-          </h1>
-          {speakers.length === 0 ? null : (
-            <p className="text-sm" dir="auto">
-              <span className="text-[color:var(--color-foreground-muted)]">
-                {t('speakers')}:{' '}
-              </span>
-              {speakers.map((person, index) => (
-                <span key={person.slug}>
-                  {index === 0 ? null : ' · '}
-                  <TextLink href={`/${locale}/people/${encodeURIComponent(person.slug)}`}>
-                    {person.name}
-                  </TextLink>
-                </span>
-              ))}
-            </p>
-          )}
-        </Prose>
-
-        <section aria-labelledby="video-player" className="flex flex-col gap-3">
+        {/*
+         * THE STAGE: a bounded, stable 16:9 frame. The player decides whether
+         * anything is loaded from the provider; this page only gives it room.
+         */}
+        <section aria-labelledby="video-player" className="flex max-w-4xl flex-col gap-3">
           <h2 id="video-player" className="sr-only">
             {t('playerHeading')}
           </h2>
@@ -627,6 +709,7 @@ export async function VideoDetailPage({
             />
           ) : (
             <div className="flex flex-col gap-3">
+              <Poster muted />
               <Alert tone="info">{t('player.unavailable', { provider })}</Alert>
               <p className="text-sm">
                 <TextLink
@@ -639,135 +722,168 @@ export async function VideoDetailPage({
           )}
         </section>
 
-        {label.description === '' ? null : (
-          <Prose>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('metadataNotice')}
-            </p>
-            {paragraphsOf(label.description).map((paragraph, index) => (
-              <p key={index} lang={label.locale} dir={direction}>
-                {paragraph}
-              </p>
-            ))}
-          </Prose>
-        )}
+        <div
+          className={`grid gap-10 ${hasStory ? 'lg:grid-cols-[minmax(0,1fr)_20rem]' : ''}`}
+        >
+          {hasStory ? (
+            <div className="flex min-w-0 flex-col gap-10">
+              {label.description === '' ? null : (
+                <section className="flex flex-col gap-4" aria-labelledby="video-about">
+                  <h2 id="video-about" className="text-heading font-semibold">
+                    {t('aboutHeading')}
+                  </h2>
+                  <Prose>
+                    {paragraphsOf(label.description).map((paragraph, index) => (
+                      <p key={index} lang={label.locale} dir={direction}>
+                        {paragraph}
+                      </p>
+                    ))}
+                    <p className="text-caption border-s-2 border-[color:var(--color-accent-rule)] ps-3 text-[color:var(--color-foreground-muted)]">
+                      {t('metadataNotice')}
+                    </p>
+                  </Prose>
+                </section>
+              )}
 
-        <section className="flex flex-col gap-3" aria-labelledby="video-facts">
-          <h2 id="video-facts" className="text-lg font-semibold">
-            {t('facts')}
-          </h2>
-          <dl className="grid gap-x-8 sm:grid-cols-2">
-            <DetailRow term={t('fact.provider')}>{provider}</DetailRow>
-            <DetailRow term={t('fact.language')}>
-              <span lang={record.languageCode} dir={contentDirection}>
-                {language?.name ?? record.languageCode}
-              </span>
-            </DetailRow>
-            {record.durationSeconds === null ? null : (
-              <DetailRow term={t('fact.duration')}>
-                <Duration seconds={record.durationSeconds} />
-              </DetailRow>
-            )}
-            {record.publishedOn === null ? null : (
-              <DetailRow term={t('fact.published')}>
-                <time dateTime={record.publishedOn}>
-                  {formatDate(record.publishedOn, locale)}
-                </time>
-              </DetailRow>
-            )}
-            {record.series === null || seriesLabel === null ? null : (
-              <DetailRow term={t(`fact.partOf.${record.series.kind}`)}>
-                <TextLink
-                  href={seriesPath(locale, record.series.kind, record.series.slug)}
+              {record.transcript === null ? null : (
+                <section
+                  className="flex flex-col gap-4"
+                  aria-labelledby="video-transcript"
                 >
-                  <span lang={seriesLabel.locale} dir={directionOf(seriesLabel.locale)}>
-                    {seriesLabel.title}
-                  </span>
-                </TextLink>
-                {' · '}
-                {t('fact.episode', { number: record.series.position })}
-              </DetailRow>
-            )}
-            <DetailRow term={t('fact.captions')}>
-              {record.captions
-                ? t('captionsAvailable', { provider })
-                : t('captionsUnknown')}
-            </DetailRow>
-            <DetailRow term={t('fact.transcript')}>
-              {record.transcript === null ? t('transcriptNone') : t('transcriptBelow')}
-            </DetailRow>
-          </dl>
-        </section>
+                  <h2 id="video-transcript" className="text-heading font-semibold">
+                    {t('fact.transcript')}
+                  </h2>
+                  <details className="rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] px-5 py-2">
+                    <summary className="min-h-11 cursor-pointer py-2.5 font-medium">
+                      {t('transcriptShow')}
+                    </summary>
+                    <div
+                      className="library-reader flex max-w-[var(--measure-prose)] flex-col gap-4 pt-2 pb-4"
+                      lang={record.languageCode}
+                      dir={contentDirection}
+                    >
+                      {paragraphsOf(record.transcript).map((paragraph, index) => (
+                        <p key={index}>{paragraph}</p>
+                      ))}
+                    </div>
+                  </details>
+                </section>
+              )}
+            </div>
+          ) : null}
 
-        {record.transcript === null ? null : (
-          <section className="flex flex-col gap-3" aria-labelledby="video-transcript">
-            <h2 id="video-transcript" className="text-lg font-semibold">
-              {t('fact.transcript')}
-            </h2>
-            <details className="rounded-[var(--radius-panel)] border border-[color:var(--color-border)] p-4">
-              <summary className="min-h-11 cursor-pointer py-2 font-medium">
-                {t('transcriptShow')}
-              </summary>
-              <div
-                className="library-reader flex flex-col gap-4 pt-3"
-                lang={record.languageCode}
-                dir={contentDirection}
+          <aside className="flex min-w-0 flex-col gap-8">
+            <section
+              className="flex flex-col gap-3 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5"
+              aria-labelledby="video-facts"
+            >
+              <h2 id="video-facts" className="text-subheading font-semibold">
+                {t('facts')}
+              </h2>
+              <dl
+                className={`grid gap-x-8 divide-y divide-[color:var(--color-border)] ${
+                  hasStory ? '' : 'sm:grid-cols-2 sm:divide-y-0'
+                }`}
               >
-                {paragraphsOf(record.transcript).map((paragraph, index) => (
-                  <p key={index}>{paragraph}</p>
-                ))}
-              </div>
-            </details>
-          </section>
-        )}
-
-        {topics.length === 0 ? null : (
-          <section className="flex flex-col gap-3" aria-labelledby="video-topics">
-            <h2 id="video-topics" className="text-lg font-semibold">
-              {t('topics')}
-            </h2>
-            <ul className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-              {topics.map((topic) => (
-                <li key={topic.slug}>
-                  <TextLink href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}>
-                    {topic.name}
-                  </TextLink>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {playlists.length === 0 ? null : (
-          <section className="flex flex-col gap-3" aria-labelledby="video-playlists">
-            <h2 id="video-playlists" className="text-lg font-semibold">
-              {t('inPlaylists')}
-            </h2>
-            <ul className="flex flex-col gap-1 text-sm">
-              {playlists.map((playlist) => {
-                const playlistLabel = mediaLabel(playlist, locale);
-                return (
-                  <li key={playlist.id}>
-                    <TextLink href={playlistPath(locale, playlist.slug)}>
+                <DetailRow term={t('fact.provider')}>{provider}</DetailRow>
+                <DetailRow term={t('fact.language')}>
+                  <span lang={record.languageCode} dir={contentDirection}>
+                    {language?.name ?? record.languageCode}
+                  </span>
+                </DetailRow>
+                {record.durationSeconds === null ? null : (
+                  <DetailRow term={t('fact.duration')}>
+                    <Duration seconds={record.durationSeconds} />
+                  </DetailRow>
+                )}
+                {record.publishedOn === null ? null : (
+                  <DetailRow term={t('fact.published')}>
+                    <time dateTime={record.publishedOn}>
+                      {formatDate(record.publishedOn, locale)}
+                    </time>
+                  </DetailRow>
+                )}
+                {record.series === null || seriesLabel === null ? null : (
+                  <DetailRow term={t(`fact.partOf.${record.series.kind}`)}>
+                    <TextLink
+                      href={seriesPath(locale, record.series.kind, record.series.slug)}
+                    >
                       <span
-                        lang={playlistLabel.locale}
-                        dir={directionOf(playlistLabel.locale)}
+                        lang={seriesLabel.locale}
+                        dir={directionOf(seriesLabel.locale)}
                       >
-                        {playlistLabel.title}
+                        {seriesLabel.title}
                       </span>
                     </TextLink>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
+                    {' · '}
+                    {t('fact.episode', { number: record.series.position })}
+                  </DetailRow>
+                )}
+                <DetailRow term={t('fact.captions')}>
+                  {record.captions
+                    ? t('captionsAvailable', { provider })
+                    : t('captionsUnknown')}
+                </DetailRow>
+                <DetailRow term={t('fact.transcript')}>
+                  {record.transcript === null
+                    ? t('transcriptNone')
+                    : t('transcriptBelow')}
+                </DetailRow>
+              </dl>
+            </section>
+
+            {topics.length === 0 ? null : (
+              <section className="flex flex-col gap-3" aria-labelledby="video-topics">
+                <h2 id="video-topics" className="text-subheading font-semibold">
+                  {t('topics')}
+                </h2>
+                <TopicChips
+                  label={t('topics')}
+                  topics={topics.map((topic) => ({
+                    href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+                    text: topic.name,
+                  }))}
+                />
+              </section>
+            )}
+
+            {playlists.length === 0 ? null : (
+              <section className="flex flex-col gap-3" aria-labelledby="video-playlists">
+                <h2 id="video-playlists" className="text-subheading font-semibold">
+                  {t('inPlaylists')}
+                </h2>
+                <ul className="flex flex-col gap-1 text-sm">
+                  {playlists.map((playlist) => {
+                    const playlistLabel = mediaLabel(playlist, locale);
+                    return (
+                      <li key={playlist.id} className="flex min-h-11 items-center">
+                        <TextLink href={playlistPath(locale, playlist.slug)}>
+                          <span
+                            lang={playlistLabel.locale}
+                            dir={directionOf(playlistLabel.locale)}
+                          >
+                            {playlistLabel.title}
+                          </span>
+                        </TextLink>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
+          </aside>
+        </div>
 
         {record.series === null || others.length === 0 ? null : (
-          <section className="flex flex-col gap-4" aria-labelledby="video-episodes">
-            <SectionHeading>
-              <span id="video-episodes">{t(`moreFrom.${record.series.kind}`)}</span>
-            </SectionHeading>
+          <section className="flex flex-col gap-5" aria-labelledby="video-episodes">
+            <SectionHeader
+              id="video-episodes"
+              heading={t(`moreFrom.${record.series.kind}`)}
+              action={{
+                href: seriesPath(locale, record.series.kind, record.series.slug),
+                text: t('allEpisodes'),
+              }}
+            />
             <VideoGrid
               locale={locale}
               videos={others}
@@ -775,11 +891,6 @@ export async function VideoDetailPage({
               headingLevel="h3"
               episode
             />
-            <p>
-              <TextLink href={seriesPath(locale, record.series.kind, record.series.slug)}>
-                {t('allEpisodes')}
-              </TextLink>
-            </p>
           </section>
         )}
 
@@ -793,38 +904,32 @@ export async function VideoDetailPage({
  * Series, programmes and playlists
  * ========================================================================= */
 
+/**
+ * A Series, programme or Playlist as a card: its kind, its title in its own
+ * language and the start of its description — one link to its ONE address.
+ */
 function GroupCard({
   locale,
   href,
   record,
+  kind,
 }: {
   readonly locale: Locale;
   readonly href: string;
   readonly record: SeriesRecord | PlaylistRecord;
+  readonly kind: string;
 }) {
   const label = mediaLabel(record, locale);
-  const direction = directionOf(label.locale);
   return (
-    <Panel as="li">
-      <div className="flex min-w-0 flex-col gap-2">
-        <h2
-          className="text-lg font-semibold break-words"
-          lang={label.locale}
-          dir={direction}
-        >
-          <TextLink href={href}>{label.title}</TextLink>
-        </h2>
-        {label.description === '' ? null : (
-          <p
-            className="line-clamp-3 text-sm break-words text-[color:var(--color-foreground-muted)]"
-            lang={label.locale}
-            dir={direction}
-          >
-            {label.description}
-          </p>
-        )}
-      </div>
-    </Panel>
+    <LinkCard
+      href={href}
+      eyebrow={kind}
+      title={label.title}
+      description={label.description}
+      headingLevel="h2"
+      lang={label.locale}
+      dir={directionOf(label.locale)}
+    />
   );
 }
 
@@ -848,30 +953,30 @@ export async function SeriesListingPage({
 
   return (
     <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[trail.home, trail.watch, { text: title }]}
+      <div className="flex flex-col gap-8 py-[var(--space-page)]">
+        <MediaPageHeader
+          crumbs={{
+            label: trail.label,
+            trail: [trail.home, trail.watch, { text: title }],
+          }}
+          eyebrow={trail.watch.text}
+          title={title}
+          lede={t(`sectionBody.${section}` as 'sectionBody.series')}
         />
-        <div className="flex flex-col gap-2">
-          <PageHeading>{title}</PageHeading>
-          <p className="text-[color:var(--color-foreground-muted)]">
-            {t(`sectionBody.${section}` as 'sectionBody.series')}
-          </p>
-        </div>
         {page.items.length === 0 ? (
           <EmptyState>{t(`groupEmpty.${kind}`)}</EmptyState>
         ) : (
-          <ul aria-label={title} className="grid gap-4 sm:grid-cols-2">
+          <CardGrid label={title}>
             {page.items.map((record) => (
               <GroupCard
                 key={record.id}
                 locale={locale}
                 record={record}
+                kind={t(`kind.${record.kind}`)}
                 href={seriesPath(locale, record.kind, record.slug)}
               />
             ))}
-          </ul>
+          </CardGrid>
         )}
         <Pagination
           label={title}
@@ -923,6 +1028,7 @@ async function GroupDetail({
   locale,
   record,
   section,
+  kind,
   path,
   videos,
   offset,
@@ -933,6 +1039,8 @@ async function GroupDetail({
   readonly locale: Locale;
   readonly record: SeriesRecord | PlaylistRecord;
   readonly section: 'series' | 'programs' | 'playlists';
+  /** The record's kind, in words — the page's eyebrow. */
+  readonly kind: string;
   readonly path: string;
   readonly videos: { readonly items: readonly VideoListing[]; readonly hasMore: boolean };
   readonly offset: number;
@@ -951,38 +1059,39 @@ async function GroupDetail({
     { name: sectionTitle, path: `/${locale}/watch/${section}` },
     { name: label.title, path },
   ];
+  const description = paragraphsOf(label.description);
 
   return (
     <Container>
-      <article className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={parts.label}
-          trail={[
-            ...trail
-              .slice(0, -1)
-              .map((entry) => ({ href: entry.path, text: entry.name })),
-            { text: label.title },
-          ]}
-        />
-        <Prose>
-          <h1
-            className="text-3xl font-semibold tracking-tight break-words"
-            lang={label.locale}
-            dir={direction}
-          >
-            {label.title}
-          </h1>
-          {paragraphsOf(label.description).map((paragraph, index) => (
-            <p key={index} lang={label.locale} dir={direction}>
-              {paragraph}
-            </p>
-          ))}
-        </Prose>
+      <article className="flex flex-col gap-10 py-[var(--space-page)]">
+        <MediaPageHeader
+          crumbs={{
+            label: parts.label,
+            trail: [
+              ...trail
+                .slice(0, -1)
+                .map((entry) => ({ href: entry.path, text: entry.name })),
+              { text: label.title },
+            ],
+          }}
+          eyebrow={kind}
+          title={label.title}
+          lang={label.locale}
+          dir={direction}
+        >
+          {description.length === 0 ? null : (
+            <div className="flex max-w-[var(--measure-prose)] flex-col gap-3 pt-1">
+              {description.map((paragraph, index) => (
+                <p key={index} lang={label.locale} dir={direction}>
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+          )}
+        </MediaPageHeader>
 
-        <section className="flex flex-col gap-4" aria-labelledby="group-videos">
-          <SectionHeading>
-            <span id="group-videos">{heading}</span>
-          </SectionHeading>
+        <section className="flex flex-col gap-5" aria-labelledby="group-videos">
+          <SectionHeader id="group-videos" heading={heading} />
           {videos.items.length === 0 ? (
             <EmptyState>{empty}</EmptyState>
           ) : (
@@ -1028,6 +1137,7 @@ export async function SeriesDetailPage({
       locale={locale}
       record={record}
       section={seriesSegment(record.kind) as 'series' | 'programs'}
+      kind={t(`kind.${record.kind}`)}
       path={seriesPath(locale, record.kind, record.slug)}
       videos={videos}
       offset={offset}
@@ -1054,30 +1164,30 @@ export async function PlaylistListingPage({
 
   return (
     <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[trail.home, trail.watch, { text: title }]}
+      <div className="flex flex-col gap-8 py-[var(--space-page)]">
+        <MediaPageHeader
+          crumbs={{
+            label: trail.label,
+            trail: [trail.home, trail.watch, { text: title }],
+          }}
+          eyebrow={trail.watch.text}
+          title={title}
+          lede={t('sectionBody.playlists')}
         />
-        <div className="flex flex-col gap-2">
-          <PageHeading>{title}</PageHeading>
-          <p className="text-[color:var(--color-foreground-muted)]">
-            {t('sectionBody.playlists')}
-          </p>
-        </div>
         {page.items.length === 0 ? (
           <EmptyState>{t('groupEmpty.playlist')}</EmptyState>
         ) : (
-          <ul aria-label={title} className="grid gap-4 sm:grid-cols-2">
+          <CardGrid label={title}>
             {page.items.map((record) => (
               <GroupCard
                 key={record.id}
                 locale={locale}
                 record={record}
+                kind={t('kind.playlist')}
                 href={playlistPath(locale, record.slug)}
               />
             ))}
-          </ul>
+          </CardGrid>
         )}
         <Pagination
           label={title}
@@ -1109,6 +1219,7 @@ export async function PlaylistDetailPage({
       locale={locale}
       record={record}
       section="playlists"
+      kind={t('kind.playlist')}
       path={playlistPath(locale, record.slug)}
       videos={videos}
       offset={offset}
@@ -1122,6 +1233,21 @@ export async function PlaylistDetailPage({
 /* ===========================================================================
  * Speakers, and a topic's videos
  * ========================================================================= */
+
+/** The first-party person mark, decorative: no portrait is invented. */
+function PersonMark() {
+  return (
+    <span
+      aria-hidden="true"
+      className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-accent-surface)] text-[color:var(--color-accent)]"
+    >
+      <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor">
+        <circle cx="12" cy="8.5" r="3.5" strokeWidth="1.6" />
+        <path d="M5 19.5a7 7 0 0 1 14 0" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    </span>
+  );
+}
 
 /**
  * `/watch/speakers` — People named on at least one published Video.
@@ -1156,48 +1282,57 @@ export async function SpeakerBrowsePage({
 
   return (
     <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[trail.home, trail.watch, { text: title }]}
+      <div className="flex flex-col gap-8 py-[var(--space-page)]">
+        <MediaPageHeader
+          crumbs={{
+            label: trail.label,
+            trail: [trail.home, trail.watch, { text: title }],
+          }}
+          eyebrow={trail.watch.text}
+          title={title}
+          lede={t('sectionBody.speakers')}
         />
-        <div className="flex flex-col gap-2">
-          <PageHeading>{title}</PageHeading>
-          <p className="text-[color:var(--color-foreground-muted)]">
-            {t('sectionBody.speakers')}
-          </p>
-        </div>
         {rows.length === 0 ? (
           <EmptyState>{t('speakersEmpty')}</EmptyState>
         ) : (
-          <ul aria-label={title} className="flex flex-col gap-3">
+          <CardGrid label={title}>
             {rows.map((row) => (
               <Panel key={row.id} as="li">
-                <div className="flex flex-wrap items-baseline justify-between gap-3">
-                  <p className="font-medium" dir="auto">
-                    <TextLink
-                      href={`/${locale}/people/${encodeURIComponent(row.person.slug)}`}
+                <div className="flex min-w-0 items-start gap-4">
+                  <PersonMark />
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <h2
+                      className="text-subheading font-semibold wrap-anywhere"
+                      dir="auto"
                     >
-                      {row.person.name}
-                    </TextLink>
-                  </p>
-                  <p className="text-sm">
-                    <TextLink
-                      href={mediaQueryPath(
-                        `/${locale}/watch/videos`,
-                        readMediaQuery({}),
-                        {
-                          speaker: row.id,
-                        },
-                      )}
-                    >
-                      {t('speakerVideos', { count: String(row.videos) })}
-                    </TextLink>
-                  </p>
+                      <TextLink
+                        href={`/${locale}/people/${encodeURIComponent(row.person.slug)}`}
+                      >
+                        {row.person.name}
+                      </TextLink>
+                    </h2>
+                    <p className="text-sm">
+                      <a
+                        href={mediaQueryPath(
+                          `/${locale}/watch/videos`,
+                          readMediaQuery({}),
+                          {
+                            speaker: row.id,
+                          },
+                        )}
+                        className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-[color:var(--color-action)] underline-offset-4 hover:underline"
+                      >
+                        {t('speakerVideos', { count: String(row.videos) })}
+                        <span aria-hidden="true" className="rtl:-scale-x-100">
+                          →
+                        </span>
+                      </a>
+                    </p>
+                  </div>
                 </div>
               </Panel>
             ))}
-          </ul>
+          </CardGrid>
         )}
         <Pagination
           label={title}
@@ -1235,24 +1370,31 @@ export async function WatchTopicPage({
 
   return (
     <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[trail.home, trail.watch, { text: topic.label.name }]}
-        />
-        <div className="flex flex-col gap-2">
-          <PageHeading>
-            {t('topicTitle')}:{' '}
-            <span lang={labelLocale} dir={directionOf(labelLocale)}>
-              {topic.label.name}
-            </span>
-          </PageHeading>
-          <p>
-            <TextLink href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}>
+      <div className="flex flex-col gap-8 py-[var(--space-page)]">
+        <MediaPageHeader
+          crumbs={{
+            label: trail.label,
+            trail: [trail.home, trail.watch, { text: topic.label.name }],
+          }}
+          eyebrow={trail.watch.text}
+          title={
+            <>
+              {t('topicTitle')}:{' '}
+              <span lang={labelLocale} dir={directionOf(labelLocale)}>
+                {topic.label.name}
+              </span>
+            </>
+          }
+        >
+          <div className="pt-1">
+            <ActionLink
+              href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}
+              tone="secondary"
+            >
               {t('topicHub')}
-            </TextLink>
-          </p>
-        </div>
+            </ActionLink>
+          </div>
+        </MediaPageHeader>
         {page.items.length === 0 ? (
           <EmptyState>{t('topicEmpty')}</EmptyState>
         ) : (
@@ -1299,19 +1441,14 @@ export async function VideoPreview({
   const page = await mediaReadRuntime().videos(filter);
   if (page.items.length === 0) return null;
   return (
-    <section className="flex flex-col gap-4" aria-labelledby={headingId}>
-      <h2 id={headingId} className="text-lg font-semibold">
-        {heading}
-      </h2>
+    <section className="flex flex-col gap-5" aria-labelledby={headingId}>
+      <SectionHeader id={headingId} heading={heading} action={more} />
       <VideoGrid
         locale={locale}
         videos={page.items.slice(0, PREVIEW)}
         label={heading}
         headingLevel="h3"
       />
-      <p>
-        <TextLink href={more.href}>{more.text}</TextLink>
-      </p>
     </section>
   );
 }
@@ -1323,15 +1460,15 @@ export async function VideoPreview({
 /** How many Videos the landing page shows before linking to the full list. */
 const LANDING = 12;
 
-/** Every Watch surface this phase delivers, in the order the landing lists them. */
-const SURFACES = [
-  'videos',
-  ...WATCH_VIEWS,
-  'series',
-  'programs',
-  'playlists',
-  'speakers',
-];
+/**
+ * Every Watch surface this phase delivers, grouped the way the landing offers
+ * them: the kinds of video, the ordered groupings, and the ways to find by
+ * person or topic — with Listen, Watch's sibling for audio, linked ONCE.
+ */
+const LANDING_GROUPS = [
+  { key: 'formats', surfaces: ['videos', ...WATCH_VIEWS] },
+  { key: 'groups', surfaces: ['series', 'programs', 'playlists'] },
+] as const;
 
 /**
  * `/watch` — `?sort=featured|latest` (ROUTE_MAP.md §3.7).
@@ -1342,6 +1479,10 @@ const SURFACES = [
  * the Watch surfaces, topics, and — from Phase 11 — Listen, Watch's sibling for
  * audio. Photographs are reached from News and Events (Phase 13), their designed
  * entry point, not from here. No "coming soon".
+ *
+ * THE SECTION'S FRONT DOOR: the one ink band among the Media pages, then the
+ * featured or latest videos, then every surface grouped by how a visitor looks
+ * for a video. Text and an inline poster only — no image, nothing that moves.
  */
 export async function WatchLandingPage({
   locale,
@@ -1351,113 +1492,123 @@ export async function WatchLandingPage({
   readonly sort: 'featured' | 'latest';
 }) {
   const t = await getTranslations({ locale, namespace: 'watch' });
-  const trail = await watchTrail(locale);
   const page = await mediaReadRuntime().videos({ featured: sort === 'featured' });
   const heading = t(`sort.${sort}`);
 
   return (
-    <Container>
-      <div className="flex flex-col gap-10 py-12">
-        <Breadcrumbs label={trail.label} trail={[trail.home, { text: t('title') }]} />
-        <Prose>
-          <PageHeading>{t('title')}</PageHeading>
-          <p>{t('description')}</p>
-        </Prose>
+    <>
+      <PageHero
+        tone="ink"
+        title={t('title')}
+        lede={t('description')}
+        actions={
+          <>
+            <ActionLink href={`/${locale}/watch/videos`} onInk>
+              {t('allVideos')}
+            </ActionLink>
+            <ActionLink href={`/${locale}/watch/programs`} tone="secondary" onInk>
+              {t('sections.programs')}
+            </ActionLink>
+          </>
+        }
+      />
 
-        <section className="flex flex-col gap-4" aria-labelledby="watch-videos">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <SectionHeading>
-              <span id="watch-videos">{heading}</span>
-            </SectionHeading>
+      <Container>
+        <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
+          <section className="flex flex-col gap-5" aria-labelledby="watch-videos">
+            <SectionHeader
+              id="watch-videos"
+              heading={heading}
+              intro={t(`landing.${sort}Intro`)}
+            />
             <nav aria-label={t('sort.label')}>
-              <ul className="flex flex-wrap gap-4 text-sm">
+              <ul className="flex flex-wrap gap-2">
                 {(['featured', 'latest'] as const).map((option) => (
                   <li key={option}>
-                    {option === sort ? (
-                      <span aria-current="page" className="font-semibold">
-                        {t(`sort.${option}`)}
-                      </span>
-                    ) : (
-                      <TextLink
-                        href={`/${locale}/watch${option === 'featured' ? '' : '?sort=latest'}`}
-                      >
-                        {t(`sort.${option}`)}
-                      </TextLink>
-                    )}
+                    <FilterLink
+                      href={`/${locale}/watch${option === 'featured' ? '' : '?sort=latest'}`}
+                      current={option === sort}
+                    >
+                      {t(`sort.${option}`)}
+                    </FilterLink>
                   </li>
                 ))}
               </ul>
             </nav>
-          </div>
-          {page.items.length === 0 ? (
-            <EmptyState>
-              {sort === 'featured' ? (
-                <span className="flex flex-col gap-2">
-                  <span>{t('featuredEmpty')}</span>
-                  <TextLink href={`/${locale}/watch?sort=latest`}>
-                    {t('sort.latest')}
-                  </TextLink>
-                </span>
-              ) : (
-                t('empty')
-              )}
-            </EmptyState>
-          ) : (
-            <VideoGrid
-              locale={locale}
-              videos={page.items.slice(0, LANDING)}
-              label={heading}
-              headingLevel="h3"
-            />
-          )}
-          <p>
-            <TextLink href={`/${locale}/watch/videos`}>{t('allVideos')}</TextLink>
-          </p>
-        </section>
-
-        <section className="flex flex-col gap-4" aria-labelledby="watch-browse">
-          <SectionHeading>
-            <span id="watch-browse">{t('browse')}</span>
-          </SectionHeading>
-          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {SURFACES.map((surface) => (
-              <Panel key={surface} as="li">
-                <div className="flex flex-col gap-2">
-                  <h3 className="text-lg font-semibold">
-                    <TextLink href={`/${locale}/watch/${surface}`}>
-                      {t(`sections.${surface}` as 'sections.videos')}
+            {page.items.length === 0 ? (
+              <EmptyState>
+                {sort === 'featured' ? (
+                  <span className="flex flex-col gap-2">
+                    <span>{t('featuredEmpty')}</span>
+                    <TextLink href={`/${locale}/watch?sort=latest`}>
+                      {t('sort.latest')}
                     </TextLink>
-                  </h3>
-                  <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                    {t(`sectionBody.${surface}` as 'sectionBody.videos')}
-                  </p>
-                </div>
-              </Panel>
-            ))}
-            <Panel as="li">
-              <div className="flex flex-col gap-2">
-                <h3 className="text-lg font-semibold">
-                  <TextLink href={`/${locale}/topics`}>{t('sections.topics')}</TextLink>
-                </h3>
-                <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                  {t('sectionBody.topics')}
-                </p>
-              </div>
-            </Panel>
-            <Panel as="li">
-              <div className="flex flex-col gap-2">
-                <h3 className="text-lg font-semibold">
-                  <TextLink href={`/${locale}/listen`}>{t('sections.listen')}</TextLink>
-                </h3>
-                <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                  {t('sectionBody.listen')}
-                </p>
-              </div>
-            </Panel>
-          </ul>
-        </section>
-      </div>
-    </Container>
+                  </span>
+                ) : (
+                  t('empty')
+                )}
+              </EmptyState>
+            ) : (
+              <VideoGrid
+                locale={locale}
+                videos={page.items.slice(0, LANDING)}
+                label={heading}
+                headingLevel="h3"
+              />
+            )}
+          </section>
+
+          {LANDING_GROUPS.map((group) => (
+            <section
+              key={group.key}
+              className="flex flex-col gap-5"
+              aria-labelledby={`watch-${group.key}`}
+            >
+              <SectionHeader
+                id={`watch-${group.key}`}
+                heading={t(`landing.${group.key}Heading`)}
+                intro={t(`landing.${group.key}Intro`)}
+              />
+              <CardGrid>
+                {group.surfaces.map((surface) => (
+                  <LinkCard
+                    key={surface}
+                    href={`/${locale}/watch/${surface}`}
+                    title={t(`sections.${surface}` as 'sections.videos')}
+                    description={t(`sectionBody.${surface}` as 'sectionBody.videos')}
+                  />
+                ))}
+              </CardGrid>
+            </section>
+          ))}
+
+          <section className="flex flex-col gap-5" aria-labelledby="watch-find">
+            <SectionHeader
+              id="watch-find"
+              heading={t('landing.findHeading')}
+              intro={t('landing.findIntro')}
+            />
+            <CardGrid>
+              <LinkCard
+                href={`/${locale}/watch/speakers`}
+                title={t('sections.speakers')}
+                description={t('sectionBody.speakers')}
+              />
+              <LinkCard
+                href={`/${locale}/topics`}
+                title={t('sections.topics')}
+                description={t('sectionBody.topics')}
+              />
+              <LinkCard
+                href={`/${locale}/listen`}
+                title={t('sections.listen')}
+                description={t('sectionBody.listen')}
+              />
+            </CardGrid>
+          </section>
+        </div>
+      </Container>
+    </>
   );
 }
 

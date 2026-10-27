@@ -583,6 +583,34 @@ describe('the contract and the database agree on the bounds they share', () => {
       'migrations',
     );
 
+    // A later migration that ALTERs a trigger an earlier one created, inside
+    // the SAME context, keeps that trigger's refusal numbers and meaning: the
+    // number is still raised by the owner's trigger and translated by the
+    // owner's adapter. Exactly one such amendment exists, named here whole —
+    // Phase 30 widening three Phase-29 Migration & Provenance triggers — and
+    // any other THROW in it, or any of these numbers outside those three
+    // ALTERs, still counts against Phase 30 itself.
+    const AMENDMENTS: Readonly<
+      Record<
+        string,
+        {
+          readonly owner: string;
+          readonly triggers: readonly string[];
+          readonly numbers: readonly string[];
+        }
+      >
+    > = {
+      '20261027000000_phase30_source_adapters': {
+        owner: '20261011000000_phase29_migration_provenance',
+        triggers: [
+          'MigrationSourceHostIntegrity',
+          'MigrationLegacyMappingIntegrity',
+          'MigrationManifestEntryIntegrity',
+        ],
+        numbers: ['51371', '51379', '51380'],
+      },
+    };
+
     const numbers = new Map<string, string[]>();
     for (const entry of await readdir(migrationDirectory)) {
       const file = path.join(migrationDirectory, entry, 'migration.sql');
@@ -593,11 +621,30 @@ describe('the contract and the database agree on the bounds they share', () => {
       }
 
       const source = await readFile(file, 'utf8');
+      const amendment = AMENDMENTS[entry];
       for (const match of source.matchAll(/THROW\s+(\d{5})/g)) {
         const thrown = match[1] ?? '';
-        numbers.set(thrown, [...(numbers.get(thrown) ?? []), entry]);
+        // The trigger this THROW sits in, when it sits in an ALTER TRIGGER.
+        const before = source.slice(0, match.index);
+        const altered = [...before.matchAll(/ALTER TRIGGER \[dbo\]\.\[(\w+)\]/g)].at(-1);
+        const nextStatement = before.lastIndexOf("END');");
+        const inAlter =
+          altered?.index !== undefined && altered.index > nextStatement
+            ? altered[1]
+            : undefined;
+        const attributed =
+          amendment !== undefined &&
+          inAlter !== undefined &&
+          amendment.triggers.includes(inAlter) &&
+          amendment.numbers.includes(thrown)
+            ? amendment.owner
+            : entry;
+        numbers.set(thrown, [...(numbers.get(thrown) ?? []), attributed]);
       }
     }
+    // An amendment keeps numbers its owner really raises — it never mints one.
+    for (const { owner, numbers: kept } of Object.values(AMENDMENTS))
+      for (const thrown of kept) expect(numbers.get(thrown), thrown).toContain(owner);
 
     for (const [thrown, migrations] of numbers) {
       expect(

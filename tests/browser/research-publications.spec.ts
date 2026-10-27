@@ -362,7 +362,11 @@ test.describe('Library-wide surfaces include what Phase 9 delivered', () => {
       'Encyclopedias',
       'Magazines and journals',
     ]) {
-      await expect(page.getByRole('link', { name, exact: true })).toBeVisible();
+      // The landing's own list — the footer's Our Work column also has a
+      // "Research" (an Explore page), which is not what this proves.
+      await expect(
+        page.getByRole('main').getByRole('link', { name, exact: true }),
+      ).toBeVisible();
     }
 
     await page.goto('/en/library/resources');

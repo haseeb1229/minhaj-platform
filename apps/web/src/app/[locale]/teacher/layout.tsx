@@ -1,7 +1,8 @@
 import { getTranslations } from 'next-intl/server';
 
 import { teacherLinks } from '@/components/teacher/nav';
-import { TextLink } from '@/components/ui';
+import { WorkspaceShell } from '@/components/workspace/parts';
+import { WorkspaceNav } from '@/components/workspace/workspace-nav';
 import { requireLocale } from '@/config/route-locale';
 import { requireTeacher } from './guard';
 
@@ -20,6 +21,12 @@ import { requireTeacher } from './guard';
  * MESSAGES ARE PART OF THE AREA since Phase 24 — the teacher's conversations
  * with learners on the Courses they teach now — and the entry is listed like
  * every other section.
+ *
+ * THE WORKSPACE FRAME names the area in its header band as text, not a
+ * heading, so each page keeps exactly one `h1` inside its own `main`. The
+ * sections are a column beside the content on a wide screen and a horizontal
+ * scroller on a narrow one; while live learning is not activated there is no
+ * navigation at all, because no section has content to reach.
  */
 export const metadata = { robots: { index: false, follow: false } };
 
@@ -35,22 +42,35 @@ export default async function TeacherLayout({
 }) {
   const locale = await requireLocale(params);
   const t = await getTranslations({ locale, namespace: 'teacher' });
+  const w = await getTranslations({ locale, namespace: 'workspace' });
   const gate = await requireTeacher(locale, `/${locale}/teacher`);
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl min-w-0 flex-col gap-6 px-4 py-8">
-      {gate.activated ? (
-        <nav aria-label={t('nav.label')}>
-          <ul className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-            {teacherLinks(locale, t).map((link) => (
-              <li key={link.key}>
-                <TextLink href={link.href}>{link.text}</TextLink>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      ) : null}
+    <WorkspaceShell
+      locale={locale}
+      skipLabel={w('skip')}
+      area={t('title')}
+      width="wide"
+      nav={
+        gate.activated ? (
+          <WorkspaceNav
+            label={t('nav.label')}
+            variant="sidebar"
+            groups={[
+              {
+                key: 'teacher',
+                links: teacherLinks(locale, t).map((link) => ({
+                  ...link,
+                  // The overview is the area's root, which every page sits under.
+                  exact: link.key === 'overview',
+                })),
+              },
+            ]}
+          />
+        ) : null
+      }
+    >
       {children}
-    </div>
+    </WorkspaceShell>
   );
 }

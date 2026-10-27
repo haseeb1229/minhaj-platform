@@ -15,12 +15,14 @@ import {
   Container,
   DetailRow,
   EmptyState,
+  MetaRow,
   Panel,
   Prose,
   TextLink,
+  TopicChips,
 } from '@/components/ui';
 import { directionOf, endonymOf } from '@/config/locale';
-import { CourseBadges, learnTrail } from './parts';
+import { courseKind, learnTrail } from './parts';
 import {
   courseBrowseHref,
   courseHref,
@@ -86,205 +88,230 @@ export async function CourseDetailPage({
     { name: label.title, path: courseHref(locale, record.slug) },
   ];
 
+  const languageLabel = (
+    <span lang={record.languageCode} dir={language?.direction ?? 'auto'}>
+      {language?.name ?? record.languageCode}
+    </span>
+  );
+
   return (
     <Container>
-      <article className="flex flex-col gap-10 py-12">
-        <Breadcrumbs
-          label={parts.label}
-          trail={[
-            ...trail
-              .slice(0, -1)
-              .map((entry) => ({ href: entry.path, text: entry.name })),
-            { text: label.title },
-          ]}
-        />
-
-        <Prose>
-          <CourseBadges course={record} t={t} />
-          {label.locale === locale ? null : (
-            <Alert tone="info">
-              {t('course.fallback', { language: endonymOf(label.locale) })}
-            </Alert>
-          )}
-          <div className="flex flex-col gap-4" lang={label.locale} dir={direction}>
-            <h1 className="text-3xl leading-tight font-semibold tracking-tight wrap-anywhere">
-              {label.title}
-            </h1>
-            {label.summary === '' ? null : (
-              <p className="text-lg wrap-anywhere text-[color:var(--color-foreground-muted)]">
-                {label.summary}
+      <article className="flex flex-col gap-10 pt-6 pb-[var(--space-section)]">
+        <header className="flex flex-col gap-6 border-b border-[color:var(--color-border)] pb-8">
+          <Breadcrumbs
+            label={parts.label}
+            trail={[
+              ...trail
+                .slice(0, -1)
+                .map((entry) => ({ href: entry.path, text: entry.name })),
+              { text: label.title },
+            ]}
+          />
+          <div className="flex max-w-3xl min-w-0 flex-col gap-4">
+            <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+              {courseKind(record, t)}
+            </p>
+            {/* The Course's own words, marked with their language as ONE block. */}
+            <div className="flex flex-col gap-3" lang={label.locale} dir={direction}>
+              <h1 className="text-title font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere">
+                {label.title}
+              </h1>
+              {label.summary === '' ? null : (
+                <p className="text-lede max-w-[var(--measure-prose)] wrap-anywhere text-[color:var(--color-foreground-muted)]">
+                  {label.summary}
+                </p>
+              )}
+            </div>
+            <MetaRow
+              items={[
+                languageLabel,
+                t('card.modules', { count: record.modules }),
+                t('card.lessons', { count: record.lessons }),
+              ]}
+            />
+            {teachers.length === 0 ? null : (
+              <p className="text-sm wrap-anywhere" dir="auto">
+                <span className="text-[color:var(--color-foreground-muted)]">
+                  {t('course.teachers')}:{' '}
+                </span>
+                {teachers.map((person, index) => (
+                  <span key={person.slug}>
+                    {index === 0 ? null : ' · '}
+                    <TextLink
+                      href={`/${locale}/people/${encodeURIComponent(person.slug)}`}
+                    >
+                      {person.name}
+                    </TextLink>
+                  </span>
+                ))}
               </p>
             )}
+            {label.locale === locale ? null : (
+              <Alert tone="info">
+                {t('course.fallback', { language: endonymOf(label.locale) })}
+              </Alert>
+            )}
           </div>
-          {teachers.length === 0 ? null : (
-            <p className="text-sm wrap-anywhere" dir="auto">
-              <span className="text-[color:var(--color-foreground-muted)]">
-                {t('course.teachers')}:{' '}
-              </span>
-              {teachers.map((person, index) => (
-                <span key={person.slug}>
-                  {index === 0 ? null : ' · '}
-                  <TextLink href={`/${locale}/people/${encodeURIComponent(person.slug)}`}>
-                    {person.name}
-                  </TextLink>
-                </span>
-              ))}
-            </p>
-          )}
-          {record.format === 'live' ? (
-            <p className="text-sm">
-              {t('course.trialNote')}{' '}
-              <TextLink href={learnPath(locale, 'trial')}>
-                {t('course.trialLink')}
-              </TextLink>
-            </p>
-          ) : null}
-        </Prose>
+        </header>
 
         {controls}
 
-        {label.description === '' ? null : (
-          <section className="flex flex-col gap-3" aria-labelledby="course-about">
-            <h2 id="course-about" className="text-lg font-semibold">
-              {t('course.about')}
-            </h2>
-            <Prose>
-              <div
-                className="flex flex-col gap-4 wrap-anywhere"
-                lang={label.locale}
-                dir={direction}
-              >
-                {paragraphsOf(label.description).map((paragraph, index) => (
-                  <p key={index}>{paragraph}</p>
-                ))}
-              </div>
-            </Prose>
-          </section>
-        )}
-
-        <section className="flex flex-col gap-3" aria-labelledby="course-facts">
-          <h2 id="course-facts" className="text-lg font-semibold">
-            {t('course.facts')}
-          </h2>
-          <dl className="grid gap-x-8 sm:grid-cols-2">
-            <DetailRow term={t('course.format')}>
-              {t(`format.${record.format}`)}
-            </DetailRow>
-            {record.level === null ? null : (
-              <DetailRow term={t('course.level')}>{t(`level.${record.level}`)}</DetailRow>
+        <div className="grid min-w-0 gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-14">
+          <div className="flex min-w-0 flex-col gap-10">
+            {label.description === '' ? null : (
+              <section className="flex flex-col gap-4" aria-labelledby="course-about">
+                <h2 id="course-about" className="text-heading font-semibold">
+                  {t('course.about')}
+                </h2>
+                <Prose>
+                  <div
+                    className="flex flex-col gap-4 wrap-anywhere"
+                    lang={label.locale}
+                    dir={direction}
+                  >
+                    {paragraphsOf(label.description).map((paragraph, index) => (
+                      <p key={index}>{paragraph}</p>
+                    ))}
+                  </div>
+                </Prose>
+              </section>
             )}
-            <DetailRow term={t('course.language')}>
-              <span lang={record.languageCode} dir={language?.direction ?? 'auto'}>
-                {language?.name ?? record.languageCode}
-              </span>
-            </DetailRow>
-            <DetailRow term={t('course.length')}>
-              {t('card.modules', { count: record.modules })}
-              {' · '}
-              {t('card.lessons', { count: record.lessons })}
-            </DetailRow>
-          </dl>
-        </section>
 
-        <section className="flex flex-col gap-4" aria-labelledby="course-syllabus">
-          <div className="flex flex-col gap-2">
-            <h2 id="course-syllabus" className="text-lg font-semibold">
-              {t('course.syllabus')}
-            </h2>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('course.syllabusNote')}
-            </p>
+            <section className="flex flex-col gap-5" aria-labelledby="course-syllabus">
+              <div className="flex flex-col gap-1.5 border-b border-[color:var(--color-border)] pb-3">
+                <h2 id="course-syllabus" className="text-heading font-semibold">
+                  {t('course.syllabus')}
+                </h2>
+                <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
+                  {t('course.syllabusNote')}
+                </p>
+              </div>
+              {record.outline.length === 0 ? (
+                <EmptyState>{t('course.syllabusEmpty')}</EmptyState>
+              ) : (
+                <ol className="flex list-none flex-col gap-4 p-0">
+                  {record.outline.map((module, index) => {
+                    const words = outlineLabel(
+                      module.labels,
+                      locale,
+                      record.primaryLocale,
+                    );
+                    const moduleDirection = directionOf(words.locale);
+                    return (
+                      <Panel key={module.id} as="li">
+                        <div className="flex min-w-0 flex-col gap-3">
+                          <h3 className="flex flex-col gap-1">
+                            <span className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+                              {t('course.module', { number: index + 1 })}
+                            </span>
+                            <span
+                              className="text-subheading font-semibold wrap-anywhere"
+                              lang={words.locale}
+                              dir={moduleDirection}
+                            >
+                              {words.title}
+                            </span>
+                          </h3>
+                          {words.summary === '' ? null : (
+                            <p
+                              className="max-w-[var(--measure-prose)] text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+                              lang={words.locale}
+                              dir={moduleDirection}
+                            >
+                              {words.summary}
+                            </p>
+                          )}
+                          {module.lessons.length === 0 ? null : (
+                            <ol
+                              aria-label={t('course.lessonsIn', { title: words.title })}
+                              className="flex list-decimal flex-col gap-3 border-t border-[color:var(--color-border)] ps-6 pt-3 marker:text-[color:var(--color-foreground-muted)]"
+                            >
+                              {module.lessons.map((lesson) => {
+                                const lessonWords = outlineLabel(
+                                  lesson.labels,
+                                  locale,
+                                  record.primaryLocale,
+                                );
+                                const lessonDirection = directionOf(lessonWords.locale);
+                                return (
+                                  <li key={lesson.id} className="text-sm">
+                                    <p
+                                      className="font-medium wrap-anywhere"
+                                      lang={lessonWords.locale}
+                                      dir={lessonDirection}
+                                    >
+                                      {lessonWords.title}
+                                    </p>
+                                    {lessonWords.summary === '' ? null : (
+                                      <p
+                                        className="wrap-anywhere text-[color:var(--color-foreground-muted)]"
+                                        lang={lessonWords.locale}
+                                        dir={lessonDirection}
+                                      >
+                                        {lessonWords.summary}
+                                      </p>
+                                    )}
+                                  </li>
+                                );
+                              })}
+                            </ol>
+                          )}
+                        </div>
+                      </Panel>
+                    );
+                  })}
+                </ol>
+              )}
+            </section>
+
+            {topics.length === 0 ? null : (
+              <section className="flex flex-col gap-4" aria-labelledby="course-topics">
+                <h2 id="course-topics" className="text-heading font-semibold">
+                  {t('course.topics')}
+                </h2>
+                <TopicChips
+                  label={t('course.topics')}
+                  topics={topics.map((topic) => ({
+                    href: courseBrowseHref(locale, { topic: topic.slug }),
+                    text: topic.name,
+                  }))}
+                />
+              </section>
+            )}
           </div>
-          {record.outline.length === 0 ? (
-            <EmptyState>{t('course.syllabusEmpty')}</EmptyState>
-          ) : (
-            <ol className="flex flex-col gap-4">
-              {record.outline.map((module, index) => {
-                const words = outlineLabel(module.labels, locale, record.primaryLocale);
-                const moduleDirection = directionOf(words.locale);
-                return (
-                  <Panel key={module.id} as="li">
-                    <div className="flex min-w-0 flex-col gap-3">
-                      <h3 className="flex flex-col gap-1">
-                        <span className="text-sm font-medium text-[color:var(--color-foreground-muted)]">
-                          {t('course.module', { number: index + 1 })}
-                        </span>
-                        <span
-                          className="text-base font-semibold wrap-anywhere"
-                          lang={words.locale}
-                          dir={moduleDirection}
-                        >
-                          {words.title}
-                        </span>
-                      </h3>
-                      {words.summary === '' ? null : (
-                        <p
-                          className="text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
-                          lang={words.locale}
-                          dir={moduleDirection}
-                        >
-                          {words.summary}
-                        </p>
-                      )}
-                      {module.lessons.length === 0 ? null : (
-                        <ol
-                          aria-label={t('course.lessonsIn', { title: words.title })}
-                          className="flex list-decimal flex-col gap-2 ps-6"
-                        >
-                          {module.lessons.map((lesson) => {
-                            const lessonWords = outlineLabel(
-                              lesson.labels,
-                              locale,
-                              record.primaryLocale,
-                            );
-                            const lessonDirection = directionOf(lessonWords.locale);
-                            return (
-                              <li key={lesson.id} className="text-sm">
-                                <p
-                                  className="font-medium wrap-anywhere"
-                                  lang={lessonWords.locale}
-                                  dir={lessonDirection}
-                                >
-                                  {lessonWords.title}
-                                </p>
-                                {lessonWords.summary === '' ? null : (
-                                  <p
-                                    className="wrap-anywhere text-[color:var(--color-foreground-muted)]"
-                                    lang={lessonWords.locale}
-                                    dir={lessonDirection}
-                                  >
-                                    {lessonWords.summary}
-                                  </p>
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ol>
-                      )}
-                    </div>
-                  </Panel>
-                );
-              })}
-            </ol>
-          )}
-        </section>
 
-        {topics.length === 0 ? null : (
-          <section className="flex flex-col gap-3" aria-labelledby="course-topics">
-            <h2 id="course-topics" className="text-lg font-semibold">
-              {t('course.topics')}
-            </h2>
-            <ul className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-              {topics.map((topic) => (
-                <li key={topic.slug}>
-                  <TextLink href={courseBrowseHref(locale, { topic: topic.slug })}>
-                    {topic.name}
+          <aside aria-labelledby="course-facts" className="min-w-0">
+            <div className="flex flex-col gap-4 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]">
+              <h2 id="course-facts" className="text-subheading font-semibold">
+                {t('course.facts')}
+              </h2>
+              <dl className="flex flex-col divide-y divide-[color:var(--color-border)]">
+                <DetailRow term={t('course.format')}>
+                  {t(`format.${record.format}`)}
+                </DetailRow>
+                {record.level === null ? null : (
+                  <DetailRow term={t('course.level')}>
+                    {t(`level.${record.level}`)}
+                  </DetailRow>
+                )}
+                <DetailRow term={t('course.language')}>{languageLabel}</DetailRow>
+                <DetailRow term={t('course.length')}>
+                  {t('card.modules', { count: record.modules })}
+                  {' · '}
+                  {t('card.lessons', { count: record.lessons })}
+                </DetailRow>
+              </dl>
+              {record.format === 'live' ? (
+                <p className="text-sm">
+                  {t('course.trialNote')}{' '}
+                  <TextLink href={learnPath(locale, 'trial')}>
+                    {t('course.trialLink')}
                   </TextLink>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+                </p>
+              ) : null}
+            </div>
+          </aside>
+        </div>
 
         <BreadcrumbData contentLocales={learningLocales(record)} trail={trail} />
       </article>

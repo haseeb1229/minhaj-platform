@@ -6,8 +6,9 @@ import {
   MIGRATION_LIMITS,
   manifestCommandSchema,
   manifestCreateSchema,
+  isPublishableKind,
+  parseStagedPayload,
   rollbackCommandSchema,
-  stagedVideoPayloadSchema,
   type ManifestEntryRecord,
   type ManifestRecord,
   type ManifestState,
@@ -16,7 +17,7 @@ import {
   type MigrationPublicationPort,
   type MigrationPublicationTargetPort,
   type MigrationReadPort,
-  type StagedVideoPayload,
+  type MigrationTargetRef,
   type TargetInspection,
   type TargetPublication,
   type TargetWithdrawal,
@@ -52,17 +53,6 @@ function usablePath(path: string): boolean {
   );
 }
 
-function payloadOf(json: string): StagedVideoPayload | null {
-  let value: unknown;
-  try {
-    value = JSON.parse(json);
-  } catch {
-    return null;
-  }
-  const parsed = stagedVideoPayloadSchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
-}
-
 /**
  * PUBLICATION AND ITS REVERSAL (MIGRATION_STRATEGY.md §4.12, §6.3, §7).
  *
@@ -85,7 +75,8 @@ function payloadOf(json: string): StagedVideoPayload | null {
  * Dependencies (ports only):
  *  - `publication` — `MigrationPublicationPort`;
  *  - `read`        — `MigrationReadPort` (`run`, to refuse an unreconciled run helpfully);
- *  - `target`      — `MigrationPublicationTargetPort` (Layer 4: Media's public service);
+ *  - `target`      — `MigrationPublicationTargetPort` (Layer 4: one publisher per
+ *                    publishable kind, each over its owning domain's public service);
  *  - `authority`   — `MigrationAuthorityPort`;
  *  - `ids`, `clock` — injectable for tests.
  */
@@ -143,16 +134,25 @@ export function createMigrationPublicationService(deps: {
     };
 
     if (publishable.review !== 'approved') return refuse('approval-withdrawn');
-    if (!target.supports(publishable.contentKind)) return refuse('no-target');
+    // A review-only kind has no publisher by design: religious material is
+    // never carried into its domain by migration (manifests refuse it too).
+    const kind = publishable.contentKind;
+    if (!isPublishableKind(kind)) return refuse('review-only-kind');
+    if (!target.supports(kind)) return refuse('no-target');
     const payload =
-      publishable.validation === 'valid' ? payloadOf(publishable.payload) : null;
+      publishable.validation === 'valid'
+        ? parseStagedPayload(kind, publishable.payload)
+        : null;
     if (payload === null) return refuse('invalid-payload');
 
     const result: TargetPublication = await ask(() =>
       target.publish({
-        kind: publishable.contentKind,
+        kind,
         payload,
         topicIds: publishable.topicIds,
+        assets: publishable.assets,
+        resolve: async (legacyUrl: string): Promise<MigrationTargetRef | null> =>
+          guarded(publication.resolveLegacyTarget(legacyUrlDigest(legacyUrl))),
         actor: publisher,
         resumed: entry.state === 'publishing',
       }),
@@ -162,14 +162,16 @@ export function createMigrationPublicationService(deps: {
     if (
       !usablePath(result.canonicalPath) ||
       !Number.isInteger(result.version) ||
-      result.version < 1
+      result.version < 1 ||
+      result.target.kind !== kind
     )
       return 'unavailable';
     await guarded(
       publication.recordPublished({
         entryId: claimed.id,
         expectedVersion: claimed.version,
-        videoId: result.videoId,
+        target: result.target,
+        targetStage: result.stage,
         targetVersion: result.version,
         canonicalPath: result.canonicalPath,
         legacyUrls: publishable.legacyUrls.map((legacy) => ({
@@ -198,12 +200,12 @@ export function createMigrationPublicationService(deps: {
       );
       return 'refused' as const;
     };
-    if (entry.videoId === null || entry.targetVersion === null) return refuse();
-    const videoId = entry.videoId;
+    if (entry.target === null || entry.targetVersion === null) return refuse();
+    const made = entry.target;
     const inspection: TargetInspection | null | { readonly status: 'unavailable' } =
       await (async () => {
         try {
-          return await target.inspect({ kind: 'media.video', videoId, actor: publisher });
+          return await target.inspect({ target: made, actor: publisher });
         } catch {
           return { status: 'unavailable' as const };
         }
@@ -219,8 +221,7 @@ export function createMigrationPublicationService(deps: {
       return refuse();
     const withdrawal: TargetWithdrawal = await ask(() =>
       target.withdraw({
-        kind: 'media.video',
-        videoId,
+        target: made,
         expectedVersion: entry.targetVersion ?? 0,
         actor: publisher,
       }),

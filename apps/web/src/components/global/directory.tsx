@@ -16,15 +16,19 @@ import {
 import { globalReadRuntime } from '@/composition/global-read';
 import { BreadcrumbData, Pagination } from '@/components/media/parts';
 import {
+  ActionLink,
   Alert,
   Breadcrumbs,
   Button,
+  CardGrid,
   Container,
   EmptyState,
   Field,
-  PageHeading,
+  FilterLink,
+  LinkCard,
+  PageHero,
   Panel,
-  Prose,
+  SectionHeader,
   Select,
   TextLink,
 } from '@/components/ui';
@@ -59,6 +63,12 @@ import {
  * be empty, and it says so plainly: no map, no flag wall, no count, no stock
  * photograph and no placeholder Centre stands in for data the organisation has
  * not confirmed. A missing translation stays missing and is marked by language.
+ *
+ * ONE FRAME FOR EVERY PAGE. A quiet breadcrumb row, then an opening band — the
+ * section pages' `PageHero`, or `RecordHeader` for a place or a Centre, whose
+ * name carries its own language — then the body in section rhythm. Places are
+ * tiles, Centres are whole-card links, and the way to find a Centre is the
+ * first action wherever a place is shown.
  */
 
 type GlobalTranslator = Awaited<ReturnType<typeof getTranslations<'global'>>>;
@@ -78,6 +88,73 @@ async function globalTrail(locale: Locale) {
 
 function pages(t: GlobalTranslator) {
   return { previousLabel: t('previous'), nextLabel: t('next') };
+}
+
+/** The slim breadcrumb row above a directory page's opening band. */
+export function DirectoryCrumbs({
+  label,
+  trail,
+}: {
+  readonly label: string;
+  readonly trail: readonly { readonly href?: string; readonly text: string }[];
+}) {
+  return (
+    <Container>
+      <div className="pt-6">
+        <Breadcrumbs label={label} trail={trail} />
+      </div>
+    </Container>
+  );
+}
+
+/**
+ * The opening band of ONE record — a Country, a Region, a City or a Centre.
+ *
+ * Unlike `PageHero`, the `h1` carries the language and direction the record's
+ * name is genuinely in, so an English place name on an Arabic page is marked
+ * English (WCAG 3.1.2) without flipping the page around it.
+ */
+export function RecordHeader({
+  eyebrow,
+  name,
+  nameLocale,
+  children,
+}: {
+  readonly eyebrow: string;
+  readonly name: string;
+  readonly nameLocale: Locale;
+  readonly children?: ReactNode;
+}) {
+  return (
+    <div className="border-b border-[color:var(--color-border)]">
+      <Container>
+        <div className="flex max-w-3xl flex-col gap-4 py-[var(--space-section)]">
+          <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+            {eyebrow}
+          </p>
+          <h1
+            className="text-title font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere"
+            lang={nameLocale}
+            dir={directionOf(nameLocale)}
+          >
+            {name}
+          </h1>
+          {children}
+        </div>
+      </Container>
+    </div>
+  );
+}
+
+/** A directory page's body, in the system's section rhythm. */
+export function DirectoryBody({ children }: { readonly children: ReactNode }) {
+  return (
+    <Container>
+      <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
+        {children}
+      </div>
+    </Container>
+  );
 }
 
 /** A name in the language it is genuinely in. */
@@ -115,16 +192,12 @@ export function GlobalSections({
   ] as const;
   return (
     <nav aria-label={t('sectionsLabel')}>
-      <ul className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+      <ul className="flex list-none flex-wrap gap-2 p-0">
         {entries.map((entry) => (
           <li key={entry.key}>
-            {entry.key === current ? (
-              <span aria-current="page" className="font-semibold">
-                {t(`sections.${entry.key}`)}
-              </span>
-            ) : (
-              <TextLink href={entry.href}>{t(`sections.${entry.key}`)}</TextLink>
-            )}
+            <FilterLink href={entry.href} current={entry.key === current}>
+              {t(`sections.${entry.key}`)}
+            </FilterLink>
           </li>
         ))}
       </ul>
@@ -146,9 +219,11 @@ function Locality({
     (part): part is PublicPlace => part !== null,
   );
   return (
-    <p className="text-sm text-[color:var(--color-foreground-muted)]">
+    <p className="text-caption text-[color:var(--color-foreground-muted)]">
       {centre.isVirtual ? (
-        <span className="font-medium">{t('card.virtual')} · </span>
+        <span className="font-semibold text-[color:var(--color-accent)]">
+          {t('card.virtual')} ·{' '}
+        </span>
       ) : null}
       {parts.map((part, index) => (
         <span key={part.id}>
@@ -160,7 +235,10 @@ function Locality({
   );
 }
 
-/** One Centre card: its name, where it is, and nothing it does not have. */
+/**
+ * One Centre as a whole-card link: its name, its own description where it has
+ * one, and where it is — nothing it does not have.
+ */
 function CentreCard({
   centre,
   locale,
@@ -171,22 +249,16 @@ function CentreCard({
   readonly t: GlobalTranslator;
 }) {
   const words = centreWords(centre, locale);
+  const wordsLocale = words?.locale ?? centre.primaryLocale;
   return (
-    <Panel as="li">
-      <article className="flex min-w-0 flex-col gap-2">
-        <h3 className="text-lg font-semibold wrap-anywhere">
-          <TextLink href={globalPaths.centre(locale, centre.slug)}>
-            <span
-              lang={words?.locale ?? centre.primaryLocale}
-              dir={directionOf(words?.locale ?? centre.primaryLocale)}
-            >
-              {words?.name ?? centre.slug}
-            </span>
-          </TextLink>
-        </h3>
-        <Locality centre={centre} locale={locale} t={t} />
-      </article>
-    </Panel>
+    <LinkCard
+      href={globalPaths.centre(locale, centre.slug)}
+      title={words?.name ?? centre.slug}
+      {...(words?.description == null ? {} : { description: words.description })}
+      lang={wordsLocale}
+      dir={directionOf(wordsLocale)}
+      meta={<Locality centre={centre} locale={locale} t={t} />}
+    />
   );
 }
 
@@ -213,14 +285,11 @@ function CentreList({
       {page.items.length === 0 ? (
         <EmptyState>{offset > 0 ? t('pageEmpty') : empty}</EmptyState>
       ) : (
-        <ul
-          aria-label={label}
-          className="grid gap-4 *:min-w-0 sm:grid-cols-2 lg:grid-cols-3"
-        >
+        <CardGrid label={label}>
           {page.items.map((centre) => (
             <CentreCard key={centre.id} centre={centre} locale={locale} t={t} />
           ))}
-        </ul>
+        </CardGrid>
       )}
       <Pagination
         label={label}
@@ -232,49 +301,85 @@ function CentreList({
   );
 }
 
-/** A list of place links, or an honest empty state. */
+/**
+ * A list of place links, or an honest empty state. `tiles` is the directory's
+ * browsing shape — each place a bordered tile with a 44-pixel target; `list`
+ * is the compact column a Pakistan region card holds.
+ */
 function PlaceList({
   places,
   href,
   label,
   empty,
   locale,
+  variant = 'tiles',
 }: {
   readonly places: readonly PublicPlace[];
   readonly href: (place: PublicPlace) => string;
   readonly label: string;
   readonly empty: string;
   readonly locale: Locale;
+  readonly variant?: 'tiles' | 'list';
 }) {
-  return places.length === 0 ? (
-    <EmptyState>{empty}</EmptyState>
-  ) : (
-    <ul aria-label={label} className="grid gap-x-8 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
+  if (places.length === 0) return <EmptyState>{empty}</EmptyState>;
+
+  return variant === 'list' ? (
+    <ul aria-label={label} className="flex list-none flex-col p-0">
       {places.map((place) => (
-        <li key={place.id} className="min-w-0 wrap-anywhere">
-          <TextLink href={href(place)}>
+        <li key={place.id} className="min-w-0">
+          <a
+            href={href(place)}
+            className="inline-flex min-h-11 items-center text-sm font-medium wrap-anywhere text-[color:var(--color-action)] underline-offset-4 hover:underline active:text-[color:var(--color-action-hover)]"
+          >
             <Name record={place} locale={locale} />
-          </TextLink>
+          </a>
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <ul
+      aria-label={label}
+      className="grid list-none grid-cols-1 gap-2 p-0 *:min-w-0 min-[30rem]:grid-cols-2 lg:grid-cols-4"
+    >
+      {places.map((place) => (
+        <li key={place.id}>
+          <a
+            href={href(place)}
+            className="flex min-h-11 items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] px-4 py-2 text-sm font-medium wrap-anywhere text-[color:var(--color-foreground)] no-underline transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--color-accent)] hover:bg-[color:var(--color-accent-surface)] active:bg-[color:var(--color-accent-rule)]"
+          >
+            <Name record={place} locale={locale} />
+            <span
+              aria-hidden="true"
+              className="inline-block shrink-0 text-[color:var(--color-accent)] rtl:-scale-x-100"
+            >
+              →
+            </span>
+          </a>
         </li>
       ))}
     </ul>
   );
 }
 
+/** A directory section: its header (the `h2` it is labelled by) and its body. */
 function Section({
   id,
   heading,
+  intro,
   children,
 }: {
   readonly id: string;
   readonly heading: string;
+  readonly intro?: string;
   readonly children: ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-4" aria-labelledby={id}>
-      <h2 id={id} className="text-xl font-semibold">
-        {heading}
-      </h2>
+    <section className="flex flex-col gap-5" aria-labelledby={id}>
+      <SectionHeader
+        id={id}
+        heading={heading}
+        {...(intro === undefined ? {} : { intro })}
+      />
       {children}
     </section>
   );
@@ -285,9 +390,10 @@ function Section({
  * ========================================================================= */
 
 /**
- * The World Network landing: the genuine entry points and, where the directory
- * is still empty, a plain statement that it is — never a map, a count or a
- * picture standing in for data. Local Events are Phase 14's and are not linked.
+ * The World Network landing: Find a Centre first, the genuine entry points,
+ * and the public Countries as a rail of tiles — and, where the directory is
+ * still empty, a plain statement that it is, never a map, a count or a picture
+ * standing in for data. Local Events are each Centre's own and are not linked.
  */
 export async function GlobalLandingPage({ locale }: { readonly locale: Locale }) {
   const t = await getTranslations({ locale, namespace: 'global' });
@@ -304,40 +410,56 @@ export async function GlobalLandingPage({ locale }: { readonly locale: Locale })
   ] as const;
 
   return (
-    <Container>
-      <div className="flex flex-col gap-10 py-12">
-        <Breadcrumbs label={trail.label} trail={[trail.home, { text: t('title') }]} />
-        <Prose>
-          <PageHeading>{t('title')}</PageHeading>
-          <p>{t('intro')}</p>
-        </Prose>
-        <GlobalSections locale={locale} current="home" t={t} />
+    <>
+      <DirectoryCrumbs label={trail.label} trail={[trail.home, { text: t('title') }]} />
+      <PageHero
+        eyebrow={t('eyebrow')}
+        title={t('title')}
+        lede={t('intro')}
+        actions={
+          <ActionLink href={globalPaths.finder(locale)}>
+            {t('sections.finder')}
+          </ActionLink>
+        }
+      >
         {hasCentres ? null : <Alert tone="info">{t('emptyDirectory')}</Alert>}
+      </PageHero>
 
-        <ul aria-label={t('entryPoints')} className="grid gap-4 *:min-w-0 sm:grid-cols-2">
-          {entries.map((entry) => (
-            <Panel key={entry.key} as="li">
-              <div className="flex flex-col gap-2">
-                <h2 className="text-lg font-semibold">
-                  <TextLink href={entry.href}>{t(`sections.${entry.key}`)}</TextLink>
-                </h2>
-                <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                  {t(`landing.${entry.key}`)}
-                </p>
-              </div>
-            </Panel>
-          ))}
-          <Panel as="li">
-            <div className="flex flex-col gap-2">
-              <h2 className="text-lg font-semibold">{t('landing.localTitle')}</h2>
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                {t('landing.localBody')}
-              </p>
-            </div>
-          </Panel>
-        </ul>
+      <DirectoryBody>
+        <section aria-labelledby="global-entry" className="flex flex-col gap-5">
+          <SectionHeader id="global-entry" heading={t('entryPoints')} />
+          <CardGrid label={t('entryPoints')} columns={4}>
+            {entries.map((entry) => (
+              <LinkCard
+                key={entry.key}
+                href={entry.href}
+                title={t(`sections.${entry.key}`)}
+                description={t(`landing.${entry.key}`)}
+              />
+            ))}
+          </CardGrid>
+          <div className="flex max-w-[var(--measure-prose)] flex-col gap-1 border-s-4 border-[color:var(--color-accent-rule)] ps-4">
+            <h3 className="text-subheading font-semibold">{t('landing.localTitle')}</h3>
+            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+              {t('landing.localBody')}
+            </p>
+          </div>
+        </section>
 
-        <Section id="global-countries" heading={t('sections.countries')}>
+        <section aria-labelledby="global-countries" className="flex flex-col gap-5">
+          <SectionHeader
+            id="global-countries"
+            heading={t('sections.countries')}
+            intro={t('countriesIntro')}
+            {...(countries.items.length === 0
+              ? {}
+              : {
+                  action: {
+                    href: globalPaths.countries(locale),
+                    text: t('allCountries'),
+                  },
+                })}
+          />
           <PlaceList
             places={countries.items}
             href={(country) => globalPaths.country(locale, country.slug)}
@@ -345,19 +467,13 @@ export async function GlobalLandingPage({ locale }: { readonly locale: Locale })
             empty={t('countriesEmpty')}
             locale={locale}
           />
-          {countries.hasMore ? (
-            <p>
-              <TextLink href={globalPaths.countries(locale)}>
-                {t('allCountries')}
-              </TextLink>
-            </p>
-          ) : null}
-        </Section>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        </section>
+
+        <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
           {t('dataNotice')}
         </p>
-      </div>
-    </Container>
+      </DirectoryBody>
+    </>
   );
 }
 
@@ -403,18 +519,16 @@ export async function FinderPage({
   const title = t('sections.finder');
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[trail.home, trail.global, { text: title }]}
-        />
-        <Prose>
-          <PageHeading>{title}</PageHeading>
-          <p>{t('finder.intro')}</p>
-        </Prose>
+    <>
+      <DirectoryCrumbs
+        label={trail.label}
+        trail={[trail.home, trail.global, { text: title }]}
+      />
+      <PageHero eyebrow={t('title')} title={title} lede={t('finder.intro')}>
         <GlobalSections locale={locale} current="finder" t={t} />
+      </PageHero>
 
+      <DirectoryBody>
         <Panel>
           <form
             method="get"
@@ -489,15 +603,17 @@ export async function FinderPage({
             </div>
             <div className="flex flex-wrap items-center gap-4">
               <Button type="submit">{t('finder.submit')}</Button>
-              <TextLink href={base}>{t('finder.reset')}</TextLink>
+              <a
+                href={base}
+                className="inline-flex min-h-11 items-center text-sm font-medium text-[color:var(--color-action)] underline underline-offset-2"
+              >
+                {t('finder.reset')}
+              </a>
             </div>
           </form>
         </Panel>
 
-        <section className="flex flex-col gap-4" aria-labelledby="finder-results">
-          <h2 id="finder-results" className="text-xl font-semibold">
-            {t('finder.results')}
-          </h2>
+        <Section id="finder-results" heading={t('finder.results')}>
           {result.status === 'invalid' ? (
             <Alert tone="warning">{t('finder.invalid')}</Alert>
           ) : result.inventoryEmpty ? (
@@ -520,9 +636,9 @@ export async function FinderPage({
               t={t}
             />
           )}
-        </section>
-      </div>
-    </Container>
+        </Section>
+      </DirectoryBody>
+    </>
   );
 }
 
@@ -545,36 +661,36 @@ export async function CountriesPage({
   const title = t('sections.countries');
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[trail.home, trail.global, { text: title }]}
-        />
-        <Prose>
-          <PageHeading>{title}</PageHeading>
-          <p>{t('countriesIntro')}</p>
-        </Prose>
+    <>
+      <DirectoryCrumbs
+        label={trail.label}
+        trail={[trail.home, trail.global, { text: title }]}
+      />
+      <PageHero eyebrow={t('title')} title={title} lede={t('countriesIntro')}>
         <GlobalSections locale={locale} current="countries" t={t} />
-        <PlaceList
-          places={page.items}
-          href={(country) => globalPaths.country(locale, country.slug)}
-          label={title}
-          empty={offset > 0 ? t('pageEmpty') : t('countriesEmpty')}
-          locale={locale}
-        />
-        <Pagination
-          label={title}
-          previous={
-            offset > 0
-              ? withQuery(base, { offset: Math.max(0, offset - GLOBAL_PAGE) })
-              : null
-          }
-          next={page.hasMore ? withQuery(base, { offset: offset + GLOBAL_PAGE }) : null}
-          {...pages(t)}
-        />
-      </div>
-    </Container>
+      </PageHero>
+      <DirectoryBody>
+        <div className="flex flex-col gap-6">
+          <PlaceList
+            places={page.items}
+            href={(country) => globalPaths.country(locale, country.slug)}
+            label={title}
+            empty={offset > 0 ? t('pageEmpty') : t('countriesEmpty')}
+            locale={locale}
+          />
+          <Pagination
+            label={title}
+            previous={
+              offset > 0
+                ? withQuery(base, { offset: Math.max(0, offset - GLOBAL_PAGE) })
+                : null
+            }
+            next={page.hasMore ? withQuery(base, { offset: offset + GLOBAL_PAGE }) : null}
+            {...pages(t)}
+          />
+        </div>
+      </DirectoryBody>
+    </>
   );
 }
 
@@ -596,28 +712,28 @@ export async function CentresPage({
   const title = t('sections.centres');
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[trail.home, trail.global, { text: title }]}
-        />
-        <Prose>
-          <PageHeading>{title}</PageHeading>
-          <p>{t('centresIntro')}</p>
-        </Prose>
+    <>
+      <DirectoryCrumbs
+        label={trail.label}
+        trail={[trail.home, trail.global, { text: title }]}
+      />
+      <PageHero eyebrow={t('title')} title={title} lede={t('centresIntro')}>
         <GlobalSections locale={locale} current="centres" t={t} />
-        <CentreList
-          page={page}
-          offset={offset}
-          path={(next) => withQuery(base, { offset: next })}
-          empty={t('emptyDirectory')}
-          label={title}
-          locale={locale}
-          t={t}
-        />
-      </div>
-    </Container>
+      </PageHero>
+      <DirectoryBody>
+        <div className="flex flex-col gap-6">
+          <CentreList
+            page={page}
+            offset={offset}
+            path={(next) => withQuery(base, { offset: next })}
+            empty={t('emptyDirectory')}
+            label={title}
+            locale={locale}
+            t={t}
+          />
+        </div>
+      </DirectoryBody>
+    </>
   );
 }
 
@@ -653,32 +769,29 @@ export async function CountryPage({
   const path = globalPaths.country(locale, country.slug);
 
   return (
-    <Container>
-      <article className="flex flex-col gap-10 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[
-            trail.home,
-            trail.global,
-            { href: globalPaths.countries(locale), text: t('sections.countries') },
-            { text: name.text },
-          ]}
-        />
-        <Prose>
-          <h1
-            className="text-3xl font-semibold tracking-tight wrap-anywhere"
-            lang={name.locale}
-            dir={directionOf(name.locale)}
-          >
-            {name.text}
-          </h1>
-          <p>
-            <TextLink href={finderPath(locale, { country })}>
-              {t('country.findIn', { country: name.text })}
-            </TextLink>
-          </p>
-        </Prose>
+    <article>
+      <DirectoryCrumbs
+        label={trail.label}
+        trail={[
+          trail.home,
+          trail.global,
+          { href: globalPaths.countries(locale), text: t('sections.countries') },
+          { text: name.text },
+        ]}
+      />
+      <RecordHeader
+        eyebrow={t('centre.country')}
+        name={name.text}
+        nameLocale={name.locale}
+      >
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <ActionLink href={finderPath(locale, { country })}>
+            {t('country.findIn', { country: name.text })}
+          </ActionLink>
+        </div>
+      </RecordHeader>
 
+      <DirectoryBody>
         {regions.length === 0 ? null : (
           <Section id="country-regions" heading={t('country.regions')}>
             <PlaceList
@@ -732,18 +845,18 @@ export async function CountryPage({
             t={t}
           />
         </Section>
+      </DirectoryBody>
 
-        <BreadcrumbData
-          contentLocales={placeLocales(country)}
-          trail={[
-            { name: trail.shellHome, path: `/${name.locale}` },
-            { name: t('title'), path: globalPaths.home(name.locale) },
-            { name: t('sections.countries'), path: globalPaths.countries(name.locale) },
-            { name: name.text, path: globalPaths.country(name.locale, country.slug) },
-          ]}
-        />
-      </article>
-    </Container>
+      <BreadcrumbData
+        contentLocales={placeLocales(country)}
+        trail={[
+          { name: trail.shellHome, path: `/${name.locale}` },
+          { name: t('title'), path: globalPaths.home(name.locale) },
+          { name: t('sections.countries'), path: globalPaths.countries(name.locale) },
+          { name: name.text, path: globalPaths.country(name.locale, country.slug) },
+        ]}
+      />
+    </article>
   );
 }
 
@@ -774,35 +887,32 @@ export async function RegionPage({
   const path = globalPaths.region(locale, region.country.slug, region.slug);
 
   return (
-    <Container>
-      <article className="flex flex-col gap-10 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[
-            trail.home,
-            trail.global,
-            {
-              href: globalPaths.country(locale, region.country.slug),
-              text: countryName.text,
-            },
-            { text: name.text },
-          ]}
-        />
-        <Prose>
-          <h1
-            className="text-3xl font-semibold tracking-tight wrap-anywhere"
-            lang={name.locale}
-            dir={directionOf(name.locale)}
-          >
-            {name.text}
-          </h1>
-          <p>
-            <TextLink href={finderPath(locale, { country: region.country, region })}>
-              {t('region.findIn', { region: name.text })}
-            </TextLink>
-          </p>
-        </Prose>
+    <article>
+      <DirectoryCrumbs
+        label={trail.label}
+        trail={[
+          trail.home,
+          trail.global,
+          {
+            href: globalPaths.country(locale, region.country.slug),
+            text: countryName.text,
+          },
+          { text: name.text },
+        ]}
+      />
+      <RecordHeader
+        eyebrow={t('centre.region')}
+        name={name.text}
+        nameLocale={name.locale}
+      >
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <ActionLink href={finderPath(locale, { country: region.country, region })}>
+            {t('region.findIn', { region: name.text })}
+          </ActionLink>
+        </div>
+      </RecordHeader>
 
+      <DirectoryBody>
         <Section id="region-cities" heading={t('region.cities')}>
           <PlaceList
             places={cities.items}
@@ -841,24 +951,24 @@ export async function RegionPage({
             t={t}
           />
         </Section>
+      </DirectoryBody>
 
-        <BreadcrumbData
-          contentLocales={placeLocales(region)}
-          trail={[
-            { name: trail.shellHome, path: `/${name.locale}` },
-            { name: t('title'), path: globalPaths.home(name.locale) },
-            {
-              name: countryName.text,
-              path: globalPaths.country(name.locale, region.country.slug),
-            },
-            {
-              name: name.text,
-              path: globalPaths.region(name.locale, region.country.slug, region.slug),
-            },
-          ]}
-        />
-      </article>
-    </Container>
+      <BreadcrumbData
+        contentLocales={placeLocales(region)}
+        trail={[
+          { name: trail.shellHome, path: `/${name.locale}` },
+          { name: t('title'), path: globalPaths.home(name.locale) },
+          {
+            name: countryName.text,
+            path: globalPaths.country(name.locale, region.country.slug),
+          },
+          {
+            name: name.text,
+            path: globalPaths.region(name.locale, region.country.slug, region.slug),
+          },
+        ]}
+      />
+    </article>
   );
 }
 
@@ -885,47 +995,41 @@ export async function CityPage({
   const path = globalPaths.city(locale, city.country.slug, city.slug);
 
   return (
-    <Container>
-      <article className="flex flex-col gap-10 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[
-            trail.home,
-            trail.global,
-            {
-              href: globalPaths.country(locale, city.country.slug),
-              text: countryName.text,
-            },
-            ...(city.region === null || regionName === null
-              ? []
-              : [
-                  {
-                    href: globalPaths.region(locale, city.country.slug, city.region.slug),
-                    text: regionName.text,
-                  },
-                ]),
-            { text: name.text },
-          ]}
-        />
-        <Prose>
-          <h1
-            className="text-3xl font-semibold tracking-tight wrap-anywhere"
-            lang={name.locale}
-            dir={directionOf(name.locale)}
-          >
-            {name.text}
-          </h1>
-          <p>
-            <TextLink href={finderPath(locale, { country: city.country, city })}>
-              {t('city.findIn', { city: name.text })}
-            </TextLink>
-          </p>
-        </Prose>
+    <article>
+      <DirectoryCrumbs
+        label={trail.label}
+        trail={[
+          trail.home,
+          trail.global,
+          {
+            href: globalPaths.country(locale, city.country.slug),
+            text: countryName.text,
+          },
+          ...(city.region === null || regionName === null
+            ? []
+            : [
+                {
+                  href: globalPaths.region(locale, city.country.slug, city.region.slug),
+                  text: regionName.text,
+                },
+              ]),
+          { text: name.text },
+        ]}
+      />
+      <RecordHeader eyebrow={t('centre.city')} name={name.text} nameLocale={name.locale}>
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <ActionLink href={finderPath(locale, { country: city.country, city })}>
+            {t('city.findIn', { city: name.text })}
+          </ActionLink>
+        </div>
+      </RecordHeader>
 
-        <Section id="city-centres" heading={t('sections.centres')}>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('city.servedNote')}
-          </p>
+      <DirectoryBody>
+        <Section
+          id="city-centres"
+          heading={t('sections.centres')}
+          intro={t('city.servedNote')}
+        >
           <CentreList
             page={centres}
             offset={offset}
@@ -936,24 +1040,24 @@ export async function CityPage({
             t={t}
           />
         </Section>
+      </DirectoryBody>
 
-        <BreadcrumbData
-          contentLocales={placeLocales(city)}
-          trail={[
-            { name: trail.shellHome, path: `/${name.locale}` },
-            { name: t('title'), path: globalPaths.home(name.locale) },
-            {
-              name: countryName.text,
-              path: globalPaths.country(name.locale, city.country.slug),
-            },
-            {
-              name: name.text,
-              path: globalPaths.city(name.locale, city.country.slug, city.slug),
-            },
-          ]}
-        />
-      </article>
-    </Container>
+      <BreadcrumbData
+        contentLocales={placeLocales(city)}
+        trail={[
+          { name: trail.shellHome, path: `/${name.locale}` },
+          { name: t('title'), path: globalPaths.home(name.locale) },
+          {
+            name: countryName.text,
+            path: globalPaths.country(name.locale, city.country.slug),
+          },
+          {
+            name: name.text,
+            path: globalPaths.city(name.locale, city.country.slug, city.slug),
+          },
+        ]}
+      />
+    </article>
   );
 }
 
@@ -964,9 +1068,9 @@ export async function CityPage({
 /**
  * The Pakistan structure — an ENTRY POINT into the ordinary Pakistan Country,
  * never a second Pakistan model. It shows the same public Regions and Cities
- * grouped as a structure, and its canonical address is the Country page (set
- * by the route), so the two never compete. With no published Pakistan record
- * it says so, claiming nothing.
+ * grouped as a structure — one card per Region, its Cities beneath — and its
+ * canonical address is the Country page (set by the route), so the two never
+ * compete. With no published Pakistan record it says so, claiming nothing.
  */
 export async function PakistanPage({
   locale,
@@ -989,57 +1093,75 @@ export async function PakistanPage({
   const direct = cities.filter((city) => city.regionId === null);
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[trail.home, trail.global, { text: title }]}
-        />
-        <Prose>
-          <PageHeading>{title}</PageHeading>
-          <p>{t('pakistan.intro')}</p>
-        </Prose>
+    <>
+      <DirectoryCrumbs
+        label={trail.label}
+        trail={[trail.home, trail.global, { text: title }]}
+      />
+      <PageHero
+        eyebrow={t('title')}
+        title={title}
+        lede={t('pakistan.intro')}
+        {...(country === null
+          ? {}
+          : {
+              actions: (
+                <ActionLink
+                  href={globalPaths.country(locale, country.slug)}
+                  tone="secondary"
+                >
+                  {t('pakistan.viewCountry')}
+                </ActionLink>
+              ),
+            })}
+      >
         <GlobalSections locale={locale} current="pakistan" t={t} />
+      </PageHero>
+
+      <DirectoryBody>
         {country === null ? (
           <EmptyState>{t('pakistan.unavailable')}</EmptyState>
         ) : (
           <>
-            <p>
-              <TextLink href={globalPaths.country(locale, country.slug)}>
-                {t('pakistan.viewCountry')}
-              </TextLink>
-            </p>
             {regions.length === 0 && cities.length === 0 ? (
               <EmptyState>{t('pakistan.empty')}</EmptyState>
             ) : null}
-            {regions.map((region) => {
-              const inRegion = cities.filter((city) => city.regionId === region.id);
-              const heading = placeName(region, locale);
-              return (
-                <section
-                  key={region.id}
-                  className="flex flex-col gap-3"
-                  aria-labelledby={`pakistan-${region.id}`}
-                >
-                  <h2 id={`pakistan-${region.id}`} className="text-xl font-semibold">
-                    <TextLink
-                      href={globalPaths.region(locale, country.slug, region.slug)}
+            {regions.length === 0 ? null : (
+              <div className="grid grid-cols-1 gap-4 *:min-w-0 sm:grid-cols-2 lg:grid-cols-3">
+                {regions.map((region) => {
+                  const inRegion = cities.filter((city) => city.regionId === region.id);
+                  const heading = placeName(region, locale);
+                  return (
+                    <section
+                      key={region.id}
+                      className="flex flex-col gap-3 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] border-t-4 border-t-[color:var(--color-accent-rule)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]"
+                      aria-labelledby={`pakistan-${region.id}`}
                     >
-                      <span lang={heading.locale} dir={directionOf(heading.locale)}>
-                        {heading.text}
-                      </span>
-                    </TextLink>
-                  </h2>
-                  <PlaceList
-                    places={inRegion}
-                    href={(city) => globalPaths.city(locale, country.slug, city.slug)}
-                    label={heading.text}
-                    empty={t('region.citiesEmpty')}
-                    locale={locale}
-                  />
-                </section>
-              );
-            })}
+                      <h2
+                        id={`pakistan-${region.id}`}
+                        className="text-subheading font-semibold wrap-anywhere"
+                      >
+                        <TextLink
+                          href={globalPaths.region(locale, country.slug, region.slug)}
+                        >
+                          <span lang={heading.locale} dir={directionOf(heading.locale)}>
+                            {heading.text}
+                          </span>
+                        </TextLink>
+                      </h2>
+                      <PlaceList
+                        places={inRegion}
+                        href={(city) => globalPaths.city(locale, country.slug, city.slug)}
+                        label={heading.text}
+                        empty={t('region.citiesEmpty')}
+                        locale={locale}
+                        variant="list"
+                      />
+                    </section>
+                  );
+                })}
+              </div>
+            )}
             {direct.length === 0 ? null : (
               <Section id="pakistan-direct" heading={t('country.directCities')}>
                 <PlaceList
@@ -1053,7 +1175,7 @@ export async function PakistanPage({
             )}
           </>
         )}
-      </div>
-    </Container>
+      </DirectoryBody>
+    </>
   );
 }

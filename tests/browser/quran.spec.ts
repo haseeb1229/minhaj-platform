@@ -782,7 +782,11 @@ test.describe('a fixture corpus', () => {
     expect(await audio.evaluate((element: HTMLAudioElement) => element.paused)).toBe(
       true,
     );
-    await expect(page.getByRole('link', { name: /download/i })).toHaveCount(0);
+    // Scoped to the page's content: the footer's "Library downloads" is
+    // navigation to another section, not a download of this recitation.
+    await expect(
+      page.getByRole('main').getByRole('link', { name: /download/i }),
+    ).toHaveCount(0);
     expect(
       await page.locator('a[download]').count(),
       'no download attribute anywhere',

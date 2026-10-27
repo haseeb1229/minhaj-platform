@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { Container, Prose } from '@/components/ui';
+import { Container, PageHero } from '@/components/ui';
 import { ExplorePanel } from '@/components/shell/explore-panel';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
@@ -43,17 +43,13 @@ export default async function ExplorePage({
   const t = await getTranslations({ locale, namespace: 'shell' });
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Prose>
-          <h1 className="text-3xl font-semibold tracking-tight">{t('explore.title')}</h1>
-          <p className="text-[color:var(--color-foreground-muted)]">
-            {t('explore.description')}
-          </p>
-        </Prose>
-
-        <ExplorePanel locale={locale} />
-      </div>
-    </Container>
+    <>
+      <PageHero title={t('explore.title')} lede={t('explore.description')} />
+      <Container>
+        <div className="py-[var(--space-page)]">
+          <ExplorePanel locale={locale} />
+        </div>
+      </Container>
+    </>
   );
 }

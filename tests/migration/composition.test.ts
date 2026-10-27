@@ -36,11 +36,16 @@ import {
  * a denial never put to Identity; topics are asked in Taxonomy's bounded
  * batches; Storage is asked for still images and PDFs only, and its custody
  * states map faithfully.
+ *
+ * Phase 30 adds the Library and Editorial targets and the router, proved over
+ * stateful fakes of each domain's operations in `./publication-targets.test.ts`.
  */
 
 const ACTOR = { accountId: '00000000-0000-4000-8000-0000000000aa' };
 const VIDEO_ID = '00000000-0000-4000-8000-000000000001';
 const TOPIC = '00000000-0000-4000-8000-0000000000f1';
+/** No assets and no other migrated record: the Video target uses neither. */
+const NO_LINKS = { assets: [], resolve: async () => null };
 
 const PAYLOAD: StagedVideoPayload = {
   kind: 'media.video',
@@ -178,13 +183,15 @@ describe('Phase 29 Media publication target', () => {
     const result = await target.publish({
       kind: 'media.video',
       payload: PAYLOAD,
+      ...NO_LINKS,
       topicIds: [TOPIC],
       actor: ACTOR,
       resumed: false,
     });
     expect(result).toEqual({
       status: 'published',
-      videoId: VIDEO_ID,
+      target: { kind: 'media.video', id: VIDEO_ID },
+      stage: 'public',
       version: 1,
       canonicalPath: `/watch/videos/${PAYLOAD.slug}`,
     });
@@ -232,13 +239,15 @@ describe('Phase 29 Media publication target', () => {
       const result = await mediaVideoTargetOver({ media, holdings: notHeld }).publish({
         kind: 'media.video',
         payload: PAYLOAD,
+        ...NO_LINKS,
         topicIds: [],
         actor: ACTOR,
         resumed: true,
       });
       expect(result).toEqual({
         status: 'published',
-        videoId: existing.id,
+        target: { kind: 'media.video', id: existing.id },
+        stage: 'public',
         version: 3,
         canonicalPath: `/watch/videos/${PAYLOAD.slug}`,
       });
@@ -264,6 +273,7 @@ describe('Phase 29 Media publication target', () => {
       const result = await mediaVideoTargetOver({ media, holdings: notHeld }).publish({
         kind: 'media.video',
         payload: PAYLOAD,
+        ...NO_LINKS,
         topicIds: [],
         actor: ACTOR,
         resumed: true,
@@ -282,6 +292,7 @@ describe('Phase 29 Media publication target', () => {
       const result = await mediaVideoTargetOver({ media, holdings: notHeld }).publish({
         kind: 'media.video',
         payload: PAYLOAD,
+        ...NO_LINKS,
         topicIds: [],
         actor: ACTOR,
         resumed: false,
@@ -299,6 +310,7 @@ describe('Phase 29 Media publication target', () => {
         await mediaVideoTargetOver({ media, holdings: notHeld }).publish({
           kind: 'media.video',
           payload: PAYLOAD,
+          ...NO_LINKS,
           topicIds: [],
           actor: ACTOR,
           resumed: false,
@@ -310,6 +322,7 @@ describe('Phase 29 Media publication target', () => {
       await mediaVideoTargetOver({ media: outage.media, holdings: notHeld }).publish({
         kind: 'media.video',
         payload: PAYLOAD,
+        ...NO_LINKS,
         topicIds: [],
         actor: ACTOR,
         resumed: false,
@@ -326,6 +339,7 @@ describe('Phase 29 Media publication target', () => {
       }).publish({
         kind: 'media.video',
         payload: PAYLOAD,
+        ...NO_LINKS,
         topicIds: [],
         actor: ACTOR,
         resumed: true,
@@ -346,7 +360,10 @@ describe('Phase 29 Media publication target', () => {
       },
     });
     expect(
-      await target.inspect({ kind: 'media.video', videoId: VIDEO_ID, actor: ACTOR }),
+      await target.inspect({
+        target: { kind: 'media.video', id: VIDEO_ID },
+        actor: ACTOR,
+      }),
     ).toEqual({
       exists: true,
       version: 4,
@@ -355,8 +372,7 @@ describe('Phase 29 Media publication target', () => {
     expect(asked).toEqual([VIDEO_ID]);
     expect(
       await target.inspect({
-        kind: 'media.video',
-        videoId: '00000000-0000-4000-8000-0000000000c0',
+        target: { kind: 'media.video', id: '00000000-0000-4000-8000-0000000000c0' },
         actor: ACTOR,
       }),
     ).toEqual({ exists: false, version: 0, referencedByPeople: false });
@@ -388,8 +404,7 @@ describe('Phase 29 Media publication target', () => {
     const target = mediaVideoTargetOver({ media, holdings: notHeld });
     expect(
       await target.withdraw({
-        kind: 'media.video',
-        videoId: VIDEO_ID,
+        target: { kind: 'media.video', id: VIDEO_ID },
         expectedVersion: 2,
         actor: ACTOR,
       }),
@@ -427,8 +442,7 @@ describe('Phase 29 Media publication target', () => {
     const edited = fakeMedia({ stored: [record({ version: 5 })] });
     expect(
       await mediaVideoTargetOver({ media: edited.media, holdings: notHeld }).withdraw({
-        kind: 'media.video',
-        videoId: VIDEO_ID,
+        target: { kind: 'media.video', id: VIDEO_ID },
         expectedVersion: 2,
         actor: ACTOR,
       }),
@@ -437,8 +451,7 @@ describe('Phase 29 Media publication target', () => {
     const gone = fakeMedia({ stored: [] });
     expect(
       await mediaVideoTargetOver({ media: gone.media, holdings: notHeld }).withdraw({
-        kind: 'media.video',
-        videoId: VIDEO_ID,
+        target: { kind: 'media.video', id: VIDEO_ID },
         expectedVersion: 2,
         actor: ACTOR,
       }),

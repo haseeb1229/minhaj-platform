@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
@@ -20,22 +21,26 @@ import { currentFatwaHitText } from '@/components/search/fatwa-hit-text';
 import { quranHitKey, type QuranHitDisplay } from '@/components/search/quran-hit';
 import { currentQuranHitText } from '@/components/search/quran-hit-text';
 import {
+  ActionLink,
   Alert,
   Breadcrumbs,
   Button,
+  CardGrid,
   Container,
   EmptyState,
   Field,
+  LinkCard,
+  MetaRow,
   PageHeading,
-  Panel,
+  SectionHeader,
   Select,
-  StatusBadge,
   TextInput,
   TextLink,
 } from '@/components/ui';
 import { publicIndexingEnabled } from '@/config/indexing';
 import { directionOf, isSupportedLocale } from '@/config/locale';
 import { requireLocale } from '@/config/route-locale';
+import { pathFor, requireRoute } from '@/shell/registry';
 
 /**
  * `/{locale}/search` — unified public search (ROUTE_MAP.md §3.1, DELIVERY_PLAN.md
@@ -154,179 +159,227 @@ export default async function SearchPage({ params, searchParams }: SearchParams)
   );
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={shell('nav.breadcrumbs')}
-          trail={[{ href: `/${locale}`, text: shell('nav.home') }, { text: t('title') }]}
-        />
+    <>
+      {/*
+       * A COMPACT TOOL HEADER, NOT A HERO. The page's job is the form and the
+       * results under it, so the band holds the heading, one line of
+       * orientation and the form — and the results start within the first
+       * screen on a phone.
+       */}
+      <div className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)]">
+        <Container>
+          <div className="flex flex-col gap-5 py-[var(--space-page)]">
+            <Breadcrumbs
+              label={shell('nav.breadcrumbs')}
+              trail={[
+                { href: `/${locale}`, text: shell('nav.home') },
+                { text: t('title') },
+              ]}
+            />
+            <div className="flex max-w-3xl flex-col gap-2">
+              <PageHeading>{t('title')}</PageHeading>
+              <p className="text-lede max-w-[var(--measure-prose)] text-[color:var(--color-foreground-muted)]">
+                {t('intro')}
+              </p>
+            </div>
 
-        <div className="flex flex-col gap-2">
-          <PageHeading>{t('title')}</PageHeading>
-          <p className="text-[color:var(--color-foreground-muted)]">{t('intro')}</p>
-        </div>
-
-        <Panel>
-          <form
-            method="get"
-            action={`/${locale}/search`}
-            role="search"
-            aria-label={t('title')}
-            className="flex flex-col gap-5"
-          >
-            <Field
-              id="search-q"
-              label={t('queryLabel')}
-              help={t('queryHelp')}
-              {...errorFor(
-                'query-too-long',
-                'too-many-terms',
-                'term-too-long',
-                'no-terms',
-              )}
+            <form
+              method="get"
+              action={`/${locale}/search`}
+              role="search"
+              aria-label={t('title')}
+              className="flex w-full max-w-3xl flex-col gap-4"
             >
-              {(props) => (
-                <TextInput
-                  {...props}
-                  type="search"
-                  name="q"
-                  defaultValue={form.q}
-                  maxLength={SEARCH_QUERY_MAX_LENGTH}
-                  autoComplete="off"
-                  enterKeyHint="search"
-                />
-              )}
-            </Field>
+              <Field
+                id="search-q"
+                label={t('queryLabel')}
+                help={t('queryHelp')}
+                {...errorFor(
+                  'query-too-long',
+                  'too-many-terms',
+                  'term-too-long',
+                  'no-terms',
+                )}
+              >
+                {(props) => (
+                  <TextInput
+                    {...props}
+                    type="search"
+                    name="q"
+                    defaultValue={form.q}
+                    maxLength={SEARCH_QUERY_MAX_LENGTH}
+                    autoComplete="off"
+                    enterKeyHint="search"
+                  />
+                )}
+              </Field>
 
-            <details
-              className="rounded-[var(--radius-control)] border border-[color:var(--color-border)] px-4 py-3"
-              open={hasFilters(form) || issues.size > 0}
-            >
-              <summary className="cursor-pointer text-sm font-medium">
-                {t('refine')}
-              </summary>
+              <details
+                className="rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4"
+                open={hasFilters(form) || issues.size > 0}
+              >
+                <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium">
+                  {t('refine')}
+                </summary>
 
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <Field id="search-type" label={t('type')} {...errorFor('type')}>
-                  {(props) => (
-                    <Select {...props} name="type" defaultValue={form.type}>
-                      <option value="">{t('typeAny')}</option>
-                      {SEARCH_KINDS.map((kind) => (
-                        <option key={kind} value={kind}>
-                          {t(`kinds.${kind}`)}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </Field>
+                <div className="grid gap-4 pb-4 pt-2 sm:grid-cols-2">
+                  <Field id="search-type" label={t('type')} {...errorFor('type')}>
+                    {(props) => (
+                      <Select {...props} name="type" defaultValue={form.type}>
+                        <option value="">{t('typeAny')}</option>
+                        {SEARCH_KINDS.map((kind) => (
+                          <option key={kind} value={kind}>
+                            {t(`kinds.${kind}`)}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
 
-                <Field id="search-topic" label={t('topic')} {...errorFor('topic')}>
-                  {(props) => (
-                    <Select {...props} name="topic" defaultValue={form.topic}>
-                      <option value="">{t('topicAny')}</option>
-                      {topics.map((topic) => (
-                        <option key={topic.id} value={topic.slug}>
-                          {`${'— '.repeat(Math.max(0, topic.depth - 1))}${topic.label.name}`}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </Field>
+                  <Field id="search-topic" label={t('topic')} {...errorFor('topic')}>
+                    {(props) => (
+                      <Select {...props} name="topic" defaultValue={form.topic}>
+                        <option value="">{t('topicAny')}</option>
+                        {topics.map((topic) => (
+                          <option key={topic.id} value={topic.slug}>
+                            {`${'— '.repeat(Math.max(0, topic.depth - 1))}${topic.label.name}`}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
 
-                <Field
-                  id="search-language"
-                  label={t('language')}
-                  help={t('languageHelp')}
-                  {...errorFor('language')}
-                >
-                  {(props) => (
-                    <Select {...props} name="language" defaultValue={form.language}>
-                      <option value="">{t('languageAny')}</option>
-                      {languages.map((language) => (
-                        <option key={language.code} value={language.code}>
-                          {language.nativeName}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </Field>
-
-                <div className="grid grid-cols-2 gap-4">
                   <Field
-                    id="search-from"
-                    label={t('from')}
-                    {...errorFor('year', 'year-range')}
+                    id="search-language"
+                    label={t('language')}
+                    help={t('languageHelp')}
+                    {...errorFor('language')}
                   >
                     {(props) => (
-                      <TextInput
-                        {...props}
-                        name="from"
-                        type="number"
-                        inputMode="numeric"
-                        min={1}
-                        max={9999}
-                        defaultValue={form.from}
-                      />
+                      <Select {...props} name="language" defaultValue={form.language}>
+                        <option value="">{t('languageAny')}</option>
+                        {languages.map((language) => (
+                          <option key={language.code} value={language.code}>
+                            {language.nativeName}
+                          </option>
+                        ))}
+                      </Select>
                     )}
                   </Field>
-                  <Field id="search-to" label={t('to')}>
-                    {(props) => (
-                      <TextInput
-                        {...props}
-                        name="to"
-                        type="number"
-                        inputMode="numeric"
-                        min={1}
-                        max={9999}
-                        defaultValue={form.to}
-                      />
-                    )}
-                  </Field>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field
+                      id="search-from"
+                      label={t('from')}
+                      {...errorFor('year', 'year-range')}
+                    >
+                      {(props) => (
+                        <TextInput
+                          {...props}
+                          name="from"
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          max={9999}
+                          defaultValue={form.from}
+                        />
+                      )}
+                    </Field>
+                    <Field id="search-to" label={t('to')}>
+                      {(props) => (
+                        <TextInput
+                          {...props}
+                          name="to"
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          max={9999}
+                          defaultValue={form.to}
+                        />
+                      )}
+                    </Field>
+                  </div>
+                  <p className="text-xs text-[color:var(--color-foreground-muted)] sm:col-span-2">
+                    {t('yearHelp')}
+                  </p>
                 </div>
+              </details>
+
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                <Button>{t('submit')}</Button>
+                {form.q === '' && !hasFilters(form) ? null : (
+                  <QuietLink href={`/${locale}/search`}>{t('clear')}</QuietLink>
+                )}
+                {hasFilters(form) && form.q !== '' ? (
+                  <QuietLink
+                    href={searchHref(locale, form, {
+                      type: '',
+                      topic: '',
+                      language: '',
+                      from: '',
+                      to: '',
+                    })}
+                  >
+                    {t('clearFilters')}
+                  </QuietLink>
+                ) : null}
               </div>
-              <p className="mt-3 text-xs text-[color:var(--color-foreground-muted)]">
-                {t('yearHelp')}
-              </p>
-            </details>
-
-            <div className="flex flex-wrap items-center gap-4">
-              <Button>{t('submit')}</Button>
-              {form.q === '' && !hasFilters(form) ? null : (
-                <TextLink href={`/${locale}/search`}>{t('clear')}</TextLink>
-              )}
-              {hasFilters(form) && form.q !== '' ? (
-                <TextLink
-                  href={searchHref(locale, form, {
-                    type: '',
-                    topic: '',
-                    language: '',
-                    from: '',
-                    to: '',
-                  })}
-                >
-                  {t('clearFilters')}
-                </TextLink>
-              ) : null}
-            </div>
-          </form>
-        </Panel>
-
-        <SearchResults
-          outcome={outcome}
-          locale={locale}
-          languageNames={languageNames}
-          quranText={quranText}
-          hadithText={hadithText}
-          fatwaText={fatwaText}
-          t={t}
-          href={(overrides) => searchHref(locale, form, overrides)}
-        />
+            </form>
+          </div>
+        </Container>
       </div>
-    </Container>
+
+      <Container>
+        <div className="flex flex-col gap-6 py-[var(--space-page)]">
+          <SearchResults
+            outcome={outcome}
+            locale={locale}
+            languageNames={languageNames}
+            quranText={quranText}
+            hadithText={hadithText}
+            fatwaText={fatwaText}
+            t={t}
+            href={(overrides) => searchHref(locale, form, overrides)}
+          />
+        </div>
+      </Container>
+    </>
   );
 }
 
 type Translate = Awaited<ReturnType<typeof getTranslations<'search'>>>;
+
+/** A secondary text link with a 44-pixel target. */
+function QuietLink({
+  href,
+  children,
+}: {
+  readonly href: string;
+  readonly children: ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      className="inline-flex min-h-11 items-center text-sm font-medium text-[color:var(--color-action)] underline underline-offset-2 hover:text-[color:var(--color-action-hover)]"
+    >
+      {children}
+    </a>
+  );
+}
+
+/** The two delivered places to browse instead of search, named by where they go. */
+function BrowseLinks({ locale, t }: { readonly locale: Locale; readonly t: Translate }) {
+  return (
+    <span className="mt-3 flex flex-wrap justify-center gap-x-6">
+      <QuietLink href={pathFor(locale, requireRoute('topics'))}>
+        {t('browseTopics')}
+      </QuietLink>
+      <QuietLink href={pathFor(locale, requireRoute('library'))}>
+        {t('browseLibrary')}
+      </QuietLink>
+    </span>
+  );
+}
 
 function SearchResults({
   outcome,
@@ -350,29 +403,40 @@ function SearchResults({
   switch (outcome.state) {
     case 'initial':
       return (
-        <section className="flex flex-col gap-3" aria-labelledby="search-initial">
-          <h2 id="search-initial" className="text-lg font-semibold">
-            {t('initialTitle')}
-          </h2>
-          <p className="text-[color:var(--color-foreground-muted)]">{t('initialBody')}</p>
-          <ul className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-            <li>
-              <TextLink href={`/${locale}/topics`}>{t('browseTopics')}</TextLink>
-            </li>
-            <li>
-              <TextLink href={`/${locale}/library`}>{t('browseLibrary')}</TextLink>
-            </li>
-          </ul>
+        <section className="flex flex-col gap-5" aria-labelledby="search-initial">
+          <SectionHeader
+            id="search-initial"
+            heading={t('initialTitle')}
+            intro={t('initialBody')}
+          />
+          <CardGrid columns={3}>
+            <LinkCard
+              href={pathFor(locale, requireRoute('topics'))}
+              title={t('browseTopics')}
+              description={t('start.topics')}
+            />
+            <LinkCard
+              href={pathFor(locale, requireRoute('library'))}
+              title={t('browseLibrary')}
+              description={t('start.library')}
+            />
+            <LinkCard
+              href={pathFor(locale, requireRoute('explore'))}
+              title={t('start.exploreTitle')}
+              description={t('start.explore')}
+            />
+          </CardGrid>
         </section>
       );
 
     case 'invalid':
       return (
-        <div role="alert" className="flex flex-col gap-2 text-sm">
-          <p className="font-medium text-[color:var(--color-error)]">
-            {t('invalidTitle')}
-          </p>
-          <ul className="list-disc ps-5 text-[color:var(--color-error)]">
+        <div
+          role="alert"
+          className="flex flex-col gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-error)] bg-[color:var(--color-error-surface)] px-4 py-3 text-sm text-[color:var(--color-error)]"
+        >
+          <p className="font-semibold">{t('invalidTitle')}</p>
+          <ul className="list-disc ps-5">
             {outcome.issues.map((key) => (
               <li key={key}>{t(`issues.${key}` as 'issues.type')}</li>
             ))}
@@ -393,20 +457,23 @@ function SearchResults({
             {t('resultsLabel')}
           </h2>
 
-          {topic === null ? null : (
-            <p className="text-sm">
-              {t('topicActive', { name: topic.name })}{' '}
-              <TextLink href={href({ topic: '' })}>{t('removeTopic')}</TextLink>
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-[color:var(--color-border)] pb-3">
+            <p role="status" className="text-sm font-medium">
+              {results.capped
+                ? t('resultsCapped', { count: SEARCH_RESULT_CEILING, query })
+                : results.total > 0
+                  ? t('results', { count: results.total, query })
+                  : null}
             </p>
-          )}
-
-          <p role="status" className="text-sm text-[color:var(--color-foreground-muted)]">
-            {results.capped
-              ? t('resultsCapped', { count: SEARCH_RESULT_CEILING, query })
-              : results.total > 0
-                ? t('results', { count: results.total, query })
-                : null}
-          </p>
+            {topic === null ? null : (
+              <p className="flex flex-wrap items-center gap-x-3 text-sm">
+                <span className="rounded-full border border-[color:var(--color-accent)] bg-[color:var(--color-accent-surface)] px-3 py-1">
+                  {t('topicActive', { name: topic.name })}
+                </span>
+                <QuietLink href={href({ topic: '' })}>{t('removeTopic')}</QuietLink>
+              </p>
+            )}
+          </div>
 
           {results.hits.length === 0 ? (
             results.page > 1 ? (
@@ -415,16 +482,18 @@ function SearchResults({
               </EmptyState>
             ) : (
               <EmptyState>
-                <span className="block font-medium">{t('noResults', { query })}</span>
-                <span className="mt-1 block">{t('noResultsHelp')}</span>
-                <span className="mt-3 flex flex-wrap justify-center gap-x-6 gap-y-2">
-                  <TextLink href={`/${locale}/topics`}>{t('browseTopics')}</TextLink>
-                  <TextLink href={`/${locale}/library`}>{t('browseLibrary')}</TextLink>
+                <span className="block font-medium text-[color:var(--color-foreground)]">
+                  {t('noResults', { query })}
                 </span>
+                <span className="mt-1 block">{t('noResultsHelp')}</span>
+                <BrowseLinks locale={locale} t={t} />
               </EmptyState>
             )
           ) : (
-            <ol aria-label={t('resultsLabel')} className="flex flex-col gap-4">
+            <ol
+              aria-label={t('resultsLabel')}
+              className="flex max-w-3xl list-none flex-col p-0"
+            >
               {results.hits.map((hit) => (
                 <ResultItem
                   key={`${hit.kind}:${hit.resourceId}`}
@@ -444,19 +513,28 @@ function SearchResults({
           {results.pageCount > 1 && results.hits.length > 0 ? (
             <nav
               aria-label={t('pagination')}
-              className="flex flex-wrap items-center gap-6"
+              className="flex max-w-3xl flex-wrap items-center justify-between gap-4 border-t border-[color:var(--color-border)] pt-5"
             >
-              {results.page > 1 ? (
-                <TextLink href={href({ page: results.page - 1 })}>
-                  {t('previous')}
-                </TextLink>
-              ) : null}
-              <span aria-current="page" className="text-sm">
+              <span className="min-w-0">
+                {results.page > 1 ? (
+                  <ActionLink href={href({ page: results.page - 1 })} tone="secondary">
+                    {t('previous')}
+                  </ActionLink>
+                ) : null}
+              </span>
+              <span
+                aria-current="page"
+                className="text-sm text-[color:var(--color-foreground-muted)]"
+              >
                 {t('pageStatus', { page: results.page, pages: results.pageCount })}
               </span>
-              {results.page < results.pageCount ? (
-                <TextLink href={href({ page: results.page + 1 })}>{t('next')}</TextLink>
-              ) : null}
+              <span className="min-w-0">
+                {results.page < results.pageCount ? (
+                  <ActionLink href={href({ page: results.page + 1 })} tone="secondary">
+                    {t('next')}
+                  </ActionLink>
+                ) : null}
+              </span>
             </nav>
           ) : null}
         </section>
@@ -524,56 +602,54 @@ function ResultItem({
       : (languageNames.get(contentLanguageCode) ?? null);
 
   return (
-    <Panel as="li">
+    <li className="min-w-0 border-b border-[color:var(--color-border)] py-5 first:pt-0 last:border-b-0">
       <article className="flex min-w-0 flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--color-foreground-muted)]">
-          <StatusBadge tone="neutral">{t(`kinds.${hit.kind}`)}</StatusBadge>
-          {quran === undefined ? null : (
-            // A translation's words are never presented as the Arabic: only the
-            // canonical text is labelled as it (Phase 18 §4).
-            <span>
-              {quran.layer === 'arabic'
-                ? t('quranArabic')
-                : t('quranLayer', { language: language?.name ?? textLanguage })}
-            </span>
-          )}
-          {hadith === undefined ? null : (
-            // A translation is never presented as the original text.
-            <span>
-              {hadith.layer === 'original'
-                ? t('hadithOriginal')
-                : t('hadithTranslation', { language: language?.name ?? textLanguage })}
-            </span>
-          )}
-          {contentLanguage === null ? null : (
-            <span lang={contentLanguageCode ?? undefined}>{contentLanguage.name}</span>
-          )}
-          {hit.year === null ? null : (
-            <span>{t('published', { year: String(hit.year) })}</span>
-          )}
-        </div>
+        <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+          {t(`kinds.${hit.kind}`)}
+        </p>
         <h3
-          className="text-lg font-semibold break-words"
+          className="text-subheading font-semibold break-words"
           lang={textLanguage}
           dir={direction}
         >
           <a
             href={`/${locale}${hit.href}`}
-            className="text-[color:var(--color-action)] underline underline-offset-2"
+            className="text-[color:var(--color-foreground)] underline decoration-[color:var(--color-accent-rule)] underline-offset-4 hover:decoration-[color:var(--color-action)] active:text-[color:var(--color-action)]"
           >
             <Highlighted text={title} query={query} />
           </a>
         </h3>
         {summary === '' ? null : (
           <p
-            className="text-sm break-words text-[color:var(--color-foreground-muted)]"
+            className="max-w-[var(--measure-prose)] text-sm break-words text-[color:var(--color-foreground-muted)]"
             lang={textLanguage}
             dir={direction}
           >
             <Highlighted text={summary} query={query} />
           </p>
         )}
+        <MetaRow
+          items={[
+            // A translation's words are never presented as the Arabic: only the
+            // canonical text is labelled as it (Phase 18 §4).
+            quran === undefined
+              ? null
+              : quran.layer === 'arabic'
+                ? t('quranArabic')
+                : t('quranLayer', { language: language?.name ?? textLanguage }),
+            // A translation is never presented as the original text.
+            hadith === undefined
+              ? null
+              : hadith.layer === 'original'
+                ? t('hadithOriginal')
+                : t('hadithTranslation', { language: language?.name ?? textLanguage }),
+            contentLanguage === null ? null : (
+              <span lang={contentLanguageCode ?? undefined}>{contentLanguage.name}</span>
+            ),
+            hit.year === null ? null : t('published', { year: String(hit.year) }),
+          ]}
+        />
       </article>
-    </Panel>
+    </li>
   );
 }

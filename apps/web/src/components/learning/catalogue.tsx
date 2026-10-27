@@ -13,15 +13,13 @@ import {
 import { learningReadRuntime } from '@/composition/learning-read';
 import { contentLanguages, referenceNames } from '@/composition/public-references';
 import { taxonomyRuntime } from '@/composition/taxonomy';
-import { Pagination } from '@/components/media/parts';
+import { MediaPageHeader, Pagination } from '@/components/media/parts';
 import {
   Alert,
-  Breadcrumbs,
   Button,
   Container,
   EmptyState,
   Field,
-  PageHeading,
   Panel,
   Select,
   TextLink,
@@ -140,18 +138,16 @@ export async function CourseCataloguePage({
 
   return (
     <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[trail.home, trail.learn, { text: title }]}
+      <div className="flex flex-col gap-10 pt-6 pb-[var(--space-section)]">
+        <MediaPageHeader
+          crumbs={{
+            label: trail.label,
+            trail: [trail.home, trail.learn, { text: title }],
+          }}
+          eyebrow={t('title')}
+          title={title}
+          lede={t('sectionBody.courses')}
         />
-
-        <div className="flex flex-col gap-2">
-          <PageHeading>{title}</PageHeading>
-          <p className="text-[color:var(--color-foreground-muted)]">
-            {t('sectionBody.courses')}
-          </p>
-        </div>
 
         <Panel>
           <form
@@ -160,7 +156,7 @@ export async function CourseCataloguePage({
             className="flex flex-col gap-4"
             aria-label={t('filter.label')}
           >
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               <Field id="learn-filter-topic" label={t('filter.topic')}>
                 {(props) => (
                   <Select {...props} name="topic" defaultValue={topic?.slug ?? ''}>

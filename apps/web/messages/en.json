@@ -36,12 +36,42 @@
     "home": {
       "description": "A unified digital platform for the Quran, Hadith, learning, library and media resources of Minhaj-ul-Quran International.",
       "lede": "A unified digital platform for the Quran, Hadith, learning, library and media resources of Minhaj-ul-Quran International.",
-      "buildStatus": "The platform is being built in stages. What is available now is the public shell: the navigation, the structure, and the routes each area will occupy. Published content arrives with the phase that delivers it.",
       "exploreAction": "Explore the platform",
       "exploreHeading": "Explore",
       "exploreIntro": "Sections describing the organisation, its leadership and its work. Each section is published as it is completed.",
       "accountHeading": "My Minhaj",
-      "accountBody": "An account is optional. Everything published here can be read without one; My Minhaj is for the parts of the platform that need to know who you are."
+      "accountBody": "An account is optional. Everything published here can be read without one; My Minhaj is for the parts of the platform that need to know who you are.",
+      "preAdoption": "Independently developed and in pre-adoption review. Each area fills as its content is published.",
+      "search": {
+        "label": "Search the Quran, Hadith, the Library and more",
+        "submit": "Find"
+      },
+      "sources": {
+        "heading": "Quran and Hadith",
+        "intro": "Two separate sources, each with its own reader, index and search."
+      },
+      "status": {
+        "available": "Available",
+        "fixture": "Test text only",
+        "unavailable": "Not yet published"
+      },
+      "areas": {
+        "heading": "Across the platform",
+        "intro": "Every area can be read without an account."
+      },
+      "library": {
+        "heading": "From the Library",
+        "book": "Book",
+        "magazine": "Magazine"
+      },
+      "links": {
+        "allNews": "All news",
+        "allEvents": "All events",
+        "library": "Visit the Library",
+        "allCollections": "All collections",
+        "allTopics": "All topics",
+        "fatwa": "Browse Fatwa"
+      }
     },
     "explore": {
       "title": "Explore",
@@ -133,9 +163,16 @@
       "accessibility": "Accessibility Statement"
     },
     "footer": {
-      "exploreHeading": "Explore",
       "legalHeading": "Legal and site",
-      "preAdoption": "One Minhaj is an independently developed platform. It is not currently commissioned, sponsored, adopted or deployed by Minhaj-ul-Quran International, and nothing here should be read as an official statement by the organisation."
+      "preAdoption": "One Minhaj is an independently developed platform. It is not currently commissioned, sponsored, adopted or deployed by Minhaj-ul-Quran International, and nothing here should be read as an official statement by the organisation.",
+      "columns": {
+        "about": "About Minhaj-ul-Quran",
+        "knowledge": "Knowledge",
+        "libraryMedia": "Library and Media",
+        "learnParticipate": "Learn and Participate",
+        "ourWork": "Our Work",
+        "globalContact": "Global and Contact"
+      }
     },
     "reserved": {
       "heading": "Not yet published",
@@ -245,6 +282,44 @@
       "trial": "Trial classes",
       "live": "Live learning",
       "teachers": "Find a teacher"
+    },
+    "menu": {
+      "overview": "{section} overview",
+      "toggle": "More in {section}",
+      "columns": {
+        "connect": "Connect",
+        "read": "Read",
+        "study": "Study",
+        "explore": "Explore",
+        "learn": "Learn",
+        "browse": "Browse",
+        "learning": "Learning",
+        "topics": "Topics",
+        "live": "Live",
+        "people": "People",
+        "writtenWorks": "Written works",
+        "periodicals": "Periodicals",
+        "access": "Access",
+        "watch": "Watch",
+        "seriesPrograms": "Series and programmes",
+        "byTopic": "By topic",
+        "listen": "Listen",
+        "find": "Find",
+        "ask": "Ask",
+        "understand": "Understand",
+        "news": "News",
+        "events": "Events",
+        "media": "Media",
+        "archive": "Archive",
+        "structure": "Structure"
+      },
+      "labels": {
+        "help": "Help and FAQ",
+        "quranRead": "Read the Quran",
+        "quranSurah": "Surah index",
+        "quranJuz": "Juz index",
+        "hadithIntroduction": "Introduction to Hadith"
+      }
     }
   },
   "localeSwitcher": {
@@ -1187,6 +1262,46 @@
       "rebuild": "Rebuild the index",
       "rebuildHelp": "Re-reads everything each owner publishes. Search keeps answering while it runs.",
       "rebuilt": "A full rebuild has started. It runs in the background; refresh this page to follow it."
+    },
+    "home": {
+      "description": "Every area your permissions open, grouped by purpose."
+    },
+    "groups": {
+      "access": "Identity and access",
+      "content": "Content",
+      "religious": "Religious content",
+      "learning": "Learning and messaging",
+      "membership": "Membership and donations",
+      "communications": "Communications",
+      "system": "System and migration"
+    },
+    "summary": {
+      "users": "Accounts and their status.",
+      "roles": "Named bundles of permissions, and who may hold them.",
+      "permissions": "The fixed permission catalogue. Read-only.",
+      "assignments": "Who holds which role, with the history of every change.",
+      "security": "Privileged second-factor state and the administrator bootstrap. Read-only.",
+      "editorial": "Articles, pages, news, events and collections, with the review queue.",
+      "correspondence": "Contact and feedback messages, and their triage.",
+      "taxonomy": "Topics, content languages and editorial tags.",
+      "people": "Contributors: authors, speakers, scholars and teachers.",
+      "library": "Books, editions, translations, research, publications and magazines.",
+      "media": "Videos, audio and photographs, with their series, playlists and galleries.",
+      "quran": "Surahs, ayat, translations, tafsir and recitations.",
+      "hadith": "Collections, books, chapters, records and commentary.",
+      "fatwa": "Questions received, answers in preparation, review and published rulings.",
+      "learning": "Courses, learning paths, enrolments, trial requests and classes.",
+      "messaging": "The support queue, moderation and reports.",
+      "global": "Countries, regions, cities and centres.",
+      "newsletter": "Newsletter subscription and suppression state.",
+      "membership": "Membership types, members and applications.",
+      "donations": "Donation records, refunds and campaigns.",
+      "migration": "Legacy sources, runs, staging and review.",
+      "navigation": "The public site’s effective navigation. Read-only.",
+      "audit": "The history of security-relevant actions. Read-only.",
+      "integrations": "Outbound email provider configuration and status.",
+      "delivery": "Pending, failed and suppressed outbound mail.",
+      "search": "Search indexing lag and failures."
     }
   },
   "people": {
@@ -1209,7 +1324,10 @@
     "videos": "Videos",
     "allVideos": "All videos with this speaker",
     "audio": "Audio",
-    "allAudio": "All audio with this speaker"
+    "allAudio": "All audio with this speaker",
+    "eyebrow": "Contributor",
+    "biography": "Biography",
+    "facetsIntro": "The kinds of contribution described and published for this person."
   },
   "editorial": {
     "title": "Editorial",
@@ -1387,7 +1505,9 @@
     "memberType-statement": "Statement",
     "memberType-media-coverage": "Media coverage",
     "memberType-work": "Book",
-    "memberType-video": "Video"
+    "memberType-video": "Video",
+    "helpArticles": "Help articles",
+    "helpMore": "Still need help? Contact the team, or tell us what could be better."
   },
   "library": {
     "title": "Library",
@@ -1701,7 +1821,34 @@
       "citationText": "Citation {number}",
       "citationUrl": "Address (https)",
       "duplicateNumber": "Another issue of this magazine already has this volume and number."
-    }
+    },
+    "landing": {
+      "browseBooks": "Browse all books",
+      "allResources": "See every resource type",
+      "groups": {
+        "books": {
+          "heading": "Books and editions",
+          "intro": "Published works with their editions and translations, and the ways to browse them."
+        },
+        "scholarly": {
+          "heading": "Research and publications",
+          "intro": "Research, papers, reports and reference works, with abstracts and citations where they exist."
+        },
+        "periodicals": {
+          "heading": "Periodicals and articles",
+          "intro": "Magazines and journals issue by issue, and articles from the editorial process."
+        },
+        "access": {
+          "heading": "Access and availability",
+          "intro": "What can be read here, what may be downloaded, and where printed copies can be obtained."
+        }
+      }
+    },
+    "kindBook": "Book",
+    "editionCount": "{count, plural, one {# edition} other {# editions}}",
+    "availabilityReading": "Reading",
+    "availabilityDownload": "Download",
+    "readBelow": "This edition can be read in full on this page."
   },
   "search": {
     "title": "Search",
@@ -1789,7 +1936,13 @@
     "quranArabic": "Arabic text",
     "quranLayer": "Translation or transliteration · {language}",
     "hadithOriginal": "Original text",
-    "hadithTranslation": "Translation · {language}"
+    "hadithTranslation": "Translation · {language}",
+    "start": {
+      "topics": "Every subject the platform classifies its material under, each with its own hub.",
+      "library": "Books, research, magazines and articles, browsed by kind, language and topic.",
+      "exploreTitle": "Explore every section",
+      "explore": "A map of the whole platform, section by section."
+    }
   },
   "topics": {
     "title": "Topics",
@@ -1829,7 +1982,37 @@
     "hadith": "Hadith on this topic",
     "fatwa": "Rulings on this topic",
     "courses": "Courses on this topic",
-    "allCourses": "All courses on this topic"
+    "allCourses": "All courses on this topic",
+    "index": {
+      "eyebrow": "Browse by subject",
+      "roots": "Top-level topics: {count}",
+      "total": "Topics in all: {count}",
+      "children": "Subtopics: {count}"
+    },
+    "hub": {
+      "eyebrow": "Topic",
+      "map": "Where this topic sits",
+      "mapIntro": "Its broader and narrower topics, and the topics beside it in the taxonomy.",
+      "broader": "Broader topics",
+      "alongside": "Alongside this topic",
+      "allTopics": "All topics",
+      "bands": {
+        "sources": "Primary sources",
+        "guidance": "Rulings and courses",
+        "library": "Library",
+        "media": "Watch and listen",
+        "editorial": "News, events and collections"
+      },
+      "count": {
+        "books": "Books: {count}",
+        "research": "Research: {count}",
+        "research-paper": "Research papers: {count}",
+        "publication": "Publications: {count}",
+        "encyclopedia": "Encyclopedias: {count}",
+        "magazine": "Magazines: {count}",
+        "magazine-issue": "Magazine issues: {count}"
+      }
+    }
   },
   "watch": {
     "title": "Watch",
@@ -1944,7 +2127,24 @@
     "speakerVideos": "Videos: {count}",
     "topicTitle": "Videos",
     "topicHub": "Everything on this topic",
-    "topicEmpty": "No published video is on this topic yet."
+    "topicEmpty": "No published video is on this topic yet.",
+    "landing": {
+      "featuredIntro": "Videos selected to be featured on this page.",
+      "latestIntro": "The most recently published videos, newest first.",
+      "formatsHeading": "Browse by kind of video",
+      "formatsIntro": "Each kind of recording has a view of its own.",
+      "groupsHeading": "Series, programmes and playlists",
+      "groupsIntro": "Videos gathered together, to be watched in order.",
+      "findHeading": "Speakers, topics and audio",
+      "findIntro": "Find videos by who speaks or what they are about, or listen instead."
+    },
+    "viewsLabel": "Kind of video",
+    "aboutHeading": "About this video",
+    "kind": {
+      "series": "Series",
+      "program": "Programme",
+      "playlist": "Playlist"
+    }
   },
   "listen": {
     "title": "Listen",
@@ -2005,7 +2205,11 @@
     "allInSeries": "Every recording in this series",
     "seriesTracks": "Recordings",
     "seriesEmpty": "No recording in this series has been published yet.",
-    "seriesListEmpty": "No audio series has been published yet."
+    "seriesListEmpty": "No audio series has been published yet.",
+    "latestIntro": "The most recently recorded talks, newest first.",
+    "allSeries": "All audio series",
+    "browseIntro": "Other ways to find a recording.",
+    "aboutHeading": "About this recording"
   },
   "media": {
     "title": "Media",
@@ -2421,6 +2625,12 @@
       "media-coverage": "Media coverage",
       "work": "Book",
       "video": "Video"
+    },
+    "kindsPlural": {
+      "article": "Articles",
+      "news": "News",
+      "work": "Books",
+      "video": "Videos"
     }
   },
   "events": {
@@ -2502,7 +2712,21 @@
     "fixture": "Test fixture — this deployment shows non-authoritative engineering fixture text. It is not the Quran.",
     "unavailable": {
       "body": "The Quran corpus is not yet available on this site.",
-      "home": "Return to the home page"
+      "home": "Return to the home page",
+      "lede": "This section is for reading the Quran and studying it with the works published beside it.",
+      "structureHeading": "How this section is organised",
+      "structureIntro": "Reading and study open once a corpus is activated. Exploring and learning are already served elsewhere on the platform.",
+      "awaiting": "Opens when the corpus is activated",
+      "parts": {
+        "read": "The Arabic text in its own order, with one permanent address for every verse you can cite.",
+        "study": "Translations, tafsir, transliteration, tajweed guidance and recitations, each its own published work.",
+        "explore": "Books, videos, research and topics from across the platform, connected through the topic hub.",
+        "learn": "Structured courses and learning paths, taught through Learn."
+      },
+      "go": {
+        "explore": "Browse topics",
+        "learn": "Go to Learn"
+      }
     },
     "empty": "Nothing has been published here yet.",
     "previous": "Previous page",
@@ -2510,8 +2734,14 @@
     "landing": {
       "read": "Read",
       "study": "Study",
-      "listen": "Listen",
-      "related": "Related material"
+      "eyebrow": "Read · Study · Explore · Learn",
+      "readIntro": "Enter the text in its own order, or go straight to a citation.",
+      "studyIntro": "Published works read beside the text, each with its own translators and source.",
+      "explore": "Explore",
+      "exploreIntro": "Material from across the platform classified under the Quran.",
+      "learn": "Learn",
+      "learnIntro": "Courses that teach the Quran, taught through Learn.",
+      "learnAll": "All courses in Learn"
     },
     "sections": {
       "read": "Start reading",
@@ -3024,15 +3254,36 @@
     "fixture": "Test fixture — this deployment shows non-authoritative engineering fixture text. It is not Hadith and must not be cited.",
     "unavailable": {
       "body": "Hadith collections are not yet available on this site.",
-      "home": "Return to the home page"
+      "home": "Return to the home page",
+      "lede": "This section is for reading the published Hadith collections, each citation shown exactly as its source gives it.",
+      "structureHeading": "How this section is organised",
+      "structureIntro": "The collections and their study open once a collection is activated. Exploring and learning are already served elsewhere on the platform.",
+      "awaiting": "Opens when a collection is activated",
+      "parts": {
+        "collections": "Published collections, read by book and chapter, with a permanent address for every citation.",
+        "study": "The original text with its source and edition, published translations, commentary and study material.",
+        "explore": "Books, videos, research and topics from across the platform, connected through the topic hub.",
+        "learn": "Structured courses and learning paths, taught through Learn."
+      },
+      "go": {
+        "explore": "Browse topics",
+        "learn": "Go to Learn"
+      }
     },
     "previous": "Previous page",
     "next": "Next page",
     "landing": {
       "collections": "Collections",
-      "browse": "Browse",
       "study": "Study",
-      "related": "Related material"
+      "eyebrow": "Collections · Study · Explore · Learn",
+      "collectionsIntro": "Each published collection, read by book and chapter, with the sources its citations come from.",
+      "collectionsAll": "All collections",
+      "studyIntro": "Every published citation, how this section is organised, and the study works published beside it.",
+      "explore": "Explore",
+      "exploreIntro": "Material from across the platform classified under Hadith.",
+      "learn": "Learn",
+      "learnIntro": "Courses that teach Hadith, taught through Learn.",
+      "learnAll": "All courses in Learn"
     },
     "sections": {
       "introduction": "Introduction",
@@ -3185,7 +3436,23 @@
     },
     "landing": {
       "explore": "Explore",
-      "rulings": "Published rulings"
+      "rulings": "Published rulings",
+      "allCategories": "All categories",
+      "trust": {
+        "heading": "How rulings are published here",
+        "published": {
+          "title": "Published rulings only",
+          "body": "Only rulings that have been reviewed and published appear here. A question that is still being answered is never shown."
+        },
+        "questions": {
+          "title": "Questions written for publication",
+          "body": "Each ruling sits beside a separately written, anonymised statement of the question — never the asker’s own words."
+        },
+        "corrections": {
+          "title": "Corrections in the open",
+          "body": "A corrected ruling says when and why it was corrected, and every earlier published version stays readable."
+        }
+      }
     },
     "sort": {
       "label": "Order rulings by",
@@ -3236,7 +3503,10 @@
       "historyIntro": "Every earlier published version is kept here exactly as it was published, with the reason it was corrected.",
       "version": "Version published",
       "previousTitle": "Title",
-      "all": "All published rulings"
+      "all": "All published rulings",
+      "provenance": "About this ruling",
+      "language": "Language",
+      "provenanceNote": "A person is named here only when they have a published profile on this site."
     },
     "howItWorks": {
       "title": "How the Fatwa service works",
@@ -4051,7 +4321,8 @@
       "events": "Events",
       "eventsUnavailable": "This centre's events cannot be shown right now.",
       "eventsEmpty": "This centre has no upcoming events.",
-      "allEvents": "All events at this centre, upcoming and past"
+      "allEvents": "All events at this centre, upcoming and past",
+      "eyebrow": "Centre"
     },
     "contact": {
       "title": "Contact details: {centre}",
@@ -4077,7 +4348,8 @@
       "unavailable": "The Pakistan structure has not been published yet.",
       "viewCountry": "Pakistan country page",
       "empty": "No regions or cities have been published for Pakistan yet."
-    }
+    },
+    "eyebrow": "Centres worldwide"
   },
   "personalIsland": {
     "heading": "Save and notes",
@@ -4537,7 +4809,9 @@
       "paths": "Recently published learning paths",
       "allCourses": "All courses",
       "allPaths": "All learning paths",
-      "empty": "No course or learning path has been published yet."
+      "empty": "No course or learning path has been published yet.",
+      "liveSchedule": "The live class schedule",
+      "allTopics": "Browse all topics"
     },
     "coursesEmpty": "No course has been published yet.",
     "pathsEmpty": "No learning path has been published yet.",
@@ -6612,7 +6886,7 @@
       "notFound": "That record wasn’t found.",
       "conflict": "Someone changed this since the page loaded. Reload the page, check where it stands now, and try again.",
       "invalidState": "That step isn’t open for this record in its current state. Reload the page to see where it stands.",
-      "realSourceNotAuthorised": "Only synthetic fixture sources can be registered or run in this phase. A real source needs recorded written authorisation first.",
+      "realSourceNotAuthorised": "A real source needs its written authorisation reference and date recorded before it can be registered, activated or run. A fixture source can never become a real one.",
       "sourceInactive": "This source is inactive, so nothing can be run from it.",
       "adapterMismatch": "The adapter doesn’t match this source’s kind or access method, or the open run’s code.",
       "runBusy": "Another process is working on this source’s open run right now. Try again later.",
@@ -6621,12 +6895,13 @@
       "approvalWithdrawn": "The approval was withdrawn, so this can’t continue.",
       "targetUnavailable": "The publication target didn’t answer. Nothing was assumed; the work can be resumed later.",
       "crossLanguage": "These two records are in different languages. They are related, never duplicates, so they can’t be merged.",
-      "unsafeScope": "A host or base address is outside the synthetic fixture scope. Fixture sources may name only *.fixture.invalid hosts.",
+      "unsafeScope": "A host or base address is outside this source’s permitted scope. A fixture source may name only *.fixture.invalid hosts; an authorised source only real https hosts, never a fixture host.",
       "topicUnknown": "That topic doesn’t exist. Choose one from the list.",
       "notRetryable": "This error can’t be retried. Only network, timeout, rate-limit and server errors are retried; an access failure never is.",
       "duplicate": "A source with that key is already registered.",
       "leaseLost": "Another process took over this run while the work was in progress.",
-      "hostRefused": "The database refused a fixture host outside *.fixture.invalid.",
+      "hostRefused": "The database refused a host outside this source’s scope: a fixture host outside *.fixture.invalid, or a *.fixture.invalid host on an authorised source.",
+      "reviewOnlyKind": "This is religious material that migration preserves and reviews as evidence only. Migration never publishes it, so it can’t be part of a manifest.",
       "unavailable": "This couldn’t be completed right now. Nothing was assumed; please try again later.",
       "noSession": "Your session has ended. Sign in again.",
       "secondFactorRequired": "Finish setting up two-step verification first.",
@@ -6650,7 +6925,7 @@
     },
     "overview": {
       "description": "Bring legacy content into the platform with its provenance: register sources, follow runs, review what was staged, and publish reviewed manifests through each target’s own rules.",
-      "fixturesOnly": "This phase works only with synthetic fixture sources on controlled local infrastructure. No live legacy site is contacted.",
+      "sources": "A real legacy source is contacted only after its written authorisation is recorded: an operator registers it by command with the authorisation reference and date, and it stays inactive until separately activated. Synthetic fixture sources remain for engineering proof.",
       "commandLine": "Runs and promotions are carried out from the command line. These screens show where they stand and hold every human decision.",
       "surface": {
         "sources": "The registered sources, their hosts and politeness limits.",
@@ -6675,10 +6950,34 @@
       "active": "Active",
       "inactive": "Inactive"
     },
+    "contentKind": {
+      "media": {
+        "video": "Video"
+      },
+      "library": {
+        "work": "Library work",
+        "magazine": "Magazine",
+        "magazine-issue": "Magazine issue"
+      },
+      "editorial": {
+        "news": "News",
+        "article": "Article"
+      },
+      "fatwa": {
+        "ruling": "Fatwa"
+      },
+      "quran": {
+        "translation": "Quran translation"
+      }
+    },
+    "reviewOnly": {
+      "badge": "Review only",
+      "notice": "This is religious material of a review-only kind. Migration preserves and reviews it as evidence only; it is never published by migration. Its acceptance belongs to the religious authority, not to this review."
+    },
     "sources": {
       "title": "Sources",
       "description": "Legacy sources the pipeline may read, with the limits it reads them under.",
-      "fixturesOnly": "Only synthetic fixture sources can be registered. They may name only hosts ending in .fixture.invalid, which never resolve on the public internet.",
+      "registration": "Authorised sources are registered by an operator command (migration:register-source) with their written authorisation reference and date. Each is created inactive, and activating it is a separate, audited act. The form on this page registers synthetic fixture sources only.",
       "heading": "Registered sources",
       "empty": "No source is registered yet.",
       "caption": "{total, plural, one {# source.} other {# sources.}}",
@@ -6689,7 +6988,8 @@
         "name": "Name",
         "authority": "Authority",
         "access": "Access",
-        "state": "State"
+        "state": "State",
+        "contentKind": "Content kind"
       },
       "field": {
         "key": "Key",
@@ -6706,7 +7006,11 @@
         "policy": "Politeness and safety limits",
         "licensingEvidence": "Licensing evidence",
         "policyNotes": "Policy notes",
-        "version": "Version"
+        "version": "Version",
+        "authority": "Authority",
+        "contentKind": "Content kind",
+        "authorisationReference": "Written authorisation reference",
+        "authorisedOn": "Authorised on"
       },
       "policy": {
         "minIntervalMs": "Minimum interval (ms)",
@@ -6718,7 +7022,7 @@
       },
       "create": {
         "heading": "Register a fixture source",
-        "help": "The source is created as a synthetic fixture. There is no way to record a real source here.",
+        "help": "The source is created as a synthetic fixture that yields videos. There is no way to record a real source here.",
         "submit": "Register the source",
         "done": "The fixture source was registered."
       },
@@ -6844,7 +7148,21 @@
       "date-implausible": "The publication date isn’t plausible.",
       "duration-invalid": "The duration isn’t valid.",
       "slug-invalid": "The address name couldn’t be formed.",
-      "description-too-long": "The description is too long."
+      "description-too-long": "The description is too long.",
+      "body-missing": "The body text is missing.",
+      "body-too-long": "The body text is too long.",
+      "excerpt-too-long": "The excerpt is too long.",
+      "language-unsupported": "This language isn’t supported for this kind of content.",
+      "reference-missing": "The reference to the record it belongs to (such as an issue’s magazine) is missing.",
+      "edition-label-missing": "The edition label is missing.",
+      "isbn-invalid": "The ISBN isn’t valid.",
+      "year-invalid": "The year isn’t valid.",
+      "page-count-invalid": "The page count isn’t valid.",
+      "surah-invalid": "The surah number isn’t valid.",
+      "ayah-invalid": "An ayah number is missing, outside this surah or repeated.",
+      "question-missing": "The question is missing.",
+      "answer-missing": "The answer is missing.",
+      "payload-invalid": "A value fails this content kind’s strict shape in a way no other issue names."
     },
     "linkDisposition": {
       "rewritten": "Rewritten",
@@ -6862,12 +7180,30 @@
       "back": "Back to staging",
       "revision": "Revision {revision}",
       "column": {
+        "select": "Select",
         "title": "Title",
+        "contentKind": "Content kind",
         "language": "Language",
         "validation": "Validation",
         "personalData": "Personal data",
         "review": "Review",
         "produced": "Staged"
+      },
+      "bulk": {
+        "heading": "Review several revisions",
+        "help": "Select pending revisions on this page, then approve or reject them together. Each is decided, checked and recorded at the version shown, exactly as on its own page; one that can’t be decided is left as it was and listed with the reason.",
+        "select": "Select {title}",
+        "notSelectable": "Review closed",
+        "note": "Note for every selected revision (optional)",
+        "approve": "Approve selected",
+        "reject": "Reject selected",
+        "done": "Every selected revision was decided.",
+        "partial": "Not every selected revision was decided. Each one left as it was is listed below with the reason.",
+        "decided": "Decided",
+        "refused": "Left as they were",
+        "unknownRevision": "A revision no longer on this page",
+        "noneSelected": "Select at least one revision first.",
+        "interrupted": "The work stopped part-way because the store didn’t answer. Revisions decided before that stay decided; reload the page to see where each one stands."
       }
     },
     "staged": {
@@ -6888,7 +7224,7 @@
       "noIssues": "No validation issue was found.",
       "personalDataFlagged": "Personal data was detected in this revision. It can’t be approved; reject it.",
       "payload": "Sanitised payload",
-      "payloadHelp": "The normalised record exactly as stored, shown as text. Its description was sanitised before staging.",
+      "payloadHelp": "The normalised record exactly as stored, shown as text. Any rich text in it was sanitised before staging.",
       "categories": "Categories and their topic mappings",
       "noCategories": "This revision has no legacy category.",
       "mappingLink": "Decide category mappings",
@@ -6899,7 +7235,8 @@
         "href": "Address",
         "disposition": "Disposition",
         "rewrittenTo": "Rewritten to"
-      }
+      },
+      "contentKind": "Content kind"
     },
     "snapshot": {
       "heading": "Raw evidence",
@@ -7122,6 +7459,10 @@
       "rolled-back": "Rolled back",
       "rollback-refused": "Left for a person"
     },
+    "targetStage": {
+      "public": "Public",
+      "in-review": "In its domain’s review"
+    },
     "promotionState": {
       "draft": "Draft",
       "approved": "Approved",
@@ -7153,7 +7494,9 @@
         "noRuns": "No completed, balanced run is available.",
         "noApproved": "This run has no approved revision.",
         "revisions": "{total, plural, one {# approved revision} other {# approved revisions}}",
-        "submit": "Create the draft manifest"
+        "submit": "Create the draft manifest",
+        "reviewOnlyWithheld": "{count, plural, one {# approved revision of a review-only kind isn’t offered: migration never publishes religious material.} other {# approved revisions of a review-only kind aren’t offered: migration never publishes religious material.}}",
+        "noPublishable": "Every approved revision shown is of a review-only kind, so there is nothing here to publish."
       }
     },
     "manifest": {
@@ -7173,14 +7516,17 @@
         "revision": "Revision",
         "state": "State",
         "canonicalPath": "Canonical path",
-        "refusal": "Refusal"
+        "refusal": "Refusal",
+        "target": "Target",
+        "stage": "Stage"
       },
       "discard": {
         "heading": "Discard this draft",
         "confirm": "I understand this draft will be discarded. Nothing was published from it.",
         "submit": "Discard the draft",
         "done": "The draft was discarded."
-      }
+      },
+      "inReview": "A record in its domain’s review was delivered into that domain’s own review, because the domain requires a second person to approve it. It becomes public only by that domain’s own decision."
     },
     "publication": {
       "heading": "Publication",
@@ -7288,6 +7634,16 @@
       "confirm": "I understand the raw body will be removed permanently.",
       "submit": "Dispose of the raw body",
       "done": "The raw body was disposed of. Its metadata and checksum remain."
+    }
+  },
+  "workspace": {
+    "skip": "Skip to content",
+    "my": {
+      "overview": "Overview",
+      "history": "History",
+      "settings": "Account settings",
+      "accountHeading": "Account and security",
+      "questionsBody": "Questions you have asked, with their status and any published answer."
     }
   }
 }

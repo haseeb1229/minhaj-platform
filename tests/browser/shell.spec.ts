@@ -1,6 +1,6 @@
 import type { Page, Response } from '@playwright/test';
 
-import { expect, registerAndSignIn, test } from './support';
+import { expect, firstDifference, knowledgeOf, registerAndSignIn, test } from './support';
 
 /**
  * PHASE 4 — the public shell in a real browser.
@@ -239,7 +239,13 @@ test.describe('the anonymous public tree is the same for everybody', () => {
       const signedIn = await page.locator('body').innerHTML();
       const signedOut = await anonymousPage.locator('body').innerHTML();
 
-      expect(signedIn, path).toBe(signedOut);
+      // Compared as KNOWLEDGE, not bytes: since Phase 30 the home page is a
+      // per-request content route, and two renders of one may flush a Suspense
+      // boundary on either side of the shell — scaffolding, never content.
+      // Every word, attribute and link must still be identical.
+      expect(firstDifference(knowledgeOf(signedOut), knowledgeOf(signedIn)), path).toBe(
+        'identical',
+      );
     }
 
     await anonymous.close();
@@ -264,7 +270,14 @@ test.describe('the anonymous public tree is the same for everybody', () => {
       const signedIn = await page.context().request.get(`${base}${path}`);
       const signedOut = await anonymous.request.get(`${base}${path}`);
 
-      expect(await signedIn.text(), path).toBe(await signedOut.text());
+      // Knowledge, not bytes, for the same reason as above.
+      expect(
+        firstDifference(
+          knowledgeOf(await signedOut.text()),
+          knowledgeOf(await signedIn.text()),
+        ),
+        path,
+      ).toBe('identical');
 
       const signedHeaders = signedIn.headers();
       const anonymousHeaders = signedOut.headers();
@@ -527,6 +540,12 @@ test.describe('navigation is honest about what exists', () => {
   test('every link on every public page resolves', async ({ page }) => {
     // The blanket check. Dead navigation is the failure this phase is most
     // exposed to, and it is cheap to make impossible rather than unlikely.
+    //
+    // Its own time budget: since the comprehensive six-column footer and the
+    // per-domain menus, every page carries several times more distinct links,
+    // each requested once and many of them content routes rendered from the
+    // database. The assertion is unchanged — every one must answer 200.
+    test.setTimeout(240_000);
     const seen = new Set<string>();
 
     for (const path of PUBLIC_PATHS) {
@@ -624,7 +643,14 @@ test.describe('layout holds at every supported width', () => {
  * ========================================================================= */
 
 test.describe('reduced motion is honoured', () => {
-  test.use({ reducedMotion: 'reduce' });
+  // Emulated on the page itself, as every other spec does. `test.use({
+  // reducedMotion })` never reached these pages: the suite's own `context`
+  // fixture builds the context from `contextOptions`, which does not carry it,
+  // so this proof ran with motion ON and passed only while the header had no
+  // transitions at all.
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+  });
 
   test('suppresses transition and animation timing', async ({ page }) => {
     await page.goto('/en');
@@ -633,6 +659,8 @@ test.describe('reduced motion is honoured', () => {
       [...document.querySelectorAll('header *')].map((element) => {
         const style = globalThis.getComputedStyle(element);
         return {
+          // Named, so a failure says WHICH element still moves.
+          element: `${element.tagName.toLowerCase()}.${(element.getAttribute('class') ?? '').slice(0, 120)}`,
           transition: style.transitionDuration,
           animation: style.animationDuration,
         };
@@ -645,7 +673,9 @@ test.describe('reduced motion is honoured', () => {
       for (const duration of [timing.transition, timing.animation]) {
         for (const part of duration.split(', ')) {
           // `0.01ms` is what the reduced-motion rule collapses everything to.
-          expect(Number.parseFloat(part), duration).toBeLessThan(0.02);
+          expect(Number.parseFloat(part), `${timing.element} ${duration}`).toBeLessThan(
+            0.02,
+          );
         }
       }
     }

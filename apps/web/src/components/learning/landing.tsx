@@ -7,17 +7,18 @@ import { LEARNING_PAGE } from '@minhaj/contracts/learning';
 import type { TopicView } from '@minhaj/contracts/taxonomy';
 
 import { learningReadRuntime } from '@/composition/learning-read';
-import { Pagination } from '@/components/media/parts';
+import { MediaPageHeader, Pagination } from '@/components/media/parts';
 import {
+  ActionLink,
   Alert,
   Breadcrumbs,
+  CardGrid,
   Container,
   EmptyState,
-  PageHeading,
+  LinkCard,
+  PageHero,
   Panel,
-  Prose,
-  SectionHeading,
-  TextLink,
+  SectionHeader,
 } from '@/components/ui';
 import { CourseGrid, learnTrail, PathGrid } from './parts';
 import { courseBrowseHref, learnPageLinks, learnPath, offsetHref } from './presentation';
@@ -35,14 +36,19 @@ import { courseBrowseHref, learnPageLinks, learnPath, offsetHref } from './prese
  * NO FAKE CATALOGUE. Nothing here is counted, rated or featured: the landing
  * shows the most recently published Courses and paths the reader returns, and
  * when nothing is published it says so in words.
+ *
+ * STRUCTURED AS THE WAYS TO LEARN. The hero names the two catalogues; then the
+ * recent Courses, the recent paths, learning with a teacher (the live
+ * schedule, trial classes, Find a Teacher) and, last, the topic browser. Each
+ * rail is omitted when its owner returns nothing.
  */
 
 /** How many Courses and paths the landing shows before linking to the full lists. */
 const LANDING_COURSES = 6;
 const LANDING_PATHS = 3;
 
-/** The delivered Learn surfaces, in the order the landing lists them. */
-const SURFACES = ['courses', 'paths', 'trial', 'live', 'teachers'] as const;
+/** The surfaces of learning with a teacher, beside the live schedule itself. */
+const WITH_A_TEACHER = ['trial', 'teachers'] as const;
 
 export async function LearnLandingPage({ locale }: { readonly locale: Locale }) {
   const t = await getTranslations({ locale, namespace: 'learn' });
@@ -52,95 +58,118 @@ export async function LearnLandingPage({ locale }: { readonly locale: Locale }) 
   const nothing = courses.items.length === 0 && paths.items.length === 0;
 
   return (
-    <Container>
-      <div className="flex flex-col gap-10 py-12">
-        <Breadcrumbs label={trail.label} trail={[trail.home, { text: t('title') }]} />
-        <Prose>
-          <PageHeading>{t('title')}</PageHeading>
-          <p>{t('intro')}</p>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('signedOut')}
-          </p>
-        </Prose>
+    <>
+      <Container>
+        <div className="pt-6">
+          <Breadcrumbs label={trail.label} trail={[trail.home, { text: t('title') }]} />
+        </div>
+      </Container>
 
-        <section className="flex flex-col gap-4" aria-labelledby="learn-browse">
-          <SectionHeading>
-            <span id="learn-browse">{t('landing.browse')}</span>
-          </SectionHeading>
-          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {SURFACES.map((surface) => (
-              <Panel key={surface} as="li">
-                <div className="flex flex-col gap-2">
-                  <h3 className="text-lg font-semibold">
-                    <TextLink href={learnPath(locale, surface)}>
-                      {t(`sections.${surface}`)}
-                    </TextLink>
-                  </h3>
-                  <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                    {t(`sectionBody.${surface}`)}
+      <PageHero
+        title={t('title')}
+        lede={t('intro')}
+        actions={
+          <>
+            <ActionLink href={courseBrowseHref(locale)}>
+              {t('sections.courses')}
+            </ActionLink>
+            <ActionLink href={learnPath(locale, 'paths')} tone="secondary">
+              {t('sections.paths')}
+            </ActionLink>
+          </>
+        }
+      >
+        <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
+          {t('signedOut')}
+        </p>
+      </PageHero>
+
+      <Container>
+        <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
+          {nothing ? <EmptyState>{t('landing.empty')}</EmptyState> : null}
+
+          {courses.items.length === 0 ? null : (
+            <section className="flex flex-col gap-5" aria-labelledby="learn-courses">
+              <SectionHeader
+                id="learn-courses"
+                heading={t('landing.courses')}
+                action={{ href: courseBrowseHref(locale), text: t('landing.allCourses') }}
+              />
+              <CourseGrid
+                locale={locale}
+                courses={courses.items.slice(0, LANDING_COURSES)}
+                label={t('landing.courses')}
+                headingLevel="h3"
+              />
+            </section>
+          )}
+
+          {paths.items.length === 0 ? null : (
+            <section className="flex flex-col gap-5" aria-labelledby="learn-paths">
+              <SectionHeader
+                id="learn-paths"
+                heading={t('landing.paths')}
+                intro={t('sectionBody.paths')}
+                action={{ href: learnPath(locale, 'paths'), text: t('landing.allPaths') }}
+              />
+              <PathGrid
+                locale={locale}
+                paths={paths.items.slice(0, LANDING_PATHS)}
+                label={t('landing.paths')}
+                headingLevel="h3"
+              />
+            </section>
+          )}
+
+          <section className="flex flex-col gap-5" aria-labelledby="learn-live">
+            <SectionHeader
+              id="learn-live"
+              heading={t('sections.live')}
+              intro={t('sectionBody.live')}
+              action={{
+                href: learnPath(locale, 'live'),
+                text: t('landing.liveSchedule'),
+              }}
+            />
+            <CardGrid columns={2}>
+              {WITH_A_TEACHER.map((surface) => (
+                <LinkCard
+                  key={surface}
+                  href={learnPath(locale, surface)}
+                  title={t(`sections.${surface}`)}
+                  description={t(`sectionBody.${surface}`)}
+                />
+              ))}
+            </CardGrid>
+          </section>
+
+          <section aria-labelledby="learn-topics">
+            <Panel as="div">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
+                <div className="flex flex-col gap-1.5">
+                  <h2 id="learn-topics" className="text-heading font-semibold">
+                    {t('sections.topics')}
+                  </h2>
+                  <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
+                    {t('sectionBody.topics')}
                   </p>
                 </div>
-              </Panel>
-            ))}
-            <Panel as="li">
-              <div className="flex flex-col gap-2">
-                <h3 className="text-lg font-semibold">
-                  <TextLink href={`/${locale}/topics`}>{t('sections.topics')}</TextLink>
-                </h3>
-                <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                  {t('sectionBody.topics')}
-                </p>
+                <div className="shrink-0">
+                  <ActionLink href={`/${locale}/topics`} tone="secondary">
+                    {t('landing.allTopics')}
+                  </ActionLink>
+                </div>
               </div>
             </Panel>
-          </ul>
-        </section>
-
-        {nothing ? (
-          <EmptyState>{t('landing.empty')}</EmptyState>
-        ) : (
-          <>
-            {courses.items.length === 0 ? null : (
-              <section className="flex flex-col gap-4" aria-labelledby="learn-courses">
-                <SectionHeading>
-                  <span id="learn-courses">{t('landing.courses')}</span>
-                </SectionHeading>
-                <CourseGrid
-                  locale={locale}
-                  courses={courses.items.slice(0, LANDING_COURSES)}
-                  label={t('landing.courses')}
-                  headingLevel="h3"
-                />
-                <p>
-                  <TextLink href={courseBrowseHref(locale)}>
-                    {t('landing.allCourses')}
-                  </TextLink>
-                </p>
-              </section>
-            )}
-            {paths.items.length === 0 ? null : (
-              <section className="flex flex-col gap-4" aria-labelledby="learn-paths">
-                <SectionHeading>
-                  <span id="learn-paths">{t('landing.paths')}</span>
-                </SectionHeading>
-                <PathGrid
-                  locale={locale}
-                  paths={paths.items.slice(0, LANDING_PATHS)}
-                  label={t('landing.paths')}
-                  headingLevel="h3"
-                />
-                <p>
-                  <TextLink href={learnPath(locale, 'paths')}>
-                    {t('landing.allPaths')}
-                  </TextLink>
-                </p>
-              </section>
-            )}
-          </>
-        )}
-      </div>
-    </Container>
+          </section>
+        </div>
+      </Container>
+    </>
   );
 }
+
+/** The four steps of a trial-class request, in order. */
+const TRIAL_STEPS = ['stepChoose', 'stepSignIn', 'stepRequest', 'stepAfter'] as const;
 
 /**
  * `/learn/trial` — what a trial-class request is, and the Courses that take one.
@@ -168,35 +197,43 @@ export async function TrialPage({
 
   return (
     <Container>
-      <div className="flex flex-col gap-10 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[trail.home, trail.learn, { text: title }]}
-        />
-        <Prose>
-          <PageHeading>{title}</PageHeading>
-          <p>{t('trial.intro')}</p>
-          <Alert tone="info">{t('trial.notBooked')}</Alert>
-        </Prose>
+      <div className="flex flex-col gap-[var(--space-section)] pt-6 pb-[var(--space-section)]">
+        <MediaPageHeader
+          crumbs={{
+            label: trail.label,
+            trail: [trail.home, trail.learn, { text: title }],
+          }}
+          eyebrow={t('title')}
+          title={title}
+          lede={t('trial.intro')}
+        >
+          <div className="pt-1">
+            <Alert tone="info">{t('trial.notBooked')}</Alert>
+          </div>
+        </MediaPageHeader>
 
-        <section className="flex flex-col gap-3" aria-labelledby="trial-how">
-          <SectionHeading>
-            <span id="trial-how">{t('trial.how')}</span>
-          </SectionHeading>
-          <Prose>
-            <ol className="flex list-decimal flex-col gap-2 ps-6">
-              <li>{t('trial.stepChoose')}</li>
-              <li>{t('trial.stepSignIn')}</li>
-              <li>{t('trial.stepRequest')}</li>
-              <li>{t('trial.stepAfter')}</li>
-            </ol>
-          </Prose>
+        <section className="flex flex-col gap-5" aria-labelledby="trial-how">
+          <SectionHeader id="trial-how" heading={t('trial.how')} />
+          <ol className="grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-4">
+            {TRIAL_STEPS.map((step, index) => (
+              <li
+                key={step}
+                className="flex min-w-0 gap-3 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5"
+              >
+                <span
+                  aria-hidden="true"
+                  className="text-subheading font-semibold text-[color:var(--color-accent)]"
+                >
+                  {index + 1}
+                </span>
+                <p className="min-w-0 text-sm">{t(`trial.${step}`)}</p>
+              </li>
+            ))}
+          </ol>
         </section>
 
-        <section className="flex flex-col gap-4" aria-labelledby="trial-courses">
-          <SectionHeading>
-            <span id="trial-courses">{t('trial.courses')}</span>
-          </SectionHeading>
+        <section className="flex flex-col gap-5" aria-labelledby="trial-courses">
+          <SectionHeader id="trial-courses" heading={t('trial.courses')} />
           {page.items.length === 0 ? (
             <EmptyState>{t('trial.empty')}</EmptyState>
           ) : (
@@ -245,19 +282,18 @@ export async function CourseTopicSection({
   const page = await learningReadRuntime().courses({ topic: topic.id });
   if (page.items.length === 0) return null;
   return (
-    <section className="flex flex-col gap-4" aria-labelledby={headingId}>
-      <h2 id={headingId} className="text-lg font-semibold">
-        {heading}
-      </h2>
+    <section className="flex flex-col gap-5" aria-labelledby={headingId}>
+      <SectionHeader
+        id={headingId}
+        heading={heading}
+        action={{ href: courseBrowseHref(locale, { topic: topic.slug }), text: more }}
+      />
       <CourseGrid
         locale={locale}
         courses={page.items.slice(0, TOPIC_PREVIEW)}
         label={heading}
         headingLevel="h3"
       />
-      <p>
-        <TextLink href={courseBrowseHref(locale, { topic: topic.slug })}>{more}</TextLink>
-      </p>
     </section>
   );
 }

@@ -13,17 +13,21 @@ import { servablePhotos } from '@/composition/media-assets';
 import { mediaReadRuntime } from '@/composition/media-read';
 import { paragraphsOf } from '@/components/library/scholarly-presentation';
 import {
-  Breadcrumbs,
   Container,
   EmptyState,
   FilterLink,
-  PageHeading,
-  Prose,
-  SectionHeading,
+  MetaRow,
+  SectionHeader,
   TextLink,
 } from '@/components/ui';
 import { directionOf } from '@/config/locale';
-import { BreadcrumbData, Pagination } from './parts';
+import {
+  BreadcrumbData,
+  MEDIA_CARD,
+  MEDIA_CARD_LINK,
+  MediaPageHeader,
+  Pagination,
+} from './parts';
 import { PhotoViewer, type ViewerPhoto } from './photo-viewer';
 import {
   archivePath,
@@ -97,18 +101,15 @@ function PhotoSections({
   const sections = ['photos', 'galleries', 'archive'] as const;
   return (
     <nav aria-label={t('sectionsLabel')}>
-      <ul className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+      <ul className="flex flex-wrap gap-2">
         {sections.map((section) => (
           <li key={section}>
-            {section === current ? (
-              <span aria-current="page" className="font-semibold">
-                {t(`sections.${section}`)}
-              </span>
-            ) : (
-              <TextLink href={`/${locale}/media/${section}`}>
-                {t(`sections.${section}`)}
-              </TextLink>
-            )}
+            <FilterLink
+              href={`/${locale}/media/${section}`}
+              current={section === current}
+            >
+              {t(`sections.${section}`)}
+            </FilterLink>
           </li>
         ))}
       </ul>
@@ -290,13 +291,16 @@ export async function PhotosPage({
 
   return (
     <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs label={trail.label} trail={[trail.home, { text: title }]} />
-        <Prose>
-          <PageHeading>{title}</PageHeading>
-          <p>{t('sectionBody.photos')}</p>
-        </Prose>
-        <PhotoSections locale={locale} current="photos" t={t} />
+      <div className="flex flex-col gap-8 py-[var(--space-page)]">
+        <MediaPageHeader
+          crumbs={{ label: trail.label, trail: [trail.home, { text: title }] }}
+          title={title}
+          lede={t('sectionBody.photos')}
+        >
+          <div className="pt-2">
+            <PhotoSections locale={locale} current="photos" t={t} />
+          </div>
+        </MediaPageHeader>
         {page.items.length === 0 ? (
           <EmptyState>{offset > 0 ? t('pageEmpty') : t('photosEmpty')}</EmptyState>
         ) : (
@@ -336,7 +340,7 @@ function GalleryCard({
   const words = photo === null ? null : photoWords(photo, locale);
 
   return (
-    <li className="relative flex min-w-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] shadow-[var(--shadow-panel)]">
+    <li className={MEDIA_CARD}>
       {cover && photo !== null && photo.assetId !== null ? (
         <img
           src={photoAssetPath(photo.id, photo.assetId)}
@@ -354,31 +358,28 @@ function GalleryCard({
           <span>{t('coverUnavailable')}</span>
         </div>
       )}
-      <div className="flex min-w-0 flex-col gap-2 p-5">
+      <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-5">
         <h2
-          className="text-lg font-semibold break-words"
+          className="text-subheading font-semibold wrap-anywhere"
           lang={label.locale}
           dir={direction}
         >
-          <a
-            href={galleryPath(locale, gallery.slug)}
-            className="underline-offset-2 after:absolute after:inset-0 hover:underline"
-          >
+          <a href={galleryPath(locale, gallery.slug)} className={MEDIA_CARD_LINK}>
             {label.title}
           </a>
         </h2>
         {label.description === '' ? null : (
           <p
-            className="line-clamp-3 text-sm break-words text-[color:var(--color-foreground-muted)]"
+            className="line-clamp-3 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
             lang={label.locale}
             dir={direction}
           >
             {label.description}
           </p>
         )}
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('count', { count: gallery.photoCount })}
-        </p>
+        <div className="mt-auto pt-1">
+          <MetaRow items={[t('count', { count: gallery.photoCount })]} />
+        </div>
       </div>
     </li>
   );
@@ -437,13 +438,16 @@ export async function GalleriesPage({
 
   return (
     <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs label={trail.label} trail={[trail.home, { text: title }]} />
-        <Prose>
-          <PageHeading>{title}</PageHeading>
-          <p>{t('sectionBody.galleries')}</p>
-        </Prose>
-        <PhotoSections locale={locale} current="galleries" t={t} />
+      <div className="flex flex-col gap-8 py-[var(--space-page)]">
+        <MediaPageHeader
+          crumbs={{ label: trail.label, trail: [trail.home, { text: title }] }}
+          title={title}
+          lede={t('sectionBody.galleries')}
+        >
+          <div className="pt-2">
+            <PhotoSections locale={locale} current="galleries" t={t} />
+          </div>
+        </MediaPageHeader>
         {page.items.length === 0 ? (
           <EmptyState>{offset > 0 ? t('pageEmpty') : t('galleriesEmpty')}</EmptyState>
         ) : (
@@ -488,41 +492,40 @@ export async function GalleryDetailPage({
     { name: t('sections.galleries'), path: `/${locale}/media/galleries` },
     { name: label.title, path },
   ];
+  const description = paragraphsOf(label.description);
 
   return (
     <Container>
-      <article className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={parts.label}
-          trail={[
-            ...trail
-              .slice(0, -1)
-              .map((entry) => ({ href: entry.path, text: entry.name })),
-            { text: label.title },
-          ]}
-        />
-        <Prose>
-          <h1
-            className="text-3xl font-semibold tracking-tight break-words"
-            lang={label.locale}
-            dir={direction}
-          >
-            {label.title}
-          </h1>
-          {paragraphsOf(label.description).map((paragraph, index) => (
-            <p key={index} lang={label.locale} dir={direction}>
-              {paragraph}
-            </p>
-          ))}
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('count', { count: gallery.photoCount })}
-          </p>
-        </Prose>
+      <article className="flex flex-col gap-10 py-[var(--space-page)]">
+        <MediaPageHeader
+          crumbs={{
+            label: parts.label,
+            trail: [
+              ...trail
+                .slice(0, -1)
+                .map((entry) => ({ href: entry.path, text: entry.name })),
+              { text: label.title },
+            ],
+          }}
+          eyebrow={t('sections.galleries')}
+          title={label.title}
+          lang={label.locale}
+          dir={direction}
+          meta={<MetaRow items={[t('count', { count: gallery.photoCount })]} />}
+        >
+          {description.length === 0 ? null : (
+            <div className="flex max-w-[var(--measure-prose)] flex-col gap-3 pt-1">
+              {description.map((paragraph, index) => (
+                <p key={index} lang={label.locale} dir={direction}>
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+          )}
+        </MediaPageHeader>
 
-        <section className="flex flex-col gap-4" aria-labelledby="gallery-photos">
-          <SectionHeading>
-            <span id="gallery-photos">{t('galleryPhotos')}</span>
-          </SectionHeading>
+        <section className="flex flex-col gap-5" aria-labelledby="gallery-photos">
+          <SectionHeader id="gallery-photos" heading={t('galleryPhotos')} />
           {photos.items.length === 0 ? (
             <EmptyState>{offset > 0 ? t('pageEmpty') : t('galleryEmpty')}</EmptyState>
           ) : (
@@ -602,61 +605,43 @@ export async function ArchivePage({
 
   return (
     <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs label={trail.label} trail={[trail.home, { text: title }]} />
-        <Prose>
-          <PageHeading>{title}</PageHeading>
-          <p>{t('sectionBody.archive')}</p>
-        </Prose>
-        <PhotoSections locale={locale} current="archive" t={t} />
+      <div className="flex flex-col gap-8 py-[var(--space-page)]">
+        <MediaPageHeader
+          crumbs={{ label: trail.label, trail: [trail.home, { text: title }] }}
+          title={title}
+          lede={t('sectionBody.archive')}
+        >
+          <div className="pt-2">
+            <PhotoSections locale={locale} current="archive" t={t} />
+          </div>
+        </MediaPageHeader>
 
         {years.length === 0 ? (
           <EmptyState>{t('archiveEmpty')}</EmptyState>
         ) : (
           <>
-            <nav aria-label={t('archiveYears')} className="flex flex-col gap-3">
-              <h2 className="text-sm font-semibold">{t('archiveYears')}</h2>
-              <ul className="flex flex-wrap gap-2">
-                <li>
-                  <FilterLink
-                    href={archivePath(locale, { year: null, month: null })}
-                    current={filter.year === null}
-                  >
-                    {t('archiveEveryYear')}
-                  </FilterLink>
-                </li>
-                {years.map((entry) => (
-                  <li key={entry.year}>
+            <div className="flex flex-col gap-5 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)] p-5">
+              <nav aria-label={t('archiveYears')} className="flex flex-col gap-3">
+                <h2 className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-foreground-muted)] uppercase">
+                  {t('archiveYears')}
+                </h2>
+                <ul className="flex flex-wrap gap-2">
+                  <li>
                     <FilterLink
-                      href={archivePath(locale, { year: entry.year, month: null })}
-                      current={filter.year === entry.year && filter.month === null}
-                      partial={filter.year === entry.year && filter.month !== null}
+                      href={archivePath(locale, { year: null, month: null })}
+                      current={filter.year === null}
                     >
-                      {yearText(entry.year, locale)}
-                      <span className="text-[color:var(--color-foreground-muted)]">
-                        {' '}
-                        ({t('countShort', { count: entry.photos })})
-                      </span>
+                      {t('archiveEveryYear')}
                     </FilterLink>
                   </li>
-                ))}
-              </ul>
-            </nav>
-
-            {filter.year === null || months.length === 0 ? null : (
-              <nav aria-label={t('archiveMonths')} className="flex flex-col gap-3">
-                <h2 className="text-sm font-semibold">{t('archiveMonths')}</h2>
-                <ul className="flex flex-wrap gap-2">
-                  {months.map((entry) => (
-                    <li key={entry.month}>
+                  {years.map((entry) => (
+                    <li key={entry.year}>
                       <FilterLink
-                        href={archivePath(locale, {
-                          year: filter.year,
-                          month: entry.month,
-                        })}
-                        current={filter.month === entry.month}
+                        href={archivePath(locale, { year: entry.year, month: null })}
+                        current={filter.year === entry.year && filter.month === null}
+                        partial={filter.year === entry.year && filter.month !== null}
                       >
-                        {monthName(entry.month, locale)}
+                        {yearText(entry.year, locale)}
                         <span className="text-[color:var(--color-foreground-muted)]">
                           {' '}
                           ({t('countShort', { count: entry.photos })})
@@ -666,12 +651,37 @@ export async function ArchivePage({
                   ))}
                 </ul>
               </nav>
-            )}
 
-            <section className="flex flex-col gap-4" aria-labelledby="archive-photos">
-              <SectionHeading>
-                <span id="archive-photos">{heading}</span>
-              </SectionHeading>
+              {filter.year === null || months.length === 0 ? null : (
+                <nav aria-label={t('archiveMonths')} className="flex flex-col gap-3">
+                  <h2 className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-foreground-muted)] uppercase">
+                    {t('archiveMonths')}
+                  </h2>
+                  <ul className="flex flex-wrap gap-2">
+                    {months.map((entry) => (
+                      <li key={entry.month}>
+                        <FilterLink
+                          href={archivePath(locale, {
+                            year: filter.year,
+                            month: entry.month,
+                          })}
+                          current={filter.month === entry.month}
+                        >
+                          {monthName(entry.month, locale)}
+                          <span className="text-[color:var(--color-foreground-muted)]">
+                            {' '}
+                            ({t('countShort', { count: entry.photos })})
+                          </span>
+                        </FilterLink>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
+              )}
+            </div>
+
+            <section className="flex flex-col gap-5" aria-labelledby="archive-photos">
+              <SectionHeader id="archive-photos" heading={heading} />
               {page.items.length === 0 ? (
                 <EmptyState>
                   <span className="flex flex-col gap-2">

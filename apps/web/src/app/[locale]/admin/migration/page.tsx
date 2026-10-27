@@ -5,11 +5,13 @@ import { adminMigrationCopy, migrationPath } from './shared';
 
 /**
  * `/{locale}/admin/migration` — the Migration area's overview
- * (DELIVERY_PLAN.md Phase 29) under `migration.read`: what each surface is
- * for, and the two facts an operator must not have to discover by accident —
- * that Phase 29 works over synthetic FIXTURE sources only and contacts no
- * live source, and that runs and promotions are carried out by the command
- * line, not from this browser.
+ * (DELIVERY_PLAN.md Phases 29–30) under `migration.read`: what each surface
+ * is for, and the two facts an operator must not have to discover by accident
+ * — that a real legacy source is contacted only once its written
+ * authorisation is recorded, by an operator command that registers it
+ * inactive until separately activated (synthetic fixture sources remain for
+ * proof), and that runs and promotions are carried out by the command line,
+ * not from this browser.
  */
 export const metadata = { robots: { index: false, follow: false } };
 
@@ -42,7 +44,7 @@ export default async function MigrationOverviewPage({
         <p className="text-sm text-[color:var(--color-foreground-muted)]">
           {t('overview.description')}
         </p>
-        <Alert tone="info">{t('overview.fixturesOnly')}</Alert>
+        <Alert tone="info">{t('overview.sources')}</Alert>
         <p className="text-sm">{t('overview.commandLine')}</p>
       </header>
 

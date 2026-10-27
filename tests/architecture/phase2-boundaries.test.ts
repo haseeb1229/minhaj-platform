@@ -406,6 +406,14 @@ describe('Phase 2 — what the delivered code does NOT contain', () => {
       const membershipOwner = file.includes('20261009000000_phase26_membership');
       const donationsOwner = file.includes('20261010000000_phase27_donations');
       const migrationOwner = file.includes('20261011000000_phase29_migration_provenance');
+      // Phase 30 names `fatwa.ruling` as a CONTENT KIND a migration source may
+      // yield — Migration & Provenance's own vocabulary, never a permission
+      // key — so that one literal, in that one migration, is set aside before
+      // the scan. Any `fatwa.*` permission key it seeded would still fail.
+      const sourceAdaptersOwner = file.includes('20261027000000_phase30_source_adapters');
+      const scanned = sourceAdaptersOwner
+        ? source.replaceAll("'fatwa.ruling'", '')
+        : source;
       for (const domain of [
         ...(fatwaOwner ? [] : ['fatwa.']),
         ...(learningOwner ? [] : ['learning.']),
@@ -414,7 +422,7 @@ describe('Phase 2 — what the delivered code does NOT contain', () => {
         ...(donationsOwner ? [] : ['donations.']),
         ...(migrationOwner ? [] : ['migration.']),
       ]) {
-        expect(source, `${file} must not seed ${domain}*`).not.toContain(`'${domain}`);
+        expect(scanned, `${file} must not seed ${domain}*`).not.toContain(`'${domain}`);
       }
     }
   });

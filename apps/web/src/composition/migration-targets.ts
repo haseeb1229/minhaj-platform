@@ -1,10 +1,15 @@
 import 'server-only';
 
-import { createMediaPersistence, createPersonalHoldings } from '@minhaj/database';
+import {
+  createEditorialPersistence,
+  createLibraryPersistence,
+  createMediaPersistence,
+  createPersonalHoldings,
+} from '@minhaj/database';
+import type { LibraryReferencesPort } from '@minhaj/contracts/library';
 import {
   MEDIA_PAGE,
   type MediaActor,
-  type MediaAuthorityPort,
   type MediaReferencesPort,
   type VideoRecord,
 } from '@minhaj/contracts/media';
@@ -16,12 +21,36 @@ import type {
   TargetPublication,
 } from '@minhaj/contracts/migration';
 
+export { routeMigrationTargets } from './migration-target-router.ts';
+
+import { createEditorialService } from '../contexts/editorial/index.ts';
+import { createLibraryService } from '../contexts/library/index.ts';
 import { createMediaService, mediaFailure } from '../contexts/media/index.ts';
 import { createHoldingService } from '../contexts/personalisation-notifications/index.ts';
+import {
+  editorialTargetOver,
+  migrationEditorialReferences,
+} from './migration-editorial-targets.ts';
+import {
+  libraryMagazineIssueTargetOver,
+  libraryMagazineTargetOver,
+  libraryWorkTargetOver,
+} from './migration-library-targets.ts';
+import {
+  ADOPTION_PAGES,
+  askerOf,
+  publishing,
+  refusal,
+  withdrawalRefusal,
+  withdrawing,
+} from './migration-target-support.ts';
 
 /**
- * Migration's ONE real publication target, `media.video` — Layer 4
- * (Phase 29; MIGRATION_STRATEGY.md §4.12, §7).
+ * The `media.video` publication target — Layer 4 (Phase 29, unchanged in
+ * behaviour by Phase 30; MIGRATION_STRATEGY.md §4.12, §7) — and the ONE
+ * factory both composition roots build every per-kind target from
+ * (`createMigrationTargets`), which `./migration-target-router.ts` routes
+ * between.
  *
  * THROUGH MEDIA'S PUBLIC SERVICE, NEVER ITS TABLES. A migrated Video is saved by
  * `createMediaService(...).saveVideo` exactly as an operator's is: Media's
@@ -61,37 +90,10 @@ export interface VideoHoldings {
   videoHeld(videoId: string): Promise<boolean>;
 }
 
-/** Pages of Media's administrative listing searched when adopting. */
-const ADOPTION_PAGES = 20;
-
 /** The locale-free canonical path; routing adds the locale prefix. */
 const canonicalPath = (slug: string) => `/watch/videos/${slug}`;
 
-/** A Media refusal as a short code the manifest entry may store. */
-function refusal(reason: string): TargetPublication {
-  return { status: 'refused', reason: reason.slice(0, 32) };
-}
-
-class Unavailable extends Error {}
-
-/**
- * Media's answer to a call: the value, a refusal code, or `Unavailable` thrown
- * for an outage. Media's own vocabulary decides which is which.
- */
-async function ask<T>(
-  work: () => Promise<T>,
-): Promise<
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly reason: string }
-> {
-  try {
-    return { ok: true, value: await work() };
-  } catch (error) {
-    const reason = mediaFailure(error);
-    if (reason === 'unavailable') throw new Unavailable();
-    return { ok: false, reason };
-  }
-}
+const ask = askerOf(mediaFailure);
 
 /** The staged payload as Media's own `videoInputSchema` input. */
 function videoInput(payload: StagedVideoPayload, topicIds: readonly string[]) {
@@ -189,7 +191,8 @@ export function mediaVideoTargetOver(deps: {
         if (video.state !== 'published') return refusal('target-not-published');
         return {
           status: 'published',
-          videoId: video.id,
+          target: { kind: 'media.video', id: video.id },
+          stage: 'public',
           version: video.version,
           canonicalPath: canonicalPath(video.slug),
         };
@@ -208,14 +211,15 @@ export function mediaVideoTargetOver(deps: {
       if (!supports(kind) || payload.kind !== 'media.video')
         return refusal('unsupported-kind');
       const mediaActor = asMedia(actor);
-      try {
+      return publishing(async () => {
         const saved = await ask(() =>
           media.saveVideo(mediaActor, null, null, videoInput(payload, topicIds)),
         );
         if (saved.ok)
           return {
             status: 'published',
-            videoId: saved.value.id,
+            target: { kind: 'media.video', id: saved.value.id },
+            stage: 'public',
             version: saved.value.version,
             canonicalPath: canonicalPath(saved.value.slug),
           };
@@ -226,15 +230,12 @@ export function mediaVideoTargetOver(deps: {
         if (saved.reason === 'duplicate-video' || saved.reason === 'duplicate-slug')
           return resumed ? await adopt(mediaActor, payload) : refusal('target-exists');
         return refusal(saved.reason);
-      } catch (error) {
-        if (error instanceof Unavailable) return { status: 'unavailable' };
-        throw error;
-      }
+      });
     },
 
-    async inspect({ kind, videoId, actor }) {
-      if (!supports(kind)) return null;
-      const video = await media.video(asMedia(actor), videoId);
+    async inspect({ target, actor }) {
+      if (!supports(target.kind)) return null;
+      const video = await media.video(asMedia(actor), target.id);
       if (video === null) return { exists: false, version: 0, referencedByPeople: false };
       return {
         exists: true,
@@ -243,16 +244,15 @@ export function mediaVideoTargetOver(deps: {
       };
     },
 
-    async withdraw({ kind, videoId, expectedVersion, actor }) {
-      if (!supports(kind)) return { status: 'refused', reason: 'unsupported-kind' };
+    async withdraw({ target, expectedVersion, actor }) {
+      if (!supports(target.kind)) return withdrawalRefusal('unsupported-kind');
       const mediaActor = asMedia(actor);
-      try {
-        const found = await ask(() => media.video(mediaActor, videoId));
-        if (!found.ok) return { status: 'refused', reason: found.reason.slice(0, 32) };
+      return withdrawing(async () => {
+        const found = await ask(() => media.video(mediaActor, target.id));
+        if (!found.ok) return withdrawalRefusal(found.reason);
         const video = found.value;
-        if (video === null) return { status: 'refused', reason: 'not-found' };
-        if (video.version !== expectedVersion)
-          return { status: 'refused', reason: 'conflict' };
+        if (video === null) return withdrawalRefusal('not-found');
+        if (video.version !== expectedVersion) return withdrawalRefusal('conflict');
         const archived = await ask(() =>
           media.saveVideo(
             mediaActor,
@@ -261,33 +261,64 @@ export function mediaVideoTargetOver(deps: {
             currentInput(video, 'archived'),
           ),
         );
-        if (!archived.ok)
-          return { status: 'refused', reason: archived.reason.slice(0, 32) };
+        if (!archived.ok) return withdrawalRefusal(archived.reason);
         return { status: 'withdrawn', version: archived.value.version };
-      } catch (error) {
-        if (error instanceof Unavailable) return { status: 'unavailable' };
-        throw error;
-      }
+      });
     },
   };
 }
 
 /**
- * The target as both processes compose it: Media's PUBLIC service over Media's
- * own adapter — exactly as Media's composition builds it — with the caller's
- * live authority and owner references, and Personalisation's holding answer
- * over its own adapter.
+ * EVERY publication target, as both processes compose them: each owning
+ * domain's PUBLIC service over that domain's own adapter — exactly as the
+ * domain's composition builds it — with the caller's live authority and the
+ * owner references Media's and Library's compositions use, and
+ * Personalisation's holding answers over its own adapter.
+ *
+ *   media.video             Media        `saveVideo`
+ *   library.work            Library      `saveWork` + `saveEdition`
+ *   library.magazine        Library      `saveScholarly('magazine')`
+ *   library.magazine-issue  Library      `saveScholarly('magazine-issue')`
+ *   editorial.news          Editorial    `create('news-article')` + `submit`
+ *   editorial.article       Editorial    `create('article')` + `submit`
+ *
+ * The review-only kinds (Fatwa, Quran) have no target here, by design. The
+ * caller hands the list to `routeMigrationTargets`, which refuses a kind two
+ * targets claim and supports nothing else.
  */
-export function createMediaVideoTarget(deps: {
-  readonly authority: MediaAuthorityPort;
-  readonly references: MediaReferencesPort;
-}): MigrationPublicationTargetPort {
-  return mediaVideoTargetOver({
-    media: createMediaService({
-      persistence: createMediaPersistence(),
-      authority: deps.authority,
-      references: deps.references,
-    }),
-    holdings: createHoldingService({ holdings: createPersonalHoldings() }),
+export function createMigrationTargets(deps: {
+  readonly authority: {
+    permits(accountId: string, permission: string): Promise<boolean>;
+  };
+  readonly references: MediaReferencesPort & LibraryReferencesPort;
+}): readonly MigrationPublicationTargetPort[] {
+  const holdings = createHoldingService({ holdings: createPersonalHoldings() });
+  const library = createLibraryService({
+    persistence: createLibraryPersistence(),
+    authority: deps.authority,
+    references: deps.references,
   });
+  const editorial = createEditorialService({
+    persistence: createEditorialPersistence(),
+    authority: deps.authority,
+    references: migrationEditorialReferences(deps.references),
+    // Only the scheduled-publication sweep reports through this, and the
+    // targets never run it.
+    reportFailure: () => undefined,
+  });
+  return [
+    mediaVideoTargetOver({
+      media: createMediaService({
+        persistence: createMediaPersistence(),
+        authority: deps.authority,
+        references: deps.references,
+      }),
+      holdings,
+    }),
+    libraryWorkTargetOver({ library, holdings }),
+    libraryMagazineTargetOver({ library }),
+    libraryMagazineIssueTargetOver({ library }),
+    editorialTargetOver({ kind: 'editorial.news', editorial, holdings }),
+    editorialTargetOver({ kind: 'editorial.article', editorial, holdings }),
+  ];
 }

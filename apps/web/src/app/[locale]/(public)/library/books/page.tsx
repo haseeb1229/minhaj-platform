@@ -12,17 +12,16 @@ import {
 import { directionOf } from '@/config/locale';
 import { requireLocale } from '@/config/route-locale';
 import {
-  Breadcrumbs,
   Button,
-  Container,
+  CardGrid,
   EmptyState,
   Field,
-  PageHeading,
-  Panel,
+  LinkCard,
   Select,
   TextInput,
   TextLink,
 } from '@/components/ui';
+import { FilterPanel, ListingFrame, Pager } from '@/components/library/frame';
 import {
   booksPath,
   labelFor,
@@ -109,24 +108,18 @@ export default async function BooksPage({ params, searchParams }: ListingParams)
   );
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={shell('nav.breadcrumbs')}
-          trail={[
-            { href: `/${locale}`, text: shell('nav.home') },
-            { href: `/${locale}/library`, text: t('title') },
-            { text: t('books') },
-          ]}
-        />
-
-        <div className="flex flex-col gap-2">
-          <PageHeading>{t('books')}</PageHeading>
-          <p className="text-[color:var(--color-foreground-muted)]">
-            {t('booksDescription')}
-          </p>
-        </div>
-
+    <ListingFrame
+      breadcrumbLabel={shell('nav.breadcrumbs')}
+      trail={[
+        { href: `/${locale}`, text: shell('nav.home') },
+        { href: `/${locale}/library`, text: t('title') },
+        { text: t('books') },
+      ]}
+      title={t('books')}
+      lede={t('booksDescription')}
+      notice={t('metadataNotice')}
+    >
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-10">
         {/*
          * A REAL `<form method="get">`, so the filters work with JavaScript
          * disabled and every filtered view is a shareable address. The offset is
@@ -134,14 +127,14 @@ export default async function BooksPage({ params, searchParams }: ListingParams)
          * first page, because page 7 of a different result set is a page that
          * means nothing.
          */}
-        <Panel>
-          <form
-            method="get"
-            action={`/${locale}/library/books`}
-            className="flex flex-col gap-4"
-            aria-label={t('filters')}
-          >
-            <div className="grid gap-4 sm:grid-cols-2">
+        <div className="min-w-0">
+          <FilterPanel id="books-filters" heading={t('filters')}>
+            <form
+              method="get"
+              action={`/${locale}/library/books`}
+              className="flex flex-col gap-4"
+              aria-label={t('filters')}
+            >
               <Field id="filter-language" label={t('filterLanguage')}>
                 {(props) => (
                   <Select
@@ -176,116 +169,124 @@ export default async function BooksPage({ params, searchParams }: ListingParams)
                 )}
               </Field>
 
-              <Field id="filter-from" label={t('filterFrom')}>
-                {(props) => (
-                  <TextInput
-                    {...props}
-                    name="from"
-                    type="number"
-                    min={1}
-                    max={9999}
-                    inputMode="numeric"
-                    defaultValue={filters.from ?? ''}
-                  />
-                )}
-              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field id="filter-from" label={t('filterFrom')}>
+                  {(props) => (
+                    <TextInput
+                      {...props}
+                      name="from"
+                      type="number"
+                      min={1}
+                      max={9999}
+                      inputMode="numeric"
+                      defaultValue={filters.from ?? ''}
+                    />
+                  )}
+                </Field>
 
-              <Field id="filter-to" label={t('filterTo')}>
-                {(props) => (
-                  <TextInput
-                    {...props}
-                    name="to"
-                    type="number"
-                    min={1}
-                    max={9999}
-                    inputMode="numeric"
-                    defaultValue={filters.to ?? ''}
-                  />
-                )}
-              </Field>
-            </div>
+                <Field id="filter-to" label={t('filterTo')}>
+                  {(props) => (
+                    <TextInput
+                      {...props}
+                      name="to"
+                      type="number"
+                      min={1}
+                      max={9999}
+                      inputMode="numeric"
+                      defaultValue={filters.to ?? ''}
+                    />
+                  )}
+                </Field>
+              </div>
 
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                name="downloads"
-                value="1"
-                defaultChecked={filters.downloads}
-                className="size-5"
-              />
-              {t('filterDownloads')}
-            </label>
+              <label className="flex min-h-11 items-center gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  name="downloads"
+                  value="1"
+                  defaultChecked={filters.downloads}
+                  className="size-5 shrink-0"
+                />
+                {t('filterDownloads')}
+              </label>
 
-            {/*
-             * The contributor filter travels as a hidden field rather than a
-             * select: it is applied by following a contributor from
-             * `/library/authors` or from a Work page, and a dropdown of every
-             * contributor in the corpus would be an unbounded control. It is
-             * visible as a named, clearable filter below.
-             */}
-            {filters.contributor === null ? null : (
-              <input type="hidden" name="contributor" value={filters.contributor} />
-            )}
+              {/*
+               * The contributor filter travels as a hidden field rather than a
+               * select: it is applied by following a contributor from
+               * `/library/authors` or from a Work page, and a dropdown of every
+               * contributor in the corpus would be an unbounded control. It is
+               * visible as a named, clearable filter beside the results.
+               */}
+              {filters.contributor === null ? null : (
+                <input type="hidden" name="contributor" value={filters.contributor} />
+              )}
 
-            <div className="flex flex-wrap items-center gap-4">
-              <Button tone="secondary">{t('filterApply')}</Button>
-              <TextLink href={`/${locale}/library/books`}>{t('filterClear')}</TextLink>
-            </div>
-          </form>
-        </Panel>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <Button tone="secondary">{t('filterApply')}</Button>
+                <TextLink href={`/${locale}/library/books`}>{t('filterClear')}</TextLink>
+              </div>
+            </form>
+          </FilterPanel>
+        </div>
 
-        {filters.contributor === null ? null : (
-          <p className="text-sm">
-            {t('filterContributor')}:{' '}
-            <span className="font-medium">
-              {references.people.get(filters.contributor)?.name ?? t('filterAny')}
-            </span>{' '}
-            <TextLink href={booksPath(locale, filters, { contributor: null, offset: 0 })}>
-              {t('filterClearOne')}
-            </TextLink>
-          </p>
-        )}
+        <div className="flex min-w-0 flex-col gap-6">
+          {filters.contributor === null ? null : (
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[var(--radius-control)] border border-[color:var(--color-accent-rule)] bg-[color:var(--color-accent-surface)] px-4 py-2 text-sm">
+              <span>
+                {t('filterContributor')}:{' '}
+                <span className="font-semibold">
+                  {references.people.get(filters.contributor)?.name ?? t('filterAny')}
+                </span>
+              </span>
+              <TextLink
+                href={booksPath(locale, filters, { contributor: null, offset: 0 })}
+              >
+                {t('filterClearOne')}
+              </TextLink>
+            </p>
+          )}
 
-        {page.items.length === 0 ? (
-          <EmptyState>{t('empty')}</EmptyState>
-        ) : (
-          <ul aria-label={t('books')} className="flex flex-col gap-4">
-            {page.items.map((record) => (
-              <WorkSummary key={record.id} record={record} locale={locale} />
-            ))}
-          </ul>
-        )}
+          {page.items.length === 0 ? (
+            <EmptyState>{t('empty')}</EmptyState>
+          ) : (
+            <CardGrid label={t('books')} columns={2}>
+              {page.items.map((record) => (
+                <WorkSummary key={record.id} record={record} locale={locale} />
+              ))}
+            </CardGrid>
+          )}
 
-        <nav className="flex gap-6" aria-label={t('books')}>
-          {filters.offset > 0 ? (
-            <TextLink
-              href={booksPath(locale, filters, {
-                offset: Math.max(0, filters.offset - WORK_PAGE),
-              })}
-            >
-              {t('previous')}
-            </TextLink>
-          ) : null}
-          {page.hasMore ? (
-            <TextLink
-              href={booksPath(locale, filters, { offset: filters.offset + WORK_PAGE })}
-            >
-              {t('next')}
-            </TextLink>
-          ) : null}
-        </nav>
+          <Pager
+            label={t('books')}
+            previous={
+              filters.offset > 0
+                ? booksPath(locale, filters, {
+                    offset: Math.max(0, filters.offset - WORK_PAGE),
+                  })
+                : null
+            }
+            next={
+              page.hasMore
+                ? booksPath(locale, filters, { offset: filters.offset + WORK_PAGE })
+                : null
+            }
+            previousLabel={t('previous')}
+            nextLabel={t('next')}
+          />
+        </div>
       </div>
-    </Container>
+    </ListingFrame>
   );
 }
 
 /**
- * One Work in a listing.
+ * One Work in a listing — one whole-card link.
  *
  * THE TITLE CARRIES ITS OWN LANGUAGE. A listing that mixes English, Urdu and
  * Arabic titles is the ordinary case for this corpus, and each one is marked so it
  * is announced and shaped correctly rather than inheriting the page's language
- * (WCAG 3.1.2, and this phase's §48 mixed-direction requirement).
+ * (WCAG 3.1.2, and this phase's §48 mixed-direction requirement). The card's
+ * heading is an `h2`, the listing's own level beneath the page title.
  */
 function WorkSummary({
   record,
@@ -295,24 +296,15 @@ function WorkSummary({
   readonly locale: Locale;
 }) {
   const label = labelFor(record, locale);
-  const direction = directionOf(label.locale);
 
   return (
-    <Panel as="li">
-      <div className="flex flex-col gap-2">
-        <h2 className="text-lg font-semibold" lang={label.locale} dir={direction}>
-          <TextLink href={workPath(locale, record.slug)}>{label.title}</TextLink>
-        </h2>
-        {label.description === '' ? null : (
-          <p
-            className="text-sm text-[color:var(--color-foreground-muted)]"
-            lang={label.locale}
-            dir={direction}
-          >
-            {label.description}
-          </p>
-        )}
-      </div>
-    </Panel>
+    <LinkCard
+      href={workPath(locale, record.slug)}
+      title={label.title}
+      description={label.description}
+      headingLevel="h2"
+      lang={label.locale}
+      dir={directionOf(label.locale)}
+    />
   );
 }

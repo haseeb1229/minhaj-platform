@@ -21,22 +21,20 @@ import { absoluteUrl } from '@/config/origin';
 import { directionOf } from '@/config/locale';
 import {
   Alert,
-  Breadcrumbs,
   Button,
-  Container,
+  CardGrid,
   DetailRow,
   EmptyState,
   Field,
-  PageHeading,
-  Panel,
-  Prose,
-  SectionHeading,
+  LinkCard,
+  MetaRow,
   Select,
-  StatusBadge,
   TextInput,
   TextLink,
+  TopicChips,
 } from '@/components/ui';
 import { isContentIndexable, serializeStructuredData } from '@/seo/metadata';
+import { FilterPanel, ListingFrame, Pager, RecordFrame, RecordSection } from './frame';
 import { Reader } from './reader';
 import {
   doiHref,
@@ -125,9 +123,10 @@ export function listingHref(locale: Locale, row: ListingRow): string {
  * ========================================================================= */
 
 /**
- * One listing row. Title in its own language and direction, the summary, and the
- * facts that distinguish one record from the next — content language, year, and
- * for an issue its numbering — each only when genuinely known.
+ * One listing row, as one whole-card link. Title and summary in their own
+ * language and direction, and the facts that distinguish one record from the
+ * next — content language, year, and for an issue its numbering — each only
+ * when genuinely known, in a metadata row of interface text.
  */
 function ScholarlyCard({
   locale,
@@ -143,64 +142,40 @@ function ScholarlyCard({
   readonly headingLevel?: 'h2' | 'h3';
 }) {
   const label = scholarlyLabel(row, locale);
-  const direction = directionOf(label.locale);
-  const Heading = headingLevel;
   const language = row.languageCode === null ? null : languages.get(row.languageCode);
   const numbering =
     row.issue === null
       ? null
       : issueNumbering(t, row.issue.volume, row.issue.issueNumber);
-
-  const facts = [
-    numbering,
+  const date =
     row.publishedOn === null
       ? row.publicationYear === null
         ? null
         : String(row.publicationYear)
-      : formatDate(row.publishedOn, locale),
-  ].filter((fact): fact is string => fact !== null);
+      : formatDate(row.publishedOn, locale);
 
   return (
-    <Panel as="li">
-      <div className="flex min-w-0 flex-col gap-2">
-        <Heading
-          className="text-lg font-semibold break-words"
-          lang={label.locale}
-          dir={direction}
-        >
-          <TextLink href={listingHref(locale, row)}>{label.title}</TextLink>
-        </Heading>
-        {label.summary === '' ? null : (
-          <p
-            className="text-sm break-words text-[color:var(--color-foreground-muted)]"
-            lang={label.locale}
-            dir={direction}
-          >
-            {label.summary}
-          </p>
-        )}
-        {facts.length === 0 && language === null ? null : (
-          <p className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
-            {language === null ? null : (
-              <span>
-                <span className="text-[color:var(--color-foreground-muted)]">
-                  {t('scholarly.fact.contentLanguage')}:{' '}
-                </span>
-                <span
-                  lang={row.languageCode ?? undefined}
-                  dir={language?.direction ?? 'auto'}
-                >
-                  {language?.name ?? row.languageCode}
-                </span>
+    <LinkCard
+      href={listingHref(locale, row)}
+      title={label.title}
+      description={label.summary}
+      headingLevel={headingLevel}
+      lang={label.locale}
+      dir={directionOf(label.locale)}
+      meta={
+        <MetaRow
+          items={[
+            numbering,
+            date,
+            row.languageCode === null ? null : (
+              <span lang={row.languageCode} dir={language?.direction ?? 'auto'}>
+                {language?.name ?? row.languageCode}
               </span>
-            )}
-            {facts.map((fact) => (
-              <span key={fact}>{fact}</span>
-            ))}
-          </p>
-        )}
-      </div>
-    </Panel>
+            ),
+          ]}
+        />
+      }
+    />
   );
 }
 
@@ -228,6 +203,8 @@ export async function ScholarlyListing({
   const shell = await getTranslations({ locale, namespace: 'shell' });
 
   const filters = readScholarlyQuery(query);
+  // A Magazine has no content language and no single date of its own — its
+  // issues do — so its listing filters by topic only.
   const dated = kind !== 'magazine';
   const base = scholarlyListPath(locale, kind);
 
@@ -244,32 +221,25 @@ export async function ScholarlyListing({
   const title = sectionTitle(t, kind);
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={shell('nav.breadcrumbs')}
-          trail={[
-            { href: `/${locale}`, text: shell('nav.home') },
-            { href: `/${locale}/library`, text: t('title') },
-            { text: title },
-          ]}
-        />
-
-        <div className="flex flex-col gap-2">
-          <PageHeading>{title}</PageHeading>
-          <p className="text-[color:var(--color-foreground-muted)]">
-            {sectionBody(t, kind)}
-          </p>
-        </div>
-
-        <Panel>
-          <form
-            method="get"
-            action={base}
-            className="flex flex-col gap-4"
-            aria-label={t('scholarly.filters')}
-          >
-            <div className="grid gap-4 sm:grid-cols-2">
+    <ListingFrame
+      breadcrumbLabel={shell('nav.breadcrumbs')}
+      trail={[
+        { href: `/${locale}`, text: shell('nav.home') },
+        { href: `/${locale}/library`, text: t('title') },
+        { text: title },
+      ]}
+      title={title}
+      lede={sectionBody(t, kind)}
+    >
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-10">
+        <div className="min-w-0">
+          <FilterPanel id="scholarly-filters" heading={t('scholarly.filters')}>
+            <form
+              method="get"
+              action={base}
+              className="flex flex-col gap-4"
+              aria-label={t('scholarly.filters')}
+            >
               {dated ? (
                 <Field id="filter-language" label={t('filterLanguage')}>
                   {(props) => (
@@ -303,7 +273,7 @@ export async function ScholarlyListing({
               </Field>
 
               {dated ? (
-                <>
+                <div className="grid grid-cols-2 gap-3">
                   <Field id="filter-from" label={t('filterFrom')}>
                     {(props) => (
                       <TextInput
@@ -330,82 +300,65 @@ export async function ScholarlyListing({
                       />
                     )}
                   </Field>
-                </>
+                </div>
               ) : null}
-            </div>
 
-            <div className="flex flex-wrap items-center gap-4">
-              <Button tone="secondary">{t('filterApply')}</Button>
-              {filtered ? <TextLink href={base}>{t('filterClear')}</TextLink> : null}
-            </div>
-          </form>
-        </Panel>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <Button tone="secondary">{t('filterApply')}</Button>
+                {filtered ? <TextLink href={base}>{t('filterClear')}</TextLink> : null}
+              </div>
+            </form>
+          </FilterPanel>
+        </div>
 
-        {page.items.length === 0 ? (
-          <EmptyState>
-            {filtered ? (
-              <span className="flex flex-col gap-2">
-                <span>{t('scholarly.emptyFiltered')}</span>
-                <TextLink href={base}>{t('filterClear')}</TextLink>
-              </span>
-            ) : (
-              t(`scholarly.empty.${kind}`)
-            )}
-          </EmptyState>
-        ) : (
-          <ul aria-label={title} className="flex flex-col gap-4">
-            {page.items.map((row) => (
-              <ScholarlyCard
-                key={row.id}
-                locale={locale}
-                row={row}
-                languages={languages}
-                t={t}
-              />
-            ))}
-          </ul>
-        )}
+        <div className="flex min-w-0 flex-col gap-6">
+          {page.items.length === 0 ? (
+            <EmptyState>
+              {filtered ? (
+                <span className="flex flex-col items-center gap-2">
+                  <span>{t('scholarly.emptyFiltered')}</span>
+                  <TextLink href={base}>{t('filterClear')}</TextLink>
+                </span>
+              ) : (
+                t(`scholarly.empty.${kind}`)
+              )}
+            </EmptyState>
+          ) : (
+            <CardGrid label={title} columns={2}>
+              {page.items.map((row) => (
+                <ScholarlyCard
+                  key={row.id}
+                  locale={locale}
+                  row={row}
+                  languages={languages}
+                  t={t}
+                />
+              ))}
+            </CardGrid>
+          )}
 
-        <Pagination
-          label={title}
-          previous={
-            filters.offset > 0
-              ? scholarlyQueryPath(base, filters, {
-                  offset: Math.max(0, filters.offset - SCHOLARLY_PAGE),
-                })
-              : null
-          }
-          next={
-            page.hasMore
-              ? scholarlyQueryPath(base, filters, {
-                  offset: filters.offset + SCHOLARLY_PAGE,
-                })
-              : null
-          }
-          t={t}
-        />
+          <Pager
+            label={title}
+            previous={
+              filters.offset > 0
+                ? scholarlyQueryPath(base, filters, {
+                    offset: Math.max(0, filters.offset - SCHOLARLY_PAGE),
+                  })
+                : null
+            }
+            next={
+              page.hasMore
+                ? scholarlyQueryPath(base, filters, {
+                    offset: filters.offset + SCHOLARLY_PAGE,
+                  })
+                : null
+            }
+            previousLabel={t('previous')}
+            nextLabel={t('next')}
+          />
+        </div>
       </div>
-    </Container>
-  );
-}
-
-function Pagination({
-  label,
-  previous,
-  next,
-  t,
-}: {
-  readonly label: string;
-  readonly previous: string | null;
-  readonly next: string | null;
-  readonly t: LibraryTranslator;
-}) {
-  if (previous === null && next === null) return null;
-  return (
-    <nav className="flex flex-wrap gap-6" aria-label={label}>
-      {previous === null ? null : <TextLink href={previous}>{t('previous')}</TextLink>}
-      {next === null ? null : <TextLink href={next}>{t('next')}</TextLink>}
-    </nav>
+    </ListingFrame>
   );
 }
 
@@ -413,45 +366,21 @@ function Pagination({
  * Shared detail parts
  * ========================================================================= */
 
-function Header({
-  label,
-  t,
-}: {
-  readonly label: {
-    readonly locale: Locale;
-    readonly title: string;
-    readonly summary: string;
-  };
-  readonly t: LibraryTranslator;
-}) {
-  const direction = directionOf(label.locale);
-  return (
-    <Prose>
-      {/* The title in ITS OWN language and direction (WCAG 3.1.2). */}
-      <h1
-        className="text-3xl font-semibold tracking-tight break-words"
-        lang={label.locale}
-        dir={direction}
-      >
-        {label.title}
-      </h1>
-      {paragraphsOf(label.summary).map((paragraph, index) => (
-        <p key={index} lang={label.locale} dir={direction}>
-          {paragraph}
-        </p>
-      ))}
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scholarly.metadataNotice')}
-      </p>
-    </Prose>
-  );
-}
-
 /**
  * Contributors, resolved by People and linked to People's canonical address. A
  * credit is attribution and grants nothing; one People cannot resolve is omitted
  * rather than printed as an identifier.
  */
+function contributorRows(
+  record: { readonly contributors: ScholarlyRecord['contributors'] },
+  people: NameMap,
+) {
+  return record.contributors.flatMap((entry) => {
+    const person = people.get(entry.personId);
+    return person === undefined ? [] : [{ person, role: entry.role }];
+  });
+}
+
 function Contributors({
   record,
   people,
@@ -463,32 +392,36 @@ function Contributors({
   readonly locale: Locale;
   readonly t: LibraryTranslator;
 }) {
-  const rows = record.contributors.flatMap((entry) => {
-    const person = people.get(entry.personId);
-    return person === undefined ? [] : [{ person, role: entry.role }];
-  });
+  const rows = contributorRows(record, people);
   if (rows.length === 0) return null;
 
   return (
-    <section className="flex flex-col gap-3" aria-labelledby="scholarly-contributors">
-      <h2 id="scholarly-contributors" className="text-lg font-semibold">
-        {t('contributors')}
-      </h2>
-      <ul className="flex flex-col gap-1 text-sm">
+    <RecordSection id="scholarly-contributors" heading={t('contributors')}>
+      <ul className="flex flex-col divide-y divide-[color:var(--color-border)] text-sm">
         {rows.map((row) => (
-          <li key={`${row.person.slug}-${row.role}`}>
+          <li
+            key={`${row.person.slug}-${row.role}`}
+            className="flex flex-col gap-0.5 py-2"
+          >
             <TextLink href={`/${locale}/people/${encodeURIComponent(row.person.slug)}`}>
               {row.person.name}
             </TextLink>
-            <span className="text-[color:var(--color-foreground-muted)]">
-              {' · '}
+            <span className="text-caption text-[color:var(--color-foreground-muted)]">
               {t(`role.${row.role}`)}
             </span>
           </li>
         ))}
       </ul>
-    </section>
+    </RecordSection>
   );
+}
+
+/** Topics resolved by Taxonomy, in the record's own order. */
+function topicRows(topicIds: readonly string[], topics: NameMap) {
+  return topicIds.flatMap((id) => {
+    const topic = topics.get(id);
+    return topic === undefined ? [] : [topic];
+  });
 }
 
 /** Topics, each linked to its canonical hub (Phase 17). */
@@ -503,27 +436,19 @@ function Topics({
   readonly locale: Locale;
   readonly t: LibraryTranslator;
 }) {
-  const rows = topicIds.flatMap((id) => {
-    const topic = topics.get(id);
-    return topic === undefined ? [] : [topic];
-  });
+  const rows = topicRows(topicIds, topics);
   if (rows.length === 0) return null;
 
   return (
-    <section className="flex flex-col gap-3" aria-labelledby="scholarly-topics">
-      <h2 id="scholarly-topics" className="text-lg font-semibold">
-        {t('topics')}
-      </h2>
-      <ul className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-        {rows.map((topic) => (
-          <li key={topic.slug}>
-            <TextLink href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}>
-              {topic.name}
-            </TextLink>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <RecordSection id="scholarly-topics" heading={t('topics')}>
+      <TopicChips
+        label={t('topics')}
+        topics={rows.map((topic) => ({
+          href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+          text: topic.name,
+        }))}
+      />
+    </RecordSection>
   );
 }
 
@@ -543,17 +468,17 @@ function Citations({
 
   return (
     <section className="flex flex-col gap-3" aria-labelledby="scholarly-citations">
-      <h2 id="scholarly-citations" className="text-lg font-semibold">
+      <h2 id="scholarly-citations" className="text-heading font-semibold">
         {t('scholarly.citations')}
       </h2>
-      <ol className="flex list-decimal flex-col gap-3 ps-6 text-sm">
+      <ol className="flex list-decimal flex-col gap-4 ps-6 text-sm marker:text-[color:var(--color-foreground-muted)]">
         {citations.map((citation, index) => (
-          <li key={index} className="break-words">
+          <li key={index} className="break-words ps-1">
             <span lang={languageCode} dir={direction}>
               {citation.text}
             </span>
             {citation.doi === null && citation.url === null ? null : (
-              <span className="flex flex-wrap gap-x-4 gap-y-1">
+              <span className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
                 {citation.doi === null ? null : (
                   <TextLink href={doiHref(citation.doi)}>
                     {t('scholarly.citationDoi', { doi: citation.doi })}
@@ -683,16 +608,28 @@ function StructuredData({
 }
 
 /* ===========================================================================
- * Detail — Research, ResearchPaper, Publication, Encyclopedia, MagazineIssue
+ * Detail
  * ========================================================================= */
 
 type ContentRecord = Exclude<ScholarlyRecord, MagazineRecord>;
 
+/** A breadcrumb trail from a structured-data trail: every entry linked but the last. */
+function crumbsOf(
+  trail: readonly { readonly name: string; readonly path: string }[],
+  current: string,
+) {
+  return [
+    ...trail.slice(0, -1).map((entry) => ({ href: entry.path, text: entry.name })),
+    { text: current },
+  ];
+}
+
 /**
- * One record's page. The facts first — language, date, where it appeared, who
- * published it, its institutional context and, for an issue, its place in the
- * periodical — then who made it and what it is about, then the abstract, the
- * text itself, and the citations.
+ * One record's page. The title, its summary and the standing notice open the
+ * page; the facts — language, date, where it appeared, who published it, its
+ * institutional context and, for an issue, its place in the periodical — sit
+ * beside the reading column with who made it and what it is about; the reading
+ * column holds the abstract, the text itself, and the citations.
  */
 export async function ScholarlyDetail({
   locale,
@@ -758,159 +695,208 @@ export async function ScholarlyDetail({
     });
 
   return (
-    <Container>
-      <article className="flex flex-col gap-10 py-12">
-        <Breadcrumbs
-          label={shell('nav.breadcrumbs')}
-          trail={[
-            ...trail
-              .slice(0, -1)
-              .map((entry) => ({ href: entry.path, text: entry.name })),
-            { text: label.title },
-          ]}
-        />
-
-        <div className="flex flex-col gap-3">
-          <StatusBadge tone="neutral">{t(`scholarly.kind.${record.kind}`)}</StatusBadge>
-          <Header label={label} t={t} />
-        </div>
-
-        <section className="flex flex-col gap-3" aria-labelledby="scholarly-facts">
-          <h2 id="scholarly-facts" className="text-lg font-semibold">
-            {t('scholarly.facts')}
-          </h2>
-          <dl className="grid gap-x-8 sm:grid-cols-2">
-            {record.kind === 'magazine-issue' && magazineLabel !== null ? (
-              <DetailRow term={t('scholarly.fact.magazine')}>
-                <TextLink href={scholarlyPath(locale, 'magazine', record.magazine.slug)}>
-                  <span
-                    lang={magazineLabel.locale}
-                    dir={directionOf(magazineLabel.locale)}
+    <RecordFrame
+      breadcrumbLabel={shell('nav.breadcrumbs')}
+      trail={crumbsOf(trail, label.title)}
+      eyebrow={t(`scholarly.kind.${record.kind}`)}
+      title={label.title}
+      lang={label.locale}
+      dir={directionOf(label.locale)}
+      summary={paragraphsOf(label.summary)}
+      notice={t('scholarly.metadataNotice')}
+      aside={
+        <>
+          <RecordSection id="scholarly-facts" heading={t('scholarly.facts')}>
+            <dl className="flex flex-col divide-y divide-[color:var(--color-border)] rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] px-4 py-1">
+              {record.kind === 'magazine-issue' && magazineLabel !== null ? (
+                <DetailRow term={t('scholarly.fact.magazine')}>
+                  <TextLink
+                    href={scholarlyPath(locale, 'magazine', record.magazine.slug)}
                   >
-                    {magazineLabel.title}
-                  </span>
-                </TextLink>
-              </DetailRow>
-            ) : null}
-            {numbering === null ? null : (
-              <DetailRow term={t('scholarly.fact.numbering')}>{numbering}</DetailRow>
-            )}
-            <DetailRow term={t('scholarly.fact.contentLanguage')}>
-              <span lang={record.languageCode} dir={contentDirection}>
-                {language?.name ?? record.languageCode}
-              </span>
-            </DetailRow>
-            {record.publishedOn !== null ? (
-              <DetailRow term={t('scholarly.fact.published')}>
-                <time dateTime={record.publishedOn}>
-                  {formatDate(record.publishedOn, locale)}
-                </time>
-              </DetailRow>
-            ) : record.publicationYear !== null ? (
-              <DetailRow term={t('scholarly.fact.publicationYear')}>
-                {String(record.publicationYear)}
-              </DetailRow>
-            ) : null}
-            {(record.kind === 'publication' || record.kind === 'encyclopedia') &&
-            record.publisher !== null ? (
-              <DetailRow term={t('scholarly.fact.publisher')}>
-                <span dir="auto">{record.publisher}</span>
-              </DetailRow>
-            ) : null}
-            {record.kind === 'research-paper' && record.venue !== null ? (
-              <DetailRow term={t('scholarly.fact.venue')}>
-                <span dir="auto">{record.venue}</span>
-              </DetailRow>
-            ) : null}
-            {record.kind === 'research-paper' && record.doi !== null ? (
-              <DetailRow term={t('scholarly.fact.doi')}>
-                <TextLink href={doiHref(record.doi)}>
-                  <span dir="ltr">{record.doi}</span>
-                </TextLink>
-              </DetailRow>
-            ) : null}
-            {(record.kind === 'research' || record.kind === 'research-paper') &&
-            record.institutionalContext !== null ? (
-              <DetailRow term={t('scholarly.fact.institutionalContext')}>
+                    <span
+                      lang={magazineLabel.locale}
+                      dir={directionOf(magazineLabel.locale)}
+                    >
+                      {magazineLabel.title}
+                    </span>
+                  </TextLink>
+                </DetailRow>
+              ) : null}
+              {numbering === null ? null : (
+                <DetailRow term={t('scholarly.fact.numbering')}>{numbering}</DetailRow>
+              )}
+              <DetailRow term={t('scholarly.fact.contentLanguage')}>
                 <span lang={record.languageCode} dir={contentDirection}>
-                  {record.institutionalContext}
+                  {language?.name ?? record.languageCode}
                 </span>
               </DetailRow>
-            ) : null}
-          </dl>
-        </section>
+              {record.publishedOn !== null ? (
+                <DetailRow term={t('scholarly.fact.published')}>
+                  <time dateTime={record.publishedOn}>
+                    {formatDate(record.publishedOn, locale)}
+                  </time>
+                </DetailRow>
+              ) : record.publicationYear !== null ? (
+                <DetailRow term={t('scholarly.fact.publicationYear')}>
+                  {String(record.publicationYear)}
+                </DetailRow>
+              ) : null}
+              {(record.kind === 'publication' || record.kind === 'encyclopedia') &&
+              record.publisher !== null ? (
+                <DetailRow term={t('scholarly.fact.publisher')}>
+                  <span dir="auto">{record.publisher}</span>
+                </DetailRow>
+              ) : null}
+              {record.kind === 'research-paper' && record.venue !== null ? (
+                <DetailRow term={t('scholarly.fact.venue')}>
+                  <span dir="auto">{record.venue}</span>
+                </DetailRow>
+              ) : null}
+              {record.kind === 'research-paper' && record.doi !== null ? (
+                <DetailRow term={t('scholarly.fact.doi')}>
+                  <TextLink href={doiHref(record.doi)}>
+                    <span dir="ltr">{record.doi}</span>
+                  </TextLink>
+                </DetailRow>
+              ) : null}
+              {(record.kind === 'research' || record.kind === 'research-paper') &&
+              record.institutionalContext !== null ? (
+                <DetailRow term={t('scholarly.fact.institutionalContext')}>
+                  <span lang={record.languageCode} dir={contentDirection}>
+                    {record.institutionalContext}
+                  </span>
+                </DetailRow>
+              ) : null}
+            </dl>
+          </RecordSection>
 
-        <Contributors record={record} people={references.people} locale={locale} t={t} />
-        <Topics
-          topicIds={record.topicIds}
-          topics={references.topics}
-          locale={locale}
-          t={t}
-        />
-
-        {(record.kind === 'research' || record.kind === 'research-paper') &&
-        record.abstract !== null ? (
-          <section className="flex flex-col gap-3" aria-labelledby="scholarly-abstract">
-            <h2 id="scholarly-abstract" className="text-lg font-semibold">
-              {t('scholarly.abstract')}
-            </h2>
-            <div
-              className="library-reader flex flex-col gap-4"
-              lang={record.languageCode}
-              dir={contentDirection}
-            >
-              {paragraphsOf(record.abstract).map((paragraph, index) => (
-                <p key={index}>{paragraph}</p>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        <FullText record={record} language={language} locale={locale} t={t} />
-
-        {record.kind === 'research' || record.kind === 'research-paper' ? (
-          <Citations
-            citations={record.citations}
-            direction={contentDirection}
-            languageCode={record.languageCode}
+          <Contributors
+            record={record}
+            people={references.people}
+            locale={locale}
             t={t}
           />
-        ) : null}
-
-        {neighbours === null ||
-        (neighbours.previous === null && neighbours.next === null) ? null : (
-          <nav
-            aria-label={t('scholarly.issueNavigation')}
-            className="flex flex-wrap justify-between gap-4 text-sm"
+          <Topics
+            topicIds={record.topicIds}
+            topics={references.topics}
+            locale={locale}
+            t={t}
+          />
+        </>
+      }
+    >
+      {(record.kind === 'research' || record.kind === 'research-paper') &&
+      record.abstract !== null ? (
+        <section className="flex flex-col gap-3" aria-labelledby="scholarly-abstract">
+          <h2 id="scholarly-abstract" className="text-heading font-semibold">
+            {t('scholarly.abstract')}
+          </h2>
+          <div
+            className="library-reader flex max-w-[var(--measure-prose)] flex-col gap-4 border-s-2 border-[color:var(--color-accent-rule)] ps-5"
+            lang={record.languageCode}
+            dir={contentDirection}
           >
-            {neighbours.previous === null ? (
-              <span />
-            ) : (
-              <TextLink href={listingHref(locale, neighbours.previous)}>
-                {t('scholarly.previousIssue')}
-                {': '}
-                {scholarlyLabel(neighbours.previous, locale).title}
-              </TextLink>
-            )}
-            {neighbours.next === null ? null : (
-              <TextLink href={listingHref(locale, neighbours.next)}>
-                {t('scholarly.nextIssue')}
-                {': '}
-                {scholarlyLabel(neighbours.next, locale).title}
-              </TextLink>
-            )}
-          </nav>
-        )}
+            {paragraphsOf(record.abstract).map((paragraph, index) => (
+              <p key={index}>{paragraph}</p>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
-        <StructuredData
-          record={record}
-          title={label.title}
-          trail={trail}
-          path={path}
-          authors={authors}
+      <FullText record={record} language={language} locale={locale} t={t} />
+
+      {record.kind === 'research' || record.kind === 'research-paper' ? (
+        <Citations
+          citations={record.citations}
+          direction={contentDirection}
+          languageCode={record.languageCode}
+          t={t}
         />
-      </article>
-    </Container>
+      ) : null}
+
+      {neighbours === null ||
+      (neighbours.previous === null && neighbours.next === null) ? null : (
+        <nav
+          aria-label={t('scholarly.issueNavigation')}
+          className="grid grid-cols-1 gap-3 border-t border-[color:var(--color-border)] pt-6 sm:grid-cols-2"
+        >
+          {neighbours.previous === null ? (
+            <span className="hidden sm:block" />
+          ) : (
+            <IssueNeighbour
+              href={listingHref(locale, neighbours.previous)}
+              direction="previous"
+              label={t('scholarly.previousIssue')}
+              title={scholarlyLabel(neighbours.previous, locale)}
+            />
+          )}
+          {neighbours.next === null ? null : (
+            <IssueNeighbour
+              href={listingHref(locale, neighbours.next)}
+              direction="next"
+              label={t('scholarly.nextIssue')}
+              title={scholarlyLabel(neighbours.next, locale)}
+            />
+          )}
+        </nav>
+      )}
+
+      <StructuredData
+        record={record}
+        title={label.title}
+        trail={trail}
+        path={path}
+        authors={authors}
+      />
+    </RecordFrame>
+  );
+}
+
+/**
+ * One neighbouring issue: what it is ("Previous issue") and which one (its
+ * title, in its own language). The link's name carries both, so it still says
+ * where it goes when it is read out of context.
+ */
+function IssueNeighbour({
+  href,
+  direction,
+  label,
+  title,
+}: {
+  readonly href: string;
+  readonly direction: 'previous' | 'next';
+  readonly label: string;
+  readonly title: { readonly locale: Locale; readonly title: string };
+}) {
+  return (
+    <a
+      href={href}
+      className={`flex min-h-11 min-w-0 flex-col gap-1 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-4 no-underline transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--color-border-strong)] active:bg-[color:var(--color-surface-sunken)] ${
+        direction === 'next' ? 'sm:col-start-2 sm:text-end' : ''
+      }`}
+    >
+      <span className="text-caption font-semibold text-[color:var(--color-accent)]">
+        {direction === 'previous' ? (
+          <span aria-hidden="true" className="me-1 inline-block rtl:-scale-x-100">
+            ←
+          </span>
+        ) : null}
+        {label}
+        {direction === 'next' ? (
+          <span aria-hidden="true" className="ms-1 inline-block rtl:-scale-x-100">
+            →
+          </span>
+        ) : null}
+        <span className="sr-only">: </span>
+      </span>
+      <span
+        className="font-semibold wrap-anywhere text-[color:var(--color-foreground)]"
+        lang={title.locale}
+        dir={directionOf(title.locale)}
+      >
+        {title.title}
+      </span>
+    </a>
   );
 }
 
@@ -964,71 +950,84 @@ export async function MagazineDetail({
     { name: label.title, path },
   ];
 
+  // The aside is only drawn when it has something to hold.
+  const hasAside =
+    contributorRows(record, references.people).length > 0 ||
+    topicRows(record.topicIds, references.topics).length > 0;
+
   return (
-    <Container>
-      <article className="flex flex-col gap-10 py-12">
-        <Breadcrumbs
-          label={shell('nav.breadcrumbs')}
-          trail={[
-            ...trail
-              .slice(0, -1)
-              .map((entry) => ({ href: entry.path, text: entry.name })),
-            { text: label.title },
-          ]}
-        />
-
-        <div className="flex flex-col gap-3">
-          <StatusBadge tone="neutral">{t('scholarly.kind.magazine')}</StatusBadge>
-          <Header label={label} t={t} />
-        </div>
-
-        <Contributors record={record} people={references.people} locale={locale} t={t} />
-        <Topics
-          topicIds={record.topicIds}
-          topics={references.topics}
-          locale={locale}
-          t={t}
-        />
-
-        <section className="flex flex-col gap-4" aria-labelledby="magazine-issues">
-          <SectionHeading>
-            <span id="magazine-issues">{t('scholarly.issues')}</span>
-          </SectionHeading>
-          {issues.items.length === 0 ? (
-            <EmptyState>{t('scholarly.noIssues')}</EmptyState>
-          ) : (
-            <ul aria-labelledby="magazine-issues" className="flex flex-col gap-4">
-              {issues.items.map((row) => (
-                <ScholarlyCard
-                  key={row.id}
+    <RecordFrame
+      breadcrumbLabel={shell('nav.breadcrumbs')}
+      trail={crumbsOf(trail, label.title)}
+      eyebrow={t('scholarly.kind.magazine')}
+      title={label.title}
+      lang={label.locale}
+      dir={directionOf(label.locale)}
+      summary={paragraphsOf(label.summary)}
+      notice={t('scholarly.metadataNotice')}
+      {...(hasAside
+        ? {
+            aside: (
+              <>
+                <Contributors
+                  record={record}
+                  people={references.people}
                   locale={locale}
-                  row={row}
-                  languages={languages}
                   t={t}
-                  headingLevel="h3"
                 />
-              ))}
-            </ul>
-          )}
-          <Pagination
-            label={t('scholarly.issues')}
-            previous={
-              offset > 0 ? pageOf(path, Math.max(0, offset - SCHOLARLY_PAGE)) : null
-            }
-            next={issues.hasMore ? pageOf(path, offset + SCHOLARLY_PAGE) : null}
-            t={t}
-          />
-        </section>
-
-        <StructuredData
-          record={record}
-          title={label.title}
-          trail={trail}
-          path={path}
-          authors={[]}
+                <Topics
+                  topicIds={record.topicIds}
+                  topics={references.topics}
+                  locale={locale}
+                  t={t}
+                />
+              </>
+            ),
+          }
+        : {})}
+    >
+      <section className="flex flex-col gap-5" aria-labelledby="magazine-issues">
+        <h2
+          id="magazine-issues"
+          className="border-b border-[color:var(--color-border)] pb-3 text-heading font-semibold"
+        >
+          {t('scholarly.issues')}
+        </h2>
+        {issues.items.length === 0 ? (
+          <EmptyState>{t('scholarly.noIssues')}</EmptyState>
+        ) : (
+          <CardGrid label={t('scholarly.issues')} columns={hasAside ? 2 : 3}>
+            {issues.items.map((row) => (
+              <ScholarlyCard
+                key={row.id}
+                locale={locale}
+                row={row}
+                languages={languages}
+                t={t}
+                headingLevel="h3"
+              />
+            ))}
+          </CardGrid>
+        )}
+        <Pager
+          label={t('scholarly.issues')}
+          previous={
+            offset > 0 ? pageOf(path, Math.max(0, offset - SCHOLARLY_PAGE)) : null
+          }
+          next={issues.hasMore ? pageOf(path, offset + SCHOLARLY_PAGE) : null}
+          previousLabel={t('previous')}
+          nextLabel={t('next')}
         />
-      </article>
-    </Container>
+      </section>
+
+      <StructuredData
+        record={record}
+        title={label.title}
+        trail={trail}
+        path={path}
+        authors={[]}
+      />
+    </RecordFrame>
   );
 }
 

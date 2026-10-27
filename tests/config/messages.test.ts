@@ -106,8 +106,12 @@ describe('the catalogues agree on their keys', () => {
     // claim is unchanged, and it is made against MORE prose than before.
     for (const key of [
       'shell.home.lede',
-      'shell.home.buildStatus',
+      // The flagship portal retired the build-status paragraph; its quiet
+      // pre-adoption note is the home prose that replaced it.
+      'shell.home.preAdoption',
+      'shell.home.search.label',
       'shell.nav.explore',
+      'shell.menu.toggle',
       'shell.reserved.body',
       'shell.footer.preAdoption',
       'shell.notFound.body',

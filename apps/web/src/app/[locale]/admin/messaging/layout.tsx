@@ -6,7 +6,7 @@ import { getTranslations } from 'next-intl/server';
 import { requireOwnSession } from '@/composition/authorization';
 import { identityRuntime } from '@/composition/identity';
 import { requireLocale } from '@/config/route-locale';
-import { TextLink } from '@/components/ui';
+import { WorkspaceNav } from '@/components/workspace/workspace-nav';
 import { MESSAGING_KEYS, MESSAGING_SURFACES } from './shared';
 
 /**
@@ -56,16 +56,20 @@ export default async function MessagingAdminLayout({
   return (
     <>
       {visible.length === 0 ? null : (
-        <nav className="flex flex-wrap gap-4" aria-label={t('title')}>
-          {visible.map((surface) => (
-            <TextLink
-              key={surface.key}
-              href={`/${locale}/admin/messaging/${surface.key}`}
-            >
-              {t(`surface.${surface.key}`)}
-            </TextLink>
-          ))}
-        </nav>
+        <WorkspaceNav
+          label={t('title')}
+          variant="tabs"
+          groups={[
+            {
+              key: 'messaging',
+              links: visible.map((surface) => ({
+                key: surface.key,
+                href: `/${locale}/admin/messaging/${surface.key}`,
+                text: t(`surface.${surface.key}`),
+              })),
+            },
+          ]}
+        />
       )}
 
       <NextIntlClientProvider

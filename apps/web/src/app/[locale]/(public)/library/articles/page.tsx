@@ -3,7 +3,8 @@ import { getTranslations } from 'next-intl/server';
 import { requireLocale } from '@/config/route-locale';
 import { editorialReadRuntime } from '@/composition/editorial-read';
 import { translationFor } from '@/components/editorial/public-content';
-import { Container, PageHeading, EmptyState, TextLink } from '@/components/ui';
+import { ListingFrame, Pager } from '@/components/library/frame';
+import { CardGrid, EmptyState, LinkCard } from '@/components/ui';
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
 export default async function Articles({
@@ -14,7 +15,9 @@ export default async function Articles({
   searchParams: Promise<{ offset?: string }>;
 }) {
   const locale = await requireLocale(params),
-    t = await getTranslations({ locale, namespace: 'editorial' });
+    t = await getTranslations({ locale, namespace: 'editorial' }),
+    library = await getTranslations({ locale, namespace: 'library' }),
+    shell = await getTranslations({ locale, namespace: 'shell' });
   const offset = z.coerce
     .number()
     .int()
@@ -24,44 +27,46 @@ export default async function Articles({
     .parse((await searchParams).offset);
   const records = await editorialReadRuntime().articles(offset);
   return (
-    <Container>
-      <div className="flex flex-col gap-6 py-12">
-        <PageHeading>{t('articles')}</PageHeading>
-        {records.length ? (
-          <ul className="flex flex-col gap-6">
-            {records.map((record) => {
-              const translation = translationFor(record, locale);
-              return (
-                <li key={record.slug} lang={translation.languageCode} dir="auto">
-                  <TextLink
-                    href={
-                      '/' +
-                      locale +
-                      '/library/articles/' +
-                      encodeURIComponent(record.slug)
-                    }
-                  >
-                    {translation.title}
-                  </TextLink>
-                  <p>{translation.excerpt}</p>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <EmptyState>{t('empty')}</EmptyState>
-        )}
-        <nav className="flex gap-4" aria-label={t('articles')}>
-          {offset > 0 ? (
-            <TextLink href={'?offset=' + Math.max(0, offset - 25)}>
-              {t('previous')}
-            </TextLink>
-          ) : null}
-          {records.length === 25 ? (
-            <TextLink href={'?offset=' + (offset + 25)}>{t('next')}</TextLink>
-          ) : null}
-        </nav>
-      </div>
-    </Container>
+    <ListingFrame
+      breadcrumbLabel={shell('nav.breadcrumbs')}
+      trail={[
+        { href: '/' + locale, text: shell('nav.home') },
+        { href: '/' + locale + '/library', text: library('title') },
+        { text: t('articles') },
+      ]}
+      title={t('articles')}
+      lede={library('sectionBody.articles')}
+    >
+      {records.length ? (
+        <CardGrid label={t('articles')}>
+          {records.map((record) => {
+            // Editorial's own resolution of which language version is shown.
+            const translation = translationFor(record, locale);
+            return (
+              <LinkCard
+                key={record.slug}
+                href={
+                  '/' + locale + '/library/articles/' + encodeURIComponent(record.slug)
+                }
+                title={translation.title}
+                description={translation.excerpt}
+                headingLevel="h2"
+                lang={translation.languageCode}
+                dir={translation.languageCode === 'en' ? 'ltr' : 'rtl'}
+              />
+            );
+          })}
+        </CardGrid>
+      ) : (
+        <EmptyState>{t('empty')}</EmptyState>
+      )}
+      <Pager
+        label={t('articles')}
+        previous={offset > 0 ? '?offset=' + Math.max(0, offset - 25) : null}
+        next={records.length === 25 ? '?offset=' + (offset + 25) : null}
+        previousLabel={t('previous')}
+        nextLabel={t('next')}
+      />
+    </ListingFrame>
   );
 }

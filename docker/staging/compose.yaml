@@ -187,6 +187,26 @@ services:
       - /srv/minhaj/restore/storage:/var/lib/minhaj/restore-storage
     networks: [backend]
 
+  # The AUTHORISED-SOURCE runner (Phase 30): the same operations image, with ONE
+  # more network — `sources`, outbound only — and used solely by
+  # bin/migration-run.sh to read the recorded public hosts of an authorised
+  # source. The application's safe-fetch boundary still pins every request to
+  # a validated PUBLIC address of the source's exact hosts, so this network
+  # reaches nothing internal; every other operator command stays on `backend`.
+  ingest:
+    profiles: [ingest]
+    image: ${MINHAJ_OPS_IMAGE:?release.env must pin MINHAJ_OPS_IMAGE by digest}
+    env_file:
+      - /etc/minhaj/staging.env
+      - /etc/minhaj/secrets/ops.env
+    environment:
+      STORAGE_ROOT: /var/lib/minhaj/storage
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: '3310'
+    volumes:
+      - /srv/minhaj/storage:/var/lib/minhaj/storage
+    networks: [backend, sources]
+
   certbot:
     profiles: [acme]
     image: certbot/certbot:v5.8.0@sha256:f70ad0adbb7e117f0fe42a63c553f28ea451edabc0148757b6efcd9735acaa20
@@ -204,6 +224,8 @@ networks:
     internal: true
   # Outbound only: signature updates and ACME.
   updates: {}
+  # Outbound only: the authorised-source runner, and nothing else.
+  sources: {}
 
 volumes:
   # Derived and re-downloadable; not authoritative, not backed up.

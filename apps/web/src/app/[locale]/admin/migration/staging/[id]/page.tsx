@@ -4,6 +4,7 @@ import type { Locale } from '@minhaj/contracts';
 import {
   ASSET_LICENCES,
   ASSET_VISIBILITIES,
+  isPublishableKind,
   migrationIdSchema,
   type AssetProvenanceRow,
   type StagedDetail,
@@ -48,6 +49,7 @@ import {
   type Query,
 } from '../../shared';
 import {
+  ContentKindLabel,
   LinkDispositionBadge,
   PersonalDataBadge,
   ReviewBadge,
@@ -69,6 +71,12 @@ import {
  * it, and the bytes leave only as an attachment from the private download
  * route. A legacy address is shown as text, never a link: following it would
  * be live access to a legacy source.
+ *
+ * REVIEW-ONLY KINDS (Fatwa, Quran translation) are religious material that
+ * migration preserves and reviews as evidence only: the page says so, plainly,
+ * above everything else. Reviewing one here never publishes it — no publisher
+ * exists for it and a manifest refuses it — and its acceptance belongs to the
+ * religious authority (OPEN_DECISIONS.md §1).
  */
 export const metadata = { robots: { index: false, follow: false } };
 
@@ -180,10 +188,16 @@ export default async function MigrationStagedRecordPage({
           <PersonalDataBadge state={staged.personalData} copy={copy} />
         </div>
         <Alert tone="info">{t('staged.inert')}</Alert>
+        {isPublishableKind(staged.contentKind) ? null : (
+          <Alert tone="warning">{t('reviewOnly.notice')}</Alert>
+        )}
       </header>
 
       <Panel>
         <dl className="divide-y divide-[color:var(--color-border)]">
+          <DetailRow term={t('staged.contentKind')}>
+            <ContentKindLabel kind={staged.contentKind} copy={copy} />
+          </DetailRow>
           <DetailRow term={t('staged.revision')}>{staged.revision}</DetailRow>
           <DetailRow term={t('staged.recordStatus')}>
             {t(`recordStatus.${staged.recordStatus}`)}

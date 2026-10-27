@@ -3,7 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { requireLocale } from '@/config/route-locale';
 import { requireOwnSession } from '@/composition/authorization';
 import { identityRuntime } from '@/composition/identity';
-import { TextLink } from '@/components/ui';
+import { WorkspaceNav } from '@/components/workspace/workspace-nav';
 export default async function Layout({
   params,
   children,
@@ -19,32 +19,39 @@ export default async function Layout({
     : new Set<string>();
   return (
     <>
-      <nav className="flex flex-wrap gap-4" aria-label={t('title')}>
-        {(
-          [
-            'articles',
-            'pages',
-            'news',
-            'press-releases',
-            'statements',
-            'media-coverage',
-            'events',
-            'collections',
-            'queue',
-            'correspondence',
-          ] as const
-        )
-          .filter((section) =>
-            held.has(
-              section === 'correspondence' ? 'correspondence.read' : 'content.read',
-            ),
-          )
-          .map((section) => (
-            <TextLink key={section} href={'/' + locale + '/admin/editorial/' + section}>
-              {t(section)}
-            </TextLink>
-          ))}
-      </nav>
+      <WorkspaceNav
+        label={t('title')}
+        variant="tabs"
+        groups={[
+          {
+            key: 'editorial',
+            links: (
+              [
+                'articles',
+                'pages',
+                'news',
+                'press-releases',
+                'statements',
+                'media-coverage',
+                'events',
+                'collections',
+                'queue',
+                'correspondence',
+              ] as const
+            )
+              .filter((section) =>
+                held.has(
+                  section === 'correspondence' ? 'correspondence.read' : 'content.read',
+                ),
+              )
+              .map((section) => ({
+                key: section,
+                href: '/' + locale + '/admin/editorial/' + section,
+                text: t(section),
+              })),
+          },
+        ]}
+      />
       <NextIntlClientProvider
         locale={locale}
         messages={{

@@ -10,7 +10,8 @@ import type {
   SessionState,
 } from '@minhaj/contracts/learning';
 
-import { Alert, PageHeading, StatusBadge, TextLink } from '@/components/ui';
+import { Alert, StatusBadge } from '@/components/ui';
+import { WorkspaceLinks, WorkspacePage } from '@/components/workspace/parts';
 import { classRange, ownZone, zoneName } from './presentation';
 
 /**
@@ -30,7 +31,11 @@ import { classRange, ownZone, zoneName } from './presentation';
 
 export type TeacherTranslator = Awaited<ReturnType<typeof getTranslations<'teacher'>>>;
 
-/** The column, heading and introduction of a Teacher-area page. */
+/**
+ * The heading and introduction of a Teacher-area page, inside the area's
+ * workspace frame — the full width of the content column, since a teacher's
+ * calendar and reports are tables.
+ */
 export function TeacherFrame({
   title,
   description,
@@ -41,17 +46,9 @@ export function TeacherFrame({
   readonly children: ReactNode;
 }) {
   return (
-    <main className="flex min-w-0 flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <PageHeading>{title}</PageHeading>
-        {description === undefined ? null : (
-          <div className="flex flex-col gap-2 text-[color:var(--color-foreground-muted)]">
-            {description}
-          </div>
-        )}
-      </header>
+    <WorkspacePage title={title} {...(description === undefined ? {} : { description })}>
       {children}
-    </main>
+    </WorkspacePage>
   );
 }
 
@@ -157,7 +154,7 @@ export function AttendanceWord({
   );
 }
 
-/** A labelled group of links to neighbouring pages. */
+/** A labelled group of links to neighbouring pages, each a 44-pixel target. */
 export function TeacherLinks({
   label,
   links,
@@ -166,12 +163,8 @@ export function TeacherLinks({
   readonly links: readonly { readonly href: string; readonly text: string }[];
 }) {
   return (
-    <nav aria-label={label} className="flex flex-wrap gap-x-6 gap-y-2">
-      {links.map((link) => (
-        <TextLink key={link.href} href={link.href}>
-          {link.text}
-        </TextLink>
-      ))}
+    <nav aria-label={label}>
+      <WorkspaceLinks links={links} />
     </nav>
   );
 }

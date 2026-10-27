@@ -1,18 +1,21 @@
-import type {
-  DuplicateState,
-  ErrorResolution,
-  ItemOutcome,
-  LegacyMappingState,
-  LinkDisposition,
-  ManifestEntryState,
-  ManifestState,
-  PersonalDataState,
-  PromotionState,
-  ReconciliationState,
-  ReviewState,
-  RunState,
-  TopicMappingState,
-  ValidationState,
+import {
+  isPublishableKind,
+  type DuplicateState,
+  type ErrorResolution,
+  type ItemOutcome,
+  type LegacyMappingState,
+  type LinkDisposition,
+  type ManifestEntryState,
+  type ManifestState,
+  type MigrationContentKind,
+  type PersonalDataState,
+  type PromotionState,
+  type ReconciliationState,
+  type ReviewState,
+  type RunState,
+  type TargetStage,
+  type TopicMappingState,
+  type ValidationState,
 } from '@minhaj/contracts/migration';
 
 import { StateBadge, type AdminMigrationCopy } from './shared';
@@ -218,4 +221,37 @@ export function LinkDispositionBadge({
         ? 'caution'
         : 'neutral';
   return <StateBadge tone={tone}>{copy.t(`linkDisposition.${disposition}`)}</StateBadge>;
+}
+
+/**
+ * A content kind, in words, with a visible "Review only" mark for religious
+ * material migration preserves and reviews as evidence and never publishes.
+ */
+export function ContentKindLabel({
+  kind,
+  copy,
+}: {
+  readonly kind: MigrationContentKind;
+  readonly copy: AdminMigrationCopy;
+}) {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <span>{copy.t(`contentKind.${kind}`)}</span>
+      {isPublishableKind(kind) ? null : (
+        <StateBadge tone="caution">{copy.t('reviewOnly.badge')}</StateBadge>
+      )}
+    </span>
+  );
+}
+
+/** How far into its owning domain a publication carried a record. */
+export function TargetStageBadge({
+  stage,
+  copy,
+}: {
+  readonly stage: TargetStage;
+  readonly copy: AdminMigrationCopy;
+}) {
+  const tone: Tone = stage === 'public' ? 'positive' : 'caution';
+  return <StateBadge tone={tone}>{copy.t(`targetStage.${stage}`)}</StateBadge>;
 }

@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-import { localeSchema, type Locale } from '../env/shared.ts';
-
 /**
  * Migration & Provenance — values (DOMAIN_MODEL.md §16, MIGRATION_STRATEGY.md).
  *
@@ -23,15 +21,40 @@ import { localeSchema, type Locale } from '../env/shared.ts';
 /**
  * The content kinds a source may yield and a staged record may carry.
  *
- * ONE KIND, BECAUSE ONE TARGET IS WIRED. A kind exists only where Layer 4 has
- * a publisher for it, so nothing can be staged that the framework cannot
- * carry to a target through that target's own public interface. Video
- * metadata is the first: provider identifiers and words, never video bytes
- * (MIGRATION_STRATEGY.md §4.9). Phase 30 adds kinds with their publishers.
+ * A STRICT, CLOSED VOCABULARY — never a free-form target type. Each kind has
+ * one strict staged-payload schema and one normaliser, and is either
+ * PUBLISHABLE (a Layer-4 publisher carries it into its owning domain through
+ * that domain's public service) or REVIEW-ONLY (religious material preserved
+ * and reviewed as evidence, which migration never publishes — see
+ * `payloads.ts`). Every vocabulary here is transcribed into the database
+ * CHECKs.
  */
-export const MIGRATION_CONTENT_KINDS = Object.freeze(['media.video'] as const);
+export const MIGRATION_PUBLISHABLE_KINDS = Object.freeze([
+  'media.video',
+  'library.work',
+  'library.magazine',
+  'library.magazine-issue',
+  'editorial.news',
+  'editorial.article',
+] as const);
+export type MigrationPublishableKind = (typeof MIGRATION_PUBLISHABLE_KINDS)[number];
+
+export const MIGRATION_REVIEW_ONLY_KINDS = Object.freeze([
+  'fatwa.ruling',
+  'quran.translation',
+] as const);
+export type MigrationReviewOnlyKind = (typeof MIGRATION_REVIEW_ONLY_KINDS)[number];
+
+export const MIGRATION_CONTENT_KINDS = Object.freeze([
+  ...MIGRATION_PUBLISHABLE_KINDS,
+  ...MIGRATION_REVIEW_ONLY_KINDS,
+] as const);
 export type MigrationContentKind = (typeof MIGRATION_CONTENT_KINDS)[number];
 export const migrationContentKindSchema = z.enum(MIGRATION_CONTENT_KINDS);
+
+export function isPublishableKind(kind: string): kind is MigrationPublishableKind {
+  return (MIGRATION_PUBLISHABLE_KINDS as readonly string[]).includes(kind);
+}
 
 /**
  * WHO VOUCHES FOR A SOURCE.
@@ -396,6 +419,56 @@ export const fixtureSourceCreateSchema = z
   .strict();
 export type FixtureSourceCreate = z.output<typeof fixtureSourceCreateSchema>;
 
+/**
+ * The politeness floor of an AUTHORISED source (MIGRATION_STRATEGY.md §4.2):
+ * at least a second between two requests and one request at a time, whatever
+ * the registration asks for. Transcribed into the source CHECK.
+ */
+export const AUTHORISED_MIN_INTERVAL_MS = 1000;
+export const AUTHORISED_MAX_CONCURRENCY = 1;
+
+/** A written authorisation reference: printable, no secret-looking separators. */
+export const authorisationReferenceSchema = z
+  .string()
+  .trim()
+  .min(3)
+  .max(400)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9 ._:/#()-]*$/);
+
+/**
+ * Registering an AUTHORISED source (Phase 30). The authority kind is not a
+ * field: this schema exists only on the authorised registration path, which
+ * sets it. The written authorisation REFERENCE and DATE are mandatory; the
+ * application records and audits them but cannot prove the organisational
+ * decision they point at — that evidence lives outside the platform
+ * (OPEN_DECISIONS.md §3.1.1). The scope is real `https` hosts only, never a
+ * credential, and the politeness bounds cannot go below the floor.
+ */
+export const authorisedSourceCreateSchema = z
+  .object({
+    key: sourceKeySchema,
+    name: z.string().trim().min(1).max(MIGRATION_LIMITS.name),
+    contentKind: migrationContentKindSchema,
+    accessMethod: z.literal('http'),
+    baseUrl: z.string().trim().min(1).max(MIGRATION_LIMITS.url),
+    hosts: z
+      .array(z.string().trim().toLowerCase().min(1).max(253))
+      .min(1)
+      .max(MIGRATION_LIMITS.hosts),
+    defaultLanguageCode: languageCodeSchema.nullable(),
+    policy: sourcePolicySchema.refine(
+      (policy) =>
+        policy.minIntervalMs >= AUTHORISED_MIN_INTERVAL_MS &&
+        policy.maxConcurrency <= AUTHORISED_MAX_CONCURRENCY,
+    ),
+    authorisationReference: authorisationReferenceSchema,
+    authorisedOn: z.iso.date(),
+    licensingEvidence: optionalText(2000),
+    policyNotes: optionalText(2000),
+  })
+  .strict();
+export type AuthorisedSourceCreate = z.output<typeof authorisedSourceCreateSchema>;
+
 /** What an operator may change on a source: never its kind, key or hosts. */
 export const sourceUpdateSchema = z
   .object({
@@ -420,6 +493,35 @@ export const reviewDecisionSchema = z
   })
   .strict();
 export type ReviewDecision = z.output<typeof reviewDecisionSchema>;
+
+/**
+ * One reviewer's decision over a bounded selection — at most one operator
+ * page — of revisions they have each seen, at the version they saw. Each item
+ * is decided, checked and audited exactly as a single review is; nothing is
+ * decided for a revision that was not named.
+ */
+export const reviewBatchSchema = z
+  .object({
+    decision: z.enum(['approve', 'reject']),
+    note,
+    items: z
+      .array(
+        z
+          .object({
+            stagedRecordId: migrationIdSchema,
+            expectedVersion: migrationVersionSchema,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(MIGRATION_LIMITS.page)
+      .refine(
+        (items) =>
+          new Set(items.map((item) => item.stagedRecordId)).size === items.length,
+      ),
+  })
+  .strict();
+export type ReviewBatch = z.output<typeof reviewBatchSchema>;
 
 export const duplicateDecisionSchema = z
   .object({
@@ -533,77 +635,6 @@ export const promotionCommandSchema = z
   .strict();
 export type PromotionCommand = z.output<typeof promotionCommandSchema>;
 
-/* ===========================================================================
- * The staged video payload — Migration's own normalised shape
- * ========================================================================= */
-
-export const MIGRATION_VIDEO_PROVIDERS = Object.freeze(['youtube', 'vimeo'] as const);
-export type MigrationVideoProvider = (typeof MIGRATION_VIDEO_PROVIDERS)[number];
-
-/** Descriptive words for one locale — never a translation the pipeline made. */
-export interface StagedLabel {
-  readonly locale: Locale;
-  readonly title: string;
-  /** Plain text, derived from the sanitised description. */
-  readonly description: string;
-}
-
-/**
- * A staged Video, as normalisation produced it from a raw snapshot.
- *
- * `descriptionHtml` IS ALREADY SANITISED — the allowlist ran before this value
- * was stored (SECURITY_BASELINE.md §10.2). The raw markup it came from stays
- * only in the immutable snapshot.
- */
-export interface StagedVideoPayload {
-  readonly kind: 'media.video';
-  readonly slug: string;
-  readonly primaryLocale: Locale;
-  readonly languageCode: string;
-  readonly provider: MigrationVideoProvider;
-  readonly providerVideoId: string;
-  readonly labels: readonly StagedLabel[];
-  readonly descriptionHtml: string;
-  readonly publishedOn: string | null;
-  readonly durationSeconds: number | null;
-  readonly legacyIdentifier: string | null;
-}
-
-export const stagedVideoPayloadSchema = z
-  .object({
-    kind: z.literal('media.video'),
-    slug: z
-      .string()
-      .min(2)
-      .max(120)
-      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-    primaryLocale: localeSchema,
-    languageCode: languageCodeSchema,
-    provider: z.enum(MIGRATION_VIDEO_PROVIDERS),
-    providerVideoId: z
-      .string()
-      .min(1)
-      .max(64)
-      .regex(/^[A-Za-z0-9_-]+$/),
-    labels: z
-      .array(
-        z
-          .object({
-            locale: localeSchema,
-            title: z.string().min(1).max(MIGRATION_LIMITS.title),
-            description: z.string().max(MIGRATION_LIMITS.description),
-          })
-          .strict(),
-      )
-      .min(1)
-      .max(3),
-    descriptionHtml: z.string().max(MIGRATION_LIMITS.payload / 2),
-    publishedOn: z.iso.date().nullable(),
-    durationSeconds: z.number().int().min(1).max(360_000).nullable(),
-    legacyIdentifier: z.string().max(200).nullable(),
-  })
-  .strict();
-
 /** Machine-readable validation issue codes — never free text from a source. */
 export const VALIDATION_ISSUES = Object.freeze([
   'title-missing',
@@ -618,5 +649,20 @@ export const VALIDATION_ISSUES = Object.freeze([
   'duration-invalid',
   'slug-invalid',
   'description-too-long',
+  'body-missing',
+  'body-too-long',
+  'excerpt-too-long',
+  'language-unsupported',
+  'reference-missing',
+  'edition-label-missing',
+  'isbn-invalid',
+  'year-invalid',
+  'page-count-invalid',
+  'surah-invalid',
+  'ayah-invalid',
+  'question-missing',
+  'answer-missing',
+  /** A value no other issue names fails the kind's strict schema. */
+  'payload-invalid',
 ] as const);
 export type ValidationIssue = (typeof VALIDATION_ISSUES)[number];

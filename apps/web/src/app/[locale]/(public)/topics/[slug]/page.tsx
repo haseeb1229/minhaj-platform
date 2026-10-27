@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
@@ -30,13 +31,14 @@ import {
   Alert,
   Breadcrumbs,
   Button,
+  CardGrid,
   Container,
-  PageHeading,
-  Panel,
-  Prose,
-  SectionHeading,
+  LinkCard,
+  MetaRow,
+  PageHero,
+  SectionHeader,
   TextInput,
-  TextLink,
+  TopicChips,
 } from '@/components/ui';
 import { directionOf } from '@/config/locale';
 import { requireLocale } from '@/config/route-locale';
@@ -56,14 +58,21 @@ import { contentMetadata } from '@/seo/metadata';
  * every family on it (Phase 13), Quran for the public ayat on it (Phase 18),
  * Hadith for the public citations on it (Phase 19), Fatwa for the published
  * rulings on it (Phase 20), Learning for the published Courses on it (Phase
- * 22), and
- * Search for everything else
- * classified under it. Each later domain adds its own section when it ships; nothing here renders an empty frame for a domain that
- * has not, and a delivered section with nothing on this topic is not rendered
- * either (ROUTE_MAP.md §5.2).
+ * 22), and Search for everything else classified under it. Each later domain
+ * adds its own section when it ships; nothing here renders an empty frame for a
+ * domain that has not, and a delivered section with nothing on this topic is
+ * not rendered either (ROUTE_MAP.md §5.2).
+ *
+ * A MAP OF ONE NODE. The page reads as the topic's place in a knowledge graph:
+ * its position in the taxonomy (broader, narrower and neighbouring topics, all
+ * from the one tree read), then each owner's material in a labelled band. A
+ * band whose owners render nothing is not displayed — the domain sections
+ * decide for themselves whether they have anything, so the band follows them
+ * (`has-[section]`) rather than guessing.
  *
  * LIBRARY'S PUBLIC READS ARE THE AUTHORITY, never the search index: each section
- * is one bounded, topic-filtered page of that owner's own public listing.
+ * is one bounded, topic-filtered page of that owner's own public listing. The
+ * counts shown are of those pages — "25+" when the owner says there is more.
  *
  * TAXONOMY OWNS THE TOPIC. This page decides nothing about it: an archived topic
  * is a 404, and the slug is immutable, so there is no history to redirect.
@@ -104,6 +113,9 @@ export async function generateMetadata({ params }: TopicParams): Promise<Metadat
 /** How many books the hub previews before linking to the full filtered list. */
 const BOOK_PREVIEW = 6;
 
+/** How many neighbouring topics the map names before "All topics" takes over. */
+const NEIGHBOUR_PREVIEW = 12;
+
 /**
  * Phase 9's sections, in the Library's order. An issue has no listing of its
  * own, so its section previews and the topic search below covers the rest.
@@ -116,6 +128,25 @@ const SCHOLARLY_SECTIONS: readonly ScholarlyKind[] = [
   'magazine',
   'magazine-issue',
 ];
+
+/** A topic as a chip: its hub, its name, and its language when it fell back. */
+function chipOf(locale: Locale, topic: TopicView) {
+  return {
+    href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+    text: topic.label.name,
+    ...(topic.label.resolvedLocale === locale
+      ? {}
+      : { lang: topic.label.resolvedLocale }),
+  };
+}
+
+/** A page's size as a reader should read it: exact, or "at least" when more exist. */
+function countOf(page: {
+  readonly items: readonly unknown[];
+  readonly hasMore: boolean;
+}) {
+  return `${String(page.items.length)}${page.hasMore ? '+' : ''}`;
+}
 
 export default async function TopicPage({ params }: TopicParams) {
   const locale = await requireLocale(params);
@@ -137,262 +168,325 @@ export default async function TopicPage({ params }: TopicParams) {
 
   const ancestors = topicBreadcrumb(topic, tree);
   const children = tree.filter((entry) => entry.parentId === topic.id);
+  const neighbours = tree
+    .filter((entry) => entry.parentId === topic.parentId && entry.id !== topic.id)
+    .slice(0, NEIGHBOUR_PREVIEW);
   const labelLocale = topic.label.resolvedLocale;
   const labelDirection = directionOf(labelLocale);
 
+  const scholarlyPages = SCHOLARLY_SECTIONS.flatMap((kind, index) => {
+    const page = scholarly[index];
+    return page === undefined || page.items.length === 0 ? [] : [{ kind, page }];
+  });
+  const libraryCounts = [
+    ...(books.items.length === 0
+      ? []
+      : [t('hub.count.books', { count: countOf(books) })]),
+    ...scholarlyPages.map(({ kind, page }) =>
+      t(`hub.count.${kind}`, { count: countOf(page) }),
+    ),
+  ];
+
+  const map = [
+    { key: 'broader', label: t('hub.broader'), topics: ancestors },
+    { key: 'narrower', label: t('subtopics'), topics: children },
+    { key: 'alongside', label: t('hub.alongside'), topics: neighbours },
+  ].filter((group) => group.topics.length > 0);
+
   return (
-    <Container>
-      <div className="flex flex-col gap-10 py-12">
-        <Breadcrumbs
-          label={shell('nav.breadcrumbs')}
-          trail={[
-            { href: `/${locale}`, text: shell('nav.home') },
-            { href: `/${locale}/topics`, text: t('title') },
-            ...ancestors.map((ancestor) => ({
-              href: `/${locale}/topics/${encodeURIComponent(ancestor.slug)}`,
-              text: ancestor.label.name,
-            })),
-            { text: topic.label.name },
-          ]}
-        />
+    <>
+      <Container>
+        <div className="pt-6">
+          <Breadcrumbs
+            label={shell('nav.breadcrumbs')}
+            trail={[
+              { href: `/${locale}`, text: shell('nav.home') },
+              { href: `/${locale}/topics`, text: t('title') },
+              ...ancestors.map((ancestor) => ({
+                href: `/${locale}/topics/${encodeURIComponent(ancestor.slug)}`,
+                text: ancestor.label.name,
+              })),
+              { text: topic.label.name },
+            ]}
+          />
+        </div>
+      </Container>
 
-        <Prose>
-          <PageHeading>
-            <span lang={labelLocale} dir={labelDirection}>
-              {topic.label.name}
-            </span>
-          </PageHeading>
-          {topic.label.fallback ? <Alert tone="info">{t('fallback')}</Alert> : null}
-          {topic.label.description === null ? null : (
-            <p lang={labelLocale} dir={labelDirection}>
-              {topic.label.description}
-            </p>
-          )}
-        </Prose>
+      <PageHero
+        eyebrow={t('hub.eyebrow')}
+        title={
+          <span lang={labelLocale} dir={labelDirection}>
+            {topic.label.name}
+          </span>
+        }
+        {...(topic.label.description === null
+          ? {}
+          : {
+              lede: (
+                <span lang={labelLocale} dir={labelDirection}>
+                  {topic.label.description}
+                </span>
+              ),
+            })}
+      >
+        {topic.label.fallback ? <Alert tone="info">{t('fallback')}</Alert> : null}
 
-        <Panel>
-          <form
-            method="get"
-            action={`/${locale}/search`}
-            role="search"
-            aria-label={t('searchWithin')}
-            className="flex flex-col gap-3"
-          >
-            <SectionHeading>{t('searchWithin')}</SectionHeading>
-            <input type="hidden" name="topic" value={topic.slug} />
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <label htmlFor="topic-search" className="text-sm font-medium">
-                  {t('searchLabel')}
-                </label>
-                <TextInput id="topic-search" type="search" name="q" maxLength={200} />
-              </div>
-              <Button>{t('searchSubmit')}</Button>
+        <form
+          method="get"
+          action={`/${locale}/search`}
+          role="search"
+          aria-label={t('searchWithin')}
+          className="flex w-full max-w-2xl flex-col gap-2 pt-1"
+        >
+          <input type="hidden" name="topic" value={topic.slug} />
+          <label htmlFor="topic-search" className="text-sm font-medium">
+            {t('searchLabel')}
+          </label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="min-w-0 flex-1">
+              <TextInput id="topic-search" type="search" name="q" maxLength={200} />
             </div>
-          </form>
-        </Panel>
+            <Button>{t('searchSubmit')}</Button>
+          </div>
+        </form>
+      </PageHero>
 
-        {children.length === 0 ? null : (
-          <section className="flex flex-col gap-3" aria-labelledby="topic-children">
-            <h2 id="topic-children" className="text-lg font-semibold">
-              {t('subtopics')}
-            </h2>
-            <ul className="flex flex-wrap gap-x-6 gap-y-2">
-              {children.map((child) => (
-                <li key={child.id}>
-                  <TextLink href={`/${locale}/topics/${encodeURIComponent(child.slug)}`}>
-                    {child.label.name}
-                  </TextLink>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+      <Container>
+        <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
+          {map.length === 0 ? null : (
+            <section aria-labelledby="topic-map" className="flex flex-col gap-5">
+              <SectionHeader
+                id="topic-map"
+                heading={t('hub.map')}
+                intro={t('hub.mapIntro')}
+                action={{ href: `/${locale}/topics`, text: t('hub.allTopics') }}
+              />
+              <div className="flex flex-col gap-5">
+                {map.map((group) => (
+                  <div
+                    key={group.key}
+                    className="grid gap-2 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-6"
+                  >
+                    <h3 className="text-caption pt-2.5 font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-foreground-muted)] uppercase">
+                      {group.label}
+                    </h3>
+                    <TopicChips
+                      label={group.label}
+                      topics={group.topics.map((entry) => chipOf(locale, entry))}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
-        {/* PHASE 18 — the public ayat assigned to this topic, from Quran's own
-            public reader, each linked to its canonical citation; nothing while
-            no corpus is active or the topic has no public Ayah. Fixture text
-            carries the fixture banner. */}
-        <QuranTopicSection
-          locale={locale}
-          topic={topic}
-          heading={t('quran')}
-          headingId="topic-quran"
-        />
+          {/* PHASES 18 AND 19 — the public ayat and Hadith citations assigned
+              to this topic, from each owner's own public reader and each
+              linked to its canonical citation; nothing while no corpus is
+              active or the topic has nothing public. Fixture text carries the
+              fixture banner. Two owners, two sections: the band only groups
+              them visually. */}
+          <Band label={t('hub.bands.sources')}>
+            <QuranTopicSection
+              locale={locale}
+              topic={topic}
+              heading={t('quran')}
+              headingId="topic-quran"
+            />
+            <HadithTopicSection
+              locale={locale}
+              topic={topic}
+              heading={t('hadith')}
+              headingId="topic-hadith"
+            />
+          </Band>
 
-        {/* PHASE 19 — the public Hadith citations assigned to this topic, from
-            Hadith's own public reader, each linked to its short canonical
-            citation; nothing while no collection is activated or the topic has
-            no public citation. Fixture text carries the fixture banner. */}
-        <HadithTopicSection
-          locale={locale}
-          topic={topic}
-          heading={t('hadith')}
-          headingId="topic-hadith"
-        />
+          {/* PHASES 20 AND 22 — the published rulings on this topic, from
+              Fatwa's own public reader (nothing while the service is not
+              activated; fixture text carries the banner), and the published
+              Courses on it, from Learning's own public catalogue with a link to
+              the catalogue filtered by this topic. */}
+          <Band label={t('hub.bands.guidance')}>
+            <FatwaTopicSection
+              locale={locale}
+              topic={topic}
+              heading={t('fatwa')}
+              headingId="topic-fatwa"
+            />
+            <CourseTopicSection
+              locale={locale}
+              topic={topic}
+              heading={t('courses')}
+              headingId="topic-courses"
+              more={t('allCourses')}
+            />
+          </Band>
 
-        {/* PHASE 20 — the published rulings on this topic, from Fatwa's own
-            public reader, each linked to its canonical address; nothing while
-            the service is not activated or no published ruling is on the
-            topic. Fixture text carries the fixture banner. */}
-        <FatwaTopicSection
-          locale={locale}
-          topic={topic}
-          heading={t('fatwa')}
-          headingId="topic-fatwa"
-        />
+          {libraryCounts.length === 0 ? null : (
+            <Band
+              label={t('hub.bands.library')}
+              summary={<MetaRow items={libraryCounts} />}
+            >
+              {books.items.length === 0 ? null : (
+                <section className="flex flex-col gap-5" aria-labelledby="topic-books">
+                  <SectionHeader
+                    id="topic-books"
+                    heading={t('books')}
+                    action={{
+                      href: `/${locale}/library/books?topic=${encodeURIComponent(topic.id)}`,
+                      text: t('allBooks'),
+                    }}
+                  />
+                  <CardGrid>
+                    {books.items.slice(0, BOOK_PREVIEW).map((work) => {
+                      const label = labelFor(work, locale);
+                      return (
+                        <LinkCard
+                          key={work.id}
+                          href={workPath(locale, work.slug)}
+                          title={label.title}
+                          description={label.description}
+                          lang={label.locale}
+                          dir={directionOf(label.locale)}
+                        />
+                      );
+                    })}
+                  </CardGrid>
+                </section>
+              )}
 
-        {/* PHASE 22 — the published Courses on this topic, from Learning's own
-            public catalogue, each linked to its canonical page, with a link to
-            the catalogue filtered by this topic; nothing when no published
-            Course is on it. */}
-        <CourseTopicSection
-          locale={locale}
-          topic={topic}
-          heading={t('courses')}
-          headingId="topic-courses"
-          more={t('allCourses')}
-        />
-
-        {books.items.length === 0 ? null : (
-          <section className="flex flex-col gap-4" aria-labelledby="topic-books">
-            <h2 id="topic-books" className="text-lg font-semibold">
-              {t('books')}
-            </h2>
-            <ul className="grid gap-4 sm:grid-cols-2">
-              {books.items.slice(0, BOOK_PREVIEW).map((work) => {
-                const label = labelFor(work, locale);
+              {scholarlyPages.map(({ kind, page }) => {
+                const headingId = `topic-${kind}`;
                 return (
-                  <Panel as="li" key={work.id}>
-                    <p
-                      className="font-semibold break-words"
-                      lang={label.locale}
-                      dir={directionOf(label.locale)}
-                    >
-                      <TextLink href={workPath(locale, work.slug)}>
-                        {label.title}
-                      </TextLink>
-                    </p>
-                  </Panel>
+                  <section
+                    key={kind}
+                    className="flex flex-col gap-5"
+                    aria-labelledby={headingId}
+                  >
+                    <SectionHeader
+                      id={headingId}
+                      heading={t(`sections.${kind}`)}
+                      {...(kind === 'magazine-issue'
+                        ? {}
+                        : {
+                            action: {
+                              href: scholarlyQueryPath(scholarlyListPath(locale, kind), {
+                                offset: 0,
+                                language: null,
+                                topic: topic.id,
+                                from: null,
+                                to: null,
+                              }),
+                              text: t(`all.${kind}`),
+                            },
+                          })}
+                    />
+                    <CardGrid>
+                      {page.items.slice(0, BOOK_PREVIEW).map((row) => {
+                        const label = scholarlyLabel(row, locale);
+                        return (
+                          <LinkCard
+                            key={row.id}
+                            href={listingHref(locale, row)}
+                            title={label.title}
+                            description={label.summary}
+                            lang={label.locale}
+                            dir={directionOf(label.locale)}
+                          />
+                        );
+                      })}
+                    </CardGrid>
+                  </section>
                 );
               })}
-            </ul>
-            <p>
-              <TextLink
-                href={`/${locale}/library/books?topic=${encodeURIComponent(topic.id)}`}
-              >
-                {t('allBooks')}
-              </TextLink>
-            </p>
-          </section>
-        )}
+            </Band>
+          )}
 
-        {SCHOLARLY_SECTIONS.map((kind, index) => {
-          const page = scholarly[index];
-          if (page === undefined || page.items.length === 0) return null;
-          const headingId = `topic-${kind}`;
-          return (
-            <section
-              key={kind}
-              className="flex flex-col gap-4"
-              aria-labelledby={headingId}
-            >
-              <h2 id={headingId} className="text-lg font-semibold">
-                {t(`sections.${kind}`)}
-              </h2>
-              <ul className="grid gap-4 sm:grid-cols-2">
-                {page.items.slice(0, BOOK_PREVIEW).map((row) => {
-                  const label = scholarlyLabel(row, locale);
-                  return (
-                    <Panel as="li" key={row.id}>
-                      <p
-                        className="font-semibold break-words"
-                        lang={label.locale}
-                        dir={directionOf(label.locale)}
-                      >
-                        <TextLink href={listingHref(locale, row)}>{label.title}</TextLink>
-                      </p>
-                    </Panel>
-                  );
-                })}
-              </ul>
-              {kind === 'magazine-issue' ? null : (
-                <p>
-                  <TextLink
-                    href={scholarlyQueryPath(scholarlyListPath(locale, kind), {
-                      offset: 0,
-                      language: null,
-                      topic: topic.id,
-                      from: null,
-                      to: null,
-                    })}
-                  >
-                    {t(`all.${kind}`)}
-                  </TextLink>
-                </p>
-              )}
-            </section>
-          );
-        })}
+          {/* PHASES 10 AND 11 — Media's own sections, read from Media's public
+              listing (never from the search index): the published Videos and
+              the published non-Quran audio on this topic, each nothing when
+              there is none. */}
+          <Band label={t('hub.bands.media')}>
+            <VideoPreview
+              locale={locale}
+              filter={{ topic: topic.id }}
+              heading={t('videos')}
+              headingId="topic-videos"
+              more={{
+                href: `/${locale}/watch/topics/${encodeURIComponent(topic.slug)}`,
+                text: t('allVideos'),
+              }}
+            />
+            <AudioPreview
+              locale={locale}
+              filter={{ topic: topic.id }}
+              heading={t('audio')}
+              headingId="topic-audio"
+              more={{
+                href: `/${locale}/listen/lectures?topic=${encodeURIComponent(topic.id)}`,
+                text: t('allAudio'),
+              }}
+            />
+          </Band>
 
-        {/* PHASE 10 — Media adds its own section, read from Media's public
-            listing (never from the search index), and renders nothing when no
-            published Video is on this topic. */}
-        <VideoPreview
-          locale={locale}
-          filter={{ topic: topic.id }}
-          heading={t('videos')}
-          headingId="topic-videos"
-          more={{
-            href: `/${locale}/watch/topics/${encodeURIComponent(topic.slug)}`,
-            text: t('allVideos'),
-          }}
-        />
+          {/* PHASES 13, 14 AND 15 — Editorial's own public reads: the most
+              recent published News of all four families on this topic, its
+              upcoming Events (or the most recent past ones when none is ahead),
+              and its most recently published Collections; each nothing when
+              there is none. The search form above reaches the rest of the News;
+              Events and Collections are not searchable. */}
+          <Band label={t('hub.bands.editorial')}>
+            <NewsTopicSection
+              locale={locale}
+              topicId={topic.id}
+              heading={t('news')}
+              headingId="topic-news"
+            />
+            <EventTopicSection
+              locale={locale}
+              topicId={topic.id}
+              heading={t('events')}
+              headingId="topic-events"
+            />
+            <CollectionTopicSection
+              locale={locale}
+              topicId={topic.id}
+              heading={t('collections')}
+              headingId="topic-collections"
+            />
+          </Band>
+        </div>
+      </Container>
+    </>
+  );
+}
 
-        {/* PHASE 11 — the published non-Quran audio on this topic, from Media's
-            public listing, likewise nothing when there is none. */}
-        <AudioPreview
-          locale={locale}
-          filter={{ topic: topic.id }}
-          heading={t('audio')}
-          headingId="topic-audio"
-          more={{
-            href: `/${locale}/listen/lectures?topic=${encodeURIComponent(topic.id)}`,
-            text: t('allAudio'),
-          }}
-        />
-
-        {/* PHASE 13 — the most recent published News of all four families on
-            this topic, from Editorial's own public read, likewise nothing when
-            there is none. The search form above reaches the rest. */}
-        <NewsTopicSection
-          locale={locale}
-          topicId={topic.id}
-          heading={t('news')}
-          headingId="topic-news"
-        />
-
-        {/* PHASE 14 — the upcoming Events on this topic, or the most recent past
-            ones when none is ahead, from Editorial's own public read; nothing
-            when the topic has no Event. Events are not searchable yet. */}
-        <EventTopicSection
-          locale={locale}
-          topicId={topic.id}
-          heading={t('events')}
-          headingId="topic-events"
-        />
-
-        {/* PHASE 15 — the most recently published Collections on this topic, a
-            bounded preview from Editorial's own public read with a link to
-            every Collection; nothing when the topic has none. Collections are
-            not searchable. */}
-        <CollectionTopicSection
-          locale={locale}
-          topicId={topic.id}
-          heading={t('collections')}
-          headingId="topic-collections"
-        />
+/**
+ * One stratum of the hub: a quiet label over the owners' sections it groups.
+ *
+ * The owners decide whether they have anything on this topic, and render
+ * nothing when they do not — so the band is displayed only while it holds a
+ * `section` (`has-[section]`). An empty band is neither seen nor announced;
+ * its label is not a heading, so the outline stays the owners' own `h2`s.
+ */
+function Band({
+  label,
+  summary,
+  children,
+}: {
+  readonly label: string;
+  readonly summary?: ReactNode;
+  readonly children: ReactNode;
+}) {
+  return (
+    <div className="hidden flex-col gap-[var(--space-stack)] has-[section]:flex">
+      <div className="flex flex-col gap-1.5">
+        <p className="text-caption flex items-center gap-3 font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase after:h-px after:flex-1 after:bg-[color:var(--color-accent-rule)]">
+          {label}
+        </p>
+        {summary}
       </div>
-    </Container>
+      <div className="flex flex-col gap-[var(--space-section)]">{children}</div>
+    </div>
   );
 }

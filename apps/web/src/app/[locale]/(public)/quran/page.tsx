@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
-import { QuranLandingPage } from '@/components/quran/landing';
-import { QuranUnavailable } from '@/components/quran/parts';
+import { QuranLandingPage, QuranLandingUnavailable } from '@/components/quran/landing';
 import { quranAvailability, quranMetadata } from '@/components/quran/read';
 import { requireLocale } from '@/config/route-locale';
 
@@ -35,6 +34,6 @@ export async function generateMetadata({ params }: LandingParams): Promise<Metad
 export default async function QuranPage({ params }: LandingParams) {
   const locale = await requireLocale(params);
   const availability = await quranAvailability();
-  if (!availability.active) return <QuranUnavailable locale={locale} />;
+  if (!availability.active) return <QuranLandingUnavailable locale={locale} />;
   return <QuranLandingPage locale={locale} availability={availability} />;
 }

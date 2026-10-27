@@ -22,8 +22,9 @@ import { repoRoot } from './architecture-harness.ts';
  *     context reaching back into migration;
  *   - the migration TOOLING (`scripts/migration/`) holding database capability
  *     of its own, or an embedded SQLite engine escaping the synthetic export;
- *   - the Media publication target wired anywhere but Layer 4, or reaching
- *     Media around its public service;
+ *   - a publication target wired anywhere but Layer 4, or reaching its owning
+ *     domain (Media, Library, Editorial) around that domain's public service,
+ *     or an Editorial target approving, scheduling or publishing on its own;
  *   - the node-runnable composition graph the CLIs and the staging proof load
  *     acquiring a bundler-only `@/` import, so it stops loading in plain Node;
  *   - the adapter surface widening past its seven port factories;
@@ -91,8 +92,20 @@ const WEB_ROOT = `${COMPOSITION}/migration.ts`;
 const RUNNER = `${COMPOSITION}/migration-runner.ts`;
 const WIRING = `${COMPOSITION}/migration-wiring.ts`;
 const TARGETS = `${COMPOSITION}/migration-targets.ts`;
+const LIBRARY_TARGETS = `${COMPOSITION}/migration-library-targets.ts`;
+const EDITORIAL_TARGETS = `${COMPOSITION}/migration-editorial-targets.ts`;
+const TARGET_SUPPORT = `${COMPOSITION}/migration-target-support.ts`;
+const ROUTER = `${COMPOSITION}/migration-target-router.ts`;
+/** Every module that defines a publication target (Phase 30: one per domain). */
+const TARGET_MODULES = [
+  TARGETS,
+  LIBRARY_TARGETS,
+  EDITORIAL_TARGETS,
+  TARGET_SUPPORT,
+  ROUTER,
+];
 /** The composition the CLIs and the staging proof load outside the bundler. */
-const NODE_RUNNABLE = [RUNNER, WIRING, TARGETS];
+const NODE_RUNNABLE = [RUNNER, WIRING, ...TARGET_MODULES];
 const API = 'apps/web/src/app/api/admin/migration';
 
 /** Every bounded context but Migration itself. */
@@ -232,21 +245,26 @@ describe('scripts/migration holds no database capability of its own', () => {
  * Layer 4 — the wiring, the target, the node-runnable graph
  * ========================================================================= */
 
-describe('only Layer-4 composition wires Migration and its Media target', () => {
-  it('names the Media target only in the migration composition', async () => {
+describe('only Layer-4 composition wires Migration and its publication targets', () => {
+  it('names the publication targets only in the migration composition', async () => {
     const scanned = [
       ...(await sources('apps/web/src')),
       ...(await sources('packages')),
       ...(await sources('scripts')),
     ];
     expect(scanned.length).toBeGreaterThan(300);
-    const allowed = new Set([TARGETS, WEB_ROOT, RUNNER]);
+    const allowed = new Set([...TARGET_MODULES, WEB_ROOT, RUNNER]);
     for (const file of scanned) {
       if (allowed.has(file)) continue;
       expect(withoutComments(await read(file)), file).not.toMatch(
-        /createMediaVideoTarget|mediaVideoTargetOver|migration-targets/u,
+        /createMigrationTargets|routeMigrationTargets|mediaVideoTargetOver|library(?:Work|Magazine|MagazineIssue)TargetOver|editorialTargetOver|migration-(?:library-|editorial-)?targets|migration-target-(?:router|support)/u,
       );
     }
+    // Both roots publish through the router over the one target factory.
+    for (const root of [WEB_ROOT, RUNNER])
+      expect(withoutComments(await read(root)), root).toMatch(
+        /target: routeMigrationTargets\(\s*createMigrationTargets\(/u,
+      );
     // The migration services are built from the one wiring, in two roots only.
     for (const file of scanned) {
       // The context defines its factories; the wiring alone calls them.
@@ -258,22 +276,35 @@ describe('only Layer-4 composition wires Migration and its Media target', () => 
     }
   });
 
-  it('reaches Media only through its public service and Personalisation only through its own', async () => {
-    const targets = withoutComments(await read(TARGETS));
-    const specifiers = imports(targets);
-    expect(specifiers).toEqual(
+  it('reaches each owning domain only through its public service and Personalisation only through its own', async () => {
+    // What each target module may import: its own domain's public index and
+    // contracts, Migration's contracts and the shared target support — and,
+    // in the one factory alone, the domains' adapters and Personalisation's
+    // public service.
+    const ALLOWED: Record<string, RegExp> = {
+      [TARGETS]:
+        /^(?:server-only|@minhaj\/database|@minhaj\/contracts\/(?:media|library|migration)|\.\.\/contexts\/(?:media|library|editorial|personalisation-notifications)\/index\.ts|\.\/migration-(?:target-router|target-support|library-targets|editorial-targets)\.ts)$/u,
+      [LIBRARY_TARGETS]:
+        /^(?:server-only|@minhaj\/contracts\/(?:library|migration)|\.\.\/contexts\/library\/index\.ts|\.\/migration-target-support\.ts)$/u,
+      [EDITORIAL_TARGETS]:
+        /^(?:server-only|@minhaj\/contracts\/(?:editorial|library|migration)|\.\.\/contexts\/editorial\/index\.ts|\.\/migration-target-support\.ts)$/u,
+      [TARGET_SUPPORT]: /^(?:server-only|@minhaj\/contracts\/migration)$/u,
+      [ROUTER]: /^(?:server-only|@minhaj\/contracts\/migration)$/u,
+    };
+    for (const file of TARGET_MODULES)
+      for (const specifier of imports(await read(file)))
+        expect(specifier, `${file} imports ${specifier}`).toMatch(ALLOWED[file]!);
+    expect(imports(await read(TARGETS))).toEqual(
       expect.arrayContaining([
         '../contexts/media/index.ts',
+        '../contexts/library/index.ts',
+        '../contexts/editorial/index.ts',
         '../contexts/personalisation-notifications/index.ts',
       ]),
     );
-    for (const specifier of specifiers)
-      expect(specifier).toMatch(
-        /^(?:server-only|@minhaj\/database|@minhaj\/contracts\/(?:media|migration)|\.\.\/contexts\/(?:media|personalisation-notifications)\/index\.ts)$/u,
-      );
-    // Media's tables are never named: the target saves and reads Videos only
-    // through `saveVideo`, `video` and `videos`.
-    for (const file of [TARGETS, WIRING, RUNNER, WEB_ROOT]) {
+    // No domain's tables are ever named: each target saves and reads only
+    // through its domain's public operations.
+    for (const file of [...TARGET_MODULES, WIRING, RUNNER, WEB_ROOT]) {
       const source = withoutComments(await read(file));
       expect(source, file).not.toMatch(
         /\[dbo\]|@prisma|\$queryRaw|\$executeRaw|getDatabaseClient/u,
@@ -282,8 +313,22 @@ describe('only Layer-4 composition wires Migration and its Media target', () => 
         /create(?:MediaReferences|MediaAssetRelations)\b/u,
       );
     }
+    const targets = withoutComments(await read(TARGETS));
+    const library = withoutComments(await read(LIBRARY_TARGETS));
+    const editorial = withoutComments(await read(EDITORIAL_TARGETS));
     expect(targets).toMatch(/media\.saveVideo\(/u);
-    expect(targets).not.toMatch(/persistence\.saveVideo|store\.saveVideo/u);
+    expect(library).toMatch(/library\.saveWork\(/u);
+    expect(library).toMatch(/library\.saveEdition\(/u);
+    expect(library).toMatch(/library\.saveScholarly\(/u);
+    expect(editorial).toMatch(/editorial\.create\(/u);
+    expect(editorial).toMatch(/editorial\.transition\(/u);
+    for (const source of [targets, library, editorial])
+      expect(source).not.toMatch(/\b(?:persistence|store)\.\w+\(/u);
+    // Editorial's second-person workflow is never short-circuited: the only
+    // actions a migrated record is ever given are submit and archive.
+    expect(
+      [...editorial.matchAll(/action: '([a-z]+)'/gu)].map((match) => match[1]).sort(),
+    ).toEqual(['archive', 'submit']);
   });
 
   it('keeps the node-runnable composition free of the bundler alias, all the way down', async () => {
@@ -304,13 +349,15 @@ describe('only Layer-4 composition wires Migration and its Media target', () => 
         if (target.startsWith('apps/web/src/')) queue.push(target);
       }
     }
-    // The graph is the three composition modules and five contexts' sources.
+    // The graph is the composition modules and seven contexts' sources.
     const contexts = new Set(
       [...reached]
         .filter((file) => file.startsWith('apps/web/src/contexts/'))
         .map((file) => file.split('/')[4]),
     );
     expect([...contexts].sort()).toEqual([
+      'editorial',
+      'library',
       'media',
       'migration-provenance',
       'people-contributors',
@@ -391,13 +438,22 @@ describe('the adapter surface is the seven port factories and nothing else', () 
     ).toEqual(['MigrationDataError', ...FACTORIES.map(([name]) => name)].sort());
   });
 
-  it('adds exactly one narrow Personalisation read for the target: a held bit', async () => {
+  it('adds exactly the narrow Personalisation reads the targets need: one held bit per holdable target', async () => {
     const ports = withoutComments(
       await read('packages/contracts/src/personalisation/ports.ts'),
     );
     const holding =
       /interface PersonalHoldingPort \{([\s\S]*?)\n\}/u.exec(ports)?.[1] ?? '';
-    expect(holding.trim()).toBe('videoHeld(videoId: string): Promise<boolean>;');
+    expect(
+      holding
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean),
+    ).toEqual([
+      'videoHeld(videoId: string): Promise<boolean>;',
+      'workHeld(workId: string): Promise<boolean>;',
+      'articleHeld(articleId: string): Promise<boolean>;',
+    ]);
     const adapter = withoutComments(
       await read(
         'packages/database/src/adapters/personalisation-notifications/holdings.ts',
@@ -406,11 +462,16 @@ describe('the adapter surface is the seven port factories and nothing else', () 
     expect(adapter).toMatch(
       /export function createPersonalHoldings\(\): PersonalHoldingPort/u,
     );
-    // One statement, over this context's own two tables, returning one bit.
-    expect([...adapter.matchAll(/\$queryRaw/gu)]).toHaveLength(1);
+    // One statement per question, over this context's own three tables, each
+    // returning one bit.
+    expect([...adapter.matchAll(/\$queryRaw/gu)]).toHaveLength(3);
     expect(
-      [...adapter.matchAll(/\[dbo\]\.\[(\w+)\]/gu)].map((match) => match[1]).sort(),
-    ).toEqual(['SavedItem', 'WatchHistory']);
+      [
+        ...new Set(
+          [...adapter.matchAll(/\[dbo\]\.\[(\w+)\]/gu)].map((match) => match[1]),
+        ),
+      ].sort(),
+    ).toEqual(['ReadingHistory', 'SavedItem', 'WatchHistory']);
     expect(adapter).not.toMatch(/userId|COUNT\(|TOP \(/u);
   });
 });

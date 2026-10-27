@@ -153,11 +153,17 @@ describe('the render and routing tree stays statically renderable', () => {
 
     // Phase 4 moved the home page into the `(public)` route group and added
     // the public shell around it. The group contributes no path segment, so
-    // the URL is unchanged — but every one of these files renders on the
-    // anonymous public path and must stay statically renderable, which is
-    // exactly what this guard is for.
+    // the URL is unchanged — but the layout renders on EVERY anonymous public
+    // path and must stay statically renderable, which is exactly what this
+    // guard is for.
+    //
+    // THE HOME PAGE IS NO LONGER LISTED, deliberately: since the flagship
+    // portal it composes published data through the public readers, so it is
+    // a dynamic CONTENT route like `/news` and `/watch`, declared in
+    // `tests/architecture/phase4-shell-boundaries.test.ts`, where it is
+    // proven to reach no session, no identity service, no request-scoped API
+    // and no authentication library. The layout around it stays here.
     'apps/web/src/app/[locale]/(public)/layout.tsx',
-    'apps/web/src/app/[locale]/(public)/page.tsx',
 
     'apps/web/src/components/editorial/editor-island.tsx',
     'apps/web/src/components/editorial/editor.tsx',
@@ -172,9 +178,14 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/editorial/collection-presentation.ts',
     // Phase 15: the editor's ordered Collection member list island.
     'apps/web/src/components/editorial/collection-members-island.tsx',
+    // The page frames News, Events and Collections share.
+    'apps/web/src/components/editorial/frame.tsx',
     // Phase 8. The Library components render on the anonymous public path;
     // the ROUTES that use them are dynamic for data, never these modules.
     'apps/web/src/components/library/facet-browse.tsx',
+    // The flagship presentation pass: the Library's shared page frames, which
+    // the static landing and the dynamic listings and records both render.
+    'apps/web/src/components/library/frame.tsx',
     'apps/web/src/components/library/presentation.ts',
     'apps/web/src/components/library/reader-controls.tsx',
     'apps/web/src/components/library/reader.tsx',
@@ -358,9 +369,18 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/locale-switcher.tsx',
     'apps/web/src/components/locale-switcher-links.tsx',
     'apps/web/src/components/ui/index.tsx',
+    // The private workspaces' frame — My Minhaj, the Teacher area and the
+    // administration: the shell, the page header and cards, the navigation
+    // island and its pure current-entry rule.
+    'apps/web/src/components/workspace/nav-match.ts',
+    'apps/web/src/components/workspace/parts.tsx',
+    'apps/web/src/components/workspace/workspace-nav.tsx',
     'apps/web/src/components/shell/site-header.tsx',
     'apps/web/src/components/shell/site-footer.tsx',
     'apps/web/src/components/shell/explore-panel.tsx',
+    // The mega-menu panels and drawer sections, rendered on the server into
+    // the prerendered header from the registry and the messages alone.
+    'apps/web/src/components/shell/menu-panel.tsx',
     'apps/web/src/components/shell/publication-status.tsx',
     'apps/web/src/components/shell/disclosure-menu.tsx',
     'apps/web/src/components/shell/mobile-nav.tsx',

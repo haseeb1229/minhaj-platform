@@ -3,7 +3,11 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 
 import {
+  AUTHORISED_MAX_CONCURRENCY,
+  AUTHORISED_MIN_INTERVAL_MS,
   MIGRATION_LIMITS,
+  authorisedScopeIsReal,
+  authorisedSourceCreateSchema,
   fixtureScopeIsSynthetic,
   fixtureSourceCreateSchema,
   migrationIdSchema,
@@ -22,9 +26,9 @@ import { MigrationRefusal } from '../domain/refusal.ts';
 import { ADMINISTER, READ, createGate, guarded } from './shared.ts';
 
 /**
- * Fields that would make a source REAL. Phase 29 registers fixtures only, so a
- * request naming any of them is refused as what it is — an attempt to record
- * an authorised source — before anything else in it is read.
+ * Fields that would make a source REAL. The FIXTURE path refuses a request
+ * naming any of them as what it is — an attempt to record an authorised
+ * source through the wrong door — before anything else in it is read.
  */
 const AUTHORITY_FIELDS = Object.freeze([
   'authorityKind',
@@ -37,10 +41,14 @@ const AUTHORITY_FIELDS = Object.freeze([
 /**
  * Legacy sources (DOMAIN_MODEL.md §16.1 LegacySource).
  *
- * FIXTURES ONLY IN PHASE 29 (OPEN_DECISIONS.md §3.1): a source is created with
- * `authorityKind = 'fixture'`, hosts under `*.fixture.invalid` and no
- * authorisation evidence; the kind is not the operator's to choose. A real
- * source is never created and never activated here.
+ * TWO DOORS, NEVER ONE WITH A KIND FIELD. `createFixture` makes a synthetic
+ * source on `*.fixture.invalid` with no authorisation evidence.
+ * `registerAuthorised` (Phase 30) makes a REAL source, inactive, and demands
+ * its written authorisation REFERENCE and DATE, a real `https` scope of exact
+ * hosts and the politeness floor. What it records is the reference: the
+ * platform validates its shape and audits the act, and does not — cannot —
+ * prove the organisational decision it names (OPEN_DECISIONS.md §3.1.1).
+ * Neither door lets a source change authority, scope or evidence later.
  *
  * Dependencies (ports only):
  *  - `sources`   — `MigrationSourcePort`;
@@ -101,8 +109,52 @@ export function createMigrationSourceService(deps: {
     },
 
     /**
-     * Changes what may change — never the key, kind, access or hosts — at the
-     * expected version. A real source is never activated in Phase 29.
+     * Registers an AUTHORISED source under `migration.administer`, INACTIVE.
+     * Refuses a missing or malformed reference or date, a date in the future,
+     * a scope that is not real `https` exact hosts (`unsafe-scope`) and
+     * politeness below the floor (`invalid`).
+     */
+    async registerAuthorised(
+      actor: MigrationActor,
+      input: unknown,
+    ): Promise<SourceRecord> {
+      const { actorId, value } = await gate.authorised(
+        actor,
+        ADMINISTER,
+        authorisedSourceCreateSchema,
+        input,
+      );
+      const hosts = [...new Set(value.hosts)];
+      if (hosts.length !== value.hosts.length) throw new MigrationRefusal('invalid');
+      if (!authorisedScopeIsReal(value.baseUrl, hosts))
+        throw new MigrationRefusal('unsafe-scope');
+      const at = now();
+      if (value.authorisedOn > at.toISOString().slice(0, 10))
+        throw new MigrationRefusal('invalid');
+      return guarded(
+        deps.sources.createAuthorisedSource({
+          id: ids(),
+          key: value.key,
+          name: value.name,
+          contentKind: value.contentKind,
+          baseUrl: value.baseUrl,
+          hosts,
+          defaultLanguageCode: value.defaultLanguageCode,
+          policy: value.policy,
+          authorisationReference: value.authorisationReference,
+          authorisedOn: value.authorisedOn,
+          licensingEvidence: value.licensingEvidence,
+          policyNotes: value.policyNotes,
+          actorId,
+          now: at,
+        }),
+      );
+    },
+
+    /**
+     * Changes what may change — never the key, kind, access, hosts or evidence
+     * — at the expected version. Activating a real source needs its recorded
+     * written authorisation; an authorised source keeps the politeness floor.
      */
     async update(actor: MigrationActor, input: unknown): Promise<SourceRecord> {
       const { actorId, value } = await gate.authorised(
@@ -115,8 +167,18 @@ export function createMigrationSourceService(deps: {
       if (current === null) throw new MigrationRefusal('not-found');
       if (current.version !== value.expectedVersion)
         throw new MigrationRefusal('conflict');
-      if (current.authorityKind !== 'fixture' && value.state === 'active')
+      if (
+        current.authorityKind === 'authorised' &&
+        value.state === 'active' &&
+        (current.authorisationReference === null || current.authorisedOn === null)
+      )
         throw new MigrationRefusal('real-source-not-authorised');
+      if (
+        current.authorityKind === 'authorised' &&
+        (value.policy.minIntervalMs < AUTHORISED_MIN_INTERVAL_MS ||
+          value.policy.maxConcurrency > AUTHORISED_MAX_CONCURRENCY)
+      )
+        throw new MigrationRefusal('invalid');
       return guarded(deps.sources.updateSource({ ...value, actorId, now: now() }));
     },
 

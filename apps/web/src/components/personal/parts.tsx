@@ -7,7 +7,8 @@ import type { Locale } from '@minhaj/contracts';
 import type { PersonalTargetKind } from '@minhaj/contracts/personalisation';
 
 import type { ResolvedTarget } from '@/composition/personal-targets';
-import { PageHeading, StatusBadge, TextLink } from '@/components/ui';
+import { StatusBadge, TextLink } from '@/components/ui';
+import { WorkspaceLinks, WorkspacePage } from '@/components/workspace/parts';
 import { displayTimeZone } from './presentation';
 
 /**
@@ -88,7 +89,10 @@ export function KindBadge({
   return <StatusBadge tone="neutral">{t(`kinds.${kind}`)}</StatusBadge>;
 }
 
-/** The column, heading and introduction of a My Minhaj Personalisation page. */
+/**
+ * The heading and introduction of a My Minhaj page, inside the area's
+ * workspace frame, bounded to a reading measure.
+ */
 export function PersonalFrame({
   title,
   description,
@@ -102,22 +106,18 @@ export function PersonalFrame({
   readonly children: ReactNode;
 }) {
   return (
-    <main className="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-6 px-4 py-10">
-      <header className="flex flex-col gap-2">
-        <PageHeading>{title}</PageHeading>
-        {description === undefined ? null : (
-          <div className="flex flex-col gap-2 text-[color:var(--color-foreground-muted)]">
-            {description}
-          </div>
-        )}
-      </header>
+    <WorkspacePage
+      title={title}
+      measure="reading"
+      {...(description === undefined ? {} : { description })}
+    >
       {children}
       {back}
-    </main>
+    </WorkspacePage>
   );
 }
 
-/** A labelled group of links to neighbouring pages. */
+/** A labelled group of links to neighbouring pages, each a 44-pixel target. */
 export function PersonalLinks({
   label,
   links,
@@ -126,12 +126,8 @@ export function PersonalLinks({
   readonly links: readonly { readonly href: string; readonly text: string }[];
 }) {
   return (
-    <nav aria-label={label} className="flex flex-wrap gap-x-6 gap-y-2">
-      {links.map((link) => (
-        <TextLink key={link.href} href={link.href}>
-          {link.text}
-        </TextLink>
-      ))}
+    <nav aria-label={label}>
+      <WorkspaceLinks links={links} />
     </nav>
   );
 }

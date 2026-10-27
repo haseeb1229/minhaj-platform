@@ -15,17 +15,17 @@ import {
 import { directionOf } from '@/config/locale';
 import { requireLocale } from '@/config/route-locale';
 import {
+  ActionLink,
   Alert,
-  Breadcrumbs,
-  Container,
   DetailRow,
   EmptyState,
+  MetaRow,
   Panel,
-  Prose,
-  SectionHeading,
   StatusBadge,
   TextLink,
+  TopicChips,
 } from '@/components/ui';
+import { RecordFrame, RecordSection } from '@/components/library/frame';
 import {
   assetPath,
   bibliography,
@@ -171,113 +171,125 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
     single(query, EDITION_PARAM),
   );
 
+  // The Work's authors, by name, for the opening metadata row — the full
+  // credit list, with roles and links, is in the aside.
+  const authors = record.contributors
+    .filter((contributor) => contributor.role === 'author')
+    .flatMap((contributor) => {
+      const name = references.people.get(contributor.personId)?.name;
+      return name === undefined ? [] : [name];
+    });
+  // Each content language the published Editions are in, once, in their order.
+  const editionLanguages = [
+    ...new Set(record.editions.map((edition) => edition.languageCode)),
+  ];
+
+  const topics = record.topicIds.flatMap((topicId) => {
+    const topic = references.topics.get(topicId);
+    return topic === undefined ? [] : [{ id: topicId, name: topic.name }];
+  });
+
   return (
-    <Container>
-      <div className="flex flex-col gap-10 py-12">
-        <Breadcrumbs
-          label={shell('nav.breadcrumbs')}
-          trail={[
-            { href: `/${locale}`, text: shell('nav.home') },
-            { href: `/${locale}/library`, text: t('title') },
-            { href: `/${locale}/library/books`, text: t('books') },
-            { text: label.title },
+    <RecordFrame
+      breadcrumbLabel={shell('nav.breadcrumbs')}
+      trail={[
+        { href: `/${locale}`, text: shell('nav.home') },
+        { href: `/${locale}/library`, text: t('title') },
+        { href: `/${locale}/library/books`, text: t('books') },
+        { text: label.title },
+      ]}
+      eyebrow={t('kindBook')}
+      /*
+       * The title is rendered in ITS OWN language and direction. `lang` on the
+       * heading rather than on the page is what lets an Arabic title sit inside
+       * an English page and still be announced in Arabic (WCAG 3.1.2).
+       */
+      title={label.title}
+      lang={label.locale}
+      dir={directionOf(label.locale)}
+      summary={label.description === '' ? [] : [label.description]}
+      meta={
+        <MetaRow
+          items={[
+            authors.length === 0
+              ? null
+              : new Intl.ListFormat(locale, { type: 'conjunction' }).format(authors),
+            record.editions.length === 0
+              ? null
+              : t('editionCount', { count: record.editions.length }),
+            ...editionLanguages.map((code) => {
+              const language = languages.get(code);
+              return (
+                <span key={code} lang={code} dir={language?.direction ?? 'ltr'}>
+                  {language?.name ?? code}
+                </span>
+              );
+            }),
           ]}
         />
+      }
+      /*
+       * THE DISTINCTION DOMAIN_MODEL.md §10.1 EXISTS TO PROTECT, said on the
+       * page rather than only in a document. The title above is this
+       * platform's descriptive metadata; it is not a claim that a translated
+       * Edition exists. The Editions below are where translation is a fact.
+       */
+      notice={t('metadataNotice')}
+      aside={
+        <>
+          <PersonalControls locale={locale} target={{ kind: 'work', id: record.id }} />
 
-        <Prose>
-          {/*
-           * The title is rendered in ITS OWN language and direction. `lang` on
-           * the element rather than on the page is what lets an Arabic title sit
-           * inside an English page and still be announced in Arabic (WCAG 3.1.2).
-           */}
-          <h1
-            className="text-3xl font-semibold tracking-tight"
-            lang={label.locale}
-            dir={directionOf(label.locale)}
-          >
-            {label.title}
-          </h1>
+          <Contributors work={record} people={references.people} locale={locale} t={t} />
 
-          {label.description === '' ? null : (
-            <p lang={label.locale} dir={directionOf(label.locale)}>
-              {label.description}
-            </p>
+          {topics.length === 0 ? null : (
+            <RecordSection id="work-topics" heading={t('topics')}>
+              {/*
+               * A FILTERED LIBRARY BROWSE, not a Topic page. Each chip narrows
+               * the Library's own listing to this Topic; Taxonomy's canonical
+               * hub is a different surface with its own entry points.
+               */}
+              <TopicChips
+                label={t('topics')}
+                topics={topics.map((topic) => ({
+                  href: `/${locale}/library/books?topic=${encodeURIComponent(topic.id)}`,
+                  text: topic.name,
+                }))}
+              />
+            </RecordSection>
           )}
+        </>
+      }
+    >
+      <Editions
+        record={record}
+        selected={selected}
+        languages={languages}
+        people={references.people}
+        locale={locale}
+        t={t}
+      />
 
-          {/*
-           * THE DISTINCTION DOMAIN_MODEL.md §10.1 EXISTS TO PROTECT, said on the
-           * page rather than only in a document. The title above is this
-           * platform's descriptive metadata; it is not a claim that a translated
-           * Edition exists. The Editions below are where translation is a fact.
-           */}
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('metadataNotice')}
-          </p>
-        </Prose>
-
-        <PersonalControls locale={locale} target={{ kind: 'work', id: record.id }} />
-
-        <Contributors work={record} people={references.people} locale={locale} t={t} />
-
-        {record.topicIds.length === 0 ? null : (
-          <section className="flex flex-col gap-3">
-            <SectionHeading>{t('topics')}</SectionHeading>
-            <ul className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-              {record.topicIds.map((topicId) => {
-                const topic = references.topics.get(topicId);
-                if (topic === undefined) return null;
-                return (
-                  <li key={topicId}>
-                    {/*
-                     * A FILTERED LIBRARY BROWSE, not a Topic page. Taxonomy owns
-                     * the canonical `/topics/{slug}` address and no phase has
-                     * delivered it yet; linking to it would be dead navigation
-                     * (ROUTE_MAP.md §5.2), and inventing a Topic page here would
-                     * be Library publishing another context's resource (§33).
-                     */}
-                    <TextLink
-                      href={`/${locale}/library/books?topic=${encodeURIComponent(topicId)}`}
-                    >
-                      {topic.name}
-                    </TextLink>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
-
-        <Editions
-          record={record}
-          selected={selected}
+      {selected === null ? (
+        <EmptyState>{t('noEditions')}</EmptyState>
+      ) : (
+        <EditionAccessPanel
+          edition={selected}
           languages={languages}
-          people={references.people}
           locale={locale}
+          interfaceDirection={interfaceDirection}
           t={t}
         />
+      )}
 
-        {selected === null ? (
-          <EmptyState>{t('noEditions')}</EmptyState>
-        ) : (
-          <EditionAccessPanel
-            edition={selected}
-            languages={languages}
-            locale={locale}
-            interfaceDirection={interfaceDirection}
-            t={t}
-          />
-        )}
+      <SalePoints record={record} t={t} />
 
-        <SalePoints record={record} t={t} />
-
-        <BookStructuredData
-          record={record}
-          edition={selected}
-          label={label}
-          people={references.people}
-        />
-      </div>
-    </Container>
+      <BookStructuredData
+        record={record}
+        edition={selected}
+        label={label}
+        people={references.people}
+      />
+    </RecordFrame>
   );
 }
 
@@ -325,22 +337,23 @@ function Contributors({
   if (rows.length === 0) return null;
 
   return (
-    <section className="flex flex-col gap-3">
-      <SectionHeading>{t('contributors')}</SectionHeading>
-      <ul className="flex flex-col gap-1 text-sm">
+    <RecordSection id="work-contributors" heading={t('contributors')}>
+      <ul className="flex flex-col divide-y divide-[color:var(--color-border)] text-sm">
         {rows.map((row) => (
-          <li key={`${row.person.slug}-${row.role}`}>
+          <li
+            key={`${row.person.slug}-${row.role}`}
+            className="flex flex-col gap-0.5 py-2"
+          >
             <TextLink href={`/${locale}/people/${encodeURIComponent(row.person.slug)}`}>
               {row.person.name}
             </TextLink>
-            <span className="text-[color:var(--color-foreground-muted)]">
-              {' · '}
+            <span className="text-caption text-[color:var(--color-foreground-muted)]">
               {t(`role.${row.role}` as 'role.author')}
             </span>
           </li>
         ))}
       </ul>
-    </section>
+    </RecordSection>
   );
 }
 
@@ -377,8 +390,13 @@ function Editions({
   if (record.editions.length === 0) return null;
 
   return (
-    <section className="flex flex-col gap-4">
-      <SectionHeading>{t('editions')}</SectionHeading>
+    <section aria-labelledby="work-editions" className="flex flex-col gap-4">
+      <h2
+        id="work-editions"
+        className="border-b border-[color:var(--color-border)] pb-3 text-heading font-semibold"
+      >
+        {t('editions')}
+      </h2>
 
       <ul aria-label={t('editions')} className="flex flex-col gap-3">
         {record.editions.map((edition) => {
@@ -392,50 +410,58 @@ function Editions({
                 ) ?? null);
 
           return (
-            <Panel key={edition.id} as="li">
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-wrap items-baseline gap-3">
-                  <h3 className="text-base font-semibold">{edition.label}</h3>
-                  {isSelected ? (
-                    <StatusBadge tone="positive">{t('selectedEdition')}</StatusBadge>
-                  ) : (
-                    <TextLink
-                      href={`${workPath(locale, record.slug)}?${EDITION_PARAM}=${encodeURIComponent(edition.id)}`}
-                    >
-                      {t('showEdition')}
-                    </TextLink>
-                  )}
-                </div>
-
-                <dl className="grid gap-x-8 sm:grid-cols-2">
-                  <DetailRow term={t('contentLanguage')}>
-                    <span lang={edition.languageCode} dir={language?.direction ?? 'ltr'}>
-                      {language?.name ?? edition.languageCode}
-                    </span>
-                  </DetailRow>
-
-                  {bibliography(edition).map((fact) => (
-                    <DetailRow key={fact.key} term={t(`fact.${fact.key}` as 'fact.isbn')}>
-                      {fact.value}
-                    </DetailRow>
-                  ))}
-
-                  {edition.translation === null ? null : (
-                    <>
-                      <DetailRow term={t('translationOf')}>
-                        {source === null ? t('sourceUnknown') : source.label}
-                      </DetailRow>
-                      <DetailRow term={t('translators')}>
-                        {edition.translation.translatorIds
-                          .map((id) => people.get(id)?.name)
-                          .filter((name): name is string => name !== undefined)
-                          .join(' · ') || t('sourceUnknown')}
-                      </DetailRow>
-                    </>
-                  )}
-                </dl>
+            <li
+              key={edition.id}
+              className={`flex min-w-0 flex-col gap-3 rounded-[var(--radius-panel)] border bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)] ${
+                isSelected
+                  ? 'border-[color:var(--color-accent)] border-s-4'
+                  : 'border-[color:var(--color-border)]'
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <h3 className="text-subheading font-semibold wrap-anywhere" dir="auto">
+                  {edition.label}
+                </h3>
+                {isSelected ? (
+                  <StatusBadge tone="positive">{t('selectedEdition')}</StatusBadge>
+                ) : (
+                  <a
+                    href={`${workPath(locale, record.slug)}?${EDITION_PARAM}=${encodeURIComponent(edition.id)}`}
+                    className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-semibold no-underline transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--color-surface-sunken)] active:bg-[color:var(--color-border)]"
+                  >
+                    {t('showEdition')}
+                  </a>
+                )}
               </div>
-            </Panel>
+
+              <dl className="grid gap-x-8 sm:grid-cols-2">
+                <DetailRow term={t('contentLanguage')}>
+                  <span lang={edition.languageCode} dir={language?.direction ?? 'ltr'}>
+                    {language?.name ?? edition.languageCode}
+                  </span>
+                </DetailRow>
+
+                {bibliography(edition).map((fact) => (
+                  <DetailRow key={fact.key} term={t(`fact.${fact.key}` as 'fact.isbn')}>
+                    {fact.value}
+                  </DetailRow>
+                ))}
+
+                {edition.translation === null ? null : (
+                  <>
+                    <DetailRow term={t('translationOf')}>
+                      {source === null ? t('sourceUnknown') : source.label}
+                    </DetailRow>
+                    <DetailRow term={t('translators')}>
+                      {edition.translation.translatorIds
+                        .map((id) => people.get(id)?.name)
+                        .filter((name): name is string => name !== undefined)
+                        .join(' · ') || t('sourceUnknown')}
+                    </DetailRow>
+                  </>
+                )}
+              </dl>
+            </li>
           );
         })}
       </ul>
@@ -487,42 +513,75 @@ function EditionAccessPanel({
   });
 
   return (
-    <section className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <SectionHeading>{t('availability')}</SectionHeading>
+    <section aria-labelledby="work-availability" className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4">
+        <h2
+          id="work-availability"
+          className="border-b border-[color:var(--color-border)] pb-3 text-heading font-semibold"
+        >
+          {t('availability')}
+        </h2>
 
-        <ul className="flex flex-col gap-2 text-sm">
-          {access.downloadable === null ? (
-            <li className="text-[color:var(--color-foreground-muted)]">
-              {t('downloadUnavailable')}
-            </li>
-          ) : (
-            <li>
-              <TextLink href={assetPath(edition.id, 'download', access.downloadable)}>
-                {t('downloadFile')}
-              </TextLink>
-              {/*
-               * The format is stated in the link's own text rather than left to
-               * an icon: "no colour-only semantics" applies to shape too, and a
-               * described link is what §23 asks for.
-               */}
-            </li>
-          )}
-        </ul>
+        {/*
+         * TWO SEPARATE DECISIONS, shown side by side and never derived from one
+         * another: whether this edition can be read here, and whether a copy
+         * may be taken.
+         */}
+        <dl className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-2 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-4">
+            <dt className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+              {t('availabilityReading')}
+            </dt>
+            <dd className="flex flex-col gap-3 text-sm">
+              {access.unavailable ? (
+                <Alert tone="info">{t('editionUnavailable')}</Alert>
+              ) : access.readableFile === null ? (
+                <p>{t('readBelow')}</p>
+              ) : (
+                <>
+                  <p className="text-[color:var(--color-foreground-muted)]">
+                    {t('readableFileNotice')}
+                  </p>
+                  <div>
+                    <ActionLink
+                      href={assetPath(edition.id, 'read', access.readableFile)}
+                      tone="secondary"
+                    >
+                      {t('openFile')}
+                    </ActionLink>
+                  </div>
+                </>
+              )}
+            </dd>
+          </div>
+
+          <div className="flex flex-col gap-2 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-4">
+            <dt className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+              {t('availabilityDownload')}
+            </dt>
+            <dd className="flex flex-col gap-3 text-sm">
+              {access.downloadable === null ? (
+                <p className="text-[color:var(--color-foreground-muted)]">
+                  {t('downloadUnavailable')}
+                </p>
+              ) : (
+                <div>
+                  <ActionLink
+                    href={assetPath(edition.id, 'download', access.downloadable)}
+                  >
+                    {t('downloadFile')}
+                  </ActionLink>
+                  {/*
+                   * The format is stated in the link's own text rather than left to
+                   * an icon: "no colour-only semantics" applies to shape too, and a
+                   * described link is what §23 asks for.
+                   */}
+                </div>
+              )}
+            </dd>
+          </div>
+        </dl>
       </div>
-
-      {access.unavailable ? <Alert tone="info">{t('editionUnavailable')}</Alert> : null}
-
-      {access.readableFile === null ? null : (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('readableFileNotice')}
-          </p>
-          <TextLink href={assetPath(edition.id, 'read', access.readableFile)}>
-            {t('openFile')}
-          </TextLink>
-        </div>
-      )}
 
       {/*
        * `contentVersion` is non-null whenever a document is, by a CHECK
@@ -583,16 +642,21 @@ function SalePoints({
   if (record.salePoints.length === 0) return null;
 
   return (
-    <section className="flex flex-col gap-3">
-      <SectionHeading>{t('salePoints')}</SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
+    <section aria-labelledby="work-sale-points" className="flex flex-col gap-4">
+      <h2
+        id="work-sale-points"
+        className="border-b border-[color:var(--color-border)] pb-3 text-heading font-semibold"
+      >
+        {t('salePoints')}
+      </h2>
+      <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
         {t('salePointsNotice')}
       </p>
-      <ul className="flex flex-col gap-3">
+      <ul className="grid list-none grid-cols-1 gap-4 p-0 *:min-w-0 sm:grid-cols-2">
         {record.salePoints.map((point) => (
           <Panel key={point.id} as="li">
             <div className="flex flex-col gap-1 text-sm">
-              <p className="font-medium" dir="auto">
+              <p className="text-subheading font-semibold wrap-anywhere" dir="auto">
                 {point.name}
               </p>
               {point.address === '' ? null : <p dir="auto">{point.address}</p>}
@@ -605,7 +669,9 @@ function SalePoints({
                    * platform's link posture belongs to the shell, and an
                    * outbound link is not a security decision this page makes.
                    */}
-                  <TextLink href={point.url}>{point.url}</TextLink>
+                  <TextLink href={point.url}>
+                    <span className="wrap-anywhere">{point.url}</span>
+                  </TextLink>
                 </p>
               )}
             </div>

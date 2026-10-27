@@ -5,7 +5,7 @@ import { getTranslations } from 'next-intl/server';
 import { requireOwnSession } from '@/composition/authorization';
 import { identityRuntime } from '@/composition/identity';
 import { requireLocale } from '@/config/route-locale';
-import { TextLink } from '@/components/ui';
+import { WorkspaceNav } from '@/components/workspace/workspace-nav';
 
 /**
  * The Global Network administration shell (ROUTE_MAP.md §7:
@@ -43,13 +43,20 @@ export default async function GlobalAdminLayout({
   return (
     <>
       {held.has('global.read') ? (
-        <nav className="flex flex-wrap gap-4" aria-label={t('title')}>
-          {SURFACES.map((surface) => (
-            <TextLink key={surface} href={`/${locale}/admin/global/${surface}`}>
-              {t(`surface.${surface}`)}
-            </TextLink>
-          ))}
-        </nav>
+        <WorkspaceNav
+          label={t('title')}
+          variant="tabs"
+          groups={[
+            {
+              key: 'global',
+              links: SURFACES.map((surface) => ({
+                key: surface,
+                href: `/${locale}/admin/global/${surface}`,
+                text: t(`surface.${surface}`),
+              })),
+            },
+          ]}
+        />
       ) : null}
 
       <NextIntlClientProvider

@@ -5,6 +5,7 @@ import {
   duplicateDecisionSchema,
   errorDecisionSchema,
   legacyMappingDecisionSchema,
+  reviewBatchSchema,
   reviewDecisionSchema,
   rightsDecisionSchema,
   topicMappingDecisionSchema,
@@ -15,7 +16,11 @@ import {
   type MigrationTopicPort,
 } from '@minhaj/contracts/migration';
 
-import { MigrationRefusal } from '../domain/refusal.ts';
+import {
+  MigrationRefusal,
+  migrationFailure,
+  type MigrationRefusalReason,
+} from '../domain/refusal.ts';
 import { ADMINISTER, createGate, guarded } from './shared.ts';
 
 /**
@@ -46,6 +51,46 @@ export function createMigrationDecisionService(deps: {
   const now = deps.clock ?? (() => new Date());
   const gate = createGate(deps.authority);
 
+  /** One review, already authorised: the service's checks, then the port's. */
+  async function decide(
+    actorId: string,
+    value: {
+      readonly stagedRecordId: string;
+      readonly expectedVersion: number;
+      readonly decision: 'approve' | 'reject' | 'withdraw-approval';
+      readonly note: string;
+    },
+  ): Promise<void> {
+    const staged = await guarded(deps.read.stagedDetail(value.stagedRecordId));
+    if (staged === null) throw new MigrationRefusal('not-found');
+    if (staged.version !== value.expectedVersion) throw new MigrationRefusal('conflict');
+    if (value.decision === 'approve') {
+      if (staged.review !== 'pending') throw new MigrationRefusal('invalid-state');
+      if (staged.validation !== 'valid' || staged.personalData !== 'none')
+        throw new MigrationRefusal('not-publishable');
+    } else if (value.decision === 'reject') {
+      // Review moves forward only: an approval is withdrawn first, then rejected.
+      if (staged.review !== 'pending') throw new MigrationRefusal('invalid-state');
+    } else if (staged.review !== 'approved') {
+      throw new MigrationRefusal('invalid-state');
+    }
+    await guarded(
+      deps.decisions.review({
+        stagedRecordId: value.stagedRecordId,
+        expectedVersion: value.expectedVersion,
+        review:
+          value.decision === 'approve'
+            ? 'approved'
+            : value.decision === 'reject'
+              ? 'rejected'
+              : 'pending',
+        note: value.note.length === 0 ? null : value.note,
+        actorId,
+        now: now(),
+      }),
+    );
+  }
+
   return {
     /** approve | reject | withdraw-approval of one staged revision. */
     async review(actor: MigrationActor, input: unknown): Promise<void> {
@@ -55,35 +100,45 @@ export function createMigrationDecisionService(deps: {
         reviewDecisionSchema,
         input,
       );
-      const staged = await guarded(deps.read.stagedDetail(value.stagedRecordId));
-      if (staged === null) throw new MigrationRefusal('not-found');
-      if (staged.version !== value.expectedVersion)
-        throw new MigrationRefusal('conflict');
-      if (value.decision === 'approve') {
-        if (staged.review !== 'pending') throw new MigrationRefusal('invalid-state');
-        if (staged.validation !== 'valid' || staged.personalData !== 'none')
-          throw new MigrationRefusal('not-publishable');
-      } else if (value.decision === 'reject') {
-        // Review moves forward only: an approval is withdrawn first, then rejected.
-        if (staged.review !== 'pending') throw new MigrationRefusal('invalid-state');
-      } else if (staged.review !== 'approved') {
-        throw new MigrationRefusal('invalid-state');
-      }
-      await guarded(
-        deps.decisions.review({
-          stagedRecordId: value.stagedRecordId,
-          expectedVersion: value.expectedVersion,
-          review:
-            value.decision === 'approve'
-              ? 'approved'
-              : value.decision === 'reject'
-                ? 'rejected'
-                : 'pending',
-          note: value.note.length === 0 ? null : value.note,
-          actorId,
-          now: now(),
-        }),
+      await decide(actorId, value);
+    },
+
+    /**
+     * approve | reject a bounded selection the reviewer named, each item at the
+     * version they saw. Every item is checked and audited on its own — an
+     * invalid, flagged, changed or already-decided revision is refused for
+     * that item only and reported, never forced.
+     */
+    async reviewMany(
+      actor: MigrationActor,
+      input: unknown,
+    ): Promise<{
+      readonly decided: number;
+      readonly refused: readonly {
+        readonly stagedRecordId: string;
+        readonly reason: MigrationRefusalReason;
+      }[];
+    }> {
+      const { actorId, value } = await gate.authorised(
+        actor,
+        ADMINISTER,
+        reviewBatchSchema,
+        input,
       );
+      let decided = 0;
+      const refused: { stagedRecordId: string; reason: MigrationRefusalReason }[] = [];
+      for (const item of value.items) {
+        try {
+          await decide(actorId, { ...item, decision: value.decision, note: value.note });
+          decided += 1;
+        } catch (error) {
+          const reason = migrationFailure(error);
+          // An outage is not a per-item verdict: stop, report what was done.
+          if (reason === 'unavailable') throw error;
+          refused.push({ stagedRecordId: item.stagedRecordId, reason });
+        }
+      }
+      return { decided, refused };
     },
 
     /**

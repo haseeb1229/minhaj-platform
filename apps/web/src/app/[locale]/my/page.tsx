@@ -28,6 +28,7 @@ import {
   SectionHeading,
   TextLink,
 } from '@/components/ui';
+import { WorkspaceCard } from '@/components/workspace/parts';
 import { donationsRuntime } from '@/composition/donations';
 import { learningRuntime } from '@/composition/learning';
 import { membershipRuntime } from '@/composition/membership';
@@ -66,6 +67,12 @@ import { SignOutForm } from './sign-out-form';
  * says so and the account itself stays fully reachable. Learning's,
  * Messaging's, Membership's and Donations' panels are read separately, so one
  * owner's outage never blanks another's.
+ *
+ * AN OVERVIEW OF CARDS, one per section, each with its heading, a short
+ * status and the links onward — the same reads as before, arranged so the
+ * page is scanned rather than scrolled. Every My Minhaj page the former link
+ * list offered is still linked from the card it belongs to; the area's own
+ * navigation sits beside the page in the workspace frame (`./layout.tsx`).
  */
 export const metadata = { robots: { index: false, follow: false } };
 
@@ -149,6 +156,7 @@ export default async function MyPage({
   const ms = await getTranslations({ locale, namespace: 'myMembership' });
   const md = await getTranslations({ locale, namespace: 'myDonations' });
   const dn = await getTranslations({ locale, namespace: 'donations' });
+  const w = await getTranslations({ locale, namespace: 'workspace' });
   const session = await requireActiveSession(locale, `/${locale}/my`);
   const timeZone = session.account.timezone;
 
@@ -227,24 +235,50 @@ export default async function MyPage({
   const position = ayah === null ? undefined : titles.get(targetKey(ayah));
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-6 px-4 py-10">
+    <main className="flex w-full min-w-0 flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('my.title')}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">
-          {t('my.description')}
-        </p>
+        <p className="text-foreground-muted">{t('my.description')}</p>
       </header>
 
-      <Panel>
-        <dl className="divide-y divide-[color:var(--color-border)]">
-          <DetailRow term={t('common.name')}>{session.account.name}</DetailRow>
-          <DetailRow term={t('common.email')}>{session.account.email}</DetailRow>
-        </dl>
-      </Panel>
+      {panels !== null && panels.current.onboarding === null ? (
+        <WorkspaceCard
+          heading={p('home.onboardingHeading')}
+          links={[
+            { href: `/${locale}/my/settings/interests`, text: p('home.onboardingLink') },
+          ]}
+        >
+          <p>{p('home.onboardingBody')}</p>
+        </WorkspaceCard>
+      ) : null}
 
-      <Panel>
-        <div className="flex flex-col gap-2">
-          <SectionHeading>{l('home.heading')}</SectionHeading>
+      {panels === null || panels.current.interests.length === 0 ? null : (
+        <Panel>
+          <nav aria-labelledby="home-sections" className="flex flex-col gap-2">
+            <span id="home-sections">
+              <SectionHeading>{p('home.sectionsHeading')}</SectionHeading>
+            </span>
+            <ul className="flex flex-wrap gap-x-6">
+              {panels.current.interests.map((interest) => (
+                <li key={interest} className="flex min-h-11 items-center">
+                  <TextLink href={`/${locale}${INTEREST_SECTIONS[interest]}`}>
+                    {p(`interests.interest.${interest}`)}
+                  </TextLink>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </Panel>
+      )}
+
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2">
+        <WorkspaceCard
+          heading={l('home.heading')}
+          links={[
+            { href: `/${locale}/my/learning`, text: l('home.link') },
+            { href: `/${locale}/my/progress/courses`, text: l('nav.progress') },
+          ]}
+        >
           {!learning.ok ? (
             <Alert tone="error">{l('home.unavailable')}</Alert>
           ) : learning.value.items.length === 0 ? (
@@ -258,7 +292,7 @@ export default async function MyPage({
             </>
           ) : (
             <>
-              <p className="text-sm">
+              <p>
                 {l(learning.value.hasMore ? 'home.enrolledMany' : 'home.enrolled', {
                   count: String(learning.value.items.length),
                 })}
@@ -279,19 +313,19 @@ export default async function MyPage({
               )}
             </>
           )}
-          <p>
-            <TextLink href={`/${locale}/my/learning`}>{l('home.link')}</TextLink>
-          </p>
-        </div>
-      </Panel>
+        </WorkspaceCard>
 
-      <Panel>
-        <div className="flex flex-col gap-2">
-          <SectionHeading>{c('home.heading')}</SectionHeading>
+        <WorkspaceCard
+          heading={c('home.heading')}
+          links={[
+            { href: `/${locale}/my/classes`, text: c('home.link') },
+            { href: `/${locale}/my/teachers`, text: c('nav.teachers') },
+          ]}
+        >
           {!classes.ok ? (
             <Alert tone="error">{c('home.unavailable')}</Alert>
           ) : nextClass === undefined ? (
-            <p className="text-sm">{c('home.none')}</p>
+            <p>{c('home.none')}</p>
           ) : (
             <>
               <p className="flex flex-wrap items-center gap-x-2">
@@ -312,142 +346,55 @@ export default async function MyPage({
               />
             </>
           )}
-          <p>
-            <TextLink href={`/${locale}/my/classes`}>{c('home.link')}</TextLink>
-          </p>
-        </div>
-      </Panel>
+        </WorkspaceCard>
 
-      <Panel>
-        <div className="flex flex-col gap-2">
-          <SectionHeading>{m('home.heading')}</SectionHeading>
+        <WorkspaceCard
+          heading={m('home.heading')}
+          links={[{ href: `/${locale}/my/messages`, text: m('home.link') }]}
+        >
           {!unreadMessages.ok ? (
             <Alert tone="error">{m('home.unavailable')}</Alert>
           ) : (
-            <p className="text-sm">
+            <p>
               {unreadMessages.value === 0
                 ? m('home.none')
                 : m('home.unread', { count: unreadMessages.value })}
             </p>
           )}
-          <p>
-            <TextLink href={`/${locale}/my/messages`}>{m('home.link')}</TextLink>
-          </p>
-        </div>
-      </Panel>
+        </WorkspaceCard>
 
-      <Panel>
-        <div className="flex flex-col gap-2">
-          <SectionHeading>{ms('home.heading')}</SectionHeading>
-          {!membership.ok ? (
-            <Alert tone="error">{ms('home.unavailable')}</Alert>
-          ) : membership.value.active === 0 && membership.value.open === 0 ? (
-            <p className="text-sm">{ms('home.none')}</p>
-          ) : (
-            <>
-              {membership.value.active === 0 ? null : (
-                <p className="text-sm">
-                  {ms('home.active', { count: membership.value.active })}
-                </p>
-              )}
-              {membership.value.open === 0 ? null : (
-                <p className="text-sm">
-                  {ms('home.open', { count: membership.value.open })}
-                </p>
-              )}
-            </>
-          )}
-          <p>
-            <TextLink href={`/${locale}/my/membership`}>{ms('home.link')}</TextLink>
-          </p>
-        </div>
-      </Panel>
+        {panels === null ? (
+          // One owner's outage never blanks another's: Personalisation's cards
+          // give way to one statement, and every other card stays.
+          <div className="md:col-span-2">
+            <Alert tone="error">{p('home.unavailable')}</Alert>
+          </div>
+        ) : (
+          <>
+            <WorkspaceCard
+              heading={p('home.notificationsHeading')}
+              links={[
+                {
+                  href: `/${locale}/my/notifications`,
+                  text: p('home.notificationsLink'),
+                },
+                {
+                  href: `/${locale}/my/settings/notifications`,
+                  text: p('nav.notificationSettings'),
+                },
+              ]}
+            >
+              <p>{p('notifications.unreadCount', { count: panels.unread })}</p>
+            </WorkspaceCard>
 
-      <Panel>
-        <div className="flex flex-col gap-2">
-          <SectionHeading>{md('home.heading')}</SectionHeading>
-          {!donations.ok ? (
-            <Alert tone="error">{md('home.unavailable')}</Alert>
-          ) : donations.value === null ? (
-            <p className="text-sm">{md('home.none')}</p>
-          ) : (
-            <>
-              <p className="text-sm">{md('home.latest')}</p>
-              <p className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="font-semibold">
-                  <CampaignTitle
-                    campaign={donations.value.campaign}
-                    locale={locale}
-                    t={dn}
-                  />
-                </span>
-                <Money money={donations.value.expected} locale={locale} />
-                <DonationStateBadge state={donations.value.state} t={dn} />
-              </p>
-            </>
-          )}
-          <p>
-            <TextLink href={`/${locale}/my/donations`}>{md('home.link')}</TextLink>
-          </p>
-        </div>
-      </Panel>
-
-      {panels === null ? (
-        <Alert tone="error">{p('home.unavailable')}</Alert>
-      ) : (
-        <>
-          {panels.current.onboarding === null ? (
-            <Panel>
-              <div className="flex flex-col gap-2">
-                <SectionHeading>{p('home.onboardingHeading')}</SectionHeading>
-                <p className="text-sm">{p('home.onboardingBody')}</p>
-                <p>
-                  <TextLink href={`/${locale}/my/settings/interests`}>
-                    {p('home.onboardingLink')}
-                  </TextLink>
-                </p>
-              </div>
-            </Panel>
-          ) : null}
-
-          {panels.current.interests.length === 0 ? null : (
-            <Panel>
-              <nav aria-labelledby="home-sections" className="flex flex-col gap-2">
-                <span id="home-sections">
-                  <SectionHeading>{p('home.sectionsHeading')}</SectionHeading>
-                </span>
-                <ul className="flex flex-wrap gap-x-6 gap-y-2">
-                  {panels.current.interests.map((interest) => (
-                    <li key={interest}>
-                      <TextLink href={`/${locale}${INTEREST_SECTIONS[interest]}`}>
-                        {p(`interests.interest.${interest}`)}
-                      </TextLink>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
-            </Panel>
-          )}
-
-          <Panel>
-            <div className="flex flex-col gap-2">
-              <SectionHeading>{p('home.notificationsHeading')}</SectionHeading>
-              <p className="text-sm">
-                {p('notifications.unreadCount', { count: panels.unread })}
-              </p>
-              <p>
-                <TextLink href={`/${locale}/my/notifications`}>
-                  {p('home.notificationsLink')}
-                </TextLink>
-              </p>
-            </div>
-          </Panel>
-
-          <Panel>
-            <div className="flex flex-col gap-2">
-              <SectionHeading>{p('home.quranHeading')}</SectionHeading>
+            <WorkspaceCard
+              heading={p('home.quranHeading')}
+              links={[
+                { href: `/${locale}/my/progress/quran`, text: p('home.quranLink') },
+              ]}
+            >
               {ayah === null ? (
-                <p className="text-sm">{p('home.quranNone')}</p>
+                <p>{p('home.quranNone')}</p>
               ) : (
                 <>
                   <TargetTitle resolved={position} t={p} />
@@ -458,17 +405,17 @@ export default async function MyPage({
                   ) : null}
                 </>
               )}
-              <p>
-                <TextLink href={`/${locale}/my/progress/quran`}>
-                  {p('home.quranLink')}
-                </TextLink>
-              </p>
-            </div>
-          </Panel>
+            </WorkspaceCard>
 
-          <Panel>
-            <div className="flex flex-col gap-2">
-              <SectionHeading>{p('home.savedHeading')}</SectionHeading>
+            <WorkspaceCard
+              heading={p('home.savedHeading')}
+              links={[
+                { href: `/${locale}/my/saved`, text: p('home.savedLink') },
+                { href: `/${locale}/my/saved/bookmarks`, text: p('nav.bookmarks') },
+                { href: `/${locale}/my/saved/notes`, text: p('nav.notes') },
+                { href: `/${locale}/my/saved/collections`, text: p('nav.collections') },
+              ]}
+            >
               {recentRows.length === 0 ? (
                 <EmptyState>{p('saved.empty')}</EmptyState>
               ) : (
@@ -481,78 +428,128 @@ export default async function MyPage({
                   t={p}
                 />
               )}
-              <p>
-                <TextLink href={`/${locale}/my/saved`}>{p('home.savedLink')}</TextLink>
+            </WorkspaceCard>
+
+            <WorkspaceCard
+              heading={
+                panels.current.historyEnabled
+                  ? p('home.historyHeading')
+                  : p('privacy.historyHeading')
+              }
+              links={[
+                { href: `/${locale}/my/history/reading`, text: p('nav.reading') },
+                { href: `/${locale}/my/history/watch`, text: p('nav.watch') },
+              ]}
+            >
+              {!panels.current.historyEnabled ? (
+                <>
+                  <p>{p('privacy.historyOff')}</p>
+                  <p>
+                    <TextLink href={`/${locale}/my/settings/privacy`}>
+                      {p('history.offLink')}
+                    </TextLink>
+                  </p>
+                </>
+              ) : readingRows.length === 0 && watchRows.length === 0 ? (
+                <EmptyState>{p('home.historyEmpty')}</EmptyState>
+              ) : (
+                <>
+                  {readingRows.length === 0 ? null : (
+                    <TargetList
+                      label={p('nav.reading')}
+                      rows={readingRows}
+                      titles={titles}
+                      locale={locale}
+                      timeZone={timeZone}
+                      t={p}
+                    />
+                  )}
+                  {watchRows.length === 0 ? null : (
+                    <TargetList
+                      label={p('nav.watch')}
+                      rows={watchRows}
+                      titles={titles}
+                      locale={locale}
+                      timeZone={timeZone}
+                      t={p}
+                    />
+                  )}
+                </>
+              )}
+            </WorkspaceCard>
+          </>
+        )}
+
+        <WorkspaceCard
+          heading={t('my.questions')}
+          links={[{ href: `/${locale}/my/questions`, text: t('my.questions') }]}
+        >
+          <p>{w('my.questionsBody')}</p>
+        </WorkspaceCard>
+
+        <WorkspaceCard
+          heading={ms('home.heading')}
+          links={[{ href: `/${locale}/my/membership`, text: ms('home.link') }]}
+        >
+          {!membership.ok ? (
+            <Alert tone="error">{ms('home.unavailable')}</Alert>
+          ) : membership.value.active === 0 && membership.value.open === 0 ? (
+            <p>{ms('home.none')}</p>
+          ) : (
+            <>
+              {membership.value.active === 0 ? null : (
+                <p>{ms('home.active', { count: membership.value.active })}</p>
+              )}
+              {membership.value.open === 0 ? null : (
+                <p>{ms('home.open', { count: membership.value.open })}</p>
+              )}
+            </>
+          )}
+        </WorkspaceCard>
+
+        <WorkspaceCard
+          heading={md('home.heading')}
+          links={[{ href: `/${locale}/my/donations`, text: md('home.link') }]}
+        >
+          {!donations.ok ? (
+            <Alert tone="error">{md('home.unavailable')}</Alert>
+          ) : donations.value === null ? (
+            <p>{md('home.none')}</p>
+          ) : (
+            <>
+              <p>{md('home.latest')}</p>
+              <p className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold">
+                  <CampaignTitle
+                    campaign={donations.value.campaign}
+                    locale={locale}
+                    t={dn}
+                  />
+                </span>
+                <Money money={donations.value.expected} locale={locale} />
+                <DonationStateBadge state={donations.value.state} t={dn} />
               </p>
-            </div>
-          </Panel>
+            </>
+          )}
+        </WorkspaceCard>
 
-          {panels.current.historyEnabled ? (
-            <Panel>
-              <div className="flex flex-col gap-3">
-                <SectionHeading>{p('home.historyHeading')}</SectionHeading>
-                {readingRows.length === 0 && watchRows.length === 0 ? (
-                  <EmptyState>{p('home.historyEmpty')}</EmptyState>
-                ) : (
-                  <>
-                    {readingRows.length === 0 ? null : (
-                      <TargetList
-                        label={p('nav.reading')}
-                        rows={readingRows}
-                        titles={titles}
-                        locale={locale}
-                        timeZone={timeZone}
-                        t={p}
-                      />
-                    )}
-                    {watchRows.length === 0 ? null : (
-                      <TargetList
-                        label={p('nav.watch')}
-                        rows={watchRows}
-                        titles={titles}
-                        locale={locale}
-                        timeZone={timeZone}
-                        t={p}
-                      />
-                    )}
-                  </>
-                )}
-              </div>
-            </Panel>
-          ) : null}
-        </>
-      )}
-
-      <nav className="flex flex-col gap-2" aria-label={t('my.title')}>
-        <TextLink href={`/${locale}/my/saved`}>{p('nav.saved')}</TextLink>
-        <TextLink href={`/${locale}/my/saved/bookmarks`}>{p('nav.bookmarks')}</TextLink>
-        <TextLink href={`/${locale}/my/saved/notes`}>{p('nav.notes')}</TextLink>
-        <TextLink href={`/${locale}/my/saved/collections`}>
-          {p('nav.collections')}
-        </TextLink>
-        <TextLink href={`/${locale}/my/history/reading`}>{p('nav.reading')}</TextLink>
-        <TextLink href={`/${locale}/my/history/watch`}>{p('nav.watch')}</TextLink>
-        <TextLink href={`/${locale}/my/progress/quran`}>{p('nav.quran')}</TextLink>
-        <TextLink href={`/${locale}/my/notifications`}>{p('nav.notifications')}</TextLink>
-        <TextLink href={`/${locale}/my/learning`}>{l('nav.learning')}</TextLink>
-        <TextLink href={`/${locale}/my/progress/courses`}>{l('nav.progress')}</TextLink>
-        <TextLink href={`/${locale}/my/classes`}>{c('nav.classes')}</TextLink>
-        <TextLink href={`/${locale}/my/teachers`}>{c('nav.teachers')}</TextLink>
-        <TextLink href={`/${locale}/my/messages`}>{m('nav.messages')}</TextLink>
-        <TextLink href={`/${locale}/my/membership`}>{ms('nav.membership')}</TextLink>
-        <TextLink href={`/${locale}/my/donations`}>{md('nav.donations')}</TextLink>
-        <TextLink href={`/${locale}/my/questions`}>{t('my.questions')}</TextLink>
-        <TextLink href={`/${locale}/my/settings/profile`}>{t('my.profile')}</TextLink>
-        <TextLink href={`/${locale}/my/settings/security`}>{t('my.security')}</TextLink>
-        <TextLink href={`/${locale}/my/settings/language`}>{t('my.language')}</TextLink>
-        <TextLink href={`/${locale}/my/settings/interests`}>
-          {p('nav.interests')}
-        </TextLink>
-        <TextLink href={`/${locale}/my/settings/notifications`}>
-          {p('nav.notificationSettings')}
-        </TextLink>
-        <TextLink href={`/${locale}/my/settings/privacy`}>{p('nav.privacy')}</TextLink>
-      </nav>
+        <WorkspaceCard
+          heading={w('my.accountHeading')}
+          wide
+          links={[
+            { href: `/${locale}/my/settings/profile`, text: t('my.profile') },
+            { href: `/${locale}/my/settings/security`, text: t('my.security') },
+            { href: `/${locale}/my/settings/language`, text: t('my.language') },
+            { href: `/${locale}/my/settings/interests`, text: p('nav.interests') },
+            { href: `/${locale}/my/settings/privacy`, text: p('nav.privacy') },
+          ]}
+        >
+          <dl className="grid grid-cols-[minmax(0,1fr)] divide-y divide-border sm:grid-cols-2 sm:divide-y-0">
+            <DetailRow term={t('common.name')}>{session.account.name}</DetailRow>
+            <DetailRow term={t('common.email')}>{session.account.email}</DetailRow>
+          </dl>
+        </WorkspaceCard>
+      </div>
 
       <SignOutForm locale={locale} label={t('my.signOut')} />
     </main>

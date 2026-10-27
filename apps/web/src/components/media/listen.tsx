@@ -19,24 +19,36 @@ import {
 import { taxonomyRuntime } from '@/composition/taxonomy';
 import { paragraphsOf } from '@/components/library/scholarly-presentation';
 import {
+  ActionLink,
   Alert,
   Breadcrumbs,
   Button,
+  CardGrid,
   Container,
   DetailRow,
   EmptyState,
   Field,
-  PageHeading,
+  LinkCard,
+  MetaRow,
+  PageHero,
   Panel,
   Prose,
-  SectionHeading,
+  SectionHeader,
   Select,
-  StatusBadge,
   TextLink,
+  TopicChips,
 } from '@/components/ui';
 import { directionOf } from '@/config/locale';
 import { AudioPlayer } from './audio-player';
-import { BreadcrumbData, Duration, formatDate, Pagination } from './parts';
+import {
+  BreadcrumbData,
+  Duration,
+  formatDate,
+  MEDIA_CARD,
+  MEDIA_CARD_LINK,
+  MediaPageHeader,
+  Pagination,
+} from './parts';
 import {
   audioSeriesPath,
   audioTrackPath,
@@ -140,52 +152,53 @@ function TrackRow({
   });
 
   return (
-    <Panel as="li">
-      <div className="flex min-w-0 items-start gap-4">
+    <li className={MEDIA_CARD}>
+      <div className="flex min-w-0 flex-1 items-start gap-4 p-4">
         <AudioMark />
-        <div className="flex min-w-0 flex-col gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
           {position && track.seriesPosition !== null ? (
-            <p>
-              <StatusBadge tone="neutral">
-                {t('fact.position', { number: track.seriesPosition })}
-              </StatusBadge>
+            <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+              {t('fact.position', { number: track.seriesPosition })}
             </p>
           ) : null}
           <Heading
-            className="text-lg font-semibold break-words"
+            className="text-subheading font-semibold wrap-anywhere"
             lang={label.locale}
             dir={directionOf(label.locale)}
           >
-            <TextLink href={audioTrackPath(locale, track.slug)}>{label.title}</TextLink>
+            <a href={audioTrackPath(locale, track.slug)} className={MEDIA_CARD_LINK}>
+              {label.title}
+            </a>
           </Heading>
           {speakers.length === 0 ? null : (
-            <p className="text-sm break-words" dir="auto">
-              <span className="text-[color:var(--color-foreground-muted)]">
-                {t('speakers')}:{' '}
-              </span>
+            <p
+              className="line-clamp-2 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+              dir="auto"
+            >
+              <span className="sr-only">{t('speakers')}: </span>
               {speakers.join(' · ')}
             </p>
           )}
-          <p className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-[color:var(--color-foreground-muted)]">
-            {track.durationSeconds === null ? null : (
-              <span>
-                <Duration seconds={track.durationSeconds} />
-              </span>
-            )}
-            {track.recordedOn === null ? null : (
-              <span>
-                <time dateTime={track.recordedOn}>
-                  {formatDate(track.recordedOn, locale)}
-                </time>
-              </span>
-            )}
-            <span lang={track.languageCode} dir={language?.direction ?? 'auto'}>
-              {language?.name ?? track.languageCode}
-            </span>
-          </p>
+          <div className="mt-auto pt-1">
+            <MetaRow
+              items={[
+                track.durationSeconds === null ? null : (
+                  <Duration seconds={track.durationSeconds} />
+                ),
+                track.recordedOn === null ? null : (
+                  <time dateTime={track.recordedOn}>
+                    {formatDate(track.recordedOn, locale)}
+                  </time>
+                ),
+                <span lang={track.languageCode} dir={language?.direction ?? 'auto'}>
+                  {language?.name ?? track.languageCode}
+                </span>,
+              ]}
+            />
+          </div>
         </div>
       </div>
-    </Panel>
+    </li>
   );
 }
 
@@ -218,7 +231,10 @@ async function TrackList({
   const List = ordered ? 'ol' : 'ul';
 
   return (
-    <List aria-label={label} className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <List
+      aria-label={label}
+      className="grid list-none grid-cols-1 gap-4 p-0 *:min-w-0 lg:grid-cols-2"
+    >
       {tracks.map((track) => (
         <TrackRow
           key={track.id}
@@ -282,18 +298,16 @@ export async function TrackListingPage({
 
   return (
     <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[trail.home, trail.listen, { text: title }]}
+      <div className="flex flex-col gap-8 py-[var(--space-page)]">
+        <MediaPageHeader
+          crumbs={{
+            label: trail.label,
+            trail: [trail.home, trail.listen, { text: title }],
+          }}
+          eyebrow={trail.listen.text}
+          title={title}
+          lede={t('sectionBody.lectures')}
         />
-
-        <div className="flex flex-col gap-2">
-          <PageHeading>{title}</PageHeading>
-          <p className="text-[color:var(--color-foreground-muted)]">
-            {t('sectionBody.lectures')}
-          </p>
-        </div>
 
         <Panel>
           <form
@@ -355,12 +369,15 @@ export async function TrackListingPage({
         </Panel>
 
         {speaker === null ? null : (
-          <p className="text-sm" dir="auto">
-            {t('speakerActive')}{' '}
+          <p
+            className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[var(--radius-control)] border border-[color:var(--color-accent-rule)] bg-[color:var(--color-accent-surface)] px-4 py-2 text-sm"
+            dir="auto"
+          >
+            <span>{t('speakerActive')}</span>
             <TextLink href={`/${locale}/people/${encodeURIComponent(speaker.slug)}`}>
               {speaker.name}
             </TextLink>
-            {' · '}
+            <span aria-hidden="true">·</span>
             <TextLink href={mediaQueryPath(base, filters, { speaker: null, offset: 0 })}>
               {t('speakerClear')}
             </TextLink>
@@ -476,53 +493,75 @@ export async function TrackDetailPage({
     siblings === null
       ? []
       : siblings.items.filter((track) => track.id !== record.id).slice(0, SERIES_PREVIEW);
+  const hasStory = label.description !== '' || record.transcript !== null;
 
   return (
     <Container>
-      <article className="flex flex-col gap-10 py-12">
-        <Breadcrumbs
-          label={parts.label}
-          trail={[
-            ...trail
-              .slice(0, -1)
-              .map((entry) => ({ href: entry.path, text: entry.name })),
-            { text: label.title },
-          ]}
+      <article className="flex flex-col gap-10 py-[var(--space-page)]">
+        <MediaPageHeader
+          crumbs={{
+            label: parts.label,
+            trail: [
+              ...trail
+                .slice(0, -1)
+                .map((entry) => ({ href: entry.path, text: entry.name })),
+              { text: label.title },
+            ],
+          }}
+          eyebrow={
+            record.series === null
+              ? parts.listen.text
+              : t('fact.position', { number: record.series.position })
+          }
+          title={label.title}
+          lang={label.locale}
+          dir={direction}
+          {...(speakers.length === 0
+            ? {}
+            : {
+                lede: (
+                  <p className="text-base" dir="auto">
+                    <span>{t('speakers')}: </span>
+                    {speakers.map((person, index) => (
+                      <span key={person.slug}>
+                        {index === 0 ? null : ' · '}
+                        <TextLink
+                          href={`/${locale}/people/${encodeURIComponent(person.slug)}`}
+                        >
+                          {person.name}
+                        </TextLink>
+                      </span>
+                    ))}
+                  </p>
+                ),
+              })}
+          meta={
+            <MetaRow
+              items={[
+                record.durationSeconds === null ? null : (
+                  <Duration seconds={record.durationSeconds} />
+                ),
+                record.recordedOn === null ? null : (
+                  <time dateTime={record.recordedOn}>
+                    {formatDate(record.recordedOn, locale)}
+                  </time>
+                ),
+                <span lang={record.languageCode} dir={contentDirection}>
+                  {language?.name ?? record.languageCode}
+                </span>,
+              ]}
+            />
+          }
         />
-
-        <Prose>
-          <h1
-            className="text-3xl font-semibold tracking-tight break-words"
-            lang={label.locale}
-            dir={direction}
-          >
-            {label.title}
-          </h1>
-          {speakers.length === 0 ? null : (
-            <p className="text-sm" dir="auto">
-              <span className="text-[color:var(--color-foreground-muted)]">
-                {t('speakers')}:{' '}
-              </span>
-              {speakers.map((person, index) => (
-                <span key={person.slug}>
-                  {index === 0 ? null : ' · '}
-                  <TextLink href={`/${locale}/people/${encodeURIComponent(person.slug)}`}>
-                    {person.name}
-                  </TextLink>
-                </span>
-              ))}
-            </p>
-          )}
-        </Prose>
 
         <section
           aria-labelledby="audio-player"
-          className="rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]"
+          className="max-w-4xl rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]"
         >
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-4">
               <AudioMark />
-              <h2 id="audio-player" className="text-lg font-semibold">
+              <h2 id="audio-player" className="text-subheading font-semibold">
                 {t('playerHeading')}
               </h2>
             </div>
@@ -544,104 +583,137 @@ export async function TrackDetailPage({
           </div>
         </section>
 
-        {label.description === '' ? null : (
-          <Prose>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('metadataNotice')}
-            </p>
-            {paragraphsOf(label.description).map((paragraph, index) => (
-              <p key={index} lang={label.locale} dir={direction}>
-                {paragraph}
-              </p>
-            ))}
-          </Prose>
-        )}
+        <div
+          className={`grid gap-10 ${hasStory ? 'lg:grid-cols-[minmax(0,1fr)_20rem]' : ''}`}
+        >
+          {hasStory ? (
+            <div className="flex min-w-0 flex-col gap-10">
+              {label.description === '' ? null : (
+                <section className="flex flex-col gap-4" aria-labelledby="audio-about">
+                  <h2 id="audio-about" className="text-heading font-semibold">
+                    {t('aboutHeading')}
+                  </h2>
+                  <Prose>
+                    {paragraphsOf(label.description).map((paragraph, index) => (
+                      <p key={index} lang={label.locale} dir={direction}>
+                        {paragraph}
+                      </p>
+                    ))}
+                    <p className="text-caption border-s-2 border-[color:var(--color-accent-rule)] ps-3 text-[color:var(--color-foreground-muted)]">
+                      {t('metadataNotice')}
+                    </p>
+                  </Prose>
+                </section>
+              )}
 
-        <section className="flex flex-col gap-3" aria-labelledby="audio-facts">
-          <h2 id="audio-facts" className="text-lg font-semibold">
-            {t('facts')}
-          </h2>
-          <dl className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
-            <DetailRow term={t('fact.language')}>
-              <span lang={record.languageCode} dir={contentDirection}>
-                {language?.name ?? record.languageCode}
-              </span>
-            </DetailRow>
-            {record.durationSeconds === null ? null : (
-              <DetailRow term={t('fact.duration')}>
-                <Duration seconds={record.durationSeconds} />
-              </DetailRow>
-            )}
-            {record.recordedOn === null ? null : (
-              <DetailRow term={t('fact.recorded')}>
-                <time dateTime={record.recordedOn}>
-                  {formatDate(record.recordedOn, locale)}
-                </time>
-              </DetailRow>
-            )}
-            {record.series === null || seriesLabel === null ? null : (
-              <DetailRow term={t('fact.partOf')}>
-                <TextLink href={audioSeriesPath(locale, record.series.slug)}>
-                  <span lang={seriesLabel.locale} dir={directionOf(seriesLabel.locale)}>
-                    {seriesLabel.title}
-                  </span>
-                </TextLink>
-                {' · '}
-                {t('fact.position', { number: record.series.position })}
-              </DetailRow>
-            )}
-            <DetailRow term={t('fact.transcript')}>
-              <span id="audio-transcript-status">
-                {record.transcript === null ? t('transcriptNone') : t('transcriptBelow')}
-              </span>
-            </DetailRow>
-          </dl>
-        </section>
+              {record.transcript === null ? null : (
+                <section
+                  className="flex flex-col gap-4"
+                  aria-labelledby="audio-transcript"
+                >
+                  <h2 id="audio-transcript" className="text-heading font-semibold">
+                    {t('fact.transcript')}
+                  </h2>
+                  <details className="rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] px-5 py-2">
+                    <summary className="min-h-11 cursor-pointer py-2.5 font-medium">
+                      {t('transcriptShow')}
+                    </summary>
+                    <div
+                      className="library-reader flex max-w-[var(--measure-prose)] flex-col gap-4 pt-2 pb-4"
+                      lang={record.languageCode}
+                      dir={contentDirection}
+                    >
+                      {paragraphsOf(record.transcript).map((paragraph, index) => (
+                        <p key={index}>{paragraph}</p>
+                      ))}
+                    </div>
+                  </details>
+                </section>
+              )}
+            </div>
+          ) : null}
 
-        {record.transcript === null ? null : (
-          <section className="flex flex-col gap-3" aria-labelledby="audio-transcript">
-            <h2 id="audio-transcript" className="text-lg font-semibold">
-              {t('fact.transcript')}
-            </h2>
-            <details className="rounded-[var(--radius-panel)] border border-[color:var(--color-border)] p-4">
-              <summary className="min-h-11 cursor-pointer py-2 font-medium">
-                {t('transcriptShow')}
-              </summary>
-              <div
-                className="library-reader flex flex-col gap-4 pt-3"
-                lang={record.languageCode}
-                dir={contentDirection}
+          <aside className="flex min-w-0 flex-col gap-8">
+            <section
+              className="flex flex-col gap-3 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5"
+              aria-labelledby="audio-facts"
+            >
+              <h2 id="audio-facts" className="text-subheading font-semibold">
+                {t('facts')}
+              </h2>
+              <dl
+                className={`grid gap-x-8 divide-y divide-[color:var(--color-border)] ${
+                  hasStory ? '' : 'sm:grid-cols-2 sm:divide-y-0'
+                }`}
               >
-                {paragraphsOf(record.transcript).map((paragraph, index) => (
-                  <p key={index}>{paragraph}</p>
-                ))}
-              </div>
-            </details>
-          </section>
-        )}
+                <DetailRow term={t('fact.language')}>
+                  <span lang={record.languageCode} dir={contentDirection}>
+                    {language?.name ?? record.languageCode}
+                  </span>
+                </DetailRow>
+                {record.durationSeconds === null ? null : (
+                  <DetailRow term={t('fact.duration')}>
+                    <Duration seconds={record.durationSeconds} />
+                  </DetailRow>
+                )}
+                {record.recordedOn === null ? null : (
+                  <DetailRow term={t('fact.recorded')}>
+                    <time dateTime={record.recordedOn}>
+                      {formatDate(record.recordedOn, locale)}
+                    </time>
+                  </DetailRow>
+                )}
+                {record.series === null || seriesLabel === null ? null : (
+                  <DetailRow term={t('fact.partOf')}>
+                    <TextLink href={audioSeriesPath(locale, record.series.slug)}>
+                      <span
+                        lang={seriesLabel.locale}
+                        dir={directionOf(seriesLabel.locale)}
+                      >
+                        {seriesLabel.title}
+                      </span>
+                    </TextLink>
+                    {' · '}
+                    {t('fact.position', { number: record.series.position })}
+                  </DetailRow>
+                )}
+                <DetailRow term={t('fact.transcript')}>
+                  <span id="audio-transcript-status">
+                    {record.transcript === null
+                      ? t('transcriptNone')
+                      : t('transcriptBelow')}
+                  </span>
+                </DetailRow>
+              </dl>
+            </section>
 
-        {topics.length === 0 ? null : (
-          <section className="flex flex-col gap-3" aria-labelledby="audio-topics">
-            <h2 id="audio-topics" className="text-lg font-semibold">
-              {t('topics')}
-            </h2>
-            <ul className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-              {topics.map((topic) => (
-                <li key={topic.slug}>
-                  <TextLink href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}>
-                    {topic.name}
-                  </TextLink>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+            {topics.length === 0 ? null : (
+              <section className="flex flex-col gap-3" aria-labelledby="audio-topics">
+                <h2 id="audio-topics" className="text-subheading font-semibold">
+                  {t('topics')}
+                </h2>
+                <TopicChips
+                  label={t('topics')}
+                  topics={topics.map((topic) => ({
+                    href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+                    text: topic.name,
+                  }))}
+                />
+              </section>
+            )}
+          </aside>
+        </div>
 
         {record.series === null || others.length === 0 ? null : (
-          <section className="flex flex-col gap-4" aria-labelledby="audio-series-more">
-            <SectionHeading>
-              <span id="audio-series-more">{t('moreFromSeries')}</span>
-            </SectionHeading>
+          <section className="flex flex-col gap-5" aria-labelledby="audio-series-more">
+            <SectionHeader
+              id="audio-series-more"
+              heading={t('moreFromSeries')}
+              action={{
+                href: audioSeriesPath(locale, record.series.slug),
+                text: t('allInSeries'),
+              }}
+            />
             <TrackList
               locale={locale}
               tracks={others}
@@ -649,11 +721,6 @@ export async function TrackDetailPage({
               headingLevel="h3"
               ordered
             />
-            <p>
-              <TextLink href={audioSeriesPath(locale, record.series.slug)}>
-                {t('allInSeries')}
-              </TextLink>
-            </p>
           </section>
         )}
 
@@ -670,27 +737,32 @@ export async function TrackDetailPage({
 function SeriesCard({
   locale,
   record,
+  headingLevel,
 }: {
   readonly locale: Locale;
   readonly record: AudioSeriesRecord;
+  readonly headingLevel: 'h2' | 'h3';
 }) {
   const label = mediaLabel(record, locale);
   const direction = directionOf(label.locale);
+  const Heading = headingLevel;
   return (
-    <Panel as="li">
-      <div className="flex min-w-0 items-start gap-4">
+    <li className={MEDIA_CARD}>
+      <div className="flex min-w-0 flex-1 items-start gap-4 p-4">
         <AudioMark />
-        <div className="flex min-w-0 flex-col gap-2">
-          <h2
-            className="text-lg font-semibold break-words"
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <Heading
+            className="text-subheading font-semibold wrap-anywhere"
             lang={label.locale}
             dir={direction}
           >
-            <TextLink href={audioSeriesPath(locale, record.slug)}>{label.title}</TextLink>
-          </h2>
+            <a href={audioSeriesPath(locale, record.slug)} className={MEDIA_CARD_LINK}>
+              {label.title}
+            </a>
+          </Heading>
           {label.description === '' ? null : (
             <p
-              className="line-clamp-3 text-sm break-words text-[color:var(--color-foreground-muted)]"
+              className="line-clamp-3 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
               lang={label.locale}
               dir={direction}
             >
@@ -699,7 +771,7 @@ function SeriesCard({
           )}
         </div>
       </div>
-    </Panel>
+    </li>
   );
 }
 
@@ -719,25 +791,29 @@ export async function AudioSeriesListingPage({
 
   return (
     <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[trail.home, trail.listen, { text: title }]}
+      <div className="flex flex-col gap-8 py-[var(--space-page)]">
+        <MediaPageHeader
+          crumbs={{
+            label: trail.label,
+            trail: [trail.home, trail.listen, { text: title }],
+          }}
+          eyebrow={trail.listen.text}
+          title={title}
+          lede={t('sectionBody.series')}
         />
-        <div className="flex flex-col gap-2">
-          <PageHeading>{title}</PageHeading>
-          <p className="text-[color:var(--color-foreground-muted)]">
-            {t('sectionBody.series')}
-          </p>
-        </div>
         {page.items.length === 0 ? (
           <EmptyState>{t('seriesListEmpty')}</EmptyState>
         ) : (
-          <ul aria-label={title} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <CardGrid label={title} columns={2}>
             {page.items.map((record) => (
-              <SeriesCard key={record.id} locale={locale} record={record} />
+              <SeriesCard
+                key={record.id}
+                locale={locale}
+                record={record}
+                headingLevel="h2"
+              />
             ))}
-          </ul>
+          </CardGrid>
         )}
         <Pagination
           label={title}
@@ -779,38 +855,39 @@ export async function AudioSeriesDetailPage({
     { name: sectionTitle, path: `/${locale}/listen/series` },
     { name: label.title, path },
   ];
+  const description = paragraphsOf(label.description);
 
   return (
     <Container>
-      <article className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={parts.label}
-          trail={[
-            ...trail
-              .slice(0, -1)
-              .map((entry) => ({ href: entry.path, text: entry.name })),
-            { text: label.title },
-          ]}
-        />
-        <Prose>
-          <h1
-            className="text-3xl font-semibold tracking-tight break-words"
-            lang={label.locale}
-            dir={direction}
-          >
-            {label.title}
-          </h1>
-          {paragraphsOf(label.description).map((paragraph, index) => (
-            <p key={index} lang={label.locale} dir={direction}>
-              {paragraph}
-            </p>
-          ))}
-        </Prose>
+      <article className="flex flex-col gap-10 py-[var(--space-page)]">
+        <MediaPageHeader
+          crumbs={{
+            label: parts.label,
+            trail: [
+              ...trail
+                .slice(0, -1)
+                .map((entry) => ({ href: entry.path, text: entry.name })),
+              { text: label.title },
+            ],
+          }}
+          eyebrow={sectionTitle}
+          title={label.title}
+          lang={label.locale}
+          dir={direction}
+        >
+          {description.length === 0 ? null : (
+            <div className="flex max-w-[var(--measure-prose)] flex-col gap-3 pt-1">
+              {description.map((paragraph, index) => (
+                <p key={index} lang={label.locale} dir={direction}>
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+          )}
+        </MediaPageHeader>
 
-        <section className="flex flex-col gap-4" aria-labelledby="series-tracks">
-          <SectionHeading>
-            <span id="series-tracks">{t('seriesTracks')}</span>
-          </SectionHeading>
+        <section className="flex flex-col gap-5" aria-labelledby="series-tracks">
+          <SectionHeader id="series-tracks" heading={t('seriesTracks')} />
           {tracks.items.length === 0 ? (
             <EmptyState>{t('seriesEmpty')}</EmptyState>
           ) : (
@@ -873,70 +950,81 @@ export async function ListenLandingPage({ locale }: { readonly locale: Locale })
   ] as const;
 
   return (
-    <Container>
-      <div className="flex flex-col gap-10 py-12">
-        <Breadcrumbs label={trail.label} trail={[trail.home, { text: t('title') }]} />
-        <Prose>
-          <PageHeading>{t('title')}</PageHeading>
-          <p>{t('description')}</p>
-        </Prose>
+    <>
+      <Container>
+        <div className="pt-6">
+          <Breadcrumbs label={trail.label} trail={[trail.home, { text: t('title') }]} />
+        </div>
+      </Container>
+      <PageHero
+        title={t('title')}
+        lede={t('description')}
+        actions={
+          <ActionLink href={`/${locale}/listen/lectures`}>{t('allTracks')}</ActionLink>
+        }
+      />
 
-        <section className="flex flex-col gap-4" aria-labelledby="listen-latest">
-          <SectionHeading>
-            <span id="listen-latest">{t('latest')}</span>
-          </SectionHeading>
-          {latest.items.length === 0 ? (
-            <EmptyState>{t('empty')}</EmptyState>
-          ) : (
-            <TrackList
-              locale={locale}
-              tracks={latest.items.slice(0, LANDING_TRACKS)}
-              label={t('latest')}
-              headingLevel="h3"
+      <Container>
+        <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
+          <section className="flex flex-col gap-5" aria-labelledby="listen-latest">
+            <SectionHeader
+              id="listen-latest"
+              heading={t('latest')}
+              intro={t('latestIntro')}
             />
-          )}
-          <p>
-            <TextLink href={`/${locale}/listen/lectures`}>{t('allTracks')}</TextLink>
-          </p>
-        </section>
-
-        {series.items.length === 0 ? null : (
-          <section className="flex flex-col gap-4" aria-labelledby="listen-series">
-            <SectionHeading>
-              <span id="listen-series">{t('sections.series')}</span>
-            </SectionHeading>
-            <ul
-              aria-label={t('sections.series')}
-              className="grid grid-cols-1 gap-4 sm:grid-cols-2"
-            >
-              {series.items.slice(0, LANDING_SERIES).map((record) => (
-                <SeriesCard key={record.id} locale={locale} record={record} />
-              ))}
-            </ul>
+            {latest.items.length === 0 ? (
+              <EmptyState>{t('empty')}</EmptyState>
+            ) : (
+              <TrackList
+                locale={locale}
+                tracks={latest.items.slice(0, LANDING_TRACKS)}
+                label={t('latest')}
+                headingLevel="h3"
+              />
+            )}
           </section>
-        )}
 
-        <section className="flex flex-col gap-4" aria-labelledby="listen-browse">
-          <SectionHeading>
-            <span id="listen-browse">{t('browse')}</span>
-          </SectionHeading>
-          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {browse.map((entry) => (
-              <Panel key={entry.key} as="li">
-                <div className="flex flex-col gap-2">
-                  <h3 className="text-lg font-semibold">
-                    <TextLink href={entry.href}>{t(`sections.${entry.key}`)}</TextLink>
-                  </h3>
-                  <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                    {t(`sectionBody.${entry.key}`)}
-                  </p>
-                </div>
-              </Panel>
-            ))}
-          </ul>
-        </section>
-      </div>
-    </Container>
+          {series.items.length === 0 ? null : (
+            <section className="flex flex-col gap-5" aria-labelledby="listen-series">
+              <SectionHeader
+                id="listen-series"
+                heading={t('sections.series')}
+                intro={t('sectionBody.series')}
+                action={{ href: `/${locale}/listen/series`, text: t('allSeries') }}
+              />
+              <CardGrid label={t('sections.series')} columns={2}>
+                {series.items.slice(0, LANDING_SERIES).map((record) => (
+                  <SeriesCard
+                    key={record.id}
+                    locale={locale}
+                    record={record}
+                    headingLevel="h3"
+                  />
+                ))}
+              </CardGrid>
+            </section>
+          )}
+
+          <section className="flex flex-col gap-5" aria-labelledby="listen-browse">
+            <SectionHeader
+              id="listen-browse"
+              heading={t('browse')}
+              intro={t('browseIntro')}
+            />
+            <CardGrid columns={browse.length >= 5 ? 3 : 4}>
+              {browse.map((entry) => (
+                <LinkCard
+                  key={entry.key}
+                  href={entry.href}
+                  title={t(`sections.${entry.key}`)}
+                  description={t(`sectionBody.${entry.key}`)}
+                />
+              ))}
+            </CardGrid>
+          </section>
+        </div>
+      </Container>
+    </>
   );
 }
 
@@ -964,19 +1052,14 @@ export async function AudioPreview({
   const page = await mediaReadRuntime().audioTracks(filter);
   if (page.items.length === 0) return null;
   return (
-    <section className="flex flex-col gap-4" aria-labelledby={headingId}>
-      <h2 id={headingId} className="text-lg font-semibold">
-        {heading}
-      </h2>
+    <section className="flex flex-col gap-5" aria-labelledby={headingId}>
+      <SectionHeader id={headingId} heading={heading} action={more} />
       <TrackList
         locale={locale}
         tracks={page.items.slice(0, PREVIEW)}
         label={heading}
         headingLevel="h3"
       />
-      <p>
-        <TextLink href={more.href}>{more.text}</TextLink>
-      </p>
     </section>
   );
 }

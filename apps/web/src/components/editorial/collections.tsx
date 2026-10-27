@@ -28,17 +28,27 @@ import {
   readCollectionOffset,
 } from '@/components/editorial/collection-presentation';
 import { translationFor } from '@/components/editorial/presentation';
+import {
+  CARD_RAISED,
+  CARD_SURFACE,
+  CARD_TITLE_LINK,
+  Eyebrow,
+  LandingFrame,
+  RecordSection,
+} from '@/components/editorial/frame';
 import { BreadcrumbData, Pagination } from '@/components/media/parts';
 import {
+  ActionLink,
   Alert,
   Breadcrumbs,
   Container,
   DetailRow,
   EmptyState,
-  PageHeading,
-  Panel,
+  MetaRow,
   Prose,
+  SectionHeader,
   TextLink,
+  TopicChips,
 } from '@/components/ui';
 import { directionOf } from '@/config/locale';
 
@@ -91,7 +101,9 @@ async function collectionsTrail(locale: Locale) {
 /**
  * ONE CARD: the Collection's title in its own language and direction, its own
  * summary and its topics. No picture and no count — neither is the
- * Collection's to state.
+ * Collection's to state. The title is the card's one stretched link; the
+ * topics sit above it as links of their own. A `feature` card — the newest
+ * Collection, opening the first page — is the same record set larger.
  */
 function CollectionCard({
   locale,
@@ -99,12 +111,14 @@ function CollectionCard({
   names,
   t,
   headingLevel,
+  feature,
 }: {
   readonly locale: Locale;
   readonly item: CollectionSummary;
   readonly names: Names;
   readonly t: CollectionsTranslator;
   readonly headingLevel: 'h2' | 'h3';
+  readonly feature: boolean;
 }) {
   const translation = translationFor(item, locale);
   const direction = directionOf(translation.languageCode);
@@ -114,20 +128,32 @@ function CollectionCard({
     return topic === undefined ? [] : [topic];
   });
   return (
-    <Panel as="li">
-      <article className="flex min-w-0 flex-col gap-3">
+    <li
+      className={`${CARD_SURFACE} border-t-4 border-t-[color:var(--color-accent-rule)] ${
+        feature ? 'gap-4 sm:col-span-2 sm:p-7' : ''
+      }`}
+    >
+      <article className="flex min-w-0 flex-1 flex-col gap-3">
+        <Eyebrow>{t('type')}</Eyebrow>
         <Heading
-          className="text-lg leading-snug font-semibold break-words"
+          className={`${
+            feature ? 'text-heading' : 'text-subheading'
+          } leading-snug font-semibold text-balance wrap-anywhere`}
           lang={translation.languageCode}
           dir={direction}
         >
-          <TextLink href={`/${locale}${collectionPathOf(item.slug)}`}>
+          <a
+            href={`/${locale}${collectionPathOf(item.slug)}`}
+            className={CARD_TITLE_LINK}
+          >
             {translation.title}
-          </TextLink>
+          </a>
         </Heading>
         {translation.excerpt === '' ? null : (
           <p
-            className="line-clamp-3 text-sm break-words text-[color:var(--color-foreground-muted)]"
+            className={`wrap-anywhere text-[color:var(--color-foreground-muted)] ${
+              feature ? 'text-lede line-clamp-4' : 'line-clamp-3 text-sm'
+            }`}
             lang={translation.languageCode}
             dir={direction}
           >
@@ -135,21 +161,18 @@ function CollectionCard({
           </p>
         )}
         {topics.length === 0 ? null : (
-          <ul className="flex flex-wrap gap-2" aria-label={t('topics')}>
-            {topics.map((topic) => (
-              <li key={topic.slug}>
-                <a
-                  href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}
-                  className="inline-flex min-h-8 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border)] px-2 text-xs"
-                >
-                  {topic.name}
-                </a>
-              </li>
-            ))}
-          </ul>
+          <div className={`${CARD_RAISED} mt-auto pt-1`}>
+            <TopicChips
+              label={t('topics')}
+              topics={topics.map((topic) => ({
+                href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+                text: topic.name,
+              }))}
+            />
+          </div>
         )}
       </article>
-    </Panel>
+    </li>
   );
 }
 
@@ -159,11 +182,14 @@ async function CollectionGrid({
   items,
   label,
   headingLevel,
+  feature = false,
 }: {
   readonly locale: Locale;
   readonly items: readonly CollectionSummary[];
   readonly label: string;
   readonly headingLevel: 'h2' | 'h3';
+  /** Open with the first card set larger — the first page of `/collections`. */
+  readonly feature?: boolean;
 }) {
   const t = await getTranslations({ locale, namespace: 'collections' });
   const names = await referenceNames(
@@ -171,8 +197,11 @@ async function CollectionGrid({
     locale,
   );
   return (
-    <ul className="grid gap-4 sm:grid-cols-2" aria-label={label}>
-      {items.map((item) => (
+    <ul
+      className="grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3"
+      aria-label={label}
+    >
+      {items.map((item, index) => (
         <CollectionCard
           key={item.slug}
           locale={locale}
@@ -180,6 +209,7 @@ async function CollectionGrid({
           names={names}
           t={t}
           headingLevel={headingLevel}
+          feature={feature && index === 0 && items.length > 1}
         />
       ))}
     </ul>
@@ -194,7 +224,8 @@ async function CollectionGrid({
  * `/collections` — every published Collection, newest publication first, twenty
  * to a page with `?offset=`. The order is Editorial's, with a deterministic
  * tie-breaker, so a page is the same page on every request. Every offset is
- * canonical to `/collections`.
+ * canonical to `/collections`. The newest opens the first page set larger — a
+ * position earned by date alone, never a "featured" claim.
  */
 export async function CollectionsPage({
   locale,
@@ -210,15 +241,18 @@ export async function CollectionsPage({
   const title = t('title');
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs label={trail.label} trail={[trail.home, { text: title }]} />
-        <Prose>
-          <PageHeading>{title}</PageHeading>
-          <p>{t('description')}</p>
-        </Prose>
+    <>
+      <LandingFrame
+        trailLabel={trail.label}
+        trail={[trail.home, { text: title }]}
+        title={title}
+        lede={t('description')}
+      >
+        <MetaRow items={KIND_ORDER.map((kind) => t(`kindsPlural.${kind}`))} />
+      </LandingFrame>
 
-        <section className="flex flex-col gap-4">
+      <Container>
+        <div className="flex flex-col gap-6 py-[var(--space-page)]">
           {page.items.length === 0 ? (
             <EmptyState>
               {offset > 0 ? (
@@ -236,6 +270,7 @@ export async function CollectionsPage({
               items={page.items}
               label={title}
               headingLevel="h2"
+              feature={offset === 0}
             />
           )}
           <Pagination
@@ -249,11 +284,14 @@ export async function CollectionsPage({
             previousLabel={t('previous')}
             nextLabel={t('next')}
           />
-        </section>
-      </div>
-    </Container>
+        </div>
+      </Container>
+    </>
   );
 }
+
+/** The kinds of record a Collection can gather, in the order the hero names them. */
+const KIND_ORDER = ['article', 'news', 'work', 'video'] as const;
 
 /* ===========================================================================
  * /collections/{slug}
@@ -265,39 +303,61 @@ export function collectionLocales(record: PublicCollection): Locale[] {
 }
 
 /**
- * ONE MEMBER: its type in words, then its owner's title linked to the owner's
- * canonical address. A long title wraps rather than widening the page.
+ * ONE MEMBER, AS A STEP IN THE SEQUENCE: its position (decorative — the
+ * ordered list already announces it), its type in words, then its owner's
+ * title as the card's one stretched link to the owner's canonical address. A
+ * long title wraps rather than widening the page.
  */
 function MemberItem({
   locale,
   kind,
   target,
+  position,
   t,
 }: {
   readonly locale: Locale;
   readonly kind: CollectionMemberKind;
   readonly target: CollectionMemberTarget;
+  readonly position: number;
   readonly t: CollectionsTranslator;
 }) {
   const title = memberTitle(target, locale);
   return (
-    <li className="flex min-w-0 flex-col gap-1 border-b border-[color:var(--color-border)] pb-3">
-      <span className="text-xs font-semibold tracking-wide text-[color:var(--color-action)] uppercase">
-        {t(`kinds.${kind}`)}
-      </span>
-      <span
-        className="min-w-0 font-medium wrap-anywhere"
-        dir="auto"
-        {...(title.languageCode === null ? {} : { lang: title.languageCode })}
-      >
-        <TextLink href={`/${locale}${collectionMemberPathOf(kind, target.slug)}`}>
-          {title.text}
-        </TextLink>
-      </span>
+    <li className={CARD_SURFACE}>
+      <div className="flex min-w-0 items-start gap-4">
+        <span
+          aria-hidden="true"
+          className="text-heading w-10 shrink-0 leading-none font-semibold text-[color:var(--color-accent)] tabular-nums"
+        >
+          {new Intl.NumberFormat(locale, { minimumIntegerDigits: 2 }).format(position)}
+        </span>
+        <span className="flex min-w-0 flex-col gap-1.5">
+          <span className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-foreground-muted)] uppercase">
+            {t(`kinds.${kind}`)}
+          </span>
+          <span
+            className="text-subheading min-w-0 font-semibold wrap-anywhere"
+            dir="auto"
+            {...(title.languageCode === null ? {} : { lang: title.languageCode })}
+          >
+            <a
+              href={`/${locale}${collectionMemberPathOf(kind, target.slug)}`}
+              className={CARD_TITLE_LINK}
+            >
+              {title.text}
+            </a>
+          </span>
+        </span>
+      </div>
     </li>
   );
 }
 
+/**
+ * A Collection's page reads as a curated sequence: its title and standfirst,
+ * the editor's introduction at a reading measure, then its members as numbered
+ * steps in the saved order, then who made it and what it is about.
+ */
 export async function CollectionDetailPage({
   locale,
   record,
@@ -342,18 +402,14 @@ export async function CollectionDetailPage({
 
   return (
     <Container>
-      <article className="flex flex-col gap-10 py-12">
+      <article className="flex flex-col gap-8 pt-6 pb-[var(--space-section)]">
         <Breadcrumbs
           label={trail.label}
           trail={[trail.home, trail.collections, { text: translation.title }]}
         />
 
-        <Prose>
-          <p>
-            <span className="text-xs font-semibold tracking-wide text-[color:var(--color-action)] uppercase">
-              {t('type')}
-            </span>
-          </p>
+        <header className="flex max-w-3xl flex-col gap-4 border-b border-[color:var(--color-border)] pb-8">
+          <Eyebrow>{t('type')}</Eyebrow>
           {translation.languageCode === locale ? null : (
             <Alert tone="info">
               {t('fallback', {
@@ -368,16 +424,16 @@ export async function CollectionDetailPage({
             lang={translation.languageCode}
             dir={direction}
           >
-            <h1 className="text-3xl leading-tight font-semibold tracking-tight break-words">
+            <h1 className="text-title font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere">
               {translation.title}
             </h1>
             {translation.excerpt === '' ? null : (
-              <p className="text-lg break-words text-[color:var(--color-foreground-muted)]">
+              <p className="text-lede max-w-[var(--measure-prose)] wrap-anywhere text-[color:var(--color-foreground-muted)]">
                 {translation.excerpt}
               </p>
             )}
           </div>
-        </Prose>
+        </header>
 
         <Prose>
           <div
@@ -388,10 +444,11 @@ export async function CollectionDetailPage({
           />
         </Prose>
 
-        <section className="flex flex-col gap-4" aria-labelledby="collection-items">
-          <h2 id="collection-items" className="text-xl font-semibold">
-            {t('itemsHeading')}
-          </h2>
+        <section
+          className="flex max-w-3xl flex-col gap-5"
+          aria-labelledby="collection-items"
+        >
+          <SectionHeader id="collection-items" heading={t('itemsHeading')} />
           {resolved.unavailable.size === 0 ? null : (
             <Alert tone="info">{t('itemsUnavailable')}</Alert>
           )}
@@ -400,13 +457,14 @@ export async function CollectionDetailPage({
               <EmptyState>{t('itemsNone')}</EmptyState>
             ) : null
           ) : (
-            <ol className="flex flex-col gap-3">
-              {available.map(({ kind, target }) => (
+            <ol className="flex list-none flex-col gap-3 p-0">
+              {available.map(({ kind, target }, index) => (
                 <MemberItem
                   key={memberToken({ kind, id: target.id })}
                   locale={locale}
                   kind={kind}
                   target={target}
+                  position={index + 1}
                   t={t}
                 />
               ))}
@@ -415,48 +473,48 @@ export async function CollectionDetailPage({
         </section>
 
         {credits.length === 0 && topics.length === 0 ? null : (
-          <section className="flex flex-col gap-3" aria-labelledby="collection-facts">
-            <h2 id="collection-facts" className="text-lg font-semibold">
-              {t('facts')}
-            </h2>
-            <dl className="grid gap-x-8 sm:grid-cols-2">
+          <div className="max-w-3xl">
+            <RecordSection id="collection-facts" heading={t('facts')}>
               {credits.length === 0 ? null : (
-                <DetailRow term={t('contributors')}>
-                  <ul className="flex flex-col gap-1">
-                    {credits.map(({ person, role }) => (
-                      <li key={`${person.slug}:${role}`} dir="auto">
-                        <TextLink
-                          href={`/${locale}/people/${encodeURIComponent(person.slug)}`}
-                        >
-                          {person.name}
-                        </TextLink>{' '}
-                        — {editorial(role as 'speaker')}
-                      </li>
-                    ))}
-                  </ul>
-                </DetailRow>
+                <dl className="flex flex-col">
+                  <DetailRow term={t('contributors')}>
+                    <ul className="flex flex-col gap-1">
+                      {credits.map(({ person, role }) => (
+                        <li key={`${person.slug}:${role}`} dir="auto">
+                          <TextLink
+                            href={`/${locale}/people/${encodeURIComponent(person.slug)}`}
+                          >
+                            {person.name}
+                          </TextLink>{' '}
+                          — {editorial(role as 'speaker')}
+                        </li>
+                      ))}
+                    </ul>
+                  </DetailRow>
+                </dl>
               )}
               {topics.length === 0 ? null : (
-                <DetailRow term={t('topics')}>
-                  <ul className="flex flex-wrap gap-x-4 gap-y-1">
-                    {topics.map((topic) => (
-                      <li key={topic.slug}>
-                        <TextLink
-                          href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}
-                        >
-                          {topic.name}
-                        </TextLink>
-                      </li>
-                    ))}
-                  </ul>
-                </DetailRow>
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs text-[color:var(--color-foreground-muted)]">
+                    {t('topics')}
+                  </p>
+                  <TopicChips
+                    label={t('topics')}
+                    topics={topics.map((topic) => ({
+                      href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+                      text: topic.name,
+                    }))}
+                  />
+                </div>
               )}
-            </dl>
-          </section>
+            </RecordSection>
+          </div>
         )}
 
         <p>
-          <TextLink href={`/${locale}/collections`}>{t('all')}</TextLink>
+          <ActionLink href={`/${locale}/collections`} tone="secondary">
+            {t('all')}
+          </ActionLink>
         </p>
 
         <BreadcrumbData
@@ -499,19 +557,18 @@ export async function CollectionTopicSection({
   if (page.items.length === 0) return null;
   const t = await getTranslations({ locale, namespace: 'collections' });
   return (
-    <section className="flex flex-col gap-4" aria-labelledby={headingId}>
-      <h2 id={headingId} className="text-lg font-semibold">
-        {heading}
-      </h2>
+    <section className="flex flex-col gap-5" aria-labelledby={headingId}>
+      <SectionHeader
+        id={headingId}
+        heading={heading}
+        action={{ href: `/${locale}/collections`, text: t('all') }}
+      />
       <CollectionGrid
         locale={locale}
         items={page.items}
         label={heading}
         headingLevel="h3"
       />
-      <p>
-        <TextLink href={`/${locale}/collections`}>{t('all')}</TextLink>
-      </p>
     </section>
   );
 }

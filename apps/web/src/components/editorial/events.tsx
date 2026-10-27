@@ -40,9 +40,18 @@ import {
 } from '@/components/editorial/event-presentation';
 import { translationFor } from '@/components/editorial/presentation';
 import { placeName } from '@/components/global/presentation';
+import {
+  CARD_RAISED,
+  CARD_SURFACE,
+  CARD_TITLE_LINK,
+  LandingFrame,
+  ListingIntro,
+  RecordSection,
+} from '@/components/editorial/frame';
 import { BreadcrumbData, Pagination } from '@/components/media/parts';
 import { GalleryCardGrid } from '@/components/media/photos';
 import {
+  ActionLink,
   Alert,
   Breadcrumbs,
   Button,
@@ -51,11 +60,12 @@ import {
   EmptyState,
   Field,
   FilterLink,
-  PageHeading,
   Panel,
   Prose,
+  SectionHeader,
   Select,
   TextLink,
+  TopicChips,
 } from '@/components/ui';
 import { directionOf } from '@/config/locale';
 import { isContentIndexable, serializeStructuredData } from '@/seo/metadata';
@@ -204,8 +214,53 @@ function CentreName({
 /** "Happening now", in words and never by colour alone. */
 function NowLabel({ t }: { readonly t: EventsTranslator }) {
   return (
-    <span className="rounded-[var(--radius-control)] border border-[color:var(--color-action)] px-2 py-0.5 text-xs font-semibold text-[color:var(--color-action)]">
+    <span className="inline-flex w-fit rounded-[var(--radius-control)] border border-[color:var(--color-action)] px-2 py-0.5 text-xs font-semibold text-[color:var(--color-action)]">
       {t('now')}
+    </span>
+  );
+}
+
+/**
+ * A calendar leaf: the month, the day and the weekday of an occurrence's
+ * INTENDED LOCAL start, read straight from the wall-clock time the editor
+ * stated (as `occurrenceWords` does), so it never shifts by a zone.
+ *
+ * DECORATIVE AND HIDDEN FROM ASSISTIVE TECHNOLOGY: the occurrence's `<time>`
+ * beside it already says the same thing in full, and a screen reader hearing
+ * "Jun 14 Sat" before every title would be noise.
+ */
+function DateLeaf({
+  local,
+  locale,
+  size = 'card',
+}: {
+  readonly local: string;
+  readonly locale: Locale;
+  readonly size?: 'card' | 'row';
+}) {
+  const wall = new Date(`${local}:00.000Z`);
+  const part = (options: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat(locale, { ...options, timeZone: 'UTC' }).format(wall);
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex shrink-0 flex-col items-center justify-center overflow-hidden rounded-[var(--radius-control)] border border-[color:var(--color-accent-rule)] bg-[color:var(--color-accent-surface)] text-center ${
+        size === 'card' ? 'w-16 py-2' : 'w-14 py-1.5'
+      }`}
+    >
+      <span className="text-caption font-semibold text-[color:var(--color-accent)] uppercase">
+        {part({ month: 'short' })}
+      </span>
+      <span
+        className={`leading-none font-semibold tabular-nums ${
+          size === 'card' ? 'text-2xl' : 'text-xl'
+        }`}
+      >
+        {part({ day: 'numeric' })}
+      </span>
+      <span className="text-caption text-[color:var(--color-foreground-muted)]">
+        {part({ weekday: 'short' })}
+      </span>
     </span>
   );
 }
@@ -215,10 +270,14 @@ function NowLabel({ t }: { readonly t: EventsTranslator }) {
  * ========================================================================= */
 
 /**
- * ONE CARD. The title in its own language and direction; the occurrence that
- * matters for this view — the next one ahead, or the last one held — in its
- * intended local time and zone; how many other dates it has; where it is held
- * when its Centre is public; its own summary and its topics. No picture.
+ * ONE CARD, DATE FIRST. A calendar leaf for the occurrence that matters for
+ * this view — the next one ahead, or the last one held — then the title in its
+ * own language and direction, that occurrence in its intended local time and
+ * zone, how many other dates it has, where it is held when its Centre is
+ * public, its own summary and its topics. No picture.
+ *
+ * The title is the card's one stretched link; the Centre and the topics sit
+ * above it as links of their own.
  */
 function EventCard({
   locale,
@@ -252,78 +311,80 @@ function EventCard({
     return topic === undefined ? [] : [topic];
   });
   return (
-    <Panel as="li">
-      <article className="flex min-w-0 flex-col gap-3">
-        {words === null ? null : (
-          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-            {ongoing ? <NowLabel t={t} /> : null}
-            <time dateTime={words.start} className="font-medium">
-              {words.text}
-            </time>
-            <span className="text-[color:var(--color-foreground-muted)]">
-              {words.zoneName}
-            </span>
-          </p>
+    <li className={CARD_SURFACE}>
+      <div className="flex min-w-0 flex-1 gap-4">
+        {lead === undefined ? null : (
+          <DateLeaf local={lead.startsLocal} locale={locale} />
         )}
-        <Heading
-          className="text-lg leading-snug font-semibold break-words"
-          lang={translation.languageCode}
-          dir={direction}
-        >
-          <TextLink href={`/${locale}${eventPathOf(item.slug)}`}>
-            {translation.title}
-          </TextLink>
-        </Heading>
-        {occurrences.length > 1 ? (
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('moreDates', { count: occurrences.length - 1 })}
-          </p>
-        ) : null}
-        {centre === null ? null : (
-          <p className="text-sm break-words">
-            <CentreName centre={centre} locale={locale} />
-            {centre.isVirtual ? (
-              <> — {t('virtual')}</>
-            ) : (
-              <>
-                {' — '}
-                <CentreLocality centre={centre} locale={locale} />
-              </>
-            )}
-          </p>
-        )}
-        {translation.excerpt === '' ? null : (
-          <p
-            className="line-clamp-3 text-sm break-words text-[color:var(--color-foreground-muted)]"
+        <article className="flex min-w-0 flex-1 flex-col gap-2.5">
+          {ongoing ? <NowLabel t={t} /> : null}
+          <Heading
+            className="text-subheading leading-snug font-semibold text-balance wrap-anywhere"
             lang={translation.languageCode}
             dir={direction}
           >
-            {translation.excerpt}
-          </p>
-        )}
-        {topics.length === 0 ? null : (
-          <ul className="flex flex-wrap gap-2" aria-label={t('topics')}>
-            {topics.map((topic) => (
-              <li key={topic.slug}>
-                <a
-                  href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}
-                  className="inline-flex min-h-8 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border)] px-2 text-xs"
-                >
-                  {topic.name}
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </article>
-    </Panel>
+            <a href={`/${locale}${eventPathOf(item.slug)}`} className={CARD_TITLE_LINK}>
+              {translation.title}
+            </a>
+          </Heading>
+          {words === null ? null : (
+            <p className="flex flex-col gap-0.5 text-sm">
+              <time dateTime={words.start} className="font-medium">
+                {words.text}
+              </time>
+              <span className="text-[color:var(--color-foreground-muted)]">
+                {words.zoneName}
+              </span>
+            </p>
+          )}
+          {occurrences.length > 1 ? (
+            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+              {t('moreDates', { count: occurrences.length - 1 })}
+            </p>
+          ) : null}
+          {centre === null ? null : (
+            <p className={`${CARD_RAISED} text-sm wrap-anywhere`}>
+              <CentreName centre={centre} locale={locale} />
+              {centre.isVirtual ? (
+                <> — {t('virtual')}</>
+              ) : (
+                <>
+                  {' — '}
+                  <CentreLocality centre={centre} locale={locale} />
+                </>
+              )}
+            </p>
+          )}
+          {translation.excerpt === '' ? null : (
+            <p
+              className="line-clamp-3 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+              lang={translation.languageCode}
+              dir={direction}
+            >
+              {translation.excerpt}
+            </p>
+          )}
+          {topics.length === 0 ? null : (
+            <div className={`${CARD_RAISED} mt-auto pt-1`}>
+              <TopicChips
+                label={t('topics')}
+                topics={topics.map((topic) => ({
+                  href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+                  text: topic.name,
+                }))}
+              />
+            </div>
+          )}
+        </article>
+      </div>
+    </li>
   );
 }
 
 /**
  * A grid of cards with their topic names and Centres resolved once — two
- * owner calls per page, never one per card. Also composed by a Centre page and
- * the topic hub.
+ * owner calls per page, never one per card. Also composed by the home page, a
+ * Centre page and the topic hub.
  */
 export async function EventGrid({
   locale,
@@ -347,7 +408,10 @@ export async function EventGrid({
   return (
     <>
       {centres === null ? <Alert tone="info">{t('centresUnavailable')}</Alert> : null}
-      <ul className="grid gap-4 sm:grid-cols-2" aria-label={label}>
+      <ul
+        className="grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2"
+        aria-label={label}
+      >
         {items.map((item) => (
           <EventCard
             key={item.slug}
@@ -378,7 +442,7 @@ export function WhenLinks({
 }) {
   return (
     <nav aria-label={t('whenLabel')}>
-      <ul className="flex flex-wrap gap-2">
+      <ul className="flex list-none flex-wrap gap-2 p-0">
         {(['upcoming', 'past'] as const).map((when) => (
           <li key={when}>
             <FilterLink href={path(when)} current={when === current}>
@@ -485,155 +549,165 @@ export async function EventsPage({
   const path = (offset: number) => eventsPath(locale, filter, offset);
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs label={trail.label} trail={[trail.home, { text: title }]} />
-        <Prose>
-          <PageHeading>{title}</PageHeading>
-          <p>{t('description')}</p>
-        </Prose>
+    <>
+      <LandingFrame
+        trailLabel={trail.label}
+        trail={[trail.home, { text: title }]}
+        title={title}
+        lede={t('description')}
+      >
         <WhenLinks
           current={filter.invalid ? null : filter.when}
           path={(when) => eventsPath(locale, { ...filter, when })}
           t={t}
         />
+      </LandingFrame>
 
-        <Panel>
-          <form
-            method="get"
-            action={`/${locale}/events`}
-            className="flex flex-col gap-4"
-            aria-label={t('filters.label')}
+      <Container>
+        <div className="grid gap-8 py-[var(--space-page)] lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-12">
+          {/* The place filter: beside the results on a wide screen, above them on a phone. */}
+          <div className="min-w-0">
+            <Panel>
+              <form
+                method="get"
+                action={`/${locale}/events`}
+                className="flex flex-col gap-4"
+                aria-label={t('filters.label')}
+              >
+                {filter.when === 'past' ? (
+                  <input type="hidden" name="when" value="past" />
+                ) : null}
+                {filter.centre !== null ? (
+                  <input type="hidden" name="centre" value={filter.centre} />
+                ) : null}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                  <Field
+                    id="events-country"
+                    label={t('filters.country')}
+                    {...(countries === null ? { help: t('filters.unavailable') } : {})}
+                  >
+                    {(props) => (
+                      <Select
+                        {...props}
+                        name="country"
+                        defaultValue={filter.country ?? ''}
+                        disabled={countries === null || countries.length === 0}
+                      >
+                        <option value="">{t('filters.anyCountry')}</option>
+                        {(countries ?? []).map((entry) => {
+                          const name = placeName(entry, locale);
+                          return (
+                            <option key={entry.id} value={entry.slug} lang={name.locale}>
+                              {name.text}
+                            </option>
+                          );
+                        })}
+                      </Select>
+                    )}
+                  </Field>
+                  <Field
+                    id="events-city"
+                    label={t('filters.city')}
+                    help={t(
+                      country === null ? 'filters.chooseCountry' : 'filters.cityHelp',
+                    )}
+                  >
+                    {(props) => (
+                      <Select
+                        {...props}
+                        name="city"
+                        defaultValue={filter.city ?? ''}
+                        disabled={country === null || cities.length === 0}
+                      >
+                        <option value="">{t('filters.anyCity')}</option>
+                        {cities.map((entry) => {
+                          const name = placeName(entry, locale);
+                          return (
+                            <option key={entry.id} value={entry.slug} lang={name.locale}>
+                              {name.text}
+                            </option>
+                          );
+                        })}
+                      </Select>
+                    )}
+                  </Field>
+                </div>
+                <div className="flex flex-wrap items-center gap-4">
+                  <Button type="submit">{t('filters.submit')}</Button>
+                  <TextLink
+                    href={eventsPath(locale, {
+                      ...filter,
+                      country: null,
+                      city: null,
+                      centre: null,
+                    })}
+                  >
+                    {t('filters.reset')}
+                  </TextLink>
+                </div>
+              </form>
+              {geography.status === 'narrowed' && geography.centre !== null ? (
+                <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[color:var(--color-border)] pt-4 text-sm">
+                  <span>{t('filters.atCentre')}</span>
+                  <CentreName centre={geography.centre} locale={locale} />
+                  <TextLink href={eventsPath(locale, { ...filter, centre: null })}>
+                    {t('filters.clearCentre')}
+                  </TextLink>
+                </p>
+              ) : null}
+            </Panel>
+          </div>
+
+          <section
+            className="flex min-w-0 flex-col gap-5"
+            aria-labelledby="events-results"
           >
-            {filter.when === 'past' ? (
-              <input type="hidden" name="when" value="past" />
-            ) : null}
-            {filter.centre !== null ? (
-              <input type="hidden" name="centre" value={filter.centre} />
-            ) : null}
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field
-                id="events-country"
-                label={t('filters.country')}
-                {...(countries === null ? { help: t('filters.unavailable') } : {})}
-              >
-                {(props) => (
-                  <Select
-                    {...props}
-                    name="country"
-                    defaultValue={filter.country ?? ''}
-                    disabled={countries === null || countries.length === 0}
-                  >
-                    <option value="">{t('filters.anyCountry')}</option>
-                    {(countries ?? []).map((entry) => {
-                      const name = placeName(entry, locale);
-                      return (
-                        <option key={entry.id} value={entry.slug} lang={name.locale}>
-                          {name.text}
-                        </option>
-                      );
-                    })}
-                  </Select>
+            <SectionHeader id="events-results" heading={t(`when.${filter.when}`)} />
+            {geography.status === 'invalid' ? (
+              <Alert tone="warning">{t('filters.invalid')}</Alert>
+            ) : geography.status === 'too-broad' ? (
+              <Alert tone="warning">{t('filters.tooBroad')}</Alert>
+            ) : geography.status === 'unavailable' ? (
+              <Alert tone="info">{t('filters.geographyUnavailable')}</Alert>
+            ) : page === null || page.items.length === 0 ? (
+              <EmptyState>
+                {!inventory ? (
+                  t('empty')
+                ) : filter.offset > 0 ? (
+                  <span className="flex flex-col gap-2">
+                    <span>{t('pageEmpty')}</span>
+                    <TextLink href={path(0)}>{t('firstPage')}</TextLink>
+                  </span>
+                ) : narrowed ? (
+                  t(`noMatch.${filter.when}`)
+                ) : (
+                  t(`none.${filter.when}`)
                 )}
-              </Field>
-              <Field
-                id="events-city"
-                label={t('filters.city')}
-                help={t(country === null ? 'filters.chooseCountry' : 'filters.cityHelp')}
-              >
-                {(props) => (
-                  <Select
-                    {...props}
-                    name="city"
-                    defaultValue={filter.city ?? ''}
-                    disabled={country === null || cities.length === 0}
-                  >
-                    <option value="">{t('filters.anyCity')}</option>
-                    {cities.map((entry) => {
-                      const name = placeName(entry, locale);
-                      return (
-                        <option key={entry.id} value={entry.slug} lang={name.locale}>
-                          {name.text}
-                        </option>
-                      );
-                    })}
-                  </Select>
-                )}
-              </Field>
-            </div>
-            <div className="flex flex-wrap items-center gap-4">
-              <Button type="submit">{t('filters.submit')}</Button>
-              <TextLink
-                href={eventsPath(locale, {
-                  ...filter,
-                  country: null,
-                  city: null,
-                  centre: null,
-                })}
-              >
-                {t('filters.reset')}
-              </TextLink>
-            </div>
-          </form>
-          {geography.status === 'narrowed' && geography.centre !== null ? (
-            <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-              <span>{t('filters.atCentre')}</span>
-              <CentreName centre={geography.centre} locale={locale} />
-              <TextLink href={eventsPath(locale, { ...filter, centre: null })}>
-                {t('filters.clearCentre')}
-              </TextLink>
-            </p>
-          ) : null}
-        </Panel>
-
-        <section className="flex flex-col gap-4" aria-labelledby="events-results">
-          <h2 id="events-results" className="text-xl font-semibold">
-            {t(`when.${filter.when}`)}
-          </h2>
-          {geography.status === 'invalid' ? (
-            <Alert tone="warning">{t('filters.invalid')}</Alert>
-          ) : geography.status === 'too-broad' ? (
-            <Alert tone="warning">{t('filters.tooBroad')}</Alert>
-          ) : geography.status === 'unavailable' ? (
-            <Alert tone="info">{t('filters.geographyUnavailable')}</Alert>
-          ) : page === null || page.items.length === 0 ? (
-            <EmptyState>
-              {!inventory ? (
-                t('empty')
-              ) : filter.offset > 0 ? (
-                <span className="flex flex-col gap-2">
-                  <span>{t('pageEmpty')}</span>
-                  <TextLink href={path(0)}>{t('firstPage')}</TextLink>
-                </span>
-              ) : narrowed ? (
-                t(`noMatch.${filter.when}`)
-              ) : (
-                t(`none.${filter.when}`)
-              )}
-            </EmptyState>
-          ) : (
-            <EventGrid
-              locale={locale}
-              items={page.items}
-              when={filter.when}
-              label={t(`when.${filter.when}`)}
-              headingLevel="h3"
-            />
-          )}
-          {page === null ? null : (
-            <Pagination
-              label={title}
-              previous={
-                filter.offset > 0 ? path(Math.max(0, filter.offset - EVENT_PAGE)) : null
-              }
-              next={page.more ? path(filter.offset + EVENT_PAGE) : null}
-              previousLabel={t('previous')}
-              nextLabel={t('next')}
-            />
-          )}
-        </section>
-      </div>
-    </Container>
+              </EmptyState>
+            ) : (
+              <EventGrid
+                locale={locale}
+                items={page.items}
+                when={filter.when}
+                label={t(`when.${filter.when}`)}
+                headingLevel="h3"
+              />
+            )}
+            {page === null ? null : (
+              <Pagination
+                label={title}
+                previous={
+                  filter.offset > 0 ? path(Math.max(0, filter.offset - EVENT_PAGE)) : null
+                }
+                next={page.more ? path(filter.offset + EVENT_PAGE) : null}
+                previousLabel={t('previous')}
+                nextLabel={t('next')}
+              />
+            )}
+          </section>
+        </div>
+      </Container>
+    </>
   );
 }
 
@@ -646,6 +720,12 @@ export function eventLocales(record: PublicEvent): Locale[] {
   return record.translations.map((row) => row.languageCode);
 }
 
+/**
+ * An Event's page, WHEN AND WHERE FIRST: the header says what it is and
+ * whether it is ahead, happening or held; directly beneath it, side by side on
+ * a wide screen, every occurrence and the public Centre it is held at; then the
+ * Event's own text at a reading measure, its photographs and its facts.
+ */
 export async function EventDetailPage({
   locale,
   record,
@@ -690,21 +770,21 @@ export async function EventDetailPage({
 
   return (
     <Container>
-      <article className="flex flex-col gap-10 py-12">
+      <article className="flex flex-col gap-8 pt-6 pb-[var(--space-section)]">
         <Breadcrumbs
           label={trail.label}
           trail={[trail.home, trail.events, { text: translation.title }]}
         />
 
-        <Prose>
-          <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="text-xs font-semibold tracking-wide text-[color:var(--color-action)] uppercase">
+        <header className="flex max-w-3xl flex-col gap-4 border-b border-[color:var(--color-border)] pb-8">
+          <p className="text-caption flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
               {t('type')}
             </span>
             {timing === 'ongoing' ? (
               <NowLabel t={t} />
             ) : (
-              <span className="text-sm text-[color:var(--color-foreground-muted)]">
+              <span className="text-[color:var(--color-foreground-muted)]">
                 {t(`status.${timing}`)}
               </span>
             )}
@@ -723,87 +803,91 @@ export async function EventDetailPage({
             lang={translation.languageCode}
             dir={direction}
           >
-            <h1 className="text-3xl leading-tight font-semibold tracking-tight break-words">
+            <h1 className="text-title font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere">
               {translation.title}
             </h1>
             {translation.excerpt === '' ? null : (
-              <p className="text-lg text-[color:var(--color-foreground-muted)]">
+              <p className="text-lede max-w-[var(--measure-prose)] text-[color:var(--color-foreground-muted)]">
                 {translation.excerpt}
               </p>
             )}
           </div>
-        </Prose>
+        </header>
 
-        <section className="flex flex-col gap-3" aria-labelledby="event-when">
-          <h2 id="event-when" className="text-xl font-semibold">
-            {t('whenHeading')}
-          </h2>
-          <ol className="flex flex-col gap-2">
-            {record.schedule.occurrences.map((occurrence) => {
-              const words = occurrenceWords(occurrence, record.schedule.timezone, locale);
-              const over =
-                (occurrence.endsAt ?? occurrence.startsAt).getTime() < now.getTime();
-              return (
-                <li
-                  key={words.start}
-                  className="flex flex-wrap items-baseline gap-x-3 gap-y-1"
-                >
-                  <time dateTime={words.start} className="font-medium">
-                    {words.text}
-                  </time>
-                  <span className="text-sm text-[color:var(--color-foreground-muted)]">
-                    {words.zoneName}
-                  </span>
-                  {over ? (
-                    <span className="text-sm text-[color:var(--color-foreground-muted)]">
-                      — {t('held')}
-                    </span>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ol>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('localTimeNote')}
-          </p>
-        </section>
+        <div className={`grid gap-6 ${record.centreId === null ? '' : 'md:grid-cols-2'}`}>
+          <Panel as="div">
+            <RecordSection id="event-when" heading={t('whenHeading')}>
+              <ol className="flex list-none flex-col gap-4 p-0">
+                {record.schedule.occurrences.map((occurrence) => {
+                  const words = occurrenceWords(
+                    occurrence,
+                    record.schedule.timezone,
+                    locale,
+                  );
+                  const over =
+                    (occurrence.endsAt ?? occurrence.startsAt).getTime() < now.getTime();
+                  return (
+                    <li key={words.start} className="flex min-w-0 items-start gap-3">
+                      <DateLeaf
+                        local={occurrence.startsLocal}
+                        locale={locale}
+                        size="row"
+                      />
+                      <span className="flex min-w-0 flex-col gap-0.5">
+                        <time dateTime={words.start} className="font-medium">
+                          {words.text}
+                        </time>
+                        <span className="text-sm text-[color:var(--color-foreground-muted)]">
+                          {words.zoneName}
+                          {over ? <> — {t('held')}</> : null}
+                        </span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+              <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                {t('localTimeNote')}
+              </p>
+            </RecordSection>
+          </Panel>
 
-        {record.centreId === null ? null : (
-          <section className="flex flex-col gap-3" aria-labelledby="event-where">
-            <h2 id="event-where" className="text-xl font-semibold">
-              {t('whereHeading')}
-            </h2>
-            {centres === null ? (
-              <Alert tone="info">{t('centresUnavailable')}</Alert>
-            ) : centre === null ? (
-              <p className="text-sm">{t('centreWithdrawn')}</p>
-            ) : (
-              <dl className="grid gap-x-8 sm:grid-cols-2">
-                <DetailRow term={t('centre')}>
-                  <CentreName centre={centre} locale={locale} />
-                </DetailRow>
-                {centre.isVirtual ? (
-                  <DetailRow term={t('place')}>{t('virtual')}</DetailRow>
+          {record.centreId === null ? null : (
+            <Panel as="div">
+              <RecordSection id="event-where" heading={t('whereHeading')}>
+                {centres === null ? (
+                  <Alert tone="info">{t('centresUnavailable')}</Alert>
+                ) : centre === null ? (
+                  <p className="text-sm">{t('centreWithdrawn')}</p>
                 ) : (
-                  <DetailRow term={t('place')}>
-                    <CentreLocality centre={centre} locale={locale} />
-                  </DetailRow>
+                  <dl className="flex flex-col">
+                    <DetailRow term={t('centre')}>
+                      <CentreName centre={centre} locale={locale} />
+                    </DetailRow>
+                    {centre.isVirtual ? (
+                      <DetailRow term={t('place')}>{t('virtual')}</DetailRow>
+                    ) : (
+                      <DetailRow term={t('place')}>
+                        <CentreLocality centre={centre} locale={locale} />
+                      </DetailRow>
+                    )}
+                    {centre.isVirtual || centreWords?.address == null ? null : (
+                      <DetailRow term={t('address')}>
+                        <address
+                          className="whitespace-pre-line not-italic wrap-anywhere"
+                          lang={centreWords.locale}
+                          dir={directionOf(centreWords.locale)}
+                        >
+                          {centreWords.address}
+                        </address>
+                      </DetailRow>
+                    )}
+                  </dl>
                 )}
-                {centre.isVirtual || centreWords?.address == null ? null : (
-                  <DetailRow term={t('address')}>
-                    <address
-                      className="whitespace-pre-line not-italic wrap-anywhere"
-                      lang={centreWords.locale}
-                      dir={directionOf(centreWords.locale)}
-                    >
-                      {centreWords.address}
-                    </address>
-                  </DetailRow>
-                )}
-              </dl>
-            )}
-          </section>
-        )}
+              </RecordSection>
+            </Panel>
+          )}
+        </div>
 
         <Prose>
           <div
@@ -815,31 +899,28 @@ export async function EventDetailPage({
         </Prose>
 
         {record.galleryIds.length === 0 ? null : (
-          <section className="flex flex-col gap-3" aria-labelledby="event-photographs">
-            <h2 id="event-photographs" className="text-xl font-semibold">
-              {t('photographs')}
-            </h2>
+          <RecordSection id="event-photographs" heading={t('photographs')}>
             {galleries === null ? (
               <Alert tone="info">{t('galleriesUnavailable')}</Alert>
             ) : galleries.length === 0 ? (
               <p className="text-sm">{t('galleriesWithdrawn')}</p>
             ) : (
               <p>
-                <TextLink href={`/${locale}${eventGalleryPathOf(record.slug)}`}>
+                <ActionLink
+                  href={`/${locale}${eventGalleryPathOf(record.slug)}`}
+                  tone="secondary"
+                >
                   {t('viewPhotographs', { count: galleries.length })}
-                </TextLink>
+                </ActionLink>
               </p>
             )}
-          </section>
+          </RecordSection>
         )}
 
         {credits.length === 0 && topics.length === 0 ? null : (
-          <section className="flex flex-col gap-3" aria-labelledby="event-facts">
-            <h2 id="event-facts" className="text-lg font-semibold">
-              {t('facts')}
-            </h2>
-            <dl className="grid gap-x-8 sm:grid-cols-2">
-              {credits.length === 0 ? null : (
+          <RecordSection id="event-facts" heading={t('facts')}>
+            {credits.length === 0 ? null : (
+              <dl className="flex flex-col">
                 <DetailRow term={t('contributors')}>
                   <ul className="flex flex-col gap-1">
                     {credits.map(({ person, role }) => (
@@ -854,28 +935,29 @@ export async function EventDetailPage({
                     ))}
                   </ul>
                 </DetailRow>
-              )}
-              {topics.length === 0 ? null : (
-                <DetailRow term={t('topics')}>
-                  <ul className="flex flex-wrap gap-x-4 gap-y-1">
-                    {topics.map((topic) => (
-                      <li key={topic.slug}>
-                        <TextLink
-                          href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}
-                        >
-                          {topic.name}
-                        </TextLink>
-                      </li>
-                    ))}
-                  </ul>
-                </DetailRow>
-              )}
-            </dl>
-          </section>
+              </dl>
+            )}
+            {topics.length === 0 ? null : (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs text-[color:var(--color-foreground-muted)]">
+                  {t('topics')}
+                </p>
+                <TopicChips
+                  label={t('topics')}
+                  topics={topics.map((topic) => ({
+                    href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+                    text: topic.name,
+                  }))}
+                />
+              </div>
+            )}
+          </RecordSection>
         )}
 
         <p>
-          <TextLink href={`/${locale}/events`}>{t('all')}</TextLink>
+          <ActionLink href={`/${locale}/events`} tone="secondary">
+            {t('all')}
+          </ActionLink>
         </p>
 
         <BreadcrumbData
@@ -926,36 +1008,46 @@ export async function EventGalleryPage({
   const title = t('galleryTitle');
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[
-            trail.home,
-            trail.events,
-            { href: eventHref, text: translation.title },
-            { text: title },
-          ]}
-        />
-        <Prose>
-          <PageHeading>{title}</PageHeading>
-          <p lang={translation.languageCode} dir={directionOf(translation.languageCode)}>
+    <>
+      <ListingIntro
+        trailLabel={trail.label}
+        trail={[
+          trail.home,
+          trail.events,
+          { href: eventHref, text: translation.title },
+          { text: title },
+        ]}
+        eyebrow={t('type')}
+        title={title}
+        lede={
+          <span
+            lang={translation.languageCode}
+            dir={directionOf(translation.languageCode)}
+          >
             {translation.title}
+          </span>
+        }
+      />
+      <Container>
+        <div className="flex flex-col gap-6 py-[var(--space-page)]">
+          <p className="max-w-[var(--measure-prose)] text-[color:var(--color-foreground-muted)]">
+            {t('galleryIntro')}
           </p>
-          <p>{t('galleryIntro')}</p>
-        </Prose>
-        {galleries === null ? (
-          <Alert tone="info">{t('galleriesUnavailable')}</Alert>
-        ) : galleries.length === 0 ? (
-          <EmptyState>{t('galleriesWithdrawn')}</EmptyState>
-        ) : (
-          <GalleryCardGrid locale={locale} galleries={galleries} label={title} />
-        )}
-        <p>
-          <TextLink href={eventHref}>{t('backToEvent')}</TextLink>
-        </p>
-      </div>
-    </Container>
+          {galleries === null ? (
+            <Alert tone="info">{t('galleriesUnavailable')}</Alert>
+          ) : galleries.length === 0 ? (
+            <EmptyState>{t('galleriesWithdrawn')}</EmptyState>
+          ) : (
+            <GalleryCardGrid locale={locale} galleries={galleries} label={title} />
+          )}
+          <p>
+            <ActionLink href={eventHref} tone="secondary">
+              {t('backToEvent')}
+            </ActionLink>
+          </p>
+        </div>
+      </Container>
+    </>
   );
 }
 
@@ -983,13 +1075,8 @@ export async function EventTopicSection({
   if (page.items.length === 0) return null;
   const t = await getTranslations({ locale, namespace: 'events' });
   return (
-    <section className="flex flex-col gap-4" aria-labelledby={headingId}>
-      <h2 id={headingId} className="text-lg font-semibold">
-        {heading}
-      </h2>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t(`when.${when}`)}
-      </p>
+    <section className="flex flex-col gap-5" aria-labelledby={headingId}>
+      <SectionHeader id={headingId} heading={heading} intro={t(`when.${when}`)} />
       <EventGrid
         locale={locale}
         items={page.items}

@@ -17,7 +17,7 @@ import sanitizeHtml from 'sanitize-html';
  */
 
 /** Recorded on every run and staged revision; bump when any output below changes. */
-export const NORMALIZER_VERSION = '29.1';
+export const NORMALIZER_VERSION = '30.1';
 
 const sha256Hex = (value: string): string =>
   createHash('sha256').update(value, 'utf8').digest('hex');
@@ -127,18 +127,37 @@ function anchorTransform(rewrite: HrefRewrite): sanitizeHtml.Transformer {
   };
 }
 
+/** Headings outside the h2–h4 range are re-levelled, never dropped with their words. */
+const HEADING_TRANSFORMS = Object.freeze({ h1: 'h2', h5: 'h4', h6: 'h4' });
+
 /** Without a link scope, an href survives only if it is already safe to store. */
 const keepSafeHref: HrefRewrite = (href) =>
   isSafeStoredHref(href.trim()) ? href.trim() : null;
 
 /**
- * THE ALLOWLIST, exactly (brief decision 7). Paragraph and list structure,
- * emphasis and links — nothing that executes, embeds, styles or submits. The
+ * THE ALLOWLIST, exactly. Paragraph, heading and list structure, quotation,
+ * emphasis and links — nothing that executes, embeds, styles or submits.
+ * Phase 30 admits section headings, because long-form legacy articles carry
+ * them: `h1` becomes `h2` (a record's own title is its only `h1`), and
+ * `h5`/`h6` become `h4`. The
  * scheme allowlist and `allowProtocolRelative: false` re-check every href the
  * transform lets through, so a mistake in one layer is caught by the other.
  */
 export const MIGRATION_SANITIZE_OPTIONS: sanitizeHtml.IOptions = Object.freeze({
-  allowedTags: ['p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'blockquote', 'a'],
+  allowedTags: [
+    'p',
+    'br',
+    'strong',
+    'em',
+    'ul',
+    'ol',
+    'li',
+    'blockquote',
+    'a',
+    'h2',
+    'h3',
+    'h4',
+  ],
   allowedAttributes: { a: ['href', 'rel'] },
   allowedSchemes: ['http', 'https'],
   allowedSchemesByTag: {},
@@ -150,6 +169,7 @@ export const MIGRATION_SANITIZE_OPTIONS: sanitizeHtml.IOptions = Object.freeze({
   enforceHtmlBoundary: false,
   parseStyleAttributes: false,
   transformTags: {
+    ...HEADING_TRANSFORMS,
     b: 'strong',
     i: 'em',
     a: anchorTransform(keepSafeHref),
@@ -169,6 +189,7 @@ export function sanitizeFragment(
   return sanitizeHtml(normalizeText(html), {
     ...MIGRATION_SANITIZE_OPTIONS,
     transformTags: {
+      ...HEADING_TRANSFORMS,
       b: 'strong',
       i: 'em',
       a: anchorTransform(rewrite),
@@ -199,7 +220,7 @@ const ENTITIES: Readonly<Record<string, string>> = Object.freeze({
   nbsp: ' ',
 });
 
-function decodeEntities(text: string): string {
+export function decodeEntities(text: string): string {
   return text.replace(
     /&(#x[0-9a-fA-F]{1,6}|#[0-9]{1,7}|[a-z]+);/g,
     (match, body: string) => {
@@ -231,7 +252,7 @@ export function plainText(html: string): string {
   for (const part of sanitizeFragment(html).split(/(<[^>]*>)/)) {
     if (part.startsWith('<')) {
       if (/^<br\b/.test(part)) text += '\n';
-      else if (/^<\/?(?:p|li|ul|ol|blockquote)\b/.test(part)) text += '\n\n';
+      else if (/^<\/?(?:p|li|ul|ol|blockquote|h2|h3|h4)\b/.test(part)) text += '\n\n';
       continue;
     }
     text += decodeEntities(part).replace(/[\t\n\f\r ]+/g, ' ');
@@ -268,6 +289,8 @@ export function slugFor(input: {
   readonly legacyIdentifier: string | null;
   readonly title: string;
   readonly fallbackSeed: string;
+  /** The kind's word for a digest slug (`video`, `book`, `news` …). */
+  readonly prefix?: string;
 }): string {
   for (const candidate of [input.legacyIdentifier, input.title]) {
     if (candidate === null) continue;
@@ -276,7 +299,7 @@ export function slugFor(input: {
   }
   const seed =
     input.legacyIdentifier ?? (input.title.length > 0 ? input.title : input.fallbackSeed);
-  return `video-${sha256Hex(seed).slice(0, 12)}`;
+  return `${input.prefix ?? 'video'}-${sha256Hex(seed).slice(0, 12)}`;
 }
 
 /* ===========================================================================

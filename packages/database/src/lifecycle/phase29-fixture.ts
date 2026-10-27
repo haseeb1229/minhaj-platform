@@ -321,7 +321,7 @@ export async function writePhase29Fixture(
       VALUES (N'${f.entryId}', N'${f.manifestId}', 0, N'${f.approvedId}', N'${f.recordId}');
     UPDATE [dbo].[MigrationPublishManifest] SET [state]=N'publishing', [publishedByUserId]=N'${f.publisherId}', [publishStartedAt]='${PUBLISHED}', [version]=2 WHERE [id]=N'${f.manifestId}';
     UPDATE [dbo].[MigrationManifestEntry] SET [state]=N'publishing', [version]=2 WHERE [id]=N'${f.entryId}';
-    UPDATE [dbo].[MigrationManifestEntry] SET [state]=N'published', [videoId]=N'${f.videoId}', [targetVersion]=1, [canonicalPath]=N'${a.path}', [publishedAt]='${PUBLISHED}', [version]=3 WHERE [id]=N'${f.entryId}';
+    UPDATE [dbo].[MigrationManifestEntry] SET [state]=N'published', [videoId]=N'${f.videoId}', [targetStage]=N'public', [targetVersion]=1, [canonicalPath]=N'${a.path}', [publishedAt]='${PUBLISHED}', [version]=3 WHERE [id]=N'${f.entryId}';
     UPDATE [dbo].[MigrationPublishManifest] SET [state]=N'published', [publishedAt]='${PUBLISHED}', [version]=3 WHERE [id]=N'${f.manifestId}';
     UPDATE [dbo].[MigrationRecord] SET [status]=N'published', [latestSnapshotId]=N'${f.heldSnapshotId}', [currentStagedRecordId]=N'${f.approvedId}', [version]=2, [updatedAt]='${PUBLISHED}' WHERE [id]=N'${f.recordId}';
     INSERT INTO [dbo].[MigrationLegacyMapping] ([id],[sourceId],[recordId],[legacyUrl],[legacyUrlDigest],[videoId],[canonicalPath],[state],[manifestEntryId],[createdAt],[createdByUserId])
@@ -751,12 +751,13 @@ export async function verifyRestoredPhase29(
        (SELECT STRING_AGG([name], N',') WITHIN GROUP (ORDER BY [name]) FROM sys.indexes
          WHERE [object_id] IN (${tables}) AND has_filter=1 AND is_unique=1) AS [filtered];`,
   );
-  // 17 CHECKs, 65 foreign keys none of which cascades, the 18 triggers and the
-  // three filtered keys, exactly as the migration creates them: a restore that
+  // 17 CHECKs, 75 foreign keys none of which cascades (Phase 29's sixty-five
+  // and Phase 30's ten typed target keys), the 18 triggers and the three
+  // filtered keys, exactly as the migrations create them: a restore that
   // silently lost one would otherwise read as "none untrusted".
   if (
     Number(counts?.checks ?? 0) !== 17 ||
-    Number(counts?.keys ?? 0) !== 65 ||
+    Number(counts?.keys ?? 0) !== 75 ||
     (counts?.triggers ?? '').split(',').sort().join(',') !== PHASE29_TRIGGERS ||
     (counts?.filtered ?? '').split(',').sort().join(',') !== PHASE29_FILTERED
   ) {

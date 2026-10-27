@@ -16,10 +16,12 @@ import { migrationFailure } from '@/contexts/migration-provenance';
 import type { FormActionState } from '../../(identity)/form-state';
 
 /**
- * The Migration administrative mutations (DELIVERY_PLAN.md Phase 29): fixture
- * sources, cancelling a run, review, duplicates, topic and legacy mappings,
- * errors and disappearances, asset rights, raw-evidence disposal, manifests
- * and promotions.
+ * The Migration administrative mutations (DELIVERY_PLAN.md Phases 29–30):
+ * fixture sources, cancelling a run, review (one revision, or a reviewer's
+ * selection from one page), duplicates, topic and legacy mappings, errors and
+ * disappearances, asset rights, raw-evidence disposal, manifests and
+ * promotions. An AUTHORISED source is never registered here: that is the
+ * operator command's door, with its written authorisation reference and date.
  *
  * EVERY ONE IS A CLASS-A SERVER ACTION, carrying the framework's Origin
  * protection and unreachable by GET, and each RE-RESOLVES THE SESSION AND
@@ -240,6 +242,70 @@ export async function reviewAction(
   }
   refreshed(actor.locale);
   return DONE;
+}
+
+/**
+ * What a reviewer's selection came to: how many revisions were decided, and
+ * each one left as it was with the refusal that names why. Identifiers and
+ * reason words only — never a title or a payload.
+ */
+export interface ReviewBatchState extends FormActionState {
+  readonly decided?: number;
+  readonly refused?: readonly {
+    readonly stagedRecordId: string;
+    readonly reason: string;
+  }[];
+}
+
+/**
+ * approve | reject a selection of staged revisions from one page, each at the
+ * version the reviewer was shown (`version-<id>`). Every item is decided,
+ * checked and audited by the service exactly as a single review is; one it
+ * refuses is reported, never forced. The decision is the button pressed.
+ */
+export async function reviewManyAction(
+  _state: ReviewBatchState,
+  form: FormData,
+): Promise<ReviewBatchState> {
+  const selected = form
+    .getAll('stagedRecordId')
+    .filter((value): value is string => typeof value === 'string');
+  if (selected.length === 0) return { status: 'error', failure: 'none-selected' };
+  const actor = await administer(form);
+  if ('refused' in actor) return actor.refused;
+  let outcome: {
+    readonly decided: number;
+    readonly refused: NonNullable<ReviewBatchState['refused']>;
+  };
+  try {
+    outcome = await migrationRuntime().decisions.reviewMany(
+      { accountId: actor.accountId },
+      {
+        decision: field(form, 'decision'),
+        note: textarea(form, 'note') ?? '',
+        items: selected.map((stagedRecordId) => ({
+          stagedRecordId,
+          expectedVersion: whole(form, `version-${stagedRecordId}`),
+        })),
+      },
+    );
+  } catch (error) {
+    const state = rejected(error, 'migration-review-batch');
+    // An outage stops the batch part-way: what was decided before it stands,
+    // so the page is refreshed and the reviewer is told to look again.
+    if (state.failure !== 'unavailable') return state;
+    refreshed(actor.locale);
+    return { status: 'error', failure: 'batch-interrupted' };
+  }
+  refreshed(actor.locale);
+  return outcome.refused.length === 0
+    ? { status: 'success', decided: outcome.decided, refused: [] }
+    : {
+        status: 'error',
+        failure: 'items-refused',
+        decided: outcome.decided,
+        refused: outcome.refused,
+      };
 }
 
 /** merge | distinct | reopen one duplicate candidate. */

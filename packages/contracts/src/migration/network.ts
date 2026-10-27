@@ -239,6 +239,42 @@ export function fixtureScopeIsSynthetic(
 }
 
 /**
+ * A real public DNS name an authorised source may name: lower-case labels of
+ * letters, digits and inner hyphens, at least two of them, ending in an
+ * ALPHABETIC top-level label — so never an IPv4 or IPv6 literal, never a
+ * single-label name like `localhost`, never `*.invalid`.
+ */
+export function isRealHostName(host: string): boolean {
+  return (
+    host.length <= 253 &&
+    /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(host) &&
+    !host.endsWith('.invalid')
+  );
+}
+
+/**
+ * Is this a REAL source's scope? The mirror of `fixtureScopeIsSynthetic`: at
+ * least one host, NO host under `*.fixture.invalid` (a fixture name never
+ * becomes a real one), and an `https` base URL — a site root path, no query —
+ * on one of those hosts. An export source has no base URL and no hosts.
+ */
+export function authorisedScopeIsReal(
+  baseUrl: string | null,
+  hosts: readonly string[],
+): boolean {
+  if (hosts.some((host) => isFixtureHost(host) || !isRealHostName(host))) return false;
+  if (baseUrl === null) return hosts.length === 0;
+  if (hosts.length === 0) return false;
+  const verdict = checkSourceUrl(baseUrl, hosts);
+  return (
+    verdict.ok &&
+    verdict.url.protocol === 'https:' &&
+    verdict.url.pathname.endsWith('/') &&
+    verdict.url.search === ''
+  );
+}
+
+/**
  * The canonical external key of a URL within a source: lower-case scheme and
  * host, no fragment, no default port, the path as served, and the query kept
  * (a legacy site may key records by query) with its parameters sorted.

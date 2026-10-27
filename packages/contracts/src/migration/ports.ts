@@ -1,5 +1,3 @@
-import type { Locale } from '../env/shared.ts';
-
 import type {
   AssetLicence,
   AssetVisibility,
@@ -15,6 +13,7 @@ import type {
   ManifestEntryState,
   ManifestState,
   MigrationContentKind,
+  MigrationPublishableKind,
   PersonalDataState,
   PromotionDestination,
   PromotionState,
@@ -27,11 +26,11 @@ import type {
   SourceAuthorityKind,
   SourcePolicy,
   SourceState,
-  StagedVideoPayload,
   TopicMappingState,
   ValidationIssue,
   ValidationState,
 } from './values.ts';
+import type { ParsedRecord, StagedPayload } from './payloads.ts';
 
 /**
  * The ports the Migration & Provenance context depends on (DOMAIN_MODEL.md
@@ -50,6 +49,26 @@ import type {
  * change it describes — never a raw body, never a payload, only identifiers
  * and states (SECURITY_BASELINE.md §13.4).
  */
+
+/**
+ * WHAT A PUBLICATION MADE, by the kind's TYPED identity. Persistence keeps it
+ * in that kind's own nullable foreign-key column (the SavedItem pattern) —
+ * never a `targetType` / `targetId` pair — so `kind` here only says which
+ * typed column `id` belongs in.
+ */
+export interface MigrationTargetRef {
+  readonly kind: MigrationPublishableKind;
+  readonly id: string;
+}
+
+/**
+ * How far into its owning domain a publication carried a record. `public`: the
+ * domain published it. `in-review`: the domain's own workflow requires a
+ * second person (Editorial refuses self-approval), so the record was delivered
+ * into that review and becomes public only by the domain's own decision.
+ */
+export const TARGET_STAGES = Object.freeze(['public', 'in-review'] as const);
+export type TargetStage = (typeof TARGET_STAGES)[number];
 
 /** An operator, identified by account only. Authority is asked live. */
 export interface MigrationActor {
@@ -419,6 +438,27 @@ export interface MigrationSourcePort {
     readonly now: Date;
   }): Promise<SourceRecord>;
 
+  /**
+   * Creates an AUTHORISED source, INACTIVE, with its hosts and its written
+   * authorisation reference and date. Audited `migration.source.registered`.
+   */
+  createAuthorisedSource(input: {
+    readonly id: string;
+    readonly key: string;
+    readonly name: string;
+    readonly contentKind: MigrationContentKind;
+    readonly baseUrl: string;
+    readonly hosts: readonly string[];
+    readonly defaultLanguageCode: string | null;
+    readonly policy: SourcePolicy;
+    readonly authorisationReference: string;
+    readonly authorisedOn: string;
+    readonly licensingEvidence: string | null;
+    readonly policyNotes: string | null;
+    readonly actorId: string;
+    readonly now: Date;
+  }): Promise<SourceRecord>;
+
   /** Changes what may change, at the expected version. Audited. */
   updateSource(input: {
     readonly id: string;
@@ -578,7 +618,8 @@ export interface ManifestEntryRecord {
   readonly stagedRecordId: string;
   readonly recordId: string;
   readonly state: ManifestEntryState;
-  readonly videoId: string | null;
+  readonly target: MigrationTargetRef | null;
+  readonly targetStage: TargetStage | null;
   readonly targetVersion: number | null;
   readonly canonicalPath: string | null;
   readonly refusal: string | null;
@@ -598,6 +639,18 @@ export interface PublishableEntry {
   readonly topicIds: readonly string[];
   /** Its record's legacy URL and every URL of records merged into it. */
   readonly legacyUrls: readonly { readonly recordId: string; readonly url: string }[];
+  /**
+   * The record's acquired assets a PERSON decided `public-eligible` — the only
+   * acquisitions a publisher may hand a target — by canonical source URL.
+   */
+  readonly assets: readonly PublishableAsset[];
+}
+
+export interface PublishableAsset {
+  readonly originalUrl: string;
+  readonly assetId: string;
+  readonly mediaType: string;
+  readonly checksum: string;
 }
 
 export interface MigrationPublicationPort {
@@ -643,7 +696,8 @@ export interface MigrationPublicationPort {
   recordPublished(input: {
     readonly entryId: string;
     readonly expectedVersion: number;
-    readonly videoId: string;
+    readonly target: MigrationTargetRef;
+    readonly targetStage: TargetStage;
     readonly targetVersion: number;
     readonly canonicalPath: string;
     readonly legacyUrls: readonly {
@@ -654,6 +708,13 @@ export interface MigrationPublicationPort {
     readonly actorId: string;
     readonly now: Date;
   }): Promise<void>;
+
+  /**
+   * What an ACTIVE legacy mapping of any source names for this legacy URL
+   * digest, or null — how one record's reference to another resolves: only
+   * once the other is published, never by a guess.
+   */
+  resolveLegacyTarget(legacyUrlDigest: string): Promise<MigrationTargetRef | null>;
 
   /** The target refused, or the approval was withdrawn. */
   recordRefused(input: {
@@ -1144,7 +1205,8 @@ export interface MigrationTopicPort {
 export type TargetPublication =
   | {
       readonly status: 'published';
-      readonly videoId: string;
+      readonly target: MigrationTargetRef;
+      readonly stage: TargetStage;
       readonly version: number;
       readonly canonicalPath: string;
     }
@@ -1175,9 +1237,13 @@ export interface TargetInspection {
 export interface MigrationPublicationTargetPort {
   supports(kind: MigrationContentKind): boolean;
   publish(input: {
-    readonly kind: MigrationContentKind;
-    readonly payload: StagedVideoPayload;
+    readonly kind: MigrationPublishableKind;
+    readonly payload: StagedPayload;
     readonly topicIds: readonly string[];
+    /** Rights-cleared acquisitions of this record, by canonical source URL. */
+    readonly assets: readonly PublishableAsset[];
+    /** Another migrated record's target, by its legacy URL — null until it is published. */
+    readonly resolve: (legacyUrl: string) => Promise<MigrationTargetRef | null>;
     readonly actor: MigrationActor;
     /**
      * True only when this entry was already in flight — an interrupted
@@ -1189,13 +1255,11 @@ export interface MigrationPublicationTargetPort {
   }): Promise<TargetPublication>;
   /** Asked as the publisher: the target's own read authority applies. */
   inspect(input: {
-    readonly kind: MigrationContentKind;
-    readonly videoId: string;
+    readonly target: MigrationTargetRef;
     readonly actor: MigrationActor;
   }): Promise<TargetInspection | null>;
   withdraw(input: {
-    readonly kind: MigrationContentKind;
-    readonly videoId: string;
+    readonly target: MigrationTargetRef;
     readonly expectedVersion: number;
     readonly actor: MigrationActor;
   }): Promise<TargetWithdrawal>;
@@ -1283,38 +1347,8 @@ export type RetrievedEvidence =
     }
   | { readonly kind: 'outcome'; readonly outcome: FetchOutcome };
 
-/** One parsed legacy record, BEFORE normalisation and sanitisation. */
-export interface ParsedVideo {
-  readonly kind: 'media.video';
-  readonly title: string;
-  readonly primaryLocale: Locale;
-  readonly languageCode: string | null;
-  readonly provider: string | null;
-  readonly providerReference: string | null;
-  /** Further localised words the page carries, each as the source wrote them. */
-  readonly labels: readonly {
-    readonly locale: Locale;
-    readonly title: string;
-    readonly descriptionHtml: string;
-  }[];
-  /** UNTRUSTED markup — sanitised by normalisation, never stored as is. */
-  readonly descriptionHtml: string;
-  readonly publishedOn: string | null;
-  readonly durationSeconds: number | null;
-  readonly legacyIdentifier: string | null;
-  readonly categories: readonly { readonly key: string; readonly label: string }[];
-  /** Every href the record carries, in document order. */
-  readonly links: readonly string[];
-  readonly assets: readonly {
-    readonly url: string;
-    readonly licence: AssetLicence;
-    readonly licenceEvidence: string | null;
-    readonly rightsHolder: string | null;
-  }[];
-}
-
 export type ParseResult =
-  | { readonly kind: 'parsed'; readonly record: ParsedVideo }
+  | { readonly kind: 'parsed'; readonly record: ParsedRecord }
   | { readonly kind: 'excluded'; readonly reason: string }
   | { readonly kind: 'failed'; readonly detail: string };
 

@@ -21,7 +21,7 @@ import { StepUpPrompt } from '../step-up';
 
 /**
  * What every Migration administration screen shares (DELIVERY_PLAN.md
- * Phase 29): the copy with a message for every refusal the context can give,
+ * Phases 29–30): the copy with a message for every refusal the context can give,
  * the bounded query readers, the pager, the hidden fields that make an act an
  * act on one version of one row, and the step-up prompt for exactly
  * `migration-publication`.
@@ -154,6 +154,7 @@ export async function adminMigrationCopy(locale: Locale) {
     duplicate: t('failure.duplicate'),
     'lease-lost': t('failure.leaseLost'),
     'host-refused': t('failure.hostRefused'),
+    'review-only-kind': t('failure.reviewOnlyKind'),
     unavailable: t('failure.unavailable'),
   };
   return {

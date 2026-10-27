@@ -5,7 +5,7 @@ import { getTranslations } from 'next-intl/server';
 import { requireOwnSession } from '@/composition/authorization';
 import { identityRuntime } from '@/composition/identity';
 import { requireLocale } from '@/config/route-locale';
-import { TextLink } from '@/components/ui';
+import { WorkspaceNav } from '@/components/workspace/workspace-nav';
 
 /**
  * The Media administration shell (ROUTE_MAP.md §7).
@@ -58,13 +58,20 @@ export default async function MediaAdminLayout({
   return (
     <>
       {held.has('media.read') ? (
-        <nav className="flex flex-wrap gap-4" aria-label={t('title')}>
-          {SURFACES.map((surface) => (
-            <TextLink key={surface.key} href={`/${locale}/admin/media/${surface.path}`}>
-              {t(`surface.${surface.key}`)}
-            </TextLink>
-          ))}
-        </nav>
+        <WorkspaceNav
+          label={t('title')}
+          variant="tabs"
+          groups={[
+            {
+              key: 'media',
+              links: SURFACES.map((surface) => ({
+                key: surface.key,
+                href: `/${locale}/admin/media/${surface.path}`,
+                text: t(`surface.${surface.key}`),
+              })),
+            },
+          ]}
+        />
       ) : null}
 
       <NextIntlClientProvider

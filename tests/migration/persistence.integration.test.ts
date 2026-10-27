@@ -1300,7 +1300,8 @@ live('Phase 29 Migration & Provenance persistence against real SQL Server', () =
     await world.publication.recordPublished({
       entryId: entry.entry.id,
       expectedVersion: claimed.version,
-      videoId,
+      target: { kind: 'media.video', id: videoId },
+      targetStage: 'public',
       targetVersion: 1,
       canonicalPath: `/watch/videos/non-migration-fixture-${videoId}`,
       legacyUrls: entry.legacyUrls.map((url) => ({ ...url, digest: sha(url.url) })),

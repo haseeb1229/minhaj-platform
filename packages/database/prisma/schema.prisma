@@ -1596,6 +1596,8 @@ model Article {
   @@index([state,updatedAt,id])
   @@index([state,publishedAt(sort: Desc),id])
   @@index([scheduleStatus,scheduledAt,id])
+  migrationMappings MigrationLegacyMapping[]
+  migrationEntries MigrationManifestEntry[]
 }
 model ArticleRevision {
   ownerId String @db.NVarChar(36)
@@ -1784,6 +1786,8 @@ model NewsArticle {
   @@index([state,updatedAt,id])
   @@index([state,publishedAt(sort: Desc),id])
   @@index([scheduleStatus,scheduledAt,id])
+  migrationMappings MigrationLegacyMapping[]
+  migrationEntries MigrationManifestEntry[]
 }
 model NewsArticleRevision {
   ownerId String @db.NVarChar(36)
@@ -2244,6 +2248,8 @@ model Work {
   savedItems SavedItem[]
   readingHistory ReadingHistory[]
   @@index([state, slug])
+  migrationMappings MigrationLegacyMapping[]
+  migrationEntries MigrationManifestEntry[]
 }
 model WorkLabel {
   workId String @db.NVarChar(36)
@@ -2570,6 +2576,8 @@ model Magazine {
   topics MagazineTopic[]
   issues MagazineIssue[]
   @@index([state, slug])
+  migrationMappings MigrationLegacyMapping[]
+  migrationEntries MigrationManifestEntry[]
 }
 model MagazineLabel {
   magazineId String @db.NVarChar(36)
@@ -2636,6 +2644,8 @@ model MagazineIssue {
   @@index([magazineId, state, publicationYear, id])
   @@index([state, publicationYear, slug])
   @@index([languageCode, publicationYear, id])
+  migrationMappings MigrationLegacyMapping[]
+  migrationEntries MigrationManifestEntry[]
 }
 model MagazineIssueLabel {
   magazineIssueId String @db.NVarChar(36)
@@ -6559,6 +6569,11 @@ model MigrationLegacyMapping {
   legacyUrl String @db.NVarChar(2000)
   legacyUrlDigest String @db.Char(64)
   videoId String? @db.NVarChar(36)
+  workId String? @db.NVarChar(36)
+  magazineId String? @db.NVarChar(36)
+  magazineIssueId String? @db.NVarChar(36)
+  newsArticleId String? @db.NVarChar(36)
+  articleId String? @db.NVarChar(36)
   canonicalPath String @db.NVarChar(400)
   /// active | disabled
   state String @db.NVarChar(16)
@@ -6571,6 +6586,11 @@ model MigrationLegacyMapping {
   source MigrationSource @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   record MigrationRecord @relation(fields: [recordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   video Video? @relation(fields: [videoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work Work? @relation(fields: [workId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  magazine Magazine? @relation(fields: [magazineId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  magazineIssue MagazineIssue? @relation(fields: [magazineIssueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  newsArticle NewsArticle? @relation(fields: [newsArticleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  article Article? @relation(fields: [articleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   entry MigrationManifestEntry? @relation(fields: [manifestEntryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   createdBy User @relation("MigrationMappingCreator", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   changedBy User? @relation("MigrationMappingChanger", fields: [changedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -6618,6 +6638,13 @@ model MigrationManifestEntry {
   /// pending | publishing | published | refused | rolled-back | rollback-refused
   state String @default("pending") @db.NVarChar(16)
   videoId String? @db.NVarChar(36)
+  workId String? @db.NVarChar(36)
+  magazineId String? @db.NVarChar(36)
+  magazineIssueId String? @db.NVarChar(36)
+  newsArticleId String? @db.NVarChar(36)
+  articleId String? @db.NVarChar(36)
+  /// public | in-review — how far the owning domain carried the record (Phase 30)
+  targetStage String? @db.NVarChar(16)
   targetVersion Int?
   canonicalPath String? @db.NVarChar(400)
   refusal String? @db.NVarChar(32)
@@ -6628,6 +6655,11 @@ model MigrationManifestEntry {
   staged MigrationStagedRecord @relation(fields: [stagedRecordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   record MigrationRecord @relation(fields: [recordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   video Video? @relation(fields: [videoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work Work? @relation(fields: [workId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  magazine Magazine? @relation(fields: [magazineId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  magazineIssue MagazineIssue? @relation(fields: [magazineIssueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  newsArticle NewsArticle? @relation(fields: [newsArticleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  article Article? @relation(fields: [articleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   legacyMappings MigrationLegacyMapping[]
   promotions MigrationPromotionEntry[]
   @@unique([manifestId, position], map: "MigrationManifestEntry_manifest_position_key")

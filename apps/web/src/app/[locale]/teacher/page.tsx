@@ -62,44 +62,48 @@ export default async function TeacherOverviewPage({
     <TeacherFrame title={t('title')} description={<p>{t('description')}</p>}>
       {accountZone === null ? <Alert tone="info">{t('common.noTimeZone')}</Alert> : null}
 
-      <section className="flex flex-col gap-3" aria-labelledby="overview-today">
-        <span id="overview-today">
-          <SectionHeading>{t('overview.today')}</SectionHeading>
-        </span>
-        {today.ok ? (
-          <Panel>
-            <p className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span className="font-medium">
-                {today.value.items.length === 0
-                  ? t('overview.todayNone')
-                  : t('overview.todayCount', { count: String(today.value.items.length) })}
-              </span>
-              <TextLink href={`/${locale}/teacher/classes/today`}>
-                {t('overview.todayLink')}
-              </TextLink>
-            </p>
-          </Panel>
-        ) : (
-          <Alert tone="error">{t('overview.unavailable')}</Alert>
-        )}
-      </section>
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
+        <section className="flex flex-col gap-3" aria-labelledby="overview-today">
+          <span id="overview-today">
+            <SectionHeading>{t('overview.today')}</SectionHeading>
+          </span>
+          {today.ok ? (
+            <Panel>
+              <p className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span className="font-medium">
+                  {today.value.items.length === 0
+                    ? t('overview.todayNone')
+                    : t('overview.todayCount', {
+                        count: String(today.value.items.length),
+                      })}
+                </span>
+                <TextLink href={`/${locale}/teacher/classes/today`}>
+                  {t('overview.todayLink')}
+                </TextLink>
+              </p>
+            </Panel>
+          ) : (
+            <Alert tone="error">{t('overview.unavailable')}</Alert>
+          )}
+        </section>
 
-      <section className="flex flex-col gap-3" aria-labelledby="overview-next">
-        <span id="overview-next">
-          <SectionHeading>{t('overview.next')}</SectionHeading>
-        </span>
-        {!upcoming.ok ? (
-          <Alert tone="error">{t('overview.unavailable')}</Alert>
-        ) : next === undefined ? (
-          <Panel>
-            <p>{t('overview.nextNone')}</p>
-          </Panel>
-        ) : (
-          <ul className="flex flex-col gap-3" aria-label={t('overview.next')}>
-            <SessionCard view={next} locale={locale} accountZone={accountZone} t={t} />
-          </ul>
-        )}
-      </section>
+        <section className="flex flex-col gap-3" aria-labelledby="overview-next">
+          <span id="overview-next">
+            <SectionHeading>{t('overview.next')}</SectionHeading>
+          </span>
+          {!upcoming.ok ? (
+            <Alert tone="error">{t('overview.unavailable')}</Alert>
+          ) : next === undefined ? (
+            <Panel>
+              <p>{t('overview.nextNone')}</p>
+            </Panel>
+          ) : (
+            <ul className="flex flex-col gap-3" aria-label={t('overview.next')}>
+              <SessionCard view={next} locale={locale} accountZone={accountZone} t={t} />
+            </ul>
+          )}
+        </section>
+      </div>
 
       <section className="flex flex-col gap-3" aria-labelledby="overview-pending">
         <span id="overview-pending">

@@ -1,4 +1,5 @@
 import { getTranslations } from 'next-intl/server';
+import type { ReactNode } from 'react';
 
 import type { Locale } from '@minhaj/contracts';
 import {
@@ -22,16 +23,19 @@ import { EventGrid, WhenLinks } from '@/components/editorial/events';
 import { NewsGrid } from '@/components/editorial/news';
 import { BreadcrumbData, Pagination } from '@/components/media/parts';
 import {
+  ActionLink,
   Alert,
-  Breadcrumbs,
-  Container,
   DetailRow,
   EmptyState,
+  PageHero,
+  Panel,
   Prose,
+  SectionHeader,
   TextLink,
 } from '@/components/ui';
 import { directionOf } from '@/config/locale';
 import { paragraphsOf } from '@/components/library/scholarly-presentation';
+import { DirectoryBody, DirectoryCrumbs, RecordHeader } from './directory';
 import {
   centreWords,
   placeLocales,
@@ -176,12 +180,14 @@ function ContactValue({
 function ContactList({
   contacts,
   t,
+  columns = 2,
 }: {
   readonly contacts: readonly CentreContact[];
   readonly t: GlobalTranslator;
+  readonly columns?: 1 | 2;
 }) {
   return (
-    <dl className="grid gap-x-8 sm:grid-cols-2">
+    <dl className={`grid gap-x-8 ${columns === 2 ? 'sm:grid-cols-2' : ''}`}>
       {contacts.map((contact, index) => (
         <DetailRow
           key={`${contact.channel}-${String(index)}`}
@@ -191,6 +197,56 @@ function ContactList({
         </DetailRow>
       ))}
     </dl>
+  );
+}
+
+/**
+ * One of the Centre's fact cards — a labelled section on the raised surface,
+ * so Location and Contact details sit side by side as the two things a person
+ * looking for a Centre came to find.
+ */
+function FactCard({
+  id,
+  heading,
+  children,
+}: {
+  readonly id: string;
+  readonly heading: string;
+  readonly children: ReactNode;
+}) {
+  return (
+    <section
+      aria-labelledby={id}
+      className="flex min-w-0 flex-col gap-3 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] border-t-4 border-t-[color:var(--color-accent-rule)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]"
+    >
+      <h2 id={id} className="text-subheading font-semibold">
+        {heading}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+/** A link that names where it goes, at the foot of a section. */
+function MoreLink({
+  href,
+  children,
+}: {
+  readonly href: string;
+  readonly children: ReactNode;
+}) {
+  return (
+    <p>
+      <a
+        href={href}
+        className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-[color:var(--color-action)] underline-offset-4 hover:underline active:text-[color:var(--color-action-hover)]"
+      >
+        {children}
+        <span aria-hidden="true" className="inline-block rtl:-scale-x-100">
+          →
+        </span>
+      </a>
+    </p>
   );
 }
 
@@ -215,127 +271,129 @@ export async function CentreDetailPage({
   ]);
 
   return (
-    <Container>
-      <article className="flex flex-col gap-10 py-12">
-        <Breadcrumbs label={trail.label} trail={[...trail.base, { text: trail.name }]} />
-        <Prose>
-          <h1
-            className="text-3xl font-semibold tracking-tight wrap-anywhere"
-            lang={trail.nameLocale}
-            dir={direction}
-          >
-            {trail.name}
-          </h1>
-          {centre.isVirtual ? (
-            <p>
-              <span className="font-semibold">{t('centre.virtual')}</span> —{' '}
-              {t('centre.virtualBody')}
-            </p>
-          ) : null}
-          {words?.description == null
-            ? null
-            : paragraphsOf(words.description).map((paragraph, index) => (
-                <p key={index} lang={words.locale} dir={direction}>
-                  {paragraph}
-                </p>
-              ))}
-        </Prose>
+    <article>
+      <DirectoryCrumbs
+        label={trail.label}
+        trail={[...trail.base, { text: trail.name }]}
+      />
+      <RecordHeader
+        eyebrow={t('centre.eyebrow')}
+        name={trail.name}
+        nameLocale={trail.nameLocale}
+      >
+        {centre.isVirtual ? (
+          <p className="text-[color:var(--color-foreground-muted)]">
+            <span className="font-semibold text-[color:var(--color-foreground)]">
+              {t('centre.virtual')}
+            </span>{' '}
+            — {t('centre.virtualBody')}
+          </p>
+        ) : null}
+        {words?.description == null ? null : (
+          <Prose>
+            {paragraphsOf(words.description).map((paragraph, index) => (
+              <p key={index} lang={words.locale} dir={direction}>
+                {paragraph}
+              </p>
+            ))}
+          </Prose>
+        )}
+      </RecordHeader>
 
-        <section className="flex flex-col gap-3" aria-labelledby="centre-facts">
-          <h2 id="centre-facts" className="text-xl font-semibold">
-            {t('centre.facts')}
-          </h2>
-          <dl className="grid gap-x-8 sm:grid-cols-2">
-            <DetailRow term={t('centre.country')}>
-              <PlaceLink
-                place={centre.country}
-                href={globalPaths.country(locale, centre.country.slug)}
-                locale={locale}
-              />
-            </DetailRow>
-            {centre.region === null ? null : (
-              <DetailRow term={t('centre.region')}>
+      <DirectoryBody>
+        <div className="grid grid-cols-1 gap-4 *:min-w-0 md:grid-cols-2">
+          <FactCard id="centre-facts" heading={t('centre.facts')}>
+            <dl className="flex flex-col">
+              <DetailRow term={t('centre.country')}>
                 <PlaceLink
-                  place={centre.region}
-                  href={globalPaths.region(
-                    locale,
-                    centre.country.slug,
-                    centre.region.slug,
-                  )}
+                  place={centre.country}
+                  href={globalPaths.country(locale, centre.country.slug)}
                   locale={locale}
                 />
               </DetailRow>
-            )}
-            {centre.city === null ? null : (
-              <DetailRow term={t('centre.city')}>
-                <PlaceLink
-                  place={centre.city}
-                  href={globalPaths.city(locale, centre.country.slug, centre.city.slug)}
-                  locale={locale}
-                />
-              </DetailRow>
-            )}
-            {words?.address == null ? null : (
-              <DetailRow term={t('centre.address')}>
-                <address
-                  className="whitespace-pre-line not-italic wrap-anywhere"
-                  lang={words.locale}
-                  dir={direction}
-                >
-                  {words.address}
-                </address>
-              </DetailRow>
-            )}
-            {centre.coordinates === null ? null : (
-              <DetailRow term={t('centre.coordinates')}>
-                <span dir="ltr">
-                  {t('centre.latitude')} {centre.coordinates.latitude},{' '}
-                  {t('centre.longitude')} {centre.coordinates.longitude}
-                </span>
-              </DetailRow>
-            )}
-          </dl>
-        </section>
-
-        {centre.servedCities.length === 0 ? null : (
-          <section className="flex flex-col gap-3" aria-labelledby="centre-served">
-            <h2 id="centre-served" className="text-xl font-semibold">
-              {t('centre.served')}
-            </h2>
-            <ul className="flex flex-wrap gap-x-6 gap-y-2">
-              {centre.servedCities.map((city) => (
-                <li key={city.id}>
+              {centre.region === null ? null : (
+                <DetailRow term={t('centre.region')}>
                   <PlaceLink
-                    place={city}
-                    href={globalPaths.city(locale, centre.country.slug, city.slug)}
+                    place={centre.region}
+                    href={globalPaths.region(
+                      locale,
+                      centre.country.slug,
+                      centre.region.slug,
+                    )}
                     locale={locale}
                   />
-                </li>
-              ))}
+                </DetailRow>
+              )}
+              {centre.city === null ? null : (
+                <DetailRow term={t('centre.city')}>
+                  <PlaceLink
+                    place={centre.city}
+                    href={globalPaths.city(locale, centre.country.slug, centre.city.slug)}
+                    locale={locale}
+                  />
+                </DetailRow>
+              )}
+              {words?.address == null ? null : (
+                <DetailRow term={t('centre.address')}>
+                  <address
+                    className="whitespace-pre-line not-italic wrap-anywhere"
+                    lang={words.locale}
+                    dir={direction}
+                  >
+                    {words.address}
+                  </address>
+                </DetailRow>
+              )}
+              {centre.coordinates === null ? null : (
+                <DetailRow term={t('centre.coordinates')}>
+                  <span dir="ltr">
+                    {t('centre.latitude')} {centre.coordinates.latitude},{' '}
+                    {t('centre.longitude')} {centre.coordinates.longitude}
+                  </span>
+                </DetailRow>
+              )}
+            </dl>
+          </FactCard>
+
+          <FactCard id="centre-contacts" heading={t('centre.contacts')}>
+            {centre.contacts.length === 0 ? (
+              <EmptyState>{t('contact.empty')}</EmptyState>
+            ) : (
+              <ContactList contacts={centre.contacts} t={t} columns={1} />
+            )}
+            <div className="mt-auto">
+              <MoreLink href={globalPaths.centreContact(locale, centre.slug)}>
+                {t('centre.contactPage')}
+              </MoreLink>
+            </div>
+          </FactCard>
+        </div>
+
+        {centre.servedCities.length === 0 ? null : (
+          <section className="flex flex-col gap-5" aria-labelledby="centre-served">
+            <SectionHeader id="centre-served" heading={t('centre.served')} />
+            <ul className="flex list-none flex-wrap gap-2 p-0">
+              {centre.servedCities.map((city) => {
+                const name = placeName(city, locale);
+                return (
+                  <li key={city.id} className="min-w-0">
+                    <a
+                      href={globalPaths.city(locale, centre.country.slug, city.slug)}
+                      lang={name.locale}
+                      dir={directionOf(name.locale)}
+                      className="inline-flex min-h-11 items-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] px-4 text-sm wrap-anywhere no-underline transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--color-accent)] hover:bg-[color:var(--color-accent-surface)] active:bg-[color:var(--color-accent-rule)]"
+                    >
+                      {name.text}
+                    </a>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}
 
-        <section className="flex flex-col gap-3" aria-labelledby="centre-contacts">
-          <h2 id="centre-contacts" className="text-xl font-semibold">
-            {t('centre.contacts')}
-          </h2>
-          {centre.contacts.length === 0 ? (
-            <EmptyState>{t('contact.empty')}</EmptyState>
-          ) : (
-            <ContactList contacts={centre.contacts} t={t} />
-          )}
-          <p>
-            <TextLink href={globalPaths.centreContact(locale, centre.slug)}>
-              {t('centre.contactPage')}
-            </TextLink>
-          </p>
-        </section>
-
-        <section className="flex flex-col gap-4" aria-labelledby="centre-news">
-          <h2 id="centre-news" className="text-xl font-semibold">
-            {t('centre.news')}
-          </h2>
+        <section className="flex flex-col gap-5" aria-labelledby="centre-news">
+          <SectionHeader id="centre-news" heading={t('centre.news')} />
           {news === null ? (
             <Alert tone="info">{t('centre.newsUnavailable')}</Alert>
           ) : news.items.length === 0 ? (
@@ -349,19 +407,15 @@ export async function CentreDetailPage({
                 showType={false}
                 headingLevel="h3"
               />
-              <p>
-                <TextLink href={globalPaths.centreNews(locale, centre.slug)}>
-                  {t('centre.allNews')}
-                </TextLink>
-              </p>
+              <MoreLink href={globalPaths.centreNews(locale, centre.slug)}>
+                {t('centre.allNews')}
+              </MoreLink>
             </>
           )}
         </section>
 
-        <section className="flex flex-col gap-4" aria-labelledby="centre-events">
-          <h2 id="centre-events" className="text-xl font-semibold">
-            {t('centre.events')}
-          </h2>
+        <section className="flex flex-col gap-5" aria-labelledby="centre-events">
+          <SectionHeader id="centre-events" heading={t('centre.events')} />
           {events === null ? (
             <Alert tone="info">{t('centre.eventsUnavailable')}</Alert>
           ) : events.items.length === 0 ? (
@@ -375,24 +429,52 @@ export async function CentreDetailPage({
               headingLevel="h3"
             />
           )}
-          <p>
-            <TextLink href={globalPaths.centreEvents(locale, centre.slug)}>
-              {t('centre.allEvents')}
-            </TextLink>
-          </p>
+          <MoreLink href={globalPaths.centreEvents(locale, centre.slug)}>
+            {t('centre.allEvents')}
+          </MoreLink>
         </section>
+      </DirectoryBody>
 
-        <BreadcrumbData
-          contentLocales={placeLocales(centre)}
-          trail={[
-            { name: trail.shellHome, path: `/${trail.nameLocale}` },
-            { name: t('title'), path: globalPaths.home(trail.nameLocale) },
-            { name: t('sections.centres'), path: globalPaths.centres(trail.nameLocale) },
-            { name: trail.name, path: globalPaths.centre(trail.nameLocale, centre.slug) },
-          ]}
-        />
-      </article>
-    </Container>
+      <BreadcrumbData
+        contentLocales={placeLocales(centre)}
+        trail={[
+          { name: trail.shellHome, path: `/${trail.nameLocale}` },
+          { name: t('title'), path: globalPaths.home(trail.nameLocale) },
+          { name: t('sections.centres'), path: globalPaths.centres(trail.nameLocale) },
+          { name: trail.name, path: globalPaths.centre(trail.nameLocale, centre.slug) },
+        ]}
+      />
+    </article>
+  );
+}
+
+/**
+ * The opening band of one of a Centre's own pages: its title, which names the
+ * Centre and so is resolved by direction rather than by the interface, a lede,
+ * and the way back to the Centre.
+ */
+function CentreSubpageHero({
+  eyebrow,
+  title,
+  lede,
+  back,
+}: {
+  readonly eyebrow: string;
+  readonly title: string;
+  readonly lede: string;
+  readonly back: { readonly href: string; readonly text: string };
+}) {
+  return (
+    <PageHero
+      eyebrow={eyebrow}
+      title={<span dir="auto">{title}</span>}
+      lede={lede}
+      actions={
+        <ActionLink href={back.href} tone="secondary">
+          <span dir="auto">{back.text}</span>
+        </ActionLink>
+      }
+    />
   );
 }
 
@@ -418,49 +500,49 @@ export async function CentreNewsPage({
   const title = t('centreNews.title', { centre: trail.name });
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[
-            ...trail.base,
-            { href: globalPaths.centre(locale, centre.slug), text: trail.name },
-            { text: t('centre.news') },
-          ]}
-        />
-        <Prose>
-          <h1 className="text-3xl font-semibold tracking-tight wrap-anywhere" dir="auto">
-            {title}
-          </h1>
-          <p>{t('centreNews.intro')}</p>
-        </Prose>
-        {page === null ? (
-          <Alert tone="info">{t('centre.newsUnavailable')}</Alert>
-        ) : page.items.length === 0 ? (
-          <EmptyState>{offset > 0 ? t('pageEmpty') : t('centre.newsEmpty')}</EmptyState>
-        ) : (
-          <NewsGrid locale={locale} items={page.items} label={title} showType={false} />
-        )}
-        {page === null ? null : (
-          <Pagination
-            label={title}
-            previous={
-              offset > 0
-                ? withQuery(path, { offset: Math.max(0, offset - NEWS_PAGE) })
-                : null
-            }
-            next={page.more ? withQuery(path, { offset: offset + NEWS_PAGE }) : null}
-            previousLabel={news('previous')}
-            nextLabel={news('next')}
-          />
-        )}
-        <p>
-          <TextLink href={globalPaths.centre(locale, centre.slug)}>
-            {t('centreNews.back', { centre: trail.name })}
-          </TextLink>
-        </p>
-      </div>
-    </Container>
+    <>
+      <DirectoryCrumbs
+        label={trail.label}
+        trail={[
+          ...trail.base,
+          { href: globalPaths.centre(locale, centre.slug), text: trail.name },
+          { text: t('centre.news') },
+        ]}
+      />
+      <CentreSubpageHero
+        eyebrow={t('centre.eyebrow')}
+        title={title}
+        lede={t('centreNews.intro')}
+        back={{
+          href: globalPaths.centre(locale, centre.slug),
+          text: t('centreNews.back', { centre: trail.name }),
+        }}
+      />
+      <DirectoryBody>
+        <div className="flex flex-col gap-6">
+          {page === null ? (
+            <Alert tone="info">{t('centre.newsUnavailable')}</Alert>
+          ) : page.items.length === 0 ? (
+            <EmptyState>{offset > 0 ? t('pageEmpty') : t('centre.newsEmpty')}</EmptyState>
+          ) : (
+            <NewsGrid locale={locale} items={page.items} label={title} showType={false} />
+          )}
+          {page === null ? null : (
+            <Pagination
+              label={title}
+              previous={
+                offset > 0
+                  ? withQuery(path, { offset: Math.max(0, offset - NEWS_PAGE) })
+                  : null
+              }
+              next={page.more ? withQuery(path, { offset: offset + NEWS_PAGE }) : null}
+              previousLabel={news('previous')}
+              nextLabel={news('next')}
+            />
+          )}
+        </div>
+      </DirectoryBody>
+    </>
   );
 }
 
@@ -495,48 +577,48 @@ export async function CentreEventsPage({
     withQuery(path, { when: target === 'past' ? 'past' : null, offset: to });
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[
-            ...trail.base,
-            { href: globalPaths.centre(locale, centre.slug), text: trail.name },
-            { text: t('centre.events') },
-          ]}
-        />
-        <Prose>
-          <h1 className="text-3xl font-semibold tracking-tight wrap-anywhere" dir="auto">
-            {title}
-          </h1>
-          <p>{t('centreEvents.intro')}</p>
-        </Prose>
-        <WhenLinks current={when} path={(target) => at(target, 0)} t={events} />
-        {page === null ? (
-          <Alert tone="info">{t('centre.eventsUnavailable')}</Alert>
-        ) : page.items.length === 0 ? (
-          <EmptyState>
-            {offset > 0 ? t('pageEmpty') : events(`centreNone.${when}`)}
-          </EmptyState>
-        ) : (
-          <EventGrid locale={locale} items={page.items} when={when} label={title} />
-        )}
-        {page === null ? null : (
-          <Pagination
-            label={title}
-            previous={offset > 0 ? at(when, Math.max(0, offset - EVENT_PAGE)) : null}
-            next={page.more ? at(when, offset + EVENT_PAGE) : null}
-            previousLabel={events('previous')}
-            nextLabel={events('next')}
-          />
-        )}
-        <p>
-          <TextLink href={globalPaths.centre(locale, centre.slug)}>
-            {t('centreNews.back', { centre: trail.name })}
-          </TextLink>
-        </p>
-      </div>
-    </Container>
+    <>
+      <DirectoryCrumbs
+        label={trail.label}
+        trail={[
+          ...trail.base,
+          { href: globalPaths.centre(locale, centre.slug), text: trail.name },
+          { text: t('centre.events') },
+        ]}
+      />
+      <CentreSubpageHero
+        eyebrow={t('centre.eyebrow')}
+        title={title}
+        lede={t('centreEvents.intro')}
+        back={{
+          href: globalPaths.centre(locale, centre.slug),
+          text: t('centreNews.back', { centre: trail.name }),
+        }}
+      />
+      <DirectoryBody>
+        <div className="flex flex-col gap-6">
+          <WhenLinks current={when} path={(target) => at(target, 0)} t={events} />
+          {page === null ? (
+            <Alert tone="info">{t('centre.eventsUnavailable')}</Alert>
+          ) : page.items.length === 0 ? (
+            <EmptyState>
+              {offset > 0 ? t('pageEmpty') : events(`centreNone.${when}`)}
+            </EmptyState>
+          ) : (
+            <EventGrid locale={locale} items={page.items} when={when} label={title} />
+          )}
+          {page === null ? null : (
+            <Pagination
+              label={title}
+              previous={offset > 0 ? at(when, Math.max(0, offset - EVENT_PAGE)) : null}
+              next={page.more ? at(when, offset + EVENT_PAGE) : null}
+              previousLabel={events('previous')}
+              nextLabel={events('next')}
+            />
+          )}
+        </div>
+      </DirectoryBody>
+    </>
   );
 }
 
@@ -557,45 +639,49 @@ export async function CentreContactPage({
   const title = t('contact.title', { centre: trail.name });
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={trail.label}
-          trail={[
-            ...trail.base,
-            { href: globalPaths.centre(locale, centre.slug), text: trail.name },
-            { text: t('centre.contacts') },
-          ]}
-        />
-        <Prose>
-          <h1 className="text-3xl font-semibold tracking-tight wrap-anywhere" dir="auto">
-            {title}
-          </h1>
-          <p>{t('contact.notice')}</p>
-        </Prose>
-        {centre.contacts.length === 0 ? (
-          <EmptyState>{t('contact.empty')}</EmptyState>
-        ) : (
-          <ContactList contacts={centre.contacts} t={t} />
-        )}
-        {words?.address == null ? null : (
-          <section className="flex flex-col gap-2" aria-labelledby="contact-address">
-            <h2 id="contact-address" className="text-xl font-semibold">
-              {t('centre.address')}
-            </h2>
-            <address
-              className="whitespace-pre-line not-italic wrap-anywhere"
-              lang={words.locale}
-              dir={directionOf(words.locale)}
-            >
-              {words.address}
-            </address>
-          </section>
-        )}
-        <p>
-          <TextLink href={`/${locale}/contact`}>{t('contact.general')}</TextLink>
-        </p>
-      </div>
-    </Container>
+    <>
+      <DirectoryCrumbs
+        label={trail.label}
+        trail={[
+          ...trail.base,
+          { href: globalPaths.centre(locale, centre.slug), text: trail.name },
+          { text: t('centre.contacts') },
+        ]}
+      />
+      <CentreSubpageHero
+        eyebrow={t('centre.eyebrow')}
+        title={title}
+        lede={t('contact.notice')}
+        back={{
+          href: globalPaths.centre(locale, centre.slug),
+          text: t('centreNews.back', { centre: trail.name }),
+        }}
+      />
+      <DirectoryBody>
+        <div className="flex flex-col gap-6">
+          {centre.contacts.length === 0 ? (
+            <EmptyState>{t('contact.empty')}</EmptyState>
+          ) : (
+            <Panel as="div">
+              <ContactList contacts={centre.contacts} t={t} />
+            </Panel>
+          )}
+          {words?.address == null ? null : (
+            <FactCard id="contact-address" heading={t('centre.address')}>
+              <address
+                className="whitespace-pre-line not-italic wrap-anywhere"
+                lang={words.locale}
+                dir={directionOf(words.locale)}
+              >
+                {words.address}
+              </address>
+            </FactCard>
+          )}
+          <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
+            <TextLink href={`/${locale}/contact`}>{t('contact.general')}</TextLink>
+          </p>
+        </div>
+      </DirectoryBody>
+    </>
   );
 }

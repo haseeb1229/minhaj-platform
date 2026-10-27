@@ -13,6 +13,22 @@ import {
   slugFor,
 } from '../../apps/web/src/contexts/migration-provenance/domain/normalize.ts';
 
+/** The allowlist, exactly: structure, headings h2–h4, quotation, emphasis and links. */
+const ALLOWED = [
+  'p',
+  'br',
+  'strong',
+  'em',
+  'ul',
+  'ol',
+  'li',
+  'blockquote',
+  'a',
+  'h2',
+  'h3',
+  'h4',
+];
+
 /** Nothing executable, embeddable, styleable or submittable survives. */
 function assertInert(html: string): void {
   expect(html).not.toMatch(
@@ -24,25 +40,12 @@ function assertInert(html: string): void {
   const tags = [...html.matchAll(/<\/?([a-z0-9]+)/gi)].map((match) =>
     match[1]!.toLowerCase(),
   );
-  for (const tag of tags)
-    expect(['p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'blockquote', 'a']).toContain(
-      tag,
-    );
+  for (const tag of tags) expect(ALLOWED).toContain(tag);
 }
 
 describe('the sanitiser allowlist', () => {
-  it('is exactly the brief decision', () => {
-    expect(MIGRATION_SANITIZE_OPTIONS.allowedTags).toEqual([
-      'p',
-      'br',
-      'strong',
-      'em',
-      'ul',
-      'ol',
-      'li',
-      'blockquote',
-      'a',
-    ]);
+  it('is exactly the brief decision, with section headings h2–h4 admitted', () => {
+    expect(MIGRATION_SANITIZE_OPTIONS.allowedTags).toEqual(ALLOWED);
     expect(MIGRATION_SANITIZE_OPTIONS.allowedAttributes).toEqual({ a: ['href', 'rel'] });
     expect(MIGRATION_SANITIZE_OPTIONS.allowedSchemes).toEqual(['http', 'https']);
     expect(MIGRATION_SANITIZE_OPTIONS.allowProtocolRelative).toBe(false);
@@ -134,6 +137,19 @@ describe('sanitizeFragment on hostile synthetic markup', () => {
     );
   });
 
+  it('re-levels headings into h2–h4 and never drops their words', () => {
+    expect(
+      sanitizeFragment(
+        '<h1 id="x">One</h1><h2>Two</h2><h3>Three</h3><h4>Four</h4><h5>Five</h5><h6 style="c">Six</h6>',
+      ),
+    ).toBe(
+      '<h2>One</h2><h2>Two</h2><h3>Three</h3><h4>Four</h4><h4>Five</h4><h4>Six</h4>',
+    );
+    expect(plainText('<h1>Title</h1><p>Body</p><h6>End</h6>')).toBe(
+      'Title\n\nBody\n\nEnd',
+    );
+  });
+
   it('keeps the words of a refused link and drops its href', () => {
     expect(sanitizeFragment('<a href="javascript:alert(1)">words</a>')).toBe(
       '<a rel="noopener noreferrer">words</a>',
@@ -211,6 +227,21 @@ describe('slugs', () => {
     expect(
       slugFor({ legacyIdentifier: null, title: 'خطاب دوم', fallbackSeed: 'k' }),
     ).not.toBe(one);
+  });
+
+  it('names the kind in a digest slug, and only there', () => {
+    for (const prefix of ['book', 'magazine', 'issue', 'news', 'article', 'fatwa'])
+      expect(
+        slugFor({ legacyIdentifier: null, title: 'خطاب', fallbackSeed: 'k', prefix }),
+      ).toMatch(new RegExp(`^${prefix}-[0-9a-f]{12}$`));
+    expect(
+      slugFor({
+        legacyIdentifier: null,
+        title: 'Plain Title',
+        fallbackSeed: 'k',
+        prefix: 'book',
+      }),
+    ).toBe('plain-title');
   });
 
   it('bounds the slug', () => {

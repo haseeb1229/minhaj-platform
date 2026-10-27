@@ -111,9 +111,12 @@ export function Reader({
         aria-label={labels.contents}
         lang={interfaceLocale}
         dir={interfaceDirection}
-        className="scroll-mt-8"
+        className="scroll-mt-8 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)] px-4 py-3"
       >
-        <ol className="flex list-decimal flex-col gap-1 ps-6 text-sm">
+        <p className="text-caption pb-1 font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+          {labels.contents}
+        </p>
+        <ol className="flex list-decimal flex-col ps-6 marker:text-[color:var(--color-foreground-muted)]">
           {sections.map((section) => (
             <li key={section.key}>
               {/*
@@ -125,7 +128,7 @@ export function Reader({
                 href={`#${section.id}`}
                 lang={languageCode}
                 dir={direction}
-                className="underline underline-offset-2"
+                className="inline-block py-2.5 underline decoration-[color:var(--color-accent-rule)] underline-offset-4 hover:decoration-[color:var(--color-action)]"
               >
                 {section.title}
               </a>
@@ -189,19 +192,28 @@ export function Reader({
                   aria-label={section.title}
                   lang={interfaceLocale}
                   dir={interfaceDirection}
-                  className="flex flex-wrap gap-4 text-sm"
+                  className="flex flex-wrap gap-x-6 gap-y-1 border-t border-[color:var(--color-border)] pt-2 text-sm"
                 >
                   {previous === undefined ? null : (
-                    <a href={`#${previous.id}`} className="underline underline-offset-2">
+                    <a
+                      href={`#${previous.id}`}
+                      className="inline-flex min-h-11 items-center underline underline-offset-4"
+                    >
                       {labels.previousSection}
                     </a>
                   )}
                   {next === undefined ? null : (
-                    <a href={`#${next.id}`} className="underline underline-offset-2">
+                    <a
+                      href={`#${next.id}`}
+                      className="inline-flex min-h-11 items-center underline underline-offset-4"
+                    >
                       {labels.nextSection}
                     </a>
                   )}
-                  <a href={`#${CONTENTS_ID}`} className="underline underline-offset-2">
+                  <a
+                    href={`#${CONTENTS_ID}`}
+                    className="inline-flex min-h-11 items-center underline underline-offset-4"
+                  >
                     {labels.backToContents}
                   </a>
                 </nav>

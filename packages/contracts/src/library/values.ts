@@ -199,8 +199,17 @@ export function parseReaderDocument(input: string): ReaderDocument | null {
   return parsed.success ? parsed.data : null;
 }
 
-/** A deterministic, schema-valid key for one section title. */
-function uniqueSectionKey(title: string, index: number, used: Set<string>): string {
+/**
+ * A deterministic, schema-valid key for one section title, unique among the
+ * keys already `used` (which it extends). Exported so every producer of a
+ * `ReaderDocument` — the authoring format here, a migrated record's structured
+ * body at Layer 4 — derives keys by the one rule.
+ */
+export function uniqueSectionKey(
+  title: string,
+  index: number,
+  used: Set<string>,
+): string {
   const slug = title
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/g, '-')

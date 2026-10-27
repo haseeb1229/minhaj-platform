@@ -111,7 +111,7 @@ export async function QuranFrame({
   const parts = await quranTrail(locale);
   return (
     <Container>
-      <div className="flex min-w-0 flex-col gap-8 py-12">
+      <div className="flex min-w-0 flex-col gap-8 pt-6 pb-[var(--space-section)]">
         <FixtureNotice locale={locale} availability={availability} />
         <Breadcrumbs label={parts.label} trail={trail} />
         {children}
@@ -137,7 +137,7 @@ export async function QuranUnavailable({
   const parts = await quranTrail(locale);
   return (
     <Container>
-      <div className="flex flex-col gap-6 py-12">
+      <div className="flex flex-col gap-6 pt-6 pb-[var(--space-section)]">
         <Breadcrumbs
           label={parts.label}
           trail={

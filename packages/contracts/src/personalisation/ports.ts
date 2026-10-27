@@ -215,13 +215,21 @@ export interface PersonalPurgePort {
  * Whether ANYBODY holds one target here — a yes or a no, and nothing else
  * (MIGRATION_STRATEGY.md §7.2).
  *
- * Asked at Layer 4 before a migrated record is withdrawn automatically: a Video
- * somebody saved or watched is left for a person to decide. The answer names
- * no account, no count and no instant, so it cannot be turned into a reading
- * of who holds what.
+ * Asked at Layer 4 before a migrated record is withdrawn automatically: a
+ * Video somebody saved or watched, a Work somebody saved or read, an Article
+ * somebody saved or read, is left for a person to decide. The answer names no
+ * account, no count and no instant, so it cannot be turned into a reading of
+ * who holds what.
+ *
+ * ONE QUESTION PER TARGET THIS CONTEXT CAN HOLD. Only a Video, a Work and an
+ * Article have typed columns in Personalisation's tables (SavedItem,
+ * ReadingHistory, WatchHistory); nothing personal can name a NewsArticle, a
+ * Magazine or a MagazineIssue, so there is nothing to ask about them.
  */
 export interface PersonalHoldingPort {
   videoHeld(videoId: string): Promise<boolean>;
+  workHeld(workId: string): Promise<boolean>;
+  articleHeld(articleId: string): Promise<boolean>;
 }
 
 /* ===========================================================================

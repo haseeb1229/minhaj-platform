@@ -262,6 +262,17 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
     'MigrationPromotion',
     'MigrationPromotionEntry',
   ],
+  // PHASE 30 CREATES NO TABLE, and the empty list says so deliberately rather
+  // than by omission. It widens the eighteen Phase-29 tables in place: eight
+  // content kinds where there was one, five more typed target keys on a
+  // manifest entry and on a legacy mapping (Library's Work, Magazine and
+  // MagazineIssue, Editorial's NewsArticle and Article — never a target pair),
+  // an entry's target stage, and an AUTHORISED source bound to its written
+  // authorisation, a real https host and the politeness floor. Asserted by
+  // `assertSourceAdaptersFoundation`, its rollback by
+  // `assertSourceAdaptersRemoved`, and proved as behaviour inside
+  // `assertMigrationRules`.
+  '20261027000000_phase30_source_adapters': [],
   // THE DONATIONS CONTEXT: a campaign with its words per locale and its
   // per-currency policy, the owner's fail-closed provider activation (one
   // immutable row the runtime can only read), the donation — one payment
@@ -17892,6 +17903,51 @@ async function assertDonationsRules(session: SqlSession): Promise<void> {
 
 const MIGRATION_PROVENANCE_MIGRATION = '20261011000000_phase29_migration_provenance';
 
+/** Phase 30, which widens the Phase-29 tables in place and creates none. */
+const SOURCE_ADAPTERS_MIGRATION = '20261027000000_phase30_source_adapters';
+
+/**
+ * The typed targets Phase 30 adds beside Phase 29's `videoId`, in the order it
+ * adds them, each the owning domain's own table: Library's Work, Magazine and
+ * MagazineIssue, Editorial's NewsArticle and Article.
+ */
+const MIGRATION_TARGETS = [
+  ['workId', 'Work'],
+  ['magazineId', 'Magazine'],
+  ['magazineIssueId', 'MagazineIssue'],
+  ['newsArticleId', 'NewsArticle'],
+  ['articleId', 'Article'],
+] as const;
+
+/** The eight content kinds of Phase 30: six publishable, two review-only. */
+const MIGRATION_CONTENT_KINDS = [
+  'media.video',
+  'library.work',
+  'library.magazine',
+  'library.magazine-issue',
+  'editorial.news',
+  'editorial.article',
+  'fatwa.ruling',
+  'quran.translation',
+] as const;
+
+/**
+ * The five Phase-29 CHECKs and three Phase-29 triggers Phase 30 replaces under
+ * the SAME names — and its rollback restores exactly.
+ */
+const SOURCE_ADAPTER_CHECKS = [
+  'MigrationSource',
+  'MigrationRecord',
+  'MigrationStagedRecord',
+  'MigrationLegacyMapping',
+  'MigrationManifestEntry',
+] as const;
+const SOURCE_ADAPTER_TRIGGERS = [
+  'MigrationSourceHostIntegrity',
+  'MigrationLegacyMappingIntegrity',
+  'MigrationManifestEntryIntegrity',
+] as const;
+
 /**
  * The three keys Phase 29 catalogues, and only these. `migration.read` and
  * `migration.administer` are ORDINARY and join the protected bundle by the
@@ -17922,9 +17978,9 @@ const MIGRATION_PUBLISH_PERMISSION = 'migration.publish';
  * mapping reach their record and run THROUGH their source; a record is first
  * and last seen by its own source's runs; a record's latest snapshot and
  * current revision, an item's evidence, and an entry's revision are their own
- * record's.
+ * record's. This is the Phase-29 set, exactly what Phase 30's rollback leaves.
  */
-const MIGRATION_KEYS = [
+const PHASE29_MIGRATION_KEYS = [
   'MigrationAssetProvenance_assetId_fkey(assetId>id)>Asset:NO_ACTION',
   'MigrationAssetProvenance_decidedByUserId_fkey(decidedByUserId>id)>User:NO_ACTION',
   'MigrationAssetProvenance_recordId_fkey(recordId>id,sourceId>sourceId)>MigrationRecord:NO_ACTION',
@@ -17993,6 +18049,23 @@ const MIGRATION_KEYS = [
 ].sort();
 
 /**
+ * EVERY foreign key from a Migration table once Phase 30 is applied: the
+ * sixty-five above and its ten typed target keys — one per new target on an
+ * entry and on a legacy mapping, each NO ACTION into the owning domain's own
+ * table. The external edges are now Identity's User, Taxonomy's Topic, Media's
+ * Video, Storage's Asset, Library's Work, Magazine and MagazineIssue, and
+ * Editorial's NewsArticle and Article.
+ */
+const MIGRATION_KEYS = [
+  ...PHASE29_MIGRATION_KEYS,
+  ...['MigrationLegacyMapping', 'MigrationManifestEntry'].flatMap((table) =>
+    MIGRATION_TARGETS.map(
+      ([column, target]) => `${table}_${column}_fkey(${column}>id)>${target}:NO_ACTION`,
+    ),
+  ),
+].sort();
+
+/**
  * Every unique index on a Phase-29 table, exactly: the keys; one source per
  * key; one record per source and external key; the record-, run- and
  * source-carrying keys the composite references reach through; one item per
@@ -18047,9 +18120,10 @@ const MIGRATION_UNIQUE = [
  * Every column of every Phase-29 table, in order. Stated whole so a stored
  * credential, cookie or session for a legacy host, a crawl queue, a
  * `targetType`/`targetId` pair or a second copy of the raw body cannot arrive
- * unnoticed.
+ * unnoticed. This is the Phase-29 shape, exactly what Phase 30's rollback
+ * leaves.
  */
-const MIGRATION_COLUMNS: Readonly<Record<string, string>> = {
+const PHASE29_MIGRATION_COLUMNS: Readonly<Record<string, string>> = {
   MigrationSource:
     'id,key,name,authorityKind,accessMethod,contentKind,baseUrl,authorisationReference,authorisedOn,licensingEvidence,policyNotes,defaultLanguageCode,minIntervalMs,maxConcurrency,maxAttempts,timeoutMs,maxBodyBytes,maxRedirects,state,version,createdAt,createdByUserId,updatedAt,updatedByUserId',
   MigrationSourceHost: 'sourceId,host',
@@ -18087,6 +18161,24 @@ const MIGRATION_COLUMNS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * Every column once Phase 30 is applied: the Phase-29 shape, with Phase 30's
+ * typed targets appended to a legacy mapping and a manifest entry — and the
+ * entry's target stage after them. Still no target pair and no credential.
+ */
+const MIGRATION_COLUMNS: Readonly<Record<string, string>> = {
+  ...PHASE29_MIGRATION_COLUMNS,
+  MigrationLegacyMapping: [
+    PHASE29_MIGRATION_COLUMNS['MigrationLegacyMapping'],
+    ...MIGRATION_TARGETS.map(([column]) => column),
+  ].join(','),
+  MigrationManifestEntry: [
+    PHASE29_MIGRATION_COLUMNS['MigrationManifestEntry'],
+    ...MIGRATION_TARGETS.map(([column]) => column),
+    'targetStage',
+  ].join(','),
+};
+
+/**
  * Whether Phase 29 is applied, ALL OR NOTHING: either every one of its
  * eighteen tables exists or none does.
  */
@@ -18115,11 +18207,13 @@ async function migrationPresent(session: SqlSession): Promise<boolean> {
  *      password, secret, bearer or stored token column (a run's lease token
  *      aside), and no `targetType` / `targetId`; the unique indexes are exactly
  *      the thirty-seven above, three of them FILTERED;
- *   3. every foreign key is exactly one of the sixty-five above, ALL NO ACTION
- *      and trusted: Identity's User, Taxonomy's Topic, Media's Video and
- *      Storage's Asset the only external edges; no other owner references a
- *      Migration table or holds a migration-record, snapshot, staged-revision or
- *      legacy-mapping column;
+ *   3. every foreign key is exactly one of the seventy-five above (the
+ *      Phase-29 sixty-five at `phase29`, after Phase 30's rollback), ALL NO
+ *      ACTION and trusted: Identity's User, Taxonomy's Topic, Media's Video,
+ *      Storage's Asset and — from Phase 30 — Library's Work, Magazine and
+ *      MagazineIssue and Editorial's NewsArticle and Article the only external
+ *      edges; no other owner references a Migration table or holds a
+ *      migration-record, snapshot, staged-revision or legacy-mapping column;
  *   4. the CHECKs are exactly the seventeen named rules, all trusted; the
  *      triggers are exactly the eighteen in `MIGRATION_TRIGGER_NUMBERS`,
  *      enabled, each raising exactly its own numbers from 51370–51384 on the
@@ -18139,8 +18233,13 @@ async function migrationPresent(session: SqlSession): Promise<boolean> {
  */
 async function assertMigrationFoundation(
   session: SqlSession,
-  stage: 'deploy' | 're-deploy' = 'deploy',
+  stage: 'deploy' | 're-deploy' | 'source-adapters-rollback' = 'deploy',
+  shape: 'phase29' | 'phase30' = 'phase30',
 ): Promise<void> {
+  const expectedColumns =
+    shape === 'phase29' ? PHASE29_MIGRATION_COLUMNS : MIGRATION_COLUMNS;
+  const expectedKeys = shape === 'phase29' ? PHASE29_MIGRATION_KEYS : MIGRATION_KEYS;
+  const keyCount = shape === 'phase29' ? 65 : 75;
   const tables = MIGRATION_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
     ',',
   );
@@ -18172,7 +18271,7 @@ async function assertMigrationFoundation(
   `);
   const shapeFindings = MIGRATION_TABLES.filter(
     (table) =>
-      shapes.find((row) => row.name === table)?.columns !== MIGRATION_COLUMNS[table],
+      shapes.find((row) => row.name === table)?.columns !== expectedColumns[table],
   );
   if (shapes.length !== 18 || shapeFindings.length > 0)
     fail(
@@ -18273,13 +18372,13 @@ async function assertMigrationFoundation(
     .map((row) => `${row.name}(${row.columns})>${row.target}:${row.deletes}`)
     .sort();
   if (
-    MIGRATION_KEYS.length !== 65 ||
-    describedKeys.join(',') !== MIGRATION_KEYS.join(',') ||
+    expectedKeys.length !== keyCount ||
+    describedKeys.join(',') !== expectedKeys.join(',') ||
     keys.some((row) => row.updates !== 'NO_ACTION' || Number(row.trusted) !== 1)
   )
     fail(
-      `Migration & Provenance keys must be exactly the reviewed sixty-five, none cascading ` +
-        `and all trusted; found ${describedKeys.join(', ')}.`,
+      `Migration & Provenance keys must be exactly the reviewed ${String(keyCount)} (${shape}), ` +
+        `none cascading and all trusted; found ${describedKeys.join(', ')}.`,
     );
 
   const [isolation] = await session.query<{ inbound: number; foreign: string | null }>(`
@@ -18457,11 +18556,11 @@ async function assertMigrationFoundation(
 
   report(
     'migration schema',
-    'eighteen empty tables — no source — of the reviewed shape, one raw VARBINARY(MAX) body ' +
-      'and no credential, cookie, session or target column, thirty-seven unique keys with ' +
-      'three filtered, sixty-five trusted NO ACTION keys, 17 CHECKs, eighteen triggers raising ' +
-      '51370–51384, no procedure, two bundled ordinary keys provisioned once and one gated ' +
-      `publish key held by nobody, ${String(bundled)} bundled`,
+    `eighteen empty tables — no source — of the reviewed ${shape} shape, one raw VARBINARY(MAX) ` +
+      'body and no credential, cookie, session or target-pair column, thirty-seven unique keys ' +
+      `with three filtered, ${String(keyCount)} trusted NO ACTION keys, 17 CHECKs, eighteen ` +
+      'triggers raising 51370–51384, no procedure, two bundled ordinary keys provisioned once ' +
+      `and one gated publish key held by nobody, ${String(bundled)} bundled`,
   );
 }
 
@@ -18527,20 +18626,216 @@ async function assertMigrationRemoved(session: SqlSession): Promise<void> {
 }
 
 /**
+ * The CHECK expression a migration states for `<table>_ck`, as SQL text.
+ *
+ * Phase 29 states its CHECKs directly; Phase 30 states them inside `EXEC(N'…')`
+ * (they name columns the same batch adds), so its quotes are doubled and are
+ * undoubled here. What comes back is exactly the expression the engine was
+ * given.
+ */
+function statedCheck(sql: string, table: string): string {
+  const head = `ALTER TABLE [dbo].[${table}] ADD CONSTRAINT [${table}_ck] CHECK (`;
+  const start = sql.indexOf(head);
+  if (start < 0 || sql.indexOf(head, start + 1) >= 0)
+    fail(`Expected exactly one statement of ${table}_ck; found none or several.`);
+  const quoted = sql.slice(Math.max(0, start - 7), start) === "EXEC(N'";
+  const end = sql.indexOf(quoted ? "\n);');" : '\n);', start);
+  if (end < 0) fail(`The statement of ${table}_ck has no end.`);
+  const expression = sql.slice(start + head.length - 1, end + 2);
+  return quoted ? expression.replaceAll("''", "'") : expression;
+}
+
+/**
+ * The definition a migration states for a trigger, exactly as the engine
+ * stores it: the text inside `EXEC(N'…')` with its quotes undoubled — and an
+ * `ALTER TRIGGER` stored as `CREATE TRIGGER`, which is what the catalogue
+ * holds after either.
+ */
+function statedTrigger(sql: string, name: string): string {
+  const starts = ['CREATE', 'ALTER'].map((verb) =>
+    sql.indexOf(`EXEC(N'${verb} TRIGGER [dbo].[${name}] `),
+  );
+  const start = Math.max(...starts);
+  if (start < 0 || starts.every((index) => index >= 0))
+    fail(`Expected exactly one statement of the trigger ${name}.`);
+  const end = sql.indexOf("\nEND');", start);
+  if (end < 0) fail(`The statement of the trigger ${name} has no end.`);
+  return sql
+    .slice(start + "EXEC(N'".length, end + '\nEND'.length)
+    .replaceAll("''", "'")
+    .replace(/^ALTER TRIGGER /u, 'CREATE TRIGGER ');
+}
+
+/**
+ * The definition the engine derives from a CHECK expression over `table`'s
+ * columns: the expression is applied to an empty temporary copy of the table
+ * and its normalised text read back. Comparing THAT with the live constraint's
+ * definition proves the live CHECK is exactly the stated one — parentheses,
+ * collations and all — which comparing source text could not.
+ */
+async function derivedCheck(
+  session: SqlSession,
+  table: string,
+  expression: string,
+): Promise<string> {
+  const [row] = await session.query<{ definition: string | null }>(`
+    SELECT TOP 0 * INTO #derive FROM [dbo].[${table}];
+    ALTER TABLE #derive ADD CHECK ${expression};
+    SELECT (SELECT [definition] FROM tempdb.sys.check_constraints
+             WHERE [parent_object_id] = OBJECT_ID(N'tempdb..#derive')) AS [definition];
+    DROP TABLE #derive;
+  `);
+  if (row?.definition === undefined || row.definition === null)
+    fail(`The engine derived no definition from the stated ${table}_ck.`);
+  return row.definition;
+}
+
+/**
+ * Proves the five replaced CHECKs and three replaced triggers are, in the
+ * catalogue, EXACTLY what `migration` states — every CHECK trusted, every
+ * trigger enabled.
+ */
+async function assertStatedMigrationRules(
+  session: SqlSession,
+  migration: Migration,
+  label: string,
+): Promise<void> {
+  for (const table of SOURCE_ADAPTER_CHECKS) {
+    const expected = await derivedCheck(
+      session,
+      table,
+      statedCheck(migration.forwardSql, table),
+    );
+    const [live] = await session.query<{ definition: string; trusted: number }>(`
+      SELECT [definition], CASE WHEN [is_disabled] = 0 AND [is_not_trusted] = 0 THEN 1 ELSE 0 END AS [trusted]
+      FROM sys.check_constraints WHERE [name] = N'${table}_ck' AND [parent_object_id] = OBJECT_ID(N'[dbo].[${table}]');
+    `);
+    if (live?.definition !== expected || Number(live.trusted) !== 1)
+      fail(
+        `${table}_ck must be exactly ${label}'s, trusted; found ${JSON.stringify(live ?? null)}.`,
+      );
+  }
+  for (const name of SOURCE_ADAPTER_TRIGGERS) {
+    const [live] = await session.query<{ definition: string | null; disabled: number }>(`
+      SELECT OBJECT_DEFINITION(t.[object_id]) AS [definition], CAST(t.[is_disabled] AS INT) AS [disabled]
+      FROM sys.triggers t WHERE t.[name] = N'${name}';
+    `);
+    if (
+      live?.definition !== statedTrigger(migration.forwardSql, name) ||
+      Number(live.disabled) !== 0
+    )
+      fail(`The trigger ${name} must be exactly ${label}'s, enabled.`);
+  }
+}
+
+/**
+ * Phase 30 — what only the catalogue can prove about the widened Migration &
+ * Provenance schema (the whole context's shape is `assertMigrationFoundation`'s):
+ *
+ *   1. the five typed target columns on an entry and on a legacy mapping, and
+ *      the entry's `targetStage`, are NULLABLE NVARCHAR(36) and NVARCHAR(16),
+ *      each target the key of exactly its owning domain's table (the keys are
+ *      in `MIGRATION_KEYS`);
+ *   2. the five replaced CHECKs and three replaced triggers are EXACTLY the ones
+ *      Phase 30 states — derived by the engine from its own text, so a CHECK
+ *      that still admitted one content kind, or a trigger body left at Phase
+ *      29's, fails here;
+ *   3. no Migration row is seeded (the foundation proves every table empty).
+ *
+ * The rules themselves are proved as BEHAVIOUR inside `assertMigrationRules`.
+ */
+async function assertSourceAdaptersFoundation(
+  session: SqlSession,
+  migrations: readonly Migration[],
+  stage: 'deploy' | 're-deploy' = 'deploy',
+): Promise<void> {
+  const migration = migrations.find((entry) => entry.id === SOURCE_ADAPTERS_MIGRATION);
+  if (migration === undefined) fail(`${SOURCE_ADAPTERS_MIGRATION} is not on disk.`);
+  const added = await session.query<{
+    name: string;
+    type: string;
+    length: number;
+    nullable: number;
+  }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] AS [name], t.[name] AS [type],
+      c.[max_length] AS [length], CAST(c.[is_nullable] AS INT) AS [nullable]
+    FROM sys.columns c JOIN sys.types t ON t.[user_type_id] = c.[user_type_id]
+    WHERE c.[object_id] IN (OBJECT_ID(N'[dbo].[MigrationLegacyMapping]'), OBJECT_ID(N'[dbo].[MigrationManifestEntry]'))
+      AND c.[name] IN (${[...MIGRATION_TARGETS.map(([column]) => column), 'targetStage'].map((column) => `N'${column}'`).join(',')})
+    ORDER BY [name];
+  `);
+  const expected = [
+    ...['MigrationLegacyMapping', 'MigrationManifestEntry'].flatMap((table) =>
+      MIGRATION_TARGETS.map(([column]) => `${table}.${column}:nvarchar(72):null`),
+    ),
+    'MigrationManifestEntry.targetStage:nvarchar(32):null',
+  ].sort();
+  const described = added
+    .map(
+      (row) =>
+        `${row.name}:${row.type}(${String(row.length)}):${Number(row.nullable) === 1 ? 'null' : 'not-null'}`,
+    )
+    .sort();
+  if (described.join(',') !== expected.join(','))
+    fail(
+      `Phase 30's target columns must be exactly the nullable NVARCHAR(36) keys and an ` +
+        `NVARCHAR(16) stage after ${stage}; found ${described.join(', ')}.`,
+    );
+  await assertStatedMigrationRules(session, migration, 'Phase 30');
+  report(
+    'source adapters',
+    `after ${stage}: eight content kinds, five typed target keys on an entry and a legacy ` +
+      'mapping with a nullable target stage, an authorised source bound to its written ' +
+      'authorisation, a real https host and the politeness floor — five CHECKs and three ' +
+      'triggers exactly as Phase 30 states them, all trusted and enabled',
+  );
+}
+
+/**
+ * After Phase 30's rollback: the Migration & Provenance schema is EXACTLY
+ * Phase 29's — every column, key, CHECK and trigger of the reviewed Phase-29
+ * shape (`assertMigrationFoundation` at `phase29`), the five CHECKs and
+ * three triggers exactly as Phase 29 states them, the Phase-30 history row gone
+ * — and Library's and Editorial's five target tables untouched by the drop.
+ */
+async function assertSourceAdaptersRemoved(
+  session: SqlSession,
+  migrations: readonly Migration[],
+): Promise<void> {
+  const phase29 = migrations.find((entry) => entry.id === MIGRATION_PROVENANCE_MIGRATION);
+  if (phase29 === undefined) fail(`${MIGRATION_PROVENANCE_MIGRATION} is not on disk.`);
+  await assertMigrationFoundation(session, 'source-adapters-rollback', 'phase29');
+  await assertStatedMigrationRules(session, phase29, 'Phase 29');
+  const [owners] = await session.query<{ broken: number }>(`
+    SELECT ${String(MIGRATION_TARGETS.length)} - COUNT(*) AS [broken] FROM sys.tables
+    WHERE [object_id] IN (${MIGRATION_TARGETS.map(([, table]) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',')});
+  `);
+  if (Number(owners?.broken ?? -1) !== 0)
+    fail("Phase 30's rollback must leave Library's and Editorial's target tables whole.");
+  report(
+    'source adapters rollback',
+    'the Phase-29 shape exactly: 65 keys, its columns, its five CHECKs and three triggers as ' +
+      'Phase 29 states them; Work, Magazine, MagazineIssue, NewsArticle and Article whole',
+  );
+}
+
+/**
  * Phase 29 — THE BUNDLE EXTENSION AS BEHAVIOUR. Extending the protected
  * Platform Administrator bundle is a privilege change, so the migration must
  * revoke every live holder's sessions and step-up grants in the same
  * transaction and record exactly which keys it added (SECURITY_BASELINE.md
  * §8.1). A first deploy cannot show that — nobody holds the role yet — so this
- * rolls Phase 29 alone back on the re-deployed database, seeds a synthetic
- * holder of the protected role and a synthetic non-holder, each with a live
- * session and step-up grant, and re-applies Phase 29 through the REAL Prisma
- * CLI:
+ * rolls Phase 29 back on the re-deployed database (Phase 30 first, newest
+ * first, because it widens Phase 29's own tables and grants nothing), seeds a
+ * synthetic holder of the protected role and a synthetic non-holder, each with
+ * a live session and step-up grant, and re-applies both through the REAL
+ * Prisma CLI:
  *
  *   - the holder's sessions and grants are gone; the non-holder's survive;
  *   - exactly one `migration.permissions.provisioned` record names the two
  *     ordinary keys, and the protected bundle is the compiled bundle again;
- *   - the migration is in the history again and nothing else was re-applied.
+ *   - both migrations are in the history again and nothing else was
+ *     re-applied.
  *
  * Both synthetic accounts are removed again afterwards: this disposable
  * database was never bootstrapped, so the final-administrator rule does not
@@ -18549,6 +18844,7 @@ async function assertMigrationRemoved(session: SqlSession): Promise<void> {
 async function assertMigrationBundleExtension(
   session: SqlSession,
   migration: Migration,
+  sourceAdapters: Migration,
 ): Promise<void> {
   if (!(await migrationPresent(session)))
     fail('The bundle-extension proof needs Phase 29 applied first.');
@@ -18571,9 +18867,10 @@ async function assertMigrationBundleExtension(
   const bundleAt = (stage: BundleStage): string =>
     [...compiledBundleAt(stage)].sort().join(',');
 
+  await rollbackMigration(session, sourceAdapters);
   await rollbackMigration(session, migration);
   if (await migrationPresent(session))
-    fail('Rolling Phase 29 back alone left its schema in place.');
+    fail('Rolling Phase 30 and Phase 29 back left the Phase-29 schema in place.');
   if ((await protectedBundle()) !== bundleAt('before-migration'))
     fail(
       'Rolling Phase 29 back alone must leave the protected bundle exactly the compiled ' +
@@ -18597,12 +18894,13 @@ async function assertMigrationBundleExtension(
   );
 
   const redeploy = await deployMigrations(disposableUrl, environment.values);
-  if (!redeploy.output.includes(migration.id))
-    fail(`Re-applying ${migration.id} alone did not report it.\n${redeploy.output}`);
+  for (const reapplied of [migration, sourceAdapters])
+    if (!redeploy.output.includes(reapplied.id))
+      fail(`Re-applying ${reapplied.id} did not report it.\n${redeploy.output}`);
   const historyAfter = await appliedMigrationNames(session);
   if (historyAfter.slice().sort().join(',') !== historyBefore.slice().sort().join(','))
     fail(
-      `Re-applying Phase 29 alone changed the history: ${historyBefore.join(', ')} -> ` +
+      `Re-applying Phase 29 and Phase 30 changed the history: ${historyBefore.join(', ')} -> ` +
         `${historyAfter.join(', ')}.`,
     );
 
@@ -18652,7 +18950,7 @@ async function assertMigrationBundleExtension(
   );
   report(
     'migration bundle',
-    "re-applied alone through the real Prisma CLI: the protected role's live holder lost " +
+    "re-applied with Phase 30 through the real Prisma CLI: the protected role's live holder lost " +
       'its session and step-up grant, a non-holder kept both, and one provisioning record ' +
       `named migration.administer and migration.read; ${String(bundled)} bundled`,
   );
@@ -18716,9 +19014,9 @@ async function assertMigrationBundleExtension(
  *     joins only a draft; it moves only in its manifest's own phase, and what
  *     it made is recorded once (51379); ONE LIVE ENTRY PER STAGED REVISION
  *     (the filtered key);
- *   - a legacy mapping names exactly one Video and a site-relative path
- *     (…_ck); ONE ACTIVE MAPPING PER LEGACY URL (the filtered key); it keeps
- *     its address and target (51380);
+ *   - a legacy mapping names exactly one target (here a Video) and a
+ *     site-relative path (…_ck); ONE ACTIVE MAPPING PER LEGACY URL (the
+ *     filtered key); it keeps its address and target (51380);
  *   - a promotion begins a draft; is approved only under the same live
  *     authority; carries only PUBLISHED entries, added while it is a draft;
  *     promotes each entry once while it is promoting; and moves only forward
@@ -18726,11 +19024,38 @@ async function assertMigrationBundleExtension(
  *   - nothing cascades: an Asset an acquisition names is never deleted from
  *     under it.
  *
+ * And PHASE 30, on the same schema:
+ *
+ *   - every in-scope content kind — six publishable, two review-only — is
+ *     accepted on a source, a record and a staged revision, and a kind no
+ *     adapter serves is refused on each (…_ck);
+ *   - an AUTHORISED source carries its written reference and date, a real
+ *     lower-case https host outside `*.invalid` (a fully-qualified
+ *     `x.invalid.` included) with a path, or no address for an export, and
+ *     the politeness floor — at least 1000 ms apart, one at a time — on insert
+ *     and on every later edit (…_ck); its hosts are real — never
+ *     `*.invalid`, dotless or an IPv4 literal (51371) — and a fixture source
+ *     still names no real host (51371); an authorised source is never
+ *     re-kinded a fixture (51370);
+ *   - a manifest entry for an approved `fatwa.ruling` or `quran.translation`
+ *     revision is refused (51379); an entry names at most one target, in its
+ *     revision's OWN kind's column (51379), with a stage exactly when it names
+ *     one (…_ck), and a published entry carries its target, stage, version and
+ *     path (…_ck); the target and stage are written ONCE (51379); an Editorial
+ *     record may be carried only to `in-review`;
+ *   - a legacy mapping names exactly one target (…_ck) — exactly what its
+ *     entry made (51380) — and never changes it (51380);
+ *   - Phase 30's rollback REFUSES over these rows rather than discard them,
+ *     and leaves its schema exactly as it was.
+ *
  * The rows are evidence and history — a raw snapshot cannot be deleted at all
  * — so, like the canonical proofs above, they die with this disposable
  * database.
  */
-async function assertMigrationRules(session: SqlSession): Promise<void> {
+async function assertMigrationRules(
+  session: SqlSession,
+  sourceAdapters: Migration,
+): Promise<void> {
   const run = randomUUID().replaceAll('-', '').slice(0, 16);
   const at = '2026-10-11T00:00:00';
   const later = '2026-10-11T01:00:00';
@@ -19073,8 +19398,10 @@ async function assertMigrationRules(session: SqlSession): Promise<void> {
       source(randomUUID(), `proof-i-${run}`, { maxConcurrency: '5' }),
     ],
     [
-      'A source of another content kind',
-      source(randomUUID(), `proof-j-${run}`, { contentKind: `N'editorial.article'` }),
+      // Phase 30 serves eight kinds (each accepted below); one no adapter
+      // serves is still refused.
+      'A source of a kind no adapter serves',
+      source(randomUUID(), `proof-j-${run}`, { contentKind: `N'media.audio'` }),
     ],
   ] as const)
     await refuse(label, statement, [547], 'MigrationSource_ck');
@@ -19126,10 +19453,24 @@ async function assertMigrationRules(session: SqlSession): Promise<void> {
     [2627, 2601],
     'MigrationSource_key_key',
   );
+  // Since Phase 30 an authorised source must name a real https host, so a
+  // re-kinding that keeps the fixture address is refused by the CHECK first;
+  // one that also moves to a real address — every column the CHECK asks for —
+  // is still refused, by the authority rule itself.
+  await refuse(
+    'A fixture source re-kinded as authorised at its fixture address',
+    set(
+      'MigrationSource',
+      fixture,
+      `[authorityKind]=N'authorised',[authorisationReference]=N'NON_MIGRATION_FIXTURE forged',[authorisedOn]='2026-10-11',[version]=[version]+1`,
+    ),
+    [547],
+    'MigrationSource_ck',
+  );
   for (const [label, assignments] of [
     [
       'A fixture source re-kinded as authorised',
-      `[authorityKind]=N'authorised',[authorisationReference]=N'NON_MIGRATION_FIXTURE forged',[authorisedOn]='2026-10-11',[version]=[version]+1`,
+      `[authorityKind]=N'authorised',[authorisationReference]=N'NON_MIGRATION_FIXTURE forged',[authorisedOn]='2026-10-11',[baseUrl]=N'https://legacy-${run}.example.org/',[version]=[version]+1`,
     ],
     ['A source re-keyed', `[key]=N'proof-rekeyed-${run}',[version]=[version]+1`],
     [
@@ -19298,7 +19639,7 @@ async function assertMigrationRules(session: SqlSession): Promise<void> {
   for (const [label, extra] of [
     ['A present record with a disappearance', { disappearance: `N'withdrawn'` }],
     ['A merged record naming nothing', { status: `N'merged'` }],
-    ['A record of another content kind', { contentKind: `N'editorial.article'` }],
+    ['A record of a kind no adapter serves', { contentKind: `N'media.audio'` }],
     [
       'A missing record classified by nobody',
       {
@@ -20263,9 +20604,9 @@ async function assertMigrationRules(session: SqlSession): Promise<void> {
   await accept(
     'One entry published to its Video, one refused by its target',
     `${set('MigrationManifestEntry', published, `[state]=N'publishing',[version]=[version]+1`)}
-     ${set('MigrationManifestEntry', published, `[state]=N'published',[videoId]=N'${video}',[targetVersion]=1,[canonicalPath]=N'/watch/videos/proof-migration-${run}',[publishedAt]='${settled}',[version]=[version]+1`)}
+     ${set('MigrationManifestEntry', published, `[state]=N'published',[videoId]=N'${video}',[targetStage]=N'public',[targetVersion]=1,[canonicalPath]=N'/watch/videos/proof-migration-${run}',[publishedAt]='${settled}',[version]=[version]+1`)}
      ${set('MigrationManifestEntry', refused, `[state]=N'refused',[refusal]=N'target-refused',[version]=[version]+1`)}
-     ${set('MigrationManifestEntry', republished, `[state]=N'published',[videoId]=N'${video}',[targetVersion]=2,[canonicalPath]=N'/watch/videos/proof-migration-${run}',[publishedAt]='${settled}',[version]=[version]+1`)}
+     ${set('MigrationManifestEntry', republished, `[state]=N'published',[videoId]=N'${video}',[targetStage]=N'public',[targetVersion]=2,[canonicalPath]=N'/watch/videos/proof-migration-${run}',[publishedAt]='${settled}',[version]=[version]+1`)}
      ${set('MigrationPublishManifest', fourth, `[state]=N'published',[publishedAt]='${settled}',[version]=[version]+1`)}`,
   );
   await refuse(
@@ -20322,7 +20663,7 @@ async function assertMigrationRules(session: SqlSession): Promise<void> {
   // ---- rollback: the same live authority, phase by phase --------------------------------------
   await accept(
     'A second manifest published to the other Video',
-    `${set('MigrationManifestEntry', reversed, `[state]=N'published',[videoId]=N'${otherVideo}',[targetVersion]=1,[canonicalPath]=N'/watch/videos/proof-migration-other-${run}',[publishedAt]='${settled}',[version]=[version]+1`)}
+    `${set('MigrationManifestEntry', reversed, `[state]=N'published',[videoId]=N'${otherVideo}',[targetStage]=N'public',[targetVersion]=1,[canonicalPath]=N'/watch/videos/proof-migration-other-${run}',[publishedAt]='${settled}',[version]=[version]+1`)}
      ${set('MigrationPublishManifest', reversible, `[state]=N'published',[publishedAt]='${settled}',[version]=[version]+1`)}`,
   );
   const rollbackBy = (actor: string): string =>
@@ -20691,6 +21032,366 @@ async function assertMigrationRules(session: SqlSession): Promise<void> {
     PROMOTION_KEEPS,
   );
 
+  // ==== Phase 30: eight content kinds, typed targets and authorised sources ====================
+  const ENTRY_KIND = "An entry names a target of its own revision's kind";
+  const LEGACY_TARGET = 'A legacy mapping names exactly what its entry made';
+  const HOST_AUTHORISED = 'An authorised source names only real hosts, never *.invalid';
+
+  // ---- every in-scope kind on a source, a record and an approved revision ---------------------
+  // One fixture EXPORT source per kind beyond Phase 29's video, each with its own run, record,
+  // held snapshot and approved revision. The review-only kinds are among them: religious
+  // material is preserved, staged and reviewed as evidence — it is only never published.
+  interface KindChain {
+    readonly source: string;
+    readonly run: string;
+    readonly record: string;
+    readonly snapshot: string;
+    readonly revision: string;
+  }
+  const chains = new Map<string, KindChain>();
+  for (const [index, kind] of MIGRATION_CONTENT_KINDS.entries()) {
+    if (kind === 'media.video') continue;
+    const link: KindChain = {
+      source: randomUUID(),
+      run: randomUUID(),
+      record: randomUUID(),
+      snapshot: randomUUID(),
+      revision: randomUUID(),
+    };
+    chains.set(kind, link);
+    await accept(
+      `A fixture source, run, record, snapshot and approved revision of ${kind}`,
+      `${source(link.source, `proof-kind-${String(index)}-${run}`, { accessMethod: `N'export'`, baseUrl: 'NULL', contentKind: `N'${kind}'` })}
+       ${runRow(link.run, link.source)}
+       ${recordRow(link.record, link.source, link.run, `${kind}-${run}`, { contentKind: `N'${kind}'` })}
+       ${snapshot(link.snapshot, link.record, link.source, link.run)}
+       ${staged(link.revision, link.record, link.snapshot, link.run, 1, { contentKind: `N'${kind}'`, dedupeKey: `N'${kind}:${run}'` })}
+       ${approve(link.revision)}`,
+    );
+  }
+  const chainOf = (kind: string): KindChain =>
+    chains.get(kind) ?? fail(`The Phase-30 rules have no ${kind} chain.`);
+  await refuse(
+    'A staged revision of a kind no adapter serves',
+    staged(randomUUID(), record, held, firstRun, 9, { contentKind: `N'media.audio'` }),
+    [547],
+    'MigrationStagedRecord_ck',
+  );
+
+  // ---- authorised sources: written authorisation, a real https host, the politeness floor ------
+  // `*.example.org` is reserved for documentation (RFC 2606): a real DNS name that is never a
+  // legacy Minhaj source and is never contacted — nothing here fetches.
+  const authorisedHost = `legacy-${run}.example.org`;
+  const authorised = randomUUID();
+  const authorisedExport = randomUUID();
+  const authorisedSource = (
+    id: string,
+    key: string,
+    extra: Readonly<Record<string, string>> = {},
+  ): string =>
+    source(id, key, {
+      name: `N'NON_MIGRATION_FIXTURE authorised source'`,
+      authorityKind: `N'authorised'`,
+      authorisationReference: `N'NON_MIGRATION_FIXTURE written authorisation'`,
+      authorisedOn: `'2026-10-27'`,
+      baseUrl: `N'https://${authorisedHost}/'`,
+      minIntervalMs: '1000',
+      maxConcurrency: '1',
+      ...extra,
+    });
+  for (const [label, extra] of [
+    ['An authorised source with no authorisation date', { authorisedOn: 'NULL' }],
+    [
+      'An authorised source with no authorisation reference',
+      { authorisationReference: 'NULL' },
+    ],
+    ['An authorised source over plain http', { baseUrl: `N'http://${authorisedHost}/'` }],
+    ['An authorised source at a fixture address', { baseUrl: `N'https://${host}/'` }],
+    [
+      'An authorised source under .invalid',
+      { baseUrl: `N'https://legacy-${run}.example.invalid/'` },
+    ],
+    [
+      'An authorised source under a fully-qualified .invalid.',
+      { baseUrl: `N'https://legacy-${run}.example.invalid./'` },
+    ],
+    ['An authorised source at a dotless host', { baseUrl: `N'https://localhost/'` }],
+    [
+      'An authorised source at an empty label',
+      { baseUrl: `N'https://legacy..example.org/'` },
+    ],
+    [
+      'An authorised source at an upper-case host',
+      { baseUrl: `N'https://Legacy-${run}.example.org/'` },
+    ],
+    [
+      'An authorised source with a port',
+      { baseUrl: `N'https://${authorisedHost}:8443/'` },
+    ],
+    [
+      'An authorised source with credentials in its address',
+      { baseUrl: `N'https://user@${authorisedHost}/'` },
+    ],
+    ['An authorised address with no path', { baseUrl: `N'https://${authorisedHost}'` }],
+    ['An authorised source under a second apart', { minIntervalMs: '999' }],
+    ['An authorised source fetching two at once', { maxConcurrency: '2' }],
+  ] as const)
+    await refuse(
+      label,
+      authorisedSource(randomUUID(), `proof-auth-${randomUUID().slice(0, 8)}`, extra),
+      [547],
+      'MigrationSource_ck',
+    );
+  await accept(
+    'Authorised sources: one by https at a real host, one by export',
+    `${authorisedSource(authorised, `proof-authorised-${run}`)}
+     ${authorisedSource(authorisedExport, `proof-authorised-export-${run}`, { accessMethod: `N'export'`, baseUrl: 'NULL', minIntervalMs: '2000' })}`,
+  );
+  for (const [label, assignments] of [
+    ['An authorised source sped below the floor', `[minIntervalMs]=999`],
+    ['An authorised source made concurrent', `[maxConcurrency]=2`],
+  ] as const)
+    await refuse(
+      label,
+      set('MigrationSource', authorised, `${assignments},[version]=[version]+1`),
+      [547],
+      'MigrationSource_ck',
+    );
+  await refuse(
+    'An authorised source re-kinded a fixture',
+    set(
+      'MigrationSource',
+      authorised,
+      `[authorityKind]=N'fixture',[authorisationReference]=NULL,[authorisedOn]=NULL,[baseUrl]=N'https://${host}/',[version]=[version]+1`,
+    ),
+    [51370],
+    SOURCE_KEEPS,
+  );
+  await accept(
+    'An authorised source slowed one version at a time',
+    set(
+      'MigrationSource',
+      authorised,
+      `[minIntervalMs]=5000,[version]=[version]+1,[updatedAt]='${later}'`,
+    ),
+  );
+  await accept("An authorised source's real host", hostRow(authorised, authorisedHost));
+  for (const [label, name] of [
+    ['An authorised source naming a fixture host', `media-${run}.fixture.invalid`],
+    ['An authorised source naming a .invalid host', `legacy-${run}.example.invalid`],
+    ['An authorised source naming a dotless host', 'localhost'],
+    // An address literal is never a named authorised host (TEST-NET-1, RFC 5737).
+    ['An authorised source naming an IPv4 literal', '192.0.2.10'],
+  ] as const)
+    await refuse(label, hostRow(authorised, name), [51371], HOST_AUTHORISED);
+  await refuse(
+    'A fixture source naming a real host',
+    hostRow(fixture, authorisedHost),
+    [51371],
+    HOST_FIXTURE,
+  );
+
+  // ---- typed targets, written once, of the revision's own kind --------------------------------
+  const work = randomUUID();
+  const otherWork = randomUUID();
+  const article = randomUUID();
+  await accept(
+    "Library's Works and an Editorial Article, as their owners write them",
+    `INSERT INTO [dbo].[Work] ([id],[slug],[primaryLocale],[state]) VALUES
+       (N'${work}',N'proof-migration-work-${run}',N'en',N'published'),
+       (N'${otherWork}',N'proof-migration-work-other-${run}',N'en',N'published');
+     INSERT INTO [dbo].[Article] ([id],[slug],[state],[version],[creatorId],[updatedAt])
+       VALUES (N'${article}',N'proof-migration-article-${run}',N'draft',1,N'${operator}',SYSUTCDATETIME());`,
+  );
+  const workChain = chainOf('library.work');
+  const articleChain = chainOf('editorial.article');
+  const workManifest = randomUUID();
+  const articleManifest = randomUUID();
+  const fatwaManifest = randomUUID();
+  const quranManifest = randomUUID();
+  const draftOf = (id: string, link: KindChain): string =>
+    manifestRow(id, { sourceId: `N'${link.source}'`, runId: `N'${link.run}'` });
+  await accept(
+    'Draft manifests of four Phase-30 sources',
+    `${draftOf(workManifest, workChain)} ${draftOf(articleManifest, articleChain)}
+     ${draftOf(fatwaManifest, chainOf('fatwa.ruling'))} ${draftOf(quranManifest, chainOf('quran.translation'))}`,
+  );
+  // Religious material is evidence only: approved, it is still never a manifest entry.
+  for (const [label, manifestId, kind] of [
+    ['An entry for an approved fatwa.ruling revision', fatwaManifest, 'fatwa.ruling'],
+    [
+      'An entry for an approved quran.translation revision',
+      quranManifest,
+      'quran.translation',
+    ],
+  ] as const) {
+    const link = chainOf(kind);
+    await refuse(
+      label,
+      entryRow(randomUUID(), manifestId, 0, link.revision, link.record),
+      [51379],
+      ENTRY_JOINS,
+    );
+  }
+  await refuse(
+    'A pending entry carrying a stage but no target',
+    entryRow(randomUUID(), workManifest, 9, workChain.revision, workChain.record, {
+      targetStage: `N'public'`,
+    }),
+    [547],
+    'MigrationManifestEntry_ck',
+  );
+  const workEntry = randomUUID();
+  const articleEntry = randomUUID();
+  await accept(
+    'Approved work and article revisions entered in drafts, published by the live holder',
+    `${entryRow(workEntry, workManifest, 0, workChain.revision, workChain.record)}
+     ${entryRow(articleEntry, articleManifest, 0, articleChain.revision, articleChain.record)}
+     ${publishBy(workManifest, publisher)} ${publishBy(articleManifest, publisher)}
+     ${set('MigrationManifestEntry', workEntry, `[state]=N'publishing',[version]=[version]+1`)}
+     ${set('MigrationManifestEntry', articleEntry, `[state]=N'publishing',[version]=[version]+1`)}`,
+  );
+  const workPath = `/library/books/proof-migration-work-${run}`;
+  const made = (target: string, stage = 'public', path = workPath): string =>
+    `[state]=N'published',${target},[targetStage]=N'${stage}',[targetVersion]=1,[canonicalPath]=N'${path}',[publishedAt]='${settled}',[version]=[version]+1`;
+  for (const [label, assignments] of [
+    ['A work entry published to a Video', made(`[videoId]=N'${video}'`)],
+    ['A work entry published to an Article', made(`[articleId]=N'${article}'`)],
+  ] as const)
+    await refuse(
+      label,
+      set('MigrationManifestEntry', workEntry, assignments),
+      [51379],
+      ENTRY_KIND,
+    );
+  for (const [label, assignments] of [
+    [
+      'A work entry published to a Work and an Article',
+      made(`[workId]=N'${work}',[articleId]=N'${article}'`),
+    ],
+    [
+      'A work entry published with no stage',
+      `[state]=N'published',[workId]=N'${work}',[targetVersion]=1,[canonicalPath]=N'${workPath}',[publishedAt]='${settled}',[version]=[version]+1`,
+    ],
+    ['A work entry published to an unknown stage', made(`[workId]=N'${work}'`, 'draft')],
+    [
+      'A work entry published with no path',
+      `[state]=N'published',[workId]=N'${work}',[targetStage]=N'public',[targetVersion]=1,[publishedAt]='${settled}',[version]=[version]+1`,
+    ],
+  ] as const)
+    await refuse(
+      label,
+      set('MigrationManifestEntry', workEntry, assignments),
+      [547],
+      'MigrationManifestEntry_ck',
+    );
+  await refuse(
+    'A work entry naming a Work that does not exist',
+    set('MigrationManifestEntry', workEntry, made(`[workId]=N'${randomUUID()}'`)),
+    [547],
+    'MigrationManifestEntry_workId_fkey',
+  );
+  // Recorded while still publishing — the order a resumed publication meets — so the
+  // write-once rule, and not the phase rule, is what refuses the rewrites below.
+  await accept(
+    'The work entry names its Work and stage while still publishing',
+    set(
+      'MigrationManifestEntry',
+      workEntry,
+      `[workId]=N'${work}',[targetStage]=N'public',[version]=[version]+1`,
+    ),
+  );
+  for (const [label, assignments] of [
+    ['A recorded Work re-targeted', `[workId]=N'${otherWork}'`],
+    ['A recorded Work and stage cleared', `[workId]=NULL,[targetStage]=NULL`],
+    ['A recorded stage moved to in-review', `[targetStage]=N'in-review'`],
+  ] as const)
+    await refuse(
+      label,
+      set('MigrationManifestEntry', workEntry, `${assignments},[version]=[version]+1`),
+      [51379],
+      ENTRY_MOVES,
+    );
+  await accept(
+    'The work entry published to its Work, public; the article entry to its Article, in review',
+    `${set('MigrationManifestEntry', workEntry, `[state]=N'published',[targetVersion]=1,[canonicalPath]=N'${workPath}',[publishedAt]='${settled}',[version]=[version]+1`)}
+     ${set('MigrationManifestEntry', articleEntry, made(`[articleId]=N'${article}'`, 'in-review', `/articles/proof-migration-article-${run}`))}`,
+  );
+
+  // ---- legacy mappings: exactly one target, exactly the entry's, never changed ----------------
+  const workUrl = `https://${host}/books/work-${run}`;
+  const workMapping = randomUUID();
+  const workLegacy = (
+    id: string,
+    url: string,
+    extra: Readonly<Record<string, string>>,
+  ): string =>
+    legacy(id, url, {
+      sourceId: `N'${workChain.source}'`,
+      recordId: `N'${workChain.record}'`,
+      manifestEntryId: `N'${workEntry}'`,
+      videoId: 'NULL',
+      canonicalPath: `N'${workPath}'`,
+      ...extra,
+    });
+  for (const [label, extra] of [
+    ['A work mapping naming no target', {}],
+    [
+      'A mapping naming a Work and an Article',
+      { workId: `N'${work}'`, articleId: `N'${article}'` },
+    ],
+  ] as const)
+    await refuse(
+      label,
+      workLegacy(randomUUID(), `${workUrl}/${randomUUID()}`, extra),
+      [547],
+      'MigrationLegacyMapping_ck',
+    );
+  for (const [label, statement] of [
+    [
+      "A work mapping naming an Article, not its entry's Work",
+      workLegacy(randomUUID(), `${workUrl}/${randomUUID()}`, {
+        articleId: `N'${article}'`,
+      }),
+    ],
+    [
+      "A work mapping naming another Work than its entry's",
+      workLegacy(randomUUID(), `${workUrl}/${randomUUID()}`, {
+        workId: `N'${otherWork}'`,
+      }),
+    ],
+    [
+      "A video mapping naming a Work, not its entry's Video",
+      legacy(randomUUID(), `${legacyUrl}/${randomUUID()}`, {
+        videoId: 'NULL',
+        workId: `N'${work}'`,
+      }),
+    ],
+  ] as const)
+    await refuse(label, statement, [51380], LEGACY_TARGET);
+  await accept(
+    "A work mapping naming exactly its entry's Work",
+    workLegacy(workMapping, workUrl, { workId: `N'${work}'` }),
+  );
+  for (const [label, assignments] of [
+    ['A work mapping re-targeted to another Work', `[workId]=N'${otherWork}'`],
+    [
+      'A work mapping re-targeted to an Article',
+      `[workId]=NULL,[articleId]=N'${article}'`,
+    ],
+  ] as const)
+    await refuse(
+      label,
+      set('MigrationLegacyMapping', workMapping, `${assignments},[version]=[version]+1`),
+      [51380],
+      LEGACY_KEEPS,
+    );
+  await accept(
+    'Both Phase-30 manifests published',
+    `${set('MigrationPublishManifest', workManifest, `[state]=N'published',[publishedAt]='${settled}',[version]=[version]+1`)}
+     ${set('MigrationPublishManifest', articleManifest, `[state]=N'published',[publishedAt]='${settled}',[version]=[version]+1`)}`,
+  );
+
   // ---- the run completes, balanced, and is then frozen; the source may run again ------------
   await accept(
     'The run completed and reconciled in one step',
@@ -20737,6 +21438,53 @@ async function assertMigrationRules(session: SqlSession): Promise<void> {
       `The Migration rule proofs wrote a row that is not an unmistakable fixture: ` +
         `${JSON.stringify(labelled ?? null)}.`,
     );
+  // Phase 30's sources: every kind's an export FIXTURE, and the two authorised ones sentinels at
+  // a reserved documentation host (or none) — never a real legacy address.
+  const kindSources = [...chains.values()].map((link) => `N'${link.source}'`).join(',');
+  const [phase30Labelled] = await session.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[MigrationSource] WHERE [id] IN (${kindSources})
+         AND ([name] NOT LIKE N'NON[_]MIGRATION[_]FIXTURE%' OR [authorityKind] <> N'fixture' OR [baseUrl] IS NOT NULL)) AS [kinds],
+      (SELECT COUNT(*) FROM [dbo].[MigrationSource] WHERE [id] IN (N'${authorised}',N'${authorisedExport}')
+         AND ([name] NOT LIKE N'NON[_]MIGRATION[_]FIXTURE%' OR [authorisationReference] NOT LIKE N'NON[_]MIGRATION[_]FIXTURE%'
+              OR ([baseUrl] IS NOT NULL AND [baseUrl] NOT LIKE N'https://%.example.org/'))) AS [authorised],
+      (SELECT COUNT(*) FROM [dbo].[MigrationSourceHost] WHERE [sourceId] = N'${authorised}'
+         AND [host] NOT LIKE N'%.example.org') AS [hosts];
+  `);
+  if (JSON.stringify(phase30Labelled) !== '{"kinds":0,"authorised":0,"hosts":0}')
+    fail(
+      `The Phase-30 rule proofs wrote a source that is not an unmistakable fixture or ` +
+        `reserved address: ${JSON.stringify(phase30Labelled ?? null)}.`,
+    );
+
+  // Phase 30's rollback is a disposable-proof artifact that never discards migration evidence:
+  // over these rows it REFUSES, and the widened schema stays exactly as Phase 30 states it.
+  const rollbackFailure = await attempt(session, sourceAdapters.rollbackSql);
+  if (
+    rollbackFailure === null ||
+    rollbackFailure.number !== 50000 ||
+    !rollbackFailure.message.includes('Phase-30 Migration & Provenance rows exist')
+  )
+    fail(
+      `Phase 30's rollback must refuse over Phase-30 rows rather than discard them; ` +
+        (rollbackFailure === null
+          ? 'it ran.'
+          : `it failed for another reason (${String(rollbackFailure.number)}): ` +
+            `${rollbackFailure.message.split('\n')[0] ?? ''}`),
+    );
+  refusals += 1;
+  const [kept] = await session.query<{ history: number; columns: number }>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[_prisma_migrations] WHERE [migration_name] = N'${SOURCE_ADAPTERS_MIGRATION}') AS [history],
+      (SELECT COUNT(*) FROM sys.columns
+        WHERE [object_id] IN (OBJECT_ID(N'[dbo].[MigrationLegacyMapping]'), OBJECT_ID(N'[dbo].[MigrationManifestEntry]'))
+          AND [name] IN (${[...MIGRATION_TARGETS.map(([column]) => column), 'targetStage'].map((column) => `N'${column}'`).join(',')})) AS [columns];
+  `);
+  if (Number(kept?.history) !== 1 || Number(kept?.columns) !== 11)
+    fail(
+      `A refused Phase-30 rollback must change nothing; found ${JSON.stringify(kept ?? null)}.`,
+    );
+  await assertStatedMigrationRules(session, sourceAdapters, 'Phase 30');
 
   report(
     'migration rules',
@@ -20747,8 +21495,13 @@ async function assertMigrationRules(session: SqlSession): Promise<void> {
       `cross-language pairs never merged, two licences over one Asset, manifests published ` +
       `and rolled back only under live migration.publish with a live migration-publication ` +
       `step-up, one live entry per revision, one active mapping per legacy URL, promotions of ` +
-      `published entries only, no cascade; ${String(refusals)} refusals by name, every text a ` +
-      `NON_MIGRATION_FIXTURE sentinel, rows kept as evidence until this database is dropped`,
+      `published entries only, no cascade; Phase 30's eight kinds on sources, records and ` +
+      `revisions, authorised sources only with written authorisation at a real https host ` +
+      `under the politeness floor, review-only kinds never entered, one target of the ` +
+      `revision's own kind written once with its stage, mappings naming exactly their ` +
+      `entry's target, and its rollback refused over them; ${String(refusals)} refusals by ` +
+      `name, every text a NON_MIGRATION_FIXTURE sentinel, rows kept as evidence until this ` +
+      `database is dropped`,
   );
 }
 
@@ -21435,6 +22188,7 @@ try {
   await assertMembershipFoundation(session);
   await assertDonationsFoundation(session);
   await assertMigrationFoundation(session);
+  await assertSourceAdaptersFoundation(session, migrations);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -21482,6 +22236,13 @@ try {
     }
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
+    }
+    if (migration.id === SOURCE_ADAPTERS_MIGRATION) {
+      // Phase 30 created nothing and widened no search vocabulary or bundle:
+      // its rollback leaves the Migration & Provenance schema exactly as Phase
+      // 29 made it, and every owner a new target key named untouched.
+      await assertSearchVocabulary(session, 'phase22');
+      await assertSourceAdaptersRemoved(session, migrations);
     }
     if (migration.id === MIGRATION_PROVENANCE_MIGRATION) {
       // Phase 29 widened no search vocabulary, so none narrows here — and the
@@ -21756,6 +22517,7 @@ try {
   await assertMembershipFoundation(session, 're-deploy');
   await assertDonationsFoundation(session, 're-deploy');
   await assertMigrationFoundation(session, 're-deploy');
+  await assertSourceAdaptersFoundation(session, migrations, 're-deploy');
   // The membership rules as BEHAVIOUR, on the re-deployed schema: what was
   // rolled back and re-applied enforces exactly what the first deploy did.
   await assertCollectionMembership(session);
@@ -21810,11 +22572,19 @@ try {
   );
   if (migrationProvenance === undefined)
     fail(`${MIGRATION_PROVENANCE_MIGRATION} is not among the migrations on disk.`);
-  await assertMigrationBundleExtension(session, migrationProvenance);
-  // And the Migration & Provenance rules, last: raw snapshots can never be
-  // deleted and every decision is history, so — like the canonical proofs —
-  // their synthetic rows die with this disposable database.
-  await assertMigrationRules(session);
+  const sourceAdapters = migrations.find(
+    (entry) => entry.id === SOURCE_ADAPTERS_MIGRATION,
+  );
+  if (sourceAdapters === undefined)
+    fail(`${SOURCE_ADAPTERS_MIGRATION} is not among the migrations on disk.`);
+  await assertMigrationBundleExtension(session, migrationProvenance, sourceAdapters);
+  await assertSourceAdaptersFoundation(session, migrations, 're-deploy');
+  // And the Migration & Provenance rules, last — Phase 29's and Phase 30's
+  // together: raw snapshots can never be deleted and every decision is
+  // history, so — like the canonical proofs — their synthetic rows die with
+  // this disposable database. Phase 30's rollback is then shown to REFUSE
+  // over them rather than discard them.
+  await assertMigrationRules(session, sourceAdapters);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

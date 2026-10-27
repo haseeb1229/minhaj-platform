@@ -5,7 +5,7 @@ import { getTranslations } from 'next-intl/server';
 import { requireOwnSession } from '@/composition/authorization';
 import { identityRuntime } from '@/composition/identity';
 import { requireLocale } from '@/config/route-locale';
-import { TextLink } from '@/components/ui';
+import { WorkspaceNav } from '@/components/workspace/workspace-nav';
 
 /**
  * The Learning administration shell (ROUTE_MAP.md §7:
@@ -55,16 +55,23 @@ export default async function LearningAdminLayout({
   return (
     <>
       {held.has('learning.read') || held.has('learning.classes.read') ? (
-        <nav className="flex flex-wrap gap-4" aria-label={t('title')}>
-          {[
-            ...(held.has('learning.read') ? SURFACES : (['trials'] as const)),
-            ...(held.has('learning.classes.read') ? CLASS_SURFACES : []),
-          ].map((surface) => (
-            <TextLink key={surface} href={`/${locale}/admin/learning/${surface}`}>
-              {t(`surface.${surface}`)}
-            </TextLink>
-          ))}
-        </nav>
+        <WorkspaceNav
+          label={t('title')}
+          variant="tabs"
+          groups={[
+            {
+              key: 'learning',
+              links: [
+                ...(held.has('learning.read') ? SURFACES : (['trials'] as const)),
+                ...(held.has('learning.classes.read') ? CLASS_SURFACES : []),
+              ].map((surface) => ({
+                key: surface,
+                href: `/${locale}/admin/learning/${surface}`,
+                text: t(`surface.${surface}`),
+              })),
+            },
+          ]}
+        />
       ) : null}
 
       <NextIntlClientProvider

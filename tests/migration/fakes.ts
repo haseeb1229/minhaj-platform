@@ -1,12 +1,21 @@
 import { createHash } from 'node:crypto';
 
+import {
+  isPublishableKind,
+  type AssetAcquisitionInput,
+  type AssetVisibility,
+  type DiscoveredItem,
+  type FetchOutcome,
+  type ManifestEntryRecord,
+  type ManifestRecord,
+  type MigrationAssetStoragePort,
+  type MigrationContentKind,
+  type MigrationPublishableKind,
+  type MigrationTargetRef,
+  type ParsedRecord,
+  type TargetStage,
+} from '../../packages/contracts/src/migration/index.ts';
 import type {
-  AssetAcquisitionInput,
-  DiscoveredItem,
-  FetchOutcome,
-  ManifestEntryRecord,
-  ManifestRecord,
-  MigrationAssetStoragePort,
   MigrationAuthorityPort,
   MigrationDecisionPort,
   MigrationFetchPort,
@@ -178,6 +187,8 @@ interface LegacyMappingRow {
   recordId: string;
   legacyUrl: string;
   digest: string;
+  /** What the mapping names, by typed target (the adapter's one typed column). */
+  target: MigrationTargetRef;
   canonicalPath: string;
   state: 'active' | 'disabled';
   version: number;
@@ -205,7 +216,11 @@ export class FakeStore {
   readonly errors = new Map<string, ErrorRow>();
   readonly duplicates = new Map<string, DuplicateRow>();
   readonly legacyMappings = new Map<string, LegacyMappingRow>();
-  readonly acquisitions = new Map<string, AssetAcquisitionInput & { id: string }>();
+  /** Acquisitions; `visibility` is what a PERSON decided (restricted until then). */
+  readonly acquisitions = new Map<
+    string,
+    AssetAcquisitionInput & { id: string; visibility: AssetVisibility }
+  >();
   readonly topicMappings = new Map<
     string,
     { id: string; state: string; topicId: string | null; version: number }
@@ -225,7 +240,13 @@ export class FakeStore {
     }
   >();
   readonly audit: string[] = [];
-  readonly calls = { stage: 0, storeSnapshot: 0, snapshotsCreated: 0, readSnapshot: 0 };
+  readonly calls = {
+    stage: 0,
+    storeSnapshot: 0,
+    snapshotsCreated: 0,
+    readSnapshot: 0,
+    resolve: 0,
+  };
   private seq = 0;
 
   addSource(overrides: Partial<SourceRecord> = {}): SourceRecord {
@@ -254,13 +275,19 @@ export class FakeStore {
     return source;
   }
 
-  /** An approved, valid revision staged directly — for publication tests. */
+  /**
+   * An approved, valid revision staged directly — for publication tests. Its
+   * kind is the payload's own `kind` (a video when the payload names none).
+   */
   approvedRevision(
     sourceId: string,
     runId: string,
     payload: object,
     url: string,
   ): StagedRow {
+    const contentKind =
+      ((payload as { kind?: unknown }).kind as MigrationContentKind | undefined) ??
+      'media.video';
     const record = this.upsertRecord(
       sourceId,
       { externalKey: url, originalUrl: url, legacyIdentifier: null },
@@ -272,7 +299,7 @@ export class FakeStore {
       itemId: 'n/a',
       recordId: record.id,
       snapshotId: 'n/a',
-      contentKind: 'media.video',
+      contentKind,
       title: 'T',
       titleKey: 't',
       dedupeKey: null,
@@ -380,10 +407,17 @@ export class FakeStore {
 
   readonly pipeline: MigrationPipelinePort = {
     openRun: async (input) => {
-      // The adapter refuses a non-fixture or inactive source itself, too.
+      // As the adapter: a fixture, or an authorised source carrying its written
+      // authorisation reference and date — and only an active one.
       const owner = this.sources.get(input.sourceId);
       if (owner === undefined) throw refusal('not-found');
-      if (owner.authorityKind !== 'fixture') throw refusal('real-source-not-authorised');
+      if (
+        owner.authorityKind !== 'fixture' &&
+        (owner.authorityKind !== 'authorised' ||
+          owner.authorisationReference === null ||
+          owner.authorisedOn === null)
+      )
+        throw refusal('real-source-not-authorised');
       if (owner.state !== 'active') throw refusal('invalid-state');
       const open = [...this.runs.values()].find(
         (run) => run.sourceId === input.sourceId && run.state === 'open',
@@ -675,7 +709,7 @@ export class FakeStore {
       const existing = this.acquisitions.get(key);
       if (existing !== undefined) return { provenanceId: existing.id, created: false };
       const id = this.ids();
-      this.acquisitions.set(key, { ...input, id });
+      this.acquisitions.set(key, { ...input, id, visibility: 'restricted' });
       return { provenanceId: id, created: true };
     },
     reconciliationCounts: async (runId) => this.counts(runId),
@@ -780,10 +814,48 @@ export class FakeStore {
       this.sources.set(source.id, source);
       return source;
     },
+    createAuthorisedSource: async (input) => {
+      // As the adapter and its CHECKs: authorised, INACTIVE, http, its
+      // evidence recorded, real hosts only (never `*.invalid`, never one label).
+      if ([...this.sources.values()].some((source) => source.key === input.key))
+        throw refusal('duplicate');
+      const hosts = [...new Set(input.hosts)];
+      if (hosts.length < 1) throw refusal('invalid');
+      if (hosts.some((host) => host.endsWith('.invalid') || !/.\../.test(host)))
+        throw refusal('host-refused');
+      const source: SourceRecord = {
+        id: input.id,
+        key: input.key,
+        name: input.name,
+        authorityKind: 'authorised',
+        accessMethod: 'http',
+        contentKind: input.contentKind,
+        baseUrl: input.baseUrl,
+        hosts,
+        authorisationReference: input.authorisationReference,
+        authorisedOn: input.authorisedOn,
+        licensingEvidence: input.licensingEvidence,
+        policyNotes: input.policyNotes,
+        defaultLanguageCode: input.defaultLanguageCode,
+        policy: input.policy,
+        state: 'inactive',
+        version: 1,
+        createdAt: input.now,
+        updatedAt: input.now,
+      };
+      this.sources.set(source.id, source);
+      this.audit.push('migration.source.registered');
+      return source;
+    },
     updateSource: async (input) => {
       const source = this.sources.get(input.id);
       if (source === undefined) throw refusal('not-found');
       if (source.version !== input.expectedVersion) throw refusal('conflict');
+      this.audit.push(
+        source.state !== 'active' && input.state === 'active'
+          ? 'migration.source.activated'
+          : 'migration.source.updated',
+      );
       const next: SourceRecord = {
         ...source,
         name: input.name,
@@ -876,6 +948,7 @@ export class FakeStore {
         (acquisition) => acquisition.id === input.provenanceId,
       );
       if (row === undefined) throw refusal('not-found');
+      row.visibility = input.visibility;
     },
     decideLegacyMapping: async (input) => {
       const row = this.legacyMappings.get(input.mappingId);
@@ -916,6 +989,15 @@ export class FakeStore {
     createManifest: async (input) => {
       const run = this.runs.get(input.runId);
       if (run === undefined) throw refusal('not-found');
+      // As the adapter, every revision is checked before anything is written:
+      // religious material is evidence only, never a manifest entry.
+      for (const stagedId of input.stagedRecordIds) {
+        const staged = this.staged.get(stagedId);
+        if (staged === undefined) throw refusal('not-found');
+        if (!isPublishableKind(staged.contentKind)) throw refusal('review-only-kind');
+        if (staged.review !== 'approved' || staged.validation !== 'valid')
+          throw refusal('invalid-state');
+      }
       const manifest: ManifestRecord = {
         id: input.id,
         sourceId: run.sourceId,
@@ -932,9 +1014,7 @@ export class FakeStore {
       };
       this.manifests.set(manifest.id, manifest);
       input.stagedRecordIds.forEach((stagedId, position) => {
-        const staged = this.staged.get(stagedId);
-        if (staged === undefined || staged.review !== 'approved')
-          throw refusal('invalid');
+        const staged = this.staged.get(stagedId)!;
         const entry: ManifestEntryRecord = {
           id: this.ids(),
           manifestId: manifest.id,
@@ -942,7 +1022,8 @@ export class FakeStore {
           stagedRecordId: stagedId,
           recordId: staged.recordId,
           state: 'pending',
-          videoId: null,
+          target: null,
+          targetStage: null,
           targetVersion: null,
           canonicalPath: null,
           refusal: null,
@@ -998,6 +1079,19 @@ export class FakeStore {
             legacyUrls: [
               { recordId: record.id, url: record.originalUrl ?? record.externalKey },
             ],
+            // As the adapter: only acquisitions a person decided public-eligible.
+            assets: [...this.acquisitions.values()]
+              .filter(
+                (acquisition) =>
+                  acquisition.recordId === record.id &&
+                  acquisition.visibility === 'public-eligible',
+              )
+              .map((acquisition) => ({
+                originalUrl: acquisition.originalUrl,
+                assetId: acquisition.assetId,
+                mediaType: acquisition.mediaType,
+                checksum: acquisition.checksum,
+              })),
           };
         }),
     claimEntry: async (entryId, expectedVersion) => {
@@ -1018,7 +1112,8 @@ export class FakeStore {
       this.entries.set(entry.id, {
         ...entry,
         state: 'published',
-        videoId: input.videoId,
+        target: input.target,
+        targetStage: input.targetStage,
         targetVersion: input.targetVersion,
         canonicalPath: input.canonicalPath,
         publishedAt: input.now,
@@ -1033,12 +1128,25 @@ export class FakeStore {
           recordId: legacy.recordId,
           legacyUrl: legacy.url,
           digest: legacy.digest,
+          target: input.target,
           canonicalPath: input.canonicalPath,
           state: 'active',
           version: 1,
         });
       }
       this.records.get(entry.recordId)!.status = 'published';
+    },
+    resolveLegacyTarget: async (digest) => {
+      this.calls.resolve += 1;
+      // As the adapter: any source's ACTIVE mapping; two that disagree are no answer.
+      const targets = [...this.legacyMappings.values()]
+        .filter((mapping) => mapping.digest === digest && mapping.state === 'active')
+        .map((mapping) => mapping.target);
+      const [first, ...rest] = targets;
+      if (first === undefined) return null;
+      if (rest.some((other) => other.kind !== first.kind || other.id !== first.id))
+        return null;
+      return first;
     },
     recordRefused: async (input) => {
       const entry = this.entries.get(input.entryId)!;
@@ -1390,7 +1498,7 @@ export class ScriptedFetcher implements MigrationFetchPort {
 }
 
 export const BASE = 'https://videos.fixture.invalid/';
-export const pageUrl = (n: number) => `${BASE}videos/${n}`;
+export const pageUrl = (n: number, base = BASE) => `${base}videos/${n}`;
 
 /** A synthetic video record, as the fixture adapter's JSON body carries it. */
 export function videoBody(n: number, overrides: Partial<ParsedVideo> = {}): string {
@@ -1414,26 +1522,33 @@ export function videoBody(n: number, overrides: Partial<ParsedVideo> = {}): stri
   return JSON.stringify(record);
 }
 
+/** Any synthetic parsed record, as the JSON adapter's body carries it. */
+export function recordBody(record: ParsedRecord): string {
+  return JSON.stringify(record);
+}
+
 /**
- * A synthetic adapter: discovery pages list `/videos/<n>` URLs, retrieval
- * fetches them, parsing reads the JSON body. `pageSize` keys per page.
+ * A synthetic adapter: discovery pages list `/videos/<n>` URLs under `base`,
+ * retrieval fetches them, parsing reads the JSON body as a parsed record of
+ * any kind. `pageSize` keys per page; `contentKind` is the kind it declares.
  */
 export class JsonAdapter implements MigrationSourceAdapter {
   readonly adapterKey = 'fixture-json';
   adapterVersion = '1';
   readonly parserKey = 'fixture-json';
   readonly parserVersion = '1';
-  readonly contentKind = 'media.video' as const;
+  contentKind: MigrationContentKind = 'media.video';
   accessMethod: 'http' | 'export' = 'http';
 
   constructor(
     readonly keys: number[],
     readonly pageSize = 10,
+    readonly base = BASE,
   ) {}
 
   async discover(cursor: string | null, fetcher: MigrationFetchPort) {
     const start = cursor === null ? 0 : Number(cursor);
-    const index = await fetcher.fetch(`${BASE}index?page=${start}`);
+    const index = await fetcher.fetch(`${this.base}index?page=${start}`);
     if (index.kind !== 'response' || index.status !== 200)
       return { kind: 'outcome' as const, outcome: index };
     const slice = this.keys.slice(start, start + this.pageSize);
@@ -1442,8 +1557,8 @@ export class JsonAdapter implements MigrationSourceAdapter {
     return {
       kind: 'page' as const,
       items: slice.map((n) => ({
-        externalKey: pageUrl(n),
-        originalUrl: pageUrl(n),
+        externalKey: pageUrl(n, this.base),
+        originalUrl: pageUrl(n, this.base),
         legacyIdentifier: null,
       })),
       next,
@@ -1469,7 +1584,7 @@ export class JsonAdapter implements MigrationSourceAdapter {
     const text = new TextDecoder().decode(evidence.body);
     if (text === 'EXCLUDE') return { kind: 'excluded' as const, reason: 'not a video' };
     try {
-      return { kind: 'parsed' as const, record: JSON.parse(text) as ParsedVideo };
+      return { kind: 'parsed' as const, record: JSON.parse(text) as ParsedRecord };
     } catch {
       return { kind: 'failed' as const, detail: 'not JSON' };
     }
@@ -1477,9 +1592,14 @@ export class JsonAdapter implements MigrationSourceAdapter {
 }
 
 /** Every index page answers 200. */
-export function indexPages(fetcher: ScriptedFetcher, keys: number, pageSize = 10): void {
+export function indexPages(
+  fetcher: ScriptedFetcher,
+  keys: number,
+  pageSize = 10,
+  base = BASE,
+): void {
   for (let start = 0; start < Math.max(keys, 1); start += pageSize)
-    fetcher.set(`${BASE}index?page=${start}`, ok(`${BASE}index?page=${start}`, '[]'));
+    fetcher.set(`${base}index?page=${start}`, ok(`${base}index?page=${start}`, '[]'));
 }
 
 export class FakeStorage implements MigrationAssetStoragePort {
@@ -1505,10 +1625,35 @@ export class FakeStorage implements MigrationAssetStoragePort {
  * Publication target and promotion destination
  * ========================================================================= */
 
+/** Where each publishable kind's record lives, as its domain's public path. */
+const TARGET_PATHS: Readonly<Record<MigrationPublishableKind, string>> = Object.freeze({
+  'media.video': '/watch/videos',
+  'library.work': '/library/books',
+  'library.magazine': '/library/magazines',
+  'library.magazine-issue': '/library/magazines/issues',
+  'editorial.news': '/news',
+  'editorial.article': '/articles',
+});
+
+type PublishInput = Parameters<MigrationPublicationTargetPort['publish']>[0];
+
+/**
+ * A Layer-4 target for the publishable kinds it is told it supports (a video
+ * by default). As a real publisher: a RESUMED entry adopts what an
+ * interrupted publication made; a fresh entry meeting an existing record of
+ * the same kind and slug is refused.
+ */
 export class FakeTarget implements MigrationPublicationTargetPort {
-  readonly videos = new Map<
+  readonly made = new Map<
     string,
-    { id: string; slug: string; version: number; state: string; referenced: boolean }
+    {
+      id: string;
+      kind: MigrationPublishableKind;
+      slug: string;
+      version: number;
+      state: string;
+      referenced: boolean;
+    }
   >();
   publishCalls = 0;
   withdrawCalls = 0;
@@ -1517,64 +1662,85 @@ export class FakeTarget implements MigrationPublicationTargetPort {
   readonly actors: string[] = [];
   /** The `resumed` flag of every publish call, in order. */
   readonly resumedFlags: boolean[] = [];
+  /** Every publish input, in order — what the target was handed. */
+  readonly inputs: PublishInput[] = [];
+  /** The stage every publication reports (`in-review` for a two-person domain). */
+  stage: TargetStage = 'public';
+  /** A misbehaving target: reports a target of this kind instead of the entry's. */
+  answerKind: MigrationPublishableKind | null = null;
+  /** Called before a publication is made — e.g. to resolve a reference. */
+  beforePublish: ((input: PublishInput) => Promise<void>) | null = null;
   private next = 0;
 
-  supports(kind: string): boolean {
-    return kind === 'media.video';
+  constructor(
+    readonly kinds: ReadonlySet<MigrationContentKind> = new Set(['media.video']),
+  ) {}
+
+  supports(kind: MigrationContentKind): boolean {
+    return this.kinds.has(kind);
   }
 
-  async publish(input: Parameters<MigrationPublicationTargetPort['publish']>[0]) {
+  async publish(input: PublishInput) {
     this.actors.push(input.actor.accountId);
     this.resumedFlags.push(input.resumed);
-    if (this.unavailableFor.has(input.payload.slug))
-      return { status: 'unavailable' as const };
+    this.inputs.push(input);
+    if (!('slug' in input.payload)) throw new Error('a publishable payload has a slug');
+    const slug = input.payload.slug;
+    if (this.unavailableFor.has(slug)) return { status: 'unavailable' as const };
     this.publishCalls += 1;
-    const refusalReason = this.refuseSlugs.get(input.payload.slug);
+    const refusalReason = this.refuseSlugs.get(slug);
     if (refusalReason !== undefined)
       return { status: 'refused' as const, reason: refusalReason };
-    // As the real target: a RESUMED entry adopts what an interrupted
-    // publication made; a fresh entry meeting an existing Video is refused.
-    let video = [...this.videos.values()].find(
-      (candidate) => candidate.slug === input.payload.slug,
+    if (this.beforePublish !== null) await this.beforePublish(input);
+    let made = [...this.made.values()].find(
+      (candidate) => candidate.kind === input.kind && candidate.slug === slug,
     );
-    if (video !== undefined && !input.resumed)
+    if (made !== undefined && !input.resumed)
       return { status: 'refused' as const, reason: 'target-exists' };
-    if (video === undefined) {
+    if (made === undefined) {
       this.next += 1;
-      video = {
+      made = {
         id: `00000000-0000-4000-a000-${String(this.next).padStart(12, '0')}`,
-        slug: input.payload.slug,
+        kind: input.kind,
+        slug,
         version: 1,
         state: 'published',
         referenced: false,
       };
-      this.videos.set(video.id, video);
+      this.made.set(made.id, made);
     }
     return {
       status: 'published' as const,
-      videoId: video.id,
-      version: video.version,
-      canonicalPath: `/watch/videos/${video.slug}`,
+      target: { kind: this.answerKind ?? made.kind, id: made.id },
+      stage: this.stage,
+      version: made.version,
+      canonicalPath: `${TARGET_PATHS[made.kind]}/${made.slug}`,
     };
+  }
+
+  /** The record a typed reference names — only when the kind agrees too. */
+  private find(target: MigrationTargetRef) {
+    const made = this.made.get(target.id);
+    return made !== undefined && made.kind === target.kind ? made : undefined;
   }
 
   async inspect(input: Parameters<MigrationPublicationTargetPort['inspect']>[0]) {
     this.actors.push(input.actor.accountId);
-    const video = this.videos.get(input.videoId);
-    return video === undefined
+    const made = this.find(input.target);
+    return made === undefined
       ? null
-      : { exists: true, version: video.version, referencedByPeople: video.referenced };
+      : { exists: true, version: made.version, referencedByPeople: made.referenced };
   }
 
   async withdraw(input: Parameters<MigrationPublicationTargetPort['withdraw']>[0]) {
     this.withdrawCalls += 1;
-    const video = this.videos.get(input.videoId);
-    if (video === undefined) return { status: 'refused' as const, reason: 'not-found' };
-    if (video.version !== input.expectedVersion)
+    const made = this.find(input.target);
+    if (made === undefined) return { status: 'refused' as const, reason: 'not-found' };
+    if (made.version !== input.expectedVersion)
       return { status: 'refused' as const, reason: 'conflict' };
-    video.state = 'archived';
-    video.version += 1;
-    return { status: 'withdrawn' as const, version: video.version };
+    made.state = 'archived';
+    made.version += 1;
+    return { status: 'withdrawn' as const, version: made.version };
   }
 }
 

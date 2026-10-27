@@ -284,7 +284,43 @@ export async function runMigrationFixtureProof(input: {
   readonly operator: MigrationProofOperator;
   readonly environment: Record<string, string | undefined>;
 }): Promise<Record<string, unknown>> {
+  return runMigrationTool({
+    runtime: input.runtime,
+    entry: MIGRATION_PROOF_ENTRY,
+    args: ['--operator', input.operator.accountId, '--session', input.operator.sessionId],
+    environment: input.environment,
+    label: 'migration proof',
+  });
+}
+
+/** The authorised-source tools a staging operator may start (Phase 30). */
+export const MIGRATION_TOOL_ENTRIES = Object.freeze({
+  register: path.join('scripts', 'migration', 'register-source.ts'),
+  run: path.join('scripts', 'migration', 'run-source.ts'),
+});
+
+/**
+ * Runs one migration tool — the fixture proof, or an authorised-source
+ * registration or run — as the RUNTIME principal against `runtime`'s database,
+ * and returns its final JSON line. The child's environment is the allowlist
+ * above plus the runtime URL: it never holds schema authority, the migration
+ * URL or another principal's password. Its stderr passes through; its stdout
+ * is captured, and only that last line is read.
+ */
+export async function runMigrationTool(input: {
+  readonly runtime: SqlServerConnection;
+  /** Repository-relative entry: the proof or one of `MIGRATION_TOOL_ENTRIES`. */
+  readonly entry: string;
+  readonly args: readonly string[];
+  readonly environment: Record<string, string | undefined>;
+  readonly label: string;
+}): Promise<Record<string, unknown>> {
   assertMigrationProofDatabase(input.runtime.database);
+  if (
+    input.entry !== MIGRATION_PROOF_ENTRY &&
+    !Object.values(MIGRATION_TOOL_ENTRIES).includes(input.entry)
+  )
+    throw new Error('Not a migration tool this runner starts.');
   const environment: Record<string, string> = {};
   for (const key of INHERITED) {
     const value = input.environment[key];
@@ -294,14 +330,7 @@ export async function runMigrationFixtureProof(input: {
 
   const child = spawn(
     process.execPath,
-    [
-      '--conditions=react-server',
-      MIGRATION_PROOF_ENTRY,
-      '--operator',
-      input.operator.accountId,
-      '--session',
-      input.operator.sessionId,
-    ],
+    ['--conditions=react-server', input.entry, ...input.args],
     { cwd: repoRoot, env: environment, stdio: ['ignore', 'pipe', 'inherit'] },
   );
   let output = '';
@@ -317,12 +346,12 @@ export async function runMigrationFixtureProof(input: {
     summary = JSON.parse(last) as Record<string, unknown>;
   } catch {
     throw new Error(
-      `The migration proof ended without a JSON summary (exit ${String(exitCode)}).`,
+      `The ${input.label} ended without a JSON summary (exit ${String(exitCode)}).`,
     );
   }
   if (exitCode !== 0 || summary['ok'] !== true)
     throw new Error(
-      `The migration proof failed: ${typeof summary['error'] === 'string' ? summary['error'] : `exit ${String(exitCode)}`}.`,
+      `The ${input.label} failed: ${typeof summary['refusal'] === 'string' ? summary['refusal'] : typeof summary['error'] === 'string' ? summary['error'] : `exit ${String(exitCode)}`}.`,
     );
   return summary;
 }

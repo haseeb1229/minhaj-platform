@@ -338,6 +338,14 @@ ops() {
     "packages/database/scripts/$script.ts" "$@"
 }
 
+# ingest <register|run> [args...] — the authorised-source runner (Phase 30):
+# `staging-migration-run` in the exact-SHA operations image, in the `ingest`
+# service, the ONE operator container with an outbound network. Arguments are
+# validated again, strictly, by the command itself.
+ingest() {
+  release_compose "$(current_release_dir)" --profile ingest run --rm --no-deps -T ingest     packages/database/scripts/staging-migration-run.ts "$@"
+}
+
 # The final line of an ops command's output, which by contract is one JSON
 # object summarising the result.
 ops_json() {

@@ -107,6 +107,69 @@
      rather than as a warning. */
   --color-highlight: #f6e8bf;
 
+  /* -------------------------------------------------------------------------
+   * The flagship presentation pass — the structure the public shell and the
+   * home portal compose with. Every existing role above keeps its name and
+   * its value; these are ADDED roles, each with a consumer.
+   * ---------------------------------------------------------------------- */
+
+  /* ACCENT — a restrained brass, for small highlights only: an eyebrow, a
+     rule, the marker of the section a visitor is in. Never a fill behind body
+     text and never a second action colour. `--color-accent` is text-safe on
+     every light surface (≥ 5.4:1 on surface, raised, sunken and its own wash);
+     the wash carries foreground and muted text at AA as well. A pre-adoption
+     value like every other token (OPEN_DECISIONS.md §6.4). */
+  --color-accent: #7a5a17;
+  --color-accent-surface: #f4ecd9;
+  --color-accent-rule: #d8c497;
+
+  /* INK — the one deep surface, for the bands that frame a page: the home
+     hero and the footer. Its foreground roles are measured against BOTH ink
+     values: foreground ≥ 12:1, muted ≥ 8.8:1, accent ≥ 6.9:1. Focus on ink
+     uses the ink accent (see `.surface-ink` below), because the default focus
+     colour is itself a deep green and would vanish there. */
+  --color-ink: #15241b;
+  --color-ink-raised: #1e3127;
+  --color-ink-foreground: #f4f1ea;
+  --color-ink-muted: #c9d1ca;
+  --color-ink-accent: #d6b46c;
+  --color-ink-border: #34473b;
+
+  /* A SECOND ELEVATION, for surfaces that sit above the page — an open mega
+     menu, a card under the pointer. Soft and short; no glow. */
+  --shadow-raised: 0 1px 2px rgb(27 27 27 / 0.06), 0 12px 28px -14px rgb(27 27 27 / 0.28);
+
+  /* THE TYPE SCALE. Six roles, fluid where a heading must not dominate a
+     phone. The line heights here are the Latin ones; Urdu and Arabic are
+     re-tuned below, on the same names, because Nastaliq and Naskh need far
+     more vertical room than the Latin defaults give them (§13.3). Quran text
+     keeps its own specialised typography and is not set from this scale. */
+  --text-display: clamp(2.25rem, 1.6rem + 2.4vw, 3.5rem);
+  --text-display--line-height: 1.1;
+  --text-title: clamp(1.75rem, 1.45rem + 1.1vw, 2.25rem);
+  --text-title--line-height: 1.2;
+  --text-heading: clamp(1.3rem, 1.18rem + 0.5vw, 1.6rem);
+  --text-heading--line-height: 1.3;
+  --text-subheading: 1.125rem;
+  --text-subheading--line-height: 1.4;
+  --text-lede: clamp(1.0625rem, 1rem + 0.3vw, 1.25rem);
+  --text-lede--line-height: 1.6;
+  --text-caption: 0.8125rem;
+  --text-caption--line-height: 1.5;
+
+  /* Letter spacing is LATIN-ONLY. Spacing Arabic-script letters apart breaks
+     the joins between them, so both values are zeroed for Urdu and Arabic. */
+  --tracking-display: -0.02em;
+  --tracking-eyebrow: 0.08em;
+
+  /* SPACING RHYTHM — the page gutter and the vertical rhythm between and
+     inside sections, so every surface breathes the same way. The gutter is
+     16px on a phone and 24px from a small tablet up, as it has always been. */
+  --space-gutter: clamp(1rem, 4vw, 1.5rem);
+  --space-page: clamp(2rem, 1.4rem + 2.5vw, 3rem);
+  --space-section: clamp(2.75rem, 2rem + 3.5vw, 4.5rem);
+  --space-stack: 1.25rem;
+
   --font-latin: system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-urdu:
     'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Nafees Nastaleeq',
@@ -148,6 +211,34 @@ body {
 :root:lang(ar) body {
   font-family: var(--font-arabic);
   line-height: 1.9;
+}
+
+/*
+ * THE TYPE SCALE, RE-TUNED PER SCRIPT on the same token names, so a component
+ * says "title" once and is right in all three languages. Nastaliq stacks
+ * diagonally and needs the most room; Naskh a little less. Letter spacing is
+ * removed entirely — it breaks the joins of Arabic script.
+ */
+:root:lang(ur) {
+  --text-display--line-height: 1.7;
+  --text-title--line-height: 1.8;
+  --text-heading--line-height: 1.9;
+  --text-subheading--line-height: 1.9;
+  --text-lede--line-height: 2;
+  --text-caption--line-height: 1.9;
+  --tracking-display: 0;
+  --tracking-eyebrow: 0;
+}
+
+:root:lang(ar) {
+  --text-display--line-height: 1.45;
+  --text-title--line-height: 1.5;
+  --text-heading--line-height: 1.6;
+  --text-subheading--line-height: 1.7;
+  --text-lede--line-height: 1.9;
+  --text-caption--line-height: 1.8;
+  --tracking-display: 0;
+  --tracking-eyebrow: 0;
 }
 
 /*
@@ -235,6 +326,45 @@ p {
 :focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
+}
+
+/*
+ * THE INK SURFACE — the deep band behind the home hero and the footer.
+ *
+ * One class sets the background, the foreground and, crucially, the focus
+ * colour: the default focus ring is a deep green that would be invisible on
+ * ink, and a focus indicator that cannot be seen is not one. Links inherit the
+ * band's foreground rather than a light-surface action colour.
+ */
+.surface-ink {
+  background-color: var(--color-ink);
+  color: var(--color-ink-foreground);
+}
+
+.surface-ink :focus-visible {
+  outline-color: var(--color-ink-accent);
+}
+
+/*
+ * A WHOLE-CARD LINK, made from ONE anchor.
+ *
+ * The card's heading holds the only link; its `::after` is stretched over the
+ * card (which is `position: relative`), so the whole surface is a pointer
+ * target while the accessibility tree still holds a single, well-named link —
+ * never a link wrapped around a heading, a paragraph and a list, and never a
+ * nested interactive element. The link keeps its own focus ring, and the card
+ * echoes it on its border, so the indicator is visible on the target itself and
+ * the extent of what will be followed is visible too.
+ */
+.card-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.card-surface:has(.card-link:focus-visible) {
+  border-color: var(--color-focus);
 }
 
 /*

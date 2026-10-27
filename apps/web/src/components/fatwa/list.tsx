@@ -7,7 +7,7 @@ import {
   type PublicFatwaSummary,
 } from '@minhaj/contracts/fatwa';
 
-import { TextLink } from '@/components/ui';
+import { MetaRow } from '@/components/ui';
 import { FatwaDate, type FatwaTranslator } from './parts';
 import { categoryHref, fatwaTextDirection, rulingHref } from './presentation';
 import { readFatwaCategories } from './read';
@@ -17,7 +17,9 @@ import { readFatwaCategories } from './read';
  * and the topic hub's preview all render it.
  *
  * THE TITLE IS THE LINK, to the ruling's one canonical address, marked with the
- * ruling's own language and direction. Beside it: the category, the first
+ * ruling's own language and direction. Beneath it, one line of metadata (each
+ * item isolated, so an Urdu category beside an English date keeps its order):
+ * the category, the first
  * publication date and — when there has been one — the date of the latest
  * correction, so a corrected ruling never looks untouched. Nothing about who
  * asked, and no question text: a listing shows the published title only.
@@ -67,42 +69,52 @@ export function FatwaList({
 }) {
   const Heading = headingLevel;
   return (
-    <ol aria-label={label} className="flex flex-col">
+    <ol
+      aria-label={label}
+      className="flex list-none flex-col border-t border-[color:var(--color-border)] p-0"
+    >
       {items.map((item) => {
         const category = categories.get(item.categoryId);
         return (
-          <li key={item.id}>
-            <article className="flex min-w-0 flex-col gap-2 border-b border-[color:var(--color-border)] py-4">
+          <li key={item.id} className="border-b border-[color:var(--color-border)]">
+            <article className="flex min-w-0 flex-col gap-2 py-5">
               <Heading
-                className="text-base font-semibold wrap-anywhere"
+                className="text-subheading font-semibold text-balance wrap-anywhere"
                 lang={item.language}
                 dir={fatwaTextDirection(item.language)}
               >
-                <TextLink href={rulingHref(locale, item.slug)}>{item.title}</TextLink>
+                <a
+                  href={rulingHref(locale, item.slug)}
+                  className="text-[color:var(--color-foreground)] underline decoration-[color:var(--color-accent-rule)] underline-offset-4 hover:decoration-[color:var(--color-action)] active:text-[color:var(--color-action)]"
+                >
+                  {item.title}
+                </a>
               </Heading>
-              <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[color:var(--color-foreground-muted)]">
-                {category === undefined ? null : (
-                  <span className="wrap-anywhere">
-                    {t('item.category')}:{' '}
-                    <a
-                      href={categoryHref(locale, category.slug)}
-                      className="underline underline-offset-2"
-                    >
-                      {category.name}
-                    </a>
-                  </span>
-                )}
-                <span>
-                  {t('item.published')}:{' '}
-                  <FatwaDate value={item.firstPublishedAt} locale={locale} />
-                </span>
-                {item.correctedAt === null ? null : (
-                  <span>
-                    {t('item.corrected')}:{' '}
-                    <FatwaDate value={item.correctedAt} locale={locale} />
-                  </span>
-                )}
-              </p>
+              <MetaRow
+                items={[
+                  category === undefined ? null : (
+                    <span className="wrap-anywhere">
+                      {t('item.category')}:{' '}
+                      <a
+                        href={categoryHref(locale, category.slug)}
+                        className="inline-flex min-h-6 items-center text-[color:var(--color-action)] underline underline-offset-2"
+                      >
+                        {category.name}
+                      </a>
+                    </span>
+                  ),
+                  <>
+                    {t('item.published')}:{' '}
+                    <FatwaDate value={item.firstPublishedAt} locale={locale} />
+                  </>,
+                  item.correctedAt === null ? null : (
+                    <>
+                      {t('item.corrected')}:{' '}
+                      <FatwaDate value={item.correctedAt} locale={locale} />
+                    </>
+                  ),
+                ]}
+              />
             </article>
           </li>
         );

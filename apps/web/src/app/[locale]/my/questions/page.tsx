@@ -11,7 +11,8 @@ import {
 } from '@/components/fatwa/presentation';
 import { pageLinks } from '@/components/hadith/presentation';
 import { Pagination } from '@/components/media/parts';
-import { EmptyState, PageHeading, Panel, StatusBadge, TextLink } from '@/components/ui';
+import { ActionLink, EmptyState, Panel, StatusBadge, TextLink } from '@/components/ui';
+import { WorkspacePage } from '@/components/workspace/parts';
 import { requireLocale } from '@/config/route-locale';
 import { requireActiveSession } from '../guard';
 
@@ -50,17 +51,14 @@ export default async function MyQuestionsPage({
   const links = pageLinks(page.offset, FATWA_PAGE_SIZE, page.total);
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-6 px-4 py-10">
-      <header className="flex flex-col gap-2">
-        <PageHeading>{t('my.title')}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">
-          {t('my.description')}
-        </p>
-        <p>
-          <TextLink href={`/${locale}/my/questions/ask`}>{t('sections.ask')}</TextLink>
-        </p>
-      </header>
-
+    <WorkspacePage
+      title={t('my.title')}
+      description={<p>{t('my.description')}</p>}
+      action={
+        <ActionLink href={`/${locale}/my/questions/ask`}>{t('sections.ask')}</ActionLink>
+      }
+      measure="reading"
+    >
       {page.items.length === 0 ? (
         <EmptyState>{t('my.empty')}</EmptyState>
       ) : (
@@ -94,6 +92,6 @@ export default async function MyQuestionsPage({
       <p>
         <TextLink href={`/${locale}/my`}>{t('my.account')}</TextLink>
       </p>
-    </main>
+    </WorkspacePage>
   );
 }

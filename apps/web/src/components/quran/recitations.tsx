@@ -221,7 +221,7 @@ export async function ListenRecitationsPage({
 
   return (
     <Container>
-      <div className="flex flex-col gap-8 py-12">
+      <div className="flex flex-col gap-8 pt-6 pb-[var(--space-section)]">
         <FixtureNotice locale={locale} availability={availability} />
         <Breadcrumbs
           label={shell('nav.breadcrumbs')}

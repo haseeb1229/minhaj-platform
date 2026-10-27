@@ -5,7 +5,7 @@ import { getTranslations } from 'next-intl/server';
 import { requireOwnSession } from '@/composition/authorization';
 import { identityRuntime } from '@/composition/identity';
 import { requireLocale } from '@/config/route-locale';
-import { TextLink } from '@/components/ui';
+import { WorkspaceNav } from '@/components/workspace/workspace-nav';
 
 /**
  * The Library administration shell (ROUTE_MAP.md §7, and this phase's §17).
@@ -70,13 +70,20 @@ export default async function LibraryAdminLayout({
   return (
     <>
       {held.has('library.read') ? (
-        <nav className="flex flex-wrap gap-4" aria-label={t('title')}>
-          {SURFACES.map((surface) => (
-            <TextLink key={surface} href={`/${locale}/admin/library/${surface}`}>
-              {t(`admin.${surface}`)}
-            </TextLink>
-          ))}
-        </nav>
+        <WorkspaceNav
+          label={t('title')}
+          variant="tabs"
+          groups={[
+            {
+              key: 'library',
+              links: SURFACES.map((surface) => ({
+                key: surface,
+                href: `/${locale}/admin/library/${surface}`,
+                text: t(`admin.${surface}`),
+              })),
+            },
+          ]}
+        />
       ) : null}
 
       <NextIntlClientProvider

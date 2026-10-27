@@ -144,7 +144,7 @@ describe('pipeline: a complete run', () => {
       expect(row.validation).toBe('valid');
       expect(row.provenance).toMatchObject({
         adapterKey: 'fixture-json',
-        normalizerVersion: '29.1',
+        normalizerVersion: '30.1',
         codeRevision: 'local',
       });
       expect(row.categories).toEqual([{ key: 'lectures', label: 'Lectures' }]);
@@ -256,7 +256,7 @@ describe('pipeline: interruption and resumption', () => {
         adapterVersion: '1',
         parserKey: 'fixture-json',
         parserVersion: '1',
-        normalizerVersion: '29.1',
+        normalizerVersion: '30.1',
         codeRevision: 'local',
       },
       runId: '00000000-0000-4000-8fff-000000000001',
@@ -401,14 +401,47 @@ describe('pipeline: retries', () => {
 });
 
 describe('pipeline: refusals', () => {
-  it('refuses a non-fixture source', async () => {
+  it('refuses an authorised source without its written authorisation reference and date', async () => {
+    for (const missing of [
+      { authorisationReference: null, authorisedOn: '2026-01-01' },
+      { authorisationReference: 'Board letter 2026/07', authorisedOn: null },
+      { authorisationReference: null, authorisedOn: null },
+    ]) {
+      // Even with a real https scope, the missing evidence is refused first.
+      const world = pipelineWorld([1], {
+        authorityKind: 'authorised',
+        baseUrl: 'https://www.example.org/',
+        hosts: ['www.example.org'],
+        ...missing,
+      });
+      expect(await refusedWith(world.run())).toBe('real-source-not-authorised');
+      expect(world.fetcher.requests).toEqual([]);
+      expect(world.store.runs.size).toBe(0);
+    }
+  });
+
+  it('refuses an authorised source whose recorded scope is a fixture one', async () => {
+    // Evidence present, but the scope is synthetic: a fixture name never
+    // becomes a real one, so nothing is fetched.
     const world = pipelineWorld([1], {
       authorityKind: 'authorised',
-      authorisationReference: 'ref',
+      authorisationReference: 'Board letter 2026/07',
       authorisedOn: '2026-01-01',
     });
-    expect(await refusedWith(world.run())).toBe('real-source-not-authorised');
+    expect(await refusedWith(world.run())).toBe('unsafe-scope');
     expect(world.fetcher.requests).toEqual([]);
+  });
+
+  it('never runs a fixture source on a real host', async () => {
+    for (const scope of [
+      { hosts: ['www.example.org'], baseUrl: 'https://www.example.org/' },
+      // A real host smuggled beside the synthetic one.
+      { hosts: ['videos.fixture.invalid', 'www.example.org'] },
+    ]) {
+      const world = pipelineWorld([1], scope);
+      expect(await refusedWith(world.run())).toBe('unsafe-scope');
+      expect(world.fetcher.requests).toEqual([]);
+    }
   });
 
   it('refuses a source whose scope is not synthetic', async () => {
@@ -494,6 +527,7 @@ describe('pipeline: normalisation outcomes', () => {
       recordId: 'r',
       legacyUrl: pageUrl(9),
       digest: legacyUrlDigest(pageUrl(9)),
+      target: { kind: 'media.video', id: '00000000-0000-4000-a000-000000000009' },
       canonicalPath: '/watch/videos/video-9',
       state: 'active',
       version: 1,
@@ -770,7 +804,7 @@ describe('publication', () => {
     });
     expect(second).toMatchObject({ state: 'published', done: 1, stopped: null });
     expect(world.target.publishCalls).toBe(2);
-    expect(world.target.videos.size).toBe(2);
+    expect(world.target.made.size).toBe(2);
   });
 
   it('adopts what an interrupted publication already made', async () => {
@@ -795,15 +829,16 @@ describe('publication', () => {
       expectedVersion: world.version(),
     });
     expect(summary).toMatchObject({ state: 'published', done: 1 });
-    expect(world.target.videos.size).toBe(1);
+    expect(world.target.made.size).toBe(1);
     // Fresh on the first attempt; the in-flight entry is RESUMED on the second.
     expect(world.target.resumedFlags).toEqual([false, true]);
   });
 
   it('refuses a fresh entry whose Video already exists, never claiming it as published', async () => {
     const world = await publicationWorld(['video-a']);
-    world.target.videos.set('00000000-0000-4000-a000-0000000000ff', {
+    world.target.made.set('00000000-0000-4000-a000-0000000000ff', {
       id: '00000000-0000-4000-a000-0000000000ff',
+      kind: 'media.video',
       slug: 'video-a',
       version: 4,
       state: 'published',
@@ -815,7 +850,7 @@ describe('publication', () => {
     });
     expect(summary).toMatchObject({ done: 0, refused: 1 });
     expect(world.target.resumedFlags).toEqual([false]);
-    expect(world.target.videos.get('00000000-0000-4000-a000-0000000000ff')?.version).toBe(
+    expect(world.target.made.get('00000000-0000-4000-a000-0000000000ff')?.version).toBe(
       4,
     );
   });
@@ -873,7 +908,7 @@ describe('publication', () => {
       stopped: null,
     });
     expect(
-      [...world.target.videos.values()].every((video) => video.state === 'archived'),
+      [...world.target.made.values()].every((video) => video.state === 'archived'),
     ).toBe(true);
     expect(
       [...world.store.legacyMappings.values()].every(
@@ -889,7 +924,7 @@ describe('publication', () => {
       manifestId: world.manifest.id,
       expectedVersion: 1,
     });
-    const [first, second] = [...world.target.videos.values()];
+    const [first, second] = [...world.target.made.values()];
     first!.version += 1;
     second!.referenced = true;
     const summary = await world.service.rollback(PRIVILEGED, {
@@ -1431,7 +1466,7 @@ describe('sources', () => {
     ).toMatchObject({ accessMethod: 'export' });
   });
 
-  it('updates at the expected version and never activates a real source', async () => {
+  it('updates at the expected version and never activates a real source without its written authorisation', async () => {
     const { store, service } = sourceWorld();
     const source = await service.createFixture(ADMIN, valid);
     const update = {

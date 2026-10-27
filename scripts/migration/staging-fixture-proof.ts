@@ -200,6 +200,9 @@ function proofAdapter(
       const result = inner.parse(evidence);
       if (result.kind !== 'parsed') return result;
       const record = result.record;
+      // The fixture video site yields videos only; anything else is the
+      // fixture's own defect, surfaced as a parse failure.
+      if (record.kind !== 'media.video') return { kind: 'failed', detail: 'not-a-video' };
       return {
         kind: 'parsed',
         record: {
@@ -385,12 +388,12 @@ async function prove(
     const entries = live.entries;
     for (const entry of entries) {
       check(
-        entry.state === 'published' && entry.videoId !== null,
+        entry.state === 'published' && entry.target?.kind === 'media.video',
         'each entry is published',
       );
       const shown = await runner.publicVideo(slugOf(entry.canonicalPath));
       check(
-        shown !== null && shown.id === entry.videoId,
+        shown !== null && shown.id === entry.target?.id,
         'each Video is served by the public read',
       );
     }

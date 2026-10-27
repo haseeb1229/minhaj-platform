@@ -9,6 +9,7 @@ import {
   createTaxonomyReader,
 } from '@minhaj/database';
 import type { PrivilegedActor, ResolvedSession } from '@minhaj/contracts/identity';
+import type { LibraryReferencesPort } from '@minhaj/contracts/library';
 import type { MediaReferencesPort } from '@minhaj/contracts/media';
 import type { StorageServicePort } from '@minhaj/contracts/platform';
 import { createAuthorizationService } from '@minhaj/server-core/authorization';
@@ -22,7 +23,7 @@ import {
 import { createMediaReadService } from '../contexts/media/index.ts';
 import { createPeopleReadService } from '../contexts/people-contributors/index.ts';
 import { createTaxonomyService } from '../contexts/taxonomy/index.ts';
-import { createMediaVideoTarget } from './migration-targets.ts';
+import { createMigrationTargets, routeMigrationTargets } from './migration-targets.ts';
 import {
   livePermits,
   migrationAssetStorage,
@@ -51,11 +52,12 @@ import {
  *     is also the ONLY minter of the privileged actor this process may present
  *     (`requirePrivilegedAction`), which is what lets it re-verify one.
  *   - TOPICS and OWNER REFERENCES: Taxonomy's and People's PUBLIC services,
- *     both node-loadable contexts, asked the questions Media's composition asks
- *     through `./owner-references.ts` (which is bundler-resolved and cannot
- *     load here), with the same answers: every identifier must resolve, and a
- *     retired language is not a valid choice.
- *   - THE TARGET: Media's public service (`./migration-targets.ts`).
+ *     both node-loadable contexts, asked the questions Media's and Library's
+ *     compositions ask through `./owner-references.ts` (which is
+ *     bundler-resolved and cannot load here), with the same answers: every
+ *     identifier must resolve, and a retired language is not a valid choice.
+ *   - THE TARGETS: Media's, Library's and Editorial's public services, one per
+ *     publishable kind, routed fail-closed (`./migration-targets.ts`).
  *   - STORAGE: the foundation's own service from `@minhaj/storage` over the
  *     storage adapter, read from `STORAGE_ROOT` and the ClamAV settings, built
  *     on first use only.
@@ -86,11 +88,11 @@ export interface MigrationRunner extends MigrationServices {
 
 const COMMIT = /^[0-9a-f]{40}$/;
 
-/** The owner questions Media asks, answered by People's and Taxonomy's public reads. */
+/** The owner questions Media and Library ask, answered by People's and Taxonomy's public reads. */
 function ownerReferencesOf(
   people: ReturnType<typeof createPeopleReadService>,
   taxonomy: ReturnType<typeof createTaxonomyService>,
-): MediaReferencesPort {
+): MediaReferencesPort & LibraryReferencesPort {
   return {
     async validPeople(ids) {
       if (ids.length === 0) return true;
@@ -146,10 +148,12 @@ export function composeMigrationRunner(
   const services = migrationDependencies({
     authority: migrationAuthority(authorization),
     topics: migrationTopics((ids, locale) => taxonomy.topicReferences(ids, locale)),
-    target: createMediaVideoTarget({
-      authority: { permits: livePermits(authorization) },
-      references: ownerReferencesOf(people, taxonomy),
-    }),
+    target: routeMigrationTargets(
+      createMigrationTargets({
+        authority: { permits: livePermits(authorization) },
+        references: ownerReferencesOf(people, taxonomy),
+      }),
+    ),
     storage: migrationAssetStorage(storageService),
   });
 

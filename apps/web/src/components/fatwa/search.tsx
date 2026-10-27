@@ -16,7 +16,6 @@ import {
   Button,
   EmptyState,
   Field,
-  PageHeading,
   Panel,
   TextInput,
   TextLink,
@@ -83,12 +82,8 @@ export async function FatwaSearchPage({
       locale={locale}
       availability={availability}
       trail={[parts.home, parts.fatwa, { text: title }]}
+      heading={{ title, lede: t('search.intro') }}
     >
-      <div className="flex flex-col gap-2">
-        <PageHeading>{title}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">{t('search.intro')}</p>
-      </div>
-
       <Panel>
         <form
           method="get"

@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import {
   MIGRATION_LIMITS,
+  authorisedScopeIsReal,
   canonicalSourceUrl,
   fixtureScopeIsSynthetic,
   migrationIdSchema,
@@ -33,8 +34,8 @@ import {
   type TransformProvenance,
 } from '@minhaj/contracts/migration';
 
+import { normaliseRecord, recordHrefs, type Normalisation } from '../domain/kinds.ts';
 import {
-  anchorHrefs,
   detectPersonalData,
   NORMALIZER_VERSION,
   normalizeTitle,
@@ -60,7 +61,7 @@ import {
   retryDecision,
   type FailureClass,
 } from '../domain/retry.ts';
-import { crossLanguage, normalizeVideo } from '../domain/video.ts';
+import { crossLanguage } from '../domain/video.ts';
 import {
   ADMINISTER,
   clip,
@@ -239,8 +240,10 @@ function sameCode(run: RunRecord, provenance: TransformProvenance): boolean {
 /**
  * The PIPELINE (MIGRATION_STRATEGY.md §4): discover → fetch → preserve raw →
  * parse → extract links → normalise → validate → map topics → acquire assets
- * → stage → reconcile, for ONE FIXTURE source, in bounded, checkpointed,
- * resumable batches.
+ * → stage → reconcile, for ONE source, in bounded, checkpointed, resumable
+ * batches. A FIXTURE source runs only inside `*.fixture.invalid`; an
+ * AUTHORISED source (Phase 30) only inside its recorded real `https` scope —
+ * and the fetcher the caller hands in is bound to that scope as well.
  *
  * SEQUENTIAL BY DESIGN. One item at a time, one checkpoint per batch, never a
  * `Promise.all` over a source: memory stays bounded and an interruption costs
@@ -267,8 +270,10 @@ export function createMigrationPipelineService(deps: {
   return {
     /**
      * Runs — or resumes — the source's one open run under `migration.administer`.
-     * Refuses a non-fixture source (`real-source-not-authorised`), a scope
-     * outside `*.fixture.invalid` (`unsafe-scope`), an inactive source, an
+     * Refuses a fixture source whose scope leaves `*.fixture.invalid`, or an
+     * authorised source whose scope is not a real `https` one (`unsafe-scope`);
+     * an authorised source without its written authorisation reference and
+     * date (`real-source-not-authorised`); an inactive source; an
      * adapter of another kind or access method — or of other code than the
      * open run it would resume (`adapter-mismatch`) — and a live lease held
      * by someone else (`run-busy`).
@@ -297,10 +302,21 @@ export function createMigrationPipelineService(deps: {
 
       const source = await guarded(deps.sources.source(input.sourceId));
       if (source === null) throw new MigrationRefusal('not-found');
-      if (source.authorityKind !== 'fixture')
-        throw new MigrationRefusal('real-source-not-authorised');
-      if (!fixtureScopeIsSynthetic(source.baseUrl, source.hosts))
-        throw new MigrationRefusal('unsafe-scope');
+      if (source.authorityKind === 'fixture') {
+        if (!fixtureScopeIsSynthetic(source.baseUrl, source.hosts))
+          throw new MigrationRefusal('unsafe-scope');
+      } else {
+        // The database CHECK already binds an authorised source to its written
+        // reference and date; this answers helpfully before any request.
+        if (source.authorisationReference === null || source.authorisedOn === null)
+          throw new MigrationRefusal('real-source-not-authorised');
+        if (
+          source.accessMethod === 'http'
+            ? !authorisedScopeIsReal(source.baseUrl, source.hosts)
+            : source.baseUrl !== null || source.hosts.length > 0
+        )
+          throw new MigrationRefusal('unsafe-scope');
+      }
       if (source.state !== 'active') throw new MigrationRefusal('source-inactive');
       if (
         adapter.contentKind !== source.contentKind ||
@@ -741,11 +757,7 @@ class RunWorker {
     const scope: LinkScope = { baseUrl: evidence.finalUrl, hosts: source.hosts };
     let hrefs: string[];
     try {
-      hrefs = [
-        ...record.links,
-        ...anchorHrefs(record.descriptionHtml),
-        ...record.labels.flatMap((label) => anchorHrefs(label.descriptionHtml)),
-      ];
+      hrefs = recordHrefs(record);
     } catch {
       await this.error(
         item.itemId,
@@ -771,9 +783,9 @@ class RunWorker {
     const lookup: MappingLookup = mappings;
 
     // NORMALISE AND VALIDATE — sanitised before anything is staged.
-    let normal: ReturnType<typeof normalizeVideo>;
+    let normal: Normalisation;
     try {
-      normal = normalizeVideo({
+      normal = normaliseRecord({
         parsed: record,
         defaultLanguageCode: source.defaultLanguageCode,
         legacyIdentifier: item.legacyIdentifier,
@@ -796,14 +808,10 @@ class RunWorker {
     const issues = [...normal.issues];
     let payload = JSON.stringify(normal.payload);
     if (payload.length > MIGRATION_LIMITS.payload) {
-      // An oversize payload is stored without its long words — the revision is
-      // rejected anyway, and the snapshot keeps every byte.
-      if (!issues.includes('description-too-long')) issues.push('description-too-long');
-      payload = JSON.stringify({
-        ...normal.payload,
-        descriptionHtml: '',
-        labels: normal.payload.labels.map((label) => ({ ...label, description: '' })),
-      });
+      // An oversize payload is stored as a stub naming its kind — the revision
+      // is rejected anyway, and the snapshot keeps every byte.
+      if (!issues.includes('body-too-long')) issues.push('body-too-long');
+      payload = JSON.stringify({ kind: normal.kind, oversize: true });
     }
     const valid = issues.length === 0;
 
@@ -819,10 +827,9 @@ class RunWorker {
 
     // DUPLICATES: a hard identity collapses; a folded title only asks a person.
     const duplicates: DuplicateInput[] = [];
-    if (normal.dedupeKey !== null) {
-      const matches = await guarded(
-        pipeline.dedupeMatches(normal.dedupeKey, item.recordId),
-      );
+    const identity = normal.identity;
+    if (identity !== null) {
+      const matches = await guarded(pipeline.dedupeMatches(identity.key, item.recordId));
       let collapsed = false;
       for (const match of matches.slice(0, MATCH_LIMIT)) {
         const cross = crossLanguage(normal.languageCode, match.languageCode);
@@ -830,11 +837,12 @@ class RunWorker {
         // already carrying the identity (the port answers in creation order);
         // a record that already has revisions is never collapsed by a re-stage,
         // and a cross-language or invalid pair is only ever a candidate.
-        const collapse = !collapsed && !cross && valid && item.currentStaged === null;
+        const collapse =
+          identity.hard && !collapsed && !cross && valid && item.currentStaged === null;
         if (collapse) collapsed = true;
         duplicates.push({
           otherRecordId: match.recordId,
-          signal: 'provider-id',
+          signal: identity.signal,
           score: 100,
           crossLanguage: cross,
           collapse,
@@ -877,7 +885,7 @@ class RunWorker {
         contentKind: source.contentKind,
         title: normal.title,
         titleKey: normal.titleKey,
-        dedupeKey: normal.dedupeKey,
+        dedupeKey: identity?.key ?? null,
         languageCode: normal.languageCode,
         payload,
         payloadChecksum: sha256Hex(payload),

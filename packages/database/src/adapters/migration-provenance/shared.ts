@@ -9,6 +9,8 @@ import {
   type ManifestRecord,
   type ManifestState,
   type MigrationContentKind,
+  type MigrationPublishableKind,
+  type MigrationTargetRef,
   type PromotionDestination,
   type PromotionRecord,
   type PromotionState,
@@ -19,6 +21,7 @@ import {
   type SourceAuthorityKind,
   type SourceRecord,
   type SourceState,
+  type TargetStage,
 } from '@minhaj/contracts/migration';
 
 import { auditRow } from '../../audit-row.ts';
@@ -608,6 +611,60 @@ export async function manifestRow(tx: Client, id: string): Promise<ManifestRow> 
   return row;
 }
 
+/**
+ * THE TYPED TARGET COLUMN of each publishable kind — the SavedItem pattern.
+ * A target is stored ONLY in its own kind's foreign-key column; there is no
+ * `targetType` / `targetId` pair, and `kind` exists only in this mapping.
+ */
+export const TARGET_COLUMNS = Object.freeze({
+  'media.video': 'videoId',
+  'library.work': 'workId',
+  'library.magazine': 'magazineId',
+  'library.magazine-issue': 'magazineIssueId',
+  'editorial.news': 'newsArticleId',
+  'editorial.article': 'articleId',
+} as const satisfies Record<MigrationPublishableKind, string>);
+
+export type TargetColumn = (typeof TARGET_COLUMNS)[MigrationPublishableKind];
+
+const TARGET_KINDS = Object.entries(TARGET_COLUMNS) as readonly (readonly [
+  MigrationPublishableKind,
+  TargetColumn,
+])[];
+
+/** The target columns, every one null but the target's own. */
+export function targetColumns(
+  target: MigrationTargetRef,
+): Readonly<Record<TargetColumn, string | null>> {
+  const columns = Object.fromEntries(
+    TARGET_KINDS.map(([, column]) => [column, null]),
+  ) as Record<TargetColumn, string | null>;
+  columns[TARGET_COLUMNS[target.kind]] = target.id;
+  return columns;
+}
+
+/** The one target a row names, or null; a row naming two is corrupt. */
+export function targetOf(
+  row: Readonly<Record<TargetColumn, string | null>>,
+): MigrationTargetRef | null {
+  const named = TARGET_KINDS.filter(([, column]) => row[column] !== null);
+  if (named.length === 0) return null;
+  const [only] = named;
+  if (named.length > 1 || only === undefined) throw new MigrationDataError('invalid');
+  const [kind, column] = only;
+  return { kind, id: row[column] ?? '' };
+}
+
+/** Select every target column. */
+export const TARGET_SELECT = {
+  videoId: true,
+  workId: true,
+  magazineId: true,
+  magazineIssueId: true,
+  newsArticleId: true,
+  articleId: true,
+} as const;
+
 export const ENTRY_SELECT = {
   id: true,
   manifestId: true,
@@ -615,7 +672,8 @@ export const ENTRY_SELECT = {
   stagedRecordId: true,
   recordId: true,
   state: true,
-  videoId: true,
+  ...TARGET_SELECT,
+  targetStage: true,
   targetVersion: true,
   canonicalPath: true,
   refusal: true,
@@ -632,6 +690,12 @@ export interface EntryRow {
   readonly recordId: string;
   readonly state: string;
   readonly videoId: string | null;
+  readonly workId: string | null;
+  readonly magazineId: string | null;
+  readonly magazineIssueId: string | null;
+  readonly newsArticleId: string | null;
+  readonly articleId: string | null;
+  readonly targetStage: string | null;
   readonly targetVersion: number | null;
   readonly canonicalPath: string | null;
   readonly refusal: string | null;
@@ -641,7 +705,22 @@ export interface EntryRow {
 }
 
 export function toEntryRecord(row: EntryRow): ManifestEntryRecord {
-  return { ...row, state: row.state as ManifestEntryState };
+  return {
+    id: row.id,
+    manifestId: row.manifestId,
+    position: row.position,
+    stagedRecordId: row.stagedRecordId,
+    recordId: row.recordId,
+    state: row.state as ManifestEntryState,
+    target: targetOf(row),
+    targetStage: row.targetStage === null ? null : (row.targetStage as TargetStage),
+    targetVersion: row.targetVersion,
+    canonicalPath: row.canonicalPath,
+    refusal: row.refusal,
+    publishedAt: row.publishedAt,
+    rolledBackAt: row.rolledBackAt,
+    version: row.version,
+  };
 }
 
 export async function entryRow(tx: Client, id: string): Promise<EntryRow> {

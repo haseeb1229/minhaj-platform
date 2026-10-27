@@ -4,7 +4,9 @@ import { randomUUID } from 'node:crypto';
 
 import {
   MIGRATION_LIMITS,
+  isPublishableKind,
   type MigrationContentKind,
+  type MigrationTargetRef,
   type MigrationPublicationPort,
   type ReviewState,
   type ValidationState,
@@ -18,6 +20,7 @@ import {
   MANIFEST_SELECT,
   MigrationDataError,
   PUBLISH,
+  TARGET_SELECT,
   audit,
   bounded,
   entryRow,
@@ -25,6 +28,8 @@ import {
   manifestRow,
   missedBecause,
   refuse,
+  targetColumns,
+  targetOf,
   toEntryRecord,
   toManifestRecord,
 } from './shared.ts';
@@ -85,6 +90,7 @@ export function createMigrationPublication(): MigrationPublicationPort {
               recordId: true,
               review: true,
               validation: true,
+              contentKind: true,
               record: { select: { sourceId: true } },
             },
           });
@@ -92,6 +98,10 @@ export function createMigrationPublication(): MigrationPublicationPort {
           for (const revision of staged) {
             if (revision.record.sourceId !== run.sourceId)
               throw new MigrationDataError('invalid');
+            // Religious material is evidence only: never a manifest entry
+            // (refused again by trigger 51379).
+            if (!isPublishableKind(revision.contentKind))
+              throw new MigrationDataError('review-only-kind');
             if (revision.review !== 'approved' || revision.validation !== 'valid')
               throw new MigrationDataError('invalid-state');
           }
@@ -259,6 +269,19 @@ export function createMigrationPublication(): MigrationPublicationPort {
             select: {
               id: true,
               originalUrl: true,
+              // Only acquisitions a PERSON decided public-eligible are offered
+              // to a target; every other acquisition stays evidence.
+              assets: {
+                where: { visibility: 'public-eligible' },
+                orderBy: [{ acquiredAt: 'asc' }, { id: 'asc' }],
+                take: MIGRATION_LIMITS.assets,
+                select: {
+                  originalUrl: true,
+                  assetId: true,
+                  mediaType: true,
+                  checksum: true,
+                },
+              },
               merged: {
                 orderBy: [{ id: 'asc' }],
                 take: MAX_MERGED_URLS,
@@ -302,6 +325,7 @@ export function createMigrationPublication(): MigrationPublicationPort {
           payload: staged.payload,
           topicIds,
           legacyUrls,
+          assets: record.assets.map((asset) => ({ ...asset })),
         };
       });
     },
@@ -377,7 +401,8 @@ export function createMigrationPublication(): MigrationPublicationPort {
             where: { id: input.entryId, version: input.expectedVersion },
             data: {
               state: 'published',
-              videoId: input.videoId,
+              ...targetColumns(input.target),
+              targetStage: input.targetStage,
               targetVersion: input.targetVersion,
               canonicalPath: input.canonicalPath,
               publishedAt: input.now,
@@ -400,10 +425,15 @@ export function createMigrationPublication(): MigrationPublicationPort {
                 legacyUrlDigest: url.digest,
                 state: 'active',
               },
-              select: { id: true, videoId: true, canonicalPath: true },
+              select: { id: true, ...TARGET_SELECT, canonicalPath: true },
             });
             if (active !== null) {
-              if (active.videoId !== input.videoId)
+              const mapped = targetOf(active);
+              if (
+                mapped === null ||
+                mapped.kind !== input.target.kind ||
+                mapped.id !== input.target.id
+              )
                 throw new MigrationDataError('conflict');
               if (active.canonicalPath === input.canonicalPath) continue;
               await tx.migrationLegacyMapping.updateMany({
@@ -423,7 +453,7 @@ export function createMigrationPublication(): MigrationPublicationPort {
                 recordId: url.recordId,
                 legacyUrl: url.url,
                 legacyUrlDigest: url.digest,
-                videoId: input.videoId,
+                ...targetColumns(input.target),
                 canonicalPath: input.canonicalPath,
                 state: 'active',
                 manifestEntryId: input.entryId,
@@ -456,7 +486,9 @@ export function createMigrationPublication(): MigrationPublicationPort {
             after: {
               state: 'published',
               manifestId: entry.manifestId,
-              videoId: input.videoId,
+              targetKind: input.target.kind,
+              targetId: input.target.id,
+              targetStage: input.targetStage,
               mappings: String(created),
               version: String(entry.version + 1),
             },
@@ -466,6 +498,25 @@ export function createMigrationPublication(): MigrationPublicationPort {
       } catch (error) {
         refuse(error);
       }
+    },
+
+    async resolveLegacyTarget(legacyUrlDigest) {
+      if (!SHA256_HEX.test(legacyUrlDigest)) return null;
+      // Any source's ACTIVE mapping; two that disagree are no answer at all.
+      const rows = await db.migrationLegacyMapping.findMany({
+        where: { legacyUrlDigest, state: 'active' },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: 2,
+        select: TARGET_SELECT,
+      });
+      const targets = rows
+        .map(targetOf)
+        .filter((target): target is MigrationTargetRef => target !== null);
+      const [first, second] = targets;
+      if (first === undefined) return null;
+      if (second !== undefined && (second.kind !== first.kind || second.id !== first.id))
+        return null;
+      return first;
     },
 
     async recordRefused(input) {

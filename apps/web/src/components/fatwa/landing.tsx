@@ -18,18 +18,22 @@ import { Pagination } from '@/components/media/parts';
 import {
   Alert,
   Button,
+  CardGrid,
+  Container,
   EmptyState,
   FilterLink,
-  PageHeading,
-  Panel,
-  Prose,
-  SectionHeading,
+  LinkCard,
+  MetaRow,
+  PageHero,
+  SectionHeader,
   TextInput,
   TextLink,
+  TopicChips,
 } from '@/components/ui';
 import { categoryLabels, FatwaList } from './list';
-import { FatwaFrame, fatwaTrail } from './parts';
+import { FatwaLandingTop, FatwaPrinciples } from './parts';
 import {
+  categoryHref,
   fatwaBrowseHref,
   fatwaSectionPath,
   isInvalidBrowse,
@@ -55,11 +59,29 @@ import { readActiveTopic, readFatwaCategory } from './read';
  * ASKING IS PRIVATE AND SIGNED IN. The ask and "my questions" entries are
  * shown to everybody with a clear sign-in indicator; they lead through
  * sign-in with a validated return path, never to a dead end.
+ *
+ * THE ORDER OF THE PAGE IS THE ORDER OF TRUST. The hero holds the search; then
+ * what the service guarantees about everything it lists; then the rulings
+ * themselves; then the categories (read once for the whole page anyway) and
+ * the ways into the rest of the section.
  */
 
 type Query = Record<string, string | string[] | undefined>;
 
 const EMPTY: PublicFatwaPage = { items: [], total: 0, offset: 0 };
+
+/** How many categories the landing's shelf shows before linking to them all. */
+const CATEGORY_SHELF = 12;
+
+/** The ways into the rest of the section, in the order the landing lists them. */
+function exploreEntries(locale: Locale) {
+  return [
+    { key: 'categories', href: fatwaSectionPath(locale, 'categories'), gated: false },
+    { key: 'howItWorks', href: fatwaSectionPath(locale, 'how-it-works'), gated: false },
+    { key: 'ask', href: fatwaSectionPath(locale, 'ask'), gated: true },
+    { key: 'myQuestions', href: `/${locale}/my/questions`, gated: true },
+  ] as const;
+}
 
 async function resolveBrowse(locale: Locale, query: Query) {
   const browse = readFatwaBrowse(query);
@@ -84,7 +106,6 @@ export async function FatwaLandingPage({
 }) {
   const t = await getTranslations({ locale, namespace: 'fatwa' });
   const searchT = await getTranslations({ locale, namespace: 'search' });
-  const parts = await fatwaTrail(locale);
   const { browse, category, topic, invalid } = await resolveBrowse(locale, query);
   const sort = browse.sort ?? 'latest';
   const [page, categories] = await Promise.all([
@@ -108,155 +129,168 @@ export async function FatwaLandingPage({
       offset,
     });
 
-  return (
-    <FatwaFrame
-      locale={locale}
-      availability={availability}
-      trail={[parts.home, { text: t('title') }]}
-    >
-      <Prose>
-        <PageHeading>{t('title')}</PageHeading>
-        <p>{t('intro')}</p>
-      </Prose>
+  const shelf = [...categories.values()].slice(0, CATEGORY_SHELF);
 
-      <Panel>
+  return (
+    <>
+      <FatwaLandingTop locale={locale} availability={availability} />
+
+      <PageHero title={t('title')} lede={t('intro')}>
         <form
           method="get"
           action={fatwaSectionPath(locale, 'search')}
           role="search"
           aria-label={t('sections.search')}
-          className="flex flex-col gap-3"
+          className="flex w-full max-w-2xl flex-col gap-2"
         >
-          <SectionHeading>{t('sections.search')}</SectionHeading>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <label htmlFor="fatwa-landing-search" className="text-sm font-medium">
-                {searchT('queryLabel')}
-              </label>
+          <label htmlFor="fatwa-landing-search" className="text-sm font-medium">
+            {searchT('queryLabel')}
+          </label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="min-w-0 flex-1">
               <TextInput
                 id="fatwa-landing-search"
                 type="search"
                 name="q"
                 maxLength={SEARCH_QUERY_MAX_LENGTH}
                 autoComplete="off"
+                enterKeyHint="search"
+                aria-describedby="fatwa-landing-search-help"
               />
             </div>
             <Button>{searchT('submit')}</Button>
           </div>
+          <p
+            id="fatwa-landing-search-help"
+            className="text-sm text-[color:var(--color-foreground-muted)]"
+          >
+            {t('sectionBody.search')}
+          </p>
         </form>
-      </Panel>
+      </PageHero>
 
-      <section className="flex flex-col gap-4" aria-labelledby="fatwa-explore">
-        <SectionHeading>
-          <span id="fatwa-explore">{t('landing.explore')}</span>
-        </SectionHeading>
-        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {(
-            [
-              {
-                key: 'categories',
-                href: fatwaSectionPath(locale, 'categories'),
-                gated: false,
-              },
-              {
-                key: 'howItWorks',
-                href: fatwaSectionPath(locale, 'how-it-works'),
-                gated: false,
-              },
-              { key: 'ask', href: fatwaSectionPath(locale, 'ask'), gated: true },
-              { key: 'myQuestions', href: `/${locale}/my/questions`, gated: true },
-            ] as const
-          ).map((entry) => (
-            <Panel key={entry.key} as="li">
+      <Container>
+        <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
+          <FatwaPrinciples locale={locale} />
+
+          <section className="flex flex-col gap-5" aria-labelledby="fatwa-rulings">
+            <SectionHeader id="fatwa-rulings" heading={t('landing.rulings')} />
+            <div className="flex flex-col gap-2">
+              <nav aria-label={t('sort.label')} className="flex flex-wrap gap-3">
+                {FATWA_SORTS.map((option) => (
+                  <FilterLink
+                    key={option}
+                    href={fatwaBrowseHref(locale, {
+                      sort: option,
+                      category: category?.slug ?? null,
+                      topic: topic?.slug ?? null,
+                    })}
+                    current={!invalid && sort === option}
+                  >
+                    {t(`sort.${option}`)}
+                  </FilterLink>
+                ))}
+              </nav>
+              <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                {sort === 'popular' ? t('sort.popularNote') : t('sort.latestNote')}
+              </p>
+            </div>
+
+            {filtered && !invalid ? (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[var(--radius-control)] bg-[color:var(--color-surface-sunken)] px-4 py-2 text-sm wrap-anywhere">
+                <MetaRow
+                  items={[
+                    category === null ? null : (
+                      <>
+                        {t('filter.category')}:{' '}
+                        {fatwaCategoryName(category.names, locale) ?? category.slug}
+                      </>
+                    ),
+                    topic === null ? null : (
+                      <>
+                        {t('filter.topic')}:{' '}
+                        <span lang={topic.label.resolvedLocale}>{topic.label.name}</span>
+                      </>
+                    ),
+                  ]}
+                />
+                <a
+                  href={fatwaBrowseHref(locale, { sort })}
+                  className="inline-flex min-h-11 items-center font-medium text-[color:var(--color-action)] underline underline-offset-2"
+                >
+                  {t('filter.clear')}
+                </a>
+              </div>
+            ) : null}
+
+            {invalid ? (
               <div className="flex flex-col gap-2">
-                <h3 className="text-lg font-semibold">
-                  <TextLink href={entry.href}>{t(`sections.${entry.key}`)}</TextLink>
-                </h3>
-                {entry.gated ? (
-                  <p className="text-xs font-semibold">{t('signInRequired')}</p>
-                ) : null}
-                <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                  {t(`sectionBody.${entry.key}`)}
+                <Alert tone="info">{t('filter.invalid')}</Alert>
+                <p>
+                  <TextLink href={fatwaSectionPath(locale)}>{t('filter.clear')}</TextLink>
                 </p>
               </div>
-            </Panel>
-          ))}
-        </ul>
-      </section>
+            ) : page.items.length === 0 ? (
+              <EmptyState>{filtered ? t('filteredEmpty') : t('empty')}</EmptyState>
+            ) : (
+              <FatwaList
+                locale={locale}
+                items={page.items}
+                categories={categories}
+                label={t('landing.rulings')}
+                headingLevel="h3"
+                t={t}
+              />
+            )}
 
-      <section className="flex flex-col gap-4" aria-labelledby="fatwa-rulings">
-        <SectionHeading>
-          <span id="fatwa-rulings">{t('landing.rulings')}</span>
-        </SectionHeading>
-        <div className="flex flex-col gap-2">
-          <nav aria-label={t('sort.label')} className="flex flex-wrap gap-3">
-            {FATWA_SORTS.map((option) => (
-              <FilterLink
-                key={option}
-                href={fatwaBrowseHref(locale, {
-                  sort: option,
-                  category: category?.slug ?? null,
-                  topic: topic?.slug ?? null,
-                })}
-                current={!invalid && sort === option}
-              >
-                {t(`sort.${option}`)}
-              </FilterLink>
-            ))}
-          </nav>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {sort === 'popular' ? t('sort.popularNote') : t('sort.latestNote')}
-          </p>
+            <Pagination
+              label={t('landing.rulings')}
+              previous={links.previous === null ? null : view(links.previous)}
+              next={links.next === null ? null : view(links.next)}
+              previousLabel={t('previous')}
+              nextLabel={t('next')}
+            />
+          </section>
+
+          {shelf.length === 0 ? null : (
+            <section className="flex flex-col gap-5" aria-labelledby="fatwa-categories">
+              <SectionHeader
+                id="fatwa-categories"
+                heading={t('sections.categories')}
+                intro={t('sectionBody.categories')}
+                action={{
+                  href: fatwaSectionPath(locale, 'categories'),
+                  text: t('landing.allCategories'),
+                }}
+              />
+              <TopicChips
+                label={t('sections.categories')}
+                topics={shelf.map((entry) => ({
+                  href: categoryHref(locale, entry.slug),
+                  text: entry.name,
+                }))}
+              />
+            </section>
+          )}
+
+          <section className="flex flex-col gap-5" aria-labelledby="fatwa-explore">
+            <SectionHeader id="fatwa-explore" heading={t('landing.explore')} />
+            <CardGrid columns={4}>
+              {exploreEntries(locale).map((entry) => (
+                <LinkCard
+                  key={entry.key}
+                  href={entry.href}
+                  title={t(`sections.${entry.key}`)}
+                  description={t(`sectionBody.${entry.key}`)}
+                  {...(entry.gated
+                    ? { meta: <MetaRow items={[t('signInRequired')]} /> }
+                    : {})}
+                />
+              ))}
+            </CardGrid>
+          </section>
         </div>
-
-        {filtered && !invalid ? (
-          <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm wrap-anywhere">
-            {category === null ? null : (
-              <span>
-                {t('filter.category')}:{' '}
-                {fatwaCategoryName(category.names, locale) ?? category.slug}
-              </span>
-            )}
-            {topic === null ? null : (
-              <span>
-                {t('filter.topic')}:{' '}
-                <span lang={topic.label.resolvedLocale}>{topic.label.name}</span>
-              </span>
-            )}
-            <TextLink href={fatwaBrowseHref(locale, { sort })}>
-              {t('filter.clear')}
-            </TextLink>
-          </p>
-        ) : null}
-
-        {invalid ? (
-          <div className="flex flex-col gap-2">
-            <Alert tone="info">{t('filter.invalid')}</Alert>
-            <p>
-              <TextLink href={fatwaSectionPath(locale)}>{t('filter.clear')}</TextLink>
-            </p>
-          </div>
-        ) : page.items.length === 0 ? (
-          <EmptyState>{filtered ? t('filteredEmpty') : t('empty')}</EmptyState>
-        ) : (
-          <FatwaList
-            locale={locale}
-            items={page.items}
-            categories={categories}
-            label={t('landing.rulings')}
-            headingLevel="h3"
-            t={t}
-          />
-        )}
-
-        <Pagination
-          label={t('landing.rulings')}
-          previous={links.previous === null ? null : view(links.previous)}
-          next={links.next === null ? null : view(links.next)}
-          previousLabel={t('previous')}
-          nextLabel={t('next')}
-        />
-      </section>
-    </FatwaFrame>
+      </Container>
+    </>
   );
 }

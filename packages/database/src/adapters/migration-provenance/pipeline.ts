@@ -84,11 +84,23 @@ export function createMigrationPipeline(): MigrationPipelinePort {
         return await db.$transaction(async (tx) => {
           const source = await tx.migrationSource.findFirst({
             where: { id: input.sourceId },
-            select: { authorityKind: true, state: true },
+            select: {
+              authorityKind: true,
+              authorisationReference: true,
+              authorisedOn: true,
+              state: true,
+            },
           });
           if (source === null) throw new MigrationDataError('not-found');
-          // Phase 29 runs fixtures only — checked here beneath the service.
-          if (source.authorityKind !== 'fixture')
+          // A fixture, or an authorised source carrying its written
+          // authorisation — checked here beneath the service (a CHECK binds the
+          // evidence to the kind as well).
+          if (
+            source.authorityKind !== 'fixture' &&
+            (source.authorityKind !== 'authorised' ||
+              source.authorisationReference === null ||
+              source.authorisedOn === null)
+          )
             throw new MigrationDataError('real-source-not-authorised');
           if (source.state !== 'active') throw new MigrationDataError('invalid-state');
 

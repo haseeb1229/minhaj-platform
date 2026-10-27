@@ -7,7 +7,8 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
-import { Breadcrumbs, Container, Prose } from '@/components/ui';
+import { ListingIntro } from '@/components/editorial/frame';
+import { CardGrid, Container, LinkCard } from '@/components/ui';
 import { PublicationStatus } from '@/components/shell/publication-status';
 import { requireLocale } from '@/config/route-locale';
 import { shellMetadata } from '@/seo/metadata';
@@ -89,45 +90,44 @@ export default async function ExploreSectionPage({ params }: SectionParams) {
     );
 
   return (
-    <Container>
-      <div className="flex flex-col gap-8 py-12">
-        <Breadcrumbs
-          label={t('nav.breadcrumbs')}
-          trail={[
-            { href: `/${locale}`, text: t('nav.home') },
-            { href: `/${locale}/explore`, text: t('explore.title') },
-            { text: title },
-          ]}
-        />
+    <>
+      <ListingIntro
+        trailLabel={t('nav.breadcrumbs')}
+        trail={[
+          { href: `/${locale}`, text: t('nav.home') },
+          { href: `/${locale}/explore`, text: t('explore.title') },
+          { text: title },
+        ]}
+        title={title}
+        lede={t(`explore.${section}.summary` as 'explore.about.summary')}
+      />
 
-        <Prose>
-          <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
-          <p className="text-[color:var(--color-foreground-muted)]">
-            {t(`explore.${section}.summary` as 'explore.about.summary')}
-          </p>
-        </Prose>
-
-        {slugs.length === 0 ? null : (
-          <nav aria-label={title}>
-            <ul className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
-              {slugs.map((slug) => (
-                <li key={slug}>
-                  <a
+      <Container>
+        <div className="flex flex-col gap-10 py-[var(--space-page)]">
+          {/*
+           * The pages this section reserves, as whole-card links. Each one is a
+           * delivered route that says honestly whether it has been published.
+           */}
+          {slugs.length === 0 ? null : (
+            <nav aria-label={title}>
+              <CardGrid>
+                {slugs.map((slug) => (
+                  <LinkCard
+                    key={slug}
                     href={exploreHrefOf(locale, section, slug)}
-                    className="underline underline-offset-2"
-                  >
-                    {t(
+                    headingLevel="h2"
+                    title={t(
                       `explore.${section}.pages.${slug}` as 'explore.about.pages.vision',
                     )}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        )}
+                  />
+                ))}
+              </CardGrid>
+            </nav>
+          )}
 
-        <PublicationStatus locale={locale} />
-      </div>
-    </Container>
+          <PublicationStatus locale={locale} />
+        </div>
+      </Container>
+    </>
   );
 }

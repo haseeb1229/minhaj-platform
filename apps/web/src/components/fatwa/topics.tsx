@@ -9,7 +9,7 @@ import type { TopicView } from '@minhaj/contracts/taxonomy';
 import { fatwaReadRuntime } from '@/composition/fatwa-read';
 import { pageLinks } from '@/components/hadith/presentation';
 import { Pagination } from '@/components/media/parts';
-import { EmptyState, PageHeading, TextLink } from '@/components/ui';
+import { ActionLink, EmptyState, SectionHeader } from '@/components/ui';
 import { directionOf } from '@/config/locale';
 import { categoryLabels, FatwaList } from './list';
 import { FatwaFixtureNotice, FatwaFrame, fatwaTrail } from './parts';
@@ -60,39 +60,49 @@ export async function FatwaTopicPage({
       locale={locale}
       availability={availability}
       trail={[parts.home, parts.fatwa, { text: topic.label.name }]}
+      heading={{
+        title: (
+          <>
+            {t('topicTitle')}:{' '}
+            <span lang={labelLocale} dir={directionOf(labelLocale)}>
+              {topic.label.name}
+            </span>
+          </>
+        ),
+        extra: (
+          <div className="pt-1">
+            <ActionLink
+              href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}
+              tone="secondary"
+            >
+              {t('topicHub')}
+            </ActionLink>
+          </div>
+        ),
+      }}
     >
-      <div className="flex flex-col gap-2">
-        <PageHeading>
-          {t('topicTitle')}:{' '}
-          <span lang={labelLocale} dir={directionOf(labelLocale)}>
-            {topic.label.name}
-          </span>
-        </PageHeading>
-        <p>
-          <TextLink href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}>
-            {t('topicHub')}
-          </TextLink>
-        </p>
-      </div>
-      {page.items.length === 0 ? (
-        <EmptyState>{t('topicEmpty')}</EmptyState>
-      ) : (
-        <FatwaList
-          locale={locale}
-          items={page.items}
-          categories={categories}
+      <section className="flex flex-col gap-5" aria-labelledby="fatwa-topic-rulings">
+        <SectionHeader id="fatwa-topic-rulings" heading={t('landing.rulings')} />
+        {page.items.length === 0 ? (
+          <EmptyState>{t('topicEmpty')}</EmptyState>
+        ) : (
+          <FatwaList
+            locale={locale}
+            items={page.items}
+            categories={categories}
+            label={topic.label.name}
+            headingLevel="h3"
+            t={t}
+          />
+        )}
+        <Pagination
           label={topic.label.name}
-          headingLevel="h2"
-          t={t}
+          previous={links.previous === null ? null : offsetHref(path, links.previous)}
+          next={links.next === null ? null : offsetHref(path, links.next)}
+          previousLabel={t('previous')}
+          nextLabel={t('next')}
         />
-      )}
-      <Pagination
-        label={topic.label.name}
-        previous={links.previous === null ? null : offsetHref(path, links.previous)}
-        next={links.next === null ? null : offsetHref(path, links.next)}
-        previousLabel={t('previous')}
-        nextLabel={t('next')}
-      />
+      </section>
     </FatwaFrame>
   );
 }
@@ -129,10 +139,12 @@ export async function FatwaTopicSection({
   ]);
 
   return (
-    <section className="flex flex-col gap-4" aria-labelledby={headingId}>
-      <h2 id={headingId} className="text-lg font-semibold">
-        {heading}
-      </h2>
+    <section className="flex flex-col gap-5" aria-labelledby={headingId}>
+      <SectionHeader
+        id={headingId}
+        heading={heading}
+        action={{ href: fatwaTopicHref(locale, topic.slug), text: t('topicAll') }}
+      />
       <FatwaFixtureNotice locale={locale} availability={availability} />
       <FatwaList
         locale={locale}
@@ -142,9 +154,6 @@ export async function FatwaTopicSection({
         headingLevel="h3"
         t={t}
       />
-      <p>
-        <TextLink href={fatwaTopicHref(locale, topic.slug)}>{t('topicAll')}</TextLink>
-      </p>
     </section>
   );
 }

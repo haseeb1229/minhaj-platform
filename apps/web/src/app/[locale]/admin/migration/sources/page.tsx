@@ -42,18 +42,30 @@ import {
   type AdminMigrationCopy,
   type Query,
 } from '../shared';
+import { ContentKindLabel } from '../status';
 
 /**
  * `/{locale}/admin/migration/sources` — legacy sources (DOMAIN_MODEL.md §16.1
  * LegacySource) under `migration.read`; registering and editing re-check
  * `migration.administer`.
  *
- * FIXTURES ONLY IN PHASE 29. The registration form has NO authority field:
- * every source it creates is a synthetic fixture naming only
+ * TWO REGISTRATION DOORS, NEITHER WITH A KIND FIELD. An AUTHORISED source
+ * (Phase 30) is registered only by the operator command
+ * (`npm run migration:register-source`; on staging, `migration-run.sh
+ * register`) with its written authorisation reference and date, a real
+ * `https` scope and the politeness floor — created inactive, and activated as
+ * a separate, audited act. The form on this page is the other door: it has NO
+ * authority field, every source it creates is a synthetic fixture naming only
  * `*.fixture.invalid` hosts, and the service refuses a request that tries to
- * record an authorised one. An edit changes the name, state, language,
- * politeness and notes — never the key, kind, access method or hosts — at the
- * version the operator saw.
+ * record an authorised one.
+ *
+ * Each source's details show its authority, content kind and — for an
+ * authorised source — the recorded authorisation reference and date, with its
+ * licensing evidence and policy notes, all as escaped text: a reference is
+ * never a link. An edit changes the name, state, language, politeness and
+ * notes — never the key, kind, access method, hosts or evidence — at the
+ * version the operator saw; the service refuses to activate a real source
+ * without its recorded authorisation.
  */
 export const metadata = { robots: { index: false, follow: false } };
 
@@ -105,7 +117,7 @@ export default async function MigrationSourcesPage({
         <p className="text-sm text-[color:var(--color-foreground-muted)]">
           {t('sources.description')}
         </p>
-        <Alert tone="info">{t('sources.fixturesOnly')}</Alert>
+        <Alert tone="info">{t('sources.registration')}</Alert>
       </header>
 
       <section className="flex flex-col gap-3" aria-labelledby="migration-sources">
@@ -124,6 +136,7 @@ export default async function MigrationSourcesPage({
                 t('sources.column.key'),
                 t('sources.column.name'),
                 t('sources.column.authority'),
+                t('sources.column.contentKind'),
                 t('sources.column.access'),
                 t('sources.column.state'),
               ]}
@@ -135,6 +148,9 @@ export default async function MigrationSourcesPage({
                   </DataCell>
                   <DataCell wrap>{source.name}</DataCell>
                   <DataCell>{t(`authority.${source.authorityKind}`)}</DataCell>
+                  <DataCell>
+                    <ContentKindLabel kind={source.contentKind} copy={copy} />
+                  </DataCell>
                   <DataCell>{t(`access.${source.accessMethod}`)}</DataCell>
                   <DataCell>
                     <StateBadge tone={source.state === 'active' ? 'positive' : 'neutral'}>
@@ -194,6 +210,30 @@ function SourceDetail({
           <bdi>{source.name}</bdi> · <Code>{source.key}</Code>
         </summary>
         <dl className="divide-y divide-[color:var(--color-border)]">
+          <DetailRow term={t('sources.field.authority')}>
+            {t(`authority.${source.authorityKind}`)}
+          </DetailRow>
+          <DetailRow term={t('sources.field.contentKind')}>
+            <ContentKindLabel kind={source.contentKind} copy={copy} />
+          </DetailRow>
+          {source.authorityKind === 'authorised' ? (
+            <>
+              <DetailRow term={t('sources.field.authorisationReference')}>
+                {source.authorisationReference === null ? (
+                  t('none')
+                ) : (
+                  <Code>{source.authorisationReference}</Code>
+                )}
+              </DetailRow>
+              <DetailRow term={t('sources.field.authorisedOn')}>
+                {source.authorisedOn === null ? (
+                  t('none')
+                ) : (
+                  <AuthorisedOn value={source.authorisedOn} locale={locale} />
+                )}
+              </DetailRow>
+            </>
+          ) : null}
           <DetailRow term={t('sources.field.baseUrl')}>
             {source.baseUrl === null ? t('none') : <Code>{source.baseUrl}</Code>}
           </DetailRow>
@@ -223,6 +263,20 @@ function SourceDetail({
                 ' · ',
               )}
             </Code>
+          </DetailRow>
+          <DetailRow term={t('sources.field.licensingEvidence')}>
+            {source.licensingEvidence === null ? (
+              t('none')
+            ) : (
+              <bdi className="whitespace-pre-wrap">{source.licensingEvidence}</bdi>
+            )}
+          </DetailRow>
+          <DetailRow term={t('sources.field.policyNotes')}>
+            {source.policyNotes === null ? (
+              t('none')
+            ) : (
+              <bdi className="whitespace-pre-wrap">{source.policyNotes}</bdi>
+            )}
           </DetailRow>
           <DetailRow term={t('sources.field.version')}>{source.version}</DetailRow>
         </dl>
@@ -272,6 +326,28 @@ function SourceDetail({
         ) : null}
       </details>
     </Panel>
+  );
+}
+
+/**
+ * A recorded authorisation date (`YYYY-MM-DD`), in the operator's language.
+ * A calendar date, not a moment: formatted in UTC so no time zone moves it.
+ */
+function AuthorisedOn({
+  value,
+  locale,
+}: {
+  readonly value: string;
+  readonly locale: Locale;
+}) {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00Z`) : null;
+  if (date === null || Number.isNaN(date.getTime())) return <Code>{value}</Code>;
+  return (
+    <time dateTime={value}>
+      {new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }).format(
+        date,
+      )}
+    </time>
   );
 }
 
