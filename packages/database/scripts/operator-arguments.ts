@@ -13,6 +13,13 @@ import 'server-only';
  * did nothing, or an empty ticket that produced an unexplained audit row, is.
  */
 
+/**
+ * An internal account identifier, as `User.id` holds it (`NVarChar(36)`): Better
+ * Auth's own identifiers and UUIDs both fit; an email address never does. Every
+ * operator command that names an account uses this one shape.
+ */
+export const ACCOUNT_ID = /^[A-Za-z0-9_-]{8,36}$/;
+
 export interface OperatorArguments {
   readonly targetUserId: string;
   readonly ticket: string;
@@ -49,7 +56,7 @@ export function parseOperatorArguments(
     }
   }
 
-  if (targetUserId === undefined || !/^[A-Za-z0-9_-]{8,36}$/.test(targetUserId)) {
+  if (targetUserId === undefined || !ACCOUNT_ID.test(targetUserId)) {
     throw new Error(
       `--user must be an internal account identifier, not an email address.\n${usage}`,
     );
