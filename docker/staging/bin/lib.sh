@@ -410,6 +410,32 @@ prune_old_releases() {
   done
 }
 
+# Removes this platform's release images (web, realtime, ops) that neither the
+# current nor the previous release references. Each deploy pulls ~6 GB of new
+# digests; without this the root disk fills within a handful of deploys. A
+# retained older release can still be restored, because every digest stays
+# pullable from the registry. Never touches volumes or the SQL Server, ClamAV,
+# NGINX or certbot images, and never forces removal of an image a container
+# uses. Refuses, removing nothing, unless both releases' digests were read.
+# The releases directory is an argument only so a test can point it elsewhere.
+prune_unreferenced_images() {
+  local releases="${1:-$RELEASES_DIR}" keep ref id
+  keep="$(cat "$releases/current/release.env" "$releases/previous/release.env" 2> /dev/null \
+    | grep -E '^MINHAJ_(WEB|REALTIME|OPS)_IMAGE=' | cut -d= -f2- | tr -d '"' | sort -u)" || true
+  if [ "$(printf '%s\n' "$keep" | grep -c '@sha256:')" -lt 3 ]; then
+    log "image prune skipped: the current and previous release digests could not be read"
+    return 0
+  fi
+  docker images --digests --format '{{.Repository}}@{{.Digest}} {{.ID}}' | while read -r ref id; do
+    case "$ref" in
+      */minhaj/web@sha256:* | */minhaj/realtime@sha256:* | */minhaj/ops@sha256:*) ;;
+      *) continue ;;
+    esac
+    printf '%s\n' "$keep" | grep -qxF "$ref" && continue
+    docker image rm "$id" > /dev/null 2>&1 || true
+  done
+}
+
 # -----------------------------------------------------------------------------
 # The real edge, probed from the host itself
 # -----------------------------------------------------------------------------

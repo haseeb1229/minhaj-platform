@@ -1404,7 +1404,12 @@ Command (no inbound SSH from GitHub). On the VM, `docker/staging/bin/fetch-relea
 digests with the VM's own identity and extracts that commit's bundle (`docker/staging/` plus the
 staging NGINX template and SQL Server Dockerfile) from the operations image; the bundle's
 `deploy.sh` proves the host, switches web, realtime and proxy, smoke-tests the real edge and
-**restores the previous known-good release** on failure. **Migrations are separate**: they run
+**restores the previous known-good release** on failure. After a successful switch it keeps the
+current release, the previous one and the three most recent other release directories, and
+removes every web, realtime and operations image that neither the current nor the previous
+release references (since Phase 30: each deploy pulls about 6 GB, and without this the root disk
+reached 97%). An older release is still restorable, because its digests stay in the registry.
+**Migrations are separate**: they run
 only from `bin/migrate.sh`, or when the operator pushes a `migrate-and-deploy` tag, after a backup,
 and never at container start. A rollback changes images only; it never reverses a migration.
 Nothing at runtime clones source or depends on the repository being public.

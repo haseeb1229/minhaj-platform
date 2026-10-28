@@ -67,6 +67,7 @@ if release_compose "$dir" up -d --wait --wait-timeout 300 --remove-orphans web r
   fi
   date -u +%Y-%m-%dT%H:%M:%SZ > "$dir/DEPLOYED_AT"
   prune_old_releases
+  prune_unreferenced_images
   log "DEPLOYED $sha"
   log "  web      $MINHAJ_WEB_IMAGE"
   log "  realtime $MINHAJ_REALTIME_IMAGE"
