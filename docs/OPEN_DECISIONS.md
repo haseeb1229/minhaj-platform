@@ -580,7 +580,8 @@ Phase 28 delivers staging **before** migration needs it.
 a dedicated host name, distinct from the pre-adoption presentation origin — owned and operated
 by the developer before adoption, with the DNS `A` record for that one name only, Let's Encrypt
 TLS, NGINX Basic Authentication as the environment gate in front of normal Identity and RBAC,
-staging email disabled and Donations unavailable (no payment provider configured). GitHub
+staging email disabled at Phase-28 delivery (transactional email enabled in Phase 30 for the
+owner's staging accounts, §5.1) and Donations unavailable (no payment provider configured). GitHub
 Actions deploys it through the protected `staging` environment with OIDC (ARCHITECTURE.md
 §10.6). On adoption, staging is re-provisioned on adopter-owned infrastructure; the Azure for
 Students subscription is not transferable.

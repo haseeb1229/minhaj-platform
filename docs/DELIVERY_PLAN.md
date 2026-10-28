@@ -2285,8 +2285,8 @@ verified · staging data is isolated from production.
 > `noindex`/`Disallow` (SECURITY_BASELINE.md §21); and SQL **plus** Storage backup with an actual
 > isolated restore. **No schema change**: at Phase-28 delivery staging was migrated with the
 > accepted history as it then stood — 27 migrations ending at `20261010000000_phase27_donations`
-> (Phase 29 later added the 28th). Email is disabled, no payment provider
-> is configured, gated religious, safeguarding and messaging capabilities stay fail-closed, and
+> (Phase 29 later added the 28th). Email was disabled (Phase 30 later enabled transactional
+> email for the owner's staging accounts), no payment provider was configured, gated religious, safeguarding and messaging capabilities stay fail-closed, and
 > the only seed is one synthetic, non-religious asset. Production hosting, licensing, HA/DR,
 > monitoring and the rollback runbook remain **Phase 34**; no Phase 29 work was included.
 

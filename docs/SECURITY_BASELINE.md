@@ -1927,8 +1927,12 @@ machine name and a database-level fingerprint carrying the same environment id. 
 (`MinhajPlatform`, `MinhajPhase1*`) are refused outright. Migrations, provisioning, seed and
 reset run **only** as explicit operator commands from the exact-SHA operations image — never at
 container start, never during a deploy unless the operator chose `migrate-and-deploy`. The
-runtime and operator principals cannot reset. **Staging email is disabled, no payment provider
-is configured, no production credential exists, and no real person's data is seeded.**
+runtime and operator principals cannot reset. **No payment provider is configured, no production
+credential exists, and no real person's data is seeded.** Staging email was disabled at Phase-28
+delivery; since Phase 30 staging sends **transactional** mail (verification, reset, security
+notices) through the pre-adoption Resend sender `mail.minhajulquran.haseebliaqat.me` with a
+sending-only credential held only in the host's root-only `app.env` (OPEN_DECISIONS.md §5.1),
+so the owner's staging accounts can verify their addresses. It is never used for outreach.
 
 ### 21.6 `PUBLIC_TO_PRIVATE_HANDOFF_CHECK`
 
