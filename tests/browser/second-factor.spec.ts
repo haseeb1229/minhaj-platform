@@ -49,7 +49,7 @@ test.describe('enrolling a second factor', () => {
     await expect(section.getByRole('img', { name: /QR code/u })).toBeVisible();
     const secret = new URL(totpUri).searchParams.get('secret') ?? '';
     const shownKey = await section.locator('code').first().innerText();
-    expect(shownKey.replace(/s+/gu, '')).toBe(secret.toUpperCase().replace(/=+$/u, ''));
+    expect(shownKey.replace(/\s+/gu, '')).toBe(secret.toUpperCase().replace(/=+$/u, ''));
 
     // Ten single-use codes, shown as a list.
     expect(recoveryCodes).toHaveLength(10);
