@@ -62,7 +62,7 @@
   "dependencies": {
     "@prisma/adapter-mssql": "7.10.0",
     "@prisma/client": "7.10.0",
-    "better-auth": "1.7.4",
+    "better-auth": "1.7.7",
     "mssql": "12.7.0",
     "resend": "6.27.0",
     "server-only": "0.0.1",

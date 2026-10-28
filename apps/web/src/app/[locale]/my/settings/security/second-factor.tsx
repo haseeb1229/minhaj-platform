@@ -2,7 +2,15 @@
 
 import { useActionState } from 'react';
 
-import { Alert, Button, Field, Panel, SectionHeading, TextInput } from '@/components/ui';
+import {
+  ActionLink,
+  Alert,
+  Button,
+  Field,
+  Panel,
+  SectionHeading,
+  TextInput,
+} from '@/components/ui';
 import {
   beginEnrolmentAction,
   confirmEnrolmentAction,
@@ -11,6 +19,7 @@ import {
   regenerateRecoveryCodesAction,
   type SecondFactorState,
 } from './actions';
+import { parseTotpSetup, qrModules, qrPath } from './totp-setup';
 
 /**
  * Two-step verification, on the account's own security surface.
@@ -42,6 +51,9 @@ export interface SecondFactorLabels {
   readonly enrolPending: string;
   readonly enrolUri: string;
   readonly enrolUriHelp: string;
+  readonly enrolQr: string;
+  readonly enrolKey: string;
+  readonly enrolOpenApp: string;
   readonly enrolCodes: string;
   readonly enrolCodesHelp: string;
   readonly confirmCodes: string;
@@ -185,15 +197,7 @@ export function SecondFactorSection({
       {/* ---- The setup key, shown once -------------------------------- */}
       {begin.totpUri === undefined ? null : (
         <Panel>
-          <div className="flex flex-col gap-2">
-            <SectionHeading>{labels.enrolUri}</SectionHeading>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {labels.enrolUriHelp}
-            </p>
-            <code className="block overflow-x-auto rounded-[var(--radius-control)] bg-[color:var(--color-surface-sunken)] p-3 text-xs break-all">
-              {begin.totpUri}
-            </code>
-          </div>
+          <SetupKey uri={begin.totpUri} labels={labels} />
         </Panel>
       )}
 
@@ -381,5 +385,72 @@ export function SecondFactorSection({
         </>
       ) : null}
     </section>
+  );
+}
+
+/** Modules of white margin around the code; four is the QR specification's. */
+const QUIET_ZONE = 4;
+
+/**
+ * The setup key, shown once: a QR code to scan, the same secret as grouped
+ * text for manual entry, and a link that hands the provisioning URI to an
+ * authenticator app on this device.
+ *
+ * The code is drawn black on white whatever the theme, because that is what
+ * camera readers reliably decode. If the URI cannot be read as a TOTP
+ * provisioning URI, the URI itself is shown rather than a key that may be wrong.
+ */
+function SetupKey({
+  uri,
+  labels,
+}: {
+  readonly uri: string;
+  readonly labels: SecondFactorLabels;
+}) {
+  const setup = parseTotpSetup(uri);
+  const modules = setup === null ? null : qrModules(setup.uri);
+  const extent = modules === null ? 0 : modules.length + QUIET_ZONE * 2;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <SectionHeading>{labels.enrolUri}</SectionHeading>
+      <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        {labels.enrolUriHelp}
+      </p>
+
+      {setup === null || modules === null ? (
+        <code className="block overflow-x-auto rounded-[var(--radius-control)] bg-[color:var(--color-surface-sunken)] p-3 text-xs break-all">
+          {uri}
+        </code>
+      ) : (
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <svg
+            role="img"
+            aria-label={labels.enrolQr}
+            viewBox={`0 0 ${extent} ${extent}`}
+            shapeRendering="crispEdges"
+            className="size-48 shrink-0 rounded-[var(--radius-control)] border border-[color:var(--color-border)]"
+          >
+            <rect width={extent} height={extent} fill="#ffffff" />
+            <path d={qrPath(modules, QUIET_ZONE)} fill="#000000" />
+          </svg>
+
+          <div className="flex min-w-0 flex-col gap-3">
+            <p className="text-sm font-semibold">{labels.enrolKey}</p>
+            <code
+              dir="ltr"
+              className="block rounded-[var(--radius-control)] bg-[color:var(--color-surface-sunken)] p-3 font-mono text-base tracking-wider break-all select-all"
+            >
+              {setup.groupedSecret}
+            </code>
+            <div>
+              <ActionLink href={setup.uri} tone="secondary">
+                {labels.enrolOpenApp}
+              </ActionLink>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

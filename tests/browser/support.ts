@@ -600,10 +600,10 @@ export async function beginSecondFactorEnrolment(
   await section.getByLabel(ADMIN.currentPassword, { exact: true }).fill(PASSWORD);
   await section.getByRole('button', { name: ADMIN.beginSetup }).click();
 
-  const totpUri = await section
-    .locator('code', { hasText: 'otpauth://' })
-    .first()
-    .innerText();
+  // The page offers the provisioning URI as its "open in authenticator app"
+  // link, beside the QR code and the grouped key drawn from the same URI.
+  const totpUri =
+    (await section.locator('a[href^="otpauth://"]').first().getAttribute('href')) ?? '';
   expect(totpUri).toContain('otpauth://totp/');
 
   return { totpUri, recoveryCodes: await recoveryCodesOn(page) };

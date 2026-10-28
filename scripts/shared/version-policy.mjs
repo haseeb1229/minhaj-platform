@@ -71,12 +71,16 @@ export const lockedStack = Object.freeze([
   },
   {
     // TECH_STACK.md §2 locks the 1.7.x RANGE and §1.5 places the exact patch
-    // at genuine introduction. Phase 2 selected 1.7.4 and pins it EXACTLY.
+    // at genuine introduction. Phase 2 selected 1.7.4 and pinned it EXACTLY;
+    // Phase 30 moved the pin to 1.7.7, the first patch clearing three Critical
+    // advisories published after Phase 29 (GHSA-r4xp-prcw-77qf,
+    // GHSA-965c-763c-88jm, GHSA-44jh-23m7-hpcf). 1.7.5-1.7.7 change no table,
+    // column or plugin schema.
     //
     // The patch matters here in a way a range would not express. 1.7.0-1.7.2
     // added a required `account.issuer` column and a unique index on
     // (issuer, accountId); 1.7.3 reversed that and restored the 1.6 account
-    // shape, and 1.7.4 keeps the reversal. A range permitting 1.7.0 would
+    // shape, and 1.7.4 onwards keep the reversal. A range permitting 1.7.0 would
     // permit a version whose schema this repository deliberately does not
     // have.
     //
@@ -86,7 +90,7 @@ export const lockedStack = Object.freeze([
     // arrived yet.
     name: 'better-auth',
     kind: 'exact',
-    expected: '1.7.4',
+    expected: '1.7.7',
     introduced: 'Phase 2 — Identity & Access',
   },
   {

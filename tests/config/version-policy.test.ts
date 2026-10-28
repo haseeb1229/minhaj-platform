@@ -91,7 +91,7 @@ function baseWorkspaces(): { name: string; directory: string; manifest: Manifest
         dependencies: {
           '@prisma/adapter-mssql': '7.10.0',
           '@prisma/client': '7.10.0',
-          'better-auth': '1.7.4',
+          'better-auth': '1.7.7',
           resend: '6.27.0',
           zod: '4.6.7',
         },
@@ -124,7 +124,7 @@ function baseLock(): { packages: Record<string, { version?: string }> } {
       'node_modules/prisma': { version: '7.10.0' },
       'node_modules/@prisma/client': { version: '7.10.0' },
       'node_modules/@prisma/adapter-mssql': { version: '7.10.0' },
-      'node_modules/better-auth': { version: '1.7.4' },
+      'node_modules/better-auth': { version: '1.7.7' },
       'node_modules/resend': { version: '6.27.0' },
       'node_modules/@playwright/test': { version: '1.55.1' },
       'node_modules/socket.io': { version: '4.8.3' },
@@ -500,8 +500,8 @@ describe('F13.6 — deferred packages: absent is correct, present is contracted'
   it('accepts a deferred package introduced at its approved version', () => {
     expect(
       failuresFor((state) => {
-        web(state).dependencies!['better-auth'] = '1.7.4';
-        state.lock.packages['node_modules/better-auth'] = { version: '1.7.4' };
+        web(state).dependencies!['better-auth'] = '1.7.7';
+        state.lock.packages['node_modules/better-auth'] = { version: '1.7.7' };
       }),
     ).toEqual([]);
 
@@ -537,11 +537,12 @@ describe('F13.6 — deferred packages: absent is correct, present is contracted'
     ).toMatch(/prerelease/);
   });
 
-  it('pins the Better Auth patch Phase 2 actually resolved', () => {
+  it('pins the Better Auth patch the stack actually resolves', () => {
     // TECH_STACK.md §2 locks the 1.7.x RANGE and §1.5 places the exact resolved
     // patch at genuine introduction. Phase 2 is that introduction, and it
     // resolved 1.7.4 — so the patch is no longer something this policy would
-    // be pre-empting by naming.
+    // be pre-empting by naming. Phase 30 moved it to 1.7.7, the first patch
+    // clearing three Critical advisories against 1.7.4-1.7.6.
     //
     // It is pinned EXACTLY rather than left as a range because the patch is
     // load-bearing: 1.7.0-1.7.2 required an `account.issuer` column and a
@@ -550,13 +551,21 @@ describe('F13.6 — deferred packages: absent is correct, present is contracted'
     // schema this repository deliberately does not have.
     expect(policyFor('better-auth')).toMatchObject({
       kind: 'exact',
-      expected: '1.7.4',
+      expected: '1.7.7',
     });
     expect(policyFor('better-auth')?.introduced).toMatch(/Phase 2/);
   });
 
   it('rejects the withdrawn 1.7.0-1.7.2 account schema line', () => {
-    for (const version of ['1.7.0', '1.7.1', '1.7.2', '1.7.3', '1.8.0']) {
+    for (const version of [
+      '1.7.0',
+      '1.7.1',
+      '1.7.2',
+      '1.7.3',
+      '1.7.4',
+      '1.7.6',
+      '1.8.0',
+    ]) {
       expect(
         failuresFor((state) => {
           database(state).dependencies!['better-auth'] = version;

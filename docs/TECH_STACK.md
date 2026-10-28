@@ -359,6 +359,17 @@ Access adapter sub-layer. **Permissions are the single enforcement path**
 > Better Auth 1.7.4 declares `zod ^4.5.4`, so the family stays compatible. No schema was
 > changed and no validation was relaxed.
 
+> **Better Auth patch moved 1.7.4 → 1.7.7** (Phase 30, October 2026). Three Critical advisories
+> were published against 1.7.4–1.7.6 after Phase 29 closed: GHSA-r4xp-prcw-77qf (OAuth Proxy
+> sign-in as another user), GHSA-965c-763c-88jm (OAuth state usable as a magic link) and
+> GHSA-44jh-23m7-hpcf (Drizzle adapter rate limits). None of those features is configured here
+> — no OAuth Proxy, no magic link, no Drizzle — but the audit gate fails every Critical, so the
+> dependency is patched rather than excepted (SECURITY_BASELINE.md §18.3.1). 1.7.7 is the first
+> patch that clears all three; 1.7.5–1.7.7 change no table, column or plugin schema, keep
+> `zod ^4.5.4` and `@better-auth/utils` 0.4.2, and the `@better-auth/*` family moves with it
+> exactly. The 1.7.x range, the TOTP and email-OTP plugins and the Identity schema are
+> unchanged; the Identity proofs re-ran on the new patch.
+
 **Zod 4.6.x** — LOCKED. Every trust boundary — Server Actions, Route Handlers, socket events,
 import pipeline, environment configuration validated at startup. Schemas shared via
 `packages/contracts`, with **server-side validation always authoritative**.
@@ -752,3 +763,9 @@ global `fetch` does not offer — and the synthetic executable export runs in No
 **No corpus, dataset or legacy asset was introduced**: every fixture page, export row and asset is
 synthetic, written for the proof; the pages and assets are served from loopback under
 `*.fixture.invalid`, and the export exists only in memory.
+
+### 18.7 Phase-30 second-factor setup inventory
+
+| Direct dependency | Exact version | Use and provenance |
+| --- | --- | --- |
+| `qrcode-generator` | 2.0.4 (pinned exactly) | MIT; [source](https://github.com/kazuhikoarase/qrcode-generator). **No transitive dependencies.** Encodes the one-time TOTP provisioning URI as a QR matrix on the account security page (`/my/settings/security`), which the page draws itself as a single SVG path — no raw HTML, no image request, no network. The URI never leaves the page that received it; the same secret is also shown as a grouped typeable key. Added after the first real staging enrolment showed the URI as raw text with no code to scan. |

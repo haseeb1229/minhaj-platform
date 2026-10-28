@@ -73,7 +73,7 @@ model AuditLog {
 // LIFECYCLE. `User`, `Session`, `Account` and `Verification` carry Better
 // Auth's mechanics and One Minhaj's application state on the SAME physical
 // row — there is no second user table and no join to keep in step. Better
-// Auth 1.7.4 owns their write mechanics; One Minhaj owns the columns marked
+// Auth 1.7.x owns their write mechanics; One Minhaj owns the columns marked
 // below and every rule about them. The shape is proved against the library's
 // own `getSchema()` by test rather than trusted (P-2).
 //

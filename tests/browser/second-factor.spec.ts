@@ -44,13 +44,21 @@ test.describe('enrolling a second factor', () => {
     expect(totpUri).toContain('otpauth://totp/');
     expect(totpUri).toContain('One%20Minhaj');
 
+    // Scannable, and typeable: a QR code, and the URI's own secret as the
+    // grouped key a person can enter by hand.
+    await expect(section.getByRole('img', { name: /QR code/u })).toBeVisible();
+    const secret = new URL(totpUri).searchParams.get('secret') ?? '';
+    const shownKey = await section.locator('code').first().innerText();
+    expect(shownKey.replace(/s+/gu, '')).toBe(secret.toUpperCase().replace(/=+$/u, ''));
+
     // Ten single-use codes, shown as a list.
     expect(recoveryCodes).toHaveLength(10);
 
     // SHOWN ONCE. A reload loses them, because nothing durable of this
     // platform's ever held them.
     await page.reload();
-    await expect(section.locator('code', { hasText: 'otpauth://' })).toHaveCount(0);
+    await expect(section.locator('a[href^="otpauth://"]')).toHaveCount(0);
+    await expect(section.getByRole('img', { name: /QR code/u })).toHaveCount(0);
     expect(await recoveryCodesOn(page)).toHaveLength(0);
 
     // AND THE POSTURE DID NOT MOVE. An enrolment abandoned before a code was
