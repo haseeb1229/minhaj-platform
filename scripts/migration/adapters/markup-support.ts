@@ -180,7 +180,8 @@ export function createListingDiscovery(
 
 /**
  * The listing page numbers that pagination hrefs name: `{listingPath}` itself
- * is page 1, `{listingPath}page/{n}` (with or without a trailing slash) is n.
+ * is page 1, `{listingPath}page/{n}` (with or without a trailing slash, or
+ * followed by the listing's own `{name}.html`, as Press-Release writes it) is n.
  */
 export function pageNumbersOf(
   hrefs: readonly string[],
@@ -201,8 +202,8 @@ export function pageNumbersOf(
       pages.add(1);
       continue;
     }
-    if (!url.pathname.startsWith(listingPath)) continue;
-    const match = /^page\/([1-9][0-9]{0,4})\/?$/.exec(
+    if (!url.pathname.startsWith(listingPath) || url.search !== '') continue;
+    const match = /^page\/([1-9][0-9]{0,4})(?:\/(?:[A-Za-z0-9-]+\.html)?)?$/.exec(
       url.pathname.slice(listingPath.length),
     );
     if (match) pages.add(Number(match[1]));

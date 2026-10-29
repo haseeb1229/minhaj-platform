@@ -365,6 +365,34 @@ describe('discovery', () => {
     });
   });
 
+  it('reads the Press-Release listing layout and its named page links', async () => {
+    const releases = `<!doctype html><html><body><section><div class="row">
+<div class="col col_6_of_12"><h1 class="page_title">Press Release</h1>
+<div class="row"><div class="col col_12_of_12"><div class="tb_widget_recent_listpr clearfix">
+<div class="item clearfix"><div class="item_content"><h4><a href="/english/tid/301/Synthetic-Release-One.html">Synthetic release one</a></h4></div></div>
+<div class="item clearfix"><div class="item_content"><h4><a href="/english/tid/302/Synthetic-Release-Two.html">Synthetic release two</a></h4></div></div>
+</div></div></div>
+<ul class="page-numbers"><li><span class="page-numbers current">1</span></li><li><a class="page-numbers" href="/english/Press-Release/page/2/Press-Release-Minhaj-ul-Quran-Intenational.html">2</a></li></ul>
+</div>
+<div class="col col_3_of_12"><div class="tb_widget_recent_listpr"><div class="item_content"><h4><a href="/english/tid/909/Synthetic-Sidebar-Release.html">Sidebar</a></h4></div></div></div>
+</div></section></body></html>`;
+    const result = await adapter({
+      kind: 'editorial.press-release',
+      section: 'Press-Release',
+    }).discover(
+      null,
+      fakeSite({ [`${ORIGIN}/english/Press-Release/`]: htmlPage(releases) }).fetcher,
+    );
+    expect(result).toEqual({
+      kind: 'page',
+      items: [
+        { externalKey: key(301), originalUrl: key(301), legacyIdentifier: 'tid-301' },
+        { externalKey: key(302), originalUrl: key(302), legacyIdentifier: 'tid-302' },
+      ],
+      next: '2:2',
+    });
+  });
+
   it('keys an Urdu section by its own language', async () => {
     const urdu = newsListing(
       ['/urdu/tid/301/', '/english/tid/302/x.html'],

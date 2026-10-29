@@ -305,7 +305,9 @@ export function createMinhajOrgEditorialAdapter(
       if (main.length !== 1) return null;
       const hrefs: string[] = [];
       main
-        .find('.layout_post_2 .item_content h4 a[href], .tb_widget_articles li > a[href]')
+        .find(
+          '.layout_post_2 .item_content h4 a[href], .tb_widget_articles li > a[href], .tb_widget_recent_listpr .item_content h4 a[href]',
+        )
         .each((_index, element) => {
           hrefs.push($(element).attr('href') ?? '');
         });

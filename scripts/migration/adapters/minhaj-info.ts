@@ -56,7 +56,12 @@ import {
  *   links         the article URLs, as written.
  *   cover         (Phase 30-R) the issue's own cover picture, its `og:image` on
  *                 this host, when it is a JPEG or PNG — a webp cover is not an
- *                 admitted image type and is left on the source.
+ *                 admitted image type and is left on the source. The page
+ *                 presents its cover only through the host's resizer,
+ *                 `/i/{width}/{path}`, which answers in WebP whatever the name
+ *                 or the request says; the cover taken is that same file's
+ *                 original, `/{path}`, on the same host. Nothing else is
+ *                 rewritten.
  * No PDF is acquired (the PDFs exceed the acquisition cap).
  */
 
@@ -69,6 +74,36 @@ const ARCHIVE_PATTERN = /^\/([A-Za-z0-9][A-Za-z0-9-]*)$/;
 const ISSUE_PATTERN = /^\/([A-Za-z0-9][A-Za-z0-9-]*)\/([^/]+)$/;
 /** A JSON-LD date or date-time; only its calendar date is read. */
 const FULL_DATE = /^([0-9]{4}-[0-9]{2}-[0-9]{2})(?:T.*)?$/;
+/** The host's image resizer: `/i/{width}/` before the original's own path. */
+const RESIZED_PATH = /^\/i\/[1-9][0-9]{0,3}(\/[^?#]+)$/;
+
+/**
+ * The original behind a resized picture on this host — the same file, without
+ * the resizer that re-encodes it as WebP. Any other address is returned as it
+ * was written.
+ */
+function originalOf(src: string | undefined, base: URL): string | undefined {
+  if (src === undefined) return undefined;
+  let url: URL;
+  try {
+    url = new URL(src, base);
+  } catch {
+    return src;
+  }
+  if (
+    url.protocol !== base.protocol ||
+    url.hostname !== base.hostname ||
+    url.username !== '' ||
+    url.password !== '' ||
+    url.port !== '' ||
+    url.search !== '' ||
+    url.hash !== ''
+  )
+    return src;
+  const match = RESIZED_PATH.exec(url.pathname);
+  if (match === null) return src;
+  return new URL(match[1] ?? '', base).toString();
+}
 
 /**
  * THE canonical URL of a magazine — its archive page. The magazine's
@@ -215,7 +250,7 @@ export function createMinhajInfoIssueAdapter(
     adapterKey: MINHAJ_INFO_ISSUE_ADAPTER_KEY,
     adapterVersion: '2',
     parserKey: 'cheerio-minhaj-info-magazine-issue',
-    parserVersion: '2',
+    parserVersion: '3',
     contentKind: 'library.magazine-issue',
     accessMethod: 'http',
 
@@ -273,7 +308,7 @@ export function createMinhajInfoIssueAdapter(
       });
 
       const cover = firstPartyImage($, {
-        src: $('meta[property="og:image"]').attr('content'),
+        src: originalOf($('meta[property="og:image"]').attr('content'), base),
         alt: title,
         pageUrl: evidence.finalUrl,
         hosts: [base.hostname],

@@ -100,7 +100,7 @@ describe('identity and construction', () => {
       adapterKey: MINHAJ_INFO_ISSUE_ADAPTER_KEY,
       adapterVersion: '2',
       parserKey: 'cheerio-minhaj-info-magazine-issue',
-      parserVersion: '2',
+      parserVersion: '3',
       contentKind: 'library.magazine-issue',
       accessMethod: 'http',
     });
@@ -390,6 +390,14 @@ describe('issue parse', () => {
   it('takes a JPEG or PNG og:image on its own host as the cover, with the page notice as evidence', () => {
     const NOTICE =
       '<p>© 2001–2026 Minhaj-ul-Quran International. All rights reserved.</p>';
+    const direct = parseIssue(
+      issuePage({ ogImage: `${SITE}/mag/mags/titlethumbs/2019-12.png`, notice: NOTICE }),
+    );
+    if (direct.kind !== 'parsed' || direct.record.kind !== 'library.magazine-issue')
+      throw new Error('expected an issue');
+    expect(direct.record.cover?.url).toBe(`${SITE}/mag/mags/titlethumbs/2019-12.png`);
+
+    // The resizer re-encodes as WebP: the cover is the same file's original.
     const result = parseIssue(
       issuePage({
         ogImage: `${SITE}/i/600/mag/mags/titlethumbs/2020-01.jpg`,
@@ -399,13 +407,13 @@ describe('issue parse', () => {
     if (result.kind !== 'parsed' || result.record.kind !== 'library.magazine-issue')
       throw new Error('expected an issue');
     expect(result.record.cover).toEqual({
-      url: `${SITE}/i/600/mag/mags/titlethumbs/2020-01.jpg`,
+      url: `${SITE}/mag/mags/titlethumbs/2020-01.jpg`,
       alt: 'شمارہ مصنوعی 2026ء',
       credit: null,
     });
     expect(result.record.assets).toEqual([
       {
-        url: `${SITE}/i/600/mag/mags/titlethumbs/2020-01.jpg`,
+        url: `${SITE}/mag/mags/titlethumbs/2020-01.jpg`,
         licence: 'organisation-owned',
         licenceEvidence: expect.stringContaining('Minhaj-ul-Quran International'),
         rightsHolder: 'Minhaj-ul-Quran International',
@@ -418,6 +426,8 @@ describe('issue parse', () => {
       `${SITE}/i/600/mag/mags/titlethumbs/2026-10.webp`,
       'https://images.example/titlethumbs/2026-10.jpg',
       `http://minhaj.info/i/600/mag/mags/titlethumbs/2020-01.jpg`,
+      `https://images.example/i/600/mag/mags/titlethumbs/2020-01.jpg`,
+      `${SITE}/i/600/mag/mags/titlethumbs/2020-01.webp`,
     ]) {
       const result = parseIssue(issuePage({ ogImage }));
       if (result.kind !== 'parsed' || result.record.kind !== 'library.magazine-issue')
@@ -432,7 +442,7 @@ describe('issue parse', () => {
     if (unstated.kind !== 'parsed') throw new Error('expected an issue');
     expect(unstated.record.assets).toEqual([
       {
-        url: `${SITE}/i/600/mag/mags/titlethumbs/2020-01.jpg`,
+        url: `${SITE}/mag/mags/titlethumbs/2020-01.jpg`,
         licence: 'unknown',
         licenceEvidence: null,
         rightsHolder: null,

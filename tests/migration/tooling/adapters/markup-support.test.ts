@@ -90,6 +90,21 @@ describe('pagination', () => {
         '/english/News-Events/',
       ),
     ).toEqual([1, 2, 3]);
+    // A page link may carry the listing's own name after its number; nothing
+    // else after the number is a page.
+    expect(
+      pageNumbersOf(
+        [
+          '/english/Press-Release/page/4/Press-Release-Minhaj-ul-Quran-Intenational.html',
+          '/english/Press-Release/page/5/a/b.html',
+          '/english/Press-Release/page/6/feed',
+          '/english/Press-Release/page/7/x.html?y=1',
+        ],
+        'https://www.minhaj.org/english/Press-Release/',
+        base,
+        '/english/Press-Release/',
+      ),
+    ).toEqual([4]);
   });
 });
 
