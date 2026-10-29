@@ -212,7 +212,10 @@ test('shows News and Events to an anonymous visitor with no cookie, and the same
   // Phase 21 and reached from the footer and Explore, not from News.
   await expect(main.locator('a[href="/en/newsletter"]')).toHaveCount(0);
   await expect(page.locator('a[href^="/rss"]')).toHaveCount(0);
-  await expect(page.locator('img')).toHaveCount(0);
+  // No picture in the content: these synthetic stories carry no lead image.
+  // (Phase 30-R: the shell's official brand lockup is the page's only picture.)
+  await expect(main.locator('img')).toHaveCount(0);
+  await expect(page.locator('header img')).toHaveAttribute('alt', 'Minhaj-ul-Quran International');
   // The primary navigation now leads here.
   await expect(
     page

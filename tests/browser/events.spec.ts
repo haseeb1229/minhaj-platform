@@ -644,7 +644,8 @@ test.describe('an anonymous visitor finds Events', () => {
     );
     await expect(upcoming.getByText(TITLE.past)).toHaveCount(0);
     await expect(page.getByText(TITLE.dst)).toHaveCount(0);
-    await expect(page.locator('img')).toHaveCount(0);
+    // No picture in the content; the shell's brand lockup is not an Event's (30-R).
+    await expect(page.getByRole('main').locator('img')).toHaveCount(0);
 
     // The same knowledge signed in, and no cookie was ever set.
     const anonymous = await page.getByRole('main').innerText();

@@ -751,13 +751,15 @@ export async function verifyRestoredPhase29(
        (SELECT STRING_AGG([name], N',') WITHIN GROUP (ORDER BY [name]) FROM sys.indexes
          WHERE [object_id] IN (${tables}) AND has_filter=1 AND is_unique=1) AS [filtered];`,
   );
-  // 17 CHECKs, 75 foreign keys none of which cascades (Phase 29's sixty-five
-  // and Phase 30's ten typed target keys), the 18 triggers and the three
-  // filtered keys, exactly as the migrations create them: a restore that
-  // silently lost one would otherwise read as "none untrusted".
+  // 19 CHECKs (Phase 30-R adds a host's role and an acquisition's public
+  // copy), 84 foreign keys none of which cascades (Phase 29's sixty-five,
+  // Phase 30's ten typed target keys and Phase 30-R's eight more and the
+  // public copy's Asset), the 18 triggers and the three filtered keys,
+  // exactly as the migrations create them: a restore that silently lost one
+  // would otherwise read as "none untrusted".
   if (
-    Number(counts?.checks ?? 0) !== 17 ||
-    Number(counts?.keys ?? 0) !== 75 ||
+    Number(counts?.checks ?? 0) !== 19 ||
+    Number(counts?.keys ?? 0) !== 84 ||
     (counts?.triggers ?? '').split(',').sort().join(',') !== PHASE29_TRIGGERS ||
     (counts?.filtered ?? '').split(',').sort().join(',') !== PHASE29_FILTERED
   ) {
