@@ -6,6 +6,8 @@
  * until the first build — and the type check runs before the build.
  */
 declare module '*.png' {
-  const image: import('next/image').StaticImageData;
+  import type { StaticImageData } from 'next/image';
+
+  const image: StaticImageData;
   export default image;
 }
