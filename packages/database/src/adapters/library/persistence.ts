@@ -11,6 +11,7 @@ import {
   type WorkDetail,
   type LibraryQuery,
   type LibraryFacetPage,
+  type LibraryCover,
 } from '@minhaj/contracts/library';
 import { getDatabaseClient } from '../../client.ts';
 import { auditRow } from '../../audit-row.ts';
@@ -44,6 +45,13 @@ const workInclude = {
   },
   topics: { orderBy: { topicId: 'asc' as const } },
   salePoints: { orderBy: { salePointId: 'asc' as const } },
+  // Phase 30-R: the card cover is the first published Edition's that has one.
+  editions: {
+    where: { state: 'published', coverAssetId: { not: null } },
+    orderBy: { id: 'asc' as const },
+    take: 1,
+    select: { id: true, coverAssetId: true, coverWidth: true, coverHeight: true },
+  },
 };
 const editionInclude = {
   translation: { include: { translators: { orderBy: { personId: 'asc' as const } } } },
@@ -82,6 +90,12 @@ interface WorkRow {
   }[];
   readonly topics: readonly { readonly topicId: string }[];
   readonly salePoints: readonly { readonly salePointId: string }[];
+  readonly editions: readonly {
+    readonly id: string;
+    readonly coverAssetId: string | null;
+    readonly coverWidth: number | null;
+    readonly coverHeight: number | null;
+  }[];
 }
 interface EditionRow {
   readonly id: string;
@@ -99,6 +113,9 @@ interface EditionRow {
   readonly downloadAssetId: string | null;
   readonly document: string | null;
   readonly contentVersion: string | null;
+  readonly coverAssetId: string | null;
+  readonly coverWidth: number | null;
+  readonly coverHeight: number | null;
   readonly version: number;
   readonly updatedAt: Date;
   readonly translation: {
@@ -115,7 +132,20 @@ interface SaleRow {
   readonly state: string;
   readonly version: number;
 }
+/** A cover as a value, or null — the CHECK keeps the three columns together. */
+function coverOf(row: {
+  readonly coverAssetId: string | null;
+  readonly coverWidth: number | null;
+  readonly coverHeight: number | null;
+}): LibraryCover | null {
+  if (row.coverAssetId === null || row.coverWidth === null || row.coverHeight === null)
+    return null;
+  return { assetId: row.coverAssetId, width: row.coverWidth, height: row.coverHeight };
+}
+
 function work(row: WorkRow): WorkRecord {
+  const coverEdition = row.editions[0];
+  const cover = coverEdition === undefined ? null : coverOf(coverEdition);
   return {
     id: row.id,
     slug: row.slug,
@@ -135,6 +165,10 @@ function work(row: WorkRow): WorkRecord {
     })),
     topicIds: row.topics.map((t) => t.topicId),
     salePointIds: row.salePoints.map((s) => s.salePointId),
+    cover:
+      cover === null || coverEdition === undefined
+        ? null
+        : { ...cover, editionId: coverEdition.id },
   };
 }
 function edition(row: EditionRow, publicOnly = false): EditionRecord {
@@ -159,6 +193,7 @@ function edition(row: EditionRow, publicOnly = false): EditionRecord {
         ? readerDocumentSchema.parse(JSON.parse(row.document))
         : null,
     contentVersion: readable ? row.contentVersion : null,
+    cover: coverOf(row),
     version: row.version,
     updatedAt: row.updatedAt,
     translation: row.translation
@@ -393,9 +428,21 @@ export function createLibraryPersistence(): LibraryPersistencePort {
             }))
           )
             throw new LibraryDataError('invalid');
-          const { document, ...fields } = value;
+          const { document, cover, ...fields } = value;
+          // An omitted cover KEEPS the stored one on an update; null removes it.
+          const coverColumns =
+            cover === undefined
+              ? id
+                ? {}
+                : { coverAssetId: null, coverWidth: null, coverHeight: null }
+              : {
+                  coverAssetId: cover?.assetId ?? null,
+                  coverWidth: cover?.width ?? null,
+                  coverHeight: cover?.height ?? null,
+                };
           const data = {
             ...fields,
+            ...coverColumns,
             document: document ? JSON.stringify(document) : null,
             contentVersion,
             updatedAt: new Date(),
@@ -433,6 +480,7 @@ export function createLibraryPersistence(): LibraryPersistencePort {
               download: row.download,
               readableAssetId: row.readableAssetId ?? '',
               downloadAssetId: row.downloadAssetId ?? '',
+              coverAssetId: row.coverAssetId ?? '',
             },
           );
           return edition(row);
@@ -861,6 +909,7 @@ export function createLibraryPublicReader(): LibraryPublicReaderPort {
           download: true,
           readableAssetId: true,
           downloadAssetId: true,
+          coverAssetId: true,
           work: { select: { state: true } },
         },
       });
@@ -872,6 +921,24 @@ export function createLibraryPublicReader(): LibraryPublicReaderPort {
             download: row.download,
             readableAssetId: row.readableAssetId,
             downloadAssetId: row.downloadAssetId,
+            coverAssetId: row.coverAssetId,
+          }
+        : null;
+    },
+    async issueCoverRelation(issueId) {
+      const row = await db.magazineIssue.findUnique({
+        where: { id: issueId },
+        select: {
+          state: true,
+          coverAssetId: true,
+          magazine: { select: { state: true } },
+        },
+      });
+      return row
+        ? {
+            issueState: row.state,
+            magazineState: row.magazine.state,
+            coverAssetId: row.coverAssetId,
           }
         : null;
     },

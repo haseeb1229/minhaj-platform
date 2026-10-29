@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 
 import {
   providerEmbedUrl,
@@ -77,10 +77,18 @@ export function VideoPlayer({
   provider,
   providerVideoId,
   labels,
+  backdrop = null,
 }: {
   readonly provider: VideoProvider;
   readonly providerVideoId: string;
   readonly labels: VideoPlayerLabels;
+  /**
+   * Phase 30-R: what the gate shows behind its notice — the Video's FIRST-PARTY
+   * poster, rendered by the server page from Media's own address — or null.
+   * It is our stored copy, so the gate still makes no request to the provider;
+   * this island itself never sets an image source.
+   */
+  readonly backdrop?: ReactNode;
 }) {
   const hydrated = useHydrated();
   const [loaded, setLoaded] = useState(false);
@@ -109,15 +117,24 @@ export function VideoPlayer({
         </div>
       ) : (
         <div
-          className="flex min-h-48 w-full flex-col items-center justify-center gap-4 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)] p-6 text-center sm:aspect-video"
+          className="relative flex min-h-48 w-full flex-col items-center justify-center gap-4 overflow-hidden rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)] p-6 text-center sm:aspect-video"
           data-player-state="gated"
         >
-          <p className="max-w-[var(--measure-prose)] text-sm">{labels.notice}</p>
-          {hydrated ? (
-            <Button type="button" onClick={() => setLoaded(true)}>
-              {labels.load}
-            </Button>
-          ) : null}
+          {backdrop}
+          <div
+            className={`relative flex flex-col items-center gap-4 ${
+              backdrop === null
+                ? ''
+                : 'rounded-[var(--radius-panel)] bg-[color:var(--color-surface-raised)] p-4 shadow-[var(--shadow-raised)]'
+            }`}
+          >
+            <p className="max-w-[var(--measure-prose)] text-sm">{labels.notice}</p>
+            {hydrated ? (
+              <Button type="button" onClick={() => setLoaded(true)}>
+                {labels.load}
+              </Button>
+            ) : null}
+          </div>
         </div>
       )}
       <p className="text-sm">

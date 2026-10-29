@@ -9,14 +9,19 @@ import {
   canonicalSourceUrl,
   languageCodeSchema,
   type MigrationContentKind,
+  type ParsedCountry,
   type ParsedEditorial,
   type ParsedFatwa,
+  type ParsedImage,
+  type ParsedPage,
+  type ParsedPerson,
   type ParsedMagazine,
   type ParsedMagazineIssue,
   type ParsedQuranTranslation,
   type ParsedRecord,
   type ParsedWork,
   type StagedBlock,
+  type StagedImage,
   type StagedLabel,
   type ValidationIssue,
 } from '@minhaj/contracts/migration';
@@ -97,12 +102,17 @@ export function recordMarkup(record: ParsedRecord): string[] {
       return record.bodyHtml === null ? [] : [record.bodyHtml];
     case 'editorial.news':
     case 'editorial.article':
+    case 'editorial.press-release':
+    case 'editorial.page':
       return [
         record.bodyHtml,
         ...(record.excerptHtml === null ? [] : [record.excerptHtml]),
       ];
+    case 'people.person':
+      return [record.biographyHtml];
     case 'fatwa.ruling':
       return [record.questionHtml, record.answerHtml];
+    case 'global.country':
     case 'quran.translation':
       return [];
   }
@@ -217,6 +227,21 @@ function httpsUrl(raw: string | null): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Phase 30-R. A record's image as staged: its canonical https URL — the same
+ * form an acquisition records, so publication can match the two — with the
+ * source's own alternative text and credit, normalised and bounded. An image
+ * whose URL is not https is no image at all: nothing is invented in its place.
+ */
+function image(words: Words, parsed: ParsedImage | null | undefined): StagedImage | null {
+  // An adapter written before images existed names none: no image, not an error.
+  if (parsed === null || parsed === undefined) return null;
+  const url = httpsUrl(parsed.url);
+  if (url === null) return null;
+  const alt = clip(words.redact(normalizeTitle(parsed.alt)), 300);
+  return { url, alt, credit: words.field(parsed.credit, 200) };
 }
 
 function finish(
@@ -347,6 +372,7 @@ function work(input: NormaliseInput, record: ParsedWork): Normalisation {
       pageCount,
       readableAssetUrl: httpsUrl(edition.readableAssetUrl),
       downloadAssetUrl: httpsUrl(edition.downloadAssetUrl),
+      cover: image(words, edition.cover),
     },
   };
   return finish('library.work', payload, words, {
@@ -419,6 +445,7 @@ function magazineIssue(
     magazine: { role: 'magazine' as const, legacyUrl: magazineUrl ?? '' },
     body: body !== null && body.length > 0 ? body : null,
     legacyIdentifier,
+    cover: image(words, record.cover),
   };
   return finish('library.magazine-issue', payload, words, {
     title,
@@ -431,6 +458,12 @@ function magazineIssue(
 /* ===========================================================================
  * editorial.news and editorial.article
  * ========================================================================= */
+
+const EDITORIAL_PREFIX = Object.freeze({
+  'editorial.news': 'news',
+  'editorial.article': 'article',
+  'editorial.press-release': 'press-release',
+} as const);
 
 function editorial(input: NormaliseInput, record: ParsedEditorial): Normalisation {
   const words = new Words(input.rewrite);
@@ -453,7 +486,7 @@ function editorial(input: NormaliseInput, record: ParsedEditorial): Normalisatio
       legacyIdentifier,
       title,
       fallbackSeed: input.externalKey,
-      prefix: record.kind === 'editorial.news' ? 'news' : 'article',
+      prefix: EDITORIAL_PREFIX[record.kind],
     }),
     languageCode: lang.text,
     title,
@@ -461,12 +494,142 @@ function editorial(input: NormaliseInput, record: ParsedEditorial): Normalisatio
     body,
     publishedOn: date(words, record.publishedOn, input.now),
     legacyIdentifier,
+    leadImage: image(words, record.leadImage),
   };
   return finish(record.kind, payload, words, {
     title,
     fallbackTitle: legacyIdentifier ?? input.externalKey,
     identity: null,
     languageCode: lang.code,
+  });
+}
+
+/* ===========================================================================
+ * editorial.page — a shell-bound organisational Page (Phase 30-R)
+ * ========================================================================= */
+
+function page(input: NormaliseInput, record: ParsedPage): Normalisation {
+  const words = new Words(input.rewrite);
+  const title = words.title(record.title, 200);
+  const lang = language(words, record.languageCode, input.defaultLanguageCode);
+  if (
+    lang.code !== null &&
+    !(EDITORIAL_MIGRATION_LANGUAGES as readonly string[]).includes(lang.code)
+  )
+    words.issues.add('language-unsupported');
+  const body = words.blocks(record.bodyHtml);
+  if (body.length === 0) words.issues.add('body-missing');
+  const excerpt =
+    record.excerptHtml === null ? '' : words.description(record.excerptHtml);
+  if (excerpt.length > 600) words.issues.add('excerpt-too-long');
+  if (!/^\/explore\/[a-z]+(?:-[a-z]+)*(?:\/[a-z]+(?:-[a-z]+)*)?$/.test(record.binding))
+    words.issues.add('reference-missing');
+  const payload = {
+    kind: 'editorial.page' as const,
+    binding: record.binding,
+    languageCode: lang.text,
+    title,
+    excerpt,
+    body,
+    leadImage: image(words, record.leadImage),
+    legacyIdentifier: identifier(input, record.legacyIdentifier),
+  };
+  return finish('editorial.page', payload, words, {
+    title,
+    fallbackTitle: record.binding,
+    // One Page per shell route: the binding IS its identity.
+    identity: { key: `page:${record.binding}`, signal: 'identifier', hard: false },
+    languageCode: lang.code,
+  });
+}
+
+/* ===========================================================================
+ * people.person — a public profile (Phase 30-R)
+ * ========================================================================= */
+
+/**
+ * The biography: WHOLE source paragraphs, in order, while they fit People's
+ * bound — never a paragraph cut, never a sentence summarised. What does not fit
+ * stays on the source page the profile was read from.
+ */
+function biographyOf(words: Words, html: string): string {
+  const paragraphs = blocksText(words.blocks(html))
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph.length > 0);
+  let biography = '';
+  for (const paragraph of paragraphs) {
+    const next = biography.length === 0 ? paragraph : `${biography}\n\n${paragraph}`;
+    if (next.length > MIGRATION_LIMITS.description) break;
+    biography = next;
+  }
+  return biography;
+}
+
+function person(input: NormaliseInput, record: ParsedPerson): Normalisation {
+  const words = new Words(input.rewrite);
+  const name = words.title(record.name, 200);
+  const primary = locale(record.primaryLocale);
+  if (primary === null) words.issues.add('primary-label-missing');
+  const lang = language(words, record.languageCode, input.defaultLanguageCode);
+  const biography = biographyOf(words, record.biographyHtml);
+  const legacyIdentifier = identifier(input, record.legacyIdentifier);
+  const payload = {
+    kind: 'people.person' as const,
+    // A person's address is their name, never a legacy page number.
+    slug: slugFor({
+      legacyIdentifier: null,
+      title: name,
+      fallbackSeed: legacyIdentifier ?? input.externalKey,
+      prefix: 'person',
+    }),
+    primaryLocale: primary,
+    labels: primary === null ? [] : [{ locale: primary, name, biography }],
+    portrait: image(words, record.portrait),
+    legacyIdentifier,
+  };
+  return finish('people.person', payload, words, {
+    title: name,
+    fallbackTitle: legacyIdentifier ?? input.externalKey,
+    identity: null,
+    languageCode: lang.code,
+  });
+}
+
+/* ===========================================================================
+ * global.country — a country of the organisation's presence (Phase 30-R)
+ * ========================================================================= */
+
+function country(input: NormaliseInput, record: ParsedCountry): Normalisation {
+  const words = new Words(input.rewrite);
+  const name = words.title(record.title, 120);
+  const primary = locale(record.primaryLocale);
+  if (primary === null) words.issues.add('primary-label-missing');
+  const code =
+    record.code !== null && /^[A-Z]{2}$/.test(record.code) ? record.code : null;
+  if (code === null) words.issues.add('reference-missing');
+  const legacyIdentifier = identifier(input, record.legacyIdentifier);
+  const payload = {
+    kind: 'global.country' as const,
+    code: code ?? '',
+    slug: slugFor({
+      legacyIdentifier: null,
+      title: name,
+      fallbackSeed: input.externalKey,
+      prefix: 'country',
+    }),
+    primaryLocale: primary,
+    labels: primary === null ? [] : [{ locale: primary, name }],
+    legacyIdentifier,
+  };
+  return finish('global.country', payload, words, {
+    title: name,
+    fallbackTitle: legacyIdentifier ?? input.externalKey,
+    identity:
+      code === null
+        ? null
+        : { key: `country:${code}`, signal: 'identifier', hard: false },
+    languageCode: primary,
   });
 }
 
@@ -588,9 +751,11 @@ export function normaliseRecord(input: NormaliseInput): Normalisation {
   switch (parsed.kind) {
     case 'media.video': {
       const video = normalizeVideo({ ...input, parsed });
+      const posterWords = new Words(input.rewrite);
+      const payload = { ...video.payload, poster: image(posterWords, parsed.poster) };
       return {
         kind: 'media.video',
-        payload: video.payload,
+        payload,
         issues: video.issues,
         title: video.title,
         titleKey: video.titleKey,
@@ -599,7 +764,7 @@ export function normaliseRecord(input: NormaliseInput): Normalisation {
             ? null
             : { key: video.dedupeKey, signal: 'provider-id', hard: true },
         languageCode: video.languageCode,
-        personalData: video.personalData,
+        personalData: video.personalData || posterWords.personalData,
       };
     }
     case 'library.work':
@@ -610,7 +775,14 @@ export function normaliseRecord(input: NormaliseInput): Normalisation {
       return magazineIssue(input, parsed);
     case 'editorial.news':
     case 'editorial.article':
+    case 'editorial.press-release':
       return editorial(input, parsed);
+    case 'editorial.page':
+      return page(input, parsed);
+    case 'people.person':
+      return person(input, parsed);
+    case 'global.country':
+      return country(input, parsed);
     case 'fatwa.ruling':
       return fatwa(input, parsed);
     case 'quran.translation':

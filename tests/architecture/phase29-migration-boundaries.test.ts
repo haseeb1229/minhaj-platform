@@ -94,6 +94,11 @@ const WIRING = `${COMPOSITION}/migration-wiring.ts`;
 const TARGETS = `${COMPOSITION}/migration-targets.ts`;
 const LIBRARY_TARGETS = `${COMPOSITION}/migration-library-targets.ts`;
 const EDITORIAL_TARGETS = `${COMPOSITION}/migration-editorial-targets.ts`;
+/** Phase 30-R: Global Network's countries and People's profiles. */
+const GLOBAL_TARGETS = `${COMPOSITION}/migration-global-targets.ts`;
+const PEOPLE_TARGETS = `${COMPOSITION}/migration-people-targets.ts`;
+/** Phase 30-R: the Storage foundation's lazy runtime, for the servable-image answer. */
+const STORAGE = `${COMPOSITION}/storage.ts`;
 const TARGET_SUPPORT = `${COMPOSITION}/migration-target-support.ts`;
 const ROUTER = `${COMPOSITION}/migration-target-router.ts`;
 /** Every module that defines a publication target (Phase 30: one per domain). */
@@ -101,11 +106,13 @@ const TARGET_MODULES = [
   TARGETS,
   LIBRARY_TARGETS,
   EDITORIAL_TARGETS,
+  GLOBAL_TARGETS,
+  PEOPLE_TARGETS,
   TARGET_SUPPORT,
   ROUTER,
 ];
 /** The composition the CLIs and the staging proof load outside the bundler. */
-const NODE_RUNNABLE = [RUNNER, WIRING, ...TARGET_MODULES];
+const NODE_RUNNABLE = [RUNNER, WIRING, ...TARGET_MODULES, STORAGE];
 const API = 'apps/web/src/app/api/admin/migration';
 
 /** Every bounded context but Migration itself. */
@@ -257,7 +264,7 @@ describe('only Layer-4 composition wires Migration and its publication targets',
     for (const file of scanned) {
       if (allowed.has(file)) continue;
       expect(withoutComments(await read(file)), file).not.toMatch(
-        /createMigrationTargets|routeMigrationTargets|mediaVideoTargetOver|library(?:Work|Magazine|MagazineIssue)TargetOver|editorialTargetOver|migration-(?:library-|editorial-)?targets|migration-target-(?:router|support)/u,
+        /createMigrationTargets|routeMigrationTargets|mediaVideoTargetOver|library(?:Work|Magazine|MagazineIssue)TargetOver|editorialTargetOver|globalCountryTargetOver|peoplePersonTargetOver|migration-(?:library-|editorial-|global-|people-)?targets|migration-target-(?:router|support)/u,
       );
     }
     // Both roots publish through the router over the one target factory.
@@ -280,14 +287,19 @@ describe('only Layer-4 composition wires Migration and its publication targets',
     // What each target module may import: its own domain's public index and
     // contracts, Migration's contracts and the shared target support — and,
     // in the one factory alone, the domains' adapters and Personalisation's
-    // public service.
+    // public service — and (Phase 30-R) the Storage foundation's lazy runtime,
+    // whose servable-still-image answer Editorial's lead-image check needs.
     const ALLOWED: Record<string, RegExp> = {
       [TARGETS]:
-        /^(?:server-only|@minhaj\/database|@minhaj\/contracts\/(?:media|library|migration)|\.\.\/contexts\/(?:media|library|editorial|personalisation-notifications)\/index\.ts|\.\/migration-(?:target-router|target-support|library-targets|editorial-targets)\.ts)$/u,
+        /^(?:server-only|@minhaj\/database|@minhaj\/contracts\/(?:media|library|migration)|\.\.\/contexts\/(?:media|library|editorial|global-network|people-contributors|personalisation-notifications)\/index\.ts|\.\/migration-(?:target-router|target-support|library-targets|editorial-targets|global-targets|people-targets)\.ts|\.\/storage\.ts)$/u,
       [LIBRARY_TARGETS]:
         /^(?:server-only|@minhaj\/contracts\/(?:library|migration)|\.\.\/contexts\/library\/index\.ts|\.\/migration-target-support\.ts)$/u,
       [EDITORIAL_TARGETS]:
-        /^(?:server-only|@minhaj\/contracts\/(?:editorial|library|migration)|\.\.\/contexts\/editorial\/index\.ts|\.\/migration-target-support\.ts)$/u,
+        /^(?:server-only|@minhaj\/contracts\/(?:editorial|library|migration|platform)|\.\.\/contexts\/editorial\/index\.ts|\.\/migration-target-support\.ts)$/u,
+      [GLOBAL_TARGETS]:
+        /^(?:server-only|@minhaj\/contracts\/(?:global|migration)|\.\.\/contexts\/global-network\/index\.ts|\.\/migration-target-support\.ts)$/u,
+      [PEOPLE_TARGETS]:
+        /^(?:server-only|@minhaj\/contracts\/(?:people|migration)|\.\.\/contexts\/people-contributors\/index\.ts|\.\/migration-target-support\.ts)$/u,
       [TARGET_SUPPORT]: /^(?:server-only|@minhaj\/contracts\/migration)$/u,
       [ROUTER]: /^(?:server-only|@minhaj\/contracts\/migration)$/u,
     };
@@ -349,7 +361,7 @@ describe('only Layer-4 composition wires Migration and its publication targets',
         if (target.startsWith('apps/web/src/')) queue.push(target);
       }
     }
-    // The graph is the composition modules and seven contexts' sources.
+    // The graph is the composition modules and eight contexts' sources.
     const contexts = new Set(
       [...reached]
         .filter((file) => file.startsWith('apps/web/src/contexts/'))
@@ -357,6 +369,7 @@ describe('only Layer-4 composition wires Migration and its publication targets',
     );
     expect([...contexts].sort()).toEqual([
       'editorial',
+      'global-network',
       'library',
       'media',
       'migration-provenance',

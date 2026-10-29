@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createMinhajOrgEditorialAdapter,
+  createMinhajOrgPageAdapter,
+  createMinhajOrgPersonAdapter,
   MINHAJ_ORG_BASE_URL,
   MINHAJ_ORG_EDITORIAL_ADAPTER_KEY,
+  MINHAJ_ORG_PAGE_ADAPTER_KEY,
+  profileName,
   type MinhajOrgEditorialAdapterOptions,
 } from '../../../../scripts/migration/adapters/minhaj-org.ts';
 
@@ -107,9 +111,9 @@ describe('identity and options', () => {
   it('declares what it is, per kind', () => {
     expect(adapter()).toMatchObject({
       adapterKey: MINHAJ_ORG_EDITORIAL_ADAPTER_KEY,
-      adapterVersion: '1',
+      adapterVersion: '2',
       parserKey: 'cheerio-minhaj-org-editorial',
-      parserVersion: '1',
+      parserVersion: '2',
       contentKind: 'editorial.news',
       accessMethod: 'http',
     });
@@ -418,6 +422,7 @@ interface DetailOptions {
   readonly title?: string;
   readonly body?: string;
   readonly article?: boolean;
+  readonly copyright?: string;
 }
 
 const ENGLISH_BODY = `<p style="text-align:center;">
@@ -433,6 +438,9 @@ function detail(options: DetailOptions = {}) {
   const meta = [
     ogLocale === null ? '' : `<meta property="og:locale" content="${ogLocale}">`,
     dateCreated === null ? '' : `<meta itemprop="dateCreated" content="${dateCreated}">`,
+    options.copyright === undefined
+      ? ''
+      : `<meta name="copyright" content="${options.copyright}">`,
   ].join('\n');
   const article =
     options.article === false
@@ -479,13 +487,110 @@ describe('parsing with Cheerio', () => {
         legacyIdentifier: 'tid-101',
         categories: [{ key: 'News-Events', label: 'News-Events' }],
         links: [],
-        assets: [],
+        // The first picture is first-party: the record's lead image, acquired —
+        // with rights UNKNOWN, as this page states no notice — and out of the body.
+        assets: [
+          {
+            url: 'https://minhaj.net/images-db10/2026/synthetic-0.jpg',
+            licence: 'unknown',
+            licenceEvidence: null,
+            rightsHolder: null,
+          },
+        ],
         excerptHtml: null,
         bodyHtml: `<p style="text-align:center;">
-<img src="https://minhaj.net/images-db10/2026/synthetic-0.jpg" alt="Synthetic image"></p>
+</p>
 
 <p>Synthetic paragraph one.</p>
 <p>Synthetic paragraph two ends.</p>`,
+        leadImage: {
+          url: 'https://minhaj.net/images-db10/2026/synthetic-0.jpg',
+          alt: 'Synthetic image',
+          credit: null,
+        },
+      },
+    });
+  });
+
+  it('records the page notice as the lead image rights evidence', () => {
+    const result = adapter().parse(
+      evidenceOf(
+        detail({ copyright: 'Minhaj-ul-Quran International. 2026' }),
+        ENGLISH_URL,
+      ),
+    );
+    if (result.kind !== 'parsed') throw new Error('expected a record');
+    expect(result.record.assets).toEqual([
+      {
+        url: 'https://minhaj.net/images-db10/2026/synthetic-0.jpg',
+        licence: 'organisation-owned',
+        licenceEvidence:
+          'The official page presents this image as part of the record, served by minhaj.net; the page states "Minhaj-ul-Quran International. 2026".',
+        rightsHolder: 'Minhaj-ul-Quran International',
+      },
+    ]);
+  });
+
+  it('takes no lead image from another host, a non-raster file or plain http', () => {
+    for (const src of [
+      'https://cdn.example.org/images/synthetic.jpg',
+      'https://minhaj.net/images-db10/2026/synthetic.webp',
+      'https://minhaj.net/images-db10/2026/synthetic.svg',
+      'http://minhaj.net/images-db10/2026/synthetic.jpg',
+      'https://user:secret@minhaj.net/images-db10/2026/synthetic.jpg',
+    ]) {
+      const result = adapter().parse(
+        evidenceOf(
+          detail({ body: `<p><img src="${src}" alt="x"></p><p>Synthetic words.</p>` }),
+          ENGLISH_URL,
+        ),
+      );
+      if (result.kind !== 'parsed' || result.record.kind !== 'editorial.news')
+        throw new Error('expected a record');
+      expect(result.record.leadImage).toBeNull();
+      expect(result.record.assets).toEqual([]);
+      // The picture leaves the body either way: the body shows none.
+      expect(result.record.bodyHtml).not.toContain('<img');
+    }
+  });
+
+  it('resolves a site-relative picture against the page and skips one inside chrome', () => {
+    const relative = adapter().parse(
+      evidenceOf(
+        detail({
+          body: '<p><img src="/images/synthetic-banner.png" alt="Banner"></p><p>Words.</p>',
+        }),
+        ENGLISH_URL,
+      ),
+    );
+    if (relative.kind !== 'parsed' || relative.record.kind !== 'editorial.news')
+      throw new Error('expected a record');
+    expect(relative.record.leadImage?.url).toBe(
+      'https://www.minhaj.org/images/synthetic-banner.png',
+    );
+    const chrome = adapter().parse(
+      evidenceOf(
+        detail({
+          body: '<div class="shareaholic-canvas"><img src="https://minhaj.net/share.png" alt=""></div><p>Words.</p>',
+        }),
+        ENGLISH_URL,
+      ),
+    );
+    if (chrome.kind !== 'parsed' || chrome.record.kind !== 'editorial.news')
+      throw new Error('expected a record');
+    expect(chrome.record.leadImage).toBeNull();
+  });
+
+  it('reads a press release with the same template', () => {
+    const result = adapter({
+      kind: 'editorial.press-release',
+      section: 'Press-Release',
+    }).parse(evidenceOf(detail(), ENGLISH_URL));
+    expect(result).toMatchObject({
+      kind: 'parsed',
+      record: {
+        kind: 'editorial.press-release',
+        categories: [{ key: 'Press-Release', label: 'Press-Release' }],
       },
     });
   });
@@ -653,5 +758,126 @@ describe('parsing with Cheerio', () => {
         kind: 'failed',
         detail: code,
       });
+  });
+});
+
+/* ------------------------------------------- organisational pages (30-R) */
+
+const BINDINGS = Object.freeze({
+  '101': '/explore/about/introduction',
+  '102': '/explore/organization/forums',
+});
+
+function pageAdapter(items: readonly string[] = []) {
+  return createMinhajOrgPageAdapter({
+    baseUrl: MINHAJ_ORG_BASE_URL,
+    selection: { pages: 1, limit: 10 },
+    items,
+    language: 'english',
+    bindings: BINDINGS,
+  });
+}
+
+describe('organisational pages', () => {
+  it('declares what it is and refuses two pages sharing one binding', () => {
+    expect(pageAdapter()).toMatchObject({
+      adapterKey: MINHAJ_ORG_PAGE_ADAPTER_KEY,
+      contentKind: 'editorial.page',
+      accessMethod: 'http',
+    });
+    expect(() =>
+      createMinhajOrgPageAdapter({
+        baseUrl: MINHAJ_ORG_BASE_URL,
+        selection: { pages: 1, limit: 10 },
+        items: [],
+        language: 'english',
+        bindings: { '1': '/explore/about/history', '2': '/explore/about/history' },
+      }),
+    ).toThrow();
+    // An operator item outside the catalogue is refused, never read.
+    expect(() => pageAdapter(['999'])).toThrow();
+  });
+
+  it('discovers exactly the catalogued tids, narrowed by --items', async () => {
+    const all = await pageAdapter().discover(null, site());
+    expect(all).toMatchObject({
+      kind: 'page',
+      next: null,
+      items: [
+        { externalKey: key(101), legacyIdentifier: 'tid-101' },
+        { externalKey: key(102), legacyIdentifier: 'tid-102' },
+      ],
+    });
+    const one = await pageAdapter(['102']).discover(null, site());
+    expect(one.kind === 'page' && one.items.map((item) => item.externalKey)).toEqual([
+      key(102),
+    ]);
+  });
+
+  it('binds the page to its catalogued route, with its lead image', () => {
+    const result = pageAdapter().parse(evidenceOf(detail(), ENGLISH_URL));
+    expect(result).toMatchObject({
+      kind: 'parsed',
+      record: {
+        kind: 'editorial.page',
+        binding: '/explore/about/introduction',
+        title: 'Synthetic headline one',
+        languageCode: 'en',
+        legacyIdentifier: 'tid-101',
+        leadImage: { url: 'https://minhaj.net/images-db10/2026/synthetic-0.jpg' },
+      },
+    });
+    // A tid the catalogue does not name is not a page of this source.
+    const other = `${ORIGIN}/english/tid/555/Synthetic-Other.html`;
+    expect(pageAdapter().parse(evidenceOf(detail(), other))).toEqual({
+      kind: 'excluded',
+      reason: 'not-catalogued',
+    });
+  });
+});
+
+/* ------------------------------------------------ public profiles (30-R) */
+
+describe('public profiles', () => {
+  const personAdapter = () =>
+    createMinhajOrgPersonAdapter({
+      baseUrl: MINHAJ_ORG_BASE_URL,
+      selection: { pages: 1, limit: 10 },
+      items: [],
+      language: 'english',
+      tids: ['101'],
+    });
+
+  it('names the person exactly as the profile title states them', () => {
+    expect(profileName('A Profile of Synthetic Person Qadri')).toBe(
+      'Synthetic Person Qadri',
+    );
+    expect(profileName('a profile OF Synthetic Person')).toBe('Synthetic Person');
+    expect(profileName('Synthetic Person profile')).toBe('Synthetic Person');
+    expect(profileName('Synthetic Person - Profile')).toBe('Synthetic Person');
+    expect(profileName('Synthetic Person')).toBe('Synthetic Person');
+  });
+
+  it('reads the name, the biography markup and the portrait', () => {
+    const result = personAdapter().parse(
+      evidenceOf(detail({ title: 'A Profile of Synthetic Person' }), ENGLISH_URL),
+    );
+    expect(result).toMatchObject({
+      kind: 'parsed',
+      record: {
+        kind: 'people.person',
+        name: 'Synthetic Person',
+        title: 'A Profile of Synthetic Person',
+        legacyIdentifier: 'tid-101',
+        portrait: {
+          url: 'https://minhaj.net/images-db10/2026/synthetic-0.jpg',
+          alt: 'Synthetic image',
+        },
+      },
+    });
+    if (result.kind !== 'parsed' || result.record.kind !== 'people.person')
+      throw new Error('expected a person');
+    expect(result.record.biographyHtml).toContain('Synthetic paragraph one.');
+    expect(result.record.biographyHtml).not.toContain('<img');
   });
 });

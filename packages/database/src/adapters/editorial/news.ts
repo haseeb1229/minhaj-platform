@@ -20,6 +20,7 @@ import {
   type EditorialWrite,
   type NewsKind,
   type NewsSummary,
+  type PublicLeadImage,
   type PublicNews,
 } from '@minhaj/contracts/editorial';
 import type { ContributionRole } from '@minhaj/contracts/people';
@@ -33,9 +34,18 @@ import {
   limitOf,
   offsetOf,
   refuse,
+  chronologyUpdate,
   revisionReset,
   transitionUpdate,
 } from './workflow.ts';
+import {
+  dateOnly,
+  leadAltOf,
+  leadColumnsOf,
+  leadImageOf,
+  publicLeadOf,
+  type LeadColumns,
+} from './lead.ts';
 
 /**
  * Editorial's Phase-13 persistence: NewsArticle, PressRelease, Statement and
@@ -52,7 +62,9 @@ import {
  *
  * WHAT DIFFERS IS DECLARED, NOT INFERRED. A Statement's translations carry an
  * issuer; a MediaCoverage revision carries its outlet, source address and
- * date. Nothing else distinguishes the families here.
+ * date; a NewsArticle and a PressRelease revision may carry ONE lead image and
+ * the source's own publication date, and their record keeps the reader-facing
+ * chronology (Phase 30-R). Nothing else distinguishes the families here.
  *
  * THE DESCRIPTION IS PRIVATE. Only the two operation sets leave this module,
  * each typed by Editorial's own ports, so no delegate, transaction handle or
@@ -73,9 +85,10 @@ interface TranslationRow {
   readonly document: string;
   readonly html: string;
   readonly issuer?: string;
+  readonly leadAlt?: string;
 }
 
-interface RevisionRow {
+interface RevisionRow extends LeadColumns {
   readonly number: number;
   readonly editorId: string;
   readonly createdAt: Date;
@@ -118,29 +131,33 @@ interface PublicRow {
   readonly slug: string;
   readonly version: number;
   readonly publishedAt: Date | null;
+  readonly chronologyAt?: Date | null;
   readonly updatedAt: Date;
-  readonly current: {
-    readonly primaryLanguage: string;
-    readonly outletName?: string;
-    readonly sourceUrl?: string | null;
-    readonly sourcePublishedOn?: Date | null;
-    readonly centreId?: string | null;
-    readonly translations: readonly {
-      readonly languageCode: string;
-      readonly title: string;
-      readonly excerpt: string;
-      readonly seoTitle?: string;
-      readonly seoDescription?: string;
-      readonly html?: string;
-      readonly document?: string;
-      readonly issuer?: string;
-    }[];
-    readonly topics: readonly { readonly topicId: string }[];
-    readonly contributors: readonly {
-      readonly personId: string;
-      readonly role: string;
-    }[];
-  } | null;
+  readonly current:
+    | (LeadColumns & {
+        readonly primaryLanguage: string;
+        readonly outletName?: string;
+        readonly sourceUrl?: string | null;
+        readonly sourcePublishedOn?: Date | null;
+        readonly centreId?: string | null;
+        readonly translations: readonly {
+          readonly languageCode: string;
+          readonly title: string;
+          readonly excerpt: string;
+          readonly seoTitle?: string;
+          readonly seoDescription?: string;
+          readonly html?: string;
+          readonly document?: string;
+          readonly issuer?: string;
+          readonly leadAlt?: string;
+        }[];
+        readonly topics: readonly { readonly topicId: string }[];
+        readonly contributors: readonly {
+          readonly personId: string;
+          readonly role: string;
+        }[];
+      })
+    | null;
 }
 
 interface RecordDelegate {
@@ -189,6 +206,11 @@ interface Shape {
   readonly coverage: boolean;
   /** The revision may name one Global Network Centre (Phase 16). */
   readonly centre: boolean;
+  /**
+   * Phase 30-R: the revision may name ONE lead image and states the source's
+   * own publication date, and the record keeps its reader-facing chronology.
+   */
+  readonly lead: boolean;
 }
 
 interface Family extends Shape {
@@ -209,6 +231,7 @@ const FAMILIES: Readonly<Record<NewsKind, Family>> = {
     issuer: false,
     coverage: false,
     centre: true,
+    lead: true,
     delegates: (c) => ({
       record: narrow(c.newsArticle),
       revision: narrow(c.newsArticleRevision),
@@ -222,6 +245,7 @@ const FAMILIES: Readonly<Record<NewsKind, Family>> = {
     issuer: false,
     coverage: false,
     centre: false,
+    lead: true,
     delegates: (c) => ({
       record: narrow(c.pressRelease),
       revision: narrow(c.pressReleaseRevision),
@@ -235,6 +259,7 @@ const FAMILIES: Readonly<Record<NewsKind, Family>> = {
     issuer: true,
     coverage: false,
     centre: false,
+    lead: false,
     delegates: (c) => ({
       record: narrow(c.statement),
       revision: narrow(c.statementRevision),
@@ -248,6 +273,7 @@ const FAMILIES: Readonly<Record<NewsKind, Family>> = {
     issuer: false,
     coverage: true,
     centre: false,
+    lead: false,
     delegates: (c) => ({
       record: narrow(c.mediaCoverage),
       revision: narrow(c.mediaCoverageRevision),
@@ -279,18 +305,38 @@ const sourceSelect = (family: Family) =>
   family.coverage ? { outletName: true, sourceUrl: true, sourcePublishedOn: true } : {};
 const issuerSelect = (family: Family) => (family.issuer ? { issuer: true } : {});
 const centreSelect = (family: Family) => (family.centre ? { centreId: true } : {});
+/** Phase 30-R: a lead family's image and source date, and its alt text per language. */
+const leadSelect = (family: Family) =>
+  family.lead
+    ? {
+        leadAssetId: true,
+        leadWidth: true,
+        leadHeight: true,
+        leadCredit: true,
+        sourcePublishedOn: true,
+      }
+    : {};
+const leadAltSelect = (family: Family) => (family.lead ? { leadAlt: true } : {});
+const chronologySelect = (family: Family) => (family.lead ? { chronologyAt: true } : {});
+/** Newest first, by the family's reader-facing date. */
+const newestFirst = (family: Family) => [
+  family.lead ? { chronologyAt: 'desc' as const } : { publishedAt: 'desc' as const },
+  { id: 'asc' as const },
+];
 
 const publicSelect = (family: Family) => ({
   id: true,
   slug: true,
   version: true,
   publishedAt: true,
+  ...chronologySelect(family),
   updatedAt: true,
   current: {
     select: {
       primaryLanguage: true,
       ...sourceSelect(family),
       ...centreSelect(family),
+      ...leadSelect(family),
       translations: {
         select: {
           languageCode: true,
@@ -300,6 +346,7 @@ const publicSelect = (family: Family) => ({
           seoDescription: true,
           html: true,
           ...issuerSelect(family),
+          ...leadAltSelect(family),
         },
         orderBy: { languageCode: 'asc' as const },
       },
@@ -318,17 +365,20 @@ const summarySelect = (family: Family) => ({
   slug: true,
   version: true,
   publishedAt: true,
+  ...chronologySelect(family),
   updatedAt: true,
   current: {
     select: {
       primaryLanguage: true,
       ...(family.coverage ? { outletName: true, sourcePublishedOn: true } : {}),
+      ...leadSelect(family),
       translations: {
         select: {
           languageCode: true,
           title: true,
           excerpt: true,
           ...issuerSelect(family),
+          ...leadAltSelect(family),
         },
         orderBy: { languageCode: 'asc' as const },
       },
@@ -365,10 +415,6 @@ const privateSummarySelect = {
 function language(code: string): EditorialLanguage {
   return code as EditorialLanguage;
 }
-/** A `date` column as the calendar date it holds, never shifted by a zone. */
-function dateOnly(value: Date | null | undefined): string | null {
-  return value === null || value === undefined ? null : value.toISOString().slice(0, 10);
-}
 
 function revisionOf(family: Shape, row: RevisionRow): EditorialRevision {
   return {
@@ -386,12 +432,19 @@ function revisionOf(family: Shape, row: RevisionRow): EditorialRevision {
       document: t.document,
       html: t.html,
       ...(family.issuer ? { issuer: t.issuer ?? '' } : {}),
+      ...(family.lead ? { leadAlt: t.leadAlt ?? '' } : {}),
     })),
     topicIds: row.topics.map((t) => t.topicId),
     contributors: row.contributors.map((c) => ({
       personId: c.personId,
       role: c.role as ContributionRole,
     })),
+    ...(family.lead
+      ? {
+          leadImage: leadImageOf(row),
+          sourcePublishedOn: dateOnly(row.sourcePublishedOn),
+        }
+      : {}),
     ...(family.coverage
       ? {
           coverage: {
@@ -438,6 +491,22 @@ function detailOf(family: Shape, row: RecordRow): ArticleDetail {
   };
 }
 
+/** The serving family of a News family that may carry a lead image, or null. */
+function leadFamilyOf(family: Shape): 'news-article' | 'press-release' | null {
+  return family.lead &&
+    (family.kind === 'news-article' || family.kind === 'press-release')
+    ? family.kind
+    : null;
+}
+
+/** A public row's lead image, named by its record, or null. */
+function leadImageFor(family: Shape, row: PublicRow): PublicLeadImage | null {
+  const lead = leadFamilyOf(family);
+  return lead === null || row.current === null
+    ? null
+    : publicLeadOf(lead, row.id, row.current);
+}
+
 function publicOf(family: Shape, row: PublicRow): PublicNews {
   if (!row.current || !row.publishedAt) throw new EditorialDataError('unavailable');
   return {
@@ -452,6 +521,7 @@ function publicOf(family: Shape, row: PublicRow): PublicNews {
       seoDescription: t.seoDescription ?? '',
       html: t.html ?? '',
       ...(family.issuer ? { issuer: t.issuer ?? '' } : {}),
+      ...(family.lead ? { leadAlt: t.leadAlt ?? '' } : {}),
     })),
     topicIds: row.current.topics.map((t) => t.topicId),
     contributors: row.current.contributors.map((c) => ({
@@ -468,6 +538,9 @@ function publicOf(family: Shape, row: PublicRow): PublicNews {
     centreId: family.centre ? (row.current.centreId ?? null) : null,
     publishedAt: row.publishedAt,
     updatedAt: row.updatedAt,
+    chronologyAt: row.chronologyAt ?? row.publishedAt,
+    sourcePublishedOn: family.lead ? dateOnly(row.current.sourcePublishedOn) : null,
+    leadImage: leadImageFor(family, row),
   };
 }
 
@@ -482,8 +555,11 @@ function summaryOf(family: Shape, row: PublicRow): NewsSummary {
       title: t.title,
       excerpt: t.excerpt,
       ...(family.issuer ? { issuer: t.issuer ?? '' } : {}),
+      ...(family.lead ? { leadAlt: t.leadAlt ?? '' } : {}),
     })),
     publishedAt: row.publishedAt,
+    chronologyAt: row.chronologyAt ?? row.publishedAt,
+    leadImage: leadImageFor(family, row),
     topicIds: row.current.topics.map((t) => t.topicId),
     contributors: row.current.contributors.map((c) => ({
       personId: c.personId,
@@ -543,6 +619,7 @@ async function writeRevision(
                 : new Date(`${coverage.sourceDate}T00:00:00.000Z`),
           }),
       ...(family.centre ? { centreId: content.centreId ?? null } : {}),
+      ...leadColumnsOf(content, { lead: family.lead, dated: family.lead }),
       translations: {
         create: content.translations.map((t) => ({
           languageCode: t.languageCode,
@@ -553,6 +630,7 @@ async function writeRevision(
           document: t.document,
           html: t.html,
           ...(family.issuer ? { issuer: t.issuer } : {}),
+          ...leadAltOf(t, family.lead),
         })),
       },
       topics: { create: content.topicIds.map((topicId) => ({ topicId })) },
@@ -841,9 +919,12 @@ export function newsOperations(): Pick<
       try {
         return await db().$transaction(async (tx) => {
           const row = await locked(tx, family, input.id, input.expectedVersion);
+          const update = transitionUpdate(row, input);
           const next = await family.delegates(tx).record.update({
             where: { id: row.id },
-            data: transitionUpdate(row, input),
+            data: family.lead
+              ? { ...update, ...chronologyUpdate(update, row.current?.sourcePublishedOn) }
+              : update,
             include: detailInclude,
           });
           await requestSearchIndexing(tx, family.kind, row.id);
@@ -906,7 +987,11 @@ const batchOf = (ids: readonly string[]) => {
   return [...ids];
 };
 
-/** The four families as one relation of (kind, id, publishedAt), filtered. */
+/**
+ * The four families as one relation of (kind, id, chronologyAt), filtered. A
+ * NewsArticle's and a PressRelease's chronology is its record's own column
+ * (Phase 30-R); a Statement's and a MediaCoverage's is its publication instant.
+ */
 function timelineRows(filter: {
   readonly from: Date | null;
   readonly to: Date | null;
@@ -915,15 +1000,17 @@ function timelineRows(filter: {
   return Prisma.join(
     NEWS_KINDS.map((kind) => {
       const family = FAMILIES[kind];
+      const date = family.lead
+        ? Prisma.sql`r.[chronologyAt]`
+        : Prisma.sql`r.[publishedAt]`;
       const conditions = [Prisma.sql`r.[state] = N'published'`];
-      if (filter.from !== null)
-        conditions.push(Prisma.sql`r.[publishedAt] >= ${filter.from}`);
-      if (filter.to !== null) conditions.push(Prisma.sql`r.[publishedAt] < ${filter.to}`);
+      if (filter.from !== null) conditions.push(Prisma.sql`${date} >= ${filter.from}`);
+      if (filter.to !== null) conditions.push(Prisma.sql`${date} < ${filter.to}`);
       if (filter.topicId !== null)
         conditions.push(
           Prisma.sql`EXISTS (SELECT 1 FROM ${family.topicTable} t WHERE t.[ownerId] = r.[id] AND t.[revisionNumber] = r.[currentRevision] AND t.[topicId] = ${filter.topicId})`,
         );
-      return Prisma.sql`SELECT CAST(${kind} AS NVARCHAR(16)) AS [kind], r.[id], r.[publishedAt] FROM ${family.table} r WHERE ${Prisma.join(conditions, ' AND ')}`;
+      return Prisma.sql`SELECT CAST(${kind} AS NVARCHAR(16)) AS [kind], r.[id], ${date} AS [chronologyAt] FROM ${family.table} r WHERE ${Prisma.join(conditions, ' AND ')}`;
     }),
     ' UNION ALL ',
   );
@@ -1001,7 +1088,7 @@ export function newsReads(): Pick<
       const rows = (await family.delegates(db()).record.findMany({
         where: { state: 'published' },
         select: summarySelect(family),
-        orderBy: [{ publishedAt: 'desc' }, { id: 'asc' }],
+        orderBy: newestFirst(family),
         skip: offsetOf(offset),
         take: take + 1,
       })) as PublicRow[];
@@ -1024,9 +1111,9 @@ export function newsReads(): Pick<
             ? new Date(Date.UTC(query.year + 1, 0, 1))
             : new Date(Date.UTC(query.year, query.month, 1));
       const refs = await db().$queryRaw<
-        { kind: string; id: string; publishedAt: Date }[]
-      >`SELECT [kind], [id], [publishedAt] FROM (${timelineRows({ from, to, topicId: query.topicId })}) AS [timeline]
-        ORDER BY [publishedAt] DESC, [kind] ASC, [id] ASC
+        { kind: string; id: string; chronologyAt: Date }[]
+      >`SELECT [kind], [id], [chronologyAt] FROM (${timelineRows({ from, to, topicId: query.topicId })}) AS [timeline]
+        ORDER BY [chronologyAt] DESC, [kind] ASC, [id] ASC
         OFFSET ${offsetOf(query.offset)} ROWS FETCH NEXT ${take + 1} ROWS ONLY`;
       const cards = await cardsFor(
         refs.slice(0, take).map((ref) => ({ kind: ref.kind as NewsKind, id: ref.id })),
@@ -1036,9 +1123,9 @@ export function newsReads(): Pick<
 
     async newsArchivePeriods() {
       const rows = await db().$queryRaw<{ year: number; month: number; count: number }[]>`
-        SELECT TOP (1200) YEAR([publishedAt]) AS [year], MONTH([publishedAt]) AS [month], COUNT_BIG(*) AS [count]
+        SELECT TOP (1200) YEAR([chronologyAt]) AS [year], MONTH([chronologyAt]) AS [month], COUNT_BIG(*) AS [count]
         FROM (${timelineRows({ from: null, to: null, topicId: null })}) AS [timeline]
-        GROUP BY YEAR([publishedAt]), MONTH([publishedAt])
+        GROUP BY YEAR([chronologyAt]), MONTH([chronologyAt])
         ORDER BY [year] DESC, [month] ASC`;
       return rows.map((row) => ({
         year: Number(row.year),
@@ -1083,6 +1170,7 @@ export function newsReads(): Pick<
           id: true,
           version: true,
           publishedAt: true,
+          ...chronologySelect(family),
           current: {
             select: {
               ...(family.coverage ? { outletName: true } : {}),
@@ -1106,6 +1194,7 @@ export function newsReads(): Pick<
         id: row.id,
         stamp: String(row.version),
         publishedAt: row.publishedAt,
+        ...(row.chronologyAt ? { chronologyAt: row.chronologyAt } : {}),
         topicIds: row.current.topics.map((t) => t.topicId),
         translations: row.current.translations.map((t) => ({
           languageCode: t.languageCode,
@@ -1142,7 +1231,7 @@ export function newsReads(): Pick<
       const rows = (await family.delegates(db()).record.findMany({
         where: { state: 'published', current: { is: { centreId } } },
         select: summarySelect(family),
-        orderBy: [{ publishedAt: 'desc' }, { id: 'asc' }],
+        orderBy: newestFirst(family),
         skip: offsetOf(offset),
         take: take + 1,
       })) as PublicRow[];

@@ -159,6 +159,7 @@ live('Phase 13 real SQL News workflow', () => {
         selectableGallery: async () => false,
         // No News family holds Collection members; only a Collection does (Phase 15).
         selectableMembers: async () => false,
+        usableImage: async () => false,
       },
     });
     author = await account(['content.read', 'content.author', 'content.review']);

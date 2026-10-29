@@ -822,7 +822,7 @@ describe('Phase 28 — the operations image is a tool, never a service', () => {
         ).toBe(true);
     for (const entry of copied)
       expect(entry, 'the operations image copies only what the tooling loads').toMatch(
-        /^apps\/web\/src\/(?:composition\/migration-(?:runner|wiring|targets|target-router|target-support|library-targets|editorial-targets)\.ts|contexts\/[a-z-]+|composition\/)$/u,
+        /^apps\/web\/src\/(?:composition\/migration-(?:runner|wiring|targets|target-router|target-support|library-targets|editorial-targets|global-targets|people-targets)\.ts|composition\/storage\.ts|contexts\/[a-z-]+|composition\/)$/u,
       );
     expect(ops).not.toMatch(/apps\/web\/src\/(?:app|components|i18n|config)\b/u);
   });

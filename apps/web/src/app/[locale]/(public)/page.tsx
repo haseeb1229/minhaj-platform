@@ -3,7 +3,11 @@ import type { ReactNode } from 'react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
-import { collectionPathOf } from '@minhaj/contracts/editorial';
+import {
+  collectionPathOf,
+  newsPathOf,
+  type NewsSummary,
+} from '@minhaj/contracts/editorial';
 import { globalPaths } from '@minhaj/contracts/global';
 import { SEARCH_QUERY_MAX_LENGTH } from '@minhaj/contracts/search';
 
@@ -11,9 +15,13 @@ import { editorialReadRuntime } from '@/composition/editorial-read';
 import { globalReadRuntime } from '@/composition/global-read';
 import { learningReadRuntime } from '@/composition/learning-read';
 import { libraryReadRuntime } from '@/composition/library-read';
+import { peopleReadRuntime } from '@/composition/people-read';
 import { taxonomyRuntime } from '@/composition/taxonomy';
 import { EventGrid } from '@/components/editorial/events';
+import { CARD_SURFACE, CARD_TITLE_LINK } from '@/components/editorial/frame';
+import { LeadThumbnail } from '@/components/editorial/lead-image';
 import { NewsGrid } from '@/components/editorial/news';
+import { ExplorePageCard, exploreSectionOf } from '@/components/editorial/page-card';
 import { translationFor } from '@/components/editorial/presentation';
 import { FatwaList, categoryLabels } from '@/components/fatwa/list';
 import { FatwaFixtureNotice } from '@/components/fatwa/parts';
@@ -22,6 +30,12 @@ import { fatwaReadRuntime } from '@/composition/fatwa-read';
 import { placeName } from '@/components/global/presentation';
 import { hadithAvailability } from '@/components/hadith/read';
 import { CourseGrid } from '@/components/learning/parts';
+import {
+  CoverImage,
+  CoverTile,
+  editionCoverPath,
+  issueCoverPath,
+} from '@/components/library/cover';
 import { labelFor, readLibraryQuery, workPath } from '@/components/library/presentation';
 import { listingHref } from '@/components/library/scholarly';
 import {
@@ -30,12 +44,14 @@ import {
 } from '@/components/library/scholarly-presentation';
 import { AudioPreview } from '@/components/media/listen';
 import { VideoPreview } from '@/components/media/watch';
+import { PersonCard } from '@/components/people/person-card';
 import { quranAvailability } from '@/components/quran/read';
 import {
   ActionLink,
   CardGrid,
   Container,
   LinkCard,
+  MetaRow,
   PageHero,
   Panel,
   SectionHeader,
@@ -52,11 +68,17 @@ import { pathFor, requireRoute } from '@/shell/registry';
  * THE HOME PORTAL.
  *
  * WHAT IT SAYS ABOUT ITSELF IS PRODUCT-LEVEL ONLY: what One Minhaj is, where to
- * search, and which areas exist. It states NO organisational content — no
- * mission, no vision, no history, no leadership, no impact figure, no
- * testimonial, no award and no Quran or Hadith excerpt. Each of those is either
- * an organisational fact Minhaj owns and publishes through the Phase-6 `Page`
- * workflow (OPEN_DECISIONS.md §6.1) or a record a domain publishes.
+ * search, and which areas exist. It WRITES no organisational content — no
+ * mission, no vision, no history, no impact figure, no testimonial and no
+ * Quran or Hadith excerpt. Organisational words appear only as the PUBLISHED
+ * records that carry them: Pages through the Phase-6 workflow
+ * (OPEN_DECISIONS.md §6.1), published People profiles, and the domains' records.
+ *
+ * PHASE 30-R — A DELIBERATE HIERARCHY. The newest news item that HAS a lead
+ * image is the hero's featured story; then the latest news, the Library shelf
+ * (covers first), Watch, the organisation's published Pages, its published
+ * leadership profiles, the two sources, the areas, the Global presence and the
+ * rest. Pictures are first-party records' own images, never decoration.
  *
  * WHAT IT SHOWS IS WHAT HAS BEEN PUBLISHED. Below the hero, the page composes
  * the owners' PUBLIC readers at Layer 4 — Editorial's News, Events and
@@ -101,14 +123,16 @@ export async function generateMetadata({ params }: HomeParams): Promise<Metadata
 
 /** How many records each module previews before linking to its owner's listing. */
 const PREVIEW = {
-  news: 4,
+  news: 7,
   events: 4,
-  works: 3,
-  magazines: 3,
+  works: 6,
+  magazines: 2,
+  people: 6,
+  pages: 6,
   rulings: 4,
   courses: 3,
   collections: 3,
-  countries: 12,
+  countries: 16,
   topics: 14,
 } as const;
 
@@ -118,22 +142,30 @@ export default async function HomePage({ params }: HomeParams) {
 
   const t = await getTranslations({ locale, namespace: 'shell' });
 
+  // One read of the newest news, shared by the featured story and the module,
+  // so the story the hero features is never repeated beneath it.
+  const news = await editorialReadRuntime().newsList('news-article', 0);
+  const featured = news.items.find((item) => item.leadImage !== null) ?? null;
+  const rest = news.items.filter((item) => item !== featured);
+
   return (
     <>
-      <HomeHero locale={locale} />
+      <HomeHero locale={locale} featured={featured} />
 
       <Container>
         <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
-          <SourcesModule locale={locale} />
-          <AreasModule locale={locale} />
-          <NewsModule locale={locale} />
-          <EventsModule locale={locale} />
+          <NewsModule locale={locale} items={rest} />
           <LibraryModule locale={locale} />
           <WatchModule locale={locale} />
+          <OrganisationModule locale={locale} />
+          <PeopleModule locale={locale} />
+          <SourcesModule locale={locale} />
+          <EventsModule locale={locale} />
           <FatwaModule locale={locale} />
           <CoursesModule locale={locale} />
           <CollectionsModule locale={locale} />
           <GlobalModule locale={locale} />
+          <AreasModule locale={locale} />
           <TopicsModule locale={locale} />
 
           <section aria-labelledby="home-explore" className="flex flex-col gap-5">
@@ -205,7 +237,13 @@ export default async function HomePage({ params }: HomeParams) {
  * JavaScript, and its query is a shareable address. Its label and button are
  * worded so that neither collides with the not-found page's own search.
  */
-async function HomeHero({ locale }: { readonly locale: Locale }) {
+async function HomeHero({
+  locale,
+  featured,
+}: {
+  readonly locale: Locale;
+  readonly featured: NewsSummary | null;
+}) {
   const t = await getTranslations({ locale, namespace: 'shell' });
 
   return (
@@ -213,6 +251,9 @@ async function HomeHero({ locale }: { readonly locale: Locale }) {
       tone="ink"
       title={<span lang="en">{PRODUCT_NAME}</span>}
       lede={t('home.lede')}
+      {...(featured === null
+        ? {}
+        : { aside: <FeaturedStory locale={locale} item={featured} /> })}
     >
       <form
         method="get"
@@ -257,6 +298,69 @@ async function HomeHero({ locale }: { readonly locale: Locale }) {
         </p>
       </div>
     </PageHero>
+  );
+}
+
+/**
+ * THE FEATURED STORY (Phase 30-R): the newest news item that has a lead image,
+ * as one whole-card link — its picture, its ORIGINAL date and its headline in
+ * its own language. Loaded first: it is above the fold on a wide screen.
+ */
+async function FeaturedStory({
+  locale,
+  item,
+}: {
+  readonly locale: Locale;
+  readonly item: NewsSummary;
+}) {
+  const t = await getTranslations({ locale, namespace: 'shell' });
+  const translation = translationFor(item, locale);
+  const direction = directionOf(translation.languageCode);
+  if (item.leadImage === null) return null;
+  return (
+    <ul className="m-0 list-none p-0">
+      <li className={`${CARD_SURFACE} text-[color:var(--color-foreground)]`}>
+        <LeadThumbnail
+          image={item.leadImage}
+          alt={translation.leadAlt ?? ''}
+          lang={translation.languageCode}
+          priority
+          className="-mx-5 -mt-5 mb-1 w-[calc(100%+2.5rem)] max-w-none rounded-t-[var(--radius-panel)]"
+        />
+        <MetaRow
+          items={[
+            t('home.featured.eyebrow'),
+            <time key="date" dateTime={item.chronologyAt.toISOString().slice(0, 10)}>
+              {new Intl.DateTimeFormat(locale, {
+                dateStyle: 'long',
+                timeZone: 'UTC',
+              }).format(item.chronologyAt)}
+            </time>,
+          ]}
+        />
+        <h2
+          className="text-heading leading-snug font-semibold text-balance wrap-anywhere"
+          lang={translation.languageCode}
+          dir={direction}
+        >
+          <a
+            href={`/${locale}${newsPathOf(item.kind, item.slug)}`}
+            className={CARD_TITLE_LINK}
+          >
+            {translation.title}
+          </a>
+        </h2>
+        {translation.excerpt === '' ? null : (
+          <p
+            className="line-clamp-3 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+            lang={translation.languageCode}
+            dir={direction}
+          >
+            {translation.excerpt}
+          </p>
+        )}
+      </li>
+    </ul>
   );
 }
 
@@ -383,9 +487,14 @@ async function AreasModule({ locale }: { readonly locale: Locale }) {
 }
 
 /** The latest NewsArticles — Editorial's own first page, newest first. */
-async function NewsModule({ locale }: { readonly locale: Locale }) {
-  const page = await editorialReadRuntime().newsList('news-article', 0);
-  if (page.items.length === 0) return null;
+async function NewsModule({
+  locale,
+  items,
+}: {
+  readonly locale: Locale;
+  readonly items: readonly NewsSummary[];
+}) {
+  if (items.length === 0) return null;
 
   const [t, news] = await Promise.all([
     getTranslations({ locale, namespace: 'shell' }),
@@ -403,10 +512,12 @@ async function NewsModule({ locale }: { readonly locale: Locale }) {
     >
       <NewsGrid
         locale={locale}
-        items={page.items.slice(0, PREVIEW.news)}
+        items={items.slice(0, PREVIEW.news)}
         label={news('latest')}
         showType={false}
         headingLevel="h3"
+        columns={3}
+        chronicle
       />
     </Module>
   );
@@ -459,7 +570,10 @@ async function LibraryModule({ locale }: { readonly locale: Locale }) {
     reads.works(readLibraryQuery({})),
     reads.scholarlyList('magazine', readScholarlyQuery({})),
   ]);
-  const books = works.items.slice(0, PREVIEW.works);
+  const books = [
+    ...works.items.filter((work) => work.cover !== null),
+    ...works.items.filter((work) => work.cover === null),
+  ].slice(0, PREVIEW.works);
   const periodicals = magazines.items.slice(0, PREVIEW.magazines);
   if (books.length === 0 && periodicals.length === 0) return null;
 
@@ -474,36 +588,63 @@ async function LibraryModule({ locale }: { readonly locale: Locale }) {
         text: t('home.links.library'),
       }}
     >
-      <CardGrid>
+      {/*
+       * THE SHELF: books as cover tiles, the ones with a cover first (each
+       * owner's order kept within each group), then the magazines with their
+       * newest issue's cover. A record without a cover is a text tile.
+       */}
+      <ul
+        aria-label={t('home.library.heading')}
+        className="grid list-none grid-cols-2 gap-x-4 gap-y-6 p-0 min-[30rem]:grid-cols-3 md:grid-cols-4 lg:grid-cols-8"
+      >
         {books.map((work) => {
           const label = labelFor(work, locale);
           return (
-            <LinkCard
+            <CoverTile
               key={work.id}
               href={workPath(locale, work.slug)}
-              eyebrow={t('home.library.book')}
               title={label.title}
-              description={label.description}
+              meta={t('home.library.book')}
               lang={label.locale}
               dir={directionOf(label.locale)}
+              cover={
+                work.cover === null ? null : (
+                  <CoverImage
+                    path={editionCoverPath(work.cover.editionId, work.cover.assetId)}
+                    cover={work.cover}
+                    alt=""
+                    className="max-h-full"
+                  />
+                )
+              }
             />
           );
         })}
         {periodicals.map((row) => {
           const label = scholarlyLabel(row, locale);
+          const latest = row.kind === 'magazine' ? (row.latestCover ?? null) : null;
           return (
-            <LinkCard
+            <CoverTile
               key={row.id}
               href={listingHref(locale, row)}
-              eyebrow={t('home.library.magazine')}
               title={label.title}
-              description={label.summary}
+              meta={t('home.library.magazine')}
               lang={label.locale}
               dir={directionOf(label.locale)}
+              cover={
+                latest === null ? null : (
+                  <CoverImage
+                    path={issueCoverPath(latest.issueId, latest.cover.assetId)}
+                    cover={latest.cover}
+                    alt=""
+                    className="max-h-full"
+                  />
+                )
+              }
             />
           );
         })}
-      </CardGrid>
+      </ul>
     </Module>
   );
 }
@@ -650,29 +791,128 @@ async function CollectionsModule({ locale }: { readonly locale: Locale }) {
   );
 }
 
-/** The Global Network — shown only once the directory holds a public Centre. */
+/**
+ * THE ORGANISATION'S OWN PAGES (Phase 30-R): the published Pages bound to
+ * Explore routes, as cards with their lead images — read in one bounded query.
+ * Only what is published renders; nothing renders when nothing is.
+ */
+async function OrganisationModule({ locale }: { readonly locale: Locale }) {
+  const pages = (await editorialReadRuntime().explorePages()).filter(
+    (page) => page.routeBinding !== '/explore/shaykh-ul-islam/biography',
+  );
+  if (pages.length === 0) return null;
+  const t = await getTranslations({ locale, namespace: 'shell' });
+  const sectionTitle = (binding: string) => {
+    const section = exploreSectionOf(binding);
+    return section === null || !(EXPLORE_SECTIONS as readonly string[]).includes(section)
+      ? undefined
+      : t(`explore.${section}.title` as 'explore.about.title');
+  };
+  return (
+    <Module
+      id="home-organisation"
+      heading={t('home.organisation.heading')}
+      intro={t('home.organisation.intro')}
+      action={{
+        href: pathFor(locale, requireRoute('explore')),
+        text: t('home.exploreAction'),
+      }}
+    >
+      <CardGrid>
+        {pages.slice(0, PREVIEW.pages).map((page) => {
+          const eyebrow = sectionTitle(page.routeBinding);
+          return (
+            <ExplorePageCard
+              key={page.routeBinding}
+              locale={locale}
+              page={page}
+              {...(eyebrow === undefined ? {} : { eyebrow })}
+            />
+          );
+        })}
+      </CardGrid>
+    </Module>
+  );
+}
+
+/**
+ * THE LEADERSHIP (Phase 30-R): the founder's published biography Page, then
+ * every published People profile as a portrait card — People's own public read,
+ * published only, in its own order. Nothing renders when nothing is published.
+ */
+async function PeopleModule({ locale }: { readonly locale: Locale }) {
+  const [people, pages] = await Promise.all([
+    peopleReadRuntime().people.publicPeople({ locale, limit: PREVIEW.people }),
+    editorialReadRuntime().explorePages(),
+  ]);
+  const founder =
+    pages.find((page) => page.routeBinding === '/explore/shaykh-ul-islam/biography') ??
+    null;
+  if (people.items.length === 0 && founder === null) return null;
+  const [t, profile] = await Promise.all([
+    getTranslations({ locale, namespace: 'shell' }),
+    getTranslations({ locale, namespace: 'people' }),
+  ]);
+  return (
+    <Module
+      id="home-people"
+      heading={t('explore.leadership.title')}
+      intro={t('home.people.intro')}
+      action={{
+        href: pathFor(locale, requireRoute('explore.leadership')),
+        text: t('home.people.action'),
+      }}
+    >
+      <CardGrid>
+        {founder === null ? null : (
+          <ExplorePageCard
+            locale={locale}
+            page={founder}
+            eyebrow={t('explore.shaykh-ul-islam.title')}
+          />
+        )}
+        {people.items.map((person) => (
+          <PersonCard
+            key={person.id}
+            locale={locale}
+            person={person}
+            creditLabel={profile('portraitCredit')}
+          />
+        ))}
+      </CardGrid>
+    </Module>
+  );
+}
+
+/** The Global Network — its countries of presence, and its Centres once listed. */
 async function GlobalModule({ locale }: { readonly locale: Locale }) {
   const reads = globalReadRuntime();
   const [hasCentres, countries] = await Promise.all([
     reads.hasPublicCentres(),
     reads.countries(0),
   ]);
-  if (!hasCentres || countries.items.length === 0) return null;
+  if (countries.items.length === 0) return null;
 
   const [t, global] = await Promise.all([
     getTranslations({ locale, namespace: 'shell' }),
     getTranslations({ locale, namespace: 'global' }),
   ]);
 
+  // Countries of presence are shown even before any Centre is listed — and
+  // then the way on is the countries directory, never an empty finder.
   return (
     <Module
       id="home-global"
       heading={global('title')}
-      intro={global('intro')}
-      action={{
-        href: pathFor(locale, requireRoute('find-a-centre')),
-        text: t('nav.findACentre'),
-      }}
+      intro={hasCentres ? global('intro') : t('home.global.presenceIntro')}
+      action={
+        hasCentres
+          ? {
+              href: pathFor(locale, requireRoute('find-a-centre')),
+              text: t('nav.findACentre'),
+            }
+          : { href: globalPaths.countries(locale), text: global('allCountries') }
+      }
     >
       <ul
         aria-label={global('sections.countries')}
@@ -694,7 +934,7 @@ async function GlobalModule({ locale }: { readonly locale: Locale }) {
           );
         })}
       </ul>
-      {countries.hasMore ? (
+      {countries.hasMore && hasCentres ? (
         <p>
           <a
             href={globalPaths.countries(locale)}

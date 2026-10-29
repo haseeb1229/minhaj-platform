@@ -34,6 +34,7 @@ import {
   TopicChips,
 } from '@/components/ui';
 import { isContentIndexable, serializeStructuredData } from '@/seo/metadata';
+import { CoverCard, CoverImage, issueCoverPath } from './cover';
 import { FilterPanel, ListingFrame, Pager, RecordFrame, RecordSection } from './frame';
 import { Reader } from './reader';
 import {
@@ -153,6 +154,45 @@ function ScholarlyCard({
         ? null
         : String(row.publicationYear)
       : formatDate(row.publishedOn, locale);
+  const meta = (
+    <MetaRow
+      items={[
+        numbering,
+        date,
+        row.languageCode === null ? null : (
+          <span lang={row.languageCode} dir={language?.direction ?? 'auto'}>
+            {language?.name ?? row.languageCode}
+          </span>
+        ),
+      ]}
+    />
+  );
+
+  // Phase 30-R: an issue is shown by its own cover, a Magazine by its newest
+  // public issue's; a record with neither keeps the text-first card.
+  const cover =
+    row.issue !== null && row.issue.cover !== null
+      ? { issueId: row.id, cover: row.issue.cover }
+      : row.latestCover;
+  if (cover !== null)
+    return (
+      <CoverCard
+        href={listingHref(locale, row)}
+        title={label.title}
+        description={label.summary}
+        headingLevel={headingLevel}
+        lang={label.locale}
+        dir={directionOf(label.locale)}
+        meta={meta}
+        cover={
+          <CoverImage
+            path={issueCoverPath(cover.issueId, cover.cover.assetId)}
+            cover={cover.cover}
+            alt=""
+          />
+        }
+      />
+    );
 
   return (
     <LinkCard
@@ -162,19 +202,7 @@ function ScholarlyCard({
       headingLevel={headingLevel}
       lang={label.locale}
       dir={directionOf(label.locale)}
-      meta={
-        <MetaRow
-          items={[
-            numbering,
-            date,
-            row.languageCode === null ? null : (
-              <span lang={row.languageCode} dir={language?.direction ?? 'auto'}>
-                {language?.name ?? row.languageCode}
-              </span>
-            ),
-          ]}
-        />
-      }
+      meta={meta}
     />
   );
 }
@@ -706,6 +734,17 @@ export async function ScholarlyDetail({
       notice={t('scholarly.metadataNotice')}
       aside={
         <>
+          {/* Phase 30-R: an issue's own cover, described, at Library's address. */}
+          {record.kind === 'magazine-issue' && record.cover !== null ? (
+            <div className="mx-auto w-48 max-w-full lg:mx-0 lg:w-full">
+              <CoverImage
+                path={issueCoverPath(record.id, record.cover.assetId)}
+                cover={record.cover}
+                alt={t('coverAlt', { title: label.title })}
+                priority
+              />
+            </div>
+          ) : null}
           <RecordSection id="scholarly-facts" heading={t('scholarly.facts')}>
             <dl className="flex flex-col divide-y divide-[color:var(--color-border)] rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] px-4 py-1">
               {record.kind === 'magazine-issue' && magazineLabel !== null ? (

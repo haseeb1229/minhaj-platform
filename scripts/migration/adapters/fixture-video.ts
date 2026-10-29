@@ -277,6 +277,7 @@ export function createFixtureVideoAdapter(
         categories,
         links,
         assets,
+        poster: null,
       };
       return { kind: 'parsed', record };
     },

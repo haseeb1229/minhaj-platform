@@ -1,6 +1,6 @@
 import { composeMigrationRunner } from '../../apps/web/src/composition/migration-runner.ts';
 import { argument, CommandError, positiveInteger, required, runCommand } from './cli.ts';
-import { createAuthorisedFetcher } from './safe-fetch.ts';
+import { createAuthorisedAssetFetcher, createAuthorisedFetcher } from './safe-fetch.ts';
 import { authorisedSource } from './sources/catalogue.ts';
 
 /**
@@ -21,13 +21,19 @@ import { authorisedSource } from './sources/catalogue.ts';
  * scope that is not real `https`.
  *
  * `--max-items` stops early and leaves the run open; running the command again
- * — with the same selection — resumes it. The final stdout line is one JSON
+ * — with the same selection — resumes it.
+ *
+ * `--replay` (Phase 30-R) re-reads the source's RETAINED raw evidence with the
+ * current code instead of fetching its pages: every record the source holds is
+ * parsed again from its snapshot, and only images not yet acquired are
+ * fetched — through the source's asset fetcher, its page and first-party asset
+ * hosts only. The final stdout line is one JSON
  * summary (counts and codes only, never content); a refusal exits 1.
  */
 
 const USAGE =
   'migration:run -- --source <key> --operator <accountId> --pages <n> --limit <n> ' +
-  '[--items <a,b,...>] [--max-items <n>]';
+  '[--items <a,b,...>] [--max-items <n>] [--replay]';
 
 await runCommand('migration:run', async () => {
   const key = required('--source', USAGE);
@@ -36,6 +42,7 @@ await runCommand('migration:run', async () => {
   const limit = positiveInteger('--limit', USAGE);
   const maxItems = positiveInteger('--max-items', USAGE);
   const itemsText = argument('--items');
+  const replay = process.argv.includes('--replay');
   if (pages === null || limit === null) throw new CommandError(`usage: ${USAGE}`);
   if (pages > 1000 || limit > 100_000)
     throw new CommandError('selection bounds too large');
@@ -57,15 +64,17 @@ await runCommand('migration:run', async () => {
 
   const adapter = definition.adapter({ pages, limit, items });
   const fetcher = createAuthorisedFetcher(source);
+  const assetFetcher = createAuthorisedAssetFetcher(source);
   const summary = await runner.pipeline.run(actor, {
     sourceId: source.id,
     adapter,
     fetcher,
-    options: { maxItems, codeRevision: runner.codeRevision },
+    assetFetcher,
+    options: { maxItems, codeRevision: runner.codeRevision, replay },
   });
   return {
     source: source.key,
-    selection: { pages, limit, items: items.length },
+    selection: { pages, limit, items: items.length, replay },
     runId: summary.runId,
     resumed: summary.resumed,
     state: summary.state,

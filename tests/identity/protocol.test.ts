@@ -369,6 +369,16 @@ describe('the mutation surface', () => {
         // authenticates nobody. Applying, withdrawing and closing are Server
         // Actions, so Membership adds no other handler.
         'apps/web/src/app/api/my/export/membership/route.ts',
+        // Phase 30-R: the owner-served pictures — an Editorial record's lead
+        // image (and its administrative preview), a Person's portrait, an
+        // Edition's and a magazine issue's cover, a Video's poster. Each is a
+        // GET of bytes its own domain's policy releases; none authenticates.
+        'apps/web/src/app/assets/editorial/[family]/[recordId]/[assetId]/route.ts',
+        'apps/web/src/app/assets/editorial/previews/[family]/[recordId]/[assetId]/route.ts',
+        'apps/web/src/app/assets/people/portraits/[personId]/[assetId]/route.ts',
+        'apps/web/src/app/assets/library/covers/editions/[editionId]/[assetId]/route.ts',
+        'apps/web/src/app/assets/library/covers/issues/[issueId]/[assetId]/route.ts',
+        'apps/web/src/app/assets/media/posters/[videoId]/[assetId]/route.ts',
         // Phase 27: the payment provider's webhook — a second PROTOCOL CLASS B
         // callback beside Resend's, POST only, verified over its raw bytes in
         // the ledger; Donations' own export beside the other owners', through
@@ -391,8 +401,9 @@ describe('the mutation surface', () => {
       ].sort(),
     );
 
-    // And the eighteen others (Phase 23 added the Learn teacher alias, Phase 24
-    // the three attachment byte routes) genuinely are read-only: a mutating
+    // And the twenty-four others (Phase 23 added the Learn teacher alias, Phase 24
+    // the three attachment byte routes, Phase 30-R the six picture routes)
+    // genuinely are read-only: a mutating
     // verb on any of them would be a state-changing endpoint outside the
     // Class-A controls.
     const { readFile } = await import('node:fs/promises');
@@ -404,7 +415,7 @@ describe('the mutation surface', () => {
         !entry.includes('/api/my/') &&
         !entry.includes('/api/messaging/'),
     );
-    expect(readOnly).toHaveLength(18);
+    expect(readOnly).toHaveLength(24);
 
     for (const route of readOnly) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');

@@ -3,11 +3,13 @@ import { z } from 'zod';
 import { localeSchema, type Locale } from '../env/shared.ts';
 import { CONTRIBUTION_ROLES, type ContributionRole } from '../people/values.ts';
 import {
+  libraryCoverSchema,
   libraryIdSchema,
   libraryLanguageCodeSchema,
   librarySlugSchema,
   libraryStateSchema,
   readerDocumentSchema,
+  type LibraryCover,
   type LibraryState,
   type ReaderDocument,
 } from './values.ts';
@@ -319,6 +321,8 @@ export const magazineIssueInputSchema = z
     volume: issueNumberSchema,
     issueNumber: issueNumberSchema,
     document: readerDocumentSchema.nullable(),
+    /** Phase 30-R: omitted keeps the stored cover on an update; null removes it. */
+    cover: libraryCoverSchema.nullable().optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -427,6 +431,8 @@ export interface MagazineIssueRecord extends ScholarlyCommon, ScholarlyDated {
   };
   readonly volume: number | null;
   readonly issueNumber: number | null;
+  /** Phase 30-R: the issue's cover, or null. */
+  readonly cover: LibraryCover | null;
 }
 
 export type ScholarlyRecord =
@@ -464,6 +470,16 @@ export interface ScholarlyListing {
     readonly magazineSlug: string;
     readonly volume: number | null;
     readonly issueNumber: number | null;
+    /** Phase 30-R: the issue's cover, or null. */
+    readonly cover: LibraryCover | null;
+  } | null;
+  /**
+   * Phase 30-R: for a Magazine, the cover of its newest public issue that has
+   * one — so a periodical is shown by what it looks like. Null otherwise.
+   */
+  readonly latestCover: {
+    readonly issueId: string;
+    readonly cover: LibraryCover;
   } | null;
   readonly version: number;
   readonly updatedAt: Date;

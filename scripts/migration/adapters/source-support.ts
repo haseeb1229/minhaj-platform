@@ -5,6 +5,8 @@ import {
   type FetchOutcome,
   type MigrationFetchPort,
   type MigrationSourceAdapter,
+  type ParsedAsset,
+  type ParsedImage,
   type PendingItem,
   type RetrievedEvidence,
 } from '@minhaj/contracts/migration';
@@ -283,4 +285,77 @@ export function statedLanguage($: CheerioAPI): string | null {
   const raw = fromLd ?? $('meta[property="og:locale"]').attr('content') ?? '';
   const subtag = (raw.trim().split(/[-_]/, 1)[0] ?? '').toLowerCase();
   return /^[a-z]{2,3}$/.test(subtag) ? subtag : null;
+}
+
+/* ===========================================================================
+ * First-party images (Phase 30-R)
+ * ========================================================================= */
+
+/** The organisation every authorised source names as its rights holder. */
+export const FIRST_PARTY_RIGHTS_HOLDER = 'Minhaj-ul-Quran International';
+
+/**
+ * The copyright notice the page itself states for the organisation — its
+ * `copyright` meta, else a footer line naming it — or null. This is the rights
+ * EVIDENCE an acquisition records; a person still decides each image.
+ */
+export function copyrightNotice($: CheerioAPI): string | null {
+  const meta = nonEmpty($('meta[name="copyright"]').attr('content'));
+  if (meta !== null && meta.includes(FIRST_PARTY_RIGHTS_HOLDER)) return meta;
+  const footer = cleanText($('body').text()).match(
+    /(?:Copyrights?\s*)?©\s*[0-9–-]{4,9}\s*Minhaj-ul-Quran International[^.]{0,60}/u,
+  );
+  return footer === null ? null : footer[0].trim();
+}
+
+/** The raster types an image acquisition may expect from a URL's own name. */
+const RASTER_PATH = /\.(?:jpe?g|png)$/i;
+
+/**
+ * An image the page presents with its record, as the record's own picture and
+ * its acquisition: an absolute `https` URL on one of `hosts` — the source's
+ * page hosts and its registered first-party asset hosts, nothing else — whose
+ * name says JPEG or PNG (Storage admits no other picture). Rights are what the
+ * page states: `organisation-owned` with the notice as evidence, else
+ * `unknown`, which no person can make public.
+ */
+export function firstPartyImage(
+  $: CheerioAPI,
+  input: {
+    readonly src: string | undefined;
+    readonly alt: string | undefined;
+    readonly pageUrl: string;
+    readonly hosts: readonly string[];
+  },
+): { readonly image: ParsedImage; readonly asset: ParsedAsset } | null {
+  const src = nonEmpty(input.src);
+  if (src === null) return null;
+  let url: URL;
+  try {
+    url = new URL(src, input.pageUrl);
+  } catch {
+    return null;
+  }
+  if (
+    url.protocol !== 'https:' ||
+    url.username !== '' ||
+    url.password !== '' ||
+    !input.hosts.includes(url.hostname) ||
+    !RASTER_PATH.test(url.pathname)
+  )
+    return null;
+  const href = url.toString();
+  const notice = copyrightNotice($);
+  return {
+    image: { url: href, alt: cleanText(input.alt ?? ''), credit: null },
+    asset: {
+      url: href,
+      licence: notice === null ? 'unknown' : 'organisation-owned',
+      licenceEvidence:
+        notice === null
+          ? null
+          : `The official page presents this image as part of the record, served by ${url.hostname}; the page states "${notice}".`,
+      rightsHolder: notice === null ? null : FIRST_PARTY_RIGHTS_HOLDER,
+    },
+  };
 }

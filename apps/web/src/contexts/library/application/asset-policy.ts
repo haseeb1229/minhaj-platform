@@ -45,3 +45,55 @@ export function createLibraryAssetPolicy(deps: {
     },
   };
 }
+
+/** The two raster types Storage's image pipeline admits. */
+const COVER_MEDIA_TYPES: readonly string[] = Object.freeze(['image/jpeg', 'image/png']);
+
+/**
+ * Phase 30-R — the policy for a COVER's bytes: an Edition's or a
+ * MagazineIssue's. The business half of the two independent allows; Storage's
+ * custody decision is made first and separately.
+ *
+ * Allowed only when both identifiers are well-formed, the asset Storage
+ * resolved is the one the URL named and a still image, and it IS the cover
+ * recorded on that record while the record is public — an Edition published
+ * within a published Work, an issue published within a published Magazine.
+ * A withdrawn record's cover is refused at once; anything else is a denial.
+ */
+export function createLibraryCoverPolicy(deps: {
+  reader: Pick<LibraryPublicReaderPort, 'assetRelation' | 'issueCoverRelation'>;
+  request: {
+    readonly owner: 'edition' | 'issue';
+    readonly ownerId: string;
+    readonly assetId: string;
+  };
+}): AssetAuthorizationPort {
+  return {
+    async decide(asset) {
+      const { owner, ownerId, assetId } = deps.request;
+      if (
+        !libraryIdSchema.safeParse(ownerId).success ||
+        !libraryIdSchema.safeParse(assetId).success ||
+        asset.assetId !== assetId ||
+        !COVER_MEDIA_TYPES.includes(asset.mediaType)
+      )
+        return 'deny';
+      if (owner === 'edition') {
+        const relation = await deps.reader.assetRelation(ownerId);
+        return relation !== null &&
+          relation.workState === 'published' &&
+          relation.editionState === 'published' &&
+          relation.coverAssetId === assetId
+          ? 'allow'
+          : 'deny';
+      }
+      const relation = await deps.reader.issueCoverRelation(ownerId);
+      return relation !== null &&
+        relation.issueState === 'published' &&
+        relation.magazineState === 'published' &&
+        relation.coverAssetId === assetId
+        ? 'allow'
+        : 'deny';
+    },
+  };
+}

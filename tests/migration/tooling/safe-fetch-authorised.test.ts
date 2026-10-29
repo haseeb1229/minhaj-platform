@@ -20,6 +20,7 @@ vi.mock('node:dns/promises', () => ({ lookup, default: { lookup } }));
 import {
   AUTHORISED_USER_AGENT,
   MIGRATION_USER_AGENT,
+  createAuthorisedAssetFetcher,
   createAuthorisedFetcher,
   systemResolver,
   type Connector,
@@ -229,5 +230,107 @@ describe('systemResolver', () => {
     const outcome = await fetcher.fetch(`https://${HOST}/`);
     expect(outcome).toMatchObject({ kind: 'failure', classification: 'network' });
     expect(connector).not.toHaveBeenCalled();
+  });
+});
+
+/* ===========================================================================
+ * Phase 30-R — the asset fetcher
+ * ========================================================================= */
+
+describe('createAuthorisedAssetFetcher (Phase 30-R)', () => {
+  const ASSET_HOST = 'images.example.org';
+  const source = authorisedSource({ assetHosts: [ASSET_HOST] });
+
+  /** A connector answering per path: robots.txt as scripted, everything else 200. */
+  function routedConnector(robots: { status: number; body: string }) {
+    const asked: string[] = [];
+    const connector = vi.fn<Connector>(async (connection) => {
+      asked.push(connection.url.toString());
+      const response = new IncomingMessage(new Socket());
+      const isRobots = connection.url.pathname === '/robots.txt';
+      response.statusCode = isRobots ? robots.status : 200;
+      response.headers = {
+        'content-type': isRobots ? 'text/plain' : 'image/jpeg',
+      };
+      response.push(isRobots ? robots.body : 'JPEGBYTES');
+      response.push(null);
+      return response;
+    });
+    return { connector, asked };
+  }
+
+  beforeEach(() => {
+    lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+  });
+
+  it('reaches an asset host only after its robots.txt, read once per host', async () => {
+    const { connector, asked } = routedConnector({
+      status: 200,
+      body: 'User-agent: *\nDisallow: /private/\n',
+    });
+    const fetcher = createAuthorisedAssetFetcher(source, { connector });
+    const allowed = await fetcher.fetch(`https://${ASSET_HOST}/lead/a.jpg`);
+    expect(allowed).toMatchObject({ kind: 'response', status: 200 });
+    // A disallowed picture is refused before it is requested.
+    expectRefused(
+      await fetcher.fetch(`https://${ASSET_HOST}/private/b.jpg`),
+      'scope-refused',
+      'robots-disallowed',
+    );
+    expect(asked).toEqual([
+      `https://${ASSET_HOST}/robots.txt`,
+      `https://${ASSET_HOST}/lead/a.jpg`,
+    ]);
+  });
+
+  it('treats a missing robots.txt as allowing, and an unreadable one as no answer', async () => {
+    const missing = routedConnector({ status: 404, body: 'not found' });
+    expect(
+      await createAuthorisedAssetFetcher(source, { connector: missing.connector }).fetch(
+        `https://${ASSET_HOST}/lead/a.jpg`,
+      ),
+    ).toMatchObject({ kind: 'response', status: 200 });
+    const failing = routedConnector({ status: 503, body: 'down' });
+    const fetcher = createAuthorisedAssetFetcher(source, {
+      connector: failing.connector,
+    });
+    expect(await fetcher.fetch(`https://${ASSET_HOST}/lead/a.jpg`)).toMatchObject({
+      kind: 'response',
+      status: 503,
+    });
+    // Never taken as permission: the picture itself was not requested.
+    expect(failing.asked).toEqual([`https://${ASSET_HOST}/robots.txt`]);
+  });
+
+  it('serves the page hosts as the page fetcher does, and refuses every other host', async () => {
+    const { connector, asked } = routedConnector({ status: 404, body: '' });
+    const fetcher = createAuthorisedAssetFetcher(source, { connector });
+    expect(await fetcher.fetch(`https://${HOST}/images/a.jpg`)).toMatchObject({
+      kind: 'response',
+      status: 200,
+    });
+    const refused = [
+      'https://cdn.example.net/a.jpg',
+      `https://sub.${ASSET_HOST}/a.jpg`,
+      `https://${ASSET_HOST}:8443/a.jpg`,
+      `https://user:secret@${ASSET_HOST}/a.jpg`,
+    ];
+    for (const url of refused) expect((await fetcher.fetch(url)).kind).toBe('refused');
+    // None of them was ever requested; at most the asset host's robots.txt was read.
+    for (const url of asked)
+      expect([
+        `https://${HOST}/images/a.jpg`,
+        `https://${ASSET_HOST}/robots.txt`,
+      ]).toContain(url);
+  });
+
+  it('refuses to exist for a fixture source or an unreal asset host', () => {
+    expect(() => createAuthorisedAssetFetcher(fixtureSource())).toThrow();
+    for (const assetHosts of [['localhost'], ['10.0.0.1'], ['images.example.invalid']])
+      expect(() =>
+        createAuthorisedAssetFetcher(authorisedSource({ assetHosts }), {
+          connector: forbiddenConnector(),
+        }),
+      ).toThrow();
   });
 });

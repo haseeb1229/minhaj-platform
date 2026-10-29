@@ -25,6 +25,7 @@ export function fixtureSource(overrides: Partial<SourceRecord> = {}): SourceReco
     contentKind: 'media.video',
     baseUrl: 'http://videos.fixture.invalid/',
     hosts: ['videos.fixture.invalid'],
+    assetHosts: [],
     authorisationReference: null,
     authorisedOn: null,
     licensingEvidence: null,

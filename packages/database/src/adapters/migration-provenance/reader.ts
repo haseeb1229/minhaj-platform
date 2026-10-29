@@ -596,34 +596,53 @@ export function createMigrationReader(): MigrationReadPort {
 
     async assets(query) {
       const page = paging(query);
-      const where = query.recordId === null ? {} : { recordId: query.recordId };
+      const runId = query.runId ?? null;
+      const visibility = query.visibility ?? null;
+      const where = {
+        ...(query.recordId === null ? {} : { recordId: query.recordId }),
+        ...(runId === null ? {} : { runId }),
+        ...(visibility === null ? {} : { visibility }),
+      };
       const [total, rows] = await Promise.all([
         db.migrationAssetProvenance.count({ where }),
         db.migrationAssetProvenance.findMany({
           where,
-          orderBy: [{ acquiredAt: 'desc' }, { id: 'desc' }],
+          // One run is reviewed in the order it acquired; elsewhere, newest first.
+          orderBy:
+            runId === null
+              ? [{ acquiredAt: 'desc' }, { id: 'desc' }]
+              : [{ acquiredAt: 'asc' }, { id: 'asc' }],
           ...page,
           select: {
             id: true,
             recordId: true,
+            runId: true,
             originalUrl: true,
             assetId: true,
             checksum: true,
             byteSize: true,
             mediaType: true,
             licence: true,
+            licenceEvidence: true,
             visibility: true,
             rightsHolder: true,
+            publicAssetId: true,
+            width: true,
+            height: true,
             version: true,
           },
         }),
       ]);
       return {
-        rows: rows.map((row) => ({
+        rows: rows.map(({ publicAssetId, width, height, ...row }) => ({
           ...row,
           byteSize: Number(row.byteSize),
           licence: row.licence as AssetLicence,
           visibility: row.visibility as AssetVisibility,
+          publicCopy:
+            publicAssetId === null || width === null || height === null
+              ? null
+              : { width, height },
         })),
         total,
         offset: page.skip,

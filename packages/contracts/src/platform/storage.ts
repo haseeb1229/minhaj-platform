@@ -324,6 +324,15 @@ export interface StorageServicePort {
    * Bounded: a question naming more than one hundred identifiers is refused.
    */
   servable(assetIds: readonly string[]): Promise<ReadonlySet<string>>;
+  /**
+   * Phase 30-R. Which of `assetIds` are servable STILL IMAGES — exactly
+   * `servable`, narrowed to the two raster types Storage admits through its
+   * image pipeline (JPEG, PNG). A domain asks it before it records an asset
+   * as a record's lead image, portrait, cover or poster, so a PDF or a
+   * quarantined file can never become one. Same bound, same non-decision about
+   * visibility.
+   */
+  servableImages(assetIds: readonly string[]): Promise<ReadonlySet<string>>;
   /** Bounded, idempotent reconciliation of Storage-owned resources only. */
   reconcile(now: Date, limit: number): Promise<number>;
   /**

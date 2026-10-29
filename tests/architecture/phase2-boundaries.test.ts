@@ -410,7 +410,11 @@ describe('Phase 2 — what the delivered code does NOT contain', () => {
       // yield — Migration & Provenance's own vocabulary, never a permission
       // key — so that one literal, in that one migration, is set aside before
       // the scan. Any `fatwa.*` permission key it seeded would still fail.
-      const sourceAdaptersOwner = file.includes('20261027000000_phase30_source_adapters');
+      // Phase 30-R restates the same content-kind CHECKs, so the same literal is
+      // set aside there too.
+      const sourceAdaptersOwner =
+        file.includes('20261027000000_phase30_source_adapters') ||
+        file.includes('20261030000000_phase30r_review_completeness');
       const scanned = sourceAdaptersOwner
         ? source.replaceAll("'fatwa.ruling'", '')
         : source;

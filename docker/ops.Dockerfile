@@ -76,10 +76,12 @@ COPY packages/storage/src ./packages/storage/src
 # and the proof `staging-migration-proof` starts as a child process as the
 # runtime principal) and EXACTLY the node-runnable composition graph it loads:
 # the tooling's own Layer-4 root with the wiring and the publication targets
-# (Phase 30: Media, Library and Editorial, behind one fail-closed router) it
-# shares with the web process, the seven bounded contexts that graph composes
-# through their public interfaces, and the server-core authorisation service
-# that answers it. No page, route, component or other web source.
+# (Phase 30: Media, Library and Editorial; Phase 30-R: People and Global
+# Network too, behind one fail-closed router) it shares with the web process,
+# the Storage composition the targets ask whether an image is servable, the
+# eight bounded contexts that graph composes through their public interfaces,
+# and the server-core authorisation service that answers it. No page, route,
+# component or other web source.
 COPY packages/server-core/src ./packages/server-core/src
 COPY apps/web/src/composition/migration-runner.ts \
      apps/web/src/composition/migration-wiring.ts \
@@ -88,11 +90,15 @@ COPY apps/web/src/composition/migration-runner.ts \
      apps/web/src/composition/migration-target-support.ts \
      apps/web/src/composition/migration-library-targets.ts \
      apps/web/src/composition/migration-editorial-targets.ts \
+     apps/web/src/composition/migration-global-targets.ts \
+     apps/web/src/composition/migration-people-targets.ts \
+     apps/web/src/composition/storage.ts \
      ./apps/web/src/composition/
 COPY apps/web/src/contexts/migration-provenance ./apps/web/src/contexts/migration-provenance
 COPY apps/web/src/contexts/media ./apps/web/src/contexts/media
 COPY apps/web/src/contexts/library ./apps/web/src/contexts/library
 COPY apps/web/src/contexts/editorial ./apps/web/src/contexts/editorial
+COPY apps/web/src/contexts/global-network ./apps/web/src/contexts/global-network
 COPY apps/web/src/contexts/people-contributors ./apps/web/src/contexts/people-contributors
 COPY apps/web/src/contexts/personalisation-notifications ./apps/web/src/contexts/personalisation-notifications
 COPY apps/web/src/contexts/taxonomy ./apps/web/src/contexts/taxonomy

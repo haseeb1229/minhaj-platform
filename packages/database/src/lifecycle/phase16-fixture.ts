@@ -229,7 +229,7 @@ export async function writePhase16Fixture(
     INSERT INTO [dbo].[NewsArticleTopic] ([ownerId],[revisionNumber],[topicId]) VALUES (N'${f.newsId}', 1, N'${topicId}');
     INSERT INTO [dbo].[NewsArticleContributor] ([ownerId],[revisionNumber],[personId],[role],[position]) VALUES (N'${f.newsId}', 1, N'${personId}', N'author', 0);
     UPDATE [dbo].[NewsArticle] SET [currentRevision]=1, [version]=1 WHERE [id]=N'${f.newsId}';
-    UPDATE [dbo].[NewsArticle] SET [approvedRevision]=1, [approvedById]=N'${reviewerId}', [state]=N'published', [publishedAt]='2033-07-01T08:00:00', [version]=2 WHERE [id]=N'${f.newsId}';
+    UPDATE [dbo].[NewsArticle] SET [approvedRevision]=1, [approvedById]=N'${reviewerId}', [state]=N'published', [publishedAt]='2033-07-01T08:00:00', [chronologyAt]='2033-07-01T08:00:00', [version]=2 WHERE [id]=N'${f.newsId}';
     INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'news-article', N'${f.newsId}');
   `);
 }

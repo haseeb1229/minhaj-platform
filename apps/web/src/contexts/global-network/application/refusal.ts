@@ -6,8 +6,13 @@ import { z } from 'zod';
  */
 
 export class GlobalRefusal extends Error {
-  constructor(readonly reason: string) {
+  // A declared field, not a parameter property: the migration tooling loads
+  // this module under plain Node, whose type stripping refuses those (30-R).
+  readonly reason: string;
+
+  constructor(reason: string) {
     super(reason);
+    this.reason = reason;
   }
 }
 

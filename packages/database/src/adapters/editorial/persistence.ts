@@ -32,22 +32,41 @@ import {
   limitOf,
   offsetOf,
   refuse,
+  chronologyUpdate,
   revisionReset,
   transitionUpdate,
 } from './workflow.ts';
+import {
+  dateOnly,
+  leadColumnsOf,
+  leadImageNamed,
+  leadImageOf,
+  leadTranslationRows,
+  publicLeadOf,
+  type LeadColumns,
+} from './lead.ts';
 const revisionInclude = {
   translations: { orderBy: { languageCode: 'asc' as const } },
   topics: { orderBy: { topicId: 'asc' as const } },
   contributors: { orderBy: [{ position: 'asc' as const }, { personId: 'asc' as const }] },
 };
 const detailInclude = { current: { include: revisionInclude } };
+/** Phase 30-R: the lead-image columns every lead family's revision carries. */
+const leadSelect = {
+  leadAssetId: true,
+  leadWidth: true,
+  leadHeight: true,
+  leadCredit: true,
+} as const;
 const publicSelect = {
+  id: true,
   slug: true,
   publishedAt: true,
   updatedAt: true,
   current: {
     select: {
       primaryLanguage: true,
+      ...leadSelect,
       translations: {
         select: {
           languageCode: true,
@@ -56,6 +75,7 @@ const publicSelect = {
           seoTitle: true,
           seoDescription: true,
           html: true,
+          leadAlt: true,
         },
         orderBy: { languageCode: 'asc' as const },
       },
@@ -67,23 +87,37 @@ const publicSelect = {
     },
   },
 } satisfies Prisma.ArticleSelect;
+/** An Article's public read also carries its chronology and source date (Phase 30-R). */
+const articlePublicSelect = {
+  ...publicSelect,
+  chronologyAt: true,
+  current: {
+    select: { ...publicSelect.current.select, sourcePublishedOn: true },
+  },
+} satisfies Prisma.ArticleSelect;
 interface PublicRow {
+  id: string;
   slug: string;
   publishedAt: Date | null;
+  chronologyAt?: Date | null;
   updatedAt: Date;
-  current: {
-    primaryLanguage: string;
-    translations: {
-      languageCode: string;
-      title: string;
-      excerpt: string;
-      seoTitle: string;
-      seoDescription: string;
-      html: string;
-    }[];
-    topics: { topicId: string }[];
-    contributors: { personId: string; role: string }[];
-  } | null;
+  current:
+    | (LeadColumns & {
+        primaryLanguage: string;
+        sourcePublishedOn?: Date | null;
+        translations: {
+          languageCode: string;
+          title: string;
+          excerpt: string;
+          seoTitle: string;
+          seoDescription: string;
+          html: string;
+          leadAlt: string;
+        }[];
+        topics: { topicId: string }[];
+        contributors: { personId: string; role: string }[];
+      })
+    | null;
 }
 const listingSelect = {
   slug: true,
@@ -112,6 +146,48 @@ function publicSummary(row: {
       ...t,
       languageCode: t.languageCode as EditorialLanguage,
     })),
+  };
+}
+/**
+ * An Article card (Phase 30-R): its words, its reader-facing date and its lead
+ * image with each translation's alt text. Never the body.
+ */
+const articleListingSelect = {
+  id: true,
+  slug: true,
+  chronologyAt: true,
+  current: {
+    select: {
+      primaryLanguage: true,
+      ...leadSelect,
+      translations: {
+        select: { languageCode: true, title: true, excerpt: true, leadAlt: true },
+        orderBy: { languageCode: 'asc' as const },
+      },
+    },
+  },
+} as const;
+function articleSummary(row: {
+  id: string;
+  slug: string;
+  chronologyAt: Date | null;
+  current:
+    | (LeadColumns & {
+        primaryLanguage: string;
+        translations: {
+          languageCode: string;
+          title: string;
+          excerpt: string;
+          leadAlt: string;
+        }[];
+      })
+    | null;
+}): PublicEditorialSummary {
+  if (!row.current || !row.chronologyAt) throw new EditorialDataError('unavailable');
+  return {
+    ...publicSummary(row),
+    chronologyAt: row.chronologyAt,
+    leadImage: publicLeadOf('article', row.id, row.current),
   };
 }
 const summarySelect = {
@@ -203,12 +279,14 @@ async function audit(
   });
 }
 
-interface RevisionRow {
+interface RevisionRow extends LeadColumns {
   number: number;
   editorId: string;
   createdAt: Date;
   slug: string;
   primaryLanguage: string;
+  /** An Article revision's source date (Phase 30-R); a Page records none. */
+  sourcePublishedOn?: Date | null;
   translations: {
     languageCode: string;
     title: string;
@@ -217,6 +295,7 @@ interface RevisionRow {
     seoDescription: string;
     document: string;
     html: string;
+    leadAlt: string;
   }[];
   topics: { topicId: string }[];
   contributors: { personId: string; role: string; position: number }[];
@@ -253,12 +332,15 @@ function articleRevision(row: NonNullable<ArticleRow['current']>): EditorialRevi
       seoDescription: t.seoDescription,
       document: t.document,
       html: t.html,
+      leadAlt: t.leadAlt,
     })),
     topicIds: row.topics.map((t) => t.topicId),
     contributors: row.contributors.map((c) => ({
       personId: c.personId,
       role: c.role as ContributionRole,
     })),
+    leadImage: leadImageOf(row),
+    sourcePublishedOn: dateOnly(row.sourcePublishedOn),
   };
 }
 function articleDetail(row: ArticleRow): ArticleDetail {
@@ -297,7 +379,11 @@ function articlePublic(row: PublicRow): PublicEditorial {
       seoTitle: t.seoTitle,
       seoDescription: t.seoDescription,
       html: t.html,
+      leadAlt: t.leadAlt,
     })),
+    chronologyAt: row.chronologyAt ?? row.publishedAt,
+    sourcePublishedOn: dateOnly(row.current.sourcePublishedOn),
+    leadImage: publicLeadOf('article', row.id, row.current),
     topicIds: row.current.topics.map((t) => t.topicId),
     contributors: row.current.contributors.map((c) => ({
       personId: c.personId,
@@ -320,7 +406,8 @@ async function writeArticleRevision(
       editorId: input.actorId,
       slug: input.content.slug,
       primaryLanguage: input.content.primaryLanguage,
-      translations: { create: input.content.translations },
+      ...leadColumnsOf(input.content, { lead: true, dated: true }),
+      translations: { create: leadTranslationRows(input.content.translations) },
       topics: { create: input.content.topicIds.map((topicId) => ({ topicId })) },
       contributors: {
         create: input.content.contributors.map((c, position) => ({ ...c, position })),
@@ -471,7 +558,11 @@ function articleOperations(): Pick<
         return await getDatabaseClient().$transaction(async (tx) => {
           const row = await articleLocked(tx, input.id, input.expectedVersion);
           const action = input.action;
-          const data: Prisma.ArticleUncheckedUpdateInput = transitionUpdate(row, input);
+          const update = transitionUpdate(row, input);
+          const data: Prisma.ArticleUncheckedUpdateInput = {
+            ...update,
+            ...chronologyUpdate(update, row.current?.sourcePublishedOn),
+          };
           const next = await tx.article.update({
             where: { id: row.id },
             data,
@@ -545,19 +636,21 @@ function articleReads(): Pick<
       if (!history || history.owner.state !== 'published') return null;
       const row = await getDatabaseClient().article.findFirst({
         where: { id: history.owner.id, state: 'published' },
-        select: publicSelect,
+        select: articlePublicSelect,
       });
       return row ? { ...articlePublic(row), id: history.owner.id } : null;
     },
     async publishedArticles(offset: number, limit: number) {
+      // Newest by CHRONOLOGY (Phase 30-R): a migrated article sits at its own
+      // source date, never at the day it was published here.
       const rows = await getDatabaseClient().article.findMany({
         where: { state: 'published' },
-        select: listingSelect,
-        orderBy: [{ publishedAt: 'desc' }, { id: 'asc' }],
+        select: articleListingSelect,
+        orderBy: [{ chronologyAt: 'desc' }, { id: 'asc' }],
         skip: offsetOf(offset),
         take: limitOf(limit),
       });
-      return rows.map(publicSummary);
+      return rows.map(articleSummary);
     },
     async articleSitemap(offset: number, limit: number) {
       const rows = await getDatabaseClient().article.findMany({
@@ -602,12 +695,14 @@ function pageRevision(row: NonNullable<PageRow['current']>): EditorialRevision {
       seoDescription: t.seoDescription,
       document: t.document,
       html: t.html,
+      leadAlt: t.leadAlt,
     })),
     topicIds: row.topics.map((t) => t.topicId),
     contributors: row.contributors.map((c) => ({
       personId: c.personId,
       role: c.role as ContributionRole,
     })),
+    leadImage: leadImageOf(row),
   };
 }
 function pageDetail(row: PageRow): PageDetail {
@@ -647,7 +742,9 @@ function pagePublic(row: PublicRow & { routeBinding: string }): PublicPage {
       seoTitle: t.seoTitle,
       seoDescription: t.seoDescription,
       html: t.html,
+      leadAlt: t.leadAlt,
     })),
+    leadImage: publicLeadOf('page', row.id, row.current),
     topicIds: row.current.topics.map((t) => t.topicId),
     contributors: row.current.contributors.map((c) => ({
       personId: c.personId,
@@ -671,7 +768,8 @@ async function writePageRevision(
       editorId: input.actorId,
       slug: input.content.slug,
       primaryLanguage: input.content.primaryLanguage,
-      translations: { create: input.content.translations },
+      ...leadColumnsOf(input.content, { lead: true, dated: false }),
+      translations: { create: leadTranslationRows(input.content.translations) },
       topics: { create: input.content.topicIds.map((topicId) => ({ topicId })) },
       contributors: {
         create: input.content.contributors.map((c, position) => ({ ...c, position })),
@@ -881,9 +979,45 @@ function pageOperations(): Pick<
 }
 function pageReads(): Pick<
   EditorialPublicReaderPort,
-  'publicPage' | 'pageSitemap' | 'publishedHelpPages' | 'pageCanonicalSlug'
+  | 'publicPage'
+  | 'pageSitemap'
+  | 'publishedHelpPages'
+  | 'publishedExplorePages'
+  | 'pageCanonicalSlug'
 > {
   return {
+    async publishedExplorePages(limit: number) {
+      // Published only, in the query; the binding is unique per Page here
+      // (slug `page`), so binding order is total.
+      const rows = await getDatabaseClient().page.findMany({
+        where: { state: 'published', routeBinding: { startsWith: '/explore/' } },
+        select: {
+          id: true,
+          slug: true,
+          routeBinding: true,
+          current: {
+            select: {
+              primaryLanguage: true,
+              ...leadSelect,
+              translations: {
+                select: { languageCode: true, title: true, excerpt: true, leadAlt: true },
+                orderBy: { languageCode: 'asc' as const },
+              },
+            },
+          },
+        },
+        orderBy: { routeBinding: 'asc' },
+        take: limitOf(limit, 60),
+      });
+      return rows.map((row) => {
+        if (!row.current) throw new EditorialDataError('unavailable');
+        return {
+          ...publicSummary(row),
+          routeBinding: row.routeBinding,
+          leadImage: publicLeadOf('page', row.id, row.current),
+        };
+      });
+    },
     async publishedHelpPages(offset: number, limit: number) {
       const rows = await getDatabaseClient().page.findMany({
         where: { state: 'published', routeBinding: 'help-article' },
@@ -967,6 +1101,7 @@ interface SearchRow {
   id: string;
   version: number;
   publishedAt: Date | null;
+  chronologyAt?: Date | null;
   current: {
     translations: {
       languageCode: string;
@@ -984,6 +1119,7 @@ function searchRecord(row: SearchRow | null): EditorialSearchRecord | null {
     id: row.id,
     stamp: String(row.version),
     publishedAt: row.publishedAt,
+    ...(row.chronologyAt ? { chronologyAt: row.chronologyAt } : {}),
     topicIds: row.current.topics.map((topic) => topic.topicId),
     translations: row.current.translations,
   };
@@ -1010,7 +1146,7 @@ function searchReads(): Pick<
       return searchRecord(
         await db().article.findFirst({
           where: { id, state: 'published' },
-          select: searchSelect,
+          select: { ...searchSelect, chronologyAt: true },
         }),
       );
     },
@@ -1061,6 +1197,8 @@ function searchReads(): Pick<
 
 export function createEditorialPersistence(): EditorialPersistencePort {
   return {
+    currentLeadImage: (family, recordId, assetId) =>
+      leadImageNamed(family, recordId, assetId, 'current'),
     ...articleOperations(),
     ...pageOperations(),
     ...newsOperations(),
@@ -1070,6 +1208,8 @@ export function createEditorialPersistence(): EditorialPersistencePort {
 }
 export function createEditorialPublicReader(): EditorialPublicReaderPort {
   return {
+    publishedLeadImage: (family, recordId, assetId) =>
+      leadImageNamed(family, recordId, assetId, 'published'),
     ...articleReads(),
     ...pageReads(),
     ...searchReads(),

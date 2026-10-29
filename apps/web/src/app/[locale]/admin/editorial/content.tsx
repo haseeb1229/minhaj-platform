@@ -9,6 +9,10 @@ import {
   PAGE_BINDINGS,
   canonicalTimeZone,
   editorialStateSchema,
+  hasLeadImage,
+  hasSourceDate,
+  isEditorialLeadFamily,
+  leadImagePreviewPath,
   eventTimeZones,
   foldOf,
   memberToken,
@@ -585,6 +589,73 @@ export async function ContentEditor({
                   )}
                 </Field>
               </fieldset>
+            ) : null}
+            {hasSourceDate(kind) ? (
+              <div className="flex flex-col gap-1">
+                <Field id="sourcePublishedOn" label={t('sourcePublishedOn')}>
+                  {(props) => (
+                    <TextInput
+                      {...props}
+                      type="date"
+                      name="sourcePublishedOn"
+                      aria-describedby="sourcePublishedOn-help"
+                      defaultValue={revision?.sourcePublishedOn ?? ''}
+                    />
+                  )}
+                </Field>
+                <p
+                  id="sourcePublishedOn-help"
+                  className="text-xs text-[color:var(--color-foreground-muted)]"
+                >
+                  {t('sourcePublishedOnHelp')}
+                </p>
+              </div>
+            ) : null}
+            {/*
+             * Phase 30-R: the lead image this revision carries, shown READ-ONLY
+             * through the administrative preview route. Saving the form does not
+             * mention it, so the service keeps it exactly as it is.
+             */}
+            {hasLeadImage(kind) &&
+            isEditorialLeadFamily(kind) &&
+            record !== null &&
+            revision?.leadImage ? (
+              <figure className="flex flex-col gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-4">
+                <figcaption className="flex flex-col gap-1">
+                  <span className="text-sm font-semibold">{t('leadImage')}</span>
+                  <span className="text-xs text-[color:var(--color-foreground-muted)]">
+                    {t('leadImageHelp')}
+                  </span>
+                </figcaption>
+                <img
+                  src={leadImagePreviewPath({
+                    family: kind,
+                    recordId: record.id,
+                    assetId: revision.leadImage.assetId,
+                  })}
+                  alt=""
+                  width={revision.leadImage.width}
+                  height={revision.leadImage.height}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-auto max-h-64 w-auto max-w-full self-start rounded-[var(--radius-control)] bg-[color:var(--color-surface-sunken)] object-contain"
+                />
+                {(() => {
+                  const alt = revision.translations.find(
+                    (entry) => entry.languageCode === revision.primaryLanguage,
+                  )?.leadAlt;
+                  return (
+                    <p className="text-xs" dir="auto">
+                      {alt ? t('leadImageAlt', { alt }) : t('leadImageNoAlt')}
+                    </p>
+                  );
+                })()}
+                {revision.leadImage.credit === null ? null : (
+                  <p className="text-xs" dir="auto">
+                    {t('leadCredit', { credit: revision.leadImage.credit })}
+                  </p>
+                )}
+              </figure>
             ) : null}
             {kind === 'collection' ? (
               <fieldset

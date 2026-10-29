@@ -116,3 +116,23 @@ export function createPhotoAssetPolicy(deps: {
     preview: deps.preview,
   });
 }
+
+/**
+ * Phase 30-R — a Video's first-party POSTER. The same decision as a Photo's
+ * image: a still image, the one recorded as THIS Video's poster, and the Video
+ * published. It is our own stored copy, so showing it makes no request to the
+ * video's provider.
+ */
+export function createVideoPosterPolicy(deps: {
+  readonly relations: MediaAssetRelationPort;
+  readonly request: { readonly videoId: string; readonly assetId: string };
+}): AssetAuthorizationPort {
+  const { videoId, assetId } = deps.request;
+  return recordedAssetPolicy({
+    recordId: videoId,
+    assetId,
+    mediaTypes: PHOTO_MEDIA_TYPES,
+    relation: () => deps.relations.videoPoster(videoId),
+    preview: undefined,
+  });
+}

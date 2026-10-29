@@ -1,6 +1,11 @@
 import 'server-only';
 
-import type { TargetPublication, TargetWithdrawal } from '@minhaj/contracts/migration';
+import type {
+  PublishableAsset,
+  StagedImage,
+  TargetPublication,
+  TargetWithdrawal,
+} from '@minhaj/contracts/migration';
 
 /**
  * What every per-kind migration publication target shares — Layer 4
@@ -105,4 +110,35 @@ export function sameLabels(
         entry.text === label.text.trim(),
     ),
   );
+}
+
+/**
+ * Phase 30-R. A staged image as a domain may record it: the PUBLIC copy of the
+ * rights-cleared acquisition of EXACTLY the image's canonical URL — never the
+ * evidence bytes, never another acquisition, never a remote URL. An image with
+ * no such acquisition (not acquired, refused, or not decided public-eligible
+ * by a person) is no image: the record is published without it.
+ */
+export function clearedImage(
+  image: StagedImage | null,
+  assets: readonly PublishableAsset[],
+): {
+  readonly assetId: string;
+  readonly width: number;
+  readonly height: number;
+  readonly alt: string;
+  readonly credit: string | null;
+} | null {
+  if (image === null) return null;
+  const cleared = assets.find(
+    (asset) => asset.originalUrl === image.url && asset.publicCopy !== null,
+  );
+  if (cleared === undefined || cleared.publicCopy === null) return null;
+  return {
+    assetId: cleared.publicCopy.assetId,
+    width: cleared.publicCopy.width,
+    height: cleared.publicCopy.height,
+    alt: image.alt,
+    credit: image.credit,
+  };
 }

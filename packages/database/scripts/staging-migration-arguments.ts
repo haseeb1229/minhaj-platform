@@ -53,7 +53,8 @@ const MODES: Readonly<
       '--limit': COUNT,
     },
     optional: { '--items': ITEMS, '--max-items': COUNT },
-    flags: [],
+    // Phase 30-R: re-read retained evidence instead of fetching pages.
+    flags: ['--replay'],
   },
 };
 

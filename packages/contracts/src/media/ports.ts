@@ -247,6 +247,8 @@ export interface MediaAssetRelationPort {
   audioAsset(trackId: string): Promise<AudioAssetRelation | null>;
   /** Phase 12 — the same question for a Photo's image. */
   photoAsset(photoId: string): Promise<PhotoAssetRelation | null>;
+  /** Phase 30-R — the same question for a Video's first-party poster. */
+  videoPoster(videoId: string): Promise<PhotoAssetRelation | null>;
 }
 
 /* ===========================================================================

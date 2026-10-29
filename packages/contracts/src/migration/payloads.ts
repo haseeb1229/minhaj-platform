@@ -179,8 +179,31 @@ export const stagedAssetUrlSchema = z
   .max(MIGRATION_LIMITS.url)
   .regex(/^https:\/\//);
 
+/**
+ * Phase 30-R. An image the source presents AS PART OF this record — a lead
+ * image, a cover, a portrait, a poster — named by its canonical source URL.
+ * Publication uses it only through a rights-cleared acquisition of exactly
+ * that URL (a person decided it `public-eligible`), and then only the
+ * metadata-stripped public copy Storage made of it; otherwise the record is
+ * published without it. `alt` is the source's own words for it (its `alt`
+ * attribute), possibly empty; `credit` only when the source states one.
+ */
+export interface StagedImage {
+  readonly url: string;
+  readonly alt: string;
+  readonly credit: string | null;
+}
+
+export const stagedImageSchema = z
+  .object({
+    url: stagedAssetUrlSchema,
+    alt: z.string().max(300),
+    credit: z.string().min(1).max(200).nullable(),
+  })
+  .strict();
+
 /* ===========================================================================
- * media.video (Phase 29, unchanged)
+ * media.video (Phase 29; poster Phase 30-R)
  * ========================================================================= */
 
 export const MIGRATION_VIDEO_PROVIDERS = Object.freeze(['youtube', 'vimeo'] as const);
@@ -202,6 +225,8 @@ export interface StagedVideoPayload {
   readonly publishedOn: string | null;
   readonly durationSeconds: number | null;
   readonly legacyIdentifier: string | null;
+  /** Phase 30-R: the source's own poster image for this video, when it shows one. */
+  readonly poster: StagedImage | null;
 }
 
 export const stagedVideoPayloadSchema = z
@@ -221,6 +246,7 @@ export const stagedVideoPayloadSchema = z
     publishedOn: dateSchema.nullable(),
     durationSeconds: z.number().int().min(1).max(360_000).nullable(),
     legacyIdentifier: z.string().max(200).nullable(),
+    poster: stagedImageSchema.nullable().default(null),
   })
   .strict();
 
@@ -245,6 +271,8 @@ export interface StagedWorkPayload {
     readonly readableAssetUrl: string | null;
     /** A PDF the source offers to download, when acquired. */
     readonly downloadAssetUrl: string | null;
+    /** Phase 30-R: the edition's cover image as the source shows it. */
+    readonly cover: StagedImage | null;
   };
 }
 
@@ -268,6 +296,7 @@ export const stagedWorkPayloadSchema = z
         pageCount: z.number().int().min(1).max(100_000).nullable(),
         readableAssetUrl: stagedAssetUrlSchema.nullable(),
         downloadAssetUrl: stagedAssetUrlSchema.nullable(),
+        cover: stagedImageSchema.nullable().default(null),
       })
       .strict(),
   })
@@ -309,6 +338,8 @@ export interface StagedMagazineIssuePayload {
   /** The issue's table of contents or editorial words, when the page carries them. */
   readonly body: readonly StagedBlock[] | null;
   readonly legacyIdentifier: string | null;
+  /** Phase 30-R: the issue's cover image as the source shows it. */
+  readonly cover: StagedImage | null;
 }
 
 export const stagedMagazineIssuePayloadSchema = z
@@ -324,6 +355,7 @@ export const stagedMagazineIssuePayloadSchema = z
     magazine: stagedReferenceSchema,
     body: stagedBodySchema.nullable(),
     legacyIdentifier: z.string().max(200).nullable(),
+    cover: stagedImageSchema.nullable().default(null),
   })
   .strict();
 
@@ -334,19 +366,29 @@ export const stagedMagazineIssuePayloadSchema = z
 /** The languages Editorial accepts as a record's primary language. */
 export const EDITORIAL_MIGRATION_LANGUAGES = Object.freeze(['en', 'ur', 'ar'] as const);
 
+/** The Editorial families that carry a dated, sourced record (Phase 30-R adds press releases). */
+export type StagedEditorialKind =
+  'editorial.news' | 'editorial.article' | 'editorial.press-release';
+
 export interface StagedEditorialPayload {
-  readonly kind: 'editorial.news' | 'editorial.article';
+  readonly kind: StagedEditorialKind;
   readonly slug: string;
   readonly languageCode: (typeof EDITORIAL_MIGRATION_LANGUAGES)[number];
   readonly title: string;
   readonly excerpt: string;
   readonly body: readonly StagedBlock[];
-  /** The source's own publication date: provenance, shown to reviewers. */
+  /**
+   * The source's own ORIGINAL publication date. Since Phase 30-R it is carried
+   * into Editorial as the record's source date — its reader-facing chronology —
+   * and is never replaced by the migration or approval date.
+   */
   readonly publishedOn: string | null;
   readonly legacyIdentifier: string | null;
+  /** Phase 30-R: the record's lead image as the source presents it. */
+  readonly leadImage: StagedImage | null;
 }
 
-function editorialSchema<K extends 'editorial.news' | 'editorial.article'>(kind: K) {
+function editorialSchema<K extends StagedEditorialKind>(kind: K) {
   return z
     .object({
       kind: z.literal(kind),
@@ -357,12 +399,133 @@ function editorialSchema<K extends 'editorial.news' | 'editorial.article'>(kind:
       body: stagedBodySchema,
       publishedOn: dateSchema.nullable(),
       legacyIdentifier: z.string().max(200).nullable(),
+      leadImage: stagedImageSchema.nullable().default(null),
     })
     .strict();
 }
 
 export const stagedNewsPayloadSchema = editorialSchema('editorial.news');
 export const stagedArticlePayloadSchema = editorialSchema('editorial.article');
+export const stagedPressReleasePayloadSchema = editorialSchema('editorial.press-release');
+
+/* ===========================================================================
+ * editorial.page — one shell-bound organisational Page (Phase 30-R)
+ * ========================================================================= */
+
+/**
+ * A public organisational Page bound to ONE reserved shell route
+ * (`/explore/{section}` or `/explore/{section}/{page}`) that the committed
+ * catalogue maps the source page to. The words are the source's; the binding
+ * is the catalogue's statement of where that page belongs, never a guess, and
+ * Editorial validates it against its own closed list.
+ */
+export interface StagedPagePayload {
+  readonly kind: 'editorial.page';
+  readonly binding: string;
+  readonly languageCode: (typeof EDITORIAL_MIGRATION_LANGUAGES)[number];
+  readonly title: string;
+  readonly excerpt: string;
+  readonly body: readonly StagedBlock[];
+  readonly leadImage: StagedImage | null;
+  readonly legacyIdentifier: string | null;
+}
+
+export const stagedPagePayloadSchema = z
+  .object({
+    kind: z.literal('editorial.page'),
+    binding: z
+      .string()
+      .min(9)
+      .max(100)
+      .regex(/^\/explore\/[a-z]+(?:-[a-z]+)*(?:\/[a-z]+(?:-[a-z]+)*)?$/),
+    languageCode: z.enum(EDITORIAL_MIGRATION_LANGUAGES),
+    title: z.string().min(1).max(200),
+    excerpt: z.string().max(600),
+    body: stagedBodySchema,
+    leadImage: stagedImageSchema.nullable(),
+    legacyIdentifier: z.string().max(200).nullable(),
+  })
+  .strict();
+
+/* ===========================================================================
+ * people.person — one public profile (Phase 30-R)
+ * ========================================================================= */
+
+/**
+ * A Person's public profile as the source states it: the name exactly as
+ * written, and a biography of WHOLE source paragraphs within People's bound —
+ * never cut mid-paragraph, never summarised. The portrait is the source's own
+ * image of the person, used only when rights-cleared.
+ */
+export interface StagedPersonPayload {
+  readonly kind: 'people.person';
+  readonly slug: string;
+  readonly primaryLocale: Locale;
+  readonly labels: readonly {
+    readonly locale: Locale;
+    readonly name: string;
+    readonly biography: string;
+  }[];
+  readonly portrait: StagedImage | null;
+  readonly legacyIdentifier: string | null;
+}
+
+export const stagedPersonPayloadSchema = z
+  .object({
+    kind: z.literal('people.person'),
+    slug: stagedSlugSchema,
+    primaryLocale: localeSchema,
+    labels: z
+      .array(
+        z
+          .object({
+            locale: localeSchema,
+            name: z.string().min(1).max(200),
+            biography: z.string().max(4000),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(3),
+    portrait: stagedImageSchema.nullable(),
+    legacyIdentifier: z.string().max(200).nullable(),
+  })
+  .strict();
+
+/* ===========================================================================
+ * global.country — a country the organisation states it is present in (30-R)
+ * ========================================================================= */
+
+/**
+ * A Country, by its ISO 3166-1 alpha-2 code, with the name the source uses.
+ * The code comes from a FIXED table in the adapter keyed by that exact name —
+ * a structural fact, like the surah lengths — and a name missing from the
+ * table is never guessed into one.
+ */
+export interface StagedCountryPayload {
+  readonly kind: 'global.country';
+  readonly code: string;
+  readonly slug: string;
+  readonly primaryLocale: Locale;
+  readonly labels: readonly { readonly locale: Locale; readonly name: string }[];
+  readonly legacyIdentifier: string | null;
+}
+
+export const stagedCountryPayloadSchema = z
+  .object({
+    kind: z.literal('global.country'),
+    code: z.string().regex(/^[A-Z]{2}$/),
+    slug: stagedSlugSchema,
+    primaryLocale: localeSchema,
+    labels: z
+      .array(
+        z.object({ locale: localeSchema, name: z.string().min(1).max(120) }).strict(),
+      )
+      .min(1)
+      .max(3),
+    legacyIdentifier: z.string().max(200).nullable(),
+  })
+  .strict();
 
 /* ===========================================================================
  * REVIEW-ONLY: fatwa.ruling and quran.translation
@@ -464,6 +627,9 @@ export type StagedPayload =
   | StagedMagazinePayload
   | StagedMagazineIssuePayload
   | StagedEditorialPayload
+  | StagedPagePayload
+  | StagedPersonPayload
+  | StagedCountryPayload
   | StagedFatwaPayload
   | StagedQuranTranslationPayload;
 
@@ -483,6 +649,10 @@ export const STAGED_PAYLOAD_SCHEMAS = Object.freeze({
   'library.magazine-issue': stagedMagazineIssuePayloadSchema,
   'editorial.news': stagedNewsPayloadSchema,
   'editorial.article': stagedArticlePayloadSchema,
+  'editorial.press-release': stagedPressReleasePayloadSchema,
+  'editorial.page': stagedPagePayloadSchema,
+  'people.person': stagedPersonPayloadSchema,
+  'global.country': stagedCountryPayloadSchema,
   'fatwa.ruling': stagedFatwaPayloadSchema,
   'quran.translation': stagedQuranTranslationPayloadSchema,
 } satisfies Record<MigrationContentKind, z.ZodType>);
@@ -514,6 +684,13 @@ export function parseStagedPayload(
 /* ===========================================================================
  * Parsed records — what an adapter hands normalisation, BEFORE sanitisation
  * ========================================================================= */
+
+/** Phase 30-R: an image the source presents with a record, before normalisation. */
+export interface ParsedImage {
+  readonly url: string;
+  readonly alt: string;
+  readonly credit: string | null;
+}
 
 /** An asset the page offers, with the rights evidence the source itself states. */
 export interface ParsedAsset {
@@ -547,6 +724,8 @@ export interface ParsedVideo extends ParsedCommon {
   }[];
   readonly descriptionHtml: string;
   readonly durationSeconds: number | null;
+  /** Phase 30-R: the poster image the source shows for this video. */
+  readonly poster: ParsedImage | null;
 }
 
 export interface ParsedWork extends ParsedCommon {
@@ -560,6 +739,8 @@ export interface ParsedWork extends ParsedCommon {
     readonly pageCount: string | null;
     readonly readableAssetUrl: string | null;
     readonly downloadAssetUrl: string | null;
+    /** Phase 30-R: the cover image the source shows. */
+    readonly cover: ParsedImage | null;
   };
 }
 
@@ -574,12 +755,39 @@ export interface ParsedMagazineIssue extends ParsedCommon {
   readonly volume: string | null;
   readonly issueNumber: string | null;
   readonly magazineUrl: string;
+  /** Phase 30-R: the cover image the source shows. */
+  readonly cover: ParsedImage | null;
 }
 
 export interface ParsedEditorial extends ParsedCommon {
-  readonly kind: 'editorial.news' | 'editorial.article';
+  readonly kind: StagedEditorialKind;
   readonly excerptHtml: string | null;
   readonly bodyHtml: string;
+  /** Phase 30-R: the lead image the source presents with the record. */
+  readonly leadImage: ParsedImage | null;
+}
+
+export interface ParsedPage extends ParsedCommon {
+  readonly kind: 'editorial.page';
+  /** The shell route the committed catalogue maps this source page to. */
+  readonly binding: string;
+  readonly excerptHtml: string | null;
+  readonly bodyHtml: string;
+  readonly leadImage: ParsedImage | null;
+}
+
+export interface ParsedPerson extends ParsedCommon {
+  readonly kind: 'people.person';
+  /** The person's name exactly as the source writes it. */
+  readonly name: string;
+  readonly biographyHtml: string;
+  readonly portrait: ParsedImage | null;
+}
+
+export interface ParsedCountry extends ParsedCommon {
+  readonly kind: 'global.country';
+  /** The ISO 3166-1 alpha-2 code from the adapter's fixed table, or null. */
+  readonly code: string | null;
 }
 
 export interface ParsedFatwa extends ParsedCommon {
@@ -603,5 +811,8 @@ export type ParsedRecord =
   | ParsedMagazine
   | ParsedMagazineIssue
   | ParsedEditorial
+  | ParsedPage
+  | ParsedPerson
+  | ParsedCountry
   | ParsedFatwa
   | ParsedQuranTranslation;

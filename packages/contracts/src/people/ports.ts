@@ -3,10 +3,12 @@ import type { ContributorCapabilities } from '../identity/capabilities.ts';
 import type {
   PersonDetail,
   PersonPage,
+  PersonPortrait,
   PersonSitemapEntry,
   PersonStatus,
   ProfileKind,
   ProfileStatus,
+  PublicPersonCardPage,
   PublicPersonProfile,
   PublicTeacherEntry,
 } from './values.ts';
@@ -114,6 +116,24 @@ export interface PeopleReaderPort {
    * render.
    */
   publicPersonExists(slug: string): Promise<boolean>;
+
+  /**
+   * Phase 30-R. One bounded page of PUBLISHED contributors as public cards,
+   * in slug order (unique, so a page boundary neither repeats nor skips). The
+   * visibility predicate is in the query, as for the profile.
+   */
+  listPublicPeople(input: {
+    readonly locale: Locale;
+    readonly offset: number;
+    readonly limit: number;
+  }): Promise<PublicPersonCardPage>;
+
+  /**
+   * Phase 30-R. Whether `assetId` is the portrait of a PUBLISHED Person
+   * `personId` — the whole of People's business decision for its portrait
+   * route. Both predicates are in the query.
+   */
+  isPublicPortrait(personId: string, assetId: string): Promise<boolean>;
 
   /**
    * Every publicly indexable Person URL, bounded, for the sitemap.
@@ -314,6 +334,19 @@ export interface PeoplePersistencePort {
     input: PeopleActorInput & {
       readonly personId: string;
       readonly status: PersonStatus;
+    },
+  ): Promise<PersonDetail>;
+
+  /**
+   * Phase 30-R. Records, replaces or clears a Person's portrait, audited with
+   * the asset identifiers before and after. Whether the asset is a servable
+   * still image is the service's question, asked of Storage first; the
+   * database's foreign key and CHECK hold the reference and its box together.
+   */
+  setPersonPortrait(
+    input: PeopleActorInput & {
+      readonly personId: string;
+      readonly portrait: PersonPortrait | null;
     },
   ): Promise<PersonDetail>;
 

@@ -2,8 +2,11 @@ import 'server-only';
 
 import {
   createEditorialPersistence,
+  createGlobalPersistence,
   createLibraryPersistence,
   createMediaPersistence,
+  createPeoplePersistence,
+  createPeopleReader,
   createPersonalHoldings,
 } from '@minhaj/database';
 import type { LibraryReferencesPort } from '@minhaj/contracts/library';
@@ -17,6 +20,7 @@ import type {
   MigrationActor,
   MigrationContentKind,
   MigrationPublicationTargetPort,
+  PublishableAsset,
   StagedVideoPayload,
   TargetPublication,
 } from '@minhaj/contracts/migration';
@@ -24,6 +28,8 @@ import type {
 export { routeMigrationTargets } from './migration-target-router.ts';
 
 import { createEditorialService } from '../contexts/editorial/index.ts';
+import { createGlobalService } from '../contexts/global-network/index.ts';
+import { createPeopleService } from '../contexts/people-contributors/index.ts';
 import { createLibraryService } from '../contexts/library/index.ts';
 import { createMediaService, mediaFailure } from '../contexts/media/index.ts';
 import { createHoldingService } from '../contexts/personalisation-notifications/index.ts';
@@ -31,6 +37,9 @@ import {
   editorialTargetOver,
   migrationEditorialReferences,
 } from './migration-editorial-targets.ts';
+import { globalCountryTargetOver } from './migration-global-targets.ts';
+import { peoplePersonTargetOver } from './migration-people-targets.ts';
+import { storageRuntime } from './storage.ts';
 import {
   libraryMagazineIssueTargetOver,
   libraryMagazineTargetOver,
@@ -39,6 +48,7 @@ import {
 import {
   ADOPTION_PAGES,
   askerOf,
+  clearedImage,
   publishing,
   refusal,
   withdrawalRefusal,
@@ -96,7 +106,12 @@ const canonicalPath = (slug: string) => `/watch/videos/${slug}`;
 const ask = askerOf(mediaFailure);
 
 /** The staged payload as Media's own `videoInputSchema` input. */
-function videoInput(payload: StagedVideoPayload, topicIds: readonly string[]) {
+function videoInput(
+  payload: StagedVideoPayload,
+  topicIds: readonly string[],
+  assets: readonly PublishableAsset[],
+) {
+  const poster = clearedImage(payload.poster, assets);
   return {
     slug: payload.slug,
     primaryLocale: payload.primaryLocale,
@@ -121,11 +136,48 @@ function videoInput(payload: StagedVideoPayload, topicIds: readonly string[]) {
     seriesPosition: null,
     speakerIds: [],
     topicIds: [...topicIds],
+    poster:
+      poster === null
+        ? null
+        : { assetId: poster.assetId, width: poster.width, height: poster.height },
+  };
+}
+
+/**
+ * Phase 30-R. A newer revision of the same legacy video over the Video Media
+ * holds: the source's words, date, duration and language from the payload,
+ * the poster when one is now rights-cleared — and everything a person may have
+ * curated since (featuring, series, speakers, topics, captions, transcript)
+ * exactly as Media holds it. The Video stays published.
+ */
+function refreshedInput(
+  video: VideoRecord,
+  payload: StagedVideoPayload,
+  assets: readonly PublishableAsset[],
+) {
+  const poster = clearedImage(payload.poster, assets);
+  const { poster: _held, ...held } = currentInput(video, 'published');
+  return {
+    ...held,
+    languageCode: payload.languageCode,
+    labels: payload.labels.map((label) => ({
+      locale: label.locale,
+      title: label.title,
+      description: label.description,
+    })),
+    durationSeconds: payload.durationSeconds,
+    publishedOn: payload.publishedOn,
+    // Omitted keeps the poster Media holds; a cleared one replaces it.
+    ...(poster === null
+      ? {}
+      : {
+          poster: { assetId: poster.assetId, width: poster.width, height: poster.height },
+        }),
   };
 }
 
 /** A Video exactly as Media holds it, as input, in the lifecycle state given. */
-function currentInput(video: VideoRecord, state: 'archived') {
+function currentInput(video: VideoRecord, state: 'published' | 'archived') {
   return {
     slug: video.slug,
     primaryLocale: video.primaryLocale,
@@ -150,6 +202,7 @@ function currentInput(video: VideoRecord, state: 'archived') {
     seriesPosition: video.series?.position ?? null,
     speakerIds: [...video.speakerIds],
     topicIds: [...video.topicIds],
+    poster: video.poster,
   };
 }
 
@@ -207,13 +260,13 @@ export function mediaVideoTargetOver(deps: {
   return {
     supports,
 
-    async publish({ kind, payload, topicIds, actor, resumed }) {
+    async publish({ kind, payload, topicIds, assets, actor, resumed }) {
       if (!supports(kind) || payload.kind !== 'media.video')
         return refusal('unsupported-kind');
       const mediaActor = asMedia(actor);
       return publishing(async () => {
         const saved = await ask(() =>
-          media.saveVideo(mediaActor, null, null, videoInput(payload, topicIds)),
+          media.saveVideo(mediaActor, null, null, videoInput(payload, topicIds, assets)),
         );
         if (saved.ok)
           return {
@@ -230,6 +283,40 @@ export function mediaVideoTargetOver(deps: {
         if (saved.reason === 'duplicate-video' || saved.reason === 'duplicate-slug')
           return resumed ? await adopt(mediaActor, payload) : refusal('target-exists');
         return refusal(saved.reason);
+      });
+    },
+
+    async refresh({ kind, target, payload, assets, actor }) {
+      if (!supports(kind) || payload.kind !== 'media.video' || target.kind !== kind)
+        return refusal('unsupported-kind');
+      const mediaActor = asMedia(actor);
+      return publishing(async () => {
+        const found = await ask(() => media.video(mediaActor, target.id));
+        if (!found.ok) return refusal(found.reason);
+        const video = found.value;
+        if (video === null) return refusal('not-found');
+        if (video.state !== 'published') return refusal('target-not-published');
+        if (
+          video.provider !== payload.provider ||
+          video.providerVideoId !== payload.providerVideoId
+        )
+          return refusal('target-conflict');
+        const saved = await ask(() =>
+          media.saveVideo(
+            mediaActor,
+            video.id,
+            video.version,
+            refreshedInput(video, payload, assets),
+          ),
+        );
+        if (!saved.ok) return refusal(saved.reason);
+        return {
+          status: 'published',
+          target: { kind: 'media.video', id: saved.value.id },
+          stage: 'public',
+          version: saved.value.version,
+          canonicalPath: canonicalPath(saved.value.slug),
+        };
       });
     },
 
@@ -281,6 +368,13 @@ export function mediaVideoTargetOver(deps: {
  *   library.magazine-issue  Library      `saveScholarly('magazine-issue')`
  *   editorial.news          Editorial    `create('news-article')` + `submit`
  *   editorial.article       Editorial    `create('article')` + `submit`
+ *   editorial.press-release Editorial    `create('press-release')` + `submit`
+ *   editorial.page          Editorial    `create('page', binding)` + `submit`
+ *   people.person           People       `createPerson` + translation + portrait
+ *   global.country          Global       `saveCountry`
+ *
+ * Every target also REFRESHES (Phase 30-R): a newer approved revision of a
+ * record it already made, through the same domain's own update.
  *
  * The review-only kinds (Fatwa, Quran) have no target here, by design. The
  * caller hands the list to `routeMigrationTargets`, which refuses a kind two
@@ -293,15 +387,22 @@ export function createMigrationTargets(deps: {
   readonly references: MediaReferencesPort & LibraryReferencesPort;
 }): readonly MigrationPublicationTargetPort[] {
   const holdings = createHoldingService({ holdings: createPersonalHoldings() });
+  // Storage's one narrow answer, asked before a cover, poster or portrait is
+  // recorded: is this asset a servable still image right now (Phase 30-R).
+  const images = {
+    servableImages: async (ids: readonly string[]) =>
+      (await storageRuntime()).servableImages(ids),
+  };
   const library = createLibraryService({
     persistence: createLibraryPersistence(),
     authority: deps.authority,
     references: deps.references,
+    images,
   });
   const editorial = createEditorialService({
     persistence: createEditorialPersistence(),
     authority: deps.authority,
-    references: migrationEditorialReferences(deps.references),
+    references: migrationEditorialReferences(deps.references, storageRuntime),
     // Only the scheduled-publication sweep reports through this, and the
     // targets never run it.
     reportFailure: () => undefined,
@@ -312,6 +413,7 @@ export function createMigrationTargets(deps: {
         persistence: createMediaPersistence(),
         authority: deps.authority,
         references: deps.references,
+        images,
       }),
       holdings,
     }),
@@ -320,5 +422,27 @@ export function createMigrationTargets(deps: {
     libraryMagazineIssueTargetOver({ library }),
     editorialTargetOver({ kind: 'editorial.news', editorial, holdings }),
     editorialTargetOver({ kind: 'editorial.article', editorial, holdings }),
+    editorialTargetOver({ kind: 'editorial.press-release', editorial, holdings }),
+    editorialTargetOver({ kind: 'editorial.page', editorial, holdings }),
+    peoplePersonTargetOver({
+      people: createPeopleService({
+        reader: createPeopleReader(),
+        people: createPeoplePersistence(),
+        // A migrated profile is never linked to an account: Identity's
+        // contributor answers are never asked on this path.
+        accounts: {
+          capabilities: () => Promise.reject(new Error('not used by migration')),
+          closedAccounts: () => Promise.reject(new Error('not used by migration')),
+        },
+        images,
+      }),
+      authority: deps.authority,
+    }),
+    globalCountryTargetOver({
+      global: createGlobalService({
+        persistence: createGlobalPersistence(),
+        authority: deps.authority,
+      }),
+    }),
   ];
 }

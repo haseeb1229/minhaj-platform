@@ -2,7 +2,11 @@ import 'server-only';
 import { cache } from 'react';
 import { getTranslations } from 'next-intl/server';
 import type { Locale } from '@minhaj/contracts';
-import { pagePath, type PublicEditorial } from '@minhaj/contracts/editorial';
+import {
+  leadImagePath,
+  pagePath,
+  type PublicEditorial,
+} from '@minhaj/contracts/editorial';
 import {
   editorialReadRuntime,
   editorialPublicReferences,
@@ -18,6 +22,7 @@ import {
 } from '@/components/ui';
 import { RecordSection } from './frame';
 import { translationFor } from './presentation';
+import { LeadFigure } from './lead-image';
 import { absoluteUrl } from '@/config/origin';
 import {
   contentMetadata,
@@ -71,10 +76,14 @@ export async function PublicContent({
   const contentLocales = record.translations.map((row) => row.languageCode);
   const direction = translation.languageCode === 'en' ? 'ltr' : 'rtl';
   // A date-only fact in the interface locale, never shifted by the reader's zone.
+  // An Article's date is its CHRONOLOGY (Phase 30-R): its source's own
+  // publication date where it states one — never the day it was migrated.
+  const dated = record.chronologyAt ?? record.publishedAt;
   const published = new Intl.DateTimeFormat(locale, {
     dateStyle: 'long',
     timeZone: 'UTC',
-  }).format(record.publishedAt);
+  }).format(dated);
+  const image = record.leadImage ?? null;
   const credits = record.contributors.flatMap((credit) => {
     const person = references.people.find((row) => row.id === credit.personId);
     return person === undefined ? [] : [{ credit, person }];
@@ -105,7 +114,7 @@ export async function PublicContent({
                   {t('articles')}
                 </span>
               ) : null,
-              <time key="date" dateTime={record.publishedAt.toISOString()}>
+              <time key="date" dateTime={dated.toISOString().slice(0, 10)}>
                 {news('published')} {published}
               </time>,
             ]}
@@ -130,6 +139,17 @@ export async function PublicContent({
             ) : null}
           </div>
         </header>
+
+        {image === null ? null : (
+          <LeadFigure
+            image={image}
+            alt={translation.leadAlt ?? ''}
+            lang={translation.languageCode}
+            caption={
+              image.credit === null ? null : t('leadCredit', { credit: image.credit })
+            }
+          />
+        )}
 
         <div
           className={
@@ -213,7 +233,10 @@ export async function PublicContent({
                     headline: translation.title,
                     inLanguage: translation.languageCode,
                     url: absoluteUrl('/' + translation.languageCode + path),
-                    datePublished: record.publishedAt.toISOString(),
+                    ...(image === null
+                      ? {}
+                      : { image: absoluteUrl(leadImagePath(image)) }),
+                    datePublished: dated.toISOString(),
                     dateModified: record.updatedAt.toISOString(),
                   },
                 ],

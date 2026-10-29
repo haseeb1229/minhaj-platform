@@ -61,6 +61,14 @@ export function createMediaService(deps: {
   readonly persistence: MediaPersistencePort;
   readonly authority: MediaAuthorityPort;
   readonly references: MediaReferencesPort;
+  /**
+   * Phase 30-R. Storage's servable-still-image answer, asked before a Video's
+   * poster is recorded. A service built without it refuses every poster
+   * rather than recording one unchecked: absence fails closed.
+   */
+  readonly images?: {
+    servableImages(assetIds: readonly string[]): Promise<ReadonlySet<string>>;
+  };
 }) {
   const store = deps.persistence;
 
@@ -78,6 +86,13 @@ export function createMediaService(deps: {
   }
 
   const offset = (value: number) => z.number().int().min(0).max(25_000).parse(value);
+
+  /** No poster needs no answer; a poster needs Storage's yes, and no port is a no. */
+  async function usablePoster(assetId: string | null): Promise<boolean> {
+    if (assetId === null) return true;
+    if (deps.images === undefined) return false;
+    return (await deps.images.servableImages([assetId])).has(assetId);
+  }
 
   return {
     async videos(actor: MediaActor, raw: unknown = {}) {
@@ -106,6 +121,7 @@ export function createMediaService(deps: {
         value.seriesId === null
           ? Promise.resolve(true)
           : store.series(value.seriesId).then((series) => series !== null),
+        usablePoster(value.poster?.assetId ?? null),
       ]);
       if (checks.includes(false)) throw new MediaRefusal('invalid');
       return store.saveVideo({ actorId: actor.accountId, id, expectedVersion, value });

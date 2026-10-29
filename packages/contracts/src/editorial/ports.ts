@@ -1,6 +1,7 @@
 import type {
   ArticleDetail,
   PublicEditorialSummary,
+  PublicPageSummary,
   EditorialScheduleCandidate,
   PageDetail,
   EditorialDirectory,
@@ -20,6 +21,7 @@ import type {
   PublicEvent,
   PublicCollection,
 } from './values.ts';
+import type { EditorialLeadFamily } from './lead.ts';
 import type { NewsArchivePeriod, NewsKind, NewsPage, NewsTimelineQuery } from './news.ts';
 import type { EventListQuery, EventPage } from './event.ts';
 import type {
@@ -57,6 +59,11 @@ export interface EditorialPublicReaderPort {
     offset: number,
     limit: number,
   ): Promise<readonly PublicEditorialSummary[]>;
+  /**
+   * Phase 30-R. The published Pages bound to Explore routes, as cards, in
+   * binding order, bounded — for the Explore landings and the home page.
+   */
+  publishedExplorePages(limit: number): Promise<readonly PublicPageSummary[]>;
   publicArticle(slug: string): Promise<PublicArticle | null>;
   publicPage(routeBinding: string, slug: string): Promise<PublicPage | null>;
   publishedArticles(
@@ -191,6 +198,17 @@ export interface EditorialPublicReaderPort {
     text: string | null,
     limit: number,
   ): Promise<readonly CollectionMemberTarget[]>;
+
+  /**
+   * PHASE 30-R — is this record PUBLISHED, and does its published revision name
+   * exactly this asset as its lead image? The whole of Editorial's public
+   * serving decision; Storage makes the technical half on its own.
+   */
+  publishedLeadImage(
+    family: EditorialLeadFamily,
+    recordId: string,
+    assetId: string,
+  ): Promise<boolean>;
 }
 
 /** What Search may know about one published Article or Page. */
@@ -199,6 +217,8 @@ export interface EditorialSearchRecord {
   /** The record's `version`, which every editorial mutation moves. */
   readonly stamp: string;
   readonly publishedAt: Date;
+  /** Phase 30-R, dated families: the reader-facing date (source date, else publishedAt). */
+  readonly chronologyAt?: Date;
   readonly topicIds: readonly string[];
   readonly translations: readonly {
     readonly languageCode: string;
@@ -303,6 +323,17 @@ export interface EditorialPersistencePort {
     expectedVersion: number,
     reason: 'authority-revoked' | 'execution-failed',
   ): Promise<void>;
+
+  /**
+   * PHASE 30-R — does this record's CURRENT revision, in whatever state, name
+   * exactly this asset as its lead image? The administrative preview's fact, so
+   * a reviewer sees the image before approving it.
+   */
+  currentLeadImage(
+    family: EditorialLeadFamily,
+    recordId: string,
+    assetId: string,
+  ): Promise<boolean>;
 }
 export interface EditorialAuthorityPort {
   permits(accountId: string, permission: string): Promise<boolean>;
@@ -331,6 +362,13 @@ export interface EditorialReferencesPort {
    * no author learns of another owner's drafts.
    */
   selectableMembers(members: readonly CollectionMember[]): Promise<boolean>;
+  /**
+   * PHASE 30-R — may this stored asset become a record's lead image? Storage's
+   * answer at Layer 4: a servable still image (a clean JPEG or PNG whose bytes
+   * are present). Editorial never reads Storage's tables, and the answer says
+   * nothing about visibility — the serving route decides that per request.
+   */
+  usableImage(assetId: string): Promise<boolean>;
 }
 export interface CorrespondencePersistencePort {
   submitContact(input: {

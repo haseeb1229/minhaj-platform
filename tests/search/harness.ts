@@ -110,6 +110,7 @@ export async function buildSearchHarness(admin: SqlSession) {
       selectableGallery: (id) => database.createMediaReferences().gallerySelectable(id),
       // Collections are not searchable (Phase 15): this harness writes none.
       selectableMembers: async () => false,
+      usableImage: async () => false,
     },
   });
 

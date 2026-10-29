@@ -36,5 +36,15 @@ export function createMediaAssetRelations(): MediaAssetRelationPort {
         ? null
         : { state: row.state as MediaState, assetId: row.assetId };
     },
+
+    async videoPoster(videoId) {
+      const row = await db.video.findUnique({
+        where: { id: videoId },
+        select: { state: true, posterAssetId: true },
+      });
+      return row === null
+        ? null
+        : { state: row.state as MediaState, assetId: row.posterAssetId };
+    },
   };
 }

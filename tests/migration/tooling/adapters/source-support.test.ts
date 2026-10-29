@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { loadHtml } from '../../../../scripts/migration/adapters/html-source.ts';
 import {
   checkSelection,
+  copyrightNotice,
   escapeHtmlText,
+  firstPartyImage,
   fixedItemDiscovery,
   hasJsonLdType,
   jsonLdObjects,
@@ -236,5 +238,94 @@ describe('reading', () => {
       ),
     ).toBe('en');
     expect(statedLanguage(loadHtml('<html lang="ur"><p>x</p></html>'))).toBeNull();
+  });
+});
+
+/* ---------------------------------------------- first-party images (30-R) */
+
+describe('first-party images (Phase 30-R)', () => {
+  const PAGE = 'https://www.synthetic-source.example/english/tid/1/';
+  const HOSTS = ['www.synthetic-source.example', 'images.synthetic-source.example'];
+  const NOTICE = 'Minhaj-ul-Quran International. 2026';
+  const withNotice = loadHtml(
+    `<html><head><meta name="copyright" content="${NOTICE}"></head><body></body></html>`,
+  );
+  const silent = loadHtml('<html><body><p>No notice here.</p></body></html>');
+  const image = (src: string | undefined, $ = withNotice, alt?: string) =>
+    firstPartyImage($, { src, alt, pageUrl: PAGE, hosts: HOSTS });
+
+  it('reads the organisation notice from its copyright meta, else its footer line', () => {
+    expect(copyrightNotice(withNotice)).toBe(NOTICE);
+    expect(
+      copyrightNotice(
+        loadHtml(
+          '<html><body><footer><p>Copyrights © 2026 Minhaj-ul-Quran International. All rights reserved</p></footer></body></html>',
+        ),
+      ),
+    ).toBe('Copyrights © 2026 Minhaj-ul-Quran International');
+    expect(
+      copyrightNotice(
+        loadHtml(
+          '<html><body><footer>© 2001–2026 Minhaj-ul-Quran International. All rights reserved.</footer></body></html>',
+        ),
+      ),
+    ).toBe('© 2001–2026 Minhaj-ul-Quran International');
+    // Another holder's notice is not the organisation's evidence.
+    expect(
+      copyrightNotice(
+        loadHtml(
+          '<html><head><meta name="copyright" content="Synthetic Agency"></head></html>',
+        ),
+      ),
+    ).toBeNull();
+    expect(copyrightNotice(silent)).toBeNull();
+  });
+
+  it('takes a JPEG or PNG on an allowed host, resolved against the page', () => {
+    expect(image('/images/a.JPG', withNotice, '  A  picture ')).toEqual({
+      image: {
+        url: 'https://www.synthetic-source.example/images/a.JPG',
+        alt: 'A picture',
+        credit: null,
+      },
+      asset: {
+        url: 'https://www.synthetic-source.example/images/a.JPG',
+        licence: 'organisation-owned',
+        licenceEvidence: `The official page presents this image as part of the record, served by www.synthetic-source.example; the page states "${NOTICE}".`,
+        rightsHolder: 'Minhaj-ul-Quran International',
+      },
+    });
+    expect(image('https://images.synthetic-source.example/p/b.png')?.image.url).toBe(
+      'https://images.synthetic-source.example/p/b.png',
+    );
+    expect(image('https://images.synthetic-source.example/p/c.jpeg')).not.toBeNull();
+  });
+
+  it('records rights as UNKNOWN when the page states no notice: never public by default', () => {
+    expect(image('/images/a.jpg', silent)?.asset).toEqual({
+      url: 'https://www.synthetic-source.example/images/a.jpg',
+      licence: 'unknown',
+      licenceEvidence: null,
+      rightsHolder: null,
+    });
+  });
+
+  it('refuses every other host, scheme, credential and image type', () => {
+    for (const src of [
+      undefined,
+      '',
+      'https://synthetic-source.example/images/a.jpg',
+      'https://evil.example/images/a.jpg',
+      'https://images.synthetic-source.example.evil.example/a.jpg',
+      'http://www.synthetic-source.example/images/a.jpg',
+      'https://user:secret@www.synthetic-source.example/a.jpg',
+      'https://www.synthetic-source.example/images/a.webp',
+      'https://www.synthetic-source.example/images/a.gif',
+      'https://www.synthetic-source.example/images/a.svg',
+      'https://www.synthetic-source.example/images/a.jpg.php',
+      'data:image/png;base64,AAAA',
+      'javascript:alert(1)',
+    ])
+      expect(image(src)).toBeNull();
   });
 });

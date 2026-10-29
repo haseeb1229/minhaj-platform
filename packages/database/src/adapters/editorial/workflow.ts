@@ -137,6 +137,22 @@ export function transitionUpdate(
 }
 
 /**
+ * PHASE 30-R — the reader-facing date a PUBLICATION records on a dated family's
+ * root (Article, NewsArticle, PressRelease): the published revision's own
+ * source date when it states one, else the first publication instant this
+ * update keeps. Nothing for any other transition, so archiving or revising
+ * leaves the chronology a published record already had — exactly as they leave
+ * `publishedAt`, whose presence the database ties it to.
+ */
+export function chronologyUpdate(
+  update: WorkflowUpdate,
+  sourcePublishedOn: Date | null | undefined,
+): { chronologyAt?: Date } {
+  if (update.state !== 'published' || update.publishedAt === undefined) return {};
+  return { chronologyAt: sourcePublishedOn ?? update.publishedAt };
+}
+
+/**
  * What saving a new revision does to the workflow: back to draft, the published
  * representation withdrawn, approval cleared, and any schedule cancelled — so
  * newly edited content can never ride an old approval into publication.

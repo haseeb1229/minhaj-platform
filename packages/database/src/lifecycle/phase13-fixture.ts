@@ -6,6 +6,12 @@ import { randomUUID } from 'node:crypto';
 import type { SqlSession } from './sql-connection.ts';
 
 /**
+ * The News families that carry a reader-facing chronology (Phase 30-R): a
+ * published one records it with its first publication, as the workflow does.
+ */
+const CHRONOLOGICAL: ReadonlySet<string> = new Set(['NewsArticle', 'PressRelease']);
+
+/**
  * POPULATED PHASE-13 STATE for the recovery rehearsals.
  *
  * WHAT THE RECOVERY FIXTURE PROVES THAT A SCHEMA CHECK DOES NOT. That Editorial's
@@ -212,7 +218,7 @@ export async function writePhase13Fixture(
       references,
     );
     await sql.query(
-      `UPDATE [dbo].[${family}] SET [approvedRevision]=2,[approvedById]=N'${reviewerId}',[state]=N'published',[publishedAt]='2033-06-15T08:00:00',[version]=3 WHERE [id]=N'${id}';
+      `UPDATE [dbo].[${family}] SET [approvedRevision]=2,[approvedById]=N'${reviewerId}',[state]=N'published',[publishedAt]='2033-06-15T08:00:00'${CHRONOLOGICAL.has(family) ? `,[chronologyAt]='2033-06-15T08:00:00'` : ''},[version]=3 WHERE [id]=N'${id}';
        INSERT INTO [dbo].[SearchIndexRequest] ([scopeKind],[scopeId]) VALUES (N'${PHASE13_KIND[family]}',N'${id}');`,
     );
   }
@@ -232,7 +238,7 @@ export async function writePhase13Fixture(
     null,
   );
   await sql.query(
-    `UPDATE [dbo].[NewsArticle] SET [approvedRevision]=1,[approvedById]=N'${reviewerId}',[state]=N'archived',[publishedAt]='2033-06-16T08:00:00',[version]=2 WHERE [id]=N'${fixture.archivedId}';`,
+    `UPDATE [dbo].[NewsArticle] SET [approvedRevision]=1,[approvedById]=N'${reviewerId}',[state]=N'archived',[publishedAt]='2033-06-16T08:00:00',[chronologyAt]='2033-06-16T08:00:00',[version]=2 WHERE [id]=N'${fixture.archivedId}';`,
   );
 
   // A press release scheduled for later, the schedule bound to its revision.

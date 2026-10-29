@@ -25,7 +25,9 @@ import {
   TextLink,
   TopicChips,
 } from '@/components/ui';
+import { CoverImage, editionCoverPath } from '@/components/library/cover';
 import { RecordFrame, RecordSection } from '@/components/library/frame';
+import { absoluteUrl } from '@/config/origin';
 import {
   assetPath,
   bibliography,
@@ -189,6 +191,17 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
     return topic === undefined ? [] : [{ id: topicId, name: topic.name }];
   });
 
+  // The cover shown is the selected Edition's, else the Work's card cover
+  // (Phase 30-R). Its path names the Edition that holds it.
+  const shownCover =
+    selected !== null && selected.cover !== null
+      ? { ...selected.cover, editionId: selected.id }
+      : record.cover;
+  const coverSrc =
+    shownCover === null
+      ? null
+      : editionCoverPath(shownCover.editionId, shownCover.assetId);
+
   return (
     <RecordFrame
       breadcrumbLabel={shell('nav.breadcrumbs')}
@@ -237,6 +250,17 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
       notice={t('metadataNotice')}
       aside={
         <>
+          {shownCover === null || coverSrc === null ? null : (
+            <div className="mx-auto w-48 max-w-full lg:mx-0 lg:w-full">
+              <CoverImage
+                path={coverSrc}
+                cover={shownCover}
+                alt={t('coverAlt', { title: label.title })}
+                priority
+              />
+            </div>
+          )}
+
           <PersonalControls locale={locale} target={{ kind: 'work', id: record.id }} />
 
           <Contributors work={record} people={references.people} locale={locale} t={t} />
@@ -288,6 +312,7 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
         edition={selected}
         label={label}
         people={references.people}
+        imagePath={coverSrc}
       />
     </RecordFrame>
   );
@@ -688,8 +713,9 @@ function SalePoints({
  * DELIVERY_PLAN.md Phase 8 names the condition exactly: "`Book` structured data
  * only where genuine ISBN and author exist". Both must be real, on the Edition
  * being presented and on the Work respectively. Nothing here is fabricated — no
- * ISBN, no author, no publisher, no date, no image, no Organization, no
- * translation, no rating and no price. If either fact is missing the element is
+ * ISBN, no author, no publisher, no date, no Organization, no translation, no
+ * rating and no price; an `image` only when the Edition's own cover is
+ * recorded, at Library's own address (Phase 30-R). If either fact is missing the element is
  * omitted, because "omitting structured data is correct and harmless; emitting a
  * wrong claim is not" (ROUTE_MAP.md §9.6).
  *
@@ -702,11 +728,13 @@ function BookStructuredData({
   edition,
   label,
   people,
+  imagePath,
 }: {
   readonly record: WorkDetail;
   readonly edition: EditionRecord | null;
   readonly label: { locale: Locale; title: string };
   readonly people: NameMap;
+  readonly imagePath: string | null;
 }) {
   if (!isContentIndexable({ contentLocales: labelLocales(record) })) return null;
   if (!canClaimBook(record, edition) || edition === null) return null;
@@ -733,6 +761,7 @@ function BookStructuredData({
           inLanguage: edition.languageCode,
           isbn: edition.isbn,
           author: authors.map((name) => ({ '@type': 'Person', name })),
+          ...(imagePath === null ? {} : { image: absoluteUrl(imagePath) }),
         }),
       }}
     />

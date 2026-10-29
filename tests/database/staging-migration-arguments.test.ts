@@ -100,6 +100,25 @@ describe('toolArguments', () => {
     ).toThrow(/--items has a malformed value/u);
   });
 
+  it('lets a run replay retained evidence, and only a run', () => {
+    expect(
+      toolArguments('run', [...RUN, '--operator', BETTER_AUTH_ID, '--replay']),
+    ).toEqual([...RUN, '--operator', BETTER_AUTH_ID, '--replay']);
+    // A flag takes no value, and is never given twice.
+    expect(() =>
+      toolArguments('run', [
+        ...RUN,
+        '--operator',
+        BETTER_AUTH_ID,
+        '--replay',
+        '--replay',
+      ]),
+    ).toThrow(/twice/);
+    expect(() =>
+      toolArguments('register', [...REGISTER, '--operator', BETTER_AUTH_ID, '--replay']),
+    ).toThrow(/not an argument of register/);
+  });
+
   it('knows only its two modes', () => {
     expect(isMigrationRunMode('register')).toBe(true);
     expect(isMigrationRunMode('run')).toBe(true);

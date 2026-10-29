@@ -364,6 +364,7 @@ live('Phase 14 Events against real SQL Server', () => {
         // This suite writes Events alone; Collection members are proved in
         // `collections.integration.test.ts`.
         selectableMembers: async () => false,
+        usableImage: async () => false,
       },
     });
     global = createGlobalService({

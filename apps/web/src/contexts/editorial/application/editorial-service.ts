@@ -7,6 +7,8 @@ import {
   editorialIdSchema,
   editorialKindSchema,
   editorialStateSchema,
+  hasLeadImage,
+  hasSourceDate,
   isNewsKind,
   workflowCommandSchema,
   validPageBinding,
@@ -26,6 +28,7 @@ import {
   type RevisionDirectory,
   type SafeEditorialContent,
   type CollectionMember,
+  type EditorialLeadImage,
 } from '@minhaj/contracts/editorial';
 import {
   assertTransition,
@@ -56,13 +59,27 @@ interface KindOperations {
  */
 const DUE_PER_KIND = 25;
 
-/** References a re-save may keep although their owner would no longer offer them. */
+/**
+ * What a re-save may keep: references their owner would no longer offer, and
+ * (Phase 30-R) the lead image, its alt text per language and the source date
+ * that an input which does not mention them leaves as they are.
+ */
 interface Kept {
   readonly centreId: string | null;
   readonly galleryIds: readonly string[];
   readonly members: readonly CollectionMember[];
+  readonly leadImage: EditorialLeadImage | null;
+  readonly leadAlt: Readonly<Record<string, string>>;
+  readonly sourcePublishedOn: string | null;
 }
-const NOTHING_KEPT: Kept = Object.freeze({ centreId: null, galleryIds: [], members: [] });
+const NOTHING_KEPT: Kept = Object.freeze({
+  centreId: null,
+  galleryIds: [],
+  members: [],
+  leadImage: null,
+  leadAlt: {},
+  sourcePublishedOn: null,
+});
 
 export function createEditorialService(dependencies: {
   persistence: EditorialPersistencePort;
@@ -169,6 +186,26 @@ export function createEditorialService(dependencies: {
     }
     const content = result.data;
     const centreId = content.centreId ?? null;
+    // OMITTED KEEPS, NULL CLEARS (Phase 30-R): the lead image and the source
+    // date the input does not mention are the current revision's.
+    const leadImage = hasLeadImage(kind)
+      ? content.leadImage === undefined
+        ? kept.leadImage
+        : content.leadImage
+      : undefined;
+    const sourcePublishedOn = hasSourceDate(kind)
+      ? content.sourcePublishedOn === undefined
+        ? kept.sourcePublishedOn
+        : content.sourcePublishedOn
+      : undefined;
+    // A NEW image must be one Storage would serve as a still image now; the one
+    // the current revision already names is kept whatever Storage says today.
+    const newImage =
+      leadImage !== undefined &&
+      leadImage !== null &&
+      leadImage.assetId !== kept.leadImage?.assetId
+        ? leadImage.assetId
+        : null;
     const newGalleries = (content.galleryIds ?? []).filter(
       (id) => !kept.galleryIds.includes(id),
     );
@@ -187,12 +224,25 @@ export function createEditorialService(dependencies: {
       newMembers.length === 0
         ? Promise.resolve(true)
         : references.selectableMembers(newMembers),
+      newImage === null ? Promise.resolve(true) : references.usableImage(newImage),
     ]);
     if (valid.some((value) => !value)) throw new EditorialRefusal('invalid');
     return {
       ...content,
+      ...(leadImage === undefined ? {} : { leadImage }),
+      ...(sourcePublishedOn === undefined ? {} : { sourcePublishedOn }),
       translations: content.translations.map((entry) => ({
         ...entry,
+        // A lead family's alt text: the input's, else the kept one, and none
+        // at all once there is no image to describe.
+        ...(leadImage === undefined
+          ? {}
+          : {
+              leadAlt:
+                leadImage === null
+                  ? ''
+                  : (entry.leadAlt ?? kept.leadAlt[entry.languageCode] ?? ''),
+            }),
         ...renderEditorialDocument(entry.document),
       })),
     };
@@ -203,12 +253,32 @@ export function createEditorialService(dependencies: {
       const record = await store.collection(id);
       return { ...NOTHING_KEPT, members: record?.revision.members ?? [] };
     }
-    if (kind !== 'news-article' && kind !== 'event') return NOTHING_KEPT;
-    const record = kind === 'event' ? await store.event(id) : await store.news(kind, id);
+    if (kind === 'event') {
+      const record = await store.event(id);
+      return {
+        ...NOTHING_KEPT,
+        centreId: record?.revision.centreId ?? null,
+        galleryIds: record?.revision.galleryIds ?? [],
+      };
+    }
+    if (!hasLeadImage(kind)) return NOTHING_KEPT;
+    const record =
+      kind === 'article'
+        ? await store.article(id)
+        : kind === 'page'
+          ? await store.page(id)
+          : isNewsKind(kind)
+            ? await store.news(kind, id)
+            : null;
+    const revision = record?.revision;
     return {
-      centreId: record?.revision.centreId ?? null,
-      galleryIds: record?.revision.galleryIds ?? [],
-      members: [],
+      ...NOTHING_KEPT,
+      centreId: revision?.centreId ?? null,
+      leadImage: revision?.leadImage ?? null,
+      leadAlt: Object.fromEntries(
+        (revision?.translations ?? []).map((t) => [t.languageCode, t.leadAlt ?? '']),
+      ),
+      sourcePublishedOn: revision?.sourcePublishedOn ?? null,
     };
   }
   async function detail(kind: EditorialKind, id: string) {

@@ -7,7 +7,7 @@ import type {
 import type { AssetAuthorizationPort } from '@minhaj/contracts/platform';
 import { createLibraryPublicReader } from '@minhaj/database';
 
-import { createLibraryAssetPolicy } from '@/contexts/library';
+import { createLibraryAssetPolicy, createLibraryCoverPolicy } from '@/contexts/library';
 
 /**
  * The PUBLIC Library serving policy — Phase 8 as the first real consumer of the
@@ -53,4 +53,13 @@ function relations(): LibraryPublicReaderPort {
  */
 export function libraryAssetPolicy(request: LibraryAssetRequest): AssetAuthorizationPort {
   return createLibraryAssetPolicy({ reader: relations(), request });
+}
+
+/** Phase 30-R: the decision for one public request for an Edition's or an issue's cover. */
+export function libraryCoverPolicy(request: {
+  readonly owner: 'edition' | 'issue';
+  readonly ownerId: string;
+  readonly assetId: string;
+}): AssetAuthorizationPort {
+  return createLibraryCoverPolicy({ reader: relations(), request });
 }

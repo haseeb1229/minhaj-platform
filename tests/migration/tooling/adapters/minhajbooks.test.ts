@@ -80,7 +80,7 @@ function bookPage(options: BookOptions = {}): string {
 }
 
 function adapter(selection = SELECTION, listingPath = LISTING) {
-  return createMinhajBooksWorkAdapter({ listing: listingPath, selection });
+  return createMinhajBooksWorkAdapter({ listings: [listingPath], selection });
 }
 
 function parseBook(html: string, url = bookKey(101, 'Synthetic-Book')) {
@@ -91,9 +91,9 @@ describe('identity and construction', () => {
   it('declares what it is', () => {
     expect(adapter()).toMatchObject({
       adapterKey: MINHAJ_BOOKS_ADAPTER_KEY,
-      adapterVersion: '1',
+      adapterVersion: '2',
       parserKey: 'cheerio-minhajbooks-work',
-      parserVersion: '1',
+      parserVersion: '2',
       contentKind: 'library.work',
       accessMethod: 'http',
     });
@@ -103,7 +103,7 @@ describe('identity and construction', () => {
     const make =
       (baseUrl: string, listingPath = LISTING, selection = SELECTION) =>
       () =>
-        createMinhajBooksWorkAdapter({ baseUrl, listing: listingPath, selection });
+        createMinhajBooksWorkAdapter({ baseUrl, listings: [listingPath], selection });
     expect(make('https://minhajbooks.com/')).toThrow();
     expect(make('http://www.minhajbooks.com/')).toThrow();
     expect(make('https://www.minhajbooks.com/english/')).toThrow();
@@ -116,6 +116,12 @@ describe('identity and construction', () => {
       make('https://www.minhajbooks.com/', LISTING, { pages: 1, limit: 1.5 }),
     ).toThrow();
     expect(make('https://www.minhajbooks.com/')).not.toThrow();
+    // Several listings, but never none and never one twice.
+    const listings = (paths: readonly string[]) => () =>
+      createMinhajBooksWorkAdapter({ listings: paths, selection: SELECTION });
+    expect(listings([])).toThrow();
+    expect(listings([LISTING, LISTING])).toThrow();
+    expect(listings([LISTING, '/english/cat/Other/'])).not.toThrow();
   });
 });
 
@@ -165,9 +171,9 @@ describe('discovery', () => {
           legacyIdentifier: 'book-102',
         },
       ],
-      next: '2:2',
+      next: '0~2:2',
     });
-    const second = await discovery.discover('2:2', site.fetcher);
+    const second = await discovery.discover('0~2:2', site.fetcher);
     expect(second).toMatchObject({ kind: 'page', next: null });
     if (second.kind !== 'page') throw new Error('expected a page');
     // Page 2 still links to page 3, but the selection is two pages.
@@ -193,8 +199,8 @@ describe('discovery', () => {
     const site = twoPageSite();
     const discovery = adapter({ pages: 5, limit: 3 });
     const first = await discovery.discover(null, site.fetcher);
-    expect(first).toMatchObject({ kind: 'page', next: '2:2' });
-    const second = await discovery.discover('2:2', site.fetcher);
+    expect(first).toMatchObject({ kind: 'page', next: '0~2:2' });
+    const second = await discovery.discover('0~2:2', site.fetcher);
     if (second.kind !== 'page') throw new Error('expected a page');
     expect(second.items.map((item) => item.legacyIdentifier)).toEqual(['book-104']);
     expect(second.next).toBeNull();
@@ -217,17 +223,17 @@ describe('discovery', () => {
 
   it('resumes from a cursor without refetching earlier pages, and validates it', async () => {
     const site = twoPageSite();
-    const result = await adapter().discover('2:2', site.fetcher);
+    const result = await adapter().discover('0~2:2', site.fetcher);
     expect(result.kind).toBe('page');
     expect(site.requested).not.toContain(`${SITE}${LISTING}`);
-    await expect(adapter().discover('1:0', site.fetcher)).rejects.toThrow('cursor');
+    await expect(adapter().discover('0~1:0', site.fetcher)).rejects.toThrow('cursor');
     await expect(adapter().discover('2', site.fetcher)).rejects.toThrow('cursor');
-    await expect(adapter().discover('x:1', site.fetcher)).rejects.toThrow('cursor');
+    await expect(adapter().discover('0~x:1', site.fetcher)).rejects.toThrow('cursor');
     // A cursor past a narrowed selection is one discovery could not have
     // issued: refused, without fetching.
     const narrowed = twoPageSite();
     await expect(
-      adapter({ pages: 1, limit: 25 }).discover('2:2', narrowed.fetcher),
+      adapter({ pages: 1, limit: 25 }).discover('0~2:2', narrowed.fetcher),
     ).rejects.toThrow('cursor');
     expect(narrowed.requested).toEqual([]);
   });
@@ -372,7 +378,16 @@ describe('parse', () => {
         legacyIdentifier: 'book-101',
         categories: [{ key: 'Synthetic-Category', label: 'Synthetic Category' }],
         links: ['/english/book/Synthetic-Book/read/img/btid/7/'],
-        assets: [],
+        // The book's own cover picture on this host; no notice on the page,
+        // so its rights are unknown — never public until a person decides.
+        assets: [
+          {
+            url: `${SITE}/images-books/thumbnails600/Synthetic_101.jpg`,
+            licence: 'unknown',
+            licenceEvidence: null,
+            rightsHolder: null,
+          },
+        ],
         descriptionHtml: `<div class="dir-rtl"><p>Synthetic introduction <b>words</b>.</p>
 <ul><li>Synthetic point</li></ul></div>`,
         edition: {
@@ -383,9 +398,43 @@ describe('parse', () => {
           pageCount: '264',
           readableAssetUrl: null,
           downloadAssetUrl: null,
+          // An empty alt gives way to the book's own title.
+          cover: {
+            url: `${SITE}/images-books/thumbnails600/Synthetic_101.jpg`,
+            alt: 'Synthetic Book Title',
+            credit: null,
+          },
         },
       },
     });
+  });
+
+  it('prefers the og:image cover and records the page notice as evidence', () => {
+    const html = bookPage()
+      .replace(
+        '<title>',
+        `<meta property="og:image:url" content="${SITE}/images-books/thumbnails600/Synthetic-Og_101.jpg"><title>`,
+      )
+      .replace(
+        '</body>',
+        '<footer><p>Copyrights © 2026 Minhaj-ul-Quran International. All rights reserved</p></footer></body>',
+      );
+    const result = parseBook(html);
+    if (result.kind !== 'parsed' || result.record.kind !== 'library.work')
+      throw new Error('expected a work');
+    expect(result.record.edition.cover?.url).toBe(
+      `${SITE}/images-books/thumbnails600/Synthetic-Og_101.jpg`,
+    );
+    expect(result.record.assets).toEqual([
+      {
+        url: `${SITE}/images-books/thumbnails600/Synthetic-Og_101.jpg`,
+        licence: 'organisation-owned',
+        licenceEvidence: expect.stringContaining(
+          'Copyrights © 2026 Minhaj-ul-Quran International',
+        ),
+        rightsHolder: 'Minhaj-ul-Quran International',
+      },
+    ]);
   });
 
   it('never carries the sale-point, sponsor, buy, PayPal or price chrome', () => {
@@ -501,5 +550,44 @@ describe('parse', () => {
         finalUrl: key,
       }),
     ).toEqual({ kind: 'failed', detail: 'invalid-utf8' });
+  });
+});
+
+describe('several listings (Phase 30-R)', () => {
+  const SECOND = '/english/cat/Second-Category/';
+  function site() {
+    return fakeSite({
+      [`${SITE}/robots.txt`]: textFile('User-agent: *\nAllow: /\n'),
+      [`${SITE}${LISTING}`]: htmlPage(
+        listing([card('/english/book/101/Synthetic-Book-One/')]),
+      ),
+      [`${SITE}${SECOND}`]: htmlPage(
+        listing([
+          card('/english/book/201/Synthetic-Second/'),
+          // A book both categories list stays one record: its key is the same.
+          card('/english/book/101/Synthetic-Book-One/'),
+        ]),
+      ),
+    });
+  }
+
+  it('walks each listing in the catalogue order, the selection applying to each', async () => {
+    const source = site();
+    const discovery = createMinhajBooksWorkAdapter({
+      listings: [LISTING, SECOND],
+      selection: { pages: 1, limit: 25 },
+    });
+    const first = await discovery.discover(null, source.fetcher);
+    expect(first).toMatchObject({ kind: 'page', next: '1~' });
+    if (first.kind !== 'page') throw new Error('expected a page');
+    expect(first.items.map((item) => item.legacyIdentifier)).toEqual(['book-101']);
+    const second = await discovery.discover('1~', source.fetcher);
+    expect(second).toMatchObject({ kind: 'page', next: null });
+    if (second.kind !== 'page') throw new Error('expected a page');
+    expect(second.items.map((item) => item.externalKey)).toEqual([
+      bookKey(201, 'Synthetic-Second'),
+      bookKey(101, 'Synthetic-Book-One'),
+    ]);
+    await expect(discovery.discover('2~', source.fetcher)).rejects.toThrow('cursor');
   });
 });

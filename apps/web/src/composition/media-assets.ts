@@ -9,7 +9,11 @@ import type {
 import type { AssetAuthorizationPort } from '@minhaj/contracts/platform';
 import { createMediaAssetRelations } from '@minhaj/database';
 
-import { createAudioAssetPolicy, createPhotoAssetPolicy } from '@/contexts/media';
+import {
+  createAudioAssetPolicy,
+  createPhotoAssetPolicy,
+  createVideoPosterPolicy,
+} from '@/contexts/media';
 import { storageRuntime } from './storage';
 
 /**
@@ -108,4 +112,12 @@ export async function servablePhotos(
       photo.assetId !== null && servable.has(photo.assetId) ? [photo.id] : [],
     ),
   );
+}
+
+/** Phase 30-R: the decision for one public request for a Video's first-party poster. */
+export function videoPosterPolicy(request: {
+  readonly videoId: string;
+  readonly assetId: string;
+}): AssetAuthorizationPort {
+  return createVideoPosterPolicy({ relations: relationReader(), request });
 }

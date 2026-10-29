@@ -436,3 +436,40 @@ export function writtenDateOf(text: string | undefined): string | null {
   }
   return null;
 }
+
+/**
+ * Phase 30-R. SEVERAL LISTINGS WALKED IN TURN — a source whose representative
+ * slice spans more than one listing (a library's categories). Each listing is
+ * its own bounded walk; the cursor is `{listing}~{that walk's cursor}`, so a
+ * resumed run continues exactly where it stopped and the listings are always
+ * walked in the same order. An item two listings name is one record: the run
+ * records an external key once.
+ */
+export function sequenceDiscovery(
+  walks: readonly MigrationSourceAdapter['discover'][],
+): MigrationSourceAdapter['discover'] {
+  if (walks.length === 0 || walks.length > 100)
+    throw new Error('between one and one hundred listings');
+  return async (cursor: string | null, fetcher: MigrationFetchPort) => {
+    let index = 0;
+    let inner: string | null = null;
+    if (cursor !== null) {
+      const match = /^([0-9]{1,3})~(.*)$/.exec(cursor);
+      if (match === null) throw new Error('invalid discovery cursor');
+      index = Number(match[1]);
+      inner = match[2] === undefined || match[2] === '' ? null : match[2];
+      if (index >= walks.length) throw new Error('invalid discovery cursor');
+    }
+    const walk = walks[index];
+    if (walk === undefined) throw new Error('invalid discovery cursor');
+    const page = await walk(inner, fetcher);
+    if (page.kind !== 'page') return page;
+    const next =
+      page.next !== null
+        ? `${String(index)}~${page.next}`
+        : index + 1 < walks.length
+          ? `${String(index + 1)}~`
+          : null;
+    return { kind: 'page', items: page.items, next } as const;
+  };
+}

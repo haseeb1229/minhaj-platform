@@ -7,13 +7,16 @@ import type {
   PeopleReaderPort,
   PersonDetail,
   PersonPage,
+  PersonPortrait,
   PersonSitemapEntry,
   PersonStatus,
   ProfileKind,
   ProfileStatus,
+  PublicPersonCardPage,
   PublicPersonProfile,
   PublicTeacherEntry,
 } from '@minhaj/contracts/people';
+import { personPortraitSchema } from '@minhaj/contracts/people';
 
 /**
  * People & Contributors — THE application service.
@@ -73,6 +76,11 @@ export type PeopleFailure =
   /** A contributor keeps the translation for their primary language. */
   | 'primary-translation-required'
   | 'too-many-languages'
+  /**
+   * Phase 30-R. The portrait is malformed, or its asset is not a servable
+   * still image — a PDF, a quarantined file or an asset that does not exist.
+   */
+  | 'portrait-unusable'
   | 'unavailable';
 
 export interface PeopleError {
@@ -158,6 +166,7 @@ const AUDIT = {
   personTranslated: 'people.person.translated',
   personTranslationRemoved: 'people.person.translation-removed',
   personStatusChanged: 'people.person.status-changed',
+  personPortraitChanged: 'people.person.portrait-changed',
   nameVariantAdded: 'people.person.name-variant-added',
   nameVariantRemoved: 'people.person.name-variant-removed',
   accountLinked: 'people.person.account-linked',
@@ -181,6 +190,9 @@ const CLOSURE_SOURCE = 'account-closure';
 
 /** How many contributors one administrative page shows. */
 const PERSON_PAGE = 25;
+
+/** Phase 30-R: the most public contributor cards one read returns. */
+const PUBLIC_CARD_PAGE = 24;
 
 /**
  * How many links one reconciliation pass examines.
@@ -251,6 +263,24 @@ export function createPeopleReadService({
       return reader.publicPersonExists(slug);
     },
 
+    /**
+     * Phase 30-R — published contributors as public cards (leadership and the
+     * home page), bounded and in slug order. Like the profile, it reads no
+     * session and takes no actor.
+     */
+    async publicPeople(input: {
+      readonly locale: Locale;
+      readonly offset?: number;
+      readonly limit?: number;
+    }): Promise<PublicPersonCardPage> {
+      const limit = Math.min(
+        Math.max(Math.trunc(input.limit ?? PUBLIC_CARD_PAGE), 1),
+        PUBLIC_CARD_PAGE,
+      );
+      const offset = Math.max(Math.trunc(input.offset ?? 0), 0);
+      return reader.listPublicPeople({ locale: input.locale, offset, limit });
+    },
+
     /** Every publicly indexable contributor URL, bounded, for the sitemap. */
     async sitemapEntries(
       limit: number,
@@ -281,12 +311,24 @@ export interface PeopleServiceDependencies {
   readonly people: PeoplePersistencePort;
   /** Identity's narrow projection. The ONE dependency edge this context has. */
   readonly accounts: ContributorAccountPort;
+  /**
+   * Phase 30-R. Storage's narrow answer about which assets are servable still
+   * images — infrastructure, not a context — asked before a portrait is
+   * recorded. Nothing else of Storage is reachable from here.
+   */
+  readonly images: PeopleImagesPort;
+}
+
+/** The one Storage question People asks (Phase 30-R). */
+export interface PeopleImagesPort {
+  servableImages(assetIds: readonly string[]): Promise<ReadonlySet<string>>;
 }
 
 export function createPeopleService({
   reader,
   people,
   accounts,
+  images,
 }: PeopleServiceDependencies) {
   function actorInput(actor: PeopleActor, auditAction: string) {
     return {
@@ -441,6 +483,39 @@ export function createPeopleService({
         const person = await people.setPersonStatus({
           ...input,
           ...actorInput(actor, AUDIT.personStatusChanged),
+        });
+        return { ok: true, person };
+      } catch (error) {
+        return fail(classify(error));
+      }
+    },
+
+    /**
+     * Phase 30-R — records, replaces or clears a contributor's PORTRAIT.
+     *
+     * The value is re-validated here whatever the caller already checked, and
+     * the asset must be a servable still image right now: a PDF or a file
+     * still in quarantine can never become a face on a public profile. The
+     * portrait is shown only while the Person is published, by People's own
+     * byte route.
+     */
+    async setPortrait(
+      actor: PeopleActor,
+      input: { readonly personId: string; readonly portrait: PersonPortrait | null },
+    ): Promise<PeopleResult<{ person: PersonDetail }>> {
+      const parsed = personPortraitSchema.nullable().safeParse(input.portrait);
+      if (!parsed.success) return fail('portrait-unusable');
+      const portrait = parsed.data;
+      try {
+        if (
+          portrait !== null &&
+          !(await images.servableImages([portrait.assetId])).has(portrait.assetId)
+        )
+          return fail('portrait-unusable');
+        const person = await people.setPersonPortrait({
+          personId: input.personId,
+          portrait,
+          ...actorInput(actor, AUDIT.personPortraitChanged),
         });
         return { ok: true, person };
       } catch (error) {

@@ -7,9 +7,14 @@ import {
 } from '@minhaj/contracts/migration';
 
 import { cleanText, decodeHtml, innerSource, loadHtml } from './html-source.ts';
-import { createListingDiscovery, pageNumbersOf } from './markup-support.ts';
+import {
+  createListingDiscovery,
+  pageNumbersOf,
+  sequenceDiscovery,
+} from './markup-support.ts';
 import {
   checkSelection,
+  firstPartyImage,
   nonEmpty,
   pathOf,
   retrieveOnce,
@@ -104,8 +109,11 @@ const BOOK_PAGE_PATTERN = /^\/(?:english|urdu)\/book\/([1-9][0-9]{0,6})\/[^/]+\/
 export interface MinhajBooksWorkAdapterOptions {
   /** The site root; `https://www.minhajbooks.com/` only. */
   readonly baseUrl?: string;
-  /** One listing path, e.g. `/english/cat/The-Hadith/`. */
-  readonly listing: string;
+  /**
+   * The listing paths walked in turn, e.g. `/english/cat/The-Hadith/` —
+   * the selection's pages and limit apply to EACH (Phase 30-R).
+   */
+  readonly listings: readonly string[];
   readonly selection: SourceSelection;
 }
 
@@ -116,54 +124,62 @@ export function createMinhajBooksWorkAdapter(
     options.baseUrl ?? MINHAJ_BOOKS_DEFAULT_BASE_URL,
     MINHAJ_BOOKS_HOST,
   );
-  if (!LISTING_PATTERN.test(options.listing))
+  if (
+    options.listings.length === 0 ||
+    new Set(options.listings).size !== options.listings.length ||
+    !options.listings.every((listing) => LISTING_PATTERN.test(listing))
+  )
     throw new Error(
-      'the listing must be an /english/ listing path such as /english/cat/{Slug}/',
+      'each listing must be a distinct /english/ listing path such as /english/cat/{Slug}/',
     );
   checkSelection(options.selection);
-  const { listing, selection } = options;
+  const { selection } = options;
 
   /**
    * The shared listing walk (`markup-support.ts`): book cards of the
    * `div.lib-related-products` grid; pagination is the "Next" link alone,
    * which — when followed — must name this listing's page n+1.
    */
-  const discover = createListingDiscovery({
-    base,
-    selection,
-    listingUrl: (page) =>
-      new URL(page === 1 ? listing : `${listing}page/${page}/`, base).toString(),
-    readListing($, finalUrl) {
-      const grid = $('div.lib-related-products');
-      if (grid.length !== 1) return null;
-      const hrefs: string[] = [];
-      grid.find('.best-seller-pro a[href]').each((_index, anchor) => {
-        hrefs.push($(anchor).attr('href') ?? '');
-      });
-      const nextHref = $('ul.pagination a[aria-label="Next"][href]').first().attr('href');
-      if (nextHref === undefined) return { hrefs, pageLinks: [] };
-      const pageLinks = pageNumbersOf([nextHref], finalUrl, base, listing);
-      // A Next link that names no page of this listing cannot be walked.
-      if (pageLinks.length !== 1) return null;
-      return { hrefs, pageLinks, nextOnly: true };
-    },
-    itemOf(target): DiscoveredItem | null {
-      const match = BOOK_LINK_PATTERN.exec(target.pathname);
-      if (match === null || target.search !== '') return null;
-      const externalKey = canonicalSourceUrl(target);
-      return {
-        externalKey,
-        originalUrl: externalKey,
-        legacyIdentifier: `book-${match[1] ?? ''}`,
-      };
-    },
-  });
+  const walk = (listing: string) =>
+    createListingDiscovery({
+      base,
+      selection,
+      listingUrl: (page) =>
+        new URL(page === 1 ? listing : `${listing}page/${page}/`, base).toString(),
+      readListing($, finalUrl) {
+        const grid = $('div.lib-related-products');
+        if (grid.length !== 1) return null;
+        const hrefs: string[] = [];
+        grid.find('.best-seller-pro a[href]').each((_index, anchor) => {
+          hrefs.push($(anchor).attr('href') ?? '');
+        });
+        const nextHref = $('ul.pagination a[aria-label="Next"][href]')
+          .first()
+          .attr('href');
+        if (nextHref === undefined) return { hrefs, pageLinks: [] };
+        const pageLinks = pageNumbersOf([nextHref], finalUrl, base, listing);
+        // A Next link that names no page of this listing cannot be walked.
+        if (pageLinks.length !== 1) return null;
+        return { hrefs, pageLinks, nextOnly: true };
+      },
+      itemOf(target): DiscoveredItem | null {
+        const match = BOOK_LINK_PATTERN.exec(target.pathname);
+        if (match === null || target.search !== '') return null;
+        const externalKey = canonicalSourceUrl(target);
+        return {
+          externalKey,
+          originalUrl: externalKey,
+          legacyIdentifier: `book-${match[1] ?? ''}`,
+        };
+      },
+    });
+  const discover = sequenceDiscovery(options.listings.map(walk));
 
   return {
     adapterKey: MINHAJ_BOOKS_ADAPTER_KEY,
-    adapterVersion: '1',
+    adapterVersion: '2',
     parserKey: 'cheerio-minhajbooks-work',
-    parserVersion: '1',
+    parserVersion: '2',
     contentKind: 'library.work',
     accessMethod: 'http',
 
@@ -255,6 +271,19 @@ export function createMinhajBooksWorkAdapter(
         });
       });
 
+      // The edition's cover: the book's own picture in the detail block, the
+      // one its `og:image` names (Phase 30-R).
+      const coverImg = detail
+        .find('img[src*="/images-books/"]')
+        .filter((_index, element) => !($(element).attr('src') ?? '').includes('/images/'))
+        .first();
+      const cover = firstPartyImage($, {
+        src: $('meta[property="og:image:url"]').attr('content') ?? coverImg.attr('src'),
+        alt: nonEmpty(coverImg.attr('alt')) ?? title,
+        pageUrl: evidence.finalUrl,
+        hosts: [MINHAJ_BOOKS_HOST],
+      });
+
       const record: ParsedWork = {
         kind: 'library.work',
         title,
@@ -264,7 +293,7 @@ export function createMinhajBooksWorkAdapter(
         legacyIdentifier: `book-${pageId}`,
         categories,
         links,
-        assets: [],
+        assets: cover === null ? [] : [cover.asset],
         descriptionHtml,
         edition: {
           label: field('binding') ?? languageText,
@@ -274,6 +303,7 @@ export function createMinhajBooksWorkAdapter(
           pageCount: field('pages'),
           readableAssetUrl: null,
           downloadAssetUrl: null,
+          cover: cover?.image ?? null,
         },
       };
       return { kind: 'parsed', record };

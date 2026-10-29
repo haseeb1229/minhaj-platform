@@ -46,6 +46,17 @@ export function routeMigrationTargets(
       return target.publish(input);
     },
 
+    async refresh(input) {
+      const target = owner.get(input.kind);
+      if (
+        target === undefined ||
+        input.payload.kind !== input.kind ||
+        input.target.kind !== input.kind
+      )
+        return { status: 'refused', reason: 'unsupported-kind' };
+      return target.refresh(input);
+    },
+
     async inspect(input) {
       const target = owner.get(input.target.kind);
       return target === undefined ? null : target.inspect(input);

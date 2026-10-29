@@ -9,6 +9,7 @@ import type {
   PeopleReaderPort,
   PersonDetail,
   PersonLabel,
+  PersonPortrait,
   PersonStatus,
   PersonView,
   ProfileDetail,
@@ -23,6 +24,7 @@ import {
   MAX_NAME_VARIANTS_PER_LOCALE,
   MAX_PROFILE_LANGUAGES,
   PROFILE_KINDS,
+  personCardExcerpt,
   normaliseNameVariant,
 } from '@minhaj/contracts/people';
 import type { Prisma } from '@prisma/client';
@@ -211,6 +213,10 @@ interface PersonRow {
   readonly primaryLocale: string;
   readonly status: string;
   readonly updatedAt: Date;
+  readonly portraitAssetId: string | null;
+  readonly portraitWidth: number | null;
+  readonly portraitHeight: number | null;
+  readonly portraitCredit: string | null;
   readonly translations: readonly {
     readonly locale: string;
     readonly name: string;
@@ -410,6 +416,22 @@ function profileDetails(
     }));
 }
 
+/** The portrait as a value, or null — the CHECK keeps the four columns together. */
+function portraitOf(row: PersonRow): PersonPortrait | null {
+  if (
+    row.portraitAssetId === null ||
+    row.portraitWidth === null ||
+    row.portraitHeight === null
+  )
+    return null;
+  return {
+    assetId: row.portraitAssetId,
+    width: row.portraitWidth,
+    height: row.portraitHeight,
+    credit: row.portraitCredit,
+  };
+}
+
 function toPersonView(row: PersonRow, locale: Locale): PersonView {
   return {
     id: row.id,
@@ -423,6 +445,7 @@ function toPersonView(row: PersonRow, locale: Locale): PersonView {
     // should not go.
     linked: row.userId !== null,
     profileKinds: kindsOf(row),
+    portrait: portraitOf(row),
     updatedAt: row.updatedAt,
   };
 }
@@ -500,6 +523,7 @@ function toPublicProfile(row: PersonRow, locale: Locale): PublicPersonProfile {
     facets,
     contentLocales: row.translations.map((entry) => entry.locale as Locale),
     primaryLocale: row.primaryLocale as Locale,
+    portrait: portraitOf(row),
     updatedAt: row.updatedAt,
   };
 }
@@ -667,6 +691,40 @@ export function createPeopleReader(): PeopleReaderPort {
       });
       if (row === null) return null;
       return toPublicProfile(row, locale);
+    },
+
+    async listPublicPeople({ locale, offset, limit }) {
+      const cap = boundedLimit(limit);
+      // Published only, in the query; slug order is total, so pages are exact.
+      const rows = await prisma.person.findMany({
+        where: { status: 'published' },
+        include: PERSON_INCLUDE,
+        orderBy: { slug: 'asc' },
+        take: cap + 1,
+        skip: boundedOffset(offset),
+      });
+      return {
+        items: rows.slice(0, cap).map((row) => {
+          const label = labelFor(row, locale);
+          return {
+            id: row.id,
+            slug: row.slug,
+            name: label.name,
+            excerpt: personCardExcerpt(label.biography),
+            resolvedLocale: label.resolvedLocale,
+            portrait: portraitOf(row),
+          };
+        }),
+        more: rows.length > cap,
+      };
+    },
+
+    async isPublicPortrait(personId, assetId) {
+      const row = await prisma.person.findFirst({
+        where: { id: personId, status: 'published', portraitAssetId: assetId },
+        select: { id: true },
+      });
+      return row !== null;
     },
 
     async publicPersonExists(slug) {
@@ -1070,6 +1128,40 @@ export function createPeoplePersistence(): PeoplePersistencePort {
             after: { status: input.status },
           });
 
+          return detailOf(tx, input.personId, LOCALE_FOR_WRITE_RESULT);
+        });
+      } catch (error) {
+        rethrow(error);
+      }
+    },
+
+    async setPersonPortrait(input) {
+      try {
+        return await prisma.$transaction(async (tx) => {
+          await requirePerson(tx, input.personId);
+          const before = await tx.person.findUnique({
+            where: { id: input.personId },
+            select: { portraitAssetId: true },
+          });
+          const now = new Date();
+          const portrait = input.portrait;
+          await tx.person.update({
+            where: { id: input.personId },
+            data: {
+              portraitAssetId: portrait?.assetId ?? null,
+              portraitWidth: portrait?.width ?? null,
+              portraitHeight: portrait?.height ?? null,
+              portraitCredit: portrait?.credit ?? null,
+              updatedAt: now,
+            },
+          });
+          await requestSearchIndexing(tx, 'person', input.personId);
+          await recordAudit(tx, input, {
+            targetType: 'person',
+            targetId: input.personId,
+            before: { portraitAssetId: before?.portraitAssetId ?? '' },
+            after: { portraitAssetId: portrait?.assetId ?? '' },
+          });
           return detailOf(tx, input.personId, LOCALE_FOR_WRITE_RESULT);
         });
       } catch (error) {

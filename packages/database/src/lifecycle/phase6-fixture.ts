@@ -62,7 +62,7 @@ export async function writePhase6Fixture(
         UPDATE [${table}] SET [slug]=N'recovery-${id}-${revision}',[currentRevision]=${revision},[version]=${revision} WHERE [id]=N'${id}';`);
     }
     await sql.query(
-      `UPDATE [${table}] SET [state]=N'${table === 'Article' ? 'published' : 'scheduled'}',[approvedRevision]=2,[approvedById]=N'${reviewerId}',[scheduledRevision]=2,[scheduledById]=N'${reviewerId}',[scheduledAt]='2099-01-01T00:00:00',[scheduledTimezone]=N'Asia/Karachi',[scheduleStatus]=N'${table === 'Article' ? 'completed' : 'pending'}',[publishedAt]=${table === 'Article' ? 'SYSUTCDATETIME()' : 'NULL'} WHERE [id]=N'${id}';`,
+      `UPDATE [${table}] SET [state]=N'${table === 'Article' ? 'published' : 'scheduled'}',[approvedRevision]=2,[approvedById]=N'${reviewerId}',[scheduledRevision]=2,[scheduledById]=N'${reviewerId}',[scheduledAt]='2099-01-01T00:00:00',[scheduledTimezone]=N'Asia/Karachi',[scheduleStatus]=N'${table === 'Article' ? 'completed' : 'pending'}',[publishedAt]=${table === 'Article' ? 'SYSUTCDATETIME()' : 'NULL'}${table === 'Article' ? ',[chronologyAt]=SYSUTCDATETIME()' : ''} WHERE [id]=N'${id}';`,
     );
   }
   await sql.query(`INSERT INTO [ContactInquiry] ([id],[name],[email],[subject],[body],[state],[version],[note],[updatedAt],[retainUntil]) VALUES (N'${f.contactId}',N'Synthetic correspondence',N'recovery@proof.invalid',N'Synthetic contact',N'Private synthetic recovery body',N'triaged',2,N'Private synthetic operator note',SYSUTCDATETIME(),'2099-01-01');

@@ -31,6 +31,7 @@ import { libraryFailure, type createLibraryService } from '../contexts/library/i
 import {
   ADOPTION_PAGES,
   askerOf,
+  clearedImage,
   publishing,
   refusal,
   sameLabels,
@@ -198,6 +199,40 @@ function editionInput(
     readableAssetId: readable?.assetId ?? null,
     downloadAssetId: download?.assetId ?? null,
     document: null,
+    cover: coverOf(payload.edition.cover, assets),
+  };
+}
+
+/**
+ * Phase 30-R. A cover as Library records it: the public copy of the
+ * rights-cleared acquisition of exactly the staged image's URL, or null.
+ */
+function coverOf(
+  image: StagedWorkPayload['edition']['cover'],
+  assets: readonly PublishableAsset[],
+) {
+  const cleared = clearedImage(image, assets);
+  return cleared === null
+    ? null
+    : { assetId: cleared.assetId, width: cleared.width, height: cleared.height };
+}
+
+/** An Edition exactly as Library holds it, as input — every field it carries. */
+function heldEditionInput(edition: EditionRecord) {
+  return {
+    workId: edition.workId,
+    label: edition.label,
+    languageCode: edition.languageCode,
+    state: edition.state,
+    publisher: edition.publisher,
+    publicationYear: edition.publicationYear,
+    isbn: edition.isbn,
+    pageCount: edition.pageCount,
+    reading: edition.reading,
+    download: edition.download,
+    readableAssetId: edition.readableAssetId,
+    downloadAssetId: edition.downloadAssetId,
+    document: edition.document,
   };
 }
 
@@ -300,6 +335,38 @@ export function libraryWorkTargetOver(deps: {
         if (created.reason !== 'duplicate-slug') return refusal(created.reason);
         // Adoption is for an interrupted publication of THIS entry only.
         return resumed ? adopt(libraryActor, payload, edition) : refusal('target-exists');
+      });
+    },
+
+    /**
+     * Phase 30-R. A newer revision of the same book page: its cover, once
+     * rights-cleared, recorded on the Work's ONE Edition with every other value
+     * as Library holds it. A Work a person has curated into several Editions is
+     * left for a person.
+     */
+    async refresh({ kind, target, payload, assets, actor }) {
+      if (!supports(kind) || payload.kind !== 'library.work' || target.kind !== kind)
+        return refusal('unsupported-kind');
+      const libraryActor = asLibrary(actor);
+      return publishing(async () => {
+        const read = await ask(() => library.work(libraryActor, target.id));
+        if (!read.ok) return refusal(read.reason);
+        const work = read.value;
+        if (work === null) return refusal('not-found');
+        if (work.state !== 'published') return refusal('target-not-published');
+        const [made, ...more] = work.editions;
+        if (made === undefined || more.length > 0) return refusal('target-curated');
+        const cover = coverOf(payload.edition.cover, assets);
+        if (cover === null || made.cover?.assetId === cover.assetId)
+          return workPublished(work);
+        const saved = await ask(() =>
+          library.saveEdition(libraryActor, made.id, made.version, {
+            ...heldEditionInput(made),
+            cover,
+          }),
+        );
+        if (!saved.ok) return refusal(saved.reason);
+        return workPublished(work);
       });
     },
 
@@ -457,6 +524,25 @@ export function libraryMagazineTargetOver(deps: {
 
   return {
     supports,
+
+    /**
+     * Phase 30-R. A magazine's payload carries nothing a refresh changes (its
+     * covers are its issues'), so a published Magazine is answered as it is.
+     */
+    async refresh({ kind, target, payload, actor }) {
+      if (!supports(kind) || payload.kind !== 'library.magazine' || target.kind !== kind)
+        return refusal('unsupported-kind');
+      return publishing(async () => {
+        const read = await ask(() =>
+          library.scholarlyRecord(asLibrary(actor), 'magazine', target.id),
+        );
+        if (!read.ok) return refusal(read.reason);
+        const record = read.value;
+        if (record === null) return refusal('not-found');
+        if (record.state !== 'published') return refusal('target-not-published');
+        return magazinePublished(record);
+      });
+    },
 
     async publish({ kind, payload, topicIds, actor, resumed }) {
       if (!supports(kind) || payload.kind !== 'library.magazine')
@@ -679,7 +765,7 @@ export function libraryMagazineIssueTargetOver(deps: {
   return {
     supports,
 
-    async publish({ kind, payload, topicIds, resolve, actor, resumed }) {
+    async publish({ kind, payload, topicIds, assets, resolve, actor, resumed }) {
       if (!supports(kind) || payload.kind !== 'library.magazine-issue')
         return refusal('unsupported-kind');
       const libraryActor = asLibrary(actor);
@@ -722,6 +808,7 @@ export function libraryMagazineIssueTargetOver(deps: {
             volume,
             issueNumber,
             document,
+            cover: coverOf(payload.cover, assets),
           }),
         );
         // The path names the Magazine's CURRENT slug, as Library just read it.
@@ -731,6 +818,53 @@ export function libraryMagazineIssueTargetOver(deps: {
         return resumed
           ? adopt(libraryActor, payload, magazine, { volume, issueNumber })
           : refusal('target-exists');
+      });
+    },
+
+    /**
+     * Phase 30-R. A newer revision of the same issue page: its cover, once
+     * rights-cleared, with every other value exactly as Library holds it.
+     */
+    async refresh({ kind, target, payload, assets, actor }) {
+      if (
+        !supports(kind) ||
+        payload.kind !== 'library.magazine-issue' ||
+        target.kind !== kind
+      )
+        return refusal('unsupported-kind');
+      const libraryActor = asLibrary(actor);
+      return publishing(async () => {
+        const read = await ask(() =>
+          library.scholarlyRecord(libraryActor, 'magazine-issue', target.id),
+        );
+        if (!read.ok) return refusal(read.reason);
+        const record = read.value;
+        if (record === null) return refusal('not-found');
+        if (record.state !== 'published') return refusal('target-not-published');
+        const cover = coverOf(payload.cover, assets);
+        if (cover === null || record.cover?.assetId === cover.assetId)
+          return issuePublished(record, record.magazine.slug);
+        const saved = await ask(() =>
+          library.saveScholarly(
+            libraryActor,
+            'magazine-issue',
+            record.id,
+            record.version,
+            {
+              ...heldDescribed(record, 'published'),
+              languageCode: record.languageCode,
+              publicationYear: record.publicationYear,
+              publishedOn: record.publishedOn,
+              magazineId: record.magazineId,
+              volume: record.volume,
+              issueNumber: record.issueNumber,
+              document: record.document,
+              cover,
+            },
+          ),
+        );
+        if (!saved.ok) return refusal(saved.reason);
+        return issuePublished(saved.value, record.magazine.slug);
       });
     },
 

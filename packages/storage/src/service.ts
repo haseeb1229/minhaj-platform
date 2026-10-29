@@ -360,6 +360,27 @@ export function createStorageService(
       return new Set(present.filter((id): id is string => id !== null));
     },
 
+    async servableImages(assetIds) {
+      const unique = [...new Set(assetIds)];
+      if (unique.length === 0) return new Set<string>();
+      if (unique.length > SERVABLE_BATCH) {
+        throw new RangeError('A servability question names too many assets.');
+      }
+      const records = await assets.findMany(unique);
+      const present = await Promise.all(
+        records
+          .filter(
+            (record) =>
+              record.state === 'clean' &&
+              SANITISABLE_IMAGE_TYPES.includes(record.mediaType),
+          )
+          .map(async (record) =>
+            (await files.exists(record.storageKey)) ? record.id : null,
+          ),
+      );
+      return new Set(present.filter((id): id is string => id !== null));
+    },
+
     /**
      * Bounded, idempotent reconciliation of Storage-owned resources ONLY.
      *

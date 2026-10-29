@@ -476,10 +476,11 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'MediaItem',
       'YouTubeVideo',
       'LectureVideo',
-      // Phase 13 invents no generic News or editorial table and no lead image:
-      // that is an architecture decision no phase has made, and the newsletter
-      // arrived as Phase 21's consent record. (Phase 16's Centre is a column on
-      // the News revision, never a per-centre content table.)
+      // Phase 13 invents no generic News or editorial table, and the newsletter
+      // arrived as Phase 21's consent record. Phase 30-R's lead image is ONE
+      // typed Asset key on the revision — never an image table or a gallery
+      // in News. (Phase 16's Centre is a column on the News revision, never a
+      // per-centre content table.)
       'NewsItem',
       'EditorialContent',
       'NewsArticleImage',

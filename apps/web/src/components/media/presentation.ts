@@ -144,6 +144,15 @@ export function photoAssetPath(photoId: string, assetId: string): string {
   return `/assets/media/photos/${part(photoId)}/${part(assetId)}`;
 }
 
+/**
+ * Phase 30-R — a published Video's first-party poster. The address names the
+ * Video and the asset, so a replaced poster has a new address and the policy
+ * refuses any asset that is not the one recorded as that Video's poster.
+ */
+export function videoPosterPath(videoId: string, assetId: string): string {
+  return `/assets/media/posters/${part(videoId)}/${part(assetId)}`;
+}
+
 /** The administrator's preview of the same image, behind a live permission. */
 export function photoPreviewPath(photoId: string, assetId: string): string {
   return `/assets/media/previews/photos/${part(photoId)}/${part(assetId)}`;

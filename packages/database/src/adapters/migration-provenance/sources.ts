@@ -100,7 +100,12 @@ export function createMigrationSources(): MigrationSourcePort {
 
     async createAuthorisedSource(input) {
       const hosts = [...new Set(input.hosts)];
-      if (hosts.length < 1 || hosts.length > MIGRATION_LIMITS.hosts)
+      const assetHosts = [...new Set(input.assetHosts)];
+      if (
+        hosts.length < 1 ||
+        hosts.length + assetHosts.length > MIGRATION_LIMITS.hosts ||
+        assetHosts.some((host) => hosts.includes(host))
+      )
         throw new MigrationDataError('invalid');
       try {
         return await db.$transaction(async (tx) => {
@@ -130,7 +135,10 @@ export function createMigrationSources(): MigrationSourcePort {
             select: { id: true },
           });
           await tx.migrationSourceHost.createMany({
-            data: hosts.map((host) => ({ sourceId: input.id, host })),
+            data: [
+              ...hosts.map((host) => ({ sourceId: input.id, host, role: 'page' })),
+              ...assetHosts.map((host) => ({ sourceId: input.id, host, role: 'asset' })),
+            ],
           });
           await audit(tx, {
             action: 'migration.source.registered',
@@ -143,6 +151,7 @@ export function createMigrationSources(): MigrationSourcePort {
               accessMethod: 'http',
               contentKind: input.contentKind,
               hosts: String(hosts.length),
+              assetHosts: String(assetHosts.length),
               authorisedOn: input.authorisedOn,
               state: 'inactive',
               version: '1',
@@ -164,6 +173,70 @@ export function createMigrationSources(): MigrationSourcePort {
           });
           if (taken !== null) throw new MigrationDataError('duplicate');
         }
+        refuse(error);
+      }
+    },
+
+    /**
+     * Phase 30-R. One ASSET host, appended to an AUTHORISED source at its
+     * version: the host row is inserted (never changed or removed, 51371), the
+     * source's version moves so a stale screen cannot add twice, and the
+     * operator's first-party evidence is the audit record's.
+     */
+    async addAssetHost(input) {
+      try {
+        return await db.$transaction(async (tx) => {
+          const before = await tx.migrationSource.findFirst({
+            where: { id: input.sourceId },
+            select: {
+              authorityKind: true,
+              state: true,
+              version: true,
+              hosts: { select: { host: true } },
+            },
+          });
+          if (before === null) throw new MigrationDataError('not-found');
+          if (before.authorityKind !== 'authorised')
+            throw new MigrationDataError('invalid');
+          if (before.hosts.length >= MIGRATION_LIMITS.hosts)
+            throw new MigrationDataError('invalid');
+          if (before.hosts.some((entry) => entry.host === input.host))
+            throw new MigrationDataError('duplicate');
+          const moved = await tx.migrationSource.updateMany({
+            where: { id: input.sourceId, version: input.expectedVersion },
+            data: {
+              updatedAt: input.now,
+              updatedByUserId: input.actorId,
+              version: { increment: 1 },
+            },
+          });
+          if (moved.count !== 1)
+            missedBecause(before, input.expectedVersion, [before.state]);
+          await tx.migrationSourceHost.create({
+            data: { sourceId: input.sourceId, host: input.host, role: 'asset' },
+            select: { host: true },
+          });
+          await audit(tx, {
+            action: 'migration.source.asset-host-added',
+            actorId: input.actorId,
+            targetType: 'migration-source',
+            targetId: input.sourceId,
+            before: { version: String(input.expectedVersion) },
+            after: {
+              host: input.host,
+              evidence: input.evidence,
+              version: String(input.expectedVersion + 1),
+            },
+            authorisingSource: ADMINISTER,
+          });
+          const row = await tx.migrationSource.findFirst({
+            where: { id: input.sourceId },
+            select: SOURCE_SELECT,
+          });
+          if (row === null) throw new MigrationDataError('conflict');
+          return toSourceRecord(row);
+        }, LOCKED_TRANSACTION);
+      } catch (error) {
         refuse(error);
       }
     },

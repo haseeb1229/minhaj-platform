@@ -778,11 +778,19 @@ jobs:
       # and the account-closure terminal-history rule with disposition. They
       # skip without a database, so the assertion below fails the job if any of
       # them did not run.
+      #
+      # DIAGNOSABLE, NEVER MASKED (Phase 30-R). The console reporter runs beside
+      # the JSON one, so a failure shows its test and assertion in the log; the
+      # assertion always runs — it names every test that did not pass, with the
+      # first lines of its failure — and the step still fails with the run's own
+      # status. Nothing is retried and nothing is allowed to fail.
       # -----------------------------------------------------------------
       - name: Messaging proof (real SQL Server, runtime principal)
         run: |
-          npm run test:messaging -- --reporter=json --outputFile=messaging-report.json
+          status=0
+          npm run test:messaging -- --reporter=default --reporter=json --outputFile.json=messaging-report.json || status=$?
           node scripts/assert-messaging-proofs.mjs messaging-report.json
+          exit "$status"
 
       # -----------------------------------------------------------------
       # Phase 26 — Membership's live proofs.

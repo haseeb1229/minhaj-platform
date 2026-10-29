@@ -6,6 +6,7 @@ import type { Locale } from '@minhaj/contracts';
 import {
   NEWS_EARLIEST_YEAR,
   NEWS_MAX_OFFSET,
+  leadImagePath,
   newsPathOf,
   type PublicNews,
 } from '@minhaj/contracts/editorial';
@@ -105,11 +106,12 @@ export function newsMetadata(record: PublicNews, locale: Locale) {
 
 /**
  * STRUCTURED DATA, ONLY WHAT IS TRUE. `NewsArticle` for a NewsArticle, a press
- * release and a statement (ROUTE_MAP.md §9.6): headline, language, address and
- * the genuine publication and modification instants — and, for a NewsArticle
- * or a press release, the People credited as its authors. No image, no
- * publisher, no logo: none is recorded, and the pre-adoption origin claims no
- * organisation. A statement's authority is an institution, not a person, so no
+ * release and a statement (ROUTE_MAP.md §9.6): headline, language, address,
+ * the record's chronology as its publication date (its source's own date where
+ * a migrated record states one — Phase 30-R) and its modification instant,
+ * its own first-party lead image where it has one — and, for a NewsArticle or
+ * a press release, the People credited as its authors. No publisher, no logo:
+ * the pre-adoption origin claims no organisation. A statement's authority is an institution, not a person, so no
  * author is claimed for it. MEDIA COVERAGE CLAIMS NO ARTICLE AT ALL — the
  * coverage is a third party's, and the page is only a summary of it — so it is
  * `null` here and carries a BreadcrumbList alone.
@@ -130,7 +132,8 @@ export function newsStructuredData(
     inLanguage: language,
     url,
     mainEntityOfPage: url,
-    datePublished: record.publishedAt.toISOString(),
+    ...(record.leadImage ? { image: absoluteUrl(leadImagePath(record.leadImage)) } : {}),
+    datePublished: (record.chronologyAt ?? record.publishedAt).toISOString(),
     dateModified: record.updatedAt.toISOString(),
     ...(record.kind !== 'statement' && authors.length > 0
       ? {

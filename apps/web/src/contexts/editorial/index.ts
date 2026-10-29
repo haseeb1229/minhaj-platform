@@ -9,3 +9,5 @@ export {
   createCorrespondenceIntake,
 } from './application/correspondence-service.ts';
 export { createEditorialSearchSources } from './application/search-projection.ts';
+export { createLeadImagePolicy } from './application/asset-policy.ts';
+export type { LeadImageRequest } from './application/asset-policy.ts';

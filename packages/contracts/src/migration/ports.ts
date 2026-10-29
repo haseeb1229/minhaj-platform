@@ -10,6 +10,7 @@ import type {
   ItemOutcome,
   LegacyMappingState,
   LinkDisposition,
+  ManifestEntryMode,
   ManifestEntryState,
   ManifestState,
   MigrationContentKind,
@@ -87,7 +88,13 @@ export interface SourceRecord {
   readonly accessMethod: SourceAccessMethod;
   readonly contentKind: MigrationContentKind;
   readonly baseUrl: string | null;
+  /** The PAGE hosts: discovery, items and links. */
   readonly hosts: readonly string[];
+  /**
+   * Phase 30-R. The exact first-party ASSET hosts: reached only to acquire an
+   * image the source's own pages name, never for discovery, items or links.
+   */
+  readonly assetHosts: readonly string[];
   readonly authorisationReference: string | null;
   readonly authorisedOn: string | null;
   readonly licensingEvidence: string | null;
@@ -181,6 +188,9 @@ export interface PendingItem {
     readonly id: string;
     readonly revision: number;
     readonly inputChecksum: string;
+    /** Which code made it: the same bytes read by newer code are a new revision. */
+    readonly parserVersion: string;
+    readonly normalizerVersion: string;
   } | null;
 }
 
@@ -277,6 +287,20 @@ export interface AssetAcquisitionInput {
   readonly licenceEvidence: string | null;
   readonly rightsHolder: string | null;
   readonly acquiredAt: Date;
+  /**
+   * Phase 30-R. For a still image: the metadata-stripped public copy Storage
+   * made of these bytes, its own checksum and measured box. Null for anything
+   * else, or when Storage refused the image.
+   */
+  readonly publicCopy: PublicImageCopy | null;
+}
+
+/** Phase 30-R. The public copy of an acquired image. */
+export interface PublicImageCopy {
+  readonly assetId: string;
+  readonly checksum: string;
+  readonly width: number;
+  readonly height: number;
 }
 
 /* ===========================================================================
@@ -384,8 +408,49 @@ export interface MigrationPipelinePort {
     readonly { readonly recordId: string; readonly languageCode: string | null }[]
   >;
 
-  /** An earlier acquisition's stored asset with exactly these bytes, if any. */
-  assetByChecksum(checksum: string): Promise<{ readonly assetId: string } | null>;
+  /**
+   * An earlier acquisition's stored asset with exactly these bytes, if any,
+   * with the public copy that acquisition recorded (Phase 30-R).
+   */
+  assetByChecksum(checksum: string): Promise<{
+    readonly assetId: string;
+    readonly publicCopy: PublicImageCopy | null;
+  } | null>;
+
+  /**
+   * Phase 30-R. Whether this source already holds an acquisition of exactly
+   * this canonical URL — so a replayed or repeated run never fetches the same
+   * image twice. The earlier acquisition keeps its own rights decision.
+   */
+  acquiredUrl(sourceId: string, originalUrlDigest: string): Promise<boolean>;
+
+  /**
+   * Phase 30-R. One page of a REPLAY's discovery: the records this source
+   * already holds, oldest first, as the items a fresh discovery would have
+   * named; `next` is an opaque cursor, null after the last page.
+   */
+  replayItems(
+    sourceId: string,
+    cursor: string | null,
+    limit: number,
+  ): Promise<{
+    readonly kind: 'page';
+    readonly items: readonly DiscoveredItem[];
+    readonly next: string | null;
+  }>;
+
+  /**
+   * Phase 30-R. A retained raw snapshot's exchange, exactly as stored — or
+   * null when its body was disposed of. Read only by a replay.
+   */
+  retainedSnapshot(snapshotId: string): Promise<{
+    readonly requestedUrl: string;
+    readonly finalUrl: string;
+    readonly httpStatus: number | null;
+    readonly contentType: string | null;
+    readonly headers: Readonly<Record<string, string>>;
+    readonly body: Uint8Array;
+  } | null>;
 
   /** One acquisition's provenance; idempotent on (source, URL, checksum). */
   recordAcquisition(
@@ -449,12 +514,27 @@ export interface MigrationSourcePort {
     readonly contentKind: MigrationContentKind;
     readonly baseUrl: string;
     readonly hosts: readonly string[];
+    readonly assetHosts: readonly string[];
     readonly defaultLanguageCode: string | null;
     readonly policy: SourcePolicy;
     readonly authorisationReference: string;
     readonly authorisedOn: string;
     readonly licensingEvidence: string | null;
     readonly policyNotes: string | null;
+    readonly actorId: string;
+    readonly now: Date;
+  }): Promise<SourceRecord>;
+
+  /**
+   * Phase 30-R. Appends one ASSET host to an AUTHORISED source at its expected
+   * version — a host is never changed or removed. Audited
+   * `migration.source.asset-host-added` with the evidence the operator gave.
+   */
+  addAssetHost(input: {
+    readonly sourceId: string;
+    readonly expectedVersion: number;
+    readonly host: string;
+    readonly evidence: string;
     readonly actorId: string;
     readonly now: Date;
   }): Promise<SourceRecord>;
@@ -618,6 +698,13 @@ export interface ManifestEntryRecord {
   readonly stagedRecordId: string;
   readonly recordId: string;
   readonly state: ManifestEntryState;
+  /**
+   * Phase 30-R. `create` makes the record in its domain; `refresh` carries a
+   * newer approved revision into the record an earlier manifest made. Fixed
+   * when the entry is created: a refresh is an entry whose record already had
+   * an ACTIVE legacy mapping then.
+   */
+  readonly mode: ManifestEntryMode;
   readonly target: MigrationTargetRef | null;
   readonly targetStage: TargetStage | null;
   readonly targetVersion: number | null;
@@ -651,6 +738,8 @@ export interface PublishableAsset {
   readonly assetId: string;
   readonly mediaType: string;
   readonly checksum: string;
+  /** Phase 30-R: the metadata-stripped public copy of an image, the only bytes a domain may show. */
+  readonly publicCopy: PublicImageCopy | null;
 }
 
 export interface MigrationPublicationPort {
@@ -989,14 +1078,20 @@ export interface MissingRecordRow {
 export interface AssetProvenanceRow {
   readonly id: string;
   readonly recordId: string | null;
+  /** Phase 30-R: the run that acquired it. */
+  readonly runId: string;
   readonly originalUrl: string;
   readonly assetId: string;
   readonly checksum: string;
   readonly byteSize: number;
   readonly mediaType: string;
   readonly licence: AssetLicence;
+  /** Phase 30-R: the rights evidence recorded — the source's own, or a person's. */
+  readonly licenceEvidence: string | null;
   readonly visibility: AssetVisibility;
   readonly rightsHolder: string | null;
+  /** Phase 30-R: the measured box of the metadata-stripped public copy, if one was made. */
+  readonly publicCopy: { readonly width: number; readonly height: number } | null;
   readonly version: number;
 }
 
@@ -1169,8 +1264,14 @@ export interface MigrationReadPort {
     readonly offset: number;
     readonly limit: number;
   }): Promise<PromotionEntryPage>;
+  /**
+   * Acquisitions, newest first — or, narrowed to one RUN (Phase 30-R), in
+   * acquisition order, so a reviewer pages through a run the way it ran.
+   */
   assets(query: {
     readonly recordId: string | null;
+    readonly runId?: string | null;
+    readonly visibility?: AssetVisibility | null;
     readonly offset: number;
     readonly limit: number;
   }): Promise<AssetPage>;
@@ -1253,6 +1354,24 @@ export interface MigrationPublicationTargetPort {
      */
     readonly resumed: boolean;
   }): Promise<TargetPublication>;
+  /**
+   * Phase 30-R. Carries a NEWER approved revision of an already-published
+   * legacy record into the record an earlier manifest made, through the
+   * domain's own update at its current version — applying every one of the
+   * domain's rules again. Idempotent: a record already holding exactly this
+   * payload answers `published` unchanged. Editorial's own workflow returns
+   * an edited record to review, so a refresh there is `in-review` until a
+   * different person approves and publishes it.
+   */
+  refresh(input: {
+    readonly kind: MigrationPublishableKind;
+    readonly target: MigrationTargetRef;
+    readonly payload: StagedPayload;
+    readonly topicIds: readonly string[];
+    readonly assets: readonly PublishableAsset[];
+    readonly resolve: (legacyUrl: string) => Promise<MigrationTargetRef | null>;
+    readonly actor: MigrationActor;
+  }): Promise<TargetPublication>;
   /** Asked as the publisher: the target's own read authority applies. */
   inspect(input: {
     readonly target: MigrationTargetRef;
@@ -1279,6 +1398,25 @@ export interface MigrationAssetStoragePort {
         readonly byteSize: number;
         readonly checksum: string;
         readonly clean: boolean;
+      }
+    | { readonly status: 'rejected'; readonly reason: string }
+  >;
+  /**
+   * Phase 30-R. The PUBLIC copy of an acquired still image: the same bytes
+   * through Storage's image pipeline — structurally validated, bounded, every
+   * hidden metadata segment removed — then quarantined and scanned like any
+   * other asset. Its checksum differs from the evidence's by design.
+   */
+  storePublicImage(input: {
+    readonly bytes: Uint8Array;
+    readonly displayName: string | null;
+  }): Promise<
+    | {
+        readonly status: 'stored';
+        readonly assetId: string;
+        readonly checksum: string;
+        readonly width: number;
+        readonly height: number;
       }
     | { readonly status: 'rejected'; readonly reason: string }
   >;

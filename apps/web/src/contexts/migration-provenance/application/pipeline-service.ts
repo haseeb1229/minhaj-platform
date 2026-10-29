@@ -27,6 +27,7 @@ import {
   type MigrationSourcePort,
   type ParseResult,
   type PendingItem,
+  type PublicImageCopy,
   type RetrievedEvidence,
   type RunCounts,
   type RunRecord,
@@ -88,14 +89,27 @@ export interface PipelineRunOptions {
   readonly random?: () => number;
   /** The deployed commit (`MINHAJ_RELEASE_SHA`) or `local` (default). */
   readonly codeRevision?: string;
+  /**
+   * Phase 30-R. REPLAY the source's RETAINED evidence instead of the network:
+   * discovery lists the records this source already holds, and each item is
+   * parsed again from its body-intact raw snapshot by the current code — no
+   * page is fetched. A record whose evidence was disposed of is fetched as
+   * usual. Images a replayed record names are still acquired, once per URL.
+   */
+  readonly replay?: boolean;
 }
 
 export interface PipelineRunInput {
   readonly sourceId: string;
   /** The source's adapter — discovery, retrieval and parsing, nothing else. */
   readonly adapter: MigrationSourceAdapter;
-  /** The safe fetch boundary bound to the source's scope. */
+  /** The safe fetch boundary bound to the source's PAGE hosts. */
   readonly fetcher: MigrationFetchPort;
+  /**
+   * Phase 30-R. The safe fetch boundary bound to the source's page AND asset
+   * hosts, used only to acquire images. Defaults to `fetcher`.
+   */
+  readonly assetFetcher?: MigrationFetchPort;
   /** Storage, narrowed to acquisition. */
   readonly assets: MigrationAssetStoragePort;
   readonly options?: PipelineRunOptions;
@@ -125,6 +139,7 @@ const optionsSchema = z.looseObject({
     .max(64)
     .regex(/^[A-Za-z0-9._-]+$/)
     .optional(),
+  replay: z.boolean().optional(),
 });
 
 const adapterSchema = z.object({
@@ -148,6 +163,13 @@ const cancelSchema = z
  * ========================================================================= */
 
 const DEFAULT_LEASE_MS = 120_000;
+
+/** Records one replay discovery page lists (Phase 30-R). */
+const REPLAY_PAGE = 100;
+
+/** The still-image types an acquisition gets a public copy of (Phase 30-R). */
+const STILL_IMAGE_TYPES: readonly string[] = Object.freeze(['image/jpeg', 'image/png']);
+
 /** Digests per mapping lookup, and duplicate candidates considered per signal. */
 const LOOKUP_CHUNK = 200;
 const MATCH_LIMIT = 10;
@@ -156,15 +178,18 @@ const HEADERS_MAX = 4000;
 const defaultSleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/** The safe fetch boundary, made polite: `minIntervalMs` between two requests. */
-function politeFetcher(
-  fetcher: MigrationFetchPort,
+/**
+ * The safe fetch boundaries, made polite: `minIntervalMs` between ANY two
+ * requests of one run, whichever boundary — page or asset — makes them.
+ */
+function politeFetchers(
+  fetchers: { readonly page: MigrationFetchPort; readonly asset: MigrationFetchPort },
   minIntervalMs: number,
   now: () => Date,
   sleep: (ms: number) => Promise<void>,
-): MigrationFetchPort {
+): { readonly page: MigrationFetchPort; readonly asset: MigrationFetchPort } {
   let last: number | null = null;
-  return {
+  const polite = (fetcher: MigrationFetchPort): MigrationFetchPort => ({
     fetcherKey: fetcher.fetcherKey,
     fetcherVersion: fetcher.fetcherVersion,
     async fetch(url) {
@@ -178,7 +203,8 @@ function politeFetcher(
         last = now().getTime();
       }
     },
-  };
+  });
+  return { page: polite(fetchers.page), asset: polite(fetchers.asset) };
 }
 
 function headerValue(
@@ -296,7 +322,9 @@ export function createMigrationPipelineService(deps: {
       const { adapter } = input;
       if (
         !adapterSchema.safeParse(adapter).success ||
-        !fetcherSchema.safeParse(input.fetcher).success
+        !fetcherSchema.safeParse(input.fetcher).success ||
+        (input.assetFetcher !== undefined &&
+          !fetcherSchema.safeParse(input.assetFetcher).success)
       )
         throw new MigrationRefusal('invalid');
 
@@ -349,12 +377,20 @@ export function createMigrationPipelineService(deps: {
       // A resumed run keeps the code it started with: one run, one provenance.
       if (!sameCode(run, provenance)) throw new MigrationRefusal('adapter-mismatch');
 
+      const fetchers = politeFetchers(
+        { page: input.fetcher, asset: input.assetFetcher ?? input.fetcher },
+        source.policy.minIntervalMs,
+        now,
+        sleep,
+      );
       const worker = new RunWorker({
         pipeline,
         source,
         run,
         adapter,
-        fetcher: politeFetcher(input.fetcher, source.policy.minIntervalMs, now, sleep),
+        fetcher: fetchers.page,
+        assetFetcher: fetchers.asset,
+        replay: parsedOptions.data.replay === true,
         assets: input.assets,
         provenance,
         leaseToken,
@@ -437,6 +473,9 @@ interface RunWorkerContext {
   readonly run: RunRecord;
   readonly adapter: MigrationSourceAdapter;
   readonly fetcher: MigrationFetchPort;
+  readonly assetFetcher: MigrationFetchPort;
+  /** Phase 30-R: parse retained evidence again instead of fetching. */
+  readonly replay: boolean;
   readonly assets: MigrationAssetStoragePort;
   readonly provenance: TransformProvenance;
   readonly leaseToken: string;
@@ -502,7 +541,11 @@ class RunWorker {
       attempt += 1;
       let page: Awaited<ReturnType<MigrationSourceAdapter['discover']>>;
       try {
-        page = await this.c.adapter.discover(cursor, this.c.fetcher);
+        page = this.c.replay
+          ? await guarded(
+              this.c.pipeline.replayItems(this.c.source.id, cursor, REPLAY_PAGE),
+            )
+          : await this.c.adapter.discover(cursor, this.c.fetcher);
       } catch {
         page = {
           kind: 'outcome',
@@ -680,7 +723,18 @@ class RunWorker {
 
   private async item(item: PendingItem): Promise<void> {
     const { pipeline, source } = this.c;
-    const retrieved = await this.retrieve(item);
+    // REPLAY reads the record's retained evidence; a disposed body is fetched.
+    const retained =
+      this.c.replay && item.latestSnapshot !== null
+        ? await guarded(pipeline.retainedSnapshot(item.latestSnapshot.id))
+        : null;
+    const retrieved =
+      retained === null
+        ? await this.retrieve(item)
+        : {
+            evidence: { kind: 'evidence' as const, ...retained },
+            attempt: item.attempts + 1,
+          };
     if (retrieved === null) return;
     const { evidence, attempt } = retrieved;
     const body = evidence.body;
@@ -696,9 +750,16 @@ class RunWorker {
       return;
     }
 
-    // UNCHANGED: exactly the bytes the current revision was made from.
+    // UNCHANGED: exactly the bytes the current revision was made from, read by
+    // exactly the code that made it. Newer parsing or normalisation of the same
+    // bytes is a new revision (Phase 30-R) — how retained evidence is re-read.
     const checksum = sha256Hex(body);
-    if (item.currentStaged !== null && item.currentStaged.inputChecksum === checksum) {
+    if (
+      item.currentStaged !== null &&
+      item.currentStaged.inputChecksum === checksum &&
+      item.currentStaged.parserVersion === this.c.provenance.parserVersion &&
+      item.currentStaged.normalizerVersion === this.c.provenance.normalizerVersion
+    ) {
       await guarded(pipeline.markUnchanged(item.itemId, this.c.now()));
       return;
     }
@@ -963,12 +1024,17 @@ class RunWorker {
       await failed('asset-rejected', 'asset URL too long');
       return;
     }
+    // Already acquired by this source: never fetched twice (Phase 30-R).
+    if (
+      await guarded(this.c.pipeline.acquiredUrl(this.c.source.id, sha256Hex(canonical)))
+    )
+      return;
 
     let response: Extract<FetchOutcome, { kind: 'response' }>;
     for (let attempt = 1; ; attempt += 1) {
       let outcome: FetchOutcome;
       try {
-        outcome = await this.c.fetcher.fetch(canonical);
+        outcome = await this.c.assetFetcher.fetch(canonical);
       } catch {
         outcome = {
           kind: 'failure',
@@ -1014,6 +1080,7 @@ class RunWorker {
       readonly mediaType: string;
       readonly byteSize: number;
     };
+    let publicCopy: PublicImageCopy | null = null;
     const existing = await guarded(this.c.pipeline.assetByChecksum(checksum));
     if (existing !== null) {
       // Same bytes: the blob is shared, the rights are NOT (§5.2) — this
@@ -1023,6 +1090,7 @@ class RunWorker {
         mediaType: declared || 'application/octet-stream',
         byteSize: bytes.byteLength,
       };
+      publicCopy = existing.publicCopy;
     } else {
       let result: Awaited<ReturnType<MigrationAssetStoragePort['store']>>;
       try {
@@ -1050,6 +1118,26 @@ class RunWorker {
       };
     }
 
+    // A still image also gets its PUBLIC copy — every hidden metadata segment
+    // removed by Storage's image pipeline — the only bytes a domain may ever
+    // show (Phase 30-R). A refusal is recorded; the evidence is kept either way.
+    if (publicCopy === null && STILL_IMAGE_TYPES.includes(stored.mediaType)) {
+      let copy: Awaited<ReturnType<MigrationAssetStoragePort['storePublicImage']>>;
+      try {
+        copy = await this.c.assets.storePublicImage({ bytes, displayName: null });
+      } catch {
+        copy = { status: 'rejected', reason: 'storage did not answer' };
+      }
+      if (copy.status === 'stored')
+        publicCopy = {
+          assetId: copy.assetId,
+          checksum: copy.checksum,
+          width: copy.width,
+          height: copy.height,
+        };
+      else await failed('asset-rejected', `public copy refused: ${copy.reason}`);
+    }
+
     await guarded(
       this.c.pipeline.recordAcquisition({
         sourceId: this.c.source.id,
@@ -1066,6 +1154,7 @@ class RunWorker {
           asset.licenceEvidence === null ? null : clip(asset.licenceEvidence, 1000),
         rightsHolder: asset.rightsHolder === null ? null : clip(asset.rightsHolder, 200),
         acquiredAt: this.c.now(),
+        publicCopy,
       }),
     );
   }

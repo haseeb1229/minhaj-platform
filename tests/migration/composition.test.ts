@@ -62,6 +62,7 @@ const PAYLOAD: StagedVideoPayload = {
   publishedOn: '2020-01-02',
   durationSeconds: 3600,
   legacyIdentifier: 'v001',
+  poster: null,
 };
 
 function record(overrides: Partial<VideoRecord> = {}): VideoRecord {
@@ -85,6 +86,7 @@ function record(overrides: Partial<VideoRecord> = {}): VideoRecord {
     series: null,
     speakerIds: [],
     topicIds: [TOPIC],
+    poster: null,
     version: 1,
     updatedAt: new Date('2026-10-23T00:00:00Z'),
     ...overrides,
@@ -106,6 +108,7 @@ const listing = (video: VideoRecord): VideoListing => ({
   publishedOn: video.publishedOn,
   seriesPosition: null,
   speakerIds: video.speakerIds,
+  poster: video.poster,
   version: video.version,
   updatedAt: video.updatedAt,
 });
@@ -219,8 +222,110 @@ describe('Phase 29 Media publication target', () => {
         seriesPosition: null,
         speakerIds: [],
         topicIds: [TOPIC],
+        poster: null,
       },
     });
+  });
+
+  it('records a poster only as the public copy of a rights-cleared acquisition of its URL', async () => {
+    const POSTER = 'https://videos.fixture.invalid/images/poster-v001.jpg';
+    const withPoster = {
+      ...PAYLOAD,
+      poster: { url: POSTER, alt: 'FIXTURE', credit: null },
+    };
+    const cleared = {
+      originalUrl: POSTER,
+      assetId: '00000000-0000-4000-8000-0000000000e1',
+      mediaType: 'image/jpeg',
+      checksum: 'a'.repeat(64),
+      publicCopy: {
+        assetId: '00000000-0000-4000-8000-0000000000e2',
+        checksum: 'b'.repeat(64),
+        width: 640,
+        height: 360,
+      },
+    };
+    for (const [assets, poster] of [
+      [[cleared], { assetId: cleared.publicCopy.assetId, width: 640, height: 360 }],
+      // No acquisition, another URL, or no public copy: no poster at all.
+      [[], null],
+      [[{ ...cleared, originalUrl: `${POSTER}?other` }], null],
+      [[{ ...cleared, publicCopy: null }], null],
+    ] as const) {
+      const { media, calls } = fakeMedia({});
+      const target = mediaVideoTargetOver({ media, holdings: notHeld });
+      await target.publish({
+        kind: 'media.video',
+        payload: withPoster,
+        assets,
+        resolve: async () => null,
+        topicIds: [],
+        actor: ACTOR,
+        resumed: false,
+      });
+      expect(calls.saves[0]?.input.poster).toEqual(poster);
+    }
+  });
+
+  it('refreshes a published Video in place, keeping what a person curated', async () => {
+    const held = record({
+      version: 4,
+      isFeatured: true,
+      speakerIds: ['00000000-0000-4000-8000-0000000000c1'],
+      captions: true,
+      durationSeconds: 100,
+    });
+    const { media, calls } = fakeMedia({
+      stored: [held],
+      save: (input) => record({ ...(input as Partial<VideoRecord>), version: 5 }),
+    });
+    const target = mediaVideoTargetOver({ media, holdings: notHeld });
+    const result = await target.refresh({
+      kind: 'media.video',
+      target: { kind: 'media.video', id: VIDEO_ID },
+      payload: PAYLOAD,
+      assets: [],
+      resolve: async () => null,
+      topicIds: [],
+      actor: ACTOR,
+    });
+    expect(result).toMatchObject({ status: 'published', stage: 'public', version: 5 });
+    expect(calls.saves).toHaveLength(1);
+    expect(calls.saves[0]).toMatchObject({
+      id: VIDEO_ID,
+      expectedVersion: 4,
+      input: {
+        state: 'published',
+        isFeatured: true,
+        speakerIds: ['00000000-0000-4000-8000-0000000000c1'],
+        captions: true,
+        durationSeconds: 3600,
+        topicIds: [TOPIC],
+      },
+    });
+    // No cleared poster: the poster Media holds is KEPT (omitted, not cleared).
+    expect('poster' in (calls.saves[0]?.input ?? {})).toBe(false);
+  });
+
+  it('refuses to refresh a Video that is no longer published or is another provider id', async () => {
+    for (const held of [
+      record({ state: 'archived' }),
+      record({ providerVideoId: 'ZzZzZzZzZz0' }),
+    ]) {
+      const { media, calls } = fakeMedia({ stored: [held] });
+      const target = mediaVideoTargetOver({ media, holdings: notHeld });
+      const result = await target.refresh({
+        kind: 'media.video',
+        target: { kind: 'media.video', id: VIDEO_ID },
+        payload: PAYLOAD,
+        assets: [],
+        resolve: async () => null,
+        topicIds: [],
+        actor: ACTOR,
+      });
+      expect(result.status).toBe('refused');
+      expect(calls.saves).toHaveLength(0);
+    }
   });
 
   it('adopts, without saving again, the published Video an interrupted publication made', async () => {
@@ -387,6 +492,11 @@ describe('Phase 29 Media publication target', () => {
       captions: true,
       format: 'lecture',
       speakerIds: ['00000000-0000-4000-8000-0000000000d1'],
+      poster: {
+        assetId: '00000000-0000-4000-8000-0000000000e9',
+        width: 640,
+        height: 360,
+      },
       series: {
         id: '00000000-0000-4000-8000-0000000000e1',
         slug: 'fixture-series',
@@ -433,6 +543,8 @@ describe('Phase 29 Media publication target', () => {
           seriesPosition: 7,
           speakerIds: current.speakerIds,
           topicIds: [TOPIC],
+          // The first-party poster stays exactly as Media holds it.
+          poster: current.poster,
         },
       },
     ]);
@@ -602,5 +714,58 @@ describe('Phase 29 Migration wiring', () => {
       'application/pdf',
     ]);
     expect(MIGRATION_ASSET_MAX_BYTES).toBe(8 * 1024 * 1024);
+  });
+
+  it('makes an image’s PUBLIC copy through Storage’s image pipeline, measured', async () => {
+    const policies: UploadPolicy[] = [];
+    const answers: (Partial<StoredAsset> & { state: string })[] = [
+      {
+        id: 'p1',
+        state: 'clean',
+        mediaType: 'image/jpeg',
+        byteSize: 2,
+        checksum: 'd1',
+        rejection: null,
+        image: { width: 640, height: 480 },
+      },
+      {
+        id: 'p2',
+        state: 'rejected',
+        mediaType: 'image/jpeg',
+        byteSize: 2,
+        checksum: 'd2',
+        rejection: 'dimensions-too-large',
+      },
+      { id: 'p3', state: 'clean', mediaType: 'image/jpeg', byteSize: 2, checksum: 'd3' },
+    ];
+    const storage = {
+      async store(_bytes: AsyncIterable<Uint8Array>, policy: UploadPolicy) {
+        policies.push(policy);
+        const answer = answers.shift();
+        if (answer === undefined) throw new Error('no answer');
+        return answer;
+      },
+    } as unknown as StorageServicePort;
+    const port = migrationAssetStorage(async () => storage);
+    const input = { bytes: new Uint8Array([1, 2]), displayName: null };
+    expect(await port.storePublicImage(input)).toEqual({
+      status: 'stored',
+      assetId: 'p1',
+      checksum: 'd1',
+      width: 640,
+      height: 480,
+    });
+    expect(await port.storePublicImage(input)).toEqual({
+      status: 'rejected',
+      reason: 'dimensions-too-large',
+    });
+    // An image Storage stored without measuring is a custody defect, never a guess.
+    await expect(port.storePublicImage(input)).rejects.toThrow(/measuring/);
+    for (const policy of policies) {
+      expect(policy.allowedMediaTypes).toEqual(['image/png', 'image/jpeg']);
+      expect(policy.image).toEqual({ maxPixels: 40_000_000, maxEdge: 16_384 });
+      // The bytes decide the type: nothing declared is trusted.
+      expect(policy.declaredMediaType).toBeNull();
+    }
   });
 });

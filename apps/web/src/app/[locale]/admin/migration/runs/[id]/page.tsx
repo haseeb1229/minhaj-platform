@@ -168,6 +168,7 @@ export default async function MigrationRunPage({
           <TextLink href={withQuery(migrationPath(locale, '/errors'), { run: run.id })}>
             {t('run.errorsLink')}
           </TextLink>
+          <TextLink href={`${base}/rights`}>{t('run.rightsLink')}</TextLink>
         </p>
       </Panel>
 

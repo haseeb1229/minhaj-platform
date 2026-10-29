@@ -271,6 +271,8 @@ describe('parsing with Cheerio', () => {
             rightsHolder: 'FIXTURE Organisation',
           },
         ],
+        // The fixture adapter names no poster: its asset stays an acquisition.
+        poster: null,
       },
     });
   });

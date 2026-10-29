@@ -534,7 +534,23 @@ describe('the contribution-role vocabulary has nothing to hang on', () => {
     }
   });
 
-  it('introduces no image, asset or external URL field', async () => {
+  // PHASE 30-R narrowed this rule rather than removing it: a Person may carry
+  // ONE portrait, and only as a typed foreign key to Storage's Asset with its
+  // measured box — never an avatar, an image URL or a free-standing photo.
+  it('carries a portrait only as one typed Asset key, and no image or avatar URL', async () => {
+    const schema = await sourceOf('packages/database/prisma/schema.prisma');
+    const start = schema.indexOf('model Person {');
+    const person = schema.slice(start, schema.indexOf('\n}', start));
+    expect(person).toMatch(/^\s+portraitAssetId String\? @db\.NVarChar\(36\)$/m);
+    expect(person).toMatch(
+      /^\s+portraitAsset Asset\? @relation\("PersonPortraitAsset", fields:\[portraitAssetId\], references:\[id\]/m,
+    );
+    for (const forbidden of ['portraitUrl', 'imageUrl', 'avatarUrl', 'avatar', 'photo']) {
+      expect(person, forbidden).not.toMatch(new RegExp(`^\\s+${forbidden}\\b`, 'mi'));
+    }
+  });
+
+  it('introduces no other image, avatar or external URL field', async () => {
     const schema = await sourceOf('packages/database/prisma/schema.prisma');
     // The People models only — Person and its profiles, up to the Editorial
     // models that follow them. A later domain's own image relation (Phase 12's
@@ -608,6 +624,13 @@ describe('the contract and the database agree on the bounds they share', () => {
           'MigrationManifestEntryIntegrity',
         ],
         numbers: ['51371', '51379', '51380'],
+      },
+      // Phase 30-R widens the same two Migration & Provenance triggers again
+      // for its four new typed targets and the entry mode.
+      '20261030000000_phase30r_review_completeness': {
+        owner: '20261011000000_phase29_migration_provenance',
+        triggers: ['MigrationLegacyMappingIntegrity', 'MigrationManifestEntryIntegrity'],
+        numbers: ['51379', '51380'],
       },
     };
 

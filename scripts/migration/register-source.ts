@@ -18,8 +18,13 @@ import { authorisedSource } from './sources/catalogue.ts';
  * §3.1.1). Nothing secret belongs in either value.
  *
  * IDEMPOTENT. Re-running for a registered key changes nothing unless it must
- * activate; a registered source whose kind, base or hosts differ from the
+ * activate; a registered source whose kind, base or page hosts differ from the
  * catalogue is refused, never altered — those never change.
+ *
+ * ASSET HOSTS (Phase 30-R). A source registered before the catalogue named an
+ * asset host is given each missing one as its own audited, append-only act,
+ * carrying the catalogue's first-party evidence; an asset host the catalogue
+ * does not name is refused, never removed.
  */
 
 const USAGE =
@@ -51,6 +56,7 @@ await runCommand('migration:register-source', async () => {
       accessMethod: 'http',
       baseUrl: definition.baseUrl,
       hosts: [...definition.hosts],
+      assetHosts: [...definition.assetHosts],
       defaultLanguageCode: definition.defaultLanguageCode,
       policy: definition.policy,
       authorisationReference: reference,
@@ -66,6 +72,22 @@ await runCommand('migration:register-source', async () => {
     [...source.hosts].sort().join(' ') !== [...definition.hosts].sort().join(' ')
   ) {
     throw new CommandError(`'${key}' is registered with another kind, base or host list`);
+  }
+
+  if (source.assetHosts.some((host) => !definition.assetHosts.includes(host)))
+    throw new CommandError(`'${key}' has an asset host the catalogue does not name`);
+  let assetHostsAdded = 0;
+  for (const host of definition.assetHosts) {
+    if (source.assetHosts.includes(host)) continue;
+    if (definition.assetHostEvidence === null)
+      throw new CommandError(`'${key}' names an asset host without evidence`);
+    source = await runner.sources.addAssetHost(actor, {
+      sourceId: source.id,
+      expectedVersion: source.version,
+      host,
+      evidence: definition.assetHostEvidence,
+    });
+    assetHostsAdded += 1;
   }
 
   let activated = false;
@@ -87,6 +109,8 @@ await runCommand('migration:register-source', async () => {
     source: source.key,
     contentKind: source.contentKind,
     hosts: source.hosts.length,
+    assetHosts: source.assetHosts.length,
+    assetHostsAdded,
     state: source.state,
     registered,
     activated,

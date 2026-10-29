@@ -198,6 +198,7 @@ export function createFixtureExportAdapter(
               : [],
           links: hrefsOf(descriptionHtml),
           assets: [],
+          poster: null,
         },
       };
     },

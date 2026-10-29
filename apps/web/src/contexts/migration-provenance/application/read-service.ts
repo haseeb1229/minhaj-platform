@@ -3,6 +3,7 @@ import 'server-only';
 import { z } from 'zod';
 
 import {
+  ASSET_VISIBILITIES,
   DUPLICATE_STATES,
   ERROR_RESOLUTIONS,
   ITEM_OUTCOMES,
@@ -67,7 +68,14 @@ const filters = {
     .object({ state: z.enum(MANIFEST_STATES).nullable().default(null), offset })
     .strict(),
   promotionEntries: z.object({ promotionId: id, offset }).strict(),
-  assets: z.object({ recordId: id.nullable().default(null), offset }).strict(),
+  assets: z
+    .object({
+      recordId: id.nullable().default(null),
+      runId: id.nullable().default(null),
+      visibility: z.enum(ASSET_VISIBILITIES).nullable().default(null),
+      offset,
+    })
+    .strict(),
   page: z.object({ offset }).strict(),
 };
 

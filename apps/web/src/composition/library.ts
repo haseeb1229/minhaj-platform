@@ -16,6 +16,7 @@ import { createLibraryAssetPolicy, createLibraryService } from '@/contexts/libra
 import { serverEnv } from '@/config/server-env';
 import { identityRuntime } from './identity';
 import { ownerReferences } from './owner-references';
+import { storageRuntime } from './storage';
 
 /**
  * The ADMINISTRATIVE Library composition root.
@@ -58,6 +59,11 @@ function buildLibraryRuntime() {
       // Answered by the owners' public reads, through the ONE implementation
       // Media shares (`./owner-references.ts`).
       references: ownerReferences,
+
+      // Storage's servable-still-image answer, asked before a cover is recorded.
+      images: {
+        servableImages: async (ids) => (await storageRuntime()).servableImages(ids),
+      },
     }),
   };
 }

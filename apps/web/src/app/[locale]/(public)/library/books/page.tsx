@@ -21,6 +21,7 @@ import {
   TextInput,
   TextLink,
 } from '@/components/ui';
+import { CoverCard, CoverImage, editionCoverPath } from '@/components/library/cover';
 import { FilterPanel, ListingFrame, Pager } from '@/components/library/frame';
 import {
   booksPath,
@@ -296,6 +297,26 @@ function WorkSummary({
   readonly locale: Locale;
 }) {
   const label = labelFor(record, locale);
+
+  // Cover-first where the Work has one (Phase 30-R); the text-first card
+  // otherwise — never a grey placeholder pretending to be a picture.
+  if (record.cover !== null)
+    return (
+      <CoverCard
+        href={workPath(locale, record.slug)}
+        title={label.title}
+        description={label.description}
+        lang={label.locale}
+        dir={directionOf(label.locale)}
+        cover={
+          <CoverImage
+            path={editionCoverPath(record.cover.editionId, record.cover.assetId)}
+            cover={record.cover}
+            alt=""
+          />
+        }
+      />
+    );
 
   return (
     <LinkCard

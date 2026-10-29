@@ -232,6 +232,7 @@ live('Phase 16 Global Network against real SQL Server', () => {
         selectableGallery: async () => false,
         // Nor Collection members; this suite writes News alone.
         selectableMembers: async () => false,
+        usableImage: async () => false,
       },
     });
     newsReads = createEditorialReadService(database.createEditorialPublicReader());

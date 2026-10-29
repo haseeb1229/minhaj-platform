@@ -10,7 +10,10 @@ import {
 import {
   createEditorialService,
   createCorrespondenceService,
+  createLeadImagePolicy,
+  type LeadImageRequest,
 } from '@/contexts/editorial';
+import type { AssetAuthorizationPort } from '@minhaj/contracts/platform';
 import { memberToken } from '@minhaj/contracts/editorial';
 import { centreReferences } from './global';
 import { galleryReferences } from './media';
@@ -20,6 +23,7 @@ import { peopleReadRuntime } from './people-read';
 import { taxonomyRuntime } from './taxonomy';
 import { appLogger } from './logging';
 import { serverEnv } from '@/config/server-env';
+import { storageRuntime } from './storage';
 
 function buildEditorialRuntime() {
   const environment = serverEnv();
@@ -68,6 +72,11 @@ function buildEditorialRuntime() {
         async selectableMembers(members) {
           const { targets } = await resolveCollectionMembers(members, { strict: true });
           return members.every((member) => targets.has(memberToken(member)));
+        },
+        // Phase 30-R: a lead image is Storage's answer — a servable still
+        // image. Editorial reads no Asset table (ARCHITECTURE.md §4.1).
+        async usableImage(assetId) {
+          return (await (await storageRuntime()).servableImages([assetId])).has(assetId);
         },
       },
       reportFailure: (operation) =>
@@ -128,4 +137,30 @@ export function editorialCentreChoice(id: string) {
  */
 export function editorialGalleryChoices(ids: readonly string[]) {
   return ids.length === 0 ? Promise.resolve([]) : galleryReferences().galleriesByIds(ids);
+}
+
+/**
+ * PHASE 30-R — the ADMINISTRATIVE preview policy of a lead image: the record's
+ * CURRENT revision names it, whatever its state, and the caller holds
+ * `content.read` right now, read live. Lives here, beside Identity, so the
+ * public byte route's graph never reaches it.
+ */
+let previewPersistence: ReturnType<typeof createEditorialPersistence> | null = null;
+export function leadImagePreviewPolicy(
+  request: LeadImageRequest,
+  accountId: string,
+): AssetAuthorizationPort {
+  const persistence = (previewPersistence ??= createEditorialPersistence());
+  return createLeadImagePolicy({
+    request,
+    relation: (family, recordId, assetId) =>
+      persistence.currentLeadImage(family, recordId, assetId),
+    preview: {
+      accountId,
+      authority: {
+        permits: (id, permission) =>
+          identityRuntime().authorization.hasPermission(id, permission),
+      },
+    },
+  });
 }

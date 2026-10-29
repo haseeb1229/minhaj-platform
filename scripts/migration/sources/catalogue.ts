@@ -10,7 +10,13 @@ import {
   createMinhajInfoIssueAdapter,
   createMinhajInfoMagazineAdapter,
 } from '../adapters/minhaj-info.ts';
-import { createMinhajOrgEditorialAdapter } from '../adapters/minhaj-org.ts';
+import {
+  MINHAJ_ORG_ASSET_HOSTS,
+  createMinhajOrgEditorialAdapter,
+  createMinhajOrgPageAdapter,
+  createMinhajOrgPersonAdapter,
+} from '../adapters/minhaj-org.ts';
+import { createMinhajOverseasCountryAdapter } from '../adapters/minhaj-overseas.ts';
 import { createMinhajTvVideoAdapter } from '../adapters/minhaj-tv.ts';
 import { createMinhajBooksWorkAdapter } from '../adapters/minhajbooks.ts';
 import { createTheFatwaAdapter } from '../adapters/thefatwa.ts';
@@ -47,6 +53,13 @@ export interface AuthorisedSourceDefinition {
   readonly contentKind: MigrationContentKind;
   readonly baseUrl: string;
   readonly hosts: readonly string[];
+  /**
+   * Phase 30-R. Exact first-party ASSET hosts the source's own pages name for
+   * their pictures, with the evidence recorded when one is added to a source
+   * registered before it.
+   */
+  readonly assetHosts: readonly string[];
+  readonly assetHostEvidence: string | null;
   readonly defaultLanguageCode: string | null;
   readonly policy: SourcePolicy;
   /** Public statement of what the registration covers; never a secret. */
@@ -85,6 +98,58 @@ const MINHAJ_BOOKS = 'https://www.minhajbooks.com/';
 const MINHAJ_INFO = 'https://minhaj.info/';
 const MINHAJ_TV = 'https://www.minhaj.tv/';
 const THE_FATWA = 'https://thefatwa.com/';
+const MINHAJ_OVERSEAS = 'https://minhajoverseas.com/';
+
+/**
+ * Phase 30-R. Why minhaj.net is the minhaj.org sources' own image host: every
+ * post that has a picture names it there (surveyed 2026-10-29), minhaj.org's
+ * contact page names "MIB Minhaj Internet Bureau … www.minhaj.net", and both
+ * state the same copyright holder.
+ */
+const MINHAJ_NET_EVIDENCE =
+  'minhaj.org posts name minhaj.net for their own pictures (surveyed 2026-10-29); minhaj.org ' +
+  'lists www.minhaj.net as its Minhaj Internet Bureau; both state copyright Minhaj-ul-Quran ' +
+  'International. Owner attestation OWNER-ATTESTATION-2026-10-29-PREADOPTION-CONTENT-BRAND-EXPANSION.';
+
+/**
+ * Phase 30-R. The organisational pages of the pre-adoption review build: each
+ * minhaj.org page and the ONE reserved shell route it belongs at — reviewed
+ * here, never inferred. A route with no truthful source page stays reserved.
+ */
+export const MINHAJ_ORG_PAGE_BINDINGS: Readonly<Record<string, string>> = Object.freeze({
+  '1799': '/explore/about/introduction',
+  '8721': '/explore/about/global-impact',
+  '8718': '/explore/shaykh-ul-islam/biography',
+  '8722': '/explore/organization/forums',
+  '14614': '/explore/organization/un-recognition',
+  '35509': '/explore/our-work/peace',
+  '31978': '/explore/digital-resources/mobile-apps',
+  '27184': '/explore/digital-resources/social-media',
+});
+
+/**
+ * Phase 30-R. The public leadership profiles on minhaj.org. The founder's own
+ * profile (tid 8718) is the Shaykh-ul-Islam biography PAGE above, so one legacy
+ * address never maps to two records.
+ */
+export const MINHAJ_ORG_PROFILE_TIDS: readonly string[] = Object.freeze([
+  '120',
+  '34530',
+  '49802',
+]);
+
+/**
+ * Phase 30-R. The Minhaj Books categories of the review build, walked in this
+ * order — The Hadith first, the Stage-1A slice every later run keeps.
+ */
+export const MINHAJ_BOOKS_LISTINGS: readonly string[] = Object.freeze([
+  '/english/cat/The-Hadith/',
+  '/english/cat/The-Quran-and-the-Quranic-Sciences/',
+  '/english/cat/The-Prophet-s-life-Conduct-and-Virtues/',
+  '/english/cat/Morality-and-Spiritualism/',
+  '/english/cat/Islam-and-Science/',
+  '/english/cat/Human-Rights-and-Contemporary-Era/',
+]);
 const IRFAN = 'https://www.irfan-ul-quran.com/';
 
 export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.freeze([
@@ -94,6 +159,8 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
     contentKind: 'editorial.news',
     baseUrl: MINHAJ_ORG,
     hosts: ['www.minhaj.org'],
+    assetHosts: MINHAJ_ORG_ASSET_HOSTS,
+    assetHostEvidence: MINHAJ_NET_EVIDENCE,
     defaultLanguageCode: 'en',
     policy: AUTHORISED_POLICY,
     policyNotes: `News & Events listing (English). ${PUBLIC_ONLY}`,
@@ -112,6 +179,8 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
     contentKind: 'editorial.news',
     baseUrl: MINHAJ_ORG,
     hosts: ['www.minhaj.org'],
+    assetHosts: MINHAJ_ORG_ASSET_HOSTS,
+    assetHostEvidence: MINHAJ_NET_EVIDENCE,
     defaultLanguageCode: 'ur',
     policy: AUTHORISED_POLICY,
     policyNotes: `News & Events listing (Urdu). ${PUBLIC_ONLY}`,
@@ -130,6 +199,8 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
     contentKind: 'editorial.article',
     baseUrl: MINHAJ_ORG,
     hosts: ['www.minhaj.org'],
+    assetHosts: MINHAJ_ORG_ASSET_HOSTS,
+    assetHostEvidence: MINHAJ_NET_EVIDENCE,
     defaultLanguageCode: 'en',
     policy: AUTHORISED_POLICY,
     policyNotes: `Articles listing (English). ${PUBLIC_ONLY}`,
@@ -143,21 +214,123 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
       }),
   },
   {
+    key: 'minhaj-org-news-ar',
+    name: 'Minhaj.org — Arabic news',
+    contentKind: 'editorial.news',
+    baseUrl: MINHAJ_ORG,
+    hosts: ['www.minhaj.org'],
+    assetHosts: MINHAJ_ORG_ASSET_HOSTS,
+    assetHostEvidence: MINHAJ_NET_EVIDENCE,
+    defaultLanguageCode: 'ar',
+    policy: AUTHORISED_POLICY,
+    policyNotes: `News & Events listing (Arabic). ${PUBLIC_ONLY}`,
+    adapter: (selection) =>
+      createMinhajOrgEditorialAdapter({
+        baseUrl: MINHAJ_ORG,
+        selection,
+        kind: 'editorial.news',
+        section: 'News-Events',
+        language: 'arabic',
+      }),
+  },
+  {
+    key: 'minhaj-org-press-releases-en',
+    name: 'Minhaj.org — English press releases',
+    contentKind: 'editorial.press-release',
+    baseUrl: MINHAJ_ORG,
+    hosts: ['www.minhaj.org'],
+    assetHosts: MINHAJ_ORG_ASSET_HOSTS,
+    assetHostEvidence: MINHAJ_NET_EVIDENCE,
+    defaultLanguageCode: 'en',
+    policy: AUTHORISED_POLICY,
+    policyNotes: `Press Release listing (English). ${PUBLIC_ONLY}`,
+    adapter: (selection) =>
+      createMinhajOrgEditorialAdapter({
+        baseUrl: MINHAJ_ORG,
+        selection,
+        kind: 'editorial.press-release',
+        section: 'Press-Release',
+        language: 'english',
+      }),
+  },
+  {
+    key: 'minhaj-org-pages-en',
+    name: 'Minhaj.org — organisational pages (English)',
+    contentKind: 'editorial.page',
+    baseUrl: MINHAJ_ORG,
+    hosts: ['www.minhaj.org'],
+    assetHosts: MINHAJ_ORG_ASSET_HOSTS,
+    assetHostEvidence: MINHAJ_NET_EVIDENCE,
+    defaultLanguageCode: 'en',
+    policy: AUTHORISED_POLICY,
+    policyNotes:
+      `The catalogued organisational pages, each bound to one reserved Explore route; ` +
+      `pre-adoption review content, subject to Minhaj content acceptance. ${PUBLIC_ONLY}`,
+    adapter: (selection) =>
+      createMinhajOrgPageAdapter({
+        baseUrl: MINHAJ_ORG,
+        selection,
+        items: selection.items,
+        language: 'english',
+        bindings: MINHAJ_ORG_PAGE_BINDINGS,
+      }),
+  },
+  {
+    key: 'minhaj-org-people-en',
+    name: 'Minhaj.org — leadership profiles (English)',
+    contentKind: 'people.person',
+    baseUrl: MINHAJ_ORG,
+    hosts: ['www.minhaj.org'],
+    assetHosts: MINHAJ_ORG_ASSET_HOSTS,
+    assetHostEvidence: MINHAJ_NET_EVIDENCE,
+    defaultLanguageCode: 'en',
+    policy: AUTHORISED_POLICY,
+    policyNotes:
+      `The catalogued public leadership profiles: name, whole biography paragraphs and the ` +
+      `profile's own portrait; no contact detail. ${PUBLIC_ONLY}`,
+    adapter: (selection) =>
+      createMinhajOrgPersonAdapter({
+        baseUrl: MINHAJ_ORG,
+        selection,
+        items: selection.items,
+        language: 'english',
+        tids: MINHAJ_ORG_PROFILE_TIDS,
+      }),
+  },
+  {
+    key: 'minhaj-overseas-countries',
+    name: 'Minhaj Overseas (DFA) — countries of presence',
+    contentKind: 'global.country',
+    baseUrl: MINHAJ_OVERSEAS,
+    hosts: ['minhajoverseas.com'],
+    assetHosts: [],
+    assetHostEvidence: null,
+    defaultLanguageCode: 'en',
+    policy: AUTHORISED_POLICY,
+    policyNotes:
+      `The Directorate of Foreign Affairs' "MQI in different Countries of the world" page and ` +
+      `each listed country's page; no person's contact detail is read. ${PUBLIC_ONLY}`,
+    adapter: (selection) =>
+      createMinhajOverseasCountryAdapter({ baseUrl: MINHAJ_OVERSEAS, selection }),
+  },
+  {
     key: 'minhajbooks-works',
     name: 'Minhaj Books — works',
     contentKind: 'library.work',
     baseUrl: MINHAJ_BOOKS,
     hosts: ['www.minhajbooks.com'],
+    assetHosts: [],
+    assetHostEvidence: null,
     defaultLanguageCode: null,
     policy: AUTHORISED_POLICY,
     policyNotes:
-      `Book landing pages: metadata and introductions; no PDF, page image or sale-point data in ` +
-      `Stage 1A. ${PUBLIC_ONLY}`,
+      `Book landing pages of the catalogued categories: metadata, introductions and the cover ` +
+      `picture; no PDF, page image or sale-point data in Stage 1A. ${PUBLIC_ONLY}`,
     adapter: (selection) =>
       createMinhajBooksWorkAdapter({
         baseUrl: MINHAJ_BOOKS,
         selection,
-        listing: '/english/cat/The-Hadith/',
+        listings: MINHAJ_BOOKS_LISTINGS,
       }),
   },
   {
@@ -166,6 +339,8 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
     contentKind: 'library.magazine',
     baseUrl: MINHAJ_INFO,
     hosts: ['minhaj.info'],
+    assetHosts: [],
+    assetHostEvidence: null,
     defaultLanguageCode: 'ur',
     policy: AUTHORISED_POLICY,
     policyNotes: `Magazine archive pages. ${PUBLIC_ONLY}`,
@@ -182,6 +357,8 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
     contentKind: 'library.magazine-issue',
     baseUrl: MINHAJ_INFO,
     hosts: ['minhaj.info'],
+    assetHosts: [],
+    assetHostEvidence: null,
     defaultLanguageCode: 'ur',
     policy: AUTHORISED_POLICY,
     policyNotes: `Issue pages: titles, dates and the table of contents; no PDF. ${PUBLIC_ONLY}`,
@@ -198,6 +375,8 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
     contentKind: 'library.magazine-issue',
     baseUrl: MINHAJ_INFO,
     hosts: ['minhaj.info'],
+    assetHosts: [],
+    assetHostEvidence: null,
     defaultLanguageCode: 'ur',
     policy: AUTHORISED_POLICY,
     policyNotes: `Issue pages: titles, dates and the table of contents; no PDF. ${PUBLIC_ONLY}`,
@@ -214,6 +393,8 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
     contentKind: 'media.video',
     baseUrl: MINHAJ_TV,
     hosts: ['www.minhaj.tv'],
+    assetHosts: [],
+    assetHostEvidence: null,
     defaultLanguageCode: null,
     policy: AUTHORISED_POLICY,
     policyNotes:
@@ -232,6 +413,8 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
     contentKind: 'fatwa.ruling',
     baseUrl: THE_FATWA,
     hosts: ['thefatwa.com'],
+    assetHosts: [],
+    assetHostEvidence: null,
     defaultLanguageCode: 'ur',
     policy: AUTHORISED_POLICY,
     policyNotes:
@@ -246,6 +429,8 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
     contentKind: 'quran.translation',
     baseUrl: IRFAN,
     hosts: ['www.irfan-ul-quran.com'],
+    assetHosts: [],
+    assetHostEvidence: null,
     defaultLanguageCode: 'ur',
     policy: AUTHORISED_POLICY,
     policyNotes:
@@ -265,6 +450,8 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
     contentKind: 'quran.translation',
     baseUrl: IRFAN,
     hosts: ['www.irfan-ul-quran.com'],
+    assetHosts: [],
+    assetHostEvidence: null,
     defaultLanguageCode: 'en',
     policy: AUTHORISED_POLICY,
     policyNotes:

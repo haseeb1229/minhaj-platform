@@ -77,7 +77,7 @@ const MIGRATION =
   'packages/database/prisma/migrations/20260928000000_phase13_news/migration.sql';
 
 describe('four Editorial aggregates, and nothing generic', () => {
-  it('models each family with its own tables and no image, Event or engagement field — and a Centre only on the NewsArticle revision', async () => {
+  it('models each family with its own tables and no Event or engagement field — a Centre only on the NewsArticle revision, and ONE typed lead image only on the NewsArticle and PressRelease revisions', async () => {
     const schema = await read('packages/database/prisma/schema.prisma');
     for (const family of FAMILIES)
       for (const suffix of SUFFIXES) {
@@ -101,12 +101,37 @@ describe('four Editorial aggregates, and nothing generic', () => {
           // on the family's root record — no column on any News table, and
           // News code reads none of it.
           if (suffix === '' && field === 'collectionItems CollectionItem[]') continue;
+          // Phase 30-R (an owner decision superseding the Phase-13 "no image"
+          // rule): a NewsArticle or PressRelease revision may name ONE lead
+          // image — a typed key to an application-owned Asset with its box and
+          // credit — and its translations the image's alt text. No remote
+          // address, no gallery, no image table; Statement and MediaCoverage
+          // carry none (DOMAIN_MODEL.md §7.1).
+          if (
+            (family === 'NewsArticle' || family === 'PressRelease') &&
+            ((suffix === 'Revision' &&
+              /^(leadAssetId String\?|leadWidth Int\?|leadHeight Int\?|leadCredit String\?|leadAsset Asset\?)$/u.test(
+                field,
+              )) ||
+              (suffix === 'RevisionTranslation' && field === 'leadAlt String'))
+          )
+            continue;
           expect(field, `${family}${suffix}.${field}`).not.toMatch(
             /image|asset|photo|gallery|event|centre|center|collection|newsletter|featured|popular|views?\b|kind|type|target/iu,
           );
         }
       }
     expect(modelBody(schema, 'NewsArticleRevision')).toMatch(/^\s*centreId String\?/mu);
+    // The lead image is ONE typed key per revision, and nowhere else.
+    for (const family of ['NewsArticle', 'PressRelease'])
+      expect(modelBody(schema, `${family}Revision`)).toMatch(
+        /^\s*leadAssetId String\? @db\.NVarChar\(36\)$/mu,
+      );
+    for (const family of ['Statement', 'MediaCoverage'])
+      for (const suffix of SUFFIXES)
+        expect(modelBody(schema, family + suffix), family + suffix).not.toMatch(
+          /\blead/u,
+        );
     for (const absent of [
       'News',
       'NewsItem',
@@ -224,12 +249,36 @@ describe('authority stays in the Editorial keys', () => {
 });
 
 describe('the public News tree claims nothing it does not have', () => {
-  it('emits no image, logo or publisher in structured data and embeds no third-party content', async () => {
+  it('claims no logo or publisher, embeds no third-party content, and pictures only its own first-party lead image', async () => {
     const source = uncommented(await read('apps/web/src/components/editorial/news.tsx'));
     expect(source).not.toMatch(/['"](image|logo|publisher|thumbnailUrl)['"]\s*:/u);
     expect(source).not.toMatch(/\bimage\s*:/u);
+    // A picture appears only through the lead-image components — never a raw
+    // tag, an embed or a third-party image component.
     expect(source).not.toMatch(/<img\b|<iframe\b|next\/image/u);
     // The coverage source is a described outbound link, never an embed.
     expect(source).toMatch(/rel="external noopener noreferrer"/u);
+
+    // Phase 30-R: structured data names an image only as Editorial's OWN byte
+    // route for the record's own lead image — never a remote address, a logo
+    // or a publisher.
+    const presentation = uncommented(
+      await read('apps/web/src/components/editorial/presentation.ts'),
+    );
+    expect(presentation).not.toMatch(/\b(logo|publisher|thumbnailUrl)\s*:/u);
+    const images = presentation.match(/\bimage\s*:[^\n]*/gu) ?? [];
+    expect(images.length).toBeGreaterThan(0);
+    for (const image of images)
+      expect(image).toMatch(
+        /^image\s*:\s*absoluteUrl\(leadImagePath\(record\.leadImage\)\)/u,
+      );
+
+    // The lead-image components draw ONLY Editorial's own route.
+    const lead = uncommented(
+      await read('apps/web/src/components/editorial/lead-image.tsx'),
+    );
+    const sources = lead.match(/\bsrc=\{[^}]*\}/gu) ?? [];
+    expect(sources).toEqual(['src={leadImagePath(image)}', 'src={leadImagePath(image)}']);
+    expect(lead).not.toMatch(/https?:\/\/|next\/image|<iframe\b/u);
   });
 });

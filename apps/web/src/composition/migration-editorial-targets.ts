@@ -2,18 +2,23 @@ import 'server-only';
 
 import {
   newsPathOf,
+  pagePath,
   type ArticleDetail,
   type EditorialActor,
   type EditorialReferencesPort,
+  type PageDetail,
 } from '@minhaj/contracts/editorial';
 import type { LibraryReferencesPort } from '@minhaj/contracts/library';
 import type {
   MigrationActor,
   MigrationContentKind,
   MigrationPublicationTargetPort,
+  PublishableAsset,
   StagedBlock,
   StagedEditorialPayload,
   StagedInline,
+  StagedPagePayload,
+  StagedPayload,
   TargetPublication,
 } from '@minhaj/contracts/migration';
 
@@ -21,6 +26,7 @@ import { editorialFailure, type EditorialService } from '../contexts/editorial/i
 import {
   ADOPTION_PAGES,
   askerOf,
+  clearedImage,
   publishing,
   refusal,
   withdrawalRefusal,
@@ -48,10 +54,21 @@ import {
  * ever assembled, and Editorial's own renderer validates and sanitises it. A
  * link is exactly the already-rewritten href the payload carries.
  *
- * NOTHING IS SMUGGLED. Editorial has no field for the source's original
- * publication date, so `publishedOn` stays migration provenance (shown to
- * reviewers) and goes nowhere here. No contributor, Centre or SEO text is
- * invented; the excerpt is the source's, possibly empty, as Editorial allows.
+ * SOURCE TRUTH, NOTHING SMUGGLED (Phase 30-R). A dated family's source date
+ * (`publishedOn`) is Editorial's `sourcePublishedOn` — the record's
+ * reader-facing chronology, never replaced by the migration or approval date.
+ * A lead image is used only as the PUBLIC copy of a rights-cleared acquisition
+ * of exactly its URL, with the source's own alt text. No contributor, Centre
+ * or SEO text is invented; the excerpt is the source's, possibly empty.
+ *
+ * FOUR FAMILIES: `editorial.news` (a NewsArticle), `editorial.article` (an
+ * Article), `editorial.press-release` (a PressRelease) and `editorial.page` —
+ * an organisational Page bound to the ONE reserved shell route its payload
+ * names, whose slug is always `page`; Editorial validates the binding.
+ *
+ * REFRESH (Phase 30-R) is an author's revision through Editorial's own
+ * workflow, then a submission: the record is in review again until a
+ * different person approves and publishes it.
  *
  * ADOPTION ONLY ON RESUME, ONLY FOR AN EXACT MATCH. A resumed entry meeting a
  * taken slug pages Editorial's administrative directory (most recently changed
@@ -78,7 +95,7 @@ import {
 /** The Editorial operations the targets use, and nothing else of Editorial. */
 export type EditorialOperations = Pick<
   EditorialService,
-  'create' | 'transition' | 'directory' | 'detail'
+  'create' | 'revise' | 'transition' | 'directory' | 'detail'
 >;
 
 /** Personalisation's one-bit answer about an Article. */
@@ -86,19 +103,31 @@ export interface ArticleHoldings {
   articleHeld(articleId: string): Promise<boolean>;
 }
 
-type EditorialFamily = 'editorial.news' | 'editorial.article';
+type EditorialFamily =
+  'editorial.news' | 'editorial.article' | 'editorial.press-release' | 'editorial.page';
 
-/** Each migration kind's Editorial aggregate and locale-free canonical path. */
+type EditorialPayload = StagedEditorialPayload | StagedPagePayload;
+
+/** Each migration kind's Editorial aggregate and whether it carries a source date. */
 const FAMILIES = {
-  'editorial.news': {
-    aggregate: 'news-article',
-    path: (slug: string) => newsPathOf('news-article', slug),
-  },
-  'editorial.article': {
-    aggregate: 'article',
-    path: (slug: string) => `/library/articles/${slug}`,
-  },
-} as const satisfies Record<EditorialFamily, unknown>;
+  'editorial.news': { aggregate: 'news-article', dated: true },
+  'editorial.article': { aggregate: 'article', dated: true },
+  'editorial.press-release': { aggregate: 'press-release', dated: true },
+  'editorial.page': { aggregate: 'page', dated: false },
+} as const satisfies Record<
+  EditorialFamily,
+  { readonly aggregate: string; readonly dated: boolean }
+>;
+
+/** The locale-free canonical path of a record Editorial holds. */
+function pathOf(family: EditorialFamily, record: ArticleDetail): string {
+  if (family === 'editorial.news') return newsPathOf('news-article', record.slug);
+  if (family === 'editorial.press-release')
+    return newsPathOf('press-release', record.slug);
+  if (family === 'editorial.page')
+    return pagePath((record as PageDetail).routeBinding, record.slug);
+  return `/library/articles/${record.slug}`;
+}
 
 /** Editorial's administrative directory page size. */
 const DIRECTORY_PAGE = 25;
@@ -201,55 +230,160 @@ function sameDocument(held: string, staged: string): boolean {
 }
 
 /* ===========================================================================
- * The targets
+ * The record as Editorial's input
  * ========================================================================= */
 
-/** The staged record as Editorial's own content input for its aggregate. */
+/** What a payload asks of its record: words, document, lead image and date. */
+interface Wanted {
+  readonly slug: string;
+  readonly languageCode: string;
+  readonly title: string;
+  readonly excerpt: string;
+  readonly document: string;
+  readonly lead: ReturnType<typeof clearedImage>;
+  /** `undefined` for a Page, which has no source date. */
+  readonly sourcePublishedOn: string | null | undefined;
+}
+
+function wantedOf(
+  family: EditorialFamily,
+  payload: EditorialPayload,
+  assets: readonly PublishableAsset[],
+): Wanted {
+  return {
+    // A shell-bound Page's slug is always `page`; its binding is its address.
+    slug: payload.kind === 'editorial.page' ? 'page' : payload.slug,
+    languageCode: payload.languageCode,
+    title: payload.title,
+    excerpt: payload.excerpt,
+    document: editorialDocument(payload.body),
+    // Only a rights-cleared acquisition's public copy, never a remote URL.
+    lead: clearedImage(payload.leadImage, assets),
+    sourcePublishedOn:
+      FAMILIES[family].dated && payload.kind !== 'editorial.page'
+        ? payload.publishedOn
+        : undefined,
+  };
+}
+
+/** The translation the payload's language carries. */
+function translationOf(wanted: Wanted) {
+  return {
+    languageCode: wanted.languageCode,
+    title: wanted.title,
+    excerpt: wanted.excerpt,
+    seoTitle: '',
+    seoDescription: '',
+    document: wanted.document,
+    leadAlt: wanted.lead?.alt ?? '',
+  };
+}
+
+function leadOf(wanted: Wanted) {
+  return wanted.lead === null
+    ? null
+    : {
+        assetId: wanted.lead.assetId,
+        width: wanted.lead.width,
+        height: wanted.lead.height,
+        credit: wanted.lead.credit,
+      };
+}
+
+/** A new record's content input for its aggregate. */
 function contentInput(
   family: EditorialFamily,
-  payload: StagedEditorialPayload,
+  wanted: Wanted,
   topicIds: readonly string[],
-  document: string,
 ) {
   const content = {
-    slug: payload.slug,
-    primaryLanguage: payload.languageCode,
-    translations: [
-      {
-        languageCode: payload.languageCode,
-        title: payload.title,
-        excerpt: payload.excerpt,
-        seoTitle: '',
-        seoDescription: '',
-        document,
-      },
-    ],
+    slug: wanted.slug,
+    primaryLanguage: wanted.languageCode,
+    translations: [translationOf(wanted)],
     topicIds: [...topicIds],
     contributors: [],
+    leadImage: leadOf(wanted),
+    ...(wanted.sourcePublishedOn === undefined
+      ? {}
+      : { sourcePublishedOn: wanted.sourcePublishedOn }),
   };
   // A NewsArticle may name a Centre; a migrated one names none.
   return family === 'editorial.news' ? { ...content, centreId: null } : content;
 }
 
-/** Whether a record Editorial holds is exactly this payload's. */
-function sameRecord(
-  record: ArticleDetail,
-  payload: StagedEditorialPayload,
-  document: string,
-): boolean {
+/**
+ * A REFRESH's content input over the record Editorial holds: the payload's
+ * words, document, lead image and source date in the payload's language —
+ * and everything a person may have curated since (other translations, topics,
+ * contributors, a Centre, SEO words) exactly as the current revision holds it.
+ */
+function refreshInput(record: ArticleDetail, wanted: Wanted) {
+  const current = record.revision;
+  const held = current.translations.find(
+    (translation) => translation.languageCode === wanted.languageCode,
+  );
+  const translations = [
+    ...current.translations
+      .filter((translation) => translation.languageCode !== wanted.languageCode)
+      .map((translation) => ({
+        languageCode: translation.languageCode,
+        title: translation.title,
+        excerpt: translation.excerpt,
+        seoTitle: translation.seoTitle,
+        seoDescription: translation.seoDescription,
+        document: translation.document,
+        leadAlt: translation.leadAlt ?? '',
+      })),
+    {
+      ...translationOf(wanted),
+      seoTitle: held?.seoTitle ?? '',
+      seoDescription: held?.seoDescription ?? '',
+    },
+  ];
+  return {
+    slug: record.slug,
+    primaryLanguage: current.primaryLanguage,
+    translations,
+    topicIds: [...current.topicIds],
+    contributors: current.contributors.map((entry) => ({
+      personId: entry.personId,
+      role: entry.role,
+    })),
+    leadImage: leadOf(wanted) ?? current.leadImage ?? null,
+    ...(wanted.sourcePublishedOn === undefined
+      ? {}
+      : { sourcePublishedOn: wanted.sourcePublishedOn }),
+    ...(current.centreId === undefined ? {} : { centreId: current.centreId }),
+  };
+}
+
+/** Whether the record Editorial holds already carries exactly what is wanted. */
+function sameRecord(record: ArticleDetail, wanted: Wanted, alone: boolean): boolean {
   const { revision } = record;
-  const [translation, ...more] = revision.translations;
+  const translation = revision.translations.find(
+    (entry) => entry.languageCode === wanted.languageCode,
+  );
+  const lead = wanted.lead;
   return (
-    record.slug === payload.slug &&
-    revision.primaryLanguage === payload.languageCode &&
+    record.slug === wanted.slug &&
     translation !== undefined &&
-    more.length === 0 &&
-    translation.languageCode === payload.languageCode &&
-    translation.title === payload.title.trim() &&
-    translation.excerpt === payload.excerpt.trim() &&
-    sameDocument(translation.document, document)
+    (!alone ||
+      (revision.translations.length === 1 &&
+        revision.primaryLanguage === wanted.languageCode)) &&
+    translation.title === wanted.title.trim() &&
+    translation.excerpt === wanted.excerpt.trim() &&
+    sameDocument(translation.document, wanted.document) &&
+    (lead === null ||
+      (revision.leadImage?.assetId === lead.assetId &&
+        (translation.leadAlt ?? '') === lead.alt.trim())) &&
+    (wanted.sourcePublishedOn === undefined ||
+      (revision.sourcePublishedOn ?? null) === wanted.sourcePublishedOn)
   );
 }
+
+/* ===========================================================================
+ * The targets
+ * ========================================================================= */
 
 /** A publication target for one Editorial family over Editorial's operations. */
 export function editorialTargetOver(deps: {
@@ -258,16 +392,21 @@ export function editorialTargetOver(deps: {
   readonly holdings: ArticleHoldings;
 }): MigrationPublicationTargetPort {
   const { editorial, kind: family } = deps;
-  const { aggregate, path } = FAMILIES[family];
+  const { aggregate } = FAMILIES[family];
   const supports = (kind: MigrationContentKind) => kind === family;
+  const ownPayload = (payload: StagedPayload): payload is EditorialPayload =>
+    payload.kind === family;
 
-  function inReview(record: ArticleDetail): TargetPublication {
+  function stageOf(
+    record: ArticleDetail,
+    stage: 'in-review' | 'public',
+  ): TargetPublication {
     return {
       status: 'published',
       target: { kind: family, id: record.id },
-      stage: 'in-review',
+      stage,
       version: record.version,
-      canonicalPath: path(record.slug),
+      canonicalPath: pathOf(family, record),
     };
   }
 
@@ -285,27 +424,49 @@ export function editorialTargetOver(deps: {
         timezone: null,
       }),
     );
-    return submitted.ok ? inReview(submitted.value) : refusal(submitted.reason);
+    return submitted.ok
+      ? stageOf(submitted.value, 'in-review')
+      : refusal(submitted.reason);
+  }
+
+  /** The record this payload names among a directory page's items, if any. */
+  async function matchIn(
+    actor: EditorialActor,
+    items: readonly { readonly id: string; readonly slug: string }[],
+    payload: EditorialPayload,
+    wanted: Wanted,
+  ): Promise<ArticleDetail | 'refused' | null> {
+    for (const item of items) {
+      if (item.slug !== wanted.slug) continue;
+      const found = await ask(() => editorial.detail(actor, aggregate, item.id));
+      if (!found.ok) return 'refused';
+      // Every shell-bound Page's slug is `page`: its binding says which one.
+      if (
+        payload.kind === 'editorial.page' &&
+        (found.value as PageDetail).routeBinding !== payload.binding
+      )
+        continue;
+      return found.value;
+    }
+    return null;
   }
 
   /** The record an interrupted publication made, when it is exactly this payload's. */
   async function adopt(
     actor: EditorialActor,
-    payload: StagedEditorialPayload,
-    document: string,
+    payload: EditorialPayload,
+    wanted: Wanted,
   ): Promise<TargetPublication> {
     for (let page = 0; page < ADOPTION_PAGES; page += 1) {
       const listing = await ask(() =>
         editorial.directory(actor, aggregate, page * DIRECTORY_PAGE, null),
       );
       if (!listing.ok) return refusal(listing.reason);
-      const match = listing.value.items.find((item) => item.slug === payload.slug);
-      if (match !== undefined) {
-        const found = await ask(() => editorial.detail(actor, aggregate, match.id));
-        if (!found.ok) return refusal(found.reason);
-        const record = found.value;
-        if (!sameRecord(record, payload, document)) return refusal('target-conflict');
-        if (record.state === 'in-review') return inReview(record);
+      const record = await matchIn(actor, listing.value.items, payload, wanted);
+      if (record === 'refused') return refusal('target-conflict');
+      if (record !== null) {
+        if (!sameRecord(record, wanted, true)) return refusal('target-conflict');
+        if (record.state === 'in-review') return stageOf(record, 'in-review');
         // Only the untouched draft its creation left: never one a reviewer
         // sent back, which a person must resubmit.
         if (
@@ -325,24 +486,63 @@ export function editorialTargetOver(deps: {
   return {
     supports,
 
-    async publish({ kind, payload, topicIds, actor, resumed }) {
-      if (!supports(kind) || payload.kind !== family) return refusal('unsupported-kind');
+    async publish({ kind, payload, topicIds, assets, actor, resumed }) {
+      if (!supports(kind) || !ownPayload(payload)) return refusal('unsupported-kind');
       const editorialActor = asEditorial(actor);
-      const document = editorialDocument(payload.body);
+      const wanted = wantedOf(family, payload, assets);
       return publishing(async () => {
+        const input = contentInput(family, wanted, topicIds);
         const created = await ask(() =>
-          editorial.create(
-            editorialActor,
-            aggregate,
-            contentInput(family, payload, topicIds, document),
-          ),
+          payload.kind === 'editorial.page'
+            ? editorial.create(editorialActor, aggregate, input, payload.binding)
+            : editorial.create(editorialActor, aggregate, input),
         );
         if (created.ok) return submit(editorialActor, created.value);
         if (created.reason !== 'duplicate-slug') return refusal(created.reason);
         // Adoption is for an interrupted publication of THIS entry only.
         return resumed
-          ? adopt(editorialActor, payload, document)
+          ? adopt(editorialActor, payload, wanted)
           : refusal('target-exists');
+      });
+    },
+
+    /**
+     * Phase 30-R. A newer revision of the same legacy record, as an AUTHOR's
+     * edit through Editorial's own workflow: revised, then submitted — so it is
+     * `in-review` until a different person approves and publishes it (an edited
+     * published record leaves public view until then, Editorial's own rule). A
+     * record already carrying exactly the wanted words, image and date is
+     * answered as it stands.
+     */
+    async refresh({ kind, target, payload, assets, actor }) {
+      if (!supports(kind) || !ownPayload(payload) || target.kind !== kind)
+        return refusal('unsupported-kind');
+      const editorialActor = asEditorial(actor);
+      const wanted = wantedOf(family, payload, assets);
+      return publishing(async () => {
+        const found = await ask(() =>
+          editorial.detail(editorialActor, aggregate, target.id),
+        );
+        if (!found.ok) return refusal(found.reason);
+        const record = found.value;
+        if (record.state === 'archived') return refusal('target-archived');
+        if (sameRecord(record, wanted, false)) {
+          if (record.state === 'published') return stageOf(record, 'public');
+          if (record.state === 'in-review') return stageOf(record, 'in-review');
+        }
+        // Editorial's own rule: a scheduled record is first cancelled by a person.
+        if (record.state === 'scheduled') return refusal('target-scheduled');
+        const revised = await ask(() =>
+          editorial.revise(
+            editorialActor,
+            aggregate,
+            record.id,
+            record.version,
+            refreshInput(record, wanted),
+          ),
+        );
+        if (!revised.ok) return refusal(revised.reason);
+        return submit(editorialActor, revised.value);
       });
     },
 
@@ -359,7 +559,7 @@ export function editorialTargetOver(deps: {
       return {
         exists: true,
         version: record.version,
-        // Nothing personal can name a NewsArticle.
+        // Only an Article can be saved or read by a person.
         referencedByPeople:
           family === 'editorial.article'
             ? await deps.holdings.articleHeld(record.id)
@@ -391,12 +591,20 @@ export function editorialTargetOver(deps: {
  * owner references Media and Library use: contributors are People's, topics
  * and content languages Taxonomy's. A migrated record names no Centre, no
  * Gallery and no Collection member, so those questions are answered `false` —
- * should one ever be asked, the record is refused rather than linked.
+ * should one ever be asked, the record is refused rather than linked. A lead
+ * image is Storage's answer (Phase 30-R): a servable still image.
  */
 export function migrationEditorialReferences(
   owner: LibraryReferencesPort,
+  /** Storage's servable-still-image question, and nothing else of Storage. */
+  storage: () => Promise<{
+    servableImages(assetIds: readonly string[]): Promise<ReadonlySet<string>>;
+  }>,
 ): EditorialReferencesPort {
   return {
+    async usableImage(assetId) {
+      return (await (await storage()).servableImages([assetId])).has(assetId);
+    },
     validContributors: (ids) => owner.validPeople(ids),
     validTopics: (ids) => owner.validTopics(ids),
     async validLanguages(codes) {

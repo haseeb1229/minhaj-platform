@@ -7,7 +7,12 @@ import { LEARNING_PAGE } from '@minhaj/contracts/learning';
 import type { TopicView } from '@minhaj/contracts/taxonomy';
 
 import { learningReadRuntime } from '@/composition/learning-read';
+import { libraryReadRuntime } from '@/composition/library-read';
+import { CoverImage, CoverTile, editionCoverPath } from '@/components/library/cover';
+import { labelFor, readLibraryQuery, workPath } from '@/components/library/presentation';
 import { MediaPageHeader, Pagination } from '@/components/media/parts';
+import { VideoPreview } from '@/components/media/watch';
+import { directionOf } from '@/config/locale';
 import {
   ActionLink,
   Alert,
@@ -36,6 +41,11 @@ import { courseBrowseHref, learnPageLinks, learnPath, offsetHref } from './prese
  * NO FAKE CATALOGUE. Nothing here is counted, rated or featured: the landing
  * shows the most recently published Courses and paths the reader returns, and
  * when nothing is published it says so in words.
+ *
+ * WHILE NO COURSE IS PUBLISHED (Phase 30-R), the landing still offers real
+ * material to learn from: the Library's published books and Watch's published
+ * lectures, each under its own owner's name and linking to its own page —
+ * never presented as a Course, a syllabus or an enrolment.
  *
  * STRUCTURED AS THE WAYS TO LEARN. The hero names the two catalogues; then the
  * recent Courses, the recent paths, learning with a teacher (the live
@@ -87,6 +97,17 @@ export async function LearnLandingPage({ locale }: { readonly locale: Locale }) 
       <Container>
         <div className="flex flex-col gap-[var(--space-section)] py-[var(--space-section)]">
           {nothing ? <EmptyState>{t('landing.empty')}</EmptyState> : null}
+
+          {nothing ? <LearnFromTheLibrary locale={locale} /> : null}
+          {nothing ? (
+            <VideoPreview
+              locale={locale}
+              filter={{}}
+              heading={t('landing.fromWatch')}
+              headingId="learn-watch"
+              more={{ href: `/${locale}/watch/videos`, text: t('landing.allVideos') }}
+            />
+          ) : null}
 
           {courses.items.length === 0 ? null : (
             <section className="flex flex-col gap-5" aria-labelledby="learn-courses">
@@ -165,6 +186,61 @@ export async function LearnLandingPage({ locale }: { readonly locale: Locale }) 
         </div>
       </Container>
     </>
+  );
+}
+
+/** How many published books the Course-less landing shows. */
+const LANDING_BOOKS = 6;
+
+/**
+ * Published books to read while no Course is published — the Library's own
+ * first page, books with a cover first, as shelf tiles. Nothing when the
+ * Library has published nothing.
+ */
+async function LearnFromTheLibrary({ locale }: { readonly locale: Locale }) {
+  const works = await libraryReadRuntime().works(readLibraryQuery({}));
+  const books = [
+    ...works.items.filter((work) => work.cover !== null),
+    ...works.items.filter((work) => work.cover === null),
+  ].slice(0, LANDING_BOOKS);
+  if (books.length === 0) return null;
+  const t = await getTranslations({ locale, namespace: 'learn' });
+  return (
+    <section className="flex flex-col gap-5" aria-labelledby="learn-library">
+      <SectionHeader
+        id="learn-library"
+        heading={t('landing.fromLibrary')}
+        intro={t('landing.fromLibraryIntro')}
+        action={{ href: `/${locale}/library/books`, text: t('landing.allBooks') }}
+      />
+      <ul
+        aria-label={t('landing.fromLibrary')}
+        className="grid list-none grid-cols-2 gap-x-4 gap-y-6 p-0 min-[30rem]:grid-cols-3 lg:grid-cols-6"
+      >
+        {books.map((work) => {
+          const label = labelFor(work, locale);
+          return (
+            <CoverTile
+              key={work.id}
+              href={workPath(locale, work.slug)}
+              title={label.title}
+              lang={label.locale}
+              dir={directionOf(label.locale)}
+              cover={
+                work.cover === null ? null : (
+                  <CoverImage
+                    path={editionCoverPath(work.cover.editionId, work.cover.assetId)}
+                    cover={work.cover}
+                    alt=""
+                    className="max-h-full"
+                  />
+                )
+              }
+            />
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

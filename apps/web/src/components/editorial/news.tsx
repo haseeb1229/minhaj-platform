@@ -39,6 +39,7 @@ import {
   RecordSection,
 } from '@/components/editorial/frame';
 import { BreadcrumbData, Pagination } from '@/components/media/parts';
+import { LeadFigure, LeadThumbnail } from '@/components/editorial/lead-image';
 import {
   ActionLink,
   Alert,
@@ -70,10 +71,16 @@ import { pathFor, requireRoute } from '@/shell/registry';
  * else — no session, no identity service, no cookie — so a signed-in visitor
  * and an anonymous one receive the same page (ARCHITECTURE.md §8.1).
  *
- * TEXT, NOT PICTURES. News has no image: its dependencies are Editorial and
- * Search, not Storage or Media. A card is its type, its date, its headline, its
- * own summary, its byline and its topics — each shown only where the record
- * genuinely has it — and never a placeholder picture or a stock image.
+ * A LEAD IMAGE WHERE THE RECORD HAS ONE, TEXT WHERE IT DOES NOT (Phase 30-R).
+ * A NewsArticle or PressRelease may carry ONE first-party lead image, served
+ * by Editorial's own route; a card shows it above its words, and a card
+ * without one is a deliberate text-first card — never a placeholder picture or
+ * a stock image. A card is otherwise its type, its date, its headline, its own
+ * summary, its byline and its topics, each shown only where genuinely present.
+ *
+ * THE DATE IS THE RECORD'S CHRONOLOGY: the source's own publication date where
+ * a migrated record states one, else its first publication here — never the
+ * day it was migrated or approved.
  *
  * ONE PAGE OF NAMES PER PAGE. Contributors and topics of every card on a page
  * are resolved by their owners in two calls, never one per card.
@@ -206,9 +213,9 @@ const HEADLINE_SIZE: Record<NewsCardVariant, string> = {
 
 /**
  * ONE CARD. The headline in its own language and direction, a type label, the
- * genuine publication date, the record's own summary, and — only where the
- * record has them — the issuing authority, the outlet, the byline and the
- * topics. No body text, no picture.
+ * record's chronology date, the record's own summary, and — only where the
+ * record has them — the lead image, the issuing authority, the outlet, the
+ * byline and the topics. No body text, and no picture it does not have.
  *
  * The headline is the card's one stretched link; the byline and the topics sit
  * above it as links of their own (see `CARD_SURFACE`).
@@ -235,9 +242,10 @@ function NewsCard({
   const translation = translationFor(item, locale);
   const direction = directionOf(translation.languageCode);
   const Heading = headingLevel;
-  const date = publishedDate(item.publishedAt, locale);
+  const date = publishedDate(item.chronologyAt, locale);
   const compact = variant === 'compact';
   const lead = variant === 'lead';
+  const image = compact ? null : item.leadImage;
   const authors = item.contributors.flatMap((credit) => {
     const person =
       credit.role === 'author' ? names.people.get(credit.personId) : undefined;
@@ -253,6 +261,16 @@ function NewsCard({
         lead ? 'gap-4 border-t-4 border-t-[color:var(--color-accent)] sm:p-7' : ''
       } ${className}`}
     >
+      {image === null ? null : (
+        <LeadThumbnail
+          image={image}
+          alt={translation.leadAlt ?? ''}
+          lang={translation.languageCode}
+          className={`-mx-5 -mt-5 mb-1 w-[calc(100%+2.5rem)] max-w-none rounded-t-[var(--radius-panel)] ${
+            lead ? 'sm:-mx-7 sm:-mt-7 sm:w-[calc(100%+3.5rem)]' : ''
+          }`}
+        />
+      )}
       <article className="flex min-w-0 flex-1 flex-col gap-3">
         <MetaRow
           items={[
@@ -711,7 +729,9 @@ export async function NewsDetailPage({
     publicCentre(record.centreId),
   ]);
   const centreLabel = centre === null ? null : labelFor(centre, locale);
-  const date = publishedDate(record.publishedAt, locale);
+  // The record's chronology: its source's own date where it states one.
+  const date = publishedDate(record.chronologyAt ?? record.publishedAt, locale);
+  const image = record.leadImage ?? null;
   const familyTitle = t(`families.${record.kind}`);
   const familyPath = newsListPathOf(record.kind);
   const credits = record.contributors.flatMap((credit) => {
@@ -799,6 +819,19 @@ export async function NewsDetailPage({
             </p>
           )}
         </header>
+
+        {image === null ? null : (
+          <LeadFigure
+            image={image}
+            alt={translation.leadAlt ?? ''}
+            lang={translation.languageCode}
+            caption={
+              image.credit === null
+                ? null
+                : editorial('leadCredit', { credit: image.credit })
+            }
+          />
+        )}
 
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-14">
           <div className="flex min-w-0 flex-col gap-6">
@@ -959,8 +992,9 @@ export async function NewsDetailPage({
 
 /**
  * The News archive: every published record of the four families, newest
- * first, browsed by the UTC year and month of its GENUINE publication instant —
- * never a record's creation time. Each card says which family it is. On a wide
+ * first, browsed by the UTC year and month of its CHRONOLOGY — its source's own
+ * publication date where a migrated record states one, else its genuine
+ * publication instant — never a record's creation, migration or approval time. Each card says which family it is. On a wide
  * screen the years and months sit beside the results as an index; on a phone
  * they come first.
  */

@@ -4,6 +4,7 @@ import type { Locale } from '@minhaj/contracts';
 
 import { Container } from '@/components/ui';
 import { footerColumns, footerUtility } from '@/shell/menus';
+import { BrandLockup } from '@/components/shell/brand-lockup';
 import { PRODUCT_NAME } from '@/shell/product';
 import { pathFor } from '@/shell/registry';
 
@@ -39,15 +40,15 @@ export async function SiteFooter({ locale }: { readonly locale: Locale }) {
     <footer className="surface-ink mt-[var(--space-section)] border-t-4 border-[color:var(--color-ink-accent)]">
       <Container>
         <div className="flex flex-col gap-10 py-[var(--space-section)]">
-          <p className="flex items-center gap-2.5">
-            <span
-              aria-hidden="true"
-              className="h-6 w-1 shrink-0 rounded-full bg-[color:var(--color-ink-accent)]"
-            />
-            <span lang="en" className="text-lg font-semibold">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+            {/* The official lockup on a light chip: its red and grey are drawn for a light ground. */}
+            <span className="inline-flex rounded-[var(--radius-control)] bg-white px-3 py-2">
+              <BrandLockup placement="footer" />
+            </span>
+            <span lang="en" className="text-sm font-semibold opacity-90">
               {PRODUCT_NAME}
             </span>
-          </p>
+          </div>
 
           <div className="grid grid-cols-1 gap-x-8 gap-y-10 min-[30rem]:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
             {columns.map((column, index) => {

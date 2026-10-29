@@ -170,6 +170,11 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/editorial/public-content.tsx',
     'apps/web/src/components/editorial/news.tsx',
     'apps/web/src/components/editorial/presentation.ts',
+    // Phase 30-R: the Article card and the lead image beside it.
+    'apps/web/src/components/editorial/article-card.tsx',
+    'apps/web/src/components/editorial/lead-image.tsx',
+    // Phase 30-R: a published Explore Page as a card.
+    'apps/web/src/components/editorial/page-card.tsx',
     // Phase 14: the Event pages and their pure presentation rules.
     'apps/web/src/components/editorial/events.tsx',
     'apps/web/src/components/editorial/event-presentation.ts',
@@ -185,6 +190,11 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/library/facet-browse.tsx',
     // The flagship presentation pass: the Library's shared page frames, which
     // the static landing and the dynamic listings and records both render.
+    // Phase 30-R. Library's cover image and cover card, and People's portrait
+    // — server-rendered from first-party routes, with no request-time API.
+    'apps/web/src/components/library/cover.tsx',
+    'apps/web/src/components/people/portrait.tsx',
+    'apps/web/src/components/people/person-card.tsx',
     'apps/web/src/components/library/frame.tsx',
     'apps/web/src/components/library/presentation.ts',
     'apps/web/src/components/library/reader-controls.tsx',
@@ -376,6 +386,8 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/workspace/parts.tsx',
     'apps/web/src/components/workspace/workspace-nav.tsx',
     'apps/web/src/components/shell/site-header.tsx',
+    // Phase 30-R: the official brand lockup in the header and footer.
+    'apps/web/src/components/shell/brand-lockup.tsx',
     'apps/web/src/components/shell/site-footer.tsx',
     'apps/web/src/components/shell/explore-panel.tsx',
     // The mega-menu panels and drawer sections, rendered on the server into
@@ -480,6 +492,8 @@ describe('the render and routing tree stays statically renderable', () => {
       '[locale]',
       'api',
       'assets',
+      // Phase 30-R: the official favicon, served by Next's file convention.
+      'icon.png',
       'robots.ts',
       'sitemap.xml',
       'sitemaps',

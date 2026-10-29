@@ -6,10 +6,12 @@ import {
   AUTHORISED_MAX_CONCURRENCY,
   AUTHORISED_MIN_INTERVAL_MS,
   MIGRATION_LIMITS,
+  assetHostAddSchema,
   authorisedScopeIsReal,
   authorisedSourceCreateSchema,
   fixtureScopeIsSynthetic,
   fixtureSourceCreateSchema,
+  isRealHostName,
   migrationIdSchema,
   migrationOffsetSchema,
   sourceKeySchema,
@@ -128,6 +130,12 @@ export function createMigrationSourceService(deps: {
       if (hosts.length !== value.hosts.length) throw new MigrationRefusal('invalid');
       if (!authorisedScopeIsReal(value.baseUrl, hosts))
         throw new MigrationRefusal('unsafe-scope');
+      const assetHosts = [...new Set(value.assetHosts)];
+      if (
+        assetHosts.length !== value.assetHosts.length ||
+        assetHosts.some((host) => hosts.includes(host) || !isRealHostName(host))
+      )
+        throw new MigrationRefusal('unsafe-scope');
       const at = now();
       if (value.authorisedOn > at.toISOString().slice(0, 10))
         throw new MigrationRefusal('invalid');
@@ -139,6 +147,7 @@ export function createMigrationSourceService(deps: {
           contentKind: value.contentKind,
           baseUrl: value.baseUrl,
           hosts,
+          assetHosts,
           defaultLanguageCode: value.defaultLanguageCode,
           policy: value.policy,
           authorisationReference: value.authorisationReference,
@@ -149,6 +158,30 @@ export function createMigrationSourceService(deps: {
           now: at,
         }),
       );
+    },
+
+    /**
+     * Phase 30-R. Appends one exact first-party ASSET host to an AUTHORISED
+     * source, under `migration.administer`, with the evidence that the host
+     * serves the source's own images. A real DNS name only, never a page host
+     * again, never a fixture source; a host once added is never removed.
+     */
+    async addAssetHost(actor: MigrationActor, input: unknown): Promise<SourceRecord> {
+      const { actorId, value } = await gate.authorised(
+        actor,
+        ADMINISTER,
+        assetHostAddSchema,
+        input,
+      );
+      if (!isRealHostName(value.host)) throw new MigrationRefusal('unsafe-scope');
+      const current = await guarded(deps.sources.source(value.sourceId));
+      if (current === null) throw new MigrationRefusal('not-found');
+      if (current.authorityKind !== 'authorised') throw new MigrationRefusal('invalid');
+      if (current.version !== value.expectedVersion)
+        throw new MigrationRefusal('conflict');
+      if (current.hosts.includes(value.host) || current.assetHosts.includes(value.host))
+        throw new MigrationRefusal('invalid');
+      return guarded(deps.sources.addAssetHost({ ...value, actorId, now: now() }));
     },
 
     /**

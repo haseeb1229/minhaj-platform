@@ -129,16 +129,33 @@ export function createMigrationPublication(): MigrationPublicationPort {
           const recordOf = new Map(
             staged.map((revision) => [revision.id, revision.recordId]),
           );
+          // A record an earlier manifest already published (an ACTIVE mapping
+          // names it) is REFRESHED in place; every other record is created.
+          const mapped = new Set(
+            (
+              await tx.migrationLegacyMapping.findMany({
+                where: {
+                  recordId: { in: staged.map((revision) => revision.recordId) },
+                  state: 'active',
+                },
+                select: { recordId: true },
+              })
+            ).map((mapping) => mapping.recordId),
+          );
           await tx.migrationManifestEntry.createMany({
-            data: ids.map((stagedRecordId, position) => ({
-              id: randomUUID(),
-              manifestId: input.id,
-              position,
-              stagedRecordId,
-              recordId: recordOf.get(stagedRecordId) ?? '',
-              state: 'pending',
-              version: 1,
-            })),
+            data: ids.map((stagedRecordId, position) => {
+              const recordId = recordOf.get(stagedRecordId) ?? '';
+              return {
+                id: randomUUID(),
+                manifestId: input.id,
+                position,
+                stagedRecordId,
+                recordId,
+                state: 'pending',
+                mode: mapped.has(recordId) ? 'refresh' : 'create',
+                version: 1,
+              };
+            }),
           });
           await audit(tx, {
             action: 'migration.manifest.created',
@@ -280,6 +297,10 @@ export function createMigrationPublication(): MigrationPublicationPort {
                   assetId: true,
                   mediaType: true,
                   checksum: true,
+                  publicAssetId: true,
+                  publicChecksum: true,
+                  width: true,
+                  height: true,
                 },
               },
               merged: {
@@ -325,7 +346,24 @@ export function createMigrationPublication(): MigrationPublicationPort {
           payload: staged.payload,
           topicIds,
           legacyUrls,
-          assets: record.assets.map((asset) => ({ ...asset })),
+          assets: record.assets.map((asset) => ({
+            originalUrl: asset.originalUrl,
+            assetId: asset.assetId,
+            mediaType: asset.mediaType,
+            checksum: asset.checksum,
+            publicCopy:
+              asset.publicAssetId === null ||
+              asset.publicChecksum === null ||
+              asset.width === null ||
+              asset.height === null
+                ? null
+                : {
+                    assetId: asset.publicAssetId,
+                    checksum: asset.publicChecksum,
+                    width: asset.width,
+                    height: asset.height,
+                  },
+          })),
         };
       });
     },
@@ -380,6 +418,25 @@ export function createMigrationPublication(): MigrationPublicationPort {
             entry.manifest.state !== 'publishing'
           )
             throw new MigrationDataError('invalid-state');
+
+          // A REFRESH changed the record an earlier entry made: it names
+          // exactly the target the record's active mapping names, and makes
+          // no mapping of its own (51380 refuses one too).
+          if (entry.mode === 'refresh') {
+            if (input.legacyUrls.length > 0) throw new MigrationDataError('invalid');
+            const mapped = await tx.migrationLegacyMapping.findFirst({
+              where: { recordId: entry.recordId, state: 'active' },
+              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+              select: TARGET_SELECT,
+            });
+            const made = mapped === null ? null : targetOf(mapped);
+            if (
+              made === null ||
+              made.kind !== input.target.kind ||
+              made.id !== input.target.id
+            )
+              throw new MigrationDataError('conflict');
+          }
 
           // Every URL is the entry's record's own, or a record merged into it.
           const urlRecords = [...new Set(input.legacyUrls.map((url) => url.recordId))];
@@ -478,7 +535,10 @@ export function createMigrationPublication(): MigrationPublicationPort {
             },
           });
           await audit(tx, {
-            action: 'migration.manifest.entry-published',
+            action:
+              entry.mode === 'refresh'
+                ? 'migration.manifest.entry-refreshed'
+                : 'migration.manifest.entry-published',
             actorId: input.actorId,
             targetType: 'migration-manifest-entry',
             targetId: input.entryId,

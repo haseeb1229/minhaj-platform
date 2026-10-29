@@ -64,6 +64,10 @@ function buildMediaRuntime() {
       persistence,
       authority,
       references: ownerReferences,
+      // Storage's servable-still-image answer, asked before a poster is recorded.
+      images: {
+        servableImages: async (ids) => (await storageRuntime()).servableImages(ids),
+      },
     }),
     audioUpload: createAudioUpload({ persistence, authority, storage: storageRuntime }),
     photoUpload: createPhotoUpload({ persistence, authority, storage: storageRuntime }),

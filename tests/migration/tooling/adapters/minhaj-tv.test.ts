@@ -118,9 +118,9 @@ describe('identity and options', () => {
   it('declares what it is', () => {
     expect(adapter()).toMatchObject({
       adapterKey: MINHAJ_TV_VIDEO_ADAPTER_KEY,
-      adapterVersion: '1',
+      adapterVersion: '2',
       parserKey: 'cheerio-minhaj-tv-video',
-      parserVersion: '1',
+      parserVersion: '2',
       contentKind: 'media.video',
       accessMethod: 'http',
     });
@@ -278,6 +278,8 @@ interface VideoPage {
   readonly title?: string;
   readonly embed?: string | null;
   readonly rows?: readonly string[];
+  readonly ogImage?: string;
+  readonly copyright?: string;
 }
 
 const FOOTER_ID = 'SynthFootr1';
@@ -304,7 +306,7 @@ function videoPage(options: VideoPage = {}) {
     )
     .join('\n');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta property="og:locale" content="en_US"><meta itemprop="dateCreated" content="--"></head><body>
+<meta property="og:locale" content="en_US"><meta itemprop="dateCreated" content="--">${options.ogImage === undefined ? '' : `<meta property="og:image:url" content="${options.ogImage}">`}${options.copyright === undefined ? '' : `<meta name="copyright" content="${options.copyright}">`}</head><body>
 <div class="row"><div class="col-sm-8 main-content">
 <div class="video-info small"><h1>${options.title ?? 'Synthetic Speech Title'}</h1><div style="clear:both;"></div><h2>(Synthetic subtitle)</h2></div>
 <div class="video-gallery"><div class="tab-content" id="VideoTabsContent">
@@ -324,6 +326,48 @@ ${rows}
 const PAGE_URL = videoUrl(1);
 
 describe('parsing with Cheerio', () => {
+  it('takes the page’s own og:image as the first-party poster, resolved on its host', () => {
+    const result = adapter().parse(
+      evidenceOf(
+        videoPage({
+          ogImage: '/images-charts/1_Synthetic-Speech_speech.jpg',
+          copyright: 'Minhaj-ul-Quran International. 2026',
+        }),
+        PAGE_URL,
+      ),
+    );
+    if (result.kind !== 'parsed' || result.record.kind !== 'media.video')
+      throw new Error('expected a video');
+    const url = 'https://www.minhaj.tv/images-charts/1_Synthetic-Speech_speech.jpg';
+    expect(result.record.poster).toEqual({
+      url,
+      alt: 'Synthetic Speech Title',
+      credit: null,
+    });
+    expect(result.record.assets).toEqual([
+      {
+        url,
+        licence: 'organisation-owned',
+        licenceEvidence: expect.stringContaining('Minhaj-ul-Quran International. 2026'),
+        rightsHolder: 'Minhaj-ul-Quran International',
+      },
+    ]);
+  });
+
+  it('never takes a provider thumbnail or an off-host image as the poster', () => {
+    for (const ogImage of [
+      'https://i.ytimg.com/vi/SynthVid_01/hqdefault.jpg',
+      'https://www.minhaj.tv/images-charts/1_Synthetic.webp',
+      'http://www.minhaj.tv/images-charts/1_Synthetic.jpg',
+    ]) {
+      const result = adapter().parse(evidenceOf(videoPage({ ogImage }), PAGE_URL));
+      if (result.kind !== 'parsed' || result.record.kind !== 'media.video')
+        throw new Error('expected a video');
+      expect(result.record.poster).toBeNull();
+      expect(result.record.assets).toEqual([]);
+    }
+  });
+
   it('extracts every field of a video page', () => {
     expect(adapter().parse(evidenceOf(videoPage(), PAGE_URL))).toEqual({
       kind: 'parsed',
@@ -342,6 +386,7 @@ describe('parsing with Cheerio', () => {
         categories: [{ key: 'English-Speeches', label: 'English Speeches' }],
         links: [],
         assets: [],
+        poster: null,
       },
     });
   });

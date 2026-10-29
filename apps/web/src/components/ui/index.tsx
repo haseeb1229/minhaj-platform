@@ -201,6 +201,7 @@ export function PageHero({
   eyebrow,
   actions,
   children,
+  aside,
   tone = 'plain',
 }: {
   readonly title: ReactNode;
@@ -210,6 +211,11 @@ export function PageHero({
   readonly actions?: ReactNode;
   /** Anything that belongs inside the band below the actions, such as a search. */
   readonly children?: ReactNode;
+  /**
+   * Phase 30-R. One featured item beside the words on wide screens (below them
+   * on narrow ones) — a real published record, never decoration.
+   */
+  readonly aside?: ReactNode;
   readonly tone?: 'plain' | 'ink';
 }) {
   const ink = tone === 'ink';
@@ -223,40 +229,53 @@ export function PageHero({
       }
     >
       <Container>
-        <div className="flex max-w-3xl flex-col gap-5 py-[var(--space-section)]">
-          {eyebrow === undefined ? null : (
-            <p
-              className={`text-caption font-semibold tracking-[var(--tracking-eyebrow)] uppercase ${
-                ink
-                  ? 'text-[color:var(--color-ink-accent)]'
-                  : 'text-[color:var(--color-accent)]'
+        <div
+          className={
+            aside === undefined
+              ? ''
+              : 'grid grid-cols-1 items-center gap-x-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)]'
+          }
+        >
+          <div className="flex max-w-3xl min-w-0 flex-col gap-5 py-[var(--space-section)]">
+            {eyebrow === undefined ? null : (
+              <p
+                className={`text-caption font-semibold tracking-[var(--tracking-eyebrow)] uppercase ${
+                  ink
+                    ? 'text-[color:var(--color-ink-accent)]'
+                    : 'text-[color:var(--color-accent)]'
+                }`}
+              >
+                {eyebrow}
+              </p>
+            )}
+            <h1
+              className={`font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere ${
+                ink ? 'text-display' : 'text-title'
               }`}
             >
-              {eyebrow}
-            </p>
+              {title}
+            </h1>
+            {lede === undefined ? null : (
+              <p
+                className={`text-lede max-w-[var(--measure-prose)] ${
+                  ink
+                    ? 'text-[color:var(--color-ink-muted)]'
+                    : 'text-[color:var(--color-foreground-muted)]'
+                }`}
+              >
+                {lede}
+              </p>
+            )}
+            {actions === undefined ? null : (
+              <div className="flex flex-wrap items-center gap-3 pt-1">{actions}</div>
+            )}
+            {children}
+          </div>
+          {aside === undefined ? null : (
+            <div className="min-w-0 pb-[var(--space-section)] lg:py-[var(--space-section)]">
+              {aside}
+            </div>
           )}
-          <h1
-            className={`font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere ${
-              ink ? 'text-display' : 'text-title'
-            }`}
-          >
-            {title}
-          </h1>
-          {lede === undefined ? null : (
-            <p
-              className={`text-lede max-w-[var(--measure-prose)] ${
-                ink
-                  ? 'text-[color:var(--color-ink-muted)]'
-                  : 'text-[color:var(--color-foreground-muted)]'
-              }`}
-            >
-              {lede}
-            </p>
-          )}
-          {actions === undefined ? null : (
-            <div className="flex flex-wrap items-center gap-3 pt-1">{actions}</div>
-          )}
-          {children}
         </div>
       </Container>
     </div>

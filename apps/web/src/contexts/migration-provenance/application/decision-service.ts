@@ -7,6 +7,7 @@ import {
   legacyMappingDecisionSchema,
   reviewBatchSchema,
   reviewDecisionSchema,
+  rightsBatchSchema,
   rightsDecisionSchema,
   topicMappingDecisionSchema,
   type MigrationActor,
@@ -266,6 +267,57 @@ export function createMigrationDecisionService(deps: {
       )
         throw new MigrationRefusal('invalid');
       await guarded(deps.decisions.decideRights({ ...value, actorId, now: now() }));
+    },
+
+    /**
+     * Phase 30-R. A reviewer clears a SELECTION of one page of acquisitions
+     * for release: each is decided on its own, at the version the reviewer
+     * saw, with the evidence and holder the reviewer stated — and audited on
+     * its own by the adapter, exactly as a single decision. One refused item
+     * (moved since, decided since) does not undo the others; an outage stops
+     * the batch and is reported, never mistaken for a verdict.
+     */
+    async rightsBatch(
+      actor: MigrationActor,
+      input: unknown,
+    ): Promise<{
+      readonly decided: number;
+      readonly refused: readonly {
+        readonly provenanceId: string;
+        readonly reason: MigrationRefusalReason;
+      }[];
+    }> {
+      const { actorId, value } = await gate.authorised(
+        actor,
+        ADMINISTER,
+        rightsBatchSchema,
+        input,
+      );
+      let decided = 0;
+      const refused: { provenanceId: string; reason: MigrationRefusalReason }[] = [];
+      for (const item of value.items) {
+        try {
+          await guarded(
+            deps.decisions.decideRights({
+              provenanceId: item.provenanceId,
+              expectedVersion: item.expectedVersion,
+              licence: value.licence,
+              visibility: 'public-eligible',
+              licenceEvidence: value.licenceEvidence,
+              rightsHolder: value.rightsHolder,
+              actorId,
+              now: now(),
+            }),
+          );
+          decided += 1;
+        } catch (error) {
+          const reason = migrationFailure(error);
+          // An outage is not a per-item verdict: stop, report what was done.
+          if (reason === 'unavailable') throw error;
+          refused.push({ provenanceId: item.provenanceId, reason });
+        }
+      }
+      return { decided, refused };
     },
 
     /** Disables or re-enables one legacy mapping (and so its 301). */

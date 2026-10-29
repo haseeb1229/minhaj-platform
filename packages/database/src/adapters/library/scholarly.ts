@@ -10,6 +10,7 @@ import {
   readerDocumentSchema,
   SCHOLARLY_LIMITS,
   SCHOLARLY_PAGE,
+  type LibraryCover,
   type LibraryPersistencePort,
   type LibraryPublicReaderPort,
   type MagazineIssueRecord,
@@ -76,6 +77,16 @@ interface Row {
   readonly magazineId?: string;
   readonly volume?: number | null;
   readonly issueNumber?: number | null;
+  readonly coverAssetId?: string | null;
+  readonly coverWidth?: number | null;
+  readonly coverHeight?: number | null;
+  /** A Magazine listing's newest public issue that has a cover (Phase 30-R). */
+  readonly issues?: readonly {
+    readonly id: string;
+    readonly coverAssetId: string | null;
+    readonly coverWidth: number | null;
+    readonly coverHeight: number | null;
+  }[];
   readonly magazine?: {
     readonly slug: string;
     readonly primaryLocale?: string;
@@ -305,7 +316,25 @@ function listingSelect(family: Family): object {
       ? { languageCode: true, publicationYear: true, publishedOn: true }
       : {}),
     ...(family.kind === 'magazine-issue'
-      ? { volume: true, issueNumber: true, magazine: { select: { slug: true } } }
+      ? {
+          volume: true,
+          issueNumber: true,
+          coverAssetId: true,
+          coverWidth: true,
+          coverHeight: true,
+          magazine: { select: { slug: true } },
+        }
+      : {}),
+    // Phase 30-R: a periodical is shown by its newest public issue's cover.
+    ...(family.kind === 'magazine'
+      ? {
+          issues: {
+            where: { state: 'published', coverAssetId: { not: null } },
+            orderBy: ISSUE_ORDER,
+            take: 1,
+            select: { id: true, coverAssetId: true, coverWidth: true, coverHeight: true },
+          },
+        }
       : {}),
   };
 }
@@ -463,6 +492,24 @@ function toRecord(kind: ScholarlyKind, row: Row): ScholarlyRecord {
   }
 }
 
+/** A cover as a value, or null — the CHECK keeps the three columns together. */
+function coverOf(row: {
+  readonly coverAssetId?: string | null;
+  readonly coverWidth?: number | null;
+  readonly coverHeight?: number | null;
+}): LibraryCover | null {
+  if (
+    row.coverAssetId === undefined ||
+    row.coverAssetId === null ||
+    row.coverWidth === undefined ||
+    row.coverWidth === null ||
+    row.coverHeight === undefined ||
+    row.coverHeight === null
+  )
+    return null;
+  return { assetId: row.coverAssetId, width: row.coverWidth, height: row.coverHeight };
+}
+
 function toIssue(row: Row): MagazineIssueRecord {
   if (row.magazineId === undefined || row.magazine === undefined) {
     throw new Error('An issue was read without its Magazine.');
@@ -479,6 +526,7 @@ function toIssue(row: Row): MagazineIssueRecord {
     },
     volume: row.volume ?? null,
     issueNumber: row.issueNumber ?? null,
+    cover: coverOf(row),
   };
 }
 
@@ -499,11 +547,20 @@ function toListing(kind: ScholarlyKind, row: Row): ScholarlyListing {
             magazineSlug: row.magazine.slug,
             volume: row.volume ?? null,
             issueNumber: row.issueNumber ?? null,
+            cover: coverOf(row),
           }
         : null,
+    latestCover: latestCoverOf(row),
     version: row.version,
     updatedAt: row.updatedAt,
   };
+}
+
+function latestCoverOf(row: Row): ScholarlyListing['latestCover'] {
+  const issue = row.issues?.[0];
+  if (issue === undefined) return null;
+  const cover = coverOf(issue);
+  return cover === null ? null : { issueId: issue.id, cover };
 }
 
 function pageOf(kind: ScholarlyKind, rows: readonly Row[]): ScholarlyListingPage {
@@ -594,6 +651,15 @@ function columns(save: ScholarlyValue): Record<string, unknown> {
         magazineId: save.value.magazineId,
         volume: save.value.volume,
         issueNumber: save.value.issueNumber,
+        // An omitted cover keeps the stored one on an update (and is NULL on a
+        // create); null removes it (Phase 30-R).
+        ...(save.value.cover === undefined
+          ? {}
+          : {
+              coverAssetId: save.value.cover?.assetId ?? null,
+              coverWidth: save.value.cover?.width ?? null,
+              coverHeight: save.value.cover?.height ?? null,
+            }),
       };
   }
 }

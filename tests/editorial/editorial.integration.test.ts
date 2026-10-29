@@ -121,6 +121,7 @@ live('Phase 6 real SQL Editorial workflow and correspondence', () => {
         // Nor any Collection member; those are proved in
         // `collections.integration.test.ts`.
         selectableMembers: async () => false,
+        usableImage: async () => false,
       },
     });
     const configuration = {

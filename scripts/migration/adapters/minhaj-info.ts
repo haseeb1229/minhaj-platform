@@ -12,6 +12,7 @@ import { createListingDiscovery, isoDateOf } from './markup-support.ts';
 import {
   checkSelection,
   escapeHtmlText,
+  firstPartyImage,
   fixedItemDiscovery,
   hasJsonLdType,
   jsonLdObjects,
@@ -53,8 +54,10 @@ import {
  *                 re-structured as `<ul><li>Title — Author</li>…</ul>`,
  *                 escaped; null when the page lists none;
  *   links         the article URLs, as written.
- * No PDF and no cover is acquired (the PDFs exceed the acquisition cap, and
- * webp is not an admitted asset type).
+ *   cover         (Phase 30-R) the issue's own cover picture, its `og:image` on
+ *                 this host, when it is a JPEG or PNG — a webp cover is not an
+ *                 admitted image type and is left on the source.
+ * No PDF is acquired (the PDFs exceed the acquisition cap).
  */
 
 export const MINHAJ_INFO_MAGAZINE_ADAPTER_KEY = 'minhaj-info-magazine';
@@ -210,9 +213,9 @@ export function createMinhajInfoIssueAdapter(
 
   return {
     adapterKey: MINHAJ_INFO_ISSUE_ADAPTER_KEY,
-    adapterVersion: '1',
+    adapterVersion: '2',
     parserKey: 'cheerio-minhaj-info-magazine-issue',
-    parserVersion: '1',
+    parserVersion: '2',
     contentKind: 'library.magazine-issue',
     accessMethod: 'http',
 
@@ -269,6 +272,13 @@ export function createMinhajInfoIssueAdapter(
         entries.push(`<li>${escapeHtmlText(line)}</li>`);
       });
 
+      const cover = firstPartyImage($, {
+        src: $('meta[property="og:image"]').attr('content'),
+        alt: title,
+        pageUrl: evidence.finalUrl,
+        hosts: [base.hostname],
+      });
+
       const record: ParsedMagazineIssue = {
         kind: 'library.magazine-issue',
         title,
@@ -279,8 +289,9 @@ export function createMinhajInfoIssueAdapter(
         legacyIdentifier: `${match[1]}/${match[2] ?? ''}`,
         categories: [],
         links,
-        assets: [],
+        assets: cover === null ? [] : [cover.asset],
         bodyHtml: entries.length === 0 ? null : `<ul>${entries.join('')}</ul>`,
+        cover: cover?.image ?? null,
         volume: stated('PublicationVolume', 'volumeNumber'),
         issueNumber: stated('PublicationIssue', 'issueNumber'),
         magazineUrl,

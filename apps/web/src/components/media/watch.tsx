@@ -10,6 +10,7 @@ import {
   type SeriesRecord,
   type VideoFormat,
   type VideoListing,
+  type VideoPoster,
   type VideoRecord,
 } from '@minhaj/contracts/media';
 import type { TopicView } from '@minhaj/contracts/taxonomy';
@@ -66,6 +67,7 @@ import {
   seriesPath,
   seriesSegment,
   videoPath,
+  videoPosterPath,
   mediaQueryPath,
   videoStructuredData,
   viewOfFormat,
@@ -81,9 +83,11 @@ import {
  * cookie, so a signed-in visitor sees exactly what an anonymous one does. The
  * one client island is the privacy-gated player.
  *
- * NO THIRD-PARTY REQUEST TO PAINT A CARD. A card's poster is a first-party
- * placeholder: no provider thumbnail, no frame, no preconnect. The provider is
- * contacted only from a Video's own page, and only after the visitor asks.
+ * NO THIRD-PARTY REQUEST TO PAINT A CARD. A card's poster is first-party: our
+ * own stored copy of the Video's image where it has one (Phase 30-R), else a
+ * drawn placeholder — never a provider thumbnail, frame or preconnect. The
+ * provider is contacted only from a Video's own page, and only after the
+ * visitor asks.
  *
  * EVERY FACT SHOWN IS ONE THE RECORD HAS. An unknown duration, date or format
  * is absent, never a dash; a missing caption or transcript is stated as
@@ -109,19 +113,40 @@ function providerName(t: WatchTranslator, provider: VideoRecord['provider']): st
  * longer serves gets a muted poster, so the grid does not promise playback.
  * The play mark is not mirrored in a right-to-left page: it is a media symbol,
  * not a direction.
+ *
+ * PHASE 30-R — A FIRST-PARTY PICTURE WHEN THE VIDEO HAS ONE. A Video may carry
+ * its own poster: our stored copy of the image the organisation published for
+ * it, served by Media's own route. It sits under the same play mark, cropped to
+ * the same 16:9 frame with its measured box reserved, lazy below the fold —
+ * and it still makes no request to the video's provider.
  */
-function Poster({ muted = false }: { readonly muted?: boolean }) {
+function Poster({
+  muted = false,
+  videoId,
+  poster = null,
+}: {
+  readonly muted?: boolean;
+  readonly videoId: string;
+  readonly poster?: VideoPoster | null;
+}) {
   return (
     <div
       aria-hidden="true"
-      className={`flex aspect-video w-full items-center justify-center ${
+      className={`relative flex aspect-video w-full items-center justify-center overflow-hidden ${
         muted
           ? 'bg-[color:var(--color-surface-sunken)] text-[color:var(--color-foreground-muted)]'
           : 'bg-[color:var(--color-ink)] text-[color:var(--color-ink-accent)]'
       }`}
     >
+      {poster === null ? null : (
+        <PosterPicture
+          videoId={videoId}
+          poster={poster}
+          className={muted ? 'opacity-40 grayscale' : ''}
+        />
+      )}
       <span
-        className={`flex size-14 items-center justify-center rounded-full border transition-colors duration-[var(--duration-fast)] ${
+        className={`relative flex size-14 items-center justify-center rounded-full border transition-colors duration-[var(--duration-fast)] ${
           muted
             ? 'border-[color:var(--color-border-strong)]'
             : 'border-[color:var(--color-ink-border)] bg-[color:var(--color-ink-raised)] group-hover:border-[color:var(--color-ink-accent)]'
@@ -132,6 +157,36 @@ function Poster({ muted = false }: { readonly muted?: boolean }) {
         </svg>
       </span>
     </div>
+  );
+}
+
+/**
+ * The ONE place Watch sets an image source (Phase 30-R): a Video's first-party
+ * poster at Media's own two-allow route, derived from the Video and asset
+ * identifiers — never another origin, never a literal. Decorative: the card or
+ * page beside it names the Video. Cropped to its 16:9 frame, box reserved.
+ */
+function PosterPicture({
+  videoId,
+  poster,
+  eager = false,
+  className = '',
+}: {
+  readonly videoId: string;
+  readonly poster: VideoPoster;
+  readonly eager?: boolean;
+  readonly className?: string;
+}) {
+  return (
+    <img
+      src={videoPosterPath(videoId, poster.assetId)}
+      width={poster.width}
+      height={poster.height}
+      alt=""
+      loading={eager ? 'eager' : 'lazy'}
+      decoding="async"
+      className={`absolute inset-0 size-full object-cover ${className}`}
+    />
   );
 }
 
@@ -175,7 +230,7 @@ function VideoCard({
 
   return (
     <li className={MEDIA_CARD}>
-      <Poster muted={unavailable} />
+      <Poster muted={unavailable} videoId={video.id} poster={video.poster} />
       <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-4">
         {eyebrow.every((word) => word === null) && !unavailable ? null : (
           <div className="flex flex-wrap items-center gap-2">
@@ -700,6 +755,11 @@ export async function VideoDetailPage({
             <VideoPlayer
               provider={record.provider}
               providerVideoId={record.providerVideoId}
+              backdrop={
+                record.poster === null ? null : (
+                  <PosterPicture videoId={record.id} poster={record.poster} eager />
+                )
+              }
               labels={{
                 notice: t('player.notice', { provider }),
                 load: t('player.load', { provider }),
@@ -709,7 +769,7 @@ export async function VideoDetailPage({
             />
           ) : (
             <div className="flex flex-col gap-3">
-              <Poster muted />
+              <Poster muted videoId={record.id} poster={record.poster} />
               <Alert tone="info">{t('player.unavailable', { provider })}</Alert>
               <p className="text-sm">
                 <TextLink

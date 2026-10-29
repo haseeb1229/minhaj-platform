@@ -21,6 +21,7 @@ import type {
   StagedEditorialPayload,
   StagedMagazineIssuePayload,
   StagedMagazinePayload,
+  StagedPagePayload,
   StagedPayload,
   StagedWorkPayload,
 } from '../../packages/contracts/src/migration/index.ts';
@@ -342,6 +343,7 @@ const WORK: StagedWorkPayload = {
     pageCount: 320,
     readableAssetUrl: 'https://fixture.invalid/books/w001.pdf',
     downloadAssetUrl: 'https://fixture.invalid/books/w001-download.pdf',
+    cover: null,
   },
 };
 
@@ -417,6 +419,8 @@ describe('Phase 30 library.work publication target', () => {
       readableAssetId: ASSET_READ,
       downloadAssetId: ASSET_DOWNLOAD,
       document: null,
+      // No rights-cleared cover: none.
+      cover: null,
     });
     // Published at the version the Edition's save left, nothing else changed.
     expect(fake.calls[2]).toMatchObject({ id: work!.id, expected: 2 });
@@ -749,6 +753,7 @@ const ISSUE: StagedMagazineIssuePayload = {
     { type: 'quote', content: [{ text: 'FIXTURE quoted\nwords' }] },
   ],
   legacyIdentifier: 'i001',
+  cover: null,
 };
 
 describe('Phase 30 library.magazine publication target', () => {
@@ -888,6 +893,8 @@ describe('Phase 30 library.magazine-issue publication target', () => {
       volume: 34,
       issueNumber: 1,
       document: readerDocumentOf(ISSUE.body, 'FIXTURE شمارہ جنوری'),
+      // No rights-cleared cover: none.
+      cover: null,
     });
   });
 
@@ -1100,6 +1107,7 @@ const NEWS: StagedEditorialPayload = {
   ],
   publishedOn: '2019-05-06',
   legacyIdentifier: 'n001',
+  leadImage: null,
 };
 
 const ARTICLE: StagedEditorialPayload = {
@@ -1111,28 +1119,49 @@ const ARTICLE: StagedEditorialPayload = {
 
 function fakeEditorial(
   failures: Partial<
-    Record<'create' | 'transition' | 'directory' | 'detail', () => Error | null>
+    Record<
+      'create' | 'revise' | 'transition' | 'directory' | 'detail',
+      () => Error | null
+    >
   > = {},
 ) {
-  const records = new Map<string, ArticleDetail & { aggregate: string }>();
-  const calls: { op: string; aggregate: string; input: unknown }[] = [];
-  const fail = (op: 'create' | 'transition' | 'directory' | 'detail') => {
+  const records = new Map<
+    string,
+    ArticleDetail & { aggregate: string; routeBinding?: string }
+  >();
+  const calls: {
+    op: string;
+    aggregate: string;
+    input: unknown;
+    binding?: string | null;
+  }[] = [];
+  const fail = (op: 'create' | 'revise' | 'transition' | 'directory' | 'detail') => {
     const failure = failures[op]?.();
     if (failure) throw failure;
   };
   const editorial = {
-    async create(actor: { accountId: string }, aggregate: string, raw: unknown) {
-      calls.push({ op: 'create', aggregate, input: raw });
+    async create(
+      actor: { accountId: string },
+      aggregate: string,
+      raw: unknown,
+      routeBinding: string | null = null,
+    ) {
+      calls.push({ op: 'create', aggregate, input: raw, binding: routeBinding });
       fail('create');
       const content = raw as ArticleDetail['revision'];
+      // As Editorial: a slug is unique per family — per binding for a Page.
       if (
         [...records.values()].some(
-          (r) => r.aggregate === aggregate && r.slug === content.slug,
+          (r) =>
+            r.aggregate === aggregate &&
+            r.slug === content.slug &&
+            (r.routeBinding ?? null) === routeBinding,
         )
       )
         throw refusalError('duplicate-slug');
       const record = {
         aggregate,
+        ...(routeBinding === null ? {} : { routeBinding }),
         id: nextId(),
         slug: content.slug,
         state: 'draft' as const,
@@ -1179,6 +1208,42 @@ function fakeEditorial(
       const moved = { ...record, state, version: record.version + 1 } as typeof record;
       records.set(record.id, moved);
       return moved;
+    },
+    async revise(
+      actor: { accountId: string },
+      aggregate: string,
+      id: string,
+      expectedVersion: number,
+      raw: unknown,
+    ) {
+      calls.push({ op: 'revise', aggregate, input: raw });
+      fail('revise');
+      const record = records.get(id);
+      if (!record || record.aggregate !== aggregate) throw refusalError('not-found');
+      if (record.version !== expectedVersion) throw refusalError('conflict');
+      const content = raw as ArticleDetail['revision'];
+      const number = record.revision.number + 1;
+      // As Editorial: a new revision returns the record to draft, approval cleared.
+      const revised = {
+        ...record,
+        state: 'draft' as const,
+        version: record.version + 1,
+        currentRevision: number,
+        approvedRevision: null,
+        approvedById: null,
+        revision: {
+          ...content,
+          translations: content.translations.map((t) => ({
+            ...t,
+            ...renderEditorialDocument(t.document),
+          })),
+          number,
+          editorId: actor.accountId,
+          createdAt: NOW,
+        },
+      };
+      records.set(id, revised);
+      return revised;
     },
     async directory(_actor: unknown, aggregate: string, offset: number) {
       calls.push({ op: 'directory', aggregate, input: offset });
@@ -1261,14 +1326,17 @@ describe('Phase 30 Editorial publication targets', () => {
             seoTitle: '',
             seoDescription: '',
             document: editorialDocument(payload.body),
+            leadAlt: '',
           },
         ],
         topicIds: [TOPIC],
         contributors: [],
+        // No rights-cleared acquisition: no lead image, never a remote URL.
+        leadImage: null,
+        // Phase 30-R: the source's ORIGINAL date is Editorial's own source date.
+        sourcePublishedOn: '2019-05-06',
         ...(payload.kind === 'editorial.news' ? { centreId: null } : {}),
       });
-      // The source's date goes nowhere Editorial does not own.
-      expect(JSON.stringify(fake.calls)).not.toContain('2019-05-06');
       expect(fake.calls[1]!.input).toEqual({
         id: record!.id,
         expectedVersion: 1,
@@ -1524,11 +1592,20 @@ describe('Phase 30 Editorial publication targets', () => {
 
   it('answers a migrated record’s references through the owners and refuses Centre, Gallery and members', async () => {
     const asked: string[] = [];
-    const references = migrationEditorialReferences({
-      validPeople: async (ids) => (asked.push(`people:${ids.length}`), true),
-      validTopics: async (ids) => (asked.push(`topics:${ids.length}`), true),
-      validLanguage: async (code) => (asked.push(`language:${code}`), code !== 'xx'),
-    });
+    const references = migrationEditorialReferences(
+      {
+        validPeople: async (ids) => (asked.push(`people:${ids.length}`), true),
+        validTopics: async (ids) => (asked.push(`topics:${ids.length}`), true),
+        validLanguage: async (code) => (asked.push(`language:${code}`), code !== 'xx'),
+      },
+      // Phase 30-R: a lead image is Storage's answer — a servable still image.
+      async () => ({
+        servableImages: async (ids: readonly string[]) =>
+          new Set(ids.filter((id) => id === 'image-clean')),
+      }),
+    );
+    expect(await references.usableImage('image-clean')).toBe(true);
+    expect(await references.usableImage('pdf-or-quarantined')).toBe(false);
     expect(await references.validContributors([])).toBe(true);
     expect(await references.validTopics([TOPIC])).toBe(true);
     expect(await references.validLanguages(['ur'])).toBe(true);
@@ -1630,5 +1707,237 @@ describe('Phase 30 fail-closed target router', () => {
     });
     expect(news.asked).toEqual(['publish:editorial.news']);
     expect(work.asked).toEqual(['inspect:library.work']);
+  });
+});
+
+/* ===========================================================================
+ * Phase 30-R — press releases, shell-bound pages, lead images, refresh
+ * ========================================================================= */
+
+const PRESS: StagedEditorialPayload = {
+  ...NEWS,
+  kind: 'editorial.press-release',
+  slug: 'fixture-p001-press',
+};
+
+const PAGE: StagedPagePayload = {
+  kind: 'editorial.page',
+  binding: '/explore/about/introduction',
+  languageCode: 'en',
+  title: 'FIXTURE Introduction',
+  excerpt: '',
+  body: [{ type: 'paragraph', content: [{ text: 'FIXTURE organisational words.' }] }],
+  leadImage: null,
+  legacyIdentifier: 'tid-1',
+};
+
+const LEAD_URL = 'https://minhaj.net/images-texts/fixture-lead.jpg';
+const CLEARED: PublishableAsset = {
+  originalUrl: LEAD_URL,
+  assetId: '00000000-0000-4000-8000-0000000000b1',
+  mediaType: 'image/jpeg',
+  checksum: 'a'.repeat(64),
+  publicCopy: {
+    assetId: '00000000-0000-4000-8000-0000000000b2',
+    checksum: 'b'.repeat(64),
+    width: 1200,
+    height: 800,
+  },
+};
+const withLead = <T extends StagedEditorialPayload | StagedPagePayload>(
+  payload: T,
+): T => ({
+  ...payload,
+  leadImage: { url: LEAD_URL, alt: 'FIXTURE alt words', credit: null },
+});
+
+const targetOf = (kind: Parameters<typeof editorialTargetOver>[0]['kind']) => {
+  const fake = fakeEditorial();
+  return {
+    fake,
+    target: editorialTargetOver({
+      kind,
+      editorial: fake.editorial,
+      holdings: holdsNoArticle,
+    }),
+  };
+};
+
+describe('Phase 30-R Editorial publication targets', () => {
+  it('publishes a press release as Editorial’s own PressRelease, dated by its source', async () => {
+    const { fake, target } = targetOf('editorial.press-release');
+    const result = await target.publish(publishInput('editorial.press-release', PRESS));
+    const [record] = fake.records.values();
+    expect(result).toMatchObject({
+      status: 'published',
+      stage: 'in-review',
+      canonicalPath: `/news/press-releases/${PRESS.slug}`,
+    });
+    expect(record?.aggregate).toBe('press-release');
+    expect(fake.calls[0]?.input).toMatchObject({ sourcePublishedOn: '2019-05-06' });
+    // A press release names no Centre: only a NewsArticle carries that field.
+    expect(fake.calls[0]?.input).not.toHaveProperty('centreId');
+  });
+
+  it('publishes a Page at its catalogued binding, slug `page`, never with a source date', async () => {
+    const { fake, target } = targetOf('editorial.page');
+    const result = await target.publish(publishInput('editorial.page', PAGE));
+    expect(result).toMatchObject({
+      status: 'published',
+      stage: 'in-review',
+      canonicalPath: '/explore/about/introduction',
+    });
+    expect(fake.calls[0]).toMatchObject({
+      op: 'create',
+      aggregate: 'page',
+      binding: '/explore/about/introduction',
+    });
+    expect(fake.calls[0]?.input).toMatchObject({ slug: 'page', leadImage: null });
+    expect(fake.calls[0]?.input).not.toHaveProperty('sourcePublishedOn');
+    // A second Page at ANOTHER binding is a different record, though both are `page`.
+    const other = await target.publish(
+      publishInput('editorial.page', {
+        ...PAGE,
+        binding: '/explore/organization/forums',
+      }),
+    );
+    expect(other).toMatchObject({ status: 'published' });
+    expect(fake.records.size).toBe(2);
+  });
+
+  it('records a lead image ONLY as the public copy of a person-cleared acquisition', async () => {
+    const cases: [readonly PublishableAsset[], unknown, string][] = [
+      [
+        [CLEARED],
+        { assetId: CLEARED.publicCopy!.assetId, width: 1200, height: 800, credit: null },
+        'FIXTURE alt words',
+      ],
+      [[], null, ''],
+      [[{ ...CLEARED, publicCopy: null }], null, ''],
+      [[{ ...CLEARED, originalUrl: `${LEAD_URL}?x=1` }], null, ''],
+    ];
+    for (const [assets, leadImage, leadAlt] of cases) {
+      const { fake, target } = targetOf('editorial.news');
+      await target.publish(publishInput('editorial.news', withLead(NEWS), { assets }));
+      const input = fake.calls[0]?.input as {
+        leadImage: unknown;
+        translations: { leadAlt: string }[];
+      };
+      expect(input.leadImage).toEqual(leadImage);
+      expect(input.translations[0]?.leadAlt).toBe(leadAlt);
+      // Never the evidence bytes, never the source URL.
+      expect(JSON.stringify(input)).not.toContain(CLEARED.assetId);
+      expect(JSON.stringify(input)).not.toContain(LEAD_URL);
+    }
+  });
+
+  describe('refresh', () => {
+    async function published(kind: 'editorial.news' | 'editorial.page', payload: never) {
+      const { fake, target } = targetOf(kind);
+      await target.publish(publishInput(kind, payload));
+      const [record] = fake.records.values();
+      // As Editorial after a different person approved and published it.
+      const live = { ...record!, state: 'published' as const, version: 5 };
+      fake.records.set(live.id, live);
+      return { fake, target, live };
+    }
+
+    it('revises the held record — keeping what a person curated — then submits it', async () => {
+      const { fake, target, live } = await published('editorial.news', NEWS as never);
+      // A person added an English translation, a contributor and a Centre since.
+      const curated = {
+        ...live,
+        revision: {
+          ...live.revision,
+          contributors: [
+            { personId: '00000000-0000-4000-8000-0000000000c1', role: 'author' },
+          ],
+          centreId: '00000000-0000-4000-8000-0000000000c2',
+          translations: [
+            ...live.revision.translations,
+            {
+              languageCode: 'en',
+              title: 'FIXTURE English',
+              excerpt: '',
+              seoTitle: 'FIXTURE seo',
+              seoDescription: '',
+              document: live.revision.translations[0]!.document,
+              html: '',
+              leadAlt: '',
+            },
+          ],
+        },
+      };
+      fake.records.set(live.id, curated as never);
+      const result = await target.refresh({
+        ...publishInput('editorial.news', withLead(NEWS), { assets: [CLEARED] }),
+        target: { kind: 'editorial.news', id: live.id },
+      });
+      expect(result).toMatchObject({ status: 'published', stage: 'in-review' });
+      expect(fake.ops().slice(-2)).toEqual(['revise', 'transition:submit']);
+      const revised = fake.calls.at(-2)!.input as Record<string, unknown> & {
+        translations: { languageCode: string; seoTitle: string }[];
+      };
+      expect(revised).toMatchObject({
+        slug: NEWS.slug,
+        contributors: [
+          { personId: '00000000-0000-4000-8000-0000000000c1', role: 'author' },
+        ],
+        centreId: '00000000-0000-4000-8000-0000000000c2',
+        sourcePublishedOn: '2019-05-06',
+        leadImage: { assetId: CLEARED.publicCopy!.assetId },
+      });
+      expect(revised.translations.map((t) => t.languageCode).sort()).toEqual([
+        'en',
+        'ur',
+      ]);
+      expect(revised.translations.find((t) => t.languageCode === 'en')?.seoTitle).toBe(
+        'FIXTURE seo',
+      );
+    });
+
+    it('answers a record already carrying exactly the wanted words as it stands', async () => {
+      const { fake, target, live } = await published('editorial.page', PAGE as never);
+      const before = fake.calls.length;
+      const result = await target.refresh({
+        ...publishInput('editorial.page', PAGE),
+        target: { kind: 'editorial.page', id: live.id },
+      });
+      expect(result).toEqual({
+        status: 'published',
+        target: { kind: 'editorial.page', id: live.id },
+        stage: 'public',
+        version: 5,
+        canonicalPath: '/explore/about/introduction',
+      });
+      expect(fake.calls.length).toBe(before);
+    });
+
+    it('refuses a scheduled or archived record, and another family’s target', async () => {
+      for (const state of ['scheduled', 'archived'] as const) {
+        const { fake, target, live } = await published('editorial.news', NEWS as never);
+        fake.records.set(live.id, { ...live, state });
+        const before = fake.calls.length;
+        const result = await target.refresh({
+          ...publishInput('editorial.news', { ...NEWS, title: 'FIXTURE newer' }),
+          target: { kind: 'editorial.news', id: live.id },
+        });
+        expect(result).toEqual({
+          status: 'refused',
+          reason: state === 'scheduled' ? 'target-scheduled' : 'target-archived',
+        });
+        expect(fake.calls.length).toBe(before);
+      }
+      const { target } = targetOf('editorial.news');
+      expect(
+        await target.refresh({
+          ...publishInput('editorial.news', NEWS),
+          target: {
+            kind: 'editorial.article',
+            id: '00000000-0000-4000-8000-0000000000d1',
+          },
+        }),
+      ).toEqual({ status: 'refused', reason: 'unsupported-kind' });
+    });
   });
 });

@@ -9,6 +9,7 @@ import {
   EVENT_LIMITS,
   editorialKindSchema,
   correspondenceKindSchema,
+  hasSourceDate,
   memberOfToken,
 } from '@minhaj/contracts/editorial';
 import { requirePermittedAction } from '@/composition/authorization';
@@ -90,6 +91,12 @@ export async function saveEditorial(
               sourceDate: optional('coverage-sourceDate'),
             },
           }
+        : {}),
+      // Phase 30-R: an Article's, NewsArticle's or PressRelease's ORIGINAL
+      // source date — empty clears it. The lead image is never sent, so the
+      // service keeps the one the current revision carries.
+      ...(hasSourceDate(kind)
+        ? { sourcePublishedOn: optional('sourcePublishedOn') }
         : {}),
       // A NewsArticle's optional Centre (Phase 16); no other kind sends the key.
       ...(kind === 'news-article' ? { centreId: optional('centreId') } : {}),

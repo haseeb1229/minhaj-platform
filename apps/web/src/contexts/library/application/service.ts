@@ -14,6 +14,8 @@ import {
   SCHOLARLY_INPUT_SCHEMAS,
   type LibraryActor,
   type LibraryAuthorityPort,
+  type LibraryCover,
+  type LibraryImagesPort,
   type LibraryReferencesPort,
   type LibraryPersistencePort,
   type ScholarlyKind,
@@ -59,6 +61,12 @@ export function createLibraryService(deps: {
   persistence: LibraryPersistencePort;
   authority: LibraryAuthorityPort;
   references: LibraryReferencesPort;
+  /**
+   * Phase 30-R. Storage's servable-still-image answer, asked before a cover is
+   * recorded. A service built without it refuses every cover rather than
+   * recording one unchecked: absence fails closed.
+   */
+  images?: LibraryImagesPort;
 }) {
   const store = deps.persistence;
   async function permit(actor: LibraryActor, key: string) {
@@ -72,6 +80,15 @@ export function createLibraryService(deps: {
     } else if (version !== null) throw new LibraryRefusal('invalid');
   }
   const offset = (v: number) => z.number().int().min(0).max(25_000).parse(v);
+  /** A new or kept cover must be a servable still image right now. */
+  async function requireUsableCover(cover: LibraryCover | null | undefined) {
+    if (cover === undefined || cover === null) return;
+    if (
+      deps.images === undefined ||
+      !(await deps.images.servableImages([cover.assetId])).has(cover.assetId)
+    )
+      throw new LibraryRefusal('invalid');
+  }
   return {
     async works(actor: LibraryActor, start = 0) {
       await permit(actor, 'library.read');
@@ -129,6 +146,7 @@ export function createLibraryService(deps: {
       const value = editionInputSchema.parse(raw);
       if (!(await deps.references.validLanguage(value.languageCode)))
         throw new LibraryRefusal('invalid');
+      await requireUsableCover(value.cover);
       const contentVersion = value.document
         ? createHash('sha256').update(JSON.stringify(value.document)).digest('hex')
         : null;
@@ -239,6 +257,7 @@ export function createLibraryService(deps: {
       ];
       if ((await Promise.all(checks)).includes(false))
         throw new LibraryRefusal('invalid');
+      if (save.kind === 'magazine-issue') await requireUsableCover(save.value.cover);
       return store.saveScholarly({ actorId: actor.accountId, id, expectedVersion, save });
     },
   };

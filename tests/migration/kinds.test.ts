@@ -4,10 +4,13 @@ import {
   MIGRATION_LIMITS,
   STAGED_PAYLOAD_SCHEMAS,
   SURAH_AYAH_COUNTS,
+  type ParsedCountry,
   type ParsedEditorial,
   type ParsedFatwa,
   type ParsedMagazine,
   type ParsedMagazineIssue,
+  type ParsedPage,
+  type ParsedPerson,
   type ParsedQuranTranslation,
   type ParsedRecord,
   type ParsedVideo,
@@ -90,6 +93,7 @@ const WORK: ParsedWork = Object.freeze({
     pageCount: ' 320 ',
     readableAssetUrl: 'https://library.fixture.invalid/read/17.pdf#page=2',
     downloadAssetUrl: null,
+    cover: null,
   },
 });
 
@@ -120,6 +124,7 @@ describe('library.work', () => {
         pageCount: 320,
         readableAssetUrl: 'https://library.fixture.invalid/read/17.pdf',
         downloadAssetUrl: null,
+        cover: null,
       },
     });
     expect(result).toMatchObject({
@@ -299,6 +304,7 @@ const ISSUE: ParsedMagazineIssue = Object.freeze({
   volume: ' 34 ',
   issueNumber: '1',
   magazineUrl: 'https://Library.fixture.invalid/magazines/mmq#top',
+  cover: null,
 });
 
 describe('library.magazine-issue', () => {
@@ -327,6 +333,7 @@ describe('library.magazine-issue', () => {
         },
       ],
       legacyIdentifier: 'mmq-2020-01',
+      cover: null,
     });
   });
 
@@ -391,6 +398,7 @@ const NEWS: ParsedEditorial = Object.freeze({
   excerptHtml: '<p>A <b>short</b> summary.</p>',
   bodyHtml:
     '<p>First paragraph with <a href="/news/500">a link</a>.</p><h3>More</h3><p>Second.</p>',
+  leadImage: null,
 });
 
 describe('editorial.news and editorial.article', () => {
@@ -419,6 +427,7 @@ describe('editorial.news and editorial.article', () => {
       ],
       publishedOn: '2024-03-01',
       legacyIdentifier: 'news-501',
+      leadImage: null,
     });
     const article = run({ ...NEWS, kind: 'editorial.article' });
     expect(article.issues).toEqual([]);
@@ -680,6 +689,7 @@ const VIDEO: ParsedVideo = Object.freeze({
   descriptionHtml: '<p>Words</p>',
   durationSeconds: 60,
   legacyIdentifier: 'lec-1',
+  poster: null,
 });
 
 describe('media.video through the dispatcher', () => {
@@ -692,6 +702,235 @@ describe('media.video through the dispatcher', () => {
       hard: true,
     });
     expect(run({ ...VIDEO, providerReference: 'nonsense' }).identity).toBeNull();
+  });
+});
+
+/* ===========================================================================
+ * Phase 30-R — images, press releases, pages, people, countries
+ * ========================================================================= */
+
+describe('images (Phase 30-R)', () => {
+  it('stages an image by its canonical https URL with the source’s own alt words', () => {
+    const result = run({
+      ...NEWS,
+      leadImage: {
+        url: 'https://Images.fixture.invalid/lead/a.jpg#top',
+        alt: '  A   picture  ',
+        credit: ' Photo  desk ',
+      },
+    });
+    expect(result.issues).toEqual([]);
+    expect(payloadOf<{ leadImage: unknown }>(result).leadImage).toEqual({
+      url: 'https://images.fixture.invalid/lead/a.jpg',
+      alt: 'A picture',
+      credit: 'Photo desk',
+    });
+  });
+
+  it('is no image at all when its URL is not https — nothing invented in its place', () => {
+    for (const url of [
+      'http://images.fixture.invalid/a.jpg',
+      'not a url',
+      'https://user:secret@images.fixture.invalid/a.jpg',
+    ]) {
+      const result = run({ ...NEWS, leadImage: { url, alt: 'x', credit: null } });
+      expect(result.issues).toEqual([]);
+      expect(payloadOf<{ leadImage: unknown }>(result).leadImage).toBeNull();
+    }
+  });
+
+  it('bounds the alt text and redacts personal data in it, flagging the record', () => {
+    const long = run({
+      ...NEWS,
+      leadImage: {
+        url: 'https://images.fixture.invalid/a.jpg',
+        alt: 'w'.repeat(400),
+        credit: null,
+      },
+    });
+    expect(payloadOf<{ leadImage: { alt: string } }>(long).leadImage.alt).toHaveLength(
+      300,
+    );
+    const personal = run({
+      ...NEWS,
+      leadImage: {
+        url: 'https://images.fixture.invalid/a.jpg',
+        alt: 'Call +92 300 1234567',
+        credit: null,
+      },
+    });
+    expect(personal.personalData).toBe(true);
+    expect(JSON.stringify(personal.payload)).not.toContain('1234567');
+  });
+
+  it('carries a cover, an issue cover and a poster in each kind’s own field', () => {
+    const cover = {
+      url: 'https://images.fixture.invalid/c.png',
+      alt: 'Cover',
+      credit: null,
+    };
+    expect(
+      payloadOf<{ edition: { cover: unknown } }>(work({}, { cover })).edition.cover,
+    ).toEqual(cover);
+    expect(payloadOf<{ cover: unknown }>(run({ ...ISSUE, cover })).cover).toEqual(cover);
+    expect(
+      payloadOf<{ poster: unknown }>(run({ ...VIDEO, poster: cover })).poster,
+    ).toEqual(cover);
+  });
+});
+
+describe('editorial.press-release (Phase 30-R)', () => {
+  it('normalises as the other dated Editorial families, naming its kind in a digest slug', () => {
+    const result = run({
+      ...NEWS,
+      kind: 'editorial.press-release',
+      legacyIdentifier: null,
+    });
+    expect(result.issues).toEqual([]);
+    expect(result.kind).toBe('editorial.press-release');
+    expect(payloadOf<{ publishedOn: string }>(result).publishedOn).toBe('2024-03-01');
+    const digest = run({
+      ...NEWS,
+      kind: 'editorial.press-release',
+      legacyIdentifier: null,
+      title: 'اعلان',
+    });
+    expect(payloadOf<{ slug: string }>(digest).slug).toMatch(
+      /^press-release-[0-9a-f]{12}$/,
+    );
+  });
+});
+
+const PAGE: ParsedPage = Object.freeze({
+  ...COMMON,
+  kind: 'editorial.page',
+  title: 'Introduction',
+  binding: '/explore/about/introduction',
+  legacyIdentifier: 'tid-1',
+  excerptHtml: null,
+  bodyHtml: '<p>The organisation’s own words.</p>',
+  leadImage: null,
+});
+
+describe('editorial.page (Phase 30-R)', () => {
+  it('stages the catalogued binding with the source’s words, identified by its binding', () => {
+    const result = run(PAGE);
+    expect(result.issues).toEqual([]);
+    expect(result.payload).toEqual({
+      kind: 'editorial.page',
+      binding: '/explore/about/introduction',
+      languageCode: 'en',
+      title: 'Introduction',
+      excerpt: '',
+      body: [{ type: 'paragraph', content: [{ text: 'The organisation’s own words.' }] }],
+      leadImage: null,
+      legacyIdentifier: 'tid-1',
+    });
+    expect(result.identity).toEqual({
+      key: 'page:/explore/about/introduction',
+      signal: 'identifier',
+      hard: false,
+    });
+  });
+
+  it('refuses a binding that is not a shell route, a missing body and another language', () => {
+    for (const binding of ['/help', '/explore/', '/explore/About/x', 'explore/about'])
+      expect(run({ ...PAGE, binding }).issues).toContain('reference-missing');
+    expect(run({ ...PAGE, bodyHtml: '' }).issues).toEqual(['body-missing']);
+    expect(run({ ...PAGE, languageCode: 'fr' }).issues).toEqual(['language-unsupported']);
+  });
+});
+
+const PERSON: ParsedPerson = Object.freeze({
+  ...COMMON,
+  kind: 'people.person',
+  title: 'A Profile of Synthetic Scholar',
+  name: 'Synthetic Scholar',
+  legacyIdentifier: 'tid-120',
+  biographyHtml: '<p>First paragraph.</p><p>Second paragraph.</p>',
+  portrait: {
+    url: 'https://images.fixture.invalid/p.jpg',
+    alt: 'Synthetic Scholar',
+    credit: null,
+  },
+});
+
+describe('people.person (Phase 30-R)', () => {
+  it('stages the name as written, a slug from the name and never the legacy number', () => {
+    const result = run(PERSON);
+    expect(result.issues).toEqual([]);
+    expect(result.payload).toEqual({
+      kind: 'people.person',
+      slug: 'synthetic-scholar',
+      primaryLocale: 'en',
+      labels: [
+        {
+          locale: 'en',
+          name: 'Synthetic Scholar',
+          biography: 'First paragraph.\n\nSecond paragraph.',
+        },
+      ],
+      portrait: {
+        url: 'https://images.fixture.invalid/p.jpg',
+        alt: 'Synthetic Scholar',
+        credit: null,
+      },
+      legacyIdentifier: 'tid-120',
+    });
+    expect(result.title).toBe('Synthetic Scholar');
+  });
+
+  it('keeps only WHOLE paragraphs within the biography bound — never a cut paragraph', () => {
+    const paragraph = (char: string) => `<p>${char.repeat(1500)}</p>`;
+    const result = run({
+      ...PERSON,
+      biographyHtml: paragraph('a') + paragraph('b') + paragraph('c'),
+    });
+    expect(result.issues).toEqual([]);
+    const [label] = payloadOf<{ labels: { biography: string }[] }>(result).labels;
+    expect(label?.biography).toBe(`${'a'.repeat(1500)}\n\n${'b'.repeat(1500)}`);
+    // A first paragraph longer than the bound leaves no biography, not half of one.
+    const tooLong = run({ ...PERSON, biographyHtml: `<p>${'z'.repeat(4500)}</p>` });
+    expect(
+      payloadOf<{ labels: { biography: string }[] }>(tooLong).labels[0]?.biography,
+    ).toBe('');
+  });
+
+  it('requires a name', () => {
+    expect(run({ ...PERSON, name: '  ' }).issues).toContain('title-missing');
+  });
+});
+
+const COUNTRY: ParsedCountry = Object.freeze({
+  ...COMMON,
+  kind: 'global.country',
+  title: 'Denmark',
+  code: 'DK',
+  legacyIdentifier: 'country-Denmark',
+});
+
+describe('global.country (Phase 30-R)', () => {
+  it('stages the code and the name as the source writes it', () => {
+    const result = run(COUNTRY);
+    expect(result.issues).toEqual([]);
+    expect(result.payload).toEqual({
+      kind: 'global.country',
+      code: 'DK',
+      slug: 'denmark',
+      primaryLocale: 'en',
+      labels: [{ locale: 'en', name: 'Denmark' }],
+      legacyIdentifier: 'country-Denmark',
+    });
+    expect(result.identity).toEqual({
+      key: 'country:DK',
+      signal: 'identifier',
+      hard: false,
+    });
+  });
+
+  it('never guesses a code: one the adapter could not name is an issue', () => {
+    for (const code of [null, 'dk', 'DNK', ''])
+      expect(run({ ...COUNTRY, code }).issues).toContain('reference-missing');
   });
 });
 
@@ -749,6 +988,12 @@ describe('recordHrefs', () => {
         ['/question', '/answer'],
       ],
       [{ ...QURAN, links: ['/surah/1'] }, ['/surah/1']],
+      [
+        { ...PAGE, bodyHtml: marked('page'), excerptHtml: marked('summary') },
+        ['/page', '/summary'],
+      ],
+      [{ ...PERSON, biographyHtml: marked('biography') }, ['/biography']],
+      [{ ...COUNTRY, links: ['/english/Denmark/'] }, ['/english/Denmark/']],
     ];
     for (const [record, hrefs] of cases) expect(recordHrefs(record)).toEqual(hrefs);
   });

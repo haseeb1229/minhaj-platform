@@ -766,6 +766,17 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     // route it derives from the recitation, segment and asset identifiers —
     // pinned by its own test below.
     const RECITATION_PLAYER = 'apps/web/src/components/quran/recitation-player.tsx';
+    // PHASE 30-R — THREE MORE FILES THAT MAY SHOW AN IMAGE, each only its own
+    // domain's FIRST-PARTY two-allow route: a contributor's portrait, a Library
+    // cover and a Video's first-party poster. Excepted from `<img` and `src=`
+    // and nothing else, and every source is pinned by the test below.
+    const PORTRAIT = 'apps/web/src/components/people/portrait.tsx';
+    const COVER = 'apps/web/src/components/library/cover.tsx';
+    const WATCH = 'apps/web/src/components/media/watch.tsx';
+    // An Editorial record's lead image, only through Editorial's own route
+    // (pinned in `phase13-news-boundaries.test.ts`).
+    const LEAD = 'apps/web/src/components/editorial/lead-image.tsx';
+    const FIRST_PARTY_IMAGES = [PORTRAIT, COVER, WATCH, LEAD];
     const { modules } = await contentGraph();
 
     for (const expected of [PLAYER, AUDIO_PLAYER, PHOTOS, VIEWER, RECITATION_PLAYER]) {
@@ -790,7 +801,7 @@ describe('the public shell is server-rendered, with narrow client islands', () =
           continue;
         if (
           (fetching === 'src=' || fetching === '<img') &&
-          [PHOTOS, VIEWER].includes(relative(file))
+          [PHOTOS, VIEWER, ...FIRST_PARTY_IMAGES].includes(relative(file))
         )
           continue;
         expect(code(source), `${relative(file)} ${fetching}`).not.toContain(fetching);
@@ -842,6 +853,34 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     }
     // The browser's own modal dialog, opened modally.
     expect(viewer).toContain('showModal()');
+  });
+
+  it('shows portraits, covers and posters ONLY from their first-party routes', async () => {
+    const read = async (file: string) =>
+      code(await readFile(path.join(repoRoot, file), 'utf8'));
+    const portrait = await read('apps/web/src/components/people/portrait.tsx');
+    const cover = await read('apps/web/src/components/library/cover.tsx');
+    const watch = await read('apps/web/src/components/media/watch.tsx');
+
+    // A portrait's one source is People's own route for that Person and asset.
+    expect(portrait.match(/src=\{[^}]*\}/g) ?? []).toEqual([
+      'src={portraitPath(personId, portrait.assetId)}',
+    ]);
+    expect(portrait).toContain('return `/assets/people/portraits/');
+    // A cover's one source is what its caller built from Library's two cover
+    // routes — the only path builders the module defines.
+    expect(cover.match(/src=\{[^}]*\}/g) ?? []).toEqual(['src={path}']);
+    expect(cover).toContain('return `/assets/library/covers/editions/');
+    expect(cover).toContain('return `/assets/library/covers/issues/');
+    // Watch's one image source is Media's own poster route.
+    expect(watch.match(/src=\{[^}]*\}/g) ?? []).toEqual([
+      'src={videoPosterPath(videoId, poster.assetId)}',
+    ]);
+    for (const source of [portrait, cover, watch]) {
+      for (const forbidden of ['srcSet', 'next/image', 'thumbnailUrl}', 'autoPlay']) {
+        expect(source, forbidden).not.toContain(forbidden);
+      }
+    }
   });
 
   it('lets the audio player play ONLY its own first-party byte route, never on its own', async () => {

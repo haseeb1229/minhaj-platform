@@ -69,3 +69,11 @@ export type {
 export { addableProfileKinds, missingTranslations } from './domain/person.ts';
 
 export { createPersonSearchSource } from './application/search-projection.ts';
+
+export {
+  createPortraitAssetPolicy,
+  PORTRAIT_MEDIA_TYPES,
+  type PortraitRelationPort,
+} from './application/portrait-policy.ts';
+
+export type { PeopleImagesPort } from './application/people-service.ts';

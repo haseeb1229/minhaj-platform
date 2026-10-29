@@ -43,7 +43,13 @@ function archivePage(issueHrefs: string[]): string {
 }
 
 function issuePage(
-  options: { jsonLd?: string; dlcTitle?: string | null; cards?: string } = {},
+  options: {
+    jsonLd?: string;
+    dlcTitle?: string | null;
+    cards?: string;
+    ogImage?: string;
+    notice?: string;
+  } = {},
 ): string {
   const dlc =
     options.dlcTitle === null
@@ -63,7 +69,7 @@ function issuePage(
   <div class="foot"><p></p></div></div>
 </article>`;
   return `<!DOCTYPE html><html lang="en" dir="rtl"><head>
-<meta property="og:locale" content="ur">${options.jsonLd === undefined ? '' : `<script type="application/ld+json">${options.jsonLd}</script>`}
+<meta property="og:locale" content="ur">${options.ogImage === undefined ? '' : `<meta property="og:image" content="${options.ogImage}">`}${options.jsonLd === undefined ? '' : `<script type="application/ld+json">${options.jsonLd}</script>`}
 </head><body>
 <main id="main"><section class="phero"><div class="wrap"><div>
   <nav class="crumbs"><a href="${SITE}">سرورق</a><a href="${MAGAZINE_URL}">مصنوعی رسالہ</a><span>مصنوعی ماہ 2026ء</span></nav>
@@ -71,7 +77,7 @@ function issuePage(
   <h1 class="issue-title">مصنوعی رسالہ</h1>
 </div></div></section>
 <section class="section"><div class="wrap adetail"><div><div class="grid3">${cards}</div></div>${dlc}</div></section></main>
-<footer><a href="tel:+0000000000">+00 000 0000</a></footer>
+<footer><a href="tel:+0000000000">+00 000 0000</a>${options.notice ?? ''}</footer>
 </body></html>`;
 }
 
@@ -92,9 +98,9 @@ describe('identity and construction', () => {
     });
     expect(issueAdapter()).toMatchObject({
       adapterKey: MINHAJ_INFO_ISSUE_ADAPTER_KEY,
-      adapterVersion: '1',
+      adapterVersion: '2',
       parserKey: 'cheerio-minhaj-info-magazine-issue',
-      parserVersion: '1',
+      parserVersion: '2',
       contentKind: 'library.magazine-issue',
       accessMethod: 'http',
     });
@@ -381,6 +387,59 @@ describe('issue parse', () => {
   const parseIssue = (html: string, url = ISSUE_URL) =>
     issueAdapter().parse(evidenceOf(html, url));
 
+  it('takes a JPEG or PNG og:image on its own host as the cover, with the page notice as evidence', () => {
+    const NOTICE =
+      '<p>© 2001–2026 Minhaj-ul-Quran International. All rights reserved.</p>';
+    const result = parseIssue(
+      issuePage({
+        ogImage: `${SITE}/i/600/mag/mags/titlethumbs/2020-01.jpg`,
+        notice: NOTICE,
+      }),
+    );
+    if (result.kind !== 'parsed' || result.record.kind !== 'library.magazine-issue')
+      throw new Error('expected an issue');
+    expect(result.record.cover).toEqual({
+      url: `${SITE}/i/600/mag/mags/titlethumbs/2020-01.jpg`,
+      alt: 'شمارہ مصنوعی 2026ء',
+      credit: null,
+    });
+    expect(result.record.assets).toEqual([
+      {
+        url: `${SITE}/i/600/mag/mags/titlethumbs/2020-01.jpg`,
+        licence: 'organisation-owned',
+        licenceEvidence: expect.stringContaining('Minhaj-ul-Quran International'),
+        rightsHolder: 'Minhaj-ul-Quran International',
+      },
+    ]);
+  });
+
+  it('leaves a webp cover, an off-host cover and an unstated notice to the source', () => {
+    for (const ogImage of [
+      `${SITE}/i/600/mag/mags/titlethumbs/2026-10.webp`,
+      'https://images.example/titlethumbs/2026-10.jpg',
+      `http://minhaj.info/i/600/mag/mags/titlethumbs/2020-01.jpg`,
+    ]) {
+      const result = parseIssue(issuePage({ ogImage }));
+      if (result.kind !== 'parsed' || result.record.kind !== 'library.magazine-issue')
+        throw new Error('expected an issue');
+      expect(result.record.cover).toBeNull();
+      expect(result.record.assets).toEqual([]);
+    }
+    // Without the organisation's notice the rights are unknown — never public.
+    const unstated = parseIssue(
+      issuePage({ ogImage: `${SITE}/i/600/mag/mags/titlethumbs/2020-01.jpg` }),
+    );
+    if (unstated.kind !== 'parsed') throw new Error('expected an issue');
+    expect(unstated.record.assets).toEqual([
+      {
+        url: `${SITE}/i/600/mag/mags/titlethumbs/2020-01.jpg`,
+        licence: 'unknown',
+        licenceEvidence: null,
+        rightsHolder: null,
+      },
+    ]);
+  });
+
   it('reads every field, references the magazine by the magazine adapter key', async () => {
     const result = parseIssue(issuePage());
     expect(result).toEqual({
@@ -403,6 +462,7 @@ describe('issue parse', () => {
         volume: null,
         issueNumber: null,
         magazineUrl: MAGAZINE_URL,
+        cover: null,
       },
     });
 

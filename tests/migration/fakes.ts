@@ -210,6 +210,10 @@ export class FakeStore {
       body: Uint8Array | null;
       personalData: 'none' | 'flagged';
       contentType: string | null;
+      requestedUrl?: string;
+      finalUrl?: string;
+      httpStatus?: number | null;
+      headers?: string | null;
     }
   >();
   readonly staged = new Map<string, StagedRow>();
@@ -246,6 +250,8 @@ export class FakeStore {
     snapshotsCreated: 0,
     readSnapshot: 0,
     resolve: 0,
+    replayItems: 0,
+    retainedSnapshot: 0,
   };
   private seq = 0;
 
@@ -259,6 +265,7 @@ export class FakeStore {
       contentKind: 'media.video',
       baseUrl: 'https://videos.fixture.invalid/',
       hosts: ['videos.fixture.invalid'],
+      assetHosts: [],
       authorisationReference: null,
       authorisedOn: null,
       licensingEvidence: null,
@@ -535,6 +542,8 @@ export class FakeStore {
                     id: current.id,
                     revision: current.revision,
                     inputChecksum: current.inputChecksum,
+                    parserVersion: current.provenance.parserVersion,
+                    normalizerVersion: current.provenance.normalizerVersion,
                   },
           };
         }),
@@ -572,6 +581,10 @@ export class FakeStore {
           body: input.body,
           personalData: input.personalData,
           contentType: input.contentType,
+          requestedUrl: input.requestedUrl,
+          finalUrl: input.finalUrl,
+          httpStatus: input.httpStatus,
+          headers: input.headers,
         });
         record.latestSnapshotId = snapshotId;
       }
@@ -701,8 +714,51 @@ export class FakeStore {
         })),
     assetByChecksum: async (checksum) => {
       for (const acquisition of this.acquisitions.values())
-        if (acquisition.checksum === checksum) return { assetId: acquisition.assetId };
+        if (acquisition.checksum === checksum)
+          return { assetId: acquisition.assetId, publicCopy: acquisition.publicCopy };
       return null;
+    },
+    acquiredUrl: async (sourceId, digest) =>
+      [...this.acquisitions.values()].some(
+        (acquisition) =>
+          acquisition.sourceId === sourceId && acquisition.originalUrlDigest === digest,
+      ),
+    replayItems: async (sourceId, cursor, limit) => {
+      this.calls.replayItems += 1;
+      const offset = cursor === null ? 0 : Number(cursor.slice(2));
+      const known = [...this.records.values()]
+        .filter(
+          (record) =>
+            record.sourceId === sourceId &&
+            record.latestSnapshotId !== null &&
+            record.mergedInto === null,
+        )
+        .sort((a, b) => a.seq - b.seq);
+      const page = known.slice(offset, offset + limit);
+      return {
+        kind: 'page' as const,
+        items: page.map((record) => ({
+          externalKey: record.externalKey,
+          originalUrl: record.originalUrl,
+          legacyIdentifier: record.legacyIdentifier,
+        })),
+        next: offset + limit < known.length ? `o:${String(offset + limit)}` : null,
+      };
+    },
+    retainedSnapshot: async (snapshotId) => {
+      this.calls.retainedSnapshot += 1;
+      const snapshot = this.snapshots.get(snapshotId);
+      if (snapshot === undefined || snapshot.body === null) return null;
+      return {
+        requestedUrl: snapshot.requestedUrl ?? '',
+        finalUrl: snapshot.finalUrl ?? '',
+        httpStatus: snapshot.httpStatus ?? null,
+        contentType: snapshot.contentType,
+        headers: snapshot.headers
+          ? (JSON.parse(snapshot.headers) as Record<string, string>)
+          : {},
+        body: snapshot.body,
+      };
     },
     recordAcquisition: async (input) => {
       const key = `${input.sourceId}|${input.originalUrlDigest}|${input.checksum}`;
@@ -800,6 +856,7 @@ export class FakeStore {
         contentKind: input.contentKind,
         baseUrl: input.baseUrl,
         hosts: input.hosts,
+        assetHosts: [],
         authorisationReference: null,
         authorisedOn: null,
         licensingEvidence: input.licensingEvidence,
@@ -832,6 +889,7 @@ export class FakeStore {
         contentKind: input.contentKind,
         baseUrl: input.baseUrl,
         hosts,
+        assetHosts: [...new Set(input.assetHosts)],
         authorisationReference: input.authorisationReference,
         authorisedOn: input.authorisedOn,
         licensingEvidence: input.licensingEvidence,
@@ -868,6 +926,24 @@ export class FakeStore {
         updatedAt: input.now,
       };
       this.sources.set(next.id, next);
+      return next;
+    },
+    addAssetHost: async (input) => {
+      // As the adapter: an authorised source, at its version, a host once.
+      const source = this.sources.get(input.sourceId);
+      if (source === undefined) throw refusal('not-found');
+      if (source.authorityKind !== 'authorised') throw refusal('invalid');
+      if (source.version !== input.expectedVersion) throw refusal('conflict');
+      if (source.hosts.includes(input.host) || source.assetHosts.includes(input.host))
+        throw refusal('duplicate');
+      const next: SourceRecord = {
+        ...source,
+        assetHosts: [...source.assetHosts, input.host],
+        version: source.version + 1,
+        updatedAt: input.now,
+      };
+      this.sources.set(next.id, next);
+      this.audit.push('migration.source.asset-host-added');
       return next;
     },
     source: async (id) => this.sources.get(id) ?? null,
@@ -1022,6 +1098,13 @@ export class FakeStore {
           stagedRecordId: stagedId,
           recordId: staged.recordId,
           state: 'pending',
+          // As the adapter: a record an ACTIVE mapping names is refreshed.
+          mode: [...this.legacyMappings.values()].some(
+            (mapping) =>
+              mapping.recordId === staged.recordId && mapping.state === 'active',
+          )
+            ? 'refresh'
+            : 'create',
           target: null,
           targetStage: null,
           targetVersion: null,
@@ -1091,6 +1174,7 @@ export class FakeStore {
                 assetId: acquisition.assetId,
                 mediaType: acquisition.mediaType,
                 checksum: acquisition.checksum,
+                publicCopy: acquisition.publicCopy,
               })),
           };
         }),
@@ -1109,6 +1193,9 @@ export class FakeStore {
     recordPublished: async (input) => {
       const entry = this.entries.get(input.entryId)!;
       if (entry.version !== input.expectedVersion) throw refusal('conflict');
+      // As the adapter (and 51380): a refresh makes no mapping of its own.
+      if (entry.mode === 'refresh' && input.legacyUrls.length > 0)
+        throw refusal('invalid');
       this.entries.set(entry.id, {
         ...entry,
         state: 'published',
@@ -1517,6 +1604,7 @@ export function videoBody(n: number, overrides: Partial<ParsedVideo> = {}): stri
     categories: [{ key: 'lectures', label: 'Lectures' }],
     links: [],
     assets: [],
+    poster: null,
     ...overrides,
   };
   return JSON.stringify(record);
@@ -1536,7 +1624,8 @@ export class JsonAdapter implements MigrationSourceAdapter {
   readonly adapterKey = 'fixture-json';
   adapterVersion = '1';
   readonly parserKey = 'fixture-json';
-  readonly parserVersion = '1';
+  /** Mutable: a newer parser reads the same retained bytes into a new revision. */
+  parserVersion = '1';
   contentKind: MigrationContentKind = 'media.video';
   accessMethod: 'http' | 'export' = 'http';
 
@@ -1619,6 +1708,24 @@ export class FakeStorage implements MigrationAssetStoragePort {
       clean: true,
     };
   }
+
+  /** Public copies made, in order; `refusePublic` makes the next one refused. */
+  readonly publicCopies: string[] = [];
+  refusePublic: string | null = null;
+  async storePublicImage(input: { readonly bytes: Uint8Array }) {
+    if (this.refusePublic !== null)
+      return { status: 'rejected' as const, reason: this.refusePublic };
+    const assetId = `00000000-0000-4000-9100-${String(this.publicCopies.length + 1).padStart(12, '0')}`;
+    this.publicCopies.push(assetId);
+    return {
+      status: 'stored' as const,
+      assetId,
+      // A stripped copy is different bytes: its own checksum.
+      checksum: sha256(new Uint8Array([...input.bytes, 0])),
+      width: 640,
+      height: 480,
+    };
+  }
 }
 
 /* ===========================================================================
@@ -1633,6 +1740,10 @@ const TARGET_PATHS: Readonly<Record<MigrationPublishableKind, string>> = Object.
   'library.magazine-issue': '/library/magazines/issues',
   'editorial.news': '/news',
   'editorial.article': '/articles',
+  'editorial.press-release': '/news/press-releases',
+  'editorial.page': '/explore',
+  'people.person': '/people',
+  'global.country': '/global/countries',
 });
 
 type PublishInput = Parameters<MigrationPublicationTargetPort['publish']>[0];
@@ -1684,8 +1795,14 @@ export class FakeTarget implements MigrationPublicationTargetPort {
     this.actors.push(input.actor.accountId);
     this.resumedFlags.push(input.resumed);
     this.inputs.push(input);
-    if (!('slug' in input.payload)) throw new Error('a publishable payload has a slug');
-    const slug = input.payload.slug;
+    // A shell-bound Page is addressed by its binding; every other record by its slug.
+    const slug =
+      'slug' in input.payload
+        ? input.payload.slug
+        : 'binding' in input.payload
+          ? input.payload.binding
+          : null;
+    if (slug === null) throw new Error('a publishable payload has an address');
     if (this.unavailableFor.has(slug)) return { status: 'unavailable' as const };
     this.publishCalls += 1;
     const refusalReason = this.refuseSlugs.get(slug);
@@ -1714,7 +1831,29 @@ export class FakeTarget implements MigrationPublicationTargetPort {
       target: { kind: this.answerKind ?? made.kind, id: made.id },
       stage: this.stage,
       version: made.version,
-      canonicalPath: `${TARGET_PATHS[made.kind]}/${made.slug}`,
+      canonicalPath: made.slug.startsWith('/')
+        ? made.slug
+        : `${TARGET_PATHS[made.kind]}/${made.slug}`,
+    };
+  }
+
+  /** Every refresh input, in order. */
+  readonly refreshInputs: Parameters<MigrationPublicationTargetPort['refresh']>[0][] = [];
+
+  async refresh(input: Parameters<MigrationPublicationTargetPort['refresh']>[0]) {
+    this.actors.push(input.actor.accountId);
+    this.refreshInputs.push(input);
+    const made = this.find(input.target);
+    if (made === undefined) return { status: 'refused' as const, reason: 'not-found' };
+    made.version += 1;
+    return {
+      status: 'published' as const,
+      target: { kind: made.kind, id: made.id },
+      stage: this.stage,
+      version: made.version,
+      canonicalPath: made.slug.startsWith('/')
+        ? made.slug
+        : `${TARGET_PATHS[made.kind]}/${made.slug}`,
     };
   }
 

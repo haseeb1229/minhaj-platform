@@ -51,6 +51,9 @@ const MAX_MATCHES = 25;
 
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 
+/** Records one replay discovery page may list (Phase 30-R). */
+const REPLAY_PAGE_MAX = 100;
+
 /** The item a checkpoint writes for, proved to be this run's and this record's. */
 async function pendingItem(
   tx: Client,
@@ -313,7 +316,13 @@ export function createMigrationPipeline(): MigrationPipelinePort {
               legacyIdentifier: true,
               latestSnapshot: { select: { id: true, checksum: true } },
               currentStaged: {
-                select: { id: true, revision: true, inputChecksum: true },
+                select: {
+                  id: true,
+                  revision: true,
+                  inputChecksum: true,
+                  parserVersion: true,
+                  normalizerVersion: true,
+                },
               },
             },
           },
@@ -780,9 +789,100 @@ export function createMigrationPipeline(): MigrationPipelinePort {
       const row = await db.migrationAssetProvenance.findFirst({
         where: { checksum },
         orderBy: [{ acquiredAt: 'asc' }, { id: 'asc' }],
-        select: { assetId: true },
+        select: {
+          assetId: true,
+          publicAssetId: true,
+          publicChecksum: true,
+          width: true,
+          height: true,
+        },
       });
-      return row === null ? null : { assetId: row.assetId };
+      if (row === null) return null;
+      return {
+        assetId: row.assetId,
+        publicCopy:
+          row.publicAssetId === null ||
+          row.publicChecksum === null ||
+          row.width === null ||
+          row.height === null
+            ? null
+            : {
+                assetId: row.publicAssetId,
+                checksum: row.publicChecksum,
+                width: row.width,
+                height: row.height,
+              },
+      };
+    },
+
+    async acquiredUrl(sourceId, originalUrlDigest) {
+      const row = await db.migrationAssetProvenance.findFirst({
+        where: { sourceId, originalUrlDigest },
+        select: { id: true },
+      });
+      return row !== null;
+    },
+
+    async replayItems(sourceId, cursor, limit) {
+      const offset =
+        cursor === null ? 0 : Number(/^o:([0-9]{1,7})$/.exec(cursor)?.[1] ?? NaN);
+      if (!Number.isInteger(offset) || offset < 0)
+        throw new MigrationDataError('invalid');
+      const take = bounded(limit, REPLAY_PAGE_MAX);
+      const rows = await db.migrationRecord.findMany({
+        where: { sourceId, latestSnapshotId: { not: null }, status: { not: 'merged' } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        skip: offset,
+        take: take + 1,
+        select: { externalKey: true, originalUrl: true, legacyIdentifier: true },
+      });
+      const more = rows.length > take;
+      return {
+        kind: 'page',
+        items: rows.slice(0, take).map((row) => ({
+          externalKey: row.externalKey,
+          originalUrl: row.originalUrl,
+          legacyIdentifier: row.legacyIdentifier,
+        })),
+        next: more ? `o:${String(offset + take)}` : null,
+      };
+    },
+
+    async retainedSnapshot(snapshotId) {
+      const row = await db.migrationRawSnapshot.findFirst({
+        where: { id: snapshotId, disposedAt: null },
+        select: {
+          requestedUrl: true,
+          finalUrl: true,
+          httpStatus: true,
+          contentType: true,
+          headers: true,
+          body: true,
+        },
+      });
+      if (row === null || row.body === null) return null;
+      let headers: Record<string, string> = {};
+      if (row.headers !== null) {
+        try {
+          const parsed: unknown = JSON.parse(row.headers);
+          if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed))
+            headers = Object.fromEntries(
+              Object.entries(parsed).filter(
+                (entry): entry is [string, string] => typeof entry[1] === 'string',
+              ),
+            );
+        } catch {
+          headers = {};
+        }
+      }
+      return {
+        requestedUrl: row.requestedUrl,
+        finalUrl: row.finalUrl,
+        httpStatus: row.httpStatus,
+        contentType: row.contentType,
+        headers,
+        body: new Uint8Array(row.body),
+      };
     },
 
     async recordAcquisition(input) {
@@ -815,6 +915,10 @@ export function createMigrationPipeline(): MigrationPipelinePort {
               visibility: 'restricted',
               acquiredAt: input.acquiredAt,
               version: 1,
+              publicAssetId: input.publicCopy?.assetId ?? null,
+              publicChecksum: input.publicCopy?.checksum ?? null,
+              width: input.publicCopy?.width ?? null,
+              height: input.publicCopy?.height ?? null,
             },
             select: { id: true },
           });

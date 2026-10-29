@@ -67,6 +67,13 @@ if (notPassed.length > 0) {
   console.error('Messaging proofs did not all run and pass:');
   for (const test of notPassed) {
     console.error(`  - ${test.status}: ${test.fullName ?? test.title}`);
+    // The first lines of the failure — the assertion and where it was raised —
+    // so an intermittent failure is diagnosable from the log alone. Proof data
+    // is synthetic sentinels only; nothing secret is in a test's message.
+    const messages = Array.isArray(test.failureMessages) ? test.failureMessages : [];
+    for (const message of messages.slice(0, 2))
+      for (const line of String(message).split('\n').slice(0, 8))
+        console.error(`      ${line.slice(0, 300)}`);
   }
   process.exit(1);
 }

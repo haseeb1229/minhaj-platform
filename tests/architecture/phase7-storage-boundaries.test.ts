@@ -213,9 +213,18 @@ describe('the serving route is the mechanism, never the policy', () => {
 describe('Phase 7 introduces no business surface', () => {
   it('adds no owner column and no polymorphic reference to Asset', async () => {
     const schema = await read('packages/database/prisma/schema.prisma');
-    const model = /model Asset \{[\s\S]*?\n\}/u.exec(schema)?.[0] ?? '';
+    const whole = /model Asset \{[\s\S]*?\n\}/u.exec(schema)?.[0] ?? '';
 
-    expect(model).not.toBe('');
+    expect(whole).not.toBe('');
+    // A consumer's typed key lives on the CONSUMER (Phase 30-R: a Person's
+    // portrait, an Edition's cover); Asset only lists the back-relations Prisma
+    // requires, which own no column. Those list lines are set aside; every
+    // column Asset itself carries is checked.
+    const backRelations = whole.match(/^ {2}\w+ \w+\[\] @relation\("\w+"\)$/gmu) ?? [];
+    expect(backRelations).toContain(
+      '  personPortraits Person[] @relation("PersonPortraitAsset")',
+    );
+    const model = whole.replace(/^ {2}\w+ \w+\[\] @relation\("\w+"\)\n/gmu, '');
 
     for (const forbidden of [
       'userId',

@@ -58,6 +58,7 @@ const PAYLOADS = {
     publishedOn: null,
     durationSeconds: null,
     legacyIdentifier: null,
+    poster: null,
   }),
   'library.work': (slug: string) => ({
     kind: 'library.work',
@@ -74,6 +75,7 @@ const PAYLOADS = {
       pageCount: 320,
       readableAssetUrl: `${BASE}read/${slug}.pdf`,
       downloadAssetUrl: null,
+      cover: null,
     },
   }),
   'library.magazine': (slug: string) => ({
@@ -95,6 +97,7 @@ const PAYLOADS = {
     magazine: { role: 'magazine', legacyUrl: MAGAZINE_URL },
     body,
     legacyIdentifier: null,
+    cover: null,
   }),
   'editorial.news': (slug: string) => ({
     kind: 'editorial.news',
@@ -105,6 +108,7 @@ const PAYLOADS = {
     body,
     publishedOn: null,
     legacyIdentifier: null,
+    leadImage: null,
   }),
   'editorial.article': (slug: string) => ({
     kind: 'editorial.article',
@@ -114,6 +118,45 @@ const PAYLOADS = {
     excerpt: 'Summary',
     body,
     publishedOn: null,
+    legacyIdentifier: null,
+    leadImage: null,
+  }),
+  'editorial.press-release': (slug: string) => ({
+    kind: 'editorial.press-release',
+    slug,
+    languageCode: 'en',
+    title: slug,
+    excerpt: '',
+    body,
+    publishedOn: '2011-08-06',
+    legacyIdentifier: null,
+    leadImage: { url: `${BASE}images/${slug}.jpg`, alt: 'A picture', credit: null },
+  }),
+  'editorial.page': (slug: string) => ({
+    kind: 'editorial.page',
+    // A Page has no slug of its own: its binding is its address.
+    binding: `/explore/about/${slug}`,
+    languageCode: 'en',
+    title: slug,
+    excerpt: '',
+    body,
+    leadImage: null,
+    legacyIdentifier: null,
+  }),
+  'people.person': (slug: string) => ({
+    kind: 'people.person',
+    slug,
+    primaryLocale: 'en',
+    labels: [{ locale: 'en', name: slug, biography: 'Whole paragraph.' }],
+    portrait: null,
+    legacyIdentifier: null,
+  }),
+  'global.country': (slug: string) => ({
+    kind: 'global.country',
+    code: 'DK',
+    slug,
+    primaryLocale: 'en',
+    labels: [{ locale: 'en', name: slug }],
     legacyIdentifier: null,
   }),
   'fatwa.ruling': (slug: string) => ({
@@ -490,5 +533,134 @@ describe('rollback by typed target', () => {
     expect(w.target.withdrawCalls).toBe(0);
     expect(w.store.entriesOf(manifest.id)[0]?.state).toBe('rollback-refused');
     expect([...w.target.made.values()][0]?.state).toBe('published');
+  });
+});
+
+describe('refresh entries (Phase 30-R)', () => {
+  /** A record published once, then a newer approved revision of the SAME record. */
+  async function refreshed(kind: MigrationContentKind = 'editorial.news') {
+    const w = world([[kind, 'item-one']]);
+    const first = await w.manifestOf();
+    await w.publish(first.id);
+    const url = `${BASE}items/item-one`;
+    const newer = w.store.approvedRevision(
+      w.source.id,
+      w.run.id,
+      kind === 'media.video'
+        ? { ...PAYLOADS[kind]('item-one'), labels: label('item-one newer') }
+        : { ...PAYLOADS[kind]('item-one'), title: 'item-one newer' },
+      url,
+    );
+    const second = await w.manifestOf([newer.id]);
+    return { w, first, second, newer };
+  }
+
+  it('a record an active mapping names is refreshed, never created again', async () => {
+    const { w, second } = await refreshed();
+    const [entry] = w.store.entriesOf(second.id);
+    expect(entry?.mode).toBe('refresh');
+    const mappingsBefore = w.store.legacyMappings.size;
+    const summary = await w.publish(second.id);
+    expect(summary).toMatchObject({ state: 'published', done: 1, refused: 0 });
+    // Created once by the first manifest; the refresh went through refresh().
+    expect(w.target.publishCalls).toBe(1);
+    expect(w.target.refreshInputs).toHaveLength(1);
+    const [input] = w.target.refreshInputs;
+    const made = [...w.target.made.values()][0]!;
+    expect(input?.target).toEqual({ kind: 'editorial.news', id: made.id });
+    expect(input?.payload).toMatchObject({ title: 'item-one newer' });
+    // It made no mapping: the record's legacy address already resolves.
+    expect(w.store.legacyMappings.size).toBe(mappingsBefore);
+    expect(w.store.entriesOf(second.id)[0]).toMatchObject({
+      state: 'published',
+      target: { kind: 'editorial.news', id: made.id },
+      targetVersion: 2,
+    });
+  });
+
+  it('refuses a refresh whose record no longer resolves to a target', async () => {
+    const { w, second } = await refreshed();
+    for (const mapping of w.store.legacyMappings.values()) mapping.state = 'disabled';
+    const summary = await w.publish(second.id);
+    expect(summary).toMatchObject({ done: 0, refused: 1 });
+    expect(w.store.entriesOf(second.id)[0]?.refusal).toBe('target-missing');
+    expect(w.target.refreshInputs).toHaveLength(0);
+    expect(w.target.publishCalls).toBe(1);
+  });
+
+  it('never rolls a refresh back: a person undoes what people may already hold', async () => {
+    const { w, second } = await refreshed('media.video');
+    expect(await w.publish(second.id)).toMatchObject({ done: 1, refused: 0 });
+    const summary = await w.service.rollback(PRIVILEGED, {
+      manifestId: second.id,
+      expectedVersion: w.version(second.id),
+      reason: 'faulty parser',
+    });
+    expect(summary).toMatchObject({ done: 0, refused: 1 });
+    expect(w.store.entriesOf(second.id)[0]?.state).toBe('rollback-refused');
+    expect(w.target.withdrawCalls).toBe(0);
+    // The first manifest's mapping still names the record.
+    expect(
+      [...w.store.legacyMappings.values()].filter(
+        (mapping) => mapping.state === 'active',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('hands a target only the public copy of a person-cleared image', async () => {
+    const w = world([['editorial.press-release', 'item-one']]);
+    const [revision] = w.revisions;
+    const url = `${BASE}images/item-one.jpg`;
+    const base = {
+      sourceId: w.source.id,
+      recordId: revision!.recordId,
+      runId: w.run.id,
+      originalUrlDigest: sha256(url),
+      byteSize: 3,
+      mediaType: 'image/jpeg',
+      licence: 'organisation-owned' as const,
+      licenceEvidence: 'stated',
+      rightsHolder: 'FIXTURE',
+      acquiredAt: new Date(0),
+    };
+    w.store.acquisitions.set('cleared', {
+      ...base,
+      id: 'p1',
+      originalUrl: url,
+      assetId: 'evidence-1',
+      checksum: 'a'.repeat(64),
+      publicCopy: {
+        assetId: 'public-1',
+        checksum: 'b'.repeat(64),
+        width: 800,
+        height: 600,
+      },
+      visibility: 'public-eligible',
+    });
+    w.store.acquisitions.set('restricted', {
+      ...base,
+      id: 'p2',
+      originalUrl: `${BASE}images/other.jpg`,
+      assetId: 'evidence-2',
+      checksum: 'c'.repeat(64),
+      publicCopy: { assetId: 'public-2', checksum: 'd'.repeat(64), width: 1, height: 1 },
+      visibility: 'restricted',
+    });
+    const manifest = await w.manifestOf();
+    await w.publish(manifest.id);
+    expect(w.target.inputs[0]?.assets).toEqual([
+      {
+        originalUrl: url,
+        assetId: 'evidence-1',
+        mediaType: 'image/jpeg',
+        checksum: 'a'.repeat(64),
+        publicCopy: {
+          assetId: 'public-1',
+          checksum: 'b'.repeat(64),
+          width: 800,
+          height: 600,
+        },
+      },
+    ]);
   });
 });

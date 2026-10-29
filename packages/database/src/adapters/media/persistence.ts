@@ -21,6 +21,7 @@ import {
   type VideoFormat,
   type VideoListing,
   type VideoPage,
+  type VideoPoster,
   type VideoProvider,
   type VideoRecord,
   type VideoValue,
@@ -94,6 +95,9 @@ const LISTING_SELECT = {
   durationSeconds: true,
   publishedOn: true,
   seriesPosition: true,
+  posterAssetId: true,
+  posterWidth: true,
+  posterHeight: true,
   version: true,
   updatedAt: true,
   labels: LABELS,
@@ -167,6 +171,9 @@ interface ListingRow {
   readonly durationSeconds: number | null;
   readonly publishedOn: Date | null;
   readonly seriesPosition: number | null;
+  readonly posterAssetId: string | null;
+  readonly posterWidth: number | null;
+  readonly posterHeight: number | null;
   readonly version: number;
   readonly updatedAt: Date;
   readonly labels: readonly LabelRow[];
@@ -199,6 +206,13 @@ interface GroupRow {
   readonly labels: readonly LabelRow[];
 }
 
+/** The poster as a value, or null — the CHECK keeps the three columns together. */
+function posterOf(row: ListingRow): VideoPoster | null {
+  if (row.posterAssetId === null || row.posterWidth === null || row.posterHeight === null)
+    return null;
+  return { assetId: row.posterAssetId, width: row.posterWidth, height: row.posterHeight };
+}
+
 function toListing(row: ListingRow): VideoListing {
   return {
     id: row.id,
@@ -215,6 +229,7 @@ function toListing(row: ListingRow): VideoListing {
     publishedOn: isoDate(row.publishedOn),
     seriesPosition: row.seriesPosition,
     speakerIds: row.speakers.map((entry) => entry.personId),
+    poster: posterOf(row),
     version: row.version,
     updatedAt: row.updatedAt,
   };
@@ -255,6 +270,7 @@ function toRecord(row: DetailRow, publicOnly: boolean): VideoRecord {
     durationSeconds: listing.durationSeconds,
     publishedOn: listing.publishedOn,
     thumbnailUrl: row.thumbnailUrl,
+    poster: listing.poster,
     captions: row.captions,
     transcript: row.transcript,
     series,
@@ -333,6 +349,15 @@ function videoColumns(value: VideoValue): Omit<Prisma.VideoUncheckedCreateInput,
     transcript: value.transcript,
     seriesId: value.seriesId,
     seriesPosition: value.seriesPosition,
+    // An omitted poster keeps the stored one on an update (and is NULL on a
+    // create); null removes it (Phase 30-R).
+    ...(value.poster === undefined
+      ? {}
+      : {
+          posterAssetId: value.poster?.assetId ?? null,
+          posterWidth: value.poster?.width ?? null,
+          posterHeight: value.poster?.height ?? null,
+        }),
     updatedAt: new Date(),
   };
 }

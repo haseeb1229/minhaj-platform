@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   MIGRATION_REFUSAL_REASONS,
+  NORMALIZER_VERSION,
   createMigrationDecisionService,
   createMigrationPipelineService,
   createMigrationPromotionService,
@@ -144,7 +145,7 @@ describe('pipeline: a complete run', () => {
       expect(row.validation).toBe('valid');
       expect(row.provenance).toMatchObject({
         adapterKey: 'fixture-json',
-        normalizerVersion: '30.1',
+        normalizerVersion: NORMALIZER_VERSION,
         codeRevision: 'local',
       });
       expect(row.categories).toEqual([{ key: 'lectures', label: 'Lectures' }]);
@@ -256,7 +257,7 @@ describe('pipeline: interruption and resumption', () => {
         adapterVersion: '1',
         parserKey: 'fixture-json',
         parserVersion: '1',
-        normalizerVersion: '30.1',
+        normalizerVersion: NORMALIZER_VERSION,
         codeRevision: 'local',
       },
       runId: '00000000-0000-4000-8fff-000000000001',
@@ -1615,5 +1616,163 @@ describe('authority', () => {
     expect(migrationFailure(new Error('boom'))).toBe('unavailable');
     for (const reason of MIGRATION_REFUSAL_REASONS)
       expect(migrationFailure({ reason })).toBe(reason);
+  });
+});
+
+/* ===========================================================================
+ * Phase 30-R — replay, code-aware change detection, asset hosts, public copies
+ * ========================================================================= */
+
+describe('pipeline: replaying retained evidence (Phase 30-R)', () => {
+  const pageRequests = (world: ReturnType<typeof pipelineWorld>) =>
+    world.fetcher.requests.filter((url) => url.includes('/videos/')).length;
+
+  it('discovers from the source’s own records and never fetches a page', async () => {
+    const world = pipelineWorld([1, 2]);
+    await world.run();
+    const indexBefore = world.fetcher.requests.filter((url) =>
+      url.includes('index'),
+    ).length;
+    const pagesBefore = pageRequests(world);
+
+    const replay = await world.run({ replay: true });
+    expect(replay).toMatchObject({ state: 'completed', processed: 2, missing: 0 });
+    expect(world.store.calls.replayItems).toBeGreaterThan(0);
+    expect(world.store.calls.retainedSnapshot).toBe(2);
+    // No listing and no page was requested: the snapshots were read instead.
+    expect(world.fetcher.requests.filter((url) => url.includes('index')).length).toBe(
+      indexBefore,
+    );
+    expect(pageRequests(world)).toBe(pagesBefore);
+    // Same bytes, same code: unchanged, accounted for.
+    expect(replay.counts).toMatchObject({ unchanged: 2, staged: 0 });
+  });
+
+  it('re-stages the same bytes read by a NEWER parser, still without fetching', async () => {
+    const world = pipelineWorld([1, 2]);
+    await world.run();
+    const pagesBefore = pageRequests(world);
+    world.adapter.parserVersion = '2';
+    const replay = await world.run({ replay: true });
+    expect(replay.counts).toMatchObject({ staged: 2, unchanged: 0 });
+    expect(pageRequests(world)).toBe(pagesBefore);
+    for (const key of [1, 2]) {
+      const revisions = world.store.stagedOf(recordOf(world.store, key).id);
+      expect(
+        revisions.map((row) => [row.revision, row.provenance.parserVersion]),
+      ).toEqual([
+        [1, '1'],
+        [2, '2'],
+      ]);
+      expect(revisions[0]?.review).toBe('superseded');
+    }
+  });
+
+  it('fetches a record whose retained body was disposed of', async () => {
+    const world = pipelineWorld([1, 2]);
+    await world.run();
+    const disposed = world.store.snapshots.get(
+      recordOf(world.store, 1).latestSnapshotId!,
+    )!;
+    disposed.body = null;
+    const before = world.fetcher.count(pageUrl(1));
+    const replay = await world.run({ replay: true });
+    expect(replay.state).toBe('completed');
+    expect(world.fetcher.count(pageUrl(1))).toBe(before + 1);
+    expect(world.fetcher.count(pageUrl(2))).toBe(1);
+  });
+
+  it('a normal run of unchanged bytes under unchanged code is still unchanged', async () => {
+    const world = pipelineWorld([1]);
+    await world.run();
+    const again = await world.run();
+    expect(again.counts).toMatchObject({ unchanged: 1, staged: 0 });
+    // A newer normaliser or parser makes the same fetched bytes a new revision.
+    world.adapter.parserVersion = '3';
+    const newer = await world.run();
+    expect(newer.counts).toMatchObject({ staged: 1, unchanged: 0 });
+  });
+});
+
+describe('pipeline: acquisition through the asset boundary (Phase 30-R)', () => {
+  const IMAGE_HOST = 'https://images.fixture.invalid/';
+  const image = `${IMAGE_HOST}lead/a.jpg`;
+  const asset = {
+    url: image,
+    licence: 'organisation-owned' as const,
+    licenceEvidence: 'The page states the organisation’s notice.',
+    rightsHolder: 'FIXTURE Organisation',
+  };
+
+  function assetWorld() {
+    const world = pipelineWorld([1, 2]);
+    world.fetcher.set(pageUrl(1), ok(pageUrl(1), videoBody(1, { assets: [asset] })));
+    world.fetcher.set(pageUrl(2), ok(pageUrl(2), videoBody(2, { assets: [asset] })));
+    const assetFetcher = new ScriptedFetcher();
+    assetFetcher.set(image, ok(image, 'JPEGBYTES', 'image/jpeg'));
+    const run = () =>
+      world.service.run(ADMIN, {
+        sourceId: world.source.id,
+        adapter: world.adapter,
+        fetcher: world.fetcher,
+        assetFetcher,
+        assets: world.storage,
+        options: { random: () => 0, sleep: async () => undefined },
+      });
+    return { world, assetFetcher, run };
+  }
+
+  it('fetches images only through the asset fetcher, and one URL only once', async () => {
+    const { world, assetFetcher, run } = assetWorld();
+    const summary = await run();
+    expect(summary.counts.staged).toBe(2);
+    expect(world.fetcher.count(image)).toBe(0);
+    // Two records name the picture; the source acquires it once.
+    expect(assetFetcher.count(image)).toBe(1);
+    expect(world.store.acquisitions.size).toBe(1);
+    await run();
+    expect(assetFetcher.count(image)).toBe(1);
+  });
+
+  it('records the public copy Storage made of a still image beside its evidence', async () => {
+    const { world, run } = assetWorld();
+    await run();
+    const [acquisition] = [...world.store.acquisitions.values()];
+    expect(world.storage.publicCopies).toHaveLength(1);
+    expect(acquisition).toMatchObject({
+      mediaType: 'image/jpeg',
+      assetId: world.storage.stored[0],
+      publicCopy: {
+        assetId: world.storage.publicCopies[0],
+        width: 640,
+        height: 480,
+      },
+    });
+    // The public copy is different bytes from the evidence.
+    expect(acquisition?.publicCopy?.checksum).not.toBe(acquisition?.checksum);
+  });
+
+  it('keeps the evidence and records the refusal when Storage refuses the public copy', async () => {
+    const { world, run } = assetWorld();
+    world.storage.refusePublic = 'dimensions-too-large';
+    const summary = await run();
+    expect(summary.counts.staged).toBe(2);
+    const [acquisition] = [...world.store.acquisitions.values()];
+    expect(acquisition?.publicCopy).toBeNull();
+    expect([...world.store.errors.values()]).toContainEqual(
+      expect.objectContaining({
+        stage: 'asset',
+        classification: 'asset-rejected',
+        detail: 'public copy refused: dimensions-too-large',
+      }),
+    );
+  });
+
+  it('makes no public copy of a document', async () => {
+    const { world, assetFetcher, run } = assetWorld();
+    assetFetcher.set(image, ok(image, '%PDF-1.4', 'application/pdf'));
+    await run();
+    expect(world.storage.publicCopies).toHaveLength(0);
+    expect([...world.store.acquisitions.values()][0]?.publicCopy).toBeNull();
   });
 });

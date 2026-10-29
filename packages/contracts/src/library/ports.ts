@@ -5,6 +5,7 @@ import type {
   SalePointInput,
   LibraryQuery,
   AssetPurpose,
+  LibraryCover,
 } from './values.ts';
 import type {
   MagazineIssueRecord,
@@ -27,6 +28,13 @@ export interface LibraryActor {
 export interface LibraryAuthorityPort {
   permits(accountId: string, permission: string): Promise<boolean>;
 }
+/**
+ * Phase 30-R. Storage's narrow answer about which assets are servable still
+ * images, asked before a cover is recorded. Infrastructure, not a context.
+ */
+export interface LibraryImagesPort {
+  servableImages(assetIds: readonly string[]): Promise<ReadonlySet<string>>;
+}
 export interface LibraryReferencesPort {
   validPeople(ids: readonly string[]): Promise<boolean>;
   validTopics(ids: readonly string[]): Promise<boolean>;
@@ -36,10 +44,17 @@ export interface WorkRecord extends WorkInput {
   id: string;
   version: number;
   updatedAt: Date;
+  /**
+   * Phase 30-R: the cover a card shows for this Work — that of its first
+   * PUBLISHED Edition (by identifier) which has one — or null.
+   */
+  cover: (LibraryCover & { readonly editionId: string }) | null;
 }
 export interface EditionRecord extends EditionInput {
   id: string;
   version: number;
+  /** Phase 30-R: the Edition's cover, or null — always stated on a record. */
+  cover: LibraryCover | null;
   contentVersion: string | null;
   updatedAt: Date;
   translation: { sourceEditionId: string | null; translatorIds: string[] } | null;
@@ -68,6 +83,15 @@ export interface LibraryAssetRelation {
   download: string;
   readableAssetId: string | null;
   downloadAssetId: string | null;
+  /** Phase 30-R: the Edition's cover asset, or null. */
+  coverAssetId: string | null;
+}
+
+/** Phase 30-R: what the issue-cover route decides by — the issue, its Magazine, its cover. */
+export interface IssueCoverRelation {
+  issueState: string;
+  magazineState: string;
+  coverAssetId: string | null;
 }
 /**
  * One navigational facet of the published Library: an identifier and how many
@@ -107,6 +131,8 @@ export interface LibraryPublicReaderPort {
   salePoints(offset: number): Promise<{ items: SalePointRecord[]; hasMore: boolean }>;
   sitemap(offset: number, limit: number): Promise<LibrarySitemapRow[]>;
   assetRelation(editionId: string): Promise<LibraryAssetRelation | null>;
+  /** Phase 30-R: the relation the issue-cover route decides by, or null. */
+  issueCoverRelation(issueId: string): Promise<IssueCoverRelation | null>;
   /**
    * The navigational facets `/library/authors`, `/library/topics` and
    * `/library/languages` browse by.

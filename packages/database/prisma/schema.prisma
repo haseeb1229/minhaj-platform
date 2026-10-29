@@ -1133,9 +1133,11 @@ model Tag {
 // Profile languages are scalar BCP-47 style codes validated by a People-owned
 // schema, which is a duplication chosen deliberately over an architecture edge.
 //
-// NO IMAGE, NO ASSET, NO URL. Storage arrives at Phase 7 and profile media with
-// the phase that owns it. A portrait column added now would either be an
-// unowned blob or an authoritative external reference nobody reviewed.
+// ONE PORTRAIT, NEVER A URL (Phase 30-R, superseding the Phase-5 "no image"
+// rule by owner decision). A Person may name ONE application-owned stored
+// Asset as its public portrait — a typed NO ACTION key with its measured box,
+// served only by People's own route while the Person is published. Never an
+// avatar URL, never a remote reference, never inferred from a face.
 //
 // NO HARD DELETE for the aggregates. `Person` and the four profiles are
 // archived, never removed, and the runtime principal holds no DELETE on any of
@@ -1239,6 +1241,12 @@ model Person {
 
   createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
   updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  /// The optional public portrait, an application-owned stored Asset (Phase 30-R).
+  portraitAssetId String? @db.NVarChar(36)
+  portraitWidth Int?
+  portraitHeight Int?
+  portraitCredit String? @db.NVarChar(200)
+  portraitAsset Asset? @relation("PersonPortraitAsset", fields:[portraitAssetId], references:[id], onDelete:NoAction, onUpdate:NoAction)
 
   translations PersonTranslation[]
   nameVariants PersonNameVariant[]
@@ -1259,6 +1267,8 @@ model Person {
   /// their last genuine modification.
   @@index([status, updatedAt])
   @@map("Person")
+  migrationMappings MigrationLegacyMapping[]
+  migrationEntries MigrationManifestEntry[]
 }
 
 /// A Person's name and biography in ONE INTERFACE LOCALE.
@@ -1579,6 +1589,9 @@ model Article {
   scheduledById String? @db.NVarChar(36)
   scheduleStatus String? @db.NVarChar(32)
   publishedAt DateTime? @db.DateTime2
+  /// The reader-facing date: the source's own publication date when the published revision
+  /// records one, else the first publication here. Set by the workflow at publication (Phase 30-R).
+  chronologyAt DateTime? @db.DateTime2
   createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
   updatedAt DateTime @db.DateTime2
   creator User @relation("ArticleCreator", fields:[creatorId], references:[id], onDelete:NoAction, onUpdate:NoAction)
@@ -1598,6 +1611,7 @@ model Article {
   @@index([scheduleStatus,scheduledAt,id])
   migrationMappings MigrationLegacyMapping[]
   migrationEntries MigrationManifestEntry[]
+  @@index([state,chronologyAt(sort: Desc),id])
 }
 model ArticleRevision {
   ownerId String @db.NVarChar(36)
@@ -1607,6 +1621,14 @@ model ArticleRevision {
   primaryLanguage String @db.NVarChar(16)
   schemaVersion Int @default(1)
   createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  /// The ORIGINAL publication date the source states (Phase 30-R); provenance and chronology.
+  sourcePublishedOn DateTime? @db.Date
+  /// The optional lead image: an application-owned stored Asset with its measured box (Phase 30-R).
+  leadAssetId String? @db.NVarChar(36)
+  leadWidth Int?
+  leadHeight Int?
+  leadCredit String? @db.NVarChar(200)
+  leadAsset Asset? @relation("ArticleRevisionLeadAsset", fields:[leadAssetId], references:[id], onDelete:NoAction, onUpdate:NoAction)
   owner Article @relation("ArticleHistory",fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
   editor User @relation(fields:[editorId],references:[id],onDelete:NoAction,onUpdate:NoAction)
   currentFor Article[] @relation("ArticleCurrent")
@@ -1627,6 +1649,8 @@ model ArticleRevisionTranslation {
   seoDescription String @db.NVarChar(300)
   document String @db.NVarChar(Max)
   html String @db.NVarChar(Max)
+  /// The lead image's alternative text in this language; empty when it has none (Phase 30-R).
+  leadAlt String @default("") @db.NVarChar(300)
   revision ArticleRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
   language Language @relation(fields:[languageCode],references:[code],onDelete:NoAction,onUpdate:NoAction)
   @@id([ownerId,revisionNumber,languageCode])
@@ -1691,6 +1715,8 @@ model Page {
   @@unique([routeBinding,slug])
   @@index([state,updatedAt,id])
   @@index([scheduleStatus,scheduledAt,id])
+  migrationMappings MigrationLegacyMapping[]
+  migrationEntries MigrationManifestEntry[]
 }
 model PageRevision {
   ownerId String @db.NVarChar(36)
@@ -1700,6 +1726,12 @@ model PageRevision {
   primaryLanguage String @db.NVarChar(16)
   schemaVersion Int @default(1)
   createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  /// The optional lead image: an application-owned stored Asset with its measured box (Phase 30-R).
+  leadAssetId String? @db.NVarChar(36)
+  leadWidth Int?
+  leadHeight Int?
+  leadCredit String? @db.NVarChar(200)
+  leadAsset Asset? @relation("PageRevisionLeadAsset", fields:[leadAssetId], references:[id], onDelete:NoAction, onUpdate:NoAction)
   owner Page @relation("PageHistory",fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
   editor User @relation(fields:[editorId],references:[id],onDelete:NoAction,onUpdate:NoAction)
   currentFor Page[] @relation("PageCurrent")
@@ -1720,6 +1752,8 @@ model PageRevisionTranslation {
   seoDescription String @db.NVarChar(300)
   document String @db.NVarChar(Max)
   html String @db.NVarChar(Max)
+  /// The lead image's alternative text in this language; empty when it has none (Phase 30-R).
+  leadAlt String @default("") @db.NVarChar(300)
   revision PageRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
   language Language @relation(fields:[languageCode],references:[code],onDelete:NoAction,onUpdate:NoAction)
   @@id([ownerId,revisionNumber,languageCode])
@@ -1771,6 +1805,9 @@ model NewsArticle {
   scheduledById String? @db.NVarChar(36)
   scheduleStatus String? @db.NVarChar(32)
   publishedAt DateTime? @db.DateTime2
+  /// The reader-facing date: the source's own publication date when the published revision
+  /// records one, else the first publication here. Set by the workflow at publication (Phase 30-R).
+  chronologyAt DateTime? @db.DateTime2
   createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
   updatedAt DateTime @db.DateTime2
   creator User @relation("NewsArticleCreator", fields:[creatorId], references:[id], onDelete:NoAction, onUpdate:NoAction)
@@ -1788,6 +1825,7 @@ model NewsArticle {
   @@index([scheduleStatus,scheduledAt,id])
   migrationMappings MigrationLegacyMapping[]
   migrationEntries MigrationManifestEntry[]
+  @@index([state,chronologyAt(sort: Desc),id])
 }
 model NewsArticleRevision {
   ownerId String @db.NVarChar(36)
@@ -1797,6 +1835,14 @@ model NewsArticleRevision {
   primaryLanguage String @db.NVarChar(16)
   schemaVersion Int @default(1)
   createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  /// The ORIGINAL publication date the source states (Phase 30-R); provenance and chronology.
+  sourcePublishedOn DateTime? @db.Date
+  /// The optional lead image: an application-owned stored Asset with its measured box (Phase 30-R).
+  leadAssetId String? @db.NVarChar(36)
+  leadWidth Int?
+  leadHeight Int?
+  leadCredit String? @db.NVarChar(200)
+  leadAsset Asset? @relation("NewsArticleRevisionLeadAsset", fields:[leadAssetId], references:[id], onDelete:NoAction, onUpdate:NoAction)
   /// Phase 16: the ONE Global Network Centre this revision is scoped to, or
   /// none for general News. Revisioned, so a change goes through review.
   centreId String? @db.NVarChar(36)
@@ -1822,6 +1868,8 @@ model NewsArticleRevisionTranslation {
   seoDescription String @db.NVarChar(300)
   document String @db.NVarChar(Max)
   html String @db.NVarChar(Max)
+  /// The lead image's alternative text in this language; empty when it has none (Phase 30-R).
+  leadAlt String @default("") @db.NVarChar(300)
   revision NewsArticleRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
   language Language @relation(fields:[languageCode],references:[code],onDelete:NoAction,onUpdate:NoAction)
   @@id([ownerId,revisionNumber,languageCode])
@@ -1872,6 +1920,9 @@ model PressRelease {
   scheduledById String? @db.NVarChar(36)
   scheduleStatus String? @db.NVarChar(32)
   publishedAt DateTime? @db.DateTime2
+  /// The reader-facing date: the source's own publication date when the published revision
+  /// records one, else the first publication here. Set by the workflow at publication (Phase 30-R).
+  chronologyAt DateTime? @db.DateTime2
   createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
   updatedAt DateTime @db.DateTime2
   creator User @relation("PressReleaseCreator", fields:[creatorId], references:[id], onDelete:NoAction, onUpdate:NoAction)
@@ -1887,6 +1938,9 @@ model PressRelease {
   @@index([state,updatedAt,id])
   @@index([state,publishedAt(sort: Desc),id])
   @@index([scheduleStatus,scheduledAt,id])
+  @@index([state,chronologyAt(sort: Desc),id])
+  migrationMappings MigrationLegacyMapping[]
+  migrationEntries MigrationManifestEntry[]
 }
 model PressReleaseRevision {
   ownerId String @db.NVarChar(36)
@@ -1896,6 +1950,14 @@ model PressReleaseRevision {
   primaryLanguage String @db.NVarChar(16)
   schemaVersion Int @default(1)
   createdAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  /// The ORIGINAL publication date the source states (Phase 30-R); provenance and chronology.
+  sourcePublishedOn DateTime? @db.Date
+  /// The optional lead image: an application-owned stored Asset with its measured box (Phase 30-R).
+  leadAssetId String? @db.NVarChar(36)
+  leadWidth Int?
+  leadHeight Int?
+  leadCredit String? @db.NVarChar(200)
+  leadAsset Asset? @relation("PressReleaseRevisionLeadAsset", fields:[leadAssetId], references:[id], onDelete:NoAction, onUpdate:NoAction)
   owner PressRelease @relation("PressReleaseHistory",fields:[ownerId],references:[id],onDelete:NoAction,onUpdate:NoAction)
   editor User @relation(fields:[editorId],references:[id],onDelete:NoAction,onUpdate:NoAction)
   currentFor PressRelease[] @relation("PressReleaseCurrent")
@@ -1916,6 +1978,8 @@ model PressReleaseRevisionTranslation {
   seoDescription String @db.NVarChar(300)
   document String @db.NVarChar(Max)
   html String @db.NVarChar(Max)
+  /// The lead image's alternative text in this language; empty when it has none (Phase 30-R).
+  leadAlt String @default("") @db.NVarChar(300)
   revision PressReleaseRevision @relation(fields:[ownerId,revisionNumber],references:[ownerId,number],onDelete:NoAction,onUpdate:NoAction)
   language Language @relation(fields:[languageCode],references:[code],onDelete:NoAction,onUpdate:NoAction)
   @@id([ownerId,revisionNumber,languageCode])
@@ -2188,7 +2252,16 @@ model Asset {
   photos Photo[] @relation("PhotoAsset")
   quranRecitationSegments QuranRecitationSegment[] @relation("QuranRecitationSegmentAsset")
   messageAttachments MessageAttachment[] @relation("MessageAttachmentAsset")
-  migrationProvenance MigrationAssetProvenance[]
+  migrationProvenance MigrationAssetProvenance[] @relation("MigrationAssetEvidence")
+  migrationPublicCopies MigrationAssetProvenance[] @relation("MigrationAssetPublicCopy")
+  articleLeads ArticleRevision[] @relation("ArticleRevisionLeadAsset")
+  newsArticleLeads NewsArticleRevision[] @relation("NewsArticleRevisionLeadAsset")
+  pressReleaseLeads PressReleaseRevision[] @relation("PressReleaseRevisionLeadAsset")
+  pageLeads PageRevision[] @relation("PageRevisionLeadAsset")
+  personPortraits Person[] @relation("PersonPortraitAsset")
+  editionCovers Edition[] @relation("EditionCoverAsset")
+  magazineIssueCovers MagazineIssue[] @relation("MagazineIssueCoverAsset")
+  videoPosters Video[] @relation("VideoPosterAsset")
   id String @id @db.NVarChar(36)
 
   /// Server-generated and opaque. Never derived from caller input.
@@ -2303,6 +2376,11 @@ model Edition {
   contentVersion String? @db.NVarChar(64)
   version Int @default(1)
   updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  /// The optional cover image, an application-owned stored Asset (Phase 30-R).
+  coverAssetId String? @db.NVarChar(36)
+  coverWidth Int?
+  coverHeight Int?
+  coverAsset Asset? @relation("EditionCoverAsset", fields:[coverAssetId], references:[id], onDelete:NoAction, onUpdate:NoAction)
   work Work @relation(fields: [workId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   language Language @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
   readableAsset Asset? @relation("EditionReadableAsset", fields: [readableAssetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -2633,6 +2711,11 @@ model MagazineIssue {
   document String? @db.NVarChar(Max)
   version Int @default(1)
   updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  /// The optional cover image, an application-owned stored Asset (Phase 30-R).
+  coverAssetId String? @db.NVarChar(36)
+  coverWidth Int?
+  coverHeight Int?
+  coverAsset Asset? @relation("MagazineIssueCoverAsset", fields:[coverAssetId], references:[id], onDelete:NoAction, onUpdate:NoAction)
   magazine Magazine @relation(fields: [magazineId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   language Language @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
   labels MagazineIssueLabel[]
@@ -2788,6 +2871,11 @@ model Video {
   seriesPosition Int?
   version Int @default(1)
   updatedAt DateTime @default(dbgenerated("SYSUTCDATETIME()")) @db.DateTime2
+  /// The optional first-party poster image, an application-owned stored Asset (Phase 30-R).
+  posterAssetId String? @db.NVarChar(36)
+  posterWidth Int?
+  posterHeight Int?
+  posterAsset Asset? @relation("VideoPosterAsset", fields:[posterAssetId], references:[id], onDelete:NoAction, onUpdate:NoAction)
   language Language @relation(fields: [languageCode], references: [code], onDelete: NoAction, onUpdate: NoAction)
   series Series? @relation(fields: [seriesId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   labels VideoLabel[]
@@ -3287,6 +3375,8 @@ model Country {
   centres       Centre[]
 
   @@index([state, slug, id])
+  migrationMappings MigrationLegacyMapping[]
+  migrationEntries MigrationManifestEntry[]
 }
 
 model CountryLabel {
@@ -6215,6 +6305,8 @@ model MigrationSource {
 model MigrationSourceHost {
   sourceId String @db.NVarChar(36)
   host String @db.NVarChar(253)
+  /// page | asset — an asset host is fetched only for the images the source's own pages name (Phase 30-R)
+  role String @default("page") @db.NVarChar(8)
   source MigrationSource @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   @@id([sourceId, host])
 }
@@ -6549,10 +6641,17 @@ model MigrationAssetProvenance {
   decidedByUserId String? @db.NVarChar(36)
   decidedAt DateTime? @db.DateTime2
   version Int @default(1)
+  /// The metadata-stripped public copy Storage made of an acquired image, with its own checksum
+  /// and measured box — all of it or none (Phase 30-R).
+  publicAssetId String? @db.NVarChar(36)
+  publicChecksum String? @db.NVarChar(64)
+  width Int?
+  height Int?
   source MigrationSource @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   record MigrationRecord? @relation(fields: [recordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   run MigrationRun @relation(fields: [runId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  asset Asset @relation(fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  asset Asset @relation("MigrationAssetEvidence", fields: [assetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  publicAsset Asset? @relation("MigrationAssetPublicCopy", fields: [publicAssetId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   decidedBy User? @relation(fields: [decidedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   @@unique([sourceId, originalUrlDigest, checksum], map: "MigrationAssetProvenance_acquisition_key")
   @@index([checksum])
@@ -6574,6 +6673,10 @@ model MigrationLegacyMapping {
   magazineIssueId String? @db.NVarChar(36)
   newsArticleId String? @db.NVarChar(36)
   articleId String? @db.NVarChar(36)
+  pageId String? @db.NVarChar(36)
+  pressReleaseId String? @db.NVarChar(36)
+  personId String? @db.NVarChar(36)
+  countryId String? @db.NVarChar(36)
   canonicalPath String @db.NVarChar(400)
   /// active | disabled
   state String @db.NVarChar(16)
@@ -6591,6 +6694,10 @@ model MigrationLegacyMapping {
   magazineIssue MagazineIssue? @relation(fields: [magazineIssueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   newsArticle NewsArticle? @relation(fields: [newsArticleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   article Article? @relation(fields: [articleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  page Page? @relation(fields: [pageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pressRelease PressRelease? @relation(fields: [pressReleaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  person Person? @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  country Country? @relation(fields: [countryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   entry MigrationManifestEntry? @relation(fields: [manifestEntryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   createdBy User @relation("MigrationMappingCreator", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   changedBy User? @relation("MigrationMappingChanger", fields: [changedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -6643,6 +6750,12 @@ model MigrationManifestEntry {
   magazineIssueId String? @db.NVarChar(36)
   newsArticleId String? @db.NVarChar(36)
   articleId String? @db.NVarChar(36)
+  pageId String? @db.NVarChar(36)
+  pressReleaseId String? @db.NVarChar(36)
+  personId String? @db.NVarChar(36)
+  countryId String? @db.NVarChar(36)
+  /// create | refresh — a refresh carries a newer revision into a record already published (Phase 30-R)
+  mode String @default("create") @db.NVarChar(8)
   /// public | in-review — how far the owning domain carried the record (Phase 30)
   targetStage String? @db.NVarChar(16)
   targetVersion Int?
@@ -6660,6 +6773,10 @@ model MigrationManifestEntry {
   magazineIssue MagazineIssue? @relation(fields: [magazineIssueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   newsArticle NewsArticle? @relation(fields: [newsArticleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   article Article? @relation(fields: [articleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  page Page? @relation(fields: [pageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pressRelease PressRelease? @relation(fields: [pressReleaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  person Person? @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  country Country? @relation(fields: [countryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   legacyMappings MigrationLegacyMapping[]
   promotions MigrationPromotionEntry[]
   @@unique([manifestId, position], map: "MigrationManifestEntry_manifest_position_key")

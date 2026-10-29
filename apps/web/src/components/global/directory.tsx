@@ -422,7 +422,11 @@ export async function GlobalLandingPage({ locale }: { readonly locale: Locale })
           </ActionLink>
         }
       >
-        {hasCentres ? null : <Alert tone="info">{t('emptyDirectory')}</Alert>}
+        {hasCentres ? null : (
+          <Alert tone="info">
+            {countries.items.length > 0 ? t('presenceNotice') : t('emptyDirectory')}
+          </Alert>
+        )}
       </PageHero>
 
       <DirectoryBody>
@@ -617,7 +621,16 @@ export async function FinderPage({
           {result.status === 'invalid' ? (
             <Alert tone="warning">{t('finder.invalid')}</Alert>
           ) : result.inventoryEmpty ? (
-            <EmptyState>{t('emptyDirectory')}</EmptyState>
+            <EmptyState>
+              {t('emptyDirectory')}{' '}
+              {/* Phase 30-R: the countries of presence remain a way on. */}
+              <a
+                href={globalPaths.countries(locale)}
+                className="inline-flex min-h-11 items-center font-medium text-[color:var(--color-action)] underline underline-offset-2"
+              >
+                {t('allCountries')}
+              </a>
+            </EmptyState>
           ) : (
             <CentreList
               page={result.page}
@@ -767,6 +780,15 @@ export async function CountryPage({
   ]);
   const name = placeName(country, locale);
   const path = globalPaths.country(locale, country.slug);
+  // Phase 30-R: a Country of PRESENCE — published, with nothing yet listed
+  // beneath it — says so once, plainly, instead of three empty lists, and does
+  // not offer a search that can only come back empty.
+  const bare =
+    offset === 0 &&
+    cityOffset === 0 &&
+    regions.length === 0 &&
+    cities.items.length === 0 &&
+    centres.items.length === 0;
 
   return (
     <article>
@@ -785,67 +807,81 @@ export async function CountryPage({
         nameLocale={name.locale}
       >
         <div className="flex flex-wrap items-center gap-3 pt-1">
-          <ActionLink href={finderPath(locale, { country })}>
-            {t('country.findIn', { country: name.text })}
-          </ActionLink>
+          {bare ? (
+            <ActionLink href={globalPaths.countries(locale)} tone="secondary">
+              {t('allCountries')}
+            </ActionLink>
+          ) : (
+            <ActionLink href={finderPath(locale, { country })}>
+              {t('country.findIn', { country: name.text })}
+            </ActionLink>
+          )}
         </div>
       </RecordHeader>
 
-      <DirectoryBody>
-        {regions.length === 0 ? null : (
-          <Section id="country-regions" heading={t('country.regions')}>
+      {bare ? (
+        <DirectoryBody>
+          <Alert tone="info">{t('country.presenceOnly')}</Alert>
+        </DirectoryBody>
+      ) : (
+        <DirectoryBody>
+          {regions.length === 0 ? null : (
+            <Section id="country-regions" heading={t('country.regions')}>
+              <PlaceList
+                places={regions}
+                href={(region) => globalPaths.region(locale, country.slug, region.slug)}
+                label={t('country.regions')}
+                empty={t('country.regionsEmpty')}
+                locale={locale}
+              />
+            </Section>
+          )}
+
+          <Section
+            id="country-cities"
+            heading={
+              regions.length === 0 ? t('country.cities') : t('country.directCities')
+            }
+          >
             <PlaceList
-              places={regions}
-              href={(region) => globalPaths.region(locale, country.slug, region.slug)}
-              label={t('country.regions')}
-              empty={t('country.regionsEmpty')}
+              places={cities.items}
+              href={(city) => globalPaths.city(locale, country.slug, city.slug)}
+              label={t('country.cities')}
+              empty={cityOffset > 0 ? t('pageEmpty') : t('country.citiesEmpty')}
               locale={locale}
             />
+            <Pagination
+              label={t('country.cities')}
+              previous={
+                cityOffset > 0
+                  ? withQuery(path, {
+                      offset,
+                      cities: Math.max(0, cityOffset - GLOBAL_PAGE),
+                    })
+                  : null
+              }
+              next={
+                cities.hasMore
+                  ? withQuery(path, { offset, cities: cityOffset + GLOBAL_PAGE })
+                  : null
+              }
+              {...pages(t)}
+            />
           </Section>
-        )}
 
-        <Section
-          id="country-cities"
-          heading={regions.length === 0 ? t('country.cities') : t('country.directCities')}
-        >
-          <PlaceList
-            places={cities.items}
-            href={(city) => globalPaths.city(locale, country.slug, city.slug)}
-            label={t('country.cities')}
-            empty={cityOffset > 0 ? t('pageEmpty') : t('country.citiesEmpty')}
-            locale={locale}
-          />
-          <Pagination
-            label={t('country.cities')}
-            previous={
-              cityOffset > 0
-                ? withQuery(path, {
-                    offset,
-                    cities: Math.max(0, cityOffset - GLOBAL_PAGE),
-                  })
-                : null
-            }
-            next={
-              cities.hasMore
-                ? withQuery(path, { offset, cities: cityOffset + GLOBAL_PAGE })
-                : null
-            }
-            {...pages(t)}
-          />
-        </Section>
-
-        <Section id="country-centres" heading={t('sections.centres')}>
-          <CentreList
-            page={centres}
-            offset={offset}
-            path={(next) => withQuery(path, { offset: next, cities: cityOffset })}
-            empty={t('country.centresEmpty')}
-            label={t('sections.centres')}
-            locale={locale}
-            t={t}
-          />
-        </Section>
-      </DirectoryBody>
+          <Section id="country-centres" heading={t('sections.centres')}>
+            <CentreList
+              page={centres}
+              offset={offset}
+              path={(next) => withQuery(path, { offset: next, cities: cityOffset })}
+              empty={t('country.centresEmpty')}
+              label={t('sections.centres')}
+              locale={locale}
+              t={t}
+            />
+          </Section>
+        </DirectoryBody>
+      )}
 
       <BreadcrumbData
         contentLocales={placeLocales(country)}

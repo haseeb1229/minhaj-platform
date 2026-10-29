@@ -201,6 +201,7 @@ describe('the export adapter', () => {
         categories: [{ key: 'fixture-lectures', label: 'FIXTURE Lectures' }],
         links: ['/videos/v001.html'],
         assets: [],
+        poster: null,
       },
     });
     expect(results[2]).toMatchObject({

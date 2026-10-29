@@ -4,11 +4,11 @@ import type { Locale } from '@minhaj/contracts';
 
 import { Container } from '@/components/ui';
 import { LocaleSwitcher } from '@/components/locale-switcher';
+import { BrandLockup } from '@/components/shell/brand-lockup';
 import { DisclosureMenu } from '@/components/shell/disclosure-menu';
 import { DrawerSection, MegaMenuPanel } from '@/components/shell/menu-panel';
 import { MobileNav } from '@/components/shell/mobile-nav';
 import { domainMenus } from '@/shell/menus';
-import { PRODUCT_NAME } from '@/shell/product';
 import { linksIn, pathFor, requireRoute } from '@/shell/registry';
 
 /**
@@ -26,7 +26,7 @@ import { linksIn, pathFor, requireRoute } from '@/shell/registry';
  *
  *   1. the UTILITY bar — Find a Centre, Membership, Contact and Help, and the
  *      language switcher, reachable on every page without opening anything;
- *   2. the IDENTITY row — the product name, Search, My Minhaj and Donate, the
+ *   2. the IDENTITY row — the brand lockup, Search, My Minhaj and Donate, the
  *      three primary items that are destinations rather than domains;
  *   3. the PRIMARY navigation — the nine domains, each with its mega menu.
  *
@@ -57,6 +57,14 @@ export async function SiteHeader({ locale }: { readonly locale: Locale }) {
       <div className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)]">
         <Container>
           <div className="flex flex-wrap items-center justify-end gap-x-5 gap-y-1 py-1 text-sm">
+            {/*
+             * THE PRE-ADOPTION MARKER (Phase 30-R): one quiet, global statement
+             * that this is a review build, not the organisation's adopted site —
+             * never a banner on every page.
+             */}
+            <p className="me-auto text-caption text-[color:var(--color-foreground-muted)]">
+              {t('preAdoptionMarker')}
+            </p>
             <ul className="hidden list-none flex-wrap items-center gap-x-5 p-0 lg:flex">
               {utility.map((route) => (
                 <li key={route.key}>
@@ -78,27 +86,17 @@ export async function SiteHeader({ locale }: { readonly locale: Locale }) {
         <div className="flex items-center justify-between gap-4 py-3 lg:py-4">
           <a
             href={pathFor(locale, requireRoute('home'))}
-            className="inline-flex min-h-11 min-w-0 items-center gap-2.5 no-underline"
+            className="inline-flex min-h-11 min-w-0 shrink items-center no-underline"
           >
             {/*
-             * THE PRODUCT NAME, set in type — not an organisational logo, not a
-             * wordmark image and not an emblem. Official brand assets are
-             * organisational input that has not arrived (OPEN_DECISIONS.md
-             * §6.4). The short accent rule beside it is a typographic device,
-             * not a mark. The name is carried in English in every locale and
-             * marked `lang="en"`: an Urdu or Arabic rendering of it would be a
-             * brand decision nobody has taken.
+             * THE BRAND LOCKUP (Phase 30-R): the organisation's current
+             * official logo and wordmark, as owner-authorised pre-adoption
+             * brand evidence (OPEN_DECISIONS.md §6.4). The picture names the
+             * organisation; the link adds its destination. It is the same in
+             * every locale — the official lockup is one picture, written in
+             * English and Arabic script as the organisation drew it.
              */}
-            <span
-              aria-hidden="true"
-              className="h-7 w-1 shrink-0 rounded-full bg-[color:var(--color-accent)]"
-            />
-            <span
-              lang="en"
-              className="text-lg font-semibold tracking-[-0.01em] sm:text-xl text-[color:var(--color-foreground)]"
-            >
-              {PRODUCT_NAME}
-            </span>
+            <BrandLockup placement="header" />
             <span className="sr-only"> — {t('nav.home')}</span>
           </a>
 

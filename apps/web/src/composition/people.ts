@@ -5,6 +5,7 @@ import type { ContributorAccountPort } from '@minhaj/contracts/people';
 
 import { createPeopleService, type PeopleService } from '@/contexts/people-contributors';
 import { identityRuntime } from '@/composition/identity';
+import { storageRuntime } from '@/composition/storage';
 
 /**
  * The People & Contributors composition root.
@@ -82,6 +83,10 @@ export function peopleRuntime(): PeopleRuntime {
       reader: createPeopleReader(),
       people: createPeoplePersistence(),
       accounts: contributorAccounts(),
+      // Storage's one narrow answer, asked before a portrait is recorded.
+      images: {
+        servableImages: async (ids) => (await storageRuntime()).servableImages(ids),
+      },
     }),
   };
 

@@ -8,6 +8,7 @@ import type { ProfileFacetView, PublicPersonProfile } from '@minhaj/contracts/pe
 import { peopleReadRuntime } from '@/composition/people-read';
 import { AudioPreview } from '@/components/media/listen';
 import { VideoPreview } from '@/components/media/watch';
+import { PersonPortraitFigure, portraitPath } from '@/components/people/portrait';
 import { absoluteUrl } from '@/config/origin';
 import { requireLocale } from '@/config/route-locale';
 import {
@@ -58,10 +59,12 @@ import {
  * this page receives does not carry any of them — `PublicPersonProfile` has no
  * field for one — so there is nothing here to forget to strip.
  *
- * NO PORTRAIT AND NO INVENTED DETAIL. Storage arrives at Phase 7 and profile
- * media with the phase that owns it; there is no image, no external avatar URL,
- * no fabricated work list, no counts and no credentials this platform has not
- * been given (OPEN_DECISIONS.md §6.3).
+ * A PORTRAIT ONLY WHERE ONE IS RECORDED, AND NO INVENTED DETAIL. Since Phase
+ * 30-R a Person may carry ONE portrait — an application-owned stored image,
+ * typically the one an official public profile itself presents — served by
+ * People's own route while the Person is published. There is still no external
+ * avatar URL, no fabricated work list, no counts and no credentials this
+ * platform has not been given (OPEN_DECISIONS.md §6.3).
  */
 export const dynamic = 'force-dynamic';
 
@@ -140,33 +143,52 @@ export default async function ContributorProfilePage({ params }: ProfileParams) 
           them — a description, never a credential or a permission. */}
       <div className="border-b border-[color:var(--color-border)]">
         <Container>
-          <div className="flex max-w-3xl flex-col gap-4 py-[var(--space-section)]">
-            <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
-              {t('eyebrow')}
-            </p>
-            {/* The name is rendered in its OWN language and direction. `lang`
+          <div
+            className={`flex flex-col gap-6 py-[var(--space-section)] ${
+              profile.portrait === null
+                ? 'max-w-3xl'
+                : 'sm:flex-row sm:items-start sm:gap-8'
+            }`}
+          >
+            {profile.portrait === null ? null : (
+              <PersonPortraitFigure
+                personId={profile.id}
+                portrait={profile.portrait}
+                name={profile.label.name}
+                nameLocale={profile.label.resolvedLocale}
+                creditLabel={t('portraitCredit')}
+                priority
+                className="w-40 shrink-0 sm:w-48 lg:w-56"
+              />
+            )}
+            <div className="flex min-w-0 max-w-3xl flex-col gap-4">
+              <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+                {t('eyebrow')}
+              </p>
+              {/* The name is rendered in its OWN language and direction. `lang`
                 and `dir` are on the element rather than on the page, so an
                 Arabic name inside an English page renders right-to-left
                 without flipping the page around it. */}
-            <h1
-              className="text-title font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere"
-              lang={profile.label.resolvedLocale}
-              dir="auto"
-            >
-              {profile.label.name}
-            </h1>
-
-            {profile.nameVariants.length === 0 ? null : (
-              <p
-                className="text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+              <h1
+                className="text-title font-semibold tracking-[var(--tracking-display)] text-balance wrap-anywhere"
+                lang={profile.label.resolvedLocale}
                 dir="auto"
               >
-                <span className="font-medium">{t('alsoKnownAs')}: </span>
-                {profile.nameVariants.join(' · ')}
-              </p>
-            )}
+                {profile.label.name}
+              </h1>
 
-            <MetaRow items={facetNames} />
+              {profile.nameVariants.length === 0 ? null : (
+                <p
+                  className="text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+                  dir="auto"
+                >
+                  <span className="font-medium">{t('alsoKnownAs')}: </span>
+                  {profile.nameVariants.join(' · ')}
+                </p>
+              )}
+
+              <MetaRow items={facetNames} />
+            </div>
           </div>
         </Container>
       </div>
@@ -357,6 +379,10 @@ function PersonStructuredData({
     ...(profile.nameVariants.length === 0
       ? {}
       : { alternateName: [...profile.nameVariants] }),
+    // Our own portrait route, never a remote URL (Phase 30-R).
+    ...(profile.portrait === null
+      ? {}
+      : { image: absoluteUrl(portraitPath(profile.id, profile.portrait.assetId)) }),
   };
 
   return (

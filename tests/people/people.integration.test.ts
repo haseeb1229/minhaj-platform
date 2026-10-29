@@ -1318,7 +1318,9 @@ describeLive('Phase 5 — People & Contributors over a live database', () => {
       // tafsir credits and the reciter of a `QuranRecitation`, Phase 19
       // Hadith's translator and commentary credits, Phase 20 the published
       // contributor records a `FatwaPublication` attributes, and Phase 22 the
-      // teachers a Course names through `CourseTeacher`. Each is a
+      // teachers a Course names through `CourseTeacher`. Phase 30-R adds
+      // Migration's typed publication target: the manifest entry and legacy
+      // mapping that made a migrated profile (`personId`). Each is a
       // typed foreign key to Person, never a polymorphic pair — and none of them
       // grants the Person anything.
       const referencing = await admin.query<{ tableName: string }>(`
@@ -1343,6 +1345,8 @@ describeLive('Phase 5 — People & Contributors over a live database', () => {
         'MagazineContributor',
         'MagazineIssueContributor',
         'MediaCoverageContributor',
+        'MigrationLegacyMapping',
+        'MigrationManifestEntry',
         'NewsArticleContributor',
         'PageContributor',
         'PersonNameVariant',

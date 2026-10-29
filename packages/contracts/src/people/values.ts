@@ -344,6 +344,25 @@ export interface PersonNameVariantView {
 }
 
 /**
+ * Phase 30-R — a Person's optional public PORTRAIT.
+ *
+ * ONE TYPED REFERENCE to an application-owned stored Asset, with the image's
+ * measured box so a page reserves its space, and a credit only when the source
+ * states one. Never a remote URL, never an avatar service, never a face match:
+ * a portrait is the image an official public profile itself presents, and it
+ * is served only through People's own route while the Person is published.
+ */
+export const personPortraitSchema = z
+  .object({
+    assetId: z.uuid(),
+    width: z.number().int().min(1).max(16_384),
+    height: z.number().int().min(1).max(16_384),
+    credit: z.string().trim().min(1).max(200).nullable(),
+  })
+  .strict();
+export type PersonPortrait = z.infer<typeof personPortraitSchema>;
+
+/**
  * A Person as a listing shows it.
  *
  * NO ACCOUNT FIELDS. Not the linked account's address, not its name, not its
@@ -372,6 +391,8 @@ export interface PersonView {
   readonly linked: boolean;
   /** The profile kinds that exist for this Person, whatever their status. */
   readonly profileKinds: readonly ProfileKind[];
+  /** Phase 30-R: the optional portrait, or null. */
+  readonly portrait: PersonPortrait | null;
   readonly updatedAt: Date;
 }
 
@@ -440,8 +461,55 @@ export interface PublicPersonProfile {
    */
   readonly contentLocales: readonly Locale[];
   readonly primaryLocale: Locale;
+  /** Phase 30-R: the optional portrait, served only through People's own route. */
+  readonly portrait: PersonPortrait | null;
   /** Genuine content modification, for `lastmod`. Never build time. */
   readonly updatedAt: Date;
+}
+
+/**
+ * Phase 30-R. One PUBLISHED contributor as a public card shows them: the
+ * name and a short opening of the biography in the requested locale (falling
+ * back, honestly marked), and the portrait People serves. Nothing else — no
+ * facet prose, no account fact.
+ */
+export interface PublicPersonCard {
+  readonly id: string;
+  readonly slug: string;
+  readonly name: string;
+  /** The biography's opening words, whole words only, or null when it has none. */
+  readonly excerpt: string | null;
+  /** The locale the name and excerpt actually came from. */
+  readonly resolvedLocale: Locale;
+  readonly portrait: PersonPortrait | null;
+}
+
+/** One bounded page of public contributor cards. */
+export interface PublicPersonCardPage {
+  readonly items: readonly PublicPersonCard[];
+  readonly more: boolean;
+}
+
+/** The longest card excerpt, in characters. */
+export const PERSON_CARD_EXCERPT = 240;
+
+/**
+ * The opening of a biography for a card: its first paragraph, cut at a word
+ * boundary within `PERSON_CARD_EXCERPT` with an ellipsis when cut — never a
+ * word split, never a sentence invented.
+ */
+export function personCardExcerpt(biography: string | null): string | null {
+  if (biography === null) return null;
+  const first =
+    biography
+      .trim()
+      .split(/\n\s*\n/u)[0]
+      ?.trim() ?? '';
+  if (first === '') return null;
+  if (first.length <= PERSON_CARD_EXCERPT) return first;
+  const cut = first.slice(0, PERSON_CARD_EXCERPT);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > PERSON_CARD_EXCERPT / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }
 
 /** One profile's stored prose in one locale, as the admin editor shows it. */

@@ -3,6 +3,7 @@
     "description": "A unified digital platform for the Quran, Hadith, learning, library and media resources of Minhaj-ul-Quran International."
   },
   "shell": {
+    "preAdoptionMarker": "Pre-adoption review build",
     "nav": {
       "home": "Home",
       "primary": "Main navigation",
@@ -71,6 +72,20 @@
         "allCollections": "All collections",
         "allTopics": "All topics",
         "fatwa": "Browse Fatwa"
+      },
+      "featured": {
+        "eyebrow": "Featured story"
+      },
+      "organisation": {
+        "heading": "About the organisation",
+        "intro": "Pages published from the organisation's own site, for review before adoption."
+      },
+      "people": {
+        "intro": "Published profiles of the organisation’s leadership.",
+        "action": "All leadership"
+      },
+      "global": {
+        "presenceIntro": "Countries where the organisation states it is present. No centre is listed here yet."
       }
     },
     "explore": {
@@ -1330,6 +1345,7 @@
     "allAudio": "All audio with this speaker",
     "eyebrow": "Contributor",
     "biography": "Biography",
+    "portraitCredit": "Photo",
     "facetsIntro": "The kinds of contribution described and published for this person."
   },
   "editorial": {
@@ -1510,7 +1526,14 @@
     "memberType-work": "Book",
     "memberType-video": "Video",
     "helpArticles": "Help articles",
-    "helpMore": "Still need help? Contact the team, or tell us what could be better."
+    "helpMore": "Still need help? Contact the team, or tell us what could be better.",
+    "leadCredit": "Image: {credit}",
+    "leadImage": "Lead image",
+    "leadImageHelp": "The lead image this revision carries. Saving keeps it; it is shown publicly only once the record is published.",
+    "leadImageAlt": "Image description: {alt}",
+    "leadImageNoAlt": "This image has no description and is shown as decoration.",
+    "sourcePublishedOn": "Original publication date",
+    "sourcePublishedOnHelp": "The date the original source published this, if known. Readers see this date, and listings are ordered by it. Leave empty for content first published here."
   },
   "library": {
     "title": "Library",
@@ -1848,6 +1871,7 @@
       }
     },
     "kindBook": "Book",
+    "coverAlt": "Cover of {title}",
     "editionCount": "{count, plural, one {# edition} other {# editions}}",
     "availabilityReading": "Reading",
     "availabilityDownload": "Download",
@@ -4290,7 +4314,8 @@
       "cities": "Cities",
       "directCities": "Cities not in a region",
       "citiesEmpty": "No cities have been published for this country.",
-      "centresEmpty": "No centres have been published in this country yet."
+      "centresEmpty": "No centres have been published in this country yet.",
+      "presenceOnly": "The organisation states it is present in this country. No centre is listed for this country yet; centres appear here as their details are confirmed."
     },
     "region": {
       "findIn": "Find a centre in {region}",
@@ -4352,7 +4377,8 @@
       "viewCountry": "Pakistan country page",
       "empty": "No regions or cities have been published for Pakistan yet."
     },
-    "eyebrow": "Centres worldwide"
+    "eyebrow": "Centres worldwide",
+    "presenceNotice": "The countries below are those the organisation states it is present in. No centre address has been published yet."
   },
   "personalIsland": {
     "heading": "Save and notes",
@@ -4814,7 +4840,12 @@
       "allPaths": "All learning paths",
       "empty": "No course or learning path has been published yet.",
       "liveSchedule": "The live class schedule",
-      "allTopics": "Browse all topics"
+      "allTopics": "Browse all topics",
+      "fromLibrary": "Read from the Library",
+      "fromLibraryIntro": "No course is published yet. These are published books you can read now.",
+      "allBooks": "All books",
+      "fromWatch": "Watch lectures",
+      "allVideos": "All videos"
     },
     "coursesEmpty": "No course has been published yet.",
     "pathsEmpty": "No learning path has been published yet.",
@@ -6964,13 +6995,21 @@
       },
       "editorial": {
         "news": "News",
-        "article": "Article"
+        "article": "Article",
+        "press-release": "Press release",
+        "page": "Organisational page"
       },
       "fatwa": {
         "ruling": "Fatwa"
       },
       "quran": {
         "translation": "Quran translation"
+      },
+      "people": {
+        "person": "Person"
+      },
+      "global": {
+        "country": "Country"
       }
     },
     "reviewOnly": {
@@ -7080,6 +7119,7 @@
       "version": "Version",
       "stagedLink": "Staged revisions of this run",
       "errorsLink": "Errors of this run",
+      "rightsLink": "Image rights of this run",
       "counts": "Items by outcome",
       "verdict": {
         "pending": "This run has not been reconciled yet.",
@@ -7601,6 +7641,43 @@
       "pages": "Reconciliation pages",
       "unbalanced": "{count, plural, one {# equation doesn’t balance.} other {# equations don’t balance.}}",
       "noCounts": "No counts were recorded for this run."
+    },
+    "rights": {
+      "title": "Image rights review",
+      "intro": "The images this run acquired that are still restricted. Nothing is shown publicly until a person clears it here; each acquisition is decided and audited on its own.",
+      "heading": "Restricted acquisitions",
+      "caption": "{total, plural, one {# restricted acquisition} other {# restricted acquisitions}}",
+      "none": "This run has no restricted acquisition.",
+      "pages": "Pages of restricted acquisitions",
+      "back": "Back to the run",
+      "select": "Select {url}",
+      "noPublicCopy": "No public copy",
+      "dimensions": "{width} × {height} px",
+      "noEvidence": "No evidence recorded",
+      "column": {
+        "select": "Select",
+        "source": "Original address",
+        "type": "Type and size",
+        "publicCopy": "Public copy",
+        "claim": "Recorded rights"
+      },
+      "bulk": {
+        "help": "Open each address to see the image where its official source shows it. Rows are pre-selected only where the source itself states organisational ownership; check every selection before you confirm.",
+        "legend": "Clear the selected images for release",
+        "licence": "Licence",
+        "evidence": "Evidence",
+        "evidenceHelp": "State what you checked: the official page, its copyright notice, any credit.",
+        "rightsHolder": "Rights holder",
+        "confirm": "I have checked each selected image against its official source and its rights.",
+        "submit": "Clear selected for release",
+        "decided": "Cleared",
+        "refused": "Left as they were",
+        "unknownAcquisition": "An acquisition no longer on this page",
+        "done": "Every selected image was cleared for release.",
+        "partial": "Not every selected image could be cleared. Those left as they were are listed below with the reason.",
+        "noneSelected": "Select at least one image first.",
+        "interrupted": "The work stopped part-way because the store did not answer. What was cleared before that stands; reload the page to see each image’s state."
+      }
     },
     "licence": {
       "unknown": "Unknown",

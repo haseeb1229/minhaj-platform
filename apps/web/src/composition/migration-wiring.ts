@@ -205,6 +205,17 @@ export const MIGRATION_ASSET_MEDIA_TYPES = Object.freeze([
 /** One acquired asset, at most. Far above a poster or a leaflet. */
 export const MIGRATION_ASSET_MAX_BYTES = 8 * 1024 * 1024;
 
+/**
+ * Phase 30-R. What a PUBLIC copy may be: the two raster types Storage's image
+ * pipeline admits, within the same pixel bounds as a Photo — so a decompression
+ * bomb or an oversized scan is refused, never shown.
+ */
+export const MIGRATION_PUBLIC_IMAGE_TYPES = Object.freeze(['image/png', 'image/jpeg']);
+export const MIGRATION_PUBLIC_IMAGE_LIMITS = Object.freeze({
+  maxPixels: 40_000_000,
+  maxEdge: 16_384,
+});
+
 async function* once(bytes: Uint8Array): AsyncGenerator<Uint8Array> {
   yield bytes;
 }
@@ -243,6 +254,30 @@ export function migrationAssetStorage(
         byteSize: stored.byteSize,
         checksum: stored.checksum,
         clean: stored.state === 'clean',
+      };
+    },
+
+    async storePublicImage({ bytes, displayName }) {
+      const service = await storage();
+      const stored = await service.store(once(bytes), {
+        allowedMediaTypes: MIGRATION_PUBLIC_IMAGE_TYPES,
+        maxBytes: MIGRATION_ASSET_MAX_BYTES,
+        declaredMediaType: null,
+        displayName,
+        image: MIGRATION_PUBLIC_IMAGE_LIMITS,
+      });
+      if (stored.state === 'rejected')
+        return { status: 'rejected', reason: stored.rejection ?? 'rejected' };
+      if (stored.state !== 'clean' && stored.state !== 'quarantined')
+        throw new Error('Storage did not complete custody of the public image.');
+      if (stored.image === undefined)
+        throw new Error('Storage stored an image without measuring it.');
+      return {
+        status: 'stored',
+        assetId: stored.id,
+        checksum: stored.checksum,
+        width: stored.image.width,
+        height: stored.image.height,
       };
     },
   };

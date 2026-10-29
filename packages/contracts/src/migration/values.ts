@@ -36,6 +36,12 @@ export const MIGRATION_PUBLISHABLE_KINDS = Object.freeze([
   'library.magazine-issue',
   'editorial.news',
   'editorial.article',
+  // Phase 30-R: Editorial's press releases and shell-bound Pages, People's
+  // public profiles and Global Network's countries.
+  'editorial.press-release',
+  'editorial.page',
+  'people.person',
+  'global.country',
 ] as const);
 export type MigrationPublishableKind = (typeof MIGRATION_PUBLISHABLE_KINDS)[number];
 
@@ -324,6 +330,26 @@ export const ASSET_VISIBILITIES = Object.freeze([
 export type AssetVisibility = (typeof ASSET_VISIBILITIES)[number];
 export const assetVisibilitySchema = z.enum(ASSET_VISIBILITIES);
 
+/**
+ * Phase 30-R. A source host's role: a PAGE host is where discovery, items and
+ * links live; an ASSET host is an exact first-party host the source's own
+ * pages name for their images, reached only to acquire such an image — never
+ * discovered, never an item, never a link target.
+ */
+export const SOURCE_HOST_ROLES = Object.freeze(['page', 'asset'] as const);
+export type SourceHostRole = (typeof SOURCE_HOST_ROLES)[number];
+
+/**
+ * Phase 30-R. A manifest entry CREATES a record in its owning domain, or
+ * REFRESHES one an earlier manifest already made: a newer approved revision of
+ * the same legacy record carried into the existing target through the owning
+ * domain's own update. A refresh makes no legacy mapping, and migration never
+ * rolls one back — what it changed in a record people may already hold is a
+ * person's to undo (MIGRATION_STRATEGY.md §7.2).
+ */
+export const MANIFEST_ENTRY_MODES = Object.freeze(['create', 'refresh'] as const);
+export type ManifestEntryMode = (typeof MANIFEST_ENTRY_MODES)[number];
+
 export const LEGACY_MAPPING_STATES = Object.freeze(['active', 'disabled'] as const);
 export type LegacyMappingState = (typeof LEGACY_MAPPING_STATES)[number];
 
@@ -455,6 +481,11 @@ export const authorisedSourceCreateSchema = z
       .array(z.string().trim().toLowerCase().min(1).max(253))
       .min(1)
       .max(MIGRATION_LIMITS.hosts),
+    /** Phase 30-R: exact first-party ASSET hosts, beside the page hosts. */
+    assetHosts: z
+      .array(z.string().trim().toLowerCase().min(1).max(253))
+      .max(MIGRATION_LIMITS.hosts)
+      .default([]),
     defaultLanguageCode: languageCodeSchema.nullable(),
     policy: sourcePolicySchema.refine(
       (policy) =>
@@ -468,6 +499,23 @@ export const authorisedSourceCreateSchema = z
   })
   .strict();
 export type AuthorisedSourceCreate = z.output<typeof authorisedSourceCreateSchema>;
+
+/**
+ * Phase 30-R. Adding one exact first-party ASSET host to an AUTHORISED source:
+ * an audited, append-only act — a host, once recorded, is never changed or
+ * removed — carrying the evidence that the host serves the source's OWN
+ * images (for example, that the source's own pages name it for them). Page
+ * hosts are fixed at registration and are never added this way.
+ */
+export const assetHostAddSchema = z
+  .object({
+    sourceId: migrationIdSchema,
+    expectedVersion: migrationVersionSchema,
+    host: z.string().trim().toLowerCase().min(1).max(253),
+    evidence: z.string().trim().min(10).max(1000),
+  })
+  .strict();
+export type AssetHostAdd = z.output<typeof assetHostAddSchema>;
 
 /** What an operator may change on a source: never its kind, key or hosts. */
 export const sourceUpdateSchema = z
@@ -573,6 +621,37 @@ export const rightsDecisionSchema = z
   })
   .strict();
 export type RightsDecision = z.output<typeof rightsDecisionSchema>;
+
+/**
+ * Phase 30-R. A reviewer's rights decision over a SELECTION of one page of
+ * acquisitions: each named at the version the reviewer was shown, and each
+ * then decided — and audited — on its own, exactly as one decision would be.
+ * The act only ever clears material for release: the licence is owned or
+ * licensed, the visibility `public-eligible`, and the reviewer states the
+ * evidence and the holder. Anything else is decided one acquisition at a time.
+ */
+export const rightsBatchSchema = z
+  .object({
+    items: z
+      .array(
+        z
+          .object({
+            provenanceId: migrationIdSchema,
+            expectedVersion: migrationVersionSchema,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(MIGRATION_LIMITS.page)
+      .refine(
+        (items) => new Set(items.map((item) => item.provenanceId)).size === items.length,
+      ),
+    licence: z.enum(['organisation-owned', 'licensed']),
+    licenceEvidence: z.string().trim().min(10).max(1000),
+    rightsHolder: z.string().trim().min(1).max(200),
+  })
+  .strict();
+export type RightsBatch = z.output<typeof rightsBatchSchema>;
 
 export const legacyMappingDecisionSchema = z
   .object({

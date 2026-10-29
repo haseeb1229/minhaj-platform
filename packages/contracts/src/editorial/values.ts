@@ -16,6 +16,12 @@ import {
   type EventSchedule,
 } from './event.ts';
 import { collectionMembersSchema, type CollectionMember } from './collection.ts';
+import {
+  editorialLeadImageSchema,
+  sourcePublishedOnSchema,
+  type EditorialLeadImage,
+  type PublicLeadImage,
+} from './lead.ts';
 
 /**
  * Every aggregate the shared editorial workflow governs: Phase 6's Article and
@@ -103,6 +109,39 @@ export const editorialContentSchema = z
   })
   .superRefine(referencesAreUnique);
 
+/* ===========================================================================
+ * Phase 30-R — the optional lead image and the source chronology
+ * ========================================================================= */
+
+/** A lead family's translation: its words, and the lead image's alt text. */
+const leadTranslationSchema = editorialTranslationSchema.extend({
+  leadAlt: z.string().trim().max(300).optional(),
+});
+
+/**
+ * OMITTED KEEPS, NULL CLEARS. On a revision, a lead image, source date or alt
+ * text the input does not mention is the current revision's, kept by the
+ * service; `null` removes it. On creation, omitted means none.
+ */
+const leadShape = {
+  translations: z.array(leadTranslationSchema).min(1).max(3),
+  leadImage: editorialLeadImageSchema.nullable().optional(),
+};
+const datedShape = {
+  ...leadShape,
+  sourcePublishedOn: sourcePublishedOnSchema.nullable().optional(),
+};
+
+/** An Article or a PressRelease: lead image and source date. */
+const datedContentSchema = z
+  .strictObject({ ...editorialContentSchema.shape, ...datedShape })
+  .superRefine(referencesAreUnique);
+
+/** A Page: a lead image, but no source date — a Page is not a dated report. */
+const pageContentSchema = z
+  .strictObject({ ...editorialContentSchema.shape, ...leadShape })
+  .superRefine(referencesAreUnique);
+
 /** A Statement's translation names its issuing authority in that language. */
 const statementTranslationSchema = z.strictObject({
   ...editorialTranslationSchema.shape,
@@ -141,6 +180,7 @@ const mediaCoverageContentSchema = z
 const newsArticleContentSchema = z
   .strictObject({
     ...editorialContentSchema.shape,
+    ...datedShape,
     centreId: editorialIdSchema.nullable().default(null),
   })
   .superRefine(referencesAreUnique)
@@ -216,12 +256,20 @@ export function editorialContentSchemaFor(
   if (kind === 'news-article') return newsArticleContentSchema;
   if (kind === 'event') return eventContentSchema;
   if (kind === 'collection') return collectionContentSchema;
-  return editorialContentSchema;
+  if (kind === 'page') return pageContentSchema;
+  // An Article and a PressRelease: the lead image and the source date.
+  return datedContentSchema;
 }
 
 export interface EditorialTranslation extends z.infer<typeof editorialTranslationSchema> {
   /** A Statement's issuing authority; absent for every other family. */
   readonly issuer?: string;
+  /**
+   * Phase 30-R: the lead image's alternative text in this language. Absent on
+   * input means "keep" (a revision) or "none" (a creation); once resolved by
+   * the service, a lead family always carries it, possibly empty.
+   */
+  readonly leadAlt?: string | undefined;
 }
 export interface EditorialContent {
   readonly slug: string;
@@ -239,6 +287,17 @@ export interface EditorialContent {
    * at, or `null`; absent for every other family.
    */
   readonly centreId?: string | null;
+  /**
+   * Phase 30-R: an Article's, NewsArticle's or PressRelease's ORIGINAL source
+   * publication date (YYYY-MM-DD), or `null`. Absent on input keeps (revision)
+   * or means none (creation); absent for every other family once resolved.
+   */
+  readonly sourcePublishedOn?: string | null | undefined;
+  /**
+   * Phase 30-R: an Article's, Page's, NewsArticle's or PressRelease's lead
+   * image, or `null`. Same omission rule; absent for every other family.
+   */
+  readonly leadImage?: EditorialLeadImage | null | undefined;
   /** An Event's resolved schedule; absent for every other family. */
   readonly schedule?: EventSchedule;
   /** An Event's ordered Media Galleries; absent for every other family. */
@@ -315,7 +374,17 @@ export interface PublicEditorial {
   readonly contributors: readonly { readonly personId: string; readonly role: string }[];
   readonly publishedAt: Date;
   readonly updatedAt: Date;
+  /**
+   * Phase 30-R, lead and dated families only: the READER-FACING date — the
+   * source's own publication date when the record states one, else the first
+   * publication here — and that source date itself.
+   */
+  readonly chronologyAt?: Date;
+  readonly sourcePublishedOn?: string | null;
+  /** Phase 30-R, lead families only: the published lead image, or null. */
+  readonly leadImage?: PublicLeadImage | null;
 }
+
 /**
  * A published Article, with its identity: the typed key a person's saved
  * item or reading history holds (Phase 21), and nothing else that the shared
@@ -432,7 +501,20 @@ export interface PublicEditorialSummary {
     readonly languageCode: EditorialLanguage;
     readonly title: string;
     readonly excerpt: string;
+    /** Phase 30-R: the lead image's alt text in this language (Articles). */
+    readonly leadAlt?: string;
   }[];
+  /** Phase 30-R (Articles): the reader-facing date and the lead image. */
+  readonly chronologyAt?: Date;
+  readonly leadImage?: PublicLeadImage | null;
+}
+/**
+ * Phase 30-R. One published shell-bound Page as a card shows it: its binding
+ * (its address), its words per language with the lead image's alt text, and
+ * its lead image. Never the body.
+ */
+export interface PublicPageSummary extends PublicEditorialSummary {
+  readonly routeBinding: string;
 }
 export interface EditorialScheduleCandidate {
   readonly id: string;

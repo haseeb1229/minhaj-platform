@@ -188,6 +188,24 @@ export {
  * A SERIES POSITION EXISTS EXACTLY WHEN A SERIES DOES, so an episode always has
  * its place and a standalone Video never carries a stray number.
  */
+/**
+ * Phase 30-R — a Video's optional first-party POSTER: ONE typed reference to an
+ * application-owned stored still image with its measured box. It is OUR copy
+ * of an image the organisation itself published for the video, served by
+ * Media's own route, so a card shows a picture without any request to a video
+ * provider. It is never a provider thumbnail URL — `thumbnailUrl` stays
+ * provider metadata for structured data only. On an UPDATE an omitted poster
+ * keeps the stored one; `null` removes it.
+ */
+export const videoPosterSchema = z
+  .object({
+    assetId: mediaIdSchema,
+    width: z.number().int().min(1).max(16_384),
+    height: z.number().int().min(1).max(16_384),
+  })
+  .strict();
+export type VideoPoster = z.infer<typeof videoPosterSchema>;
+
 export const videoInputSchema = z
   .object({
     slug: mediaSlugSchema,
@@ -212,6 +230,7 @@ export const videoInputSchema = z
     seriesPosition: z.number().int().min(1).max(MEDIA_LIMITS.seriesPosition).nullable(),
     speakerIds: ids(MEDIA_LIMITS.speakers),
     topicIds: ids(MEDIA_LIMITS.topics),
+    poster: videoPosterSchema.nullable().optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -366,6 +385,8 @@ export interface VideoRecord {
   /** `YYYY-MM-DD`, a date and not an instant. */
   readonly publishedOn: string | null;
   readonly thumbnailUrl: string | null;
+  /** Phase 30-R: the first-party poster, or null. */
+  readonly poster: VideoPoster | null;
   readonly captions: boolean;
   readonly transcript: string | null;
   /** On a PUBLIC read, present only while the Series itself is published. */
@@ -396,6 +417,8 @@ export interface VideoListing {
   /** The episode position, where the Video is read within its Series. */
   readonly seriesPosition: number | null;
   readonly speakerIds: readonly string[];
+  /** Phase 30-R: the first-party poster, or null. */
+  readonly poster: VideoPoster | null;
   readonly version: number;
   readonly updatedAt: Date;
 }

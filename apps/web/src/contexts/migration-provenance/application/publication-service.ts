@@ -145,17 +145,40 @@ export function createMigrationPublicationService(deps: {
         : null;
     if (payload === null) return refuse('invalid-payload');
 
+    const resolve = async (legacyUrl: string): Promise<MigrationTargetRef | null> =>
+      guarded(publication.resolveLegacyTarget(legacyUrlDigest(legacyUrl)));
+
+    // A REFRESH carries the newer revision into the record the record's own
+    // active mapping names — found by its own legacy address, never guessed.
+    let refreshed: MigrationTargetRef | null = null;
+    if (entry.mode === 'refresh') {
+      const own = publishable.legacyUrls.find(
+        (legacy) => legacy.recordId === entry.recordId,
+      );
+      refreshed = own === undefined ? null : await resolve(own.url);
+      if (refreshed === null || refreshed.kind !== kind) return refuse('target-missing');
+    }
+
     const result: TargetPublication = await ask(() =>
-      target.publish({
-        kind,
-        payload,
-        topicIds: publishable.topicIds,
-        assets: publishable.assets,
-        resolve: async (legacyUrl: string): Promise<MigrationTargetRef | null> =>
-          guarded(publication.resolveLegacyTarget(legacyUrlDigest(legacyUrl))),
-        actor: publisher,
-        resumed: entry.state === 'publishing',
-      }),
+      refreshed === null
+        ? target.publish({
+            kind,
+            payload,
+            topicIds: publishable.topicIds,
+            assets: publishable.assets,
+            resolve,
+            actor: publisher,
+            resumed: entry.state === 'publishing',
+          })
+        : target.refresh({
+            kind,
+            target: refreshed,
+            payload,
+            topicIds: publishable.topicIds,
+            assets: publishable.assets,
+            resolve,
+            actor: publisher,
+          }),
     );
     if (result.status === 'unavailable') return 'unavailable';
     if (result.status === 'refused') return refuse(refusalCode(result.reason));
@@ -174,11 +197,15 @@ export function createMigrationPublicationService(deps: {
         targetStage: result.stage,
         targetVersion: result.version,
         canonicalPath: result.canonicalPath,
-        legacyUrls: publishable.legacyUrls.map((legacy) => ({
-          recordId: legacy.recordId,
-          url: legacy.url,
-          digest: legacyUrlDigest(legacy.url),
-        })),
+        // A refresh makes no mapping: the record's addresses already resolve.
+        legacyUrls:
+          refreshed !== null
+            ? []
+            : publishable.legacyUrls.map((legacy) => ({
+                recordId: legacy.recordId,
+                url: legacy.url,
+                digest: legacyUrlDigest(legacy.url),
+              })),
         actorId: publisher.accountId,
         now: now(),
       }),
@@ -201,6 +228,9 @@ export function createMigrationPublicationService(deps: {
       return 'refused' as const;
     };
     if (entry.target === null || entry.targetVersion === null) return refuse();
+    // A refresh changed a record people may already hold: undoing it is a
+    // person's decision, never a migration rollback (§7.2, a CHECK too).
+    if (entry.mode === 'refresh') return refuse();
     const made = entry.target;
     const inspection: TargetInspection | null | { readonly status: 'unavailable' } =
       await (async () => {

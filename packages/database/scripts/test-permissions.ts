@@ -8537,6 +8537,11 @@ try {
         'byteSize',
         'mediaType',
         'acquiredAt',
+        // Phase 30-R: an acquired image's public copy is fixed with it.
+        'publicAssetId',
+        'publicChecksum',
+        'width',
+        'height',
       ],
       MigrationLegacyMapping: [
         'id',
@@ -8551,6 +8556,11 @@ try {
         'magazineIssueId',
         'newsArticleId',
         'articleId',
+        // Phase 30-R's typed targets.
+        'pageId',
+        'pressReleaseId',
+        'personId',
+        'countryId',
         'canonicalPath',
         'manifestEntryId',
         'createdAt',
@@ -8569,6 +8579,8 @@ try {
         'position',
         'stagedRecordId',
         'recordId',
+        // Phase 30-R: an entry's create/refresh mode is fixed at creation.
+        'mode',
       ],
       MigrationPromotion: ['id', 'destination', 'createdByUserId', 'createdAt'],
       MigrationPromotionEntry: ['id', 'promotionId', 'position', 'manifestEntryId'],

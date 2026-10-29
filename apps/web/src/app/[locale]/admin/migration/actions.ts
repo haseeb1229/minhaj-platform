@@ -454,6 +454,73 @@ export async function rightsAction(
   return DONE;
 }
 
+/**
+ * What a rights reviewer's selection came to: how many acquisitions were
+ * cleared, and each one left as it was with the refusal that names why.
+ * Identifiers and reason words only.
+ */
+export interface RightsBatchState extends FormActionState {
+  readonly decided?: number;
+  readonly refused?: readonly {
+    readonly provenanceId: string;
+    readonly reason: string;
+  }[];
+}
+
+/**
+ * Phase 30-R. Clears a SELECTION of one page of a run's acquisitions for
+ * release — owned or licensed, `public-eligible` — with the evidence and holder
+ * the reviewer states, each at the version the reviewer was shown
+ * (`version-<id>`), after an explicit confirmation. The service decides and
+ * audits every acquisition on its own; one it refuses is reported, never forced.
+ */
+export async function rightsManyAction(
+  _state: RightsBatchState,
+  form: FormData,
+): Promise<RightsBatchState> {
+  const selected = form
+    .getAll('provenanceId')
+    .filter((value): value is string => typeof value === 'string');
+  if (selected.length === 0) return { status: 'error', failure: 'none-selected' };
+  if (form.get('confirm') !== 'on') return UNCONFIRMED;
+  const actor = await administer(form);
+  if ('refused' in actor) return actor.refused;
+  let outcome: {
+    readonly decided: number;
+    readonly refused: NonNullable<RightsBatchState['refused']>;
+  };
+  try {
+    outcome = await migrationRuntime().decisions.rightsBatch(
+      { accountId: actor.accountId },
+      {
+        licence: field(form, 'licence'),
+        licenceEvidence: textarea(form, 'licenceEvidence') ?? '',
+        rightsHolder: field(form, 'rightsHolder'),
+        items: selected.map((provenanceId) => ({
+          provenanceId,
+          expectedVersion: whole(form, `version-${provenanceId}`),
+        })),
+      },
+    );
+  } catch (error) {
+    const state = rejected(error, 'migration-rights-batch');
+    // An outage stops the batch part-way: what was cleared before it stands,
+    // so the page is refreshed and the reviewer is told to look again.
+    if (state.failure !== 'unavailable') return state;
+    refreshed(actor.locale);
+    return { status: 'error', failure: 'batch-interrupted' };
+  }
+  refreshed(actor.locale);
+  return outcome.refused.length === 0
+    ? { status: 'success', decided: outcome.decided, refused: [] }
+    : {
+        status: 'error',
+        failure: 'items-refused',
+        decided: outcome.decided,
+        refused: outcome.refused,
+      };
+}
+
 /* ===========================================================================
  * Raw evidence — `migration.administer`
  * ========================================================================= */

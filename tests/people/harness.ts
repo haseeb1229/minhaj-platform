@@ -133,7 +133,13 @@ async function buildPeople(accounts: ControlledAccounts) {
   return {
     reader,
     store,
-    people: createPeopleService({ reader, people: store, accounts }),
+    people: createPeopleService({
+      reader,
+      people: store,
+      accounts,
+      // No portrait proof here: nothing is a servable image.
+      images: { servableImages: async () => new Set<string>() },
+    }),
   };
 }
 

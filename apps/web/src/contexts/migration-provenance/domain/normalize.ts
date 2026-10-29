@@ -17,7 +17,7 @@ import sanitizeHtml from 'sanitize-html';
  */
 
 /** Recorded on every run and staged revision; bump when any output below changes. */
-export const NORMALIZER_VERSION = '30.1';
+export const NORMALIZER_VERSION = '30.2';
 
 const sha256Hex = (value: string): string =>
   createHash('sha256').update(value, 'utf8').digest('hex');

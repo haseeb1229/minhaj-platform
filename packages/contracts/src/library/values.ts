@@ -255,6 +255,22 @@ const isbn = z
   .transform((v) => v.replaceAll(/[-\s]/g, '').toUpperCase())
   .refine(validIsbn)
   .nullable();
+/**
+ * Phase 30-R — the optional COVER of an Edition or a MagazineIssue: ONE typed
+ * reference to an application-owned stored still image, with its measured box
+ * so a card reserves its space. Never a remote URL. On an UPDATE an omitted
+ * cover keeps the stored one and `null` removes it, so a form that does not
+ * offer covers cannot erase one by saving.
+ */
+export const libraryCoverSchema = z
+  .object({
+    assetId: libraryIdSchema,
+    width: z.number().int().min(1).max(16_384),
+    height: z.number().int().min(1).max(16_384),
+  })
+  .strict();
+export type LibraryCover = z.infer<typeof libraryCoverSchema>;
+
 export const editionInputSchema = z
   .object({
     workId: libraryIdSchema,
@@ -270,6 +286,7 @@ export const editionInputSchema = z
     readableAssetId: libraryIdSchema.nullable(),
     downloadAssetId: libraryIdSchema.nullable(),
     document: readerDocumentSchema.nullable(),
+    cover: libraryCoverSchema.nullable().optional(),
   })
   .strict()
   .superRefine((v, ctx) => {

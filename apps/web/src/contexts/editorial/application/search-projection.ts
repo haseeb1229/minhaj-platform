@@ -24,7 +24,9 @@ import { editorialPlainText } from './rich-text.ts';
  * Language (a real reference to Taxonomy's catalogue), so these documents are
  * what the content-language filter selects.
  *
- * THE YEAR IS THE GENUINE PUBLICATION YEAR, taken from `publishedAt` in UTC.
+ * THE YEAR IS THE RECORD'S CHRONOLOGY YEAR in UTC: the source's own
+ * publication date where a dated record states one (Phase 30-R), else the
+ * genuine publication instant — never a migration or approval time.
  *
  * A NEWS RECORD'S OWN WORDS ONLY. A Statement's issuing authority and a
  * MediaCoverage record's outlet name are matched with its body because a
@@ -32,7 +34,7 @@ import { editorialPlainText } from './rich-text.ts';
  * nothing of the third party's article is ever projected — none is stored.
  */
 function documentsOf(kind: 'article' | 'page' | NewsKind, record: EditorialSearchRecord) {
-  const year = record.publishedAt.getUTCFullYear();
+  const year = (record.chronologyAt ?? record.publishedAt).getUTCFullYear();
   return record.translations.map((translation) => ({
     kind,
     resourceId: record.id,

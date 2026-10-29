@@ -52,6 +52,8 @@ const eventOffsetSchema = z.number().int().min(0).max(EVENT_MAX_OFFSET);
 const collectionOffsetSchema = z.number().int().min(0).max(COLLECTION_MAX_OFFSET);
 /** One Collection's members at most; anything longer is not one Collection's. */
 const membersSchema = z.array(collectionMemberSchema).max(100);
+/** The most Explore Pages one read returns: every Explore route, with room to spare. */
+const EXPLORE_PAGE_CAP = 60;
 
 /**
  * An Event listing's query, validated again here whatever the page tolerated.
@@ -89,6 +91,13 @@ export function createEditorialReadService(
     helpPages(offset = 0) {
       z.number().int().min(0).max(10_000_000).parse(offset);
       return reader.publishedHelpPages(offset, 25);
+    },
+    /**
+     * Phase 30-R: every published Explore Page as a card, in binding order —
+     * bounded by the closed Explore route list, which is far below the cap.
+     */
+    explorePages() {
+      return reader.publishedExplorePages(EXPLORE_PAGE_CAP);
     },
     async article(slug: string) {
       if (!editorialSlugSchema.safeParse(slug).success) return null;

@@ -33,4 +33,5 @@ export {
 export {
   createAudioAssetPolicy,
   createPhotoAssetPolicy,
+  createVideoPosterPolicy,
 } from './application/asset-policy.ts';

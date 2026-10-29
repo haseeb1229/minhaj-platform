@@ -2,9 +2,9 @@ import { z } from 'zod';
 import { getTranslations } from 'next-intl/server';
 import { requireLocale } from '@/config/route-locale';
 import { editorialReadRuntime } from '@/composition/editorial-read';
-import { translationFor } from '@/components/editorial/public-content';
+import { ArticleCard } from '@/components/editorial/article-card';
 import { ListingFrame, Pager } from '@/components/library/frame';
-import { CardGrid, EmptyState, LinkCard } from '@/components/ui';
+import { CardGrid, EmptyState } from '@/components/ui';
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
 export default async function Articles({
@@ -39,23 +39,10 @@ export default async function Articles({
     >
       {records.length ? (
         <CardGrid label={t('articles')}>
-          {records.map((record) => {
-            // Editorial's own resolution of which language version is shown.
-            const translation = translationFor(record, locale);
-            return (
-              <LinkCard
-                key={record.slug}
-                href={
-                  '/' + locale + '/library/articles/' + encodeURIComponent(record.slug)
-                }
-                title={translation.title}
-                description={translation.excerpt}
-                headingLevel="h2"
-                lang={translation.languageCode}
-                dir={translation.languageCode === 'en' ? 'ltr' : 'rtl'}
-              />
-            );
-          })}
+          {records.map((record) => (
+            // Newest by chronology; the card shows the lead image where there is one.
+            <ArticleCard key={record.slug} locale={locale} record={record} />
+          ))}
         </CardGrid>
       ) : (
         <EmptyState>{t('empty')}</EmptyState>

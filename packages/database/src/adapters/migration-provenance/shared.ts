@@ -5,6 +5,7 @@ import type { Prisma } from '@prisma/client';
 import {
   MIGRATION_LIMITS,
   type ManifestEntryRecord,
+  type ManifestEntryMode,
   type ManifestEntryState,
   type ManifestRecord,
   type ManifestState,
@@ -406,7 +407,7 @@ export const SOURCE_SELECT = {
   version: true,
   createdAt: true,
   updatedAt: true,
-  hosts: { select: { host: true }, orderBy: { host: 'asc' } },
+  hosts: { select: { host: true, role: true }, orderBy: { host: 'asc' } },
 } as const satisfies Prisma.MigrationSourceSelect;
 
 export interface SourceRow {
@@ -432,7 +433,7 @@ export interface SourceRow {
   readonly version: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;
-  readonly hosts: readonly { readonly host: string }[];
+  readonly hosts: readonly { readonly host: string; readonly role: string }[];
 }
 
 export function toSourceRecord(row: SourceRow): SourceRecord {
@@ -444,7 +445,10 @@ export function toSourceRecord(row: SourceRow): SourceRecord {
     accessMethod: row.accessMethod as SourceAccessMethod,
     contentKind: row.contentKind as MigrationContentKind,
     baseUrl: row.baseUrl,
-    hosts: row.hosts.map((entry) => entry.host),
+    hosts: row.hosts.filter((entry) => entry.role === 'page').map((entry) => entry.host),
+    assetHosts: row.hosts
+      .filter((entry) => entry.role === 'asset')
+      .map((entry) => entry.host),
     authorisationReference: row.authorisationReference,
     authorisedOn: dateOnly(row.authorisedOn),
     licensingEvidence: row.licensingEvidence,
@@ -623,6 +627,10 @@ export const TARGET_COLUMNS = Object.freeze({
   'library.magazine-issue': 'magazineIssueId',
   'editorial.news': 'newsArticleId',
   'editorial.article': 'articleId',
+  'editorial.press-release': 'pressReleaseId',
+  'editorial.page': 'pageId',
+  'people.person': 'personId',
+  'global.country': 'countryId',
 } as const satisfies Record<MigrationPublishableKind, string>);
 
 export type TargetColumn = (typeof TARGET_COLUMNS)[MigrationPublishableKind];
@@ -663,6 +671,10 @@ export const TARGET_SELECT = {
   magazineIssueId: true,
   newsArticleId: true,
   articleId: true,
+  pressReleaseId: true,
+  pageId: true,
+  personId: true,
+  countryId: true,
 } as const;
 
 export const ENTRY_SELECT = {
@@ -672,6 +684,7 @@ export const ENTRY_SELECT = {
   stagedRecordId: true,
   recordId: true,
   state: true,
+  mode: true,
   ...TARGET_SELECT,
   targetStage: true,
   targetVersion: true,
@@ -689,12 +702,17 @@ export interface EntryRow {
   readonly stagedRecordId: string;
   readonly recordId: string;
   readonly state: string;
+  readonly mode: string;
   readonly videoId: string | null;
   readonly workId: string | null;
   readonly magazineId: string | null;
   readonly magazineIssueId: string | null;
   readonly newsArticleId: string | null;
   readonly articleId: string | null;
+  readonly pressReleaseId: string | null;
+  readonly pageId: string | null;
+  readonly personId: string | null;
+  readonly countryId: string | null;
   readonly targetStage: string | null;
   readonly targetVersion: number | null;
   readonly canonicalPath: string | null;
@@ -712,6 +730,7 @@ export function toEntryRecord(row: EntryRow): ManifestEntryRecord {
     stagedRecordId: row.stagedRecordId,
     recordId: row.recordId,
     state: row.state as ManifestEntryState,
+    mode: row.mode as ManifestEntryMode,
     target: targetOf(row),
     targetStage: row.targetStage === null ? null : (row.targetStage as TargetStage),
     targetVersion: row.targetVersion,

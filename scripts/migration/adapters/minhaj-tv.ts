@@ -16,6 +16,7 @@ import {
 } from './markup-support.ts';
 import {
   checkSelection,
+  firstPartyImage,
   retrieveOnce,
   scriptLocale,
   siteRoot,
@@ -135,9 +136,9 @@ export function createMinhajTvVideoAdapter(
 
   return {
     adapterKey: MINHAJ_TV_VIDEO_ADAPTER_KEY,
-    adapterVersion: '1',
+    adapterVersion: '2',
     parserKey: 'cheerio-minhaj-tv-video',
-    parserVersion: '1',
+    parserVersion: '2',
     contentKind: 'media.video',
     accessMethod: 'http',
     discover,
@@ -227,6 +228,15 @@ export function createMinhajTvVideoAdapter(
           descriptionHtml = inner.slice(label.index + label[0].length).trim();
       }
 
+      // The page's own poster picture, its og:image on this host (Phase 30-R):
+      // a first-party image of ours to serve, never a request to YouTube.
+      const poster = firstPartyImage($, {
+        src: $('meta[property="og:image:url"]').attr('content'),
+        alt: title,
+        pageUrl: evidence.finalUrl,
+        hosts: MINHAJ_TV_HOSTS,
+      });
+
       const duration = valueOf('duration');
       const record: ParsedVideo = {
         kind: 'media.video',
@@ -242,7 +252,8 @@ export function createMinhajTvVideoAdapter(
         legacyIdentifier: `mtv-${video[1]}`,
         categories,
         links: [],
-        assets: [],
+        assets: poster === null ? [] : [poster.asset],
+        poster: poster?.image ?? null,
       };
       return { kind: 'parsed', record };
     },

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { PublicLeadImage } from './lead.ts';
+
 /**
  * News — Phase 13, inside Editorial (DOMAIN_MODEL.md §7.1).
  *
@@ -11,9 +13,13 @@ import { z } from 'zod';
  * an external outlet's coverage. There is no News context, no generic content
  * table and no `targetType + targetId` anywhere below.
  *
- * NO IMAGE. News depends on Editorial and Search, not on Storage or Media, so no
- * lead image, uploaded figure or remote image address exists here. The shared
- * rich-text schema refuses images too.
+ * ONE LEAD IMAGE, NOTHING ELSE (Phase 30-R, an owner decision superseding the
+ * Phase-13 "no image" rule). A NewsArticle or a PressRelease revision may name
+ * ONE lead image: a typed foreign key to an application-owned stored Asset,
+ * served only through Editorial's own route while the record is published. No
+ * remote image address, no gallery, no image table and no figure inside the
+ * body exist — the shared rich-text schema still refuses images. A Statement
+ * and a MediaCoverage record carry none.
  */
 
 export const NEWS_KINDS = Object.freeze([
@@ -168,8 +174,18 @@ export interface NewsSummary {
     readonly title: string;
     readonly excerpt: string;
     readonly issuer?: string;
+    /** Phase 30-R: the lead image's alt text in this language. */
+    readonly leadAlt?: string;
   }[];
   readonly publishedAt: Date;
+  /**
+   * Phase 30-R: the READER-FACING date, and the order of every listing — the
+   * source's own publication date when the record states one, else its first
+   * publication here.
+   */
+  readonly chronologyAt: Date;
+  /** Phase 30-R: the published lead image (NewsArticle, PressRelease), or null. */
+  readonly leadImage: PublicLeadImage | null;
   readonly topicIds: readonly string[];
   readonly contributors: readonly { readonly personId: string; readonly role: string }[];
   readonly coverage: {
@@ -185,8 +201,10 @@ export interface NewsPage {
 
 /**
  * The archive and the topic hub read ONE timeline across the four families,
- * ordered by genuine publication instant. Year and month are UTC calendar
- * values of that instant, never a record's creation time.
+ * ordered by each record's chronology (Phase 30-R): the source's own
+ * publication date where a NewsArticle or PressRelease states one, else the
+ * genuine publication instant. Year and month are UTC calendar values of that
+ * date, never a record's creation or migration time.
  */
 export interface NewsTimelineQuery {
   readonly offset: number;

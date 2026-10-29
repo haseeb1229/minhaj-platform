@@ -14,12 +14,15 @@ import {
   fixtureScopeIsSynthetic,
   isFixtureHost,
   isPublicAddress,
+  isRealHostName,
   sourcePolicySchema,
   type FetchOutcome,
   type MigrationFetchPort,
   type SourcePolicy,
   type SourceRecord,
 } from '@minhaj/contracts/migration';
+
+import { readRobots, type RobotsPolicy } from './robots.ts';
 
 /**
  * THE SAFE FETCH BOUNDARY (MIGRATION_STRATEGY.md §4.2, §8.1).
@@ -525,4 +528,67 @@ export function createAuthorisedFetcher(
     ...(options.connector === undefined ? {} : { connector: options.connector }),
     userAgent: AUTHORISED_USER_AGENT,
   });
+}
+
+/**
+ * Phase 30-R. The fetcher an AUTHORISED source acquires its IMAGES through:
+ * the same boundary as its pages — exact hosts, public addresses, pinned
+ * transport, the honest User-Agent — over its page hosts AND its registered
+ * first-party asset hosts, and nothing else. An asset host's own robots.txt is
+ * honoured: read once per host (a definitive 200 or 4xx only; anything else is
+ * read again), and a disallowed picture is refused before it is requested.
+ */
+export function createAuthorisedAssetFetcher(
+  source: SourceRecord,
+  options: { readonly resolver?: Resolver; readonly connector?: Connector } = {},
+): MigrationFetchPort {
+  if (source.authorityKind !== 'authorised')
+    throw new Error('an authorised fetcher serves authorised sources only');
+  if (
+    source.accessMethod !== 'http' ||
+    !authorisedScopeIsReal(source.baseUrl, source.hosts) ||
+    !source.assetHosts.every(isRealHostName)
+  )
+    throw new Error('an authorised source must name a real https scope');
+  const inner = createSafeFetcher({
+    hosts: [...source.hosts, ...source.assetHosts],
+    policy: source.policy,
+    resolver: options.resolver ?? systemResolver,
+    ...(options.connector === undefined ? {} : { connector: options.connector }),
+    userAgent: AUTHORISED_USER_AGENT,
+  });
+  const robots = new Map<string, RobotsPolicy>();
+  return {
+    fetcherKey: inner.fetcherKey,
+    fetcherVersion: inner.fetcherVersion,
+    async fetch(url) {
+      let host: string;
+      try {
+        host = new URL(url).hostname;
+      } catch {
+        return inner.fetch(url);
+      }
+      if (source.assetHosts.includes(host)) {
+        let policy = robots.get(host);
+        if (policy === undefined) {
+          const read = await readRobots(inner, `https://${host}`);
+          const definitive =
+            read.outcome.kind === 'response' &&
+            (read.outcome.status === 200 ||
+              (read.outcome.status >= 400 && read.outcome.status < 500));
+          if (!definitive) return read.outcome;
+          policy = read.policy;
+          robots.set(host, policy);
+        }
+        if (!policy.allows(url))
+          return {
+            kind: 'refused',
+            classification: 'scope-refused',
+            requestedUrl: url,
+            detail: 'robots-disallowed',
+          };
+      }
+      return inner.fetch(url);
+    },
+  };
 }

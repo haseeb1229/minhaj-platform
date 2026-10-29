@@ -7,7 +7,11 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
+import { editorialReadRuntime } from '@/composition/editorial-read';
+import { peopleReadRuntime } from '@/composition/people-read';
 import { ListingIntro } from '@/components/editorial/frame';
+import { ExplorePageCard, exploreSectionOf } from '@/components/editorial/page-card';
+import { PersonCard } from '@/components/people/person-card';
 import { CardGrid, Container, LinkCard } from '@/components/ui';
 import { PublicationStatus } from '@/components/shell/publication-status';
 import { requireLocale } from '@/config/route-locale';
@@ -30,11 +34,16 @@ import { requireRoute } from '@/shell/registry';
  * authority (the same rule the locale segment follows,
  * SECURITY_BASELINE.md §9.1).
  *
- * WHAT IT SHOWS. Its own title, the pages it reserves, and an explicit
- * publication-status state. It shows no organisational content, because none
- * has been published: vision, mission, history, governance and the rest enter
- * the system as `Page` records through the Phase-6 workflow
- * (OPEN_DECISIONS.md §6.1).
+ * WHAT IT SHOWS. Its own title and its pages: each PUBLISHED Page as a card with
+ * its own title, excerpt and lead image, and every page not yet published as a
+ * plainly marked reserved link — so the section is never presented as complete
+ * when it is not. Organisational words enter only as `Page` records through
+ * the Phase-6 workflow (OPEN_DECISIONS.md §6.1); none is written here.
+ *
+ * LEADERSHIP (Phase 30-R) has no pages of its own: it shows the founder's
+ * published biography Page and every PUBLISHED People profile, People's own
+ * public read. The publication-status state stands whenever something the
+ * section reserves is still unpublished.
  */
 
 export const dynamic = 'force-dynamic';
@@ -78,7 +87,14 @@ export default async function ExploreSectionPage({ params }: SectionParams) {
   const slugs = exploreSlugsOf(section);
   const title = t(`explore.${section}.title` as 'explore.about.title');
 
-  const published = await readPage(`/explore/${section}`);
+  const [published, pages, people, profile] = await Promise.all([
+    readPage(`/explore/${section}`),
+    editorialReadRuntime().explorePages(),
+    section === 'leadership'
+      ? peopleReadRuntime().people.publicPeople({ locale })
+      : Promise.resolve(null),
+    getTranslations({ locale, namespace: 'people' }),
+  ]);
   if (published)
     return (
       <PublicContent
@@ -88,6 +104,22 @@ export default async function ExploreSectionPage({ params }: SectionParams) {
         kind="WebPage"
       />
     );
+
+  // This section's published Pages, by the page slug of their binding.
+  const mine = pages.filter((page) => exploreSectionOf(page.routeBinding) === section);
+  const pageAt = (slug: string) =>
+    mine.find((page) => page.routeBinding === `/explore/${section}/${slug}`);
+  const leaders = people?.items ?? [];
+  const founder =
+    section === 'leadership'
+      ? pages.find((page) => page.routeBinding === '/explore/shaykh-ul-islam/biography')
+      : undefined;
+  // Complete only when every reserved page is published, or — for a section
+  // with no pages — when it shows somebody.
+  const complete =
+    slugs.length > 0
+      ? slugs.every((slug) => pageAt(slug) !== undefined)
+      : leaders.length > 0 || founder !== undefined;
 
   return (
     <>
@@ -111,21 +143,54 @@ export default async function ExploreSectionPage({ params }: SectionParams) {
           {slugs.length === 0 ? null : (
             <nav aria-label={title}>
               <CardGrid>
-                {slugs.map((slug) => (
-                  <LinkCard
-                    key={slug}
-                    href={exploreHrefOf(locale, section, slug)}
-                    headingLevel="h2"
-                    title={t(
-                      `explore.${section}.pages.${slug}` as 'explore.about.pages.vision',
-                    )}
-                  />
-                ))}
+                {slugs.map((slug) => {
+                  const page = pageAt(slug);
+                  return page === undefined ? (
+                    <LinkCard
+                      key={slug}
+                      href={exploreHrefOf(locale, section, slug)}
+                      headingLevel="h2"
+                      eyebrow={t('home.status.unavailable')}
+                      title={t(
+                        `explore.${section}.pages.${slug}` as 'explore.about.pages.vision',
+                      )}
+                    />
+                  ) : (
+                    <ExplorePageCard
+                      key={slug}
+                      locale={locale}
+                      page={page}
+                      headingLevel="h2"
+                    />
+                  );
+                })}
               </CardGrid>
             </nav>
           )}
 
-          <PublicationStatus locale={locale} />
+          {leaders.length === 0 && founder === undefined ? null : (
+            <CardGrid label={title}>
+              {founder === undefined ? null : (
+                <ExplorePageCard
+                  locale={locale}
+                  page={founder}
+                  eyebrow={t('explore.shaykh-ul-islam.title')}
+                  headingLevel="h2"
+                />
+              )}
+              {leaders.map((person) => (
+                <PersonCard
+                  key={person.id}
+                  locale={locale}
+                  person={person}
+                  creditLabel={profile('portraitCredit')}
+                  headingLevel="h2"
+                />
+              ))}
+            </CardGrid>
+          )}
+
+          {complete ? null : <PublicationStatus locale={locale} />}
         </div>
       </Container>
     </>

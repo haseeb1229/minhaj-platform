@@ -336,7 +336,7 @@ function publishedEditorial(table: 'Article' | 'NewsArticle', recordId: string) 
     INSERT INTO [dbo].[${table}RevisionTranslation] ([ownerId],[revisionNumber],[languageCode],[title],[excerpt],[seoTitle],[seoDescription],[document],[html])
       VALUES (N'${recordId}', 1, N'en', N'${member.title}', N'Synthetic fixture', N'', N'', N'${document}', N'<p>Synthetic non-authoritative member body.</p>');
     UPDATE [dbo].[${table}] SET [currentRevision]=1 WHERE [id]=N'${recordId}';
-    UPDATE [dbo].[${table}] SET [approvedRevision]=1, [approvedById]=N'${reviewerId}', [state]=N'published', [publishedAt]=SYSUTCDATETIME(), [version]=2 WHERE [id]=N'${recordId}';
+    UPDATE [dbo].[${table}] SET [approvedRevision]=1, [approvedById]=N'${reviewerId}', [state]=N'published', [publishedAt]=SYSUTCDATETIME(), [chronologyAt]=SYSUTCDATETIME(), [version]=2 WHERE [id]=N'${recordId}';
   `;
 }
 
