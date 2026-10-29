@@ -844,3 +844,34 @@ nullable foreign key per target table — `videoId`, `workId`, `magazineId`, `ma
 (`--pages`, `--limit`, `--items`, `--max-items`); on staging `bin/migration-run.sh` runs them in the
 exact-SHA operations image inside the `ingest` service — the one operator container with an
 outbound network — as the runtime principal. Every human decision stays in `/admin/migration`.
+
+**Stage 1A on staging (2026-10-28/29).** All eleven sources were registered under the owner's
+attestation `OWNER-ATTESTATION-2026-10-27-PREADOPTION-STAGING` (2026-10-27) and activated; each
+ran its bounded selection once, from the exact-SHA operations image, at three seconds a request.
+
+| Run | Discovered | Staged | Rejected | Reviewed | Published (stage) |
+|---|---|---|---|---|---|
+| `minhaj-org-news-en` | 20 | 20 | 0 | 20 approved | 20 (in review → published) |
+| `minhaj-org-news-ur` | 20 | 19 | 1 (dated in the future) | 19 approved, 1 rejected | 19 (in review → published) |
+| `minhaj-org-articles-en` | 20 | 20 | 0 | 20 approved | 20 (in review → published) |
+| `minhajbooks-works` | 25 | 25 | 0 | 25 approved | 25 (public) |
+| `minhaj-info-magazines` | 2 | 2 | 0 | 2 approved | 2 (public) |
+| `minhaj-info-issues-mq` | 12 | 12 | 0 | 12 approved | 12 (public) |
+| `minhaj-info-issues-di` | 12 | 12 | 0 | 12 approved | 12 (public) |
+| `minhaj-tv-videos` | 24 | 24 | 0 | 24 approved | 24 (public) |
+| `thefatwa-rulings` (review-only) | 24 | 24 | 0 | awaiting qualified review | — |
+| `irfan-ul-quran-ur`, `irfan-ul-quran-en` (review-only; surahs 1, 36, 67) | 6 | 6 | 0 | awaiting qualified review | — |
+| **Total** | **165** | **164** | **1** | **134 approved** | **134** |
+
+Every run completed **balanced** against its own selection, with nothing missing, errored, excluded
+or flagged for personal data. Eight manifests published 134 entries with none refused, and wrote
+134 active legacy mappings — each naming exactly one typed target, none duplicated, no chain. The 59
+editorial records entered Editorial's own review and were approved and published by a **second**
+administrator, never by the account that migrated them. The 30 Fatwa and Quran revisions remain
+staged for a qualified reviewer; nothing approved them and no manifest can carry them.
+
+**What Stage 1A shows, and what it cannot.** No image is shown anywhere: the sources' images live
+on other hosts or under no recorded rights, and none was acquired or substituted. Editorial has no
+field for a source's original publication date, so a migrated news item shows the date it was
+published on this platform; the source date remains migration provenance, visible to reviewers.
+

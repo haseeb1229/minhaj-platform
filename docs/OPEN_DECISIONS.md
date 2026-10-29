@@ -478,10 +478,15 @@ fetching, staging, review queues and reconciliation can proceed without a holder
 required before any real migrated record can satisfy the Phase-30 exit. For a Phase 30 meant to
 complete in one run, supplying it up front is operationally sensible.
 
-**Current status — OPEN.** `migration.publish` is catalogued and externally gated — bundled into
-no role and held by nobody (SECURITY_BASELINE.md §3.5); every publish, rollback and promotion
-approval also needs the `migration-publication` step-up. A holder is named by the organisation and
-granted through the ordinary audited `permissions.grant` lifecycle.
+**Current status — OPEN for the organisation; a pre-adoption staging holder exists.**
+`migration.publish` is catalogued and externally gated — bundled into no protected role
+(SECURITY_BASELINE.md §3.5); every publish, rollback and promotion approval also needs the
+`migration-publication` step-up. **On pre-adoption staging only** (2026-10-28), by the owner's
+authorisation, the owner's first administrator holds it through a custom role
+`staging-migration-publisher` (`migration.publish`, `migration.read`) that a **second**
+administrator created, bundled under `permissions.grant` and assigned — the ordinary audited
+lifecycle, never a self-grant (a self-grant was refused). That is not production authority, not
+scholarly authority and not Minhaj's naming of a holder, which remains this decision.
 
 ### 3.6 Phase-30 gates by timing
 
@@ -504,7 +509,9 @@ pre-adoption staging by the owner's attestation (§3.1). **B** is applied per so
 attestation: public content only, assets only with their own rights decision. **C** is
 public-website ingestion. **D is not satisfied and is not bypassed**: Fatwa and Quran material is
 staged and reviewed as evidence only and never published by migration (MIGRATION_STRATEGY.md §14);
-no scholarly approval is recorded or simulated. **E** — see §3.5. **F** is untouched. None of this
+no scholarly approval is recorded or simulated. **E** is satisfied for pre-adoption staging only
+(§3.5): 134 ordinary records were published there on 2026-10-29 (MIGRATION_STRATEGY.md §14). **F**
+is untouched. None of this
 is a decision of Minhaj-ul-Quran International; the owner's roadmap decision only fixes the order:
 build and review first, official adoption and content acceptance afterwards.
 

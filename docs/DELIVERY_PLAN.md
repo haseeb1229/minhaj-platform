@@ -9,8 +9,10 @@ exit are its contract; "Delivered" and continuity notes record what each phase a
 and any status table inside them is a **snapshot at that phase's exit** unless it says otherwise.
 Phases 0B–29 are delivered, except Phase 2G, which remains separately deferred. Phase 30 is in
 progress in two corpus stages (§4, Phase 30): its migration engineering is delivered; Stage 1A —
-the representative real review corpus for pre-adoption staging — runs on staging; Stage 1B, the
-full initial corpus, follows Minhaj's review and go-ahead. Phase 31 has not started.
+the representative real review corpus for pre-adoption staging — has run on staging (165 records
+discovered, 134 ordinary records published, 30 religious records staged for qualified review;
+MIGRATION_STRATEGY.md §14); Stage 1B, the full initial corpus, follows Minhaj's review and go-ahead.
+Phase 31 has not started.
 
 ---
 
@@ -2473,6 +2475,15 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > stays open until Stage 1B, its reconciliation and the required content acceptance complete.
 > **Phase 31 requires Stage 1B.** Neither stage is a new product phase, a DemoMode or a separate
 > import path, and representative content is data, never a reduced product.
+
+> **Stage 1A — run on staging (2026-10-28/29).** Eleven authorised sources, one bounded run each:
+> 165 discovered, 164 staged, 1 rejected; every run balanced. 134 ordinary records (Library, Media,
+> news and articles) were reviewed and published in staging under `migration.publish` and the
+> `migration-publication` step-up, held by the owner's first administrator and granted by a second
+> (OPEN_DECISIONS.md §3.5); Editorial's 59 were approved and published by that second
+> administrator. 134 legacy mappings, one typed target each, no chain. Fatwa and Quran revisions
+> (30) stay staged for qualified review. The Phase-30 **exit** stays open: Stage 1B, its
+> reconciliation and religious sign-off have not happened (MIGRATION_STRATEGY.md §14).
 
 ---
 
