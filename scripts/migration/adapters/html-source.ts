@@ -12,10 +12,18 @@ import { load, type CheerioAPI } from 'cheerio';
  * staging (SECURITY_BASELINE.md §10.2).
  */
 
-/** Decodes a UTF-8 HTML body, refusing other charsets and invalid bytes. */
+/**
+ * Decodes a UTF-8 HTML body, refusing other charsets and invalid bytes.
+ *
+ * `invalidBytes: 'replace'` is for a LISTING page only, whose links are read
+ * and whose text never becomes a record: a source that cuts an excerpt in the
+ * middle of a character must not hide every link on the page. A record's own
+ * page is always decoded strictly.
+ */
 export function decodeHtml(
   body: Uint8Array,
   contentType: string | null,
+  options: { readonly invalidBytes?: 'refuse' | 'replace' } = {},
 ):
   | { readonly ok: true; readonly html: string }
   | { readonly ok: false; readonly detail: string } {
@@ -26,8 +34,9 @@ export function decodeHtml(
   const charset = /;\s*charset\s*=\s*"?([^";\s]+)"?/.exec(type)?.[1];
   if (charset !== undefined && charset !== 'utf-8' && charset !== 'utf8')
     return { ok: false, detail: 'unsupported-charset' };
+  const fatal = options.invalidBytes !== 'replace';
   try {
-    return { ok: true, html: new TextDecoder('utf-8', { fatal: true }).decode(body) };
+    return { ok: true, html: new TextDecoder('utf-8', { fatal }).decode(body) };
   } catch {
     return { ok: false, detail: 'invalid-utf8' };
   }

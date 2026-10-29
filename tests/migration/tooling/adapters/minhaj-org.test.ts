@@ -393,6 +393,31 @@ describe('discovery', () => {
     });
   });
 
+  it('still reads the links of a listing whose excerpt the source cut mid-character', async () => {
+    const listing = new TextEncoder().encode(
+      newsListing(['/english/tid/401/Synthetic-Cut.html'], []),
+    );
+    // The first two bytes of a three-byte character, then markup again.
+    const cut = new Uint8Array([0x62, 0xe1, 0xb9, 0x2e, 0x2e, 0x2e]);
+    const at = new TextDecoder().decode(listing).indexOf('Synthetic excerpt');
+    const body = new Uint8Array([...listing.slice(0, at), ...cut, ...listing.slice(at)]);
+    const page = (url: string) => ({
+      ...htmlPage('')(url),
+      body,
+    });
+    const result = await adapter().discover(
+      null,
+      fakeSite({ [`${ORIGIN}/english/News-Events/`]: page }).fetcher,
+    );
+    expect(result).toEqual({
+      kind: 'page',
+      items: [
+        { externalKey: key(401), originalUrl: key(401), legacyIdentifier: 'tid-401' },
+      ],
+      next: null,
+    });
+  });
+
   it('keys an Urdu section by its own language', async () => {
     const urdu = newsListing(
       ['/urdu/tid/301/', '/english/tid/302/x.html'],

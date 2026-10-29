@@ -119,7 +119,11 @@ export function createListingDiscovery(
       kind: 'outcome',
       outcome: unrecognisedIndex(outcome.requestedUrl),
     } as const;
-    const decoded = decodeHtml(outcome.body, outcome.contentType);
+    // Only the listing's links are read: an excerpt the source cut mid-character
+    // does not hide them (a record's own page is still decoded strictly).
+    const decoded = decodeHtml(outcome.body, outcome.contentType, {
+      invalidBytes: 'replace',
+    });
     if (!decoded.ok) return refuse;
     const listing = options.readListing(loadHtml(decoded.html), outcome.finalUrl);
     if (listing === null || listing.hrefs.length === 0) return refuse;
