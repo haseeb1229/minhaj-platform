@@ -45,6 +45,7 @@ const filters = {
     .object({
       review: z.enum(REVIEW_STATES).nullable().default(null),
       runId: id.nullable().default(null),
+      unmanifested: z.boolean().default(false),
       offset,
     })
     .strict(),

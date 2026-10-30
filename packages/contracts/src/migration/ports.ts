@@ -1216,6 +1216,8 @@ export interface MigrationReadPort {
   staged(query: {
     readonly review: ReviewState | null;
     readonly runId: string | null;
+    /** Only revisions no live manifest entry holds (Phase 30-R). */
+    readonly unmanifested: boolean;
     readonly offset: number;
     readonly limit: number;
   }): Promise<StagedPage>;

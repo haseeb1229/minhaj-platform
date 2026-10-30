@@ -118,7 +118,12 @@ export default async function MigrationManifestsPage({
       : Promise.resolve(null),
     administer && runId !== null
       ? migrationRead('migration-admin-manifest-candidates', () =>
-          read.staged(actor, { review: 'approved', runId, offset: 0 }),
+          read.staged(actor, {
+            review: 'approved',
+            runId,
+            unmanifested: true,
+            offset: 0,
+          }),
         )
       : Promise.resolve(null),
   ]);

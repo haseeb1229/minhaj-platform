@@ -1246,6 +1246,20 @@ live('Phase 29 Migration & Provenance persistence against real SQL Server', () =
         }),
       ),
     ).toBe('conflict');
+    // So a new manifest is offered only what no live entry holds (Phase 30-R):
+    // the approved revisions stay listed, the unmanifested offer is empty.
+    const approvedOf = (unmanifested: boolean) =>
+      world.reader.staged({
+        review: 'approved',
+        runId: run.run.id,
+        unmanifested,
+        offset: 0,
+        limit: 100,
+      });
+    expect((await approvedOf(false)).rows.map((row) => row.id).sort()).toEqual(
+      [staged.stagedRecordId, otherStaged.stagedRecordId].sort(),
+    );
+    expect(await approvedOf(true)).toMatchObject({ rows: [], total: 0 });
 
     // Without migration.publish and a live step-up the database refuses.
     expect(

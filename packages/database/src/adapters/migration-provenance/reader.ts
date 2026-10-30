@@ -30,6 +30,8 @@ import type {
 
 import { getDatabaseClient } from '../../client.ts';
 import {
+  LIVE_ENTRY_STATES,
+  LIVE_MANIFEST_STATES,
   MANIFEST_SELECT,
   MAX_PAGE,
   RUN_SELECT,
@@ -214,6 +216,18 @@ export function createMigrationReader(): MigrationReadPort {
       const where = {
         ...(query.review === null ? {} : { review: query.review }),
         ...(query.runId === null ? {} : { runId: query.runId }),
+        // Phase 30-R: only revisions no live manifest entry holds — the same
+        // rule a new manifest is refused under.
+        ...(query.unmanifested
+          ? {
+              entries: {
+                none: {
+                  state: { in: LIVE_ENTRY_STATES },
+                  manifest: { state: { in: LIVE_MANIFEST_STATES } },
+                },
+              },
+            }
+          : {}),
       };
       const [total, rows] = await Promise.all([
         db.migrationStagedRecord.count({ where }),

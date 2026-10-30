@@ -342,6 +342,16 @@ export function bytesOf(value: unknown): Uint8Array | null {
 export const ADMINISTER = 'migration.administer';
 export const PUBLISH = 'migration.publish';
 
+/** Live manifest-entry states: a revision in one of these is in a manifest now. */
+export const LIVE_ENTRY_STATES = [
+  'pending',
+  'publishing',
+  'published',
+  'rollback-refused',
+];
+/** Manifest states whose entries are still in play. */
+export const LIVE_MANIFEST_STATES = ['draft', 'publishing', 'published', 'rolling-back'];
+
 /**
  * One audit row, committed IN THE CALLER'S TRANSACTION beside the change it
  * describes. States and identifiers only — never a body, a payload, a URL, a

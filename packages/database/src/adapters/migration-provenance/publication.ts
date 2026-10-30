@@ -16,6 +16,8 @@ import { getDatabaseClient } from '../../client.ts';
 import {
   ADMINISTER,
   ENTRY_SELECT,
+  LIVE_ENTRY_STATES,
+  LIVE_MANIFEST_STATES,
   LOCKED_TRANSACTION,
   MANIFEST_SELECT,
   MigrationDataError,
@@ -50,10 +52,6 @@ import {
  * unique index). A rollback disables those mappings — it never deletes them.
  */
 
-/** Live manifest-entry states: a revision in one of these is in a manifest now. */
-const LIVE_ENTRY_STATES = ['pending', 'publishing', 'published', 'rollback-refused'];
-/** Manifest states whose entries are still in play. */
-const LIVE_MANIFEST_STATES = ['draft', 'publishing', 'published', 'rolling-back'];
 /** Records merged into one entry's record whose URLs it carries. */
 const MAX_MERGED_URLS = 50;
 /** `MigrationManifestEntry.refusal`. */

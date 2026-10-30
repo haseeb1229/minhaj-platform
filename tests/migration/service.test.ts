@@ -1608,6 +1608,9 @@ describe('authority', () => {
     for (const work of reads(READER)) await work();
     expect(await refusedWith(read.runs(READER, { offset: -1 }))).toBe('invalid');
     expect(await refusedWith(read.staged(READER, { review: 'bogus' }))).toBe('invalid');
+    expect(await refusedWith(read.staged(READER, { unmanifested: 'yes' }))).toBe(
+      'invalid',
+    );
   });
 
   it('maps every refusal onto the closed vocabulary', () => {
