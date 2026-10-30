@@ -126,6 +126,10 @@ export const MINHAJ_ORG_PAGE_BINDINGS: Readonly<Record<string, string>> = Object
   '31978': '/explore/digital-resources/mobile-apps',
   '27184': '/explore/digital-resources/social-media',
 });
+/** The bound pages' `tid`s, which no English editorial listing may also take. */
+const MINHAJ_ORG_PAGE_TIDS: readonly string[] = Object.freeze(
+  Object.keys(MINHAJ_ORG_PAGE_BINDINGS),
+);
 
 /**
  * Phase 30-R. The public leadership profiles on minhaj.org. The founder's own
@@ -171,6 +175,7 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
         kind: 'editorial.news',
         section: 'News-Events',
         language: 'english',
+        reservedTids: MINHAJ_ORG_PAGE_TIDS,
       }),
   },
   {
@@ -191,6 +196,7 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
         kind: 'editorial.news',
         section: 'News-Events',
         language: 'urdu',
+        reservedTids: [],
       }),
   },
   {
@@ -211,6 +217,7 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
         kind: 'editorial.article',
         section: 'Articles',
         language: 'english',
+        reservedTids: MINHAJ_ORG_PAGE_TIDS,
       }),
   },
   {
@@ -231,6 +238,7 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
         kind: 'editorial.news',
         section: 'News-Events',
         language: 'arabic',
+        reservedTids: [],
       }),
   },
   {
@@ -251,6 +259,7 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
         kind: 'editorial.press-release',
         section: 'Press-Release',
         language: 'english',
+        reservedTids: MINHAJ_ORG_PAGE_TIDS,
       }),
   },
   {

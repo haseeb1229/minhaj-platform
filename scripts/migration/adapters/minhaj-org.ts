@@ -267,6 +267,12 @@ export interface MinhajOrgEditorialAdapterOptions {
   /** The listing segment, e.g. `News-Events`, `Articles` or `Press-Release`. */
   readonly section: string;
   readonly language: SectionLanguage;
+  /**
+   * Phase 30-R. The `tid`s another source of this site owns — the catalogued
+   * Explore pages — which a listing may also show. They are not items of this
+   * listing, so one legacy address never maps to two records.
+   */
+  readonly reservedTids: readonly string[];
 }
 
 const EDITORIAL_KINDS: readonly string[] = Object.freeze([
@@ -292,6 +298,7 @@ export function createMinhajOrgEditorialAdapter(
   const sectionLanguage = options.language;
   const languageCode = SECTION_LANGUAGES[sectionLanguage];
   const listingPath = `/${sectionLanguage}/${section}/`;
+  const reserved = new Set(options.reservedTids);
 
   const discover = createListingDiscovery({
     base,
@@ -320,13 +327,14 @@ export function createMinhajOrgEditorialAdapter(
     itemOf(url): DiscoveredItem | null {
       const match = TID_PATH.exec(url.pathname);
       if (match === null || match[1] !== sectionLanguage) return null;
+      if (reserved.has(match[2] ?? '')) return null;
       return tidItem(base, sectionLanguage, match[2] ?? '');
     },
   });
 
   return {
     adapterKey: MINHAJ_ORG_EDITORIAL_ADAPTER_KEY,
-    adapterVersion: '2',
+    adapterVersion: '3',
     parserKey: 'cheerio-minhaj-org-editorial',
     parserVersion: '2',
     contentKind: kind,

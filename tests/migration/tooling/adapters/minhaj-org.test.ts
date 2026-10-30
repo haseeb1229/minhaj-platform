@@ -36,6 +36,7 @@ function adapter(overrides: Partial<MinhajOrgEditorialAdapterOptions> = {}) {
     kind: 'editorial.news',
     section: 'News-Events',
     language: 'english',
+    reservedTids: [],
     ...overrides,
   });
 }
@@ -111,7 +112,7 @@ describe('identity and options', () => {
   it('declares what it is, per kind', () => {
     expect(adapter()).toMatchObject({
       adapterKey: MINHAJ_ORG_EDITORIAL_ADAPTER_KEY,
-      adapterVersion: '2',
+      adapterVersion: '3',
       parserKey: 'cheerio-minhaj-org-editorial',
       parserVersion: '2',
       contentKind: 'editorial.news',
@@ -391,6 +392,31 @@ describe('discovery', () => {
       ],
       next: '2:2',
     });
+  });
+
+  it('never takes a tid another source owns, so one address maps to one record', async () => {
+    const listing = newsListing(
+      ['/english/tid/501/Synthetic-Owned.html', '/english/tid/502/Synthetic-Free.html'],
+      [],
+    );
+    const result = await adapter({ reservedTids: ['501'] }).discover(
+      null,
+      fakeSite({ [`${ORIGIN}/english/News-Events/`]: htmlPage(listing) }).fetcher,
+    );
+    expect(result).toEqual({
+      kind: 'page',
+      items: [
+        { externalKey: key(502), originalUrl: key(502), legacyIdentifier: 'tid-502' },
+      ],
+      next: null,
+    });
+    // A listing whose every item another source owns is not this listing.
+    expect(
+      await adapter({ reservedTids: ['501', '502'] }).discover(
+        null,
+        fakeSite({ [`${ORIGIN}/english/News-Events/`]: htmlPage(listing) }).fetcher,
+      ),
+    ).toMatchObject({ kind: 'outcome' });
   });
 
   it('still reads the links of a listing whose excerpt the source cut mid-character', async () => {
