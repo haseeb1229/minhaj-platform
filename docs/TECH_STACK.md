@@ -769,3 +769,28 @@ synthetic, written for the proof; the pages and assets are served from loopback 
 | Direct dependency | Exact version | Use and provenance |
 | --- | --- | --- |
 | `qrcode-generator` | 2.0.4 (pinned exactly) | MIT; [source](https://github.com/kazuhikoarase/qrcode-generator). **No transitive dependencies.** Encodes the one-time TOTP provisioning URI as a QR matrix on the account security page (`/my/settings/security`), which the page draws itself as a single SVG path — no raw HTML, no image request, no network. The URI never leaves the page that received it; the same secret is also shown as a grouped typeable key. Added after the first real staging enrolment showed the URI as raw text with no code to scan. |
+
+### 18.8 Phase-30-R brand and imported-picture inventory
+
+**No dependency is added.** No image library, decoder, optimiser, CDN or remote image host: the
+pictures are already web-sized, Storage's existing structural pipeline strips their metadata, and
+the Next build bundles the brand files.
+
+| Asset | Source and retrieval | Original | Stored copy | Use and rights |
+| --- | --- | --- | --- | --- |
+| `apps/web/src/shell/brand/mqi-logo.png` — the official logo and wordmark | `https://www.minhaj.org/images/logo.png`, retrieved 2026-10-29 | PNG raster, 444×65 RGBA, 12,424 bytes, SHA-256 `ffbf13f368bb90d01bec27cfcbe4a9c50e0bcd0a5fdf9a07b46c9c4674076ae2` | 11,410 bytes, SHA-256 `3357d2995baff253d7943a782a6cfa1f02996dab6d0b420d31a5aa92c4ad55d1` — only the `tEXt` ("Software: Adobe ImageReady") and `iTXt` (XMP) chunks removed; pixels, dimensions and colours untouched | Header and footer brand lockup of the pre-adoption build, by the owner's authorisation (OPEN_DECISIONS.md §3.7, §6.4). The page states "Minhaj-ul-Quran International. 2026" (its `copyright` meta). Provisional brand evidence, **not** the accepted brand pack; never redrawn, recoloured or re-proportioned |
+| `apps/web/src/app/icon.png` — the official favicon | `https://www.minhaj.org/favicon.ico`, retrieved 2026-10-29 (served as an `.ico` name, actually a PNG) | PNG raster, 64×66 RGBA, 10,545 bytes, SHA-256 `41a2138b4b4ecd7a4de081b962a7775ea9a63e3a2771cb1500f1a59ce5d8aee2` | 9,690 bytes, SHA-256 `e68e6b43cfbe41f62bdfd9514ed1350949dd26646ba2a2cc76392b31da5a5bbd` — the same two metadata chunks removed | The App Router icon, same authorisation and status |
+
+Not used: no SVG of the logo is published; a 900×828 crest with an opaque grey background
+(minhaj.net, the pages' `og:image`) exists but would need modifying to sit on the header, so it is
+not shipped. No official brand stylesheet or guideline was found, so no palette or typeface was
+taken from the logo.
+
+**Imported legacy pictures** (lead images, covers, posters, portraits) are not repository files:
+each is a stored Storage asset carrying its own per-asset provenance — source URL, source record,
+fetch time, evidence and public-copy checksums, media type, measured box, licence claim with the
+page's copyright notice as evidence, and the person's rights decision — in
+`MigrationAssetProvenance` (MIGRATION_STRATEGY.md §15). On staging after the macro: 461
+acquisitions — 222 lead images, 3 portraits, 104 book covers, 63 issue covers and 69 video posters
+— each with a metadata-stripped public copy and each decided `public-eligible` by a person; none
+left restricted, none of unknown rights cleared (MIGRATION_STRATEGY.md §15.1).

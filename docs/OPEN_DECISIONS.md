@@ -287,6 +287,12 @@ Licensing for third-party translations, tafsir works and recitations · required
 whether content may be downloaded or only read online · **per-asset licensing for migrated
 binaries** (MIGRATION_STRATEGY.md §4.9).
 
+**Pre-adoption staging only (Phase 30-R, §3.7).** First-party pictures the official pages
+present with their own records are acquired with the page's own © Minhaj-ul-Quran International
+notice as evidence, and a person decides each one public-eligible; unknown or third-party rights
+stay restricted. This is the owner's attestation for the review build, **not** Minhaj's licensing
+decision, which remains open for production.
+
 ### 2.5 Student↔student messaging policy
 **Owner:** Minhaj · **Gates:** Phase 24 · **Priority:** Medium
 
@@ -514,6 +520,49 @@ no scholarly approval is recorded or simulated. **E** is satisfied for pre-adopt
 is untouched. None of this
 is a decision of Minhaj-ul-Quran International; the owner's roadmap decision only fixes the order:
 build and review first, official adoption and content acceptance afterwards.
+
+**After the Phase 30-R review-completeness macro (2026-10-29, §3.7).** **A** extends, for
+pre-adoption staging only, to five more registrations and to the first-party image hosts the
+authorised pages name, under `OWNER-ATTESTATION-2026-10-29-PREADOPTION-CONTENT-BRAND-EXPANSION`.
+**B** is applied per asset: a picture is copied only from those exact hosts, with the page's own
+copyright notice as evidence, and shown only after a person decides it public-eligible; unknown
+rights stay restricted. **D** is unchanged and still not bypassed. **E** stays satisfied for
+pre-adoption staging only: after the macro, on 2026-10-30, **497** ordinary migrated records are
+public there — 147 news items, 45 articles, 30 press releases, 3 Explore pages, 102 books, 2
+magazines with 72 issues, 63 videos, 3 leadership profiles and 30 countries of presence
+(MIGRATION_STRATEGY.md §15.1). **F** is untouched.
+
+### 3.7 Pre-adoption review completeness — owner decision (Phase 30-R)
+**Owner:** Owner (pre-adoption) · **Recorded:** 2026-10-29 · **Status:** decided for pre-adoption
+staging only; every Minhaj decision it touches stays open
+
+The owner reviewed the first Stage-1A build and judged it too sparse to present. Decided, for the
+**pre-adoption review build on staging only** (owner attestation
+`OWNER-ATTESTATION-2026-10-29-PREADOPTION-CONTENT-BRAND-EXPANSION`):
+
+- **A broader review corpus.** Stage 1A may be materially larger — several listing pages deep in the
+  high-volume areas, across more categories, languages and years — while staying bounded, recorded
+  and reconciled. It is still **not** Stage 1B (MIGRATION_STRATEGY.md §10.1.0, §15).
+- **Public first-party visual assets are in scope** where an authorised official page presents them
+  as part of its own record, from that source's hosts or a clearly first-party MQI host it names
+  (registered as an asset host with its evidence): lead images, covers, posters, portraits. No
+  access-control bypass, robots respected, provenance and rights recorded per asset, **unknown
+  rights skipped**, third-party, social, provider and private images never.
+- **Additional official hosts** may be registered only when demonstrably MQI-owned, linked from an
+  authorised source, relevant to a built domain and needed to fill a real gap — exact hosts, public
+  content only. Used for `minhajoverseas.com` (the Directorate of Foreign Affairs, listed on
+  minhaj.org's contact page) and the asset hosts `minhaj.net` / `www.minhaj.net`.
+- **The current official MQI logo** is the build's provisional brand lockup (§6.4).
+- **Original source dates are product truth**: a migrated record's reader-facing date is the date
+  its source states, never the migration or approval date (DOMAIN_MODEL.md §7.2.2).
+- **Optional visual fields are added where a content type needs them** — an Editorial lead image,
+  a Person portrait, Edition and MagazineIssue covers, a Video poster — superseding the earlier
+  "no image" rules for News and People (DOMAIN_MODEL.md §5.1, §7.2.2).
+
+**Not decided by this record, and still open:** Minhaj's content acceptance of the organisational
+pages and profiles migrated for review, its brand pack (§6.4), its per-asset licensing for
+production (§2.4), any religious acceptance (§1), production promotion and cutover (§3.4), and
+official adoption.
 
 ---
 
@@ -829,6 +878,17 @@ accepted brand evidence** — and because the structure is semantic, supplying t
 later is a token substitution rather than a redesign. **Font licensing is recorded at
 introduction** (TECH_STACK.md §18).
 
+**Pre-adoption brand evidence (Phase 30-R, §3.7) — still OPEN for the organisation.** By the
+owner's authorisation, the pre-adoption build shows the organisation's **current official logo
+and wordmark** exactly as minhaj.org publishes it (`https://www.minhaj.org/images/logo.png`,
+retrieved 2026-10-29, a 444×65 PNG; only its editing metadata removed — never redrawn,
+recoloured or re-proportioned) in the header and footer, and the official site's favicon as the
+app icon; provenance and checksums are inventoried in TECH_STACK.md §18. No SVG or brand guide is
+published, so no palette or typeface was inferred from the logo's pixels: the restrained semantic
+palette stays. This is **provisional brand evidence, not the accepted brand pack**: the logo
+variants, palette, typefaces and guidelines remain this decision, and supplying them replaces the
+file and the token values.
+
 ### 6.5 Content team structure and roles
 **Owner:** Minhaj · **Gates:** Phase 6 · **Priority:** Medium
 
@@ -968,6 +1028,7 @@ gates. A decision may gate more than one thing.
 | 3.4 | Legacy domain control, production promotion and cutover | **C/E** | Launch | **35 only** | Legacy links break at launch; **no effect on Phase 30** |
 | 3.5 | Staging migration publication authority (`migration.publish` holder) | **C/D** | Content acceptance | **30 exit** | Migrated content is staged and reviewed but not published in staging; nobody holds the grant |
 | 3.6 | Phase-30 gates by timing | — | (classification of 3.1–3.5, 1.1–1.6, 2.4) | 30 | — |
+| 3.7 | Pre-adoption review completeness (owner decision, Phase 30-R) | — | Owner, pre-adoption staging only | 30 (Stage 1A) | Decided for staging; Minhaj acceptance, brand pack and production licensing stay open |
 | 4.1 | **Staging/production** SQL Server infrastructure and ownership | **E** | Implementation (28, 34) · launch | **28, 34** | **Staging rows resolved for pre-adoption staging (Phase 28).** Production remains blocked until decided (34). **Phase 1 proceeds on local Developer edition** |
 | 4.2 | Staging environment | **E** | Implementation | 28 | **Resolved for pre-adoption staging (Phase 28)** — `minhaj.haseebliaqat.me`; re-provisioned on adopter-owned infrastructure at handover |
 | 4.3 | Production hosting | **E** | Launch | 34 | Deployment blocked |
@@ -979,7 +1040,7 @@ gates. A decision may gate more than one thing.
 | 6.1 | Canonical organisational facts | **D** | Content acceptance | 6 publishes | Placeholders only; **never published as configuration** |
 | 6.2 | Centre and global network data | **C** | Content acceptance | 16 | Find a Centre has no authoritative data |
 | 6.3 | Contributor records and capability grants | **D** | Activation · content acceptance | 5, 20, 23 | No real grants issued |
-| 6.4 | Brand and visual identity | **C** | Content acceptance | 4 | **Token structure is decided**; real values substituted later |
+| 6.4 | Brand and visual identity | **C** | Content acceptance | 4 | **Token structure is decided**; the current official logo is provisional pre-adoption evidence (§3.7); real values substituted later |
 | 6.5 | Content team structure and roles | **C** | Activation | 6 | Separation-of-duties default applies |
 | 6.6 | Support and moderation ownership | **C** | Activation | 24 | Support conversations not staffed |
 | 7.1 | Search Console and analytics access | **C** | Launch | 35 | No third-party analytics assumed |

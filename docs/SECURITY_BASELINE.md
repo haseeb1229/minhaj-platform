@@ -874,6 +874,49 @@ Phase 30 registers real sources under the owner's recorded pre-adoption attestat
   manifests and the database refuse them. No scholarly approval, `fatwa.publish`, canonical Quran
   source or activation is created or simulated.
 
+### 10.7 As delivered (Phase 30-R) — first-party pictures
+
+Every control above applies unchanged; the owner's 2026-10-29 decision (OPEN_DECISIONS.md §3.7)
+brings real pictures into the pre-adoption build under these rules:
+
+- **Scope stays exact.** A source reaches pictures only on its page hosts and its registered
+  first-party ASSET hosts — exact names, never a suffix match, never a generic CDN — through the
+  same pinned, redirect-revalidating, body-capped boundary; adding an asset host is an audited,
+  append-only act with its evidence. An asset host's own `robots.txt` is read (a definitive 200 or
+  4xx only; anything else is read again) and a disallowed picture is refused before it is
+  requested. SSRF and DNS-rebinding defences are unchanged.
+- **Only rasters, only first-party, only with rights.** An adapter offers only an `https` JPEG or
+  PNG the page presents as part of its record; SVG, WebP, GIF, third-party, social, provider and
+  private pictures are never acquired. The licence claim is `organisation-owned` only when the page
+  states the organisation's copyright notice (kept as evidence), and nothing is public until a
+  PERSON decides it `public-eligible` — unknown rights stay restricted. A picture whose bytes are
+  not the type its name states is refused by Storage's type detection (the minhaj.info resizer's
+  WebP answers were refused so, and its covers are now taken from the same file's original on the
+  same host).
+- **Strict where it becomes a record.** A record's own page is decoded as strict UTF-8 and refused
+  on any malformed byte. Only a LISTING page — whose links alone are read and whose text never
+  becomes a record or evidence of one — is decoded with replacement characters, so a source that
+  cuts an excerpt mid-character cannot hide every link on the page.
+- **Evidence kept, metadata stripped.** The fetched bytes are stored exactly, checksum-verified and
+  scanned; what can ever be shown is a separate PUBLIC copy through Storage's image pipeline —
+  structurally validated, within 40 megapixels and 16,384 pixels a side (no decompression bomb),
+  every EXIF (GPS, device, owner), XMP, IPTC, comment, embedded-thumbnail and trailing segment
+  removed, no pixel decoded or re-encoded — quarantined and scanned in its turn.
+- **Recorded only when servable.** Editorial, People, Library and Media record a lead image,
+  portrait, cover or poster only after Storage answers the asset is a clean, present JPEG or PNG
+  (`servableImages`), so a PDF, a quarantined file or a missing asset can never become a picture.
+- **Served only by the owner.** Each picture's bytes leave only through its domain's route, for a
+  published record and exactly the asset it names, with the Photo posture: `private, no-cache`
+  with a checksum ETag (a 304 only after both owners allow), `nosniff`, `Content-Disposition:
+  inline`, `Cross-Origin-Resource-Policy: same-origin`, `X-Robots-Tag: noindex`, and one identical
+  404 for every refusal; the Editorial preview route needs a live `content.read` and is `no-store`.
+- **No remote image, no tracker.** The Content-Security-Policy is unchanged (`img-src 'self'
+  data:`): every picture is our own bytes, no remote image host is allowed, and a video card or
+  the click-to-load gate shows the first-party poster with **no provider request** before the
+  visitor's click. Structured data names only our own picture routes.
+- **The brand lockup** is a bundled first-party PNG with its editing metadata removed (TECH_STACK.md
+  §18), not a remote reference.
+
 ---
 
 ## 11. Live class and meeting URL security

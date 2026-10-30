@@ -920,6 +920,38 @@ The diagram and the bullets above are the **Phase-29 exit** state; §5.2 records
   registration and run — as the runtime principal with the one outbound network operator commands
   have.
 
+### 5.3 As delivered (Phase 30-R) — review completeness
+
+- **More targets, same router.** `migration-targets.ts` also builds Editorial's press-release and
+  page targets (`migration-editorial-targets.ts`; every Editorial target now also REFRESHES by an
+  author's revision and submission), People's profile target (`migration-people-targets.ts`, under
+  a live `people.administer` check, over People's public service) and Global Network's country
+  target (`migration-global-targets.ts`, `saveCountry`); every target implements `refresh` — a newer
+  approved revision of a record it already made, through the owning domain's own update — and the
+  router routes it fail-closed like `publish`. The migration composition therefore reaches eight
+  contexts' public interfaces (adding `global-network`), and the Storage composition
+  (`composition/storage.ts`) whose `servableImages` answer the Library, Media, People and Editorial
+  services ask before recording a picture. Global's refusal class declares its field rather than
+  using a constructor parameter property, so the node-run tooling loads it.
+- **Pictures are served by their owners.** A lead image, portrait, cover or poster is ONE typed key
+  from the owning record to a Storage `Asset`; Storage still holds no owner column (its model lists
+  only the back-relations Prisma requires). Bytes leave only through the owning domain's route —
+  `/assets/editorial/*`, `/assets/people/portraits/*`, `/assets/library/covers/*`,
+  `/assets/media/posters/*` — under that domain's policy (published record, exactly that asset) and
+  Storage's technical decision, with the Photo serving posture (SECURITY_BASELINE.md §10.7).
+  No pixel is decoded on the server and no resized variant is generated: the sources' pictures are
+  already web-sized, and each `<img>` carries its measured width and height.
+- **The tooling.** Asset hosts per source and an asset fetcher over page + asset hosts that honours
+  each asset host's `robots.txt` (`safe-fetch.ts` `createAuthorisedAssetFetcher`); replay of retained
+  raw evidence (`run-source.ts --replay`); `sequenceDiscovery` for several listings; the shared
+  `firstPartyImage` / `copyrightNotice` readers; a new `adapters/minhaj-overseas.ts`.
+- **Operations image.** It now also carries `migration-global-targets.ts`,
+  `migration-people-targets.ts`, `composition/storage.ts` and the `global-network` context — every
+  module `migration-runner.ts` reaches.
+- **The brand lockup.** The official logo is a statically imported PNG bundled into the Next build
+  output (`apps/web/src/shell/brand/`), and the favicon is the App Router `icon.png` file convention;
+  neither is a remote reference (OPEN_DECISIONS.md §6.4).
+
 ---
 
 ## 6. Dependency rules

@@ -371,6 +371,14 @@ dates where public and known, biography per locale, an **optional** link to a Us
 A Person is a public-facing record. It exists for historical figures with no account, and
 for contributors who have never signed in.
 
+**Portrait (Phase 30-R).** *Historical, superseded:* Phase 5 deliberately gave a Person no
+image, asset or URL until a phase owned profile media. Since the owner decision of 2026-10-29
+(OPEN_DECISIONS.md §3.7) a Person may name ONE public **portrait** — a NO ACTION key to a stored
+Storage `Asset` with its measured box and an optional credit — set through People's audited
+`setPortrait` (`people.administer`), accepted only when Storage answers the asset is a servable
+JPEG or PNG, and served only by People's own route while the Person is published. Never an
+avatar URL, a remote reference or anything inferred from a face.
+
 ### 5.2 Profiles
 
 A **Person may hold several legitimate profiles simultaneously.** Each is a separate
@@ -585,15 +593,27 @@ editorial keys `content.read/author/review/publish` govern them; no `news.*` key
 | **MediaCoverage** | The revision names the **outlet**, and only where known an **HTTPS source address** (normalised; no credentials, no other scheme) and the **date of the coverage**. Title, summary and body are the organisation's own words about the coverage — nothing of the third party's article is copied, mirrored, embedded or fetched |
 
 **Rules:**
-- **No image.** News depends on Editorial and Search, not on Storage or Media, so no lead
-  image, Asset, Photo, Gallery or remote image address exists. A future lead image is an
-  explicit dependency decision.
+- **One optional lead image, never a gallery (Phase 30-R).** *Historical, superseded:* at
+  Phase 13 News had no image at all, and a lead image was reserved as an explicit dependency
+  decision. The owner took that decision on 2026-10-29 (OPEN_DECISIONS.md §3.7): a NewsArticle
+  or PressRelease **revision** — like an Article's and a Page's — may name ONE lead image, a NO
+  ACTION key to a stored Storage `Asset` with its measured width and height and an optional
+  credit, and each translation carries its alternative text (`leadAlt`). Choosing or changing it
+  is an ordinary reviewed edit. Editorial accepts an asset only when Storage answers it is a
+  servable JPEG or PNG (`servableImages`), and serves the bytes only through its own route while
+  the record is published. Statement and MediaCoverage never carry one; still no Photo,
+  Gallery, separate image table or remote image address.
 - **No forward reference.** No Event, Centre, Collection or newsletter relation; centre-scoped
   News is Phase 16's Centre reference on these records.
 - **No engagement state.** No view count, popularity score or featured flag; "latest" is the
   publication-instant order.
 - **The archive and topic timelines read genuine publication instants** (UTC year and month),
-  never a record's creation time, across all four families.
+  never a record's creation time, across all four families. *Since Phase 30-R* that instant is
+  the root's **`chronologyAt`**: the published revision's **source publication date**
+  (`sourcePublishedOn`, the original date a migrated record's source states, at UTC midnight)
+  when it has one, else its first publication here. It is set by the workflow at publication
+  and exists exactly when the record has been published (a CHECK); `publishedAt` remains the
+  workflow fact. A migrated record is therefore never dated to its migration or approval.
 - **Issuer and source changes are audited as their own events**, and no audit row carries a
   title, body, authoring document, issuer or source address.
 
@@ -1060,6 +1080,12 @@ Owns published works. Corrects the prior revision's conflation of *localized met
 - Contributors are referenced from **People & Contributors** (§5). **Library no longer owns
   Author.**
 - Large PDFs are **never database BLOBs** — storage references and checksums only.
+- **Covers (Phase 30-R).** An Edition's cover — and a MagazineIssue's — is ONE optional NO
+  ACTION key to a stored Storage `Asset` with its measured box, accepted only as a servable
+  JPEG or PNG, kept when an update omits it and cleared only by an explicit `null`, and served
+  by Library's own routes only while the Edition and its Work (or the issue and its Magazine)
+  are published. A Work shows the cover of its first published Edition that has one; a
+  Magazine its newest public issue's.
 
 ### 10.2 Other aggregates
 
@@ -1120,6 +1146,14 @@ player — nothing polls the provider, and a cross-origin frame's failure is not
 `event` format is event coverage, not a reference to an Event. A thumbnail must be this video's
 image on the provider's own image host, and a transcript is text the organisation holds —
 neither is fetched nor generated.
+
+**First-party poster (Phase 30-R).** A Video may also name ONE **poster** — a NO ACTION key to a
+stored Storage `Asset` with its measured box, accepted only as a servable JPEG or PNG and kept
+when an update omits it. It is the organisation's own picture of the video (a migrated one comes
+from the source page's own image, never from the provider), served by Media's own route while the
+Video is published, so a card or the click-to-load gate shows a real picture with **no provider
+request** before the visitor's click. The provider `thumbnailUrl` stays structured-data metadata
+only.
 
 As delivered (Phase 11) — AudioTrack and AudioSeries, **non-Quran audio only**:
 
@@ -2075,6 +2109,39 @@ Migration `20261027000000_phase30_source_adapters` adds no table; it widens the 
   `videoHeld` (`SavedItem` and `ReadingHistory`); a held Work or Article is never withdrawn
   automatically. No personal table can hold a news item, magazine or issue.
 
+### 16.7 As delivered (Phase 30-R — review completeness: four more kinds, assets, refresh)
+
+Migration `20261030000000_phase30r_review_completeness` adds no table (OPEN_DECISIONS.md §3.7).
+
+- **Four more publishable kinds.** `editorial.press-release` (a PressRelease), `editorial.page` (an
+  organisational Page bound to ONE reserved shell route the committed catalogue names; its slug is
+  always `page`), `people.person` (a public profile: name, whole biography paragraphs within
+  People's bound, portrait) and `global.country` (a Country of the organisation's stated presence,
+  its ISO code from a fixed table, never guessed). Typed targets `pressReleaseId`, `pageId`,
+  `personId`, `countryId` on entries and mappings — still exactly one per mapping, still no target
+  pair. Twelve kinds in all; the two review-only kinds are unchanged.
+- **Images in payloads.** A staged payload may name the image its source presents with the record
+  — a lead image (news, article, press release, page), a cover (edition, magazine issue), a poster
+  (video), a portrait (person) — by canonical `https` URL with the source's own alt text. A target
+  records it only as the PUBLIC copy of the rights-cleared acquisition of exactly that URL;
+  otherwise the record is published without it.
+- **Public copy of an acquisition.** An acquired JPEG or PNG keeps its exact evidence bytes AND a
+  metadata-stripped public copy made by Storage's image pipeline; `MigrationAssetProvenance`
+  records that copy's asset, checksum and measured box — all of it or none (a CHECK). Only a
+  PERSON decides an acquisition `public-eligible`, one by one or in an audited bulk act over a
+  run's acquisitions; unknown or third-party rights cannot be.
+- **Source hosts have roles.** A `page` host is where discovery, items and links live; an `asset`
+  host is an exact first-party host the source's own pages name for their pictures, reached only
+  to acquire one. Adding an asset host to a registered source is an audited, append-only act with
+  its first-party evidence; a host is still never changed or removed (51371).
+- **Refresh entries.** A manifest entry is a `create` or a `refresh`, fixed when the entry is made
+  (51379): a refresh carries a newer approved revision of an already-published legacy record into
+  the record its ACTIVE legacy mapping names, through the owning domain's own update — Editorial's
+  revision and review again, the others staying published — makes no legacy mapping (51380) and is
+  never rolled back by migration (a CHECK): what it changed is a person's to undo.
+- **Replay.** A run may re-read the source's retained raw snapshots with newer parser and
+  normaliser code instead of fetching pages; the same bytes read by newer code are a new revision.
+
 ---
 
 ## 17. Global Network, Membership, Donations
@@ -2123,6 +2190,10 @@ A Centre's news and events are ordinary Editorial records carrying a Centre refe
 - **Not searchable yet.** Phase 16 enters from 6 and 13, not 17; Find a Centre is Global's own
   owner query. A Global search projection, if wanted, is a recorded later step, and Phase 31
   proves completeness (DELIVERY_PLAN.md §3).
+- **Countries without Centres (Phase 30-R).** Migration may publish a Country the organisation's
+  own site states it is present in (`global.country`) without any Region, City or Centre: no
+  authorised source publishes a centre directory with addresses, and none is inferred. Such a
+  Country's public page says honestly that no Centre is listed yet.
 
 ### 17.2 Membership
 

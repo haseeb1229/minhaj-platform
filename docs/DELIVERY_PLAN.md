@@ -11,8 +11,10 @@ Phases 0B–29 are delivered, except Phase 2G, which remains separately deferred
 progress in two corpus stages (§4, Phase 30): its migration engineering is delivered; Stage 1A —
 the representative real review corpus for pre-adoption staging — has run on staging (165 records
 discovered, 134 ordinary records published, 30 religious records staged for qualified review;
-MIGRATION_STRATEGY.md §14); Stage 1B, the full initial corpus, follows Minhaj's review and go-ahead.
-Phase 31 has not started.
+MIGRATION_STRATEGY.md §14) and was then materially widened by the Phase 30-R review-completeness
+macro — first-party visuals, original source dates, organisational pages, leadership profiles and
+countries of presence (§4, Phase 30; MIGRATION_STRATEGY.md §15); Stage 1B, the full initial corpus,
+follows Minhaj's review and go-ahead. Phase 31 has not started.
 
 ---
 
@@ -958,7 +960,9 @@ review history:**
   (`?sort=latest` is the only order and canonical to `/news`), the other three families, the News
   archive and the Phase-12 photograph surfaces, which the Watch landing no longer links. The
   archive is `/news/archive?year=&month=` over all four families by UTC publication instant.
-  Cards are text — type, date, headline, summary, byline, topics — with no image. A coverage
+  Cards are text — type, date, headline, summary, byline, topics — with no image (at Phase-13
+  exit; since Phase 30-R a NewsArticle or PressRelease card shows its optional first-party lead
+  image, and the date shown and ordered by is the record's source chronology). A coverage
   record's source is a described outbound link, never an embed or a redirect.
 - **Slugs.** Each family its own history, one-hop 301 through the request proxy, locale kept.
   The static `/news` siblings are reserved words a NewsArticle slug can never hold, and the proxy
@@ -2484,6 +2488,41 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > administrator. 134 legacy mappings, one typed target each, no chain. Fatwa and Quran revisions
 > (30) stay staged for qualified review. The Phase-30 **exit** stays open: Stage 1B, its
 > reconciliation and religious sign-off have not happened (MIGRATION_STRATEGY.md §14).
+
+> **Phase 30-R — Stage-1A review completeness (an OPERATIONAL macro inside Phase 30, not a new
+> phase number; owner decision 2026-10-29, OPEN_DECISIONS.md §3.7).** The first Stage-1A corpus
+> proved the machinery but was too sparse to present. Delivered on one branch: migration
+> `20261030000000_phase30r_review_completeness` (30 migrations) — optional typed visuals (an
+> Editorial lead image on Article, NewsArticle, PressRelease and Page revisions with per-translation
+> alt text; a Person portrait; Edition and MagazineIssue covers; a Video poster — each one NO ACTION
+> key to a stored Asset with its measured box, served only by its owning domain), the source's
+> original publication date on Article, NewsArticle and PressRelease revisions and the root
+> `chronologyAt` every listing now orders by, four more migration kinds (`editorial.press-release`,
+> `editorial.page`, `people.person`, `global.country`), per-source first-party asset hosts, the
+> metadata-stripped public copy of an acquired image, replay of retained raw evidence, and REFRESH
+> manifest entries that carry a newer approved revision into an already-published record through
+> its own domain (MIGRATION_STRATEGY.md §15). The official MQI logo is the provisional brand
+> lockup (OPEN_DECISIONS.md §6.4). The Database-foundation Messaging proof now prints the failing
+> test and its first failure lines beside the JSON report, still failing with the run's status.
+> Staging result (2026-10-29/30, MIGRATION_STRATEGY.md §15.1): 21 runs, every one balanced — the
+> Stage-1A sources replayed from their retained evidence, then 545 items discovered and 396 staged
+> in the bounded expansion; 496 manifest entries published (364 new records, 132 refreshes), 2
+> refused by Library; **497 ordinary records public**, every Editorial one approved and published by
+> a second administrator; 461 first-party pictures, each decided public by a person; every news
+> item, article and press release dated by its source; 497 active legacy mappings with no chain and
+> no address mapped twice. Fatwa (24) and Quran (6) revisions stay review-only, never manifested.
+> Ingestion ran on the exact CI-green releases `730159e`, `d956ce4` and `821dca7` (branch CI
+> 40978771144, staging deploy 40980811932); a post-migration backup set `20261030T120812Z` passed an
+> isolated restore proof from Blob. Visual acceptance on staging at 390, 768 and 1440 px in en, ur
+> and ar over 30 public routes — home, Explore with a migrated page, leadership and a profile, News
+> with an item in each language, press releases, Library, articles, books, magazines and an issue,
+> Watch and a video, Global and a country, Learn, Quran, Hadith, Fatwa and search: each answered
+> 200 in its locale's direction with no horizontal overflow, no broken or alt-less image and one
+> main heading. Three source defects found on the way were fixed by normal
+> commits (Press-Release listing, minhaj.info cover originals, a listing page cut mid-character),
+> as were a manifest page that could not offer past its first page of revisions and one legacy
+> address taken by two sources. Stage 1B, Phase 31, Phase 32 and production cutover have **not**
+> started, and no official adoption is claimed.
 
 ---
 

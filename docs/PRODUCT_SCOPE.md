@@ -79,6 +79,21 @@ source cannot fill shows an honest unavailable or limited state. It is **not** t
 material in it is staged for review, never published by migration. All three acceptance
 dimensions above remain separate.
 
+**Review completeness (Phase 30-R, owner decision 2026-10-29).** The owner judged the first
+134-record Stage-1A corpus too sparse to present, and directed a **materially broader** review
+corpus — still Stage 1A, still bounded and recorded, never the A-to-Z Stage 1B — with the visual
+truth its sources carry: real **first-party pictures** (news and article lead images, book and
+magazine-issue covers, video posters, leadership portraits) copied from the organisation's own
+hosts only where a person recorded their rights per asset, and every migrated record's **original
+source date** as its reader-facing chronology. These pictures are **production-target data**, not
+demo decoration: each is an application-owned stored asset with its provenance, served only through
+its owning domain, exactly as the full migration will carry them. The current official MQI logo
+appears on the build as **owner-authorised, provisional pre-adoption brand evidence**; the
+organisation's accepted brand pack and its content acceptance remain open (OPEN_DECISIONS.md §3.7,
+§6.4). Areas no authorised source can truthfully fill — courses without a syllabus, events without
+schedules, centres without a public directory, audio held only as third-party embeds — keep an
+honest limited state rather than invented content.
+
 Commercial questions — source ownership, licensing, portfolio rights, retention of a clone,
 future reuse — are **outside technical architecture** and are deliberately not recorded in
 this baseline.

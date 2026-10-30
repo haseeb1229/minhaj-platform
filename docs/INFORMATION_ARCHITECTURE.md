@@ -334,6 +334,19 @@ pre-adoption statement; the language switcher stays in the header only — a sec
 duplicate a landmark and its pinned link names — and no copyright owner, contact detail or social
 profile is shown, since none is evidenced (OPEN_DECISIONS.md §6.1, §6.4).
 
+**Phase 30-R (review completeness, OPEN_DECISIONS.md §3.7).** The header and footer carry the
+organisation's **current official logo** as provisional pre-adoption brand evidence (the footer's on
+a light chip), and the utility bar a short "pre-adoption review build" marker — one quiet global
+statement, never a banner on every page. Explore items whose catalogued source page has been
+migrated and published now carry that **published Page** at their own reserved address (About —
+Introduction and Global Impact; Shaykh-ul-Islam — Biography; Organization — Forums and UN
+Recognition; Our Work — Peace & Counter-extremism; Digital Resources — Mobile Apps and Social
+Media): the same canonical route, no second content system, words and date from the source,
+pre-adoption review content subject to Minhaj's acceptance. Every other Explore item stays an
+honest reserved page. Leadership lists the published leadership profiles (People) and links the
+Shaykh-ul-Islam biography. Global lists the **countries of the organisation's stated presence**
+even where no Centre is listed, and says so on each country rather than inventing an address.
+
 ---
 
 ## 5. Authenticated hierarchy — My Minhaj

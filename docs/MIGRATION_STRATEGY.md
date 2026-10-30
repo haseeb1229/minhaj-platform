@@ -262,6 +262,11 @@ through the StorageService abstraction.
 asset*, not merely for the site it came from. A site-level authorisation does not
 automatically license every third-party image or document on it.
 
+**As applied since Phase 30-R (§15):** pictures are reached only on a source's exact page and
+registered first-party asset hosts; an acquired JPEG or PNG keeps its evidence bytes and gains a
+metadata-stripped public copy, the only bytes a domain may show; and a person decides each
+acquisition's public eligibility.
+
 **Video files are never downloaded.** Only provider identifiers and metadata are stored.
 
 **Non-Quran audio is not a provider reference.** Media's AudioTrack holds its recording as a
@@ -875,3 +880,165 @@ on other hosts or under no recorded rights, and none was acquired or substituted
 field for a source's original publication date, so a migrated news item shows the date it was
 published on this platform; the source date remains migration provenance, visible to reviewers.
 
+
+> *Historical, superseded by §15:* the paragraph above is the state at the first Stage-1A run
+> (2026-10-29). Phase 30-R gave Editorial a source date and a lead image, gave the minhaj.org
+> sources their first-party image hosts, and re-read the same retained evidence.
+
+---
+
+## 15. As delivered (Phase 30-R) — review completeness: visuals, original dates, more kinds
+
+> **An operational macro inside Phase 30 Stage 1A, not a new phase and not Stage 1B.** The owner
+> judged the first 134-record corpus too sparse to present to Minhaj-ul-Quran International and,
+> on 2026-10-29, authorised a materially broader, still bounded review corpus with the real
+> first-party pictures and original dates its sources carry (OPEN_DECISIONS.md §3.7; owner
+> attestation `OWNER-ATTESTATION-2026-10-29-PREADOPTION-CONTENT-BRAND-EXPANSION`). Nothing here is
+> official adoption, religious acceptance or production promotion.
+
+**Schema.** Migration `20261030000000_phase30r_review_completeness` (30 migrations; its reviewed
+rollback refuses while any row uses what it added). Four more publishable kinds —
+`editorial.press-release`, `editorial.page`, `people.person`, `global.country` — with typed targets
+`pressReleaseId`, `pageId`, `personId`, `countryId`; a manifest entry `mode` (`create` | `refresh`);
+a source host `role` (`page` | `asset`); an acquisition's public copy (`publicAssetId`,
+`publicChecksum`, `width`, `height`, all or none). In the owning domains: an optional lead image on
+Article, NewsArticle, PressRelease and Page revisions (alt text per translation), the source's
+original publication date on the three dated families and the root `chronologyAt` every listing
+orders by, a Person portrait, Edition and MagazineIssue covers and a Video poster — each one NO
+ACTION key to a stored Storage `Asset` with its measured box (DOMAIN_MODEL.md §16.7). The runtime
+principal may never UPDATE the new mapping targets, the public-copy columns or an entry's mode.
+
+**Original dates are product truth.** A dated payload's `publishedOn` — the date the source page
+states — is carried into Editorial as `sourcePublishedOn`, and becomes the record's reader-facing
+chronology; the migration timestamp and the approval date stay audit and workflow facts. A source
+that states no date leaves the platform's own first publication as the chronology. No date is
+guessed.
+
+**First-party assets (§4.9 as applied).**
+- **Asset hosts.** Each catalogued source names the exact first-party hosts its own pages use for
+  pictures — for the minhaj.org sources `minhaj.net` and `www.minhaj.net` (its pages name them;
+  minhaj.org lists `www.minhaj.net` as its Minhaj Internet Bureau; both state the same copyright
+  holder). A source registered earlier receives each as an audited, append-only
+  `migration.source.asset-host-added` act carrying that evidence. Images are fetched through a
+  boundary over the page and asset hosts only — the same SSRF, DNS-pinning, redirect and body
+  rules — and an asset host's own `robots.txt` is honoured.
+- **What an adapter offers.** Only an `https` picture on the source's page or asset hosts whose
+  name says JPEG or PNG, presented by the page AS PART OF the record (a post's first picture, a
+  book's or issue's `og:image`, a video page's own poster). WebP, GIF and SVG are never acquired;
+  third-party, social and provider images never. minhaj.info presents each issue cover only
+  through its resizer, `/i/{width}/{path}`, which answers in WebP whatever the file is called; the
+  cover taken is that same file's original, `/{path}`, on the same host — nothing else is
+  rewritten, and an address whose bytes are not the JPEG or PNG its name states is still refused by
+  Storage's type check. Its licence claim is `organisation-owned` only
+  when the page itself states the © Minhaj-ul-Quran International notice — recorded verbatim as
+  evidence — and `unknown` otherwise.
+- **Acquisition.** The evidence bytes are stored exactly as fetched, checksum verified and
+  scanned; a JPEG or PNG also gets a PUBLIC copy through Storage's image pipeline — structurally
+  validated, at most 40 megapixels and 16,384 pixels on a side, every EXIF, XMP, IPTC, comment,
+  embedded-thumbnail and trailing segment removed — with its own checksum and measured box. The
+  same URL is never fetched twice by a source.
+- **Rights.** A PERSON decides each acquisition `public-eligible`, one by one or in the audited bulk
+  act at `/admin/migration/runs/{id}/rights` (each acquisition decided and audited on its own;
+  only `organisation-owned` or `licensed`, with stated evidence and rights holder). Unknown rights
+  stay restricted, and a record is then published without its picture — never with a substitute.
+- **Use.** A target records an image only as the public copy of the rights-cleared acquisition of
+  exactly the staged URL; the owning domain checks Storage's `servableImages` answer again and
+  serves the bytes only through its own route.
+
+**Replay and refresh.** `migration:run --replay` re-reads the source's retained raw snapshots with
+the current parser and normaliser (`NORMALIZER_VERSION` 30.2) without fetching pages — the same
+bytes read by newer code are a new revision; only images not yet acquired are fetched. A manifest
+over such revisions is made of REFRESH entries for records already published: each is carried into
+the record its active legacy mapping names through the owning domain's own update (Editorial: an
+author's revision then submission, so the record is in review until a second person approves and
+publishes it; Media, Library, People and Global keep the record published), makes no new mapping
+and is never rolled back by migration (§7.2).
+
+**Sources.** Sixteen registrations. Five new: `minhaj-org-news-ar` (Arabic news),
+`minhaj-org-press-releases-en`, `minhaj-org-pages-en` (eight catalogued pages, each bound to one
+reserved Explore route: about/introduction, about/global-impact, shaykh-ul-islam/biography,
+organization/forums, organization/un-recognition, our-work/peace, digital-resources/mobile-apps,
+digital-resources/social-media), `minhaj-org-people-en` (three leadership profiles; the founder's
+own profile is the Shaykh-ul-Islam biography Page, so no legacy address maps to two records) and
+`minhaj-overseas-countries` (the Directorate of Foreign Affairs' "MQI in different Countries of
+the world" page, linked from minhaj.org's contact page; a fixed ISO table, "Korea" deliberately
+absent). Minhaj Books now walks six catalogued categories in order, The Hadith first; Minhaj.TV and
+minhaj.info offer their pages' own posters and covers. The English editorial listings never take a
+`tid` the catalogue binds as an Explore page (the Articles listing also shows tid 35509, the peace
+page), so one legacy address maps to one record. The Press-Release listing names its items in its
+own widget and writes its page links with the listing's name after the number; both are read.
+A LISTING page is decoded with replacement characters, because only its links are read and its
+text never becomes a record (the English News listing cuts one excerpt in the middle of a
+character); a record's own page is still decoded strictly.
+
+**Manifests over a large run.** A new manifest is offered only the approved revisions no live
+manifest entry holds — the same rule its creation is refused under — so a run of more than one page
+of approved revisions is manifested page after page.
+
+**Source-limited, honestly.** Learning (the public catalogue has no syllabus), Events (the source's
+"events" are dated news with no schedule), Collections (no genuine curated legacy grouping was
+migrated), Audio (SoundCloud embeds only), Galleries and Photos (no authorised gallery listing; a
+post's picture is its lead image), Centres (no public directory with addresses — countries of
+presence only). Fatwa and Quran stay review-only; Hadith has no authoritative edition.
+
+### 15.1 Stage-1A expansion on staging
+
+Run on pre-adoption staging on 2026-10-29/30 UTC from the exact CI-green releases `730159e` (the
+macro build, migration 30 applied), `d956ce4` (Press-Release listing, minhaj.info cover originals)
+and `821dca7` (listing decoding, manifest offer). The three minhaj.org sources registered earlier
+received their two asset hosts by the audited act; the five new sources were registered under the
+owner attestation `OWNER-ATTESTATION-2026-10-29-PREADOPTION-CONTENT-BRAND-EXPANSION` and activated.
+Every Stage-1A source was REPLAYED from its retained evidence first, then expanded under a bounded
+selection. **21 runs, every one completed and `balanced`.**
+
+| Source | Replay: staged / rejected | Expansion: discovered · staged · unchanged · rejected · errored · excluded | Published entries (create + refresh) | Stage |
+| --- | --- | --- | --- | --- |
+| `minhaj-org-news-en` | 20 / 0 | 60 · 39 · 20 · 1 · 0 · 0 | 39 + 20 | in review → published by a second person |
+| `minhaj-org-news-ur` | 19 / 1 (date implausible) | 60 · 40 · 20 · 0 · 0 · 0 | 40 + 19 | in review → published |
+| `minhaj-org-news-ar` | — | 30 · 29 · 0 · 0 · 1 (title missing) · 0 | 29 + 0 | in review → published |
+| `minhaj-org-articles-en` | 20 / 0 | 60 · 30 · 20 · 2 · 1 · 7 | 26 + 20 (2 held unreviewed for their flags) | in review → published |
+| `minhaj-org-press-releases-en` | — | 30 · 30 · 0 · 0 · 0 · 0 | 30 + 0 | in review → published |
+| `minhaj-org-pages-en` | — | 8 · 4 · 0 · 0 · 0 · 4 | 3 + 0 (1 held unreviewed) | in review → published |
+| `minhaj-org-people-en` | — | 3 · 3 · 0 · 0 · 0 · 0 | 3 + 0 | public |
+| `minhaj-overseas-countries` | — | 30 · 30 · 0 · 0 · 0 · 0 | 30 + 0 | public |
+| `minhajbooks-works` | 25 / 0 | 120 · 103 · 0 · 1 · 16 (primary locale undetermined) · 0 | 77 + 25 (2 refused) | public |
+| `minhaj-info-issues-mq` | 12, then 36 / 0 | 36 · 24 · 12 · 0 · 0 · 0 | 24 + 12 | public |
+| `minhaj-info-issues-di` | 12, then 36 / 0 | 36 · 24 · 12 · 0 · 0 · 0 | 24 + 12 | public |
+| `minhaj-tv-videos` | 24 / 0 | 72 · 40 · 23 · 6 · 3 (locale, provider or language missing) · 0 | 39 + 24 | public |
+
+Twenty-nine manifests over the macro's runs hold **498 entries: 364 creations and 132 refreshes
+published, 2 refused** by Library — one work whose only labels are Sindhi (Library labels a work
+in the interface locales only) and one whose target already existed. Every refusal is final and
+the record stays on the source. Of the eight bound Explore pages, four use the site's
+section-landing layout rather than a post and were excluded at parse (`not-an-editorial-post`:
+global-impact, the Shaykh-ul-Islam biography, forums, social-media) and the introduction page is
+held unreviewed for its personal-data flag; those five remain reserved Explore pages. Eleven rows
+invalid on review were rejected. Two articles and one page
+held a personal-data or validity flag and were left unreviewed; nothing flagged was approved.
+
+**Pictures.** **461 acquisitions** (lead images 222, portraits 3, book covers 104, issue covers
+63, video posters 69 — counted per acquisition, a replayed record's image fetched once), every one with a
+metadata-stripped public copy and every one decided `public-eligible` by a person as
+`organisation-owned` under the page's own © notice; **none was left restricted** and none of
+unknown rights was cleared. Refused: **63** issue-cover answers that were WebP behind `.jpg`/`.png`
+names (the minhaj.info resizer — refused by Storage's type check before `d956ce4` took the
+originals); no non-first-party picture was offered. On the published records: news 146 of 147
+with a lead image, articles 39 of 45, press releases 25 of 30, pages 3 of 3, works 102 of 102 with
+a cover, issues 63 of 72 (the nine newest issues present only a `.webp` cover, left on the
+source), videos 63 of 63 with a poster, people 3 of 3 with a portrait; countries carry none.
+
+**Dates and the second person.** Every published news item (147), article (45) and press release
+(30) carries its source's own publication date, and listings order by it. The Editorial creations
+and refreshes landed in review; a second administrator (`content.review`, `content.publish`, never
+the migration actor) approved and published every one — 226 items — and the review queue is empty.
+
+**Mappings and reconciliation.** **497 active legacy mappings**; **0** chains, **0** mappings made
+by a refresh, **0** mappings naming more than one target. One cross-source duplicate was found:
+minhaj.org tid 35509 had been taken both as the bound Explore page and as an article (the active
+mapping key is per source). The article copy's mapping was disabled by the audited act, the
+duplicate article archived through Editorial, and the English editorial listings now reserve the
+bound pages' tids (`3bdd7a4`), so no legacy address has two destinations. Review-only material is
+untouched: 24 Fatwa and 6 Quran-translation revisions remain `pending`, with **0** manifest
+entries. A post-migration backup set (`20261030T120812Z`: SQL 130 MB, 885 Storage files) was
+restored from Blob into an isolated database — 30 migrations, constraints trusted, runtime least
+privilege, 885 of 885 assets verified, the restored database dropped and the live one untouched.
