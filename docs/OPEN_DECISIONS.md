@@ -530,7 +530,8 @@ rights stay restricted. **D** is unchanged and still not bypassed. **E** stays s
 pre-adoption staging only: after the macro, on 2026-10-30, **497** ordinary migrated records are
 public there — 147 news items, 45 articles, 30 press releases, 3 Explore pages, 102 books, 2
 magazines with 72 issues, 63 videos, 3 leadership profiles and 30 countries of presence
-(MIGRATION_STRATEGY.md §15.1). **F** is untouched.
+(MIGRATION_STRATEGY.md §15.1); after the Phase 30-RF gap closure, on 2026-10-31, **501** — four
+more Explore pages (MIGRATION_STRATEGY.md §16.1). **F** is untouched.
 
 ### 3.7 Pre-adoption review completeness — owner decision (Phase 30-R)
 **Owner:** Owner (pre-adoption) · **Recorded:** 2026-10-29 · **Status:** decided for pre-adoption
@@ -563,6 +564,33 @@ The owner reviewed the first Stage-1A build and judged it too sparse to present.
 pages and profiles migrated for review, its brand pack (§6.4), its per-asset licensing for
 production (§2.4), any religious acceptance (§1), production promotion and cutover (§3.4), and
 official adoption.
+
+### 3.8 Two findings of the final Stage-1A gap closure that need a decision (Phase 30-RF)
+**Owner:** Owner (pre-adoption), then Minhaj · **Gates:** nothing delivered; each decides whether
+one more review-build capability is built · **Recorded:** 2026-10-31
+
+The final gap-closure macro (MIGRATION_STRATEGY.md §16) closed every ordinary engineering gap it
+found. Two findings are not ordinary engineering — each needs a decision the accepted model does
+not make — so neither was built, and neither is a source limitation:
+
+- **A person clearing an incidental personal-data flag.** The bound introduction page
+  (minhaj.org tid 1799) was flagged because its body states the Central Secretariat's postal
+  address, office, UAN and fax numbers and an organisational mailbox. A person classified every
+  match as a **public organisational office contact** — a false positive for *personal* data. But
+  §8.3 of MIGRATION_STRATEGY.md says flagged material is "excluded by default": the approval act
+  refuses any flagged revision, and the staged text already carries `[redacted]` in place of each
+  match, so "approve normally" is impossible and approving the redacted text would publish
+  placeholders. Building a reviewer's audited false-positive clearance (who may clear, what is
+  re-staged unredacted, how it is recorded) is a new privacy control. **Until decided:** the page
+  stays a reserved Explore page and its revision stays unreviewed.
+- **Collections from the source's curated archives.** minhaj.org's `lkcatid` pages are genuine,
+  editor-ordered archives of conference and campaign coverage — e.g. Al-Hidayah (one curated list
+  of 20 posts, 2005–2019), Mawlid Conferences (43 posts in four sections), Itikaf (51 in two) —
+  exactly what DOMAIN_MODEL.md §7.3 calls a Collection. Migrating one needs a new publishable kind
+  (`editorial.collection`) with its own typed target column (a schema migration), its member posts
+  migrated first, and lifting the accepted Phase-30-R boundary that a migrated Editorial record
+  names no Collection member. **Until decided:** `/collections` holds only curator-made
+  Collections; the archives stay on the source.
 
 ---
 
@@ -1029,6 +1057,7 @@ gates. A decision may gate more than one thing.
 | 3.5 | Staging migration publication authority (`migration.publish` holder) | **C/D** | Content acceptance | **30 exit** | Migrated content is staged and reviewed but not published in staging; nobody holds the grant |
 | 3.6 | Phase-30 gates by timing | — | (classification of 3.1–3.5, 1.1–1.6, 2.4) | 30 | — |
 | 3.7 | Pre-adoption review completeness (owner decision, Phase 30-R) | — | Owner, pre-adoption staging only | 30 (Stage 1A) | Decided for staging; Minhaj acceptance, brand pack and production licensing stay open |
+| 3.8 | Personal-data flag clearance; Collections from curated archives (Phase 30-RF findings) | **C** | Owner decision, then implementation | 30 (Stage 1A/1B) | The introduction page stays reserved; the source's curated archives are not migrated as Collections |
 | 4.1 | **Staging/production** SQL Server infrastructure and ownership | **E** | Implementation (28, 34) · launch | **28, 34** | **Staging rows resolved for pre-adoption staging (Phase 28).** Production remains blocked until decided (34). **Phase 1 proceeds on local Developer edition** |
 | 4.2 | Staging environment | **E** | Implementation | 28 | **Resolved for pre-adoption staging (Phase 28)** — `minhaj.haseebliaqat.me`; re-provisioned on adopter-owned infrastructure at handover |
 | 4.3 | Production hosting | **E** | Launch | 34 | Deployment blocked |

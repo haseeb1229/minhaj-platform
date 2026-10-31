@@ -887,7 +887,8 @@ brings real pictures into the pre-adoption build under these rules:
   requested. SSRF and DNS-rebinding defences are unchanged.
 - **Only rasters, only first-party, only with rights.** An adapter offers only an `https` JPEG or
   PNG the page presents as part of its record; SVG, WebP, GIF, third-party, social, provider and
-  private pictures are never acquired. The licence claim is `organisation-owned` only when the page
+  private pictures are never acquired (at Phase-30-R exit; since Phase 30-RF a magazine issue's
+  still-WebP cover is admitted under §10.8). The licence claim is `organisation-owned` only when the page
   states the organisation's copyright notice (kept as evidence), and nothing is public until a
   PERSON decides it `public-eligible` — unknown rights stay restricted. A picture whose bytes are
   not the type its name states is refused by Storage's type detection (the minhaj.info resizer's
@@ -904,7 +905,8 @@ brings real pictures into the pre-adoption build under these rules:
   removed, no pixel decoded or re-encoded — quarantined and scanned in its turn.
 - **Recorded only when servable.** Editorial, People, Library and Media record a lead image,
   portrait, cover or poster only after Storage answers the asset is a clean, present JPEG or PNG
-  (`servableImages`), so a PDF, a quarantined file or a missing asset can never become a picture.
+  (`servableImages`; since Phase 30-RF also a sanitised still WebP, which only a Library cover can
+  receive — §10.8), so a PDF, a quarantined file or a missing asset can never become a picture.
 - **Served only by the owner.** Each picture's bytes leave only through its domain's route, for a
   published record and exactly the asset it names, with the Photo posture: `private, no-cache`
   with a checksum ETag (a 304 only after both owners allow), `nosniff`, `Content-Disposition:
@@ -916,6 +918,42 @@ brings real pictures into the pre-adoption build under these rules:
   visitor's click. Structured data names only our own picture routes.
 - **The brand lockup** is a bundled first-party PNG with its editing metadata removed (TECH_STACK.md
   §18), not a remote reference.
+
+### 10.8 As delivered (Phase 30-RF) — still WebP for Library covers
+
+The nine newest minhaj.info magazine issues present their cover only as a `.webp` original, which
+10.7 refused. Phase 30-RF admits a **still** WebP — and only where a policy names it — without
+widening any other image path:
+
+- **Opt-in per policy.** Storage sanitises a WebP only for an upload policy that lists
+  `image/webp`. Every existing image policy (Editorial lead images, Media photographs, People
+  portraits, Messaging attachments) still lists JPEG and PNG only, so a WebP sent to any of them
+  is not read as one and is refused `detected-type-not-allowed`, exactly as before. Migration's
+  acquisition and public-copy policies name WebP; a migrated image reaches a domain only if that
+  domain shows its type (Library covers: JPEG, PNG, still WebP; Editorial, People and Media posters:
+  JPEG and PNG), and Library's cover-serving policy allows WebP for a cover only.
+- **Container-level validation, no decoder.** The same streaming posture as JPEG and PNG: the
+  server reads RIFF/WebP structure only and never decodes a pixel. The declared RIFF length must
+  be even, cover every chunk exactly and end the file — **any byte after the declared end is a
+  refusal** (a polyglot's hiding place), as is a chunk overrunning the RIFF, a missing or non-zero
+  padding byte, or a chunk name that is not four printable characters. Exactly one image
+  bitstream: a lossy `VP8 ` key frame that is shown, of a defined version, with its start code
+  and a first partition inside the chunk; or a lossless `VP8L` with its signature and version 0.
+  A `VP8X` header must come first, with no reserved bits, and its canvas must equal the
+  bitstream's size; the canvas and the bitstream are both bounded by the policy's pixel and edge
+  limits **before** any image data is read (no decompression bomb).
+- **Animation is a refusal, not a first frame.** The animation flag, an `ANIM` or an `ANMF` chunk
+  anywhere refuses the file. So does a second bitstream, an `ALPH` with a lossless image (which
+  carries its own transparency) or anywhere but immediately before its lossy bitstream, an alpha
+  or colour-profile flag that contradicts the chunks present, a second colour profile, or raw
+  alpha whose length is not one byte per canvas pixel.
+- **Metadata stripped, header rewritten.** EXIF, XMP and every unknown chunk are dropped; the kept
+  file is written afresh — a new RIFF header, a `VP8X` only when transparency or a colour profile
+  needs one (with flags recomputed from what is kept), a colour profile only when it states its
+  own length and `acsp` signature and is at most 1 MiB, the transparency chunk and the bitstream
+  byte for byte. The bitstream's own bytes are kept as written, as a JPEG's scan data and a PNG's
+  image data are. The byte ceiling counts what arrives, dropped metadata included, and one input
+  always yields the same bytes (a stable checksum). Tests: `tests/storage/image-webp.test.ts`.
 
 ---
 

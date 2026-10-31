@@ -263,9 +263,10 @@ asset*, not merely for the site it came from. A site-level authorisation does no
 automatically license every third-party image or document on it.
 
 **As applied since Phase 30-R (§15):** pictures are reached only on a source's exact page and
-registered first-party asset hosts; an acquired JPEG or PNG keeps its evidence bytes and gains a
-metadata-stripped public copy, the only bytes a domain may show; and a person decides each
-acquisition's public eligibility.
+registered first-party asset hosts; an acquired JPEG or PNG — or, since Phase 30-RF (§16), a still
+WebP — keeps its evidence bytes and gains a metadata-stripped public copy, the only bytes a domain
+may show (and only a domain that shows that type); and a person decides each acquisition's public
+eligibility.
 
 **Video files are never downloaded.** Only provider identifiers and metadata are stored.
 
@@ -924,7 +925,8 @@ guessed.
   rules — and an asset host's own `robots.txt` is honoured.
 - **What an adapter offers.** Only an `https` picture on the source's page or asset hosts whose
   name says JPEG or PNG, presented by the page AS PART OF the record (a post's first picture, a
-  book's or issue's `og:image`, a video page's own poster). WebP, GIF and SVG are never acquired;
+  book's or issue's `og:image`, a video page's own poster). WebP, GIF and SVG are never acquired
+  (at Phase-30-R exit; since Phase 30-RF a magazine issue's still-WebP cover is, §16);
   third-party, social and provider images never. minhaj.info presents each issue cover only
   through its resizer, `/i/{width}/{path}`, which answers in WebP whatever the file is called; the
   cover taken is that same file's original, `/{path}`, on the same host — nothing else is
@@ -979,7 +981,9 @@ of approved revisions is manifested page after page.
 "events" are dated news with no schedule), Collections (no genuine curated legacy grouping was
 migrated), Audio (SoundCloud embeds only), Galleries and Photos (no authorised gallery listing; a
 post's picture is its lead image), Centres (no public directory with addresses — countries of
-presence only). Fatwa and Quran stay review-only; Hadith has no authoritative edition.
+presence only). Fatwa and Quran stay review-only; Hadith has no authoritative edition. (At
+Phase-30-R exit; Phase 30-RF re-checked each area against its source and records the final matrix
+in §16.)
 
 ### 15.1 Stage-1A expansion on staging
 
@@ -1012,7 +1016,10 @@ in the interface locales only) and one whose target already existed. Every refus
 the record stays on the source. Of the eight bound Explore pages, four use the site's
 section-landing layout rather than a post and were excluded at parse (`not-an-editorial-post`:
 global-impact, the Shaykh-ul-Islam biography, forums, social-media) and the introduction page is
-held unreviewed for its personal-data flag; those five remain reserved Explore pages. Eleven rows
+held unreviewed for its personal-data flag; those five remain reserved Explore pages. (Corrected
+in Phase 30-RF, §16: the four are ordinary posts the site redirects under an empty category
+segment, and they were excluded as `not-a-tid-page`; the exclusion reason is not persisted, and
+the one recorded here was inferred.) Eleven rows
 invalid on review were rejected. Two articles and one page
 held a personal-data or validity flag and were left unreviewed; nothing flagged was approved.
 
@@ -1042,3 +1049,98 @@ untouched: 24 Fatwa and 6 Quran-translation revisions remain `pending`, with **0
 entries. A post-migration backup set (`20261030T120812Z`: SQL 130 MB, 885 Storage files) was
 restored from Blob into an isolated database — 30 migrations, constraints trusted, runtime least
 privilege, 885 of 885 assets verified, the restored database dropped and the live one untouched.
+
+## 16. As delivered (Phase 30-RF) — final Stage-1A gap closure
+
+> **An operational continuation inside Phase 30 Stage 1A, not a new phase and not Stage 1B.**
+> "30-RF" is a working checkpoint label. It closed the ordinary engineering gaps the Phase-30-R
+> record left open, made one bounded evidence sweep of the source-limited areas, and accepted the
+> final review build. No schema change: the migration count stays **30**.
+
+**The four "section-landing" Explore pages were ordinary posts (a correction to §15.1).** The
+retained raw evidence of global-impact (tid 8721), the Shaykh-ul-Islam biography (8718), forums
+(8722) and social-media (27184) shows each is a normal `article.post`. The site redirects a page
+filed under no category to `/english//tid/{n}/{slug}.html` — an EMPTY category segment — and the
+adapter's address pattern required a non-empty one, so each was excluded as `not-a-tid-page`
+before it was read; the exclusion reason is not persisted, and §15.1 inferred the wrong one. The
+pattern now accepts an empty segment (one stable rule, not four exceptions); a listing link under
+such an address is keyed by its `tid` like any other. Replayed from the retained snapshots — no
+page fetched again — all four parse with their title, body and source date, none is flagged, and
+the biography takes its first-party portrait as its lead image. On staging the four were created
+in review and a second administrator approved and published them: **seven of the eight bound
+Explore pages are now published**.
+
+**The introduction page stays reserved — a decision, not a defect (OPEN_DECISIONS.md §3.8).** Its
+personal-data flag comes from the Central Secretariat's postal address, office, UAN and fax numbers
+and an organisational mailbox in its body: a person classified every match as a public
+organisational office contact (class B). But a flagged revision cannot be approved (§8.3: flagged
+material is excluded by default), and its staged text already reads `[redacted]` where each match
+was; clearing a flag is a new privacy control the accepted model does not have. No prose was
+rewritten to pass.
+
+**Still WebP for magazine covers.** Storage admits a still WebP for a policy that names
+`image/webp` — container-level validation and metadata removal without decoding a pixel; animation,
+trailing bytes, malformed chunks, contradictory feature flags and oversized canvases are refused
+(SECURITY_BASELINE.md §10.8). Migration's acquisition and public-copy policies name it; minhaj.info
+issue covers may now be a `.webp` original on the same host; a migrated image reaches a domain only
+when that domain shows its type, so a WebP becomes a Library cover and never an Editorial lead
+image, a portrait or a poster. Of the nine issues §15.1 left without a cover, **eight** now carry
+their WebP original (July–October 2026 of both magazines), each sanitised by Storage, decided
+public by a person and carried in by a refresh entry. The ninth, December 2024, is not a WebP case:
+its own page names its cover `…/titlethumbs/2024-12.php`, a script path rather than an image, so
+no cover is offered and it stays without one.
+
+**The source-limitation sweep (2026-10-31; about a dozen polite requests to authorised hosts,
+robots honoured).** Each area kept YELLOW only with its evidence:
+
+| Area | Official source checked | What the source has | What the target needs | Result |
+| --- | --- | --- | --- | --- |
+| Learning | `equranclass.com` course pages (the eLearning catalogue minhaj.org links) | title, description, levels with class length and plan durations | a Course publishes only with a complete module-and-lesson syllabus; no migration kind exists | **YELLOW** — no syllabus is published; none is invented |
+| Events | minhaj.org Top-Events and its 14 themed archives | dated news coverage of conferences, retreats and gatherings | an Event's identity with a schedule (start, end, time zone) and venue or online truth | **YELLOW** — coverage is news, not an Event |
+| Collections | minhaj.org `lkcatid` archives | genuine curated archives (Al-Hidayah 20 posts; Mawlid Conferences 43 in four sections; Itikaf 51 in two) | a new publishable kind with a typed target, member posts migrated first, and the Phase-30-R boundary on members lifted | **YELLOW — needs a decision** (OPEN_DECISIONS.md §3.8), not a source limitation |
+| Audio | minhaj.tv audio pages | SoundCloud embeds only — no first-party audio bytes, no `<audio>` | stored first-party audio with its rights | **YELLOW** — third-party audio is never downloaded |
+| Galleries / Photos | minhaj.org navigation and pages | no gallery or photo section; a post's pictures are its lead image | a gallery identity, ordered photos, captions, credits and rights | **YELLOW** — no gallery is manufactured from lead images |
+| Centres | minhajoverseas.com country pages; minhaj.org contact page | countries of presence and prose about centres; departments' contacts | a current directory of named centres with an address, privacy-permitted contacts | **YELLOW** — no directory; no centre inferred from news, no coordinates guessed |
+
+Fatwa and Quran stay review-only and Hadith unactivated (no authoritative edition or qualified
+review).
+
+### 16.1 On staging (2026-10-31)
+
+Run from the exact CI-green release `0945a86` (branch CI 41182517179, 5/5 first attempt; staging
+deploy 41183695614). Three replays of retained evidence — `minhaj-org-pages-en` (8),
+`minhaj-info-issues-mq` (36) and `minhaj-info-issues-di` (36) — **every one completed and
+`balanced`**, nothing rejected or errored, no page fetched again; nine images acquired (eight WebP
+covers, one portrait), every one with a public copy and none refused. Each new revision was
+compared with its record's previous revision: the **13** that differ (four new pages, the peace
+page, whose links to its own legacy address now resolve to its platform path because its mapping
+exists, eight issues with a cover) were approved; the **66** identical
+to what is already published (same payload checksum, only the parser version moved) were rejected
+with that reason, so nothing was republished for no change; the flagged introduction revision was
+left unreviewed. Three manifests published **13 entries** (4 creations, 9 refreshes, none refused);
+the five Pages landed in review and a second administrator approved and published each.
+
+**Final Stage-1A review build:** **501 ordinary public records** (147 news, 45 articles, 30 press
+releases, 7 organisational pages, 102 books, 2 magazines, 72 issues, 63 videos, 3 leadership
+profiles, 30 countries); **501 active legacy mappings** with **0** chains, **0** addresses mapped
+twice, **0** mappings made by a refresh and **0** naming more than one target; **470** first-party
+pictures, every one decided public by a person (issues 71 of 72 with a cover, pages 4 of 7 with a
+lead image); 24 runs since Phase 30-R began, all balanced. Fatwa (24) and Quran (6) revisions stay
+review-only with **0** manifest entries. A backup set `20261031T093409Z` (SQL 134 MB, 903 Storage
+files) passed an isolated restore proof from Blob — 30 migrations, constraints trusted, runtime
+least privilege, 903 of 903 assets verified, the restored database dropped and the live one
+untouched.
+
+**Final review on staging.** 47 public and administrative routes — home, Explore and all eight
+bound pages, leadership and a profile, News in English and Urdu, articles, press releases,
+Library, books, magazines and two newest issues with their WebP covers, Watch and a video, Listen,
+photos, galleries, the media archive, Global, a country, Find a Centre, Learn, Events,
+Collections, Quran, Hadith, Fatwa, search, topics, help, My Minhaj and the migration overview — in
+en, ur and ar at 390, 768 and 1440 px: **423 loads**, each answering 200 in its locale's direction
+with one main heading, no horizontal overflow, no broken or alt-less image and **no request to any
+other host** before a visitor acts. (`/media` itself has no index by design and answers 404; no
+navigation links to it.) One presentation defect was found and fixed: an undated Page showed the
+platform's own publication day as its "Published" date, so the 2009 founder's profile read as new
+(DOMAIN_MODEL.md §7.2.1); re-checked on the redeployed release `0b3cea0`. The edge still refuses a
+request without its credential (401, including the realtime path), redirects HTTP to HTTPS, serves
+`robots.txt` disallowing everything and marks every response `noindex`.

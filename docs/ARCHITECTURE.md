@@ -517,7 +517,8 @@ recognised either by its ID3 tag or structurally — two consecutive valid Layer
 headers — never by one byte, an extension or a declared type.
 
 **Still images (Phase 12).** An upload policy may carry image limits (pixels and longest side).
-Storage then admits only a structurally whole JPEG or PNG within them — checked from the frame
+Storage then admits only a structurally whole JPEG or PNG within them — and, since Phase 30-RF,
+a still WebP for a policy that names `image/webp` (SECURITY_BASELINE.md §10.8) — checked from the frame
 header or `IHDR` before the image data is read, so a small file declaring an enormous canvas is
 refused on arrival — and what it WRITES, and so measures, hashes, sniffs, scans and serves, is
 that image with its hidden metadata removed: EXIF, XMP, IPTC, comments, embedded thumbnails,

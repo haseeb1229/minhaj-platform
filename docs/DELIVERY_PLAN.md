@@ -13,8 +13,9 @@ the representative real review corpus for pre-adoption staging — has run on st
 discovered, 134 ordinary records published, 30 religious records staged for qualified review;
 MIGRATION_STRATEGY.md §14) and was then materially widened by the Phase 30-R review-completeness
 macro — first-party visuals, original source dates, organisational pages, leadership profiles and
-countries of presence (§4, Phase 30; MIGRATION_STRATEGY.md §15); Stage 1B, the full initial corpus,
-follows Minhaj's review and go-ahead. Phase 31 has not started.
+countries of presence (§4, Phase 30; MIGRATION_STRATEGY.md §15) — and finished by the Phase 30-RF
+gap closure (MIGRATION_STRATEGY.md §16; 501 ordinary records, Stage 1A complete); Stage 1B, the full
+initial corpus, follows Minhaj's review and go-ahead. Phase 31 has not started.
 
 ---
 
@@ -2523,6 +2524,31 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > as were a manifest page that could not offer past its first page of revisions and one legacy
 > address taken by two sources. Stage 1B, Phase 31, Phase 32 and production cutover have **not**
 > started, and no official adoption is claimed.
+
+> **Phase 30-RF — final Stage-1A gap closure (an OPERATIONAL continuation inside Phase 30, a
+> working checkpoint label, not a new phase).** No schema change (30 migrations). Delivered: the
+> four bound Explore pages §15.1 had called "section-landing" were ordinary posts the site
+> redirects under an empty category segment — one address-pattern fix, replayed from retained
+> evidence, all four published by a second administrator (seven of eight bound pages live); still
+> WebP admitted by Storage for a policy that names it, container-validated and stripped with no
+> pixel decoded, reaching Library covers only (SECURITY_BASELINE.md §10.8) — eight of the nine
+> coverless issues now carry their cover, the ninth's own page names a `.php` path; a final
+> source-limitation sweep recording Learning, Events, Audio, Galleries/Photos and Centres YELLOW
+> with evidence (MIGRATION_STRATEGY.md §16); and one presentation defect the final review found — an
+> undated Page (an organisational, help or legal destination) no longer states the day the
+> platform published it as its "Published" date, which made a 2009 profile read as new. Two
+> findings need an owner decision and were not built
+> (OPEN_DECISIONS.md §3.8): clearing a personal-data flag on the introduction page's organisational
+> contacts, and Collections from the source's curated archives. Staging result (2026-10-31,
+> MIGRATION_STRATEGY.md §16.1): 3 balanced replays, 13 entries published, **501 ordinary public
+> records**, 501 active mappings with no chain or duplicate, 470 first-party pictures each decided
+> public by a person, Fatwa and Quran still review-only; backup `20261031T093409Z` restore-proven.
+> Ingestion ran on the exact CI-green release `0945a86` (branch CI 41182517179, staging deploy
+> 41183695614); the Page-date fix followed as `0b3cea0` (branch CI 41193297494, deploy
+> 41194727578), and the final review — 47 routes, three locales, three widths, 423 loads, no
+> request to another host — passed on it.
+> **Phase 30 engineering and Stage 1A are complete.** Stage 1B, Phase 31, Phase 32 and production
+> cutover have **not** started, and no official adoption is claimed.
 
 ---
 

@@ -563,7 +563,10 @@ authoring document and private workflow actors.
 Article slugs and help-article Page slugs may change; all prior slugs remain reserved and
 resolve directly to the current published canonical URL with HTTP 301. Fixed organisational,
 legal and utility Page destinations are an allowlist, immutable after creation, with the
-internal slug `page`. They cannot claim another context's route.
+internal slug `page`. They cannot claim another context's route. A Page carries no source
+chronology, so its public page states no publication date — no dateline and no
+`datePublished`, only the true `dateModified` (Phase 30-RF): the day the platform published a
+migrated organisational page is not the date of its content.
 
 The stored schedule binds UTC time, an IANA display zone, revision and scheduling actor.
 A single-instance executor processes at most 25 due records of each workflow-governed
@@ -1082,7 +1085,8 @@ Owns published works. Corrects the prior revision's conflation of *localized met
 - Large PDFs are **never database BLOBs** — storage references and checksums only.
 - **Covers (Phase 30-R).** An Edition's cover — and a MagazineIssue's — is ONE optional NO
   ACTION key to a stored Storage `Asset` with its measured box, accepted only as a servable
-  JPEG or PNG, kept when an update omits it and cleared only by an explicit `null`, and served
+  JPEG or PNG (and, since Phase 30-RF, a sanitised still WebP — SECURITY_BASELINE.md §10.8),
+  kept when an update omits it and cleared only by an explicit `null`, and served
   by Library's own routes only while the Edition and its Work (or the issue and its Magazine)
   are published. A Work shows the cover of its first published Edition that has one; a
   Magazine its newest public issue's.
@@ -2123,10 +2127,11 @@ Migration `20261030000000_phase30r_review_completeness` adds no table (OPEN_DECI
 - **Images in payloads.** A staged payload may name the image its source presents with the record
   — a lead image (news, article, press release, page), a cover (edition, magazine issue), a poster
   (video), a portrait (person) — by canonical `https` URL with the source's own alt text. A target
-  records it only as the PUBLIC copy of the rights-cleared acquisition of exactly that URL;
-  otherwise the record is published without it.
-- **Public copy of an acquisition.** An acquired JPEG or PNG keeps its exact evidence bytes AND a
-  metadata-stripped public copy made by Storage's image pipeline; `MigrationAssetProvenance`
+  records it only as the PUBLIC copy of the rights-cleared acquisition of exactly that URL, and
+  (Phase 30-RF) only when the receiving domain shows that image type — a still WebP reaches a
+  Library cover only; otherwise the record is published without it.
+- **Public copy of an acquisition.** An acquired JPEG, PNG or (Phase 30-RF) still WebP keeps its
+  exact evidence bytes AND a metadata-stripped public copy made by Storage's image pipeline; `MigrationAssetProvenance`
   records that copy's asset, checksum and measured box — all of it or none (a CHECK). Only a
   PERSON decides an acquisition `public-eligible`, one by one or in an audited bulk act over a
   run's acquisitions; unknown or third-party rights cannot be.

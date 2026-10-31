@@ -92,7 +92,10 @@ appears on the build as **owner-authorised, provisional pre-adoption brand evide
 organisation's accepted brand pack and its content acceptance remain open (OPEN_DECISIONS.md §3.7,
 §6.4). Areas no authorised source can truthfully fill — courses without a syllabus, events without
 schedules, centres without a public directory, audio held only as third-party embeds — keep an
-honest limited state rather than invented content.
+honest limited state rather than invented content. The final Stage-1A gap closure (Phase 30-RF,
+2026-10-31) re-checked each against its source and records the final matrix
+(MIGRATION_STRATEGY.md §16); it also found the source's curated archives that a Collection could
+carry, which needs an owner decision before it is built (OPEN_DECISIONS.md §3.8).
 
 Commercial questions — source ownership, licensing, portfolio rights, retention of a clone,
 future reuse — are **outside technical architecture** and are deliberately not recorded in

@@ -191,8 +191,10 @@ and contributors for one topic. It sits at root level because it serves every co
 it, at the same canonical URL — eight pre-adoption pages are bound (about/introduction,
 about/global-impact, shaykh-ul-islam/biography, organization/forums, organization/un-recognition,
 our-work/peace, digital-resources/mobile-apps and digital-resources/social-media); on staging
-three are published (un-recognition, peace, mobile-apps — MIGRATION_STRATEGY.md §15.1), and every
-other item, the other five bound ones included, stays a reserved page. `/explore/leadership` lists the published leadership profiles, each
+three were published at Phase-30-R exit (un-recognition, peace, mobile-apps — MIGRATION_STRATEGY.md
+§15.1), and since Phase 30-RF seven are (global-impact, the Shaykh-ul-Islam biography, forums and
+social-media added — §16). Every other item stays a reserved page, about/introduction included
+while its personal-data decision is open (OPEN_DECISIONS.md §3.8). `/explore/leadership` lists the published leadership profiles, each
 canonical at `/people/{slug}`, and links the Shaykh-ul-Islam biography. No new path is created.
 
 ### 3.3 Quran
