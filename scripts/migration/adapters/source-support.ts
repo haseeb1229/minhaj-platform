@@ -310,14 +310,17 @@ export function copyrightNotice($: CheerioAPI): string | null {
 
 /** The raster types an image acquisition may expect from a URL's own name. */
 const RASTER_PATH = /\.(?:jpe?g|png)$/i;
+/** Phase 30-RF. The same, for a record whose domain also shows a still WebP. */
+const RASTER_OR_WEBP_PATH = /\.(?:jpe?g|png|webp)$/i;
 
 /**
  * An image the page presents with its record, as the record's own picture and
  * its acquisition: an absolute `https` URL on one of `hosts` — the source's
  * page hosts and its registered first-party asset hosts, nothing else — whose
- * name says JPEG or PNG (Storage admits no other picture). Rights are what the
- * page states: `organisation-owned` with the notice as evidence, else
- * `unknown`, which no person can make public.
+ * name says JPEG or PNG, or WebP when `webp` says the receiving domain shows
+ * one (Phase 30-RF: a Library cover); Storage refuses an animated or malformed
+ * WebP either way. Rights are what the page states: `organisation-owned` with
+ * the notice as evidence, else `unknown`, which no person can make public.
  */
 export function firstPartyImage(
   $: CheerioAPI,
@@ -326,6 +329,7 @@ export function firstPartyImage(
     readonly alt: string | undefined;
     readonly pageUrl: string;
     readonly hosts: readonly string[];
+    readonly webp?: boolean;
   },
 ): { readonly image: ParsedImage; readonly asset: ParsedAsset } | null {
   const src = nonEmpty(input.src);
@@ -341,7 +345,7 @@ export function firstPartyImage(
     url.username !== '' ||
     url.password !== '' ||
     !input.hosts.includes(url.hostname) ||
-    !RASTER_PATH.test(url.pathname)
+    !(input.webp === true ? RASTER_OR_WEBP_PATH : RASTER_PATH).test(url.pathname)
   )
     return null;
   const href = url.toString();

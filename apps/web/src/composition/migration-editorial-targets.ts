@@ -27,6 +27,7 @@ import {
   ADOPTION_PAGES,
   askerOf,
   clearedImage,
+  STILL_JPEG_PNG,
   publishing,
   refusal,
   withdrawalRefusal,
@@ -258,7 +259,7 @@ function wantedOf(
     excerpt: payload.excerpt,
     document: editorialDocument(payload.body),
     // Only a rights-cleared acquisition's public copy, never a remote URL.
-    lead: clearedImage(payload.leadImage, assets),
+    lead: clearedImage(payload.leadImage, assets, STILL_JPEG_PNG),
     sourcePublishedOn:
       FAMILIES[family].dated && payload.kind !== 'editorial.page'
         ? payload.publishedOn

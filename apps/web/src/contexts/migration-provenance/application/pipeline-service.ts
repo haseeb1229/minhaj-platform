@@ -167,8 +167,12 @@ const DEFAULT_LEASE_MS = 120_000;
 /** Records one replay discovery page lists (Phase 30-R). */
 const REPLAY_PAGE = 100;
 
-/** The still-image types an acquisition gets a public copy of (Phase 30-R). */
-const STILL_IMAGE_TYPES: readonly string[] = Object.freeze(['image/jpeg', 'image/png']);
+/** The still-image types an acquisition gets a public copy of (Phase 30-R; WebP 30-RF). */
+const STILL_IMAGE_TYPES: readonly string[] = Object.freeze([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
 
 /** Digests per mapping lookup, and duplicate candidates considered per signal. */
 const LOOKUP_CHUNK = 200;

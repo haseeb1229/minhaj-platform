@@ -194,11 +194,14 @@ export function migrationTopics(
 
 /**
  * What acquisition may store: still images and PDFs, as the bytes sniff — the
- * declared type only ever refuses a mismatch.
+ * declared type only ever refuses a mismatch. WebP (Phase 30-RF) because an
+ * official page may present its picture only as one; whether a domain may SHOW
+ * it is that domain's decision (`clearedImage`'s `admits`).
  */
 export const MIGRATION_ASSET_MEDIA_TYPES = Object.freeze([
   'image/png',
   'image/jpeg',
+  'image/webp',
   'application/pdf',
 ]);
 
@@ -206,11 +209,16 @@ export const MIGRATION_ASSET_MEDIA_TYPES = Object.freeze([
 export const MIGRATION_ASSET_MAX_BYTES = 8 * 1024 * 1024;
 
 /**
- * Phase 30-R. What a PUBLIC copy may be: the two raster types Storage's image
- * pipeline admits, within the same pixel bounds as a Photo — so a decompression
- * bomb or an oversized scan is refused, never shown.
+ * Phase 30-R. What a PUBLIC copy may be: the raster types Storage's image
+ * pipeline admits — JPEG, PNG and (Phase 30-RF) still WebP — within the same
+ * pixel bounds as a Photo, so a decompression bomb, an animation or an
+ * oversized scan is refused, never shown.
  */
-export const MIGRATION_PUBLIC_IMAGE_TYPES = Object.freeze(['image/png', 'image/jpeg']);
+export const MIGRATION_PUBLIC_IMAGE_TYPES = Object.freeze([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+]);
 export const MIGRATION_PUBLIC_IMAGE_LIMITS = Object.freeze({
   maxPixels: 40_000_000,
   maxEdge: 16_384,

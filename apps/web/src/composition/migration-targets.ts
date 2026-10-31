@@ -49,6 +49,7 @@ import {
   ADOPTION_PAGES,
   askerOf,
   clearedImage,
+  STILL_JPEG_PNG,
   publishing,
   refusal,
   withdrawalRefusal,
@@ -111,7 +112,7 @@ function videoInput(
   topicIds: readonly string[],
   assets: readonly PublishableAsset[],
 ) {
-  const poster = clearedImage(payload.poster, assets);
+  const poster = clearedImage(payload.poster, assets, STILL_JPEG_PNG);
   return {
     slug: payload.slug,
     primaryLocale: payload.primaryLocale,
@@ -155,7 +156,7 @@ function refreshedInput(
   payload: StagedVideoPayload,
   assets: readonly PublishableAsset[],
 ) {
-  const poster = clearedImage(payload.poster, assets);
+  const poster = clearedImage(payload.poster, assets, STILL_JPEG_PNG);
   const { poster: _held, ...held } = currentInput(video, 'published');
   return {
     ...held,

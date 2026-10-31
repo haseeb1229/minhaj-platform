@@ -49,6 +49,16 @@ import { ByteLimitExceeded } from './filesystem.ts';
  *
  * Anything after the image's end marker is discarded.
  *
+ *   WebP — (Phase 30-RF) a STILL image only, admitted only by a policy that
+ *          names `image/webp`. The one image bitstream (`VP8 ` lossy or `VP8L`
+ *          lossless) is kept byte for byte, with its `ALPH` transparency and an
+ *          `ICCP` colour profile when they are structurally sound; the RIFF
+ *          header and a `VP8X` header are written afresh from what is kept.
+ *          EXIF, XMP and every unknown chunk are dropped. Animation is a
+ *          refusal, not a first frame, and so is anything after the RIFF's
+ *          declared end — a WebP's length is stated, so trailing bytes are a
+ *          hiding place, not slack.
+ *
  * THE BYTE CEILING APPLIES TO WHAT ARRIVES, not to what is kept: metadata that
  * is discarded still counts, so stripping cannot be used to push an unbounded
  * upload through.
@@ -80,10 +90,14 @@ export class ImageRefused extends Error {
   }
 }
 
-/** The media types this module can structurally validate. */
+/**
+ * The media types this module can structurally validate. WebP is a STILL WebP
+ * only, and only for a policy that names it (`sanitiseImage`'s `webp`).
+ */
 export const SANITISABLE_IMAGE_TYPES: readonly string[] = Object.freeze([
   'image/jpeg',
   'image/png',
+  'image/webp',
 ]);
 
 /** How many progressive scans a JPEG may carry. Real encoders use about ten. */
@@ -660,6 +674,278 @@ async function* sanitisePng(
 }
 
 /* ===========================================================================
+ * WebP (RFC 9649) — still images only
+ * ========================================================================= */
+
+/** A WebP colour profile larger than this is dropped, not kept. */
+const MAX_WEBP_ICC = 1024 * 1024;
+
+const le16 = (bytes: Uint8Array, at: number) =>
+  (bytes[at] ?? 0) | ((bytes[at + 1] ?? 0) << 8);
+
+const le24 = (bytes: Uint8Array, at: number) =>
+  (bytes[at] ?? 0) | ((bytes[at + 1] ?? 0) << 8) | ((bytes[at + 2] ?? 0) << 16);
+
+const le32 = (bytes: Uint8Array, at: number) =>
+  (le24(bytes, at) + (bytes[at + 3] ?? 0) * 0x1000000) >>> 0;
+
+/** Little-endian bytes of `value`, `count` of them. */
+const littleEndian = (value: number, count: number) =>
+  Array.from(
+    { length: count },
+    (_unused, index) => Math.floor(value / 256 ** index) % 256,
+  );
+
+/** VP8X feature flags (RFC 9649 §2.7): reserved bits, ICC, alpha, EXIF, XMP, animation. */
+const VP8X_RESERVED = 0xc1;
+const VP8X_ICC = 0x20;
+const VP8X_ALPHA = 0x10;
+const VP8X_ANIMATION = 0x02;
+
+/** Chunks that are image, layout or animation: never dropped, never repeated. */
+const WEBP_STRUCTURAL: ReadonlySet<string> = new Set([
+  'VP8 ',
+  'VP8L',
+  'VP8X',
+  'ALPH',
+  'ANIM',
+  'ANMF',
+  'ICCP',
+]);
+
+/** A chunk's FourCC — four printable ASCII characters — or `null`. */
+function fourCc(bytes: Uint8Array): string | null {
+  const letters = [...bytes.subarray(0, 4)];
+  if (letters.length !== 4 || !letters.every((byte) => byte >= 0x20 && byte <= 0x7e))
+    return null;
+  return String.fromCharCode(...letters);
+}
+
+/** A complete chunk, padded to an even length with a zero byte. */
+function webpChunk(type: string, payload: Uint8Array): Uint8Array {
+  const out = new Uint8Array(8 + payload.length + (payload.length & 1));
+  out.set(
+    [...type].map((character) => character.charCodeAt(0)),
+    0,
+  );
+  out.set(littleEndian(payload.length, 4), 4);
+  out.set(payload, 8);
+  return out;
+}
+
+/** Is this `ICCP` payload an ICC profile whose own header agrees with its length? */
+function soundIccProfile(data: Uint8Array): boolean {
+  return (
+    data.length >= 132 &&
+    u32(data, 0) === data.length &&
+    startsWith(data.subarray(36), 'acsp')
+  );
+}
+
+/**
+ * A lossy bitstream's still dimensions (RFC 6386 §9.1): a shown KEY frame, a
+ * defined version, a first partition inside the chunk, then the start code.
+ */
+function vp8Dimensions(head: Uint8Array, size: number): ImageDimensions {
+  const tag = le24(head, 0);
+  const keyFrame = (tag & 1) === 0;
+  const version = (tag >> 1) & 7;
+  const shown = (tag >> 4) & 1;
+  const firstPartition = tag >>> 5;
+  if (
+    !keyFrame ||
+    version > 3 ||
+    shown !== 1 ||
+    firstPartition === 0 ||
+    firstPartition > size - 10 ||
+    head[3] !== 0x9d ||
+    head[4] !== 0x01 ||
+    head[5] !== 0x2a
+  )
+    throw truncated();
+  return { width: le16(head, 6) & 0x3fff, height: le16(head, 8) & 0x3fff };
+}
+
+/** A lossless bitstream's header (WebP Lossless §3): signature, size, alpha hint, version 0. */
+function vp8lHeader(head: Uint8Array): ImageDimensions & { readonly alpha: boolean } {
+  if (head[0] !== 0x2f) throw truncated();
+  const bits = le32(head, 1);
+  if (bits >>> 29 !== 0) throw truncated();
+  return {
+    width: (bits & 0x3fff) + 1,
+    height: ((bits >>> 14) & 0x3fff) + 1,
+    alpha: ((bits >>> 28) & 1) === 1,
+  };
+}
+
+async function* sanitiseWebp(
+  source: ByteSource,
+  limits: ImageLimits,
+  report: (dimensions: ImageDimensions) => void,
+): AsyncGenerator<Uint8Array> {
+  const riff = await source.take(12);
+  if (!startsWith(riff, 'RIFF') || !startsWith(riff.subarray(8), 'WEBP'))
+    throw truncated();
+  // The declared size covers "WEBP" and every chunk. Chunks are padded to an
+  // even length, so an odd size, or one too small for a single chunk, is a lie.
+  const declared = le32(riff, 4);
+  if (declared % 2 !== 0 || declared < 4 + 8) throw truncated();
+  let remaining = declared - 4;
+
+  /** The next chunk's header, refused unless the whole padded chunk fits the RIFF. */
+  const next = async () => {
+    if (remaining < 8) throw truncated();
+    const head = await source.take(8);
+    const type = fourCc(head);
+    const size = le32(head, 4);
+    const padded = size + (size & 1);
+    if (type === null || padded > remaining - 8) throw truncated();
+    remaining -= 8 + padded;
+    return { type, size };
+  };
+  /** The padding byte after an odd-sized payload: present, and zero. */
+  const padding = async (size: number) => {
+    if ((size & 1) === 1 && (await source.take(1))[0] !== 0) throw truncated();
+  };
+  const discard = async (size: number) => {
+    await source.skip(size);
+    await padding(size);
+  };
+
+  let canvas: (ImageDimensions & { readonly flags: number }) | null = null;
+  let iccSeen = false;
+  let icc: Uint8Array | null = null;
+  let alpha: Uint8Array | null = null;
+
+  let image = await next();
+  if (image.type === 'VP8X') {
+    if (image.size !== 10) throw truncated();
+    const header = await source.take(10);
+    const flags = header[0] ?? 0;
+    if ((flags & (VP8X_RESERVED | VP8X_ANIMATION)) !== 0 || le24(header, 1) !== 0)
+      throw truncated();
+    canvas = { flags, width: le24(header, 4) + 1, height: le24(header, 7) + 1 };
+    // The canvas is the decoder's allocation: bounded before anything else is read.
+    withinLimits(canvas.width, canvas.height, limits);
+
+    // Colour profile, then transparency, then the bitstream (RFC 9649 §2.7).
+    for (;;) {
+      image = await next();
+      if (image.type === 'VP8 ' || image.type === 'VP8L') break;
+      if (alpha !== null) throw truncated();
+      if (image.type === 'ICCP') {
+        if (iccSeen || (flags & VP8X_ICC) === 0) throw truncated();
+        iccSeen = true;
+        if (image.size > MAX_WEBP_ICC) {
+          await discard(image.size);
+          continue;
+        }
+        const data = await source.take(image.size);
+        await padding(image.size);
+        if (soundIccProfile(data)) icc = data;
+        continue;
+      }
+      if (image.type === 'ALPH') {
+        if ((flags & VP8X_ALPHA) === 0 || image.size < 2) throw truncated();
+        alpha = await source.take(image.size);
+        await padding(image.size);
+        // Reserved bits zero; preprocessing 0–1; compression 0 (raw) or 1
+        // (lossless). Raw alpha is exactly one byte per canvas pixel.
+        const method = alpha[0] ?? 0;
+        const compression = method & 0x03;
+        if (
+          (method & 0xc0) !== 0 ||
+          ((method >> 4) & 0x03) > 1 ||
+          compression > 1 ||
+          (compression === 0 && image.size - 1 !== canvas.width * canvas.height)
+        )
+          throw truncated();
+        continue;
+      }
+      if (WEBP_STRUCTURAL.has(image.type)) throw truncated();
+      // EXIF, XMP and unknown chunks before the image: not the picture.
+      await discard(image.size);
+    }
+    if ((flags & VP8X_ICC) !== 0 && !iccSeen) throw truncated();
+  }
+
+  // ---- the one bitstream ----------------------------------------------------
+  let dimensions: ImageDimensions;
+  let head: Uint8Array;
+  let transparent: boolean;
+  if (image.type === 'VP8 ') {
+    if (image.size < 10) throw truncated();
+    head = await source.take(10);
+    dimensions = vp8Dimensions(head, image.size);
+    if (canvas !== null && (canvas.flags & VP8X_ALPHA) !== 0 && alpha === null)
+      throw truncated();
+    transparent = alpha !== null;
+  } else if (image.type === 'VP8L') {
+    // Lossless carries its own transparency: a separate ALPH contradicts it.
+    if (alpha !== null || image.size < 5) throw truncated();
+    head = await source.take(5);
+    const lossless = vp8lHeader(head);
+    dimensions = { width: lossless.width, height: lossless.height };
+    transparent = lossless.alpha;
+  } else {
+    throw truncated();
+  }
+  withinLimits(dimensions.width, dimensions.height, limits);
+  if (
+    canvas !== null &&
+    (canvas.width !== dimensions.width || canvas.height !== dimensions.height)
+  )
+    throw truncated();
+
+  // ---- written afresh: the RIFF, a VP8X only when one is needed -------------
+  const extended = icc !== null || alpha !== null;
+  const kept: Uint8Array[] = [];
+  if (extended) {
+    kept.push(
+      webpChunk(
+        'VP8X',
+        Uint8Array.from([
+          (icc === null ? 0 : VP8X_ICC) | (transparent ? VP8X_ALPHA : 0),
+          0,
+          0,
+          0,
+          ...littleEndian(dimensions.width - 1, 3),
+          ...littleEndian(dimensions.height - 1, 3),
+        ]),
+      ),
+    );
+    if (icc !== null) kept.push(webpChunk('ICCP', icc));
+    if (alpha !== null) kept.push(webpChunk('ALPH', alpha));
+  }
+  const bitstream = 8 + image.size + (image.size & 1);
+  const total = kept.reduce((sum, chunk) => sum + chunk.length, 4) + bitstream;
+  yield Uint8Array.from([
+    ...riff.subarray(0, 4),
+    ...littleEndian(total, 4),
+    ...riff.subarray(8, 12),
+  ]);
+  yield* kept;
+  yield Uint8Array.from([
+    ...[...image.type].map((character) => character.charCodeAt(0)),
+    ...littleEndian(image.size, 4),
+  ]);
+  yield head;
+  yield* source.pass(image.size - head.length);
+  await padding(image.size);
+  if ((image.size & 1) === 1) yield Uint8Array.from([0]);
+
+  // ---- after the image: metadata dropped, a second image or animation refused
+  while (remaining > 0) {
+    const chunk = await next();
+    if (WEBP_STRUCTURAL.has(chunk.type)) throw truncated();
+    await discard(chunk.size);
+  }
+  // Nothing may follow the declared end.
+  if (await source.ensure(1)) throw truncated();
+  report(dimensions);
+}
+
+/* ===========================================================================
  * The transform
  * ========================================================================= */
 
@@ -681,11 +967,16 @@ export interface SanitisedImage {
  * module does not decide what a file is — the sniff does, and it will refuse
  * them against the caller's image-only allowlist. `maxBytes` bounds what
  * ARRIVES, discarded metadata included.
+ *
+ * A WebP is held to the still-WebP rules only when `options.webp` says the
+ * caller's policy admits one; otherwise it passes through like any other
+ * format the policy does not name, and the sniff refuses it as unsupported.
  */
 export function sanitiseImage(
   input: AsyncIterable<Uint8Array>,
   limits: ImageLimits,
   maxBytes: number,
+  options: { readonly webp?: boolean } = {},
 ): SanitisedImage {
   let dimensions: ImageDimensions | null = null;
   const report = (value: ImageDimensions) => {
@@ -706,6 +997,15 @@ export function sanitiseImage(
     }
     if (known && PNG_SIGNATURE.every((byte, index) => lead[index] === byte)) {
       yield* sanitisePng(source, limits, report);
+      return;
+    }
+    if (
+      options.webp === true &&
+      (await source.ensure(12)) &&
+      startsWith(source.view(), 'RIFF') &&
+      startsWith(source.view().subarray(8), 'WEBP')
+    ) {
+      yield* sanitiseWebp(source, limits, report);
       return;
     }
 

@@ -328,4 +328,27 @@ describe('first-party images (Phase 30-R)', () => {
     ])
       expect(image(src)).toBeNull();
   });
+
+  it('takes a WebP only for a domain that shows one, on the same terms (Phase 30-RF)', () => {
+    const webp = (src: string) =>
+      firstPartyImage(withNotice, {
+        src,
+        alt: '',
+        pageUrl: PAGE,
+        hosts: HOSTS,
+        webp: true,
+      });
+    expect(webp('/images/a.webp')?.asset).toMatchObject({
+      url: 'https://www.synthetic-source.example/images/a.webp',
+      licence: 'organisation-owned',
+    });
+    expect(webp('/images/a.jpg')).not.toBeNull();
+    for (const src of [
+      'https://evil.example/images/a.webp',
+      'http://www.synthetic-source.example/images/a.webp',
+      'https://www.synthetic-source.example/images/a.webp.php',
+      'https://www.synthetic-source.example/images/a.gif',
+    ])
+      expect(webp(src)).toBeNull();
+  });
 });

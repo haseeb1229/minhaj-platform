@@ -118,10 +118,20 @@ export function sameLabels(
  * evidence bytes, never another acquisition, never a remote URL. An image with
  * no such acquisition (not acquired, refused, or not decided public-eligible
  * by a person) is no image: the record is published without it.
+ *
+ * Phase 30-RF. `admits` is the receiving domain's own picture types: an image
+ * of any other type — a WebP offered to a domain that shows JPEG and PNG only —
+ * is no image either, rather than a picture that domain would refuse to serve.
  */
+export const STILL_JPEG_PNG: readonly string[] = Object.freeze([
+  'image/jpeg',
+  'image/png',
+]);
+
 export function clearedImage(
   image: StagedImage | null,
   assets: readonly PublishableAsset[],
+  admits: readonly string[],
 ): {
   readonly assetId: string;
   readonly width: number;
@@ -131,7 +141,10 @@ export function clearedImage(
 } | null {
   if (image === null) return null;
   const cleared = assets.find(
-    (asset) => asset.originalUrl === image.url && asset.publicCopy !== null,
+    (asset) =>
+      asset.originalUrl === image.url &&
+      asset.publicCopy !== null &&
+      admits.includes(asset.mediaType),
   );
   if (cleared === undefined || cleared.publicCopy === null) return null;
   return {

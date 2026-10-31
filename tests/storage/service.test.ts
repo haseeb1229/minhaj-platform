@@ -27,6 +27,7 @@ import {
   SYNTHETIC_JPEG,
   syntheticPng,
 } from '../../packages/database/src/lifecycle/phase12-fixture.ts';
+import { chunk, FLAG, riff, text, vp8, vp8x } from './webp-fixture.ts';
 
 /**
  * The upload pipeline and the default-deny serving decision.
@@ -688,7 +689,73 @@ describe('an image policy admits only whole, bounded, cleaned images (Phase 12)'
         ...PHOTOS,
         allowedMediaTypes: ['image/png', 'application/pdf'],
       }),
-    ).rejects.toThrow(/only JPEG and PNG/u);
+    ).rejects.toThrow(/only JPEG, PNG and still WebP/u);
+  });
+});
+
+describe('a policy that names WebP admits only a still, cleaned WebP (Phase 30-RF)', () => {
+  const COVERS: UploadPolicy = {
+    allowedMediaTypes: ['image/jpeg', 'image/png', 'image/webp'],
+    maxBytes: 1024 * 1024,
+    image: { maxPixels: 40_000_000, maxEdge: 16_384 },
+  };
+  const PHOTOS: UploadPolicy = {
+    ...COVERS,
+    allowedMediaTypes: ['image/jpeg', 'image/png'],
+  };
+  const STILL = chunk('VP8 ', vp8(24, 36));
+  const withMetadata = riff([
+    vp8x(FLAG.exif, 24, 36),
+    chunk('EXIF', text('SENTINEL-OWNER')),
+    STILL,
+  ]);
+
+  it('stores the WebP without its metadata, measured, as image/webp', async () => {
+    const storage = await service(programmableScanner({ status: 'clean' }));
+    const stored = await storage.store(bytes(withMetadata), COVERS);
+    expect(stored).toMatchObject({
+      state: 'clean',
+      mediaType: 'image/webp',
+      image: { width: 24, height: 36 },
+    });
+    const opened = await storage.open(stored.id, allow);
+    const chunks: Uint8Array[] = [];
+    for await (const part of opened!.body) chunks.push(part);
+    const kept = Uint8Array.from(Buffer.concat(chunks));
+    expect(containsText(kept, 'SENTINEL')).toBe(false);
+    expect(Buffer.from(kept).equals(Buffer.from(riff([STILL])))).toBe(true);
+    expect(stored.checksum).toBe(createHash('sha256').update(kept).digest('hex'));
+    expect((await storage.servableImages([stored.id])).has(stored.id)).toBe(true);
+  });
+
+  it('refuses an animated or malformed WebP, a mislabelled one, and a WebP under any other policy', async () => {
+    const scanner = programmableScanner({ status: 'clean' });
+    const storage = await service(scanner);
+    const animated = await storage.store(
+      bytes(riff([vp8x(FLAG.animation, 24, 36), STILL])),
+      COVERS,
+    );
+    expect(animated).toMatchObject({ state: 'rejected', rejection: 'unreadable' });
+    const trailing = await storage.store(
+      bytes(Uint8Array.from([...riff([STILL]), 0x50, 0x4b])),
+      COVERS,
+    );
+    expect(trailing).toMatchObject({ state: 'rejected', rejection: 'unreadable' });
+    const mislabelled = await storage.store(bytes(riff([STILL])), {
+      ...COVERS,
+      declaredMediaType: 'image/png',
+    });
+    expect(mislabelled).toMatchObject({
+      state: 'rejected',
+      rejection: 'declared-type-mismatch',
+    });
+    // A JPEG/PNG policy is unchanged: a WebP is not even read as one, and is refused.
+    const photo = await storage.store(bytes(withMetadata), PHOTOS);
+    expect(photo).toMatchObject({
+      state: 'rejected',
+      rejection: 'detected-type-not-allowed',
+    });
+    expect(scanner.calls).toBe(0);
   });
 });
 

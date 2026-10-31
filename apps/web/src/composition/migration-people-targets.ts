@@ -14,6 +14,7 @@ import type { PeopleService } from '../contexts/people-contributors/index.ts';
 import {
   ADOPTION_PAGES,
   clearedImage,
+  STILL_JPEG_PNG,
   refusal,
   withdrawalRefusal,
 } from './migration-target-support.ts';
@@ -118,7 +119,7 @@ export function peoplePersonTargetOver(deps: {
       if (!set.ok) return answer(set.failure);
       current = set.person;
     }
-    const portrait = clearedImage(payload.portrait, assets);
+    const portrait = clearedImage(payload.portrait, assets, STILL_JPEG_PNG);
     if (portrait !== null && current.portrait?.assetId !== portrait.assetId) {
       const set = await people.setPortrait(actor, {
         personId: current.id,

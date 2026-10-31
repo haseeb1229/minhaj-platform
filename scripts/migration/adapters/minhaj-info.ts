@@ -55,8 +55,8 @@ import {
  *                 escaped; null when the page lists none;
  *   links         the article URLs, as written.
  *   cover         (Phase 30-R) the issue's own cover picture, its `og:image` on
- *                 this host, when it is a JPEG or PNG — a webp cover is not an
- *                 admitted image type and is left on the source. The page
+ *                 this host, when it is a JPEG, a PNG or (Phase 30-RF) a still
+ *                 WebP — the newest issues offer only a `.webp` original. The page
  *                 presents its cover only through the host's resizer,
  *                 `/i/{width}/{path}`, which answers in WebP whatever the name
  *                 or the request says; the cover taken is that same file's
@@ -250,7 +250,7 @@ export function createMinhajInfoIssueAdapter(
     adapterKey: MINHAJ_INFO_ISSUE_ADAPTER_KEY,
     adapterVersion: '2',
     parserKey: 'cheerio-minhaj-info-magazine-issue',
-    parserVersion: '3',
+    parserVersion: '4',
     contentKind: 'library.magazine-issue',
     accessMethod: 'http',
 
@@ -312,6 +312,7 @@ export function createMinhajInfoIssueAdapter(
         alt: title,
         pageUrl: evidence.finalUrl,
         hosts: [base.hostname],
+        webp: true,
       });
 
       const record: ParsedMagazineIssue = {

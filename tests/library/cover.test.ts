@@ -208,6 +208,16 @@ describe('the cover byte policy', () => {
     expect(await decide(reader({}), 'issue')).toBe('allow');
   });
 
+  it('allows a still-WebP cover on the same terms, and no other picture type (Phase 30-RF)', async () => {
+    const webp = asset(ID(7), 'image/webp');
+    expect(await decide(reader({}), 'issue', ID(1), webp)).toBe('allow');
+    expect(await decide(reader({ issue: 'draft' }), 'issue', ID(1), webp)).toBe('deny');
+    for (const mediaType of ['image/gif', 'image/svg+xml'])
+      expect(await decide(reader({}), 'issue', ID(1), asset(ID(7), mediaType))).toBe(
+        'deny',
+      );
+  });
+
   it('denies a withdrawn record or parent, another asset, another record and a non-image', async () => {
     expect(await decide(reader({ work: 'draft' }), 'edition')).toBe('deny');
     expect(await decide(reader({ edition: 'archived' }), 'edition')).toBe('deny');

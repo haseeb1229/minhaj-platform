@@ -898,6 +898,34 @@ describe('Phase 30 library.magazine-issue publication target', () => {
     });
   });
 
+  it('takes a cleared still-WebP cover, as Library shows one (Phase 30-RF)', async () => {
+    const { fake, resolve } = await withMagazine();
+    const target = libraryMagazineIssueTargetOver({ library: fake.scholarly });
+    const url = 'https://minhaj.info/mag/mags/titlethumbs/2026-10.webp';
+    const asset: PublishableAsset = {
+      originalUrl: url,
+      assetId: '00000000-0000-4000-8000-0000000000c1',
+      mediaType: 'image/webp',
+      checksum: 'c'.repeat(64),
+      publicCopy: {
+        assetId: '00000000-0000-4000-8000-0000000000c2',
+        checksum: 'd'.repeat(64),
+        width: 600,
+        height: 840,
+      },
+    };
+    await target.publish(
+      publishInput(
+        'library.magazine-issue',
+        { ...ISSUE, cover: { url, alt: 'FIXTURE cover', credit: null } },
+        { resolve, assets: [asset] },
+      ),
+    );
+    expect(fake.calls.at(-1)!.input).toMatchObject({
+      cover: { assetId: asset.publicCopy!.assetId, width: 600, height: 840 },
+    });
+  });
+
   it('refuses an unresolved, foreign or unpublished Magazine before saving anything', async () => {
     const { fake, magazine, resolve } = await withMagazine();
     const target = libraryMagazineIssueTargetOver({ library: fake.scholarly });
@@ -1815,6 +1843,8 @@ describe('Phase 30-R Editorial publication targets', () => {
       [[], null, ''],
       [[{ ...CLEARED, publicCopy: null }], null, ''],
       [[{ ...CLEARED, originalUrl: `${LEAD_URL}?x=1` }], null, ''],
+      // Phase 30-RF: Editorial shows JPEG and PNG only — a WebP copy is no lead image.
+      [[{ ...CLEARED, mediaType: 'image/webp' }], null, ''],
     ];
     for (const [assets, leadImage, leadAlt] of cases) {
       const { fake, target } = targetOf('editorial.news');

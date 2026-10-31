@@ -104,7 +104,9 @@ export function createStorageService(
         policy.image !== undefined &&
         !policy.allowedMediaTypes.every((type) => SANITISABLE_IMAGE_TYPES.includes(type))
       ) {
-        throw new Error('An image upload policy may admit only JPEG and PNG.');
+        throw new Error(
+          'An image upload policy may admit only JPEG, PNG and still WebP.',
+        );
       }
 
       // A release token is a caller's secret of a fixed grammar. A malformed
@@ -121,7 +123,11 @@ export function createStorageService(
       const key = generateStorageKey();
       const ceiling = Math.min(policy.maxBytes, dependencies.maxBytes);
       const image =
-        policy.image === undefined ? null : sanitiseImage(bytes, policy.image, ceiling);
+        policy.image === undefined
+          ? null
+          : sanitiseImage(bytes, policy.image, ceiling, {
+              webp: policy.allowedMediaTypes.includes('image/webp'),
+            });
 
       await assets.begin({
         id,

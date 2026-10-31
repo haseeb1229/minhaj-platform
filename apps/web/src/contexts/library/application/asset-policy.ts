@@ -46,8 +46,15 @@ export function createLibraryAssetPolicy(deps: {
   };
 }
 
-/** The two raster types Storage's image pipeline admits. */
-const COVER_MEDIA_TYPES: readonly string[] = Object.freeze(['image/jpeg', 'image/png']);
+/**
+ * The raster types a cover may be: JPEG, PNG and (Phase 30-RF) a still WebP —
+ * every one structurally validated and stripped by Storage's image pipeline.
+ */
+export const LIBRARY_COVER_MEDIA_TYPES: readonly string[] = Object.freeze([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
 
 /**
  * Phase 30-R — the policy for a COVER's bytes: an Edition's or a
@@ -75,7 +82,7 @@ export function createLibraryCoverPolicy(deps: {
         !libraryIdSchema.safeParse(ownerId).success ||
         !libraryIdSchema.safeParse(assetId).success ||
         asset.assetId !== assetId ||
-        !COVER_MEDIA_TYPES.includes(asset.mediaType)
+        !LIBRARY_COVER_MEDIA_TYPES.includes(asset.mediaType)
       )
         return 'deny';
       if (owner === 'edition') {

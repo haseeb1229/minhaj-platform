@@ -100,7 +100,7 @@ describe('identity and construction', () => {
       adapterKey: MINHAJ_INFO_ISSUE_ADAPTER_KEY,
       adapterVersion: '2',
       parserKey: 'cheerio-minhaj-info-magazine-issue',
-      parserVersion: '3',
+      parserVersion: '4',
       contentKind: 'library.magazine-issue',
       accessMethod: 'http',
     });
@@ -421,13 +421,37 @@ describe('issue parse', () => {
     ]);
   });
 
-  it('leaves a webp cover, an off-host cover and an unstated notice to the source', () => {
+  it('takes a WebP original as the cover — the newest issues offer no other (Phase 30-RF)', () => {
+    const NOTICE =
+      '<p>© 2001–2026 Minhaj-ul-Quran International. All rights reserved.</p>';
+    for (const [ogImage, original] of [
+      [
+        `${SITE}/i/600/mag/mags/titlethumbs/2026-10.webp`,
+        `${SITE}/mag/mags/titlethumbs/2026-10.webp`,
+      ],
+      [
+        `${SITE}/mag/mags/titlethumbs/2026-09.WEBP`,
+        `${SITE}/mag/mags/titlethumbs/2026-09.WEBP`,
+      ],
+    ]) {
+      const result = parseIssue(issuePage({ ogImage, notice: NOTICE }));
+      if (result.kind !== 'parsed' || result.record.kind !== 'library.magazine-issue')
+        throw new Error('expected an issue');
+      expect(result.record.cover?.url).toBe(original);
+      expect(result.record.assets).toEqual([
+        expect.objectContaining({ url: original, licence: 'organisation-owned' }),
+      ]);
+    }
+  });
+
+  it('leaves an off-host cover, another picture type and an unstated notice to the source', () => {
     for (const ogImage of [
-      `${SITE}/i/600/mag/mags/titlethumbs/2026-10.webp`,
       'https://images.example/titlethumbs/2026-10.jpg',
+      'https://images.example/titlethumbs/2026-10.webp',
       `http://minhaj.info/i/600/mag/mags/titlethumbs/2020-01.jpg`,
       `https://images.example/i/600/mag/mags/titlethumbs/2020-01.jpg`,
-      `${SITE}/i/600/mag/mags/titlethumbs/2020-01.webp`,
+      `${SITE}/mag/mags/titlethumbs/2020-01.gif`,
+      `${SITE}/mag/mags/titlethumbs/2020-01.svg`,
     ]) {
       const result = parseIssue(issuePage({ ogImage }));
       if (result.kind !== 'parsed' || result.record.kind !== 'library.magazine-issue')

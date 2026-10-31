@@ -702,6 +702,7 @@ describe('Phase 29 Migration wiring', () => {
       expect(policy.allowedMediaTypes).toEqual([
         'image/png',
         'image/jpeg',
+        'image/webp',
         'application/pdf',
       ]);
       expect(policy.maxBytes).toBe(8 * 1024 * 1024);
@@ -711,6 +712,7 @@ describe('Phase 29 Migration wiring', () => {
     expect(MIGRATION_ASSET_MEDIA_TYPES).toEqual([
       'image/png',
       'image/jpeg',
+      'image/webp',
       'application/pdf',
     ]);
     expect(MIGRATION_ASSET_MAX_BYTES).toBe(8 * 1024 * 1024);
@@ -762,7 +764,7 @@ describe('Phase 29 Migration wiring', () => {
     // An image Storage stored without measuring is a custody defect, never a guess.
     await expect(port.storePublicImage(input)).rejects.toThrow(/measuring/);
     for (const policy of policies) {
-      expect(policy.allowedMediaTypes).toEqual(['image/png', 'image/jpeg']);
+      expect(policy.allowedMediaTypes).toEqual(['image/png', 'image/jpeg', 'image/webp']);
       expect(policy.image).toEqual({ maxPixels: 40_000_000, maxEdge: 16_384 });
       // The bytes decide the type: nothing declared is trusted.
       expect(policy.declaredMediaType).toBeNull();

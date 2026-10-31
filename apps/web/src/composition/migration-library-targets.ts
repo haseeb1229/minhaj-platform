@@ -27,7 +27,11 @@ import type {
   TargetPublication,
 } from '@minhaj/contracts/migration';
 
-import { libraryFailure, type createLibraryService } from '../contexts/library/index.ts';
+import {
+  LIBRARY_COVER_MEDIA_TYPES,
+  libraryFailure,
+  type createLibraryService,
+} from '../contexts/library/index.ts';
 import {
   ADOPTION_PAGES,
   askerOf,
@@ -211,7 +215,7 @@ function coverOf(
   image: StagedWorkPayload['edition']['cover'],
   assets: readonly PublishableAsset[],
 ) {
-  const cleared = clearedImage(image, assets);
+  const cleared = clearedImage(image, assets, LIBRARY_COVER_MEDIA_TYPES);
   return cleared === null
     ? null
     : { assetId: cleared.assetId, width: cleared.width, height: cleared.height };
