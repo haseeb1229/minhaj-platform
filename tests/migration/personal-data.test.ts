@@ -172,9 +172,15 @@ describe('the detector stays the default', () => {
 
   it('records each distinct match once, with words around it that carry no contact value', () => {
     const scanner = new PersonalDataScanner();
-    scanner.redact(`Office: ${OFFICE_PHONE}; fax ${OFFICE_PHONE}; mail ${OFFICE_MAIL}.`);
+    scanner.redact(
+      `Secretariat\n  office: ${OFFICE_PHONE}; fax ${OFFICE_PHONE}; mail ${OFFICE_MAIL}.`,
+    );
     const matches = [...scanner.matches.values()];
     expect(matches).toHaveLength(2);
+    // The source's words are kept as written; only runs of whitespace fold.
+    expect(matches[0]?.context).toBe(
+      'Secretariat office: «phone»; fax [redacted]; mail [redacted].',
+    );
     for (const match of matches) {
       expect(match.context).not.toContain(OFFICE_MAIL);
       expect(match.context).not.toContain('140 140');

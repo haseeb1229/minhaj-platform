@@ -374,7 +374,7 @@ function matchesIn(text: string): Match[] {
 
 /** The key one distinct match is known by: its type and its exact text. */
 export function personalDataKey(type: PersonalDataType, value: string): string {
-  return `${type} ${value}`;
+  return `${type}\u0000${value}`;
 }
 
 /** One DISTINCT match, with the words around its first occurrence. */
@@ -407,7 +407,7 @@ function contextOf(text: string, matches: readonly Match[], focus: Match): strin
   shown += text.slice(at);
   const window = shown
     .slice(Math.max(0, focusAt - CONTEXT_REACH), focusAt + CONTEXT_REACH)
-    .replace(/s+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
   return window.slice(0, CONTEXT_MAX);
 }
