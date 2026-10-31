@@ -4,6 +4,7 @@ import {
   newsPathOf,
   pagePath,
   type ArticleDetail,
+  type CollectionMember,
   type EditorialActor,
   type EditorialReferencesPort,
   type PageDetail,
@@ -590,10 +591,12 @@ export function editorialTargetOver(deps: {
 /**
  * Editorial's reference questions for a MIGRATED record, answered by the same
  * owner references Media and Library use: contributors are People's, topics
- * and content languages Taxonomy's. A migrated record names no Centre, no
- * Gallery and no Collection member, so those questions are answered `false` —
- * should one ever be asked, the record is refused rather than linked. A lead
- * image is Storage's answer (Phase 30-R): a servable still image.
+ * and content languages Taxonomy's. A migrated record names no Centre and no
+ * Gallery, so those questions are answered `false` — should one ever be
+ * asked, the record is refused rather than linked. A lead image is Storage's
+ * answer (Phase 30-R): a servable still image. A migrated Collection's members
+ * (Phase 30-RD) are their OWNERS' answer — public now, asked strictly, the
+ * same question a curator's Collection meets.
  */
 export function migrationEditorialReferences(
   owner: LibraryReferencesPort,
@@ -601,6 +604,8 @@ export function migrationEditorialReferences(
   storage: () => Promise<{
     servableImages(assetIds: readonly string[]): Promise<ReadonlySet<string>>;
   }>,
+  /** Whether every one of these members is public now, by its owner. */
+  members: (members: readonly CollectionMember[]) => Promise<boolean>,
 ): EditorialReferencesPort {
   return {
     async usableImage(assetId) {
@@ -614,6 +619,6 @@ export function migrationEditorialReferences(
     },
     selectableCentre: async () => false,
     selectableGallery: async () => false,
-    selectableMembers: async () => false,
+    selectableMembers: members,
   };
 }

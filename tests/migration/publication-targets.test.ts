@@ -18,6 +18,7 @@ import type {
   MigrationTargetRef,
   PublishableAsset,
   StagedBlock,
+  StagedCollectionPayload,
   StagedEditorialPayload,
   StagedMagazineIssuePayload,
   StagedMagazinePayload,
@@ -42,6 +43,8 @@ import {
   type LibraryWorkOperations,
 } from '../../apps/web/src/composition/migration-library-targets.ts';
 import { routeMigrationTargets } from '../../apps/web/src/composition/migration-target-router.ts';
+import { editorialCollectionTargetOver } from '../../apps/web/src/composition/migration-collection-targets.ts';
+import { allMembersPublic } from '../../apps/web/src/composition/collection-member-owners.ts';
 
 /**
  * Phase 30 — the Library and Editorial publication targets and the router,
@@ -1618,7 +1621,7 @@ describe('Phase 30 Editorial publication targets', () => {
     ).toEqual([]);
   });
 
-  it('answers a migrated record’s references through the owners and refuses Centre, Gallery and members', async () => {
+  it('answers a migrated record’s references through the owners and refuses Centre and Gallery', async () => {
     const asked: string[] = [];
     const references = migrationEditorialReferences(
       {
@@ -1631,6 +1634,8 @@ describe('Phase 30 Editorial publication targets', () => {
         servableImages: async (ids: readonly string[]) =>
           new Set(ids.filter((id) => id === 'image-clean')),
       }),
+      // Phase 30-RD: a Collection's members are their owners' answer.
+      async (members) => (asked.push(`members:${members.length}`), members.length === 1),
     );
     expect(await references.usableImage('image-clean')).toBe(true);
     expect(await references.usableImage('pdf-or-quarantined')).toBe(false);
@@ -1641,12 +1646,17 @@ describe('Phase 30 Editorial publication targets', () => {
     expect(await references.selectableCentre(TOPIC)).toBe(false);
     expect(await references.selectableGallery(TOPIC)).toBe(false);
     expect(await references.selectableMembers([])).toBe(false);
+    expect(
+      await references.selectableMembers([{ kind: 'news-article', id: TOPIC }]),
+    ).toBe(true);
     expect(asked).toEqual([
       'people:0',
       'topics:1',
       'language:ur',
       'language:ur',
       'language:xx',
+      'members:0',
+      'members:1',
     ]);
   });
 });
@@ -1969,5 +1979,262 @@ describe('Phase 30-R Editorial publication targets', () => {
         }),
       ).toEqual({ status: 'refused', reason: 'unsupported-kind' });
     });
+  });
+});
+
+/* ===========================================================================
+ * Phase 30-RD — the editorial.collection target
+ * ========================================================================= */
+
+const MEMBER_URLS = [
+  'https://www.minhaj.org/english/tid/48059/',
+  'https://www.minhaj.org/english/tid/47265/',
+  'https://www.minhaj.org/english/tid/134/',
+];
+const MEMBER_IDS = [
+  '00000000-0000-4000-8000-00000000c001',
+  '00000000-0000-4000-8000-00000000c002',
+  '00000000-0000-4000-8000-00000000c003',
+];
+
+const ARCHIVE: StagedCollectionPayload = {
+  kind: 'editorial.collection',
+  slug: 'al-hidayah',
+  languageCode: 'en',
+  title: 'Al-Hidayah',
+  excerpt: 'Al-Hidayah, an annual spiritual retreat under MQI.',
+  members: MEMBER_URLS.map((legacyUrl) => ({
+    legacyUrl,
+    section: 'Al-Hidayah',
+    group: null,
+  })),
+  repeatedMembers: 0,
+  legacyIdentifier: 'lkcatid-12',
+};
+
+/** Migration's own active mappings: each member URL to the record it made. */
+const mapped =
+  (kinds: Partial<Record<string, MigrationTargetRef['kind']>> = {}) =>
+  async (legacyUrl: string): Promise<MigrationTargetRef | null> => {
+    const index = MEMBER_URLS.indexOf(legacyUrl);
+    if (index < 0) return null;
+    return { kind: kinds[legacyUrl] ?? 'editorial.news', id: MEMBER_IDS[index]! };
+  };
+
+describe('Phase 30-RD editorial.collection publication target', () => {
+  it('creates the Collection through Editorial with members in source order, then submits it', async () => {
+    const fake = fakeEditorial();
+    const target = editorialCollectionTargetOver({ editorial: fake.editorial });
+    const result = await target.publish(
+      publishInput('editorial.collection', ARCHIVE, { resolve: mapped() }),
+    );
+    expect(result).toMatchObject({
+      status: 'published',
+      stage: 'in-review',
+      canonicalPath: '/collections/al-hidayah',
+      target: { kind: 'editorial.collection' },
+    });
+    expect(fake.ops()).toEqual(['create', 'transition:submit']);
+    const created = fake.calls[0]!.input as {
+      members: unknown;
+      translations: { title: string; excerpt: string; document: string }[];
+      contributors: unknown[];
+    };
+    expect(fake.calls[0]!.aggregate).toBe('collection');
+    expect(created.members).toEqual(
+      MEMBER_IDS.map((id) => ({ kind: 'news-article', id })),
+    );
+    expect(created.translations[0]).toMatchObject({
+      title: 'Al-Hidayah',
+      excerpt: ARCHIVE.excerpt,
+    });
+    // No introduction is written for the source: an empty paragraph.
+    expect(JSON.parse(created.translations[0]!.document)).toEqual({
+      type: 'doc',
+      content: [{ type: 'paragraph' }],
+    });
+    expect(created.contributors).toEqual([]);
+  });
+
+  it('refuses the whole archive when one member has no active mapping — never a smaller Collection', async () => {
+    const fake = fakeEditorial();
+    const target = editorialCollectionTargetOver({ editorial: fake.editorial });
+    const missing = {
+      ...ARCHIVE,
+      members: [
+        ...ARCHIVE.members,
+        {
+          legacyUrl: 'https://www.minhaj.org/english/tid/9/',
+          section: null,
+          group: null,
+        },
+      ],
+    };
+    expect(
+      await target.publish(
+        publishInput('editorial.collection', missing, { resolve: mapped() }),
+      ),
+    ).toEqual({ status: 'refused', reason: 'member-unmapped' });
+    expect(fake.ops()).toEqual([]);
+  });
+
+  it('refuses a member of a type a Collection may not hold', async () => {
+    const fake = fakeEditorial();
+    const target = editorialCollectionTargetOver({ editorial: fake.editorial });
+    for (const kind of [
+      'editorial.page',
+      'people.person',
+      'global.country',
+      'library.magazine',
+    ] as const)
+      expect(
+        await target.publish(
+          publishInput('editorial.collection', ARCHIVE, {
+            resolve: mapped({ [MEMBER_URLS[1]!]: kind }),
+          }),
+        ),
+      ).toEqual({ status: 'refused', reason: 'member-kind-refused' });
+    expect(fake.ops()).toEqual([]);
+  });
+
+  it('maps each migrated kind to the member type Editorial names', async () => {
+    const fake = fakeEditorial();
+    const target = editorialCollectionTargetOver({ editorial: fake.editorial });
+    await target.publish(
+      publishInput('editorial.collection', ARCHIVE, {
+        resolve: mapped({
+          [MEMBER_URLS[0]!]: 'editorial.article',
+          [MEMBER_URLS[1]!]: 'library.work',
+          [MEMBER_URLS[2]!]: 'media.video',
+        }),
+      }),
+    );
+    expect((fake.calls[0]!.input as { members: unknown }).members).toEqual([
+      { kind: 'article', id: MEMBER_IDS[0] },
+      { kind: 'work', id: MEMBER_IDS[1] },
+      { kind: 'video', id: MEMBER_IDS[2] },
+    ]);
+  });
+
+  it('a fresh entry meeting a taken slug is refused; a resumed one adopts only its own untouched record', async () => {
+    const fake = fakeEditorial();
+    const target = editorialCollectionTargetOver({ editorial: fake.editorial });
+    const first = await target.publish(
+      publishInput('editorial.collection', ARCHIVE, { resolve: mapped() }),
+    );
+    expect(first.status).toBe('published');
+    expect(
+      await target.publish(
+        publishInput('editorial.collection', ARCHIVE, { resolve: mapped() }),
+      ),
+    ).toEqual({ status: 'refused', reason: 'target-exists' });
+    expect(
+      await target.publish(
+        publishInput('editorial.collection', ARCHIVE, {
+          resolve: mapped(),
+          resumed: true,
+        }),
+      ),
+    ).toMatchObject({ status: 'published', stage: 'in-review' });
+    // Another member list under the same slug is not this payload's record.
+    expect(
+      await target.publish(
+        publishInput(
+          'editorial.collection',
+          { ...ARCHIVE, members: ARCHIVE.members.slice(0, 2) },
+          { resolve: mapped(), resumed: true },
+        ),
+      ),
+    ).toEqual({ status: 'refused', reason: 'target-conflict' });
+  });
+
+  it('refreshes through a new revision with the source’s order, keeping what a person curated', async () => {
+    const fake = fakeEditorial();
+    const target = editorialCollectionTargetOver({ editorial: fake.editorial });
+    const made = await target.publish(
+      publishInput('editorial.collection', ARCHIVE, {
+        resolve: mapped(),
+        topicIds: [TOPIC],
+      }),
+    );
+    if (made.status !== 'published') throw new Error('expected a publication');
+    const reordered = { ...ARCHIVE, members: [...ARCHIVE.members].reverse() };
+    const refreshed = await target.refresh({
+      kind: 'editorial.collection',
+      target: made.target,
+      payload: reordered,
+      topicIds: [],
+      assets: [],
+      resolve: mapped(),
+      actor: ACTOR,
+    });
+    expect(refreshed).toMatchObject({ status: 'published', stage: 'in-review' });
+    const revised = fake.calls.find((call) => call.op === 'revise')!.input as {
+      members: { id: string }[];
+      topicIds: string[];
+    };
+    expect(revised.members.map((member) => member.id)).toEqual([...MEMBER_IDS].reverse());
+    expect(revised.topicIds).toEqual([TOPIC]);
+    // The same words and members again: answered as it stands, no new revision.
+    const before = fake.calls.length;
+    expect(
+      await target.refresh({
+        kind: 'editorial.collection',
+        target: made.target,
+        payload: reordered,
+        topicIds: [],
+        assets: [],
+        resolve: mapped(),
+        actor: ACTOR,
+      }),
+    ).toMatchObject({ status: 'published', stage: 'in-review' });
+    expect(fake.calls.slice(before).map((call) => call.op)).toEqual([]);
+  });
+
+  it('withdraws by Editorial’s archive at the recorded version, and supports nothing else', async () => {
+    const fake = fakeEditorial();
+    const target = editorialCollectionTargetOver({ editorial: fake.editorial });
+    const made = await target.publish(
+      publishInput('editorial.collection', ARCHIVE, { resolve: mapped() }),
+    );
+    if (made.status !== 'published') throw new Error('expected a publication');
+    expect(
+      await target.withdraw({
+        target: made.target,
+        expectedVersion: made.version,
+        actor: ACTOR,
+      }),
+    ).toMatchObject({ status: 'withdrawn' });
+    expect(target.supports('editorial.news')).toBe(false);
+    expect(target.supports('fatwa.ruling')).toBe(false);
+    expect(await target.publish(publishInput('editorial.news', NEWS))).toEqual({
+      status: 'refused',
+      reason: 'unsupported-kind',
+    });
+  });
+
+  it('asks the members’ owners strictly: an owner outage is an error, never a “no”', async () => {
+    const owners = {
+      memberTargets: async (members: readonly { kind: string; id: string }[]) =>
+        new Map(
+          members
+            .filter((member) => member.id !== MEMBER_IDS[2])
+            .map((member) => [
+              `${member.kind}:${member.id}`,
+              { id: member.id, slug: member.id, titles: [] },
+            ]),
+        ),
+      workReferences: async () => [],
+      videoReferences: async () => {
+        throw new Error('socket hang up');
+      },
+    };
+    const members = MEMBER_IDS.map((id) => ({ kind: 'news-article' as const, id }));
+    expect(await allMembersPublic(owners, members.slice(0, 2))).toBe(true);
+    // A member its owner does not publish now is not selectable.
+    expect(await allMembersPublic(owners, members)).toBe(false);
+    await expect(
+      allMembersPublic(owners, [{ kind: 'video', id: MEMBER_IDS[0]! }]),
+    ).rejects.toThrow('socket hang up');
   });
 });

@@ -2,7 +2,12 @@ import 'server-only';
 
 import type { StagedBlock, StagedInline } from '@minhaj/contracts/migration';
 
-import { decodeEntities, sanitizeFragment, type HrefRewrite } from './normalize.ts';
+import {
+  decodeEntities,
+  sanitizeFragment,
+  type HrefRewrite,
+  type PersonalDataScanner,
+} from './normalize.ts';
 
 /**
  * SANITISED MARKUP → STAGED BLOCKS (MIGRATION_STRATEGY.md §4.6).
@@ -92,7 +97,10 @@ function tidy(runs: readonly StagedInline[]): StagedInline[] {
  */
 export function blocksFrom(
   html: string,
-  options: { readonly rewrite?: HrefRewrite; readonly redact?: boolean } = {},
+  options: {
+    readonly rewrite?: HrefRewrite;
+    readonly redact?: boolean | PersonalDataScanner;
+  } = {},
 ): StagedBlock[] {
   const safe = sanitizeFragment(html, options);
   const blocks: StagedBlock[] = [];

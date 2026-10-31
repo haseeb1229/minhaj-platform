@@ -13,7 +13,7 @@ import {
 } from '@minhaj/contracts/migration';
 
 import {
-  detectPersonalData,
+  type PersonalDataScanner,
   foldTitle,
   normalizeText,
   normalizeTitle,
@@ -164,15 +164,12 @@ export function normalizeVideo(input: {
   /** Decides each anchor's href (link rewriting). */
   readonly rewrite: HrefRewrite;
   readonly now: Date;
+  /** The record's detector (Phase 30-RD): what it clears, and what it found. */
+  readonly scanner: PersonalDataScanner;
 }): VideoNormalisation {
-  const { parsed } = input;
+  const { parsed, scanner } = input;
   const issues = new Set<ValidationIssue>();
-  let personalData = false;
-  const redact = (text: string): string => {
-    const found = detectPersonalData(text);
-    if (found.flagged) personalData = true;
-    return found.redacted;
-  };
+  const redact = (text: string): string => scanner.redact(text);
 
   // Words: sanitised before anything is stored; personal data redacted and flagged.
   const title = redact(normalizeTitle(parsed.title));
@@ -182,11 +179,9 @@ export function normalizeVideo(input: {
   const describe = (html: string) => {
     const descriptionHtml = sanitizeFragment(html, {
       rewrite: input.rewrite,
-      redact: true,
+      redact: scanner,
     });
     const description = redact(plainText(descriptionHtml));
-    if (descriptionHtml !== sanitizeFragment(html, { rewrite: input.rewrite }))
-      personalData = true;
     if (description.length > MIGRATION_LIMITS.description)
       issues.add('description-too-long');
     return { descriptionHtml, description };
@@ -294,7 +289,7 @@ export function normalizeVideo(input: {
     titleKey: foldTitle(title),
     dedupeKey: provider !== null && videoId !== null ? `${provider}:${videoId}` : null,
     languageCode,
-    personalData,
+    personalData: scanner.uncleared,
   };
 }
 

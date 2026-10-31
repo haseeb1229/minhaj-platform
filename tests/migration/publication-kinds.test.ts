@@ -143,6 +143,17 @@ const PAYLOADS = {
     leadImage: null,
     legacyIdentifier: null,
   }),
+  // Phase 30-RD: a curated archive, its members by legacy URL.
+  'editorial.collection': (slug: string) => ({
+    kind: 'editorial.collection',
+    slug,
+    languageCode: 'en',
+    title: slug,
+    excerpt: '',
+    members: [{ legacyUrl: `${BASE}members/${slug}`, section: null, group: null }],
+    repeatedMembers: 0,
+    legacyIdentifier: null,
+  }),
   'people.person': (slug: string) => ({
     kind: 'people.person',
     slug,

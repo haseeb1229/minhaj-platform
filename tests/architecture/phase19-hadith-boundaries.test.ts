@@ -428,6 +428,8 @@ describe('the vocabulary is exactly what the documents name', () => {
       'fatwa-publication',
       'donation-refund',
       'migration-publication',
+      // Phase 30-RD: classifying a migration personal-data finding.
+      'migration-personal-data',
     ]);
     expect(STEP_UP_PURPOSES.filter((purpose) => purpose.startsWith('hadith-'))).toEqual([
       'hadith-canonical-edit',

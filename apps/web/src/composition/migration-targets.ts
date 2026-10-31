@@ -2,7 +2,10 @@ import 'server-only';
 
 import {
   createEditorialPersistence,
+  createEditorialPublicReader,
   createGlobalPersistence,
+  createLibraryPublicReader,
+  createMediaPublicReader,
   createLibraryPersistence,
   createMediaPersistence,
   createPeoplePersistence,
@@ -27,11 +30,26 @@ import type {
 
 export { routeMigrationTargets } from './migration-target-router.ts';
 
-import { createEditorialService } from '../contexts/editorial/index.ts';
+import {
+  createEditorialReadService,
+  createEditorialService,
+} from '../contexts/editorial/index.ts';
 import { createGlobalService } from '../contexts/global-network/index.ts';
 import { createPeopleService } from '../contexts/people-contributors/index.ts';
-import { createLibraryService } from '../contexts/library/index.ts';
-import { createMediaService, mediaFailure } from '../contexts/media/index.ts';
+import {
+  createLibraryReadService,
+  createLibraryService,
+} from '../contexts/library/index.ts';
+import {
+  createMediaReadService,
+  createMediaService,
+  mediaFailure,
+} from '../contexts/media/index.ts';
+import {
+  allMembersPublic,
+  type CollectionMemberOwners,
+} from './collection-member-owners.ts';
+import { editorialCollectionTargetOver } from './migration-collection-targets.ts';
 import { createHoldingService } from '../contexts/personalisation-notifications/index.ts';
 import {
   editorialTargetOver,
@@ -371,6 +389,7 @@ export function mediaVideoTargetOver(deps: {
  *   editorial.article       Editorial    `create('article')` + `submit`
  *   editorial.press-release Editorial    `create('press-release')` + `submit`
  *   editorial.page          Editorial    `create('page', binding)` + `submit`
+ *   editorial.collection    Editorial    `create('collection')` + `submit` (Phase 30-RD)
  *   people.person           People       `createPerson` + translation + portrait
  *   global.country          Global       `saveCountry`
  *
@@ -400,10 +419,22 @@ export function createMigrationTargets(deps: {
     references: deps.references,
     images,
   });
+  // Phase 30-RD: a migrated Collection's members are their owners' answer,
+  // through the same public reads the public pages use.
+  const editorialRead = createEditorialReadService(createEditorialPublicReader());
+  const libraryRead = createLibraryReadService(createLibraryPublicReader());
+  const mediaRead = createMediaReadService(createMediaPublicReader());
+  const memberOwners: CollectionMemberOwners = {
+    memberTargets: (members) => editorialRead.memberTargets(members),
+    workReferences: (ids) => libraryRead.workReferences(ids),
+    videoReferences: (ids) => mediaRead.videoReferences(ids),
+  };
   const editorial = createEditorialService({
     persistence: createEditorialPersistence(),
     authority: deps.authority,
-    references: migrationEditorialReferences(deps.references, storageRuntime),
+    references: migrationEditorialReferences(deps.references, storageRuntime, (members) =>
+      allMembersPublic(memberOwners, members),
+    ),
     // Only the scheduled-publication sweep reports through this, and the
     // targets never run it.
     reportFailure: () => undefined,
@@ -425,6 +456,7 @@ export function createMigrationTargets(deps: {
     editorialTargetOver({ kind: 'editorial.article', editorial, holdings }),
     editorialTargetOver({ kind: 'editorial.press-release', editorial, holdings }),
     editorialTargetOver({ kind: 'editorial.page', editorial, holdings }),
+    editorialCollectionTargetOver({ editorial }),
     peoplePersonTargetOver({
       people: createPeopleService({
         reader: createPeopleReader(),

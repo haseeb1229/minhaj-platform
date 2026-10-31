@@ -405,16 +405,20 @@ describe('Phase 2 — what the delivered code does NOT contain', () => {
         file.includes('20261006000000_phase22_learning') || classesOwner;
       const membershipOwner = file.includes('20261009000000_phase26_membership');
       const donationsOwner = file.includes('20261010000000_phase27_donations');
-      const migrationOwner = file.includes('20261011000000_phase29_migration_provenance');
+      // Phase 30-RD appended Migration's fourth key, externally gated.
+      const migrationOwner =
+        file.includes('20261011000000_phase29_migration_provenance') ||
+        file.includes('20261031000000_phase30rd_owner_decisions');
       // Phase 30 names `fatwa.ruling` as a CONTENT KIND a migration source may
       // yield — Migration & Provenance's own vocabulary, never a permission
       // key — so that one literal, in that one migration, is set aside before
       // the scan. Any `fatwa.*` permission key it seeded would still fail.
       // Phase 30-R restates the same content-kind CHECKs, so the same literal is
-      // set aside there too.
+      // set aside there too, and in Phase 30-RD's.
       const sourceAdaptersOwner =
         file.includes('20261027000000_phase30_source_adapters') ||
-        file.includes('20261030000000_phase30r_review_completeness');
+        file.includes('20261030000000_phase30r_review_completeness') ||
+        file.includes('20261031000000_phase30rd_owner_decisions');
       const scanned = sourceAdaptersOwner
         ? source.replaceAll("'fatwa.ruling'", '')
         : source;

@@ -743,7 +743,8 @@
       "hadithCanonicalEdit": "Changing sourced Hadith records, structure, verification or citations needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app.",
       "fatwaPublication": "Publishing or withdrawing a Fatwa needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app.",
       "donationRefund": "Refunding a donation needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app.",
-      "migrationPublication": "Publishing or rolling back migrated content, and approving a promotion, need their own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app."
+      "migrationPublication": "Publishing or rolling back migrated content, and approving a promotion, need their own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app.",
+      "migrationPersonalData": "Deciding that a personal-data finding is a public organisational contact needs its own recent proof. A confirmation earned for any other administrative change does not count here. Enter your password, and the current code from your authenticator app."
     },
     "users": {
       "title": "Accounts",
@@ -6942,7 +6943,8 @@
       "stepUpRequired": "Confirm it is you with the form above, then submit again.",
       "accountInactive": "This account is not active.",
       "confirmRequired": "Tick the confirmation box first.",
-      "load": "This can’t be shown right now. Please try again later."
+      "load": "This can’t be shown right now. Please try again later.",
+      "samePerson": "You classified a personal-data finding of this revision, so someone else must review it."
     },
     "filter": {
       "heading": "Filter",
@@ -6997,7 +6999,8 @@
         "news": "News",
         "article": "Article",
         "press-release": "Press release",
-        "page": "Organisational page"
+        "page": "Organisational page",
+        "collection": "Collection"
       },
       "fatwa": {
         "ruling": "Fatwa"
@@ -7166,7 +7169,8 @@
     },
     "personalData": {
       "none": "No personal data found",
-      "flagged": "Personal data flagged"
+      "flagged": "Personal data flagged",
+      "cleared": "Cleared by a person"
     },
     "recordStatus": {
       "discovered": "Discovered",
@@ -7714,6 +7718,33 @@
       "confirm": "I understand the raw body will be removed permanently.",
       "submit": "Dispose of the raw body",
       "done": "The raw body was disposed of. Its metadata and checksum remain."
+    },
+    "findings": {
+      "heading": "Personal-data findings",
+      "help": "Each email address or phone-like number the detector found, shown only by its type among the words around it; every match is redacted. The exact text is in the raw evidence preview, which is an audited read. A finding may be cleared only when it is a public organisational office contact or identifier, never a private person's details. Every finding must be cleared, by someone other than the person who later approves the record, before it can be re-read without redaction.",
+      "none": "No findings were recorded for this revision.",
+      "clearedFrom": "This revision was re-read from the same source bytes after every finding of the flagged revision was cleared by a person.",
+      "flaggedRevision": "Open the flagged revision",
+      "clearerOnly": "Classifying a finding needs the personal-data clearance permission.",
+      "position": "Finding {position} of {count}",
+      "type": {
+        "email": "Email address",
+        "phone": "Phone-like number"
+      },
+      "classification": {
+        "unresolved": "Unresolved",
+        "public-organisational-contact": "Public organisational contact",
+        "public-organisational-identifier": "Public organisational identifier",
+        "personal-or-private": "Personal or private"
+      },
+      "decidedBy": "Decided by",
+      "decidedAt": "Decided",
+      "note": "Reason",
+      "classify": "Classification",
+      "reason": "Reason",
+      "reasonHelp": "Say why, in words a second reviewer can check. Do not copy the contact itself here.",
+      "submit": "Record classification",
+      "done": "Classification recorded."
     }
   },
   "workspace": {

@@ -10,6 +10,7 @@ import {
   providerVideoId,
   videoProvider,
 } from '../../apps/web/src/contexts/migration-provenance/domain/video.ts';
+import { PersonalDataScanner } from '../../apps/web/src/contexts/migration-provenance/domain/normalize.ts';
 
 const NOW = new Date('2026-10-20T00:00:00Z');
 
@@ -47,6 +48,7 @@ const normalise = (
     externalKey: 'https://videos.fixture.invalid/videos/42',
     rewrite: (href) => href,
     now: NOW,
+    scanner: new PersonalDataScanner(),
   });
 
 describe('provider references', () => {

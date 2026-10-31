@@ -2,6 +2,7 @@ import 'server-only';
 
 import { Prisma } from '@prisma/client';
 
+import { MIGRATION_LIMITS } from '@minhaj/contracts/migration';
 import type {
   AssetLicence,
   AssetVisibility,
@@ -16,6 +17,8 @@ import type {
   LinkDisposition,
   MigrationContentKind,
   MigrationReadPort,
+  PersonalDataClassification,
+  PersonalDataFindingType,
   PersonalDataState,
   RecordObservation,
   RecordStatus,
@@ -241,12 +244,47 @@ export function createMigrationReader(): MigrationReadPort {
       return { rows: rows.map(toStagedRow), total, offset: page.skip };
     },
 
+    async personalDataFindings(stagedRecordId) {
+      const rows = await db.migrationPersonalDataFinding.findMany({
+        where: { stagedRecordId },
+        orderBy: [{ position: 'asc' }],
+        take: MIGRATION_LIMITS.findings,
+        select: {
+          id: true,
+          stagedRecordId: true,
+          position: true,
+          findingCount: true,
+          findingType: true,
+          context: true,
+          classification: true,
+          note: true,
+          decidedByUserId: true,
+          decidedAt: true,
+          version: true,
+        },
+      });
+      return rows.map((row) => ({
+        id: row.id,
+        stagedRecordId: row.stagedRecordId,
+        position: row.position,
+        findingCount: row.findingCount,
+        type: row.findingType as PersonalDataFindingType,
+        context: row.context,
+        classification: row.classification as PersonalDataClassification,
+        note: row.note,
+        decidedByUserId: row.decidedByUserId,
+        decidedAt: row.decidedAt,
+        version: row.version,
+      }));
+    },
+
     async stagedDetail(id) {
       const row = await db.migrationStagedRecord.findFirst({
         where: { id },
         select: {
           ...STAGED_ROW_SELECT,
           snapshotId: true,
+          clearanceOfStagedRecordId: true,
           payload: true,
           payloadChecksum: true,
           adapterKey: true,
@@ -296,6 +334,7 @@ export function createMigrationReader(): MigrationReadPort {
       if (row === null) return null;
       return {
         ...toStagedRow(row),
+        clearanceOfStagedRecordId: row.clearanceOfStagedRecordId,
         sourceId: row.record.sourceId,
         externalKey: row.record.externalKey,
         originalUrl: row.record.originalUrl,

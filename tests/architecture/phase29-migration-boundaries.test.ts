@@ -97,6 +97,9 @@ const EDITORIAL_TARGETS = `${COMPOSITION}/migration-editorial-targets.ts`;
 /** Phase 30-R: Global Network's countries and People's profiles. */
 const GLOBAL_TARGETS = `${COMPOSITION}/migration-global-targets.ts`;
 const PEOPLE_TARGETS = `${COMPOSITION}/migration-people-targets.ts`;
+/** Phase 30-RD: Editorial's Collections, and the members' owners it asks. */
+const COLLECTION_TARGETS = `${COMPOSITION}/migration-collection-targets.ts`;
+const MEMBER_OWNERS = `${COMPOSITION}/collection-member-owners.ts`;
 /** Phase 30-R: the Storage foundation's lazy runtime, for the servable-image answer. */
 const STORAGE = `${COMPOSITION}/storage.ts`;
 const TARGET_SUPPORT = `${COMPOSITION}/migration-target-support.ts`;
@@ -108,11 +111,12 @@ const TARGET_MODULES = [
   EDITORIAL_TARGETS,
   GLOBAL_TARGETS,
   PEOPLE_TARGETS,
+  COLLECTION_TARGETS,
   TARGET_SUPPORT,
   ROUTER,
 ];
 /** The composition the CLIs and the staging proof load outside the bundler. */
-const NODE_RUNNABLE = [RUNNER, WIRING, ...TARGET_MODULES, STORAGE];
+const NODE_RUNNABLE = [RUNNER, WIRING, ...TARGET_MODULES, STORAGE, MEMBER_OWNERS];
 const API = 'apps/web/src/app/api/admin/migration';
 
 /** Every bounded context but Migration itself. */
@@ -264,7 +268,7 @@ describe('only Layer-4 composition wires Migration and its publication targets',
     for (const file of scanned) {
       if (allowed.has(file)) continue;
       expect(withoutComments(await read(file)), file).not.toMatch(
-        /createMigrationTargets|routeMigrationTargets|mediaVideoTargetOver|library(?:Work|Magazine|MagazineIssue)TargetOver|editorialTargetOver|globalCountryTargetOver|peoplePersonTargetOver|migration-(?:library-|editorial-|global-|people-)?targets|migration-target-(?:router|support)/u,
+        /createMigrationTargets|routeMigrationTargets|mediaVideoTargetOver|library(?:Work|Magazine|MagazineIssue)TargetOver|editorial(?:Collection)?TargetOver|globalCountryTargetOver|peoplePersonTargetOver|migration-(?:library-|editorial-|global-|people-|collection-)?targets|migration-target-(?:router|support)/u,
       );
     }
     // Both roots publish through the router over the one target factory.
@@ -291,7 +295,7 @@ describe('only Layer-4 composition wires Migration and its publication targets',
     // whose servable-still-image answer Editorial's lead-image check needs.
     const ALLOWED: Record<string, RegExp> = {
       [TARGETS]:
-        /^(?:server-only|@minhaj\/database|@minhaj\/contracts\/(?:media|library|migration)|\.\.\/contexts\/(?:media|library|editorial|global-network|people-contributors|personalisation-notifications)\/index\.ts|\.\/migration-(?:target-router|target-support|library-targets|editorial-targets|global-targets|people-targets)\.ts|\.\/storage\.ts)$/u,
+        /^(?:server-only|@minhaj\/database|@minhaj\/contracts\/(?:media|library|migration)|\.\.\/contexts\/(?:media|library|editorial|global-network|people-contributors|personalisation-notifications)\/index\.ts|\.\/migration-(?:target-router|target-support|library-targets|editorial-targets|global-targets|people-targets|collection-targets)\.ts|\.\/collection-member-owners\.ts|\.\/storage\.ts)$/u,
       [LIBRARY_TARGETS]:
         /^(?:server-only|@minhaj\/contracts\/(?:library|migration)|\.\.\/contexts\/library\/index\.ts|\.\/migration-target-support\.ts)$/u,
       [EDITORIAL_TARGETS]:
@@ -300,6 +304,8 @@ describe('only Layer-4 composition wires Migration and its publication targets',
         /^(?:server-only|@minhaj\/contracts\/(?:global|migration)|\.\.\/contexts\/global-network\/index\.ts|\.\/migration-target-support\.ts)$/u,
       [PEOPLE_TARGETS]:
         /^(?:server-only|@minhaj\/contracts\/(?:people|migration)|\.\.\/contexts\/people-contributors\/index\.ts|\.\/migration-target-support\.ts)$/u,
+      [COLLECTION_TARGETS]:
+        /^(?:server-only|@minhaj\/contracts\/(?:editorial|migration)|\.\.\/contexts\/editorial\/index\.ts|\.\/migration-(?:editorial-targets|target-support)\.ts)$/u,
       [TARGET_SUPPORT]: /^(?:server-only|@minhaj\/contracts\/migration)$/u,
       [ROUTER]: /^(?:server-only|@minhaj\/contracts\/migration)$/u,
     };
@@ -338,9 +344,16 @@ describe('only Layer-4 composition wires Migration and its publication targets',
       expect(source).not.toMatch(/\b(?:persistence|store)\.\w+\(/u);
     // Editorial's second-person workflow is never short-circuited: the only
     // actions a migrated record is ever given are submit and archive.
-    expect(
-      [...editorial.matchAll(/action: '([a-z]+)'/gu)].map((match) => match[1]).sort(),
-    ).toEqual(['archive', 'submit']);
+    const collections = withoutComments(await read(COLLECTION_TARGETS));
+    for (const source of [editorial, collections])
+      expect(
+        [...source.matchAll(/action: '([a-z]+)'/gu)].map((match) => match[1]).sort(),
+      ).toEqual(['archive', 'submit']);
+    expect(collections).toMatch(/editorial\.create\(/u);
+    expect(collections).not.toMatch(/\b(?:persistence|store)\.\w+\(/u);
+    // Phase 30-RD: the members' owners are asked only through their public reads.
+    for (const specifier of imports(await read(MEMBER_OWNERS)))
+      expect(specifier).toMatch(/^(?:server-only|@minhaj\/contracts\/editorial)$/u);
   });
 
   it('keeps the node-runnable composition free of the bundler alias, all the way down', async () => {

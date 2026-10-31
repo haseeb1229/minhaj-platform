@@ -376,6 +376,8 @@ live('Phase 29 Migration & Provenance persistence against real SQL Server', () =
       validation: 'valid',
       issues: [],
       personalData: 'none',
+      clearanceOfStagedRecordId: null,
+      findings: [],
       categories: options.categories ?? [],
       links: [],
       duplicates: options.duplicates ?? [],
@@ -928,6 +930,171 @@ live('Phase 29 Migration & Provenance persistence against real SQL Server', () =
     expect(
       (await auditFor(admin, first.stagedRecordId)).map((row) => row.action),
     ).toEqual(['migration.staged.reviewed']);
+  });
+
+  it('records findings, classifies them only with live clearance authority, and approves a cleared revision only by someone else (Phase 30-RD)', async () => {
+    const source = await fixtureSource();
+    const run = await openRun(source);
+    await discover(source, run, ['office']);
+    const [item] = await pending(run.run.id);
+    if (item === undefined) throw new Error('no pending item');
+    const fetched = await fetchItem(source, run.run.id, item, '<html>office</html>');
+    const base = {
+      sourceId: source.id,
+      runId: run.run.id,
+      itemId: item.itemId,
+      recordId: item.recordId,
+      snapshotId: fetched.snapshotId,
+      contentKind: 'media.video' as const,
+      title: sentinel('TITLE', 'office'),
+      titleKey: 'office',
+      dedupeKey: null,
+      languageCode: 'en',
+      provenance: PROVENANCE,
+      inputChecksum: fetched.checksum,
+      producedAt: new Date(),
+      validation: 'valid' as const,
+      issues: [],
+      categories: [],
+      links: [],
+      duplicates: [],
+      outcome: 'staged' as const,
+      error: null,
+    };
+    const flaggedPayload = JSON.stringify({ kind: 'media.video', title: '[redacted]' });
+    const flagged = await world.pipeline.stage({
+      ...base,
+      payload: flaggedPayload,
+      payloadChecksum: sha(flaggedPayload),
+      personalData: 'flagged',
+      clearanceOfStagedRecordId: null,
+      findings: [
+        { type: 'email', digest: sha('email'), context: 'Write to «email».' },
+        { type: 'phone', digest: sha('phone'), context: 'Call «phone».' },
+      ],
+    });
+    const findings = await world.reader.personalDataFindings(flagged.stagedRecordId);
+    expect(
+      findings.map((finding) => [finding.position, finding.type, finding.classification]),
+    ).toEqual([
+      [0, 'email', 'unresolved'],
+      [1, 'phone', 'unresolved'],
+    ]);
+    expect(await world.pipeline.personalDataFindings(flagged.stagedRecordId)).toEqual(
+      new Map([
+        [sha('email'), 'unresolved'],
+        [sha('phone'), 'unresolved'],
+      ]),
+    );
+
+    // Without the key and a live `migration-personal-data` step-up: refused, by the database.
+    const classify = (findingId: string, version: number, actorId: string) =>
+      world.decisions.classifyFinding({
+        findingId,
+        expectedVersion: version,
+        classification: 'public-organisational-contact',
+        note: sentinel('NOTE', 'office'),
+        actorId,
+        now: new Date(),
+      });
+    expect(await reasonOf(classify(findings[0]!.id, 1, operator))).toBe('denied');
+    // The publication grant is not the clearance grant.
+    expect(await reasonOf(classify(findings[0]!.id, 1, authority))).toBe('denied');
+    const clearer = await createProofAccount(admin);
+    const role = randomUUID();
+    const session = randomUUID();
+    await admin.query(`
+      INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system])
+        VALUES (${n(role)}, ${n(`proof-clear-${role.slice(0, 8)}`)}, N'NON_MIGRATION_FIXTURE clearance role', N'Holds migration.clearPersonalData for the integration proof only.', 0);
+      INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES (${n(role)}, N'migration.clearPersonalData');
+      INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId]) VALUES (${n(clearer)}, ${n(role)});
+      INSERT INTO [dbo].[Session] ([id],[token],[userId],[expiresAt],[createdAt],[updatedAt])
+        VALUES (${n(session)}, ${n(`proof-clear-${session}`)}, ${n(clearer)}, DATEADD(hour,2,SYSUTCDATETIME()), SYSUTCDATETIME(), SYSUTCDATETIME());
+      INSERT INTO [dbo].[StepUpGrant] ([userId],[sessionId],[purpose],[expiresAt])
+        VALUES (${n(clearer)}, ${n(session)}, N'migration-personal-data', DATEADD(hour,1,SYSUTCDATETIME()));
+    `);
+    expect(await reasonOf(classify(findings[0]!.id, 7, clearer))).toBe('conflict');
+    for (const finding of findings) await classify(finding.id, 1, clearer);
+    const decided = await world.reader.personalDataFindings(flagged.stagedRecordId);
+    expect(
+      decided.map((finding) => [
+        finding.classification,
+        finding.decidedByUserId,
+        finding.version,
+      ]),
+    ).toEqual([
+      ['public-organisational-contact', clearer, 2],
+      ['public-organisational-contact', clearer, 2],
+    ]);
+    // The audit row names the act and the class, never the reason's words.
+    const audit = await auditFor(admin, findings[0]!.id);
+    expect(audit.map((row) => [row.action, row.authorisingSource])).toEqual([
+      ['migration.personal-data.classified', 'migration.clearPersonalData'],
+    ]);
+    expect(JSON.stringify(audit)).not.toContain(sentinel('NOTE', 'office'));
+    // Evidence is never rewritten or deleted by the runtime principal.
+    expect(
+      await sqlNumber(
+        world.app.query(
+          `UPDATE [dbo].[MigrationPersonalDataFinding] SET [context] = N'x' WHERE [id] = ${n(findings[0]!.id)};`,
+        ),
+      ),
+    ).toBe(230);
+    expect(
+      await sqlNumber(
+        world.app.query(
+          `DELETE FROM [dbo].[MigrationPersonalDataFinding] WHERE [id] = ${n(findings[0]!.id)};`,
+        ),
+      ),
+    ).toBe(229);
+
+    // The cleared re-read of the SAME bytes, in the next run: a new revision
+    // naming the flagged one.
+    await completeRun(run);
+    const replay = await openRun(source);
+    await discover(source, replay, ['office']);
+    const [next] = await pending(replay.run.id);
+    if (next === undefined) throw new Error('no pending item');
+    const refetched = await fetchItem(source, replay.run.id, next, '<html>office</html>');
+    const clearedPayload = JSON.stringify({ kind: 'media.video', title: 'office@x' });
+    const cleared = await world.pipeline.stage({
+      ...base,
+      runId: replay.run.id,
+      itemId: next.itemId,
+      snapshotId: refetched.snapshotId,
+      payload: clearedPayload,
+      payloadChecksum: sha(clearedPayload),
+      personalData: 'cleared',
+      clearanceOfStagedRecordId: flagged.stagedRecordId,
+      findings: [],
+    });
+    const detail = await world.reader.stagedDetail(cleared.stagedRecordId);
+    expect(detail).toMatchObject({
+      personalData: 'cleared',
+      clearanceOfStagedRecordId: flagged.stagedRecordId,
+      review: 'pending',
+    });
+    // The clearer may not approve it; someone else may.
+    expect(
+      await reasonOf(
+        world.decisions.review({
+          stagedRecordId: cleared.stagedRecordId,
+          expectedVersion: 1,
+          review: 'approved',
+          note: null,
+          actorId: clearer,
+          now: new Date(),
+        }),
+      ),
+    ).toBe('same-person');
+    await approve(cleared.stagedRecordId);
+    expect((await world.reader.stagedDetail(cleared.stagedRecordId))?.review).toBe(
+      'approved',
+    );
+    // The flagged revision is evidence: its payload is what it always was.
+    expect((await world.reader.stagedDetail(flagged.stagedRecordId))?.payload).toBe(
+      flaggedPayload,
+    );
   });
 
   it('collapses a hard-identity duplicate into the earlier record, and a person can undo it', async () => {

@@ -156,6 +156,7 @@ describe('the Fatwa permission vocabulary', () => {
       'fatwa.publish',
       'messaging.moderate',
       'messaging.support',
+      'migration.clearPersonalData',
       'migration.publish',
       'question.receive',
       'teaching.perform',

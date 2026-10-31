@@ -3,6 +3,7 @@ import type {
   MigrationSourceAdapter,
   ParseResult,
   ParsedAsset,
+  ParsedCollection,
   ParsedEditorial,
   ParsedImage,
   ParsedPage,
@@ -64,6 +65,9 @@ import {
 export const MINHAJ_ORG_EDITORIAL_ADAPTER_KEY = 'minhaj-org-editorial';
 export const MINHAJ_ORG_PAGE_ADAPTER_KEY = 'minhaj-org-page';
 export const MINHAJ_ORG_PERSON_ADAPTER_KEY = 'minhaj-org-person';
+/** Phase 30-RD: the posts a curated archive holds, and the archives themselves. */
+export const MINHAJ_ORG_ARCHIVE_NEWS_ADAPTER_KEY = 'minhaj-org-archive-news';
+export const MINHAJ_ORG_COLLECTION_ADAPTER_KEY = 'minhaj-org-collection';
 export const MINHAJ_ORG_BASE_URL = 'https://www.minhaj.org/';
 /** The hosts a minhaj.org source registers: listing and item links stay on www. */
 export const MINHAJ_ORG_HOST = 'www.minhaj.org';
@@ -518,6 +522,235 @@ export function createMinhajOrgPersonAdapter(
         assets: post.assets,
         biographyHtml: post.bodyHtml,
         portrait: post.image,
+      };
+      return { kind: 'parsed', record };
+    },
+  };
+}
+
+/* ===========================================================================
+ * Phase 30-RD: archive members and the curated archives themselves
+ * ========================================================================= */
+
+/** The category a `tid` page's address files it under, or null when none. */
+function categoryOf(finalUrl: string): string | null {
+  try {
+    const match =
+      /^\/(?:english|urdu|arabic)\/([^/]+)\/tid\/[1-9][0-9]{0,8}(?:\/|$)/.exec(
+        new URL(finalUrl).pathname,
+      );
+    return match?.[1] === undefined ? null : decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
+
+export interface MinhajOrgArchiveNewsOptions extends MinhajOrgFixedOptions {
+  /** The catalogue's archive-member tids — the posts its Collections hold. */
+  readonly tids: readonly string[];
+}
+
+/**
+ * The news posts a catalogued curated archive holds, as `editorial.news` — a
+ * fixed, reviewed list of `tid`s, never a crawl. Each is read exactly as the
+ * listing sources read a post; its category is the one its own address files
+ * it under ("Overseas", "Lahore" …), since no listing names it.
+ */
+export function createMinhajOrgArchiveNewsAdapter(
+  options: MinhajOrgArchiveNewsOptions,
+): MigrationSourceAdapter {
+  const base = siteRoot(options.baseUrl, MINHAJ_ORG_HOST);
+  checkSelection(options.selection);
+  if (!isSectionLanguage(options.language))
+    throw new Error('language must be english, urdu or arabic');
+  const sectionLanguage = options.language;
+  const languageCode = SECTION_LANGUAGES[sectionLanguage];
+  if (new Set(options.tids).size !== options.tids.length)
+    throw new Error('a tid is listed twice');
+  const tids = selectedTids(options.tids, options.items);
+
+  return {
+    adapterKey: MINHAJ_ORG_ARCHIVE_NEWS_ADAPTER_KEY,
+    adapterVersion: '1',
+    parserKey: 'cheerio-minhaj-org-editorial',
+    parserVersion: '3',
+    contentKind: 'editorial.news',
+    accessMethod: 'http',
+    discover: fixedItemDiscovery(
+      base,
+      tids.map((tid) => tidItem(base, sectionLanguage, tid)),
+      options.selection.limit,
+    ),
+    retrieve: retrieveOnce,
+
+    parse(evidence): ParseResult {
+      const read = readPost(evidence, sectionLanguage);
+      if (read.kind !== 'post') return read;
+      const { post } = read;
+      const category = categoryOf(evidence.finalUrl);
+      const record: ParsedEditorial = {
+        kind: 'editorial.news',
+        title: post.title,
+        primaryLocale: languageCode,
+        languageCode,
+        publishedOn: post.publishedOn,
+        legacyIdentifier: `tid-${post.tid}`,
+        categories: category === null ? [] : [{ key: category, label: category }],
+        links: [],
+        assets: post.assets,
+        excerptHtml: null,
+        bodyHtml: post.bodyHtml,
+        leadImage: post.image,
+      };
+      return { kind: 'parsed', record };
+    },
+  };
+}
+
+/** A curated archive's path: `/{lang}/lkcatid/{n}/…`. */
+const LKCATID_PATH = /^\/(english|urdu|arabic)\/lkcatid\/([1-9][0-9]{0,8})(?:\/|$)/;
+
+/** The template's tail on every page description, which is not the description. */
+const DESCRIPTION_TAIL = / by Minhaj-ul-Quran International\.$/;
+
+function escapeText(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+export interface MinhajOrgCollectionOptions extends MinhajOrgFixedOptions {
+  /** The catalogue's curated archives, by `lkcatid` — never every category. */
+  readonly archives: readonly string[];
+}
+
+/**
+ * A source's own editor-curated archive (`/{lang}/lkcatid/{n}/`) as one
+ * `editorial.collection` record: its title, its own description (the page's
+ * meta description without the template's tail), and its members — every post
+ * card in the main column's archive list, in document order, each under the
+ * section heading (`h3`) and group heading (`h4`) above it.
+ *
+ * EXACT OR NOTHING. A card that links anywhere but a `tid` post of this site
+ * in the archive's own language, an archive split over pages, or an empty one
+ * is a parse failure — never a smaller Collection claimed as the archive.
+ */
+export function createMinhajOrgCollectionAdapter(
+  options: MinhajOrgCollectionOptions,
+): MigrationSourceAdapter {
+  const base = siteRoot(options.baseUrl, MINHAJ_ORG_HOST);
+  checkSelection(options.selection);
+  if (!isSectionLanguage(options.language))
+    throw new Error('language must be english, urdu or arabic');
+  const sectionLanguage = options.language;
+  const languageCode = SECTION_LANGUAGES[sectionLanguage];
+  const archives = selectedTids(options.archives, options.items);
+  const catalogued = new Set(options.archives);
+
+  return {
+    adapterKey: MINHAJ_ORG_COLLECTION_ADAPTER_KEY,
+    adapterVersion: '1',
+    parserKey: 'cheerio-minhaj-org-collection',
+    parserVersion: '1',
+    contentKind: 'editorial.collection',
+    accessMethod: 'http',
+    discover: fixedItemDiscovery(
+      base,
+      archives.map((id) => {
+        const externalKey = keyOf(base, `/${sectionLanguage}/lkcatid/${id}/`);
+        return {
+          externalKey,
+          originalUrl: externalKey,
+          legacyIdentifier: `lkcatid-${id}`,
+        };
+      }),
+      options.selection.limit,
+    ),
+    retrieve: retrieveOnce,
+
+    parse(evidence): ParseResult {
+      const decoded = decodeHtml(evidence.body, evidence.contentType);
+      if (!decoded.ok) return { kind: 'failed', detail: decoded.detail };
+      const $ = loadHtml(decoded.html);
+      let path: string;
+      try {
+        path = new URL(evidence.finalUrl).pathname;
+      } catch {
+        return { kind: 'failed', detail: 'final-url-invalid' };
+      }
+      const archive = LKCATID_PATH.exec(path);
+      if (archive === null) return { kind: 'excluded', reason: 'not-an-archive-page' };
+      if (archive[1] !== sectionLanguage)
+        return { kind: 'failed', detail: 'language-conflict' };
+      const id = archive[2] ?? '';
+      if (!catalogued.has(id)) return { kind: 'excluded', reason: 'not-catalogued' };
+
+      const heading = $('h1.page_title');
+      if (heading.length !== 1)
+        return { kind: 'failed', detail: 'record-structure-missing' };
+      const title = cleanText(heading.text());
+      if (title.length === 0) return { kind: 'failed', detail: 'title-missing' };
+      const main = heading.closest('.col');
+      const list = main.find('.tb_widget_recent_list');
+      if (main.length !== 1 || list.length !== 1)
+        return { kind: 'failed', detail: 'record-structure-missing' };
+      if (main.find('ul.page-numbers').length > 0)
+        return { kind: 'failed', detail: 'archive-paginated' };
+
+      const members: { url: string; section: string | null; group: string | null }[] = [];
+      let section: string | null = null;
+      let group: string | null = null;
+      let foreign = false;
+      list
+        .find('.widget_title h3, .widget_title h4, .item_content h4')
+        .each((_index, element) => {
+          const node = $(element);
+          const card = node.closest('.item_content').length > 0;
+          if (!card) {
+            const text = cleanText(node.text());
+            if (element.tagName === 'h3') {
+              section = text.length > 0 ? text : null;
+              group = null;
+            } else group = text.length > 0 ? text : null;
+            return;
+          }
+          const href = node.find('a[href]').first().attr('href') ?? '';
+          let url: URL;
+          try {
+            url = new URL(href, evidence.finalUrl);
+          } catch {
+            foreign = true;
+            return;
+          }
+          const tid = TID_PATH.exec(url.pathname);
+          if (
+            url.host !== MINHAJ_ORG_HOST ||
+            tid === null ||
+            tid[1] !== sectionLanguage
+          ) {
+            foreign = true;
+            return;
+          }
+          members.push({
+            url: tidItem(base, sectionLanguage, tid[2] ?? '').externalKey,
+            section,
+            group,
+          });
+        });
+      if (foreign) return { kind: 'failed', detail: 'member-not-a-record' };
+      if (members.length === 0) return { kind: 'failed', detail: 'archive-empty' };
+
+      const described = cleanText($('meta[name="description"]').attr('content') ?? '');
+      const record: ParsedCollection = {
+        kind: 'editorial.collection',
+        title,
+        primaryLocale: languageCode,
+        languageCode,
+        publishedOn: null,
+        legacyIdentifier: `lkcatid-${id}`,
+        categories: [],
+        links: [],
+        assets: [],
+        descriptionHtml: escapeText(described.replace(DESCRIPTION_TAIL, '')),
+        members,
       };
       return { kind: 'parsed', record };
     },

@@ -12,6 +12,8 @@ import {
 } from '../adapters/minhaj-info.ts';
 import {
   MINHAJ_ORG_ASSET_HOSTS,
+  createMinhajOrgArchiveNewsAdapter,
+  createMinhajOrgCollectionAdapter,
   createMinhajOrgEditorialAdapter,
   createMinhajOrgPageAdapter,
   createMinhajOrgPersonAdapter,
@@ -132,6 +134,154 @@ const MINHAJ_ORG_PAGE_TIDS: readonly string[] = Object.freeze(
 );
 
 /**
+ * Phase 30-RD. The source's own editor-curated archives the owner approved as
+ * Collections, by `lkcatid` — exactly these three, never every category:
+ * Al-Hidayah (12), Mawlid Conferences (1) and Itikaf during Ramadhan (2).
+ */
+export const MINHAJ_ORG_COLLECTION_IDS: readonly string[] = Object.freeze([
+  '12',
+  '1',
+  '2',
+]);
+
+/**
+ * Phase 30-RD. Every post those three archives hold, as their pages listed
+ * them on 2026-10-31 (archive order; Itikaf names tid 18036 twice, kept once):
+ * the bounded set of news posts migrated FIRST, so each Collection's members
+ * are public before it is. No other post of the site is taken, and none of
+ * these was held by any source before.
+ */
+export const MINHAJ_ORG_ARCHIVE_TIDS: readonly string[] = Object.freeze([
+  // Al-Hidayah (20)
+  '48059',
+  '47265',
+  '44564',
+  '41485',
+  '41122',
+  '41422',
+  '38479',
+  '38602',
+  '12283',
+  '12252',
+  '12280',
+  '8790',
+  '8765',
+  '8774',
+  '8776',
+  '8775',
+  '3323',
+  '3343',
+  '3197',
+  '134',
+  // Mawlid Conferences (43)
+  '60930',
+  '54974',
+  '57047',
+  '52637',
+  '50300',
+  '47951',
+  '45356',
+  '42118',
+  '39286',
+  '35018',
+  '31331',
+  '25312',
+  '20929',
+  '15857',
+  '13347',
+  '9927',
+  '7784',
+  '3446',
+  '3233',
+  '3179',
+  '13271',
+  '3182',
+  '11133',
+  '3484',
+  '3475',
+  '7997',
+  '3485',
+  '7932',
+  '7853',
+  '8426',
+  '62',
+  '138',
+  '3405',
+  '7933',
+  '3227',
+  '3432',
+  '7874',
+  '3451',
+  '3462',
+  '3466',
+  '7939',
+  '8496',
+  '8473',
+  // Itikaf during Ramadhan (51)
+  '23362',
+  '23360',
+  '23356',
+  '23350',
+  '23345',
+  '23344',
+  '23318',
+  '23335',
+  '23306',
+  '23303',
+  '18045',
+  '18048',
+  '18036',
+  '18023',
+  '18040',
+  '18015',
+  '18041',
+  '18006',
+  '18014',
+  '17999',
+  '18001',
+  '17989',
+  '14802',
+  '14798',
+  '14782',
+  '14767',
+  '9072',
+  '9047',
+  '9024',
+  '9021',
+  '9019',
+  '9008',
+  '8979',
+  '8976',
+  '8970',
+  '8965',
+  '3802',
+  '3798',
+  '3791',
+  '3782',
+  '3778',
+  '3283',
+  '3282',
+  '3281',
+  '3280',
+  '3279',
+  '3278',
+  '3284',
+  '9018',
+  '3803',
+  '3804',
+]);
+
+/**
+ * The English `tid`s other sources own — the bound pages and the archive
+ * members — which no English editorial LISTING may also take, so one legacy
+ * address never maps to two records.
+ */
+const MINHAJ_ORG_ENGLISH_RESERVED_TIDS: readonly string[] = Object.freeze([
+  ...MINHAJ_ORG_PAGE_TIDS,
+  ...MINHAJ_ORG_ARCHIVE_TIDS,
+]);
+
+/**
  * Phase 30-R. The public leadership profiles on minhaj.org. The founder's own
  * profile (tid 8718) is the Shaykh-ul-Islam biography PAGE above, so one legacy
  * address never maps to two records.
@@ -175,7 +325,7 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
         kind: 'editorial.news',
         section: 'News-Events',
         language: 'english',
-        reservedTids: MINHAJ_ORG_PAGE_TIDS,
+        reservedTids: MINHAJ_ORG_ENGLISH_RESERVED_TIDS,
       }),
   },
   {
@@ -217,7 +367,7 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
         kind: 'editorial.article',
         section: 'Articles',
         language: 'english',
-        reservedTids: MINHAJ_ORG_PAGE_TIDS,
+        reservedTids: MINHAJ_ORG_ENGLISH_RESERVED_TIDS,
       }),
   },
   {
@@ -259,7 +409,7 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
         kind: 'editorial.press-release',
         section: 'Press-Release',
         language: 'english',
-        reservedTids: MINHAJ_ORG_PAGE_TIDS,
+        reservedTids: MINHAJ_ORG_ENGLISH_RESERVED_TIDS,
       }),
   },
   {
@@ -282,6 +432,51 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
         items: selection.items,
         language: 'english',
         bindings: MINHAJ_ORG_PAGE_BINDINGS,
+      }),
+  },
+  {
+    key: 'minhaj-org-archive-news-en',
+    name: 'Minhaj.org — curated-archive news posts (English)',
+    contentKind: 'editorial.news',
+    baseUrl: MINHAJ_ORG,
+    hosts: ['www.minhaj.org'],
+    assetHosts: MINHAJ_ORG_ASSET_HOSTS,
+    assetHostEvidence: MINHAJ_NET_EVIDENCE,
+    defaultLanguageCode: 'en',
+    policy: AUTHORISED_POLICY,
+    policyNotes:
+      `The catalogued posts the three approved curated archives hold — migrated first, so ` +
+      `every Collection member is public before its Collection. ${PUBLIC_ONLY}`,
+    adapter: (selection) =>
+      createMinhajOrgArchiveNewsAdapter({
+        baseUrl: MINHAJ_ORG,
+        selection,
+        items: selection.items,
+        language: 'english',
+        tids: MINHAJ_ORG_ARCHIVE_TIDS,
+      }),
+  },
+  {
+    key: 'minhaj-org-collections-en',
+    name: 'Minhaj.org — curated archives (English)',
+    contentKind: 'editorial.collection',
+    baseUrl: MINHAJ_ORG,
+    hosts: ['www.minhaj.org'],
+    assetHosts: [],
+    assetHostEvidence: null,
+    defaultLanguageCode: 'en',
+    policy: AUTHORISED_POLICY,
+    policyNotes:
+      `The three owner-approved editor-curated archives (Al-Hidayah, Mawlid Conferences, ` +
+      `Itikaf during Ramadhan) as Collections: title, description and members in source ` +
+      `order; no image. ${PUBLIC_ONLY}`,
+    adapter: (selection) =>
+      createMinhajOrgCollectionAdapter({
+        baseUrl: MINHAJ_ORG,
+        selection,
+        items: selection.items,
+        language: 'english',
+        archives: MINHAJ_ORG_COLLECTION_IDS,
       }),
   },
   {

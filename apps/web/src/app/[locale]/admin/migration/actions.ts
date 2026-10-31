@@ -220,6 +220,39 @@ export async function cancelRunAction(
  * ========================================================================= */
 
 /** approve | reject | withdraw-approval of one staged revision. */
+/**
+ * Phase 30-RD. One person's classification of one personal-data finding,
+ * with its reason, at the version shown — `migration.clearPersonalData`
+ * (externally gated) with a complete second-factor posture and a live step-up
+ * for exactly `migration-personal-data`; the service re-verifies that actor
+ * and the database trigger checks a third time. Nothing typed is logged.
+ */
+export async function classifyFindingAction(
+  _state: FormActionState,
+  form: FormData,
+): Promise<FormActionState> {
+  const locale = localeOf(form);
+  const gate = await requirePrivilegedActor(
+    locale,
+    'migration.clearPersonalData',
+    'migration-personal-data',
+  );
+  if (gate.state === 'denied') return { status: 'error', failure: gate.reason };
+  const { id, expectedVersion } = versioned(form);
+  try {
+    await migrationRuntime().decisions.classifyFinding(gate.actor, {
+      findingId: id,
+      expectedVersion,
+      classification: field(form, 'classification'),
+      note: textarea(form, 'note') ?? '',
+    });
+  } catch (error) {
+    return rejected(error, 'migration-classify-finding');
+  }
+  refreshed(locale);
+  return DONE;
+}
+
 export async function reviewAction(
   _state: FormActionState,
   form: FormData,

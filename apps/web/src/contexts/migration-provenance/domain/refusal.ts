@@ -28,6 +28,11 @@ export const MIGRATION_REFUSAL_REASONS = Object.freeze([
   'run-unreconciled',
   /** The revision is invalid or carries personal data, so it cannot be approved. */
   'not-publishable',
+  /**
+   * Phase 30-RD. A person who cleared a personal-data finding of a revision
+   * may not also approve it: the clearance is checked by somebody else.
+   */
+  'same-person',
   'approval-withdrawn',
   /** The publication target did not answer; nothing was assumed. Resumable. */
   'target-unavailable',

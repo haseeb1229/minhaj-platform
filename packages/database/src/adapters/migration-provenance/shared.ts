@@ -53,7 +53,7 @@ export { MigrationDataError };
  * ========================================================================= */
 
 /**
- * The migration's own refusals (`THROW 51370`–`51384`), by number. They are
+ * The migration's own refusals (`THROW 51370`–`51386`), by number. They are
  * the FLOOR beneath the adapter's own questions, which are asked first, so a
  * caller is told precisely. Read from the STRUCTURED fields the driver
  * populates, never from message text, which a stored value could imitate.
@@ -89,6 +89,11 @@ const THROW_REASONS: ReadonlyMap<number, string> = new Map([
   [51383, 'invalid-state'],
   // A topic mapping re-identified.
   [51384, 'invalid-state'],
+  // Phase 30-RD: a finding rewritten or decided without live clearance authority.
+  [51385, 'denied'],
+  // Phase 30-RD: a cleared revision without a complete clearance, or approved
+  // by a person who cleared it.
+  [51386, 'same-person'],
 ]);
 
 const UNIQUE_VIOLATION = 'UniqueConstraintViolation';
@@ -641,6 +646,7 @@ export const TARGET_COLUMNS = Object.freeze({
   'editorial.page': 'pageId',
   'people.person': 'personId',
   'global.country': 'countryId',
+  'editorial.collection': 'collectionId',
 } as const satisfies Record<MigrationPublishableKind, string>);
 
 export type TargetColumn = (typeof TARGET_COLUMNS)[MigrationPublishableKind];
@@ -685,6 +691,7 @@ export const TARGET_SELECT = {
   pageId: true,
   personId: true,
   countryId: true,
+  collectionId: true,
 } as const;
 
 export const ENTRY_SELECT = {
@@ -723,6 +730,7 @@ export interface EntryRow {
   readonly pageId: string | null;
   readonly personId: string | null;
   readonly countryId: string | null;
+  readonly collectionId: string | null;
   readonly targetStage: string | null;
   readonly targetVersion: number | null;
   readonly canonicalPath: string | null;

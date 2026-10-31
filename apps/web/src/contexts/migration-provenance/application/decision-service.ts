@@ -1,7 +1,9 @@
 import 'server-only';
 
 import {
+  clearsFinding,
   disappearanceDecisionSchema,
+  findingDecisionSchema,
   duplicateDecisionSchema,
   errorDecisionSchema,
   legacyMappingDecisionSchema,
@@ -37,14 +39,15 @@ import { ADMINISTER, createGate, guarded } from './shared.ts';
  *
  * Dependencies (ports only):
  *  - `decisions` — `MigrationDecisionPort`;
- *  - `read`      — `MigrationReadPort` (`stagedDetail`, to answer an approval helpfully);
+ *  - `read`      — `MigrationReadPort` (`stagedDetail` and, for a cleared
+ *                  revision, `personalDataFindings`, to answer an approval helpfully);
  *  - `topics`    — `MigrationTopicPort`, Taxonomy's answer;
  *  - `authority` — `MigrationAuthorityPort`;
  *  - `clock`     — injectable for tests.
  */
 export function createMigrationDecisionService(deps: {
   readonly decisions: MigrationDecisionPort;
-  readonly read: Pick<MigrationReadPort, 'stagedDetail'>;
+  readonly read: Pick<MigrationReadPort, 'stagedDetail' | 'personalDataFindings'>;
   readonly topics: MigrationTopicPort;
   readonly authority: MigrationAuthorityPort;
   readonly clock?: () => Date;
@@ -67,8 +70,25 @@ export function createMigrationDecisionService(deps: {
     if (staged.version !== value.expectedVersion) throw new MigrationRefusal('conflict');
     if (value.decision === 'approve') {
       if (staged.review !== 'pending') throw new MigrationRefusal('invalid-state');
-      if (staged.validation !== 'valid' || staged.personalData !== 'none')
+      if (staged.validation !== 'valid' || staged.personalData === 'flagged')
         throw new MigrationRefusal('not-publishable');
+      // Phase 30-RD: a cleared revision is approved only by somebody who
+      // cleared none of its findings, and only while each still stands.
+      if (staged.personalData === 'cleared') {
+        const clearance =
+          staged.clearanceOfStagedRecordId === null
+            ? []
+            : await guarded(
+                deps.read.personalDataFindings(staged.clearanceOfStagedRecordId),
+              );
+        if (
+          clearance.length === 0 ||
+          clearance.some((finding) => !clearsFinding(finding.classification))
+        )
+          throw new MigrationRefusal('not-publishable');
+        if (clearance.some((finding) => finding.decidedByUserId === actorId))
+          throw new MigrationRefusal('same-person');
+      }
     } else if (value.decision === 'reject') {
       // Review moves forward only: an approval is withdrawn first, then rejected.
       if (staged.review !== 'pending') throw new MigrationRefusal('invalid-state');
@@ -93,6 +113,30 @@ export function createMigrationDecisionService(deps: {
   }
 
   return {
+    /**
+     * Phase 30-RD. One person's classification of one personal-data finding —
+     * the actor Identity minted for `migration.clearPersonalData` with a live
+     * `migration-personal-data` step-up, re-verified here; the database
+     * checks a third time. Only a pending flagged revision's finding is
+     * decided; the next replay of the same bytes reads the decisions.
+     */
+    async classifyFinding(actor: unknown, input: unknown): Promise<void> {
+      const actorId = await guarded(deps.authority.verifyClearer(actor));
+      if (actorId === null) throw new MigrationRefusal('denied');
+      const parsed = findingDecisionSchema.safeParse(input);
+      if (!parsed.success) throw new MigrationRefusal('invalid');
+      await guarded(
+        deps.decisions.classifyFinding({
+          findingId: parsed.data.findingId,
+          expectedVersion: parsed.data.expectedVersion,
+          classification: parsed.data.classification,
+          note: parsed.data.note,
+          actorId,
+          now: now(),
+        }),
+      );
+    },
+
     /** approve | reject | withdraw-approval of one staged revision. */
     async review(actor: MigrationActor, input: unknown): Promise<void> {
       const { actorId, value } = await gate.authorised(

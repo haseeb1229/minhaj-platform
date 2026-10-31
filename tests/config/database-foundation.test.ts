@@ -426,6 +426,8 @@ describe('Phase 1 Chunk 1 database foundation', () => {
       'MigrationRunItem',
       'MigrationRawSnapshot',
       'MigrationStagedRecord',
+      // Phase 30-RD: a person's classification of each personal-data finding.
+      'MigrationPersonalDataFinding',
       'MigrationStagedCategory',
       'MigrationStagedLink',
       'MigrationTopicMapping',

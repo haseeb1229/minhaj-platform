@@ -213,6 +213,7 @@ model User {
   migrationErrorDecisions      MigrationError[]
   migrationDuplicateDecisions  MigrationDuplicateCandidate[]
   migrationRightsDecisions     MigrationAssetProvenance[]
+  migrationFindingDecisions    MigrationPersonalDataFinding[]
   migrationMappingsCreated     MigrationLegacyMapping[]     @relation("MigrationMappingCreator")
   migrationMappingsChanged     MigrationLegacyMapping[]     @relation("MigrationMappingChanger")
   migrationManifestsCreated    MigrationPublishManifest[]   @relation("MigrationManifestCreator")
@@ -3721,6 +3722,8 @@ model Collection {
   scheduled CollectionRevision? @relation("CollectionScheduled", fields:[id,scheduledRevision], references:[ownerId,number], onDelete:NoAction, onUpdate:NoAction)
   revisions CollectionRevision[] @relation("CollectionHistory")
   slugs CollectionSlugHistory[]
+  migrationMappings MigrationLegacyMapping[]
+  migrationEntries MigrationManifestEntry[]
   @@unique([slug])
   @@index([state,updatedAt,id])
   @@index([state,publishedAt(sort: Desc),id])
@@ -6490,8 +6493,10 @@ model MigrationStagedRecord {
   /// valid | invalid
   validation String @db.NVarChar(16)
   issues String? @db.NVarChar(2000)
-  /// none | flagged
+  /// none | flagged | cleared (Phase 30-RD: a person cleared every finding of the flagged revision of the same bytes)
   personalData String @db.NVarChar(16)
+  /// The flagged revision whose findings were cleared — exactly when `personalData` is `cleared`.
+  clearanceOfStagedRecordId String? @db.NVarChar(36)
   /// pending | approved | rejected | superseded
   review String @default("pending") @db.NVarChar(16)
   reviewedByUserId String? @db.NVarChar(36)
@@ -6502,6 +6507,9 @@ model MigrationStagedRecord {
   snapshot MigrationRawSnapshot @relation(fields: [snapshotId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   run MigrationRun @relation(fields: [runId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   reviewedBy User? @relation(fields: [reviewedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clearanceOf MigrationStagedRecord? @relation("MigrationStagedClearance", fields: [clearanceOfStagedRecordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clearedBy MigrationStagedRecord[] @relation("MigrationStagedClearance")
+  findings MigrationPersonalDataFinding[]
   currentOf MigrationRecord[] @relation("MigrationRecordCurrentStaged")
   items MigrationRunItem[]
   categories MigrationStagedCategory[]
@@ -6512,6 +6520,37 @@ model MigrationStagedRecord {
   @@index([runId, review, id])
   @@index([contentKind, titleKey])
   @@index([dedupeKey])
+}
+
+/// Phase 30-RD. One DISTINCT match of the personal-data detector in a flagged
+/// revision — its type, a digest bound to the exact input bytes (never the
+/// matched text) and the words around it from the already-redacted text — and
+/// a person's classification of it. Recorded once, all together, by the run
+/// that staged the revision; decided only under `migration.clearPersonalData`
+/// with a live `migration-personal-data` step-up; never deleted.
+model MigrationPersonalDataFinding {
+  id String @id @db.NVarChar(36)
+  stagedRecordId String @db.NVarChar(36)
+  recordId String @db.NVarChar(36)
+  inputChecksum String @db.Char(64)
+  normalizerVersion String @db.NVarChar(32)
+  position Int
+  findingCount Int
+  /// email | phone
+  findingType String @db.NVarChar(16)
+  findingDigest String @db.Char(64)
+  context String @db.NVarChar(400)
+  /// unresolved | public-organisational-contact | public-organisational-identifier | personal-or-private
+  classification String @default("unresolved") @db.NVarChar(40)
+  note String? @db.NVarChar(500)
+  decidedByUserId String? @db.NVarChar(36)
+  decidedAt DateTime? @db.DateTime2
+  version Int @default(1)
+  staged MigrationStagedRecord @relation(fields: [stagedRecordId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  decidedBy User? @relation(fields: [decidedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  @@unique([stagedRecordId, position], map: "MigrationPersonalDataFinding_staged_position_key")
+  @@unique([stagedRecordId, findingDigest], map: "MigrationPersonalDataFinding_staged_digest_key")
+  @@index([recordId])
 }
 
 /// A staged revision's legacy category, joined to its source's reviewable
@@ -6677,6 +6716,8 @@ model MigrationLegacyMapping {
   pressReleaseId String? @db.NVarChar(36)
   personId String? @db.NVarChar(36)
   countryId String? @db.NVarChar(36)
+  /// Phase 30-RD: a curated archive migrated as an Editorial Collection.
+  collectionId String? @db.NVarChar(36)
   canonicalPath String @db.NVarChar(400)
   /// active | disabled
   state String @db.NVarChar(16)
@@ -6698,6 +6739,7 @@ model MigrationLegacyMapping {
   pressRelease PressRelease? @relation(fields: [pressReleaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   person Person? @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   country Country? @relation(fields: [countryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  collection Collection? @relation(fields: [collectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   entry MigrationManifestEntry? @relation(fields: [manifestEntryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   createdBy User @relation("MigrationMappingCreator", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   changedBy User? @relation("MigrationMappingChanger", fields: [changedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -6754,6 +6796,8 @@ model MigrationManifestEntry {
   pressReleaseId String? @db.NVarChar(36)
   personId String? @db.NVarChar(36)
   countryId String? @db.NVarChar(36)
+  /// Phase 30-RD: a curated archive migrated as an Editorial Collection.
+  collectionId String? @db.NVarChar(36)
   /// create | refresh — a refresh carries a newer revision into a record already published (Phase 30-R)
   mode String @default("create") @db.NVarChar(8)
   /// public | in-review — how far the owning domain carried the record (Phase 30)
@@ -6777,6 +6821,7 @@ model MigrationManifestEntry {
   pressRelease PressRelease? @relation(fields: [pressReleaseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   person Person? @relation(fields: [personId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   country Country? @relation(fields: [countryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  collection Collection? @relation(fields: [collectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   legacyMappings MigrationLegacyMapping[]
   promotions MigrationPromotionEntry[]
   @@unique([manifestId, position], map: "MigrationManifestEntry_manifest_position_key")

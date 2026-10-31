@@ -42,6 +42,9 @@ export const MIGRATION_PUBLISHABLE_KINDS = Object.freeze([
   'editorial.page',
   'people.person',
   'global.country',
+  // Phase 30-RD: a source's own curated archive, as an Editorial Collection
+  // whose members are records migration already published.
+  'editorial.collection',
 ] as const);
 export type MigrationPublishableKind = (typeof MIGRATION_PUBLISHABLE_KINDS)[number];
 
@@ -136,6 +139,8 @@ export const MIGRATION_LIMITS = Object.freeze({
   detail: 500,
   /** A free-text operator note or reason. */
   note: 500,
+  /** Distinct personal-data findings recorded for one revision (Phase 30-RD). */
+  findings: 200,
   title: 240,
   description: 4000,
   url: 2000,
@@ -280,8 +285,43 @@ export type ReviewState = (typeof REVIEW_STATES)[number];
 export const VALIDATION_STATES = Object.freeze(['valid', 'invalid'] as const);
 export type ValidationState = (typeof VALIDATION_STATES)[number];
 
-export const PERSONAL_DATA_STATES = Object.freeze(['none', 'flagged'] as const);
+/**
+ * `none`: the detector found nothing. `flagged`: it found something, which is
+ * redacted, and the revision can never be approved. `cleared` (Phase 30-RD):
+ * a revision re-read from the SAME bytes by the SAME normaliser after a person
+ * classified every finding of the flagged one as public organisational — the
+ * only way past the detector, and never by editing a flag.
+ */
+export const PERSONAL_DATA_STATES = Object.freeze([
+  'none',
+  'flagged',
+  'cleared',
+] as const);
 export type PersonalDataState = (typeof PERSONAL_DATA_STATES)[number];
+
+/** What the detector matches (Phase 30-RD). */
+export const PERSONAL_DATA_FINDING_TYPES = Object.freeze(['email', 'phone'] as const);
+export type PersonalDataFindingType = (typeof PERSONAL_DATA_FINDING_TYPES)[number];
+
+/**
+ * A person's classification of one finding (Phase 30-RD). Only the two PUBLIC
+ * ORGANISATIONAL classes clear it; `personal-or-private` and `unresolved`
+ * keep the record held — the default is the detector's, never the reviewer's
+ * convenience.
+ */
+export const PERSONAL_DATA_CLASSIFICATIONS = Object.freeze([
+  'unresolved',
+  'public-organisational-contact',
+  'public-organisational-identifier',
+  'personal-or-private',
+] as const);
+export type PersonalDataClassification = (typeof PERSONAL_DATA_CLASSIFICATIONS)[number];
+export const CLEARING_CLASSIFICATIONS: readonly PersonalDataClassification[] =
+  Object.freeze(['public-organisational-contact', 'public-organisational-identifier']);
+
+export function clearsFinding(classification: PersonalDataClassification): boolean {
+  return CLEARING_CLASSIFICATIONS.includes(classification);
+}
 
 export const LINK_DISPOSITIONS = Object.freeze([
   'rewritten',
@@ -541,6 +581,21 @@ export const reviewDecisionSchema = z
   })
   .strict();
 export type ReviewDecision = z.output<typeof reviewDecisionSchema>;
+
+/**
+ * Phase 30-RD. One person's classification of ONE personal-data finding, at
+ * the version they saw, with the reason — always required, because a
+ * privacy judgement nobody explained is not one anybody can review.
+ */
+export const findingDecisionSchema = z
+  .object({
+    findingId: migrationIdSchema,
+    expectedVersion: migrationVersionSchema,
+    classification: z.enum(PERSONAL_DATA_CLASSIFICATIONS),
+    note: z.string().trim().min(1).max(MIGRATION_LIMITS.note),
+  })
+  .strict();
+export type FindingDecision = z.output<typeof findingDecisionSchema>;
 
 /**
  * One reviewer's decision over a bounded selection — at most one operator

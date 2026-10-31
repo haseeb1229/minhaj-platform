@@ -1,6 +1,11 @@
 import 'server-only';
 
-import type { MigrationDecisionPort, RecordStatus } from '@minhaj/contracts/migration';
+import {
+  clearsFinding,
+  type MigrationDecisionPort,
+  type PersonalDataClassification,
+  type RecordStatus,
+} from '@minhaj/contracts/migration';
 
 import { getDatabaseClient } from '../../client.ts';
 import {
@@ -46,6 +51,65 @@ export function createMigrationDecisions(): MigrationDecisionPort {
   const db = getDatabaseClient();
 
   return {
+    async classifyFinding(input) {
+      try {
+        await db.$transaction(async (tx) => {
+          const finding = await tx.migrationPersonalDataFinding.findFirst({
+            where: { id: input.findingId },
+            select: {
+              stagedRecordId: true,
+              recordId: true,
+              position: true,
+              classification: true,
+              version: true,
+              staged: { select: { review: true } },
+            },
+          });
+          if (finding === null) throw new MigrationDataError('not-found');
+          if (!(await lockRow(tx, 'MigrationRecord', finding.recordId)))
+            throw new MigrationDataError('not-found');
+          if (finding.version !== input.expectedVersion)
+            throw new MigrationDataError('conflict');
+          // Decided only while its revision awaits review: once a cleared
+          // revision supersedes it, the decision is the evidence it rests on.
+          if (finding.staged.review !== 'pending')
+            throw new MigrationDataError('invalid-state');
+          const decided = await tx.migrationPersonalDataFinding.updateMany({
+            where: { id: input.findingId, version: input.expectedVersion },
+            data: {
+              classification: input.classification,
+              note: input.note,
+              decidedByUserId: input.actorId,
+              decidedAt: input.now,
+              version: { increment: 1 },
+            },
+          });
+          if (decided.count !== 1) throw new MigrationDataError('conflict');
+          // What was decided, by whom, about which finding — never the
+          // matched text, its context or the reason's words.
+          await audit(tx, {
+            action: 'migration.personal-data.classified',
+            actorId: input.actorId,
+            targetType: 'migration-personal-data-finding',
+            targetId: input.findingId,
+            before: {
+              classification: finding.classification,
+              version: String(finding.version),
+            },
+            after: {
+              classification: input.classification,
+              stagedRecordId: finding.stagedRecordId,
+              position: String(finding.position),
+              version: String(finding.version + 1),
+            },
+            authorisingSource: 'migration.clearPersonalData',
+          });
+        }, LOCKED_TRANSACTION);
+      } catch (error) {
+        refuse(error);
+      }
+    },
+
     async review(input) {
       try {
         await db.$transaction(async (tx) => {
@@ -56,6 +120,7 @@ export function createMigrationDecisions(): MigrationDecisionPort {
               review: true,
               validation: true,
               personalData: true,
+              clearanceOfStagedRecordId: true,
               version: true,
             },
           });
@@ -70,9 +135,28 @@ export function createMigrationDecisions(): MigrationDecisionPort {
             throw new MigrationDataError('invalid-state');
           if (
             input.review === 'approved' &&
-            (staged.validation !== 'valid' || staged.personalData !== 'none')
+            (staged.validation !== 'valid' ||
+              (staged.personalData !== 'none' && staged.personalData !== 'cleared'))
           )
             throw new MigrationDataError('invalid-state');
+          // Phase 30-RD: a cleared revision is approved by somebody who
+          // cleared none of its findings, while every one still stands.
+          if (input.review === 'approved' && staged.clearanceOfStagedRecordId !== null) {
+            const findings = await tx.migrationPersonalDataFinding.findMany({
+              where: { stagedRecordId: staged.clearanceOfStagedRecordId },
+              select: { classification: true, decidedByUserId: true },
+            });
+            if (
+              findings.length === 0 ||
+              findings.some(
+                (finding) =>
+                  !clearsFinding(finding.classification as PersonalDataClassification),
+              )
+            )
+              throw new MigrationDataError('invalid-state');
+            if (findings.some((finding) => finding.decidedByUserId === input.actorId))
+              throw new MigrationDataError('same-person');
+          }
 
           const reviewed = await tx.migrationStagedRecord.updateMany({
             where: {

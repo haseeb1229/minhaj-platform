@@ -141,7 +141,9 @@ export function livePermits(
 /**
  * Migration's authority port: the live permission read, and the
  * re-verification of a privileged actor Identity minted for EXACTLY
- * `migration.publish` with a live `migration-publication` step-up. Anything
+ * `migration.publish` with a live `migration-publication` step-up — or, for
+ * a personal-data classification (Phase 30-RD), EXACTLY
+ * `migration.clearPersonalData` with a live `migration-personal-data` one. Anything
  * else — a plain object, an actor minted for another permission or purpose, an
  * expired grant — answers `null`.
  */
@@ -157,6 +159,18 @@ export function migrationAuthority(
         actor: candidate,
         permission: 'migration.publish',
         stepUp: 'migration-publication',
+      });
+      return verified ? candidate.accountId : null;
+    },
+    // Phase 30-RD: exactly `migration.clearPersonalData` with a live
+    // `migration-personal-data` step-up, and nothing else.
+    async verifyClearer(actor) {
+      if (typeof actor !== 'object' || actor === null) return null;
+      const candidate = actor as PrivilegedActor;
+      const verified = await authorization.verifyPrivilegedActor({
+        actor: candidate,
+        permission: 'migration.clearPersonalData',
+        stepUp: 'migration-personal-data',
       });
       return verified ? candidate.accountId : null;
     },

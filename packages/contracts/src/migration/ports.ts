@@ -15,6 +15,8 @@ import type {
   ManifestState,
   MigrationContentKind,
   MigrationPublishableKind,
+  PersonalDataClassification,
+  PersonalDataFindingType,
   PersonalDataState,
   PromotionDestination,
   PromotionState,
@@ -191,6 +193,8 @@ export interface PendingItem {
     /** Which code made it: the same bytes read by newer code are a new revision. */
     readonly parserVersion: string;
     readonly normalizerVersion: string;
+    /** Phase 30-RD: whether it carries personal data, and whether a person cleared it. */
+    readonly personalData: PersonalDataState;
   } | null;
 }
 
@@ -245,6 +249,18 @@ export interface DuplicateInput {
   readonly collapse: boolean;
 }
 
+/**
+ * Phase 30-RD. One DISTINCT match of the personal-data detector in a flagged
+ * revision: its type, a SHA-256 digest over the input checksum, the type and
+ * the matched text — never the text — and the words around it with every
+ * match already redacted.
+ */
+export interface PersonalDataFindingInput {
+  readonly type: PersonalDataFindingType;
+  readonly digest: string;
+  readonly context: string;
+}
+
 export interface StageInput {
   readonly sourceId: string;
   readonly runId: string;
@@ -265,6 +281,13 @@ export interface StageInput {
   readonly validation: ValidationState;
   readonly issues: readonly ValidationIssue[];
   readonly personalData: PersonalDataState;
+  /**
+   * Phase 30-RD. A `cleared` revision names the flagged revision of the same
+   * bytes whose every finding a person cleared; null for every other.
+   */
+  readonly clearanceOfStagedRecordId: string | null;
+  /** Phase 30-RD. A `flagged` revision's findings, every one; empty otherwise. */
+  readonly findings: readonly PersonalDataFindingInput[];
   readonly categories: readonly { readonly key: string; readonly label: string }[];
   readonly links: readonly StagedLinkInput[];
   readonly duplicates: readonly DuplicateInput[];
@@ -373,6 +396,14 @@ export interface MigrationPipelinePort {
   stage(
     input: StageInput,
   ): Promise<{ readonly stagedRecordId: string; readonly revision: number }>;
+
+  /**
+   * Phase 30-RD. The findings recorded for a flagged revision, by digest, with
+   * each one's current classification — empty when none were recorded.
+   */
+  personalDataFindings(
+    stagedRecordId: string,
+  ): Promise<ReadonlyMap<string, PersonalDataClassification>>;
 
   /**
    * A classified failure. With `itemId`, the item becomes `errored` and names
@@ -562,6 +593,22 @@ export interface MigrationSourcePort {
  * ========================================================================= */
 
 export interface MigrationDecisionPort {
+  /**
+   * Phase 30-RD. One person's classification of one personal-data finding of
+   * a pending flagged revision, at the version they saw, with its reason.
+   * The database re-checks `migration.clearPersonalData` and the live
+   * `migration-personal-data` step-up. Audited without the matched text or
+   * its context.
+   */
+  classifyFinding(input: {
+    readonly findingId: string;
+    readonly expectedVersion: number;
+    readonly classification: PersonalDataClassification;
+    readonly note: string;
+    readonly actorId: string;
+    readonly now: Date;
+  }): Promise<void>;
+
   /** approve | reject | withdraw an approval. The record's status follows. */
   review(input: {
     readonly stagedRecordId: string;
@@ -984,6 +1031,8 @@ export interface StagedRow {
 }
 
 export interface StagedDetail extends StagedRow {
+  /** Phase 30-RD: the flagged revision a `cleared` one clears; null otherwise. */
+  readonly clearanceOfStagedRecordId: string | null;
   readonly sourceId: string;
   readonly externalKey: string;
   readonly originalUrl: string | null;
@@ -1004,6 +1053,25 @@ export interface StagedDetail extends StagedRow {
     readonly topicId: string | null;
   }[];
   readonly links: readonly StagedLinkInput[];
+}
+
+/**
+ * Phase 30-RD. One personal-data finding as a reviewer sees it: its type and
+ * the words around it with every match redacted — never the matched text,
+ * which only the audited raw-evidence preview shows.
+ */
+export interface PersonalDataFindingRecord {
+  readonly id: string;
+  readonly stagedRecordId: string;
+  readonly position: number;
+  readonly findingCount: number;
+  readonly type: PersonalDataFindingType;
+  readonly context: string;
+  readonly classification: PersonalDataClassification;
+  readonly note: string | null;
+  readonly decidedByUserId: string | null;
+  readonly decidedAt: Date | null;
+  readonly version: number;
 }
 
 export interface DuplicateRow {
@@ -1222,6 +1290,10 @@ export interface MigrationReadPort {
     readonly limit: number;
   }): Promise<StagedPage>;
   stagedDetail(id: string): Promise<StagedDetail | null>;
+  /** Phase 30-RD. A revision's personal-data findings, in detection order. */
+  personalDataFindings(
+    stagedRecordId: string,
+  ): Promise<readonly PersonalDataFindingRecord[]>;
   snapshot(id: string): Promise<SnapshotMeta | null>;
   duplicates(query: {
     readonly state: DuplicateState | null;
@@ -1297,6 +1369,11 @@ export interface MigrationAuthorityPort {
    * The value is opaque to Migration.
    */
   verifyPublisher(actor: unknown): Promise<string | null>;
+  /**
+   * Phase 30-RD. The same re-verification for an actor minted for
+   * `migration.clearPersonalData` + `migration-personal-data`.
+   */
+  verifyClearer(actor: unknown): Promise<string | null>;
 }
 
 /** Taxonomy's answer: which of these Topic ids exist now. */

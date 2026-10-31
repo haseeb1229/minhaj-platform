@@ -374,7 +374,10 @@ describe('Phase 2 Chunk 2 — what the delivered code does NOT contain', () => {
       const donationsOwner = file.includes('20261010000000_phase27_donations');
       // Migration & Provenance's three keys are Phase 29's and appear in its
       // migration alone.
-      const migrationOwner = file.includes('20261011000000_phase29_migration_provenance');
+      // Phase 30-RD appended the externally gated `migration.clearPersonalData`.
+      const migrationOwner =
+        file.includes('20261011000000_phase29_migration_provenance') ||
+        file.includes('20261031000000_phase30rd_owner_decisions');
       for (const domain of [
         ...(fatwaOwner ? [] : ['fatwa.', 'question.']),
         ...(learningOwner ? [] : ['learning.']),
@@ -643,6 +646,13 @@ const PERMISSION_MIGRATIONS = [
     id: '20261011000000_phase29_migration_provenance',
     keys: ['migration.administer', 'migration.publish', 'migration.read'],
   },
+  {
+    // One key, catalogued, externally gated and bundled into no role: a
+    // person's classification of a personal-data finding.
+    phase: 'Phase 30-RD',
+    id: '20261031000000_phase30rd_owner_decisions',
+    keys: ['migration.clearPersonalData'],
+  },
 ] as const;
 
 describe('the permission catalogue is one definition, appended only by owners', () => {
@@ -783,10 +793,12 @@ describe('the permission catalogue is one definition, appended only by owners', 
     ]) {
       expect(declared.some((key) => key.startsWith(domain))).toBe(false);
     }
-    // Migration & Provenance has exactly three keys: two ordinary and bundled,
-    // and publication authority, the organisation's to grant.
+    // Migration & Provenance has exactly four keys: two ordinary and bundled,
+    // and two the organisation grants — publication authority and (Phase
+    // 30-RD) the classification of a personal-data finding.
     expect(declared.filter((key) => key.startsWith('migration.'))).toEqual([
       'migration.administer',
+      'migration.clearPersonalData',
       'migration.publish',
       'migration.read',
     ]);

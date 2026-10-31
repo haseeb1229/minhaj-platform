@@ -448,6 +448,77 @@ export const stagedPagePayloadSchema = z
   .strict();
 
 /* ===========================================================================
+ * editorial.collection — one source-curated archive (Phase 30-RD)
+ * ========================================================================= */
+
+/** How many members one migrated Collection may name: Editorial's own bound. */
+export const MAX_COLLECTION_MEMBERS = 100;
+
+/**
+ * One member of a source's curated archive, by the LEGACY URL of the record
+ * migration made of it — resolved at publication through an ACTIVE legacy
+ * mapping only, so a member not yet published refuses and is never guessed —
+ * with the source's own section and group headings over it, verbatim.
+ */
+export interface StagedCollectionMember {
+  readonly legacyUrl: string;
+  readonly section: string | null;
+  readonly group: string | null;
+}
+
+/**
+ * A source's own editor-curated archive, as an Editorial Collection: its
+ * title and description as the source wrote them, and its members in the
+ * source's order. A record the source lists twice is a member once, at its
+ * first place; `repeatedMembers` says how many later listings that dropped.
+ */
+export interface StagedCollectionPayload {
+  readonly kind: 'editorial.collection';
+  readonly slug: string;
+  readonly languageCode: (typeof EDITORIAL_MIGRATION_LANGUAGES)[number];
+  readonly title: string;
+  readonly excerpt: string;
+  readonly members: readonly StagedCollectionMember[];
+  readonly repeatedMembers: number;
+  readonly legacyIdentifier: string | null;
+}
+
+const headingSchema = z.string().min(1).max(200).nullable();
+
+export const stagedCollectionPayloadSchema = z
+  .object({
+    kind: z.literal('editorial.collection'),
+    slug: stagedSlugSchema,
+    languageCode: z.enum(EDITORIAL_MIGRATION_LANGUAGES),
+    title: z.string().min(1).max(200),
+    excerpt: z.string().max(600),
+    members: z
+      .array(
+        z
+          .object({
+            legacyUrl: z
+              .string()
+              .min(1)
+              .max(MIGRATION_LIMITS.url)
+              .regex(/^https:\/\//),
+            section: headingSchema,
+            group: headingSchema,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(MAX_COLLECTION_MEMBERS)
+      .refine(
+        (members) =>
+          new Set(members.map((member) => member.legacyUrl)).size === members.length,
+        { message: 'A record is a member once.' },
+      ),
+    repeatedMembers: z.number().int().min(0).max(10_000),
+    legacyIdentifier: z.string().max(200).nullable(),
+  })
+  .strict();
+
+/* ===========================================================================
  * people.person — one public profile (Phase 30-R)
  * ========================================================================= */
 
@@ -628,6 +699,7 @@ export type StagedPayload =
   | StagedMagazineIssuePayload
   | StagedEditorialPayload
   | StagedPagePayload
+  | StagedCollectionPayload
   | StagedPersonPayload
   | StagedCountryPayload
   | StagedFatwaPayload
@@ -651,6 +723,7 @@ export const STAGED_PAYLOAD_SCHEMAS = Object.freeze({
   'editorial.article': stagedArticlePayloadSchema,
   'editorial.press-release': stagedPressReleasePayloadSchema,
   'editorial.page': stagedPagePayloadSchema,
+  'editorial.collection': stagedCollectionPayloadSchema,
   'people.person': stagedPersonPayloadSchema,
   'global.country': stagedCountryPayloadSchema,
   'fatwa.ruling': stagedFatwaPayloadSchema,
@@ -776,6 +849,20 @@ export interface ParsedPage extends ParsedCommon {
   readonly leadImage: ParsedImage | null;
 }
 
+/**
+ * Phase 30-RD. A source's curated archive: its own description, and its
+ * members in its own order as absolute links with the headings over them.
+ */
+export interface ParsedCollection extends ParsedCommon {
+  readonly kind: 'editorial.collection';
+  readonly descriptionHtml: string;
+  readonly members: readonly {
+    readonly url: string;
+    readonly section: string | null;
+    readonly group: string | null;
+  }[];
+}
+
 export interface ParsedPerson extends ParsedCommon {
   readonly kind: 'people.person';
   /** The person's name exactly as the source writes it. */
@@ -812,6 +899,7 @@ export type ParsedRecord =
   | ParsedMagazineIssue
   | ParsedEditorial
   | ParsedPage
+  | ParsedCollection
   | ParsedPerson
   | ParsedCountry
   | ParsedFatwa

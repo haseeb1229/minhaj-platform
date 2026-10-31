@@ -145,6 +145,7 @@ export async function adminMigrationCopy(locale: Locale) {
     'run-busy': t('failure.runBusy'),
     'run-unreconciled': t('failure.runUnreconciled'),
     'not-publishable': t('failure.notPublishable'),
+    'same-person': t('failure.samePerson'),
     'approval-withdrawn': t('failure.approvalWithdrawn'),
     'target-unavailable': t('failure.targetUnavailable'),
     'cross-language': t('failure.crossLanguage'),
@@ -277,6 +278,28 @@ export function StateBadge({
   readonly children: ReactNode;
 }) {
   return <StatusBadge tone={tone}>{children}</StatusBadge>;
+}
+
+/**
+ * Phase 30-RD. The step-up prompt for exactly `migration-personal-data`: a
+ * grant earned to publish or for any other purpose does not count.
+ */
+export async function MigrationPersonalDataStepUp({
+  locale,
+}: {
+  readonly locale: Locale;
+}) {
+  const [admin, stepUp] = await Promise.all([
+    adminCopy(locale),
+    getTranslations({ locale, namespace: 'admin.stepUp' }),
+  ]);
+  return (
+    <StepUpPrompt
+      locale={locale}
+      purpose="migration-personal-data"
+      labels={{ ...admin.stepUp, description: stepUp('migrationPersonalData') }}
+    />
+  );
 }
 
 /**

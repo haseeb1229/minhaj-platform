@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  createMinhajOrgArchiveNewsAdapter,
+  createMinhajOrgCollectionAdapter,
   createMinhajOrgEditorialAdapter,
   createMinhajOrgPageAdapter,
   createMinhajOrgPersonAdapter,
+  MINHAJ_ORG_ARCHIVE_NEWS_ADAPTER_KEY,
   MINHAJ_ORG_BASE_URL,
+  MINHAJ_ORG_COLLECTION_ADAPTER_KEY,
   MINHAJ_ORG_EDITORIAL_ADAPTER_KEY,
   MINHAJ_ORG_PAGE_ADAPTER_KEY,
   profileName,
@@ -997,5 +1001,200 @@ describe('public profiles', () => {
       throw new Error('expected a person');
     expect(result.record.biographyHtml).toContain('Synthetic paragraph one.');
     expect(result.record.biographyHtml).not.toContain('<img');
+  });
+});
+
+/* ===========================================================================
+ * Phase 30-RD — curated archives and the posts they hold
+ * ========================================================================= */
+
+/** A synthetic curated archive on the site's template: sections, groups, cards. */
+function archivePage(
+  options: {
+    readonly cards?: readonly (readonly [string, string | null, string])[];
+    readonly paginated?: boolean;
+    readonly description?: string;
+  } = {},
+) {
+  const cards =
+    options.cards ??
+    ([
+      ['First section', null, '/english/tid/301/Synthetic-One.html'],
+      ['First section', null, '/english/tid/302/Synthetic-Two.html'],
+      ['Second section', 'Year 2009', '/english/tid/303/Synthetic-Three.html'],
+      ['Second section', 'Year 2008', '/english/tid/302/Synthetic-Two.html'],
+    ] as const);
+  let section: string | null = null;
+  let group: string | null = null;
+  const parts: string[] = [];
+  for (const [cardSection, cardGroup, href] of cards) {
+    if (cardSection !== section) {
+      section = cardSection;
+      group = null;
+      parts.push(
+        `<div class="widget"><div class="widget_title"><h3>${cardSection}</h3></div></div>`,
+      );
+    }
+    if (cardGroup !== null && cardGroup !== group) {
+      group = cardGroup;
+      parts.push(
+        `<div class="widget"><div class="widget_title"><h4>${cardGroup}</h4></div></div>`,
+      );
+    }
+    parts.push(`<div class="col col_4_of_12"><div class="item clearfix">
+<div class="item_thumb"><div class="thumb_hover"><a href="${href}"><img src="https://minhaj.net/images-texts/x.jpg" alt=""></a></div></div>
+<div class="item_content"><h4><a href="${href}">Synthetic card</a></h4><div class="item_meta clearfix"><span class="meta_date">August 9, 2013</span></div></div>
+</div></div>`);
+  }
+  return `<!doctype html><html lang="en-US"><head><meta charset="utf-8">
+<meta name="description" content="${options.description ?? 'A synthetic archive of yearly gatherings &amp; their reports. by Minhaj-ul-Quran International.'}">
+<title>Synthetic archive</title></head><body>
+<header><div class="widget"><div class="widget_title"><h3>Sidebar heading</h3></div><div class="item_content"><h4><a href="/english/tid/999/Sidebar.html">Sidebar card</a></h4></div></div></header>
+<section><div class="container"><div class="row"><div class="col col_9_of_12">
+<h1 class="page_title">Synthetic Archive</h1>
+<div class="row"><div class="col col_12_of_12"><div class="tb_widget_recent_list clearfix">
+${parts.join('\n')}
+</div></div></div>
+${options.paginated ? '<ul class="page-numbers"><li><a href="/english/lkcatid/7/page/2/">2</a></li></ul>' : ''}
+</div></div></div></section></body></html>`;
+}
+
+const ARCHIVE_URL = `${ORIGIN}/english/lkcatid/7/Synthetic-Archive.html`;
+
+function collectionAdapter(items: readonly string[] = []) {
+  return createMinhajOrgCollectionAdapter({
+    baseUrl: MINHAJ_ORG_BASE_URL,
+    selection: { pages: 1, limit: 10 },
+    items,
+    language: 'english',
+    archives: ['7', '8'],
+  });
+}
+
+describe('curated archives as Collections (Phase 30-RD)', () => {
+  it('declares its kind and discovers exactly the catalogued archives', async () => {
+    const adapter = collectionAdapter();
+    expect(adapter).toMatchObject({
+      adapterKey: MINHAJ_ORG_COLLECTION_ADAPTER_KEY,
+      contentKind: 'editorial.collection',
+    });
+    const page = await adapter.discover(null, site());
+    expect(page).toEqual({
+      kind: 'page',
+      items: [
+        {
+          externalKey: `${ORIGIN}/english/lkcatid/7/`,
+          originalUrl: `${ORIGIN}/english/lkcatid/7/`,
+          legacyIdentifier: 'lkcatid-7',
+        },
+        {
+          externalKey: `${ORIGIN}/english/lkcatid/8/`,
+          originalUrl: `${ORIGIN}/english/lkcatid/8/`,
+          legacyIdentifier: 'lkcatid-8',
+        },
+      ],
+      next: null,
+    });
+    // `--items` narrows to catalogued archives only.
+    expect(() => collectionAdapter(['9'])).toThrow();
+  });
+
+  it('reads the title, the source’s own description and every member in source order', () => {
+    const parsed = collectionAdapter().parse(evidenceOf(archivePage(), ARCHIVE_URL));
+    expect(parsed.kind).toBe('parsed');
+    if (parsed.kind !== 'parsed' || parsed.record.kind !== 'editorial.collection')
+      throw new Error('expected a collection');
+    expect(parsed.record).toMatchObject({
+      title: 'Synthetic Archive',
+      languageCode: 'en',
+      legacyIdentifier: 'lkcatid-7',
+      // The template's tail is not the description.
+      descriptionHtml: 'A synthetic archive of yearly gatherings &amp; their reports.',
+      assets: [],
+    });
+    expect(parsed.record.members).toEqual([
+      { url: key(301), section: 'First section', group: null },
+      { url: key(302), section: 'First section', group: null },
+      { url: key(303), section: 'Second section', group: 'Year 2009' },
+      // A repeat is kept for normalisation to count and drop.
+      { url: key(302), section: 'Second section', group: 'Year 2008' },
+    ]);
+  });
+
+  it('fails an archive with a card that is not a post of this site, never a smaller Collection', () => {
+    for (const foreign of [
+      'https://www.facebook.com/synthetic',
+      'https://minhaj.net/english/tid/301/',
+      '/urdu/tid/301/Synthetic.html',
+      '/english/lkcatid/8/Other.html',
+      'javascript:alert(1)',
+    ]) {
+      const html = archivePage({
+        cards: [
+          ['Section', null, '/english/tid/301/Synthetic-One.html'],
+          ['Section', null, foreign],
+        ],
+      });
+      expect(collectionAdapter().parse(evidenceOf(html, ARCHIVE_URL))).toEqual({
+        kind: 'failed',
+        detail: 'member-not-a-record',
+      });
+    }
+  });
+
+  it('fails a paginated or empty archive and excludes an uncatalogued one', () => {
+    expect(
+      collectionAdapter().parse(
+        evidenceOf(archivePage({ paginated: true }), ARCHIVE_URL),
+      ),
+    ).toEqual({ kind: 'failed', detail: 'archive-paginated' });
+    expect(
+      collectionAdapter().parse(evidenceOf(archivePage({ cards: [] }), ARCHIVE_URL)),
+    ).toEqual({ kind: 'failed', detail: 'archive-empty' });
+    expect(
+      collectionAdapter().parse(
+        evidenceOf(archivePage(), `${ORIGIN}/english/lkcatid/9/Elsewhere.html`),
+      ),
+    ).toEqual({ kind: 'excluded', reason: 'not-catalogued' });
+    expect(
+      collectionAdapter().parse(evidenceOf(archivePage(), `${ORIGIN}/english/tid/301/`)),
+    ).toEqual({ kind: 'excluded', reason: 'not-an-archive-page' });
+  });
+
+  it('reads the archive’s posts as news from a fixed list, filed under their own category', async () => {
+    const adapter = createMinhajOrgArchiveNewsAdapter({
+      baseUrl: MINHAJ_ORG_BASE_URL,
+      selection: { pages: 1, limit: 10 },
+      items: [],
+      language: 'english',
+      tids: ['301', '303'],
+    });
+    expect(adapter).toMatchObject({
+      adapterKey: MINHAJ_ORG_ARCHIVE_NEWS_ADAPTER_KEY,
+      contentKind: 'editorial.news',
+    });
+    expect(await adapter.discover(null, site())).toMatchObject({
+      kind: 'page',
+      items: [{ externalKey: key(301) }, { externalKey: key(303) }],
+      next: null,
+    });
+    const parsed = adapter.parse(
+      evidenceOf(detail(), `${ORIGIN}/english/Overseas/tid/301/Synthetic.html`),
+    );
+    if (parsed.kind !== 'parsed') throw new Error('expected a post');
+    expect(parsed.record).toMatchObject({
+      kind: 'editorial.news',
+      legacyIdentifier: 'tid-301',
+      categories: [{ key: 'Overseas', label: 'Overseas' }],
+    });
+    expect(() =>
+      createMinhajOrgArchiveNewsAdapter({
+        baseUrl: MINHAJ_ORG_BASE_URL,
+        selection: { pages: 1, limit: 10 },
+        items: [],
+        language: 'english',
+        tids: ['301', '301'],
+      }),
+    ).toThrow();
   });
 });

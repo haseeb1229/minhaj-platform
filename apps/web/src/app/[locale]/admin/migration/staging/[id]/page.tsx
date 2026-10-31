@@ -4,9 +4,12 @@ import type { Locale } from '@minhaj/contracts';
 import {
   ASSET_LICENCES,
   ASSET_VISIBILITIES,
+  PERSONAL_DATA_CLASSIFICATIONS,
+  clearsFinding,
   isPublishableKind,
   migrationIdSchema,
   type AssetProvenanceRow,
+  type PersonalDataFindingRecord,
   type StagedDetail,
 } from '@minhaj/contracts/migration';
 
@@ -22,6 +25,7 @@ import {
   PageHeading,
   Panel,
   SectionHeading,
+  Select,
   TextArea,
   TextInput,
   TextLink,
@@ -32,11 +36,18 @@ import { migrationRuntime } from '@/composition/migration';
 import { taxonomyRuntime } from '@/composition/taxonomy';
 import { requireLocale } from '@/config/route-locale';
 import { ActionForm } from '../../../../(identity)/form-state';
-import { disposeSnapshotAction, reviewAction, rightsAction } from '../../actions';
+import {
+  classifyFindingAction,
+  disposeSnapshotAction,
+  reviewAction,
+  rightsAction,
+} from '../../actions';
 import { RightsFields } from '../../rights-fields';
 import {
   Code,
+  MigrationPersonalDataStepUp,
   MigrationTime,
+  StateBadge,
   Pager,
   RowIdentity,
   actorOf,
@@ -155,7 +166,11 @@ export default async function MigrationStagedRecordPage({
   // The raw preview is an AUDITED read of evidence: only when asked for, and
   // only for an administrator — the service re-checks the key.
   const wantsPreview = administer && query['preview'] === '1';
-  const [snapshot, preview, names, assets] = await Promise.all([
+  // Phase 30-RD: a flagged revision's own findings, or — for a cleared one —
+  // the findings of the flagged revision it clears, with their decisions.
+  const findingsOf =
+    staged.personalData === 'flagged' ? staged.id : staged.clearanceOfStagedRecordId;
+  const [snapshot, preview, names, assets, findings] = await Promise.all([
     migrationRead('migration-admin-snapshot', () =>
       runtime.read.snapshot(actor, staged.snapshotId),
     ),
@@ -173,6 +188,11 @@ export default async function MigrationStagedRecordPage({
     migrationRead('migration-admin-record-assets', () =>
       runtime.read.assets(actor, { recordId: staged.recordId, offset: assetOffset }),
     ),
+    findingsOf === null
+      ? Promise.resolve(null)
+      : migrationRead('migration-admin-personal-data', () =>
+          runtime.read.personalDataFindings(actor, findingsOf),
+        ),
   ]);
 
   return (
@@ -290,6 +310,17 @@ export default async function MigrationStagedRecordPage({
           <Alert tone="warning">{t('staged.personalDataFlagged')}</Alert>
         ) : null}
       </section>
+
+      {findings === null ? null : (
+        <PersonalDataFindings
+          staged={staged}
+          findings={findings}
+          clearer={context.authorization.can('migration.clearPersonalData')}
+          locale={locale}
+          timeZone={timeZone}
+          copy={copy}
+        />
+      )}
 
       <section className="flex flex-col gap-3" aria-labelledby="staged-payload">
         <SectionHeading>
@@ -548,6 +579,176 @@ function EscapedText({
   );
 }
 
+/**
+ * Phase 30-RD. The detector's findings and each one's human classification.
+ * A finding is shown only as its type in the words around it, every match
+ * redacted — the exact text is in the audited raw-evidence preview above.
+ * While the flagged revision awaits review, a holder of
+ * `migration.clearPersonalData` classifies each one, with a reason, after its
+ * own step-up: one form per finding, never a batch.
+ */
+function PersonalDataFindings({
+  staged,
+  findings,
+  clearer,
+  locale,
+  timeZone,
+  copy,
+}: {
+  readonly staged: StagedDetail;
+  readonly findings:
+    | { readonly ok: true; readonly value: readonly PersonalDataFindingRecord[] }
+    | { readonly ok: false };
+  readonly clearer: boolean;
+  readonly locale: Locale;
+  readonly timeZone: string | null;
+  readonly copy: AdminMigrationCopy;
+}) {
+  const { t } = copy;
+  const awaiting = staged.personalData === 'flagged' && staged.review === 'pending';
+  const decidable = clearer && awaiting;
+  return (
+    <section className="flex flex-col gap-3" aria-labelledby="staged-findings">
+      <SectionHeading>
+        <span id="staged-findings">{t('findings.heading')}</span>
+      </SectionHeading>
+      <p className="text-sm">{t('findings.help')}</p>
+      {staged.personalData === 'cleared' && staged.clearanceOfStagedRecordId !== null ? (
+        <Alert tone="info">
+          {t('findings.clearedFrom')}{' '}
+          <TextLink
+            href={migrationPath(
+              locale,
+              `/staging/${encodeURIComponent(staged.clearanceOfStagedRecordId)}`,
+            )}
+          >
+            {t('findings.flaggedRevision')}
+          </TextLink>
+        </Alert>
+      ) : null}
+      {!findings.ok ? (
+        <Alert tone="error">{t('failure.load')}</Alert>
+      ) : findings.value.length === 0 ? (
+        <EmptyState>{t('findings.none')}</EmptyState>
+      ) : (
+        <>
+          {decidable ? (
+            <MigrationPersonalDataStepUp locale={locale} />
+          ) : awaiting ? (
+            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+              {t('findings.clearerOnly')}
+            </p>
+          ) : null}
+          <ol className="flex flex-col gap-3" aria-label={t('findings.heading')}>
+            {findings.value.map((finding) => (
+              <li key={finding.id}>
+                <Panel>
+                  <div
+                    className="flex flex-col gap-2"
+                    data-testid="personal-data-finding"
+                  >
+                    <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                      <span>
+                        {t('findings.position', {
+                          position: finding.position + 1,
+                          count: finding.findingCount,
+                        })}
+                      </span>
+                      <span>{t(`findings.type.${finding.type}`)}</span>
+                      <StateBadge
+                        tone={
+                          clearsFinding(finding.classification)
+                            ? 'positive'
+                            : finding.classification === 'personal-or-private'
+                              ? 'caution'
+                              : 'neutral'
+                        }
+                      >
+                        {t(`findings.classification.${finding.classification}`)}
+                      </StateBadge>
+                    </p>
+                    <p className="text-sm wrap-anywhere" dir="auto">
+                      <bdi>{finding.context}</bdi>
+                    </p>
+                    {finding.decidedByUserId === null ? null : (
+                      <dl className="divide-y divide-[color:var(--color-border)] text-sm">
+                        <DetailRow term={t('findings.decidedBy')}>
+                          <Code>{finding.decidedByUserId}</Code>
+                        </DetailRow>
+                        {finding.decidedAt === null ? null : (
+                          <DetailRow term={t('findings.decidedAt')}>
+                            <MigrationTime
+                              value={finding.decidedAt}
+                              locale={locale}
+                              timeZone={timeZone}
+                            />
+                          </DetailRow>
+                        )}
+                        {finding.note === null ? null : (
+                          <DetailRow term={t('findings.note')}>
+                            <bdi>{finding.note}</bdi>
+                          </DetailRow>
+                        )}
+                        <DetailRow term={t('staged.version')}>
+                          {finding.version}
+                        </DetailRow>
+                      </dl>
+                    )}
+                    {decidable ? (
+                      <ActionForm
+                        action={classifyFindingAction}
+                        submitLabel={t('findings.submit')}
+                        pendingLabel={t('pending')}
+                        tone="secondary"
+                        messages={{ ...copy.messages, success: t('findings.done') }}
+                      >
+                        <RowIdentity locale={locale} row={finding} />
+                        <Field
+                          id={`finding-classification-${finding.id}`}
+                          label={t('findings.classify')}
+                        >
+                          {(props) => (
+                            <Select
+                              {...props}
+                              name="classification"
+                              defaultValue={finding.classification}
+                            >
+                              {PERSONAL_DATA_CLASSIFICATIONS.map((classification) => (
+                                <option key={classification} value={classification}>
+                                  {t(`findings.classification.${classification}`)}
+                                </option>
+                              ))}
+                            </Select>
+                          )}
+                        </Field>
+                        <Field
+                          id={`finding-note-${finding.id}`}
+                          label={t('findings.reason')}
+                          help={t('findings.reasonHelp')}
+                        >
+                          {(props) => (
+                            <TextArea
+                              {...props}
+                              name="note"
+                              rows={2}
+                              required
+                              maxLength={500}
+                            />
+                          )}
+                        </Field>
+                      </ActionForm>
+                    ) : null}
+                  </div>
+                </Panel>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+    </section>
+  );
+}
+
 /** Approve, reject or withdraw an approval — each at the version shown. */
 function ReviewForms({
   staged,
@@ -559,7 +760,7 @@ function ReviewForms({
   readonly copy: AdminMigrationCopy;
 }) {
   const { t } = copy;
-  const publishable = staged.validation === 'valid' && staged.personalData === 'none';
+  const publishable = staged.validation === 'valid' && staged.personalData !== 'flagged';
   const decisions: readonly ('approve' | 'reject' | 'withdraw-approval')[] =
     staged.review === 'pending'
       ? publishable

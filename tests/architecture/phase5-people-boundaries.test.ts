@@ -602,8 +602,8 @@ describe('the contract and the database agree on the bounds they share', () => {
     // A later migration that ALTERs a trigger an earlier one created, inside
     // the SAME context, keeps that trigger's refusal numbers and meaning: the
     // number is still raised by the owner's trigger and translated by the
-    // owner's adapter. Exactly one such amendment exists, named here whole —
-    // Phase 30 widening three Phase-29 Migration & Provenance triggers — and
+    // owner's adapter. Each such amendment is named here whole — Phase 30,
+    // 30-R and 30-RD widening Phase-29 Migration & Provenance triggers — and
     // any other THROW in it, or any of these numbers outside those three
     // ALTERs, still counts against Phase 30 itself.
     const AMENDMENTS: Readonly<
@@ -631,6 +631,18 @@ describe('the contract and the database agree on the bounds they share', () => {
         owner: '20261011000000_phase29_migration_provenance',
         triggers: ['MigrationLegacyMappingIntegrity', 'MigrationManifestEntryIntegrity'],
         numbers: ['51379', '51380'],
+      },
+      // Phase 30-RD widens them once more for the Collection target, and the
+      // staged revision's own trigger for the `cleared` state — keeping 51374;
+      // the two numbers it mints (51385, 51386) are its own.
+      '20261031000000_phase30rd_owner_decisions': {
+        owner: '20261011000000_phase29_migration_provenance',
+        triggers: [
+          'MigrationStagedRecordIntegrity',
+          'MigrationLegacyMappingIntegrity',
+          'MigrationManifestEntryIntegrity',
+        ],
+        numbers: ['51374', '51379', '51380'],
       },
     };
 

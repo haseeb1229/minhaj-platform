@@ -183,9 +183,19 @@ export const MIGRATION_SANITIZE_OPTIONS: sanitizeHtml.IOptions = Object.freeze({
  */
 export function sanitizeFragment(
   html: string,
-  options: { readonly rewrite?: HrefRewrite; readonly redact?: boolean } = {},
+  options: {
+    readonly rewrite?: HrefRewrite;
+    /** `true`: the detector; a scanner: that one, with whatever it was cleared for. */
+    readonly redact?: boolean | PersonalDataScanner;
+  } = {},
 ): string {
   const rewrite = options.rewrite ?? keepSafeHref;
+  const scanner =
+    options.redact === true
+      ? new PersonalDataScanner()
+      : options.redact instanceof PersonalDataScanner
+        ? options.redact
+        : null;
   return sanitizeHtml(normalizeText(html), {
     ...MIGRATION_SANITIZE_OPTIONS,
     transformTags: {
@@ -194,9 +204,7 @@ export function sanitizeFragment(
       i: 'em',
       a: anchorTransform(rewrite),
     },
-    ...(options.redact === true
-      ? { textFilter: (text: string) => detectPersonalData(text).redacted }
-      : {}),
+    ...(scanner === null ? {} : { textFilter: (text: string) => scanner.redact(text) }),
   });
 }
 
@@ -326,26 +334,143 @@ const ISO_DATE_LIKE = /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2})?$/;
 
 export const REDACTED = '[redacted]';
 
+/** What the detector matches (Phase 30-RD names them). */
+export type PersonalDataType = 'email' | 'phone';
+
+/** One match in one text: its type, the exact matched text and where it is. */
+interface Match {
+  readonly type: PersonalDataType;
+  readonly value: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * Every match in `text`, in order. Emails first; then phone-like runs in the
+ * text with each email masked by non-digits of the same length, so a phone is
+ * never found inside an address — the same reading the detector always made.
+ */
+function matchesIn(text: string): Match[] {
+  const found: Match[] = [];
+  for (const match of text.matchAll(EMAIL))
+    found.push({
+      type: 'email',
+      value: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    });
+  const masked = text.replace(EMAIL, (match) => ']'.repeat(match.length));
+  for (const match of masked.matchAll(PHONE)) {
+    if (ISO_DATE_LIKE.test(match[0].trim())) continue;
+    found.push({
+      type: 'phone',
+      value: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    });
+  }
+  return found.sort((a, b) => a.start - b.start);
+}
+
+/** The key one distinct match is known by: its type and its exact text. */
+export function personalDataKey(type: PersonalDataType, value: string): string {
+  return `${type} ${value}`;
+}
+
+/** One DISTINCT match, with the words around its first occurrence. */
+export interface PersonalDataMatch {
+  readonly type: PersonalDataType;
+  readonly value: string;
+  /**
+   * At most 400 characters of the text around it, with THIS match shown as
+   * `«email»` or `«phone»` and every other one as `[redacted]` — so the
+   * context alone never carries a contact value.
+   */
+  readonly context: string;
+}
+
+const CONTEXT_REACH = 180;
+const CONTEXT_MAX = 400;
+
+function contextOf(text: string, matches: readonly Match[], focus: Match): string {
+  let shown = '';
+  let at = 0;
+  let focusAt = 0;
+  for (const match of matches) {
+    shown += text.slice(at, match.start);
+    if (match === focus) {
+      focusAt = shown.length;
+      shown += `«${match.type}»`;
+    } else shown += REDACTED;
+    at = match.end;
+  }
+  shown += text.slice(at);
+  const window = shown
+    .slice(Math.max(0, focusAt - CONTEXT_REACH), focusAt + CONTEXT_REACH)
+    .replace(/s+/g, ' ')
+    .trim();
+  return window.slice(0, CONTEXT_MAX);
+}
+
+/**
+ * THE INCIDENTAL PERSONAL-DATA DETECTOR (MIGRATION_STRATEGY.md §8.3), as an
+ * object that remembers what it saw.
+ *
+ * Detects email addresses and phone-like digit runs and replaces each with
+ * `[redacted]`. Conservative by design: a false positive only holds a record
+ * for a person; a false negative would carry personal data forward.
+ *
+ * Phase 30-RD. It records every DISTINCT match (type and exact text) with the
+ * words around it, so a person can classify each one; and it may be given the
+ * keys of matches a person CLEARED as public organisational for exactly these
+ * bytes — those, and only those, are left as the source wrote them. Anything
+ * else it finds is redacted and leaves the result `uncleared`, which holds the
+ * record exactly as before.
+ */
+export class PersonalDataScanner {
+  readonly matches = new Map<string, PersonalDataMatch>();
+  /** Something matched that no person cleared. */
+  uncleared = false;
+
+  private readonly cleared: ReadonlySet<string>;
+
+  /** A declared field, not a parameter property: the CLIs run this under plain Node. */
+  constructor(cleared: ReadonlySet<string> = new Set()) {
+    this.cleared = cleared;
+  }
+
+  /** The text with every match no person cleared replaced by `[redacted]`. */
+  redact(text: string): string {
+    const found = matchesIn(text);
+    if (found.length === 0) return text;
+    let out = '';
+    let at = 0;
+    for (const match of found) {
+      const key = personalDataKey(match.type, match.value);
+      if (!this.matches.has(key))
+        this.matches.set(key, {
+          type: match.type,
+          value: match.value,
+          context: contextOf(text, found, match),
+        });
+      const kept = this.cleared.has(key);
+      if (!kept) this.uncleared = true;
+      out += text.slice(at, match.start) + (kept ? match.value : REDACTED);
+      at = match.end;
+    }
+    return out + text.slice(at);
+  }
+}
+
 /**
  * Detects email addresses and phone-like digit runs, and returns the text
- * with each replaced by `[redacted]`. Conservative by design: a false positive
- * only holds a record for a person; a false negative would carry personal
- * data forward.
+ * with each replaced by `[redacted]` — the detector with nothing cleared.
  */
 export function detectPersonalData(text: string): {
   readonly flagged: boolean;
   readonly redacted: string;
 } {
-  let flagged = false;
-  const redacted = text
-    .replace(EMAIL, () => {
-      flagged = true;
-      return REDACTED;
-    })
-    .replace(PHONE, (match) => {
-      if (ISO_DATE_LIKE.test(match.trim())) return match;
-      flagged = true;
-      return REDACTED;
-    });
-  return { flagged, redacted };
+  const scanner = new PersonalDataScanner();
+  const redacted = scanner.redact(text);
+  return { flagged: scanner.uncleared, redacted };
 }

@@ -687,6 +687,17 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = Object.free
     description:
       "Publish a reviewed migration manifest through its targets' own interfaces, roll one back, and approve a promotion, after a migration-publication step-up. Never replaces target or religious approval.",
   }),
+  // Phase 30-RD: a person may clear a FALSE POSITIVE of the personal-data
+  // detector — a public organisational office contact — and nothing else.
+  // Its own key, externally gated, because deciding that matched text is not
+  // personal data is a privacy judgement no content or migration role
+  // implies; and its own step-up, because a grant earned to publish must not
+  // also clear personal data.
+  Object.freeze({
+    key: 'migration.clearPersonalData',
+    description:
+      'Classify each personal-data finding of a migrated record as public organisational or not, with a reason, after a migration-personal-data step-up. Clears no private data; publishes nothing.',
+  }),
 ]);
 
 /** Every catalogue key, as a union. Mistyping one is a compile error. */
@@ -752,6 +763,10 @@ export const EXTERNALLY_GATED_PERMISSIONS = Object.freeze([
   // organisation's decision (OPEN_DECISIONS.md §3.5). Catalogued, bundled
   // into no role.
   'migration.publish',
+  // Phase 30-RD: who may judge that a detector's match is a public
+  // organisational contact rather than personal data is a privacy decision
+  // the organisation names. Catalogued, bundled into no role.
+  'migration.clearPersonalData',
 ] as const satisfies readonly PermissionKey[]);
 
 const EXTERNALLY_GATED: ReadonlySet<string> = new Set(EXTERNALLY_GATED_PERMISSIONS);
@@ -819,6 +834,12 @@ export const PLATFORM_ADMINISTRATOR_PERMISSIONS: readonly PermissionKey[] = Obje
  * operation under `migration.publish` (MIGRATION_STRATEGY.md §8.4), so a grant
  * earned to refund a donation or edit canon does not authorise it, and a
  * `migration-publication` grant authorises nothing else.
+ *
+ * PHASE 30-RD ADDS THE NINTH. Clearing a false positive of Migration's
+ * personal-data detector is its own operation under
+ * `migration.clearPersonalData`, so a grant earned to publish migrated content
+ * does not authorise a privacy judgement, and a `migration-personal-data`
+ * grant authorises nothing else.
  */
 export const STEP_UP_PURPOSES = Object.freeze([
   /** Role lifecycle, permission bundles, assignment grant and revoke. */
@@ -837,6 +858,8 @@ export const STEP_UP_PURPOSES = Object.freeze([
   'donation-refund',
   /** Migration publication, its rollback, and promotion approval (Phase 29). */
   'migration-publication',
+  /** Classifying a personal-data finding of a migrated record (Phase 30-RD). */
+  'migration-personal-data',
 ] as const);
 
 export type StepUpPurpose = (typeof STEP_UP_PURPOSES)[number];

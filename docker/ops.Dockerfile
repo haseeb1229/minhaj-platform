@@ -92,6 +92,8 @@ COPY apps/web/src/composition/migration-runner.ts \
      apps/web/src/composition/migration-editorial-targets.ts \
      apps/web/src/composition/migration-global-targets.ts \
      apps/web/src/composition/migration-people-targets.ts \
+     apps/web/src/composition/migration-collection-targets.ts \
+     apps/web/src/composition/collection-member-owners.ts \
      apps/web/src/composition/storage.ts \
      ./apps/web/src/composition/
 COPY apps/web/src/contexts/migration-provenance ./apps/web/src/contexts/migration-provenance

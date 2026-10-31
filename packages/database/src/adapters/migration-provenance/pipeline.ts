@@ -5,6 +5,8 @@ import { randomUUID } from 'node:crypto';
 import {
   MIGRATION_LIMITS,
   type MigrationPipelinePort,
+  type PersonalDataClassification,
+  type PersonalDataState,
   type RunCounts,
 } from '@minhaj/contracts/migration';
 
@@ -322,6 +324,7 @@ export function createMigrationPipeline(): MigrationPipelinePort {
                   inputChecksum: true,
                   parserVersion: true,
                   normalizerVersion: true,
+                  personalData: true,
                 },
               },
             },
@@ -336,8 +339,29 @@ export function createMigrationPipeline(): MigrationPipelinePort {
         legacyIdentifier: row.record.legacyIdentifier,
         attempts: row.attempts,
         latestSnapshot: row.record.latestSnapshot,
-        currentStaged: row.record.currentStaged,
+        currentStaged:
+          row.record.currentStaged === null
+            ? null
+            : {
+                ...row.record.currentStaged,
+                personalData: row.record.currentStaged.personalData as PersonalDataState,
+              },
       }));
+    },
+
+    async personalDataFindings(stagedRecordId) {
+      const rows = await db.migrationPersonalDataFinding.findMany({
+        where: { stagedRecordId },
+        orderBy: { position: 'asc' },
+        take: MIGRATION_LIMITS.findings,
+        select: { findingDigest: true, classification: true },
+      });
+      return new Map(
+        rows.map((row) => [
+          row.findingDigest,
+          row.classification as PersonalDataClassification,
+        ]),
+      );
     },
 
     async scheduleRetry(itemId, attempts, nextAttemptAt) {
@@ -476,6 +500,10 @@ export function createMigrationPipeline(): MigrationPipelinePort {
 
     async stage(input) {
       if (
+        input.findings.length > MIGRATION_LIMITS.findings ||
+        (input.findings.length > 0 && input.personalData !== 'flagged') ||
+        (input.personalData === 'cleared') !==
+          (input.clearanceOfStagedRecordId !== null) ||
         input.categories.length > MIGRATION_LIMITS.categories ||
         input.links.length > MIGRATION_LIMITS.links ||
         input.duplicates.length > MAX_DUPLICATES ||
@@ -527,11 +555,32 @@ export function createMigrationPipeline(): MigrationPipelinePort {
               validation: input.validation,
               issues: input.issues.length === 0 ? null : JSON.stringify(input.issues),
               personalData: input.personalData,
+              clearanceOfStagedRecordId: input.clearanceOfStagedRecordId,
               review: 'pending',
               version: 1,
             },
             select: { id: true },
           });
+
+          // Phase 30-RD: every finding of a flagged revision, recorded once,
+          // together — the database refuses a partial set.
+          if (input.findings.length > 0)
+            await tx.migrationPersonalDataFinding.createMany({
+              data: input.findings.map((finding, position) => ({
+                id: randomUUID(),
+                stagedRecordId,
+                recordId: input.recordId,
+                inputChecksum: input.inputChecksum,
+                normalizerVersion: input.provenance.normalizerVersion,
+                position,
+                findingCount: input.findings.length,
+                findingType: finding.type,
+                findingDigest: finding.digest,
+                context: finding.context,
+                classification: 'unresolved',
+                version: 1,
+              })),
+            });
 
           if (input.categories.length > 0) {
             const json = JSON.stringify(

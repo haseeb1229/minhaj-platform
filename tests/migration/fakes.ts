@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import {
   isPublishableKind,
+  clearsFinding,
   type AssetAcquisitionInput,
   type AssetVisibility,
   type DiscoveredItem,
@@ -13,6 +14,7 @@ import {
   type MigrationPublishableKind,
   type MigrationTargetRef,
   type ParsedRecord,
+  type PersonalDataClassification,
   type TargetStage,
 } from '../../packages/contracts/src/migration/index.ts';
 import type {
@@ -69,6 +71,13 @@ export const PRIVILEGED = Object.freeze({
   accountId: PUBLISHER_ID,
   live: true,
 });
+/** Phase 30-RD: an actor minted for `migration.clearPersonalData` + its step-up. */
+export const CLEARER_ID = 'clearer-account';
+export const CLEARER = Object.freeze({
+  kind: 'clearer-actor',
+  accountId: CLEARER_ID,
+  live: true,
+});
 
 /** Identity: admin holds read + administer; reader holds read; publisher verifies only when live. */
 export class FakeAuthority implements MigrationAuthorityPort {
@@ -82,6 +91,14 @@ export class FakeAuthority implements MigrationAuthorityPort {
   async verifyPublisher(actor: unknown): Promise<string | null> {
     const value = actor as { kind?: unknown; accountId?: unknown; live?: unknown } | null;
     return value?.kind === 'privileged-actor' &&
+      value.live === true &&
+      typeof value.accountId === 'string'
+      ? value.accountId
+      : null;
+  }
+  async verifyClearer(actor: unknown): Promise<string | null> {
+    const value = actor as { kind?: unknown; accountId?: unknown; live?: unknown } | null;
+    return value?.kind === 'clearer-actor' &&
       value.live === true &&
       typeof value.accountId === 'string'
       ? value.accountId
@@ -156,6 +173,22 @@ interface StagedRow extends StageInput {
   note: string | null;
 }
 
+/** Phase 30-RD: one recorded personal-data finding. */
+export interface FindingRow {
+  id: string;
+  stagedRecordId: string;
+  position: number;
+  findingCount: number;
+  type: 'email' | 'phone';
+  digest: string;
+  context: string;
+  classification: PersonalDataClassification;
+  note: string | null;
+  decidedByUserId: string | null;
+  decidedAt: Date | null;
+  version: number;
+}
+
 interface ErrorRow {
   id: string;
   runId: string;
@@ -217,6 +250,7 @@ export class FakeStore {
     }
   >();
   readonly staged = new Map<string, StagedRow>();
+  readonly findings = new Map<string, FindingRow>();
   readonly errors = new Map<string, ErrorRow>();
   readonly duplicates = new Map<string, DuplicateRow>();
   readonly legacyMappings = new Map<string, LegacyMappingRow>();
@@ -404,6 +438,13 @@ export class FakeStore {
     return record;
   }
 
+  /** Phase 30-RD: a revision's recorded findings, in order. */
+  findingsOf(stagedRecordId: string): FindingRow[] {
+    return [...this.findings.values()]
+      .filter((finding) => finding.stagedRecordId === stagedRecordId)
+      .sort((a, b) => a.position - b.position);
+  }
+
   stagedOf(recordId: string): StagedRow[] {
     return [...this.staged.values()]
       .filter((row) => row.recordId === recordId)
@@ -544,6 +585,7 @@ export class FakeStore {
                     inputChecksum: current.inputChecksum,
                     parserVersion: current.provenance.parserVersion,
                     normalizerVersion: current.provenance.normalizerVersion,
+                    personalData: current.personalData,
                   },
           };
         }),
@@ -593,6 +635,13 @@ export class FakeStore {
       if (record.status === 'discovered') record.status = 'fetched';
       return { snapshotId, reused };
     },
+    personalDataFindings: async (stagedRecordId) =>
+      new Map(
+        this.findingsOf(stagedRecordId).map((finding) => [
+          finding.digest,
+          finding.classification,
+        ]),
+      ),
     markUnchanged: async (itemId) => {
       const item = this.items.get(itemId)!;
       item.outcome = 'unchanged';
@@ -608,6 +657,20 @@ export class FakeStore {
       const item = this.items.get(input.itemId)!;
       if (item.outcome !== 'pending') throw refusal('invalid-state');
       const record = this.records.get(input.recordId)!;
+      // As the database: a cleared revision names a flagged one of the same
+      // bytes whose every finding is cleared.
+      if (input.personalData === 'cleared') {
+        const of = this.staged.get(input.clearanceOfStagedRecordId ?? '');
+        const decided = this.findingsOf(input.clearanceOfStagedRecordId ?? '');
+        if (
+          of === undefined ||
+          of.personalData !== 'flagged' ||
+          of.inputChecksum !== input.inputChecksum ||
+          decided.length === 0 ||
+          decided.some((finding) => !clearsFinding(finding.classification))
+        )
+          throw refusal('same-person');
+      }
       for (const earlier of this.stagedOf(record.id))
         if (earlier.review === 'pending' || earlier.review === 'approved') {
           earlier.review = 'superseded';
@@ -623,6 +686,23 @@ export class FakeStore {
         note: null,
       };
       this.staged.set(row.id, row);
+      input.findings.forEach((finding, position) => {
+        const id = this.ids();
+        this.findings.set(id, {
+          id,
+          stagedRecordId: row.id,
+          position,
+          findingCount: input.findings.length,
+          type: finding.type,
+          digest: finding.digest,
+          context: finding.context,
+          classification: 'unresolved',
+          note: null,
+          decidedByUserId: null,
+          decidedAt: null,
+          version: 1,
+        });
+      });
       for (const category of input.categories) {
         const key = `${input.sourceId}:${category.key}`;
         if (!this.topicMappings.has(key))
@@ -954,6 +1034,19 @@ export class FakeStore {
   /* ---- Decisions --------------------------------------------------------- */
 
   readonly decisionPort: MigrationDecisionPort = {
+    classifyFinding: async (input) => {
+      const finding = this.findings.get(input.findingId);
+      if (finding === undefined) throw refusal('not-found');
+      if (finding.version !== input.expectedVersion) throw refusal('conflict');
+      if (this.staged.get(finding.stagedRecordId)?.review !== 'pending')
+        throw refusal('invalid-state');
+      finding.classification = input.classification;
+      finding.note = input.note;
+      finding.decidedByUserId = input.actorId;
+      finding.decidedAt = input.now;
+      finding.version += 1;
+      this.audit.push('migration.personal-data.classified');
+    },
     review: async (input) => {
       const row = this.staged.get(input.stagedRecordId);
       if (row === undefined) throw refusal('not-found');
@@ -965,9 +1058,16 @@ export class FakeStore {
       if (!ok) throw refusal('invalid-state');
       if (
         input.review === 'approved' &&
-        (row.validation !== 'valid' || row.personalData !== 'none')
+        (row.validation !== 'valid' || row.personalData === 'flagged')
       )
         throw refusal('not-publishable');
+      if (input.review === 'approved' && row.personalData === 'cleared') {
+        const decided = this.findingsOf(row.clearanceOfStagedRecordId ?? '');
+        if (decided.some((finding) => finding.decidedByUserId === input.actorId))
+          throw refusal('same-person');
+        if (decided.length === 0 || decided.some((f) => !clearsFinding(f.classification)))
+          throw refusal('invalid-state');
+      }
       row.review = input.review;
       row.note = input.note;
       row.version += 1;
@@ -1464,6 +1564,20 @@ export class FakeStore {
     },
     runItems: async (query) => page([], query.offset, query.limit),
     staged: async (query) => page([], query.offset, query.limit),
+    personalDataFindings: async (stagedRecordId) =>
+      this.findingsOf(stagedRecordId).map((finding) => ({
+        id: finding.id,
+        stagedRecordId: finding.stagedRecordId,
+        position: finding.position,
+        findingCount: finding.findingCount,
+        type: finding.type,
+        context: finding.context,
+        classification: finding.classification,
+        note: finding.note,
+        decidedByUserId: finding.decidedByUserId,
+        decidedAt: finding.decidedAt,
+        version: finding.version,
+      })),
     stagedDetail: async (id) => {
       const row = this.staged.get(id);
       if (row === undefined) return null;
@@ -1481,6 +1595,7 @@ export class FakeStore {
         review: row.review,
         producedAt: row.producedAt,
         version: row.version,
+        clearanceOfStagedRecordId: row.clearanceOfStagedRecordId,
         sourceId: row.sourceId,
         externalKey: record.externalKey,
         originalUrl: record.originalUrl,
@@ -1744,6 +1859,7 @@ const TARGET_PATHS: Readonly<Record<MigrationPublishableKind, string>> = Object.
   'editorial.page': '/explore',
   'people.person': '/people',
   'global.country': '/global/countries',
+  'editorial.collection': '/collections',
 });
 
 type PublishInput = Parameters<MigrationPublicationTargetPort['publish']>[0];

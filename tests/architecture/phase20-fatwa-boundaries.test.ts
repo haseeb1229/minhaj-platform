@@ -149,6 +149,7 @@ describe('the externally gated keys are nobody’s by default', () => {
       'fatwa.publish',
       'messaging.moderate',
       'messaging.support',
+      'migration.clearPersonalData',
       'migration.publish',
       'question.receive',
       'teaching.perform',
@@ -180,6 +181,8 @@ describe('the externally gated keys are nobody’s by default', () => {
       'fatwa-publication',
       'donation-refund',
       'migration-publication',
+      // Phase 30-RD: classifying a migration personal-data finding.
+      'migration-personal-data',
     ]);
   });
 });

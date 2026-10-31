@@ -1021,3 +1021,88 @@ test.describe('Migration presentation', () => {
     }
   });
 });
+
+/* ===========================================================================
+ * 5. Personal-data findings (Phase 30-RD)
+ * ========================================================================= */
+
+test.describe('Personal-data findings', () => {
+  test('shows each finding only by its type in redacted words, and offers no classification without its key', async () => {
+    test.setTimeout(300_000);
+    const pd = {
+      source: randomUUID(),
+      run: randomUUID(),
+      record: randomUUID(),
+      snapshot: randomUUID(),
+      staged: randomUUID(),
+    };
+    const host = `pd-${run}.fixture.invalid`;
+    const officeMail = `office-${run}@contact.fixture.invalid`;
+    const body = Buffer.from(
+      `<p>${SENTINEL} central office ${run}. Write to ${officeMail}.</p>`,
+      'utf8',
+    );
+    const payload = JSON.stringify({
+      kind: 'editorial.page',
+      binding: '/explore/about/introduction',
+      languageCode: 'en',
+      title: `${SENTINEL} office page ${run}`,
+      excerpt: '',
+      body: [{ type: 'paragraph', content: [{ text: 'Write to [redacted].' }] }],
+      leadImage: null,
+      legacyIdentifier: null,
+    });
+    const finding = (position: number, type: 'email' | 'phone', context: string) =>
+      `(N'${randomUUID()}', N'${pd.staged}', N'${pd.record}', N'${sha256(body)}', N'1', ${String(position)}, 2, N'${type}', N'${sha256(`${type}:${String(position)}:${run}`)}', ${n(context)})`;
+    await sql.query(
+      `BEGIN TRY BEGIN TRAN;
+       INSERT INTO [dbo].[MigrationSource] ([id],[key],[name],[authorityKind],[accessMethod],[contentKind],[baseUrl],[defaultLanguageCode],[minIntervalMs],[maxConcurrency],[maxAttempts],[timeoutMs],[maxBodyBytes],[maxRedirects],[state],[createdAt],[createdByUserId],[updatedAt],[updatedByUserId])
+         VALUES (N'${pd.source}', ${n(`fixture-pd-${run}`)}, ${n(`${SENTINEL} findings ${run}`)}, N'fixture', N'http', N'editorial.page', ${n(`http://${host}/`)}, N'en', 1000, 1, 3, 10000, 1048576, 2, N'active', SYSUTCDATETIME(), N'${operator.id}', SYSUTCDATETIME(), N'${operator.id}');
+       INSERT INTO [dbo].[MigrationSourceHost] ([sourceId],[host]) VALUES (N'${pd.source}', ${n(host)});
+       INSERT INTO [dbo].[MigrationRun] ([id],[sourceId],[operatorUserId],[state],[adapterKey],[adapterVersion],[parserKey],[parserVersion],[normalizerVersion],[codeRevision],[discoveryComplete],[startedAt])
+         VALUES (N'${pd.run}', N'${pd.source}', N'${operator.id}', N'open', ${PROVENANCE}, 1, SYSUTCDATETIME());
+       INSERT INTO [dbo].[MigrationRecord] ([id],[sourceId],[externalKey],[originalUrl],[contentKind],[status],[observed],[firstObservedRunId],[lastObservedRunId],[createdAt],[updatedAt])
+         VALUES (N'${pd.record}', N'${pd.source}', ${n(`http://${host}/office`)}, ${n(`http://${host}/office`)}, N'editorial.page', N'staged', N'present', N'${pd.run}', N'${pd.run}', SYSUTCDATETIME(), SYSUTCDATETIME());
+       INSERT INTO [dbo].[MigrationRawSnapshot] ([id],[sourceId],[recordId],[runId],[requestedUrl],[finalUrl],[httpStatus],[contentType],[body],[byteSize],[checksum],[fetchedAt],[fetcherKey],[fetcherVersion],[personalData])
+         VALUES (N'${pd.snapshot}', N'${pd.source}', N'${pd.record}', N'${pd.run}', ${n(`http://${host}/office`)}, ${n(`http://${host}/office`)}, 200, N'text/html; charset=utf-8', ${hex(body)}, ${String(body.byteLength)}, N'${sha256(body)}', SYSUTCDATETIME(), N'fixture-ui', N'1', N'flagged');
+       INSERT INTO [dbo].[MigrationStagedRecord] ([id],[recordId],[snapshotId],[runId],[revision],[contentKind],[title],[titleKey],[languageCode],[payload],[payloadChecksum],[adapterKey],[adapterVersion],[parserKey],[parserVersion],[normalizerVersion],[codeRevision],[inputChecksum],[producedAt],[validation],[personalData])
+         VALUES (N'${pd.staged}', N'${pd.record}', N'${pd.snapshot}', N'${pd.run}', 1, N'editorial.page', ${n(`${SENTINEL} office page ${run}`)}, ${n(`office page ${run}`)}, N'en', ${n(payload)}, N'${sha256(payload)}', ${PROVENANCE}, N'${sha256(body)}', SYSUTCDATETIME(), N'valid', N'flagged');
+       INSERT INTO [dbo].[MigrationPersonalDataFinding] ([id],[stagedRecordId],[recordId],[inputChecksum],[normalizerVersion],[position],[findingCount],[findingType],[findingDigest],[context])
+         VALUES ${finding(0, 'email', `central office ${run}. Write to «email».`)},
+                ${finding(1, 'phone', `the office line «phone» and [redacted].`)};
+       COMMIT TRAN; END TRY BEGIN CATCH IF @@TRANCOUNT > 0 ROLLBACK TRAN; THROW; END CATCH;`,
+    );
+
+    for (const actor of [operator, reader]) {
+      const page = actor.page;
+      const response = await page.goto(path(`/staging/${pd.staged}`));
+      expect(response?.status()).toBe(200);
+      const main = page.getByRole('main');
+      await expect(main).toContainText(copy('adminMigration.findings.heading'));
+      const findings = main.getByTestId('personal-data-finding');
+      await expect(findings).toHaveCount(2);
+      await expect(findings.first()).toContainText('«email»');
+      await expect(findings.first()).toContainText(
+        copy('adminMigration.findings.classification.unresolved'),
+      );
+      // The matched text is nowhere on the page: only its type, in words already redacted.
+      await expect(main).not.toContainText(officeMail);
+      // Classifying needs the gated key: neither account is offered the form.
+      await expect(main).toContainText(copy('adminMigration.findings.clearerOnly'));
+      await expect(
+        main.getByRole('button', {
+          name: copy('adminMigration.findings.submit'),
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      // A flagged revision is never offered approval.
+      await expect(
+        main.getByRole('button', {
+          name: copy('adminMigration.review.approve'),
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await expectInert(page, 'findings');
+    }
+  });
+});

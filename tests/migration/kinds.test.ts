@@ -9,6 +9,7 @@ import {
   type ParsedFatwa,
   type ParsedMagazine,
   type ParsedMagazineIssue,
+  type ParsedCollection,
   type ParsedPage,
   type ParsedPerson,
   type ParsedQuranTranslation,
@@ -838,6 +839,76 @@ describe('editorial.page (Phase 30-R)', () => {
       expect(run({ ...PAGE, binding }).issues).toContain('reference-missing');
     expect(run({ ...PAGE, bodyHtml: '' }).issues).toEqual(['body-missing']);
     expect(run({ ...PAGE, languageCode: 'fr' }).issues).toEqual(['language-unsupported']);
+  });
+});
+
+const ARCHIVE: ParsedCollection = Object.freeze({
+  ...COMMON,
+  kind: 'editorial.collection',
+  title: 'Synthetic Archive',
+  legacyIdentifier: 'lkcatid-7',
+  descriptionHtml: 'Yearly gatherings &amp; their reports.',
+  members: [
+    { url: 'https://www.minhaj.org/english/tid/301/', section: 'First', group: null },
+    { url: 'https://www.minhaj.org/english/tid/302/', section: 'First', group: null },
+    { url: 'https://www.minhaj.org/english/tid/303/', section: 'Second', group: '2009' },
+    { url: 'https://www.minhaj.org/english/tid/302/', section: 'Second', group: '2008' },
+  ],
+});
+
+describe('editorial.collection (Phase 30-RD)', () => {
+  it('stages the source’s title, description and members in order, a repeat kept once', () => {
+    const result = run(ARCHIVE);
+    expect(result.issues).toEqual([]);
+    expect(result.payload).toEqual({
+      kind: 'editorial.collection',
+      // Named for what it is, never for the source's numeric category.
+      slug: 'synthetic-archive',
+      languageCode: 'en',
+      title: 'Synthetic Archive',
+      excerpt: 'Yearly gatherings & their reports.',
+      members: [
+        {
+          legacyUrl: 'https://www.minhaj.org/english/tid/301/',
+          section: 'First',
+          group: null,
+        },
+        {
+          legacyUrl: 'https://www.minhaj.org/english/tid/302/',
+          section: 'First',
+          group: null,
+        },
+        {
+          legacyUrl: 'https://www.minhaj.org/english/tid/303/',
+          section: 'Second',
+          group: '2009',
+        },
+      ],
+      repeatedMembers: 1,
+      legacyIdentifier: 'lkcatid-7',
+    });
+  });
+
+  it('holds an archive with a member that is not an https address, or with none', () => {
+    expect(
+      run({
+        ...ARCHIVE,
+        members: [
+          ...ARCHIVE.members,
+          { url: 'http://www.minhaj.org/english/tid/9/', section: null, group: null },
+        ],
+      }).issues,
+    ).toContain('reference-missing');
+    expect(run({ ...ARCHIVE, members: [] }).issues).toContain('reference-missing');
+  });
+
+  it('holds an archive larger than one Collection may be', () => {
+    const members = Array.from({ length: 101 }, (_, index) => ({
+      url: `https://www.minhaj.org/english/tid/${String(index + 1)}/`,
+      section: null,
+      group: null,
+    }));
+    expect(run({ ...ARCHIVE, members }).issues).toEqual(['payload-invalid']);
   });
 });
 

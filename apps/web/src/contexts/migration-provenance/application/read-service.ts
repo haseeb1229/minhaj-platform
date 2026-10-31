@@ -24,6 +24,7 @@ import {
   type PromotionRecord,
   type RunRecord,
   type SnapshotMeta,
+  type PersonalDataFindingRecord,
   type StagedDetail,
 } from '@minhaj/contracts/migration';
 
@@ -144,6 +145,19 @@ export function createMigrationReadService(deps: {
       stagedId: unknown,
     ): Promise<StagedDetail | null> {
       return one(actor, stagedId, (value) => read.stagedDetail(value));
+    },
+    /**
+     * Phase 30-RD. A revision's personal-data findings: each one's type, the
+     * words around it with every match redacted, and its decision — never the
+     * matched text, which only the audited raw-evidence preview shows.
+     */
+    async personalDataFindings(
+      actor: MigrationActor,
+      stagedId: unknown,
+    ): Promise<readonly PersonalDataFindingRecord[]> {
+      return (
+        (await one(actor, stagedId, (value) => read.personalDataFindings(value))) ?? []
+      );
     },
     /** A snapshot's metadata — never its body. */
     async snapshot(

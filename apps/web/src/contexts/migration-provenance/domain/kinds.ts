@@ -9,6 +9,7 @@ import {
   canonicalSourceUrl,
   languageCodeSchema,
   type MigrationContentKind,
+  type ParsedCollection,
   type ParsedCountry,
   type ParsedEditorial,
   type ParsedFatwa,
@@ -28,14 +29,15 @@ import {
 
 import {
   anchorHrefs,
-  detectPersonalData,
   foldTitle,
   normalizeText,
   normalizeTitle,
   plainText,
   sanitizeFragment,
   slugFor,
+  PersonalDataScanner,
   type HrefRewrite,
+  type PersonalDataMatch,
 } from './normalize.ts';
 import { blocksFrom, blocksText } from './rich-text.ts';
 import { clip, normalizeVideo, plausibleDate } from './video.ts';
@@ -75,7 +77,10 @@ export interface Normalisation {
     readonly hard: boolean;
   } | null;
   readonly languageCode: string | null;
+  /** Personal data no person cleared was found, and redacted. */
   readonly personalData: boolean;
+  /** Phase 30-RD: every distinct match the detector found, cleared or not. */
+  readonly findings: readonly PersonalDataMatch[];
 }
 
 export interface NormaliseInput {
@@ -85,7 +90,16 @@ export interface NormaliseInput {
   readonly externalKey: string;
   readonly rewrite: HrefRewrite;
   readonly now: Date;
+  /**
+   * Phase 30-RD. The detector this record is read with — by default one that
+   * clears nothing. The pipeline hands it the matches a person cleared for
+   * exactly these bytes, and reads back everything it found.
+   */
+  readonly scanner?: PersonalDataScanner;
 }
+
+/** The input once its detector is settled: one per record, so findings accumulate. */
+type Ready = NormaliseInput & { readonly scanner: PersonalDataScanner };
 
 /** Every markup string of a record, for link extraction (§4.5). */
 export function recordMarkup(record: ParsedRecord): string[] {
@@ -108,6 +122,8 @@ export function recordMarkup(record: ParsedRecord): string[] {
         record.bodyHtml,
         ...(record.excerptHtml === null ? [] : [record.excerptHtml]),
       ];
+    case 'editorial.collection':
+      return [record.descriptionHtml];
     case 'people.person':
       return [record.biographyHtml];
     case 'fatwa.ruling':
@@ -129,19 +145,27 @@ export function recordHrefs(record: ParsedRecord): string[] {
 
 class Words {
   readonly issues = new Set<ValidationIssue>();
-  personalData = false;
 
   private readonly rewrite: HrefRewrite;
+  private readonly scanner: PersonalDataScanner;
 
-  /** A declared field, not a parameter property: the CLIs run this under plain Node. */
-  constructor(rewrite: HrefRewrite) {
+  /** Declared fields, not parameter properties: the CLIs run this under plain Node. */
+  constructor(rewrite: HrefRewrite, scanner: PersonalDataScanner) {
     this.rewrite = rewrite;
+    this.scanner = scanner;
+  }
+
+  /** Personal data no person cleared was found (and redacted). */
+  get personalData(): boolean {
+    return this.scanner.uncleared;
+  }
+
+  get findings(): readonly PersonalDataMatch[] {
+    return [...this.scanner.matches.values()];
   }
 
   redact(text: string): string {
-    const found = detectPersonalData(text);
-    if (found.flagged) this.personalData = true;
-    return found.redacted;
+    return this.scanner.redact(text);
   }
 
   title(raw: string, max: number = MIGRATION_LIMITS.title): string {
@@ -153,9 +177,10 @@ class Words {
 
   /** Plain description words from markup, links rewritten, personal data redacted. */
   description(html: string): string {
-    const rewritten = sanitizeFragment(html, { rewrite: this.rewrite });
-    const redacted = sanitizeFragment(html, { rewrite: this.rewrite, redact: true });
-    if (redacted !== rewritten) this.personalData = true;
+    const redacted = sanitizeFragment(html, {
+      rewrite: this.rewrite,
+      redact: this.scanner,
+    });
     const text = this.redact(plainText(redacted));
     if (text.length > MIGRATION_LIMITS.description)
       this.issues.add('description-too-long');
@@ -164,9 +189,10 @@ class Words {
 
   /** Rich blocks from markup, links rewritten, personal data redacted. */
   blocks(html: string): StagedBlock[] {
-    const plain = blocksFrom(html, { rewrite: this.rewrite });
-    if (detectPersonalData(blocksText(plain)).flagged) this.personalData = true;
-    return blocksFrom(html, { rewrite: this.rewrite, redact: true });
+    // The whole text once, so a match a text-node boundary would split is
+    // still found; then each node redacted for what is stored.
+    this.scanner.redact(blocksText(blocksFrom(html, { rewrite: this.rewrite })));
+    return blocksFrom(html, { rewrite: this.rewrite, redact: this.scanner });
   }
 
   /** A short optional field (a publisher, a volume): normalised, bounded, else null. */
@@ -270,6 +296,7 @@ function finish(
     identity: rest.identity,
     languageCode: rest.languageCode,
     personalData: words.personalData,
+    findings: words.findings,
   };
 }
 
@@ -318,8 +345,8 @@ export function normalIsbn(raw: string): string | null {
   return null;
 }
 
-function work(input: NormaliseInput, record: ParsedWork): Normalisation {
-  const words = new Words(input.rewrite);
+function work(input: Ready, record: ParsedWork): Normalisation {
+  const words = new Words(input.rewrite, input.scanner);
   const {
     labels,
     locale: primaryLocale,
@@ -388,8 +415,8 @@ function work(input: NormaliseInput, record: ParsedWork): Normalisation {
  * library.magazine and library.magazine-issue
  * ========================================================================= */
 
-function magazine(input: NormaliseInput, record: ParsedMagazine): Normalisation {
-  const words = new Words(input.rewrite);
+function magazine(input: Ready, record: ParsedMagazine): Normalisation {
+  const words = new Words(input.rewrite, input.scanner);
   const {
     labels,
     locale: primaryLocale,
@@ -417,11 +444,8 @@ function magazine(input: NormaliseInput, record: ParsedMagazine): Normalisation 
   });
 }
 
-function magazineIssue(
-  input: NormaliseInput,
-  record: ParsedMagazineIssue,
-): Normalisation {
-  const words = new Words(input.rewrite);
+function magazineIssue(input: Ready, record: ParsedMagazineIssue): Normalisation {
+  const words = new Words(input.rewrite, input.scanner);
   const { labels, locale: primaryLocale, title } = primaryLabel(words, record, '');
   const lang = language(words, record.languageCode, input.defaultLanguageCode);
   const legacyIdentifier = identifier(input, record.legacyIdentifier);
@@ -465,8 +489,8 @@ const EDITORIAL_PREFIX = Object.freeze({
   'editorial.press-release': 'press-release',
 } as const);
 
-function editorial(input: NormaliseInput, record: ParsedEditorial): Normalisation {
-  const words = new Words(input.rewrite);
+function editorial(input: Ready, record: ParsedEditorial): Normalisation {
+  const words = new Words(input.rewrite, input.scanner);
   const title = words.title(record.title, 200);
   const lang = language(words, record.languageCode, input.defaultLanguageCode);
   if (
@@ -508,8 +532,8 @@ function editorial(input: NormaliseInput, record: ParsedEditorial): Normalisatio
  * editorial.page — a shell-bound organisational Page (Phase 30-R)
  * ========================================================================= */
 
-function page(input: NormaliseInput, record: ParsedPage): Normalisation {
-  const words = new Words(input.rewrite);
+function page(input: Ready, record: ParsedPage): Normalisation {
+  const words = new Words(input.rewrite, input.scanner);
   const title = words.title(record.title, 200);
   const lang = language(words, record.languageCode, input.defaultLanguageCode);
   if (
@@ -544,6 +568,75 @@ function page(input: NormaliseInput, record: ParsedPage): Normalisation {
 }
 
 /* ===========================================================================
+ * editorial.collection — a source's curated archive (Phase 30-RD)
+ * ========================================================================= */
+
+/**
+ * The archive's own title and description, and its members in the source's
+ * order, each by the canonical form of its legacy address — the form a legacy
+ * mapping records, so publication resolves it exactly or not at all. A member
+ * listed twice is kept once, at its first place, and the repeat counted; a
+ * member that is not an https address is no member, and holds the archive.
+ */
+function collection(input: Ready, record: ParsedCollection): Normalisation {
+  const words = new Words(input.rewrite, input.scanner);
+  const title = words.title(record.title, 200);
+  const lang = language(words, record.languageCode, input.defaultLanguageCode);
+  if (
+    lang.code !== null &&
+    !(EDITORIAL_MIGRATION_LANGUAGES as readonly string[]).includes(lang.code)
+  )
+    words.issues.add('language-unsupported');
+  const excerpt = words.description(record.descriptionHtml);
+  if (excerpt.length > 600) words.issues.add('excerpt-too-long');
+  const members: { legacyUrl: string; section: string | null; group: string | null }[] =
+    [];
+  const seen = new Set<string>();
+  let repeatedMembers = 0;
+  for (const member of record.members) {
+    const legacyUrl = httpsUrl(member.url);
+    if (legacyUrl === null) {
+      words.issues.add('reference-missing');
+      continue;
+    }
+    if (seen.has(legacyUrl)) {
+      repeatedMembers += 1;
+      continue;
+    }
+    seen.add(legacyUrl);
+    members.push({
+      legacyUrl,
+      section: words.field(member.section, 200),
+      group: words.field(member.group, 200),
+    });
+  }
+  if (members.length === 0) words.issues.add('reference-missing');
+  const legacyIdentifier = identifier(input, record.legacyIdentifier);
+  const payload = {
+    kind: 'editorial.collection' as const,
+    // Named for what it is, not for the source's numeric category.
+    slug: slugFor({
+      legacyIdentifier: null,
+      title,
+      fallbackSeed: input.externalKey,
+      prefix: 'collection',
+    }),
+    languageCode: lang.text,
+    title,
+    excerpt,
+    members,
+    repeatedMembers,
+    legacyIdentifier,
+  };
+  return finish('editorial.collection', payload, words, {
+    title,
+    fallbackTitle: legacyIdentifier ?? input.externalKey,
+    identity: null,
+    languageCode: lang.code,
+  });
+}
+
+/* ===========================================================================
  * people.person — a public profile (Phase 30-R)
  * ========================================================================= */
 
@@ -566,8 +659,8 @@ function biographyOf(words: Words, html: string): string {
   return biography;
 }
 
-function person(input: NormaliseInput, record: ParsedPerson): Normalisation {
-  const words = new Words(input.rewrite);
+function person(input: Ready, record: ParsedPerson): Normalisation {
+  const words = new Words(input.rewrite, input.scanner);
   const name = words.title(record.name, 200);
   const primary = locale(record.primaryLocale);
   if (primary === null) words.issues.add('primary-label-missing');
@@ -600,8 +693,8 @@ function person(input: NormaliseInput, record: ParsedPerson): Normalisation {
  * global.country — a country of the organisation's presence (Phase 30-R)
  * ========================================================================= */
 
-function country(input: NormaliseInput, record: ParsedCountry): Normalisation {
-  const words = new Words(input.rewrite);
+function country(input: Ready, record: ParsedCountry): Normalisation {
+  const words = new Words(input.rewrite, input.scanner);
   const name = words.title(record.title, 120);
   const primary = locale(record.primaryLocale);
   if (primary === null) words.issues.add('primary-label-missing');
@@ -637,8 +730,8 @@ function country(input: NormaliseInput, record: ParsedCountry): Normalisation {
  * REVIEW-ONLY: fatwa.ruling and quran.translation
  * ========================================================================= */
 
-function fatwa(input: NormaliseInput, record: ParsedFatwa): Normalisation {
-  const words = new Words(input.rewrite);
+function fatwa(input: Ready, record: ParsedFatwa): Normalisation {
+  const words = new Words(input.rewrite, input.scanner);
   const title = words.title(record.title);
   const lang = language(words, record.languageCode, input.defaultLanguageCode);
   const question = words.blocks(record.questionHtml);
@@ -679,11 +772,8 @@ function fatwa(input: NormaliseInput, record: ParsedFatwa): Normalisation {
   });
 }
 
-function quranTranslation(
-  input: NormaliseInput,
-  record: ParsedQuranTranslation,
-): Normalisation {
-  const words = new Words(input.rewrite);
+function quranTranslation(input: Ready, record: ParsedQuranTranslation): Normalisation {
+  const words = new Words(input.rewrite, input.scanner);
   const work = normalizeTitle(record.work);
   if (work.length === 0) words.issues.add('title-missing');
   else if (work.length > 200) words.issues.add('title-too-long');
@@ -713,7 +803,8 @@ function quranTranslation(
       words.issues.add('body-missing');
       continue;
     }
-    if (detectPersonalData(text).flagged) words.personalData = true;
+    // Scripture is never rewritten: a match only holds the record.
+    words.redact(text);
     seen.add(ayah);
     ayat.push({ ayah, text });
   }
@@ -746,12 +837,13 @@ function quranTranslation(
  * The dispatcher
  * ========================================================================= */
 
-export function normaliseRecord(input: NormaliseInput): Normalisation {
+export function normaliseRecord(given: NormaliseInput): Normalisation {
+  const input: Ready = { ...given, scanner: given.scanner ?? new PersonalDataScanner() };
   const { parsed } = input;
   switch (parsed.kind) {
     case 'media.video': {
       const video = normalizeVideo({ ...input, parsed });
-      const posterWords = new Words(input.rewrite);
+      const posterWords = new Words(input.rewrite, input.scanner);
       const payload = { ...video.payload, poster: image(posterWords, parsed.poster) };
       return {
         kind: 'media.video',
@@ -764,7 +856,8 @@ export function normaliseRecord(input: NormaliseInput): Normalisation {
             ? null
             : { key: video.dedupeKey, signal: 'provider-id', hard: true },
         languageCode: video.languageCode,
-        personalData: video.personalData || posterWords.personalData,
+        personalData: input.scanner.uncleared,
+        findings: posterWords.findings,
       };
     }
     case 'library.work':
@@ -779,6 +872,8 @@ export function normaliseRecord(input: NormaliseInput): Normalisation {
       return editorial(input, parsed);
     case 'editorial.page':
       return page(input, parsed);
+    case 'editorial.collection':
+      return collection(input, parsed);
     case 'people.person':
       return person(input, parsed);
     case 'global.country':

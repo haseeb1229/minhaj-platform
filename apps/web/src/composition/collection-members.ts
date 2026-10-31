@@ -1,12 +1,17 @@
 import 'server-only';
 
-import {
-  isEditorialMemberKind,
-  memberToken,
-  type CollectionMember,
-  type CollectionMemberKind,
-  type CollectionMemberTarget,
+import type {
+  CollectionMember,
+  CollectionMemberKind,
+  CollectionMemberTarget,
 } from '@minhaj/contracts/editorial';
+
+import {
+  referencesOf,
+  resolveMembersThrough,
+  type CollectionMemberOwners,
+  type ResolvedMembers,
+} from './collection-member-owners';
 
 import { editorialReadRuntime } from './editorial-read';
 import { libraryReadRuntime } from './library-read';
@@ -37,79 +42,25 @@ import { mediaReadRuntime } from './media-read';
  * (ARCHITECTURE.md §8.1).
  */
 
-export interface ResolvedMembers {
-  /** The public targets, keyed `kind:id`. */
-  readonly targets: ReadonlyMap<string, CollectionMemberTarget>;
-  /** Member types whose owner could not be asked just now. */
-  readonly unavailable: ReadonlySet<CollectionMemberKind>;
-}
+/** The owners' public read runtimes this process holds. */
+const owners: CollectionMemberOwners = {
+  memberTargets: (members) => editorialReadRuntime().memberTargets(members),
+  workReferences: (ids) => libraryReadRuntime().workReferences(ids),
+  videoReferences: (ids) => mediaReadRuntime().videoReferences(ids),
+};
 
-function referencesOf(
-  kind: 'work' | 'video',
-  rows: readonly {
-    readonly id: string;
-    readonly slug: string;
-    readonly labels: readonly { readonly locale: string; readonly title: string }[];
-  }[],
-): [string, CollectionMemberTarget][] {
-  return rows.map((row) => [
-    memberToken({ kind, id: row.id }),
-    {
-      id: row.id,
-      slug: row.slug,
-      titles: row.labels.map((label) => ({
-        languageCode: label.locale,
-        title: label.title,
-      })),
-    },
-  ]);
-}
+export type { ResolvedMembers };
 
 /**
  * Every currently public member among these, by its owner. With `strict`, an
  * owner that cannot be asked is an error rather than a degraded group — the
  * form a WRITE needs, where "could not ask" must never read as "may not".
  */
-export async function resolveCollectionMembers(
+export function resolveCollectionMembers(
   members: readonly CollectionMember[],
   options: { readonly strict?: boolean } = {},
 ): Promise<ResolvedMembers> {
-  const editorial = members.filter((m) => isEditorialMemberKind(m.kind));
-  const works = [...new Set(members.filter((m) => m.kind === 'work').map((m) => m.id))];
-  const videos = [...new Set(members.filter((m) => m.kind === 'video').map((m) => m.id))];
-  const unavailable = new Set<CollectionMemberKind>();
-  const guarded = async (
-    kinds: readonly CollectionMemberKind[],
-    read: () => Promise<[string, CollectionMemberTarget][]>,
-  ): Promise<[string, CollectionMemberTarget][]> => {
-    try {
-      return await read();
-    } catch (error) {
-      if (options.strict) throw error;
-      // A public route reaches no logger (it would pull the server environment
-      // into an anonymous page); the owner's own read path observes it.
-      for (const kind of kinds) unavailable.add(kind);
-      return [];
-    }
-  };
-  const found = await Promise.all([
-    editorial.length === 0
-      ? Promise.resolve([])
-      : guarded([...new Set(editorial.map((m) => m.kind))], async () => [
-          ...(await editorialReadRuntime().memberTargets(editorial)),
-        ]),
-    works.length === 0
-      ? Promise.resolve([])
-      : guarded(['work'], async () =>
-          referencesOf('work', await libraryReadRuntime().workReferences(works)),
-        ),
-    videos.length === 0
-      ? Promise.resolve([])
-      : guarded(['video'], async () =>
-          referencesOf('video', await mediaReadRuntime().videoReferences(videos)),
-        ),
-  ]);
-  return { targets: new Map(found.flat()), unavailable };
+  return resolveMembersThrough(owners, members, options);
 }
 
 /**

@@ -504,6 +504,8 @@ describe('Phase 3B — every taxonomy surface passes the gate', () => {
       'fatwa-publication',
       'donation-refund',
       'migration-publication',
+      // Phase 30-RD: classifying a migration personal-data finding.
+      'migration-personal-data',
     ]);
   });
 
