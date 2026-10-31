@@ -79,6 +79,12 @@ export async function PublicContent({
   // An Article's date is its CHRONOLOGY (Phase 30-R): its source's own
   // publication date where it states one — never the day it was migrated.
   const dated = record.chronologyAt ?? record.publishedAt;
+  // Phase 30-RF. A WebPage — an organisational, help or legal destination —
+  // carries no source chronology, so the only date it has is the day the
+  // platform published it, which on a migrated page (a 2009 profile) reads as
+  // if the content were new. It shows no dateline and states no publication
+  // date; its structured data keeps the true `dateModified`.
+  const showsDate = kind === 'Article';
   const published = new Intl.DateTimeFormat(locale, {
     dateStyle: 'long',
     timeZone: 'UTC',
@@ -114,9 +120,11 @@ export async function PublicContent({
                   {t('articles')}
                 </span>
               ) : null,
-              <time key="date" dateTime={dated.toISOString().slice(0, 10)}>
-                {news('published')} {published}
-              </time>,
+              showsDate ? (
+                <time key="date" dateTime={dated.toISOString().slice(0, 10)}>
+                  {news('published')} {published}
+                </time>
+              ) : null,
             ]}
           />
           {translation.languageCode !== locale ? (
@@ -236,7 +244,7 @@ export async function PublicContent({
                     ...(image === null
                       ? {}
                       : { image: absoluteUrl(leadImagePath(image)) }),
-                    datePublished: dated.toISOString(),
+                    ...(showsDate ? { datePublished: dated.toISOString() } : {}),
                     dateModified: record.updatedAt.toISOString(),
                   },
                 ],

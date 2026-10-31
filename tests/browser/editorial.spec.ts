@@ -198,10 +198,21 @@ test('renders signed-out fallback content with no cookies and the same signed-in
     expect(await sharedText(author, locale)).toBe(text);
     expect(await page.context().cookies()).toHaveLength(0);
   }
+  // An Article states its date; a Page — an undated destination — states none
+  // (Phase 30-RF): no dateline, and no datePublished in its structured data.
+  await page.goto('/en/library/articles/' + renamed);
+  await expect(page.locator('main article header time')).toHaveCount(1);
   await page.goto('/en/help/' + slug);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
     'Synthetic help browser proof',
   );
+  await expect(page.locator('main article header time')).toHaveCount(0);
+  const structured = await page
+    .locator('script[type="application/ld+json"]')
+    .first()
+    .textContent();
+  expect(structured).toContain('"dateModified"');
+  expect(structured).not.toContain('"datePublished"');
 });
 test('serves the Article byte-identically signed in and out, its private island empty until hydrated', async ({
   browser,
