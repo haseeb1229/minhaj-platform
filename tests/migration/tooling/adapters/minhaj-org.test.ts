@@ -112,9 +112,9 @@ describe('identity and options', () => {
   it('declares what it is, per kind', () => {
     expect(adapter()).toMatchObject({
       adapterKey: MINHAJ_ORG_EDITORIAL_ADAPTER_KEY,
-      adapterVersion: '3',
+      adapterVersion: '4',
       parserKey: 'cheerio-minhaj-org-editorial',
-      parserVersion: '2',
+      parserVersion: '3',
       contentKind: 'editorial.news',
       accessMethod: 'http',
     });
@@ -417,6 +417,24 @@ describe('discovery', () => {
         fakeSite({ [`${ORIGIN}/english/News-Events/`]: htmlPage(listing) }).fetcher,
       ),
     ).toMatchObject({ kind: 'outcome' });
+  });
+
+  it('keys a link under an empty category segment by its tid, like any other (Phase 30-RF)', async () => {
+    const listing = newsListing(
+      ['/english//tid/601/Synthetic-Uncategorised.html', '/english/tid/601/Again.html'],
+      [],
+    );
+    const result = await adapter().discover(
+      null,
+      fakeSite({ [`${ORIGIN}/english/News-Events/`]: htmlPage(listing) }).fetcher,
+    );
+    expect(result).toEqual({
+      kind: 'page',
+      items: [
+        { externalKey: key(601), originalUrl: key(601), legacyIdentifier: 'tid-601' },
+      ],
+      next: null,
+    });
   });
 
   it('still reads the links of a listing whose excerpt the source cut mid-character', async () => {
@@ -912,6 +930,27 @@ describe('organisational pages', () => {
       kind: 'excluded',
       reason: 'not-catalogued',
     });
+  });
+
+  it('reads a page the site files under no category, at /{lang}//tid/{n}/ (Phase 30-RF)', () => {
+    // The site redirects an uncategorised page to an empty category segment;
+    // that answer IS the page, read like any other.
+    const result = pageAdapter().parse(
+      evidenceOf(detail(), `${ORIGIN}/english//tid/101/Synthetic-Headline-One.html`),
+    );
+    expect(result).toMatchObject({
+      kind: 'parsed',
+      record: { binding: '/explore/about/introduction', legacyIdentifier: 'tid-101' },
+    });
+    // Still one section, one number: two empty segments or another language are not.
+    for (const path of ['/english///tid/101/x.html', '/french//tid/101/x.html'])
+      expect(pageAdapter().parse(evidenceOf(detail(), `${ORIGIN}${path}`))).toEqual({
+        kind: 'excluded',
+        reason: 'not-a-tid-page',
+      });
+    expect(
+      pageAdapter().parse(evidenceOf(detail(), `${ORIGIN}/urdu//tid/101/x.html`)),
+    ).toEqual({ kind: 'failed', detail: 'language-conflict' });
   });
 });
 

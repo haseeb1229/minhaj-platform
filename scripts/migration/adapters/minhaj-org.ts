@@ -106,7 +106,13 @@ const OG_LOCALE_LANGUAGES: Readonly<Record<EditorialLanguage, readonly string[]>
 const CHROME =
   'h1.entry_title, .meta_date, .shareaholic-canvas, [class*="shareaholic"], .fb-like, .fb-share-button, .fb-comments, #comments, .a2a_kit';
 
-const TID_PATH = /^\/(english|urdu|arabic)\/(?:[^/]+\/)?tid\/([1-9][0-9]{0,8})(?:\/|$)/;
+/**
+ * A `tid` page's path. The category segment may be EMPTY: the site redirects a
+ * page filed under no category to `/{lang}//tid/{n}/{slug}.html` (seen on the
+ * founder's profile, the forums, achievements and social-media pages,
+ * 2026-10-29), and that answer is the page itself.
+ */
+const TID_PATH = /^\/(english|urdu|arabic)\/(?:[^/]*\/)?tid\/([1-9][0-9]{0,8})(?:\/|$)/;
 
 function isSectionLanguage(value: string | undefined): value is SectionLanguage {
   return value === 'english' || value === 'urdu' || value === 'arabic';
@@ -334,9 +340,9 @@ export function createMinhajOrgEditorialAdapter(
 
   return {
     adapterKey: MINHAJ_ORG_EDITORIAL_ADAPTER_KEY,
-    adapterVersion: '3',
+    adapterVersion: '4',
     parserKey: 'cheerio-minhaj-org-editorial',
-    parserVersion: '2',
+    parserVersion: '3',
     contentKind: kind,
     accessMethod: 'http',
     discover,
@@ -416,7 +422,7 @@ export function createMinhajOrgPageAdapter(
     adapterKey: MINHAJ_ORG_PAGE_ADAPTER_KEY,
     adapterVersion: '1',
     parserKey: 'cheerio-minhaj-org-page',
-    parserVersion: '1',
+    parserVersion: '2',
     contentKind: 'editorial.page',
     accessMethod: 'http',
     discover: fixedItemDiscovery(
@@ -485,7 +491,7 @@ export function createMinhajOrgPersonAdapter(
     adapterKey: MINHAJ_ORG_PERSON_ADAPTER_KEY,
     adapterVersion: '1',
     parserKey: 'cheerio-minhaj-org-person',
-    parserVersion: '1',
+    parserVersion: '2',
     contentKind: 'people.person',
     accessMethod: 'http',
     discover: fixedItemDiscovery(
