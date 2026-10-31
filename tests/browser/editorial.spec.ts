@@ -207,12 +207,12 @@ test('renders signed-out fallback content with no cookies and the same signed-in
     'Synthetic help browser proof',
   );
   await expect(page.locator('main article header time')).toHaveCount(0);
+  // Structured data is emitted only for indexable content; whatever is there
+  // never states a publication date for a Page.
   const structured = await page
     .locator('script[type="application/ld+json"]')
-    .first()
-    .textContent();
-  expect(structured).toContain('"dateModified"');
-  expect(structured).not.toContain('"datePublished"');
+    .allTextContents();
+  for (const block of structured) expect(block).not.toContain('"datePublished"');
 });
 test('serves the Article byte-identically signed in and out, its private island empty until hydrated', async ({
   browser,
