@@ -1394,6 +1394,15 @@ try {
           'UPDATE [dbo].[MigrationManifestEntry] SET [stagedRecordId]=[stagedRecordId];',
         ],
         ['MigrationPromotion DELETE', 'DELETE FROM [dbo].[MigrationPromotion];'],
+        // Phase 30-RD: a finding is never deleted, and its evidence never moves.
+        [
+          'MigrationPersonalDataFinding DELETE',
+          'DELETE FROM [dbo].[MigrationPersonalDataFinding];',
+        ],
+        [
+          'MigrationPersonalDataFinding evidence UPDATE',
+          'UPDATE [dbo].[MigrationPersonalDataFinding] SET [context]=[context];',
+        ],
         [
           'migration.* Permission INSERT',
           "INSERT INTO [dbo].[Permission] ([key],[description]) VALUES (N'migration.scrape',N'forged');",
@@ -1418,6 +1427,7 @@ try {
             'MigrationManifestEntry',
             'MigrationPromotion',
             'MigrationPromotionEntry',
+            'MigrationPersonalDataFinding',
           ] as const
         ).map((table): [string, string] => [
           `${table} ALTER`,

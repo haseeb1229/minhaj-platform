@@ -600,6 +600,9 @@ describe.skipIf(!configured)('Phase 1 database lifecycle (live SQL Server)', () 
         'MigrationManifestEntry',
         'MigrationPromotion',
         'MigrationPromotionEntry',
+        // Phase 30-RD — the personal-data detector's findings of a flagged
+        // revision, each with a person's audited classification.
+        'MigrationPersonalDataFinding',
       ].sort(),
     );
   });

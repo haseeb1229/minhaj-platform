@@ -869,6 +869,11 @@ try {
       `UPDATE [dbo].[MigrationPromotionEntry] SET [state] = N'promoted';`,
       `DELETE FROM [dbo].[MigrationPromotionEntry];`,
     ],
+    MigrationPersonalDataFinding: [
+      `INSERT INTO [dbo].[MigrationPersonalDataFinding] ([id], [stagedRecordId], [recordId], [inputChecksum], [normalizerVersion], [position], [findingCount], [findingType], [findingDigest], [context]) VALUES (N'injected', N'injected', N'injected', REPLICATE('0', 64), N'1', 0, 1, N'email', REPLICATE('0', 64), N'injected');`,
+      `UPDATE [dbo].[MigrationPersonalDataFinding] SET [classification] = N'public-organisational-contact';`,
+      `DELETE FROM [dbo].[MigrationPersonalDataFinding];`,
+    ],
   };
   for (const [table, [insert, update, remove]] of Object.entries(migrationProbes)) {
     await expectDenied(operatorSession, `operator SELECT on ${table} denied`, () =>

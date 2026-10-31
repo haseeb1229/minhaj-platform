@@ -8044,9 +8044,11 @@ try {
     const operator = randomUUID();
     const publisher = randomUUID();
     const plain = randomUUID();
+    const clearer = randomUUID();
+    const clearRole = randomUUID();
     const publishRole = randomUUID();
     await admin.query(`
-      ${[operator, publisher, plain]
+      ${[operator, publisher, plain, clearer]
         .map(
           (id) =>
             `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled])
@@ -8061,6 +8063,16 @@ try {
         VALUES (N'${publisher}',N'proof-migration-${publisher}',N'${publisher}',DATEADD(hour,1,SYSUTCDATETIME()),SYSUTCDATETIME(),SYSUTCDATETIME());
       INSERT INTO [dbo].[StepUpGrant] ([id],[userId],[sessionId],[purpose],[expiresAt])
         VALUES (N'${randomUUID()}',N'${publisher}',N'${publisher}',N'migration-publication',DATEADD(minute,30,SYSUTCDATETIME()));
+      -- Phase 30-RD: a synthetic holder of the gated clearance key, with a live
+      -- migration-personal-data step-up, for the finding decisions below.
+      INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system])
+        VALUES (N'${clearRole}',N'proof-migration-clear-permissions-${run}',N'Synthetic personal-data clearance proof role',N'Holds migration.clearPersonalData for the permission proof only.',0);
+      INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES (N'${clearRole}',N'migration.clearPersonalData');
+      INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId]) VALUES (N'${clearer}',N'${clearRole}');
+      INSERT INTO [dbo].[Session] ([id],[token],[userId],[expiresAt],[createdAt],[updatedAt])
+        VALUES (N'${clearer}',N'proof-migration-${clearer}',N'${clearer}',DATEADD(hour,1,SYSUTCDATETIME()),SYSUTCDATETIME(),SYSUTCDATETIME());
+      INSERT INTO [dbo].[StepUpGrant] ([id],[userId],[sessionId],[purpose],[expiresAt])
+        VALUES (N'${randomUUID()}',N'${clearer}',N'${clearer}',N'migration-personal-data',DATEADD(minute,30,SYSUTCDATETIME()));
     `);
 
     // Media's Video and Storage's Asset, written as their owners would: the
@@ -8131,10 +8143,25 @@ try {
       recordId: string,
       snapshotId: string,
       revision: number,
+      personalData = 'none',
+      clearanceOf: string | null = null,
     ): string =>
-      `INSERT INTO [dbo].[MigrationStagedRecord] ([id],[recordId],[snapshotId],[runId],[revision],[contentKind],[title],[titleKey],[dedupeKey],[languageCode],[payload],[payloadChecksum],[adapterKey],[adapterVersion],[parserKey],[parserVersion],[normalizerVersion],[codeRevision],[inputChecksum],[producedAt],[validation],[personalData]) VALUES (N'${id}',N'${recordId}',N'${snapshotId}',N'${firstRun}',${String(revision)},N'media.video',N'NON_MIGRATION_FIXTURE title',N'non migration fixture title',N'youtube:p${run.slice(0, 10)}',N'en',N'${payload}','${sha(payload)}',N'fixture-video',N'1',N'fixture-video',N'1',N'1',N'proof','${sha(body)}','${at}',N'valid',N'none');`;
+      `INSERT INTO [dbo].[MigrationStagedRecord] ([id],[recordId],[snapshotId],[runId],[revision],[contentKind],[title],[titleKey],[dedupeKey],[languageCode],[payload],[payloadChecksum],[adapterKey],[adapterVersion],[parserKey],[parserVersion],[normalizerVersion],[codeRevision],[inputChecksum],[producedAt],[validation],[personalData],[clearanceOfStagedRecordId]) VALUES (N'${id}',N'${recordId}',N'${snapshotId}',N'${firstRun}',${String(revision)},N'media.video',N'NON_MIGRATION_FIXTURE title',N'non migration fixture title',N'youtube:p${run.slice(0, 10)}',N'en',N'${payload}','${sha(payload)}',N'fixture-video',N'1',N'fixture-video',N'1',N'1',N'proof','${sha(body)}','${at}',N'valid',N'${personalData}',${clearanceOf === null ? 'NULL' : `N'${clearanceOf}'`});`;
+    // Phase 30-RD: a flagged revision, its findings and the revision cleared of them.
+    const flaggedStaged = randomUUID();
+    const clearedStaged = randomUUID();
+    const finding = randomUUID();
+    const otherFinding = randomUUID();
+    const findingRow = (id: string, position: number): string =>
+      `(N'${id}',N'${flaggedStaged}',N'${record}','${sha(body)}',N'1',${String(position)},2,N'email','${sha(`finding-${run}-${String(position)}`)}',N'NON_MIGRATION_FIXTURE office contact [redacted-email]')`;
     const update = (table: string, id: string, assignments: string): string =>
       `UPDATE [dbo].[${table}] SET ${assignments} WHERE [id]=N'${id}';`;
+    const decideFinding = (id: string, actor: string): string =>
+      update(
+        'MigrationPersonalDataFinding',
+        id,
+        `[classification]=N'public-organisational-contact',[note]=N'NON_MIGRATION_FIXTURE reason',[decidedByUserId]=N'${actor}',[decidedAt]='${later}',[version]=[version]+1`,
+      );
 
     for (const [label, statement, detail] of [
       [
@@ -8206,6 +8233,16 @@ try {
         `${update('MigrationStagedRecord', staged, `[review]=N'approved',[reviewedByUserId]=N'${operator}',[reviewedAt]='${later}',[reviewNote]=N'NON_MIGRATION_FIXTURE review',[version]=[version]+1`)}
          ${update('MigrationRecord', missing, `[observed]=N'missing',[disappearance]=N'withdrawn',[disappearanceNote]=N'NON_MIGRATION_FIXTURE note',[classifiedByUserId]=N'${operator}',[classifiedAt]='${later}',[version]=[version]+1,[updatedAt]='${later}'`)}`,
         'a revision approved and a vanished record classified, never deleted',
+      ],
+      [
+        'MigrationPersonalDataFinding recorded, decided, and a revision cleared',
+        `${stagedRow(flaggedStaged, record, snapshot, 2, 'flagged')}
+         INSERT INTO [dbo].[MigrationPersonalDataFinding] ([id],[stagedRecordId],[recordId],[inputChecksum],[normalizerVersion],[position],[findingCount],[findingType],[findingDigest],[context]) VALUES ${findingRow(finding, 0)},${findingRow(otherFinding, 1)};
+         ${decideFinding(finding, clearer)}
+         ${decideFinding(otherFinding, clearer)}
+         ${stagedRow(clearedStaged, record, snapshot, 3, 'cleared', flaggedStaged)}
+         ${update('MigrationStagedRecord', clearedStaged, `[review]=N'approved',[reviewedByUserId]=N'${operator}',[reviewedAt]='${later}',[version]=[version]+1`)}`,
+        "a flagged revision's findings recorded as one set, cleared by a live migration.clearPersonalData holder, and a cleared revision approved by another",
       ],
       [
         'MigrationRun completed and reconciled',
@@ -8336,6 +8373,13 @@ try {
           `[state]=N'approved',[approvedByUserId]=N'${plain}',[approvedAt]='${settled}',[version]=[version]+1`,
         ),
         51381,
+      ],
+      [
+        // The trigger re-checks clearance authority beneath the runtime's own
+        // update: an account without migration.clearPersonalData decides nothing.
+        'MigrationPersonalDataFinding decided without clearance authority',
+        decideFinding(finding, plain),
+        51385,
       ],
       [
         'MigrationPromotionEntry for an unpublished entry',
@@ -8501,6 +8545,22 @@ try {
         'validation',
         'issues',
         'personalData',
+        // Phase 30-RD: the flagged revision a cleared one names is fixed with it.
+        'clearanceOfStagedRecordId',
+      ],
+      // Phase 30-RD: a finding's identity and evidence never change; only its
+      // decision moves.
+      MigrationPersonalDataFinding: [
+        'id',
+        'stagedRecordId',
+        'recordId',
+        'inputChecksum',
+        'normalizerVersion',
+        'position',
+        'findingCount',
+        'findingType',
+        'findingDigest',
+        'context',
       ],
       MigrationTopicMapping: ['id', 'sourceId', 'categoryKey'],
       MigrationError: [
@@ -8561,6 +8621,8 @@ try {
         'pressReleaseId',
         'personId',
         'countryId',
+        // Phase 30-RD's typed target.
+        'collectionId',
         'canonicalPath',
         'manifestEntryId',
         'createdAt',
@@ -8618,6 +8680,7 @@ try {
       'MigrationStagedRecord',
       'MigrationStagedCategory',
       'MigrationStagedLink',
+      'MigrationPersonalDataFinding',
       'MigrationTopicMapping',
       'MigrationError',
       'MigrationDuplicateCandidate',
@@ -8700,7 +8763,7 @@ try {
       promotion: 'promoted',
       bundled: 2,
       publishBundled: 0,
-      catalogued: 3,
+      catalogued: 4,
     };
     if (JSON.stringify(migrationState) === JSON.stringify(expectedMigrationState)) {
       pass(
@@ -8734,6 +8797,7 @@ try {
       ['MigrationLegacyMappingIntegrity', 'MigrationLegacyMapping'],
       ['MigrationStagedCategoryIntegrity', 'MigrationStagedCategory'],
       ['MigrationStagedLinkIntegrity', 'MigrationStagedLink'],
+      ['MigrationPersonalDataFindingIntegrity', 'MigrationPersonalDataFinding'],
       ['MigrationPublishManifestIntegrity', 'MigrationPublishManifest'],
       ['MigrationManifestEntryIntegrity', 'MigrationManifestEntry'],
       ['MigrationPromotionIntegrity', 'MigrationPromotion'],

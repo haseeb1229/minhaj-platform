@@ -683,6 +683,9 @@ const ALLOWED_OBJECT_GRANTS: Readonly<Record<string, readonly string[]>> = {
   '[dbo].[migrationmanifestentry]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[migrationpromotion]': ['SELECT', 'INSERT', 'UPDATE'],
   '[dbo].[migrationpromotionentry]': ['SELECT', 'INSERT', 'UPDATE'],
+  // Phase 30-RD: a personal-data finding is recorded with its revision and
+  // never deleted; only its decision columns move (the rest carry column DENYs).
+  '[dbo].[migrationpersonaldatafinding]': ['SELECT', 'INSERT', 'UPDATE'],
 
   // Phase 7 — storage custody metadata. DELETE is genuinely the operation
   // here: reconciliation removes rows a crash left mid-upload, which is

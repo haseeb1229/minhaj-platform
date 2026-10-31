@@ -285,6 +285,16 @@ const MIGRATION_EXPECTATIONS: Record<string, readonly string[]> = {
   // its rollback by `assertReviewCompletenessRemoved`, and proved as behaviour
   // inside `assertMigrationRules`.
   '20261030000000_phase30r_review_completeness': [],
+  // PHASE 30-RD CREATES ONE TABLE: the personal-data detector's findings of a
+  // flagged revision, each with a person's audited classification. It also
+  // lets a revision be staged `cleared` (one column naming the flagged
+  // revision it clears), adds the `editorial.collection` kind with its typed
+  // `collectionId` target on an entry and a legacy mapping, and catalogues the
+  // externally gated `migration.clearPersonalData`. Asserted by
+  // `assertOwnerDecisionsFoundation`, its rollback by
+  // `assertOwnerDecisionsRemoved`, and proved as behaviour inside
+  // `assertMigrationRules`.
+  '20261031000000_phase30rd_owner_decisions': ['MigrationPersonalDataFinding'],
   // THE DONATIONS CONTEXT: a campaign with its words per locale and its
   // per-currency policy, the owner's fail-closed provider activation (one
   // immutable row the runtime can only read), the donation — one payment
@@ -1743,6 +1753,19 @@ const MIGRATION_TRIGGER_NUMBERS: Readonly<Record<string, readonly [string, strin
   MigrationPromotionEntryIntegrity: ['MigrationPromotionEntry', '51381'],
 };
 
+/**
+ * The Migration & Provenance triggers once Phase 30-RD is applied: the staged
+ * revision's trigger also raises 51386 (a cleared revision staged or approved
+ * outside its clearance), and the findings table's own trigger raises 51385.
+ */
+const OWNER_DECISION_TRIGGER_NUMBERS: Readonly<
+  Record<string, readonly [string, string]>
+> = {
+  ...MIGRATION_TRIGGER_NUMBERS,
+  MigrationStagedRecordIntegrity: ['MigrationStagedRecord', '51374+51386'],
+  MigrationPersonalDataFindingIntegrity: ['MigrationPersonalDataFinding', '51385'],
+};
+
 /** The fifteen Phase-21 tables, in the migration's order. */
 const PERSONALISATION_TABLES =
   MIGRATION_EXPECTATIONS['20261005000000_phase21_personalisation_notifications'] ?? [];
@@ -2028,6 +2051,11 @@ const EXPECTED_TRIGGERS = [
   // authority — each listed, with the refusal it raises, in
   // `MIGRATION_TRIGGER_NUMBERS`.
   ...Object.keys(MIGRATION_TRIGGER_NUMBERS),
+  // Phase 30-RD: a personal-data finding is recorded once, with its whole
+  // set, keeps its evidence and is decided only under live clearance
+  // authority — listed, with the refusal it raises, in
+  // `OWNER_DECISION_TRIGGER_NUMBERS`.
+  'MigrationPersonalDataFindingIntegrity',
 ];
 
 /** CHECK constraints that carry a correctness rule rather than a preference. */
@@ -2484,6 +2512,13 @@ const EXPECTED_CHECK_CONSTRAINTS = [
   ...MIGRATION_TABLES.filter((table) => table !== 'MigrationStagedCategory').map(
     (table) => ({ table, constraint: table + '_ck' }),
   ),
+  // Phase 30-RD. A finding's evidence is bounded and typed, its position
+  // inside its complete set, and a decision carries its person, time and
+  // reason together.
+  {
+    table: 'MigrationPersonalDataFinding',
+    constraint: 'MigrationPersonalDataFinding_ck',
+  },
 ];
 
 /**
@@ -4029,13 +4064,21 @@ async function assertCollectionFoundation(session: SqlSession): Promise<void> {
   const setAside = [...HADITH_TABLES, 'PrivateCollection', 'PrivateCollectionItem']
     .map((table) => `N'${table}'`)
     .join(',');
+  // Phase 30-RD's Migration TYPED TARGET is not Collection schema either: an
+  // entry's and a legacy mapping's `collectionId` is Migration's own record of
+  // what a publication made, one NO ACTION key each that
+  // `assertMigrationFoundation` states exactly. Exactly those two columns and
+  // their two keys are set aside, by name — nothing else of Migration's.
+  const migrationTargets = ['MigrationManifestEntry', 'MigrationLegacyMapping'];
   const [ownership] = await session.query<{ inbound: number; columns: string | null }>(`
     SELECT
       (SELECT COUNT(*) FROM sys.foreign_keys
-        WHERE referenced_object_id IN (${tables}) AND parent_object_id NOT IN (${tables})) AS inbound,
+        WHERE referenced_object_id IN (${tables}) AND parent_object_id NOT IN (${tables})
+          AND [name] NOT IN (${migrationTargets.map((table) => `N'${table}_collectionId_fkey'`).join(',')})) AS inbound,
       (SELECT STRING_AGG(OBJECT_NAME(c.object_id) + N'.' + c.name, N',') FROM sys.columns c
         WHERE c.name LIKE N'%collection%' AND c.object_id NOT IN (${tables})
           AND OBJECT_NAME(c.object_id) NOT IN (${setAside})
+          AND OBJECT_NAME(c.object_id) + N'.' + c.name NOT IN (${migrationTargets.map((table) => `N'${table}.collectionId'`).join(',')})
           AND OBJECTPROPERTY(c.object_id, 'IsUserTable') = 1) AS columns;
   `);
   if (Number(ownership?.inbound) !== 0 || (ownership?.columns ?? null) !== null)
@@ -8489,7 +8532,8 @@ async function assertFatwaFoundation(
   );
   // The externally gated set is the three Fatwa keys, `teaching.perform` since
   // Phase 23, the two Messaging keys since Phase 24, `donations.refund` since
-  // Phase 27 and `migration.publish` since Phase 29 — and nothing else.
+  // Phase 27, `migration.publish` since Phase 29 and `migration.clearPersonalData`
+  // since Phase 30-RD — and nothing else.
   if (
     permissions.map((row) => row.key).join(',') !== FATWA_PERMISSIONS.join(',') ||
     [...EXTERNALLY_GATED_PERMISSIONS].sort().join(',') !==
@@ -8499,6 +8543,7 @@ async function assertFatwaFoundation(
         ...MESSAGING_PERMISSIONS,
         DONATIONS_REFUND_PERMISSION,
         MIGRATION_PUBLISH_PERMISSION,
+        CLEAR_PERSONAL_DATA_PERMISSION,
       ]
         .sort()
         .join(',') ||
@@ -8510,8 +8555,8 @@ async function assertFatwaFoundation(
       `The Fatwa vocabulary must be exactly ${FATWA_PERMISSIONS.join(', ')}, described as the ` +
         `compiled catalogue describes them and held by no role, and the gated set exactly ` +
         `those three, ${TEACHING_PERMISSION}, ${MESSAGING_PERMISSIONS.join(', ')}, ` +
-        `${DONATIONS_REFUND_PERMISSION} and ${MIGRATION_PUBLISH_PERMISSION}; found ` +
-        `${JSON.stringify(permissions)}.`,
+        `${DONATIONS_REFUND_PERMISSION}, ${MIGRATION_PUBLISH_PERMISSION} and ` +
+        `${CLEAR_PERSONAL_DATA_PERMISSION}; found ${JSON.stringify(permissions)}.`,
     );
 
   const [quiet] = await session.query<{
@@ -18083,6 +18128,37 @@ const MIGRATION_BUNDLED = ['migration.administer', 'migration.read'];
 const MIGRATION_PUBLISH_PERMISSION = 'migration.publish';
 
 /**
+ * Phase 30-RD, two owner decisions: the personal-data findings table and its
+ * human classification, a `cleared` staged revision, the `editorial.collection`
+ * kind with its typed `collectionId` target, and one gated key.
+ */
+const OWNER_DECISIONS_MIGRATION = '20261031000000_phase30rd_owner_decisions';
+
+/** The one table Phase 30-RD creates. */
+const PERSONAL_DATA_FINDING_TABLE = 'MigrationPersonalDataFinding';
+
+/**
+ * Who may judge that a detector's match is a public organisational contact is
+ * a privacy decision the organisation names: catalogued, externally gated,
+ * bundled into no role and held by nobody — so no bundle changes.
+ */
+const CLEAR_PERSONAL_DATA_PERMISSION = 'migration.clearPersonalData';
+
+/** Phase 30-RD's one further kind, publishable. */
+const OWNER_DECISION_CONTENT_KINDS = ['editorial.collection'] as const;
+
+/**
+ * The three triggers Phase 30-RD restates — the staged revision's (until now
+ * exactly Phase 29's), the legacy mapping's and the entry's; the host trigger
+ * stays Phase 30's.
+ */
+const OWNER_DECISION_TRIGGERS = [
+  'MigrationStagedRecordIntegrity',
+  'MigrationLegacyMappingIntegrity',
+  'MigrationManifestEntryIntegrity',
+] as const;
+
+/**
  * EVERY foreign key from a Phase-29 table, exactly, with its column mapping and
  * its delete action. ALL are NO ACTION: nothing cascades, inside the context or
  * out of it, and no evidence is ever deleted from under what names it. The
@@ -18195,6 +18271,22 @@ const REVIEW_MIGRATION_KEYS = [
 ].sort();
 
 /**
+ * Phase 30-RD's keys: Phase 30-R's eighty-four; the typed `collectionId` target
+ * on a mapping and an entry, each NO ACTION into Editorial's own Collection; a
+ * cleared revision's flagged revision, reached through the SAME record by the
+ * composite key; and a finding's revision, likewise through its record, and
+ * the person who decided it — eighty-nine.
+ */
+const OWNER_DECISION_MIGRATION_KEYS = [
+  ...REVIEW_MIGRATION_KEYS,
+  'MigrationLegacyMapping_collectionId_fkey(collectionId>id)>Collection:NO_ACTION',
+  'MigrationManifestEntry_collectionId_fkey(collectionId>id)>Collection:NO_ACTION',
+  'MigrationStagedRecord_clearanceOf_fkey(clearanceOfStagedRecordId>id,recordId>recordId)>MigrationStagedRecord:NO_ACTION',
+  'MigrationPersonalDataFinding_stagedRecordId_fkey(stagedRecordId>id,recordId>recordId)>MigrationStagedRecord:NO_ACTION',
+  'MigrationPersonalDataFinding_decidedByUserId_fkey(decidedByUserId>id)>User:NO_ACTION',
+].sort();
+
+/**
  * Every unique index on a Phase-29 table, exactly: the keys; one source per
  * key; one record per source and external key; the record-, run- and
  * source-carrying keys the composite references reach through; one item per
@@ -18243,6 +18335,18 @@ const MIGRATION_UNIQUE = [
   'MigrationStagedRecord_record_revision_key(recordId,revision)',
   'MigrationTopicMapping_pkey(id)',
   'MigrationTopicMapping_source_category_key(sourceId,categoryKey)',
+].sort();
+
+/**
+ * Phase 30-RD's unique keys: the thirty-seven above and the findings table's
+ * — one finding per place in its revision's set, and each DISTINCT match
+ * recorded once per revision. Forty, still three filtered.
+ */
+const OWNER_DECISION_MIGRATION_UNIQUE = [
+  ...MIGRATION_UNIQUE,
+  'MigrationPersonalDataFinding_pkey(id)',
+  'MigrationPersonalDataFinding_staged_digest_key(stagedRecordId,findingDigest)',
+  'MigrationPersonalDataFinding_staged_position_key(stagedRecordId,position)',
 ].sort();
 
 /**
@@ -18329,6 +18433,23 @@ const REVIEW_MIGRATION_COLUMNS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * Every column once Phase 30-RD is applied: Phase 30-R's shape, a staged
+ * revision's `clearanceOfStagedRecordId`, the typed `collectionId` on a mapping
+ * and an entry, and the findings table — what was found (a type and a DIGEST,
+ * never the matched text), where in its set, in which bytes by which
+ * normaliser, the words around it from the already-redacted text, and the one
+ * decision on it. Still no target pair, no matched text and no credential.
+ */
+const OWNER_DECISION_MIGRATION_COLUMNS: Readonly<Record<string, string>> = {
+  ...REVIEW_MIGRATION_COLUMNS,
+  MigrationStagedRecord: `${REVIEW_MIGRATION_COLUMNS['MigrationStagedRecord']},clearanceOfStagedRecordId`,
+  MigrationLegacyMapping: `${REVIEW_MIGRATION_COLUMNS['MigrationLegacyMapping']},collectionId`,
+  MigrationManifestEntry: `${REVIEW_MIGRATION_COLUMNS['MigrationManifestEntry']},collectionId`,
+  [PERSONAL_DATA_FINDING_TABLE]:
+    'id,stagedRecordId,recordId,inputChecksum,normalizerVersion,position,findingCount,findingType,findingDigest,context,classification,note,decidedByUserId,decidedAt,version',
+};
+
+/**
  * Whether Phase 29 is applied, ALL OR NOTHING: either every one of its
  * eighteen tables exists or none does.
  */
@@ -18387,42 +18508,75 @@ async function assertMigrationFoundation(
     | 'deploy'
     | 're-deploy'
     | 'source-adapters-rollback'
-    | 'review-completeness-rollback' = 'deploy',
-  shape: 'phase29' | 'phase30' | 'phase30r' = 'phase30r',
+    | 'review-completeness-rollback'
+    | 'owner-decisions-rollback' = 'deploy',
+  shape: 'phase29' | 'phase30' | 'phase30r' | 'phase30rd' = 'phase30rd',
 ): Promise<void> {
   const expectedColumns =
     shape === 'phase29'
       ? PHASE29_MIGRATION_COLUMNS
       : shape === 'phase30'
         ? MIGRATION_COLUMNS
-        : REVIEW_MIGRATION_COLUMNS;
+        : shape === 'phase30r'
+          ? REVIEW_MIGRATION_COLUMNS
+          : OWNER_DECISION_MIGRATION_COLUMNS;
   const expectedKeys =
     shape === 'phase29'
       ? PHASE29_MIGRATION_KEYS
       : shape === 'phase30'
         ? MIGRATION_KEYS
-        : REVIEW_MIGRATION_KEYS;
-  const keyCount = shape === 'phase29' ? 65 : shape === 'phase30' ? 75 : 84;
-  const checkCount = shape === 'phase30r' ? 19 : 17;
-  const tables = MIGRATION_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(
-    ',',
-  );
-  const names = MIGRATION_TABLES.map((table) => `N'${table}'`).join(',');
+        : shape === 'phase30r'
+          ? REVIEW_MIGRATION_KEYS
+          : OWNER_DECISION_MIGRATION_KEYS;
+  const keyCount =
+    shape === 'phase29' ? 65 : shape === 'phase30' ? 75 : shape === 'phase30r' ? 84 : 89;
+  const checkCount = shape === 'phase30rd' ? 20 : shape === 'phase30r' ? 19 : 17;
+  // Phase 30-RD's findings table is Migration & Provenance's own, so from then on
+  // the context is nineteen tables; every earlier shape is Phase 29's eighteen.
+  const contextTables: readonly string[] =
+    shape === 'phase30rd'
+      ? [...MIGRATION_TABLES, PERSONAL_DATA_FINDING_TABLE]
+      : MIGRATION_TABLES;
+  const tableCount = shape === 'phase30rd' ? 19 : 18;
+  const triggerNumbers =
+    shape === 'phase30rd' ? OWNER_DECISION_TRIGGER_NUMBERS : MIGRATION_TRIGGER_NUMBERS;
+  const expectedUnique =
+    shape === 'phase30rd' ? OWNER_DECISION_MIGRATION_UNIQUE : MIGRATION_UNIQUE;
+  const expectedPermissions =
+    shape === 'phase30rd'
+      ? [...MIGRATION_PERMISSIONS, CLEAR_PERSONAL_DATA_PERMISSION].sort()
+      : MIGRATION_PERMISSIONS;
+  const tables = contextTables.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',');
+  const names = contextTables.map((table) => `N'${table}'`).join(',');
   if (!(await migrationPresent(session)))
     fail(`The Phase-29 Migration & Provenance tables are missing after ${stage}.`);
+  const [finding] = await session.query<{ present: number }>(
+    `SELECT COUNT(*) AS [present] FROM sys.tables WHERE [name] = N'${PERSONAL_DATA_FINDING_TABLE}';`,
+  );
+  if (Number(finding?.present ?? -1) !== (shape === 'phase30rd' ? 1 : 0))
+    fail(
+      `${PERSONAL_DATA_FINDING_TABLE} must exist exactly when Phase 30-RD is applied ` +
+        `(${shape} after ${stage}).`,
+    );
 
   // ---- 1. nothing seeded -----------------------------------------------------------
   const counts = await session.query<{ name: string; total: number }>(
-    MIGRATION_TABLES.map(
-      (table) =>
-        `SELECT N'${table}' AS [name], COUNT_BIG(*) AS [total] FROM [dbo].[${table}]`,
-    ).join(' UNION ALL ') + ';',
+    contextTables
+      .map(
+        (table) =>
+          `SELECT N'${table}' AS [name], COUNT_BIG(*) AS [total] FROM [dbo].[${table}]`,
+      )
+      .join(' UNION ALL ') + ';',
   );
   const seeded = counts.filter((row) => Number(row.total) !== 0);
-  if (MIGRATION_TABLES.length !== 18 || counts.length !== 18 || seeded.length > 0)
+  if (
+    contextTables.length !== tableCount ||
+    counts.length !== tableCount ||
+    seeded.length > 0
+  )
     fail(
-      `The Migration & Provenance migration must create eighteen empty tables — no source — ` +
-        `and seed nothing; found ${String(counts.length)} tables after ${stage}, seeded: ` +
+      `The Migration & Provenance migrations must create ${String(tableCount)} empty tables — no ` +
+        `source — and seed nothing; found ${String(counts.length)} tables after ${stage}, seeded: ` +
         `${JSON.stringify(seeded)}.`,
     );
 
@@ -18433,11 +18587,11 @@ async function assertMigrationFoundation(
     FROM sys.columns c WHERE c.[object_id] IN (${tables})
     GROUP BY c.[object_id];
   `);
-  const shapeFindings = MIGRATION_TABLES.filter(
+  const shapeFindings = contextTables.filter(
     (table) =>
       shapes.find((row) => row.name === table)?.columns !== expectedColumns[table],
   );
-  if (shapes.length !== 18 || shapeFindings.length > 0)
+  if (shapes.length !== tableCount || shapeFindings.length > 0)
     fail(
       `Migration & Provenance columns differ from the reviewed shape in ` +
         `${shapeFindings.join(', ')}: ` +
@@ -18503,12 +18657,13 @@ async function assertMigrationFoundation(
     )
     .sort();
   if (
-    describedUnique.join(' | ') !== MIGRATION_UNIQUE.join(' | ') ||
+    describedUnique.join(' | ') !== expectedUnique.join(' | ') ||
     unique.filter((row) => row.filter !== null).length !== 3
   )
     fail(
-      `Migration & Provenance unique indexes must be exactly the reviewed thirty-seven, three ` +
-        `of them filtered; found ${describedUnique.join(' | ')}.`,
+      `Migration & Provenance unique indexes must be exactly the reviewed ` +
+        `${String(expectedUnique.length)} (${shape}), three of them filtered; found ` +
+        `${describedUnique.join(' | ')}.`,
     );
 
   // ---- 3. exact keys, all NO ACTION and trusted; nothing foreign holds the context ----
@@ -18569,9 +18724,9 @@ async function assertMigrationFoundation(
   `);
   const expectedChecks = [
     ...EXPECTED_CHECK_CONSTRAINTS,
-    ...(shape === 'phase30r' ? REVIEW_MIGRATION_CHECKS : []),
+    ...(shape === 'phase30r' || shape === 'phase30rd' ? REVIEW_MIGRATION_CHECKS : []),
   ]
-    .filter((entry) => MIGRATION_TABLES.includes(entry.table))
+    .filter((entry) => contextTables.includes(entry.table))
     .map((entry) => entry.constraint)
     .sort();
   if (
@@ -18601,18 +18756,18 @@ async function assertMigrationFoundation(
     .map((row) => `${row.name}@${row.tableName}:${raisedNumbers(row.definition)}`)
     .sort()
     .join(',');
-  const expectedTriggers = Object.entries(MIGRATION_TRIGGER_NUMBERS)
+  const expectedTriggers = Object.entries(triggerNumbers)
     .map(([name, [table, numbers]]) => `${name}@${table}:${numbers}`)
     .sort()
     .join(',');
   if (
     describedTriggers !== expectedTriggers ||
-    triggers.length !== 18 ||
+    triggers.length !== tableCount ||
     triggers.some((row) => Number(row.disabled) !== 0)
   )
     fail(
-      `Migration & Provenance triggers must be exactly eighteen, enabled, raising exactly ` +
-        `their own 51370–51384 numbers; found ${describedTriggers}.`,
+      `Migration & Provenance triggers must be exactly ${String(tableCount)} (${shape}), enabled, ` +
+        `raising exactly their own 51370–51386 numbers; found ${describedTriggers}.`,
     );
 
   const [procedures] = await session.query<{ total: number }>(`
@@ -18650,10 +18805,16 @@ async function assertMigrationFoundation(
   const publishGated =
     gated.has(MIGRATION_PUBLISH_PERMISSION) &&
     !compiled.has(MIGRATION_PUBLISH_PERMISSION);
+  // Phase 30-RD's clearance key is gated too — whatever the database holds, the
+  // compiled catalogue never bundles it.
+  const clearanceGated =
+    gated.has(CLEAR_PERSONAL_DATA_PERMISSION) &&
+    !compiled.has(CLEAR_PERSONAL_DATA_PERMISSION);
   if (
-    permissions.map((row) => row.key).join(',') !== MIGRATION_PERMISSIONS.join(',') ||
+    permissions.map((row) => row.key).join(',') !== expectedPermissions.join(',') ||
     !MIGRATION_BUNDLED.every((key) => compiled.has(key) && !gated.has(key)) ||
     !publishGated ||
+    !clearanceGated ||
     permissions.some((row) => {
       const ordinary = MIGRATION_BUNDLED.includes(row.key);
       return (
@@ -18665,19 +18826,20 @@ async function assertMigrationFoundation(
     })
   )
     fail(
-      `The Migration vocabulary must be exactly ${MIGRATION_PERMISSIONS.join(', ')}, described ` +
-        `as the compiled catalogue describes them; the two ordinary keys each bundled once into ` +
-        `the protected role and held by no other, and ${MIGRATION_PUBLISH_PERMISSION} gated and ` +
-        `held by no role; found ${JSON.stringify(permissions)}.`,
+      `The Migration vocabulary must be exactly ${expectedPermissions.join(', ')} (${shape}), ` +
+        `described as the compiled catalogue describes them; the two ordinary keys each bundled ` +
+        `once into the protected role and held by no other, and every gated key held by no ` +
+        `role; found ${JSON.stringify(permissions)}.`,
     );
 
   const [publicationGrants] = await session.query<{ total: number }>(`
-    SELECT COUNT(*) AS [total] FROM [dbo].[StepUpGrant] WHERE [purpose] = N'migration-publication';
+    SELECT COUNT(*) AS [total] FROM [dbo].[StepUpGrant]
+    WHERE [purpose] IN (N'migration-publication', N'migration-personal-data');
   `);
   if (Number(publicationGrants?.total ?? -1) !== 0)
     fail(
-      `A migrated database must hold no migration-publication step-up grant; found ` +
-        `${String(publicationGrants?.total)}.`,
+      `A migrated database must hold no migration-publication or migration-personal-data ` +
+        `step-up grant; found ${String(publicationGrants?.total)}.`,
     );
 
   const provisioning = await session.query<{
@@ -18722,11 +18884,13 @@ async function assertMigrationFoundation(
 
   report(
     'migration schema',
-    `eighteen empty tables — no source — of the reviewed ${shape} shape, one raw VARBINARY(MAX) ` +
-      'body and no credential, cookie, session or target-pair column, thirty-seven unique keys ' +
-      `with three filtered, ${String(keyCount)} trusted NO ACTION keys, ${String(checkCount)} CHECKs, eighteen ` +
-      'triggers raising 51370–51384, no procedure, two bundled ordinary keys provisioned once ' +
-      `and one gated publish key held by nobody, ${String(bundled)} bundled`,
+    `${String(tableCount)} empty tables — no source — of the reviewed ${shape} shape, one raw ` +
+      'VARBINARY(MAX) body and no credential, cookie, session or target-pair column, ' +
+      `${String(expectedUnique.length)} unique keys with three filtered, ${String(keyCount)} ` +
+      `trusted NO ACTION keys, ${String(checkCount)} CHECKs, ${String(tableCount)} triggers by ` +
+      'number, no procedure, two bundled ordinary keys provisioned once and ' +
+      `${String(expectedPermissions.length - MIGRATION_BUNDLED.length)} gated key(s) held by ` +
+      `nobody, ${String(bundled)} bundled`,
   );
 }
 
@@ -18914,13 +19078,21 @@ async function assertStatedMigrationRules(
 async function assertSourceAdaptersFoundation(
   session: SqlSession,
   migrations: readonly Migration[],
-  stage: 'deploy' | 're-deploy' | 'review-completeness-rollback' = 'deploy',
-  statedBy: 'phase30' | 'phase30r' = 'phase30r',
+  stage:
+    | 'deploy'
+    | 're-deploy'
+    | 'review-completeness-rollback'
+    | 'owner-decisions-rollback' = 'deploy',
+  statedBy: 'phase30' | 'phase30r' | 'phase30rd' = 'phase30rd',
 ): Promise<void> {
   const migration = migrations.find((entry) => entry.id === SOURCE_ADAPTERS_MIGRATION);
   if (migration === undefined) fail(`${SOURCE_ADAPTERS_MIGRATION} is not on disk.`);
   const review = migrations.find((entry) => entry.id === REVIEW_COMPLETENESS_MIGRATION);
   if (review === undefined) fail(`${REVIEW_COMPLETENESS_MIGRATION} is not on disk.`);
+  const owner = migrations.find((entry) => entry.id === OWNER_DECISIONS_MIGRATION);
+  if (owner === undefined) fail(`${OWNER_DECISIONS_MIGRATION} is not on disk.`);
+  const phase29 = migrations.find((entry) => entry.id === MIGRATION_PROVENANCE_MIGRATION);
+  if (phase29 === undefined) fail(`${MIGRATION_PROVENANCE_MIGRATION} is not on disk.`);
   const added = await session.query<{
     name: string;
     type: string;
@@ -18954,30 +19126,53 @@ async function assertSourceAdaptersFoundation(
   if (statedBy === 'phase30')
     await assertStatedMigrationRules(session, migration, 'Phase 30');
   else {
-    // Phase 30-R restates the five CHECKs and the entry and mapping triggers;
+    // Phase 30-R restates the five CHECKs and the entry and mapping triggers,
+    // and Phase 30-RD restates them again with the staged revision's trigger;
     // the host trigger is still exactly Phase 30's.
-    await assertStatedMigrationRules(session, review, 'Phase 30-R', REVIEW_TRIGGERS);
-    const [host] = await session.query<{ definition: string | null; disabled: number }>(`
-      SELECT OBJECT_DEFINITION(t.[object_id]) AS [definition], CAST(t.[is_disabled] AS INT) AS [disabled]
-      FROM sys.triggers t WHERE t.[name] = N'MigrationSourceHostIntegrity';
-    `);
-    if (
-      host?.definition !==
-        statedTrigger(migration.forwardSql, 'MigrationSourceHostIntegrity') ||
-      Number(host.disabled) !== 0
-    )
-      fail(
-        "The trigger MigrationSourceHostIntegrity must be exactly Phase 30's, enabled.",
+    if (statedBy === 'phase30rd')
+      await assertStatedMigrationRules(
+        session,
+        owner,
+        'Phase 30-RD',
+        OWNER_DECISION_TRIGGERS,
       );
+    else await assertStatedMigrationRules(session, review, 'Phase 30-R', REVIEW_TRIGGERS);
+    const stated = async (
+      name: string,
+      from: Migration,
+      label: string,
+    ): Promise<void> => {
+      const [live] = await session.query<{
+        definition: string | null;
+        disabled: number;
+      }>(`
+        SELECT OBJECT_DEFINITION(t.[object_id]) AS [definition], CAST(t.[is_disabled] AS INT) AS [disabled]
+        FROM sys.triggers t WHERE t.[name] = N'${name}';
+      `);
+      if (
+        live?.definition !== statedTrigger(from.forwardSql, name) ||
+        Number(live.disabled) !== 0
+      )
+        fail(`The trigger ${name} must be exactly ${label}'s, enabled.`);
+    };
+    await stated('MigrationSourceHostIntegrity', migration, 'Phase 30');
+    // Until Phase 30-RD the staged revision's trigger is exactly Phase 29's — so
+    // Phase 30-RD's rollback must restore it to the character.
+    if (statedBy === 'phase30r')
+      await stated('MigrationStagedRecordIntegrity', phase29, 'Phase 29');
   }
   report(
     'source adapters',
-    `after ${stage}: eight content kinds, five typed target keys on an entry and a legacy ` +
-      'mapping with a nullable target stage, an authorised source bound to its written ' +
-      'authorisation, a real https host and the politeness floor — ' +
+    `after ${stage}: five typed target keys on an entry and a legacy mapping with a nullable ` +
+      'target stage, an authorised source bound to its written authorisation, a real https ' +
+      'host and the politeness floor — ' +
       (statedBy === 'phase30'
         ? 'five CHECKs and three triggers exactly as Phase 30 states them'
-        : 'five CHECKs and two triggers exactly as Phase 30-R restates them, the host trigger as Phase 30 states it') +
+        : statedBy === 'phase30r'
+          ? 'five CHECKs and two triggers exactly as Phase 30-R restates them, the staged ' +
+            "revision's as Phase 29 states it and the host trigger as Phase 30 states it"
+          : 'five CHECKs and three triggers exactly as Phase 30-RD restates them, the host ' +
+            'trigger as Phase 30 states it') +
       ', all trusted and enabled',
   );
 }
@@ -19073,7 +19268,7 @@ async function reviewOwnerColumns(session: SqlSession): Promise<string[]> {
  */
 async function assertReviewCompletenessFoundation(
   session: SqlSession,
-  stage: 'deploy' | 're-deploy' = 'deploy',
+  stage: 'deploy' | 're-deploy' | 'owner-decisions-rollback' = 'deploy',
 ): Promise<void> {
   const columns = await reviewOwnerColumns(session);
   if (columns.join(',') !== REVIEW_OWNER_COLUMNS.join(','))
@@ -19260,6 +19455,329 @@ async function assertReviewCompletenessRemoved(
 }
 
 /**
+ * Every column Phase 30-RD adds, as `table.column:type(bytes):null`: the whole
+ * findings table — a type and a DIGEST, never the matched text; the words around
+ * it bounded at 400 characters; the decision's person, time and reason — the
+ * cleared revision's one key, and the typed `collectionId` on a mapping and an
+ * entry.
+ */
+const OWNER_DECISION_COLUMN_TYPES = [
+  'MigrationLegacyMapping.collectionId:nvarchar(72):null',
+  'MigrationManifestEntry.collectionId:nvarchar(72):null',
+  'MigrationStagedRecord.clearanceOfStagedRecordId:nvarchar(72):null',
+  ...[
+    'id:nvarchar(72):not-null',
+    'stagedRecordId:nvarchar(72):not-null',
+    'recordId:nvarchar(72):not-null',
+    'inputChecksum:char(64):not-null',
+    'normalizerVersion:nvarchar(64):not-null',
+    'position:int(4):not-null',
+    'findingCount:int(4):not-null',
+    'findingType:nvarchar(32):not-null',
+    'findingDigest:char(64):not-null',
+    'context:nvarchar(800):not-null',
+    'classification:nvarchar(80):not-null',
+    'note:nvarchar(1000):null',
+    'decidedByUserId:nvarchar(72):null',
+    'decidedAt:datetime2(8):null',
+    'version:int(4):not-null',
+  ].map((column) => `${PERSONAL_DATA_FINDING_TABLE}.${column}`),
+].sort();
+
+/** The five keys Phase 30-RD adds, by name. */
+const OWNER_DECISION_KEY_NAMES = OWNER_DECISION_MIGRATION_KEYS.filter(
+  (key) => !REVIEW_MIGRATION_KEYS.includes(key),
+).map((key) => key.split('(')[0] ?? '');
+
+/** Phase 30-RD's columns, as they are found in the catalogue now. */
+async function ownerDecisionColumns(session: SqlSession): Promise<string[]> {
+  const rows = await session.query<{
+    name: string;
+    type: string;
+    length: number;
+    nullable: number;
+  }>(`
+    SELECT OBJECT_NAME(c.[object_id]) + N'.' + c.[name] AS [name], t.[name] AS [type],
+      c.[max_length] AS [length], CAST(c.[is_nullable] AS INT) AS [nullable]
+    FROM sys.columns c JOIN sys.types t ON t.[user_type_id] = c.[user_type_id]
+    WHERE c.[object_id] = OBJECT_ID(N'[dbo].[${PERSONAL_DATA_FINDING_TABLE}]')
+       OR (c.[object_id] = OBJECT_ID(N'[dbo].[MigrationStagedRecord]') AND c.[name] = N'clearanceOfStagedRecordId')
+       OR (c.[object_id] IN (OBJECT_ID(N'[dbo].[MigrationLegacyMapping]'), OBJECT_ID(N'[dbo].[MigrationManifestEntry]'))
+           AND c.[name] = N'collectionId');
+  `);
+  return rows
+    .map(
+      (row) =>
+        `${row.name}:${row.type}(${String(row.length)}):${Number(row.nullable) === 1 ? 'null' : 'not-null'}`,
+    )
+    .sort();
+}
+
+/**
+ * Phase 30-RD — what only the catalogue can prove about the two owner decisions
+ * (Migration's whole shape — nineteen tables, eighty-nine keys, forty unique
+ * keys, twenty CHECKs, nineteen triggers by number and the four keys — is
+ * `assertMigrationFoundation` at `phase30rd`; the five restated CHECKs and three
+ * restated triggers are `assertSourceAdaptersFoundation` at `phase30rd`):
+ *
+ *   1. every column it adds, exactly — the finding holds a type and a SHA-256
+ *      DIGEST, never the matched text, and the cleared revision and the two
+ *      typed targets are nullable NVARCHAR(36) keys;
+ *   2. a finding begins `unresolved` at version 1 (its defaults), its CHECK and
+ *      trigger are exactly as stated — trusted and enabled — and it is indexed
+ *      by its record;
+ *   3. every kind CHECK and the entry trigger's publishable list name
+ *      `editorial.collection`;
+ *   4. `migration.clearPersonalData` is catalogued as the compiled catalogue
+ *      describes it, externally gated, bundled into no role and held by nobody,
+ *      and no `migration-personal-data` step-up grant exists — so no bundle
+ *      changed;
+ *   5. no finding is seeded.
+ *
+ * The rules themselves are proved as BEHAVIOUR inside `assertMigrationRules`.
+ */
+async function assertOwnerDecisionsFoundation(
+  session: SqlSession,
+  migrations: readonly Migration[],
+  stage: 'deploy' | 're-deploy' = 'deploy',
+): Promise<void> {
+  const owner = migrations.find((entry) => entry.id === OWNER_DECISIONS_MIGRATION);
+  if (owner === undefined) fail(`${OWNER_DECISIONS_MIGRATION} is not on disk.`);
+  const columns = await ownerDecisionColumns(session);
+  if (columns.join(',') !== OWNER_DECISION_COLUMN_TYPES.join(','))
+    fail(
+      `Phase 30-RD's columns must be exactly the reviewed ${String(OWNER_DECISION_COLUMN_TYPES.length)} ` +
+        `after ${stage}; found ${columns.join(', ')}.`,
+    );
+
+  const defaults = await session.query<{ name: string; definition: string }>(`
+    SELECT [name], [definition] FROM sys.default_constraints
+    WHERE [parent_object_id] = OBJECT_ID(N'[dbo].[${PERSONAL_DATA_FINDING_TABLE}]');
+  `);
+  const describedDefaults = defaults.map((row) => `${row.name}=${row.definition}`).sort();
+  const expectedDefaults = [
+    `${PERSONAL_DATA_FINDING_TABLE}_classification_df=(N'unresolved')`,
+    `${PERSONAL_DATA_FINDING_TABLE}_version_df=((1))`,
+  ].sort();
+  if (describedDefaults.join(',') !== expectedDefaults.join(','))
+    fail(
+      `A finding must begin unresolved at version 1; found ${describedDefaults.join(', ')}.`,
+    );
+
+  const indexes = await session.query<{ name: string; columns: string; unique: number }>(`
+    SELECT i.[name], CAST(i.[is_unique] AS INT) AS [unique],
+      STRING_AGG(COL_NAME(ic.[object_id], ic.[column_id]), N',') WITHIN GROUP (ORDER BY ic.[key_ordinal]) AS [columns]
+    FROM sys.indexes i
+    JOIN sys.index_columns ic ON ic.[object_id] = i.[object_id] AND ic.[index_id] = i.[index_id]
+    WHERE i.[object_id] = OBJECT_ID(N'[dbo].[${PERSONAL_DATA_FINDING_TABLE}]') AND i.[is_unique] = 0
+      AND ic.[key_ordinal] > 0
+    GROUP BY i.[name], i.[is_unique];
+  `);
+  if (
+    indexes.map((row) => `${row.name}(${row.columns})`).join(',') !==
+    `${PERSONAL_DATA_FINDING_TABLE}_recordId_idx(recordId)`
+  )
+    fail(
+      `A finding must be indexed by its record, and by nothing else non-unique; found ` +
+        `${JSON.stringify(indexes)}.`,
+    );
+
+  const expectedCheck = await derivedCheck(
+    session,
+    PERSONAL_DATA_FINDING_TABLE,
+    statedCheck(owner.forwardSql, PERSONAL_DATA_FINDING_TABLE),
+  );
+  const [check] = await session.query<{ definition: string; trusted: number }>(`
+    SELECT [definition], CASE WHEN [is_disabled] = 0 AND [is_not_trusted] = 0 THEN 1 ELSE 0 END AS [trusted]
+    FROM sys.check_constraints WHERE [name] = N'${PERSONAL_DATA_FINDING_TABLE}_ck';
+  `);
+  if (check?.definition !== expectedCheck || Number(check.trusted) !== 1)
+    fail(
+      `${PERSONAL_DATA_FINDING_TABLE}_ck must be exactly Phase 30-RD's, trusted; found ` +
+        `${JSON.stringify(check ?? null)}.`,
+    );
+  const [trigger] = await session.query<{ definition: string | null; disabled: number }>(`
+    SELECT OBJECT_DEFINITION(t.[object_id]) AS [definition], CAST(t.[is_disabled] AS INT) AS [disabled]
+    FROM sys.triggers t WHERE t.[name] = N'MigrationPersonalDataFindingIntegrity';
+  `);
+  if (
+    trigger?.definition !==
+      statedTrigger(owner.forwardSql, 'MigrationPersonalDataFindingIntegrity') ||
+    Number(trigger.disabled) !== 0
+  )
+    fail(
+      "The trigger MigrationPersonalDataFindingIntegrity must be exactly Phase 30-RD's, enabled.",
+    );
+
+  const [kinds] = await session.query<{ missing: number }>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.check_constraints
+        WHERE [name] IN (N'MigrationSource_ck', N'MigrationRecord_ck', N'MigrationStagedRecord_ck')
+          AND [definition] NOT LIKE N'%''editorial.collection''%')
+      + (SELECT 3 - COUNT(*) FROM sys.check_constraints
+          WHERE [name] IN (N'MigrationSource_ck', N'MigrationRecord_ck', N'MigrationStagedRecord_ck'))
+      + CASE WHEN OBJECT_DEFINITION(OBJECT_ID(N'[dbo].[MigrationManifestEntryIntegrity]'))
+               LIKE N'%N''editorial.page'', N''editorial.collection'', N''people.person''%' THEN 0 ELSE 1 END AS [missing];
+  `);
+  if (Number(kinds?.missing ?? -1) !== 0)
+    fail(
+      "The three kind CHECKs and the entry trigger's publishable list must name editorial.collection.",
+    );
+
+  const described = PERMISSION_CATALOGUE.find(
+    (entry) => (entry.key as string) === CLEAR_PERSONAL_DATA_PERMISSION,
+  )?.description;
+  const compiled = new Set<string>(PLATFORM_ADMINISTRATOR_PERMISSIONS);
+  const gated = new Set<string>(EXTERNALLY_GATED_PERMISSIONS);
+  const [authority] = await session.query<{
+    description: string | null;
+    held: number;
+    grants: number;
+    findings: number;
+  }>(`
+    SELECT
+      (SELECT [description] FROM [dbo].[Permission] WHERE [key] = N'${CLEAR_PERSONAL_DATA_PERMISSION}') AS [description],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] WHERE [permissionKey] = N'${CLEAR_PERSONAL_DATA_PERMISSION}') AS [held],
+      (SELECT COUNT(*) FROM [dbo].[StepUpGrant] WHERE [purpose] = N'migration-personal-data') AS [grants],
+      (SELECT COUNT_BIG(*) FROM [dbo].[${PERSONAL_DATA_FINDING_TABLE}]) AS [findings];
+  `);
+  if (
+    described === undefined ||
+    authority?.description !== described ||
+    Number(authority.held) !== 0 ||
+    Number(authority.grants) !== 0 ||
+    Number(authority.findings) !== 0 ||
+    !gated.has(CLEAR_PERSONAL_DATA_PERMISSION) ||
+    compiled.has(CLEAR_PERSONAL_DATA_PERMISSION)
+  )
+    fail(
+      `${CLEAR_PERSONAL_DATA_PERMISSION} must be catalogued as the compiled catalogue describes ` +
+        `it, externally gated, held by no role, with no migration-personal-data grant and no ` +
+        `finding seeded; found ${JSON.stringify(authority ?? null)}.`,
+    );
+
+  report(
+    'owner decisions',
+    `after ${stage}: ${String(OWNER_DECISION_COLUMN_TYPES.length)} columns — a finding's type ` +
+      "and digest, never the matched text, a cleared revision's one key and a typed " +
+      'collectionId on an entry and a mapping — findings unresolved at version 1, indexed by ' +
+      'record, their CHECK and trigger exactly as stated, editorial.collection on every kind ' +
+      `list, and ${CLEAR_PERSONAL_DATA_PERMISSION} catalogued, gated and held by nobody`,
+  );
+}
+
+/**
+ * Phase 30-RD's rollback is guarded by AUTHORITY as well as by evidence: on a
+ * database holding no finding, cleared revision or collection row at all, a
+ * role granting `migration.clearPersonalData` alone makes it REFUSE, and it
+ * changes nothing; with that grant removed it may run.
+ */
+async function assertOwnerDecisionsRollbackGuarded(
+  session: SqlSession,
+  owner: Migration,
+): Promise<void> {
+  const role = randomUUID();
+  await expectAccepted(
+    session,
+    'A synthetic role granting migration.clearPersonalData, and nothing else of Phase 30-RD',
+    `INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system]) VALUES
+       (N'${role}',N'proof-migration-clearance-${role.slice(0, 8)}',N'Synthetic personal-data clearance proof role',N'Holds migration.clearPersonalData for the rollback proof only.',0);
+     INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES (N'${role}',N'${CLEAR_PERSONAL_DATA_PERMISSION}');`,
+  );
+  const failure = await attempt(session, owner.rollbackSql);
+  if (
+    failure === null ||
+    failure.number !== 50000 ||
+    !failure.message.includes('Phase-30-RD rows exist')
+  )
+    fail(
+      "Phase 30-RD's rollback must refuse while a role grants migration.clearPersonalData; " +
+        (failure === null
+          ? 'it ran.'
+          : `it failed for another reason (${String(failure.number)}): ` +
+            `${failure.message.split('\n')[0] ?? ''}`),
+    );
+  const [kept] = await session.query<{ history: number; table: number; key: number }>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[_prisma_migrations] WHERE [migration_name] = N'${OWNER_DECISIONS_MIGRATION}') AS [history],
+      (SELECT COUNT(*) FROM sys.tables WHERE [name] = N'${PERSONAL_DATA_FINDING_TABLE}') AS [table],
+      (SELECT COUNT(*) FROM [dbo].[Permission] WHERE [key] = N'${CLEAR_PERSONAL_DATA_PERMISSION}') AS [key];
+  `);
+  if (JSON.stringify(kept) !== '{"history":1,"table":1,"key":1}')
+    fail(
+      `A refused Phase-30-RD rollback must change nothing; found ${JSON.stringify(kept ?? null)}.`,
+    );
+  await expectAccepted(
+    session,
+    'The synthetic clearance role removed again',
+    `DELETE FROM [dbo].[RolePermission] WHERE [roleId] = N'${role}';
+     DELETE FROM [dbo].[Role] WHERE [id] = N'${role}';`,
+  );
+  report(
+    'owner decisions guard',
+    'its rollback refused over a role granting migration.clearPersonalData alone, changing nothing',
+  );
+}
+
+/**
+ * After Phase 30-RD's rollback: no table, trigger, column, key, CHECK, index,
+ * default, permission or grant it added remains; Migration & Provenance is
+ * EXACTLY Phase 30-R's (`assertMigrationFoundation` at `phase30r`, the five
+ * CHECKs and two triggers as Phase 30-R states them and the staged revision's
+ * trigger as Phase 29 states it); Phase 30-R's owner columns are intact; and
+ * Editorial's Collection — the one owner it newly named — is whole.
+ */
+async function assertOwnerDecisionsRemoved(
+  session: SqlSession,
+  migrations: readonly Migration[],
+): Promise<void> {
+  const left = await ownerDecisionColumns(session);
+  const [rest] = await session.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM sys.tables WHERE [name] = N'${PERSONAL_DATA_FINDING_TABLE}') AS [tables],
+      (SELECT COUNT(*) FROM sys.triggers WHERE [name] = N'MigrationPersonalDataFindingIntegrity') AS [triggers],
+      (SELECT COUNT(*) FROM sys.foreign_keys
+        WHERE [name] IN (${OWNER_DECISION_KEY_NAMES.map((name) => `N'${name}'`).join(',')})) AS [keys],
+      (SELECT COUNT(*) FROM sys.objects
+        WHERE [name] LIKE N'${PERSONAL_DATA_FINDING_TABLE}[_]%') AS [objects],
+      (SELECT COUNT(*) FROM sys.indexes WHERE [name] LIKE N'${PERSONAL_DATA_FINDING_TABLE}[_]%') AS [indexes],
+      (SELECT COUNT(*) FROM [dbo].[Permission] WHERE [key] = N'${CLEAR_PERSONAL_DATA_PERMISSION}') AS [permissions],
+      (SELECT COUNT(*) FROM [dbo].[StepUpGrant] WHERE [purpose] = N'migration-personal-data') AS [grants],
+      (SELECT ${String(COLLECTION_TABLES.length)} - COUNT(*) FROM sys.tables
+        WHERE [object_id] IN (${COLLECTION_TABLES.map((table) => `OBJECT_ID(N'[dbo].[${table}]')`).join(',')})) AS [collectionBroken];
+  `);
+  if (
+    left.length > 0 ||
+    Object.values(rest ?? { missing: 1 }).some((value) => Number(value) !== 0)
+  )
+    fail(
+      `Phase 30-RD's rollback must remove everything it added and leave Collection whole; ` +
+        `found columns ${left.join(', ')} and ${JSON.stringify(rest ?? null)}.`,
+    );
+  await assertMigrationFoundation(session, 'owner-decisions-rollback', 'phase30r');
+  await assertSourceAdaptersFoundation(
+    session,
+    migrations,
+    'owner-decisions-rollback',
+    'phase30r',
+  );
+  await assertReviewCompletenessFoundation(session, 'owner-decisions-rollback');
+  const bundled = await assertProtectedBundleExcludesGated(session);
+  if (bundled !== PLATFORM_ADMINISTRATOR_PERMISSIONS.length)
+    fail(
+      `Phase 30-RD changed no bundle, so its rollback must leave the compiled bundle; found ` +
+        `${String(bundled)} keys.`,
+    );
+  report(
+    'owner decisions rollback',
+    'the Phase-30-R shape exactly: 84 Migration keys, its columns, its five CHECKs and two ' +
+      "triggers as Phase 30-R states them and the staged revision's as Phase 29 does; no " +
+      `finding, clearance column, collection target or ${CLEAR_PERSONAL_DATA_PERMISSION}; ` +
+      `Collection whole, ${String(bundled)} bundled`,
+  );
+}
+
+/**
  * Phase 29 — THE BUNDLE EXTENSION AS BEHAVIOUR. Extending the protected
  * Platform Administrator bundle is a privilege change, so the migration must
  * revoke every live holder's sessions and step-up grants in the same
@@ -19286,6 +19804,7 @@ async function assertMigrationBundleExtension(
   migration: Migration,
   sourceAdapters: Migration,
   reviewCompleteness: Migration,
+  ownerDecisions: Migration,
 ): Promise<void> {
   if (!(await migrationPresent(session)))
     fail('The bundle-extension proof needs Phase 29 applied first.');
@@ -19308,12 +19827,14 @@ async function assertMigrationBundleExtension(
   const bundleAt = (stage: BundleStage): string =>
     [...compiledBundleAt(stage)].sort().join(',');
 
+  await rollbackMigration(session, ownerDecisions);
   await rollbackMigration(session, reviewCompleteness);
   await rollbackMigration(session, sourceAdapters);
   await rollbackMigration(session, migration);
   if (await migrationPresent(session))
     fail(
-      'Rolling Phase 30-R, Phase 30 and Phase 29 back left the Phase-29 schema in place.',
+      'Rolling Phase 30-RD, Phase 30-R, Phase 30 and Phase 29 back left the Phase-29 schema ' +
+        'in place.',
     );
   if ((await protectedBundle()) !== bundleAt('before-migration'))
     fail(
@@ -19338,14 +19859,14 @@ async function assertMigrationBundleExtension(
   );
 
   const redeploy = await deployMigrations(disposableUrl, environment.values);
-  for (const reapplied of [migration, sourceAdapters, reviewCompleteness])
+  for (const reapplied of [migration, sourceAdapters, reviewCompleteness, ownerDecisions])
     if (!redeploy.output.includes(reapplied.id))
       fail(`Re-applying ${reapplied.id} did not report it.\n${redeploy.output}`);
   const historyAfter = await appliedMigrationNames(session);
   if (historyAfter.slice().sort().join(',') !== historyBefore.slice().sort().join(','))
     fail(
-      `Re-applying Phase 29, Phase 30 and Phase 30-R changed the history: ${historyBefore.join(', ')} -> ` +
-        `${historyAfter.join(', ')}.`,
+      `Re-applying Phase 29, Phase 30, Phase 30-R and Phase 30-RD changed the history: ` +
+        `${historyBefore.join(', ')} -> ${historyAfter.join(', ')}.`,
     );
 
   const [after] = await session.query<Record<string, number | string | null>>(`
@@ -19394,7 +19915,7 @@ async function assertMigrationBundleExtension(
   );
   report(
     'migration bundle',
-    "re-applied with Phase 30 and Phase 30-R through the real Prisma CLI: the protected role's live holder lost " +
+    "re-applied with Phase 30, Phase 30-R and Phase 30-RD through the real Prisma CLI: the protected role's live holder lost " +
       'its session and step-up grant, a non-holder kept both, and one provisioning record ' +
       `named migration.administer and migration.read; ${String(bundled)} bundled`,
   );
@@ -19492,6 +20013,30 @@ async function assertMigrationBundleExtension(
  *   - Phase 30's rollback REFUSES over these rows rather than discard them,
  *     and leaves its schema exactly as it was.
  *
+ * And PHASE 30-RD, on the same schema:
+ *
+ *   - a personal-data finding is recorded unresolved at version one, for a
+ *     PENDING FLAGGED revision of exactly its bytes and normaliser, as one
+ *     complete set (51385); its evidence and identity never change; it is
+ *     decided — with a reason (…_ck) — only by an active account holding
+ *     `migration.clearPersonalData` through an active role AND a live
+ *     `migration-personal-data` step-up on a live session (no key, a
+ *     publication step-up, a lapsed step-up and a publish holder each
+ *     refused), one version at a time, while its revision is pending; and it
+ *     is never deleted (51385);
+ *   - a revision is staged `cleared` exactly when it names a flagged revision
+ *     (…_ck, the same-record key), and only of the same bytes and normaliser
+ *     with every finding classified public organisational — an unresolved,
+ *     private or absent finding, other bytes or another normaliser refused
+ *     (51386); the flagged revision itself is still never approved (…_ck); the
+ *     cleared one is approved only by someone who decided none of its
+ *     findings, while every one still stands cleared (51386);
+ *   - `editorial.collection` is a kind on a source, a record and an approved
+ *     revision; its entry names only its own typed `collectionId` (51379), one
+ *     target at most (…_ck), written once (51379); its mapping exactly its
+ *     entry's (51380), never changed (51380);
+ *   - Phase 30-RD's rollback REFUSES over these rows first.
+ *
  * The rows are evidence and history — a raw snapshot cannot be deleted at all
  * — so, like the canonical proofs above, they die with this disposable
  * database.
@@ -19500,6 +20045,7 @@ async function assertMigrationRules(
   session: SqlSession,
   sourceAdapters: Migration,
   reviewCompleteness: Migration,
+  ownerDecisions: Migration,
 ): Promise<void> {
   const run = randomUUID().replaceAll('-', '').slice(0, 16);
   const at = '2026-10-11T00:00:00';
@@ -21497,6 +22043,7 @@ async function assertMigrationRules(
   for (const [index, kind] of [
     ...MIGRATION_CONTENT_KINDS,
     ...REVIEW_CONTENT_KINDS,
+    ...OWNER_DECISION_CONTENT_KINDS,
   ].entries()) {
     if (kind === 'media.video') continue;
     const link: KindChain = {
@@ -22136,6 +22683,583 @@ async function assertMigrationRules(
     `UPDATE [dbo].[Person] SET [portraitAssetId]=N'${asset}',[portraitWidth]=400,[portraitHeight]=533 WHERE [id]=N'${person}';`,
   );
 
+  // ==== Phase 30-RD: personal-data findings, a cleared revision, and collections ===============
+  const FINDING_FRESH =
+    'A finding is recorded unresolved, at version 1, for a pending flagged revision of exactly its bytes and normaliser';
+  const FINDING_SET = 'findings are recorded once, every one of them together';
+  const FINDING_IDENTITY = 'A finding keeps its identity';
+  const FINDING_KEEPS =
+    'A finding keeps its evidence, and is decided one version at a time while its revision is pending';
+  const CLEARANCE_AUTHORITY = 'Personal-data clearance authority is not held now';
+  const FINDING_DELETED = 'A personal-data finding is never deleted';
+  const CLEARED_FROM =
+    'A revision is cleared only from the flagged revision of the same bytes and normaliser';
+  const CLEARED_APPROVAL =
+    'A cleared revision is approved by someone who cleared none of its findings';
+
+  // ---- the clearance authority, and every way of lacking it -----------------------------------
+  // Two holders of `migration.clearPersonalData` with a live `migration-personal-data` step-up;
+  // one account with the step-up but no key; one with the key but only a PUBLICATION step-up;
+  // one with the key whose step-up has lapsed.
+  const clearer = randomUUID();
+  const otherClearer = randomUUID();
+  const noClearance = randomUUID();
+  const publicationOnly = randomUUID();
+  const lapsedClearance = randomUUID();
+  for (const [user, label] of [
+    [clearer, 'clearer'],
+    [otherClearer, 'other-clearer'],
+    [noClearance, 'no-clearance'],
+    [publicationOnly, 'publication-only'],
+    [lapsedClearance, 'lapsed-clearance'],
+  ] as const)
+    await session.query(
+      `INSERT INTO [dbo].[User] ([id],[name],[email],[emailVerified],[createdAt],[updatedAt],[locale],[status],[twoFactorEnabled]) VALUES (N'${user}',N'NON_MIGRATION_FIXTURE ${label}',N'${label}-${run}@migration-proof.invalid',0,SYSUTCDATETIME(),SYSUTCDATETIME(),N'en',N'active',0);`,
+    );
+  const clearRole = randomUUID();
+  await accept(
+    'A synthetic personal-data clearance authority, and every way of lacking it',
+    `INSERT INTO [dbo].[Role] ([id],[key],[name],[description],[system]) VALUES
+       (N'${clearRole}',N'proof-migration-clear-${run}',N'Synthetic personal-data clearance proof role',N'Holds migration.clearPersonalData for the migration proof only.',0);
+     INSERT INTO [dbo].[RolePermission] ([roleId],[permissionKey]) VALUES (N'${clearRole}',N'${CLEAR_PERSONAL_DATA_PERMISSION}');
+     INSERT INTO [dbo].[RoleAssignment] ([userId],[roleId]) VALUES
+       (N'${clearer}',N'${clearRole}'),(N'${otherClearer}',N'${clearRole}'),
+       (N'${publicationOnly}',N'${clearRole}'),(N'${lapsedClearance}',N'${clearRole}');
+     ${sessionOf(clearer, 1)}
+     ${sessionOf(otherClearer, 1)}
+     ${sessionOf(noClearance, 1)}
+     ${sessionOf(publicationOnly, 1)}
+     ${sessionOf(lapsedClearance, 1)}
+     ${grantOf(clearer, 'migration-personal-data', 30)}
+     ${grantOf(otherClearer, 'migration-personal-data', 30)}
+     ${grantOf(noClearance, 'migration-personal-data', 30)}
+     ${grantOf(publicationOnly, 'migration-publication', 30)}
+     ${grantOf(lapsedClearance, 'migration-personal-data', -1)}`,
+  );
+
+  // ---- a page record with flagged, clean and closed revisions of one snapshot ------------------
+  const pdSource = randomUUID();
+  const pdRun = randomUUID();
+  const pdRecord = randomUUID();
+  const pdSnapshot = randomUUID();
+  const pdRebytes = randomUUID();
+  const otherBody = Buffer.from(
+    `<p>NON_MIGRATION_FIXTURE other raw body ${run}</p>`,
+    'utf8',
+  );
+  const flagged = randomUUID();
+  const privateFlag = randomUUID();
+  const bare = randomUUID();
+  const clean = randomUUID();
+  const closed = randomUUID();
+  const pageRevision = (
+    id: string,
+    revision: number,
+    extra: Readonly<Record<string, string>> = {},
+  ): string =>
+    staged(id, pdRecord, pdSnapshot, pdRun, revision, {
+      contentKind: `N'editorial.page'`,
+      dedupeKey: `N'page:pd-${run}'`,
+      ...extra,
+    });
+  await accept(
+    'A page source, run and record, two snapshots, and flagged, clean and closed revisions',
+    `${source(pdSource, `proof-pd-${run}`, { accessMethod: `N'export'`, baseUrl: 'NULL', contentKind: `N'editorial.page'` })}
+     ${runRow(pdRun, pdSource)}
+     ${recordRow(pdRecord, pdSource, pdRun, `page-pd-${run}`, { contentKind: `N'editorial.page'` })}
+     ${snapshot(pdSnapshot, pdRecord, pdSource, pdRun)}
+     ${snapshot(pdRebytes, pdRecord, pdSource, pdRun, { body: `0x${otherBody.toString('hex')}`, byteSize: String(otherBody.byteLength), checksum: `'${sha(otherBody)}'` })}
+     ${pageRevision(flagged, 1, { personalData: `N'flagged'` })}
+     ${pageRevision(privateFlag, 2, { personalData: `N'flagged'` })}
+     ${pageRevision(bare, 3, { personalData: `N'flagged'` })}
+     ${pageRevision(clean, 4)}
+     ${pageRevision(closed, 5, { personalData: `N'flagged'` })}
+     ${set('MigrationStagedRecord', closed, `[review]=N'rejected',[reviewedByUserId]=N'${operator}',[reviewedAt]='${later}',[version]=[version]+1`)}`,
+  );
+
+  // ---- findings: recorded unresolved, all together, for a pending flagged revision of its bytes --
+  const findingValues = (
+    stagedId: string,
+    position: number,
+    count: number,
+    extra: Readonly<Record<string, string>> = {},
+  ): Record<string, string> => ({
+    id: `N'${randomUUID()}'`,
+    stagedRecordId: `N'${stagedId}'`,
+    recordId: `N'${pdRecord}'`,
+    inputChecksum: `'${sha(body)}'`,
+    normalizerVersion: `N'1'`,
+    position: String(position),
+    findingCount: String(count),
+    findingType: `N'email'`,
+    findingDigest: `'${sha(`finding-${stagedId}-${String(position)}`)}'`,
+    context: `N'NON_MIGRATION_FIXTURE office contact [redacted-email] ${String(position)}'`,
+    classification: `N'unresolved'`,
+    note: 'NULL',
+    decidedByUserId: 'NULL',
+    decidedAt: 'NULL',
+    version: '1',
+    ...extra,
+  });
+  const findingInsert = (rows: readonly Readonly<Record<string, string>>[]): string => {
+    const columns = Object.keys(rows[0] ?? fail('A finding statement needs a row.'));
+    return `INSERT INTO [dbo].[${PERSONAL_DATA_FINDING_TABLE}] (${columns
+      .map((name) => `[${name}]`)
+      .join(',')}) VALUES ${rows
+      .map((row) => `(${columns.map((name) => row[name] ?? 'NULL').join(',')})`)
+      .join(',')};`;
+  };
+  for (const [label, row] of [
+    [
+      'A finding recorded already decided',
+      findingValues(bare, 0, 1, {
+        classification: `N'public-organisational-contact'`,
+        note: `N'NON_MIGRATION_FIXTURE reason'`,
+        decidedByUserId: `N'${clearer}'`,
+        decidedAt: `'${later}'`,
+      }),
+    ],
+    ['A finding recorded at version two', findingValues(bare, 0, 1, { version: '2' })],
+    ['A finding of a revision that was never flagged', findingValues(clean, 0, 1)],
+    ['A finding of a flagged revision no longer pending', findingValues(closed, 0, 1)],
+    [
+      "A finding of other bytes than its revision's",
+      findingValues(bare, 0, 1, { inputChecksum: `'${sha(otherBody)}'` }),
+    ],
+    [
+      "A finding of another normaliser than its revision's",
+      findingValues(bare, 0, 1, { normalizerVersion: `N'2'` }),
+    ],
+  ] as const)
+    await refuse(label, findingInsert([row]), [51385], FINDING_FRESH);
+  await refuse(
+    'A finding naming a revision of another record',
+    findingInsert([findingValues(revision, 0, 1)]),
+    [547],
+    `${PERSONAL_DATA_FINDING_TABLE}_stagedRecordId_fkey`,
+  );
+  for (const [label, row] of [
+    [
+      'A finding of an unknown type',
+      findingValues(bare, 0, 1, { findingType: `N'address'` }),
+    ],
+    ['A finding placed outside its set', findingValues(bare, 1, 1)],
+    ['A finding with no context', findingValues(bare, 0, 1, { context: `N''` })],
+  ] as const)
+    await refuse(label, findingInsert([row]), [547], `${PERSONAL_DATA_FINDING_TABLE}_ck`);
+  await refuse(
+    'One finding of a set of two, recorded alone',
+    findingInsert([findingValues(bare, 0, 2)]),
+    [51385],
+    FINDING_SET,
+  );
+  await refuse(
+    'One match recorded twice in one set',
+    findingInsert([
+      findingValues(bare, 0, 2, { findingDigest: `'${sha(`twice-${run}`)}'` }),
+      findingValues(bare, 1, 2, { findingDigest: `'${sha(`twice-${run}`)}'` }),
+    ]),
+    [2627, 2601],
+    `${PERSONAL_DATA_FINDING_TABLE}_staged_digest_key`,
+  );
+  const firstFinding = randomUUID();
+  const secondFinding = randomUUID();
+  const privateFinding = randomUUID();
+  await accept(
+    "A flagged revision's two findings recorded together, and another's one",
+    `${findingInsert([
+      findingValues(flagged, 0, 2, { id: `N'${firstFinding}'` }),
+      findingValues(flagged, 1, 2, {
+        id: `N'${secondFinding}'`,
+        findingType: `N'phone'`,
+      }),
+    ])}
+     ${findingInsert([findingValues(privateFlag, 0, 1, { id: `N'${privateFinding}'` })])}`,
+  );
+  await refuse(
+    'A third finding added to a recorded set',
+    findingInsert([findingValues(flagged, 2, 3)]),
+    [51385],
+    FINDING_SET,
+  );
+
+  // ---- decisions: only by a live clearance holder, one version at a time, evidence fixed ------
+  const decide = (id: string, actor: string, classification: string): string =>
+    set(
+      PERSONAL_DATA_FINDING_TABLE,
+      id,
+      `[classification]=N'${classification}',[note]=N'NON_MIGRATION_FIXTURE reason',[decidedByUserId]=N'${actor}',[decidedAt]='${later}',[version]=[version]+1`,
+    );
+  for (const [label, actor] of [
+    ['A finding decided by an account without migration.clearPersonalData', noClearance],
+    ['A finding decided under a migration-publication step-up', publicationOnly],
+    ['A finding decided under a lapsed migration-personal-data step-up', lapsedClearance],
+    ['A finding decided by a migration.publish holder', publisher],
+  ] as const)
+    await refuse(
+      label,
+      decide(firstFinding, actor, 'public-organisational-contact'),
+      [51385],
+      CLEARANCE_AUTHORITY,
+    );
+  const decision = `[classification]=N'public-organisational-contact',[note]=N'NON_MIGRATION_FIXTURE reason',[decidedByUserId]=N'${clearer}',[decidedAt]='${later}'`;
+  for (const [label, assignments] of [
+    ['A finding decided without a version', decision],
+    [
+      "A finding's context rewritten",
+      `${decision},[context]=N'NON_MIGRATION_FIXTURE forged',[version]=[version]+1`,
+    ],
+    [
+      "A finding's digest rewritten",
+      `${decision},[findingDigest]='${sha(`forged-${run}`)}',[version]=[version]+1`,
+    ],
+    [
+      "A finding's type rewritten",
+      `${decision},[findingType]=N'phone',[version]=[version]+1`,
+    ],
+    ["A finding's set resized", `${decision},[findingCount]=3,[version]=[version]+1`],
+    [
+      "A finding's bytes rewritten",
+      `${decision},[inputChecksum]='${sha(otherBody)}',[version]=[version]+1`,
+    ],
+    [
+      "A finding's normaliser rewritten",
+      `${decision},[normalizerVersion]=N'2',[version]=[version]+1`,
+    ],
+  ] as const)
+    await refuse(
+      label,
+      set(PERSONAL_DATA_FINDING_TABLE, firstFinding, assignments),
+      [51385],
+      FINDING_KEEPS,
+    );
+  await refuse(
+    'A finding re-identified',
+    set(
+      PERSONAL_DATA_FINDING_TABLE,
+      firstFinding,
+      `[id]=N'${randomUUID()}',${decision},[version]=[version]+1`,
+    ),
+    [51385],
+    FINDING_IDENTITY,
+  );
+  for (const [label, assignments] of [
+    [
+      'A finding decided without a reason',
+      `[classification]=N'public-organisational-contact',[decidedByUserId]=N'${clearer}',[decidedAt]='${later}',[version]=[version]+1`,
+    ],
+    [
+      'A finding classified outside the vocabulary',
+      `[classification]=N'public',[note]=N'NON_MIGRATION_FIXTURE reason',[decidedByUserId]=N'${clearer}',[decidedAt]='${later}',[version]=[version]+1`,
+    ],
+  ] as const)
+    await refuse(
+      label,
+      set(PERSONAL_DATA_FINDING_TABLE, firstFinding, assignments),
+      [547],
+      `${PERSONAL_DATA_FINDING_TABLE}_ck`,
+    );
+  await accept(
+    'A live clearance holder clears one finding and classifies another private',
+    `${decide(firstFinding, clearer, 'public-organisational-contact')}
+     ${decide(privateFinding, clearer, 'personal-or-private')}`,
+  );
+  await refuse(
+    'A finding deleted',
+    `DELETE FROM [dbo].[${PERSONAL_DATA_FINDING_TABLE}] WHERE [id]=N'${firstFinding}';`,
+    [51385],
+    FINDING_DELETED,
+  );
+
+  // ---- a CLEARED revision: the same bytes and normaliser, every finding public organisational --
+  const clearedOf = (
+    id: string,
+    revisionNumber: number,
+    of: string,
+    extra: Readonly<Record<string, string>> = {},
+  ): string =>
+    pageRevision(id, revisionNumber, {
+      personalData: `N'cleared'`,
+      clearanceOfStagedRecordId: `N'${of}'`,
+      ...extra,
+    });
+  await refuse(
+    'A revision cleared while one of its findings is unresolved',
+    clearedOf(randomUUID(), 90, flagged),
+    [51386],
+    CLEARED_FROM,
+  );
+  await accept(
+    'A second clearance holder clears the other finding',
+    decide(secondFinding, otherClearer, 'public-organisational-identifier'),
+  );
+  for (const [label, statement] of [
+    [
+      'A revision cleared of a finding classified private',
+      clearedOf(randomUUID(), 91, privateFlag),
+    ],
+    [
+      'A revision cleared of a flagged revision with no findings',
+      clearedOf(randomUUID(), 92, bare),
+    ],
+    [
+      'A revision cleared of a revision never flagged',
+      clearedOf(randomUUID(), 93, clean),
+    ],
+    [
+      'A revision cleared from other bytes',
+      clearedOf(randomUUID(), 94, flagged, {
+        snapshotId: `N'${pdRebytes}'`,
+        inputChecksum: `'${sha(otherBody)}'`,
+      }),
+    ],
+    [
+      'A revision cleared by another normaliser',
+      clearedOf(randomUUID(), 95, flagged, { normalizerVersion: `N'2'` }),
+    ],
+  ] as const)
+    await refuse(label, statement, [51386], CLEARED_FROM);
+  const selfCleared = randomUUID();
+  for (const [label, statement] of [
+    [
+      'A cleared revision naming no flagged revision',
+      pageRevision(randomUUID(), 96, { personalData: `N'cleared'` }),
+    ],
+    [
+      'A revision naming a clearance without being cleared',
+      pageRevision(randomUUID(), 97, { clearanceOfStagedRecordId: `N'${flagged}'` }),
+    ],
+    [
+      'A revision clearing itself',
+      pageRevision(selfCleared, 98, {
+        personalData: `N'cleared'`,
+        clearanceOfStagedRecordId: `N'${selfCleared}'`,
+      }),
+    ],
+  ] as const)
+    await refuse(label, statement, [547], 'MigrationStagedRecord_ck');
+  await refuse(
+    "A revision cleared of another record's revision",
+    clearedOf(randomUUID(), 99, revision),
+    [547],
+    'MigrationStagedRecord_clearanceOf_fkey',
+  );
+  const cleared = randomUUID();
+  await accept(
+    'A revision cleared of the flagged revision every finding of which is public organisational',
+    clearedOf(cleared, 6, flagged),
+  );
+  await refuse(
+    'A cleared revision re-pointed at another clearance',
+    set(
+      'MigrationStagedRecord',
+      cleared,
+      `[clearanceOfStagedRecordId]=N'${bare}',[version]=[version]+1`,
+    ),
+    [51374],
+    STAGED_KEEPS,
+  );
+  await refuse(
+    'The flagged revision itself approved',
+    approve(flagged),
+    [547],
+    'MigrationStagedRecord_ck',
+  );
+  const approveRevisionBy = (id: string, actor: string): string =>
+    set(
+      'MigrationStagedRecord',
+      id,
+      `[review]=N'approved',[reviewedByUserId]=N'${actor}',[reviewedAt]='${later}',[version]=[version]+1`,
+    );
+  for (const [label, actor] of [
+    ['A cleared revision approved by the person who cleared one finding', clearer],
+    ['A cleared revision approved by the person who cleared the other', otherClearer],
+  ] as const)
+    await refuse(label, approveRevisionBy(cleared, actor), [51386], CLEARED_APPROVAL);
+  await accept(
+    'A cleared finding reclassified private while its revision is still pending',
+    decide(secondFinding, clearer, 'personal-or-private'),
+  );
+  await refuse(
+    'A cleared revision approved after a finding of it was reclassified',
+    approveRevisionBy(cleared, operator),
+    [51386],
+    CLEARED_APPROVAL,
+  );
+  await accept(
+    'The finding cleared again, and the cleared revision approved by someone who cleared nothing',
+    `${decide(secondFinding, otherClearer, 'public-organisational-identifier')}
+     ${approveRevisionBy(cleared, operator)}
+     ${set('MigrationStagedRecord', flagged, `[review]=N'superseded',[version]=[version]+1`)}`,
+  );
+  await refuse(
+    'A finding decided after its revision left review',
+    decide(secondFinding, otherClearer, 'public-organisational-contact'),
+    [51385],
+    FINDING_KEEPS,
+  );
+
+  // ---- collections: the typed target of their own kind only, written once ----------------------
+  const collection = randomUUID();
+  const otherCollection = randomUUID();
+  await accept(
+    "Editorial's Collections, as their owner writes them",
+    `INSERT INTO [dbo].[Collection] ([id],[slug],[state],[version],[creatorId],[updatedAt]) VALUES
+       (N'${collection}',N'proof-migration-collection-${run}',N'draft',1,N'${operator}',SYSUTCDATETIME()),
+       (N'${otherCollection}',N'proof-migration-collection-other-${run}',N'draft',1,N'${operator}',SYSUTCDATETIME());`,
+  );
+  const collectionChain = chainOf('editorial.collection');
+  const magazineChain = chainOf('library.magazine');
+  const collectionManifest = randomUUID();
+  const magazineManifest = randomUUID();
+  const collectionEntry = randomUUID();
+  const collectionPath = `/collections/proof-migration-collection-${run}`;
+  await accept(
+    'Draft manifests of the collection and magazine sources',
+    `${draftOf(collectionManifest, collectionChain)} ${draftOf(magazineManifest, magazineChain)}`,
+  );
+  for (const [label, statement] of [
+    [
+      'A magazine entry naming a Collection',
+      entryRow(
+        randomUUID(),
+        magazineManifest,
+        0,
+        magazineChain.revision,
+        magazineChain.record,
+        {
+          collectionId: `N'${collection}'`,
+          targetStage: `N'in-review'`,
+        },
+      ),
+    ],
+    [
+      'A collection entry naming a Work',
+      entryRow(
+        randomUUID(),
+        collectionManifest,
+        9,
+        collectionChain.revision,
+        collectionChain.record,
+        { workId: `N'${work}'`, targetStage: `N'public'` },
+      ),
+    ],
+  ] as const)
+    await refuse(label, statement, [51379], ENTRY_KIND);
+  await accept(
+    'An approved collection revision entered in a draft, published by the live holder',
+    `${entryRow(collectionEntry, collectionManifest, 0, collectionChain.revision, collectionChain.record)}
+     ${publishBy(collectionManifest, publisher)}
+     ${set('MigrationManifestEntry', collectionEntry, `[state]=N'publishing',[version]=[version]+1`)}`,
+  );
+  await refuse(
+    'A collection entry published to a Collection and a Work',
+    set(
+      'MigrationManifestEntry',
+      collectionEntry,
+      made(
+        `[collectionId]=N'${collection}',[workId]=N'${work}'`,
+        'in-review',
+        collectionPath,
+      ),
+    ),
+    [547],
+    'MigrationManifestEntry_ck',
+  );
+  await refuse(
+    'A collection entry naming a Collection that does not exist',
+    set(
+      'MigrationManifestEntry',
+      collectionEntry,
+      made(`[collectionId]=N'${randomUUID()}'`, 'in-review', collectionPath),
+    ),
+    [547],
+    'MigrationManifestEntry_collectionId_fkey',
+  );
+  await accept(
+    'The collection entry published to its own Collection, in review',
+    set(
+      'MigrationManifestEntry',
+      collectionEntry,
+      made(`[collectionId]=N'${collection}'`, 'in-review', collectionPath),
+    ),
+  );
+  await refuse(
+    'A recorded Collection re-targeted',
+    set(
+      'MigrationManifestEntry',
+      collectionEntry,
+      `[collectionId]=N'${otherCollection}',[version]=[version]+1`,
+    ),
+    [51379],
+    ENTRY_MOVES,
+  );
+  const collectionUrl = `https://${host}/collections/collection-${run}`;
+  const collectionMapping = randomUUID();
+  const collectionLegacy = (
+    id: string,
+    url: string,
+    extra: Readonly<Record<string, string>>,
+  ): string =>
+    legacy(id, url, {
+      sourceId: `N'${collectionChain.source}'`,
+      recordId: `N'${collectionChain.record}'`,
+      manifestEntryId: `N'${collectionEntry}'`,
+      videoId: 'NULL',
+      canonicalPath: `N'${collectionPath}'`,
+      ...extra,
+    });
+  await refuse(
+    'A mapping naming a Collection and a Page',
+    collectionLegacy(randomUUID(), `${collectionUrl}/${randomUUID()}`, {
+      collectionId: `N'${collection}'`,
+      pageId: `N'${page}'`,
+    }),
+    [547],
+    'MigrationLegacyMapping_ck',
+  );
+  for (const [label, statement] of [
+    [
+      "A collection mapping naming a Page, not its entry's Collection",
+      collectionLegacy(randomUUID(), `${collectionUrl}/${randomUUID()}`, {
+        pageId: `N'${page}'`,
+      }),
+    ],
+    [
+      "A page mapping naming a Collection, not its entry's Page",
+      pageLegacy(randomUUID(), `${pageUrl}/${randomUUID()}`, {
+        collectionId: `N'${collection}'`,
+      }),
+    ],
+  ] as const)
+    await refuse(label, statement, [51380], LEGACY_TARGET);
+  await accept(
+    "A collection mapping naming exactly its entry's Collection",
+    collectionLegacy(collectionMapping, collectionUrl, {
+      collectionId: `N'${collection}'`,
+    }),
+  );
+  for (const [label, assignments] of [
+    [
+      'A collection mapping re-targeted to another Collection',
+      `[collectionId]=N'${otherCollection}'`,
+    ],
+    [
+      'A collection mapping re-targeted to a Page',
+      `[collectionId]=NULL,[pageId]=N'${page}'`,
+    ],
+  ] as const)
+    await refuse(
+      label,
+      set(
+        'MigrationLegacyMapping',
+        collectionMapping,
+        `${assignments},[version]=[version]+1`,
+      ),
+      [51380],
+      LEGACY_KEEPS,
+    );
+
   // ---- the run completes, balanced, and is then frozen; the source may run again ------------
   await accept(
     'The run completed and reconciled in one step',
@@ -22201,6 +23325,40 @@ async function assertMigrationRules(
         `reserved address: ${JSON.stringify(phase30Labelled ?? null)}.`,
     );
 
+  // Phase 30-RD's findings are sentinels too: every context an unmistakable fixture, every one
+  // of the page source's rows an export fixture.
+  const [ownerLabelled] = await session.query<Record<string, number>>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[${PERSONAL_DATA_FINDING_TABLE}] WHERE [recordId] = N'${pdRecord}'
+         AND ([context] NOT LIKE N'NON[_]MIGRATION[_]FIXTURE%'
+              OR ([note] IS NOT NULL AND [note] NOT LIKE N'NON[_]MIGRATION[_]FIXTURE%'))) AS [findings],
+      (SELECT COUNT(*) FROM [dbo].[MigrationSource] WHERE [id] = N'${pdSource}'
+         AND ([name] NOT LIKE N'NON[_]MIGRATION[_]FIXTURE%' OR [authorityKind] <> N'fixture' OR [baseUrl] IS NOT NULL)) AS [source];
+  `);
+  if (JSON.stringify(ownerLabelled) !== '{"findings":0,"source":0}')
+    fail(
+      `The Phase-30-RD rule proofs wrote a row that is not an unmistakable fixture: ` +
+        `${JSON.stringify(ownerLabelled ?? null)}.`,
+    );
+
+  // Phase 30-RD's rollback, newest of all, is a disposable-proof artifact as well: over these
+  // rows — findings, a cleared revision, a collection record, entry and mapping, and a role
+  // granting migration.clearPersonalData — it REFUSES.
+  const ownerFailure = await attempt(session, ownerDecisions.rollbackSql);
+  if (
+    ownerFailure === null ||
+    ownerFailure.number !== 50000 ||
+    !ownerFailure.message.includes('Phase-30-RD rows exist')
+  )
+    fail(
+      `Phase 30-RD's rollback must refuse over Phase-30-RD rows rather than discard them; ` +
+        (ownerFailure === null
+          ? 'it ran.'
+          : `it failed for another reason (${String(ownerFailure.number)}): ` +
+            `${ownerFailure.message.split('\n')[0] ?? ''}`),
+    );
+  refusals += 1;
+
   // Phase 30-R's rollback, newest first, is likewise a disposable-proof artifact: over these rows
   // — new kinds, a refresh entry, an asset host, a public copy, a lead image — it REFUSES.
   const reviewFailure = await attempt(session, reviewCompleteness.rollbackSql);
@@ -22256,12 +23414,46 @@ async function assertMigrationRules(
     fail(
       `A refused Phase-30-R rollback must change nothing; found ${JSON.stringify(reviewKept ?? null)}.`,
     );
+  const [ownerKept] = await session.query<{
+    history: number;
+    findings: number;
+    columns: number;
+    key: number;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM [dbo].[_prisma_migrations] WHERE [migration_name] = N'${OWNER_DECISIONS_MIGRATION}') AS [history],
+      (SELECT COUNT(*) FROM [dbo].[${PERSONAL_DATA_FINDING_TABLE}] WHERE [recordId] = N'${pdRecord}') AS [findings],
+      (SELECT COUNT(*) FROM sys.columns
+        WHERE ([object_id] = OBJECT_ID(N'[dbo].[MigrationStagedRecord]') AND [name] = N'clearanceOfStagedRecordId')
+           OR ([object_id] IN (OBJECT_ID(N'[dbo].[MigrationLegacyMapping]'), OBJECT_ID(N'[dbo].[MigrationManifestEntry]'))
+               AND [name] = N'collectionId')) AS [columns],
+      (SELECT COUNT(*) FROM [dbo].[Permission] WHERE [key] = N'${CLEAR_PERSONAL_DATA_PERMISSION}') AS [key];
+  `);
+  if (JSON.stringify(ownerKept) !== '{"history":1,"findings":3,"columns":3,"key":1}')
+    fail(
+      `A refused Phase-30-RD rollback must change nothing; found ${JSON.stringify(ownerKept ?? null)}.`,
+    );
   await assertStatedMigrationRules(
     session,
-    reviewCompleteness,
-    'Phase 30-R',
-    REVIEW_TRIGGERS,
+    ownerDecisions,
+    'Phase 30-RD',
+    OWNER_DECISION_TRIGGERS,
   );
+  const [findingTrigger] = await session.query<{
+    definition: string | null;
+    disabled: number;
+  }>(`
+    SELECT OBJECT_DEFINITION(t.[object_id]) AS [definition], CAST(t.[is_disabled] AS INT) AS [disabled]
+    FROM sys.triggers t WHERE t.[name] = N'MigrationPersonalDataFindingIntegrity';
+  `);
+  if (
+    findingTrigger?.definition !==
+      statedTrigger(ownerDecisions.forwardSql, 'MigrationPersonalDataFindingIntegrity') ||
+    Number(findingTrigger.disabled) !== 0
+  )
+    fail(
+      "After the refused rollbacks the trigger MigrationPersonalDataFindingIntegrity must be exactly Phase 30-RD's, enabled.",
+    );
 
   report(
     'migration rules',
@@ -22280,7 +23472,13 @@ async function assertMigrationRules(
       `on its own typed target, a refresh entry fixed in its mode that makes no mapping and is ` +
       `never rolled back, an asset host added and then fixed, an all-or-nothing public copy, ` +
       `lead images, portraits and posters each a typed asset with its box, chronology only once ` +
-      `published, and its rollback refused too; ${String(refusals)} refusals by ` +
+      `published, and its rollback refused too; Phase 30-RD's findings recorded once as a ` +
+      `complete unresolved set for a pending flagged revision of their bytes and normaliser, ` +
+      `evidence fixed, decided only under live migration.clearPersonalData with a live ` +
+      `migration-personal-data step-up and never deleted, a cleared revision only from wholly ` +
+      `public-organisational findings and approved only by someone who cleared none, collections ` +
+      `on their own typed target written once, and its rollback refused first; ` +
+      `${String(refusals)} refusals by ` +
       `name, every text a NON_MIGRATION_FIXTURE sentinel, rows kept as evidence until this ` +
       `database is dropped`,
   );
@@ -22976,6 +24174,7 @@ try {
   await assertMigrationFoundation(session);
   await assertSourceAdaptersFoundation(session, migrations);
   await assertReviewCompletenessFoundation(session);
+  await assertOwnerDecisionsFoundation(session, migrations);
   await assertSeedGuardsIdempotent(session);
 
   const historyAfterApply = await appliedMigrationNames(session);
@@ -23010,6 +24209,10 @@ try {
   // reference an earlier migration's tables, so rolling back oldest-first
   // would fail on a constraint that still exists.
   for (const migration of [...migrations].reverse()) {
+    // Phase 30-RD's rollback refuses over authority as well as evidence: shown
+    // here, where no Migration row exists at all, before it runs.
+    if (migration.id === OWNER_DECISIONS_MIGRATION)
+      await assertOwnerDecisionsRollbackGuarded(session, migration);
     await rollbackMigration(session, migration);
 
     const afterThisRollback = await userTables(session);
@@ -23023,6 +24226,13 @@ try {
     }
     if ((await appliedMigrationNames(session)).includes(migration.id)) {
       fail(`Migration history still lists ${migration.id} after rollback.`);
+    }
+    if (migration.id === OWNER_DECISIONS_MIGRATION) {
+      // Phase 30-RD widened no search vocabulary or bundle: its rollback leaves
+      // Migration & Provenance exactly as Phase 30-R made it, and Collection
+      // whole.
+      await assertSearchVocabulary(session, 'phase22');
+      await assertOwnerDecisionsRemoved(session, migrations);
     }
     if (migration.id === REVIEW_COMPLETENESS_MIGRATION) {
       // Phase 30-R created nothing and widened no search vocabulary or bundle:
@@ -23313,6 +24523,7 @@ try {
   await assertMigrationFoundation(session, 're-deploy');
   await assertSourceAdaptersFoundation(session, migrations, 're-deploy');
   await assertReviewCompletenessFoundation(session, 're-deploy');
+  await assertOwnerDecisionsFoundation(session, migrations, 're-deploy');
   // The membership rules as BEHAVIOUR, on the re-deployed schema: what was
   // rolled back and re-applied enforces exactly what the first deploy did.
   await assertCollectionMembership(session);
@@ -23377,20 +24588,27 @@ try {
   );
   if (reviewCompleteness === undefined)
     fail(`${REVIEW_COMPLETENESS_MIGRATION} is not among the migrations on disk.`);
+  const ownerDecisions = migrations.find(
+    (entry) => entry.id === OWNER_DECISIONS_MIGRATION,
+  );
+  if (ownerDecisions === undefined)
+    fail(`${OWNER_DECISIONS_MIGRATION} is not among the migrations on disk.`);
   await assertMigrationBundleExtension(
     session,
     migrationProvenance,
     sourceAdapters,
     reviewCompleteness,
+    ownerDecisions,
   );
   await assertSourceAdaptersFoundation(session, migrations, 're-deploy');
   await assertReviewCompletenessFoundation(session, 're-deploy');
-  // And the Migration & Provenance rules, last — Phase 29's and Phase 30's
-  // together: raw snapshots can never be deleted and every decision is
-  // history, so — like the canonical proofs — their synthetic rows die with
-  // this disposable database. Phase 30's rollback is then shown to REFUSE
-  // over them rather than discard them.
-  await assertMigrationRules(session, sourceAdapters, reviewCompleteness);
+  await assertOwnerDecisionsFoundation(session, migrations, 're-deploy');
+  // And the Migration & Provenance rules, last — Phase 29's, Phase 30's,
+  // Phase 30-R's and Phase 30-RD's together: raw snapshots can never be
+  // deleted and every decision is history, so — like the canonical proofs —
+  // their synthetic rows die with this disposable database. Each later
+  // rollback is then shown to REFUSE over them rather than discard them.
+  await assertMigrationRules(session, sourceAdapters, reviewCompleteness, ownerDecisions);
 
   const finalHistory = await appliedMigrationNames(session);
   for (const migration of migrations) {

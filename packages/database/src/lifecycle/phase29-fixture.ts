@@ -690,7 +690,7 @@ export async function verifyRestoredPhase29(
     promotion: 'promoted:promoted:publisher',
     bundled: 2,
     publishHeldBy: `recovery-migration-publish-${stem}`,
-    catalogued: 3,
+    catalogued: 4,
   };
   if (JSON.stringify(state) !== JSON.stringify(expectedState)) {
     throw new Error(
@@ -699,7 +699,9 @@ export async function verifyRestoredPhase29(
   }
 
   // NO CREDENTIAL OR TARGET PAIR survived or arrived with the restore, no table
-  // beyond the eighteen is a Migration record, and no fourth key exists.
+  // beyond the eighteen and Phase 30-RD's findings table is a Migration record,
+  // and no key beyond the four catalogued exists — Phase 30-RD's gated
+  // `migration.clearPersonalData` held by no role at all.
   const tables = PHASE29_TABLES.map((table) => `OBJECT_ID(N'${table}')`).join(',');
   const [artifacts] = await sql.query<Record<string, number>>(`
     SELECT
@@ -710,12 +712,16 @@ export async function verifyRestoredPhase29(
                OR (c.[name] LIKE N'%token%' AND c.[name] <> N'leaseToken')
                OR c.[name] IN (N'targetType', N'targetId'))) AS [columns],
       (SELECT COUNT(*) FROM sys.tables
-        WHERE [name] LIKE N'Migration%' AND [name] NOT IN (${PHASE29_TABLES.map((table) => `N'${table}'`).join(',')})) AS [tables],
+        WHERE [name] LIKE N'Migration%'
+          AND [name] NOT IN (${[...PHASE29_TABLES, 'MigrationPersonalDataFinding'].map((table) => `N'${table}'`).join(',')})) AS [tables],
       (SELECT COUNT(*) FROM [dbo].[Permission]
         WHERE [key] LIKE N'migration.%'
-          AND [key] NOT IN (N'migration.read', N'migration.administer', N'migration.publish')) AS [keys];
+          AND [key] NOT IN (N'migration.read', N'migration.administer', N'migration.publish', N'migration.clearPersonalData')) AS [keys],
+      (SELECT COUNT(*) FROM [dbo].[RolePermission] WHERE [permissionKey] = N'migration.clearPersonalData') AS [clearanceHeld];
   `);
-  if (JSON.stringify(artifacts) !== '{"columns":0,"tables":0,"keys":0}') {
+  if (
+    JSON.stringify(artifacts) !== '{"columns":0,"tables":0,"keys":0,"clearanceHeld":0}'
+  ) {
     throw new Error(
       `Restored Phase-29 schema carries a credential, target pair or foreign artifact: ${JSON.stringify(artifacts)}.`,
     );
@@ -752,14 +758,15 @@ export async function verifyRestoredPhase29(
          WHERE [object_id] IN (${tables}) AND has_filter=1 AND is_unique=1) AS [filtered];`,
   );
   // 19 CHECKs (Phase 30-R adds a host's role and an acquisition's public
-  // copy), 84 foreign keys none of which cascades (Phase 29's sixty-five,
-  // Phase 30's ten typed target keys and Phase 30-R's eight more and the
-  // public copy's Asset), the 18 triggers and the three filtered keys,
+  // copy), 87 foreign keys none of which cascades (Phase 29's sixty-five,
+  // Phase 30's ten typed target keys, Phase 30-R's eight more and the public
+  // copy's Asset, and Phase 30-RD's two typed collection targets and a cleared
+  // revision's flagged revision), the 18 triggers and the three filtered keys,
   // exactly as the migrations create them: a restore that silently lost one
   // would otherwise read as "none untrusted".
   if (
     Number(counts?.checks ?? 0) !== 19 ||
-    Number(counts?.keys ?? 0) !== 84 ||
+    Number(counts?.keys ?? 0) !== 87 ||
     (counts?.triggers ?? '').split(',').sort().join(',') !== PHASE29_TRIGGERS ||
     (counts?.filtered ?? '').split(',').sort().join(',') !== PHASE29_FILTERED
   ) {
