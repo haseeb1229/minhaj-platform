@@ -34,6 +34,7 @@
     "db:restore:test": "node --conditions=react-server packages/database/scripts/restore-test.ts",
     "db:recovery:test": "node --conditions=react-server packages/database/scripts/recovery-test.ts",
     "db:recovery:populated": "node --conditions=react-server packages/database/scripts/recovery-populated-test.ts",
+    "db:residue:cleanup": "node --conditions=react-server packages/database/scripts/cleanup-local-residue.ts",
     "donations:sandbox:proof": "node --conditions=react-server packages/database/scripts/donations-sandbox-proof.ts",
     "staging:db:inspect": "node --conditions=react-server packages/database/scripts/staging-inspect.ts",
     "staging:db:create": "node --conditions=react-server packages/database/scripts/staging-create.ts",

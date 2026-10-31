@@ -178,6 +178,21 @@ export async function assertDatabaseAbsent(
   master: SqlSession,
   database: string,
 ): Promise<void> {
+  if (await isDatabasePresent(master, database)) {
+    throw new Error(`${database} still exists after the drop attempt`);
+  }
+}
+
+/**
+ * Reads `DB_ID` for `database` and returns ONLY an explicit answer: `true` for
+ * present, `false` for absent. Anything else throws, for the reasons
+ * `assertDatabaseAbsent` gives. Exposed separately so a caller can tell a
+ * database that survived its DROP from an inspection that did not answer.
+ */
+export async function isDatabasePresent(
+  master: SqlSession,
+  database: string,
+): Promise<boolean> {
   const rows = await master.query<{ present: number | null }>(
     `SELECT CASE WHEN DB_ID(N'${database}') IS NULL THEN 0 ELSE 1 END AS present;`,
   );
@@ -200,9 +215,7 @@ export async function assertDatabaseAbsent(
         `answer about ${database}`,
     );
   }
-  if (present !== 0) {
-    throw new Error(`${database} still exists after the drop attempt`);
-  }
+  return present === 1;
 }
 
 /**
