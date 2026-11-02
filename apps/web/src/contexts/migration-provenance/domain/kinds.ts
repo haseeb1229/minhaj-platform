@@ -611,6 +611,14 @@ function collection(input: Ready, record: ParsedCollection): Normalisation {
     });
   }
   if (members.length === 0) words.issues.add('reference-missing');
+  // An entry the catalogue excludes, with its recorded reason, for the reviewer.
+  const excludedMembers: { legacyUrl: string; reason: string }[] = [];
+  for (const excluded of record.excluded ?? []) {
+    const legacyUrl = httpsUrl(excluded.url);
+    const reason = words.field(excluded.reason, 300);
+    if (legacyUrl === null || reason === null) words.issues.add('reference-missing');
+    else excludedMembers.push({ legacyUrl, reason });
+  }
   const legacyIdentifier = identifier(input, record.legacyIdentifier);
   const payload = {
     kind: 'editorial.collection' as const,
@@ -626,6 +634,7 @@ function collection(input: Ready, record: ParsedCollection): Normalisation {
     excerpt,
     members,
     repeatedMembers,
+    excludedMembers,
     legacyIdentifier,
   };
   return finish('editorial.collection', payload, words, {

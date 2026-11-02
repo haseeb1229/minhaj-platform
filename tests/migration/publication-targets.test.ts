@@ -2009,6 +2009,7 @@ const ARCHIVE: StagedCollectionPayload = {
     group: null,
   })),
   repeatedMembers: 0,
+  excludedMembers: [],
   legacyIdentifier: 'lkcatid-12',
 };
 

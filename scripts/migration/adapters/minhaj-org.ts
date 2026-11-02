@@ -620,6 +620,12 @@ function escapeText(text: string): string {
 export interface MinhajOrgCollectionOptions extends MinhajOrgFixedOptions {
   /** The catalogue's curated archives, by `lkcatid` — never every category. */
   readonly archives: readonly string[];
+  /**
+   * Phase 30-RD. Entries the catalogue records, by `tid`, as ones no record
+   * can be made of — each with the reason a person recorded — so an archive
+   * that lists one is still read, and says exactly what it leaves out.
+   */
+  readonly exclusions: Readonly<Record<string, string>>;
 }
 
 /**
@@ -629,9 +635,11 @@ export interface MinhajOrgCollectionOptions extends MinhajOrgFixedOptions {
  * card in the main column's archive list, in document order, each under the
  * section heading (`h3`) and group heading (`h4`) above it.
  *
- * EXACT OR NOTHING. A card that links anywhere but a `tid` post of this site
- * in the archive's own language, an archive split over pages, or an empty one
- * is a parse failure — never a smaller Collection claimed as the archive.
+ * EXACT OR NOTHING, SAVE WHAT THE CATALOGUE RECORDS. A card that links
+ * anywhere but a `tid` post of this site in the archive's own language, an
+ * archive split over pages, or an empty one is a parse failure — never a
+ * smaller Collection claimed as the archive. A card the catalogue excludes is
+ * no member, and is carried as `excluded` with its recorded reason.
  */
 export function createMinhajOrgCollectionAdapter(
   options: MinhajOrgCollectionOptions,
@@ -644,6 +652,9 @@ export function createMinhajOrgCollectionAdapter(
   const languageCode = SECTION_LANGUAGES[sectionLanguage];
   const archives = selectedTids(options.archives, options.items);
   const catalogued = new Set(options.archives);
+  for (const tid of Object.keys(options.exclusions))
+    if (!/^[1-9][0-9]{0,8}$/.test(tid) || (options.exclusions[tid] ?? '').trim() === '')
+      throw new Error('an exclusion needs a tid and its reason');
 
   return {
     adapterKey: MINHAJ_ORG_COLLECTION_ADAPTER_KEY,
@@ -696,6 +707,7 @@ export function createMinhajOrgCollectionAdapter(
         return { kind: 'failed', detail: 'archive-paginated' };
 
       const members: { url: string; section: string | null; group: string | null }[] = [];
+      const excluded: { url: string; reason: string }[] = [];
       let section: string | null = null;
       let group: string | null = null;
       let foreign = false;
@@ -729,11 +741,14 @@ export function createMinhajOrgCollectionAdapter(
             foreign = true;
             return;
           }
-          members.push({
-            url: tidItem(base, sectionLanguage, tid[2] ?? '').externalKey,
-            section,
-            group,
-          });
+          const key = tidItem(base, sectionLanguage, tid[2] ?? '').externalKey;
+          const reason = options.exclusions[tid[2] ?? ''];
+          if (reason !== undefined) {
+            if (!excluded.some((entry) => entry.url === key))
+              excluded.push({ url: key, reason });
+            return;
+          }
+          members.push({ url: key, section, group });
         });
       if (foreign) return { kind: 'failed', detail: 'member-not-a-record' };
       if (members.length === 0) return { kind: 'failed', detail: 'archive-empty' };
@@ -751,6 +766,7 @@ export function createMinhajOrgCollectionAdapter(
         assets: [],
         descriptionHtml: escapeText(described.replace(DESCRIPTION_TAIL, '')),
         members,
+        excluded,
       };
       return { kind: 'parsed', record };
     },

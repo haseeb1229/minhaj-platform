@@ -152,6 +152,7 @@ const PAYLOADS = {
     excerpt: '',
     members: [{ legacyUrl: `${BASE}members/${slug}`, section: null, group: null }],
     repeatedMembers: 0,
+    excludedMembers: [],
     legacyIdentifier: null,
   }),
   'people.person': (slug: string) => ({

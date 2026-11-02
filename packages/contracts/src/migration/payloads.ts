@@ -471,6 +471,11 @@ export interface StagedCollectionMember {
  * title and description as the source wrote them, and its members in the
  * source's order. A record the source lists twice is a member once, at its
  * first place; `repeatedMembers` says how many later listings that dropped.
+ * An entry the committed catalogue records as one no record can be made of —
+ * the source no longer serves it, or it carries no text an Editorial record
+ * can hold — is no member: it is listed in `excludedMembers` with that
+ * recorded reason, so the person approving the Collection sees exactly what it
+ * leaves out and why.
  */
 export interface StagedCollectionPayload {
   readonly kind: 'editorial.collection';
@@ -480,6 +485,10 @@ export interface StagedCollectionPayload {
   readonly excerpt: string;
   readonly members: readonly StagedCollectionMember[];
   readonly repeatedMembers: number;
+  readonly excludedMembers: readonly {
+    readonly legacyUrl: string;
+    readonly reason: string;
+  }[];
   readonly legacyIdentifier: string | null;
 }
 
@@ -514,6 +523,20 @@ export const stagedCollectionPayloadSchema = z
         { message: 'A record is a member once.' },
       ),
     repeatedMembers: z.number().int().min(0).max(10_000),
+    excludedMembers: z
+      .array(
+        z
+          .object({
+            legacyUrl: z
+              .string()
+              .min(1)
+              .max(MIGRATION_LIMITS.url)
+              .regex(/^https:\/\//),
+            reason: z.string().min(1).max(300),
+          })
+          .strict(),
+      )
+      .max(MAX_COLLECTION_MEMBERS),
     legacyIdentifier: z.string().max(200).nullable(),
   })
   .strict();
@@ -861,6 +884,8 @@ export interface ParsedCollection extends ParsedCommon {
     readonly section: string | null;
     readonly group: string | null;
   }[];
+  /** Entries the committed catalogue excludes, each with its recorded reason. */
+  readonly excluded: readonly { readonly url: string; readonly reason: string }[];
 }
 
 export interface ParsedPerson extends ParsedCommon {

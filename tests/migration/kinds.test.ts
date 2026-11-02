@@ -854,6 +854,7 @@ const ARCHIVE: ParsedCollection = Object.freeze({
     { url: 'https://www.minhaj.org/english/tid/303/', section: 'Second', group: '2009' },
     { url: 'https://www.minhaj.org/english/tid/302/', section: 'Second', group: '2008' },
   ],
+  excluded: [],
 });
 
 describe('editorial.collection (Phase 30-RD)', () => {
@@ -885,8 +886,32 @@ describe('editorial.collection (Phase 30-RD)', () => {
         },
       ],
       repeatedMembers: 1,
+      excludedMembers: [],
       legacyIdentifier: 'lkcatid-7',
     });
+  });
+
+  it('names each entry the catalogue excludes, with its recorded reason, and carries it as no member', () => {
+    const result = run({
+      ...ARCHIVE,
+      excluded: [
+        { url: 'https://www.minhaj.org/english/tid/309/', reason: 'A photo-only post.' },
+      ],
+    });
+    expect(result.issues).toEqual([]);
+    expect(result.payload).toMatchObject({
+      excludedMembers: [
+        {
+          legacyUrl: 'https://www.minhaj.org/english/tid/309/',
+          reason: 'A photo-only post.',
+        },
+      ],
+    });
+    expect(
+      (result.payload as { members: { legacyUrl: string }[] }).members.map(
+        (m) => m.legacyUrl,
+      ),
+    ).not.toContain('https://www.minhaj.org/english/tid/309/');
   });
 
   it('holds an archive with a member that is not an https address, or with none', () => {

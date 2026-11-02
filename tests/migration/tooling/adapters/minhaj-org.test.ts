@@ -1068,6 +1068,7 @@ function collectionAdapter(items: readonly string[] = []) {
     items,
     language: 'english',
     archives: ['7', '8'],
+    exclusions: { '303': 'A photo-only post (synthetic).' },
   });
 }
 
@@ -1115,10 +1116,26 @@ describe('curated archives as Collections (Phase 30-RD)', () => {
     expect(parsed.record.members).toEqual([
       { url: key(301), section: 'First section', group: null },
       { url: key(302), section: 'First section', group: null },
-      { url: key(303), section: 'Second section', group: 'Year 2009' },
       // A repeat is kept for normalisation to count and drop.
       { url: key(302), section: 'Second section', group: 'Year 2008' },
     ]);
+    // The catalogue's exclusion is no member, and is named with its reason.
+    expect(parsed.record.excluded).toEqual([
+      { url: key(303), reason: 'A photo-only post (synthetic).' },
+    ]);
+  });
+
+  it('refuses an exclusion without a reason', () => {
+    expect(() =>
+      createMinhajOrgCollectionAdapter({
+        baseUrl: MINHAJ_ORG_BASE_URL,
+        selection: { pages: 1, limit: 10 },
+        items: [],
+        language: 'english',
+        archives: ['7'],
+        exclusions: { '303': ' ' },
+      }),
+    ).toThrow();
   });
 
   it('fails an archive with a card that is not a post of this site, never a smaller Collection', () => {

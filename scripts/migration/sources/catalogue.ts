@@ -272,6 +272,22 @@ export const MINHAJ_ORG_ARCHIVE_TIDS: readonly string[] = Object.freeze([
 ]);
 
 /**
+ * Phase 30-RD. The archive entries no record can be made of, as the member
+ * run of 2026-10-31 found them, each with the reason — reviewed here, never
+ * inferred. Owner decision 2026-10-31: each archive is published without
+ * exactly these, and its staged payload names them for the reviewer.
+ */
+export const MINHAJ_ORG_ARCHIVE_EXCLUSIONS: Readonly<Record<string, string>> =
+  Object.freeze({
+    // Al-Hidayah: "European al-Hidayah Camp 2017: Highlights".
+    '41122':
+      'A photo-only post: seven pictures and two social-media embeds, no text an Editorial record can carry (2026-10-31).',
+    // Mawlid Conferences, "Other Mawlid Conferences".
+    '3484':
+      'The source no longer serves this post: its address redirects to the site home page (2026-10-31).',
+  });
+
+/**
  * The English `tid`s other sources own — the bound pages and the archive
  * members — which no English editorial LISTING may also take, so one legacy
  * address never maps to two records.
@@ -469,7 +485,7 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
     policyNotes:
       `The three owner-approved editor-curated archives (Al-Hidayah, Mawlid Conferences, ` +
       `Itikaf during Ramadhan) as Collections: title, description and members in source ` +
-      `order; no image. ${PUBLIC_ONLY}`,
+      `order; no image; the two entries the catalogue records as unmigratable are named, not carried. ${PUBLIC_ONLY}`,
     adapter: (selection) =>
       createMinhajOrgCollectionAdapter({
         baseUrl: MINHAJ_ORG,
@@ -477,6 +493,7 @@ export const AUTHORISED_SOURCES: readonly AuthorisedSourceDefinition[] = Object.
         items: selection.items,
         language: 'english',
         archives: MINHAJ_ORG_COLLECTION_IDS,
+        exclusions: MINHAJ_ORG_ARCHIVE_EXCLUSIONS,
       }),
   },
   {

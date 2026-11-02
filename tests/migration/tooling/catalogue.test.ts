@@ -11,6 +11,7 @@ import {
 import {
   AUTHORISED_SOURCES,
   MINHAJ_BOOKS_LISTINGS,
+  MINHAJ_ORG_ARCHIVE_EXCLUSIONS,
   MINHAJ_ORG_ARCHIVE_TIDS,
   MINHAJ_ORG_COLLECTION_IDS,
   MINHAJ_ORG_PAGE_BINDINGS,
@@ -100,6 +101,12 @@ describe('the authorised source catalogue', () => {
   it('names exactly the three owner-approved archives and their posts, each once (Phase 30-RD)', () => {
     expect([...MINHAJ_ORG_COLLECTION_IDS]).toEqual(['12', '1', '2']);
     expect(MINHAJ_ORG_ARCHIVE_TIDS).toHaveLength(114);
+    // Exactly the two entries found unmigratable, each a listed post with a reason.
+    expect(Object.keys(MINHAJ_ORG_ARCHIVE_EXCLUSIONS).sort()).toEqual(['3484', '41122']);
+    for (const [tid, reason] of Object.entries(MINHAJ_ORG_ARCHIVE_EXCLUSIONS)) {
+      expect(MINHAJ_ORG_ARCHIVE_TIDS).toContain(tid);
+      expect(reason.length).toBeGreaterThan(20);
+    }
     expect(new Set(MINHAJ_ORG_ARCHIVE_TIDS).size).toBe(MINHAJ_ORG_ARCHIVE_TIDS.length);
     for (const tid of MINHAJ_ORG_ARCHIVE_TIDS) {
       expect(tid).toMatch(/^[1-9][0-9]{0,8}$/);
