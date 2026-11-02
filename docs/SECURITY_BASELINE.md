@@ -226,6 +226,16 @@ database trigger re-checking the live key and the live grant when the manifest o
 Migration publication never substitutes for a target's own authority — Media's `media.administer`
 still decides a migrated Video — nor for religious review (MIGRATION_STRATEGY.md §8.4).
 
+**Phase 30-RD adds the ninth: `migration.clearPersonalData`** (OPEN_DECISIONS.md §3.8). Deciding
+that text the personal-data detector matched is a public organisational office contact — not a
+person's data — is a privacy judgement no content or migration role implies, so the key is
+catalogued, externally gated, bundled into no role and held by nobody by default. It classifies a
+finding and nothing else: it approves, publishes and edits nothing. Every classification also needs a
+fresh `migration-personal-data` step-up (§8.1), checked by the Server Action, re-verified by the
+service and re-checked by the database trigger when the finding moves (§10.9). **On pre-adoption
+staging only**, by the owner's decision, the owner's first administrator holds it through a custom
+role a second administrator created and assigned under `permissions.grant` — never a self-grant.
+
 ---
 
 ## 4. CMS publishing permissions
@@ -522,6 +532,7 @@ controls apply, and they are not alternatives:**
 | **Fatwa publication** | `fatwa.publish` — dedicated purpose `fatwa-publication` since Phase 20, also required to withdraw a published ruling |
 | **Donation refund** | `donations.refund` — dedicated purpose `donation-refund` since Phase 27, required for every full or partial refund and re-checked by the database |
 | **Migration publication** | `migration.publish` — dedicated purpose `migration-publication` since Phase 29, required to publish a manifest, roll one back and approve a promotion; checked by the action, re-verified by the service and re-checked by the database |
+| **Personal-data clearance** | `migration.clearPersonalData` — dedicated purpose `migration-personal-data` since Phase 30-RD, required for every classification of a migration personal-data finding; checked by the action, re-verified by the service and re-checked by the database |
 | User account administration | Admin permissions |
 | Destructive bulk operations | Admin permissions |
 
@@ -954,6 +965,39 @@ widening any other image path:
   byte for byte. The bitstream's own bytes are kept as written, as a JPEG's scan data and a PNG's
   image data are. The byte ceiling counts what arrives, dropped metadata included, and one input
   always yields the same bytes (a stable checksum). Tests: `tests/storage/image-webp.test.ts`.
+
+### 10.9 As delivered (Phase 30-RD) — clearing a personal-data false positive
+
+The detector (MIGRATION_STRATEGY.md §8.3) is unchanged and still the default: an email address or a
+phone-like run flags its revision and is redacted in what is staged, and a flagged revision can
+never be approved (a CHECK holds that). Phase 30-RD adds a narrow, audited way past it for **public
+organisational contact data only**, and no other:
+
+- **Findings are evidence, never the matched text.** When a revision is flagged, the run records each
+  DISTINCT match once — its type (`email` or `phone`), a SHA-256 over the input bytes' checksum,
+  the type and the matched text, and up to 400 characters of the already-redacted text around it with
+  the match shown only as `«email»` or `«phone»`. The matched text itself is stored nowhere new:
+  a reviewer reads it in the existing audited raw-evidence preview. The set is recorded whole or not
+  at all (more than 200 distinct matches are not recorded, and the record simply stays held).
+- **A person classifies each finding, one at a time.** `unresolved`,
+  `public-organisational-contact`, `public-organisational-identifier` or `personal-or-private`,
+  with a reason, at the version shown, while the flagged revision is pending — under
+  `migration.clearPersonalData` and a live `migration-personal-data` step-up, re-checked by the
+  database (51385). There is no batch, no "clear all", no host or pattern allowlist. The audit row
+  names the act, the classification and the finding's position — never the text, the context or the
+  reason's words.
+- **Clearing is a replay, never an edit.** Only when EVERY finding of the flagged revision is
+  classified public organisational does the next replay of the RETAINED snapshot re-read the same
+  bytes with the same normaliser, leaving exactly those matched texts as the source wrote them, and
+  only if this read finds exactly the recorded findings — a new or changed match keeps the record
+  held. The result is a NEW revision, `personalData = cleared`, naming the flagged revision; the
+  flagged revision, its payload and its findings are never changed. The database refuses a cleared
+  revision without a complete, wholly organisational clearance of the flagged revision of the same
+  bytes and normaliser (51386). Changed source bytes match no clearance and are flagged afresh.
+- **Two people.** A cleared revision is approved only by someone who decided none of its findings,
+  and only while each still stands cleared (application and database, 51386); Editorial's own
+  workflow then needs a different person again to approve and publish the record. Tests:
+  `tests/migration/personal-data.test.ts` and the migration lifecycle proof.
 
 ---
 

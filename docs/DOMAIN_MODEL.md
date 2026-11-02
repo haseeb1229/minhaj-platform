@@ -2147,6 +2147,31 @@ Migration `20261030000000_phase30r_review_completeness` adds no table (OPEN_DECI
 - **Replay.** A run may re-read the source's retained raw snapshots with newer parser and
   normaliser code instead of fetching pages; the same bytes read by newer code are a new revision.
 
+### 16.8 As delivered (Phase 30-RD — personal-data clearance, curated archives as Collections)
+
+Migration `20261031000000_phase30rd_owner_decisions` adds one table (OPEN_DECISIONS.md §3.8).
+
+- **`MigrationPersonalDataFinding`** — one DISTINCT match of the personal-data detector in a
+  flagged revision: type (`email` | `phone`), a digest bound to the revision's input checksum
+  (never the matched text), the redacted words around it, position and count of its set, and a
+  person's classification (`unresolved` | `public-organisational-contact` |
+  `public-organisational-identifier` | `personal-or-private`) with reason, decider, time and
+  version. Recorded once, whole, for a pending flagged revision of exactly those bytes and that
+  normaliser; never deleted; only its decision moves (51385).
+- **A third personal-data state, `cleared`.** A staged revision is `none`, `flagged` or
+  `cleared`; `cleared` exactly when it names (`clearanceOfStagedRecordId`, a composite key within
+  the same record) the flagged revision of the same input checksum and normaliser version every
+  finding of which is classified public organisational (51386). An approved revision carries
+  `none` or `cleared`, and a cleared one is approved by none of its finding's deciders.
+- **One more publishable kind, `editorial.collection`** — a source's own editor-curated archive:
+  its title and description, and its members in source order by LEGACY URL (with the source's
+  section and group headings), resolved at publication through ACTIVE legacy mappings only to the
+  exact typed records migration published. Typed target `collectionId` on entries and mappings —
+  still exactly one per mapping, still no target pair. Thirteen kinds in all. Collection membership
+  stays Phase 15's (§7.3.1): Article, the four News families, Work and Video; a member of any other
+  type refuses the archive. An entry the committed catalogue records as unmigratable is no member:
+  the payload names it in `excludedMembers` with its recorded reason for the reviewer.
+
 ---
 
 ## 17. Global Network, Membership, Donations

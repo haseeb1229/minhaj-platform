@@ -794,5 +794,7 @@ page's copyright notice as evidence, and the person's rights decision — in
 acquisitions — 222 lead images, 3 portraits, 104 book covers, 63 issue covers and 69 video posters
 — each with a metadata-stripped public copy and each decided `public-eligible` by a person; none
 left restricted, none of unknown rights cleared (MIGRATION_STRATEGY.md §15.1). After the Phase 30-RF gap closure (2026-10-31): 470 — eight still-WebP issue covers and one
-portrait added, each the same way (MIGRATION_STRATEGY.md §16.1). No dependency was added for WebP:
+portrait added, each the same way (MIGRATION_STRATEGY.md §16.1). After Phase 30-RD (2026-11-02):
+577 — 107 lead images of the curated archives' posts added the same way (MIGRATION_STRATEGY.md
+§17.1). Phase 30-RD adds no dependency. No dependency was added for WebP:
 Storage validates the container itself (SECURITY_BASELINE.md §10.8).

@@ -953,6 +953,23 @@ The diagram and the bullets above are the **Phase-29 exit** state; §5.2 records
   output (`apps/web/src/shell/brand/`), and the favicon is the App Router `icon.png` file convention;
   neither is a remote reference (OPEN_DECISIONS.md §6.4).
 
+### 5.4 As delivered (Phase 30-RD) — Collections and the personal-data clearance
+
+- **One more target, same router.** `migration-collection-targets.ts` builds Editorial's
+  Collection target over the same Editorial service the other Editorial targets use (create, revise,
+  submit, archive — no other workflow action). A migrated Collection's members are resolved by
+  Migration's own active mappings, then asked of their OWNERS through
+  `collection-member-owners.ts`: the one combination of Editorial's, Library's and Media's public
+  member reads that the public Collection pages (`collection-members.ts`, over the public read
+  runtimes) and the migration composition (over the same public read services built in
+  `migration-targets.ts`) both use — no new context edge; Editorial → Library and Editorial → Media
+  are Phase 15's. The migration composition still reaches eight contexts.
+- **The clearance is Migration's own.** The detector, the findings and the cleared replay live in
+  the Migration context; Identity answers the new gated key and step-up purpose through the same
+  `verifyPrivilegedActor` re-verification publication uses.
+- **Operations image.** It also carries `migration-collection-targets.ts` and
+  `collection-member-owners.ts` — every module `migration-runner.ts` reaches.
+
 ---
 
 ## 6. Dependency rules

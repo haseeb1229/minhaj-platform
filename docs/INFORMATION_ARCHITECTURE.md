@@ -57,6 +57,11 @@ runs a campaign.
 Collection membership also uses **typed relationships**, not polymorphic references — a
 Collection must never hold dangling pointers to deleted content.
 
+**Phase 30-RD (pre-adoption review build).** Three of the source's own editor-curated archives —
+Al-Hidayah, Mawlid Conferences and Itikaf during Ramadhan — are migrated as Collections at
+`/collections/{slug}`, in the source's order, each member linking to its own canonical address;
+they still occupy no primary navigation item (MIGRATION_STRATEGY.md §17).
+
 ### 1.4 Quran and Hadith are peers, never nested
 
 Neither is a subsection of Library, and neither is a subsection of the other. Each is a

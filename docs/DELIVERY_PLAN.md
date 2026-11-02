@@ -14,8 +14,10 @@ discovered, 134 ordinary records published, 30 religious records staged for qual
 MIGRATION_STRATEGY.md §14) and was then materially widened by the Phase 30-R review-completeness
 macro — first-party visuals, original source dates, organisational pages, leadership profiles and
 countries of presence (§4, Phase 30; MIGRATION_STRATEGY.md §15) — and finished by the Phase 30-RF
-gap closure (MIGRATION_STRATEGY.md §16; 501 ordinary records, Stage 1A complete); Stage 1B, the full
-initial corpus, follows Minhaj's review and go-ahead. Phase 31 has not started.
+gap closure (MIGRATION_STRATEGY.md §16; 501 ordinary records, Stage 1A complete), then extended by
+the Phase 30-RD owner decisions — a person's audited clearance of personal-data false positives and
+the source's curated archives as Collections (MIGRATION_STRATEGY.md §17; 617 ordinary records);
+Stage 1B, the full initial corpus, follows Minhaj's review and go-ahead. Phase 31 has not started.
 
 ---
 
@@ -2549,6 +2551,28 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > request to another host — passed on it.
 > **Phase 30 engineering and Stage 1A are complete.** Stage 1B, Phase 31, Phase 32 and production
 > cutover have **not** started, and no official adoption is claimed.
+
+> **Phase 30-RD — the two owner decisions of OPEN_DECISIONS.md §3.8 (an OPERATIONAL continuation
+> inside Phase 30, a working checkpoint label, not a new phase).** One schema migration,
+> `20261031000000_phase30rd_owner_decisions` (31 migrations). Delivered: a narrow, audited
+> clearance of personal-data FALSE POSITIVES — each detector match recorded as evidence (never its
+> text), classified by a holder of the externally gated `migration.clearPersonalData` after its own
+> `migration-personal-data` step-up, a replay of the retained snapshot into a new `cleared`
+> revision only when every match is public organisational, approved by a different person, every
+> rule held by the database too (SECURITY_BASELINE.md §10.9); the `editorial.collection` kind with
+> its typed `collectionId` target, two bounded catalogued sources for exactly three source-curated
+> archives and the 114 posts they hold, members resolved only through active mappings and confirmed
+> public by their owners, and two unmigratable entries named in the payload rather than dropped
+> (MIGRATION_STRATEGY.md §17); and a guarded command that removes leftover local restore and test
+> databases (`npm run db:residue:cleanup`). Staging result (2026-11-02, MIGRATION_STRATEGY.md
+> §17.1): the introduction page published — **all eight** bound Explore pages — **three Collections**
+> (Al-Hidayah 19, Mawlid Conferences 42, Itikaf 51), **617 ordinary public records**, 617 active
+> mappings with no chain or duplicate, 577 pictures, Fatwa and Quran still review-only; backup
+> `20261102T171008Z` restore-proven. Clearance and members ran on `c5d0dbb` (CI 41226330077,
+> migrate-and-deploy 41229333489), the Collections on `576e5b3` (CI 41480782196, deploy
+> 41484695429); the release carrying this record is the one staging and `main` both run.
+> **Phase 30-RD is complete.** Stage 1B, Phase 31, Phase 32 and production cutover have **not**
+> started, no official adoption is claimed, and religious acceptance stays separate and open.
 
 ---
 

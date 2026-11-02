@@ -95,7 +95,10 @@ schedules, centres without a public directory, audio held only as third-party em
 honest limited state rather than invented content. The final Stage-1A gap closure (Phase 30-RF,
 2026-10-31) re-checked each against its source and records the final matrix
 (MIGRATION_STRATEGY.md §16); it also found the source's curated archives that a Collection could
-carry, which needs an owner decision before it is built (OPEN_DECISIONS.md §3.8).
+carry, which needed an owner decision (OPEN_DECISIONS.md §3.8). The owner decided both §3.8 items
+for the pre-adoption build (Phase 30-RD, MIGRATION_STRATEGY.md §17): the introduction page is
+published after a person cleared its organisational contact details, and three curated archives
+are Collections. Minhaj's acceptance of both remains open.
 
 Commercial questions — source ownership, licensing, portfolio rights, retention of a clone,
 future reuse — are **outside technical architecture** and are deliberately not recorded in

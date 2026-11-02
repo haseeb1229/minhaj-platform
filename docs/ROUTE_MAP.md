@@ -193,8 +193,12 @@ about/global-impact, shaykh-ul-islam/biography, organization/forums, organizatio
 our-work/peace, digital-resources/mobile-apps and digital-resources/social-media); on staging
 three were published at Phase-30-R exit (un-recognition, peace, mobile-apps — MIGRATION_STRATEGY.md
 §15.1), and since Phase 30-RF seven are (global-impact, the Shaykh-ul-Islam biography, forums and
-social-media added — §16). Every other item stays a reserved page, about/introduction included
-while its personal-data decision is open (OPEN_DECISIONS.md §3.8). `/explore/leadership` lists the published leadership profiles, each
+social-media added — §16), and since Phase 30-RD all **eight** are: about/introduction is published
+at its same canonical address once a person cleared its personal-data findings as public
+organisational contacts (OPEN_DECISIONS.md §3.8; MIGRATION_STRATEGY.md §17). Every other item stays
+a reserved page. The source's three curated archives are Collections at the existing canonical
+`/collections/{slug}` (`al-hidayah`, `mawlid-conferences`, `itikaf-during-ramadhan`) — no
+legacy category route exists. `/explore/leadership` lists the published leadership profiles, each
 canonical at `/people/{slug}`, and links the Shaykh-ul-Islam biography. No new path is created.
 
 ### 3.3 Quran

@@ -531,7 +531,9 @@ pre-adoption staging only: after the macro, on 2026-10-30, **497** ordinary migr
 public there — 147 news items, 45 articles, 30 press releases, 3 Explore pages, 102 books, 2
 magazines with 72 issues, 63 videos, 3 leadership profiles and 30 countries of presence
 (MIGRATION_STRATEGY.md §15.1); after the Phase 30-RF gap closure, on 2026-10-31, **501** — four
-more Explore pages (MIGRATION_STRATEGY.md §16.1). **F** is untouched.
+more Explore pages (MIGRATION_STRATEGY.md §16.1); after Phase 30-RD, on 2026-11-02, **617** — the
+introduction page, the 112 posts three curated archives hold and those three archives as
+Collections (§3.8; MIGRATION_STRATEGY.md §17.1). **F** is untouched.
 
 ### 3.7 Pre-adoption review completeness — owner decision (Phase 30-R)
 **Owner:** Owner (pre-adoption) · **Recorded:** 2026-10-29 · **Status:** decided for pre-adoption
@@ -565,9 +567,10 @@ pages and profiles migrated for review, its brand pack (§6.4), its per-asset li
 production (§2.4), any religious acceptance (§1), production promotion and cutover (§3.4), and
 official adoption.
 
-### 3.8 Two findings of the final Stage-1A gap closure that need a decision (Phase 30-RF)
-**Owner:** Owner (pre-adoption), then Minhaj · **Gates:** nothing delivered; each decides whether
-one more review-build capability is built · **Recorded:** 2026-10-31
+### 3.8 Two findings of the final Stage-1A gap closure (Phase 30-RF), decided (Phase 30-RD)
+**Owner:** Owner (pre-adoption), then Minhaj · **Gates:** nothing delivered; each decided whether
+one more review-build capability is built · **Recorded:** 2026-10-31 · **Status:** both **decided
+for pre-adoption staging and implemented** (Phase 30-RD, below); Minhaj's acceptance stays open
 
 The final gap-closure macro (MIGRATION_STRATEGY.md §16) closed every ordinary engineering gap it
 found. Two findings are not ordinary engineering — each needs a decision the accepted model does
@@ -591,6 +594,28 @@ not make — so neither was built, and neither is a source limitation:
   migrated first, and lifting the accepted Phase-30-R boundary that a migrated Editorial record
   names no Collection member. **Until decided:** `/collections` holds only curator-made
   Collections; the archives stay on the source.
+
+**Decided — Phase 30-RD (owner, 2026-10-31), for the pre-adoption review build on staging only.**
+
+- **A narrow, audited false-positive clearance: YES.** Only for a detector match that is genuinely a
+  public organisational fact or contact — never a private person's details, never a blanket
+  "ignore personal data", never by changing the detector, editing a flag, rewriting a staged
+  payload or by SQL. Implemented as each distinct match recorded as evidence (never its text), a
+  person's per-finding classification with a reason under the externally gated
+  `migration.clearPersonalData` and its own `migration-personal-data` step-up, a replay of the
+  RETAINED snapshot into a new `cleared` revision only when every finding is cleared, and approval
+  by a different person — each rule held by the database as well (MIGRATION_STRATEGY.md §8.3, §17;
+  SECURITY_BASELINE.md §3.5, §10.9). Who holds the key in production is Minhaj's to name, like
+  `migration.publish` (§3.5).
+- **The source's curated archives as Editorial Collections: YES** — only genuine editor-curated
+  archives that fit Phase 15's Collection exactly, every member an allowed, already-public typed
+  record: the three named above, by `lkcatid`, never every category; members migrated first as a
+  bounded dependency, resolved only through active legacy mappings, source order kept
+  (MIGRATION_STRATEGY.md §17; DOMAIN_MODEL.md §16.8).
+
+**Not decided by this record, and still open:** Minhaj's acceptance of the Collections and of the
+introduction page's contents, any production holder of `migration.clearPersonalData`, every
+religious acceptance (§1), production promotion and cutover (§3.4), and official adoption.
 
 ---
 
@@ -1057,7 +1082,7 @@ gates. A decision may gate more than one thing.
 | 3.5 | Staging migration publication authority (`migration.publish` holder) | **C/D** | Content acceptance | **30 exit** | Migrated content is staged and reviewed but not published in staging; nobody holds the grant |
 | 3.6 | Phase-30 gates by timing | — | (classification of 3.1–3.5, 1.1–1.6, 2.4) | 30 | — |
 | 3.7 | Pre-adoption review completeness (owner decision, Phase 30-R) | — | Owner, pre-adoption staging only | 30 (Stage 1A) | Decided for staging; Minhaj acceptance, brand pack and production licensing stay open |
-| 3.8 | Personal-data flag clearance; Collections from curated archives (Phase 30-RF findings) | **C** | Owner decision, then implementation | 30 (Stage 1A/1B) | The introduction page stays reserved; the source's curated archives are not migrated as Collections |
+| 3.8 | Personal-data flag clearance; Collections from curated archives (Phase 30-RF findings) | **C** | Owner decision, then implementation | 30 (Stage 1A/1B) | **Decided for pre-adoption staging and implemented (Phase 30-RD).** Minhaj's acceptance and any production holder of `migration.clearPersonalData` stay open |
 | 4.1 | **Staging/production** SQL Server infrastructure and ownership | **E** | Implementation (28, 34) · launch | **28, 34** | **Staging rows resolved for pre-adoption staging (Phase 28).** Production remains blocked until decided (34). **Phase 1 proceeds on local Developer edition** |
 | 4.2 | Staging environment | **E** | Implementation | 28 | **Resolved for pre-adoption staging (Phase 28)** — `minhaj.haseebliaqat.me`; re-provisioned on adopter-owned infrastructure at handover |
 | 4.3 | Production hosting | **E** | Launch | 34 | Deployment blocked |

@@ -503,6 +503,12 @@ validation and scanning before publication.
   indefinite personal data store; retention is bounded and disposal is deliberate.
 - Migration operators work under a distinct, auditable role.
 - Pages exposing apparently private data are **excluded and reported to Minhaj**.
+- **A false positive may be cleared by a person, and only a false positive** (Phase 30-RD, §17;
+  SECURITY_BASELINE.md §10.9). Each distinct match is recorded as evidence (never its text); a holder
+  of the externally gated `migration.clearPersonalData`, after its own step-up, classifies each one,
+  with a reason; only when every match is a public organisational contact or identifier does a
+  replay of the retained snapshot produce a NEW `cleared` revision of the same bytes, approved by a
+  different person. Private or unresolved matches keep the record held, exactly as before.
 
 ### 8.4 Publication authority
 
@@ -1076,7 +1082,7 @@ and an organisational mailbox in its body: a person classified every match as a 
 organisational office contact (class B). But a flagged revision cannot be approved (§8.3: flagged
 material is excluded by default), and its staged text already reads `[redacted]` where each match
 was; clearing a flag is a new privacy control the accepted model does not have. No prose was
-rewritten to pass.
+rewritten to pass. (Historical: decided and delivered in Phase 30-RD — the page is published, §17.)
 
 **Still WebP for magazine covers.** Storage admits a still WebP for a policy that names
 `image/webp` — container-level validation and metadata removal without decoding a pixel; animation,
@@ -1097,7 +1103,7 @@ robots honoured).** Each area kept YELLOW only with its evidence:
 | --- | --- | --- | --- | --- |
 | Learning | `equranclass.com` course pages (the eLearning catalogue minhaj.org links) | title, description, levels with class length and plan durations | a Course publishes only with a complete module-and-lesson syllabus; no migration kind exists | **YELLOW** — no syllabus is published; none is invented |
 | Events | minhaj.org Top-Events and its 14 themed archives | dated news coverage of conferences, retreats and gatherings | an Event's identity with a schedule (start, end, time zone) and venue or online truth | **YELLOW** — coverage is news, not an Event |
-| Collections | minhaj.org `lkcatid` archives | genuine curated archives (Al-Hidayah 20 posts; Mawlid Conferences 43 in four sections; Itikaf 51 in two) | a new publishable kind with a typed target, member posts migrated first, and the Phase-30-R boundary on members lifted | **YELLOW — needs a decision** (OPEN_DECISIONS.md §3.8), not a source limitation |
+| Collections | minhaj.org `lkcatid` archives | genuine curated archives (Al-Hidayah 20 posts; Mawlid Conferences 43 in four sections; Itikaf 51 in two) | a new publishable kind with a typed target, member posts migrated first, and the Phase-30-R boundary on members lifted | **YELLOW — needs a decision** (OPEN_DECISIONS.md §3.8), not a source limitation (historical: decided and delivered in Phase 30-RD, §17) |
 | Audio | minhaj.tv audio pages | SoundCloud embeds only — no first-party audio bytes, no `<audio>` | stored first-party audio with its rights | **YELLOW** — third-party audio is never downloaded |
 | Galleries / Photos | minhaj.org navigation and pages | no gallery or photo section; a post's pictures are its lead image | a gallery identity, ordered photos, captions, credits and rights | **YELLOW** — no gallery is manufactured from lead images |
 | Centres | minhajoverseas.com country pages; minhaj.org contact page | countries of presence and prose about centres; departments' contacts | a current directory of named centres with an address, privacy-permitted contacts | **YELLOW** — no directory; no centre inferred from news, no coordinates guessed |
@@ -1144,3 +1150,124 @@ platform's own publication day as its "Published" date, so the 2009 founder's pr
 (DOMAIN_MODEL.md §7.2.1); re-checked on the redeployed release `0b3cea0`. The edge still refuses a
 request without its credential (401, including the realtime path), redirects HTTP to HTTPS, serves
 `robots.txt` disallowing everything and marks every response `noindex`.
+
+## 17. As delivered (Phase 30-RD) — owner decisions: personal-data clearance, curated archives
+
+> **An operational continuation inside Phase 30 Stage 1A, not a new phase and not Stage 1B.**
+> "30-RD" is a working checkpoint label. It implements the two owner decisions of
+> OPEN_DECISIONS.md §3.8 for the pre-adoption review build. One schema migration,
+> `20261031000000_phase30rd_owner_decisions`: the count becomes **31**.
+
+**Clearing a personal-data false positive (§8.3; SECURITY_BASELINE.md §10.9).** The detector is
+unchanged and still the default. What is new:
+
+- **Findings.** A run that stages a flagged revision records each DISTINCT match once — type,
+  a SHA-256 over the input checksum, the type and the matched text (never the text itself), and the
+  already-redacted words around it — as one complete set (`MigrationPersonalDataFinding`). A
+  flagged revision staged before findings existed is re-staged ONCE by the next replay so its
+  findings are recorded; otherwise an undecided revision of unchanged bytes stays unchanged.
+- **Classification.** On the staged record's page, a holder of the externally gated
+  `migration.clearPersonalData`, after a `migration-personal-data` step-up, classifies each finding
+  — `public-organisational-contact`, `public-organisational-identifier`, `personal-or-private` or
+  `unresolved` — with a reason, one at a time, at the version shown. The exact text is read in the
+  audited raw-evidence preview; the audit row carries no text, context or reason.
+- **The cleared replay.** When every finding of the CURRENT flagged revision is cleared, the next
+  replay of the retained snapshot re-reads the same bytes with the same normaliser, leaving exactly
+  the cleared texts as written — and only if this read finds exactly those findings. The result is
+  a new revision, `personalData = cleared`, naming the flagged one, which is kept unchanged. Any
+  private or unresolved match keeps the record held; changed bytes are flagged afresh.
+- **Two people, then Editorial's workflow.** A cleared revision is approved only by someone who
+  cleared none of its findings; a manifest carries it like any approved revision, and Editorial
+  needs a different person again to approve and publish it.
+
+**Curated archives as Editorial Collections (DOMAIN_MODEL.md §7.3.1, §16.8).** One more
+publishable kind, `editorial.collection`, with the typed target `collectionId`:
+
+- **Two bounded sources, both committed in the catalogue.** `minhaj-org-collections-en` reads
+  exactly the three owner-approved archives by `lkcatid` — Al-Hidayah (12), Mawlid Conferences (1)
+  and Itikaf during Ramadhan (2) — never every category: the title, the page's own meta
+  description less the template's "by Minhaj-ul-Quran International." tail, and every post card of
+  the main column's archive list in document order, each with the section (`h3`) and group (`h4`)
+  heading above it. A card linking anywhere but a `tid` post of the site in the archive's language,
+  a paginated archive or an empty one fails the parse: an archive is migrated exactly or not at
+  all. `minhaj-org-archive-news-en` migrates the posts those archives hold, from a fixed reviewed
+  list of **114** `tid`s (20 + 43 + 51, Itikaf's one repeat kept once) as `editorial.news` — the
+  site files them under regional news categories, which each keeps from its own address; the
+  English listing sources reserve those `tid`s so one legacy address never maps to two records.
+- **Normalisation.** Members by the canonical form of their legacy address, in source order; a
+  repeat kept once at its first place and counted (`repeatedMembers`); a non-`https` member or an
+  empty archive holds the record; at most 100 members (Editorial's bound). The slug is the title's,
+  never the numeric category.
+- **Members first, then the Collection.** The Collection target resolves every member's legacy URL
+  through an ACTIVE legacy mapping only, to the exact typed record migration published — never a
+  title match. A member without one (`member-unmapped`) or of a type a Collection may not hold
+  (`member-kind-refused`: only Article, the four News families, Work and Video) refuses the whole
+  archive. Editorial then asks each member's owner — Editorial, Library, Media — whether it is
+  public now, through the same public reads the public pages use, strictly: the rule a curator's
+  Collection meets. The Collection is created and submitted through Editorial's own workflow; a
+  different person approves and publishes it. Its standfirst is the source's description; its
+  introduction is left empty rather than written. Refresh revises it through the same workflow in
+  the source's current order; rollback archives it.
+- **Two entries no record can be made of — named, never silently dropped (owner decision
+  2026-11-02).** The member run found one Al-Hidayah entry ("European al-Hidayah Camp 2017:
+  Highlights", tid 41122) that is only pictures and social-media embeds, with no text an Editorial
+  record can carry (rejected `body-missing`), and one Mawlid entry (tid 3484) the source no longer
+  serves (its address redirects to the site's home page; excluded). The committed catalogue records
+  exactly these two with their reasons (`MINHAJ_ORG_ARCHIVE_EXCLUSIONS`); the Collection adapter
+  carries them as `excluded`, and the staged payload names them in `excludedMembers` for the
+  person who approves the Collection. Every other entry still resolves exactly or refuses the
+  archive, so Al-Hidayah is published with 19 of its 20 entries and Mawlid Conferences with 42 of
+  43; Itikaf (51 entries, its one repeat kept once) is exact.
+
+### 17.1 On staging (2026-10-31 – 2026-11-02)
+
+Run from exact CI-green releases: `c5d0dbb` (branch CI 41226330077, 5/5 on its second attempt —
+the first lost only the browser job's global teardown to a SQL timeout, all 509 browser tests
+having passed; migrate-and-deploy 41229333489, a backup set `20261031T183715Z` taken before the
+schema moved to **31** migrations) for the clearance and the member posts, and `576e5b3` (branch CI
+41480782196, 5/5 first attempt; deploy 41484695429), which adds the two recorded exclusions, for
+the Collections.
+
+- **The clearance.** A second administrator created the custom role `staging-personal-data-clearer`
+  (`migration.clearPersonalData`, `migration.read`) and granted it to the first under
+  `permissions.grant` — never a self-grant. A replay of `minhaj-org-pages-en` re-staged the
+  introduction page once to record its findings (seven pages unchanged): **six**, five phone-like
+  runs and one email — the Central Secretariat's office, UAN and fax numbers and the head office's
+  telephone, fax and mailbox, all printed under "Our Contact" and the organisation's address. The
+  first administrator, after the `migration-personal-data` step-up, classified each one
+  `public-organisational-contact` with a reason (six audited decisions, no text in the audit). The
+  next replay produced the `cleared` revision of the same input checksum with no `[redacted]` left;
+  the flagged revisions are unchanged. The second administrator approved it (the database would
+  have refused the first); the first published its manifest, and the second approved and published
+  the Page in Editorial: **all eight bound Explore pages are now published**. The six findings were
+  recorded by a release whose context folding dropped every letter "s" from the surrounding words;
+  findings are immutable evidence, so they keep that context — the exact text was read in the
+  audited raw preview — and the fold is fixed for every later finding.
+- **Members first.** `minhaj-org-archive-news-en` fetched the 114 catalogued posts (balanced): 112
+  staged valid, **none flagged**, one rejected (tid 41122, no text) and one excluded (tid 3484, gone
+  from the source) — the two the catalogue now records. 107 lead images were acquired, each with a
+  public copy, and decided public by a person; the 112 were approved, published by five manifests
+  into Editorial review and approved and published there by the second administrator.
+- **The Collections.** `minhaj-org-collections-en` read the three archives (balanced, nothing
+  flagged): **Al-Hidayah 19** members (one excluded), **Mawlid Conferences 42** (one excluded),
+  **Itikaf during Ramadhan 51** (its one repeat kept once). Every member resolved through an active
+  mapping to a published news record; one manifest published all three into Editorial review, and
+  the second administrator approved and published each.
+
+**Totals after 30-RD:** **617 ordinary public records** — 259 news items (147 + 112), 45 articles, 30
+press releases, 8 organisational pages, **3 Collections**, 102 books, 2 magazines, 72 issues, 63
+videos, 3 leadership profiles, 30 countries; **617 active legacy mappings** with **0** chains, **0**
+addresses mapped twice and **0** made by a refresh; **577** first-party pictures, each decided public
+by a person; 28 runs since Phase 30-R began, every one balanced. Fatwa (24) and Quran (6) revisions
+stay review-only with **0** manifest entries. A backup set `20261102T171008Z` (SQL 162 MB, 1,113
+Storage files) passed an isolated restore proof from Blob — 31 migrations, constraints trusted,
+runtime least privilege, 1,113 of 1,113 assets verified, the restored database dropped and the live
+one untouched.
+
+**Final review on staging.** 26 routes — home, Explore and all eight bound pages (the introduction
+among them), the Collections listing and its three Collections, News, articles, books, magazines,
+videos, leadership, countries, Learn, Quran, Hadith, Fatwa and search — in en, ur and ar at 390, 768
+and 1440 px: **234 loads**, each answering 200 in its locale's direction with one main heading, no
+horizontal overflow, no broken or alt-less image, no `[redacted]` placeholder anywhere and **no
+request to any other host**. Each Collection page links every member to its own canonical address
+(19, 42 and 51 links) in every locale and width.
