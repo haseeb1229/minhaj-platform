@@ -16,7 +16,8 @@ macro — first-party visuals, original source dates, organisational pages, lead
 countries of presence (§4, Phase 30; MIGRATION_STRATEGY.md §15) — and finished by the Phase 30-RF
 gap closure (MIGRATION_STRATEGY.md §16; 501 ordinary records, Stage 1A complete), then extended by
 the Phase 30-RD owner decisions — a person's audited clearance of personal-data false positives and
-the source's curated archives as Collections (MIGRATION_STRATEGY.md §17; 617 ordinary records);
+the source's curated archives as Collections (MIGRATION_STRATEGY.md §17; 617 ordinary records),
+and corrected by the Phase 30-RV defect-only owner review (MIGRATION_STRATEGY.md §18);
 Stage 1B, the full initial corpus, follows Minhaj's review and go-ahead. Phase 31 has not started.
 
 ---
@@ -2570,7 +2571,8 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > mappings with no chain or duplicate, 577 pictures, Fatwa and Quran still review-only; backup
 > `20261102T171008Z` restore-proven. Clearance and members ran on `c5d0dbb` (CI 41226330077,
 > migrate-and-deploy 41229333489), the Collections on `576e5b3` (CI 41480782196, deploy
-> 41484695429); the release carrying this record is the one staging and `main` both run.
+> 41484695429); the release carrying this record was the one staging and `main` both ran at
+> Phase 30-RD exit.
 > **Phase 30-RD is complete.** Stage 1B, Phase 31, Phase 32 and production cutover have **not**
 > started, no official adoption is claimed, and religious acceptance stays separate and open.
 
@@ -2582,8 +2584,13 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > prose is not its opening paragraph; a Page's search result states no year, as the Page states no
 > date; and a description under a left-to-right label takes its direction from its own text
 > (`NORMALIZER_VERSION` 30.3). Issue and book order (slug order — a model decision) and the bare
-> titles of private pages are recorded, not changed. The owner's verdict on the staging build is
-> pending.
+> titles of private pages are recorded, not changed. Staging result (2026-11-03,
+> MIGRATION_STRATEGY.md §18.1): the fixes ran on `8d5d49a` (CI 41605219941, deploy 41608188495) —
+> five revisions refreshed and published (peace, mobile apps, UN recognition, the biography page
+> and one leadership profile), no lead image changed, totals unchanged at 617, search rebuilt, and
+> the final review — 41 routes, three locales, three widths, 369 loads, no request to another host —
+> passed. The owner's verdict on the staging build is pending; Stage 1B, Phase 31, Phase 32 and
+> production cutover have **not** started.
 
 ---
 

@@ -1321,3 +1321,28 @@ replayed keep their published revision until their source is next run.
 - Source artefacts kept as written: an orphan closing heading on one 2025 post, `<br>`-ended list
   items on the introduction, a leadership name that carries its role in parentheses (the profile
   title as written).
+
+### 18.1 On staging (2026-11-03)
+
+The defect fixes ran on release `8d5d49a` (branch CI 41605219941, deploy 41608188495). An earlier
+replay on `c8ba0a7` showed the first form of the image rule removing a real lead image — the UN
+recognition page's photograph links to the UN press release — so none of that replay was
+approved; the rule was corrected as above and the parsers moved to new versions.
+
+- **Replays** of `minhaj-org-pages-en` (8) and `minhaj-org-people-en` (3) from retained evidence,
+  both balanced. Five revisions differ from the published ones, each only by a fix: the peace page
+  (86 footnote markers kept as words, no self-link), the mobile-apps page (8 app links), the UN
+  recognition page (its photograph kept, the press-release link added), the biography page (a
+  book-category banner's link kept as words) and the Hassan Mohi-ud-Din Qadri profile (the opening
+  heading dropped). No lead image or portrait changed. They were approved, published by two refresh
+  manifests, and the four pages approved and published in Editorial by the second administrator.
+  The five identical revisions were rejected as identical; the introduction's replay matched its
+  earlier flagged revisions exactly and was rejected, so its published, cleared revision stands
+  (its replays recorded 12 findings on revisions that are not published).
+- **Search** was rebuilt; a Page result states no year, an Article result still does.
+- **Totals unchanged:** 617 ordinary public records, 617 active mappings (0 chains, 0 duplicates,
+  0 made by a refresh), 577 pictures, 32 runs since Phase 30-R began, every one balanced; Fatwa (24)
+  and Quran (6) still review-only with 0 manifest entries; 31 migrations.
+- **Final review:** 41 routes in en, ur and ar at 390, 768 and 1440 px — **369 loads**, each 200
+  in its locale's direction with one main heading, no horizontal overflow, no broken or alt-less
+  image, no `[redacted]` placeholder and no request to any other host.
