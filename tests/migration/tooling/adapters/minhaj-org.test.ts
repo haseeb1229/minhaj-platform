@@ -682,7 +682,7 @@ describe('parsing with Cheerio', () => {
     expect(chrome.record.leadImage).toBeNull();
   });
 
-  it('keeps an image that labels a link in the body, never as the lead picture (Phase 30-RV)', () => {
+  it('keeps a first picture that labels a link as the lead picture AND in the body (Phase 30-RV)', () => {
     const appLink =
       '<div class="widget"><a href="https://get.app.example/" target="_blank"><div><br><img src="https://minhaj.net/images-db10/2026/synthetic-app.png" alt="Synthetic App"></a></div></div>';
     const result = adapter().parse(
@@ -695,13 +695,14 @@ describe('parsing with Cheerio', () => {
     );
     if (result.kind !== 'parsed' || result.record.kind !== 'editorial.news')
       throw new Error('expected a record');
+    // Its picture is the post's picture; the link it labels keeps it, so its
+    // words are not lost with it.
     expect(result.record.leadImage).toEqual({
-      url: 'https://minhaj.net/images-db10/2026/synthetic-1.jpg',
-      alt: 'Synthetic picture',
+      url: 'https://minhaj.net/images-db10/2026/synthetic-app.png',
+      alt: 'Synthetic App',
       credit: null,
     });
     expect(result.record.bodyHtml).toContain(appLink);
-    expect(result.record.bodyHtml).not.toContain('synthetic-1.jpg');
 
     // An image inside a link to a picture is still the post's picture.
     const zoom = adapter().parse(
@@ -717,6 +718,8 @@ describe('parsing with Cheerio', () => {
     expect(zoom.record.leadImage?.url).toBe(
       'https://minhaj.net/images-db10/2026/synthetic-2.jpg',
     );
+    // ...and, labelling nothing, it leaves the body.
+    expect(zoom.record.bodyHtml).not.toContain('synthetic-2.jpg');
   });
 
   it('reads a press release with the same template', () => {

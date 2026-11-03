@@ -60,10 +60,10 @@ import {
  *              (`minhaj.net`, a registered asset host): the record's lead image
  *              — or a profile's portrait — with the picture's own `alt`, and
  *              its acquisition carrying the page's copyright notice as rights
- *              evidence. The picture stays out of the body. (Phase 30-RV) An
- *              image inside a link to anything but a picture is that link's
- *              label, never the post's picture: it stays in the body, where
- *              the sanitiser keeps its `alt` as the link's words.
+ *              evidence. The picture stays out of the body — unless (Phase
+ *              30-RV) it sits inside a link to anything but a picture: then it
+ *              is that link's label too, and it stays in the body, where the
+ *              sanitiser keeps its `alt` as the link's words.
  */
 
 export const MINHAJ_ORG_EDITORIAL_ADAPTER_KEY = 'minhaj-org-editorial';
@@ -224,7 +224,7 @@ function readPost(
   });
 
   // The post's first picture is its image when it is first-party; it leaves
-  // the body either way, which shows no picture.
+  // the body either way, which shows no picture — except as a link's label.
   const first = firstPicture($, content, evidence.finalUrl);
   if (first !== null && first.range !== null) excluded.push(first.range);
 
@@ -244,7 +244,11 @@ function readPost(
   };
 }
 
-/** The first `img` of the post body that is neither template chrome nor a link's label. */
+/**
+ * The first `img` of the post body that is not template chrome, and its source
+ * range to leave out of the body — none when the image labels a link to
+ * anything but a picture, whose words the body then keeps.
+ */
 function firstPicture(
   $: CheerioAPI,
   content: ReturnType<CheerioAPI>,
@@ -255,13 +259,11 @@ function firstPicture(
 } | null {
   const img = content
     .find('img')
-    .filter((_index, element) => {
-      if ($(element).closest(CHROME).length > 0) return false;
-      const href = $(element).closest('a').attr('href');
-      return href === undefined || isPictureAddress(href);
-    })
+    .filter((_index, element) => $(element).closest(CHROME).length === 0)
     .first();
   if (img.length !== 1) return null;
+  const href = img.closest('a').attr('href');
+  const labelsLink = href !== undefined && !isPictureAddress(href);
   return {
     found: firstPartyImage($, {
       src: img.attr('src'),
@@ -269,7 +271,7 @@ function firstPicture(
       pageUrl,
       hosts: IMAGE_HOSTS,
     }),
-    range: outerRange(img.get(0)),
+    range: labelsLink ? null : outerRange(img.get(0)),
   };
 }
 

@@ -1291,9 +1291,10 @@ read-only content pass) found five ordinary defects, each fixed at its cause:
 - **Image-only links lost their words.** The mobile-apps page links each app only through its
   icon; with the image not carried, each link was left empty and removed, leaving eight bare names.
   An image inside a link to anything but a picture is now that link's label: sanitisation keeps its
-  non-empty `alt` as the link's words (redacted like any other text), and the minhaj.org post
-  reader no longer takes such an image as the post's lead picture (`isPictureAddress`, the same
-  rule in both places). An image in a link to a picture is still a picture.
+  non-empty `alt` as the link's words (redacted like any other text). When such an image is a
+  minhaj.org post's first picture it is still the lead picture, but it no longer leaves the body
+  with it, so the link keeps its words (`isPictureAddress` decides "a link to a picture" in both
+  places). An image in a link to a picture is a picture only, as before.
 - **A profile's opening heading stood as its card summary.** A biography is plain text; a heading
   before any of its prose ("Current Status") is now dropped — the profile's own Biography heading
   titles that section — and every later heading stays.
