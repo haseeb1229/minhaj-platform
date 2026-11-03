@@ -566,7 +566,9 @@ legal and utility Page destinations are an allowlist, immutable after creation, 
 internal slug `page`. They cannot claim another context's route. A Page carries no source
 chronology, so its public page states no publication date — no dateline and no
 `datePublished`, only the true `dateModified` (Phase 30-RF): the day the platform published a
-migrated organisational page is not the date of its content.
+migrated organisational page is not the date of its content. Its search result states no year
+either (Phase 30-RV); before that, a Page's result read "Published" with the platform's
+publication year.
 
 The stored schedule binds UTC time, an IANA display zone, revision and scheduling actor.
 A single-instance executor processes at most 25 due records of each workflow-governed

@@ -18,6 +18,10 @@ import {
  * and scheme a browser would actually use, never by a string prefix.
  *
  *   - not http(s) after resolution, or carrying credentials → `dropped`;
+ *   - a reference into the record's own document (`#…`, or its own URL with
+ *     a fragment) → `dropped` (Phase 30-RV): the sanitiser keeps no `id`, so
+ *     the fragment never resolves and the link would only reload the page;
+ *     another page's URL with a fragment is unchanged;
  *   - a source host at its default port → internal: `rewritten` to the
  *     canonical path when an ACTIVE legacy mapping exists, else `unresolved`
  *     and kept as the legacy absolute URL — a target is never fabricated;
@@ -70,6 +74,11 @@ export function classifyLink(href: string, scope: LinkScope): ClassifiedLink {
   if (url.username !== '' || url.password !== '') return { kind: 'dropped', href };
   const resolved = url.href;
   if (resolved.length > MIGRATION_LIMITS.url) return { kind: 'dropped', href };
+  if (
+    (href.trim().startsWith('#') || url.hash !== '') &&
+    canonicalSourceUrl(url) === canonicalSourceUrl(new URL(scope.baseUrl))
+  )
+    return { kind: 'dropped', href };
   const host = url.hostname.toLowerCase();
   if (scope.hosts.includes(host) && url.port === '') {
     const canonical = canonicalSourceUrl(url);

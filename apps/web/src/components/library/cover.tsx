@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 
 import type { LibraryCover } from '@minhaj/contracts/library';
 
+import { descriptionDirection } from '@/config/locale';
+
 /**
  * Library covers (Phase 30-R) — an Edition's or a magazine issue's own image.
  *
@@ -104,6 +106,7 @@ export function CoverCard({
           <p
             className="line-clamp-4 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
             {...content}
+            {...(dir === undefined ? {} : { dir: descriptionDirection(dir) })}
           >
             {description}
           </p>

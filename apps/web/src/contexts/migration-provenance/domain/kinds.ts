@@ -653,9 +653,17 @@ function collection(input: Ready, record: ParsedCollection): Normalisation {
  * The biography: WHOLE source paragraphs, in order, while they fit People's
  * bound — never a paragraph cut, never a sentence summarised. What does not fit
  * stays on the source page the profile was read from.
+ *
+ * A biography is plain text, so a heading becomes a paragraph of it. A heading
+ * BEFORE any of its prose ("Current Status") titles only the opening section,
+ * which the profile's own Biography heading already titles; left in, it would
+ * open the text and stand as the card's excerpt (Phase 30-RV). Every later
+ * heading stays.
  */
 function biographyOf(words: Words, html: string): string {
-  const paragraphs = blocksText(words.blocks(html))
+  const blocks = words.blocks(html);
+  const opening = blocks.findIndex((block) => block.type !== 'heading');
+  const paragraphs = blocksText(opening === -1 ? [] : blocks.slice(opening))
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
     .filter((paragraph) => paragraph.length > 0);

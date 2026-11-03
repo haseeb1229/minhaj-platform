@@ -289,3 +289,14 @@ export function canonicalSourceUrl(url: URL): string {
   for (const [key, value] of params) copy.searchParams.append(key, value);
   return copy.toString();
 }
+
+/**
+ * Phase 30-RV. Does an address, as written, name a picture — its path (the
+ * query and fragment are not) ending in a picture's extension? An image inside
+ * a link to one is the picture itself, not a label for somewhere else.
+ */
+export function isPictureAddress(href: string): boolean {
+  return /\.(?:jpe?g|png|gif|webp|bmp|svg)$/i.test(
+    href.trim().replace(/[?#][\s\S]*$/, ''),
+  );
+}

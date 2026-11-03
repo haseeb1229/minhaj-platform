@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createHash } from 'node:crypto';
 
+import { isPictureAddress } from '@minhaj/contracts/migration';
 import sanitizeHtml from 'sanitize-html';
 
 /**
@@ -17,7 +18,7 @@ import sanitizeHtml from 'sanitize-html';
  */
 
 /** Recorded on every run and staged revision; bump when any output below changes. */
-export const NORMALIZER_VERSION = '30.2';
+export const NORMALIZER_VERSION = '30.3';
 
 const sha256Hex = (value: string): string =>
   createHash('sha256').update(value, 'utf8').digest('hex');
@@ -127,12 +128,36 @@ function anchorTransform(rewrite: HrefRewrite): sanitizeHtml.Transformer {
   };
 }
 
+/**
+ * Phase 30-RV. Where an image-only link's words are written during one pass.
+ * An `img` is void, so the element closes at once and the sanitiser goes on
+ * emitting the text after it (a discarded tag given text would swallow that
+ * text); the output is then unwrapped. A source element of this name loses
+ * only its tags — exactly what discarding it would do.
+ */
+const IMAGE_WORDS_TAG = 'migration-image-words';
+
 /** Headings outside the h2–h4 range are re-levelled, never dropped with their words. */
 const HEADING_TRANSFORMS = Object.freeze({ h1: 'h2', h5: 'h4', h6: 'h4' });
 
 /** Without a link scope, an href survives only if it is already safe to store. */
 const keepSafeHref: HrefRewrite = (href) =>
   isSafeStoredHref(href.trim()) ? href.trim() : null;
+
+const ALLOWED_TAGS = Object.freeze([
+  'p',
+  'br',
+  'strong',
+  'em',
+  'ul',
+  'ol',
+  'li',
+  'blockquote',
+  'a',
+  'h2',
+  'h3',
+  'h4',
+] as const);
 
 /**
  * THE ALLOWLIST, exactly. Paragraph, heading and list structure, quotation,
@@ -144,20 +169,7 @@ const keepSafeHref: HrefRewrite = (href) =>
  * transform lets through, so a mistake in one layer is caught by the other.
  */
 export const MIGRATION_SANITIZE_OPTIONS: sanitizeHtml.IOptions = Object.freeze({
-  allowedTags: [
-    'p',
-    'br',
-    'strong',
-    'em',
-    'ul',
-    'ol',
-    'li',
-    'blockquote',
-    'a',
-    'h2',
-    'h3',
-    'h4',
-  ],
+  allowedTags: [...ALLOWED_TAGS],
   allowedAttributes: { a: ['href', 'rel'] },
   allowedSchemes: ['http', 'https'],
   allowedSchemesByTag: {},
@@ -180,6 +192,11 @@ export const MIGRATION_SANITIZE_OPTIONS: sanitizeHtml.IOptions = Object.freeze({
  * Sanitises untrusted legacy markup. `rewrite` decides each anchor's href
  * (link rewriting, §4.5); `redact` replaces incidental personal data in every
  * text node. The input is first normalised as text (control characters).
+ *
+ * Phase 30-RV. An image inside a link to anything but a picture is that
+ * link's label: its non-empty `alt` stays, as text, where the image stood, so
+ * an image-only link keeps its words (redacted like any other text). Any other
+ * image contributes nothing.
  */
 export function sanitizeFragment(
   html: string,
@@ -196,16 +213,35 @@ export function sanitizeFragment(
       : options.redact instanceof PersonalDataScanner
         ? options.redact
         : null;
+  // The source href of every open anchor, innermost last (`undefined`: none).
+  const anchors: (string | undefined)[] = [];
+  const imageTransform: sanitizeHtml.Transformer = (tag, attribs) => {
+    const href = anchors.at(-1);
+    const alt = (attribs['alt'] ?? '').trim();
+    return href !== undefined && !isPictureAddress(href) && alt.length > 0
+      ? { tagName: IMAGE_WORDS_TAG, attribs: {}, text: alt }
+      : { tagName: tag, attribs };
+  };
   return sanitizeHtml(normalizeText(html), {
     ...MIGRATION_SANITIZE_OPTIONS,
+    allowedTags: [...ALLOWED_TAGS, IMAGE_WORDS_TAG],
     transformTags: {
       ...HEADING_TRANSFORMS,
       b: 'strong',
       i: 'em',
       a: anchorTransform(rewrite),
+      img: imageTransform,
+    },
+    onOpenTag: (name, attribs) => {
+      if (name === 'a') anchors.push(attribs['href']);
+    },
+    onCloseTag: (name) => {
+      if (name === 'a') anchors.pop();
     },
     ...(scanner === null ? {} : { textFilter: (text: string) => scanner.redact(text) }),
-  });
+  })
+    .replaceAll(`<${IMAGE_WORDS_TAG}>`, '')
+    .replaceAll(`</${IMAGE_WORDS_TAG}>`, '');
 }
 
 /** Every anchor href in the markup, in document order, as the source wrote it. */

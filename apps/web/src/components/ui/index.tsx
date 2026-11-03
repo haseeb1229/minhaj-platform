@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { descriptionDirection } from '@/config/locale';
+
 /**
  * The Phase-2 component subset.
  *
@@ -465,6 +467,7 @@ export function LinkCard({
         <p
           className="line-clamp-3 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
           {...content}
+          {...(dir === undefined ? {} : { dir: descriptionDirection(dir) })}
         >
           {description}
         </p>

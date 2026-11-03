@@ -182,6 +182,82 @@ describe('stageLinks and rewriteHref', () => {
   });
 });
 
+describe('references into the record’s own document (Phase 30-RV)', () => {
+  // The record's own legacy URL is mapped: a self-reference used to be
+  // rewritten to the record's own path, and only reloaded it.
+  const own = new Map([
+    [
+      sha(canonicalSourceUrl(new URL(scope.baseUrl))),
+      { id: 'mapping-own', canonicalPath: '/watch/videos/lecture-7' },
+    ],
+  ]);
+
+  it('drops a fragment-only href, however it is written', () => {
+    for (const href of ['#_ftn1', '#_ftnref12', '#', ' #_ftn1']) {
+      expect(classifyLink(href, scope)).toEqual({ kind: 'dropped', href });
+      expect(rewriteHref(href, scope, own)).toBeNull();
+    }
+    expect(internalDigests(['#_ftn1'], scope)).toEqual([]);
+  });
+
+  it('drops the record’s own URL with a fragment, in any spelling of it', () => {
+    for (const href of [
+      'https://videos.fixture.invalid/videos/7?lang=en#_ftn1',
+      'HTTPS://Videos.Fixture.Invalid/videos/7?lang=en#_ftn1',
+      '/videos/7?lang=en#_ftnref1',
+      '7?lang=en#note',
+    ])
+      expect(classifyLink(href, scope).kind).toBe('dropped');
+  });
+
+  it('keeps a fragment link to any other page as it was', () => {
+    expect(classifyLink('/videos/3#_ftn1', scope)).toMatchObject({
+      kind: 'internal',
+      url: 'https://videos.fixture.invalid/videos/3',
+    });
+    expect(classifyLink('/videos/7?lang=ur#_ftn1', scope)).toMatchObject({
+      kind: 'internal',
+      url: 'https://videos.fixture.invalid/videos/7?lang=ur',
+    });
+    expect(classifyLink('https://example.org/page#part', scope)).toMatchObject({
+      kind: 'external',
+      url: 'https://example.org/page#part',
+    });
+  });
+
+  it('leaves a link to the record itself without a fragment unchanged', () => {
+    expect(classifyLink('/videos/7?lang=en', scope)).toMatchObject({
+      kind: 'internal',
+      url: 'https://videos.fixture.invalid/videos/7?lang=en',
+    });
+    expect(rewriteHref('/videos/7?lang=en', scope, own)).toBe('/watch/videos/lecture-7');
+  });
+
+  it('stages a footnote reference as dropped and keeps its words without a link', () => {
+    expect(stageLinks(['#_ftn1', '/videos/3#_ftn1'], scope, own)).toEqual([
+      {
+        position: 0,
+        href: '#_ftn1',
+        disposition: 'dropped',
+        rewrittenTo: null,
+        legacyMappingId: null,
+      },
+      {
+        position: 1,
+        href: 'https://videos.fixture.invalid/videos/3',
+        disposition: 'unresolved',
+        rewrittenTo: null,
+        legacyMappingId: null,
+      },
+    ]);
+    expect(
+      sanitizeFragment('<p>Peace<a href="#_ftn1">[1]</a></p>', {
+        rewrite: (href) => rewriteHref(href, scope, own),
+      }),
+    ).toBe('<p>Peace<a rel="noopener noreferrer">[1]</a></p>');
+  });
+});
+
 describe('legacyUrlDigest', () => {
   it('is the SHA-256 of the canonical URL, so query order does not matter', () => {
     expect(legacyUrlDigest('https://videos.fixture.invalid/videos/12?b=2&a=1')).toBe(

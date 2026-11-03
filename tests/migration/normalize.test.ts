@@ -179,6 +179,79 @@ describe('sanitizeFragment on hostile synthetic markup', () => {
   });
 });
 
+describe('images that label a link (Phase 30-RV)', () => {
+  const REL = 'rel="noopener noreferrer"';
+
+  it('keeps an image-only link’s words: the image’s alt, as text, where it stood', () => {
+    const html = sanitizeFragment(
+      '<a href="https://get.app.example/" target="_blank"><div><br><img src="https://minhaj.net/app.png" alt=" Synthetic App "></a>',
+    );
+    expect(html).toBe(
+      `<a href="https://get.app.example/" ${REL}><br />Synthetic App</a>`,
+    );
+    assertInert(html);
+    expect(
+      plainText('<p><a href="/apps/one"><img src="/one.png" alt="App One"></a></p>'),
+    ).toBe('App One');
+    expect(anchorHrefs('<a href="/apps/one"><img alt="App One"></a>')).toEqual([
+      '/apps/one',
+    ]);
+  });
+
+  it('goes on keeping the words after the image, inside and outside the link', () => {
+    expect(
+      sanitizeFragment('<p><a href="/p"><img alt="Icon"> Read <b>more</b></a> after</p>'),
+    ).toBe(`<p><a href="/p" ${REL}>Icon Read <strong>more</strong></a> after</p>`);
+    expect(sanitizeFragment('<a href="/p"><img alt="Icon"><span>words</span></a>x')).toBe(
+      `<a href="/p" ${REL}>Iconwords</a>x`,
+    );
+  });
+
+  it('contributes nothing for an image in a link to a picture, outside a link, or without alt', () => {
+    for (const href of [
+      'https://minhaj.net/large.jpg',
+      '/images/large.JPEG?size=2',
+      'large.png#zoom',
+      'https://x.example/a.gif',
+      'https://x.example/a.webp',
+      'https://x.example/a.bmp',
+      'https://x.example/a.svg',
+    ])
+      expect(sanitizeFragment(`<a href="${href}"><img alt="Zoom"></a>`)).not.toContain(
+        'Zoom',
+      );
+    expect(sanitizeFragment('<p><img src="/a.png" alt="Alone"></p>')).toBe('<p></p>');
+    expect(sanitizeFragment('<a href="/p">x</a><img alt="After">')).toBe(
+      `<a href="/p" ${REL}>x</a>`,
+    );
+    expect(sanitizeFragment('<a name="n"><img alt="Named"></a>')).toBe(`<a ${REL}></a>`);
+    for (const img of ['<img src="/a.png">', '<img alt="">', '<img alt="  ">'])
+      expect(sanitizeFragment(`<a href="/p">${img}</a>`)).toBe(
+        `<a href="/p" ${REL}></a>`,
+      );
+  });
+
+  it('writes the alt as escaped text, and redacts it like any other text', () => {
+    expect(sanitizeFragment('<a href="/p"><img alt="A &amp; <b>B</b>"></a>')).toBe(
+      `<a href="/p" ${REL}>A &amp; &lt;b&gt;B&lt;/b&gt;</a>`,
+    );
+    const contact =
+      '<a href="/contact"><img alt="Write to me@example.com or +92 300 1234567"></a>';
+    expect(sanitizeFragment(contact)).toContain('me@example.com');
+    expect(sanitizeFragment(contact, { redact: true })).toBe(
+      `<a href="/contact" ${REL}>Write to ${REDACTED} or ${REDACTED}</a>`,
+    );
+  });
+
+  it('leaves no trace of the element the words are written in', () => {
+    expect(
+      sanitizeFragment(
+        '<migration-image-words class="x" onclick="y">kept</migration-image-words>',
+      ),
+    ).toBe('kept');
+  });
+});
+
 describe('text normalisation', () => {
   it('removes C0 controls, keeps tab and newline, and converts CRLF', () => {
     expect(normalizeText('a\u0000b\u0007c\td\r\ne\rf\u001f')).toBe('abc\td\ne\nf');

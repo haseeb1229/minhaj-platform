@@ -182,6 +182,25 @@ describe('blocksFrom', () => {
   });
 });
 
+describe('image-only links (Phase 30-RV)', () => {
+  it('keeps each link with its image’s alt as its words', () => {
+    // The shape of a legacy app grid, malformed nesting included.
+    const app = (href: string, name: string) =>
+      `<div class="col"> <div class="widget"> <a href="${href}" target="_blank"> <div class="sitemap clearfix"> <div><br><img src="https://minhaj.net/images/${name}.png" alt="${name}" loading="lazy"></a></div> <div class="widget_title"><h3>${name}</h3></div> </div> </div> </div>`;
+    expect(
+      blocksFrom(
+        app('https://get.app-one.example', 'App One') +
+          app('https://store.example/apps?id=org.example.two', 'App Two'),
+      ),
+    ).toEqual([
+      para({ text: 'App One', href: 'https://get.app-one.example' }),
+      { type: 'heading', level: 3, content: [text('App One')] },
+      para({ text: 'App Two', href: 'https://store.example/apps?id=org.example.two' }),
+      { type: 'heading', level: 3, content: [text('App Two')] },
+    ]);
+  });
+});
+
 describe('blocksText', () => {
   it('reads blocks as a reader would: one paragraph per block or list item', () => {
     expect(

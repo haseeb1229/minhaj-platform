@@ -213,6 +213,9 @@ legacy URLs send visitors straight back to the sites being replaced.
    Unresolved links reveal content that was missed, deliberately excluded, or genuinely gone.
 4. **Never fabricate a target.** An unmapped link is left as-is and reported, never guessed.
 5. External links are preserved unchanged.
+6. **A reference into the record's own document is dropped** (Phase 30-RV, §18) — `#…`, or the
+   record's own URL with a fragment. Sanitisation keeps no `id`, so the fragment can never
+   resolve; the words stay and the link goes. Another page's URL with a fragment is unchanged.
 
 ### 4.6 Normalize
 
@@ -954,8 +957,9 @@ guessed.
   serves the bytes only through its own route.
 
 **Replay and refresh.** `migration:run --replay` re-reads the source's retained raw snapshots with
-the current parser and normaliser (`NORMALIZER_VERSION` 30.2) without fetching pages — the same
-bytes read by newer code are a new revision; only images not yet acquired are fetched. A manifest
+the current parser and normaliser (`NORMALIZER_VERSION` 30.3 since Phase 30-RV, §18; 30.2 before
+it) without fetching pages — the same bytes read by newer code are a new revision; only images not
+yet acquired are fetched. A manifest
 over such revisions is made of REFRESH entries for records already published: each is carried into
 the record its active legacy mapping names through the owning domain's own update (Editorial: an
 author's revision then submission, so the record is in review until a second person approves and
@@ -1271,3 +1275,48 @@ and 1440 px: **234 loads**, each answering 200 in its locale's direction with on
 horizontal overflow, no broken or alt-less image, no `[redacted]` placeholder anywhere and **no
 request to any other host**. Each Collection page links every member to its own canonical address
 (19, 42 and 51 links) in every locale and width.
+
+## 18. As delivered (Phase 30-RV) — owner staging review: defect-only closure
+
+> "30-RV" is a working checkpoint label: the defect-only closure of the owner's final staging
+> review, not a new phase and no new scope. No schema change.
+
+The final review of the deployed build (41 routes, en, ur and ar, 390, 768 and 1440 px, plus a
+read-only content pass) found five ordinary defects, each fixed at its cause:
+
+- **Footnote references reloaded the page** (§4.5 rule 6). Word-style footnotes (`#_ftn1`) were
+  resolved against the record's own URL and rewritten to its own canonical path: 86 "[n]" links on
+  the peace page pointed at the page itself. A reference into the record's own document is now
+  dropped — the words stay.
+- **Image-only links lost their words.** The mobile-apps page links each app only through its
+  icon; with the image not carried, each link was left empty and removed, leaving eight bare names.
+  An image inside a link to anything but a picture is now that link's label: sanitisation keeps its
+  non-empty `alt` as the link's words (redacted like any other text), and the minhaj.org post
+  reader no longer takes such an image as the post's lead picture (`isPictureAddress`, the same
+  rule in both places). An image in a link to a picture is still a picture.
+- **A profile's opening heading stood as its card summary.** A biography is plain text; a heading
+  before any of its prose ("Current Status") is now dropped — the profile's own Biography heading
+  titles that section — and every later heading stays.
+- **A Page's search result stated "Published" and the platform's publication year**, though the
+  Page itself states no date (DOMAIN_MODEL.md, Editorial). It states none now.
+- **A romanised title's Urdu description read left to right.** One Work label holds one locale for
+  title and description; 44 migrated books pair a Latin-script title with an Urdu description.
+  Under a left-to-right label a description now takes its direction from its own text; its `lang`
+  still names the label's locale.
+
+`NORMALIZER_VERSION` is **30.3**, and the four minhaj.org adapters that read posts have new parser
+versions, so a replay of their retained evidence restages every record they made; records not
+replayed keep their published revision until their source is next run.
+
+**Observed and not changed** (each needs a decision, not a defect fix):
+
+- **Magazine issues and books list in slug order.** No minhaj.info issue page states a date or
+  number, so an issue's month and year exist only in its title; and every migrated book's slug is
+  its legacy number (`book-120`). Ordering them chronologically or by title needs a
+  month-precision issue date or a Library ordering rule — a model decision.
+- **Private and sign-in pages carry the product name as their whole document title** (about 170
+  routes under `/admin`, `/my`, `/teacher` and the sign-in flow) — a consistent gap since those
+  areas were built, recorded for a later accessibility pass.
+- Source artefacts kept as written: an orphan closing heading on one 2025 post, `<br>`-ended list
+  items on the introduction, a leadership name that carries its role in parentheses (the profile
+  title as written).

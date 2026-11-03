@@ -26,7 +26,10 @@ import { editorialPlainText } from './rich-text.ts';
  *
  * THE YEAR IS THE RECORD'S CHRONOLOGY YEAR in UTC: the source's own
  * publication date where a dated record states one (Phase 30-R), else the
- * genuine publication instant — never a migration or approval time.
+ * genuine publication instant — never a migration or approval time. A PAGE
+ * HAS NONE: its page states no publication date (Phase 30-RF), because the
+ * only one it has is the day the platform published it, so its result does
+ * not state one either (Phase 30-RV).
  *
  * A NEWS RECORD'S OWN WORDS ONLY. A Statement's issuing authority and a
  * MediaCoverage record's outlet name are matched with its body because a
@@ -34,7 +37,8 @@ import { editorialPlainText } from './rich-text.ts';
  * nothing of the third party's article is ever projected — none is stored.
  */
 function documentsOf(kind: 'article' | 'page' | NewsKind, record: EditorialSearchRecord) {
-  const year = (record.chronologyAt ?? record.publishedAt).getUTCFullYear();
+  const year =
+    kind === 'page' ? null : (record.chronologyAt ?? record.publishedAt).getUTCFullYear();
   return record.translations.map((translation) => ({
     kind,
     resourceId: record.id,

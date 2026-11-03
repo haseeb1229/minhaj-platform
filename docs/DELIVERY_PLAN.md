@@ -2574,6 +2574,17 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > **Phase 30-RD is complete.** Stage 1B, Phase 31, Phase 32 and production cutover have **not**
 > started, no official adoption is claimed, and religious acceptance stays separate and open.
 
+> **Phase 30-RV — the owner's staging review, defect-only (a working checkpoint label, not a new
+> phase).** No schema change. Five ordinary defects found by the final review of the deployed build
+> are fixed at their cause (MIGRATION_STRATEGY.md §18): a reference into a record's own document
+> is dropped rather than rewritten to the page itself; an image-only link keeps its image's `alt`
+> as its words and is never taken as the lead picture; a heading before a biography's prose is not
+> its opening paragraph; a Page's search result states no year, as the Page states no date; and a
+> description under a left-to-right label takes its direction from its own text
+> (`NORMALIZER_VERSION` 30.3). Issue and book order (slug order — a model decision) and the bare
+> titles of private pages are recorded, not changed. The owner's verdict on the staging build is
+> pending.
+
 ---
 
 ### Phase 31 — Search Completeness Validation

@@ -1,14 +1,15 @@
-import type {
-  DiscoveredItem,
-  MigrationSourceAdapter,
-  ParseResult,
-  ParsedAsset,
-  ParsedCollection,
-  ParsedEditorial,
-  ParsedImage,
-  ParsedPage,
-  ParsedPerson,
-  StagedEditorialKind,
+import {
+  isPictureAddress,
+  type DiscoveredItem,
+  type MigrationSourceAdapter,
+  type ParseResult,
+  type ParsedAsset,
+  type ParsedCollection,
+  type ParsedEditorial,
+  type ParsedImage,
+  type ParsedPage,
+  type ParsedPerson,
+  type StagedEditorialKind,
 } from '@minhaj/contracts/migration';
 import type { CheerioAPI } from 'cheerio';
 
@@ -59,7 +60,10 @@ import {
  *              (`minhaj.net`, a registered asset host): the record's lead image
  *              — or a profile's portrait — with the picture's own `alt`, and
  *              its acquisition carrying the page's copyright notice as rights
- *              evidence. The picture stays out of the body.
+ *              evidence. The picture stays out of the body. (Phase 30-RV) An
+ *              image inside a link to anything but a picture is that link's
+ *              label, never the post's picture: it stays in the body, where
+ *              the sanitiser keeps its `alt` as the link's words.
  */
 
 export const MINHAJ_ORG_EDITORIAL_ADAPTER_KEY = 'minhaj-org-editorial';
@@ -240,7 +244,7 @@ function readPost(
   };
 }
 
-/** The first `img` of the post body that is not template chrome. */
+/** The first `img` of the post body that is neither template chrome nor a link's label. */
 function firstPicture(
   $: CheerioAPI,
   content: ReturnType<CheerioAPI>,
@@ -251,7 +255,11 @@ function firstPicture(
 } | null {
   const img = content
     .find('img')
-    .filter((_index, element) => $(element).closest(CHROME).length === 0)
+    .filter((_index, element) => {
+      if ($(element).closest(CHROME).length > 0) return false;
+      const href = $(element).closest('a').attr('href');
+      return href === undefined || isPictureAddress(href);
+    })
     .first();
   if (img.length !== 1) return null;
   return {
@@ -346,7 +354,7 @@ export function createMinhajOrgEditorialAdapter(
     adapterKey: MINHAJ_ORG_EDITORIAL_ADAPTER_KEY,
     adapterVersion: '4',
     parserKey: 'cheerio-minhaj-org-editorial',
-    parserVersion: '3',
+    parserVersion: '4',
     contentKind: kind,
     accessMethod: 'http',
     discover,
@@ -426,7 +434,7 @@ export function createMinhajOrgPageAdapter(
     adapterKey: MINHAJ_ORG_PAGE_ADAPTER_KEY,
     adapterVersion: '1',
     parserKey: 'cheerio-minhaj-org-page',
-    parserVersion: '2',
+    parserVersion: '3',
     contentKind: 'editorial.page',
     accessMethod: 'http',
     discover: fixedItemDiscovery(
@@ -495,7 +503,7 @@ export function createMinhajOrgPersonAdapter(
     adapterKey: MINHAJ_ORG_PERSON_ADAPTER_KEY,
     adapterVersion: '1',
     parserKey: 'cheerio-minhaj-org-person',
-    parserVersion: '2',
+    parserVersion: '3',
     contentKind: 'people.person',
     accessMethod: 'http',
     discover: fixedItemDiscovery(
@@ -573,7 +581,7 @@ export function createMinhajOrgArchiveNewsAdapter(
     adapterKey: MINHAJ_ORG_ARCHIVE_NEWS_ADAPTER_KEY,
     adapterVersion: '1',
     parserKey: 'cheerio-minhaj-org-editorial',
-    parserVersion: '3',
+    parserVersion: '4',
     contentKind: 'editorial.news',
     accessMethod: 'http',
     discover: fixedItemDiscovery(

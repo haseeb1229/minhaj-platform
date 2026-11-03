@@ -992,6 +992,23 @@ describe('people.person (Phase 30-R)', () => {
     ).toBe('');
   });
 
+  it('drops only the headings before the first prose, keeping every later one (Phase 30-RV)', () => {
+    const result = run({
+      ...PERSON,
+      biographyHtml:
+        '<h3>Current Status</h3><p>Opening prose.</p><h3>Education</h3><p>Later prose.</p>',
+    });
+    expect(result.issues).toEqual([]);
+    expect(
+      payloadOf<{ labels: { biography: string }[] }>(result).labels[0]?.biography,
+    ).toBe('Opening prose.\n\nEducation\n\nLater prose.');
+    // Headings alone are no biography.
+    const headingsOnly = run({ ...PERSON, biographyHtml: '<h2>Current Status</h2>' });
+    expect(
+      payloadOf<{ labels: { biography: string }[] }>(headingsOnly).labels[0]?.biography,
+    ).toBe('');
+  });
+
   it('requires a name', () => {
     expect(run({ ...PERSON, name: '  ' }).issues).toContain('title-missing');
   });

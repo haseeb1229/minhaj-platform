@@ -46,6 +46,17 @@ export function directionOf(locale: Locale): 'ltr' | 'rtl' {
 }
 
 /**
+ * The direction of a record's DESCRIPTION, given its label's direction. One
+ * label holds one locale for the title and the description, and a migrated
+ * record can pair a romanised title with an Urdu description (Phase 30-RV):
+ * under a left-to-right label the description takes its direction from its
+ * own text; a right-to-left label's description stays right-to-left.
+ */
+export function descriptionDirection(dir: 'ltr' | 'rtl'): 'rtl' | 'auto' {
+  return dir === 'rtl' ? 'rtl' : 'auto';
+}
+
+/**
  * Each locale's name IN ITS OWN LANGUAGE AND SCRIPT.
  *
  * Endonyms, deliberately — and deliberately NOT in the message catalogues.

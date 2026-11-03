@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { Breadcrumbs, Container, PageHero } from '@/components/ui';
+import { descriptionDirection } from '@/config/locale';
 
 /**
  * The Library's page frames — one implementation of "where am I, what is this
@@ -100,7 +101,10 @@ export function RecordFrame({
   readonly title: string;
   readonly lang: string;
   readonly dir: 'ltr' | 'rtl';
-  /** Paragraphs of the record's own description, in the title's language. */
+  /**
+   * Paragraphs of the record's own description, labelled with the title's
+   * language, in the direction `descriptionDirection` gives.
+   */
   readonly summary: readonly string[];
   readonly meta?: ReactNode;
   readonly notice?: string;
@@ -128,7 +132,7 @@ export function RecordFrame({
                 key={index}
                 className="text-lede max-w-[var(--measure-prose)] text-[color:var(--color-foreground-muted)]"
                 lang={lang}
-                dir={dir}
+                dir={descriptionDirection(dir)}
               >
                 {paragraph}
               </p>
