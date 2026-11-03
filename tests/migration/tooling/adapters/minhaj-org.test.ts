@@ -118,7 +118,7 @@ describe('identity and options', () => {
       adapterKey: MINHAJ_ORG_EDITORIAL_ADAPTER_KEY,
       adapterVersion: '4',
       parserKey: 'cheerio-minhaj-org-editorial',
-      parserVersion: '4',
+      parserVersion: '5',
       contentKind: 'editorial.news',
       accessMethod: 'http',
     });

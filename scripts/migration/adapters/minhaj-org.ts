@@ -356,7 +356,7 @@ export function createMinhajOrgEditorialAdapter(
     adapterKey: MINHAJ_ORG_EDITORIAL_ADAPTER_KEY,
     adapterVersion: '4',
     parserKey: 'cheerio-minhaj-org-editorial',
-    parserVersion: '4',
+    parserVersion: '5',
     contentKind: kind,
     accessMethod: 'http',
     discover,
@@ -436,7 +436,7 @@ export function createMinhajOrgPageAdapter(
     adapterKey: MINHAJ_ORG_PAGE_ADAPTER_KEY,
     adapterVersion: '1',
     parserKey: 'cheerio-minhaj-org-page',
-    parserVersion: '3',
+    parserVersion: '4',
     contentKind: 'editorial.page',
     accessMethod: 'http',
     discover: fixedItemDiscovery(
@@ -505,7 +505,7 @@ export function createMinhajOrgPersonAdapter(
     adapterKey: MINHAJ_ORG_PERSON_ADAPTER_KEY,
     adapterVersion: '1',
     parserKey: 'cheerio-minhaj-org-person',
-    parserVersion: '3',
+    parserVersion: '4',
     contentKind: 'people.person',
     accessMethod: 'http',
     discover: fixedItemDiscovery(
@@ -583,7 +583,7 @@ export function createMinhajOrgArchiveNewsAdapter(
     adapterKey: MINHAJ_ORG_ARCHIVE_NEWS_ADAPTER_KEY,
     adapterVersion: '1',
     parserKey: 'cheerio-minhaj-org-editorial',
-    parserVersion: '4',
+    parserVersion: '5',
     contentKind: 'editorial.news',
     accessMethod: 'http',
     discover: fixedItemDiscovery(
