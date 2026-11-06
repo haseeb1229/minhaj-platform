@@ -2671,8 +2671,12 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > routes × en/ur/ar × 390/768/1440 px), all 200, no horizontal overflow, no broken image, no
 > third-party request, titled; header bar Library · Watch · News · Collections · About, no Donate;
 > Gulzar Nastaliq on Urdu headings, Naskh on Arabic; `/en…` and case variants one 301 with the
-> query kept, `Accept-Language` never redirects, `/fr/…` 404, no public `Set-Cookie`. The closing
-> commit is documentation only; `main` is fast-forwarded to it. No schema change (31 migrations).
+> query kept, `Accept-Language` never redirects, `/fr/…` 404, no public `Set-Cookie`. After the
+> deployed runtime, two further commits change no runtime code — this record, and `c1dd042`, which
+> makes the browser suite compare signed-in and signed-out documents from the same presence
+> snapshot (CI run 42228320736 had caught two loads straddling a snapshot refresh) — so staging
+> keeps serving `3fb5863` while `main` is fast-forwarded to the final branch head. No schema
+> change (31 migrations).
 >
 > **Readiness after R1 (six dimensions).** Engineering — R1 contract delivered and CI-proven.
 > Product — the shell, routing and identity foundation is in place; the home, landings, media
