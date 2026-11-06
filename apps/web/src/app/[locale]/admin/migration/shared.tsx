@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { ReactNode } from 'react';
 
 import { getTranslations } from 'next-intl/server';
@@ -38,7 +39,7 @@ export type Query = Record<string, string | string[] | undefined>;
 export const MIGRATION_PAGE = MIGRATION_LIMITS.page;
 
 export function migrationPath(locale: Locale, rest = ''): string {
-  return `/${locale}/admin/migration${rest}`;
+  return localizedPath(locale, `/admin/migration${rest}`);
 }
 
 /** The operator a service call acts as: identified by account only. */

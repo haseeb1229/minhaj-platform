@@ -35,47 +35,58 @@ const link = (key: string, href: string, extra: Partial<WorkspaceLink> = {}) => 
 
 describe('the current workspace entry', () => {
   const ADMIN: readonly WorkspaceLink[] = [
-    link('dashboard', '/en/admin', { exact: true }),
-    link('editorial', '/en/admin/editorial/articles', { also: ['/en/admin/editorial'] }),
-    link('correspondence', '/en/admin/editorial/correspondence'),
-    link('donations', '/en/admin/donations'),
-    link('campaigns', '/en/admin/donations/campaigns'),
+    link('dashboard', '/admin', { exact: true }),
+    link('editorial', '/admin/editorial/articles', { also: ['/admin/editorial'] }),
+    link('correspondence', '/admin/editorial/correspondence'),
+    link('donations', '/admin/donations'),
+    link('campaigns', '/admin/donations/campaigns'),
   ];
 
   it('marks an area root only on the root itself', () => {
-    expect(currentLinkKey('/en/admin', ADMIN)).toBe('dashboard');
-    expect(currentLinkKey('/en/admin/', ADMIN)).toBe('dashboard');
+    expect(currentLinkKey('/admin', ADMIN)).toBe('dashboard');
+    expect(currentLinkKey('/admin/', ADMIN)).toBe('dashboard');
     // A page no entry claims has no current entry — never the root by default.
-    expect(currentLinkKey('/en/admin/identity/users', ADMIN)).toBeNull();
+    expect(currentLinkKey('/admin/identity/users', ADMIN)).toBeNull();
   });
 
   it('prefers the deepest entry the path sits under', () => {
-    expect(currentLinkKey('/en/admin/editorial/correspondence', ADMIN)).toBe(
+    expect(currentLinkKey('/admin/editorial/correspondence', ADMIN)).toBe(
       'correspondence',
     );
-    expect(currentLinkKey('/en/admin/editorial/news', ADMIN)).toBe('editorial');
-    expect(currentLinkKey('/en/admin/editorial/articles/new', ADMIN)).toBe('editorial');
-    expect(currentLinkKey('/en/admin/donations/campaigns', ADMIN)).toBe('campaigns');
-    expect(currentLinkKey('/en/admin/donations/0000-record', ADMIN)).toBe('donations');
+    expect(currentLinkKey('/admin/editorial/news', ADMIN)).toBe('editorial');
+    expect(currentLinkKey('/admin/editorial/articles/new', ADMIN)).toBe('editorial');
+    expect(currentLinkKey('/admin/donations/campaigns', ADMIN)).toBe('campaigns');
+    expect(currentLinkKey('/admin/donations/0000-record', ADMIN)).toBe('donations');
+  });
+
+  it('matches a prefixed Urdu workspace the same way, and never across locales', () => {
+    // English is unprefixed (ROUTE_MAP.md §1.1, R1); Urdu and Arabic carry
+    // their prefix, so their navigation is built — and matched — prefixed.
+    const urdu = [
+      link('dashboard', '/ur/admin', { exact: true }),
+      link('donations', '/ur/admin/donations'),
+    ];
+    expect(currentLinkKey('/ur/admin', urdu)).toBe('dashboard');
+    expect(currentLinkKey('/ur/admin/donations/0000-record', urdu)).toBe('donations');
+    expect(currentLinkKey('/admin/donations', urdu)).toBeNull();
+    expect(currentLinkKey('/ur/admin/donations', ADMIN)).toBeNull();
   });
 
   it('respects segment boundaries', () => {
-    const links = [link('saved', '/en/my/saved'), link('save', '/en/my/save')];
-    expect(currentLinkKey('/en/my/saved/notes', links)).toBe('saved');
-    expect(currentLinkKey('/en/my/savedx', links)).toBeNull();
-    expect(currentLinkKey('/en/my/save', links)).toBe('save');
+    const links = [link('saved', '/my/saved'), link('save', '/my/save')];
+    expect(currentLinkKey('/my/saved/notes', links)).toBe('saved');
+    expect(currentLinkKey('/my/savedx', links)).toBeNull();
+    expect(currentLinkKey('/my/save', links)).toBe('save');
   });
 
   it('ignores a query or fragment on an entry', () => {
-    const links = [link('audit', '/en/admin/system/audit?action=x#top')];
-    expect(currentLinkKey('/en/admin/system/audit', links)).toBe('audit');
+    const links = [link('audit', '/admin/system/audit?action=x#top')];
+    expect(currentLinkKey('/admin/system/audit', links)).toBe('audit');
   });
 
   it('never lets an exact entry claim by an extra prefix', () => {
-    const links = [
-      link('overview', '/en/my', { exact: true, also: ['/en/my/settings'] }),
-    ];
-    expect(currentLinkKey('/en/my/settings/profile', links)).toBeNull();
+    const links = [link('overview', '/my', { exact: true, also: ['/my/settings'] })];
+    expect(currentLinkKey('/my/settings/profile', links)).toBeNull();
   });
 
   it('answers nothing without a path', () => {

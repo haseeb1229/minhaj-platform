@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import type { PermissionKey } from '@minhaj/contracts/identity';
 
 import { requirePermittedAction } from '@/composition/authorization';
@@ -77,7 +77,7 @@ async function authorise(
 
 /** Re-renders the administration, and indexes catalogue words sooner. */
 function refreshed(locale: Locale): void {
-  revalidatePath(`/${locale}/admin/learning`, 'layout');
+  revalidatePath(localizedPath(locale, '/admin/learning'), 'layout');
   // Durable intent is already committed; this only indexes it sooner.
   indexAfterResponse();
 }
@@ -114,7 +114,7 @@ export async function saveCourseAction(
       version,
       courseFields(form),
     );
-    destination = `/${actor.locale}/admin/learning/courses/${saved.id}`;
+    destination = localizedPath(actor.locale, `/admin/learning/courses/${saved.id}`);
     refreshed(actor.locale);
   } catch (error) {
     return rejected(error, 'learning-save-course');
@@ -211,7 +211,7 @@ export async function savePathAction(
       version,
       pathFields(form),
     );
-    destination = `/${actor.locale}/admin/learning/paths/${saved.id}`;
+    destination = localizedPath(actor.locale, `/admin/learning/paths/${saved.id}`);
     refreshed(actor.locale);
   } catch (error) {
     return rejected(error, 'learning-save-path');
@@ -270,8 +270,8 @@ const CLASSES: PermissionKey = 'learning.classes.administer';
 
 /** Re-renders the class administration and My Minhaj; no catalogue words changed. */
 function refreshedClasses(locale: Locale): void {
-  revalidatePath(`/${locale}/admin/learning`, 'layout');
-  revalidatePath(`/${locale}/my`, 'layout');
+  revalidatePath(localizedPath(locale, '/admin/learning'), 'layout');
+  revalidatePath(localizedPath(locale, '/my'), 'layout');
 }
 
 /** Confirms one trial request into a Booking and a class on the chosen window. */
@@ -307,7 +307,10 @@ export async function createSessionAction(
       formValue(form, 'scopeId') ?? '',
       sessionFields(form),
     );
-    destination = `/${actor.locale}/admin/learning/classes/${created.session.id}`;
+    destination = localizedPath(
+      actor.locale,
+      `/admin/learning/classes/${created.session.id}`,
+    );
     refreshedClasses(actor.locale);
   } catch (error) {
     return rejected(error, 'learning-create-session');

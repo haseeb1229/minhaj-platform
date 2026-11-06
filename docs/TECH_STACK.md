@@ -237,7 +237,10 @@ so translations do not force client rendering.
 
 **Introduced and compatibility-validated in Phase 3A — Localisation Foundation** (§1.5), which
 is delivered **before any phase required to serve en/ur/ar routes**, including the Phase 2
-authentication surfaces. **There is exactly one localisation implementation.**
+authentication surfaces. **There is exactly one localisation implementation.** Since Rebaseline
+R1 (2026-11-06) its routing is configured `localePrefix: 'as-needed'`, `localeDetection: false`,
+`localeCookie: false`: English is unprefixed, no cookie or `Accept-Language` redirect exists, and
+every localised path is built by the contracts helper `localizedPath` (ROUTE_MAP.md §1.1).
 
 English, Urdu and Arabic supported architecturally from day one; RTL from the start; **one
 codebase, one content database**. V1 may ship English content first.
@@ -637,15 +640,16 @@ copied or generated asset.
 > distinction matters most exactly where it is easiest to overlook: religious texts,
 > translations, tafsir works and recitations (OPEN_DECISIONS.md §2.4).
 
-> **Naming a font family is not shipping one, and the inventory records the difference.** Phase 4
-> declares three semantic script slots — Latin, Urdu and Arabic — whose values are stacks of
-> family NAMES ending in a generic family. Nothing is downloaded, nothing is bundled, no
-> `@font-face` is declared and no network request is made, so no licence is acquired or
-> required: a visitor sees a face only if their own system already has it. **The moment a font
-> FILE enters this repository, or a remote font is requested at runtime, that is an
-> introduction** and it carries a recorded licence — and, for the Urdu and Arabic typefaces,
-> the accepted brand evidence of OPEN_DECISIONS.md §6.4 as well. Substituting the approved
-> faces later is a change to those three token values.
+> **Naming a font family is not shipping one, and the inventory records the difference.** At
+> Phase-4 exit the platform declared three semantic script slots — Latin, Urdu and Arabic — whose
+> values were stacks of family NAMES ending in a generic family; nothing was downloaded or
+> bundled, no `@font-face` was declared and no licence was acquired (historical, superseded by
+> Rebaseline R1). **The moment a font FILE enters this repository, or a remote font is requested
+> at runtime, that is an introduction** and it carries a recorded licence. **Rebaseline R1
+> (2026-11-06) is that introduction:** four self-hosted SIL OFL 1.1 faces, inventoried in §18.9,
+> under the owner-approved interim identity — the organisation's own brand pack, including any
+> approved Urdu and Arabic typefaces, stays OPEN (OPEN_DECISIONS.md §6.4), and substituting it
+> later is a change to the one font module and its role variables.
 
 **No enterprise SBOM programme is introduced**, and no speculative compliance bureaucracy. The
 requirement is a maintained, honest inventory — proportionate to a platform that will hold
@@ -778,7 +782,7 @@ the Next build bundles the brand files.
 
 | Asset | Source and retrieval | Original | Stored copy | Use and rights |
 | --- | --- | --- | --- | --- |
-| `apps/web/src/shell/brand/mqi-logo.png` — the official logo and wordmark | `https://www.minhaj.org/images/logo.png`, retrieved 2026-10-29 | PNG raster, 444×65 RGBA, 12,424 bytes, SHA-256 `ffbf13f368bb90d01bec27cfcbe4a9c50e0bcd0a5fdf9a07b46c9c4674076ae2` | 11,410 bytes, SHA-256 `3357d2995baff253d7943a782a6cfa1f02996dab6d0b420d31a5aa92c4ad55d1` — only the `tEXt` ("Software: Adobe ImageReady") and `iTXt` (XMP) chunks removed; pixels, dimensions and colours untouched | Header and footer brand lockup of the pre-adoption build, by the owner's authorisation (OPEN_DECISIONS.md §3.7, §6.4). The page states "Minhaj-ul-Quran International. 2026" (its `copyright` meta). Provisional brand evidence, **not** the accepted brand pack; never redrawn, recoloured or re-proportioned |
+| `apps/web/src/shell/brand/mqi-logo.png` — the official logo and wordmark | `https://www.minhaj.org/images/logo.png`, retrieved 2026-10-29 | PNG raster, 444×65 RGBA, 12,424 bytes, SHA-256 `ffbf13f368bb90d01bec27cfcbe4a9c50e0bcd0a5fdf9a07b46c9c4674076ae2` | 11,410 bytes, SHA-256 `3357d2995baff253d7943a782a6cfa1f02996dab6d0b420d31a5aa92c4ad55d1` — only the `tEXt` ("Software: Adobe ImageReady") and `iTXt` (XMP) chunks removed; pixels, dimensions and colours untouched | Header and footer brand lockup of the pre-adoption build at Phase-30-R exit; since Rebaseline R1 the footer's secondary organisational mark only, unmodified, beside the pre-adoption statement — by the owner's authorisation (OPEN_DECISIONS.md §3.7, §6.4). The page states "Minhaj-ul-Quran International. 2026" (its `copyright` meta). Provisional brand evidence, **not** the accepted brand pack; never redrawn, recoloured or re-proportioned |
 | `apps/web/src/app/icon.png` — the official favicon | `https://www.minhaj.org/favicon.ico`, retrieved 2026-10-29 (served as an `.ico` name, actually a PNG) | PNG raster, 64×66 RGBA, 10,545 bytes, SHA-256 `41a2138b4b4ecd7a4de081b962a7775ea9a63e3a2771cb1500f1a59ce5d8aee2` | 9,690 bytes, SHA-256 `e68e6b43cfbe41f62bdfd9514ed1350949dd26646ba2a2cc76392b31da5a5bbd` — the same two metadata chunks removed | The App Router icon, same authorisation and status |
 
 Not used: no SVG of the logo is published; a 900×828 crest with an opaque grey background
@@ -798,3 +802,32 @@ portrait added, each the same way (MIGRATION_STRATEGY.md §16.1). After Phase 30
 577 — 107 lead images of the curated archives' posts added the same way (MIGRATION_STRATEGY.md
 §17.1). Phase 30-RD adds no dependency. No dependency was added for WebP:
 Storage validates the container itself (SECURITY_BASELINE.md §10.8).
+
+### 18.9 Rebaseline-R1 typeface inventory
+
+**No npm dependency is added.** The faces are vendored files, each copied byte-for-byte from the
+exact Fontsource release named below (a repackaging of the canonical upstream project), stored in
+`apps/web/src/styles/fonts/<family>/` beside that family's verbatim SIL Open Font License 1.1 text
+(`OFL.txt`), and declared through `next/font/local` in the one font module
+`apps/web/src/styles/fonts.ts`. They are served from this origin by Next: no font CDN, no
+Google-hosted font loading (it fetches at build time and is forbidden by test), no third-party
+request, and CSP `font-src 'self'` is unchanged. Chosen after a rendered side-by-side trial under
+the owner-approved interim identity (ARCHITECTURE.md §13.3); the organisation's brand pack stays
+OPEN (OPEN_DECISIONS.md §6.4).
+
+| File | Release | Upstream and licence | Bytes | SHA-256 | Role · preload |
+| --- | --- | --- | --- | --- | --- |
+| `newsreader/newsreader-latin-wght-normal.woff2` | `@fontsource-variable/newsreader` 5.3.0 | productiontype/Newsreader · OFL 1.1 | 58,084 | `62981321d9a3cc7a61a73792729043703fd6112da86e8ec848bb57f088578757` | display: headings, English long-form · preloaded |
+| `newsreader/newsreader-latin-wght-italic.woff2` | `@fontsource-variable/newsreader` 5.3.0 | productiontype/Newsreader · OFL 1.1 | 64,520 | `48bc8861b9b2ca9300747cad4fd6a3b4ac3028d364df00bd1b72097baa75e509` | display italic · preloaded |
+| `instrument-sans/instrument-sans-latin-wght-normal.woff2` | `@fontsource-variable/instrument-sans` 5.3.0 | Instrument/instrument-sans · OFL 1.1 | 30,092 | `2ee17598a98d8a59e4df8152d015bec9ab8e4d5672cc0ab42bef806b568e3971` | ui: interface text · preloaded |
+| `gulzar/gulzar-arabic-400-normal.woff2` | `@fontsource/gulzar` 5.3.0 | googlefonts/gulzar · OFL 1.1 | 208,800 | `92dc772098b0f1fd2d309c50bff8fdbc18bb6f6d3dba65f4a69a7a3c8edfa1e9` | urdu: genuine Nastaliq for Urdu headings and long-form · not preloaded |
+| `noto-naskh-arabic/noto-naskh-arabic-arabic-400-normal.woff2` | `@fontsource/noto-naskh-arabic` 5.3.0 | notofonts/arabic · OFL 1.1 | 52,668 | `9cc2d2e90f7b51904468558b4ed529de8a8206497c8edb5e33122bd077e0158c` | naskh: Arabic, dense Urdu interface text · not preloaded |
+| `noto-naskh-arabic/noto-naskh-arabic-arabic-600-normal.woff2` | `@fontsource/noto-naskh-arabic` 5.3.0 | notofonts/arabic · OFL 1.1 | 56,648 | `0cefc9b889f4dc4ff1b958edae5ace24b0e9876fea79558013aa3bf840d8da91` | naskh 600 · not preloaded |
+
+The Latin faces are preloaded because every page renders them, with metric-adjusted fallbacks
+(`adjustFontFallback`) so the swap does not shift layout; the Arabic-script faces are subset to
+Arabic script and are fetched only by a page that shows Urdu or Arabic text. **Not shipped:** a
+Quran face (deferred to an approved corpus, and never used for ordinary Arabic interface text)
+and Jameel Noori Nastaleeq (licence unclear). `tests/config/fonts.test.ts` enforces one font
+module, `next/font/local` only, no Google-hosted fonts, an OFL text beside every file, and this
+preload policy.

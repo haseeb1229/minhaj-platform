@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 
-import { localeSchema } from '@minhaj/contracts';
+import { localeSchema, localizedPath } from '@minhaj/contracts';
 
 import { absoluteUrl } from '@/config/origin';
 import { publicIndexingEnabled } from '@/config/indexing';
@@ -38,8 +38,8 @@ export default function robots(): MetadataRoute.Robots {
   }
 
   const privateAreas = localeSchema.options.flatMap((locale) => [
-    `/${locale}/my`,
-    `/${locale}/admin`,
+    localizedPath(locale, '/my'),
+    localizedPath(locale, '/admin'),
   ]);
 
   // THE BUILD-BOUND PARTITIONS ARE THE RIGHT QUESTION HERE, and deliberately

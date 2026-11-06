@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -74,7 +75,7 @@ interface ProfileParams {
 
 /** The canonical path for one language version of one contributor. */
 function pathForProfile(slug: string): (locale: Locale) => string {
-  return (locale) => `/${locale}/people/${slug}`;
+  return (locale) => localizedPath(locale, `/people/${slug}`);
 }
 
 export async function generateMetadata({ params }: ProfileParams): Promise<Metadata> {
@@ -131,7 +132,7 @@ export default async function ContributorProfilePage({ params }: ProfileParams) 
           <Breadcrumbs
             label={shell('nav.breadcrumbs')}
             trail={[
-              { href: `/${locale}`, text: shell('nav.home') },
+              { href: localizedPath(locale, ''), text: shell('nav.home') },
               { text: profile.label.name },
             ]}
           />
@@ -141,7 +142,7 @@ export default async function ContributorProfilePage({ params }: ProfileParams) 
       {/* THE PROFILE'S HEADER: who this is, the other spellings an
           administrator entered, and the kinds of contribution published for
           them — a description, never a credential or a permission. */}
-      <div className="border-b border-[color:var(--color-border)]">
+      <div className="border-b border-border">
         <Container>
           <div
             className={`flex flex-col gap-6 py-[var(--space-section)] ${
@@ -162,7 +163,7 @@ export default async function ContributorProfilePage({ params }: ProfileParams) 
               />
             )}
             <div className="flex min-w-0 max-w-3xl flex-col gap-4">
-              <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+              <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
                 {t('eyebrow')}
               </p>
               {/* The name is rendered in its OWN language and direction. `lang`
@@ -178,10 +179,7 @@ export default async function ContributorProfilePage({ params }: ProfileParams) 
               </h1>
 
               {profile.nameVariants.length === 0 ? null : (
-                <p
-                  className="text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
-                  dir="auto"
-                >
+                <p className="text-sm wrap-anywhere text-foreground-muted" dir="auto">
                   <span className="font-medium">{t('alsoKnownAs')}: </span>
                   {profile.nameVariants.join(' · ')}
                 </p>
@@ -252,7 +250,10 @@ export default async function ContributorProfilePage({ params }: ProfileParams) 
             heading={t('videos')}
             headingId="person-videos"
             more={{
-              href: `/${locale}/watch/videos?speaker=${encodeURIComponent(profile.id)}`,
+              href: localizedPath(
+                locale,
+                `/watch/videos?speaker=${encodeURIComponent(profile.id)}`,
+              ),
               text: t('allVideos'),
             }}
           />
@@ -266,7 +267,10 @@ export default async function ContributorProfilePage({ params }: ProfileParams) 
             heading={t('audio')}
             headingId="person-audio"
             more={{
-              href: `/${locale}/listen/lectures?speaker=${encodeURIComponent(profile.id)}`,
+              href: localizedPath(
+                locale,
+                `/listen/lectures?speaker=${encodeURIComponent(profile.id)}`,
+              ),
               text: t('allAudio'),
             }}
           />
@@ -296,7 +300,7 @@ function FacetPanel({
   readonly t: ProfileTranslator;
 }) {
   return (
-    <li className="flex min-w-0 flex-col gap-4 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] border-t-4 border-t-[color:var(--color-accent-rule)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]">
+    <li className="flex min-w-0 flex-col gap-4 rounded-panel border border-border border-t-4 border-t-accent-rule bg-surface-raised p-5 shadow-panel">
       <h3 className="text-subheading font-semibold">
         {t(`kind.${facet.kind}` as 'kind.author')}
       </h3>
@@ -305,7 +309,7 @@ function FacetPanel({
         <dl className="flex flex-col gap-4 text-sm">
           {facet.details.map((detail) => (
             <div key={detail.field} className="flex min-w-0 flex-col gap-1">
-              <dt className="text-caption font-semibold text-[color:var(--color-foreground-muted)]">
+              <dt className="text-caption font-semibold text-foreground-muted">
                 {t(`field.${detail.field}` as 'field.qualifications')}
               </dt>
               <dd
@@ -320,7 +324,7 @@ function FacetPanel({
 
           {facet.languages.length === 0 ? null : (
             <div className="flex min-w-0 flex-col gap-1">
-              <dt className="text-caption font-semibold text-[color:var(--color-foreground-muted)]">
+              <dt className="text-caption font-semibold text-foreground-muted">
                 {t('languages')}
               </dt>
               <dd>{facet.languages.join(', ')}</dd>
@@ -375,7 +379,7 @@ function PersonStructuredData({
     '@context': 'https://schema.org',
     '@type': 'Person',
     name: profile.label.name,
-    url: absoluteUrl(`/${resolved}/people/${slug}`),
+    url: absoluteUrl(localizedPath(resolved, `/people/${slug}`)),
     ...(profile.nameVariants.length === 0
       ? {}
       : { alternateName: [...profile.nameVariants] }),

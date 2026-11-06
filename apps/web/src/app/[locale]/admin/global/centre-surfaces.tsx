@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import {
   CONTACT_CHANNELS,
   GLOBAL_LIMITS,
@@ -104,11 +104,9 @@ function CentreForm({
         </p>
       </div>
 
-      <fieldset className="flex flex-col gap-4 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-4">
+      <fieldset className="flex flex-col gap-4 rounded-control border border-border p-4">
         <legend className="px-1 text-sm font-semibold">{t('locality')}</legend>
-        <p className="text-xs text-[color:var(--color-foreground-muted)]">
-          {t('localityHelp')}
-        </p>
+        <p className="text-xs text-foreground-muted">{t('localityHelp')}</p>
         <Field id={`${prefix}-city`} label={t('cityOptional')} help={t('centreCityHelp')}>
           {(props) => (
             <Select
@@ -148,20 +146,15 @@ function CentreForm({
             />
             {t('virtual')}
           </label>
-          <p
-            id={`${prefix}-virtual-help`}
-            className="text-xs text-[color:var(--color-foreground-muted)]"
-          >
+          <p id={`${prefix}-virtual-help`} className="text-xs text-foreground-muted">
             {t('virtualHelp')}
           </p>
         </div>
       </fieldset>
 
-      <fieldset className="flex flex-col gap-4 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-4">
+      <fieldset className="flex flex-col gap-4 rounded-control border border-border p-4">
         <legend className="px-1 text-sm font-semibold">{t('coordinates')}</legend>
-        <p className="text-xs text-[color:var(--color-foreground-muted)]">
-          {t('coordinatesHelp')}
-        </p>
+        <p className="text-xs text-foreground-muted">{t('coordinatesHelp')}</p>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field id={`${prefix}-latitude`} label={t('latitude')}>
             {(props) => (
@@ -195,9 +188,7 @@ function CentreForm({
       <CommonFields prefix={prefix} locale={locale} record={record} copy={copy} />
 
       <SectionHeading>{t('centreWords')}</SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('centreWordsHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('centreWordsHelp')}</p>
       {localeSchema.options.map((language) => {
         const existing = record?.labels.find((label) => label.locale === language);
         const dir = directionOf(language);
@@ -407,7 +398,7 @@ function Contacts({
       <SectionHeading>
         <span id="centre-contacts">{t('contacts')}</span>
       </SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
+      <p className="text-sm text-foreground-muted">
         {t('contactsHelp', {
           count: String(record.contacts.length),
           limit: String(GLOBAL_LIMITS.contacts),
@@ -421,7 +412,7 @@ function Contacts({
             <Panel key={`${contact.channel}-${contact.value}`} as="li">
               <div className="flex flex-col gap-3">
                 <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
-                  <span className="text-[color:var(--color-foreground-muted)]">
+                  <span className="text-foreground-muted">
                     {t('position', { number: index + 1 })}
                   </span>
                   <span className="font-medium">
@@ -550,7 +541,7 @@ function ServedCities({
       <SectionHeading>
         <span id="centre-served">{t('served')}</span>
       </SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
+      <p className="text-sm text-foreground-muted">
         {t('servedHelp', {
           count: String(record.servedCities.length),
           limit: String(GLOBAL_LIMITS.servedCities),
@@ -634,7 +625,7 @@ export async function CentreEditor({ params, searchParams }: EditorParams) {
   const locale = await requireLocale(params);
   const id = editorTarget((await params).id);
   const query = await searchParams;
-  const base = `/${locale}/admin/global/centres`;
+  const base = localizedPath(locale, '/admin/global/centres');
   const context = await requireAdminPage(locale, 'global.read', `${base}/${id}`);
   const copy = await globalCopy(locale);
   const { t } = copy;

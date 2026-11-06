@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { PERSONAL_LIMITS, targetKey } from '@minhaj/contracts/personalisation';
@@ -48,7 +49,7 @@ export default async function BookmarksPage({
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const locale = await requireLocale(params);
-  const path = `/${locale}/my/saved/bookmarks`;
+  const path = localizedPath(locale, '/my/saved/bookmarks');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'personal' });
   const offset = readPersonalOffset(await searchParams);
@@ -88,7 +89,7 @@ export default async function BookmarksPage({
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex min-w-0 flex-col gap-2">
                   <TargetTitle resolved={titles.get(targetKey(entry.target))} t={t} />
-                  <div className="flex flex-wrap items-center gap-3 text-sm text-[color:var(--color-foreground-muted)]">
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-foreground-muted">
                     <KindBadge kind={entry.target.kind} t={t} />
                     <span>
                       {t('target.savedAt')}{' '}

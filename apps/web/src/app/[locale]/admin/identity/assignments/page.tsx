@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getFormatter, getTranslations } from 'next-intl/server';
 
 import { requireAdminPage } from '@/composition/authorization';
@@ -59,7 +60,7 @@ export default async function AssignmentsPage({
   const page = await requireAdminPage(
     locale,
     'assignments.read',
-    `/${locale}/admin/identity/assignments`,
+    localizedPath(locale, '/admin/identity/assignments'),
   );
   const copy = await adminCopy(locale);
 
@@ -81,9 +82,7 @@ export default async function AssignmentsPage({
     <main className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('assignments.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('assignments.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('assignments.description')}</p>
       </header>
 
       {mayGrant ? (
@@ -153,11 +152,11 @@ export default async function AssignmentsPage({
 
       <nav className="text-sm">
         {includeRevoked ? (
-          <TextLink href={`/${locale}/admin/identity/assignments`}>
+          <TextLink href={localizedPath(locale, '/admin/identity/assignments')}>
             {t('assignments.showLive')}
           </TextLink>
         ) : (
-          <TextLink href={`/${locale}/admin/identity/assignments?revoked=1`}>
+          <TextLink href={localizedPath(locale, '/admin/identity/assignments?revoked=1')}>
             {t('assignments.showRevoked')}
           </TextLink>
         )}
@@ -181,14 +180,14 @@ export default async function AssignmentsPage({
               <DataRow key={assignment.id}>
                 <DataCell wrap>
                   <span className="block">{assignment.accountEmail}</span>
-                  <code className="block text-xs break-all text-[color:var(--color-foreground-muted)]">
+                  <code className="block text-xs break-all text-foreground-muted">
                     {assignment.accountId}
                   </code>
                 </DataCell>
 
                 <DataCell wrap>
                   <span className="block">{assignment.roleName}</span>
-                  <code className="block text-xs text-[color:var(--color-foreground-muted)]">
+                  <code className="block text-xs text-foreground-muted">
                     {assignment.roleKey}
                   </code>
                 </DataCell>
@@ -202,7 +201,7 @@ export default async function AssignmentsPage({
                   ) : (
                     <>
                       <StatusBadge tone="neutral">{t('assignments.revoked')}</StatusBadge>
-                      <span className="mt-1 block text-xs text-[color:var(--color-foreground-muted)]">
+                      <span className="mt-1 block text-xs text-foreground-muted">
                         {format.dateTime(assignment.revokedAt, { dateStyle: 'medium' })}
                       </span>
                     </>
@@ -248,9 +247,7 @@ export default async function AssignmentsPage({
                         </Field>
                       </ActionForm>
                     ) : (
-                      <span className="text-xs text-[color:var(--color-foreground-muted)]">
-                        —
-                      </span>
+                      <span className="text-xs text-foreground-muted">—</span>
                     )}
                   </DataCell>
                 ) : null}

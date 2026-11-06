@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -65,23 +66,23 @@ export async function FatwaHowItWorksPage({
         {STEPS.map((step, index) => (
           <li
             key={step}
-            className="flex min-w-0 flex-col gap-2 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]"
+            className="flex min-w-0 flex-col gap-2 rounded-panel border border-border bg-surface-raised p-5 shadow-panel"
           >
             <h2 className="flex flex-col gap-1.5">
-              <span className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+              <span className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
                 {t('howItWorks.stepNumber', { number: index + 1 })}
               </span>{' '}
               <span className="text-subheading font-semibold text-balance">
                 {t(`howItWorks.steps.${step}.title`)}
               </span>
             </h2>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+            <p className="text-sm text-foreground-muted">
               {t(`howItWorks.steps.${step}.body`)}
             </p>
           </li>
         ))}
       </ol>
-      <div className="flex flex-col gap-4 border-t border-[color:var(--color-border)] pt-6">
+      <div className="flex flex-col gap-4 border-t border-border pt-6">
         <p className="max-w-[var(--measure-prose)]">{t('howItWorks.noPromise')}</p>
         <div className="flex flex-wrap items-center gap-3">
           {availability.active ? (
@@ -89,15 +90,13 @@ export async function FatwaHowItWorksPage({
               <ActionLink href={fatwaSectionPath(locale, 'ask')}>
                 {t('sections.ask')}
               </ActionLink>
-              <span className="text-sm text-[color:var(--color-foreground-muted)]">
-                {t('signInRequired')}
-              </span>
+              <span className="text-sm text-foreground-muted">{t('signInRequired')}</span>
               <ActionLink href={fatwaSectionPath(locale)} tone="secondary">
                 {t('ruling.all')}
               </ActionLink>
             </>
           ) : (
-            <ActionLink href={`/${locale}`} tone="secondary">
+            <ActionLink href={localizedPath(locale, '')} tone="secondary">
               {t('unavailable.home')}
             </ActionLink>
           )}

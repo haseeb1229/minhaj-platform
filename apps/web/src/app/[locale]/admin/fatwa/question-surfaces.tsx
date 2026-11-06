@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import type { Locale } from '@minhaj/contracts';
@@ -131,7 +132,7 @@ function QuestionTable({
 export async function QuestionsScreen({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/fatwa/questions`;
+  const base = localizedPath(locale, '/admin/fatwa/questions');
   const context = await requireAdminPage(locale, FATWA_PERMISSIONS.receive, base);
   const copy = await fatwaCopy(locale);
   const { t } = copy;
@@ -148,9 +149,7 @@ export async function QuestionsScreen({ params, searchParams }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.questions')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scope.questions')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('scope.questions')}</p>
 
       {page.items.length === 0 ? (
         <EmptyState>{t('question.empty')}</EmptyState>
@@ -183,7 +182,7 @@ export async function QuestionsScreen({ params, searchParams }: ListParams) {
 export async function AssignmentScreen({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/fatwa/assignment`;
+  const base = localizedPath(locale, '/admin/fatwa/assignment');
   const context = await requireAdminPage(locale, FATWA_PERMISSIONS.receive, base);
   const copy = await fatwaCopy(locale);
   const { t } = copy;
@@ -202,16 +201,14 @@ export async function AssignmentScreen({ params, searchParams }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.assignment')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scope.assignment')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('scope.assignment')}</p>
 
       {rows.length === 0 ? (
         <EmptyState>{t('assignment.empty')}</EmptyState>
       ) : (
         <QuestionTable
           rows={rows}
-          base={`/${locale}/admin/fatwa/questions`}
+          base={localizedPath(locale, '/admin/fatwa/questions')}
           locale={locale}
           categories={categoryNames(categories, locale)}
           answerers={answererNames(answerers)}
@@ -241,7 +238,7 @@ export async function QuestionScreen({
 }) {
   const locale = await requireLocale(params);
   const id = recordTarget((await params).id);
-  const list = `/${locale}/admin/fatwa/questions`;
+  const list = localizedPath(locale, '/admin/fatwa/questions');
   const context = await requireAdminPage(
     locale,
     FATWA_PERMISSIONS.receive,
@@ -412,9 +409,7 @@ export async function QuestionScreen({
             <input type="hidden" name="locale" value={locale} />
             <input type="hidden" name="id" value={question.id} />
             <input type="hidden" name="version" value={String(question.version)} />
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('decline.help')}
-            </p>
+            <p className="text-sm text-foreground-muted">{t('decline.help')}</p>
             <ConfirmField id="fatwa-decline-confirm" label={t('decline.confirm')} />
           </ActionForm>
         )}

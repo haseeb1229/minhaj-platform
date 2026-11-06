@@ -2,7 +2,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import {
   QURAN_AYAH_NUMBER_MAX,
   QURAN_LIMITS,
@@ -133,7 +133,7 @@ function sourceIndex(sources: readonly QuranSourceRecord[]) {
 export async function SurahsScreen({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/quran/surahs`;
+  const base = localizedPath(locale, '/admin/quran/surahs');
   const context = await requireAdminPage(locale, 'quran.read', base);
   const copy = await quranCopy(locale);
   const { t } = copy;
@@ -153,9 +153,7 @@ export async function SurahsScreen({ params, searchParams }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.surahs')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scope.surahs')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('scope.surahs')}</p>
 
       {/* ---- Corpus status ------------------------------------------------ */}
       <Panel>
@@ -191,9 +189,7 @@ export async function SurahsScreen({ params, searchParams }: ListParams) {
             <DetailRow term={t('corpus.ayat')}>{status.ayat}</DetailRow>
             <DetailRow term={t('corpus.juz')}>{status.juz}</DetailRow>
           </dl>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('corpus.operatorOnly')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('corpus.operatorOnly')}</p>
         </section>
       </Panel>
 
@@ -260,9 +256,7 @@ export async function SurahsScreen({ params, searchParams }: ListParams) {
         <SectionHeading>
           <span id="runs">{t('runs.title')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('runs.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('runs.help')}</p>
         {status.recentRuns.length === 0 ? (
           <EmptyState>{t('runs.empty')}</EmptyState>
         ) : (
@@ -312,9 +306,7 @@ export async function SurahsScreen({ params, searchParams }: ListParams) {
         <SectionHeading>
           <span id="surah-list">{t('surahs.title')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('surahs.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('surahs.help')}</p>
         {surahs.length === 0 ? (
           <EmptyState>{t('surahs.empty')}</EmptyState>
         ) : (
@@ -384,9 +376,7 @@ export async function SurahsScreen({ params, searchParams }: ListParams) {
                 {t('surahs.namesTitle', { name: surahText(selected, locale, copy) })}
               </span>
             </SectionHeading>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('surahs.namesHelp')}
-            </p>
+            <p className="text-sm text-foreground-muted">{t('surahs.namesHelp')}</p>
             <ActionForm
               action={saveSurahNames}
               submitLabel={t('save')}
@@ -429,7 +419,7 @@ export async function SurahsScreen({ params, searchParams }: ListParams) {
 export async function AyatScreen({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/quran/ayat`;
+  const base = localizedPath(locale, '/admin/quran/ayat');
   const context = await requireAdminPage(locale, 'quran.read', base);
   const copy = await quranCopy(locale);
   const { t } = copy;
@@ -447,9 +437,7 @@ export async function AyatScreen({ params, searchParams }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.ayat')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scope.ayat')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('scope.ayat')}</p>
 
       {surahs.length === 0 ? (
         <EmptyState>{t('surahs.empty')}</EmptyState>
@@ -534,7 +522,7 @@ export async function AyahScreen({
   if (surahNumber === null || ayahNumber === null) notFound();
 
   const query = await searchParams;
-  const list = `/${locale}/admin/quran/ayat`;
+  const list = localizedPath(locale, '/admin/quran/ayat');
   const base = `${list}/${String(surahNumber)}/${String(ayahNumber)}`;
   const context = await requireAdminPage(locale, 'quran.read', base);
   const copy = await quranCopy(locale);
@@ -585,9 +573,7 @@ export async function AyahScreen({
             <span id="ayah-text">{t('ayah.canonical')}</span>
           </SectionHeading>
           <Scripture text={detail.text} />
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('ayah.readOnly')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('ayah.readOnly')}</p>
           <dl className="flex flex-col">
             <DetailRow term={t('ayah.juz')}>{detail.juz}</DetailRow>
             <DetailRow term={t('ayah.hizb')}>{detail.hizb ?? t('none')}</DetailRow>
@@ -611,9 +597,7 @@ export async function AyahScreen({
         <SectionHeading>
           <span id="ayah-history">{t('history.title')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('history.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('history.help')}</p>
         {detail.history.length === 0 ? (
           <EmptyState>{t('history.empty')}</EmptyState>
         ) : (
@@ -651,7 +635,7 @@ export async function AyahScreen({
         <SectionHeading>
           <span id="ayah-topics">{t('topics.title')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="text-sm text-foreground-muted">
           {t('topics.help', {
             count: detail.topicIds.length,
             limit: QURAN_LIMITS.topicsPerAyah,

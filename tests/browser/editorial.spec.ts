@@ -75,7 +75,7 @@ test.afterAll(async () => {
 });
 
 test('authors, independently approves, schedules, cancels and publishes an Article', async () => {
-  await author.goto('/en/admin/editorial/articles/new');
+  await author.goto('/admin/editorial/articles/new');
   await author.getByLabel('Canonical slug', { exact: true }).fill(slug);
   await author.locator('#en-title').fill(title);
   const editor = author.getByRole('textbox', { name: 'Body (en)', exact: true });
@@ -142,7 +142,7 @@ test('reports stale edits and permanently redirects an old slug in one hop', asy
   await anon.close();
 });
 test('publishes a Page through an independent review workflow', async () => {
-  await author.goto('/en/admin/editorial/pages/new');
+  await author.goto('/admin/editorial/pages/new');
   await author
     .getByLabel('Page destination', { exact: true })
     .selectOption('help-article');
@@ -200,9 +200,9 @@ test('renders signed-out fallback content with no cookies and the same signed-in
   }
   // An Article states its date; a Page — an undated destination — states none
   // (Phase 30-RF): no dateline, and no datePublished in its structured data.
-  await page.goto('/en/library/articles/' + renamed);
+  await page.goto('/library/articles/' + renamed);
   await expect(page.locator('main article header time')).toHaveCount(1);
-  await page.goto('/en/help/' + slug);
+  await page.goto('/help/' + slug);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
     'Synthetic help browser proof',
   );
@@ -224,7 +224,7 @@ test('serves the Article byte-identically signed in and out, its private island 
     baseURL: baseUrl(),
     extraHTTPHeaders: { 'x-forwarded-for': '100.64.241.1' },
   });
-  const target = '/en/library/articles/' + renamed;
+  const target = '/library/articles/' + renamed;
   const { anonymous, signedIn } = await asTwoVisitors(
     anon.request,
     author.context().request,
@@ -255,29 +255,29 @@ test('serves the Article byte-identically signed in and out, its private island 
   );
   await expect(island.getByRole('link', { name: 'Sign in to save' })).toHaveAttribute(
     'href',
-    '/en/signin?returnTo=' + encodeURIComponent(target),
+    '/signin?returnTo=' + encodeURIComponent(target),
   );
   await anon.close();
 });
 test('accepts private correspondence and restricts triage to the operator', async ({
   page,
 }) => {
-  await page.goto('/en/contact');
+  await page.goto('/contact');
   await page.getByLabel('Name', { exact: true }).fill('Synthetic correspondent');
   await page.getByLabel('Email', { exact: true }).fill('editorial-browser@proof.invalid');
   await page.getByLabel('Subject', { exact: true }).fill('Synthetic private contact');
   await page.getByLabel('Body', { exact: true }).fill('PRIVATE-BROWSER-CORRESPONDENCE');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Your submission was received.');
-  await page.goto('/en/feedback');
+  await page.goto('/feedback');
   await page.getByLabel('Body', { exact: true }).fill('PRIVATE-BROWSER-FEEDBACK');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Your submission was received.');
-  await author.goto('/en/admin/editorial/correspondence');
+  await author.goto('/admin/editorial/correspondence');
   await expect(
     author.getByText('PRIVATE-BROWSER-CORRESPONDENCE', { exact: true }),
   ).toHaveCount(0);
-  await publisher.goto('/en/admin/editorial/correspondence');
+  await publisher.goto('/admin/editorial/correspondence');
   await expect(
     publisher.getByText('PRIVATE-BROWSER-CORRESPONDENCE', { exact: true }),
   ).toBeVisible();
@@ -287,7 +287,7 @@ test('accepts private correspondence and restricts triage to the operator', asyn
     .fill('PRIVATE-BROWSER-NOTE');
   await clickSaved(publisher, 'Save triage');
   expect(
-    await (await page.request.get('/en/library/articles/' + renamed)).text(),
+    await (await page.request.get('/library/articles/' + renamed)).text(),
   ).not.toContain('PRIVATE-BROWSER-');
 });
 test('keeps the keyboard editor inside a small RTL viewport without violating CSP', async () => {
@@ -318,11 +318,11 @@ test('keeps the keyboard editor inside a small RTL viewport without violating CS
 test('replaces a reserved Page placeholder only after independent publication', async ({
   page,
 }) => {
-  await page.goto('/en/volunteer');
+  await page.goto('/volunteer');
   await expect(page.getByRole('heading', { level: 1 })).not.toHaveText(
     'Synthetic volunteer fixture',
   );
-  await author.goto('/en/admin/editorial/pages/new');
+  await author.goto('/admin/editorial/pages/new');
   await author.getByLabel('Page destination', { exact: true }).selectOption('/volunteer');
   await author.locator('#en-title').fill('Synthetic volunteer fixture');
   await author
@@ -349,9 +349,9 @@ test('replaces a reserved Page placeholder only after independent publication', 
 test('rejects a cross-origin correspondence Server Action without writing', async ({
   page,
 }) => {
-  await page.goto('/en/feedback');
+  await page.goto('/feedback');
   await page.getByLabel('Body', { exact: true }).fill('CROSS-ORIGIN-MUST-NOT-WRITE');
-  await page.route('**/en/feedback', async (route) => {
+  await page.route('**/feedback', async (route) => {
     if (route.request().method() === 'POST')
       await route.continue({
         headers: { ...route.request().headers(), origin: 'https://foreign.invalid' },
@@ -360,7 +360,7 @@ test('rejects a cross-origin correspondence Server Action without writing', asyn
   });
   const responsePromise = page.waitForResponse(
     (response) =>
-      response.request().method() === 'POST' && response.url().endsWith('/en/feedback'),
+      response.request().method() === 'POST' && response.url().endsWith('/feedback'),
   );
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   expect((await responsePromise).status()).toBeGreaterThanOrEqual(400);

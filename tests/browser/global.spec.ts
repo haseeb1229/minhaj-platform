@@ -8,6 +8,7 @@ import {
   baseUrl,
   expect,
   grantRole,
+  localizedPath,
   privilegedSession,
   registerAndSignIn,
   test,
@@ -171,7 +172,7 @@ async function overflowOf(
 }
 
 const centrePath = (locale: string, centre: string) =>
-  `/${locale}/global/centres/${centre}`;
+  localizedPath(locale, `/global/centres/${centre}`);
 
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(300_000);
@@ -265,7 +266,7 @@ test.describe('an anonymous visitor explores the Global Network', () => {
   test('lands on the World Network with its genuine entry points and no cookie', async ({
     page,
   }) => {
-    const response = await page.goto('/en/global');
+    const response = await page.goto('/global');
     expect(response?.status()).toBe(200);
     expect(response?.headers()['set-cookie']).toBeUndefined();
     await expect(
@@ -274,10 +275,10 @@ test.describe('an anonymous visitor explores the Global Network', () => {
 
     const entries = page.getByRole('list', { name: 'Ways into the directory' });
     for (const [name, href] of [
-      ['Find a Centre', '/en/global/find-a-centre'],
-      ['Countries', '/en/global/countries'],
-      ['Centres', '/en/global/centres'],
-      ['Pakistan structure', '/en/global/pakistan'],
+      ['Find a Centre', '/global/find-a-centre'],
+      ['Countries', '/global/countries'],
+      ['Centres', '/global/centres'],
+      ['Pakistan structure', '/global/pakistan'],
     ] as const)
       await expect(entries.getByRole('link', { name, exact: true })).toHaveAttribute(
         'href',
@@ -285,8 +286,8 @@ test.describe('an anonymous visitor explores the Global Network', () => {
       );
 
     // Local Events are reached on each Centre's own page, not from the landing.
-    // Scoped to the landing's content: the shell's News and Events menu links
-    // the all-Events listing on every page.
+    // Scoped to the landing's content: the shell's footer links the
+    // all-Events listing whenever Events are published.
     await expect(page.getByRole('main').locator('a[href*="/events"]')).toHaveCount(0);
     // The seeded Countries are listed; the directory is not called empty.
     const main = page.getByRole('main');
@@ -298,7 +299,7 @@ test.describe('an anonymous visitor explores the Global Network', () => {
     ).toHaveCount(0);
 
     // A plain fetch sets no cookie either, on the landing or on a Centre.
-    for (const path of ['/en/global', centrePath('en', slug.physical)]) {
+    for (const path of ['/global', centrePath('en', slug.physical)]) {
       const plain = await page.request.get(path);
       expect(plain.status(), path).toBe(200);
       expect(plain.headers()['set-cookie'], path).toBeUndefined();
@@ -325,7 +326,7 @@ test.describe('an anonymous visitor explores the Global Network', () => {
     page,
   }) => {
     // A Country with no Region: its Cities directly, its Centres — no Regions.
-    await page.goto(`/en/global/countries/${slug.plainCountry}`);
+    await page.goto(`/global/countries/${slug.plainCountry}`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(NAME.plainCountry);
     await expect(page.getByRole('heading', { name: 'Regions', exact: true })).toHaveCount(
       0,
@@ -336,14 +337,14 @@ test.describe('an anonymous visitor explores the Global Network', () => {
     const cities = page.getByRole('list', { name: 'Cities', exact: true });
     await expect(cities.getByRole('link', { name: NAME.plainCity })).toHaveAttribute(
       'href',
-      `/en/global/countries/${slug.plainCountry}/cities/${slug.plainCity}`,
+      `/global/countries/${slug.plainCountry}/cities/${slug.plainCity}`,
     );
     const centres = page.getByRole('list', { name: 'Centres', exact: true });
     await expect(centres.getByRole('link', { name: NAME.physical })).toBeVisible();
     await expect(centres.getByRole('link', { name: NAME.long })).toBeVisible();
 
     // A Country with a Region lists it — and never the archived one.
-    await page.goto(`/en/global/countries/${slug.regionalCountry}`);
+    await page.goto(`/global/countries/${slug.regionalCountry}`);
     const regions = page.getByRole('list', { name: 'Regions', exact: true });
     await expect(regions.getByRole('link', { name: NAME.region })).toBeVisible();
     await expect(page.getByText(NAME.archivedRegion)).toHaveCount(0);
@@ -351,9 +352,7 @@ test.describe('an anonymous visitor explores the Global Network', () => {
     await expect(page.getByText(NAME.underArchived)).toHaveCount(0);
 
     // The Region lists its City.
-    await page.goto(
-      `/en/global/countries/${slug.regionalCountry}/regions/${slug.region}`,
-    );
+    await page.goto(`/global/countries/${slug.regionalCountry}/regions/${slug.region}`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(NAME.region);
     await expect(
       page
@@ -361,12 +360,12 @@ test.describe('an anonymous visitor explores the Global Network', () => {
         .getByRole('link', { name: NAME.regionalCity }),
     ).toHaveAttribute(
       'href',
-      `/en/global/countries/${slug.regionalCountry}/cities/${slug.regionalCity}`,
+      `/global/countries/${slug.regionalCountry}/cities/${slug.regionalCity}`,
     );
 
     // The City lists the virtual Centre that serves it — exactly once.
     await page.goto(
-      `/en/global/countries/${slug.regionalCountry}/cities/${slug.regionalCity}`,
+      `/global/countries/${slug.regionalCountry}/cities/${slug.regionalCity}`,
     );
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(NAME.regionalCity);
     const served = page.getByRole('list', { name: 'Centres', exact: true });
@@ -376,7 +375,7 @@ test.describe('an anonymous visitor explores the Global Network', () => {
 
     // The withheld Region and the Centres beneath or beside it are not public.
     for (const path of [
-      `/en/global/countries/${slug.regionalCountry}/regions/${slug.archivedRegion}`,
+      `/global/countries/${slug.regionalCountry}/regions/${slug.archivedRegion}`,
       centrePath('en', slug.draft),
       centrePath('en', slug.underArchived),
       `${centrePath('en', slug.underArchived)}/contact`,
@@ -391,7 +390,7 @@ test.describe('an anonymous visitor explores the Global Network', () => {
     page,
   }) => {
     const response = await page.goto(
-      `/en/global/find-a-centre?country=${slug.regionalCountry}&city=${slug.regionalCity}`,
+      `/global/find-a-centre?country=${slug.regionalCountry}&city=${slug.regionalCity}`,
     );
     expect(response?.status()).toBe(200);
     const results = page.getByRole('list', { name: 'Centres', exact: true });
@@ -405,7 +404,7 @@ test.describe('an anonymous visitor explores the Global Network', () => {
     await expect(page.getByLabel('City', { exact: true })).toHaveValue(slug.regionalCity);
 
     // A Country alone covers every public Centre in it.
-    await page.goto(`/en/global/find-a-centre?country=${slug.plainCountry}`);
+    await page.goto(`/global/find-a-centre?country=${slug.plainCountry}`);
     const plain = page.getByRole('list', { name: 'Centres', exact: true });
     await expect(plain.getByRole('link', { name: NAME.physical })).toBeVisible();
     await expect(plain.getByRole('link', { name: NAME.long })).toBeVisible();
@@ -419,7 +418,7 @@ test.describe('an anonymous visitor explores the Global Network', () => {
       `country=${slug.regionalCountry}&region=${slug.region}&city=${slug.regionalCity}`,
       `city=${slug.regionalCity}`,
     ]) {
-      const invalid = await page.goto(`/en/global/find-a-centre?${query}`);
+      const invalid = await page.goto(`/global/find-a-centre?${query}`);
       expect(invalid?.status(), query).toBe(200);
       await expect(
         page
@@ -451,11 +450,11 @@ test.describe('an anonymous visitor explores the Global Network', () => {
     // Where it is, as links into the directory.
     await expect(main.getByRole('link', { name: NAME.plainCity })).toHaveAttribute(
       'href',
-      `/en/global/countries/${slug.plainCountry}/cities/${slug.plainCity}`,
+      `/global/countries/${slug.plainCountry}/cities/${slug.plainCity}`,
     );
     await expect(main.getByRole('link', { name: NAME.plainCountry })).toHaveAttribute(
       'href',
-      `/en/global/countries/${slug.plainCountry}`,
+      `/global/countries/${slug.plainCountry}`,
     );
 
     // Contacts: a dialable telephone link, a mail link and a described
@@ -538,12 +537,15 @@ test.describe('former addresses', () => {
     `);
 
     const current = (locale: string) =>
-      `/${locale}/global/countries/${slug.plainCountry}/cities/${slug.plainCity}`;
+      localizedPath(
+        locale,
+        `/global/countries/${slug.plainCountry}/cities/${slug.plainCity}`,
+      );
     for (const [locale, from] of [
-      ['en', `/en/global/countries/${old.country}/cities/${old.city}`],
+      ['en', `/global/countries/${old.country}/cities/${old.city}`],
       ['ur', `/ur/global/countries/${old.country}/cities/${old.city}`],
       // Only one segment former: still one hop to the whole current address.
-      ['en', `/en/global/countries/${old.country}/cities/${slug.plainCity}`],
+      ['en', `/global/countries/${old.country}/cities/${slug.plainCity}`],
       ['ar', `/ar/global/countries/${slug.plainCountry}/cities/${old.city}`],
     ] as const) {
       const response = await request.get(from, { maxRedirects: 0 });
@@ -600,12 +602,12 @@ test.describe('centre-scoped News', () => {
     test.setTimeout(180_000);
 
     // A press release has no Centre to choose.
-    await author.goto('/en/admin/editorial/press-releases/new');
+    await author.goto('/admin/editorial/press-releases/new');
     await expect(author.getByLabel('Canonical slug', { exact: true })).toBeVisible();
     await expect(author.locator('select[name="centreId"]')).toHaveCount(0);
 
     // A NewsArticle does, by name — and never a withheld draft as if public.
-    await author.goto('/en/admin/editorial/news/new');
+    await author.goto('/admin/editorial/news/new');
     const choice = author.getByRole('combobox', {
       name: 'Centre (optional)',
       exact: true,
@@ -639,7 +641,7 @@ test.describe('centre-scoped News', () => {
     ).toBeVisible();
 
     // The News names its Centre, as a link to it.
-    await page.goto(`/en/news/${NEWS_SLUG}`);
+    await page.goto(`/news/${NEWS_SLUG}`);
     const attribution = page
       .getByRole('main')
       .locator(`a[href="${centrePath('en', slug.physical)}"]`);
@@ -649,10 +651,10 @@ test.describe('centre-scoped News', () => {
     await sql.query(
       `UPDATE [dbo].[Centre] SET [state]=N'archived', [version]=[version]+1, [updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${id.physical}';`,
     );
-    const after = await page.goto(`/en/news/${NEWS_SLUG}`);
+    const after = await page.goto(`/news/${NEWS_SLUG}`);
     expect(after?.status()).toBe(200);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(NEWS_TITLE);
-    await expect(page.locator('a[href^="/en/global/centres/"]')).toHaveCount(0);
+    await expect(page.locator('a[href^="/global/centres/"]')).toHaveCount(0);
     await expect(page.getByText(NAME.physical)).toHaveCount(0);
     for (const path of [
       centrePath('en', slug.physical),
@@ -675,27 +677,27 @@ test.describe('Global Network administration', () => {
       `countries/${id.regionalCountry}`,
       `centres/${id.virtual}`,
     ]) {
-      const response = await stranger.goto(`/en/admin/global/${surface}`);
+      const response = await stranger.goto(`/admin/global/${surface}`);
       expect(response?.status(), surface).toBe(404);
     }
   });
 
   test('lets a reader see the directory, but create and save nothing', async () => {
-    await reader.goto('/en/admin/global/countries');
+    await reader.goto('/admin/global/countries');
     await expect(
       reader.getByRole('heading', { level: 1, name: 'Countries' }),
     ).toBeVisible();
     await expect(reader.getByText(slug.regionalCountry).first()).toBeVisible();
     await expect(reader.getByRole('link', { name: 'New Country' })).toHaveCount(0);
 
-    await reader.goto(`/en/admin/global/countries/${id.regionalCountry}`);
+    await reader.goto(`/admin/global/countries/${id.regionalCountry}`);
     await expect(reader.getByText(codes.regional, { exact: true }).first()).toBeVisible();
     await expect(reader.getByRole('button', { name: 'Save', exact: true })).toHaveCount(
       0,
     );
     await expect(reader.locator('main form')).toHaveCount(0);
 
-    await reader.goto(`/en/admin/global/centres/${id.virtual}`);
+    await reader.goto(`/admin/global/centres/${id.virtual}`);
     await expect(reader.getByRole('button', { name: 'Save', exact: true })).toHaveCount(
       0,
     );
@@ -703,7 +705,7 @@ test.describe('Global Network administration', () => {
     // Creating is not offered at all: the page is the not-found page. (Its HTTP
     // status is not asserted — the refusal is thrown after this subtree's
     // loading boundary has streamed, so it arrives as a 200 soft 404.)
-    await reader.goto('/en/admin/global/countries/new');
+    await reader.goto('/admin/global/countries/new');
     await expect(reader.getByLabel('ISO code', { exact: true })).toHaveCount(0);
     await expect(reader.getByRole('button', { name: 'Create', exact: true })).toHaveCount(
       0,
@@ -720,14 +722,14 @@ test.describe('Global Network administration', () => {
       slug: `browser-admin-country-${run}`,
       name: `Synthetic Administered Country ${run}`,
     };
-    await administrator.goto('/en/admin/global/countries');
+    await administrator.goto('/admin/global/countries');
     await administrator.getByRole('link', { name: 'New Country' }).click();
-    await administrator.waitForURL(/\/en\/admin\/global\/countries\/new$/);
+    await administrator.waitForURL(/\/admin\/global\/countries\/new$/);
     await administrator.getByLabel('ISO code', { exact: true }).fill(codes.created);
     await administrator.getByLabel('Slug', { exact: true }).fill(created.slug);
     await administrator.getByLabel('Name in English', { exact: true }).fill(created.name);
     await administrator.getByRole('button', { name: 'Create', exact: true }).click();
-    await administrator.waitForURL(/\/en\/admin\/global\/countries\/[0-9a-f-]{36}$/);
+    await administrator.waitForURL(/\/admin\/global\/countries\/[0-9a-f-]{36}$/);
     await expect(
       administrator.getByRole('heading', { level: 1, name: created.name, exact: true }),
     ).toBeVisible();
@@ -738,7 +740,7 @@ test.describe('Global Network administration', () => {
     expect(row).toEqual({ code: codes.created, state: 'draft', version: 1 });
     // A draft Country is not public.
     expect(
-      (await administrator.request.get(`/en/global/countries/${created.slug}`)).status(),
+      (await administrator.request.get(`/global/countries/${created.slug}`)).status(),
     ).toBe(404);
 
     // Two copies of the editor; the first save wins, the second is refused.
@@ -798,7 +800,7 @@ test.describe('reading direction, reflow and the keyboard', () => {
   test('labels the finder’s controls and reaches its submit button by keyboard', async ({
     page,
   }) => {
-    await page.goto(`/en/global/find-a-centre?country=${slug.regionalCountry}`);
+    await page.goto(`/global/find-a-centre?country=${slug.regionalCountry}`);
     const country = page.getByLabel('Country', { exact: true });
     const region = page.getByLabel('Region', { exact: true });
     const city = page.getByLabel('City', { exact: true });
@@ -829,7 +831,7 @@ test.describe('reading direction, reflow and the keyboard', () => {
     ).toBeVisible();
 
     // With no Country chosen, the narrower controls are disabled and skipped.
-    await page.goto('/en/global/find-a-centre');
+    await page.goto('/global/find-a-centre');
     await expect(page.getByLabel('Region', { exact: true })).toBeDisabled();
     await expect(page.getByLabel('City', { exact: true })).toBeDisabled();
     await page.getByLabel('Country', { exact: true }).focus();
@@ -844,11 +846,11 @@ test.describe('reading direction, reflow and the keyboard', () => {
   }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     for (const path of [
-      '/en/global/find-a-centre',
-      `/en/global/find-a-centre?country=${slug.regionalCountry}`,
+      '/global/find-a-centre',
+      `/global/find-a-centre?country=${slug.regionalCountry}`,
       centrePath('en', slug.long),
       `${centrePath('en', slug.long)}/contact`,
-      `/en/global/countries/${slug.plainCountry}`,
+      `/global/countries/${slug.plainCountry}`,
       '/ur/global',
     ]) {
       const response = await page.goto(path);

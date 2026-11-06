@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -41,7 +42,7 @@ export async function learnTrail(locale: Locale) {
   const t = await getTranslations({ locale, namespace: 'learn' });
   return {
     label: shell('nav.breadcrumbs'),
-    home: { href: `/${locale}`, text: shell('nav.home') },
+    home: { href: localizedPath(locale, ''), text: shell('nav.home') },
     learn: { href: learnPath(locale), text: t('title') },
   };
 }

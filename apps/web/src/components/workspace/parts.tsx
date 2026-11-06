@@ -2,8 +2,8 @@ import type { ReactNode } from 'react';
 
 import type { Locale } from '@minhaj/contracts';
 
+import { ProductBar } from '@/components/shell/product-bar';
 import { PageHeading } from '@/components/ui';
-import { PRODUCT_NAME } from '@/shell/product';
 
 /**
  * The private workspaces' frame — My Minhaj, the Teacher area and the
@@ -73,19 +73,19 @@ export function WorkspaceShell({
         {skipLabel}
       </a>
 
-      <header className="border-b border-border bg-surface-raised">
-        <div className={`${column} flex flex-col gap-1 py-4`}>
-          <a
-            href={`/${locale}`}
-            lang="en"
-            className="inline-flex min-h-11 items-center self-start text-sm font-semibold text-action underline-offset-2 hover:underline"
-          >
-            {PRODUCT_NAME}
-          </a>
+      {/*
+       * ONE PRODUCT (Rebaseline R1): the shared product bar — wordmark, the
+       * area's name, the way back to the public site, the language switcher —
+       * above this area's own band and navigation.
+       */}
+      <ProductBar locale={locale} area={area} columnClassName={column} />
+
+      <div className="border-b border-border bg-surface">
+        <div className={`${column} flex flex-col gap-1 py-5`}>
           {areaIsHeading ? (
             <PageHeading>{area}</PageHeading>
           ) : (
-            <p className="text-lg font-semibold">{area}</p>
+            <p className="font-serif text-2xl font-semibold">{area}</p>
           )}
           {description === undefined ? null : (
             <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
@@ -93,7 +93,7 @@ export function WorkspaceShell({
             </p>
           )}
         </div>
-      </header>
+      </div>
 
       <div
         className={`${column} grid flex-1 grid-cols-[minmax(0,1fr)] content-start gap-6 py-6 lg:gap-10 lg:py-8 ${

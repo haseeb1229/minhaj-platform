@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { requireAdminPage } from '@/composition/authorization';
@@ -11,6 +12,8 @@ import {
   StatusBadge,
 } from '@/components/ui';
 import { publicIndexingEnabled } from '@/config/indexing';
+import { readPresence } from '@/composition/presence';
+import { promotionRuleOf } from '@/shell/presence';
 import { SHELL_ROUTES, isAvailable, type ShellRoute } from '@/shell/registry';
 
 /**
@@ -57,16 +60,19 @@ export default async function NavigationStatusPage({
   const locale = await requireLocale(params);
   const t = await getTranslations({ locale, namespace: 'admin' });
   const shell = await getTranslations({ locale, namespace: 'shell' });
+  const presence = await readPresence();
 
-  await requireAdminPage(locale, 'navigation.read', `/${locale}/admin/system/navigation`);
+  await requireAdminPage(
+    locale,
+    'navigation.read',
+    localizedPath(locale, '/admin/system/navigation'),
+  );
 
   return (
     <main className="flex flex-col gap-4">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('navigation.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('navigation.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('navigation.description')}</p>
       </header>
 
       {/*
@@ -90,7 +96,7 @@ export default async function NavigationStatusPage({
         columns={[
           t('navigation.columnRoute'),
           t('navigation.columnPath'),
-          t('navigation.columnPlacement'),
+          t('navigation.columnPromotion'),
           t('navigation.columnAvailability'),
           t('navigation.columnIndexing'),
         ]}
@@ -99,9 +105,7 @@ export default async function NavigationStatusPage({
           <DataRow key={route.key}>
             <DataCell wrap>
               <span className="font-medium">{shell(route.label as 'nav.home')}</span>
-              <span className="block text-xs text-[color:var(--color-foreground-muted)]">
-                {route.key}
-              </span>
+              <span className="block text-xs text-foreground-muted">{route.key}</span>
             </DataCell>
 
             {/*
@@ -110,13 +114,20 @@ export default async function NavigationStatusPage({
              * a link to something that does not exist.
              */}
             <DataCell wrap>
-              {isAvailable(route) ? `/${locale}${route.path}` : t('navigation.noPath')}
+              {isAvailable(route)
+                ? localizedPath(locale, route.path)
+                : t('navigation.noPath')}
             </DataCell>
 
             <DataCell wrap>
-              {route.placements.length === 0
-                ? t('navigation.noPlacement')
-                : route.placements.join(', ')}
+              {(() => {
+                const rule = promotionRuleOf(route.key);
+                if (rule === undefined) return t('navigation.promotion.never');
+                if (rule === null) return t('navigation.promotion.always');
+                return presence.signals.has(rule)
+                  ? t('navigation.promotion.live', { signal: rule })
+                  : t('navigation.promotion.waiting', { signal: rule });
+              })()}
             </DataCell>
 
             <DataCell>

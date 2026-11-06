@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Locale } from '@minhaj/contracts';
 import {
   DONATION_STATES,
@@ -53,22 +54,22 @@ function single(query: Query, name: string): string | null {
 
 /** The public giving page. */
 export function donatePath(locale: Locale): string {
-  return `/${locale}/donate`;
+  return localizedPath(locale, '/donate');
 }
 
 /** The bearer status page of one anonymous donation. */
 export function donationStatusPath(locale: Locale, token: string): string {
-  return `/${locale}/donate/status/${token}`;
+  return localizedPath(locale, `/donate/status/${token}`);
 }
 
 /** The signed-in person's own donations. */
 export function myDonationsPath(locale: Locale): string {
-  return `/${locale}/my/donations`;
+  return localizedPath(locale, '/my/donations');
 }
 
 /** The administration's donation records. */
 export function adminDonationsPath(locale: Locale): string {
-  return `/${locale}/admin/donations`;
+  return localizedPath(locale, '/admin/donations');
 }
 
 /** An address with its query, in a fixed order, omitting what is unset. */

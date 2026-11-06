@@ -68,9 +68,7 @@ export default async function DonationCampaignsPage({
     <main className="flex min-w-0 flex-col gap-8">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('campaigns.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('campaigns.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('campaigns.description')}</p>
       </header>
 
       <section className="flex flex-col gap-3" aria-labelledby="donation-campaigns">
@@ -135,9 +133,7 @@ function CreateCampaign({
       <SectionHeading>
         <span id="donation-campaign-create">{t('create.heading')}</span>
       </SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('create.help')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('create.help')}</p>
       <Panel>
         <ActionForm
           action={createCampaignAction}

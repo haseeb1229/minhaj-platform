@@ -1,3 +1,4 @@
+import { localizedPath } from '../../packages/contracts/src/locale-path.ts';
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -1271,7 +1272,9 @@ live('Phase 14 Events against real SQL Server', () => {
            WHERE e.[state]=N'published';`,
         );
         const expected = new Set(
-          rows.map((row) => `${ORIGIN}/${row.languageCode}${eventPathOf(row.slug)}`),
+          rows.map(
+            (row) => `${ORIGIN}${localizedPath(row.languageCode, eventPathOf(row.slug))}`,
+          ),
         );
         expect(expected.size).toBeGreaterThan(0);
         expect(advertised).toEqual(expected);

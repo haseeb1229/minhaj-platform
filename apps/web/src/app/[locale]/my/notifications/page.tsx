@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import {
@@ -54,7 +55,7 @@ export default async function NotificationsPage({
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const locale = await requireLocale(params);
-  const path = `/${locale}/my/notifications`;
+  const path = localizedPath(locale, '/my/notifications');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'personal' });
   const actor = { accountId: session.account.id };
@@ -71,10 +72,10 @@ export default async function NotificationsPage({
       label={t('nav.label')}
       links={[
         {
-          href: `/${locale}/my/settings/notifications`,
+          href: localizedPath(locale, '/my/settings/notifications'),
           text: t('nav.notificationSettings'),
         },
-        { href: `/${locale}/my`, text: t('nav.account') },
+        { href: localizedPath(locale, '/my'), text: t('nav.account') },
       ]}
     />
   );
@@ -137,7 +138,7 @@ export default async function NotificationsPage({
           {page.items.map((entry) => {
             const destination =
               entry.destination !== null && isInternalDestination(entry.destination)
-                ? `/${locale}${entry.destination}`
+                ? localizedPath(locale, `${entry.destination}`)
                 : null;
             return (
               <Panel key={entry.id} as="li">
@@ -150,7 +151,7 @@ export default async function NotificationsPage({
                     ) : (
                       <StatusBadge tone="neutral">{t('notifications.read')}</StatusBadge>
                     )}
-                    <span className="text-sm text-[color:var(--color-foreground-muted)]">
+                    <span className="text-sm text-foreground-muted">
                       <PersonalTime
                         value={entry.createdAt}
                         locale={locale}

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { LearningTitle } from '@/components/my-learning/parts';
@@ -46,7 +47,10 @@ export default async function CourseMaterialsPage({
 }) {
   const locale = await requireLocale(params);
   const { id } = await params;
-  const path = `/${locale}/teacher/courses/${encodeURIComponent(id)}/materials`;
+  const path = localizedPath(
+    locale,
+    `/teacher/courses/${encodeURIComponent(id)}/materials`,
+  );
   const gate = await requireTeacher(locale, path);
   const t = await getTranslations({ locale, namespace: 'teacher' });
   if (!gate.activated) return <NotActivated t={t} />;
@@ -102,7 +106,7 @@ export default async function CourseMaterialsPage({
                       <a
                         href={`${path}?lesson=${encodeURIComponent(entry.id)}`}
                         aria-current={entry.id === chosen ? 'page' : undefined}
-                        className="min-w-0 font-medium text-[color:var(--color-action)] underline underline-offset-2 aria-[current=page]:no-underline"
+                        className="min-w-0 font-medium text-action underline underline-offset-2 aria-[current=page]:no-underline"
                       >
                         <LearningTitle
                           labels={entry.labels}
@@ -130,7 +134,7 @@ export default async function CourseMaterialsPage({
               </span>
             </SectionHeading>
           </span>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
+          <p className="text-sm text-foreground-muted">
             {t('materials.position', {
               number: String(position + 1),
               total: String(lessons.length),

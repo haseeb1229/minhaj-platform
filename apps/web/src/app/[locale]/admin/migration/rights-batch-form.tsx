@@ -110,7 +110,7 @@ export function RightsBatchForm({
       <input type="hidden" name="locale" value={locale} />
       {children}
 
-      <fieldset className="flex flex-col gap-4 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-4">
+      <fieldset className="flex flex-col gap-4 rounded-control border border-border p-4">
         <legend className="px-1 text-sm font-semibold">{labels.legend}</legend>
         <Field id="rights-batch-licence" label={labels.licence}>
           {(props) => (

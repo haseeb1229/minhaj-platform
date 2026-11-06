@@ -1,3 +1,4 @@
+import { localizedPath } from '../../packages/contracts/src/locale-path.ts';
 import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -1469,7 +1470,10 @@ live('Phase 15 Collections against real SQL Server', () => {
            WHERE c.[state]=N'published';`,
         );
         const expected = new Set(
-          rows.map((row) => `${ORIGIN}/${row.languageCode}${collectionPathOf(row.slug)}`),
+          rows.map(
+            (row) =>
+              `${ORIGIN}${localizedPath(row.languageCode, collectionPathOf(row.slug))}`,
+          ),
         );
         expect(expected.size).toBeGreaterThan(0);
         expect(advertised).toEqual(expected);

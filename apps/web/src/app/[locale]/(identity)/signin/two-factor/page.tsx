@@ -1,3 +1,5 @@
+import { identityMetadata } from '../../metadata';
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { requireLocale } from '@/config/route-locale';
@@ -25,7 +27,9 @@ import { ActionForm } from '../../form-state';
  * authenticator, and it is deliberately reachable here rather than only
  * through a support conversation (SECURITY_BASELINE.md §8.2).
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = identityMetadata('twoFactor.title', {
+  robots: { index: false, follow: false },
+});
 
 /** PER REQUEST. There is nothing here to prerender and nothing to cache. */
 export const dynamic = 'force-dynamic';
@@ -62,19 +66,27 @@ export default async function TwoFactorPage({ params, searchParams }: PageProps)
         <span>
           {recovery ? (
             <TextLink
-              href={`/${locale}/signin/two-factor?returnTo=${encodeURIComponent(returnTo)}`}
+              href={localizedPath(
+                locale,
+                `/signin/two-factor?returnTo=${encodeURIComponent(returnTo)}`,
+              )}
             >
               {t('twoFactor.useCode')}
             </TextLink>
           ) : (
             <TextLink
-              href={`/${locale}/signin/two-factor?recovery=1&returnTo=${encodeURIComponent(returnTo)}`}
+              href={localizedPath(
+                locale,
+                `/signin/two-factor?recovery=1&returnTo=${encodeURIComponent(returnTo)}`,
+              )}
             >
               {t('twoFactor.useRecovery')}
             </TextLink>
           )}
           {' · '}
-          <TextLink href={`/${locale}/signin`}>{t('twoFactor.backToSignIn')}</TextLink>
+          <TextLink href={localizedPath(locale, '/signin')}>
+            {t('twoFactor.backToSignIn')}
+          </TextLink>
         </span>
       }
     >

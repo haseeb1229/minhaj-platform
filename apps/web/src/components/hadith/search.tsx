@@ -99,7 +99,7 @@ export async function HadithSearchPage({
     >
       <div className="flex flex-col gap-2">
         <PageHeading>{title}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">{t('search.intro')}</p>
+        <p className="text-foreground-muted">{t('search.intro')}</p>
       </div>
 
       <Panel>
@@ -173,10 +173,8 @@ function HadithResults({
       // explain a malformed query identically.
       return (
         <div role="alert" className="flex flex-col gap-2 text-sm">
-          <p className="font-medium text-[color:var(--color-error)]">
-            {searchT('invalidTitle')}
-          </p>
-          <ul className="list-disc ps-5 text-[color:var(--color-error)]">
+          <p className="font-medium text-error">{searchT('invalidTitle')}</p>
+          <ul className="list-disc ps-5 text-error">
             {outcome.issues.map((key) => (
               <li key={key}>{searchT(`issues.${key}` as 'issues.type')}</li>
             ))}
@@ -193,7 +191,7 @@ function HadithResults({
           <h2 id="hadith-results" className="sr-only">
             {t('search.results')}
           </h2>
-          <p role="status" className="text-sm text-[color:var(--color-foreground-muted)]">
+          <p role="status" className="text-sm text-foreground-muted">
             {results.capped
               ? t('search.capped', { count: SEARCH_RESULT_CEILING, query: words })
               : results.total > 0
@@ -288,7 +286,7 @@ function HadithHit({
         <h3 className="text-lg font-semibold wrap-anywhere">
           <a
             href={citationHref(locale, display.collectionSlug, display.number)}
-            className="text-[color:var(--color-action)] underline underline-offset-2"
+            className="text-action underline underline-offset-2"
           >
             <span lang={name.locale}>{name.text}</span>{' '}
             {t('number', { number: display.number })}

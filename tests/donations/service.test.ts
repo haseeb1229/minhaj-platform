@@ -1134,8 +1134,8 @@ describe('starting a donation', () => {
       donationId: begin.id,
       amount: USD(2500n),
       description: TITLE,
-      successUrl: `${BASE_URL}/en/donate/return`,
-      cancelUrl: `${BASE_URL}/en/donate/return`,
+      successUrl: `${BASE_URL}/donate/return`,
+      cancelUrl: `${BASE_URL}/donate/return`,
       expiresAt: new Date(NOW.getTime() + CHECKOUT_LIFETIME_SECONDS * 1000),
       idempotencyKey: `donation:${begin.id}`,
     });
@@ -2222,8 +2222,8 @@ describe('reconciliation', () => {
       donationId: DONATION_ID,
       amount: USD(2500n),
       description: TITLE,
-      successUrl: `${BASE_URL}/en/donate/return`,
-      cancelUrl: `${BASE_URL}/en/donate/return`,
+      successUrl: `${BASE_URL}/donate/return`,
+      cancelUrl: `${BASE_URL}/donate/return`,
       expiresAt: new Date(NOW.getTime() + CHECKOUT_LIFETIME_SECONDS * 1000),
       idempotencyKey: `donation:${DONATION_ID}`,
     });

@@ -117,17 +117,17 @@ base="https://$HOST:$HTTPS_PORT"
 good=(-u "edge-proof:$password")
 bad=(-u "edge-proof:wrong-$password")
 
-for path in /en /ur /ar /signin /my /admin /assets/synthetic /api/my/anything /sitemap.xml /no-such-page '/socket.io/?EIO=4&transport=websocket'; do
+for path in / /ur /ar /signin /my /admin /assets/synthetic /api/my/anything /sitemap.xml /no-such-page '/socket.io/?EIO=4&transport=websocket'; do
   [ "$(status_of "$base$path")" = 401 ] && pass "no credential: $path -> 401" || fail "no credential: $path is not refused"
   [ "$(status_of "${bad[@]}" "$base$path")" = 401 ] && pass "wrong credential: $path -> 401" || fail "wrong credential: $path is not refused"
   [ "$(noindex "$base$path")" = 1 ] && pass "401 for $path carries X-Robots-Tag" || fail "401 for $path lacks X-Robots-Tag"
 done
 
-[ "$(status_of "${good[@]}" "$base/en")" = 200 ] && pass "right credential: /en admitted" || fail "right credential: /en not admitted"
-[ "$(noindex "${good[@]}" "$base/en")" = 1 ] && pass "admitted page carries X-Robots-Tag noindex" || fail "admitted page lacks X-Robots-Tag noindex"
-[ "$(robots_headers "${good[@]}" "$base/en")" = 1 ] && pass "the application's X-Robots-Tag is replaced, not added" || fail "the application's X-Robots-Tag reached the client"
+[ "$(status_of "${good[@]}" "$base/")" = 200 ] && pass "right credential: / admitted" || fail "right credential: / not admitted"
+[ "$(noindex "${good[@]}" "$base/")" = 1 ] && pass "admitted page carries X-Robots-Tag noindex" || fail "admitted page lacks X-Robots-Tag noindex"
+[ "$(robots_headers "${good[@]}" "$base/")" = 1 ] && pass "the application's X-Robots-Tag is replaced, not added" || fail "the application's X-Robots-Tag reached the client"
 
-echoed="$(https "${good[@]}" -H 'X-Forwarded-For: 203.0.113.9' -H 'X-Forwarded-Host: evil.example' "$base/en")"
+echoed="$(https "${good[@]}" -H 'X-Forwarded-For: 203.0.113.9' -H 'X-Forwarded-Host: evil.example' "$base/")"
 printf '%s' "$echoed" | grep -q '"authorization"' && fail "the environment credential reached the application" || pass "Authorization is cleared before the application"
 printf '%s' "$echoed" | grep -q '203.0.113.9' && fail "a client X-Forwarded-For reached the application" || pass "client X-Forwarded-For is overwritten"
 printf '%s' "$echoed" | grep -q 'evil.example' && fail "a client X-Forwarded-Host reached the application" || pass "client X-Forwarded-Host is cleared"
@@ -147,12 +147,12 @@ https "$base/robots.txt" | grep -qi 'sitemap' && fail "robots.txt advertises a s
 http_base="http://127.0.0.1:$HTTP_PORT"
 [ "$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $HOST" "$http_base/.well-known/acme-challenge/proof-token")" = 200 ] \
   && pass "port 80 serves the ACME challenge without a credential" || fail "port 80 does not serve the ACME challenge"
-location="$(curl -s -o /dev/null -D - -H 'Host: evil.example' "$http_base/en?x=1" | tr -d '\r' | awk 'tolower($1) == "location:" { print $2 }')"
-[ "$location" = "https://$HOST/en?x=1" ] && pass "port 80 redirects to the fixed HTTPS host" || fail "port 80 redirect is '$location'"
+location="$(curl -s -o /dev/null -D - -H 'Host: evil.example' "$http_base/explore?x=1" | tr -d '\r' | awk 'tolower($1) == "location:" { print $2 }')"
+[ "$location" = "https://$HOST/explore?x=1" ] && pass "port 80 redirects to the fixed HTTPS host" || fail "port 80 redirect is '$location'"
 [ "$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $HOST" "$http_base/.well-known/acme-challenge/../../etc/passwd")" != 200 ] \
   && pass "the ACME path does not escape its directory" || fail "the ACME path escaped its directory"
 
-wrong_host="$(https -o /dev/null -D - -H 'Host: other.invalid' "$base/en" | tr -d '\r')"
+wrong_host="$(https -o /dev/null -D - -H 'Host: other.invalid' "$base/" | tr -d '\r')"
 printf '%s\n' "$wrong_host" | awk 'NR == 1 { exit !($2 == 421) }' \
   && pass "a foreign Host on an approved TLS connection is answered 421, never proxied" \
   || fail "a foreign Host on an approved TLS connection was not refused"

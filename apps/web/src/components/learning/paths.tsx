@@ -106,7 +106,7 @@ export async function PathDetailPage({
   return (
     <Container>
       <article className="flex flex-col gap-10 pt-6 pb-[var(--space-section)]">
-        <header className="flex flex-col gap-6 border-b border-[color:var(--color-border)] pb-8">
+        <header className="flex flex-col gap-6 border-b border-border pb-8">
           <Breadcrumbs
             label={parts.label}
             trail={[
@@ -117,7 +117,7 @@ export async function PathDetailPage({
             ]}
           />
           <div className="flex max-w-3xl min-w-0 flex-col gap-4">
-            <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+            <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
               {t('path.type')}
             </p>
             {/* The path's own words, marked with their language as ONE block. */}
@@ -126,7 +126,7 @@ export async function PathDetailPage({
                 {label.title}
               </h1>
               {label.summary === '' ? null : (
-                <p className="text-lede max-w-[var(--measure-prose)] wrap-anywhere text-[color:var(--color-foreground-muted)]">
+                <p className="text-lede max-w-[var(--measure-prose)] wrap-anywhere text-foreground-muted">
                   {label.summary}
                 </p>
               )}

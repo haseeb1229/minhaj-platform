@@ -3,7 +3,6 @@
     "description": "منصة رقمية موحّدة لموارد القرآن والحديث والتعلّم والمكتبة والوسائط لمنهاج القرآن العالمية."
   },
   "shell": {
-    "preAdoptionMarker": "نسخة مراجعة قبل الاعتماد",
     "nav": {
       "home": "الصفحة الرئيسية",
       "primary": "التنقل الرئيسي",
@@ -32,7 +31,19 @@
       "feedback": "الملاحظات",
       "volunteer": "التطوع",
       "topics": "الموضوعات",
-      "newsletter": "النشرة الإخبارية"
+      "newsletter": "النشرة الإخبارية",
+      "about": "من نحن",
+      "news": "الأخبار",
+      "collections": "المجموعات",
+      "listen": "استماع",
+      "events": "الفعاليات",
+      "presence": "حول العالم",
+      "help": "المساعدة",
+      "more": "المزيد",
+      "signIn": "تسجيل الدخول",
+      "signedIn": "(مسجَّل الدخول)",
+      "searchLabel": "ابحث في One Minhaj",
+      "searchPlaceholder": "ابحث في الكتب والمحاضرات والأخبار…"
     },
     "home": {
       "description": "منصة رقمية موحّدة لموارد القرآن والحديث والتعلّم والمكتبة والوسائط لمنهاج القرآن العالمية.",
@@ -180,13 +191,11 @@
     "footer": {
       "legalHeading": "الشؤون القانونية والموقع",
       "preAdoption": "«ون منهاج» منصة طُوّرت بشكل مستقل. وهي حالياً ليست مكلّفة ولا مموّلة ولا معتمَدة ولا منشورة من قِبل منهاج القرآن العالمية، ولا ينبغي اعتبار أي شيء هنا بياناً رسمياً للمنظمة.",
-      "columns": {
-        "about": "عن منهاج القرآن",
-        "knowledge": "المعرفة",
-        "libraryMedia": "المكتبة والوسائط",
-        "learnParticipate": "تعلّم وشارك",
-        "ourWork": "أعمالنا",
-        "globalContact": "الشبكة العالمية والتواصل"
+      "description": "كتب ومحاضرات وأخبار وتعليم من منهاج القرآن الدولية، في منصة واحدة متعددة اللغات.",
+      "groups": {
+        "discover": "اكتشف",
+        "organisation": "المؤسسة",
+        "participate": "شارك"
       }
     },
     "reserved": {
@@ -298,42 +307,13 @@
       "live": "التعلّم المباشر",
       "teachers": "ابحث عن معلّم"
     },
-    "menu": {
-      "overview": "{section}: نظرة عامة",
-      "toggle": "المزيد في {section}",
-      "columns": {
-        "connect": "تواصل",
-        "read": "القراءة",
-        "study": "الدراسة",
-        "explore": "استكشاف",
-        "learn": "تعلّم",
-        "browse": "تصفّح",
-        "learning": "التعلّم",
-        "topics": "الموضوعات",
-        "live": "مباشر",
-        "people": "الأشخاص",
-        "writtenWorks": "الأعمال المكتوبة",
-        "periodicals": "الدوريات",
-        "access": "الوصول",
-        "watch": "المشاهدة",
-        "seriesPrograms": "السلاسل والبرامج",
-        "byTopic": "حسب الموضوع",
-        "listen": "الاستماع",
-        "find": "اعثر",
-        "ask": "اسأل",
-        "understand": "افهم",
-        "news": "الأخبار",
-        "events": "الفعاليات",
-        "media": "الوسائط",
-        "archive": "الأرشيف",
-        "structure": "الهيكل"
-      },
-      "labels": {
-        "help": "المساعدة والأسئلة الشائعة",
-        "quranRead": "اقرأ القرآن",
-        "quranSurah": "فهرس السور",
-        "quranJuz": "فهرس الأجزاء",
-        "hadithIntroduction": "مدخل إلى الحديث"
+    "private": {
+      "backToSite": "العودة إلى One Minhaj",
+      "areas": {
+        "my": "منهاجي",
+        "teacher": "التدريس",
+        "admin": "الإدارة",
+        "account": "الحساب"
       }
     }
   },
@@ -992,11 +972,9 @@
       "caption": "كل مسار يعرفه الهيكل العام، مع حالة توفره وأهليته للفهرسة.",
       "columnRoute": "المسار",
       "columnPath": "العنوان",
-      "columnPlacement": "الموضع",
       "columnAvailability": "التوفر",
       "columnIndexing": "الفهرسة",
       "noPath": "لا يوجد مسار بعد",
-      "noPlacement": "خارج التنقل",
       "availability": {
         "delivered": "مُسلّم",
         "reserved": "محجوز",
@@ -1005,6 +983,13 @@
       "indexing": {
         "eligible": "مؤهّل",
         "excluded": "مستثنى"
+      },
+      "columnPromotion": "الإبراز",
+      "promotion": {
+        "always": "مُبرَز دائمًا",
+        "live": "مُبرَز الآن ({signal} منشور)",
+        "waiting": "بانتظار نشر {signal}",
+        "never": "غير مُبرَز — يمكن الوصول إليه بعنوانه"
       }
     },
     "audit": {

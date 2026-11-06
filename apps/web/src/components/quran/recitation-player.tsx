@@ -58,7 +58,7 @@ export function RecitationPlayer({
       {failed ? (
         <p
           role="status"
-          className="rounded-[var(--radius-control)] border border-[color:var(--color-warning)] bg-[color:var(--color-warning-surface)] px-4 py-3 text-sm text-[color:var(--color-warning)]"
+          className="rounded-control border border-warning bg-warning-surface px-4 py-3 text-sm text-warning"
         >
           {labels.failed}
         </p>

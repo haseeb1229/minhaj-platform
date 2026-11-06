@@ -69,9 +69,7 @@ export default async function MembershipPage({ params }: MembershipParams) {
         <Prose>
           <PageHeading>{t('title')}</PageHeading>
           <p>{t('intro')}</p>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('signedOut')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('signedOut')}</p>
         </Prose>
 
         <section

@@ -37,7 +37,7 @@ export function LiveFixtureNotice({
   return (
     <p
       role="note"
-      className="rounded-[var(--radius-panel)] border-2 border-[color:var(--color-warning)] bg-[color:var(--color-warning-surface)] px-4 py-3 font-semibold text-[color:var(--color-warning)]"
+      className="rounded-panel border-2 border-warning bg-warning-surface px-4 py-3 font-semibold text-warning"
     >
       {text}
     </p>

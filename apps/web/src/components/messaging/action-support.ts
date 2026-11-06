@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { revalidatePath } from 'next/cache';
@@ -49,12 +50,12 @@ export interface SurfaceRefresh {
 
 export const MY_MESSAGES: SurfaceRefresh = {
   surface: 'my',
-  refresh: (locale) => revalidatePath(`/${locale}/my`, 'layout'),
+  refresh: (locale) => revalidatePath(localizedPath(locale, '/my'), 'layout'),
 };
 
 export const TEACHER_MESSAGES: SurfaceRefresh = {
   surface: 'teacher',
-  refresh: (locale) => revalidatePath(`/${locale}/teacher`, 'layout'),
+  refresh: (locale) => revalidatePath(localizedPath(locale, '/teacher'), 'layout'),
 };
 
 /** A failure as the form shows it; only an outage is logged, by name. */

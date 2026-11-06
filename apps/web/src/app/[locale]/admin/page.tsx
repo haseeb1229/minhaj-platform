@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { requireOwnSession } from '@/composition/authorization';
@@ -39,7 +40,12 @@ export default async function AdminDashboard({
 
   const active = await requireOwnSession(locale);
   if (active === null) {
-    redirect(`/${locale}/signin?returnTo=${encodeURIComponent(`/${locale}/admin`)}`);
+    redirect(
+      localizedPath(
+        locale,
+        `/signin?returnTo=${encodeURIComponent(localizedPath(locale, '/admin'))}`,
+      ),
+    );
   }
 
   const { authorization, privilegedSecurity } = identityRuntime();
@@ -65,7 +71,7 @@ export default async function AdminDashboard({
       {posture.complete ? null : (
         <Alert tone="warning">
           {t('denied.secondFactorRequired')}{' '}
-          <TextLink href={`/${locale}/my/settings/security`}>
+          <TextLink href={localizedPath(locale, '/my/settings/security')}>
             {t('security.manage')}
           </TextLink>
         </Alert>
@@ -78,7 +84,7 @@ export default async function AdminDashboard({
             {surfaces.map((surface) => (
               <LinkCard
                 key={surface.key}
-                href={`/${locale}/admin/${surface.path}`}
+                href={localizedPath(locale, `/admin/${surface.path}`)}
                 title={t(`nav.${surface.key}`)}
                 description={t(`summary.${surface.key}`)}
               />

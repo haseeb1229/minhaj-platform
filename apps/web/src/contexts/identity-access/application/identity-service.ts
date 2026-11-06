@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type {
   AccountIdentity,
   AccountStatus,
@@ -1204,7 +1205,10 @@ export function createIdentityService(dependencies: IdentityServiceDependencies)
         const account = await persistence.findAccountByEmail(change.currentEmail);
         const locale = account?.locale ?? 'en';
 
-        const url = new URL(`/${locale}/confirm-email-change`, dependencies.baseUrl);
+        const url = new URL(
+          localizedPath(locale, '/confirm-email-change'),
+          dependencies.baseUrl,
+        );
         url.searchParams.set('email', change.newEmail);
         url.searchParams.set('token', material.token);
 
@@ -1236,7 +1240,7 @@ export function createIdentityService(dependencies: IdentityServiceDependencies)
         // through locale negotiation and could land someone in a language they
         // did not choose, on a page about their own account security.
         const url = new URL(
-          `/${locale}${verificationPath(token.purpose)}`,
+          localizedPath(locale, `${verificationPath(token.purpose)}`),
           dependencies.baseUrl,
         );
         url.searchParams.set('email', token.email);

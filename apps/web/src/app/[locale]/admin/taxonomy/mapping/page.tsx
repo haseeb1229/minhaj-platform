@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { requireAdminPage } from '@/composition/authorization';
@@ -45,7 +46,11 @@ export default async function TopicMappingPage({
   const locale = await requireLocale(params);
   const t = await getTranslations({ locale, namespace: 'admin' });
 
-  await requireAdminPage(locale, 'taxonomy.read', `/${locale}/admin/taxonomy/mapping`);
+  await requireAdminPage(
+    locale,
+    'taxonomy.read',
+    localizedPath(locale, '/admin/taxonomy/mapping'),
+  );
 
   const status = await taxonomyRuntime().taxonomy.assignmentStatus();
 
@@ -53,7 +58,7 @@ export default async function TopicMappingPage({
     <main className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('taxonomy.mapping.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="text-sm text-foreground-muted">
           {t('taxonomy.mapping.description')}
         </p>
       </header>
@@ -92,7 +97,7 @@ export default async function TopicMappingPage({
             <li>{t('taxonomy.mapping.ruleTwo')}</li>
             <li>{t('taxonomy.mapping.ruleThree')}</li>
           </ol>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
+          <p className="text-sm text-foreground-muted">
             {t('taxonomy.mapping.ruleProhibition')}
           </p>
         </div>

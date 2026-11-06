@@ -71,13 +71,13 @@ interface Status {
 }
 
 const PANEL =
-  'flex flex-col gap-4 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] ' +
-  'bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]';
+  'flex flex-col gap-4 rounded-panel border border-border ' +
+  'bg-surface-raised p-5 shadow-panel';
 
 const STATUS_TONES: Record<Status['tone'], string> = {
-  neutral: 'text-[color:var(--color-foreground-muted)]',
-  success: 'text-[color:var(--color-foreground)]',
-  error: 'font-medium text-[color:var(--color-error)]',
+  neutral: 'text-foreground-muted',
+  success: 'text-foreground',
+  error: 'font-medium text-error',
 };
 
 export function LearningIsland({
@@ -186,9 +186,7 @@ export function LearningIsland({
         <h2 id={headingId} className="text-lg font-semibold tracking-tight">
           {labels.heading}
         </h2>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {labels.privacy}
-        </p>
+        <p className="text-sm text-foreground-muted">{labels.privacy}</p>
       </div>
 
       {standing.enrolled ? (
@@ -218,18 +216,14 @@ export function LearningIsland({
               {labels.enrol}
             </Button>
           </div>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {labels.enrolHelp}
-          </p>
+          <p className="text-sm text-foreground-muted">{labels.enrolHelp}</p>
         </div>
       )}
 
       {!live ? null : standing.trialRequested ? (
         <div className="flex flex-col gap-2">
           <p className="text-sm font-medium">{labels.trialRequested}</p>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {labels.trialHelp}
-          </p>
+          <p className="text-sm text-foreground-muted">{labels.trialHelp}</p>
           <p className="text-sm">
             <TextLink href={myLearningHref}>{labels.trialManage}</TextLink>
           </p>
@@ -252,9 +246,7 @@ export function LearningIsland({
               {labels.requestTrial}
             </Button>
           </div>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {labels.trialHelp}
-          </p>
+          <p className="text-sm text-foreground-muted">{labels.trialHelp}</p>
         </div>
       )}
     </section>,

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { z } from 'zod';
 import { getMessages, getTranslations } from 'next-intl/server';
 import {
@@ -28,7 +29,7 @@ export default async function Correspondence({
 }) {
   const locale = await requireLocale(params),
     query = await searchParams;
-  const path = '/' + locale + '/admin/editorial/correspondence';
+  const path = localizedPath(locale, '/admin/editorial/correspondence');
   const context = await requireAdminPage(locale, 'correspondence.read', path);
   const t = await getTranslations({ locale, namespace: 'editorial' }),
     messages = (await getMessages({ locale })).editorial;

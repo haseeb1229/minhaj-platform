@@ -2,13 +2,11 @@ import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { toQueryParams } from '../../apps/web/src/i18n/query.ts';
 import { localeSchema } from '../../packages/contracts/src/env/shared.ts';
 import { repoRoot } from '../architecture/architecture-harness.ts';
 
 /**
- * The interface message catalogues, and the query handling locale switching
- * depends on.
+ * The interface message catalogues.
  *
  * Phase 3A delivers INTERFACE localisation only. These files hold UI strings —
  * a heading, two labels, the switcher's accessible name. They hold no Quran
@@ -111,7 +109,9 @@ describe('the catalogues agree on their keys', () => {
       'shell.home.preAdoption',
       'shell.home.search.label',
       'shell.nav.explore',
-      'shell.menu.toggle',
+      'shell.nav.about',
+      'shell.nav.searchPlaceholder',
+      'shell.footer.description',
       'shell.reserved.body',
       'shell.footer.preAdoption',
       'shell.notFound.body',
@@ -243,59 +243,5 @@ describe('missing-message behaviour is explicit', () => {
     // an interpolated message value is user content
     // (SECURITY_BASELINE.md §19.2).
     expect(code).not.toMatch(/console\./);
-  });
-});
-
-describe('locale switching preserves the query string', () => {
-  /**
-   * The half of switching that markup cannot show.
-   *
-   * A statically rendered route is served from a prerendered file, so the
-   * query is only ever known in the browser — there is no server-rendered HTML
-   * carrying it for an HTTP test to inspect. The conversion is therefore
-   * proven here, directly, on the function the switcher calls.
-   */
-  it('preserves a single parameter', () => {
-    expect(toQueryParams(new URLSearchParams('a=1'))).toEqual({ a: '1' });
-  });
-
-  it('preserves several parameters', () => {
-    expect(toQueryParams(new URLSearchParams('a=1&b=2'))).toEqual({ a: '1', b: '2' });
-  });
-
-  it('preserves a REPEATED key as a list rather than keeping the last value', () => {
-    // The defect this function exists to avoid. `Object.fromEntries` yields
-    // `{ x: '2' }` here, silently dropping a filter selection
-    // (ROUTE_MAP.md §2.3 makes filters query parameters).
-    expect(toQueryParams(new URLSearchParams('x=1&x=2'))).toEqual({ x: ['1', '2'] });
-  });
-
-  it('preserves three repetitions of one key, in order', () => {
-    expect(toQueryParams(new URLSearchParams('x=1&x=2&x=3'))).toEqual({
-      x: ['1', '2', '3'],
-    });
-  });
-
-  it('hands over DECODED values, leaving encoding to the URL builder', () => {
-    // Concatenating an already-encoded value into a URL double-encodes it;
-    // concatenating a decoded one without encoding splits it into new
-    // parameters. The value crosses this boundary decoded, exactly once.
-    const query = toQueryParams(
-      new URLSearchParams('q=%D8%A7%D8%B1%D8%AF%D9%88&r=a%26b'),
-    );
-
-    expect(query).toEqual({ q: 'اردو', r: 'a&b' });
-  });
-
-  it('preserves a parameter with an empty value', () => {
-    expect(toQueryParams(new URLSearchParams('a=&b=1'))).toEqual({ a: '', b: '1' });
-  });
-
-  it('preserves a space-bearing value', () => {
-    expect(toQueryParams(new URLSearchParams('q=one+two'))).toEqual({ q: 'one two' });
-  });
-
-  it('yields an empty query when there is none', () => {
-    expect(toQueryParams(new URLSearchParams(''))).toEqual({});
   });
 });

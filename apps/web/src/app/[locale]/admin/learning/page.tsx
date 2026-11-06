@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound, redirect } from 'next/navigation';
 
 import { requireOwnSession } from '@/composition/authorization';
@@ -21,9 +22,10 @@ export default async function LearningAdminRoot({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const base = `/${locale}/admin/learning`;
+  const base = localizedPath(locale, '/admin/learning');
   const active = await requireOwnSession(locale);
-  if (active === null) redirect(`/${locale}/signin?returnTo=${encodeURIComponent(base)}`);
+  if (active === null)
+    redirect(localizedPath(locale, `/signin?returnTo=${encodeURIComponent(base)}`));
   const held = (await identityRuntime().authorization.evaluate(active.session))
     .permissions;
   if (held.has('learning.read')) redirect(`${base}/courses`);

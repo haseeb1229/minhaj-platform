@@ -119,7 +119,7 @@ export default async function MigrationRunPage({
       </header>
 
       <Panel>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('run.source')}>
             <Code>{run.sourceKey}</Code>
           </DetailRow>
@@ -176,7 +176,7 @@ export default async function MigrationRunPage({
         <SectionHeading>
           <span id="run-counts">{t('run.counts')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="text-sm text-foreground-muted">
           {t(`run.verdict.${run.reconciliation}`)}
         </p>
         {!counts.ok ? (

@@ -39,68 +39,176 @@ async function sourceOf(relative: string): Promise<string> {
 const ACTIONS = 'apps/web/src/app/[locale]/(identity)/actions.ts';
 
 describe('returnTo destinations', () => {
+  /**
+   * ROUTE_MAP.md §1.1 (Rebaseline R1): English is UNPREFIXED. `/my/saved` is
+   * the English address, `/ur/my/saved` and `/ar/my/saved` the Urdu and
+   * Arabic ones, and a legacy `/en/…` value is accepted only to be handed back
+   * in its canonical unprefixed form — a sign-in never lands on an address
+   * that would answer a further redirect.
+   */
   const locale = 'en';
 
-  it('accepts a same-origin path under a supported locale', () => {
-    expect(safeReturnTo('/en/my/settings/security', locale)).toBe(
-      '/en/my/settings/security',
-    );
+  /** The fallback a hostile value resolves to, in each caller locale. */
+  const FALLBACK = { en: '/my', ur: '/ur/my', ar: '/ar/my' } as const;
+
+  it('accepts an unprefixed English path and a /ur or /ar path, unchanged', () => {
+    expect(safeReturnTo('/my', locale)).toBe('/my');
+    expect(safeReturnTo('/my/settings/security', locale)).toBe('/my/settings/security');
     expect(safeReturnTo('/ur/my', locale)).toBe('/ur/my');
+    expect(safeReturnTo('/ur/my/saved', locale)).toBe('/ur/my/saved');
     expect(safeReturnTo('/ar/my/settings/profile', locale)).toBe(
       '/ar/my/settings/profile',
     );
   });
 
-  it('falls back safely for every hostile shape', () => {
+  it('keeps the DESTINATION’s locale, whatever the caller’s', () => {
+    // The caller's locale only chooses the fallback. A destination that names
+    // its own language keeps it — an unprefixed one stays English even when
+    // the sign-in page itself was Urdu.
+    expect(safeReturnTo('/my/saved', 'ur')).toBe('/my/saved');
+    expect(safeReturnTo('/my/saved', 'ar')).toBe('/my/saved');
+    expect(safeReturnTo('/ar/my/saved', 'ur')).toBe('/ar/my/saved');
+    expect(safeReturnTo('/ur/my/saved', 'ar')).toBe('/ur/my/saved');
+  });
+
+  it('returns a legacy /en destination in its canonical unprefixed form', () => {
+    expect(safeReturnTo('/en/my/saved', locale)).toBe('/my/saved');
+    expect(safeReturnTo('/en/my', locale)).toBe('/my');
+    expect(safeReturnTo('/en/my', 'ur')).toBe('/my');
+    expect(safeReturnTo('/en/my/settings/security', 'ar')).toBe('/my/settings/security');
+    expect(safeReturnTo('/en/library/articles/some-article', locale)).toBe(
+      '/library/articles/some-article',
+    );
+    expect(safeReturnTo('/en/my/saved?x=1', locale)).toBe('/my/saved?x=1');
+    expect(safeReturnTo('/en/my/saved#notes', locale)).toBe('/my/saved#notes');
+  });
+
+  it('preserves the query and the fragment of an accepted destination', () => {
+    for (const accepted of [
+      '/my/saved?x=1',
+      '/ur/my/saved?x=1',
+      '/ar/my/saved?x=1&x=2',
+      '/my/saved#notes',
+      '/ur/my/saved/bookmarks?offset=20#top',
+      '/my/questions/?offset=20',
+    ])
+      expect(safeReturnTo(accepted, locale), accepted).toBe(accepted);
+  });
+
+  it('accepts the teacher and administration entry points, and only their roots', () => {
+    // Each page still makes its own authorisation decision after sign-in;
+    // accepting the address grants nothing.
+    for (const accepted of ['/admin', '/teacher', '/admin/', '/ur/admin', '/ar/teacher'])
+      expect(safeReturnTo(accepted, locale), accepted).toBe(accepted);
+    expect(safeReturnTo('/en/admin', locale)).toBe('/admin');
+    expect(safeReturnTo('/en/teacher', 'ur')).toBe('/teacher');
+
+    for (const candidate of [
+      '/admin/identity/users',
+      '/teacher/classes',
+      '/ur/admin/system/audit',
+      '/administrator',
+      '/teachers',
+      '/admin.evil.example',
+      '/admin%2f..%2fx',
+      '//admin',
+    ])
+      expect(safeReturnTo(candidate, locale), candidate).toBe('/my');
+  });
+
+  it('falls back safely for every hostile shape, into the caller locale', () => {
     // An open redirect under a trusted domain is a phishing primitive, and a
     // particular reputational risk for a religious organisation whose visitors
     // have every reason to trust a link that appears to come from it
     // (SECURITY_BASELINE.md §9.3).
     //
-    // ALLOWLIST, not denylist: everything that is not provably a local route
-    // under a known locale falls back, so a shape nobody thought of fails
-    // closed rather than passing through.
+    // ALLOWLIST, not denylist: everything that is not provably a known local
+    // route falls back, so a shape nobody thought of fails closed rather than
+    // passing through. Unprefixed English is now a legitimate shape, so each
+    // hostile form is tried both unprefixed and under a locale prefix.
     const hostile = [
       // Absolute and scheme-bearing.
       'https://evil.example/steal',
       'http://evil.example',
+      'https://evil.example/my',
       '//evil.example',
       '//evil.example/path',
+      '//evil.example/my',
       'javascript:alert(1)',
       'JaVaScRiPt:alert(1)',
       'data:text/html,<script>alert(1)</script>',
       'vbscript:msgbox(1)',
-      // Backslash variants some parsers normalise to `//`.
+      // Backslash variants some parsers normalise to `//`, raw and encoded.
       '/\\evil.example',
       '/\\/evil.example',
       '/en/\\evil.example',
+      '/ur/\\evil.example',
+      '/my/\\evil.example',
+      '/%5cevil.example',
+      // An encoded network-path reference.
+      '/%2f%2fevil.example',
+      '/%2F%2Fevil.example/my',
       // Traversal, raw and encoded.
       '/en/../../etc/passwd',
+      '/../../etc/passwd',
+      '/my/../admin',
       '/en/%2e%2e/%2e%2e/admin',
+      '/%2e%2e/admin',
       '/en/..%2fadmin',
+      '/..%2fadmin',
       '/%2e%2e/%2e%2e',
-      // Not a path at all.
+      '/ur/my/%2e%2e/%2e%2e/admin',
+      // Not an absolute path at all.
       'my/settings',
-      '',
+      'my',
       'en/my',
-      // A locale nobody supports.
+      '?next=/my',
+      '#/my',
+      // A locale nobody supports, a locale in the wrong case, a doubled
+      // locale, a bare locale root, and a route that does not exist.
       '/fr/my',
       '/xx/my',
-      '/admin',
+      '/EN/my',
+      '/Ur/my',
+      '/en-GB/my',
+      '/en/ur/my',
+      '/ur/en/my',
+      '/ur/ur/my',
+      '/en/en/my',
+      '/',
+      '/en',
+      '/ur',
+      '/ar/',
       '/en/not-a-real-route',
-      // Control characters, including the newline that splits a header.
+      '/not-a-real-route',
+      '/ur/not-a-real-route',
+      // Control characters, including the newline that splits a header, raw
+      // and percent-encoded.
+      '/my\nSet-Cookie: a=b',
       '/en/my\nSet-Cookie: a=b',
+      '/my\r\nLocation: https://evil.example',
       '/en/my\r\nLocation: https://evil.example',
+      '/ur/my\r\nLocation: https://evil.example',
+      '/my%0d%0aLocation:%20https://evil.example',
+      '/my?x=%0aSet-Cookie',
+      '/my\u0000',
       '/en/my\u0000',
+      '/my\u007f',
       // Malformed percent-encoding, which cannot be reasoned about.
       '/en/%zz',
       '/en/%',
+      '/%zz',
+      '/my%',
+      '/ur/my?x=%',
     ];
 
-    for (const candidate of hostile) {
-      expect(safeReturnTo(candidate, locale), `${JSON.stringify(candidate)}`).toBe(
-        '/en/my',
-      );
+    for (const [caller, fallback] of Object.entries(FALLBACK)) {
+      for (const candidate of hostile) {
+        expect(
+          safeReturnTo(candidate, caller),
+          `${caller} ${JSON.stringify(candidate)}`,
+        ).toBe(fallback);
+      }
     }
   });
 
@@ -108,117 +216,157 @@ describe('returnTo destinations', () => {
     // Phase 20: `/fatwa/ask` sends an anonymous visitor through sign-in back to
     // `/my/questions/ask`; a question is addressed by its opaque id alone.
     const id = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
-    expect(safeReturnTo('/en/my/questions', locale)).toBe('/en/my/questions');
+    expect(safeReturnTo('/my/questions', locale)).toBe('/my/questions');
+    expect(safeReturnTo('/my/questions/ask', locale)).toBe('/my/questions/ask');
+    expect(safeReturnTo(`/my/questions/${id}`, locale)).toBe(`/my/questions/${id}`);
     expect(safeReturnTo('/ur/my/questions/ask', locale)).toBe('/ur/my/questions/ask');
     expect(safeReturnTo(`/ar/my/questions/${id}`, locale)).toBe(`/ar/my/questions/${id}`);
+    expect(safeReturnTo(`/en/my/questions/${id}`, locale)).toBe(`/my/questions/${id}`);
     expect(safeReturnTo('/en/my/questions/?offset=20', locale)).toBe(
-      '/en/my/questions/?offset=20',
+      '/my/questions/?offset=20',
     );
 
+    // Each locale-free shape is refused unprefixed and under every prefix.
+    for (const shape of [
+      '/my/questions/not-an-id',
+      '/my/questions/0A1B2C3D-4E5F-4A6B-8C7D-9E0F1A2B3C4D',
+      `/my/questions/${id}x`,
+      `/my/questions/${id}/edit`,
+      '/my/questions/0a1b2c3d-4e5f-0a6b-8c7d-9e0f1a2b3c4d',
+      '/my/questions/0a1b2c3d4e5f4a6b8c7d9e0f1a2b3c4d',
+      '/my/questions/ask/extra',
+      `/my/questions/%2e%2e/${id}`,
+    ]) {
+      for (const prefix of ['', '/en', '/ur', '/ar']) {
+        const candidate = `${prefix}${shape}`;
+        expect(safeReturnTo(candidate, locale), candidate).toBe('/my');
+      }
+    }
+
     for (const candidate of [
-      '/en/my/questions/not-an-id',
-      '/en/my/questions/0A1B2C3D-4E5F-4A6B-8C7D-9E0F1A2B3C4D',
-      `/en/my/questions/${id}x`,
-      `/en/my/questions/${id}/edit`,
-      '/en/my/questions/0a1b2c3d-4e5f-0a6b-8c7d-9e0f1a2b3c4d',
-      '/en/my/questions/0a1b2c3d4e5f4a6b8c7d9e0f1a2b3c4d',
-      '/en/my/questions/ask/extra',
-      `/en/my/questions/%2e%2e/${id}`,
+      `//evil.example/my/questions/${id}`,
       `//evil.example/en/my/questions/${id}`,
       `/fr/my/questions/${id}`,
-    ]) {
-      expect(safeReturnTo(candidate, locale), candidate).toBe('/en/my');
-    }
+    ])
+      expect(safeReturnTo(candidate, locale), candidate).toBe('/my');
   });
 
   it('accepts Personalisation’s and Learning’s own pages and the island pages, exactly', () => {
     // Phase 21: a "sign in to save" island returns to the page it sits on, and
     // every `/my` page Personalisation delivers is a sign-in destination.
     const id = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
-    for (const accepted of [
-      '/en/my/saved',
-      '/en/my/saved/bookmarks',
-      '/ur/my/saved/notes',
-      '/ar/my/saved/collections',
-      `/en/my/saved/collections/${id}`,
-      '/en/my/history/reading',
-      '/en/my/history/watch',
-      '/en/my/progress/quran',
-      '/en/my/notifications',
-      '/en/my/settings/interests',
-      '/en/my/settings/notifications',
-      '/en/my/settings/privacy',
-      '/en/my/saved/bookmarks?offset=20',
-      '/en/library/articles/some-article',
-      '/ur/library/books/a-book-2',
-      '/ar/watch/videos/a-lecture',
-      '/en/quran/surah/2/255',
-      '/en/quran/surah/114/6',
-      '/en/hadith/a-collection/7',
+    const englishAccepted = [
+      '/my/saved',
+      '/my/saved/bookmarks',
+      `/my/saved/collections/${id}`,
+      '/my/history/reading',
+      '/my/history/watch',
+      '/my/progress/quran',
+      '/my/notifications',
+      '/my/settings/interests',
+      '/my/settings/notifications',
+      '/my/settings/privacy',
+      '/my/saved/bookmarks?offset=20',
+      '/library/articles/some-article',
+      '/library/books/a-book-2',
+      '/watch/videos/a-lecture',
+      '/quran/surah/2/255',
+      '/quran/surah/114/6',
+      '/hadith/a-collection/7',
       // Phase 22: Learning's own pages, and the public Course page whose
       // island offers "sign in to enrol".
-      '/en/my/learning',
+      '/my/learning',
+      '/my/learning/courses/a-course',
+      '/my/learning/paths/a-path-2',
+      '/my/progress/courses',
+      '/learn/courses/a-course',
+    ];
+    for (const accepted of [
+      ...englishAccepted,
+      '/ur/my/saved/notes',
+      '/ar/my/saved/collections',
+      '/ur/library/books/a-book-2',
+      '/ar/watch/videos/a-lecture',
       '/ur/my/learning/courses/a-course',
       '/ar/my/learning/paths/a-path-2',
-      '/en/my/progress/courses',
-      '/en/learn/courses/a-course',
     ])
       expect(safeReturnTo(accepted, locale), accepted).toBe(accepted);
 
+    // The same English destinations under the legacy prefix come back in
+    // their canonical unprefixed form.
+    for (const accepted of englishAccepted)
+      expect(safeReturnTo(`/en${accepted}`, 'ur'), `/en${accepted}`).toBe(accepted);
+
+    // Each locale-free shape is refused unprefixed and under every prefix.
+    for (const shape of [
+      '/my/saved/collections/not-a-uuid',
+      `/my/saved/collections/${id.toUpperCase()}`,
+      `/my/saved/collections/${id}/edit`,
+      `/my/saved/collections/${id}x`,
+      '/my/saved/everything',
+      '/my/history',
+      '/my/progress',
+      '/my/learning/courses',
+      '/my/learning/courses/A-Course',
+      '/my/learning/courses/a-course/lesson',
+      '/my/learning/paths/',
+      '/my/learning/classes',
+      '/learn/courses',
+      '/learn/courses/a_course',
+      '/learn/paths/a-path',
+      '/library/articles/../x',
+      '/library/articles/%2e%2e/x',
+      '/library/articles/Some-Article',
+      '/library/articles/some_article',
+      '/library/articles/-leading',
+      '/library/articles/a/b',
+      '/library/articles/',
+      '/library/editions/a-book',
+      '/quran/surah/0/1',
+      '/quran/surah/1/0',
+      '/quran/surah/01/1',
+      '/quran/surah/1',
+      '/quran/surah/1/1/extra',
+      '/quran/surah/a/1',
+      '/hadith/a-collection/0',
+      '/hadith/a-collection/1234567',
+      '/hadith/a-collection',
+      '/watch/videos/a-lecture/transcript',
+      '/watch/playlists/a-lecture',
+      '/my/saved%2f..%2fadmin',
+    ]) {
+      for (const prefix of ['', '/en', '/ur', '/ar']) {
+        const candidate = `${prefix}${shape}`;
+        expect(safeReturnTo(candidate, locale), candidate).toBe('/my');
+      }
+    }
+
     for (const candidate of [
-      '/en/my/saved/collections/not-a-uuid',
-      `/en/my/saved/collections/${id.toUpperCase()}`,
-      `/en/my/saved/collections/${id}/edit`,
-      `/en/my/saved/collections/${id}x`,
-      '/en/my/saved/everything',
-      '/en/my/history',
-      '/en/my/progress',
-      '/en/my/learning/courses',
-      '/en/my/learning/courses/A-Course',
-      '/en/my/learning/courses/a-course/lesson',
-      '/en/my/learning/paths/',
-      '/en/my/learning/classes',
-      '/en/learn/courses',
-      '/en/learn/courses/a_course',
-      '/en/learn/paths/a-path',
-      '/en/library/articles/../x',
-      '/en/library/articles/%2e%2e/x',
-      '/en/library/articles/Some-Article',
-      '/en/library/articles/some_article',
-      '/en/library/articles/-leading',
-      '/en/library/articles/a/b',
-      '/en/library/articles/',
-      '/en/library/editions/a-book',
-      '/en/quran/surah/0/1',
-      '/en/quran/surah/1/0',
-      '/en/quran/surah/01/1',
-      '/en/quran/surah/1',
-      '/en/quran/surah/1/1/extra',
-      '/en/quran/surah/a/1',
-      '/en/hadith/a-collection/0',
-      '/en/hadith/a-collection/1234567',
-      '/en/hadith/a-collection',
-      '/en/watch/videos/a-lecture/transcript',
-      '/en/watch/playlists/a-lecture',
       '//evil',
+      '//evil.example/library/articles/x',
       '//evil.example/en/library/articles/x',
-      '/\\evil.example/en/my/saved',
+      '/\\evil.example/my/saved',
+      'https://evil.example/my/saved',
       'https://evil.example/en/my/saved',
+      '//my/saved',
       '/en//my/saved',
+      '/ur//my/saved',
       '/fr/my/saved',
-      '/en/my/saved%2f..%2fadmin',
-      '/library/articles/some-article',
+      '/fr/library/articles/some-article',
     ])
-      expect(safeReturnTo(candidate, locale), candidate).toBe('/en/my');
+      expect(safeReturnTo(candidate, locale), candidate).toBe('/my');
   });
 
   it('falls back for an absent destination', () => {
-    expect(safeReturnTo(null, locale)).toBe('/en/my');
+    expect(safeReturnTo(null, locale)).toBe('/my');
+    expect(safeReturnTo('', locale)).toBe('/my');
   });
 
   it('falls back into the CALLER locale, not a fixed one', () => {
     expect(safeReturnTo(null, 'ur')).toBe('/ur/my');
+    expect(safeReturnTo(null, 'ar')).toBe('/ar/my');
     expect(safeReturnTo('https://evil.example', 'ar')).toBe('/ar/my');
+    expect(safeReturnTo('https://evil.example', 'en')).toBe('/my');
   });
 });
 
@@ -341,6 +489,9 @@ describe('the mutation surface', () => {
         'apps/web/src/app/api/my/notes/route.ts',
         'apps/web/src/app/api/my/quran-progress/route.ts',
         'apps/web/src/app/api/my/target-state/route.ts',
+        // Rebaseline R1: whether this browser is signed in — one boolean, for
+        // the public header's account island. Same transport, same guards.
+        'apps/web/src/app/api/my/account-state/route.ts',
         // Phase 22: Learning's handlers beneath the same prefix, admitted by
         // the same transport — one GET of the person's state on one Course,
         // two Class-A mutations (enrol, request a trial class) and Learning's
@@ -439,7 +590,7 @@ describe('the mutation surface', () => {
       /if \(!isSameOriginMutation\(request, \w+\)\) return failed\('denied'\)/u,
     );
     const personal = routes.filter((entry) => entry.includes('/api/my/'));
-    expect(personal).toHaveLength(14);
+    expect(personal).toHaveLength(15);
     for (const route of personal) {
       const source = await readFile(path.join(repoRoot, route), 'utf8');
       for (const verb of ['PUT', 'PATCH', 'DELETE'])

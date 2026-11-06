@@ -19,6 +19,11 @@ the Phase 30-RD owner decisions — a person's audited clearance of personal-dat
 the source's curated archives as Collections (MIGRATION_STRATEGY.md §17; 617 ordinary records),
 and corrected by the Phase 30-RV defect-only owner review (MIGRATION_STRATEGY.md §18);
 Stage 1B, the full initial corpus, follows Minhaj's review and go-ahead. Phase 31 has not started.
+Since then the owner-directed **Rebaseline Program R1 — Flagship Foundation** (an operational
+macro, 2026-11-06, not a canonical phase; recorded after Phase 30 in §4) has reset the product's
+foundation: the interim One Minhaj identity, unprefixed English URLs, content-aware navigation,
+shipped typefaces and one product frame. Stage 1B and Phases 31–35 have not started, and readiness
+is reported in six separate dimensions, never as a bare "complete".
 
 ---
 
@@ -448,7 +453,10 @@ routing with `en`, `ur`, `ar` **always present** (ROUTE_MAP.md §1.1) · locale 
 `/` → resolved-locale **307** · route-preserving locale switching (ROUTE_MAP.md §1.3) ·
 **RTL route infrastructure and foundation** — logical CSS properties throughout, `dir` derived
 from locale, correct mixed-direction handling · locale-aware layout primitives · the lint rule
-blocking physical-direction utilities in layout code.
+blocking physical-direction utilities in layout code. *(Historical at Phase-3A exit: the
+always-present `/en` segment, the cookie/`Accept-Language` resolution and the 307 at `/` are
+superseded by Rebaseline R1 (2026-11-06) — English unprefixed, `/en/…` one 301, no locale
+cookie, ROUTE_MAP.md §1.1. The single localisation implementation is unchanged in kind.)*
 
 **Explicitly NOT:** Topic, Language or Tag schema · taxonomy administration · any content
 domain · any content-translation modelling (that is domain data — DOMAIN_MODEL.md §19.1).
@@ -498,6 +506,10 @@ CSP · **`hreflang`, canonical and `x-default` emission** · sitemap index skele
 presentation infrastructure** · **the canonical product design system** (ARCHITECTURE.md §13)
 — semantic tokens, tri-script typography, the component and state contract, responsive
 breakpoint behaviour, navigation and scroll behaviour, and the motion and reduced-motion rules.
+*(Historical at Phase-4 exit: its visual values, the utility bar, the twelve-item navigation and
+the mega-menu framework are superseded by Rebaseline R1 (2026-11-06) — the owner-approved interim
+One Minhaj identity and the content-aware shell; the token structure, the component and state
+contract and the behavioural rules stand. See the Rebaseline R1 record after Phase 30.)*
 
 > **Phase 4 owns the canonical broad design system; Phase 2 delivered only the minimum
 > foundation its own surfaces needed.** This phase extends that foundation to the full public
@@ -2592,6 +2604,65 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > passed. The owner's verdict on the staging build is pending; Stage 1B, Phase 31, Phase 32 and
 > production cutover have **not** started.
 
+> **Rebaseline Program R1 — Flagship Foundation (an OPERATIONAL macro, 2026-11-06; owner-directed,
+> not a canonical phase and not Phase 31).** It follows the independent Enterprise Product
+> Re-Baseline Audit (2026-11-06, held outside the repository) and resets the product's
+> foundation — identity, addresses, navigation, typography and frame — before any further
+> presentation work. **No schema change** (31 migrations; latest
+> `20261031000000_phase30rd_owner_decisions`), no new npm dependency, public indexing still off,
+> staging still pre-adoption.
+>
+> **Owner decisions (2026-11-06, Haseeb, project owner; OPEN_DECISIONS.md §6.4, §8):** the interim
+> One Minhaj visual identity (replaceable by Minhaj's brand pack, which stays OPEN; the official
+> MQI logo unmodified as a secondary footer mark; a typographic "One Minhaj" wordmark with an
+> eight-point star outline); unprefixed English URLs; content-aware navigation; the one
+> pre-adoption statement in the footer; and the readiness vocabulary below.
+>
+> **Delivered:**
+>
+> - **Visual identity as tokens** — the palette, radii and shadows by role in one `@theme` block,
+>   every role a Tailwind utility; 1,403 arbitrary `[color:var(--…)]`/radius/shadow classes
+>   migrated; contrast asserted by `tests/config/design-tokens.test.ts` (text ≥ 4.5:1, control
+>   boundary and focus ≥ 3:1) (ARCHITECTURE.md §13.2).
+> - **Typography** — four self-hosted OFL faces (Newsreader, Instrument Sans, Gulzar Nastaliq, Noto
+>   Naskh Arabic) through `next/font/local` in one module, Latin preloaded, Arabic-script not,
+>   enforced by `tests/config/fonts.test.ts`; CSP `font-src 'self'` unchanged (ARCHITECTURE.md
+>   §13.3; TECH_STACK.md §18.9).
+> - **Unprefixed English URLs** — `/en` and `/en/…` one 301 to the unprefixed address (query
+>   preserved, merged with slug history); `localePrefix: 'as-needed'`, no locale detection, no
+>   locale cookie; every localised path built by `localizedPath` / parsed by `splitLocalePath`
+>   (`packages/contracts/src/locale-path.ts`), ~850 hand-built `/${locale}` constructions
+>   centralised; the language switcher as plain links; route-scoped headers by `inEveryLocale`;
+>   sign-in `returnTo` canonicalised; `icon.png` excluded from the proxy matcher (ROUTE_MAP.md §1.1,
+>   §1.3, §4, §9, §10).
+> - **Content-aware shell** — a pure presentation policy (`apps/web/src/shell/presence.ts`) over a
+>   per-request, fail-closed public evidence snapshot (`apps/web/src/composition/presence.ts`):
+>   at most six promoted destinations plus "More", Donate only while giving is open, a three-group
+>   footer, legal links only for published legal Pages, `/explore` listing only published pages; the
+>   registry's `placements`, `shell/menus.ts` and `components/shell/menu-panel.tsx` removed; the
+>   public layout and `/explore` declared content routes (INFORMATION_ARCHITECTURE.md §2–§4;
+>   ARCHITECTURE.md §8.3.1.1). The admin Navigation status page's Placement column became a
+>   Promotion column (ROUTE_MAP.md §5.1).
+> - **One product frame** — a shared ProductBar on My Minhaj, Teacher, Admin (`WorkspaceShell`)
+>   and a new identity layout; "<page> · <Area> · One Minhaj" titles; explicit `noindex`; the
+>   private read `/api/my/account-state` (`{ signedIn }` only) for the header's account island
+>   (INFORMATION_ARCHITECTURE.md §5; SECURITY_BASELINE.md §19.1.2).
+> - **Probes moved off `/en`** — the staging edge smoke and edge-credential rotation probe `/`,
+>   `/signin`, `/my`, `/admin`, `/admin/migration`; `scripts/staging-edge-proof.sh` probes `/` and
+>   `/explore?x=1`; the CI proxy proof and the staging-deploy verify probe `/`.
+>
+> **Intentionally NOT in R1:** the home and landing-page redesign (R2; the home body's own hero
+> line is left for it), media-player redesign, the My Minhaj / Teacher / Admin workflow redesign
+> (R3/R4), Stage 1B, Phases 31–35, production cutover, any schema change and any official adoption
+> claim.
+>
+> **Readiness vocabulary (owner-approved).** Readiness is never reported as a bare "complete". It
+> is reported in six separate dimensions — **Engineering**, **Product**, **Content**, **Activation**,
+> **Production** and **Flagship/presentation** — each stated on its own evidence, so that an
+> engineering exit is never read as content, activation, production or presentation readiness.
+>
+> **Closure evidence: pending exact-SHA CI and staging.**
+
 ---
 
 ### Phase 31 — Search Completeness Validation
@@ -2742,9 +2813,11 @@ post-launch monitoring.
 > `hreflang` is emitted and the sitemap routes answer 404. Turning it on at the official origin —
 > together with `AUTH_BASE_URL`, the single application origin canonical URLs are built from — is
 > what performs this transition. **It is an environment and launch-state control, not a product
-> mode**, and the application is not reduced in any way while it is off. The public shell is
-> statically rendered, so the value is read at build time: the transition is a deliberate
-> rebuild and redeploy, not a runtime toggle.
+> mode**, and the application is not reduced in any way while it is off. The value is inlined
+> into the build (`MINHAJ_BUILD_PUBLIC_INDEXING_ENABLED`), so the transition is a deliberate
+> rebuild and redeploy, not a runtime toggle — still true since Rebaseline R1 made the public
+> layout render per request (ARCHITECTURE.md §8.3.1.1); at Phase-4 exit the reason given was that
+> the public shell was statically rendered (historical).
 
 > **Staging acceptance is not production promotion.** Promotion carries provenance, review
 > integrity and checksums forward, and **excludes staging test accounts, known-password users,

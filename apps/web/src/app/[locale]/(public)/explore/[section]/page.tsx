@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import {
   readPage,
   publishedPageMetadata,
@@ -126,8 +127,8 @@ export default async function ExploreSectionPage({ params }: SectionParams) {
       <ListingIntro
         trailLabel={t('nav.breadcrumbs')}
         trail={[
-          { href: `/${locale}`, text: t('nav.home') },
-          { href: `/${locale}/explore`, text: t('explore.title') },
+          { href: localizedPath(locale, ''), text: t('nav.home') },
+          { href: localizedPath(locale, '/explore'), text: t('explore.title') },
           { text: title },
         ]}
         title={title}

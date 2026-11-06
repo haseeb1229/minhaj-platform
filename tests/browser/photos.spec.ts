@@ -18,6 +18,7 @@ import {
   baseUrl,
   browserEnvironment,
   expect,
+  localizedPath,
   privilegedSession,
   registerAndSignIn,
   test,
@@ -202,7 +203,7 @@ test.describe('an anonymous visitor looks at photographs', () => {
     page,
   }) => {
     const external = thirdPartyRequests(page);
-    const response = await page.goto('/en/media/photos');
+    const response = await page.goto('/media/photos');
     expect(response?.status()).toBe(200);
     expect(response?.headers()['set-cookie']).toBeUndefined();
     await expect(
@@ -243,11 +244,11 @@ test.describe('an anonymous visitor looks at photographs', () => {
     ).toBeVisible();
 
     // The three photograph surfaces, and no download.
-    for (const href of ['/en/media/galleries', '/en/media/archive']) {
+    for (const href of ['/media/galleries', '/media/archive']) {
       await expect(main.locator(`a[href="${href}"]`).first()).toBeVisible();
     }
-    // Scoped to the page's content: the footer's "Library downloads" is
-    // navigation to another section, not a download of these photographs.
+    // Scoped to the page's content: the shell's own navigation is not a
+    // download of these photographs.
     await expect(
       page.getByRole('main').getByRole('link', { name: /download/i }),
     ).toHaveCount(0);
@@ -260,7 +261,7 @@ test.describe('an anonymous visitor looks at photographs', () => {
     page,
   }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto(`/en/media/galleries/${gallerySlug}`);
+    await page.goto(`/media/galleries/${gallerySlug}`);
     await everyImageLoaded(page);
 
     const tile = page
@@ -298,7 +299,7 @@ test.describe('an anonymous visitor looks at photographs', () => {
   test('lists a gallery with a genuine cover and its public count, and hides one with nothing public', async ({
     page,
   }) => {
-    const response = await page.goto('/en/media/galleries');
+    const response = await page.goto('/media/galleries');
     expect(response?.headers()['set-cookie']).toBeUndefined();
     const card = page.getByRole('listitem').filter({ hasText: GALLERY_TITLE });
     await expect(card).toBeVisible();
@@ -316,7 +317,7 @@ test.describe('an anonymous visitor looks at photographs', () => {
   test('shows a gallery’s public photographs in its order, and an honest empty state', async ({
     page,
   }) => {
-    await page.goto(`/en/media/galleries/${gallerySlug}`);
+    await page.goto(`/media/galleries/${gallerySlug}`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(GALLERY_TITLE);
     const list = page.getByRole('list', { name: 'Photographs' });
     const figures = list.locator('figure');
@@ -334,7 +335,7 @@ test.describe('an anonymous visitor looks at photographs', () => {
     await expect(page.getByText(ARCHIVED_CAPTION)).toHaveCount(0);
 
     // Published, but nothing in it is public: it answers, and says so.
-    await page.goto(`/en/media/galleries/${hiddenSlug}`);
+    await page.goto(`/media/galleries/${hiddenSlug}`);
     await expect(
       page.getByText('None of this gallery’s photographs is available yet.'),
     ).toBeVisible();
@@ -345,12 +346,15 @@ test.describe('an anonymous visitor looks at photographs', () => {
     request,
   }) => {
     for (const locale of ['en', 'ur']) {
-      const response = await request.get(`/${locale}/media/galleries/${galleryOld}`, {
-        maxRedirects: 0,
-      });
+      const response = await request.get(
+        localizedPath(locale, `/media/galleries/${galleryOld}`),
+        {
+          maxRedirects: 0,
+        },
+      );
       expect(response.status()).toBe(301);
       expect(new URL(response.headers()['location'] ?? '', baseUrl()).pathname).toBe(
-        `/${locale}/media/galleries/${gallerySlug}`,
+        localizedPath(locale, `/media/galleries/${gallerySlug}`),
       );
     }
   });
@@ -358,7 +362,7 @@ test.describe('an anonymous visitor looks at photographs', () => {
   test('browses the archive by the date taken — never by when a record was made', async ({
     page,
   }) => {
-    await page.goto('/en/media/archive');
+    await page.goto('/media/archive');
     const years = page.getByRole('navigation', { name: 'Years' });
     await expect(years.getByRole('link', { name: /1995/ })).toBeVisible();
     await expect(years.getByRole('link', { name: /1989/ })).toBeVisible();
@@ -368,7 +372,7 @@ test.describe('an anonymous visitor looks at photographs', () => {
     ).toHaveCount(0);
 
     await years.getByRole('link', { name: /1995/ }).click();
-    await expect(page).toHaveURL(/\/en\/media\/archive\?year=1995$/);
+    await expect(page).toHaveURL(/\/media\/archive\?year=1995$/);
     await expect(
       page.getByRole('heading', { name: 'Photographs from 1995' }),
     ).toBeVisible();
@@ -382,7 +386,7 @@ test.describe('an anonymous visitor looks at photographs', () => {
     await expect(page.getByText(DRAFT_CAPTION)).toHaveCount(0);
 
     // A year known alone stays a year.
-    await page.goto('/en/media/archive?year=1989');
+    await page.goto('/media/archive?year=1989');
     await expect(page.getByText(PANORAMA_CAPTION)).toBeVisible();
     await expect(page.getByText('1989', { exact: true }).first()).toBeVisible();
   });
@@ -413,10 +417,7 @@ test.describe('an anonymous visitor looks at photographs', () => {
       const refused = await request.get(imageRoute(photoId, assetId));
       expect(refused.status(), `${photoId}/${assetId}`).toBe(404);
     }
-    for (const missing of [
-      '/en/media/downloads',
-      `/en/media/photos/${photo.landscape}`,
-    ]) {
+    for (const missing of ['/media/downloads', `/media/photos/${photo.landscape}`]) {
       expect((await request.get(missing, { maxRedirects: 0 })).status(), missing).toBe(
         404,
       );
@@ -427,7 +428,7 @@ test.describe('an anonymous visitor looks at photographs', () => {
     page,
   }) => {
     const route = imageRoute(photo.withdrawn, asset.withdrawn);
-    await page.goto('/en/media/photos');
+    await page.goto('/media/photos');
     await everyImageLoaded(page);
     await expect(page.locator(`img[src="${route}"]`)).toHaveCount(1);
 
@@ -483,10 +484,10 @@ test.describe('an anonymous visitor looks at photographs', () => {
   }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     for (const address of [
-      '/en/media/photos',
-      '/en/media/galleries',
-      `/en/media/galleries/${gallerySlug}`,
-      '/en/media/archive?year=1995',
+      '/media/photos',
+      '/media/galleries',
+      `/media/galleries/${gallerySlug}`,
+      '/media/archive?year=1995',
       `/ur/media/galleries/${gallerySlug}`,
       '/ar/media/archive',
     ]) {
@@ -536,9 +537,9 @@ test.describe('photograph administration', () => {
   });
 
   test('shows the same public page signed in as signed out', async ({ page }) => {
-    await page.goto(`/en/media/galleries/${gallerySlug}`);
+    await page.goto(`/media/galleries/${gallerySlug}`);
     const anonymous = await page.getByRole('main').innerText();
-    const response = await admin.goto(`/en/media/galleries/${gallerySlug}`);
+    const response = await admin.goto(`/media/galleries/${gallerySlug}`);
     expect(response?.headers()['set-cookie']).toBeUndefined();
     expect(await admin.getByRole('main').innerText()).toBe(anonymous);
   });
@@ -550,7 +551,7 @@ test.describe('photograph administration', () => {
       `photos/${photo.landscape}`,
       `galleries/${galleryId}`,
     ]) {
-      const response = await stranger.goto(`/en/admin/media/${surface}`);
+      const response = await stranger.goto(`/admin/media/${surface}`);
       expect(response?.status(), surface).toBe(404);
     }
     const upload = await stranger.request.post(
@@ -565,7 +566,7 @@ test.describe('photograph administration', () => {
   });
 
   test('lets a reader see, but not preview a draft or change anything', async () => {
-    await reader.goto('/en/admin/media/photos');
+    await reader.goto('/admin/media/photos');
     await expect(reader.getByRole('heading', { level: 1, name: 'Photos' })).toBeVisible();
     await expect(reader.getByRole('heading', { name: 'Upload photographs' })).toHaveCount(
       0,
@@ -581,16 +582,16 @@ test.describe('photograph administration', () => {
       `/assets/media/previews/photos/${photo.draft}/${asset.draft}`,
     );
     expect(preview.status()).toBe(404);
-    await reader.goto(`/en/admin/media/photos/${photo.draft}`);
+    await reader.goto(`/admin/media/photos/${photo.draft}`);
     await expect(reader.getByRole('button', { name: 'Save', exact: true })).toHaveCount(
       0,
     );
   });
 
   test('previews a draft for a live administrator, and lists the gaps to fill', async () => {
-    await admin.goto('/en/admin/media/photos?gap=alt');
+    await admin.goto('/admin/media/photos?gap=alt');
     await expect(admin.getByText('No alternative text').first()).toBeVisible();
-    await admin.goto(`/en/admin/media/photos/${photo.draft}`);
+    await admin.goto(`/admin/media/photos/${photo.draft}`);
     const image = admin.getByRole('main').locator('img').first();
     await expect(image).toHaveAttribute(
       'src',
@@ -631,7 +632,7 @@ test.describe('photograph administration', () => {
       Buffer.from(pngChunk('IHDR', header)),
     ]);
 
-    await admin.goto('/en/admin/media/photos');
+    await admin.goto('/admin/media/photos');
     await admin.locator('input[type="file"]').setInputFiles([
       { name: 'synthetic-large.png', mimeType: 'image/png', buffer: large },
       {
@@ -671,7 +672,7 @@ test.describe('photograph administration', () => {
     const [empty] = await sql.query<{ id: string }>(
       'SELECT TOP 1 [id] FROM [dbo].[Photo] WHERE [assetId] IS NULL ORDER BY [createdAt] DESC;',
     );
-    await admin.goto(`/en/admin/media/photos/${String(empty?.id)}`);
+    await admin.goto(`/admin/media/photos/${String(empty?.id)}`);
     await admin.locator('#photo-state').selectOption('published');
     await admin.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(
@@ -680,7 +681,7 @@ test.describe('photograph administration', () => {
         .filter({ hasText: 'Upload an image before publishing this photograph.' }),
     ).toBeVisible();
 
-    await admin.goto(`/en/admin/media/photos/${photo.draft}`);
+    await admin.goto(`/admin/media/photos/${photo.draft}`);
     const second = await admin.context().newPage();
     await second.goto(admin.url());
     await admin
@@ -708,15 +709,15 @@ test.describe('photograph administration', () => {
 
   test('creates a gallery, adds photographs by looking at them, and reorders them', async () => {
     const slug = `browser-admin-gallery-${run}`;
-    await admin.goto('/en/admin/media/galleries');
+    await admin.goto('/admin/media/galleries');
     await admin.locator('#new-gallery-slug').fill(slug);
     await admin.locator('#new-gallery-title-en').fill('Synthetic admin gallery');
     await admin.getByRole('button', { name: 'Create', exact: true }).click();
-    await admin.waitForURL(/\/en\/admin\/media\/galleries\/[0-9a-f-]{36}$/);
+    await admin.waitForURL(/\/admin\/media\/galleries\/[0-9a-f-]{36}$/);
     createdGallery = admin.url().split('/').pop() ?? '';
     await expect(admin.getByText('This gallery has no photographs yet.')).toBeVisible();
 
-    await admin.goto(`/en/admin/media/galleries/${createdGallery}?state=published`);
+    await admin.goto(`/admin/media/galleries/${createdGallery}?state=published`);
     const choices = admin.getByRole('checkbox', { name: 'Add this photograph' });
     await expect(choices.first()).toBeVisible();
     await choices.nth(0).check();
@@ -746,7 +747,7 @@ test.describe('photograph administration', () => {
   });
 
   test('refuses a stale membership change visibly, and keeps the first', async () => {
-    await admin.goto(`/en/admin/media/galleries/${createdGallery}`);
+    await admin.goto(`/admin/media/galleries/${createdGallery}`);
     const second = await admin.context().newPage();
     await second.goto(admin.url());
 

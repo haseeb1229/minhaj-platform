@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import type { ReactNode } from 'react';
@@ -51,7 +52,7 @@ export async function fatwaTrail(locale: Locale) {
   const t = await getTranslations({ locale, namespace: 'fatwa' });
   return {
     label: shell('nav.breadcrumbs'),
-    home: { href: `/${locale}`, text: shell('nav.home') },
+    home: { href: localizedPath(locale, ''), text: shell('nav.home') },
     fatwa: { href: fatwaSectionPath(locale), text: t('title') },
   };
 }
@@ -69,7 +70,7 @@ export async function FatwaFixtureNotice({
   return (
     <p
       role="note"
-      className="rounded-[var(--radius-panel)] border-2 border-[color:var(--color-warning)] bg-[color:var(--color-warning-surface)] px-4 py-3 font-semibold text-[color:var(--color-warning)]"
+      className="rounded-panel border-2 border-warning bg-warning-surface px-4 py-3 font-semibold text-warning"
     >
       {t('fixture')}
     </p>
@@ -169,12 +170,12 @@ export async function FatwaPrinciples({ locale }: { readonly locale: Locale }) {
         {PRINCIPLES.map((key) => (
           <li
             key={key}
-            className="flex min-w-0 flex-col gap-2 border-s-2 border-[color:var(--color-accent-rule)] ps-4"
+            className="flex min-w-0 flex-col gap-2 border-s-2 border-accent-rule ps-4"
           >
             <h3 className="text-subheading font-semibold">
               {t(`landing.trust.${key}.title`)}
             </h3>
-            <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
+            <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
               {t(`landing.trust.${key}.body`)}
             </p>
           </li>
@@ -210,7 +211,7 @@ export async function FatwaUnavailable({
       <ActionLink href={fatwaSectionPath(locale, 'how-it-works')}>
         {t('unavailable.howItWorks')}
       </ActionLink>
-      <ActionLink href={`/${locale}`} tone="secondary">
+      <ActionLink href={localizedPath(locale, '')} tone="secondary">
         {t('unavailable.home')}
       </ActionLink>
     </div>

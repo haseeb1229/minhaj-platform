@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { endonymOf } from '@/config/locale';
@@ -32,15 +33,16 @@ export default async function LanguagePage({
 }) {
   const locale = await requireLocale(params);
   const t = await getTranslations({ locale, namespace: 'identity' });
-  const session = await requireActiveSession(locale, `/${locale}/my/settings/language`);
+  const session = await requireActiveSession(
+    locale,
+    localizedPath(locale, '/my/settings/language'),
+  );
 
   return (
     <main className="flex w-full max-w-3xl min-w-0 flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('language.title')}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">
-          {t('language.description')}
-        </p>
+        <p className="text-foreground-muted">{t('language.description')}</p>
       </header>
 
       <Panel>

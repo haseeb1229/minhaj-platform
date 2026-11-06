@@ -13,6 +13,7 @@ import {
   enrolSecondFactorInBrowser,
   expect,
   grantRole,
+  localizedPath,
   privilegedSession,
   registerAndSignIn,
   test,
@@ -297,7 +298,7 @@ test.describe('while the Fatwa service is not activated', () => {
     page,
   }) => {
     for (const locale of LOCALES) {
-      const response = await page.goto(`/${locale}/fatwa`);
+      const response = await page.goto(localizedPath(locale, '/fatwa'));
       expect(response?.status(), locale).toBe(200);
       expect(response?.headers()['set-cookie'], locale).toBeUndefined();
       await expect(page.locator('html')).toHaveAttribute(
@@ -320,7 +321,7 @@ test.describe('while the Fatwa service is not activated', () => {
   test('how it works still renders, and says no question is being accepted', async ({
     page,
   }) => {
-    const response = await page.goto('/en/fatwa/how-it-works');
+    const response = await page.goto('/fatwa/how-it-works');
     expect(response?.status()).toBe(200);
     expect(response?.headers()['set-cookie']).toBeUndefined();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
@@ -332,7 +333,7 @@ test.describe('while the Fatwa service is not activated', () => {
   });
 
   test('the removed derived-view paths are absent', async ({ request }) => {
-    for (const missing of ['/en/fatwa/latest', '/en/fatwa/popular']) {
+    for (const missing of ['/fatwa/latest', '/fatwa/popular']) {
       const response = await request.get(missing, { maxRedirects: 0 });
       expect(response.status(), missing).toBe(404);
     }
@@ -341,16 +342,16 @@ test.describe('while the Fatwa service is not activated', () => {
   test('asking anonymously ends at sign-in with a validated return path', async ({
     page,
   }) => {
-    await page.goto('/en/fatwa/ask');
-    await page.waitForURL(/\/en\/signin\?/);
+    await page.goto('/fatwa/ask');
+    await page.waitForURL(/\/signin\?/);
     const url = new URL(page.url());
     expect(`${url.pathname}${url.search}`).toBe(
-      '/en/signin?returnTo=%2Fen%2Fmy%2Fquestions%2Fask',
+      '/signin?returnTo=%2Fmy%2Fquestions%2Fask',
     );
   });
 
   test('a signed-in account is offered nothing to type into', async () => {
-    const response = await asker.goto('/en/my/questions/ask');
+    const response = await asker.goto('/my/questions/ask');
     expect(response?.status()).toBe(200);
     await expect(
       asker.getByText(
@@ -402,7 +403,7 @@ test.describe('a fixture activation', () => {
 
   test('the asker reads the privacy terms first, asks, and lands on an opaque address', async () => {
     const page = asker;
-    await page.goto('/en/my/questions/ask');
+    await page.goto('/my/questions/ask');
     const privacy = page.locator('section[aria-labelledby="ask-privacy"]');
     await expect(privacy.getByRole('heading', { level: 2 })).toHaveText(
       'How your question is handled',
@@ -414,7 +415,7 @@ test.describe('a fixture activation', () => {
     await expect(box).toBeVisible();
     await box.fill(TEXT.question);
     await page.getByRole('button', { name: 'Send question' }).click();
-    await page.waitForURL(/\/en\/my\/questions\/[0-9a-f-]{36}$/);
+    await page.waitForURL(/\/my\/questions\/[0-9a-f-]{36}$/);
 
     // THE ADDRESS IS THE QUESTION'S OPAQUE ID, NEVER ITS WORDS.
     const url = page.url();
@@ -431,29 +432,29 @@ test.describe('a fixture activation', () => {
     await expect(main).toContainText('Received');
 
     // The list names the question by date and status — never by its words.
-    await page.goto('/en/my/questions');
+    await page.goto('/my/questions');
     const list = page.getByRole('list', { name: 'Your questions' });
     await expect(list.getByRole('listitem')).toHaveCount(1);
     await expect(list.getByRole('link')).toHaveAttribute(
       'href',
-      `/en/my/questions/${questionId}`,
+      `/my/questions/${questionId}`,
     );
     await expect(page.getByRole('main')).not.toContainText(PRIVATE_WORD);
 
     for (const target of [
-      '/en/my/questions',
-      '/en/my/questions/ask',
-      `/en/my/questions/${questionId}`,
+      '/my/questions',
+      '/my/questions/ask',
+      `/my/questions/${questionId}`,
     ])
       await expectPrivateSurface(page, target);
   });
 
   test('another account cannot open the question, and does not see it listed', async () => {
-    const response = await secondAsker.goto(`/en/my/questions/${questionId}`);
+    const response = await secondAsker.goto(`/my/questions/${questionId}`);
     expect(response?.status()).toBe(404);
     await expect(secondAsker.locator('body')).not.toContainText(PRIVATE_WORD);
 
-    await secondAsker.goto('/en/my/questions');
+    await secondAsker.goto('/my/questions');
     await expect(
       secondAsker.getByText('You have not asked a question yet.'),
     ).toBeVisible();
@@ -464,21 +465,21 @@ test.describe('a fixture activation', () => {
       await secondAsker
         .locator('a[href]')
         .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? '')),
-    ).not.toContain(`/en/my/questions/${questionId}`);
+    ).not.toContain(`/my/questions/${questionId}`);
   });
 
   test('question.receive files and assigns the question — the list never shows its words', async () => {
     const page = receiver;
-    await page.goto('/en/admin/fatwa/questions');
+    await page.goto('/admin/fatwa/questions');
     const main = page.getByRole('main');
     await expect(
       main.getByRole('link', { name: `Open question ${questionId.slice(0, 8)}` }),
-    ).toHaveAttribute('href', `/en/admin/fatwa/questions/${questionId}`);
+    ).toHaveAttribute('href', `/admin/fatwa/questions/${questionId}`);
     await expect(main).not.toContainText(PRIVATE_WORD);
-    await expectPrivateSurface(page, '/en/admin/fatwa/questions');
+    await expectPrivateSurface(page, '/admin/fatwa/questions');
 
     // The detail is an audited read, and says so before the text.
-    const detail = `/en/admin/fatwa/questions/${questionId}`;
+    const detail = `/admin/fatwa/questions/${questionId}`;
     await page.goto(detail);
     await expect(main).toContainText('Your opening this page has been recorded.');
     await expect(main).toContainText(TEXT.question);
@@ -515,7 +516,7 @@ test.describe('a fixture activation', () => {
 
   test('fatwa.answer drafts a separate public question and sends it for review', async () => {
     const page = answerer;
-    const draft = `/en/admin/fatwa/drafts/${questionId}`;
+    const draft = `/admin/fatwa/drafts/${questionId}`;
     await page.goto(draft);
     const main = page.getByRole('main');
     await expect(main).toContainText(TEXT.question);
@@ -570,9 +571,9 @@ test.describe('a fixture activation', () => {
   test('fatwa.publish publishes only behind the fatwa-publication step-up', async () => {
     test.setTimeout(120_000);
     const page = publisher;
-    await page.goto('/en/admin/fatwa/review');
+    await page.goto('/admin/fatwa/review');
     await page.getByRole('main').getByRole('link', { name: TEXT.title }).click();
-    const review = `/en/admin/fatwa/review/${fatwaId}`;
+    const review = `/admin/fatwa/review/${fatwaId}`;
     await page.waitForURL(`**${review}`);
 
     // The step-up prompt is this purpose's own.
@@ -604,7 +605,7 @@ test.describe('a fixture activation', () => {
     ).toBeVisible();
     await page.locator('#fatwa-publish-confirm').check();
     await page.getByRole('button', { name: 'Publish revision' }).click();
-    await page.waitForURL(`**/en/admin/fatwa/published/${fatwaId}`);
+    await page.waitForURL(`**/admin/fatwa/published/${fatwaId}`);
 
     const [publication] = await sql.query<{ purpose: string; sequence: number }>(
       `SELECT g.[purpose], p.[sequence] FROM [dbo].[FatwaPublication] p JOIN [dbo].[StepUpGrant] g ON g.[id]=p.[stepUpGrantId] WHERE p.[fatwaId]=N'${fatwaId}';`,
@@ -615,7 +616,7 @@ test.describe('a fixture activation', () => {
   test('the public ruling carries the banner and the public question — never the private one', async ({
     page,
   }) => {
-    const response = await visitFixture(page, `/en${RULING}`);
+    const response = await visitFixture(page, RULING);
     const html = await response.text();
     expect(html).not.toContain(PRIVATE_WORD);
     expect(html).not.toContain('NON_FATWA_FIXTURE_PRIVATE_QUESTION');
@@ -631,7 +632,7 @@ test.describe('a fixture activation', () => {
     await expect(ruling.locator('p[lang]')).toHaveAttribute('lang', 'en');
     await expect(page.getByRole('link', { name: NAME.topic })).toHaveAttribute(
       'href',
-      `/en/topics/${slug.topic}`,
+      `/topics/${slug.topic}`,
     );
     expect(await page.content()).not.toContain(PRIVATE_WORD);
 
@@ -645,34 +646,30 @@ test.describe('a fixture activation', () => {
 
   test('the asker sees the question answered, with a link to the ruling', async () => {
     const page = asker;
-    await page.goto(`/en/my/questions/${questionId}`);
+    await page.goto(`/my/questions/${questionId}`);
     const main = page.getByRole('main');
     await expect(main).toContainText('Answered');
     const link = main.getByRole('link', { name: 'Read the published ruling' });
-    await expect(link).toHaveAttribute('href', `/en${RULING}`);
+    await expect(link).toHaveAttribute('href', RULING);
     await link.click();
-    await page.waitForURL(`**/en${RULING}`);
+    await page.waitForURL(`**${RULING}`);
     await expect(page.getByRole('note')).toHaveText(COPY.en.fixture);
   });
 
   test('both orders list the ruling, and every view stays out of the index', async ({
     page,
   }) => {
-    for (const target of [
-      '/en/fatwa',
-      '/en/fatwa?sort=latest',
-      '/en/fatwa?sort=popular',
-    ]) {
+    for (const target of ['/fatwa', '/fatwa?sort=latest', '/fatwa?sort=popular']) {
       await visitFixture(page, target);
       const list = page.getByRole('list', { name: 'Published rulings' });
       await expect(list.getByRole('link', { name: TEXT.title }), target).toHaveAttribute(
         'href',
-        `/en${RULING}`,
+        RULING,
       );
       await expect(page.getByRole('main'), target).not.toContainText(PRIVATE_WORD);
     }
     for (const locale of ['ur', 'ar'] as const) {
-      await visitFixture(page, `/${locale}/fatwa`, locale);
+      await visitFixture(page, localizedPath(locale, '/fatwa'), locale);
       await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     }
   });
@@ -687,7 +684,7 @@ test.describe('a fixture activation', () => {
       .poll(
         async () => {
           const response = await page.goto(
-            `/en/fatwa/search?q=${encodeURIComponent(PUBLIC_WORD)}`,
+            `/fatwa/search?q=${encodeURIComponent(PUBLIC_WORD)}`,
           );
           expect(response?.status()).toBe(200);
           await page.getByRole('heading', { level: 1 }).waitFor();
@@ -706,12 +703,12 @@ test.describe('a fixture activation', () => {
     await expect(results).toHaveCount(1);
     await expect(page.getByRole('link', { name: TEXT.title })).toHaveAttribute(
       'href',
-      `/en${RULING}`,
+      RULING,
     );
 
     // The asker's own words were never indexed.
     const response = await page.goto(
-      `/en/fatwa/search?q=${encodeURIComponent(PRIVATE_WORD)}`,
+      `/fatwa/search?q=${encodeURIComponent(PRIVATE_WORD)}`,
     );
     expect(response?.status()).toBe(200);
     await expect(page.locator('ol[aria-labelledby="fatwa-results"] > li')).toHaveCount(0);
@@ -746,7 +743,7 @@ test.describe('a fixture activation', () => {
       '/published',
       '/categories',
     ]) {
-      const response = await page.goto(`/en/admin/fatwa${surface}`);
+      const response = await page.goto(`/admin/fatwa${surface}`);
       statuses[surface === '' ? '/' : surface] = response?.status();
       await expect(page.locator('body'), surface).not.toContainText(PRIVATE_WORD);
     }
@@ -765,8 +762,8 @@ test.describe('a fixture activation', () => {
       for (const viewer of [page, asker])
         await viewer.setViewportSize({ width, height: 800 });
       for (const target of [
-        ...LOCALES.map((locale) => `/${locale}/fatwa`),
-        ...LOCALES.map((locale) => `/${locale}${RULING}`),
+        ...LOCALES.map((locale) => localizedPath(locale, '/fatwa')),
+        ...LOCALES.map((locale) => localizedPath(locale, RULING)),
       ]) {
         const response = await page.goto(target);
         expect(response?.status(), target).toBe(200);
@@ -777,7 +774,7 @@ test.describe('a fixture activation', () => {
         await expectHeadingsInOrder(page, `${String(width)}px ${target}`);
       }
       for (const locale of LOCALES) {
-        const target = `/${locale}/my/questions/ask`;
+        const target = localizedPath(locale, '/my/questions/ask');
         const response = await asker.goto(target);
         expect(response?.status(), target).toBe(200);
         expect(
@@ -790,7 +787,7 @@ test.describe('a fixture activation', () => {
 
     // The ask box is labelled, and its submit is reached by keyboard alone.
     await asker.setViewportSize({ width: 1280, height: 800 });
-    await asker.goto('/en/my/questions/ask');
+    await asker.goto('/my/questions/ask');
     const box = asker.locator('textarea');
     await expect(box).toHaveCount(1);
     await expect(asker.getByRole('textbox', { name: 'Your question' })).toHaveAttribute(
@@ -807,7 +804,7 @@ test.describe('a fixture activation', () => {
     // or transition — then under `reduce`, where nothing on the page may move
     // beyond the platform's global 0.01ms ceiling.
     await page.emulateMedia({ reducedMotion: 'no-preference' });
-    await page.goto(`/en${RULING}`);
+    await page.goto(RULING);
     const text = await page.evaluate(() =>
       [...document.querySelectorAll('main section p[lang], main h1, main h1 *')].map(
         (element) => {
@@ -824,7 +821,7 @@ test.describe('a fixture activation', () => {
     }
 
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto(`/en${RULING}`);
+    await page.goto(RULING);
     const motion = await page.evaluate(() => ({
       running: document
         .getAnimations()

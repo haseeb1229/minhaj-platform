@@ -91,9 +91,7 @@ export function PersonName({
 }) {
   const name = names.get(accountId);
   return name === undefined ? (
-    <span className="text-[color:var(--color-foreground-muted)]">
-      {copy.t('person.fallback')}
-    </span>
+    <span className="text-foreground-muted">{copy.t('person.fallback')}</span>
   ) : (
     <span dir="auto" className="wrap-anywhere">
       {name}

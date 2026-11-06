@@ -73,9 +73,7 @@ export function StepUpPrompt({
         <input type="hidden" name="purpose" value={purpose} />
 
         <SectionHeading>{labels.title}</SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {labels.description}
-        </p>
+        <p className="text-sm text-foreground-muted">{labels.description}</p>
 
         {state.status === 'success' ? (
           <Alert tone="success">{labels.granted}</Alert>

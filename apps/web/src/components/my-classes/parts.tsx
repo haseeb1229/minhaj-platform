@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import type { getTranslations } from 'next-intl/server';
@@ -41,11 +42,11 @@ interface Link {
 /** The neighbouring pages each My Classes page links to. */
 export function classLinks(locale: Locale, t: ClassesTranslator): readonly Link[] {
   return [
-    { href: `/${locale}/my/classes`, text: t('nav.classes') },
-    { href: `/${locale}/my/teachers`, text: t('nav.teachers') },
-    { href: `/${locale}/my/learning`, text: t('nav.learning') },
-    { href: `/${locale}/learn/live`, text: t('nav.schedule') },
-    { href: `/${locale}/my`, text: t('nav.account') },
+    { href: localizedPath(locale, '/my/classes'), text: t('nav.classes') },
+    { href: localizedPath(locale, '/my/teachers'), text: t('nav.teachers') },
+    { href: localizedPath(locale, '/my/learning'), text: t('nav.learning') },
+    { href: localizedPath(locale, '/learn/live'), text: t('nav.schedule') },
+    { href: localizedPath(locale, '/my'), text: t('nav.account') },
   ];
 }
 
@@ -143,7 +144,7 @@ export function ClassSchedule({
   return (
     <dl className="flex flex-col gap-1 text-sm">
       <div className="flex flex-wrap gap-x-2">
-        <dt className="text-[color:var(--color-foreground-muted)]">{t('time.starts')}</dt>
+        <dt className="text-foreground-muted">{t('time.starts')}</dt>
         <dd>
           <ClassTime
             instant={session.startsAt}
@@ -154,7 +155,7 @@ export function ClassSchedule({
         </dd>
       </div>
       <div className="flex flex-wrap gap-x-2">
-        <dt className="text-[color:var(--color-foreground-muted)]">{t('time.ends')}</dt>
+        <dt className="text-foreground-muted">{t('time.ends')}</dt>
         <dd>
           <ClassTime
             instant={session.endsAt}
@@ -166,15 +167,11 @@ export function ClassSchedule({
         </dd>
       </div>
       <div className="flex flex-wrap gap-x-2">
-        <dt className="text-[color:var(--color-foreground-muted)]">
-          {t('time.classZone')}
-        </dt>
+        <dt className="text-foreground-muted">{t('time.classZone')}</dt>
         <dd>{session.timeZone}</dd>
       </div>
       <div className="flex flex-wrap gap-x-2">
-        <dt className="text-[color:var(--color-foreground-muted)]">
-          {t('time.yourZone')}
-        </dt>
+        <dt className="text-foreground-muted">{t('time.yourZone')}</dt>
         <dd>
           <PersonalTime
             value={session.startsAt.toISOString()}
@@ -203,7 +200,7 @@ export function JoinLink({
       href={url}
       target="_blank"
       rel="noreferrer noopener"
-      className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] bg-[color:var(--color-action)] px-4 py-2 text-sm font-medium text-[color:var(--color-action-foreground)] hover:bg-[color:var(--color-action-hover)]"
+      className="inline-flex min-h-11 items-center rounded-control bg-action px-4 py-2 text-sm font-medium text-action-foreground hover:bg-action-hover"
     >
       {label}
     </a>

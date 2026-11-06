@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { learningRead } from '@/components/my-learning/read';
@@ -42,7 +43,7 @@ export default async function CourseSessionsPage({
   const { id } = await params;
   const gate = await requireTeacher(
     locale,
-    `/${locale}/teacher/courses/${encodeURIComponent(id)}/sessions`,
+    localizedPath(locale, `/teacher/courses/${encodeURIComponent(id)}/sessions`),
   );
   const t = await getTranslations({ locale, namespace: 'teacher' });
   if (!gate.activated) return <NotActivated t={t} />;
@@ -94,9 +95,7 @@ export default async function CourseSessionsPage({
         <span id="course-upcoming">
           <SectionHeading>{t('course.upcoming')}</SectionHeading>
         </span>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('course.upcomingHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('course.upcomingHelp')}</p>
         {!upcoming.ok ? (
           <Alert tone="error">{t('failure.load')}</Alert>
         ) : mine(upcoming.value.items).length === 0 ? (
@@ -117,7 +116,9 @@ export default async function CourseSessionsPage({
         {upcoming.ok && upcoming.value.truncated ? (
           <p className="text-sm">
             {t('course.upcomingMore')}{' '}
-            <TextLink href={`/${locale}/teacher/calendar`}>{t('nav.calendar')}</TextLink>
+            <TextLink href={localizedPath(locale, '/teacher/calendar')}>
+              {t('nav.calendar')}
+            </TextLink>
           </p>
         ) : null}
       </section>
@@ -126,9 +127,7 @@ export default async function CourseSessionsPage({
         <span id="course-past">
           <SectionHeading>{t('course.past')}</SectionHeading>
         </span>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('course.pastHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('course.pastHelp')}</p>
         {!past.ok ? (
           <Alert tone="error">{t('failure.load')}</Alert>
         ) : mine(past.value.items).length === 0 ? (

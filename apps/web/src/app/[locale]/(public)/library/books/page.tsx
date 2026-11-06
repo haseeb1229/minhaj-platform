@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
@@ -112,8 +113,8 @@ export default async function BooksPage({ params, searchParams }: ListingParams)
     <ListingFrame
       breadcrumbLabel={shell('nav.breadcrumbs')}
       trail={[
-        { href: `/${locale}`, text: shell('nav.home') },
-        { href: `/${locale}/library`, text: t('title') },
+        { href: localizedPath(locale, ''), text: shell('nav.home') },
+        { href: localizedPath(locale, '/library'), text: t('title') },
         { text: t('books') },
       ]}
       title={t('books')}
@@ -132,7 +133,7 @@ export default async function BooksPage({ params, searchParams }: ListingParams)
           <FilterPanel id="books-filters" heading={t('filters')}>
             <form
               method="get"
-              action={`/${locale}/library/books`}
+              action={localizedPath(locale, '/library/books')}
               className="flex flex-col gap-4"
               aria-label={t('filters')}
             >
@@ -224,7 +225,9 @@ export default async function BooksPage({ params, searchParams }: ListingParams)
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <Button tone="secondary">{t('filterApply')}</Button>
-                <TextLink href={`/${locale}/library/books`}>{t('filterClear')}</TextLink>
+                <TextLink href={localizedPath(locale, '/library/books')}>
+                  {t('filterClear')}
+                </TextLink>
               </div>
             </form>
           </FilterPanel>
@@ -232,7 +235,7 @@ export default async function BooksPage({ params, searchParams }: ListingParams)
 
         <div className="flex min-w-0 flex-col gap-6">
           {filters.contributor === null ? null : (
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[var(--radius-control)] border border-[color:var(--color-accent-rule)] bg-[color:var(--color-accent-surface)] px-4 py-2 text-sm">
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-control border border-accent-rule bg-accent-surface px-4 py-2 text-sm">
               <span>
                 {t('filterContributor')}:{' '}
                 <span className="font-semibold">

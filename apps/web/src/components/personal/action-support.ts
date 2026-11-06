@@ -2,7 +2,7 @@ import 'server-only';
 
 import { revalidatePath } from 'next/cache';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 
 import type { FormActionState } from '@/app/[locale]/(identity)/form-state';
 import { requireOwnSession } from '@/composition/authorization';
@@ -58,7 +58,7 @@ export function rejected(error: unknown, operation: string): FormActionState {
 
 /** Re-renders every My Minhaj page after a change any of them may display. */
 export function refreshMy(locale: Locale): void {
-  revalidatePath(`/${locale}/my`, 'layout');
+  revalidatePath(localizedPath(locale, '/my'), 'layout');
 }
 
 /** A whole decimal number, or `NaN` — never a zero for a missing field. */

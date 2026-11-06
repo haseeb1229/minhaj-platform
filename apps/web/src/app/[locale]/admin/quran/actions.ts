@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
-import { localeSchema } from '@minhaj/contracts';
+import { localeSchema, localizedPath } from '@minhaj/contracts';
 import {
   QURAN_AYAH_NUMBER_MAX,
   QURAN_LIMITS,
@@ -128,7 +128,7 @@ async function authorise(form: FormData) {
 
 /** Re-renders the Quran administration after a change it displays. */
 function refresh(locale: string): void {
-  revalidatePath(`/${locale}/admin/quran`, 'layout');
+  revalidatePath(localizedPath(locale, '/admin/quran'), 'layout');
 }
 
 /** The record being edited and the version the operator was looking at. */
@@ -354,7 +354,7 @@ export async function saveTranslation(
     const service = quranRuntime().quran;
     if (value(form, 'id') === null) {
       const created = await service.createTranslation(actor, { value: parsed.data });
-      destination = `/${locale}/admin/quran/translations/${created.id}`;
+      destination = localizedPath(locale, `/admin/quran/translations/${created.id}`);
     } else {
       const target = versioned(form);
       if (!target.success) return INVALID;
@@ -388,7 +388,7 @@ export async function saveTransliteration(
     const service = quranRuntime().quran;
     if (value(form, 'id') === null) {
       const created = await service.createTransliteration(actor, { value: parsed.data });
-      destination = `/${locale}/admin/quran/transliterations/${created.id}`;
+      destination = localizedPath(locale, `/admin/quran/transliterations/${created.id}`);
     } else {
       const target = versioned(form);
       if (!target.success) return INVALID;
@@ -422,7 +422,7 @@ export async function saveTafsir(
     const service = quranRuntime().quran;
     if (value(form, 'id') === null) {
       const created = await service.createTafsir(actor, { value: parsed.data });
-      destination = `/${locale}/admin/quran/tafsir/${created.id}`;
+      destination = localizedPath(locale, `/admin/quran/tafsir/${created.id}`);
     } else {
       const target = versioned(form);
       if (!target.success) return INVALID;
@@ -584,7 +584,7 @@ export async function saveRecitation(
     const service = quranRuntime().quran;
     if (value(form, 'id') === null) {
       const created = await service.createRecitation(actor, { value: parsed.data });
-      destination = `/${locale}/admin/quran/recitations/${created.id}`;
+      destination = localizedPath(locale, `/admin/quran/recitations/${created.id}`);
     } else {
       const target = versioned(form);
       if (!target.success) return INVALID;
@@ -693,7 +693,7 @@ export async function saveTajweedRule(
     const service = quranRuntime().quran;
     if (value(form, 'id') === null) {
       const created = await service.createTajweedRule(actor, { value: parsed.data });
-      destination = `/${locale}/admin/quran/tajweed/${created.id}`;
+      destination = localizedPath(locale, `/admin/quran/tajweed/${created.id}`);
     } else {
       const target = versioned(form);
       if (!target.success) return INVALID;

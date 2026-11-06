@@ -281,7 +281,7 @@ export function ExactText({
 }
 
 export const SUBMIT_CLASSES =
-  'inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-medium';
+  'inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-medium';
 
 /* ===========================================================================
  * Owner references — languages from Taxonomy, people from People
@@ -413,9 +413,7 @@ export function PeopleSearch({
           {t('people.searchSubmit')}
         </button>
       </form>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('people.searchHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('people.searchHelp')}</p>
     </div>
   );
 }
@@ -502,9 +500,7 @@ export function SlugField({
       <p className="text-sm">
         <input type="hidden" name="slug" value={slug} />
         {t('slug')}: <span dir="ltr">{slug}</span>
-        <span className="block text-xs text-[color:var(--color-foreground-muted)]">
-          {t('slugFixed')}
-        </span>
+        <span className="block text-xs text-foreground-muted">{t('slugFixed')}</span>
       </p>
     );
   return (
@@ -631,9 +627,7 @@ export function StateControls({
   );
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('stateHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('stateHelp')}</p>
       <div className="flex flex-wrap gap-4">
         {targets.map((state) => (
           <ActionForm

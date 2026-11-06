@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 
 import { quranReadRuntime } from '@/composition/quran-read';
 import { ayahPathOf } from '@/components/quran/presentation';
@@ -51,7 +51,7 @@ export async function quranSitemapPartitions(): Promise<readonly SitemapPartitio
       const path = ayahPathOf({ surah: row.surah, ayah: row.ayah });
       for (const [locale, urls] of buckets)
         urls.push({
-          loc: absoluteUrl(`/${locale}${path}`),
+          loc: absoluteUrl(localizedPath(locale, `${path}`)),
           lastmod: row.lastModified.toISOString(),
         });
     }

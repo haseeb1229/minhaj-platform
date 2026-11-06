@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
@@ -78,8 +79,8 @@ export default async function MyCollectionPage({
   const session = await requireActiveSession(
     locale,
     valid === null
-      ? `/${locale}/my/saved/collections`
-      : `/${locale}/my/saved/collections/${valid}`,
+      ? localizedPath(locale, '/my/saved/collections')
+      : localizedPath(locale, `/my/saved/collections/${valid}`),
   );
   if (valid === null) notFound();
   const t = await getTranslations({ locale, namespace: 'personal' });
@@ -150,7 +151,7 @@ export default async function MyCollectionPage({
               <Panel key={member.savedItemId} as="li">
                 <div className="flex min-w-0 flex-col gap-3">
                   <div className="flex flex-wrap items-center gap-3">
-                    <span className="text-sm text-[color:var(--color-foreground-muted)]">
+                    <span className="text-sm text-foreground-muted">
                       {t('collection.position', { position: index + 1 })}
                     </span>
                     <KindBadge kind={member.target.kind} t={t} />
@@ -269,9 +270,7 @@ export default async function MyCollectionPage({
         <span id="collection-delete">
           <SectionHeading>{t('collection.delete')}</SectionHeading>
         </span>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('collection.deleteHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('collection.deleteHelp')}</p>
         <Panel>
           <ActionForm
             action={removeCollectionAction}

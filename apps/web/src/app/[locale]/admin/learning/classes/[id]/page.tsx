@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import { ATTENDANCE_STATUSES, sessionIsFuture } from '@minhaj/contracts/learning';
@@ -125,7 +126,7 @@ export default async function ClassDetailPage({ params }: EditorParams) {
       <ActivationNotice mode={mode} copy={copy} />
 
       <Panel>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('classes.when')}>
             <SessionTimes session={session} locale={locale} copy={copy} />
           </DetailRow>
@@ -137,7 +138,9 @@ export default async function ClassDetailPage({ params }: EditorParams) {
             />
           </DetailRow>
           <DetailRow term={t('classes.course')}>
-            <TextLink href={`/${locale}/admin/learning/courses/${course.id}`}>
+            <TextLink
+              href={localizedPath(locale, `/admin/learning/courses/${course.id}`)}
+            >
               <Title record={course} locale={locale} />
             </TextLink>
           </DetailRow>
@@ -177,9 +180,7 @@ export default async function ClassDetailPage({ params }: EditorParams) {
         <SectionHeading>
           <span id="class-participants">{t('classes.participants')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('classes.participantsHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('classes.participantsHelp')}</p>
         {participants.length === 0 ? (
           <EmptyState>{t('classes.noParticipants')}</EmptyState>
         ) : (
@@ -263,7 +264,7 @@ export default async function ClassDetailPage({ params }: EditorParams) {
               <SectionHeading>
                 <span id="class-reschedule">{t('classes.reschedule')}</span>
               </SectionHeading>
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
+              <p className="text-sm text-foreground-muted">
                 {t('classes.rescheduleHelp')}
               </p>
               <Panel>
@@ -291,7 +292,7 @@ export default async function ClassDetailPage({ params }: EditorParams) {
               <SectionHeading>
                 <span id="class-teacher">{t('classes.replaceTeacher')}</span>
               </SectionHeading>
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
+              <p className="text-sm text-foreground-muted">
                 {t('classes.replaceTeacherHelp')}
               </p>
               {replacements.length === 0 ? (

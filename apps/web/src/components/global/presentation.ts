@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { z } from 'zod';
 
 import type { Locale } from '@minhaj/contracts';
@@ -94,7 +95,7 @@ export function finderPath(
     readonly city?: PublicPlace | null;
   },
 ): string {
-  return withQuery(`/${locale}/global/find-a-centre`, {
+  return withQuery(localizedPath(locale, '/global/find-a-centre'), {
     country: scope.country?.slug ?? null,
     region: scope.region?.slug ?? null,
     city: scope.city?.slug ?? null,

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Locale } from '@minhaj/contracts';
 
 import type { TeacherTranslator } from './parts';
@@ -18,7 +19,7 @@ export function teacherLinks(
   locale: Locale,
   t: TeacherTranslator,
 ): readonly TeacherLink[] {
-  const root = `/${locale}/teacher`;
+  const root = localizedPath(locale, '/teacher');
   return [
     { key: 'overview', href: root, text: t('nav.overview') },
     { key: 'today', href: `${root}/classes/today`, text: t('nav.today') },

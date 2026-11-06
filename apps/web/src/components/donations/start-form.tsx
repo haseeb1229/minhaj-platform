@@ -92,7 +92,7 @@ export function DonationStartForm({
               return (
                 <div
                   key={id}
-                  className="flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-3"
+                  className="flex min-h-11 items-center gap-2 rounded-control border border-border-strong px-3"
                 >
                   <input
                     id={id}
@@ -107,7 +107,7 @@ export function DonationStartForm({
                 </div>
               );
             })}
-            <div className="flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-3">
+            <div className="flex min-h-11 items-center gap-2 rounded-control border border-border-strong px-3">
               <input id={`${prefix}-own`} type="radio" name="suggested" value="" />
               <label htmlFor={`${prefix}-own`} className="text-sm">
                 {t('form.own')}
@@ -181,9 +181,7 @@ export function DonationStartForm({
         </ul>
       </div>
 
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('form.provider')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('form.provider')}</p>
     </ActionForm>
   );
 }

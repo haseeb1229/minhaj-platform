@@ -148,7 +148,6 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/i18n/routing.ts',
     'apps/web/src/i18n/request.ts',
     'apps/web/src/i18n/navigation.ts',
-    'apps/web/src/i18n/query.ts',
     'apps/web/src/app/[locale]/layout.tsx',
 
     // Phase 4 moved the home page into the `(public)` route group and added
@@ -162,8 +161,9 @@ describe('the render and routing tree stays statically renderable', () => {
     // a dynamic CONTENT route like `/news` and `/watch`, declared in
     // `tests/architecture/phase4-shell-boundaries.test.ts`, where it is
     // proven to reach no session, no identity service, no request-scoped API
-    // and no authentication library. The layout around it stays here.
-    'apps/web/src/app/[locale]/(public)/layout.tsx',
+    // and no authentication library.
+    // R1: the public LAYOUT is now a content route too — its header and footer
+    // promote only areas with published content — and is declared there.
 
     'apps/web/src/components/editorial/editor-island.tsx',
     'apps/web/src/components/editorial/editor.tsx',
@@ -385,14 +385,21 @@ describe('the render and routing tree stays statically renderable', () => {
     'apps/web/src/components/workspace/nav-match.ts',
     'apps/web/src/components/workspace/parts.tsx',
     'apps/web/src/components/workspace/workspace-nav.tsx',
+    // R1: the header, footer and Explore index render per request because
+    // they read the public presence snapshot (`@/composition/presence`), but
+    // none of them declares a segment config or calls a request API itself.
     'apps/web/src/components/shell/site-header.tsx',
-    // Phase 30-R: the official brand lockup in the header and footer.
+    // The organisation's official mark, once, in the footer.
     'apps/web/src/components/shell/brand-lockup.tsx',
     'apps/web/src/components/shell/site-footer.tsx',
     'apps/web/src/components/shell/explore-panel.tsx',
-    // The mega-menu panels and drawer sections, rendered on the server into
-    // the prerendered header from the registry and the messages alone.
-    'apps/web/src/components/shell/menu-panel.tsx',
+    // R1: the One Minhaj wordmark, the private areas' product bar, the
+    // header's current-section link and its signed-in island.
+    'apps/web/src/components/shell/brand-wordmark.tsx',
+    'apps/web/src/components/shell/product-bar.tsx',
+    'apps/web/src/components/shell/nav-link.tsx',
+    'apps/web/src/components/shell/account-entry.tsx',
+    'apps/web/src/components/shell/canonical-pathname.ts',
     'apps/web/src/components/shell/publication-status.tsx',
     'apps/web/src/components/shell/disclosure-menu.tsx',
     'apps/web/src/components/shell/mobile-nav.tsx',
@@ -408,9 +415,9 @@ describe('the render and routing tree stays statically renderable', () => {
   it.each(renderTree)('%s reads no request-time server API', async (file) => {
     // `headers()` or `cookies()` anywhere in this tree would opt every locale
     // route out of static generation. The locale arrives as a route parameter
-    // precisely so that neither is needed; resolving a locale FROM a cookie or
-    // an `Accept-Language` header is the proxy's job, and the proxy is not a
-    // render path.
+    // precisely so that neither is needed: the address alone decides the
+    // interface language (ROUTE_MAP.md §1.1), and no cookie or
+    // `Accept-Language` header is consulted anywhere.
     const code = await codeOf(file);
 
     expect(code).not.toMatch(/from\s+['"]next\/headers['"]/);
@@ -466,10 +473,12 @@ describe('the render and routing tree stays statically renderable', () => {
   });
 
   it('keeps no unprefixed public application tree beside the locale one', async () => {
-    // ROUTE_MAP.md §1.1: the locale segment is ALWAYS present for PAGES. A
-    // surviving `app/layout.tsx` and `app/page.tsx` would make `/` answer
-    // directly and reintroduce exactly the duplicate-URL problem the contract
-    // removes.
+    // ROUTE_MAP.md §1.1 (Rebaseline R1): every PAGE renders through the one
+    // `[locale]` tree. English is addressed unprefixed — the proxy rewrites
+    // `/library` onto `[locale]=en` — but there is still exactly one render
+    // tree. A surviving `app/layout.tsx` and `app/page.tsx` would make `/`
+    // answer from a second, locale-less tree with its own markup, which is
+    // exactly the divergence the single contract removes.
     //
     // THE ACCEPTED NON-LOCALE ROUTES, and only those. ROUTE_MAP.md §10 rule 6
     // names the complete set: `robots.txt`, the sitemaps, `/api/*`, `/rss/*`,

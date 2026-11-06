@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import type { ContributorCapabilities } from '@minhaj/contracts/identity';
@@ -39,7 +40,7 @@ export default async function TeacherProfilePage({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const gate = await requireTeacher(locale, `/${locale}/teacher/profile`);
+  const gate = await requireTeacher(locale, localizedPath(locale, '/teacher/profile'));
   const t = await getTranslations({ locale, namespace: 'teacher' });
   if (!gate.activated) return <NotActivated t={t} />;
 
@@ -100,7 +101,10 @@ export default async function TeacherProfilePage({
                 </dl>
                 <p className="mt-3">
                   <TextLink
-                    href={`/${locale}/people/${encodeURIComponent(read.profile.slug)}`}
+                    href={localizedPath(
+                      locale,
+                      `/people/${encodeURIComponent(read.profile.slug)}`,
+                    )}
                   >
                     {t('profile.publicPage')}
                   </TextLink>
@@ -113,7 +117,7 @@ export default async function TeacherProfilePage({
             <span id="profile-capabilities">
               <SectionHeading>{t('profile.capabilitiesHeading')}</SectionHeading>
             </span>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+            <p className="text-sm text-foreground-muted">
               {t('profile.capabilitiesHelp')}
             </p>
             <Panel>
@@ -143,7 +147,7 @@ export default async function TeacherProfilePage({
             </DetailRow>
           </dl>
           <p className="mt-3">
-            <TextLink href={`/${locale}/my/settings/profile`}>
+            <TextLink href={localizedPath(locale, '/my/settings/profile')}>
               {t('profile.accountSettings')}
             </TextLink>
           </p>

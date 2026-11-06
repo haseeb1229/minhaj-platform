@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 
@@ -35,7 +36,7 @@ export default async function MyLearningPathPage({
   const { slug } = await params;
   const session = await requireActiveSession(
     locale,
-    `/${locale}/my/learning/paths/${encodeURIComponent(slug)}`,
+    localizedPath(locale, `/my/learning/paths/${encodeURIComponent(slug)}`),
   );
   const t = await getTranslations({ locale, namespace: 'myLearning' });
   const back = <PersonalLinks label={t('nav.label')} links={learningLinks(locale, t)} />;
@@ -76,7 +77,12 @@ export default async function MyLearningPathPage({
             })}
           </p>
           <p>
-            <TextLink href={`/${locale}/learn/paths/${encodeURIComponent(path.slug)}`}>
+            <TextLink
+              href={localizedPath(
+                locale,
+                `/learn/paths/${encodeURIComponent(path.slug)}`,
+              )}
+            >
               {t('path.publicPage')}
             </TextLink>
           </p>
@@ -100,7 +106,7 @@ export default async function MyLearningPathPage({
             return (
               <Panel key={entry.course.id} as="li">
                 <div className="flex min-w-0 flex-col gap-2">
-                  <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                  <p className="text-sm text-foreground-muted">
                     {t('path.position', {
                       number: String(index + 1),
                       total: String(courses.length),
@@ -108,7 +114,9 @@ export default async function MyLearningPathPage({
                   </p>
                   {entry.enrolled ? (
                     <>
-                      <TextLink href={`/${locale}/my/learning/courses/${slugPart}`}>
+                      <TextLink
+                        href={localizedPath(locale, `/my/learning/courses/${slugPart}`)}
+                      >
                         {title}
                       </TextLink>
                       <p>
@@ -122,7 +130,9 @@ export default async function MyLearningPathPage({
                   ) : (
                     <>
                       {entry.course.state === 'published' ? (
-                        <TextLink href={`/${locale}/learn/courses/${slugPart}`}>
+                        <TextLink
+                          href={localizedPath(locale, `/learn/courses/${slugPart}`)}
+                        >
                           {title}
                         </TextLink>
                       ) : (

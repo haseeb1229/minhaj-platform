@@ -50,7 +50,7 @@ export function CoverImage({
       loading={priority ? 'eager' : 'lazy'}
       decoding="async"
       {...(priority ? { fetchPriority: 'high' as const } : {})}
-      className={`block h-auto w-full rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)] object-contain shadow-[var(--shadow-panel)] ${className}`}
+      className={`block h-auto w-full rounded-control border border-border bg-surface-sunken object-contain shadow-panel ${className}`}
     />
   );
 }
@@ -91,20 +91,20 @@ export function CoverCard({
   };
 
   return (
-    <li className="card-surface relative flex h-full min-w-0 gap-4 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-4 shadow-[var(--shadow-panel)] transition-[border-color,box-shadow] duration-[var(--duration-fast)] hover:border-[color:var(--color-border-strong)] hover:shadow-[var(--shadow-raised)]">
+    <li className="card-surface relative flex h-full min-w-0 gap-4 rounded-panel border border-border bg-surface-raised p-4 shadow-panel transition-[border-color,box-shadow] duration-[var(--duration-fast)] hover:border-border-strong hover:shadow-raised">
       <div className="w-24 shrink-0 sm:w-28">{cover}</div>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <Heading className="text-subheading font-semibold wrap-anywhere" {...content}>
           <a
             href={href}
-            className="card-link text-[color:var(--color-foreground)] no-underline decoration-[color:var(--color-accent-rule)] underline-offset-4 hover:underline active:text-[color:var(--color-action)]"
+            className="card-link text-foreground no-underline decoration-accent-rule underline-offset-4 hover:underline active:text-action"
           >
             {title}
           </a>
         </Heading>
         {description === undefined || description === '' ? null : (
           <p
-            className="line-clamp-4 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+            className="line-clamp-4 text-sm wrap-anywhere text-foreground-muted"
             {...content}
             {...(dir === undefined ? {} : { dir: descriptionDirection(dir) })}
           >
@@ -149,10 +149,10 @@ export function CoverTile({
       {cover === null ? (
         <div
           aria-hidden="true"
-          className="flex aspect-[2/3] items-end rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)] p-3"
+          className="flex aspect-[2/3] items-end rounded-control border border-border bg-surface-sunken p-3"
         >
           <span
-            className="line-clamp-5 text-sm font-semibold wrap-anywhere text-[color:var(--color-foreground-muted)]"
+            className="line-clamp-5 text-sm font-semibold wrap-anywhere text-foreground-muted"
             {...content}
           >
             {title}
@@ -164,13 +164,13 @@ export function CoverTile({
       <h3 className="text-sm leading-snug font-semibold wrap-anywhere" {...content}>
         <a
           href={href}
-          className="card-link line-clamp-2 text-[color:var(--color-foreground)] no-underline decoration-[color:var(--color-accent-rule)] underline-offset-4 hover:underline active:text-[color:var(--color-action)]"
+          className="card-link line-clamp-2 text-foreground no-underline decoration-accent-rule underline-offset-4 hover:underline active:text-action"
         >
           {title}
         </a>
       </h3>
       {meta === undefined ? null : (
-        <p className="text-caption text-[color:var(--color-foreground-muted)]">{meta}</p>
+        <p className="text-caption text-foreground-muted">{meta}</p>
       )}
     </li>
   );

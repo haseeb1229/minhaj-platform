@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { requireAdminPage } from '@/composition/authorization';
 import { libraryReferenceChoices, libraryRuntime } from '@/composition/library';
 import { requireLocale } from '@/config/route-locale';
@@ -45,7 +46,7 @@ export default async function TranslationsPage({
   const context = await requireAdminPage(
     locale,
     'library.read',
-    `/${locale}/admin/library/translations`,
+    localizedPath(locale, '/admin/library/translations'),
   );
 
   const copy = await libraryCopy(locale);
@@ -73,9 +74,7 @@ export default async function TranslationsPage({
       <main className="flex flex-col gap-8">
         <PageHeading>{selected.label}</PageHeading>
 
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('translationHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('translationHelp')}</p>
 
         <Panel>
           <div className="flex flex-col gap-4">
@@ -95,7 +94,7 @@ export default async function TranslationsPage({
         )}
 
         <p className="text-sm">
-          <TextLink href={`/${locale}/admin/library/translations`}>
+          <TextLink href={localizedPath(locale, '/admin/library/translations')}>
             {t('adminBackToList')}
           </TextLink>
         </p>
@@ -110,9 +109,7 @@ export default async function TranslationsPage({
     <main className="flex flex-col gap-8">
       <PageHeading>{t('admin.translations')}</PageHeading>
 
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('translationHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('translationHelp')}</p>
 
       {page.items.length === 0 ? (
         <EmptyState>{t('adminEmpty')}</EmptyState>
@@ -125,7 +122,10 @@ export default async function TranslationsPage({
             <DataRow key={record.id}>
               <DataCell wrap>
                 <TextLink
-                  href={`/${locale}/admin/library/translations?edition=${encodeURIComponent(record.id)}`}
+                  href={localizedPath(
+                    locale,
+                    `/admin/library/translations?edition=${encodeURIComponent(record.id)}`,
+                  )}
                 >
                   {record.label}
                 </TextLink>

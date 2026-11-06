@@ -81,9 +81,7 @@ export default async function NewClassPage({ params, searchParams }: ListParams)
     <main className="flex flex-col gap-8">
       <div className="flex flex-col gap-2">
         <PageHeading>{t('classes.create')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('classes.createHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('classes.createHelp')}</p>
         <p>
           <TextLink href={base}>{t('backToList')}</TextLink>
         </p>
@@ -137,7 +135,7 @@ export default async function NewClassPage({ params, searchParams }: ListParams)
               )}
             </Field>
             {truncated ? (
-              <p className="text-xs text-[color:var(--color-foreground-muted)]">
+              <p className="text-xs text-foreground-muted">
                 {t('classes.scopesTruncated')}
               </p>
             ) : null}

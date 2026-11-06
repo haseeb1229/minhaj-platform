@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Locale } from '@minhaj/contracts';
 
 import type { PersonalTranslator } from './parts';
@@ -13,7 +14,7 @@ interface Link {
   readonly text: string;
 }
 
-const my = (locale: Locale, path = '') => `/${locale}/my${path}`;
+const my = (locale: Locale, path = '') => localizedPath(locale, `/my${path}`);
 
 export function savedLinks(locale: Locale, t: PersonalTranslator): readonly Link[] {
   return [

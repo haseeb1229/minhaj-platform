@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { supportedTimeZones } from '@minhaj/contracts/platform';
@@ -45,7 +46,7 @@ export default async function AvailabilityPage({
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const locale = await requireLocale(params);
-  const path = `/${locale}/teacher/availability`;
+  const path = localizedPath(locale, '/teacher/availability');
   const gate = await requireTeacher(locale, path);
   const t = await getTranslations({ locale, namespace: 'teacher' });
   if (!gate.activated) return <NotActivated t={t} />;
@@ -146,9 +147,7 @@ export default async function AvailabilityPage({
         <span id="availability-open">
           <SectionHeading>{t('availability.openHeading')}</SectionHeading>
         </span>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('availability.openHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('availability.openHelp')}</p>
         <Panel>
           <ScheduleForm
             action={openAvailabilityAction}

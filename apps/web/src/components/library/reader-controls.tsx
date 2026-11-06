@@ -202,9 +202,7 @@ export function ReaderControls({
           ] as const
         ).map(([key, label]) => (
           <div key={key} className="flex items-center gap-1">
-            <span className="text-xs text-[color:var(--color-foreground-muted)]">
-              {label}
-            </span>
+            <span className="text-xs text-foreground-muted">{label}</span>
             <ControlButton
               label={`${labels.decrease}: ${label}`}
               onClick={() => adjust(key, -1)}
@@ -235,13 +233,13 @@ export function ReaderControls({
        * attribute is refused by the platform's `style-src 'self'` CSP, and the
        * native element needs none — and it has no motion to reduce.
        */}
-      <p className="flex items-center gap-3 text-xs text-[color:var(--color-foreground-muted)]">
+      <p className="flex items-center gap-3 text-xs text-foreground-muted">
         <span>{progressText}</span>
         <progress
           aria-hidden="true"
           value={current}
           max={Math.max(1, sectionCount)}
-          className="h-1 w-24 accent-[color:var(--color-action)]"
+          className="h-1 w-24 accent-action"
         />
       </p>
     </div>
@@ -272,7 +270,7 @@ function ControlButton({
       aria-label={label}
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+      className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-control border border-border-strong bg-surface-raised px-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
     >
       {children}
     </button>

@@ -1,9 +1,12 @@
+import type { Metadata } from 'next';
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { teacherLinks } from '@/components/teacher/nav';
 import { WorkspaceShell } from '@/components/workspace/parts';
 import { WorkspaceNav } from '@/components/workspace/workspace-nav';
 import { requireLocale } from '@/config/route-locale';
+import { privateAreaMetadata } from '@/shell/private-metadata';
 import { requireTeacher } from './guard';
 
 /**
@@ -28,7 +31,15 @@ import { requireTeacher } from './guard';
  * scroller on a narrow one; while live learning is not activated there is no
  * navigation at all, because no section has content to reach.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  const locale = await requireLocale(params);
+  const t = await getTranslations({ locale, namespace: 'teacher' });
+  return privateAreaMetadata(t('title'), { robots: { index: false, follow: false } });
+}
 
 /** PER REQUEST, always: every page beneath reads a session and live privilege. */
 export const dynamic = 'force-dynamic';
@@ -43,7 +54,7 @@ export default async function TeacherLayout({
   const locale = await requireLocale(params);
   const t = await getTranslations({ locale, namespace: 'teacher' });
   const w = await getTranslations({ locale, namespace: 'workspace' });
-  const gate = await requireTeacher(locale, `/${locale}/teacher`);
+  const gate = await requireTeacher(locale, localizedPath(locale, '/teacher'));
 
   return (
     <WorkspaceShell

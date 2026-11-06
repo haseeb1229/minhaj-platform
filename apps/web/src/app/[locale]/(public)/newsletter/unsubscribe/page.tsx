@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
@@ -58,9 +59,7 @@ export default async function NewsletterUnsubscribePage({
 
         {status === 'valid' && token !== null ? (
           <>
-            <p className="text-[color:var(--color-foreground-muted)]">
-              {t('unsubscribe.description')}
-            </p>
+            <p className="text-foreground-muted">{t('unsubscribe.description')}</p>
             <ActionForm
               action={unsubscribeNewsletter}
               submitLabel={t('unsubscribe.submit')}
@@ -79,7 +78,7 @@ export default async function NewsletterUnsubscribePage({
           <Alert tone="warning">{t('link.invalid')}</Alert>
         )}
 
-        <TextLink href={`/${locale}/newsletter`}>{t('link.back')}</TextLink>
+        <TextLink href={localizedPath(locale, '/newsletter')}>{t('link.back')}</TextLink>
       </div>
     </Container>
   );

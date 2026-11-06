@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { learningRead } from '@/components/my-learning/read';
@@ -26,7 +27,10 @@ export default async function TodayPage({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const gate = await requireTeacher(locale, `/${locale}/teacher/classes/today`);
+  const gate = await requireTeacher(
+    locale,
+    localizedPath(locale, '/teacher/classes/today'),
+  );
   const t = await getTranslations({ locale, namespace: 'teacher' });
   if (!gate.activated) return <NotActivated t={t} />;
 

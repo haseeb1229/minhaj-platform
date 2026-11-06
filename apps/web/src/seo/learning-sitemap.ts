@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import type { LearningSitemapRow } from '@minhaj/contracts/learning';
 
 import { learningReadRuntime } from '@/composition/learning-read';
@@ -50,7 +50,7 @@ async function partitionsOf(
     for (const row of batch)
       for (const locale of row.locales)
         buckets.get(locale as Locale)?.push({
-          loc: absoluteUrl(`/${locale}${path(row.slug)}`),
+          loc: absoluteUrl(localizedPath(locale, `${path(row.slug)}`)),
           lastmod: row.updatedAt.toISOString(),
         });
     if (batch.length < READ_BATCH) break;

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
@@ -91,8 +92,8 @@ async function listenTrail(locale: Locale) {
   const t = await getTranslations({ locale, namespace: 'listen' });
   return {
     label: shell('nav.breadcrumbs'),
-    home: { href: `/${locale}`, text: shell('nav.home') },
-    listen: { href: `/${locale}/listen`, text: t('title') },
+    home: { href: localizedPath(locale, ''), text: shell('nav.home') },
+    listen: { href: localizedPath(locale, '/listen'), text: t('title') },
   };
 }
 
@@ -112,7 +113,7 @@ function AudioMark() {
   return (
     <span
       aria-hidden="true"
-      className="flex size-12 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[color:var(--color-surface-sunken)] text-[color:var(--color-action)]"
+      className="flex size-12 shrink-0 items-center justify-center rounded-control bg-surface-sunken text-action"
     >
       <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor">
         <path
@@ -157,7 +158,7 @@ function TrackRow({
         <AudioMark />
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           {position && track.seriesPosition !== null ? (
-            <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+            <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
               {t('fact.position', { number: track.seriesPosition })}
             </p>
           ) : null}
@@ -172,7 +173,7 @@ function TrackRow({
           </Heading>
           {speakers.length === 0 ? null : (
             <p
-              className="line-clamp-2 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+              className="line-clamp-2 text-sm wrap-anywhere text-foreground-muted"
               dir="auto"
             >
               <span className="sr-only">{t('speakers')}: </span>
@@ -274,7 +275,7 @@ export async function TrackListingPage({
   const t = await getTranslations({ locale, namespace: 'listen' });
   const trail = await listenTrail(locale);
   const filters = readMediaQuery(query);
-  const base = `/${locale}/listen/lectures`;
+  const base = localizedPath(locale, '/listen/lectures');
   const title = t('sections.lectures');
 
   const reads = mediaReadRuntime();
@@ -370,11 +371,13 @@ export async function TrackListingPage({
 
         {speaker === null ? null : (
           <p
-            className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[var(--radius-control)] border border-[color:var(--color-accent-rule)] bg-[color:var(--color-accent-surface)] px-4 py-2 text-sm"
+            className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-control border border-accent-rule bg-accent-surface px-4 py-2 text-sm"
             dir="auto"
           >
             <span>{t('speakerActive')}</span>
-            <TextLink href={`/${locale}/people/${encodeURIComponent(speaker.slug)}`}>
+            <TextLink
+              href={localizedPath(locale, `/people/${encodeURIComponent(speaker.slug)}`)}
+            >
               {speaker.name}
             </TextLink>
             <span aria-hidden="true">·</span>
@@ -431,9 +434,9 @@ function trackTrail(
   labels: { readonly home: string; readonly listen: string; readonly lectures: string },
 ) {
   return [
-    { name: labels.home, path: `/${locale}` },
-    { name: labels.listen, path: `/${locale}/listen` },
-    { name: labels.lectures, path: `/${locale}/listen/lectures` },
+    { name: labels.home, path: localizedPath(locale, '') },
+    { name: labels.listen, path: localizedPath(locale, '/listen') },
+    { name: labels.lectures, path: localizedPath(locale, '/listen/lectures') },
     { name: mediaLabel(record, locale).title, path: audioTrackPath(locale, record.slug) },
   ];
 }
@@ -526,7 +529,10 @@ export async function TrackDetailPage({
                       <span key={person.slug}>
                         {index === 0 ? null : ' · '}
                         <TextLink
-                          href={`/${locale}/people/${encodeURIComponent(person.slug)}`}
+                          href={localizedPath(
+                            locale,
+                            `/people/${encodeURIComponent(person.slug)}`,
+                          )}
                         >
                           {person.name}
                         </TextLink>
@@ -556,7 +562,7 @@ export async function TrackDetailPage({
 
         <section
           aria-labelledby="audio-player"
-          className="max-w-4xl rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]"
+          className="max-w-4xl rounded-panel border border-border bg-surface-raised p-5 shadow-panel"
         >
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-4">
@@ -599,7 +605,7 @@ export async function TrackDetailPage({
                         {paragraph}
                       </p>
                     ))}
-                    <p className="text-caption border-s-2 border-[color:var(--color-accent-rule)] ps-3 text-[color:var(--color-foreground-muted)]">
+                    <p className="text-caption border-s-2 border-accent-rule ps-3 text-foreground-muted">
                       {t('metadataNotice')}
                     </p>
                   </Prose>
@@ -614,7 +620,7 @@ export async function TrackDetailPage({
                   <h2 id="audio-transcript" className="text-heading font-semibold">
                     {t('fact.transcript')}
                   </h2>
-                  <details className="rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] px-5 py-2">
+                  <details className="rounded-panel border border-border bg-surface-raised px-5 py-2">
                     <summary className="min-h-11 cursor-pointer py-2.5 font-medium">
                       {t('transcriptShow')}
                     </summary>
@@ -635,14 +641,14 @@ export async function TrackDetailPage({
 
           <aside className="flex min-w-0 flex-col gap-8">
             <section
-              className="flex flex-col gap-3 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5"
+              className="flex flex-col gap-3 rounded-panel border border-border bg-surface-raised p-5"
               aria-labelledby="audio-facts"
             >
               <h2 id="audio-facts" className="text-subheading font-semibold">
                 {t('facts')}
               </h2>
               <dl
-                className={`grid gap-x-8 divide-y divide-[color:var(--color-border)] ${
+                className={`grid gap-x-8 divide-y divide-border ${
                   hasStory ? '' : 'sm:grid-cols-2 sm:divide-y-0'
                 }`}
               >
@@ -695,7 +701,10 @@ export async function TrackDetailPage({
                 <TopicChips
                   label={t('topics')}
                   topics={topics.map((topic) => ({
-                    href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+                    href: localizedPath(
+                      locale,
+                      `/topics/${encodeURIComponent(topic.slug)}`,
+                    ),
                     text: topic.name,
                   }))}
                 />
@@ -762,7 +771,7 @@ function SeriesCard({
           </Heading>
           {label.description === '' ? null : (
             <p
-              className="line-clamp-3 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+              className="line-clamp-3 text-sm wrap-anywhere text-foreground-muted"
               lang={label.locale}
               dir={direction}
             >
@@ -785,7 +794,7 @@ export async function AudioSeriesListingPage({
   const t = await getTranslations({ locale, namespace: 'listen' });
   const trail = await listenTrail(locale);
   const offset = readOffset(query);
-  const base = `/${locale}/listen/series`;
+  const base = localizedPath(locale, '/listen/series');
   const title = t('sections.series');
   const page = await mediaReadRuntime().audioSeriesList(offset);
 
@@ -852,7 +861,7 @@ export async function AudioSeriesDetailPage({
   const trail = [
     { name: parts.home.text, path: parts.home.href },
     { name: parts.listen.text, path: parts.listen.href },
-    { name: sectionTitle, path: `/${locale}/listen/series` },
+    { name: sectionTitle, path: localizedPath(locale, '/listen/series') },
     { name: label.title, path },
   ];
   const description = paragraphsOf(label.description);
@@ -940,13 +949,18 @@ export async function ListenLandingPage({ locale }: { readonly locale: Locale })
   ]);
 
   const browse = [
-    { href: `/${locale}/listen/lectures`, key: 'lectures' },
-    { href: `/${locale}/listen/series`, key: 'series' },
+    { href: localizedPath(locale, '/listen/lectures'), key: 'lectures' },
+    { href: localizedPath(locale, '/listen/series'), key: 'series' },
     ...(quran.active
-      ? [{ href: `/${locale}/listen/recitations`, key: 'recitations' } as const]
+      ? [
+          {
+            href: localizedPath(locale, '/listen/recitations'),
+            key: 'recitations',
+          } as const,
+        ]
       : []),
-    { href: `/${locale}/topics`, key: 'topics' },
-    { href: `/${locale}/watch`, key: 'watch' },
+    { href: localizedPath(locale, '/topics'), key: 'topics' },
+    { href: localizedPath(locale, '/watch'), key: 'watch' },
   ] as const;
 
   return (
@@ -960,7 +974,9 @@ export async function ListenLandingPage({ locale }: { readonly locale: Locale })
         title={t('title')}
         lede={t('description')}
         actions={
-          <ActionLink href={`/${locale}/listen/lectures`}>{t('allTracks')}</ActionLink>
+          <ActionLink href={localizedPath(locale, '/listen/lectures')}>
+            {t('allTracks')}
+          </ActionLink>
         }
       />
 
@@ -990,7 +1006,10 @@ export async function ListenLandingPage({ locale }: { readonly locale: Locale })
                 id="listen-series"
                 heading={t('sections.series')}
                 intro={t('sectionBody.series')}
-                action={{ href: `/${locale}/listen/series`, text: t('allSeries') }}
+                action={{
+                  href: localizedPath(locale, '/listen/series'),
+                  text: t('allSeries'),
+                }}
               />
               <CardGrid label={t('sections.series')} columns={2}>
                 {series.items.slice(0, LANDING_SERIES).map((record) => (

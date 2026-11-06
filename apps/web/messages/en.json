@@ -3,7 +3,6 @@
     "description": "A unified digital platform for the Quran, Hadith, learning, library and media resources of Minhaj-ul-Quran International."
   },
   "shell": {
-    "preAdoptionMarker": "Pre-adoption review build",
     "nav": {
       "home": "Home",
       "primary": "Main navigation",
@@ -32,7 +31,19 @@
       "feedback": "Feedback",
       "volunteer": "Volunteer",
       "topics": "Topics",
-      "newsletter": "Newsletter"
+      "newsletter": "Newsletter",
+      "about": "About",
+      "news": "News",
+      "collections": "Collections",
+      "listen": "Listen",
+      "events": "Events",
+      "presence": "Worldwide",
+      "help": "Help",
+      "more": "More",
+      "signIn": "Sign in",
+      "signedIn": "(signed in)",
+      "searchLabel": "Search One Minhaj",
+      "searchPlaceholder": "Search books, lectures, news…"
     },
     "home": {
       "description": "A unified digital platform for the Quran, Hadith, learning, library and media resources of Minhaj-ul-Quran International.",
@@ -180,13 +191,11 @@
     "footer": {
       "legalHeading": "Legal and site",
       "preAdoption": "One Minhaj is an independently developed platform. It is not currently commissioned, sponsored, adopted or deployed by Minhaj-ul-Quran International, and nothing here should be read as an official statement by the organisation.",
-      "columns": {
-        "about": "About Minhaj-ul-Quran",
-        "knowledge": "Knowledge",
-        "libraryMedia": "Library and Media",
-        "learnParticipate": "Learn and Participate",
-        "ourWork": "Our Work",
-        "globalContact": "Global and Contact"
+      "description": "Books, lectures, news and learning from Minhaj-ul-Quran International, gathered in one multilingual platform.",
+      "groups": {
+        "discover": "Discover",
+        "organisation": "The organisation",
+        "participate": "Take part"
       }
     },
     "reserved": {
@@ -298,42 +307,13 @@
       "live": "Live learning",
       "teachers": "Find a teacher"
     },
-    "menu": {
-      "overview": "{section} overview",
-      "toggle": "More in {section}",
-      "columns": {
-        "connect": "Connect",
-        "read": "Read",
-        "study": "Study",
-        "explore": "Explore",
-        "learn": "Learn",
-        "browse": "Browse",
-        "learning": "Learning",
-        "topics": "Topics",
-        "live": "Live",
-        "people": "People",
-        "writtenWorks": "Written works",
-        "periodicals": "Periodicals",
-        "access": "Access",
-        "watch": "Watch",
-        "seriesPrograms": "Series and programmes",
-        "byTopic": "By topic",
-        "listen": "Listen",
-        "find": "Find",
-        "ask": "Ask",
-        "understand": "Understand",
-        "news": "News",
-        "events": "Events",
-        "media": "Media",
-        "archive": "Archive",
-        "structure": "Structure"
-      },
-      "labels": {
-        "help": "Help and FAQ",
-        "quranRead": "Read the Quran",
-        "quranSurah": "Surah index",
-        "quranJuz": "Juz index",
-        "hadithIntroduction": "Introduction to Hadith"
+    "private": {
+      "backToSite": "Back to One Minhaj",
+      "areas": {
+        "my": "My Minhaj",
+        "teacher": "Teaching",
+        "admin": "Administration",
+        "account": "Account"
       }
     }
   },
@@ -992,11 +972,9 @@
       "caption": "Every route the public shell knows about, with its availability and indexing eligibility.",
       "columnRoute": "Route",
       "columnPath": "Path",
-      "columnPlacement": "Placement",
       "columnAvailability": "Availability",
       "columnIndexing": "Indexing",
       "noPath": "No route yet",
-      "noPlacement": "Not in navigation",
       "availability": {
         "delivered": "Delivered",
         "reserved": "Reserved",
@@ -1005,6 +983,13 @@
       "indexing": {
         "eligible": "Eligible",
         "excluded": "Excluded"
+      },
+      "columnPromotion": "Promotion",
+      "promotion": {
+        "always": "Always promoted",
+        "live": "Promoted now ({signal} is published)",
+        "waiting": "Waits for published {signal}",
+        "never": "Not promoted — reachable by its address"
       }
     },
     "audit": {

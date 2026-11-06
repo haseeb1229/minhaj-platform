@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
@@ -52,7 +53,10 @@ export default async function ReportEvidencePage({
 }) {
   const locale = await requireLocale(params);
   const { reportId } = await params;
-  const path = `/${locale}/admin/messaging/reports/${encodeURIComponent(reportId)}`;
+  const path = localizedPath(
+    locale,
+    `/admin/messaging/reports/${encodeURIComponent(reportId)}`,
+  );
   const context = await requireAdminPage(locale, 'messaging.moderate', path);
   const copy = await adminMessagingCopy(locale);
   const { t } = copy;
@@ -65,10 +69,10 @@ export default async function ReportEvidencePage({
   );
   const back = (
     <p className="flex flex-wrap gap-x-6 gap-y-2">
-      <TextLink href={`/${locale}/admin/messaging/moderation`}>
+      <TextLink href={localizedPath(locale, '/admin/messaging/moderation')}>
         {t('evidence.backQueue')}
       </TextLink>
-      <TextLink href={`/${locale}/admin/messaging/reports`}>
+      <TextLink href={localizedPath(locale, '/admin/messaging/reports')}>
         {t('evidence.backReports')}
       </TextLink>
     </p>
@@ -117,7 +121,7 @@ export default async function ReportEvidencePage({
       </header>
 
       <Panel>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('reports.column.reason')}>
             {t(`reason.${report.reason}`)}
           </DetailRow>
@@ -158,7 +162,7 @@ export default async function ReportEvidencePage({
         <h2 id="evidence-messages" className="text-lg font-semibold tracking-tight">
           {t('evidence.messages')}
         </h2>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="text-sm text-foreground-muted">
           {report.messageId === null
             ? t('evidence.windowConversation')
             : t('evidence.windowMessage')}
@@ -191,7 +195,7 @@ export default async function ReportEvidencePage({
                 timeZone={timeZone}
               />
             </p>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+            <p className="text-sm text-foreground-muted">
               {decision.moderatorAccountId === actor.accountId
                 ? t('decision.byYou')
                 : t('decision.byModerator')}
@@ -232,7 +236,7 @@ export default async function ReportEvidencePage({
                       <span className="font-medium">
                         {t(`decision.option.${action}`)}
                       </span>
-                      <span className="text-[color:var(--color-foreground-muted)]">
+                      <span className="text-foreground-muted">
                         {t(`decision.explain.${action}`)}
                       </span>
                     </span>

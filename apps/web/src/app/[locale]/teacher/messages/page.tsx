@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { ConversationList } from '@/components/messaging/parts';
@@ -37,7 +38,7 @@ export default async function TeacherMessagesPage({
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const locale = await requireLocale(params);
-  const path = `/${locale}/teacher/messages`;
+  const path = localizedPath(locale, '/teacher/messages');
   const gate = await requireTeacher(locale, path);
   if (!gate.activated) {
     const teacher = await getTranslations({ locale, namespace: 'teacher' });
@@ -109,7 +110,9 @@ export default async function TeacherMessagesPage({
       {capabilities.teacherStudent ? (
         <p className="text-sm">
           {t('teacher.startHelp')}{' '}
-          <TextLink href={`/${locale}/teacher/students`}>{t('nav.students')}</TextLink>
+          <TextLink href={localizedPath(locale, '/teacher/students')}>
+            {t('nav.students')}
+          </TextLink>
         </p>
       ) : null}
     </TeacherFrame>

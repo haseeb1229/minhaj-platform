@@ -106,7 +106,7 @@ async function eventuallyFound(page: Page, query: string, text: string): Promise
   await expect
     .poll(
       async () => {
-        await page.goto(`/en/search?q=${encodeURIComponent(query)}`);
+        await page.goto(`/search?q=${encodeURIComponent(query)}`);
         await page.getByRole('heading', { level: 1, name: 'Search' }).waitFor();
         return page.getByRole('main').innerText();
       },
@@ -228,7 +228,7 @@ test.describe('an anonymous visitor listens', () => {
   test('lands on Listen signed out, with the recordings and only real surfaces', async ({
     page,
   }) => {
-    const response = await page.goto('/en/listen');
+    const response = await page.goto('/listen');
     expect(response?.status()).toBe(200);
     expect(response?.headers()['set-cookie']).toBeUndefined();
     await expect(page.getByRole('heading', { level: 1, name: 'Listen' })).toBeVisible();
@@ -236,19 +236,19 @@ test.describe('an anonymous visitor listens', () => {
     await expect(page.getByText('Synthetic hidden draft recording')).toHaveCount(0);
 
     const { active, observed: hrefs } = await inStableQuranState(async () => {
-      await page.goto('/en/listen');
+      await page.goto('/listen');
       return page
         .getByRole('main')
         .getByRole('link')
         .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
     });
-    for (const surface of ['/en/listen/lectures', '/en/listen/series', '/en/watch']) {
+    for (const surface of ['/listen/lectures', '/listen/series', '/watch']) {
       expect(hrefs).toContain(surface);
     }
     // The recitation catalogue is linked exactly when Quran has one to show,
     // and only at its Listen address — never anything else "recitation".
     expect(hrefs.filter((href) => href.includes('recitation'))).toEqual(
-      active ? ['/en/listen/recitations'] : [],
+      active ? ['/listen/recitations'] : [],
     );
     // No cover art is invented: a row paints no image at all.
     await expect(page.locator('main img')).toHaveCount(0);
@@ -257,19 +257,19 @@ test.describe('an anonymous visitor listens', () => {
   test('filters recordings by language and by series, and says so when nothing matches', async ({
     page,
   }) => {
-    await page.goto('/en/listen/lectures?language=ur');
+    await page.goto('/listen/lectures?language=ur');
     await expect(page.getByRole('link', { name: URDU_TITLE })).toBeVisible();
     await expect(page.getByRole('link', { name: LECTURE_TITLE })).toHaveCount(0);
 
-    await page.goto(`/en/listen/lectures?series=${seriesId}&language=ar`);
+    await page.goto(`/listen/lectures?series=${seriesId}&language=ar`);
     await expect(
       page.getByText('No published recording matches these filters.'),
     ).toBeVisible();
     await page.getByRole('link', { name: 'Clear all filters' }).first().click();
-    await expect(page).toHaveURL(/\/en\/listen\/lectures$/);
+    await expect(page).toHaveURL(/\/listen\/lectures$/);
 
     // A speaker's filter names who it is showing, and offers the way back.
-    await page.goto(`/en/listen/lectures?speaker=${people.linkedPersonId}`);
+    await page.goto(`/listen/lectures?speaker=${people.linkedPersonId}`);
     await expect(page.getByText('Showing recordings with')).toBeVisible();
     await expect(page.getByRole('link', { name: LECTURE_TITLE })).toBeVisible();
     await expect(page.getByRole('link', { name: URDU_TITLE })).toHaveCount(0);
@@ -279,20 +279,20 @@ test.describe('an anonymous visitor listens', () => {
     page,
   }) => {
     const external = thirdPartyRequests(page);
-    const response = await page.goto(`/en/listen/lectures/${lectureSlug}`);
+    const response = await page.goto(`/listen/lectures/${lectureSlug}`);
     expect(response?.headers()['set-cookie']).toBeUndefined();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(LECTURE_TITLE);
 
     await expect(
-      page.locator(`a[href="/en/people/${people.linkedSlug}"]`).first(),
+      page.locator(`a[href="/people/${people.linkedSlug}"]`).first(),
     ).toBeVisible();
     await expect(page.getByRole('link', { name: 'Education' }).first()).toHaveAttribute(
       'href',
-      '/en/topics/education',
+      '/topics/education',
     );
     await expect(page.getByRole('link', { name: SERIES_TITLE }).first()).toHaveAttribute(
       'href',
-      `/en/listen/series/${seriesSlug}`,
+      `/listen/series/${seriesSlug}`,
     );
     await page.getByText('Read the transcript').click();
     await expect(page.getByText('Synthetic transcript, second paragraph.')).toBeVisible();
@@ -310,9 +310,9 @@ test.describe('an anonymous visitor listens', () => {
       true,
     );
 
-    // No download is offered: playback grants no right to keep a copy. (The
-    // footer's "Library downloads" is navigation to another section, not an
-    // offer of this recording.)
+    // No download is offered: playback grants no right to keep a copy. (Scoped
+    // to the page's content: the shell's own navigation is not an offer of
+    // this recording.)
     await expect(
       page.getByRole('main').getByRole('link', { name: /download/i }),
     ).toHaveCount(0);
@@ -331,7 +331,7 @@ test.describe('an anonymous visitor listens', () => {
     page.on('request', (request) => {
       if (request.url().includes(route)) early.push(request.url());
     });
-    await page.goto(`/en/listen/lectures/${lectureSlug}`);
+    await page.goto(`/listen/lectures/${lectureSlug}`);
     await page.waitForLoadState('networkidle');
     // `preload="none"`: opening the page fetched not one byte of the recording.
     expect(early).toEqual([]);
@@ -370,7 +370,7 @@ test.describe('an anonymous visitor listens', () => {
   test('says a recording is unavailable when its file cannot be served — no dead player', async ({
     page,
   }) => {
-    await page.goto(`/en/listen/lectures/${urduSlug}`);
+    await page.goto(`/listen/lectures/${urduSlug}`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(URDU_TITLE);
     await expect(
       page.getByText('This recording is not available to play right now.'),
@@ -411,13 +411,13 @@ test.describe('an anonymous visitor listens', () => {
   test('never serves a draft page, and serves a recitation catalogue only from Quran', async ({
     request,
   }) => {
-    for (const missing of [`/en/listen/lectures/${draftSlug}`, '/en/listen/podcasts']) {
+    for (const missing of [`/listen/lectures/${draftSlug}`, '/listen/podcasts']) {
       const response = await request.get(missing, { maxRedirects: 0 });
       expect(response.status(), missing).toBe(404);
     }
 
     const { active, observed } = await inStableQuranState(async () => {
-      const response = await request.get('/en/listen/recitations', { maxRedirects: 0 });
+      const response = await request.get('/listen/recitations', { maxRedirects: 0 });
       return {
         status: response.status(),
         cookie: response.headers()['set-cookie'],
@@ -434,7 +434,7 @@ test.describe('an anonymous visitor listens', () => {
     // the Quran section, never indexable on this deployment, and holding none
     // of Media's recordings.
     expect(observed.status).toBe(200);
-    expect(observed.body).toContain('href="/en/quran/recitations"');
+    expect(observed.body).toContain('href="/quran/recitations"');
     expect(observed.body).toMatch(/<meta name="robots" content="noindex/);
     expect(observed.body).not.toContain('rel="canonical"');
     for (const title of [LECTURE_TITLE, URDU_TITLE, WITHDRAWN_TITLE])
@@ -444,7 +444,7 @@ test.describe('an anonymous visitor listens', () => {
   });
 
   test('lists an audio series in its own order', async ({ page }) => {
-    await page.goto(`/en/listen/series/${seriesSlug}`);
+    await page.goto(`/listen/series/${seriesSlug}`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(SERIES_TITLE);
     const tracks = page.getByRole('list', { name: 'Recordings' });
     await expect(tracks.getByRole('heading')).toHaveText([LECTURE_TITLE, URDU_TITLE]);
@@ -469,14 +469,14 @@ test.describe('an anonymous visitor listens', () => {
   test('composes audio into the topic hub and the speaker’s profile', async ({
     page,
   }) => {
-    await page.goto('/en/topics/education');
+    await page.goto('/topics/education');
     const section = page.getByRole('region', { name: 'Audio on this topic' });
     await expect(section.getByRole('link', { name: LECTURE_TITLE })).toHaveAttribute(
       'href',
-      `/en/listen/lectures/${lectureSlug}`,
+      `/listen/lectures/${lectureSlug}`,
     );
 
-    await page.goto(`/en/people/${people.linkedSlug}`);
+    await page.goto(`/people/${people.linkedSlug}`);
     const audio = page.getByRole('region', { name: 'Audio', exact: true });
     await expect(audio.getByRole('link', { name: LECTURE_TITLE })).toBeVisible();
   });
@@ -498,9 +498,9 @@ test.describe('an anonymous visitor listens', () => {
   }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     for (const path of [
-      '/en/listen',
-      '/en/listen/lectures',
-      `/en/listen/lectures/${lectureSlug}`,
+      '/listen',
+      '/listen/lectures',
+      `/listen/lectures/${lectureSlug}`,
       `/ur/listen/lectures/${lectureSlug}`,
       `/ar/listen/series/${seriesSlug}`,
     ]) {
@@ -524,14 +524,14 @@ test.describe('search finds a recording, and never a withdrawn one', () => {
     const results = page.getByRole('list', { name: 'Search results' });
     await expect(results.getByRole('link', { name: LECTURE_TITLE })).toHaveAttribute(
       'href',
-      `/en/listen/lectures/${lectureSlug}`,
+      `/listen/lectures/${lectureSlug}`,
     );
 
     await eventuallyFound(page, WITHDRAWN_WORD, WITHDRAWN_TITLE);
     await sql.query(
       `UPDATE [dbo].[AudioTrack] SET [state]=N'archived' WHERE [id]=N'${withdrawnId}';`,
     );
-    await page.goto(`/en/search?q=${WITHDRAWN_WORD}`);
+    await page.goto(`/search?q=${WITHDRAWN_WORD}`);
     await page.getByRole('heading', { level: 1, name: 'Search' }).waitFor();
     await expect(page.getByText(WITHDRAWN_TITLE)).toHaveCount(0);
   });
@@ -572,7 +572,7 @@ test.describe('audio administration', () => {
 
   test('refuses every audio surface, and the upload, to an account without the permission', async () => {
     for (const surface of ['audio', 'audio/series', `audio/${lectureId}`]) {
-      const response = await stranger.goto(`/en/admin/media/${surface}`);
+      const response = await stranger.goto(`/admin/media/${surface}`);
       expect(response?.status(), surface).toBe(404);
     }
     const upload = await stranger.request.post(
@@ -588,7 +588,7 @@ test.describe('audio administration', () => {
 
   test('creates a draft track, and refuses to publish it with no recording', async () => {
     const slug = `browser-admin-audio-${run}`;
-    await admin.goto('/en/admin/media/audio');
+    await admin.goto('/admin/media/audio');
     await expect(admin.getByRole('heading', { level: 1, name: 'Audio' })).toBeVisible();
 
     await admin.locator('#new-audio-slug').fill(`${slug}-published`);
@@ -602,12 +602,12 @@ test.describe('audio administration', () => {
         .filter({ hasText: 'Upload a recording before publishing this track.' }),
     ).toBeVisible();
 
-    await admin.goto('/en/admin/media/audio');
+    await admin.goto('/admin/media/audio');
     await admin.locator('#new-audio-slug').fill(slug);
     await admin.locator('#new-audio-title-en').fill('Synthetic admin recording');
     await admin.locator('#new-audio-language').selectOption('en');
     await admin.getByRole('button', { name: 'Create', exact: true }).click();
-    await admin.waitForURL(/\/en\/admin\/media\/audio\/[0-9a-f-]{36}$/);
+    await admin.waitForURL(/\/admin\/media\/audio\/[0-9a-f-]{36}$/);
     createdId = admin.url().split('/').pop() ?? '';
     await expect(
       admin.getByText('No recording has been uploaded for this track yet.'),
@@ -622,7 +622,7 @@ test.describe('audio administration', () => {
       "SELECT COUNT(*) AS n FROM [dbo].[Asset] WHERE [state]=N'quarantined';",
     );
 
-    await admin.goto(`/en/admin/media/audio/${createdId}`);
+    await admin.goto(`/admin/media/audio/${createdId}`);
     await admin.locator('input[type="file"]').setInputFiles({
       name: 'synthetic-large.mp3',
       mimeType: 'audio/mpeg',
@@ -667,7 +667,7 @@ test.describe('audio administration', () => {
   });
 
   test('previews an attached file for a live administrator only', async () => {
-    await admin.goto(`/en/admin/media/audio/${lectureId}`);
+    await admin.goto(`/admin/media/audio/${lectureId}`);
     await expect(admin.getByText('Ready to play')).toBeVisible();
     const preview = admin.locator('audio');
     await expect(preview).toHaveAttribute(
@@ -685,7 +685,7 @@ test.describe('audio administration', () => {
   });
 
   test('refuses a stale track save visibly, and keeps the first', async () => {
-    await admin.goto(`/en/admin/media/audio/${lectureId}`);
+    await admin.goto(`/admin/media/audio/${lectureId}`);
     const second = await admin.context().newPage();
     await second.goto(admin.url());
 

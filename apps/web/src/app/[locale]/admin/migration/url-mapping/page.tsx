@@ -147,9 +147,7 @@ export default async function MigrationUrlMappingPage({
     <main className="flex min-w-0 flex-col gap-8">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('mapping.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('mapping.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('mapping.description')}</p>
       </header>
 
       {/* ---- Legacy URL mappings ------------------------------------------ */}
@@ -157,9 +155,7 @@ export default async function MigrationUrlMappingPage({
         <SectionHeading>
           <span id="legacy-mappings">{t('mapping.legacy.heading')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('mapping.legacy.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('mapping.legacy.help')}</p>
         <nav aria-label={t('mapping.legacy.filter')} className="flex flex-wrap gap-2">
           <FilterLink
             href={href({ lstate: null, lpage: null })}
@@ -198,7 +194,7 @@ export default async function MigrationUrlMappingPage({
               <DataRow key={row.id}>
                 <DataCell wrap>
                   <Code>{row.legacyUrl}</Code>
-                  <span className="block text-xs text-[color:var(--color-foreground-muted)]">
+                  <span className="block text-xs text-foreground-muted">
                     <Code>{row.sourceKey}</Code>
                   </span>
                 </DataCell>
@@ -259,9 +255,7 @@ export default async function MigrationUrlMappingPage({
         <SectionHeading>
           <span id="topic-mappings">{t('mapping.topics.heading')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('mapping.topics.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('mapping.topics.help')}</p>
         <nav aria-label={t('mapping.topics.filter')} className="flex flex-wrap gap-2">
           <FilterLink
             href={href({ tstate: null, tpage: null })}
@@ -319,9 +313,7 @@ export default async function MigrationUrlMappingPage({
         <SectionHeading>
           <span id="unresolved-links">{t('mapping.unresolved.heading')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('mapping.unresolved.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('mapping.unresolved.help')}</p>
         {!links.ok ? (
           <Alert tone="error">{t('failure.load')}</Alert>
         ) : links.value.rows.length === 0 ? (

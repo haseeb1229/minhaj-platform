@@ -22,6 +22,7 @@ import {
   firstDifference,
   grantRole,
   knowledgeOf,
+  localizedPath,
   privilegedSession,
   registerAndSignIn,
   test,
@@ -226,7 +227,7 @@ async function apply(
   notice: 'submitted' | 'existing',
 ): Promise<void> {
   await applyButton(page, title).click();
-  await page.waitForURL(new RegExp(`/en/my/membership\\?done=${notice}$`, 'u'));
+  await page.waitForURL(new RegExp(`/my/membership\\?done=${notice}$`, 'u'));
   await expect(page.getByRole('main')).toContainText(copy(`myMembership.done.${notice}`));
 }
 
@@ -276,7 +277,7 @@ async function captured(request: Request): Promise<Submission> {
 
 /** The application detail an operator opens. */
 function detailPath(applicationId: string): string {
-  return `/en/admin/membership/applications/${applicationId}`;
+  return `/admin/membership/applications/${applicationId}`;
 }
 
 /** Opens an application, starts its review after confirming, and waits for the decision forms. */
@@ -365,7 +366,7 @@ test.describe('the public Membership page', () => {
   }) => {
     test.setTimeout(120_000);
     for (const locale of LOCALES) {
-      const target = `/${locale}/membership`;
+      const target = localizedPath(locale, '/membership');
       const response = await page.goto(target);
       expect(response?.status(), target).toBe(200);
       expect(response?.headers()['set-cookie'], target).toBeUndefined();
@@ -410,19 +411,19 @@ test.describe('the public Membership page', () => {
           exact: true,
         }),
         target,
-      ).toHaveAttribute('href', `/${locale}/my/membership`);
+      ).toHaveAttribute('href', localizedPath(locale, '/my/membership'));
       await expect(main.locator('form'), target).toHaveCount(0);
       await expect(main.getByRole('button'), target).toHaveCount(0);
     }
-    await page.goto('/en/membership');
-    await expectNoPaymentWords(page, '/en/membership');
+    await page.goto('/membership');
+    await expectNoPaymentWords(page, '/membership');
   });
 
   test('is the same document signed in and signed out, and names nobody', async ({
     request,
   }) => {
     test.setTimeout(120_000);
-    for (const target of ['/en/membership', '/ur/membership'])
+    for (const target of ['/membership', '/ur/membership'])
       for (const visitor of [applicant, other]) {
         const { anonymous, signedIn } = await asTwoVisitors(
           request,
@@ -449,7 +450,7 @@ test.describe('the public Membership page', () => {
     for (const width of [320, 640]) {
       await page.setViewportSize({ width, height: 800 });
       for (const locale of LOCALES) {
-        const target = `/${locale}/membership`;
+        const target = localizedPath(locale, '/membership');
         const where = `${String(width)}px ${target}`;
         const response = await page.goto(target);
         expect(response?.status(), where).toBe(200);
@@ -473,11 +474,11 @@ test.describe('My Membership', () => {
     page,
     request,
   }) => {
-    await page.goto('/en/my/membership');
-    await page.waitForURL(/\/en\/signin\?/);
+    await page.goto('/my/membership');
+    await page.waitForURL(/\/signin\?/);
     const url = new URL(page.url());
     expect(`${url.pathname}${url.search}`).toBe(
-      `/en/signin?returnTo=${encodeURIComponent('/en/my/membership')}`,
+      `/signin?returnTo=${encodeURIComponent('/my/membership')}`,
     );
     const response = await request.get('/api/my/export/membership');
     expect(response.status()).toBe(401);
@@ -487,13 +488,13 @@ test.describe('My Membership', () => {
   test('is private, and one application is made however often it is asked for', async () => {
     test.setTimeout(180_000);
     const page = applicant.page;
-    await expectPrivateSurface(page, '/en/my/membership');
+    await expectPrivateSurface(page, '/my/membership');
     await expect(myList(page, 'open')).toHaveCount(0);
     await expect(page.getByRole('main')).toContainText(copy('myMembership.open.empty'));
 
     // A second page, loaded BEFORE applying, still offers the form.
     const stale = await page.context().newPage();
-    await stale.goto('/en/my/membership');
+    await stale.goto('/my/membership');
     await expect(applyButton(stale, TEXT.open)).toBeVisible();
 
     await apply(page, TEXT.open, 'submitted');
@@ -511,7 +512,7 @@ test.describe('My Membership', () => {
 
     // The stale page asks again: answered with the application in progress.
     await applyButton(stale, TEXT.open).click();
-    await stale.waitForURL(/\/en\/my\/membership\?done=existing$/u);
+    await stale.waitForURL(/\/my\/membership\?done=existing$/u);
     await expect(stale.getByRole('main')).toContainText(
       copy('myMembership.done.existing'),
     );
@@ -524,7 +525,7 @@ test.describe('My Membership', () => {
   test('withdrawing needs the confirmation, then withdraws; applying again is allowed', async () => {
     test.setTimeout(180_000);
     const page = applicant.page;
-    await page.goto('/en/my/membership');
+    await page.goto('/my/membership');
     const entry = myList(page, 'open')
       .getByRole('listitem')
       .filter({ hasText: TEXT.open });
@@ -542,7 +543,7 @@ test.describe('My Membership', () => {
       .getByLabel(copy('myMembership.withdraw.confirm'), { exact: true })
       .check();
     await withdraw.click();
-    await page.waitForURL(/\/en\/my\/membership\?done=withdrawn$/u);
+    await page.waitForURL(/\/my\/membership\?done=withdrawn$/u);
     const main = page.getByRole('main');
     await expect(main).toContainText(copy('myMembership.done.withdrawn'));
     await expect(main).toContainText(copy('myMembership.open.empty'));
@@ -562,7 +563,7 @@ test.describe('My Membership', () => {
     test.setTimeout(180_000);
     const mine = await openApplication(applicant.id, ids.open);
     const page = other.page;
-    const response = await page.goto('/en/my/membership');
+    const response = await page.goto('/my/membership');
     expect(response?.status()).toBe(200);
     await expect(page.getByRole('main')).toContainText(copy('myMembership.open.empty'));
     await expect(page.getByRole('main')).toContainText(
@@ -657,15 +658,15 @@ test.describe('Membership administration', () => {
     // Membership's part of it does not exist.
     await grantRole(sql, other.id, ['taxonomy.read'], `${SENTINEL} another area`);
     const page = other.page;
-    expect((await page.goto('/en/admin'))?.status()).toBe(200);
+    expect((await page.goto('/admin'))?.status()).toBe(200);
     await expect(
       page.getByRole('link', { name: copy('admin.nav.membership'), exact: true }),
     ).toHaveCount(0);
     const { id } = await openApplication(applicant.id, ids.open);
     for (const target of [
-      '/en/admin/membership',
-      `/en/admin/membership?type=${ids.open}`,
-      '/en/admin/membership/applications',
+      '/admin/membership',
+      `/admin/membership?type=${ids.open}`,
+      '/admin/membership/applications',
       detailPath(id),
     ]) {
       const response = await page.goto(target);
@@ -680,7 +681,7 @@ test.describe('Membership administration', () => {
   }) => {
     test.setTimeout(240_000);
     const page = operator.page;
-    await page.goto('/en/admin/membership');
+    await page.goto('/admin/membership');
     await expect(mainHeading(page)).toHaveText(copy('adminMembership.types.title'));
     const main = page.getByRole('main');
     await main.locator('#create-primary').selectOption('en');
@@ -691,7 +692,7 @@ test.describe('Membership administration', () => {
     await main
       .getByRole('button', { name: copy('adminMembership.create.submit'), exact: true })
       .click();
-    await page.waitForURL(/\/en\/admin\/membership\?type=[0-9a-f-]{36}$/u);
+    await page.waitForURL(/\/admin\/membership\?type=[0-9a-f-]{36}$/u);
     createdId = new URL(page.url()).searchParams.get('type') ?? '';
     const editor = main.locator('section[aria-labelledby="membership-editor"]');
     await expect(editor).toContainText(TEXT.created);
@@ -722,7 +723,7 @@ test.describe('Membership administration', () => {
     ).toBe(1);
 
     // Published: the editor now offers only archiving.
-    await page.goto(`/en/admin/membership?type=${createdId}`);
+    await page.goto(`/admin/membership?type=${createdId}`);
     await editor
       .getByRole('button', {
         name: copy('adminMembership.lifecycle.to.published'),
@@ -766,7 +767,7 @@ test.describe('Membership administration', () => {
     test.setTimeout(180_000);
     const first = operator.page;
     const second = await first.context().newPage();
-    const target = `/en/admin/membership?type=${createdId}`;
+    const target = `/admin/membership?type=${createdId}`;
     for (const page of [first, second]) {
       await page.goto(target);
       await expect(mainHeading(page)).toBeVisible();
@@ -813,7 +814,7 @@ test.describe('Membership administration', () => {
     // in the administration navigation. (The `/admin` dashboard reads the same
     // surface list as that navigation, so it shows this holder the Membership
     // card too.)
-    expect((await page.goto('/en/admin/membership'))?.status()).toBe(200);
+    expect((await page.goto('/admin/membership'))?.status()).toBe(200);
     await expect(
       page.getByRole('link', { name: copy('admin.nav.membership'), exact: true }),
     ).toBeVisible();
@@ -839,7 +840,7 @@ test.describe('Membership administration', () => {
     await expect(main.locator('form')).toHaveCount(0);
 
     // The editor is a reading: the words, and no act.
-    await page.goto(`/en/admin/membership?type=${createdId}`);
+    await page.goto(`/admin/membership?type=${createdId}`);
     const editor = main.locator('section[aria-labelledby="membership-editor"]');
     await expect(editor).toContainText(TEXT.createdUr);
     await expect(main.locator('form')).toHaveCount(0);
@@ -847,7 +848,7 @@ test.describe('Membership administration', () => {
 
     // The queue and an application, opened as an audited read.
     const { id } = await openApplication(applicant.id, ids.open);
-    await page.goto('/en/admin/membership/applications');
+    await page.goto('/admin/membership/applications');
     await expect(mainHeading(page)).toHaveText(
       copy('adminMembership.applications.title'),
     );
@@ -890,7 +891,7 @@ test.describe('Membership administration', () => {
     const page = operator.page;
     const { id } = await openApplication(applicant.id, ids.open);
 
-    await page.goto('/en/admin/membership/applications');
+    await page.goto('/admin/membership/applications');
     const main = page.getByRole('main');
     await main
       .getByRole('row')
@@ -932,7 +933,7 @@ test.describe('Membership administration', () => {
     ).toBeGreaterThanOrEqual(1);
 
     // Private, unindexed, and never the applicant's address.
-    for (const target of ['/en/admin/membership/applications', detailPath(id)]) {
+    for (const target of ['/admin/membership/applications', detailPath(id)]) {
       await expectPrivateSurface(page, target);
       const html = await (
         await page.context().request.get(target, { maxRedirects: 0 })
@@ -943,7 +944,7 @@ test.describe('Membership administration', () => {
 
     // The applicant sees the Membership they now hold.
     const mine = applicant.page;
-    await mine.goto('/en/my/membership');
+    await mine.goto('/my/membership');
     const held = myList(mine, 'memberships')
       .getByRole('listitem')
       .filter({ hasText: TEXT.open });
@@ -976,7 +977,7 @@ test.describe('Membership administration', () => {
     ).toBe(0);
 
     const theirs = other.page;
-    await theirs.goto('/en/my/membership');
+    await theirs.goto('/my/membership');
     await expect(
       myList(theirs, 'history').getByRole('listitem').filter({ hasText: TEXT.open }),
     ).toContainText(copy('membership.status.application.rejected'));
@@ -993,14 +994,14 @@ test.describe('Membership administration', () => {
   test('an operator ends a Membership after confirming, and the member is told who ended it', async () => {
     test.setTimeout(300_000);
     // A Membership of the type created through the administration.
-    await applicant.page.goto('/en/my/membership');
+    await applicant.page.goto('/my/membership');
     await apply(applicant.page, TEXT.created, 'submitted');
     const { id } = await openApplication(applicant.id, createdId);
     const page = operator.page;
     await startReview(page, id);
     await decide(page, 'approve');
 
-    await page.goto(`/en/admin/membership?type=${createdId}`);
+    await page.goto(`/admin/membership?type=${createdId}`);
     const main = page.getByRole('main');
     const members = main.getByRole('list', {
       name: copy('adminMembership.members.heading'),
@@ -1031,13 +1032,13 @@ test.describe('Membership administration', () => {
     // Ending it never edits the application that began it.
     expect((await applicationsOf(applicant.id, createdId))[0]?.status).toBe('approved');
 
-    await page.goto(`/en/admin/membership?type=${createdId}&members=closed`);
+    await page.goto(`/admin/membership?type=${createdId}&members=closed`);
     await expect(
       members.getByRole('listitem').filter({ hasText: TEXT.applicant }),
     ).toContainText(copy('membership.closureSource.operator'));
 
     const mine = applicant.page;
-    await mine.goto('/en/my/membership');
+    await mine.goto('/my/membership');
     const ended = myList(mine, 'memberships')
       .getByRole('listitem')
       .filter({ hasText: TEXT.created });
@@ -1057,7 +1058,7 @@ test.describe('a member', () => {
   test('ends their own Membership after confirming, and may apply again', async () => {
     test.setTimeout(240_000);
     const page = applicant.page;
-    await page.goto('/en/my/membership');
+    await page.goto('/my/membership');
     const held = myList(page, 'memberships')
       .getByRole('listitem')
       .filter({ hasText: TEXT.open });
@@ -1071,7 +1072,7 @@ test.describe('a member', () => {
     await expect(alertIn(page)).toHaveText(copy('myMembership.failure.confirmRequired'));
     await held.getByLabel(copy('myMembership.close.confirm'), { exact: true }).check();
     await close.click();
-    await page.waitForURL(/\/en\/my\/membership\?done=closed$/u);
+    await page.waitForURL(/\/my\/membership\?done=closed$/u);
     await expect(page.getByRole('main')).toContainText(copy('myMembership.done.closed'));
     await expect(held).toContainText(copy('membership.status.membership.closed'));
     await expect(held).toContainText(copy('membership.closureSource.member'));
@@ -1103,11 +1104,11 @@ test.describe('the Membership surfaces', () => {
     test.setTimeout(300_000);
     const { id } = await openApplication(applicant.id, ids.open);
     for (const [page, target] of [
-      [visitor, '/en/membership'],
-      [applicant.page, '/en/my/membership'],
-      [operator.page, '/en/admin/membership'],
-      [operator.page, `/en/admin/membership?type=${createdId}`],
-      [operator.page, '/en/admin/membership/applications'],
+      [visitor, '/membership'],
+      [applicant.page, '/my/membership'],
+      [operator.page, '/admin/membership'],
+      [operator.page, `/admin/membership?type=${createdId}`],
+      [operator.page, '/admin/membership/applications'],
       [operator.page, detailPath(id)],
     ] as const) {
       const response = await page.goto(target);
@@ -1120,7 +1121,7 @@ test.describe('the Membership surfaces', () => {
 
     // Status is a word in the badge, never a colour alone.
     const page = applicant.page;
-    await page.goto('/en/my/membership');
+    await page.goto('/my/membership');
     await expect(
       myList(page, 'open').getByRole('listitem').filter({ hasText: TEXT.open }),
     ).toContainText(copy('membership.status.application.submitted'));
@@ -1138,7 +1139,7 @@ test.describe('the Membership surfaces', () => {
   test('the apply button is reached by keyboard alone, with a visible focus', async () => {
     test.setTimeout(120_000);
     const page = applicant.page;
-    await page.goto('/en/my/membership');
+    await page.goto('/my/membership');
     const target = applyButton(page, TEXT.long);
     await expect(target).toBeVisible();
     await tabTo(page, target);
@@ -1149,8 +1150,8 @@ test.describe('the Membership surfaces', () => {
     test.setTimeout(300_000);
     for (const locale of ['ur', 'ar'] as const)
       for (const [page, target] of [
-        [applicant.page, `/${locale}/my/membership`],
-        [operator.page, `/${locale}/admin/membership`],
+        [applicant.page, localizedPath(locale, '/my/membership')],
+        [operator.page, localizedPath(locale, '/admin/membership')],
       ] as const) {
         const response = await page.goto(target);
         expect(response?.status(), target).toBe(200);
@@ -1163,7 +1164,7 @@ test.describe('the Membership surfaces', () => {
     for (const width of [320, 640]) {
       await page.setViewportSize({ width, height: 800 });
       for (const locale of ['en', 'ar'] as const) {
-        const target = `/${locale}/my/membership`;
+        const target = localizedPath(locale, '/my/membership');
         const where = `${String(width)}px ${target}`;
         const response = await page.goto(target);
         expect(response?.status(), where).toBe(200);

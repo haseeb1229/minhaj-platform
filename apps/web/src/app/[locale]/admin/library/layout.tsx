@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getTranslations } from 'next-intl/server';
@@ -78,7 +79,7 @@ export default async function LibraryAdminLayout({
               key: 'library',
               links: SURFACES.map((surface) => ({
                 key: surface,
-                href: `/${locale}/admin/library/${surface}`,
+                href: localizedPath(locale, `/admin/library/${surface}`),
                 text: t(`admin.${surface}`),
               })),
             },

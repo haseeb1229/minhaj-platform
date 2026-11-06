@@ -180,7 +180,7 @@ export function PhotoUploader(
             className="min-h-11 w-full text-sm"
           />
         ) : null}
-        <p id={helpId} className="text-xs text-[color:var(--color-foreground-muted)]">
+        <p id={helpId} className="text-xs text-foreground-muted">
           {labels.help}
         </p>
       </div>
@@ -203,7 +203,7 @@ export function PhotoUploader(
           {lines.map((line, index) => (
             <li
               key={`${line.name}-${String(index)}`}
-              className="flex flex-col gap-1 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-3 text-sm"
+              className="flex flex-col gap-1 rounded-control border border-border p-3 text-sm"
             >
               <span className="break-all" dir="auto">
                 {line.name}
@@ -217,12 +217,12 @@ export function PhotoUploader(
                 />
               ) : null}
               {line.state === 'done' ? (
-                <span className="text-[color:var(--color-success)]">
+                <span className="text-success">
                   {(labels.fileDone ?? labels.success).replace('{name}', line.name)}
                 </span>
               ) : null}
               {line.state === 'failed' ? (
-                <span className="text-[color:var(--color-error)]">
+                <span className="text-error">
                   {(labels.fileFailed ?? '').replace('{name}', line.name)}{' '}
                   {message(line.failure ?? 'unknown')}
                 </span>

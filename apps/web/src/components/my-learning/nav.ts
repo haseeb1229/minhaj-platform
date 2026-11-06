@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Locale } from '@minhaj/contracts';
 
 import type { LearningTranslator } from './parts';
@@ -15,10 +16,10 @@ interface Link {
 
 export function learningLinks(locale: Locale, t: LearningTranslator): readonly Link[] {
   return [
-    { href: `/${locale}/my/learning`, text: t('nav.learning') },
-    { href: `/${locale}/my/progress/courses`, text: t('nav.progress') },
-    { href: `/${locale}/my/classes`, text: t('nav.classes') },
-    { href: `/${locale}/learn/courses`, text: t('nav.catalogue') },
-    { href: `/${locale}/my`, text: t('nav.account') },
+    { href: localizedPath(locale, '/my/learning'), text: t('nav.learning') },
+    { href: localizedPath(locale, '/my/progress/courses'), text: t('nav.progress') },
+    { href: localizedPath(locale, '/my/classes'), text: t('nav.classes') },
+    { href: localizedPath(locale, '/learn/courses'), text: t('nav.catalogue') },
+    { href: localizedPath(locale, '/my'), text: t('nav.account') },
   ];
 }

@@ -1,9 +1,12 @@
+import type { Metadata } from 'next';
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 import { notFound, redirect } from 'next/navigation';
 
 import { requireOwnSession } from '@/composition/authorization';
 import { identityRuntime } from '@/composition/identity';
 import { requireLocale } from '@/config/route-locale';
+import { privateAreaMetadata } from '@/shell/private-metadata';
 import { WorkspaceShell } from '@/components/workspace/parts';
 import { WorkspaceNav } from '@/components/workspace/workspace-nav';
 import { groupedSurfaces, reachableSurfaces } from './surfaces';
@@ -28,7 +31,15 @@ import { groupedSurfaces, reachableSurfaces } from './surfaces';
  * horizontal scroller on a narrow one, and the content column is wide enough
  * for an administrative table on a wide desktop (ARCHITECTURE.md §13.5).
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  const locale = await requireLocale(params);
+  const t = await getTranslations({ locale, namespace: 'admin' });
+  return privateAreaMetadata(t('title'), { robots: { index: false, follow: false } });
+}
 
 /**
  * PER REQUEST, always. Every page beneath reads a session and privilege state,
@@ -49,7 +60,10 @@ export default async function AdminLayout({ children, params }: LayoutProps) {
   const active = await requireOwnSession(locale);
   if (active === null) {
     redirect(
-      '/' + locale + '/signin?returnTo=' + encodeURIComponent('/' + locale + '/admin'),
+      localizedPath(
+        locale,
+        '/signin?returnTo=' + encodeURIComponent(localizedPath(locale, '/admin')),
+      ),
     );
   }
 
@@ -59,7 +73,7 @@ export default async function AdminLayout({ children, params }: LayoutProps) {
   const visible = reachableSurfaces(held);
   if (visible.length === 0) notFound();
 
-  const root = `/${locale}/admin`;
+  const root = localizedPath(locale, '/admin');
 
   return (
     <WorkspaceShell

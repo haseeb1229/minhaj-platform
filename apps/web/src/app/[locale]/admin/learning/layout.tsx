@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getTranslations } from 'next-intl/server';
@@ -66,7 +67,7 @@ export default async function LearningAdminLayout({
                 ...(held.has('learning.classes.read') ? CLASS_SURFACES : []),
               ].map((surface) => ({
                 key: surface,
-                href: `/${locale}/admin/learning/${surface}`,
+                href: localizedPath(locale, `/admin/learning/${surface}`),
                 text: t(`surface.${surface}`),
               })),
             },

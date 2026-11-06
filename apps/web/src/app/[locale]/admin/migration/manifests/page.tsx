@@ -156,9 +156,7 @@ export default async function MigrationManifestsPage({
     <main className="flex min-w-0 flex-col gap-8">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('manifests.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('manifests.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('manifests.description')}</p>
       </header>
 
       <section className="flex flex-col gap-3" aria-labelledby="migration-manifests">
@@ -247,9 +245,7 @@ export default async function MigrationManifestsPage({
         <Panel>
           <div className="flex flex-col gap-4">
             <SectionHeading>{t('manifests.create.heading')}</SectionHeading>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('manifests.create.help')}
-            </p>
+            <p className="text-sm text-foreground-muted">{t('manifests.create.help')}</p>
             <form method="get" action={base} className="flex flex-col gap-4">
               <Field id="manifest-run" label={t('manifests.create.run')}>
                 {(props) => (
@@ -305,7 +301,7 @@ export default async function MigrationManifestsPage({
                       />
                       <label htmlFor={`manifest-staged-${row.id}`}>
                         <bdi>{row.title}</bdi>{' '}
-                        <span className="text-[color:var(--color-foreground-muted)]">
+                        <span className="text-foreground-muted">
                           <ContentKindLabel kind={row.contentKind} copy={copy} />
                         </span>
                       </label>
@@ -327,9 +323,7 @@ export default async function MigrationManifestsPage({
         <SectionHeading>
           <span id="migration-promotions">{t('promotions.heading')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('promotions.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('promotions.help')}</p>
         <Alert tone="info">{t('promotions.commandLine')}</Alert>
         {publisher ? <MigrationPublicationStepUp locale={locale} /> : null}
         {!promotions.ok ? (

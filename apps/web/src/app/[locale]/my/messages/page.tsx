@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { TeacherName } from '@/components/live-learning/parts';
@@ -51,7 +52,7 @@ export default async function MyMessagesPage({
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const locale = await requireLocale(params);
-  const path = `/${locale}/my/messages`;
+  const path = localizedPath(locale, '/my/messages');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'messages' });
   const cursor = readCursor(await searchParams);
@@ -140,16 +141,16 @@ export default async function MyMessagesPage({
           <span id="messages-start">
             <SectionHeading>{t('start.heading')}</SectionHeading>
           </span>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('start.help')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('start.help')}</p>
           {startable?.ok === false ? (
             <Alert tone="error">{t('start.unavailable')}</Alert>
           ) : offered.length === 0 ? (
             <>
               <EmptyState>{t('start.empty')}</EmptyState>
               <p>
-                <TextLink href={`/${locale}/my/teachers`}>{t('nav.teachers')}</TextLink>
+                <TextLink href={localizedPath(locale, '/my/teachers')}>
+                  {t('nav.teachers')}
+                </TextLink>
               </p>
             </>
           ) : (
@@ -175,7 +176,7 @@ export default async function MyMessagesPage({
                       </p>
                       {course === undefined ? null : (
                         <p className="flex min-w-0 flex-wrap gap-x-2 text-sm">
-                          <span className="text-[color:var(--color-foreground-muted)]">
+                          <span className="text-foreground-muted">
                             {t('list.course')}
                           </span>
                           <LearningTitle

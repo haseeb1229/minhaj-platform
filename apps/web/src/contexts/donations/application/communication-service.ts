@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import type { Locale } from '@minhaj/contracts';
@@ -84,7 +85,7 @@ export function createDonationsCommunicationService(deps: {
 
   /** The person's own private donations page, in their interface locale. */
   const donationsUrl = (locale: Locale): string =>
-    new URL(`/${locale}/my/donations`, deps.baseUrl).toString();
+    new URL(localizedPath(locale, '/my/donations'), deps.baseUrl).toString();
 
   return {
     /**

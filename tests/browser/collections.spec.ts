@@ -8,6 +8,7 @@ import {
   baseUrl,
   expect,
   grantRole,
+  localizedPath,
   privilegedSession,
   registerAndSignIn,
   test,
@@ -226,7 +227,7 @@ async function expectPublicOrder(page: Page, order: readonly MemberName[]) {
     await expect(item).toContainText(MEMBER[name].publicType);
     await expect(item.getByRole('link', { name: MEMBER[name].title })).toHaveAttribute(
       'href',
-      `/en${OWNER_PATH[name]}`,
+      OWNER_PATH[name],
     );
   }
 }
@@ -415,7 +416,7 @@ test.describe('authoring a Collection', () => {
     const status = members.getByRole('status');
 
     // Every public member type is offered, narrowed by the search.
-    await author.goto(`/en/admin/editorial/collections/new?referenceQuery=${run}`);
+    await author.goto(`/admin/editorial/collections/new?referenceQuery=${run}`);
     await expect(members.getByText(/^No items yet\./)).toBeVisible();
     await addMember(author, 'article', 1);
     await addMember(author, 'news', 2);
@@ -490,7 +491,7 @@ test.describe('authoring a Collection', () => {
       .getByRole('textbox', { name: 'Body (ur)', exact: true })
       .fill('آزمائشی غیر مستند تعارف۔');
     await author.getByRole('button', { name: 'Save revision', exact: true }).click();
-    await author.waitForURL(/\/en\/admin\/editorial\/collections\/[0-9a-f-]{36}$/);
+    await author.waitForURL(/\/admin\/editorial\/collections\/[0-9a-f-]{36}$/);
     mainEditor = new URL(author.url()).pathname;
     await expectEditorOrder(author, SAVED_ORDER);
     await expect(members.getByText('Item changes are not saved yet.')).toHaveCount(0);
@@ -567,7 +568,7 @@ test.describe('authoring a Collection', () => {
 
   test('gives a read-only account the editor without a form, and refuses what it posts anyway', async () => {
     const collectionId = collectionIdOf(mainEditor);
-    await reader.goto('/en/admin/editorial/collections');
+    await reader.goto('/admin/editorial/collections');
     await expect(
       reader.getByRole('heading', { name: 'Collections', exact: true }),
     ).toBeVisible();
@@ -620,7 +621,7 @@ test.describe('authoring a Collection', () => {
       'collections/new',
       `collections/${collectionId}`,
     ]) {
-      const response = await outsider.goto(`/en/admin/editorial/${surface}`);
+      const response = await outsider.goto(`/admin/editorial/${surface}`);
       // Refused as not-found — never a page that confirms what is there.
       expect([200, 404], surface).toContain(response?.status());
       if (response?.status() === 200)
@@ -633,9 +634,9 @@ test.describe('authoring a Collection', () => {
       await expect(membersOf(outsider)).toHaveCount(0);
     }
 
-    await page.goto('/en/admin/editorial/collections');
-    await page.waitForURL(/\/en\/signin\?returnTo=/);
-    expect(new URL(page.url()).searchParams.get('returnTo')).toMatch(/^\/en\/admin/);
+    await page.goto('/admin/editorial/collections');
+    await page.waitForURL(/\/signin\?returnTo=/);
+    expect(new URL(page.url()).searchParams.get('returnTo')).toMatch(/^\/admin/);
     expect(await page.context().cookies()).toHaveLength(0);
   });
 });
@@ -646,36 +647,36 @@ test.describe('an anonymous visitor finds Collections', () => {
   test('lists the Collection with no cookie and the same body signed in, and News leads here', async ({
     page,
   }) => {
-    const response = await page.goto('/en/collections');
+    const response = await page.goto('/collections');
     expect(response?.status()).toBe(200);
     expect(response?.headers()['set-cookie']).toBeUndefined();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Collections');
     const list = page.getByRole('list', { name: 'Collections', exact: true });
     await expect(list.getByRole('link', { name: TITLE.en })).toHaveAttribute(
       'href',
-      `/en/collections/${slug.main}`,
+      `/collections/${slug.main}`,
     );
     // A card states only what the Collection owns: no picture, no member.
     await expect(page.locator('main img')).toHaveCount(0);
     await expect(list.getByText(MEMBER.work.title)).toHaveCount(0);
 
     const anonymous = await page.getByRole('main').innerText();
-    const signedIn = await author.goto('/en/collections');
+    const signedIn = await author.goto('/collections');
     expect(signedIn?.headers()['set-cookie']).toBeUndefined();
     expect(await author.getByRole('main').innerText()).toBe(anonymous);
     expect(await page.context().cookies()).toHaveLength(0);
 
     // News and Events leads here.
-    await page.goto('/en/news');
+    await page.goto('/news');
     await expect(
-      page.getByRole('main').locator('a[href="/en/collections"]').first(),
+      page.getByRole('main').locator('a[href="/collections"]').first(),
     ).toBeVisible();
   });
 
   test('shows the members in the saved order, typed and linked to their owners', async ({
     page,
   }) => {
-    const response = await page.goto(`/en/collections/${slug.main}`);
+    const response = await page.goto(`/collections/${slug.main}`);
     expect(response?.status()).toBe(200);
     expect(response?.headers()['set-cookie']).toBeUndefined();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(TITLE.en);
@@ -687,10 +688,9 @@ test.describe('an anonymous visitor finds Collections', () => {
 
     // Every member link resolves at its owner.
     for (const name of FINAL_ORDER)
-      expect(
-        (await page.request.get(`/en${OWNER_PATH[name]}`)).status(),
-        OWNER_PATH[name],
-      ).toBe(200);
+      expect((await page.request.get(OWNER_PATH[name])).status(), OWNER_PATH[name]).toBe(
+        200,
+      );
 
     // The deployment is pre-adoption: noindex, no canonical claim and no
     // structured data at all (ROUTE_MAP.md §9.5) — so certainly no ItemList or
@@ -711,13 +711,13 @@ test.describe('an anonymous visitor finds Collections', () => {
 
     // The same knowledge signed in, and no cookie was ever set.
     const text = await page.getByRole('main').innerText();
-    const signedIn = await author.goto(`/en/collections/${slug.main}`);
+    const signedIn = await author.goto(`/collections/${slug.main}`);
     expect(signedIn?.headers()['set-cookie']).toBeUndefined();
     expect(await author.getByRole('main').innerText()).toBe(text);
     expect(await page.context().cookies()).toHaveLength(0);
 
     // An unknown Collection is not public, signed in or not.
-    expect((await page.request.get(`/en/collections/no-such-${run}`)).status()).toBe(404);
+    expect((await page.request.get(`/collections/no-such-${run}`)).status()).toBe(404);
   });
 });
 
@@ -790,31 +790,45 @@ test.describe('former addresses', () => {
     await clickSaved(author, 'Save revision');
     // The rename is an ordinary edit: withdrawn until it is published again.
     expect(
-      (await request.get(`/en/collections/${slug.main}`, { maxRedirects: 0 })).status(),
+      (await request.get(`/collections/${slug.main}`, { maxRedirects: 0 })).status(),
     ).toBe(404);
     expect(
-      (
-        await request.get(`/en/collections/${slug.renamed}`, { maxRedirects: 0 })
-      ).status(),
+      (await request.get(`/collections/${slug.renamed}`, { maxRedirects: 0 })).status(),
     ).toBe(404);
     await throughWorkflow(mainEditor);
 
     const old = slug.main;
     slug.main = slug.renamed;
     for (const locale of ['en', 'ur', 'ar']) {
-      const from = `/${locale}/collections/${old}`;
+      const from = localizedPath(locale, `/collections/${old}`);
       const response = await request.get(from, { maxRedirects: 0 });
       expect(response.status(), from).toBe(301);
       const target = new URL(response.headers()['location'] ?? '', baseUrl()).pathname;
-      expect(target, from).toBe(`/${locale}/collections/${slug.main}`);
+      expect(target, from).toBe(localizedPath(locale, `/collections/${slug.main}`));
       // The target is final: no second hop.
       expect((await request.get(target, { maxRedirects: 0 })).status(), target).toBe(200);
     }
 
+    // A former slug under the LEGACY `/en` prefix is still ONE hop: the prefix
+    // and the slug history are answered together, straight to the current
+    // unprefixed address — never `/en/old` → `/old` → `/current`.
+    const legacy = `/en/collections/${old}?ref=legacy`;
+    const merged = await request.get(legacy, { maxRedirects: 0 });
+    expect(merged.status(), legacy).toBe(301);
+    const landing = new URL(merged.headers()['location'] ?? '', baseUrl());
+    expect(`${landing.pathname}${landing.search}`, legacy).toBe(
+      `/collections/${slug.main}?ref=legacy`,
+    );
+    expect(
+      (
+        await request.get(`${landing.pathname}${landing.search}`, { maxRedirects: 0 })
+      ).status(),
+    ).toBe(200);
+
     // The listing names the current address only.
-    const listing = await (await request.get('/en/collections')).text();
-    expect(listing).toContain(`/en/collections/${slug.main}"`);
-    expect(listing).not.toContain(`/en/collections/${old}"`);
+    const listing = await (await request.get('/collections')).text();
+    expect(listing).toContain(`/collections/${slug.main}"`);
+    expect(listing).not.toContain(`/collections/${old}"`);
   });
 });
 
@@ -824,7 +838,7 @@ test.describe('withdrawn members and an archived Collection', () => {
   test('omits a withdrawn member, keeps the rest in order, and says so when none remain', async ({
     page,
   }) => {
-    const detail = `/en/collections/${slug.main}`;
+    const detail = `/collections/${slug.main}`;
     const collectionId = collectionIdOf(mainEditor);
     const stored = await storedOrder(collectionId);
     const record = await collectionRow(collectionId);
@@ -896,8 +910,8 @@ test.describe('withdrawn members and an archived Collection', () => {
     expect((await collectionRow(collectionId)).state).toBe('archived');
     expect(await targetStates()).toBe(before);
 
-    expect((await page.request.get(`/en/collections/${slug.main}`)).status()).toBe(404);
-    await page.goto('/en/collections');
+    expect((await page.request.get(`/collections/${slug.main}`)).status()).toBe(404);
+    await page.goto('/collections');
     await expect(page.getByRole('main').getByText(TITLE.en)).toHaveCount(0);
   });
 });

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
@@ -102,14 +103,11 @@ function TargetList({
   readonly t: PersonalTranslator;
 }) {
   return (
-    <ul
-      aria-label={label}
-      className="flex flex-col divide-y divide-[color:var(--color-border)]"
-    >
+    <ul aria-label={label} className="flex flex-col divide-y divide-border">
       {rows.map((row) => (
         <li key={targetKey(row.target)} className="flex min-w-0 flex-col gap-1 py-2">
           <TargetTitle resolved={titles.get(targetKey(row.target))} t={t} />
-          <span className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--color-foreground-muted)]">
+          <span className="flex flex-wrap items-center gap-2 text-xs text-foreground-muted">
             <KindBadge kind={row.target.kind} t={t} />
             <PersonalTime value={row.at} locale={locale} timeZone={timeZone} />
           </span>
@@ -157,7 +155,7 @@ export default async function MyPage({
   const md = await getTranslations({ locale, namespace: 'myDonations' });
   const dn = await getTranslations({ locale, namespace: 'donations' });
   const w = await getTranslations({ locale, namespace: 'workspace' });
-  const session = await requireActiveSession(locale, `/${locale}/my`);
+  const session = await requireActiveSession(locale, localizedPath(locale, '/my'));
   const timeZone = session.account.timezone;
 
   const learning = await learningRead('learning-home', () =>
@@ -245,7 +243,10 @@ export default async function MyPage({
         <WorkspaceCard
           heading={p('home.onboardingHeading')}
           links={[
-            { href: `/${locale}/my/settings/interests`, text: p('home.onboardingLink') },
+            {
+              href: localizedPath(locale, '/my/settings/interests'),
+              text: p('home.onboardingLink'),
+            },
           ]}
         >
           <p>{p('home.onboardingBody')}</p>
@@ -261,7 +262,9 @@ export default async function MyPage({
             <ul className="flex flex-wrap gap-x-6">
               {panels.current.interests.map((interest) => (
                 <li key={interest} className="flex min-h-11 items-center">
-                  <TextLink href={`/${locale}${INTEREST_SECTIONS[interest]}`}>
+                  <TextLink
+                    href={localizedPath(locale, `${INTEREST_SECTIONS[interest]}`)}
+                  >
                     {p(`interests.interest.${interest}`)}
                   </TextLink>
                 </li>
@@ -275,8 +278,11 @@ export default async function MyPage({
         <WorkspaceCard
           heading={l('home.heading')}
           links={[
-            { href: `/${locale}/my/learning`, text: l('home.link') },
-            { href: `/${locale}/my/progress/courses`, text: l('nav.progress') },
+            { href: localizedPath(locale, '/my/learning'), text: l('home.link') },
+            {
+              href: localizedPath(locale, '/my/progress/courses'),
+              text: l('nav.progress'),
+            },
           ]}
         >
           {!learning.ok ? (
@@ -285,7 +291,7 @@ export default async function MyPage({
             <>
               <EmptyState>{l('courses.empty')}</EmptyState>
               <p>
-                <TextLink href={`/${locale}/learn/courses`}>
+                <TextLink href={localizedPath(locale, '/learn/courses')}>
                   {l('courses.browse')}
                 </TextLink>
               </p>
@@ -301,7 +307,10 @@ export default async function MyPage({
                 <p className="flex flex-wrap items-center gap-x-2">
                   <span>{l('home.continue')}</span>
                   <TextLink
-                    href={`/${locale}/my/learning/courses/${encodeURIComponent(resume.course.slug)}`}
+                    href={localizedPath(
+                      locale,
+                      `/my/learning/courses/${encodeURIComponent(resume.course.slug)}`,
+                    )}
                   >
                     <LearningTitle
                       labels={resume.course.labels}
@@ -318,8 +327,8 @@ export default async function MyPage({
         <WorkspaceCard
           heading={c('home.heading')}
           links={[
-            { href: `/${locale}/my/classes`, text: c('home.link') },
-            { href: `/${locale}/my/teachers`, text: c('nav.teachers') },
+            { href: localizedPath(locale, '/my/classes'), text: c('home.link') },
+            { href: localizedPath(locale, '/my/teachers'), text: c('nav.teachers') },
           ]}
         >
           {!classes.ok ? (
@@ -330,7 +339,9 @@ export default async function MyPage({
             <>
               <p className="flex flex-wrap items-center gap-x-2">
                 <span>{c('home.next')}</span>
-                <TextLink href={`/${locale}/my/classes/${nextClass.session.id}`}>
+                <TextLink
+                  href={localizedPath(locale, `/my/classes/${nextClass.session.id}`)}
+                >
                   <LearningTitle
                     labels={nextClass.course.labels}
                     primaryLocale={nextClass.course.primaryLocale}
@@ -350,7 +361,7 @@ export default async function MyPage({
 
         <WorkspaceCard
           heading={m('home.heading')}
-          links={[{ href: `/${locale}/my/messages`, text: m('home.link') }]}
+          links={[{ href: localizedPath(locale, '/my/messages'), text: m('home.link') }]}
         >
           {!unreadMessages.ok ? (
             <Alert tone="error">{m('home.unavailable')}</Alert>
@@ -375,11 +386,11 @@ export default async function MyPage({
               heading={p('home.notificationsHeading')}
               links={[
                 {
-                  href: `/${locale}/my/notifications`,
+                  href: localizedPath(locale, '/my/notifications'),
                   text: p('home.notificationsLink'),
                 },
                 {
-                  href: `/${locale}/my/settings/notifications`,
+                  href: localizedPath(locale, '/my/settings/notifications'),
                   text: p('nav.notificationSettings'),
                 },
               ]}
@@ -390,7 +401,10 @@ export default async function MyPage({
             <WorkspaceCard
               heading={p('home.quranHeading')}
               links={[
-                { href: `/${locale}/my/progress/quran`, text: p('home.quranLink') },
+                {
+                  href: localizedPath(locale, '/my/progress/quran'),
+                  text: p('home.quranLink'),
+                },
               ]}
             >
               {ayah === null ? (
@@ -410,10 +424,16 @@ export default async function MyPage({
             <WorkspaceCard
               heading={p('home.savedHeading')}
               links={[
-                { href: `/${locale}/my/saved`, text: p('home.savedLink') },
-                { href: `/${locale}/my/saved/bookmarks`, text: p('nav.bookmarks') },
-                { href: `/${locale}/my/saved/notes`, text: p('nav.notes') },
-                { href: `/${locale}/my/saved/collections`, text: p('nav.collections') },
+                { href: localizedPath(locale, '/my/saved'), text: p('home.savedLink') },
+                {
+                  href: localizedPath(locale, '/my/saved/bookmarks'),
+                  text: p('nav.bookmarks'),
+                },
+                { href: localizedPath(locale, '/my/saved/notes'), text: p('nav.notes') },
+                {
+                  href: localizedPath(locale, '/my/saved/collections'),
+                  text: p('nav.collections'),
+                },
               ]}
             >
               {recentRows.length === 0 ? (
@@ -437,15 +457,21 @@ export default async function MyPage({
                   : p('privacy.historyHeading')
               }
               links={[
-                { href: `/${locale}/my/history/reading`, text: p('nav.reading') },
-                { href: `/${locale}/my/history/watch`, text: p('nav.watch') },
+                {
+                  href: localizedPath(locale, '/my/history/reading'),
+                  text: p('nav.reading'),
+                },
+                {
+                  href: localizedPath(locale, '/my/history/watch'),
+                  text: p('nav.watch'),
+                },
               ]}
             >
               {!panels.current.historyEnabled ? (
                 <>
                   <p>{p('privacy.historyOff')}</p>
                   <p>
-                    <TextLink href={`/${locale}/my/settings/privacy`}>
+                    <TextLink href={localizedPath(locale, '/my/settings/privacy')}>
                       {p('history.offLink')}
                     </TextLink>
                   </p>
@@ -482,14 +508,18 @@ export default async function MyPage({
 
         <WorkspaceCard
           heading={t('my.questions')}
-          links={[{ href: `/${locale}/my/questions`, text: t('my.questions') }]}
+          links={[
+            { href: localizedPath(locale, '/my/questions'), text: t('my.questions') },
+          ]}
         >
           <p>{w('my.questionsBody')}</p>
         </WorkspaceCard>
 
         <WorkspaceCard
           heading={ms('home.heading')}
-          links={[{ href: `/${locale}/my/membership`, text: ms('home.link') }]}
+          links={[
+            { href: localizedPath(locale, '/my/membership'), text: ms('home.link') },
+          ]}
         >
           {!membership.ok ? (
             <Alert tone="error">{ms('home.unavailable')}</Alert>
@@ -509,7 +539,9 @@ export default async function MyPage({
 
         <WorkspaceCard
           heading={md('home.heading')}
-          links={[{ href: `/${locale}/my/donations`, text: md('home.link') }]}
+          links={[
+            { href: localizedPath(locale, '/my/donations'), text: md('home.link') },
+          ]}
         >
           {!donations.ok ? (
             <Alert tone="error">{md('home.unavailable')}</Alert>
@@ -537,11 +569,26 @@ export default async function MyPage({
           heading={w('my.accountHeading')}
           wide
           links={[
-            { href: `/${locale}/my/settings/profile`, text: t('my.profile') },
-            { href: `/${locale}/my/settings/security`, text: t('my.security') },
-            { href: `/${locale}/my/settings/language`, text: t('my.language') },
-            { href: `/${locale}/my/settings/interests`, text: p('nav.interests') },
-            { href: `/${locale}/my/settings/privacy`, text: p('nav.privacy') },
+            {
+              href: localizedPath(locale, '/my/settings/profile'),
+              text: t('my.profile'),
+            },
+            {
+              href: localizedPath(locale, '/my/settings/security'),
+              text: t('my.security'),
+            },
+            {
+              href: localizedPath(locale, '/my/settings/language'),
+              text: t('my.language'),
+            },
+            {
+              href: localizedPath(locale, '/my/settings/interests'),
+              text: p('nav.interests'),
+            },
+            {
+              href: localizedPath(locale, '/my/settings/privacy'),
+              text: p('nav.privacy'),
+            },
           ]}
         >
           <dl className="grid grid-cols-[minmax(0,1fr)] divide-y divide-border sm:grid-cols-2 sm:divide-y-0">

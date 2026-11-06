@@ -147,9 +147,7 @@ export default async function MembershipAdminPage({
     <main className="flex min-w-0 flex-col gap-8">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('types.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('types.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('types.description')}</p>
       </header>
 
       {/* ---- Types ------------------------------------------------------- */}
@@ -224,9 +222,7 @@ export default async function MembershipAdminPage({
         <SectionHeading>
           <span id="membership-members">{t('members.heading')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('members.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('members.description')}</p>
         <nav aria-label={t('members.filter')} className="flex flex-wrap gap-2">
           {MEMBERSHIP_STATUSES.map((status) => (
             <FilterLink
@@ -326,7 +322,7 @@ function TypeEditor({
       </p>
 
       <Panel>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('editor.state')}>
             <TypeStateBadge state={record.state} t={s} />
           </DetailRow>
@@ -435,9 +431,7 @@ function TypeEditor({
         <h3 id="membership-labels" className="font-semibold">
           {t('labels.heading')}
         </h3>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('labels.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('labels.help')}</p>
         {localeSchema.options.map((language) => (
           <LabelEditor
             key={language}
@@ -480,9 +474,7 @@ function LabelEditor({
             : name}
         </h4>
         {existing === undefined ? (
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('labels.missing')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('labels.missing')}</p>
         ) : null}
         {administer ? (
           <ActionForm
@@ -503,11 +495,7 @@ function LabelEditor({
             />
           </ActionForm>
         ) : existing === undefined ? null : (
-          <dl
-            className="divide-y divide-[color:var(--color-border)]"
-            lang={language}
-            dir="auto"
-          >
+          <dl className="divide-y divide-border" lang={language} dir="auto">
             <DetailRow term={t('fields.title')}>{existing.title}</DetailRow>
             <DetailRow term={t('fields.summary')}>{existing.summary}</DetailRow>
             <DetailRow term={t('fields.description')}>
@@ -626,9 +614,7 @@ function CreateType({
       <SectionHeading>
         <span id="membership-create">{t('create.heading')}</span>
       </SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('create.help')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('create.help')}</p>
       <Panel>
         <ActionForm
           action={createTypeAction}
@@ -713,7 +699,7 @@ function MemberRow({
         <div className="flex flex-wrap items-center gap-2">
           <MembershipStatusBadge status={row.status} t={s} />
         </div>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('members.member')}>
             <PersonName accountId={row.memberAccountId} names={names} copy={copy} />
           </DetailRow>

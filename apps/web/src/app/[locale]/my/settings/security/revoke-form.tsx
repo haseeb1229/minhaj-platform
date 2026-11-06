@@ -45,7 +45,7 @@ export function RevokeSessionForm({
       </Button>
 
       {state.status === 'error' ? (
-        <p role="alert" className="text-xs text-[color:var(--color-error)]">
+        <p role="alert" className="text-xs text-error">
           {failureLabel}
         </p>
       ) : null}

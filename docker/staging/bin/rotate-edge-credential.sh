@@ -113,7 +113,7 @@ new_password() {
 
 # The previous credential, kept only to prove it is refused afterwards.
 cp -- "$EDGE_NETRC" "$work/previous.netrc"
-log "before rotation: current credential -> $(probe_status "$work/previous.netrc" /en)"
+log "before rotation: current credential -> $(probe_status "$work/previous.netrc" /)"
 
 password="$(new_password)" || die "could not generate a new credential"
 printf 'machine %s login %s password %s\n' "$MINHAJ_PUBLIC_HOST" "$EDGE_USER" "$password" > "$work/edge.netrc"
@@ -149,17 +149,17 @@ check() {
 }
 uuid=00000000-0000-4000-8000-000000000000
 
-check 'unauthenticated /en' "$(edge_probe /en no)" '401 1'
-check 'previous credential /en' "$(probe_status "$work/previous.netrc" /en)" '401'
-check 'new credential /en (status, noindex)' "$(edge_probe /en yes)" '200 1'
+check 'unauthenticated /' "$(edge_probe / no)" '401 1'
+check 'previous credential /' "$(probe_status "$work/previous.netrc" /)" '401'
+check 'new credential / (status, noindex)' "$(edge_probe / yes)" '200 1'
 check 'robots.txt (status, noindex)' "$(edge_probe /robots.txt no)" '200 1'
 robots_disallow="$(curl -sS --max-time 20 --resolve "$MINHAJ_PUBLIC_HOST:443:127.0.0.1" \
   "https://$MINHAJ_PUBLIC_HOST/robots.txt" 2> /dev/null | grep -cx 'Disallow: /' || true)"
 check 'robots.txt disallows /' "$robots_disallow" '1'
-check 'new credential /en/signin' "$(probe_status "$EDGE_NETRC" /en/signin)" '200'
-check 'new credential /en/my without a session' "$(probe_status "$EDGE_NETRC" /en/my)" '30[2378]'
-check 'new credential /en/admin without a session' "$(probe_status "$EDGE_NETRC" /en/admin)" '30[2378]'
-check 'new credential /en/admin/migration without a session' "$(probe_status "$EDGE_NETRC" /en/admin/migration)" '30[2378]'
+check 'new credential /signin' "$(probe_status "$EDGE_NETRC" /signin)" '200'
+check 'new credential /my without a session' "$(probe_status "$EDGE_NETRC" /my)" '30[2378]'
+check 'new credential /admin without a session' "$(probe_status "$EDGE_NETRC" /admin)" '30[2378]'
+check 'new credential /admin/migration without a session' "$(probe_status "$EDGE_NETRC" /admin/migration)" '30[2378]'
 check 'new credential migration API without a session' "$(probe_status "$EDGE_NETRC" "/api/admin/migration/runs/$uuid")" '404'
 check 'new credential realtime handshake without a session' "$(probe_status "$EDGE_NETRC" '/socket.io/?EIO=4&transport=websocket' \
   -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \

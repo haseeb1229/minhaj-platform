@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import {
@@ -46,7 +47,10 @@ export default async function MySupportPage({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const session = await requireActiveSession(locale, `/${locale}/my/messages/support`);
+  const session = await requireActiveSession(
+    locale,
+    localizedPath(locale, '/my/messages/support'),
+  );
   const t = await getTranslations({ locale, namespace: 'messages' });
   const actor = { accountId: session.account.id };
   const { service } = messagingRuntime();
@@ -71,7 +75,9 @@ export default async function MySupportPage({
         )}
         <p className="text-sm">
           {t('support.contactInstead')}{' '}
-          <TextLink href={`/${locale}/contact`}>{t('support.contactLink')}</TextLink>
+          <TextLink href={localizedPath(locale, '/contact')}>
+            {t('support.contactLink')}
+          </TextLink>
         </p>
       </PersonalFrame>
     );
@@ -103,7 +109,7 @@ export default async function MySupportPage({
                 {open.lastMessageAt === null ? (
                   <span>{t('list.noMessages')}</span>
                 ) : (
-                  <span className="text-[color:var(--color-foreground-muted)]">
+                  <span className="text-foreground-muted">
                     {t('list.lastActivity')}{' '}
                     <MessagingTime
                       value={open.lastMessageAt}

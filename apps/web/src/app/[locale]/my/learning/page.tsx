@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { LEARNING_PAGE } from '@minhaj/contracts/learning';
@@ -60,7 +61,7 @@ export default async function MyLearningPage({
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const locale = await requireLocale(params);
-  const path = `/${locale}/my/learning`;
+  const path = localizedPath(locale, '/my/learning');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myLearning' });
   const offset = readPersonalOffset(await searchParams);
@@ -94,7 +95,9 @@ export default async function MyLearningPage({
               {offset === 0 ? t('courses.empty') : t('list.beyond')}
             </EmptyState>
             <p>
-              <TextLink href={`/${locale}/learn/courses`}>{t('courses.browse')}</TextLink>
+              <TextLink href={localizedPath(locale, '/learn/courses')}>
+                {t('courses.browse')}
+              </TextLink>
             </p>
           </>
         ) : (
@@ -103,7 +106,10 @@ export default async function MyLearningPage({
               <Panel key={entry.course.id} as="li">
                 <div className="flex min-w-0 flex-col gap-2">
                   <TextLink
-                    href={`/${locale}/my/learning/courses/${encodeURIComponent(entry.course.slug)}`}
+                    href={localizedPath(
+                      locale,
+                      `/my/learning/courses/${encodeURIComponent(entry.course.slug)}`,
+                    )}
                   >
                     <LearningTitle
                       labels={entry.course.labels}
@@ -117,7 +123,7 @@ export default async function MyLearningPage({
                       lessons={entry.course.lessons}
                       t={t}
                     />
-                    <span className="text-sm text-[color:var(--color-foreground-muted)]">
+                    <span className="text-sm text-foreground-muted">
                       {t('courses.enrolledAt')}{' '}
                       <PersonalTime
                         value={entry.enrolledAt.toISOString()}
@@ -153,9 +159,7 @@ export default async function MyLearningPage({
         <span id="learning-paths">
           <SectionHeading>{t('paths.heading')}</SectionHeading>
         </span>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('paths.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('paths.help')}</p>
         {paths.length === 0 ? (
           <EmptyState>{t('paths.empty')}</EmptyState>
         ) : (
@@ -164,7 +168,10 @@ export default async function MyLearningPage({
               <Panel key={entry.path.id} as="li">
                 <div className="flex min-w-0 flex-col gap-2">
                   <TextLink
-                    href={`/${locale}/my/learning/paths/${encodeURIComponent(entry.path.slug)}`}
+                    href={localizedPath(
+                      locale,
+                      `/my/learning/paths/${encodeURIComponent(entry.path.slug)}`,
+                    )}
                   >
                     <LearningTitle
                       labels={entry.path.labels}
@@ -193,9 +200,7 @@ export default async function MyLearningPage({
         <span id="learning-trials">
           <SectionHeading>{t('trials.heading')}</SectionHeading>
         </span>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('trials.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('trials.help')}</p>
         {trials.length === 0 ? (
           <EmptyState>{t('trials.empty')}</EmptyState>
         ) : (
@@ -214,7 +219,10 @@ export default async function MyLearningPage({
                     <div className="flex min-w-0 flex-col gap-2">
                       {request.course.state === 'published' ? (
                         <TextLink
-                          href={`/${locale}/learn/courses/${encodeURIComponent(request.course.slug)}`}
+                          href={localizedPath(
+                            locale,
+                            `/learn/courses/${encodeURIComponent(request.course.slug)}`,
+                          )}
                         >
                           {title}
                         </TextLink>
@@ -232,12 +240,15 @@ export default async function MyLearningPage({
                       </p>
                       {request.booking === null ? null : (
                         <TextLink
-                          href={`/${locale}/my/classes/${request.booking.sessionId}`}
+                          href={localizedPath(
+                            locale,
+                            `/my/classes/${request.booking.sessionId}`,
+                          )}
                         >
                           {t('trials.openClass')}
                         </TextLink>
                       )}
-                      <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                      <p className="text-sm text-foreground-muted">
                         {t('trials.requestedAt')}{' '}
                         <PersonalTime
                           value={request.requestedAt.toISOString()}

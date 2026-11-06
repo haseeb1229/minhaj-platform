@@ -1,5 +1,6 @@
 'use server';
 
+import { localizedPath } from '@minhaj/contracts';
 import { redirect } from 'next/navigation';
 
 import { field, membershipRejected } from '@/components/membership/action-support';
@@ -38,7 +39,7 @@ import type { FormActionState } from '../../(identity)/form-state';
  */
 
 function done(locale: string, notice: DoneNotice): never {
-  redirect(`/${locale}/my/membership?done=${notice}`);
+  redirect(localizedPath(locale, `/my/membership?done=${notice}`));
 }
 
 /** Applies for one published type. An application already in progress is answered, not duplicated. */

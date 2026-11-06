@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 
@@ -163,7 +164,7 @@ function ConflictBadge({ count, copy }: { readonly count: number; readonly copy:
 export async function RecordsScreen({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/hadith/records`;
+  const base = localizedPath(locale, '/admin/hadith/records');
   const context = await requireAdminPage(locale, 'hadith.read', base);
   const copy = await hadithCopy(locale);
   const { t } = copy;
@@ -195,9 +196,7 @@ export async function RecordsScreen({ params, searchParams }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.records')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scope.records')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('scope.records')}</p>
 
       <nav className="flex flex-wrap gap-2" aria-label={t('records.viewLabel')}>
         {HADITH_RECORD_FILTERS.map((entry) => (
@@ -634,7 +633,7 @@ function RecordForm({
 
       <fieldset className="flex flex-col gap-4">
         <legend className="text-sm font-semibold">{t('gradings.title')}</legend>
-        <p className="text-xs text-[color:var(--color-foreground-muted)]">
+        <p className="text-xs text-foreground-muted">
           {t('gradings.formHelp', { limit: HADITH_LIMITS.gradings })}
         </p>
         {Array.from({ length: rows }, (_, index) => {
@@ -748,7 +747,7 @@ export async function RecordScreen({ params, searchParams }: EditorParams) {
   const locale = await requireLocale(params);
   const id = recordTarget((await params).id);
   const query = await searchParams;
-  const list = `/${locale}/admin/hadith/records`;
+  const list = localizedPath(locale, '/admin/hadith/records');
   const base = `${list}/${id}`;
   const context = await requireAdminPage(locale, 'hadith.read', base);
   const copy = await hadithCopy(locale);
@@ -815,7 +814,10 @@ export async function RecordScreen({ params, searchParams }: EditorParams) {
           <dl className="flex flex-col">
             <DetailRow term={t('structure.collection')}>
               <TextLink
-                href={`/${locale}/admin/hadith/collections/${record.collectionId}`}
+                href={localizedPath(
+                  locale,
+                  `/admin/hadith/collections/${record.collectionId}`,
+                )}
               >
                 <span dir="ltr">{record.collectionSlug}</span>
               </TextLink>
@@ -840,7 +842,9 @@ export async function RecordScreen({ params, searchParams }: EditorParams) {
               {record.citationNumber ?? t('record.noCitationNumber')}
             </DetailRow>
             <DetailRow term={t('structure.book')}>
-              <TextLink href={`/${locale}/admin/hadith/books/${record.bookId}`}>
+              <TextLink
+                href={localizedPath(locale, `/admin/hadith/books/${record.bookId}`)}
+              >
                 <span dir="auto">
                   {structureText({
                     slug: record.bookSlug,
@@ -855,7 +859,12 @@ export async function RecordScreen({ params, searchParams }: EditorParams) {
               record.chapterReference === null ? (
                 t('record.noChapter')
               ) : (
-                <TextLink href={`/${locale}/admin/hadith/chapters/${record.chapterId}`}>
+                <TextLink
+                  href={localizedPath(
+                    locale,
+                    `/admin/hadith/chapters/${record.chapterId}`,
+                  )}
+                >
                   <span dir="auto">
                     {structureText({
                       slug: record.chapterSlug,
@@ -888,9 +897,7 @@ export async function RecordScreen({ params, searchParams }: EditorParams) {
               <ExactText text={record.chain} language={record.chainLanguage} />
             </>
           )}
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('record.readOnly')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('record.readOnly')}</p>
         </section>
       </Panel>
 
@@ -898,9 +905,7 @@ export async function RecordScreen({ params, searchParams }: EditorParams) {
         <SectionHeading>
           <span id="record-gradings">{t('gradings.title')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('gradings.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('gradings.help')}</p>
         {record.gradings.length === 0 ? (
           <EmptyState>{t('gradings.empty')}</EmptyState>
         ) : (
@@ -1029,9 +1034,7 @@ export async function RecordScreen({ params, searchParams }: EditorParams) {
         )}
 
         <h3 className="text-sm font-semibold">{t('candidates.title')}</h3>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('candidates.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('candidates.help')}</p>
         {record.candidates.length === 0 ? (
           <EmptyState>{t('candidates.empty')}</EmptyState>
         ) : (
@@ -1073,9 +1076,7 @@ export async function RecordScreen({ params, searchParams }: EditorParams) {
         <SectionHeading>
           <span id="record-citation">{t('citation.title')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('citation.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('citation.help')}</p>
         {record.citationNumber === null ? (
           <EmptyState>{t('citation.noNumber')}</EmptyState>
         ) : record.citationRecord === null ? (
@@ -1160,9 +1161,7 @@ export async function RecordScreen({ params, searchParams }: EditorParams) {
         <SectionHeading>
           <span id="record-history">{t('history.title')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('history.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('history.help')}</p>
         {record.revisions.length === 0 ? (
           <EmptyState>{t('history.empty')}</EmptyState>
         ) : (
@@ -1280,7 +1279,7 @@ function TopicsSection({
       <SectionHeading>
         <span id="record-topics">{t('topics.title')}</span>
       </SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
+      <p className="text-sm text-foreground-muted">
         {t('topics.help', {
           count: record.topicIds.length,
           limit: HADITH_LIMITS.topicsPerRecord,
@@ -1390,9 +1389,7 @@ async function TranslationsSection({
       <SectionHeading>
         <span id="record-translations">{t('translations.title')}</span>
       </SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('translations.help')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('translations.help')}</p>
       {translations.length === 0 ? (
         <EmptyState>{t('translations.empty')}</EmptyState>
       ) : (

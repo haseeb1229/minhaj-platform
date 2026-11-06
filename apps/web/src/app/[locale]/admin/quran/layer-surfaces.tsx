@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import type { Locale } from '@minhaj/contracts';
@@ -140,7 +141,7 @@ async function Directory(kind: LayerKind, { params, searchParams }: ListParams) 
   const locale = await requireLocale(params);
   const query = await searchParams;
   const path = PATHS[kind];
-  const base = `/${locale}/admin/quran/${path}`;
+  const base = localizedPath(locale, `/admin/quran/${path}`);
   const context = await requireAdminPage(locale, 'quran.read', base);
   const copy = await quranCopy(locale);
   const { t } = copy;
@@ -163,9 +164,7 @@ async function Directory(kind: LayerKind, { params, searchParams }: ListParams) 
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t(`surface.${path}`)}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t(`scope.${path}`)}
-      </p>
+      <p className="text-sm text-foreground-muted">{t(`scope.${path}`)}</p>
 
       {page.items.length === 0 ? (
         <EmptyState>{t('empty')}</EmptyState>
@@ -220,9 +219,7 @@ async function Directory(kind: LayerKind, { params, searchParams }: ListParams) 
         <Panel>
           <div className="flex flex-col gap-4">
             <SectionHeading>{t(`create.${path}`)}</SectionHeading>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('createHelp')}
-            </p>
+            <p className="text-sm text-foreground-muted">{t('createHelp')}</p>
             {people === null ? null : <PeopleSearch query={reference} copy={copy} />}
             <WorkForm
               kind={kind}
@@ -261,7 +258,7 @@ async function Editor(kind: LayerKind, { params, searchParams }: EditorParams) {
   const id = recordTarget((await params).id);
   const query = await searchParams;
   const path = PATHS[kind];
-  const list = `/${locale}/admin/quran/${path}`;
+  const list = localizedPath(locale, `/admin/quran/${path}`);
   const base = `${list}/${id}`;
   const context = await requireAdminPage(locale, 'quran.read', base);
   const copy = await quranCopy(locale);
@@ -563,7 +560,7 @@ function ContributorFields({
   return (
     <fieldset className="flex flex-col gap-3">
       <legend className="text-sm font-semibold">{t('contributors.title')}</legend>
-      <p className="text-xs text-[color:var(--color-foreground-muted)]">
+      <p className="text-xs text-foreground-muted">
         {t('contributors.help', { limit: QURAN_LIMITS.contributors })}
       </p>
       {Array.from({ length: rows }, (_, index) => {
@@ -756,9 +753,7 @@ async function LayerTexts({
   return (
     <div className="flex flex-col gap-4">
       <SectionHeading>{label}</SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('texts.help')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('texts.help')}</p>
       {administer ? (
         <ActionForm
           action={saveLayerTexts}
@@ -815,7 +810,7 @@ function TafsirEntries({
   return (
     <div className="flex flex-col gap-4">
       <SectionHeading>{surahText(surah, locale, copy)}</SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
+      <p className="text-sm text-foreground-muted">
         {t('tafsir.help', { count: surah.ayahCount })}
       </p>
       {entries.length === 0 ? (

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { z } from 'zod';
@@ -87,7 +88,7 @@ export function newsArchivePath(
     search.set('month', String(filter.month));
   if (offset > 0) search.set('offset', String(offset));
   const encoded = search.toString();
-  return `/${locale}/news/archive${encoded === '' ? '' : `?${encoded}`}`;
+  return localizedPath(locale, `/news/archive${encoded === '' ? '' : `?${encoded}`}`);
 }
 
 /** Canonical, `hreflang` and `x-default` from the record's own languages. */
@@ -98,7 +99,8 @@ export function newsMetadata(record: PublicNews, locale: Locale) {
     locale,
     contentLocales: record.translations.map((row) => row.languageCode),
     primaryLocale: record.primaryLanguage,
-    pathFor: (language) => `/${language}${newsPathOf(record.kind, record.slug)}`,
+    pathFor: (language) =>
+      localizedPath(language, `${newsPathOf(record.kind, record.slug)}`),
     title: translation.seoTitle || translation.title,
     ...(description ? { description } : {}),
   });
@@ -124,7 +126,9 @@ export function newsStructuredData(
   if (record.kind === 'media-coverage') return null;
   const translation = translationFor(record, locale);
   const language = translation.languageCode;
-  const url = absoluteUrl(`/${language}${newsPathOf(record.kind, record.slug)}`);
+  const url = absoluteUrl(
+    localizedPath(language, `${newsPathOf(record.kind, record.slug)}`),
+  );
   return {
     '@context': 'https://schema.org',
     '@type': 'NewsArticle',
@@ -140,7 +144,9 @@ export function newsStructuredData(
           author: authors.map((person) => ({
             '@type': 'Person',
             name: person.name,
-            url: absoluteUrl(`/${language}/people/${encodeURIComponent(person.slug)}`),
+            url: absoluteUrl(
+              localizedPath(language, `/people/${encodeURIComponent(person.slug)}`),
+            ),
           })),
         }
       : {}),

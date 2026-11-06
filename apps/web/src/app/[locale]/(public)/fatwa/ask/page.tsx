@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { redirect } from 'next/navigation';
 
 import { requireLocale } from '@/config/route-locale';
@@ -21,5 +22,5 @@ export default async function FatwaAskRoute({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  redirect(`/${locale}/my/questions/ask`);
+  redirect(localizedPath(locale, '/my/questions/ask'));
 }

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
@@ -92,7 +93,7 @@ export default async function MyMembershipPage({
   readonly searchParams: Promise<Query>;
 }) {
   const locale = await requireLocale(params);
-  const path = `/${locale}/my/membership`;
+  const path = localizedPath(locale, '/my/membership');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myMembership' });
   const s = await getTranslations({ locale, namespace: 'membership' });
@@ -106,7 +107,7 @@ export default async function MyMembershipPage({
       label={t('nav.label')}
       links={[
         { href: membershipPath(locale), text: t('nav.public') },
-        { href: `/${locale}/my`, text: t('nav.account') },
+        { href: localizedPath(locale, '/my'), text: t('nav.account') },
       ]}
     />
   );
@@ -170,9 +171,7 @@ export default async function MyMembershipPage({
         <span id="membership-held">
           <SectionHeading>{t('memberships.heading')}</SectionHeading>
         </span>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('memberships.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('memberships.help')}</p>
         {memberships.length === 0 ? (
           <EmptyState>{t('memberships.empty')}</EmptyState>
         ) : (
@@ -199,9 +198,7 @@ export default async function MyMembershipPage({
         <span id="membership-apply">
           <SectionHeading>{t('apply.heading')}</SectionHeading>
         </span>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('apply.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('apply.help')}</p>
         {available.length === 0 ? (
           <EmptyState>{t('apply.empty')}</EmptyState>
         ) : (
@@ -266,7 +263,7 @@ export default async function MyMembershipPage({
                       t={s}
                     />
                   </p>
-                  <dl className="divide-y divide-[color:var(--color-border)]">
+                  <dl className="divide-y divide-border">
                     <DetailRow term={t('when.submitted')}>
                       <MembershipTime
                         value={entry.submittedAt}
@@ -341,7 +338,7 @@ function OpenApplication({
         <p className="text-sm">
           {entry.status === 'submitted' ? t('open.submittedHelp') : t('open.reviewHelp')}
         </p>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('when.submitted')}>
             <MembershipTime
               value={entry.submittedAt}
@@ -395,7 +392,7 @@ function HeldMembership({
         <p className="font-semibold">
           <TypeTitle type={type} locale={locale} t={s} />
         </p>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('when.began')}>
             <MembershipTime
               value={entry.activatedAt}

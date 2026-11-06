@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { z } from 'zod';
 
 import type { Locale } from '@minhaj/contracts';
@@ -115,12 +116,12 @@ export function booksPath(
   if (merged.downloads) search.set('downloads', '1');
 
   const query = search.toString();
-  return `/${locale}/library/books${query === '' ? '' : `?${query}`}`;
+  return localizedPath(locale, `/library/books${query === '' ? '' : `?${query}`}`);
 }
 
 /** The canonical public address of one Work (ROUTE_MAP.md §5, §9.1). */
 export function workPath(locale: string, slug: string): string {
-  return `/${locale}/library/books/${encodeURIComponent(slug)}`;
+  return localizedPath(locale, `/library/books/${encodeURIComponent(slug)}`);
 }
 
 /**

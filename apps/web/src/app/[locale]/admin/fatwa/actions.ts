@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-import { localeSchema } from '@minhaj/contracts';
+import { localeSchema, localizedPath } from '@minhaj/contracts';
 import {
   FATWA_PERMISSIONS,
   FATWA_STEP_UP_PURPOSE,
@@ -132,7 +132,7 @@ async function permitted(
 
 /** Re-renders the Fatwa administration after a change it displays. */
 function refresh(locale: string): void {
-  revalidatePath(`/${locale}/admin/fatwa`, 'layout');
+  revalidatePath(localizedPath(locale, '/admin/fatwa'), 'layout');
 }
 
 /** A category's names: one optional field per interface locale. */
@@ -216,7 +216,7 @@ export async function declineFatwaQuestion(
     const asker = await fatwaRuntime().workflow.decline(gate.actor, parsed.data);
     await notifyAsker(asker, 'question-declined');
     refresh(gate.locale);
-    destination = `/${gate.locale}/admin/fatwa/questions`;
+    destination = localizedPath(gate.locale, '/admin/fatwa/questions');
   } catch (error) {
     return rejected(error, 'fatwa-decline');
   }
@@ -316,7 +316,7 @@ export async function returnFatwaRevision(
 
     await fatwaRuntime().workflow.returnForRevision(gate.actor, parsed.data);
     refresh(gate.locale);
-    destination = `/${gate.locale}/admin/fatwa/review`;
+    destination = localizedPath(gate.locale, '/admin/fatwa/review');
   } catch (error) {
     return rejected(error, 'fatwa-return');
   }
@@ -360,7 +360,7 @@ export async function publishFatwaRevision(
     refresh(locale);
     // The procedure already owes Search a pass; this only indexes it sooner.
     indexAfterResponse();
-    destination = `/${locale}/admin/fatwa/published/${parsed.data.fatwaId}`;
+    destination = localizedPath(locale, `/admin/fatwa/published/${parsed.data.fatwaId}`);
   } catch (error) {
     return rejected(error, 'fatwa-publish');
   }
@@ -432,7 +432,7 @@ export async function createFatwaCategory(
     refresh(gate.locale);
     // A category's topic is part of every ruling's search projection.
     indexAfterResponse();
-    destination = `/${gate.locale}/admin/fatwa/categories/${created.id}`;
+    destination = localizedPath(gate.locale, `/admin/fatwa/categories/${created.id}`);
   } catch (error) {
     return rejected(error, 'fatwa-create-category');
   }

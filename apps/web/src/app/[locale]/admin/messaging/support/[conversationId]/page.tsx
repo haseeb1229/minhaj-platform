@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
@@ -63,7 +64,7 @@ export default async function SupportConversationPage({
 }) {
   const locale = await requireLocale(params);
   const { conversationId } = await params;
-  const base = `/${locale}/admin/messaging/support`;
+  const base = localizedPath(locale, '/admin/messaging/support');
   const path = `${base}/${encodeURIComponent(conversationId)}`;
   const context = await requireAdminPage(locale, 'messaging.support', path);
   const copy = await adminMessagingCopy(locale);
@@ -138,7 +139,7 @@ export default async function SupportConversationPage({
       </header>
 
       <Panel>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('conversation.requesterTerm')}>
             <span dir="auto">{requester}</span>
           </DetailRow>

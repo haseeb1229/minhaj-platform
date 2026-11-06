@@ -36,7 +36,7 @@ test.describe('registration and verification', () => {
   test('creates an account, verifies it, and signs in', async ({ page }) => {
     const email = freshEmail('journey');
 
-    await page.goto('/en/signup');
+    await page.goto('/signup');
     await expect(page.getByRole('heading', { name: 'Create an account' })).toBeVisible();
 
     await page.getByLabel(LABEL.name).fill('Journey Proof');
@@ -81,7 +81,7 @@ test.describe('registration and verification', () => {
     const email = freshEmail('resend');
 
     await page.goto(
-      `/en/verify-email?email=${encodeURIComponent(email)}&token=${'x'.repeat(43)}`,
+      `/verify-email?email=${encodeURIComponent(email)}&token=${'x'.repeat(43)}`,
     );
 
     await expect(alertIn(page)).toBeVisible();
@@ -91,7 +91,7 @@ test.describe('registration and verification', () => {
   });
 
   test('refuses an incomplete link without saying more', async ({ page }) => {
-    await page.goto('/en/verify-email');
+    await page.goto('/verify-email');
     await expect(alertIn(page)).toContainText('incomplete');
   });
 
@@ -99,7 +99,7 @@ test.describe('registration and verification', () => {
     const email = freshEmail('unverified');
     await signUp(page, email, PASSWORD);
 
-    await page.goto('/en/signin');
+    await page.goto('/signin');
     await page.getByLabel(LABEL.email).fill(email);
     await page.getByLabel(LABEL.password, { exact: true }).fill(PASSWORD);
     await page.getByRole('button', { name: BUTTON.signIn, exact: true }).click();
@@ -115,7 +115,7 @@ test.describe('sign-in and sessions', () => {
     const { email } = await registerAndSignIn(page, 'wrong-password');
     await signOut(page);
 
-    await page.goto('/en/signin');
+    await page.goto('/signin');
     await page.getByLabel(LABEL.email).fill(email);
     await page
       .getByLabel(LABEL.password, { exact: true })
@@ -123,7 +123,7 @@ test.describe('sign-in and sessions', () => {
     await page.getByRole('button', { name: BUTTON.signIn, exact: true }).click();
     const known = await alertIn(page).textContent();
 
-    await page.goto('/en/signin');
+    await page.goto('/signin');
     await page.getByLabel(LABEL.email).fill(freshEmail('nobody'));
     await page
       .getByLabel(LABEL.password, { exact: true })
@@ -140,7 +140,7 @@ test.describe('sign-in and sessions', () => {
 
     // The cookie is gone, so `/my` sends the visitor to sign in rather than
     // rendering anything.
-    await page.goto('/en/my');
+    await page.goto('/my');
     await page.waitForURL(/\/signin/);
   });
 
@@ -156,7 +156,7 @@ test.describe('sign-in and sessions', () => {
     const other = await newDevice(browser, clientAddress);
     await signIn(other.page, email, PASSWORD);
 
-    await page.goto('/en/my/settings/security');
+    await page.goto('/my/settings/security');
 
     const sessions = page.getByRole('list', { name: 'Active sessions' });
     await expect(sessions.getByRole('listitem')).toHaveCount(2);
@@ -173,10 +173,10 @@ test.describe('sign-in and sessions', () => {
     // finished would be a race that passes or fails by timing.
     await expect(sessions.getByRole('listitem')).toHaveCount(1);
 
-    await other.page.goto('/en/my');
+    await other.page.goto('/my');
     await other.page.waitForURL(/\/signin/);
 
-    await page.goto('/en/my');
+    await page.goto('/my');
     await expect(page.getByText(email)).toBeVisible();
 
     await other.context.close();
@@ -196,7 +196,7 @@ test.describe('sign-in and sessions', () => {
 
     for (const device of devices) await signIn(device.page, email, PASSWORD);
 
-    await page.goto('/en/my/settings/security');
+    await page.goto('/my/settings/security');
 
     const sessions = page.getByRole('list', { name: 'Active sessions' });
     await expect(sessions.getByRole('listitem')).toHaveCount(3);
@@ -215,11 +215,11 @@ test.describe('sign-in and sessions', () => {
     await expect(statusIn(page).filter({ hasText: 'No other sessions' })).toBeVisible();
 
     for (const device of devices) {
-      await device.page.goto('/en/my');
+      await device.page.goto('/my');
       await device.page.waitForURL(/\/signin/);
     }
 
-    await page.goto('/en/my');
+    await page.goto('/my');
     await expect(page.getByText(email)).toBeVisible();
 
     for (const device of devices) await device.context.close();
@@ -231,7 +231,7 @@ test.describe('returnTo', () => {
     const { email } = await registerAndSignIn(page, 'return-good');
     await signOut(page);
 
-    await page.goto('/en/signin?returnTo=%2Fen%2Fmy%2Fsettings%2Fprofile');
+    await page.goto('/signin?returnTo=%2Fmy%2Fsettings%2Fprofile');
     await page.getByLabel(LABEL.email).fill(email);
     await page.getByLabel(LABEL.password, { exact: true }).fill(PASSWORD);
     await page.getByRole('button', { name: BUTTON.signIn, exact: true }).click();
@@ -255,15 +255,15 @@ test.describe('returnTo', () => {
     ]) {
       await signOut(page);
 
-      await page.goto(`/en/signin?returnTo=${encodeURIComponent(hostile)}`);
+      await page.goto(`/signin?returnTo=${encodeURIComponent(hostile)}`);
       await page.getByLabel(LABEL.email).fill(email);
       await page.getByLabel(LABEL.password, { exact: true }).fill(PASSWORD);
       await page.getByRole('button', { name: BUTTON.signIn, exact: true }).click();
 
       // An open redirect under a trusted domain is a phishing primitive. Every
       // one of these lands on the safe fallback instead.
-      await page.waitForURL('**/en/my');
-      expect(new URL(page.url()).pathname).toBe('/en/my');
+      await page.waitForURL('**/my');
+      expect(new URL(page.url()).pathname).toBe('/my');
     }
   });
 });
@@ -273,7 +273,7 @@ test.describe('passwords', () => {
     const { email } = await registerAndSignIn(page, 'reset');
     await signOut(page);
 
-    await page.goto('/en/forgot-password');
+    await page.goto('/forgot-password');
     await page.getByLabel(LABEL.email).fill(email);
     await page.getByRole('button', { name: BUTTON.sendResetLink }).click();
     await expect(statusIn(page)).toBeVisible();
@@ -295,7 +295,7 @@ test.describe('passwords', () => {
   test('changes the password and keeps THIS device signed in', async ({ page }) => {
     const { email } = await registerAndSignIn(page, 'change-password');
 
-    await page.goto('/en/my/settings/security');
+    await page.goto('/my/settings/security');
     await page.locator('#currentPassword').fill(PASSWORD);
     await page.locator('#newPassword').fill(NEW_PASSWORD);
     await page.getByRole('button', { name: BUTTON.changePassword }).click();
@@ -306,7 +306,7 @@ test.describe('passwords', () => {
     // THE ROTATION. The library replaces every session for the account — this
     // one included — and the replacement cookie has to reach the browser, or
     // the person is signed out one request after being told it worked.
-    await page.goto('/en/my');
+    await page.goto('/my');
     await expect(page.getByText(email)).toBeVisible();
 
     await signOut(page);
@@ -316,7 +316,7 @@ test.describe('passwords', () => {
   test('refuses a wrong current password and changes nothing', async ({ page }) => {
     const { email } = await registerAndSignIn(page, 'change-refused');
 
-    await page.goto('/en/my/settings/security');
+    await page.goto('/my/settings/security');
     await page.locator('#currentPassword').fill('not-the-current-password');
     await page.locator('#newPassword').fill(NEW_PASSWORD);
     await page.getByRole('button', { name: BUTTON.changePassword }).click();
@@ -333,7 +333,7 @@ test.describe('email change', () => {
     const { email } = await registerAndSignIn(page, 'change-email');
     const destination = freshEmail('destination');
 
-    await page.goto('/en/my/settings/security');
+    await page.goto('/my/settings/security');
     await page.getByLabel(LABEL.newEmail).fill(destination);
     await page.locator('#emailCurrentPassword').fill(PASSWORD);
     await page.getByRole('button', { name: BUTTON.changeEmail }).click();
@@ -347,7 +347,7 @@ test.describe('email change', () => {
     await page.getByRole('button', { name: BUTTON.confirmAddress }).click();
     await expect(statusIn(page).filter({ hasText: 'has been changed' })).toBeVisible();
 
-    await page.goto('/en/my');
+    await page.goto('/my');
     await expect(page.getByText(destination)).toBeVisible();
   });
 
@@ -355,7 +355,7 @@ test.describe('email change', () => {
     const { email } = await registerAndSignIn(page, 'change-stepup');
     const destination = freshEmail('destination');
 
-    await page.goto('/en/my/settings/security');
+    await page.goto('/my/settings/security');
     await page.getByLabel(LABEL.newEmail).fill(destination);
     await page.locator('#emailCurrentPassword').fill('not-the-password');
     await page.getByRole('button', { name: BUTTON.changeEmail }).click();
@@ -363,7 +363,7 @@ test.describe('email change', () => {
     await expect(alertIn(page)).toBeVisible();
 
     // Nothing moved, and the account still answers to its original address.
-    await page.goto('/en/my');
+    await page.goto('/my');
     await expect(page.getByText(email)).toBeVisible();
   });
 
@@ -375,7 +375,7 @@ test.describe('email change', () => {
     const { email } = await registerAndSignIn(page, 'change-needs-session');
     const destination = freshEmail('destination');
 
-    await page.goto('/en/my/settings/security');
+    await page.goto('/my/settings/security');
     await page.getByLabel(LABEL.newEmail).fill(destination);
     await page.locator('#emailCurrentPassword').fill(PASSWORD);
     await page.getByRole('button', { name: BUTTON.changeEmail }).click();
@@ -405,13 +405,13 @@ test.describe('closure and clean re-registration', () => {
   test('closes an account and frees the address for a NEW one', async ({ page }) => {
     const { email } = await registerAndSignIn(page, 'closure');
 
-    await page.goto('/en/my/settings/security');
+    await page.goto('/my/settings/security');
     await page.getByLabel(LABEL.closeConfirm).fill(PASSWORD);
     await page.getByRole('button', { name: BUTTON.closeAccount }).click();
-    await page.waitForURL(/\/en$/);
+    await page.waitForURL((url) => url.pathname === '/');
 
     // Signed out everywhere, and the old credential no longer works.
-    await page.goto('/en/signin');
+    await page.goto('/signin');
     await page.getByLabel(LABEL.email).fill(email);
     await page.getByLabel(LABEL.password, { exact: true }).fill(PASSWORD);
     await page.getByRole('button', { name: BUTTON.signIn, exact: true }).click();
@@ -429,7 +429,7 @@ test.describe('closure and clean re-registration', () => {
   test('refuses closure without the password', async ({ page }) => {
     await registerAndSignIn(page, 'closure-refused');
 
-    await page.goto('/en/my/settings/security');
+    await page.goto('/my/settings/security');
     await page.getByLabel(LABEL.closeConfirm).fill('not-the-password');
     await page.getByRole('button', { name: BUTTON.closeAccount }).click();
 
@@ -442,7 +442,7 @@ test.describe('sign-in methods', () => {
   test('shows the credential method and NO Google affordance', async ({ page }) => {
     await registerAndSignIn(page, 'methods');
 
-    await page.goto('/en/my/settings/security');
+    await page.goto('/my/settings/security');
 
     await expect(page.getByText('Email and password')).toBeVisible();
     await expect(page.getByText('only way to sign in')).toBeVisible();

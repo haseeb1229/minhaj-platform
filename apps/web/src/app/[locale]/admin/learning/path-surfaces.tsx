@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import type { Locale } from '@minhaj/contracts';
@@ -59,7 +60,7 @@ import {
 export async function PathDirectory({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/learning/paths`;
+  const base = localizedPath(locale, '/admin/learning/paths');
   const context = await requireAdminPage(locale, 'learning.read', base);
   const copy = await learningCopy(locale);
   const { t } = copy;
@@ -206,7 +207,7 @@ export async function PathEditor({ params, searchParams }: EditorParams) {
   const locale = await requireLocale(params);
   const id = editorTarget((await params).id);
   const query = await searchParams;
-  const base = `/${locale}/admin/learning/paths`;
+  const base = localizedPath(locale, '/admin/learning/paths');
   const context = await requireAdminPage(locale, 'learning.read', `${base}/${id}`);
   const copy = await learningCopy(locale);
   const { t } = copy;
@@ -237,7 +238,10 @@ export async function PathEditor({ params, searchParams }: EditorParams) {
             </span>
             {record.state === 'published' ? (
               <TextLink
-                href={`/${locale}/learn/paths/${encodeURIComponent(record.slug)}`}
+                href={localizedPath(
+                  locale,
+                  `/learn/paths/${encodeURIComponent(record.slug)}`,
+                )}
               >
                 {t('viewPublic')}
               </TextLink>
@@ -308,9 +312,7 @@ async function Members({
       <SectionHeading>
         <span id="path-courses">{t('path.courses')}</span>
       </SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('path.coursesHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('path.coursesHelp')}</p>
       {total === 0 ? (
         <EmptyState>{t('path.coursesEmpty')}</EmptyState>
       ) : (
@@ -322,13 +324,15 @@ async function Members({
               <Panel key={course.id} as="li">
                 <div className="flex flex-col gap-3">
                   <p className="flex flex-wrap items-center gap-3">
-                    <span className="text-sm text-[color:var(--color-foreground-muted)]">
+                    <span className="text-sm text-foreground-muted">
                       {t('path.position', {
                         position: place.position,
                         total: place.total,
                       })}
                     </span>
-                    <TextLink href={`/${locale}/admin/learning/courses/${course.id}`}>
+                    <TextLink
+                      href={localizedPath(locale, `/admin/learning/courses/${course.id}`)}
+                    >
                       <Title record={course} locale={locale} />
                     </TextLink>
                     <StateBadge state={course.state} copy={copy} />
@@ -390,7 +394,7 @@ async function Members({
               </Field>
               <button
                 type="submit"
-                className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-medium"
+                className="inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-medium"
               >
                 {t('path.find')}
               </button>

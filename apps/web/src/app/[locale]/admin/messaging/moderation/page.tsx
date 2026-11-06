@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import { MessagingTime } from '@/components/messaging/parts';
@@ -38,7 +39,7 @@ export default async function ModerationQueuePage({
   readonly searchParams: Promise<Query>;
 }) {
   const locale = await requireLocale(params);
-  const base = `/${locale}/admin/messaging/moderation`;
+  const base = localizedPath(locale, '/admin/messaging/moderation');
   const context = await requireAdminPage(locale, 'messaging.moderate', base);
   const copy = await adminMessagingCopy(locale);
   const { t } = copy;
@@ -62,9 +63,7 @@ export default async function ModerationQueuePage({
   return (
     <main className="flex flex-col gap-4">
       <PageHeading>{t('moderation.title')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('moderation.description')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('moderation.description')}</p>
 
       {!read.ok ? (
         <>
@@ -104,7 +103,10 @@ export default async function ModerationQueuePage({
               <DataCell>{t(`kind.${report.conversationKind}`)}</DataCell>
               <DataCell>
                 <TextLink
-                  href={`/${locale}/admin/messaging/reports/${encodeURIComponent(report.id)}`}
+                  href={localizedPath(
+                    locale,
+                    `/admin/messaging/reports/${encodeURIComponent(report.id)}`,
+                  )}
                 >
                   <span dir="auto">
                     {t('moderation.review', { id: shortId(report.id) })}

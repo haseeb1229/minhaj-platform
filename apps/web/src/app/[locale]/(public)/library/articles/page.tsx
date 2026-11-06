@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { localizedPath } from '@minhaj/contracts';
 import { z } from 'zod';
 import { getTranslations } from 'next-intl/server';
 import { requireLocale } from '@/config/route-locale';
@@ -6,7 +8,16 @@ import { ArticleCard } from '@/components/editorial/article-card';
 import { ListingFrame, Pager } from '@/components/library/frame';
 import { CardGrid, EmptyState } from '@/components/ui';
 export const dynamic = 'force-dynamic';
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const locale = await requireLocale(params);
+  const t = await getTranslations({ locale, namespace: 'editorial' });
+  // R1: the tab says what this is; the listing stays unindexed as before.
+  return { title: t('articles'), robots: { index: false, follow: false } };
+}
 export default async function Articles({
   params,
   searchParams,
@@ -30,8 +41,8 @@ export default async function Articles({
     <ListingFrame
       breadcrumbLabel={shell('nav.breadcrumbs')}
       trail={[
-        { href: '/' + locale, text: shell('nav.home') },
-        { href: '/' + locale + '/library', text: library('title') },
+        { href: localizedPath(locale, ''), text: shell('nav.home') },
+        { href: localizedPath(locale, '/library'), text: library('title') },
         { text: t('articles') },
       ]}
       title={t('articles')}

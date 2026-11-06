@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { z } from 'zod';
 
 import type { Locale } from '@minhaj/contracts';
@@ -46,12 +47,14 @@ export function hadithCitationPath(collectionSlug: string, number: number): stri
 }
 
 export function citationHref(locale: string, collectionSlug: string, number: number) {
-  return `/${locale}${hadithCitationPath(collectionSlug, number)}`;
+  return localizedPath(locale, `${hadithCitationPath(collectionSlug, number)}`);
 }
 
 /** The Hadith section address under a locale: `/{locale}/hadith[/{section}]`. */
 export function hadithPath(locale: string, section = ''): string {
-  return section === '' ? `/${locale}/hadith` : `/${locale}/hadith/${section}`;
+  return section === ''
+    ? localizedPath(locale, '/hadith')
+    : localizedPath(locale, `/hadith/${section}`);
 }
 
 export function collectionPathOf(slug: string): string {
@@ -59,7 +62,7 @@ export function collectionPathOf(slug: string): string {
 }
 
 export function collectionPath(locale: string, slug: string): string {
-  return `/${locale}${collectionPathOf(slug)}`;
+  return localizedPath(locale, `${collectionPathOf(slug)}`);
 }
 
 export function collectionBooksPathOf(slug: string): string {
@@ -83,7 +86,7 @@ export function sciencePathOf(slug: string): string {
 }
 
 export function hadithTopicPath(locale: string, topicSlug: string): string {
-  return `/${locale}/hadith/topics/${part(topicSlug)}`;
+  return localizedPath(locale, `/hadith/topics/${part(topicSlug)}`);
 }
 
 /** One step of a page's breadcrumb, as both the trail and its structured data name it. */
@@ -109,16 +112,22 @@ export function citationTrail(input: {
 }): readonly TrailStep[] {
   const { locale, collection, book, chapter } = input;
   return [
-    { name: input.home, path: `/${locale}` },
+    { name: input.home, path: localizedPath(locale, '') },
     { name: input.hadith, path: hadithPath(locale) },
     { name: collection.name, path: collectionPath(locale, collection.slug) },
-    { name: book.name, path: `/${locale}${bookPathOf(collection.slug, book.slug)}` },
+    {
+      name: book.name,
+      path: localizedPath(locale, `${bookPathOf(collection.slug, book.slug)}`),
+    },
     ...(chapter === null
       ? []
       : [
           {
             name: chapter.name,
-            path: `/${locale}${chapterPathOf(collection.slug, book.slug, chapter.slug)}`,
+            path: localizedPath(
+              locale,
+              `${chapterPathOf(collection.slug, book.slug, chapter.slug)}`,
+            ),
           },
         ]),
     {

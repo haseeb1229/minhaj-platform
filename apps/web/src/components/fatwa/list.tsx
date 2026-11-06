@@ -69,14 +69,11 @@ export function FatwaList({
 }) {
   const Heading = headingLevel;
   return (
-    <ol
-      aria-label={label}
-      className="flex list-none flex-col border-t border-[color:var(--color-border)] p-0"
-    >
+    <ol aria-label={label} className="flex list-none flex-col border-t border-border p-0">
       {items.map((item) => {
         const category = categories.get(item.categoryId);
         return (
-          <li key={item.id} className="border-b border-[color:var(--color-border)]">
+          <li key={item.id} className="border-b border-border">
             <article className="flex min-w-0 flex-col gap-2 py-5">
               <Heading
                 className="text-subheading font-semibold text-balance wrap-anywhere"
@@ -85,7 +82,7 @@ export function FatwaList({
               >
                 <a
                   href={rulingHref(locale, item.slug)}
-                  className="text-[color:var(--color-foreground)] underline decoration-[color:var(--color-accent-rule)] underline-offset-4 hover:decoration-[color:var(--color-action)] active:text-[color:var(--color-action)]"
+                  className="text-foreground underline decoration-accent-rule underline-offset-4 hover:decoration-action active:text-action"
                 >
                   {item.title}
                 </a>
@@ -97,7 +94,7 @@ export function FatwaList({
                       {t('item.category')}:{' '}
                       <a
                         href={categoryHref(locale, category.slug)}
-                        className="inline-flex min-h-6 items-center text-[color:var(--color-action)] underline underline-offset-2"
+                        className="inline-flex min-h-6 items-center text-action underline underline-offset-2"
                       >
                         {category.name}
                       </a>

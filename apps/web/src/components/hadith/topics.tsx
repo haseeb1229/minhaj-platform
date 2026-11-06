@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -72,7 +73,9 @@ export async function HadithTopicPage({
           </span>
         </PageHeading>
         <p>
-          <TextLink href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}>
+          <TextLink
+            href={localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`)}
+          >
             {t('topicHub')}
           </TextLink>
         </p>

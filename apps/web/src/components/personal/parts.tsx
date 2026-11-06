@@ -72,7 +72,7 @@ export function TargetTitle({
       </TextLink>
     );
   return (
-    <span className="text-[color:var(--color-foreground-muted)]">
+    <span className="text-foreground-muted">
       {resolved?.status === 'unknown' ? t('target.unknown') : t('target.unavailable')}
     </span>
   );

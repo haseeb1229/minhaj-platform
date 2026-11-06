@@ -68,7 +68,7 @@ describe('the /collections offset', () => {
       COLLECTION_MAX_OFFSET,
     );
     expect(collectionsPath('ur', 40)).toBe('/ur/collections?offset=40');
-    expect(collectionsPath('en')).toBe('/en/collections');
+    expect(collectionsPath('en')).toBe('/collections');
   });
 
   it('answers anything else with the first page, never a wider read', async () => {
@@ -131,9 +131,9 @@ describe('canonical and hreflang', () => {
       `${ORIGIN}/ur/collections/synthetic-collection`,
     );
     expect(metadata.alternates?.languages).toEqual({
-      en: `${ORIGIN}/en/collections/synthetic-collection`,
+      en: `${ORIGIN}/collections/synthetic-collection`,
       ur: `${ORIGIN}/ur/collections/synthetic-collection`,
-      'x-default': `${ORIGIN}/en/collections/synthetic-collection`,
+      'x-default': `${ORIGIN}/collections/synthetic-collection`,
     });
   });
 

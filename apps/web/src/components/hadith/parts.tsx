@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import type { ReactNode } from 'react';
@@ -50,8 +51,8 @@ export async function hadithTrail(locale: Locale) {
   const t = await getTranslations({ locale, namespace: 'hadith' });
   return {
     label: shell('nav.breadcrumbs'),
-    home: { href: `/${locale}`, text: shell('nav.home') },
-    hadith: { href: `/${locale}/hadith`, text: t('title') },
+    home: { href: localizedPath(locale, ''), text: shell('nav.home') },
+    hadith: { href: localizedPath(locale, '/hadith'), text: t('title') },
   };
 }
 
@@ -64,7 +65,7 @@ export function FixtureBanner({ text }: { readonly text: string }) {
   return (
     <p
       role="note"
-      className="rounded-[var(--radius-panel)] border-2 border-[color:var(--color-warning)] bg-[color:var(--color-warning-surface)] px-4 py-3 font-semibold text-[color:var(--color-warning)]"
+      className="rounded-panel border-2 border-warning bg-warning-surface px-4 py-3 font-semibold text-warning"
     >
       {text}
     </p>
@@ -141,7 +142,7 @@ export async function HadithUnavailable({
           <PageHeading>{section ?? t('title')}</PageHeading>
           <Alert tone="info">{t('unavailable.body')}</Alert>
           <p>
-            <TextLink href={`/${locale}`}>{t('unavailable.home')}</TextLink>
+            <TextLink href={localizedPath(locale, '')}>{t('unavailable.home')}</TextLink>
           </p>
         </Prose>
       </div>
@@ -209,7 +210,7 @@ export function SourcedText({
 }) {
   return (
     <div role="group" aria-labelledby={id} className="flex min-w-0 flex-col gap-1">
-      <p id={id} className="text-xs text-[color:var(--color-foreground-muted)]">
+      <p id={id} className="text-xs text-foreground-muted">
         {label}
       </p>
       <p
@@ -283,12 +284,12 @@ export function Contributors({
       {rows.map((row, index) => (
         <span key={`${row.slug}:${row.role}`}>
           {index === 0 ? null : ' · '}
-          <TextLink href={`/${locale}/people/${encodeURIComponent(row.slug)}`}>
+          <TextLink
+            href={localizedPath(locale, `/people/${encodeURIComponent(row.slug)}`)}
+          >
             {row.name}
           </TextLink>{' '}
-          <span className="text-[color:var(--color-foreground-muted)]">
-            ({t(`role.${row.role}`)})
-          </span>
+          <span className="text-foreground-muted">({t(`role.${row.role}`)})</span>
         </span>
       ))}
     </p>
@@ -343,7 +344,7 @@ export function CitationList({
           <li key={key}>
             <article
               aria-label={title}
-              className="flex min-w-0 flex-col gap-2 border-b border-[color:var(--color-border)] py-4"
+              className="flex min-w-0 flex-col gap-2 border-b border-border py-4"
             >
               <Heading className="text-base font-semibold wrap-anywhere">
                 <TextLink
@@ -353,7 +354,7 @@ export function CitationList({
                   {t('number', { number: citation.number })}
                 </TextLink>
               </Heading>
-              <p className="text-xs text-[color:var(--color-foreground-muted)] wrap-anywhere">
+              <p className="text-xs text-foreground-muted wrap-anywhere">
                 {t('fact.sourceReference')}:{' '}
                 <span dir="auto" className="whitespace-pre-wrap">
                   {citation.sourceReference}

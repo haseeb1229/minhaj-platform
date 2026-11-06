@@ -56,6 +56,13 @@ const PUBLIC_GROUP = path.join(APP_SRC, 'app', '[locale]', '(public)');
  * quietly exempt something.
  */
 const CONTENT_ROUTE_FILES = [
+  // REBASELINE R1 — THE SHELL IS CONTENT-AWARE. The public layout's header and
+  // footer, and the Explore index, promote only areas with published content
+  // (`@/composition/presence`), so they read public data per request exactly
+  // like a content route — and are held to every content-route rule below: no
+  // session, no identity, no logger, no authentication library, dynamic.
+  'apps/web/src/app/[locale]/(public)/layout.tsx',
+  'apps/web/src/app/[locale]/(public)/explore/page.tsx',
   'apps/web/src/app/[locale]/(public)/contact/page.tsx',
   'apps/web/src/app/[locale]/(public)/feedback/page.tsx',
   'apps/web/src/app/[locale]/(public)/help/page.tsx',
@@ -486,12 +493,12 @@ describe('the anonymous public tree reads no session-derived state', () => {
   it('reaches a real graph, so nothing below passes vacuously', async () => {
     const { modules } = await publicGraph();
 
-    // The layout, the Explore routes, the legal routes, the sitemap, the
-    // error surfaces, and everything they pull in. (The home page is a
-    // content route since the flagship portal; its shell is still here.)
+    // The Explore section routes, the legal routes, the sitemap and the error
+    // surfaces, and everything they pull in. (Since R1 the layout's header and
+    // footer are content-aware and live in the content graph, below.)
     expect(modules.size).toBeGreaterThan(10);
     expect([...modules.keys()].map(relative)).toContain(
-      'apps/web/src/components/shell/site-header.tsx',
+      'apps/web/src/app/[locale]/(public)/not-found.tsx',
     );
   });
 
@@ -654,12 +661,29 @@ describe('the public shell is server-rendered, with narrow client islands', () =
       .map(([file]) => relative(file))
       .sort();
 
-    expect(clientModules).toEqual([
-      'apps/web/src/app/[locale]/(public)/error.tsx',
+    expect(clientModules).toEqual(['apps/web/src/app/[locale]/(public)/error.tsx']);
+
+    // R1: the navigation islands now arrive with the content-aware layout, in
+    // the content graph — the same narrow set, plus the current-section link and
+    // the signed-in account entry.
+    const content = await contentGraph();
+    const contentClient = [...content.modules]
+      .filter(([, source]) => /^\s*['"]use client['"]/m.test(source))
+      .map(([file]) => relative(file));
+    for (const island of [
       'apps/web/src/components/locale-switcher-links.tsx',
       'apps/web/src/components/shell/disclosure-menu.tsx',
       'apps/web/src/components/shell/mobile-nav.tsx',
-    ]);
+      'apps/web/src/components/shell/nav-link.tsx',
+      'apps/web/src/components/shell/account-entry.tsx',
+    ])
+      expect(contentClient, island).toContain(island);
+    for (const shellFile of [
+      'apps/web/src/components/shell/site-header.tsx',
+      'apps/web/src/components/shell/site-footer.tsx',
+      'apps/web/src/components/shell/brand-wordmark.tsx',
+    ])
+      expect(contentClient, shellFile).not.toContain(shellFile);
   });
 
   it('renders nothing the error boundary was handed', async () => {
@@ -776,7 +800,10 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     // An Editorial record's lead image, only through Editorial's own route
     // (pinned in `phase13-news-boundaries.test.ts`).
     const LEAD = 'apps/web/src/components/editorial/lead-image.tsx';
-    const FIRST_PARTY_IMAGES = [PORTRAIT, COVER, WATCH, LEAD];
+    // R1 — the organisation's official mark, once, in the footer: its one
+    // source is the statically imported first-party file (pinned below).
+    const BRAND = 'apps/web/src/components/shell/brand-lockup.tsx';
+    const FIRST_PARTY_IMAGES = [PORTRAIT, COVER, WATCH, LEAD, BRAND];
     const { modules } = await contentGraph();
 
     for (const expected of [PLAYER, AUDIO_PLAYER, PHOTOS, VIEWER, RECITATION_PLAYER]) {
@@ -876,7 +903,11 @@ describe('the public shell is server-rendered, with narrow client islands', () =
     expect(watch.match(/src=\{[^}]*\}/g) ?? []).toEqual([
       'src={videoPosterPath(videoId, poster.assetId)}',
     ]);
-    for (const source of [portrait, cover, watch]) {
+    // The organisation's mark: one source, the bundled logo file itself.
+    const brand = await read('apps/web/src/components/shell/brand-lockup.tsx');
+    expect(brand.match(/src=\{[^}]*\}/g) ?? []).toEqual(['src={logo.src}']);
+    expect(brand).toContain("import logo from '@/shell/brand/mqi-logo.png';");
+    for (const source of [portrait, cover, watch, brand]) {
       for (const forbidden of ['srcSet', 'next/image', 'thumbnailUrl}', 'autoPlay']) {
         expect(source, forbidden).not.toContain(forbidden);
       }
@@ -1399,20 +1430,30 @@ describe('the base security headers', () => {
       "import { PROVIDER_EMBED_ORIGINS, VIDEO_PROVIDERS } from '@minhaj/contracts/media';",
     );
     expect(config).toContain('"frame-src \'none\'"');
-    expect(config).toContain("'/:locale(en|ur|ar)/watch/videos/:slug'");
-    expect(config).toContain("'/:locale(en|ur|ar)/admin/media/videos/:id'");
+    // Every route-scoped shape is written ONCE, locale-free, and expanded by
+    // one helper into exactly its unprefixed English address and its `/ur` and
+    // `/ar` forms (ROUTE_MAP.md §1.1, R1). `/en/…` never renders — the proxy
+    // redirects it — so no shape names it, and no helper may widen a shape to
+    // an arbitrary first segment.
+    expect(config).toMatch(
+      /function inEveryLocale\(path: string\): readonly string\[\] \{\s*return \[path, `\/:locale\(ur\|ar\)\$\{path\}`\];\s*\}/,
+    );
+    expect(config).not.toMatch(/:locale\([^)]*\ben\b/);
+    expect(config).toContain("...inEveryLocale('/watch/videos/:slug'),");
+    expect(config).toContain("...inEveryLocale('/admin/media/videos/:id'),");
     // Phase 27 adds four exact shapes and nothing broader: the two pages that
     // render a giving form (their `form-action` also names the provider's
     // hosted checkout), and the two whose address or state is a bearer
     // (`no-referrer`, `private, no-store`).
     for (const route of [
-      "'/:locale(en|ur|ar)/donate',",
-      "'/:locale(en|ur|ar)/my/donations',",
-      "'/:locale(en|ur|ar)/donate/status/:token*',",
-      "'/:locale(en|ur|ar)/donate/return',",
+      "...inEveryLocale('/donate'),",
+      "...inEveryLocale('/my/donations'),",
+      "...inEveryLocale('/donate/status/:token*'),",
+      "...inEveryLocale('/donate/return'),",
     ])
       expect(config, route).toContain(route);
-    expect(config.match(/'\/:locale\(en\|ur\|ar\)\//g) ?? []).toHaveLength(6);
+    expect(config.match(/inEveryLocale\('/g) ?? []).toHaveLength(6);
+    expect(config.match(/:locale\(/g) ?? []).toHaveLength(1);
     expect(config).toContain('autoplay=()');
     for (const origin of [
       'youtube',
@@ -1486,6 +1527,21 @@ describe('the base security headers', () => {
 });
 
 describe('Phase 21 private island and newsletter action', () => {
+  it('walks the account island into the content graph: client-only, one boolean read', async () => {
+    // R1: the header's account entry learns whether this browser is signed in
+    // AFTER render, from `/api/my/account-state` — the public HTML stays the
+    // same for everyone, and the island asks for nothing else.
+    const { modules } = await contentGraph();
+    const file = 'apps/web/src/components/shell/account-entry.tsx';
+    expect([...modules.keys()].map(relative)).toContain(file);
+    const island = code(await readFile(path.join(repoRoot, file), 'utf8'));
+    expect(island.trimStart()).toMatch(/^['"]use client['"]/);
+    expect(island.match(/fetch\(/g)).toHaveLength(1);
+    expect(island).toContain("fetch('/api/my/account-state'");
+    expect(island).toContain("credentials: 'same-origin'");
+    expect(island).not.toMatch(/document\.cookie|localStorage|sessionStorage/);
+  });
+
   it('walks the island into the content graph and keeps it client-only', async () => {
     const { modules } = await contentGraph();
     const files = [...modules.keys()].map(relative);

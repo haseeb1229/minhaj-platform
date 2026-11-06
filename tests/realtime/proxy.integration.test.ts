@@ -221,21 +221,21 @@ live('Phase 25 — the NGINX WebSocket seam in front of the real realtime proces
 
   it('sends ordinary HTTP to the web upstream with Host kept and every forwarding header set by NGINX', async () => {
     const before = web.requests.length;
-    const response = await httpGet(`${origin}/en/messages?page=2`, FORGED);
+    const response = await httpGet(`${origin}/my/messages?page=2`, FORGED);
     expect(response).toMatchObject({ status: 200, body: 'recorded' });
     const seen = web.requests.slice(before);
     expect(seen).toHaveLength(1);
     expect(seen[0]).toMatchObject({
       kind: 'http',
       method: 'GET',
-      url: '/en/messages?page=2',
+      url: '/my/messages?page=2',
     });
     proxySet(seen[0]!.headers, publicHost);
   });
 
   it('refuses an unknown Host without reaching any upstream', async () => {
     const before = web.requests.length;
-    const response = await httpGet(`${origin}/en`, { host: 'attacker.invalid' });
+    const response = await httpGet(`${origin}/`, { host: 'attacker.invalid' });
     expect(response.status).toBe(421);
     expect(web.requests.length).toBe(before);
   });

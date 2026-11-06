@@ -2,7 +2,7 @@ import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import {
   QURAN_PAGE,
   type PublicLayerWork,
@@ -103,12 +103,12 @@ function Contributors({
       {rows.map((row, index) => (
         <span key={`${row.slug}:${row.role}`}>
           {index === 0 ? null : ' · '}
-          <TextLink href={`/${locale}/people/${encodeURIComponent(row.slug)}`}>
+          <TextLink
+            href={localizedPath(locale, `/people/${encodeURIComponent(row.slug)}`)}
+          >
             {row.name}
           </TextLink>{' '}
-          <span className="text-[color:var(--color-foreground-muted)]">
-            ({t(`role.${row.role}`)})
-          </span>
+          <span className="text-foreground-muted">({t(`role.${row.role}`)})</span>
         </span>
       ))}
     </p>
@@ -145,7 +145,7 @@ function WorkRow({
         <h2 className="text-lg font-semibold break-words" dir="auto">
           {href === null ? work.name : <TextLink href={href}>{work.name}</TextLink>}
         </h2>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="text-sm text-foreground-muted">
           <LanguageName languages={languages} code={work.languageCode} />
         </p>
         <Contributors locale={locale} work={work} names={names} t={t} />
@@ -156,17 +156,12 @@ function WorkRow({
         )}
         {scheme === null ? null : (
           <p className="text-sm break-words" dir="auto">
-            <span className="text-[color:var(--color-foreground-muted)]">
-              {t('work.scheme')}:{' '}
-            </span>
+            <span className="text-foreground-muted">{t('work.scheme')}: </span>
             {scheme}
           </p>
         )}
         {work.attribution === null ? null : (
-          <p
-            className="text-xs break-words text-[color:var(--color-foreground-muted)]"
-            dir="auto"
-          >
+          <p className="text-xs break-words text-foreground-muted" dir="auto">
             {work.attribution}
           </p>
         )}
@@ -224,9 +219,7 @@ export async function WorkListingPage({
     >
       <div className="flex flex-col gap-2">
         <PageHeading>{title}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">
-          {t(`sectionBody.${kind}`)}
-        </p>
+        <p className="text-foreground-muted">{t(`sectionBody.${kind}`)}</p>
       </div>
       {works.length === 0 ? (
         <EmptyState>{t(`worksEmpty.${kind}`)}</EmptyState>
@@ -471,7 +464,7 @@ export async function WorkDetailPage({
                         {segmentRange(t, entry)}
                       </TextLink>
                     </h3>
-                    <details className="rounded-[var(--radius-control)] border border-[color:var(--color-border)] px-4 py-2">
+                    <details className="rounded-control border border-border px-4 py-2">
                       <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">
                         {t('work.readEntry')}
                       </summary>
@@ -539,9 +532,7 @@ export async function TajweedListingPage({
     >
       <div className="flex flex-col gap-2">
         <PageHeading>{title}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">
-          {t('sectionBody.tajweed')}
-        </p>
+        <p className="text-foreground-muted">{t('sectionBody.tajweed')}</p>
       </div>
       {rules.length === 0 ? (
         <EmptyState>{t('worksEmpty.tajweed')}</EmptyState>
@@ -630,10 +621,7 @@ export async function TajweedRulePage({
           </div>
         </div>
         {rule.attribution === null ? null : (
-          <p
-            className="text-sm break-words text-[color:var(--color-foreground-muted)]"
-            dir="auto"
-          >
+          <p className="text-sm break-words text-foreground-muted" dir="auto">
             {rule.attribution}
           </p>
         )}

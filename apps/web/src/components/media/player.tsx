@@ -103,7 +103,7 @@ export function VideoPlayer({
   return (
     <div className="flex flex-col gap-3">
       {loaded ? (
-        <div className="aspect-video w-full overflow-hidden rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)]">
+        <div className="aspect-video w-full overflow-hidden rounded-panel border border-border bg-surface-sunken">
           <iframe
             ref={frame}
             src={providerEmbedUrl(provider, providerVideoId)}
@@ -117,15 +117,13 @@ export function VideoPlayer({
         </div>
       ) : (
         <div
-          className="relative flex min-h-48 w-full flex-col items-center justify-center gap-4 overflow-hidden rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)] p-6 text-center sm:aspect-video"
+          className="relative flex min-h-48 w-full flex-col items-center justify-center gap-4 overflow-hidden rounded-panel border border-border bg-surface-sunken p-6 text-center sm:aspect-video"
           data-player-state="gated"
         >
           {backdrop}
           <div
             className={`relative flex flex-col items-center gap-4 ${
-              backdrop === null
-                ? ''
-                : 'rounded-[var(--radius-panel)] bg-[color:var(--color-surface-raised)] p-4 shadow-[var(--shadow-raised)]'
+              backdrop === null ? '' : 'rounded-panel bg-surface-raised p-4 shadow-raised'
             }`}
           >
             <p className="max-w-[var(--measure-prose)] text-sm">{labels.notice}</p>
@@ -141,7 +139,7 @@ export function VideoPlayer({
         <a
           href={providerWatchUrl(provider, providerVideoId)}
           rel="noopener noreferrer"
-          className="font-medium text-[color:var(--color-action)] underline underline-offset-2"
+          className="font-medium text-action underline underline-offset-2"
         >
           {labels.fallback}
         </a>

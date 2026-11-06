@@ -19,10 +19,7 @@ export function Highlighted({
     <>
       {highlightSegments(text, query).map((segment, index) =>
         segment.match ? (
-          <mark
-            key={index}
-            className="rounded-sm bg-[color:var(--color-highlight)] px-0.5 text-inherit"
-          >
+          <mark key={index} className="rounded-sm bg-highlight px-0.5 text-inherit">
             {segment.text}
           </mark>
         ) : (

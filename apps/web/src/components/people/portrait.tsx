@@ -49,13 +49,10 @@ export function PersonPortraitFigure({
         loading={priority ? 'eager' : 'lazy'}
         decoding="async"
         {...(priority ? { fetchPriority: 'high' as const } : {})}
-        className="aspect-[3/4] h-auto w-full rounded-[var(--radius-panel)] bg-[color:var(--color-surface-sunken)] object-cover object-top"
+        className="aspect-[3/4] h-auto w-full rounded-panel bg-surface-sunken object-cover object-top"
       />
       {portrait.credit === null ? null : (
-        <figcaption
-          className="text-caption text-[color:var(--color-foreground-muted)]"
-          dir="auto"
-        >
+        <figcaption className="text-caption text-foreground-muted" dir="auto">
           {creditLabel}: {portrait.credit}
         </figcaption>
       )}

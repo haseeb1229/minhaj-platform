@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { PERSONAL_GOALS, PERSONAL_INTERESTS } from '@minhaj/contracts/personalisation';
@@ -40,7 +41,10 @@ export default async function InterestsPage({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const session = await requireActiveSession(locale, `/${locale}/my/settings/interests`);
+  const session = await requireActiveSession(
+    locale,
+    localizedPath(locale, '/my/settings/interests'),
+  );
   const t = await getTranslations({ locale, namespace: 'personal' });
   const read = await personalRead('personal-onboarding', () =>
     personalisationRuntime().settings.settings({ accountId: session.account.id }),
@@ -54,7 +58,7 @@ export default async function InterestsPage({
         <li>{t('interests.notInferred')}</li>
         <li>
           {t('interests.language')}{' '}
-          <TextLink href={`/${locale}/my/settings/language`}>
+          <TextLink href={localizedPath(locale, '/my/settings/language')}>
             {t('interests.languageLink')}
           </TextLink>
         </li>
@@ -133,9 +137,7 @@ export default async function InterestsPage({
           <span id="interests-skip">
             <SectionHeading>{t('interests.skipHeading')}</SectionHeading>
           </span>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('interests.skipHelp')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('interests.skipHelp')}</p>
           <div className="self-start">
             <ActionForm
               action={skipInterestsAction}

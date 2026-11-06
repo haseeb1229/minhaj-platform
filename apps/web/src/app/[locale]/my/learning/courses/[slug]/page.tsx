@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 
@@ -60,7 +61,7 @@ export default async function MyCoursePage({
 }) {
   const locale = await requireLocale(params);
   const { slug } = await params;
-  const path = `/${locale}/my/learning/courses/${encodeURIComponent(slug)}`;
+  const path = localizedPath(locale, `/my/learning/courses/${encodeURIComponent(slug)}`);
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myLearning' });
   const actor = { accountId: session.account.id };
@@ -118,7 +119,10 @@ export default async function MyCoursePage({
             ) : null}
             {available ? (
               <TextLink
-                href={`/${locale}/learn/courses/${encodeURIComponent(course.slug)}`}
+                href={localizedPath(
+                  locale,
+                  `/learn/courses/${encodeURIComponent(course.slug)}`,
+                )}
               >
                 {t('course.publicPage')}
               </TextLink>
@@ -170,14 +174,14 @@ export default async function MyCoursePage({
                           <a
                             href={`${path}?lesson=${entry.id}`}
                             aria-current={entry.id === chosen ? 'page' : undefined}
-                            className="min-w-0 font-medium text-[color:var(--color-action)] underline underline-offset-2 aria-[current=page]:no-underline"
+                            className="min-w-0 font-medium text-action underline underline-offset-2 aria-[current=page]:no-underline"
                           >
                             {title}
                           </a>
                         ) : (
                           <span className="min-w-0">{title}</span>
                         )}
-                        <span className="text-xs text-[color:var(--color-foreground-muted)]">
+                        <span className="text-xs text-foreground-muted">
                           {finished ? (
                             <>
                               <span aria-hidden="true">✓ </span>
@@ -210,7 +214,7 @@ export default async function MyCoursePage({
               </span>
             </SectionHeading>
           </span>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
+          <p className="text-sm text-foreground-muted">
             {t('lesson.position', {
               number: String(position + 1),
               total: String(lessons.length),

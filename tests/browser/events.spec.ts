@@ -375,7 +375,7 @@ test.describe('authoring an Event', () => {
     test.setTimeout(240_000);
 
     // The editor names the Centre and the Gallery — never an identifier.
-    await author.goto(`/en/admin/editorial/events/new?referenceQuery=${run}`);
+    await author.goto(`/admin/editorial/events/new?referenceQuery=${run}`);
     await author.getByLabel('Canonical slug', { exact: true }).fill(slug.main);
     await author.locator('#en-title').fill(TITLE.en);
     await author
@@ -396,7 +396,7 @@ test.describe('authoring an Event', () => {
     await author.locator('#occurrence-1-end').fill(WINTER.end);
     await author.locator('#gallery-0').selectOption({ label: GALLERY_TITLE });
     await author.getByRole('button', { name: 'Save revision', exact: true }).click();
-    await author.waitForURL(/\/en\/admin\/editorial\/events\/[0-9a-f-]{36}$/);
+    await author.waitForURL(/\/admin\/editorial\/events\/[0-9a-f-]{36}$/);
     mainEditor = new URL(author.url()).pathname;
     const eventId = eventIdOf(mainEditor);
 
@@ -472,7 +472,7 @@ test.describe('authoring an Event', () => {
     expect((await eventRow(eventId)).state).toBe('published');
 
     // A second, wholly past Event with no Centre, for the past view.
-    await author.goto('/en/admin/editorial/events/new');
+    await author.goto('/admin/editorial/events/new');
     await author.getByLabel('Canonical slug', { exact: true }).fill(slug.past);
     await author.locator('#en-title').fill(TITLE.past);
     await author
@@ -482,7 +482,7 @@ test.describe('authoring an Event', () => {
     await author.locator('#occurrence-0-start').fill('2024-05-10T10:00');
     await author.locator('#occurrence-0-end').fill('2024-05-10T11:00');
     await author.getByRole('button', { name: 'Save revision', exact: true }).click();
-    await author.waitForURL(/\/en\/admin\/editorial\/events\/[0-9a-f-]{36}$/);
+    await author.waitForURL(/\/admin\/editorial\/events\/[0-9a-f-]{36}$/);
     await throughWorkflow(new URL(author.url()).pathname);
 
     // The read-only account below replays THIS save — a real one — as itself.
@@ -491,7 +491,7 @@ test.describe('authoring an Event', () => {
 
   test('gives a read-only account the editor without a form, and refuses what it posts anyway', async () => {
     const eventId = eventIdOf(mainEditor);
-    await reader.goto('/en/admin/editorial/events');
+    await reader.goto('/admin/editorial/events');
     await expect(
       reader.getByRole('heading', { name: 'Events', exact: true }),
     ).toBeVisible();
@@ -534,7 +534,7 @@ test.describe('authoring an Event', () => {
   }) => {
     const eventId = eventIdOf(mainEditor);
     for (const surface of ['events', 'events/new', `events/${eventId}`]) {
-      const response = await outsider.goto(`/en/admin/editorial/${surface}`);
+      const response = await outsider.goto(`/admin/editorial/${surface}`);
       // Refused as not-found — never a page that confirms what is there.
       expect([200, 404], surface).toContain(response?.status());
       if (response?.status() === 200)
@@ -548,20 +548,20 @@ test.describe('authoring an Event', () => {
         outsider.getByRole('heading', { name: 'Events', exact: true }),
       ).toHaveCount(0);
       await expect(
-        outsider.getByRole('navigation').locator('a[href="/en/admin/editorial/events"]'),
+        outsider.getByRole('navigation').locator('a[href="/admin/editorial/events"]'),
       ).toHaveCount(0);
     }
 
-    await page.goto('/en/admin/editorial/events');
-    await page.waitForURL(/\/en\/signin\?returnTo=/);
+    await page.goto('/admin/editorial/events');
+    await page.waitForURL(/\/signin\?returnTo=/);
     // The administrative shell refuses first, and returns to its own root.
-    expect(new URL(page.url()).searchParams.get('returnTo')).toMatch(/^\/en\/admin/);
+    expect(new URL(page.url()).searchParams.get('returnTo')).toMatch(/^\/admin/);
     await expect(page.getByLabel('Canonical slug', { exact: true })).toHaveCount(0);
     expect(await page.context().cookies()).toHaveLength(0);
   });
 
   test('refuses a daylight-saving gap, a repeated hour without a choice and an end before its start', async () => {
-    await author.goto('/en/admin/editorial/events/new');
+    await author.goto('/admin/editorial/events/new');
     await author.getByLabel('Canonical slug', { exact: true }).fill(slug.dst);
     await author.locator('#en-title').fill(TITLE.dst);
     await author
@@ -583,7 +583,7 @@ test.describe('authoring an Event', () => {
     await expect(author.getByLabel('Canonical slug', { exact: true })).toHaveValue(
       slug.dst,
     );
-    expect(new URL(author.url()).pathname).toBe('/en/admin/editorial/events/new');
+    expect(new URL(author.url()).pathname).toBe('/admin/editorial/events/new');
 
     // An end before its start.
     await start.fill('2027-01-10T10:00');
@@ -598,12 +598,12 @@ test.describe('authoring an Event', () => {
     await save.click();
     await expect(refusal('A start or end time happens twice in the event')).toBeVisible();
     await expect(start).toHaveValue('2026-11-01T01:30');
-    expect(new URL(author.url()).pathname).toBe('/en/admin/editorial/events/new');
+    expect(new URL(author.url()).pathname).toBe('/admin/editorial/events/new');
 
     // The second 01:30 — after the clocks go back, EST, 06:30 UTC — saves.
     await author.locator('#occurrence-0-startFold').selectOption('later');
     await save.click();
-    await author.waitForURL(/\/en\/admin\/editorial\/events\/[0-9a-f-]{36}$/);
+    await author.waitForURL(/\/admin\/editorial\/events\/[0-9a-f-]{36}$/);
     await expect(author.locator('#occurrence-0-start')).toHaveValue('2026-11-01T01:30');
     await expect(author.locator('#occurrence-0-startFold')).toHaveValue('later');
     await expect(author.locator('body')).toContainText(
@@ -621,7 +621,7 @@ test.describe('an anonymous visitor finds Events', () => {
     const summer = occurrenceText(SUMMER.start, SUMMER.movedEnd, SUMMER.instant);
     expect(summer.zone).toBe('Eastern Daylight Time');
 
-    const response = await page.goto('/en/events');
+    const response = await page.goto('/events');
     expect(response?.status()).toBe(200);
     expect(response?.headers()['set-cookie']).toBeUndefined();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Events');
@@ -635,12 +635,12 @@ test.describe('an anonymous visitor finds Events', () => {
     await expect(card).toContainText('and 1 more date');
     await expect(card.getByRole('link', { name: NAME.centre })).toHaveAttribute(
       'href',
-      `/en/global/centres/${place.centre}`,
+      `/global/centres/${place.centre}`,
     );
     await expect(card).toContainText(`${NAME.city}, ${NAME.country}`);
     await expect(card.getByRole('link', { name: TITLE.en })).toHaveAttribute(
       'href',
-      `/en/events/${slug.main}`,
+      `/events/${slug.main}`,
     );
     await expect(upcoming.getByText(TITLE.past)).toHaveCount(0);
     await expect(page.getByText(TITLE.dst)).toHaveCount(0);
@@ -649,22 +649,22 @@ test.describe('an anonymous visitor finds Events', () => {
 
     // The same knowledge signed in, and no cookie was ever set.
     const anonymous = await page.getByRole('main').innerText();
-    const signedIn = await author.goto('/en/events');
+    const signedIn = await author.goto('/events');
     expect(signedIn?.headers()['set-cookie']).toBeUndefined();
     expect(await author.getByRole('main').innerText()).toBe(anonymous);
     expect(await page.context().cookies()).toHaveLength(0);
 
     // News and Events leads here.
-    await page.goto('/en/news');
+    await page.goto('/news');
     await expect(
-      page.getByRole('main').locator('a[href="/en/events"]').first(),
+      page.getByRole('main').locator('a[href="/events"]').first(),
     ).toBeVisible();
   });
 
   test('shows the past view, narrows by place, and lists nothing for an invalid filter', async ({
     page,
   }) => {
-    await page.goto('/en/events?when=past');
+    await page.goto('/events?when=past');
     const past = page.getByRole('list', { name: 'Past events', exact: true });
     await expect(past.getByRole('link', { name: TITLE.past })).toBeVisible();
     await expect(past.getByText(TITLE.en)).toHaveCount(0);
@@ -679,7 +679,7 @@ test.describe('an anonymous visitor finds Events', () => {
       `country=${place.country}`,
       `country=${place.country}&city=${place.city}`,
     ]) {
-      const response = await page.goto(`/en/events?${query}`);
+      const response = await page.goto(`/events?${query}`);
       expect(response?.status(), query).toBe(200);
       await expect(
         page
@@ -692,13 +692,13 @@ test.describe('an anonymous visitor finds Events', () => {
     await expect(page.getByLabel('City', { exact: true })).toHaveValue(place.city);
 
     // Elsewhere, nothing is held: said in words, and nothing is listed.
-    await page.goto(`/en/events?country=${place.otherCountry}`);
+    await page.goto(`/events?country=${place.otherCountry}`);
     await expect(
       page.getByRole('main').getByText('No upcoming events are held in this place.'),
     ).toBeVisible();
     await expect(page.getByText(TITLE.en)).toHaveCount(0);
     // The past Event has no Centre, so a place filter excludes it too.
-    await page.goto(`/en/events?when=past&country=${place.country}`);
+    await page.goto(`/events?when=past&country=${place.country}`);
     await expect(
       page.getByRole('main').getByText('No past events were held in this place.'),
     ).toBeVisible();
@@ -713,7 +713,7 @@ test.describe('an anonymous visitor finds Events', () => {
       `centre=no-such-centre-${run}`,
       'when=tomorrow',
     ]) {
-      const response = await page.goto(`/en/events?${query}`);
+      const response = await page.goto(`/events?${query}`);
       expect(response?.status(), query).toBe(200);
       await expect(
         page
@@ -739,7 +739,7 @@ test.describe('an anonymous visitor finds Events', () => {
     const summer = occurrenceText(SUMMER.start, SUMMER.movedEnd, SUMMER.instant);
     expect(winter.zone).toBe('Eastern Standard Time');
 
-    const response = await page.goto(`/en/events/${slug.main}`);
+    const response = await page.goto(`/events/${slug.main}`);
     expect(response?.status()).toBe(200);
     expect(response?.headers()['set-cookie']).toBeUndefined();
     const main = page.getByRole('main');
@@ -768,7 +768,7 @@ test.describe('an anonymous visitor finds Events', () => {
     const where = main.locator('section[aria-labelledby="event-where"]');
     await expect(where.getByRole('link', { name: NAME.centre })).toHaveAttribute(
       'href',
-      `/en/global/centres/${place.centre}`,
+      `/global/centres/${place.centre}`,
     );
     await expect(where).toContainText(`${NAME.city}, ${NAME.country}`);
     await expect(where.locator('address')).toHaveText(ADDRESS);
@@ -785,19 +785,19 @@ test.describe('an anonymous visitor finds Events', () => {
     await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(0);
 
     const text = await main.innerText();
-    await author.goto(`/en/events/${slug.main}`);
+    await author.goto(`/events/${slug.main}`);
     expect(await author.getByRole('main').innerText()).toBe(text);
 
     // The photographs: a view over the Gallery, linking to its own page.
     const photographs = main.getByRole('link', {
       name: 'View the photographs (1 gallery)',
     });
-    await expect(photographs).toHaveAttribute('href', `/en/events/${slug.main}/gallery`);
+    await expect(photographs).toHaveAttribute('href', `/events/${slug.main}/gallery`);
     await photographs.click();
-    await page.waitForURL(new RegExp(`/en/events/${slug.main}/gallery$`));
+    await page.waitForURL(new RegExp(`/events/${slug.main}/gallery$`));
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Event photographs');
     const cards = page.getByRole('list', { name: 'Event photographs', exact: true });
-    const card = cards.locator(`a[href="/en/media/galleries/${place.gallery}"]`).first();
+    const card = cards.locator(`a[href="/media/galleries/${place.gallery}"]`).first();
     await expect(card).toBeVisible();
     await expect(cards).toContainText(GALLERY_TITLE);
     await expect(page.locator('meta[name="robots"]').first()).toHaveAttribute(
@@ -807,18 +807,16 @@ test.describe('an anonymous visitor finds Events', () => {
     await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
     await expect(
       page.getByRole('main').getByRole('link', { name: 'Back to the event' }),
-    ).toHaveAttribute('href', `/en/events/${slug.main}`);
-    const gallery = await page.request.get(`/en/events/${slug.main}/gallery`);
+    ).toHaveAttribute('href', `/events/${slug.main}`);
+    const gallery = await page.request.get(`/events/${slug.main}/gallery`);
     expect(gallery.status()).toBe(200);
     expect(gallery.headers()['set-cookie']).toBeUndefined();
 
     // An Event with no Gallery has no gallery view at all.
-    expect((await page.request.get(`/en/events/${slug.past}/gallery`)).status()).toBe(
-      404,
-    );
+    expect((await page.request.get(`/events/${slug.past}/gallery`)).status()).toBe(404);
     // An unpublished Event is not public, signed in or not.
-    expect((await page.request.get(`/en/events/${slug.dst}`)).status()).toBe(404);
-    expect((await author.request.get(`/en/events/${slug.dst}`)).status()).toBe(404);
+    expect((await page.request.get(`/events/${slug.dst}`)).status()).toBe(404);
+    expect((await author.request.get(`/events/${slug.dst}`)).status()).toBe(404);
   });
 });
 
@@ -877,7 +875,7 @@ test.describe('reading direction, reflow and the keyboard', () => {
   test('labels the place filter visibly and submits it from the keyboard', async ({
     page,
   }) => {
-    await page.goto(`/en/events?country=${place.country}`);
+    await page.goto(`/events?country=${place.country}`);
     const form = page.getByRole('form', { name: 'Filter events by place' });
     await expect(form.locator('label[for="events-country"]')).toBeVisible();
     await expect(form.locator('label[for="events-country"]')).toHaveText('Country');
@@ -907,7 +905,7 @@ test.describe('reading direction, reflow and the keyboard', () => {
     ).toBeVisible();
 
     // With no Country chosen the City is disabled and skipped.
-    await page.goto('/en/events');
+    await page.goto('/events');
     await expect(page.getByLabel('City', { exact: true })).toBeDisabled();
     await page.getByLabel('Country', { exact: true }).focus();
     await page.keyboard.press('Tab');
@@ -929,16 +927,16 @@ test.describe('former addresses', () => {
     await clickSaved(author, 'Save revision');
     // The rename is an ordinary edit: withdrawn until it is published again.
     expect(
-      (await request.get(`/en/events/${slug.main}`, { maxRedirects: 0 })).status(),
+      (await request.get(`/events/${slug.main}`, { maxRedirects: 0 })).status(),
     ).toBe(404);
     await throughWorkflow(mainEditor);
 
     const old = slug.main;
     slug.main = slug.renamed;
     for (const [from, to] of [
-      [`/en/events/${old}`, `/en/events/${slug.main}`],
+      [`/events/${old}`, `/events/${slug.main}`],
       [`/ur/events/${old}`, `/ur/events/${slug.main}`],
-      [`/en/events/${old}/gallery`, `/en/events/${slug.main}/gallery`],
+      [`/events/${old}/gallery`, `/events/${slug.main}/gallery`],
       [`/ar/events/${old}/gallery`, `/ar/events/${slug.main}/gallery`],
     ] as const) {
       const response = await request.get(from, { maxRedirects: 0 });
@@ -957,7 +955,7 @@ test.describe('a withdrawn Centre or Gallery', () => {
   test('lists the Event among the Centre’s Local Events, and degrades honestly when either is withdrawn', async ({
     page,
   }) => {
-    const centre = `/en/global/centres/${place.centre}`;
+    const centre = `/global/centres/${place.centre}`;
 
     // Local Events, on their own page and as a section of the Centre page.
     const local = await page.goto(`${centre}/events`);
@@ -970,7 +968,7 @@ test.describe('a withdrawn Centre or Gallery', () => {
       page
         .getByRole('list', { name: `Events at ${NAME.centre}`, exact: true })
         .getByRole('link', { name: TITLE.en }),
-    ).toHaveAttribute('href', `/en/events/${slug.main}`);
+    ).toHaveAttribute('href', `/events/${slug.main}`);
     await page.goto(centre);
     const section = page.locator('section[aria-labelledby="centre-events"]');
     await expect(section.getByRole('link', { name: TITLE.en })).toBeVisible();
@@ -982,15 +980,15 @@ test.describe('a withdrawn Centre or Gallery', () => {
     await sql.query(
       `UPDATE [dbo].[Gallery] SET [state]=N'archived', [version]=[version]+1, [updatedAt]=SYSUTCDATETIME() WHERE [id]=N'${id.gallery}';`,
     );
-    const view = await page.goto(`/en/events/${slug.main}/gallery`);
+    const view = await page.goto(`/events/${slug.main}/gallery`);
     expect(view?.status()).toBe(200);
     await expect(
       page
         .getByRole('main')
         .getByText('No photographs of this event are available at the moment.'),
     ).toBeVisible();
-    await expect(page.locator('a[href^="/en/media/galleries/"]')).toHaveCount(0);
-    const detail = await page.goto(`/en/events/${slug.main}`);
+    await expect(page.locator('a[href^="/media/galleries/"]')).toHaveCount(0);
+    const detail = await page.goto(`/events/${slug.main}`);
     expect(detail?.status()).toBe(200);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(TITLE.en);
     await expect(
@@ -998,9 +996,7 @@ test.describe('a withdrawn Centre or Gallery', () => {
         .getByRole('main')
         .getByText('No photographs of this event are available at the moment.'),
     ).toBeVisible();
-    await expect(page.locator(`a[href="/en/events/${slug.main}/gallery"]`)).toHaveCount(
-      0,
-    );
+    await expect(page.locator(`a[href="/events/${slug.main}/gallery"]`)).toHaveCount(0);
 
     // The Centre is withdrawn: its Local Events are gone, and the Event stays,
     // no longer naming it.
@@ -1011,7 +1007,7 @@ test.describe('a withdrawn Centre or Gallery', () => {
       expect((await page.request.get(target, { maxRedirects: 0 })).status(), target).toBe(
         404,
       );
-    const after = await page.goto(`/en/events/${slug.main}`);
+    const after = await page.goto(`/events/${slug.main}`);
     expect(after?.status()).toBe(200);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(TITLE.en);
     await expect(
@@ -1021,15 +1017,15 @@ test.describe('a withdrawn Centre or Gallery', () => {
           'The centre for this event is not listed in the directory at the moment.',
         ),
     ).toBeVisible();
-    await expect(page.locator('main a[href^="/en/global/centres/"]')).toHaveCount(0);
+    await expect(page.locator('main a[href^="/global/centres/"]')).toHaveCount(0);
     await expect(page.getByText(NAME.centre)).toHaveCount(0);
     // The listing still has it — without a Centre line.
-    await page.goto('/en/events');
+    await page.goto('/events');
     const card = page
       .getByRole('list', { name: 'Upcoming events', exact: true })
       .getByRole('listitem')
       .filter({ hasText: TITLE.en });
     await expect(card).toHaveCount(1);
-    await expect(card.locator('a[href^="/en/global/centres/"]')).toHaveCount(0);
+    await expect(card.locator('a[href^="/global/centres/"]')).toHaveCount(0);
   });
 });

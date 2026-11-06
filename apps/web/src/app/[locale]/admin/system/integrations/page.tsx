@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { requireAdminPage } from '@/composition/authorization';
@@ -49,7 +50,7 @@ export default async function IntegrationsPage({
   await requireAdminPage(
     locale,
     'integrations.read',
-    `/${locale}/admin/system/integrations`,
+    localizedPath(locale, '/admin/system/integrations'),
   );
 
   const { provider, deliveries } = identityRuntime();
@@ -64,16 +65,14 @@ export default async function IntegrationsPage({
     <main className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('integrations.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('integrations.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('integrations.description')}</p>
       </header>
 
       <Panel>
         <div className="flex flex-col gap-3">
           <SectionHeading>{t('integrations.provider')}</SectionHeading>
 
-          <dl className="flex flex-col divide-y divide-[color:var(--color-border)]">
+          <dl className="flex flex-col divide-y divide-border">
             <DetailRow term={t('integrations.provider')}>
               <code className="text-xs">{provider.providerName}</code>
             </DetailRow>
@@ -111,7 +110,7 @@ export default async function IntegrationsPage({
         <div className="flex flex-col gap-3">
           <SectionHeading>{t('delivery.title')}</SectionHeading>
 
-          <dl className="flex flex-col divide-y divide-[color:var(--color-border)]">
+          <dl className="flex flex-col divide-y divide-border">
             <DetailRow term={t('delivery.pending')}>{summary.pending}</DetailRow>
             <DetailRow term={t('delivery.failed')}>{summary.failed}</DetailRow>
             <DetailRow term={t('delivery.suppressed')}>{summary.suppressed}</DetailRow>

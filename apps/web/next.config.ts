@@ -133,10 +133,19 @@ const DONATION_CONTENT_SECURITY_POLICY = contentSecurityPolicy(
   [DONATION_CHECKOUT_ORIGIN],
 );
 
+/**
+ * A route-scoped header source in every interface locale: the unprefixed
+ * English address and its `/ur` and `/ar` forms (ROUTE_MAP.md §1.1, R1). A
+ * `/en/…` request never renders — the proxy redirects it — so it needs none.
+ */
+function inEveryLocale(path: string): readonly string[] {
+  return [path, `/:locale(ur|ar)${path}`];
+}
+
 /** The only routes that render a giving form. Exact shapes, nothing beneath them. */
 const DONATION_FORM_ROUTES: readonly string[] = [
-  '/:locale(en|ur|ar)/donate',
-  '/:locale(en|ur|ar)/my/donations',
+  ...inEveryLocale('/donate'),
+  ...inEveryLocale('/my/donations'),
 ];
 
 /**
@@ -146,8 +155,8 @@ const DONATION_FORM_ROUTES: readonly string[] = [
  * a `Referer` — a status address must not leave in a link someone follows.
  */
 const DONATION_PRIVATE_ROUTES: readonly string[] = [
-  '/:locale(en|ur|ar)/donate/status/:token*',
-  '/:locale(en|ur|ar)/donate/return',
+  ...inEveryLocale('/donate/status/:token*'),
+  ...inEveryLocale('/donate/return'),
 ];
 
 /**
@@ -155,8 +164,8 @@ const DONATION_PRIVATE_ROUTES: readonly string[] = [
  * a Video listing, a topic view or any other page keeps `frame-src 'none'`.
  */
 const PLAYER_ROUTES: readonly string[] = [
-  '/:locale(en|ur|ar)/watch/videos/:slug',
-  '/:locale(en|ur|ar)/admin/media/videos/:id',
+  ...inEveryLocale('/watch/videos/:slug'),
+  ...inEveryLocale('/admin/media/videos/:id'),
 ];
 
 /**

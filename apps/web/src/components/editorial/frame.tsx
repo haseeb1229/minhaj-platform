@@ -75,7 +75,7 @@ export function ListingIntro({
   readonly children?: ReactNode;
 }) {
   return (
-    <div className="border-b border-[color:var(--color-border)]">
+    <div className="border-b border-border">
       <Container>
         <div className="flex flex-col gap-4 pt-6 pb-[var(--space-page)]">
           <Breadcrumbs label={trailLabel} trail={trail} />
@@ -83,7 +83,7 @@ export function ListingIntro({
             {eyebrow === undefined ? null : <Eyebrow>{eyebrow}</Eyebrow>}
             <PageHeading>{title}</PageHeading>
             {lede === undefined ? null : (
-              <p className="text-lede max-w-[var(--measure-prose)] text-[color:var(--color-foreground-muted)]">
+              <p className="text-lede max-w-[var(--measure-prose)] text-foreground-muted">
                 {lede}
               </p>
             )}
@@ -98,7 +98,7 @@ export function ListingIntro({
 /** The type of a record, in words — never a colour alone. */
 export function Eyebrow({ children }: { readonly children: ReactNode }) {
   return (
-    <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+    <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
       {children}
     </p>
   );
@@ -112,11 +112,11 @@ export function Eyebrow({ children }: { readonly children: ReactNode }) {
  * own. The accessibility tree is unchanged: one named link per destination.
  */
 export const CARD_SURFACE =
-  'card-surface relative flex h-full min-w-0 flex-col gap-3 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)] transition-[border-color,box-shadow] duration-[var(--duration-fast)] hover:border-[color:var(--color-border-strong)] hover:shadow-[var(--shadow-raised)]';
+  'card-surface relative flex h-full min-w-0 flex-col gap-3 rounded-panel border border-border bg-surface-raised p-5 shadow-panel transition-[border-color,box-shadow] duration-[var(--duration-fast)] hover:border-border-strong hover:shadow-raised';
 
 /** The headline link of a card: quiet until hovered, stretched over the card. */
 export const CARD_TITLE_LINK =
-  'card-link text-[color:var(--color-foreground)] no-underline decoration-[color:var(--color-accent-rule)] underline-offset-4 hover:underline active:text-[color:var(--color-action)]';
+  'card-link text-foreground no-underline decoration-accent-rule underline-offset-4 hover:underline active:text-action';
 
 /** The layer every secondary link inside a card sits in. */
 export const CARD_RAISED = 'relative z-10';
@@ -133,10 +133,7 @@ export function RecordSection({
 }) {
   return (
     <section className="flex flex-col gap-4" aria-labelledby={id}>
-      <h2
-        id={id}
-        className="text-subheading border-b border-[color:var(--color-border)] pb-2 font-semibold"
-      >
+      <h2 id={id} className="text-subheading border-b border-border pb-2 font-semibold">
         {heading}
       </h2>
       {children}

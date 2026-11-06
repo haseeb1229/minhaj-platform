@@ -50,7 +50,7 @@ describe('a citation has exactly one address', () => {
     expect(ayahPathOf({ surah: 2, ayah: 3 })).toBe('/quran/surah/2/3');
     expect(ayahPath('ur', { surah: 2, ayah: 3 })).toBe('/ur/quran/surah/2/3');
     expect(surahPath('ar', 7)).toBe('/ar/quran/surah/7');
-    expect(juzPath('en', 4)).toBe('/en/quran/juz/4');
+    expect(juzPath('en', 4)).toBe('/quran/juz/4');
     expect(ayahAnchor(12)).toBe('ayah-12');
   });
 
@@ -138,36 +138,32 @@ describe('reading preferences are validated, never broadened', () => {
   });
 
   it('keeps the canonical citation bare when nothing is chosen', () => {
-    expect(withReading('/en/quran/surah/2/3', NO_READING_CHOICE)).toBe(
-      '/en/quran/surah/2/3',
-    );
+    expect(withReading('/quran/surah/2/3', NO_READING_CHOICE)).toBe('/quran/surah/2/3');
   });
 
   it('carries only confirmed preferences, in a fixed order, with the default size omitted', () => {
     expect(
-      withReading('/en/quran/surah/2', {
+      withReading('/quran/surah/2', {
         ...NO_READING_CHOICE,
         reciter: 'fixture-recitation',
         translation: 'fixture-translation',
       }),
-    ).toBe(
-      '/en/quran/surah/2?translation=fixture-translation&reciter=fixture-recitation',
-    );
+    ).toBe('/quran/surah/2?translation=fixture-translation&reciter=fixture-recitation');
     expect(
       withReading(
-        '/en/quran/surah/2',
+        '/quran/surah/2',
         { ...NO_READING_CHOICE, size: 'large' },
         {},
         'ayah-4',
       ),
-    ).toBe('/en/quran/surah/2?size=large#ayah-4');
+    ).toBe('/quran/surah/2?size=large#ayah-4');
     expect(
       withReading(
-        '/en/quran/surah/2',
+        '/quran/surah/2',
         { ...NO_READING_CHOICE, tafsir: 'fixture-tafsir' },
         { tafsir: null },
       ),
-    ).toBe('/en/quran/surah/2');
+    ).toBe('/quran/surah/2');
   });
 });
 
@@ -205,8 +201,8 @@ describe('paging is bounded and deterministic', () => {
     expect(pageLinks(0, 50, 120)).toEqual({ previous: null, next: 50 });
     expect(pageLinks(100, 50, 120)).toEqual({ previous: 50, next: null });
     expect(pageLinks(20, 50, 120)).toEqual({ previous: 0, next: 70 });
-    expect(offsetPathOf('/en/quran/juz/1', 0)).toBe('/en/quran/juz/1');
-    expect(offsetPathOf('/en/quran/juz/1', 100)).toBe('/en/quran/juz/1?offset=100');
+    expect(offsetPathOf('/quran/juz/1', 0)).toBe('/quran/juz/1');
+    expect(offsetPathOf('/quran/juz/1', 100)).toBe('/quran/juz/1?offset=100');
   });
 });
 

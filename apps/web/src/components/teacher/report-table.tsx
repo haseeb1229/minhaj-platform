@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import type { Locale } from '@minhaj/contracts';
@@ -39,7 +40,10 @@ export function ReportTable({
         <DataRow key={row.session.id}>
           <DataCell wrap>
             <TextLink
-              href={`/${locale}/teacher/attendance/${encodeURIComponent(row.session.id)}`}
+              href={localizedPath(
+                locale,
+                `/teacher/attendance/${encodeURIComponent(row.session.id)}`,
+              )}
             >
               <LearningTitle
                 labels={row.course.labels}
@@ -47,9 +51,7 @@ export function ReportTable({
                 locale={locale}
               />
             </TextLink>{' '}
-            <span className="text-[color:var(--color-foreground-muted)]">
-              {t(`kind.${row.session.kind}`)}
-            </span>
+            <span className="text-foreground-muted">{t(`kind.${row.session.kind}`)}</span>
           </DataCell>
           <DataCell>
             <OwnTime

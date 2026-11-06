@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 
@@ -60,7 +61,7 @@ export default async function StudentPage({
 }) {
   const locale = await requireLocale(params);
   const { id } = await params;
-  const path = `/${locale}/teacher/students/${encodeURIComponent(id)}`;
+  const path = localizedPath(locale, `/teacher/students/${encodeURIComponent(id)}`);
   const gate = await requireTeacher(locale, path);
   const t = await getTranslations({ locale, namespace: 'teacher' });
   if (!gate.activated) return <NotActivated t={t} />;
@@ -87,7 +88,9 @@ export default async function StudentPage({
   const accountZone = gate.session.account.timezone;
   const back = (
     <p>
-      <TextLink href={`/${locale}/teacher/students`}>{t('student.back')}</TextLink>
+      <TextLink href={localizedPath(locale, '/teacher/students')}>
+        {t('student.back')}
+      </TextLink>
     </p>
   );
 
@@ -112,7 +115,10 @@ export default async function StudentPage({
               <Panel key={entry.course.id} as="li">
                 <div className="flex min-w-0 flex-col gap-1 text-sm wrap-anywhere">
                   <TextLink
-                    href={`/${locale}/teacher/courses/${encodeURIComponent(entry.course.id)}`}
+                    href={localizedPath(
+                      locale,
+                      `/teacher/courses/${encodeURIComponent(entry.course.id)}`,
+                    )}
                   >
                     <LearningTitle
                       labels={entry.course.labels}
@@ -128,7 +134,7 @@ export default async function StudentPage({
                       total: String(entry.course.lessons),
                     })}
                   </span>
-                  <span className="text-[color:var(--color-foreground-muted)]">
+                  <span className="text-foreground-muted">
                     {t('students.enrolledAt')}{' '}
                     <OwnTime
                       value={entry.enrolledAt}
@@ -189,7 +195,10 @@ export default async function StudentPage({
               <DataRow key={entry.session.id}>
                 <DataCell wrap>
                   <TextLink
-                    href={`/${locale}/teacher/classes/today/${encodeURIComponent(entry.session.id)}`}
+                    href={localizedPath(
+                      locale,
+                      `/teacher/classes/today/${encodeURIComponent(entry.session.id)}`,
+                    )}
                   >
                     <LearningTitle
                       labels={entry.course.labels}
@@ -197,7 +206,7 @@ export default async function StudentPage({
                       locale={locale}
                     />
                   </TextLink>{' '}
-                  <span className="text-[color:var(--color-foreground-muted)]">
+                  <span className="text-foreground-muted">
                     {t(`kind.${entry.session.kind}`)}
                   </span>
                 </DataCell>

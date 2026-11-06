@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { notFound, redirect } from 'next/navigation';
@@ -76,7 +77,7 @@ export async function requireAdminPage(
   const outcome = await sessions.resolve(context.headers);
 
   if (outcome.state !== 'active') {
-    redirect(`/${locale}/signin?returnTo=${encodeURIComponent(returnPath)}`);
+    redirect(localizedPath(locale, `/signin?returnTo=${encodeURIComponent(returnPath)}`));
   }
 
   const permitted = await authorization.requirePermission(outcome.session, permission);

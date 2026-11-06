@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { learningLanguageCodeSchema } from '@minhaj/contracts/learning';
 import { zonedIso } from '@minhaj/contracts/platform';
 import { topicSlugSchema } from '@minhaj/contracts/taxonomy';
@@ -47,7 +48,7 @@ export function teacherDirectoryPath(locale: string): string {
 
 /** The canonical public profile of a teacher, by their People slug. */
 export function teacherProfileHref(locale: string, slug: string): string {
-  return `/${locale}/people/${encodeURIComponent(slug)}`;
+  return localizedPath(locale, `/people/${encodeURIComponent(slug)}`);
 }
 
 /* ===========================================================================

@@ -114,9 +114,7 @@ export default async function MigrationSourcesPage({
     <main className="flex min-w-0 flex-col gap-8">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('sources.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('sources.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('sources.description')}</p>
         <Alert tone="info">{t('sources.registration')}</Alert>
       </header>
 
@@ -209,7 +207,7 @@ function SourceDetail({
         <summary className="cursor-pointer font-medium">
           <bdi>{source.name}</bdi> · <Code>{source.key}</Code>
         </summary>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('sources.field.authority')}>
             {t(`authority.${source.authorityKind}`)}
           </DetailRow>
@@ -364,9 +362,7 @@ function CreateSource({
     <Panel>
       <div className="flex flex-col gap-4">
         <SectionHeading>{t('sources.create.heading')}</SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('sources.create.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('sources.create.help')}</p>
         <ActionForm
           action={createSourceAction}
           submitLabel={t('sources.create.submit')}

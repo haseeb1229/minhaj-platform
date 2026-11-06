@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound, redirect } from 'next/navigation';
 
 import { requireOwnSession } from '@/composition/authorization';
@@ -20,9 +21,10 @@ export default async function MessagingAdminRoot({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const base = `/${locale}/admin/messaging`;
+  const base = localizedPath(locale, '/admin/messaging');
   const active = await requireOwnSession(locale);
-  if (active === null) redirect(`/${locale}/signin?returnTo=${encodeURIComponent(base)}`);
+  if (active === null)
+    redirect(localizedPath(locale, `/signin?returnTo=${encodeURIComponent(base)}`));
   const held = (await identityRuntime().authorization.evaluate(active.session))
     .permissions;
   const first = MESSAGING_SURFACES.find((surface) => held.has(surface.permission));

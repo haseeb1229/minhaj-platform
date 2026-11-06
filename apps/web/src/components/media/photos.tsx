@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
@@ -77,7 +78,7 @@ async function photosTrail(locale: Locale) {
   const shell = await getTranslations({ locale, namespace: 'shell' });
   return {
     label: shell('nav.breadcrumbs'),
-    home: { href: `/${locale}`, text: shell('nav.home') },
+    home: { href: localizedPath(locale, ''), text: shell('nav.home') },
   };
 }
 
@@ -105,7 +106,7 @@ function PhotoSections({
         {sections.map((section) => (
           <li key={section}>
             <FilterLink
-              href={`/${locale}/media/${section}`}
+              href={localizedPath(locale, `/media/${section}`)}
               current={section === current}
             >
               {t(`sections.${section}`)}
@@ -214,7 +215,7 @@ async function PhotoGrid({
             <li key={photo.id}>
               <figure data-photo-tile className="group flex min-w-0 flex-col gap-2">
                 {index === undefined || photo.assetId === null ? (
-                  <div className="flex aspect-[4/3] flex-col items-center justify-center gap-2 rounded-[var(--radius-panel)] bg-[color:var(--color-surface-sunken)] p-4 text-center text-sm text-[color:var(--color-foreground-muted)]">
+                  <div className="flex aspect-[4/3] flex-col items-center justify-center gap-2 rounded-panel bg-surface-sunken p-4 text-center text-sm text-foreground-muted">
                     <PictureMark />
                     <span>{t('unavailable')}</span>
                   </div>
@@ -222,7 +223,7 @@ async function PhotoGrid({
                   <a
                     href={photoAssetPath(photo.id, photo.assetId)}
                     data-photo-index={index}
-                    className="relative block aspect-[4/3] overflow-hidden rounded-[var(--radius-panel)] bg-[color:var(--color-surface-sunken)]"
+                    className="relative block aspect-[4/3] overflow-hidden rounded-panel bg-surface-sunken"
                   >
                     <img
                       src={photoAssetPath(photo.id, photo.assetId)}
@@ -234,7 +235,7 @@ async function PhotoGrid({
                       decoding="async"
                       className="size-full object-cover group-data-[unavailable]:hidden"
                     />
-                    <span className="hidden size-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-[color:var(--color-foreground-muted)] group-data-[unavailable]:flex">
+                    <span className="hidden size-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-foreground-muted group-data-[unavailable]:flex">
                       <PictureMark />
                       {t('unavailable')}
                     </span>
@@ -254,7 +255,7 @@ async function PhotoGrid({
                     )}
                     {details === null ? null : (
                       <span
-                        className="text-xs break-words text-[color:var(--color-foreground-muted)]"
+                        className="text-xs break-words text-foreground-muted"
                         dir="auto"
                       >
                         {details}
@@ -285,7 +286,7 @@ export async function PhotosPage({
   const t = await getTranslations({ locale, namespace: 'photos' });
   const trail = await photosTrail(locale);
   const offset = readOffset(query);
-  const base = `/${locale}/media/photos`;
+  const base = localizedPath(locale, '/media/photos');
   const title = t('sections.photos');
   const page = await mediaReadRuntime().photos(offset);
 
@@ -350,10 +351,10 @@ function GalleryCard({
           height={photo.height ?? undefined}
           loading="lazy"
           decoding="async"
-          className="aspect-[4/3] w-full bg-[color:var(--color-surface-sunken)] object-cover"
+          className="aspect-[4/3] w-full bg-surface-sunken object-cover"
         />
       ) : (
-        <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 bg-[color:var(--color-surface-sunken)] text-sm text-[color:var(--color-foreground-muted)]">
+        <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 bg-surface-sunken text-sm text-foreground-muted">
           <PictureMark />
           <span>{t('coverUnavailable')}</span>
         </div>
@@ -370,7 +371,7 @@ function GalleryCard({
         </h2>
         {label.description === '' ? null : (
           <p
-            className="line-clamp-3 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+            className="line-clamp-3 text-sm wrap-anywhere text-foreground-muted"
             lang={label.locale}
             dir={direction}
           >
@@ -432,7 +433,7 @@ export async function GalleriesPage({
   const t = await getTranslations({ locale, namespace: 'photos' });
   const trail = await photosTrail(locale);
   const offset = readOffset(query);
-  const base = `/${locale}/media/galleries`;
+  const base = localizedPath(locale, '/media/galleries');
   const title = t('sections.galleries');
   const page = await mediaReadRuntime().galleries(offset);
 
@@ -489,7 +490,7 @@ export async function GalleryDetailPage({
   const direction = directionOf(label.locale);
   const trail = [
     { name: parts.home.text, path: parts.home.href },
-    { name: t('sections.galleries'), path: `/${locale}/media/galleries` },
+    { name: t('sections.galleries'), path: localizedPath(locale, '/media/galleries') },
     { name: label.title, path },
   ];
   const description = paragraphsOf(label.description);
@@ -620,9 +621,9 @@ export async function ArchivePage({
           <EmptyState>{t('archiveEmpty')}</EmptyState>
         ) : (
           <>
-            <div className="flex flex-col gap-5 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)] p-5">
+            <div className="flex flex-col gap-5 rounded-panel border border-border bg-surface-sunken p-5">
               <nav aria-label={t('archiveYears')} className="flex flex-col gap-3">
-                <h2 className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-foreground-muted)] uppercase">
+                <h2 className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-foreground-muted uppercase">
                   {t('archiveYears')}
                 </h2>
                 <ul className="flex flex-wrap gap-2">
@@ -642,7 +643,7 @@ export async function ArchivePage({
                         partial={filter.year === entry.year && filter.month !== null}
                       >
                         {yearText(entry.year, locale)}
-                        <span className="text-[color:var(--color-foreground-muted)]">
+                        <span className="text-foreground-muted">
                           {' '}
                           ({t('countShort', { count: entry.photos })})
                         </span>
@@ -654,7 +655,7 @@ export async function ArchivePage({
 
               {filter.year === null || months.length === 0 ? null : (
                 <nav aria-label={t('archiveMonths')} className="flex flex-col gap-3">
-                  <h2 className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-foreground-muted)] uppercase">
+                  <h2 className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-foreground-muted uppercase">
                     {t('archiveMonths')}
                   </h2>
                   <ul className="flex flex-wrap gap-2">
@@ -668,7 +669,7 @@ export async function ArchivePage({
                           current={filter.month === entry.month}
                         >
                           {monthName(entry.month, locale)}
-                          <span className="text-[color:var(--color-foreground-muted)]">
+                          <span className="text-foreground-muted">
                             {' '}
                             ({t('countShort', { count: entry.photos })})
                           </span>

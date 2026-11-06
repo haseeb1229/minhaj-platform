@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
@@ -65,8 +66,8 @@ export default async function SalePointsPage({ params, searchParams }: SalePoint
     <ListingFrame
       breadcrumbLabel={shell('nav.breadcrumbs')}
       trail={[
-        { href: `/${locale}`, text: shell('nav.home') },
-        { href: `/${locale}/library`, text: t('title') },
+        { href: localizedPath(locale, ''), text: shell('nav.home') },
+        { href: localizedPath(locale, '/library'), text: t('title') },
         { text: t('section.sale-points') },
       ]}
       title={t('section.sale-points')}
@@ -94,7 +95,7 @@ export default async function SalePointsPage({ params, searchParams }: SalePoint
                 <h2 className="text-subheading font-semibold wrap-anywhere" dir="auto">
                   {point.name}
                 </h2>
-                <dl className="divide-y divide-[color:var(--color-border)]">
+                <dl className="divide-y divide-border">
                   {point.address === '' ? null : (
                     <DetailRow term={t('salePointAddress')}>
                       <span dir="auto">{point.address}</span>
@@ -123,12 +124,18 @@ export default async function SalePointsPage({ params, searchParams }: SalePoint
         label={t('section.sale-points')}
         previous={
           offset > 0
-            ? `/${locale}/library/sale-points?offset=${String(Math.max(0, offset - SALE_POINT_PAGE))}`
+            ? localizedPath(
+                locale,
+                `/library/sale-points?offset=${String(Math.max(0, offset - SALE_POINT_PAGE))}`,
+              )
             : null
         }
         next={
           page.hasMore
-            ? `/${locale}/library/sale-points?offset=${String(offset + SALE_POINT_PAGE)}`
+            ? localizedPath(
+                locale,
+                `/library/sale-points?offset=${String(offset + SALE_POINT_PAGE)}`,
+              )
             : null
         }
         previousLabel={t('previous')}

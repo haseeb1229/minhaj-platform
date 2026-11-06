@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getFormatter, getTranslations } from 'next-intl/server';
 
 import { requireAdminPage } from '@/composition/authorization';
@@ -52,7 +53,11 @@ export default async function AuditPage({
   const t = await getTranslations({ locale, namespace: 'admin' });
   const format = await getFormatter({ locale });
 
-  await requireAdminPage(locale, 'audit.read', `/${locale}/admin/system/audit`);
+  await requireAdminPage(
+    locale,
+    'audit.read',
+    localizedPath(locale, '/admin/system/audit'),
+  );
 
   const action = queryValue(query, 'action');
   const actorId = queryValue(query, 'actor');
@@ -69,9 +74,7 @@ export default async function AuditPage({
     <main className="flex flex-col gap-4">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('audit.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('audit.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('audit.description')}</p>
       </header>
 
       <Panel>
@@ -139,14 +142,14 @@ export default async function AuditPage({
 
                 <DataCell wrap>
                   <span className="block text-xs">{record.actorType}</span>
-                  <code className="block text-xs break-all text-[color:var(--color-foreground-muted)]">
+                  <code className="block text-xs break-all text-foreground-muted">
                     {record.actorId ?? '—'}
                   </code>
                 </DataCell>
 
                 <DataCell wrap>
                   <span className="block text-xs">{record.targetType}</span>
-                  <code className="block text-xs break-all text-[color:var(--color-foreground-muted)]">
+                  <code className="block text-xs break-all text-foreground-muted">
                     {record.targetId ?? '—'}
                   </code>
                 </DataCell>

@@ -15,7 +15,7 @@ export default async function SearchLoading() {
 
   return (
     <Container>
-      <p role="status" className="py-12 text-[color:var(--color-foreground-muted)]">
+      <p role="status" className="py-12 text-foreground-muted">
         {t('loading')}
       </p>
     </Container>

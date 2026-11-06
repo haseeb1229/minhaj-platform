@@ -101,7 +101,7 @@ describe('browse filters', () => {
   });
 
   it('builds sort views as query links, never as /fatwa/latest or /fatwa/popular', () => {
-    expect(fatwaBrowseHref('en', { sort: 'latest' })).toBe('/en/fatwa?sort=latest');
+    expect(fatwaBrowseHref('en', { sort: 'latest' })).toBe('/fatwa?sort=latest');
     expect(fatwaBrowseHref('ur', { sort: 'popular' })).toBe('/ur/fatwa?sort=popular');
     expect(
       fatwaBrowseHref('ar', {

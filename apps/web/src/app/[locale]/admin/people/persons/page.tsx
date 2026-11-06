@@ -1,6 +1,6 @@
 import { getTranslations } from 'next-intl/server';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import {
   MAX_NAME_VARIANTS_PER_LOCALE,
   MAX_PROFILE_LANGUAGES,
@@ -119,7 +119,7 @@ export default async function PersonsPage({
   const page = await requireAdminPage(
     locale,
     'people.read',
-    `/${locale}/admin/people/persons`,
+    localizedPath(locale, '/admin/people/persons'),
   );
   const copy = await peopleCopy(locale);
   const mayAdminister = page.authorization.can('people.administer');
@@ -170,7 +170,10 @@ export default async function PersonsPage({
     if (status !== null) next.set('status', status);
     if (target > 1) next.set('page', String(target));
     const suffix = next.toString();
-    return `/${locale}/admin/people/persons${suffix === '' ? '' : `?${suffix}`}`;
+    return localizedPath(
+      locale,
+      `/admin/people/persons${suffix === '' ? '' : `?${suffix}`}`,
+    );
   };
 
   const editHref = (id: string): string => {
@@ -179,16 +182,14 @@ export default async function PersonsPage({
     if (status !== null) next.set('status', status);
     if (currentPage > 1) next.set('page', String(currentPage));
     next.set('person', id);
-    return `/${locale}/admin/people/persons?${next.toString()}`;
+    return localizedPath(locale, `/admin/people/persons?${next.toString()}`);
   };
 
   return (
     <main className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('people.persons.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('people.persons.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('people.persons.description')}</p>
       </header>
 
       <Alert tone="info">{t('people.persons.acceptanceNotice')}</Alert>
@@ -228,7 +229,7 @@ export default async function PersonsPage({
           <div>
             <button
               type="submit"
-              className="rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-4 py-2 text-sm font-medium hover:bg-[color:var(--color-surface-sunken)]"
+              className="rounded-control border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-sunken"
             >
               {t('people.persons.searchSubmit')}
             </button>
@@ -263,7 +264,7 @@ export default async function PersonsPage({
                   <DataCell wrap>
                     {person.label.name}
                     {person.label.fallback ? (
-                      <span className="block text-xs text-[color:var(--color-foreground-muted)]">
+                      <span className="block text-xs text-foreground-muted">
                         {t('people.persons.shownIn', {
                           locale: person.label.resolvedLocale,
                         })}
@@ -333,7 +334,7 @@ export default async function PersonsPage({
       {!mayAdminister ? null : (
         <Panel>
           <SectionHeading>{t('people.persons.createTitle')}</SectionHeading>
-          <p className="pb-4 text-sm text-[color:var(--color-foreground-muted)]">
+          <p className="pb-4 text-sm text-foreground-muted">
             {t('people.persons.createHelp')}
           </p>
 
@@ -384,7 +385,7 @@ export default async function PersonsPage({
                   name="biography"
                   rows={4}
                   maxLength={4000}
-                  className="w-full rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-3 py-2 text-base"
+                  className="w-full rounded-control border border-border-strong bg-surface-raised px-3 py-2 text-base"
                 />
               )}
             </Field>
@@ -440,7 +441,7 @@ function ContributorEditor({
           <dt className="font-medium">{t('people.persons.slug')}</dt>
           <dd>
             <code className="text-xs">{detail.slug}</code>
-            <span className="block text-xs text-[color:var(--color-foreground-muted)]">
+            <span className="block text-xs text-foreground-muted">
               {t('people.editor.slugImmutable')}
             </span>
           </dd>
@@ -458,7 +459,7 @@ function ContributorEditor({
 
         {detail.status === 'published' ? (
           <p className="text-sm">
-            <TextLink href={`/${locale}/people/${detail.slug}`}>
+            <TextLink href={localizedPath(locale, `/people/${detail.slug}`)}>
               {t('people.editor.viewPublic')}
             </TextLink>
           </p>
@@ -496,7 +497,7 @@ function ContributorEditor({
       {/* ---- Translations ------------------------------------------------ */}
       <Panel>
         <SectionHeading>{t('people.editor.translations')}</SectionHeading>
-        <p className="pb-4 text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="pb-4 text-sm text-foreground-muted">
           {t('people.editor.translationsHelp')}
         </p>
 
@@ -507,10 +508,7 @@ function ContributorEditor({
           const isPrimary = contentLocale === detail.primaryLocale;
 
           return (
-            <section
-              key={contentLocale}
-              className="border-t border-[color:var(--color-border)] py-4"
-            >
+            <section key={contentLocale} className="border-t border-border py-4">
               <h4 className="pb-2 text-sm font-semibold">
                 {contentLocale}
                 {isPrimary ? ` — ${t('people.editor.primaryBadge')}` : ''}
@@ -558,7 +556,7 @@ function ContributorEditor({
                         rows={4}
                         maxLength={4000}
                         defaultValue={existing?.biography ?? ''}
-                        className="w-full rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-3 py-2 text-base"
+                        className="w-full rounded-control border border-border-strong bg-surface-raised px-3 py-2 text-base"
                       />
                     )}
                   </Field>
@@ -592,7 +590,7 @@ function ContributorEditor({
       {/* ---- Name variants ----------------------------------------------- */}
       <Panel>
         <SectionHeading>{t('people.editor.variants')}</SectionHeading>
-        <p className="pb-4 text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="pb-4 text-sm text-foreground-muted">
           {t('people.editor.variantsHelp', { max: MAX_NAME_VARIANTS_PER_LOCALE })}
         </p>
 
@@ -603,9 +601,7 @@ function ContributorEditor({
             {detail.nameVariants.map((variant) => (
               <li key={variant.id} className="flex flex-wrap items-center gap-3 text-sm">
                 <span className="font-medium">{variant.value}</span>
-                <span className="text-xs text-[color:var(--color-foreground-muted)]">
-                  {variant.locale}
-                </span>
+                <span className="text-xs text-foreground-muted">{variant.locale}</span>
                 {!mayAdminister ? null : (
                   <ActionForm
                     action={removeNameVariantAction}
@@ -660,7 +656,7 @@ function ContributorEditor({
       {/* ---- The optional account link ----------------------------------- */}
       <Panel>
         <SectionHeading>{t('people.editor.account')}</SectionHeading>
-        <p className="pb-4 text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="pb-4 text-sm text-foreground-muted">
           {t('people.editor.accountHelp')}
         </p>
 
@@ -755,7 +751,7 @@ function ContributorEditor({
       {/* ---- Profiles ----------------------------------------------------- */}
       <Panel>
         <SectionHeading>{t('people.editor.profiles')}</SectionHeading>
-        <p className="pb-4 text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="pb-4 text-sm text-foreground-muted">
           {t('people.editor.profilesHelp')}
         </p>
 
@@ -778,7 +774,7 @@ function ContributorEditor({
         })}
 
         {!mayAdminister || addable.length === 0 ? null : (
-          <div className="border-t border-[color:var(--color-border)] pt-4">
+          <div className="border-t border-border pt-4">
             <h4 className="pb-2 text-sm font-semibold">{t('people.editor.addFacet')}</h4>
             <ActionForm
               action={createProfileAction}
@@ -842,7 +838,7 @@ function ProfileSection({
   const hasDetail = kind === 'scholar' || kind === 'teacher';
 
   return (
-    <section className="border-t border-[color:var(--color-border)] py-4">
+    <section className="border-t border-border py-4">
       <h4 className="flex flex-wrap items-center gap-3 pb-2 text-sm font-semibold">
         {t(`people.kind.${kind}` as 'people.kind.author')}
         <StatusBadge tone={profile.status === 'active' ? 'positive' : 'neutral'}>
@@ -882,7 +878,7 @@ function ProfileSection({
       )}
 
       {!hasDetail ? (
-        <p className="pt-2 text-xs text-[color:var(--color-foreground-muted)]">
+        <p className="pt-2 text-xs text-foreground-muted">
           {t('people.editor.facetNoFields')}
         </p>
       ) : (
@@ -924,7 +920,7 @@ function ProfileSection({
                             rows={3}
                             maxLength={2000}
                             defaultValue={stored?.qualifications ?? ''}
-                            className="w-full rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-3 py-2 text-base"
+                            className="w-full rounded-control border border-border-strong bg-surface-raised px-3 py-2 text-base"
                           />
                         )}
                       </Field>
@@ -939,7 +935,7 @@ function ProfileSection({
                             rows={3}
                             maxLength={2000}
                             defaultValue={stored?.expertise ?? ''}
-                            className="w-full rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-3 py-2 text-base"
+                            className="w-full rounded-control border border-border-strong bg-surface-raised px-3 py-2 text-base"
                           />
                         )}
                       </Field>
@@ -958,7 +954,7 @@ function ProfileSection({
                             rows={3}
                             maxLength={2000}
                             defaultValue={stored?.biography ?? ''}
-                            className="w-full rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-3 py-2 text-base"
+                            className="w-full rounded-control border border-border-strong bg-surface-raised px-3 py-2 text-base"
                           />
                         )}
                       </Field>
@@ -974,7 +970,7 @@ function ProfileSection({
                             rows={3}
                             maxLength={2000}
                             defaultValue={stored?.subjects ?? ''}
-                            className="w-full rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-3 py-2 text-base"
+                            className="w-full rounded-control border border-border-strong bg-surface-raised px-3 py-2 text-base"
                           />
                         )}
                       </Field>

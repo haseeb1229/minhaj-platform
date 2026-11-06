@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getFormatter, getTranslations } from 'next-intl/server';
 
 import { requireAdminPage } from '@/composition/authorization';
@@ -50,7 +51,7 @@ export default async function IdentitySecurityPage({
   const page = await requireAdminPage(
     locale,
     'security.read',
-    `/${locale}/admin/identity/security`,
+    localizedPath(locale, '/admin/identity/security'),
   );
 
   const { administration, privilegedSecurity } = identityRuntime();
@@ -63,16 +64,14 @@ export default async function IdentitySecurityPage({
     <main className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('security.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('security.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('security.description')}</p>
       </header>
 
       <Panel>
         <div className="flex flex-col gap-3">
           <SectionHeading>{t('security.posture')}</SectionHeading>
 
-          <dl className="flex flex-col divide-y divide-[color:var(--color-border)]">
+          <dl className="flex flex-col divide-y divide-border">
             <DetailRow term={t('security.posture')}>
               <StatusBadge tone={posture.secondFactorEnrolled ? 'positive' : 'caution'}>
                 {posture.secondFactorEnrolled
@@ -97,7 +96,7 @@ export default async function IdentitySecurityPage({
           </dl>
 
           <p className="text-sm">
-            <TextLink href={`/${locale}/my/settings/security`}>
+            <TextLink href={localizedPath(locale, '/my/settings/security')}>
               {t('security.manage')}
             </TextLink>
           </p>
@@ -108,7 +107,7 @@ export default async function IdentitySecurityPage({
         <div className="flex flex-col gap-3">
           <SectionHeading>{t('security.bootstrap')}</SectionHeading>
 
-          <dl className="flex flex-col divide-y divide-[color:var(--color-border)]">
+          <dl className="flex flex-col divide-y divide-border">
             <DetailRow term={t('security.bootstrap')}>
               <StatusBadge tone={bootstrap.completed ? 'positive' : 'caution'}>
                 {bootstrap.completed

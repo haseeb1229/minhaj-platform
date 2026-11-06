@@ -41,14 +41,12 @@ export function AuthLayout({
       <header className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
         {description === undefined ? null : (
-          <p className="text-[color:var(--color-foreground-muted)]">{description}</p>
+          <p className="text-foreground-muted">{description}</p>
         )}
       </header>
       {children}
       {footer === undefined ? null : (
-        <footer className="text-sm text-[color:var(--color-foreground-muted)]">
-          {footer}
-        </footer>
+        <footer className="text-sm text-foreground-muted">{footer}</footer>
       )}
     </main>
   );
@@ -110,21 +108,18 @@ export function Breadcrumbs({
 }) {
   return (
     <nav aria-label={label}>
-      <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[color:var(--color-foreground-muted)]">
+      <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-foreground-muted">
         {trail.map((crumb, index) => (
           <li key={crumb.text} className="flex min-w-0 items-center gap-2">
             {index === 0 ? null : (
-              <span
-                aria-hidden="true"
-                className="text-[color:var(--color-border-strong)]"
-              >
+              <span aria-hidden="true" className="text-border-strong">
                 /
               </span>
             )}
             {crumb.href === undefined ? (
               <span
                 aria-current="page"
-                className="min-w-0 font-medium wrap-anywhere text-[color:var(--color-foreground)]"
+                className="min-w-0 font-medium wrap-anywhere text-foreground"
               >
                 {crumb.text}
               </span>
@@ -152,7 +147,7 @@ export function Panel({
   readonly as?: 'section' | 'div' | 'li';
 }) {
   return (
-    <Element className="rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]">
+    <Element className="rounded-panel border border-border bg-surface-raised p-5 shadow-panel">
       {children}
     </Element>
   );
@@ -225,9 +220,7 @@ export function PageHero({
   return (
     <div
       className={
-        ink
-          ? 'surface-ink border-b-4 border-[color:var(--color-ink-accent)]'
-          : 'border-b border-[color:var(--color-border)]'
+        ink ? 'surface-ink border-b-4 border-ink-accent' : 'border-b border-border'
       }
     >
       <Container>
@@ -242,9 +235,7 @@ export function PageHero({
             {eyebrow === undefined ? null : (
               <p
                 className={`text-caption font-semibold tracking-[var(--tracking-eyebrow)] uppercase ${
-                  ink
-                    ? 'text-[color:var(--color-ink-accent)]'
-                    : 'text-[color:var(--color-accent)]'
+                  ink ? 'text-ink-accent' : 'text-accent'
                 }`}
               >
                 {eyebrow}
@@ -260,9 +251,7 @@ export function PageHero({
             {lede === undefined ? null : (
               <p
                 className={`text-lede max-w-[var(--measure-prose)] ${
-                  ink
-                    ? 'text-[color:var(--color-ink-muted)]'
-                    : 'text-[color:var(--color-foreground-muted)]'
+                  ink ? 'text-ink-muted' : 'text-foreground-muted'
                 }`}
               >
                 {lede}
@@ -304,22 +293,21 @@ export function ActionLink({
 }) {
   const tones = onInk
     ? {
-        primary:
-          'bg-[color:var(--color-ink-accent)] text-[color:var(--color-ink)] hover:bg-[color:var(--color-ink-foreground)] active:bg-[color:var(--color-ink-muted)]',
+        primary: 'bg-ink-accent text-ink hover:bg-ink-foreground active:bg-ink-muted',
         secondary:
-          'border border-[color:var(--color-ink-border)] text-[color:var(--color-ink-foreground)] hover:border-[color:var(--color-ink-accent)] active:bg-[color:var(--color-ink-raised)]',
+          'border border-ink-border text-ink-foreground hover:border-ink-accent active:bg-ink-raised',
       }
     : {
         primary:
-          'bg-[color:var(--color-action)] text-[color:var(--color-action-foreground)] hover:bg-[color:var(--color-action-hover)] active:bg-[color:var(--color-action-hover)]',
+          'bg-action text-action-foreground hover:bg-action-hover active:bg-action-hover',
         secondary:
-          'border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] hover:bg-[color:var(--color-surface-sunken)] active:bg-[color:var(--color-border)]',
+          'border border-border-strong bg-surface-raised hover:bg-surface-sunken active:bg-border',
       };
 
   return (
     <a
       href={href}
-      className={`inline-flex max-w-full min-h-11 items-center justify-center rounded-[var(--radius-control)] px-5 py-2 text-sm font-semibold wrap-anywhere no-underline transition-colors duration-[var(--duration-fast)] ${tones[tone]}`}
+      className={`inline-flex max-w-full min-h-11 items-center justify-center rounded-control px-5 py-2 text-sm font-semibold wrap-anywhere no-underline transition-colors duration-[var(--duration-fast)] ${tones[tone]}`}
     >
       {children}
     </a>
@@ -346,13 +334,13 @@ export function SectionHeader({
   readonly action?: { readonly href: string; readonly text: ReactNode };
 }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 border-b border-[color:var(--color-border)] pb-3">
+    <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 border-b border-border pb-3">
       <div className="flex min-w-0 flex-col gap-1.5">
         <h2 id={id} className="text-heading font-semibold text-balance">
           {heading}
         </h2>
         {intro === undefined ? null : (
-          <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
+          <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
             {intro}
           </p>
         )}
@@ -360,7 +348,7 @@ export function SectionHeader({
       {action === undefined ? null : (
         <a
           href={action.href}
-          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-[color:var(--color-action)] underline-offset-4 hover:underline active:text-[color:var(--color-action-hover)]"
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-action underline-offset-4 hover:underline active:text-action-hover"
         >
           {action.text}
           <span aria-hidden="true" className="rtl:-scale-x-100">
@@ -405,7 +393,7 @@ export function CardGrid({
 }
 
 const CARD_SURFACE =
-  'card-surface relative flex h-full min-w-0 flex-col gap-2.5 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]';
+  'card-surface relative flex h-full min-w-0 flex-col gap-2.5 rounded-panel border border-border bg-surface-raised p-5 shadow-panel';
 
 /**
  * A card that is ONE link, end to end.
@@ -448,24 +436,24 @@ export function LinkCard({
 
   return (
     <li
-      className={`${CARD_SURFACE} transition-[border-color,box-shadow] duration-[var(--duration-fast)] hover:border-[color:var(--color-border-strong)] hover:shadow-[var(--shadow-raised)]`}
+      className={`${CARD_SURFACE} transition-[border-color,box-shadow] duration-[var(--duration-fast)] hover:border-border-strong hover:shadow-raised`}
     >
       {eyebrow === undefined ? null : (
-        <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+        <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
           {eyebrow}
         </p>
       )}
       <Heading className="text-subheading font-semibold wrap-anywhere" {...content}>
         <a
           href={href}
-          className="card-link text-[color:var(--color-foreground)] no-underline decoration-[color:var(--color-accent-rule)] underline-offset-4 hover:underline active:text-[color:var(--color-action)]"
+          className="card-link text-foreground no-underline decoration-accent-rule underline-offset-4 hover:underline active:text-action"
         >
           {title}
         </a>
       </Heading>
       {description === undefined || description === '' ? null : (
         <p
-          className="line-clamp-3 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+          className="line-clamp-3 text-sm wrap-anywhere text-foreground-muted"
           {...content}
           {...(dir === undefined ? {} : { dir: descriptionDirection(dir) })}
         >
@@ -493,11 +481,11 @@ export function MetaRow({ items }: { readonly items: readonly ReactNode[] }) {
   if (present.length === 0) return null;
 
   return (
-    <p className="text-caption flex flex-wrap items-center gap-x-2 gap-y-1 text-[color:var(--color-foreground-muted)]">
+    <p className="text-caption flex flex-wrap items-center gap-x-2 gap-y-1 text-foreground-muted">
       {present.map((item, index) => (
         <span key={index} className="inline-flex items-center gap-x-2">
           {index === 0 ? null : (
-            <span aria-hidden="true" className="text-[color:var(--color-border-strong)]">
+            <span aria-hidden="true" className="text-border-strong">
               ·
             </span>
           )}
@@ -533,7 +521,7 @@ export function TopicChips({
           <a
             href={topic.href}
             {...(topic.lang === undefined ? {} : { lang: topic.lang })}
-            className="inline-flex min-h-10 items-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] px-4 text-sm wrap-anywhere no-underline transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--color-accent)] hover:bg-[color:var(--color-accent-surface)] active:bg-[color:var(--color-accent-rule)]"
+            className="inline-flex min-h-10 items-center rounded-full border border-border bg-surface-raised px-4 text-sm wrap-anywhere no-underline transition-colors duration-[var(--duration-fast)] hover:border-accent hover:bg-accent-surface active:bg-accent-rule"
           >
             {topic.text}
           </a>
@@ -550,13 +538,10 @@ export function TopicChips({
 export type AlertTone = 'error' | 'success' | 'info' | 'warning';
 
 const ALERT_TONES: Record<AlertTone, string> = {
-  error:
-    'border-[color:var(--color-error)] bg-[color:var(--color-error-surface)] text-[color:var(--color-error)]',
-  success:
-    'border-[color:var(--color-success)] bg-[color:var(--color-success-surface)] text-[color:var(--color-success)]',
-  info: 'border-[color:var(--color-info)] bg-[color:var(--color-info-surface)] text-[color:var(--color-info)]',
-  warning:
-    'border-[color:var(--color-warning)] bg-[color:var(--color-warning-surface)] text-[color:var(--color-warning)]',
+  error: 'border-error bg-error-surface text-error',
+  success: 'border-success bg-success-surface text-success',
+  info: 'border-info bg-info-surface text-info',
+  warning: 'border-warning bg-warning-surface text-warning',
 };
 
 /**
@@ -580,7 +565,7 @@ export function Alert({
   return (
     <p
       role={tone === 'error' ? 'alert' : 'status'}
-      className={`rounded-[var(--radius-control)] border px-4 py-3 text-sm ${ALERT_TONES[tone]}`}
+      className={`rounded-control border px-4 py-3 text-sm ${ALERT_TONES[tone]}`}
     >
       {children}
     </p>
@@ -590,7 +575,7 @@ export function Alert({
 /** An empty state. Says what is absent and what to do, never just "nothing". */
 export function EmptyState({ children }: { readonly children: ReactNode }) {
   return (
-    <p className="rounded-[var(--radius-control)] border border-dashed border-[color:var(--color-border-strong)] px-4 py-6 text-center text-sm text-[color:var(--color-foreground-muted)]">
+    <p className="rounded-control border border-dashed border-border-strong px-4 py-6 text-center text-sm text-foreground-muted">
       {children}
     </p>
   );
@@ -642,12 +627,12 @@ export function Field({
       })}
 
       {help === undefined ? null : (
-        <p id={helpId} className="text-xs text-[color:var(--color-foreground-muted)]">
+        <p id={helpId} className="text-xs text-foreground-muted">
           {help}
         </p>
       )}
       {error === undefined ? null : (
-        <p id={errorId} className="text-xs font-medium text-[color:var(--color-error)]">
+        <p id={errorId} className="text-xs font-medium text-error">
           {error}
         </p>
       )}
@@ -656,11 +641,11 @@ export function Field({
 }
 
 const CONTROL_CLASSES =
-  'w-full rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] ' +
-  'bg-[color:var(--color-surface-raised)] px-3 py-2 text-base ' +
-  'disabled:cursor-not-allowed disabled:bg-[color:var(--color-surface-sunken)] ' +
-  'disabled:text-[color:var(--color-foreground-muted)] ' +
-  'aria-[invalid=true]:border-[color:var(--color-error)]';
+  'w-full rounded-control border border-border-strong ' +
+  'bg-surface-raised px-3 py-2 text-base ' +
+  'disabled:cursor-not-allowed disabled:bg-surface-sunken ' +
+  'disabled:text-foreground-muted ' +
+  'aria-[invalid=true]:border-error';
 
 export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={CONTROL_CLASSES} />;
@@ -677,12 +662,9 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
 export type ButtonTone = 'primary' | 'secondary' | 'destructive';
 
 const BUTTON_TONES: Record<ButtonTone, string> = {
-  primary:
-    'bg-[color:var(--color-action)] text-[color:var(--color-action-foreground)] hover:bg-[color:var(--color-action-hover)]',
-  secondary:
-    'border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] hover:bg-[color:var(--color-surface-sunken)]',
-  destructive:
-    'border border-[color:var(--color-error)] bg-[color:var(--color-surface-raised)] text-[color:var(--color-error)] hover:bg-[color:var(--color-error-surface)]',
+  primary: 'bg-action text-action-foreground hover:bg-action-hover',
+  secondary: 'border border-border-strong bg-surface-raised hover:bg-surface-sunken',
+  destructive: 'border border-error bg-surface-raised text-error hover:bg-error-surface',
 };
 
 /**
@@ -701,7 +683,7 @@ export function Button({
       {...props}
       type={type}
       className={
-        `inline-flex min-h-11 items-center justify-center rounded-[var(--radius-control)] ` +
+        `inline-flex min-h-11 items-center justify-center rounded-control ` +
         `px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60 ` +
         BUTTON_TONES[tone]
       }
@@ -718,10 +700,7 @@ export function TextLink({
   readonly children: ReactNode;
 }) {
   return (
-    <a
-      href={href}
-      className="font-medium text-[color:var(--color-action)] underline underline-offset-2"
-    >
+    <a href={href} className="font-medium text-action underline underline-offset-2">
       {children}
     </a>
   );
@@ -749,10 +728,8 @@ export function FilterLink({
     <a
       href={href}
       {...(current ? { 'aria-current': 'page' as const } : {})}
-      className={`inline-flex min-h-11 items-center rounded-[var(--radius-control)] border px-3 text-sm ${
-        current || partial
-          ? 'border-[color:var(--color-action)] font-semibold'
-          : 'border-[color:var(--color-border)]'
+      className={`inline-flex min-h-11 items-center rounded-control border px-3 text-sm ${
+        current || partial ? 'border-action font-semibold' : 'border-border'
       }`}
     >
       {children}
@@ -774,7 +751,7 @@ export function DetailRow({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5 py-2">
-      <dt className="text-xs text-[color:var(--color-foreground-muted)]">{term}</dt>
+      <dt className="text-xs text-foreground-muted">{term}</dt>
       <dd className="min-w-0 text-sm wrap-anywhere">{children}</dd>
     </div>
   );
@@ -824,7 +801,7 @@ export function SessionRow({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           {current ? (
-            <span className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-action)]">
+            <span className="text-xs font-semibold uppercase tracking-wide text-action">
               {currentLabel}
             </span>
           ) : null}
@@ -873,14 +850,14 @@ export function DataTable({
       role="region"
       aria-label={caption}
       tabIndex={0}
-      className="w-full overflow-x-auto rounded-[var(--radius-control)]"
+      className="w-full overflow-x-auto rounded-control"
     >
       <table className="w-full min-w-[32rem] border-collapse text-sm">
-        <caption className="pb-2 text-start text-xs text-[color:var(--color-foreground-muted)]">
+        <caption className="pb-2 text-start text-xs text-foreground-muted">
           {caption}
         </caption>
         <thead>
-          <tr className="border-b border-[color:var(--color-border-strong)]">
+          <tr className="border-b border-border-strong">
             {columns.map((column) => (
               <th
                 key={column}
@@ -900,9 +877,7 @@ export function DataTable({
 
 /** One table row. Bordered rather than striped, so it survives a dark theme. */
 export function DataRow({ children }: { readonly children: ReactNode }) {
-  return (
-    <tr className="border-b border-[color:var(--color-border)] align-top">{children}</tr>
-  );
+  return <tr className="border-b border-border align-top">{children}</tr>;
 }
 
 /** One table cell. */
@@ -936,15 +911,14 @@ export function StatusBadge({
   readonly children: ReactNode;
 }) {
   const tones = {
-    neutral:
-      'border-[color:var(--color-border-strong)] text-[color:var(--color-foreground-muted)]',
-    positive: 'border-[color:var(--color-success)] text-[color:var(--color-success)]',
-    caution: 'border-[color:var(--color-warning)] text-[color:var(--color-warning)]',
+    neutral: 'border-border-strong text-foreground-muted',
+    positive: 'border-success text-success',
+    caution: 'border-warning text-warning',
   } as const;
 
   return (
     <span
-      className={`inline-block rounded-[var(--radius-control)] border px-2 py-0.5 text-xs font-medium ${tones[tone]}`}
+      className={`inline-block rounded-control border px-2 py-0.5 text-xs font-medium ${tones[tone]}`}
     >
       {children}
     </span>

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -79,7 +80,7 @@ function exploreEntries(locale: Locale) {
     { key: 'categories', href: fatwaSectionPath(locale, 'categories'), gated: false },
     { key: 'howItWorks', href: fatwaSectionPath(locale, 'how-it-works'), gated: false },
     { key: 'ask', href: fatwaSectionPath(locale, 'ask'), gated: true },
-    { key: 'myQuestions', href: `/${locale}/my/questions`, gated: true },
+    { key: 'myQuestions', href: localizedPath(locale, '/my/questions'), gated: true },
   ] as const;
 }
 
@@ -160,10 +161,7 @@ export async function FatwaLandingPage({
             </div>
             <Button>{searchT('submit')}</Button>
           </div>
-          <p
-            id="fatwa-landing-search-help"
-            className="text-sm text-[color:var(--color-foreground-muted)]"
-          >
+          <p id="fatwa-landing-search-help" className="text-sm text-foreground-muted">
             {t('sectionBody.search')}
           </p>
         </form>
@@ -191,13 +189,13 @@ export async function FatwaLandingPage({
                   </FilterLink>
                 ))}
               </nav>
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
+              <p className="text-sm text-foreground-muted">
                 {sort === 'popular' ? t('sort.popularNote') : t('sort.latestNote')}
               </p>
             </div>
 
             {filtered && !invalid ? (
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[var(--radius-control)] bg-[color:var(--color-surface-sunken)] px-4 py-2 text-sm wrap-anywhere">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-control bg-surface-sunken px-4 py-2 text-sm wrap-anywhere">
                 <MetaRow
                   items={[
                     category === null ? null : (
@@ -216,7 +214,7 @@ export async function FatwaLandingPage({
                 />
                 <a
                   href={fatwaBrowseHref(locale, { sort })}
-                  className="inline-flex min-h-11 items-center font-medium text-[color:var(--color-action)] underline underline-offset-2"
+                  className="inline-flex min-h-11 items-center font-medium text-action underline underline-offset-2"
                 >
                   {t('filter.clear')}
                 </a>

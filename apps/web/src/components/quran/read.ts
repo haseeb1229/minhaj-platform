@@ -3,7 +3,12 @@ import 'server-only';
 import { cache } from 'react';
 import type { Metadata } from 'next';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import {
+  localeSchema,
+  type Locale,
+  localizedPath,
+  UNPREFIXED_LOCALE,
+} from '@minhaj/contracts';
 import type { QuranAvailability } from '@minhaj/contracts/quran';
 
 import { quranReadRuntime } from '@/composition/quran-read';
@@ -168,15 +173,17 @@ export function quranMetadata(input: {
 
   const languages: Record<string, string> = {};
   for (const locale of localeSchema.options)
-    languages[locale] = absoluteUrl(`/${locale}${input.canonicalPath}`);
-  languages['x-default'] = absoluteUrl(`/en${input.canonicalPath}`);
+    languages[locale] = absoluteUrl(localizedPath(locale, `${input.canonicalPath}`));
+  languages['x-default'] = absoluteUrl(
+    localizedPath(UNPREFIXED_LOCALE, input.canonicalPath),
+  );
 
   return {
     title: input.title,
     ...(input.description === undefined ? {} : { description: input.description }),
     robots: { index: true, follow: true },
     alternates: {
-      canonical: absoluteUrl(`/${input.locale}${input.canonicalPath}`),
+      canonical: absoluteUrl(localizedPath(input.locale, `${input.canonicalPath}`)),
       languages,
     },
   };

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
@@ -205,7 +206,7 @@ export default async function HomePage({ params }: HomeParams) {
                   <h2 id="home-account" className="text-heading font-semibold">
                     {t('home.accountHeading')}
                   </h2>
-                  <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
+                  <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
                     {t('home.accountBody')}
                   </p>
                 </div>
@@ -272,11 +273,11 @@ async function HomeHero({
             name="q"
             maxLength={SEARCH_QUERY_MAX_LENGTH}
             autoComplete="off"
-            className="min-h-12 w-full min-w-0 flex-1 rounded-[var(--radius-control)] border border-[color:var(--color-ink-border)] bg-[color:var(--color-surface-raised)] px-4 text-base text-[color:var(--color-foreground)]"
+            className="min-h-12 w-full min-w-0 flex-1 rounded-control border border-ink-border bg-surface-raised px-4 text-base text-foreground"
           />
           <button
             type="submit"
-            className="inline-flex min-h-12 items-center justify-center rounded-[var(--radius-control)] bg-[color:var(--color-ink-accent)] px-6 text-sm font-semibold text-[color:var(--color-ink)] transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--color-ink-foreground)] active:bg-[color:var(--color-ink-muted)]"
+            className="inline-flex min-h-12 items-center justify-center rounded-control bg-ink-accent px-6 text-sm font-semibold text-ink transition-colors duration-[var(--duration-fast)] hover:bg-ink-foreground active:bg-ink-muted"
           >
             {t('home.search.submit')}
           </button>
@@ -293,7 +294,7 @@ async function HomeHero({
         >
           {t('home.exploreAction')}
         </ActionLink>
-        <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-ink-muted)]">
+        <p className="max-w-[var(--measure-prose)] text-sm text-ink-muted">
           {t('home.preAdoption')}
         </p>
       </div>
@@ -319,13 +320,13 @@ async function FeaturedStory({
   if (item.leadImage === null) return null;
   return (
     <ul className="m-0 list-none p-0">
-      <li className={`${CARD_SURFACE} text-[color:var(--color-foreground)]`}>
+      <li className={`${CARD_SURFACE} text-foreground`}>
         <LeadThumbnail
           image={item.leadImage}
           alt={translation.leadAlt ?? ''}
           lang={translation.languageCode}
           priority
-          className="-mx-5 -mt-5 mb-1 w-[calc(100%+2.5rem)] max-w-none rounded-t-[var(--radius-panel)]"
+          className="-mx-5 -mt-5 mb-1 w-[calc(100%+2.5rem)] max-w-none rounded-t-panel"
         />
         <MetaRow
           items={[
@@ -344,7 +345,7 @@ async function FeaturedStory({
           dir={direction}
         >
           <a
-            href={`/${locale}${newsPathOf(item.kind, item.slug)}`}
+            href={localizedPath(locale, `${newsPathOf(item.kind, item.slug)}`)}
             className={CARD_TITLE_LINK}
           >
             {translation.title}
@@ -352,7 +353,7 @@ async function FeaturedStory({
         </h2>
         {translation.excerpt === '' ? null : (
           <p
-            className="line-clamp-3 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+            className="line-clamp-3 text-sm wrap-anywhere text-foreground-muted"
             lang={translation.languageCode}
             dir={direction}
           >
@@ -778,7 +779,7 @@ async function CollectionsModule({ locale }: { readonly locale: Locale }) {
           return (
             <LinkCard
               key={item.slug}
-              href={`/${locale}${collectionPathOf(item.slug)}`}
+              href={localizedPath(locale, `${collectionPathOf(item.slug)}`)}
               title={translation.title}
               description={translation.excerpt}
               lang={translation.languageCode}
@@ -926,7 +927,7 @@ async function GlobalModule({ locale }: { readonly locale: Locale }) {
                 href={globalPaths.country(locale, country.slug)}
                 lang={name.locale}
                 dir={directionOf(name.locale)}
-                className="inline-flex min-h-11 items-center wrap-anywhere text-[color:var(--color-action)] underline decoration-[color:var(--color-accent-rule)] underline-offset-4 hover:decoration-[color:var(--color-action)]"
+                className="inline-flex min-h-11 items-center wrap-anywhere text-action underline decoration-accent-rule underline-offset-4 hover:decoration-action"
               >
                 {name.text}
               </a>
@@ -938,7 +939,7 @@ async function GlobalModule({ locale }: { readonly locale: Locale }) {
         <p>
           <a
             href={globalPaths.countries(locale)}
-            className="text-sm font-semibold text-[color:var(--color-action)] underline underline-offset-4"
+            className="text-sm font-semibold text-action underline underline-offset-4"
           >
             {global('allCountries')}
           </a>
@@ -977,7 +978,7 @@ async function TopicsModule({ locale }: { readonly locale: Locale }) {
       <TopicChips
         label={topics('title')}
         topics={roots.map((topic) => ({
-          href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+          href: localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`),
           text: topic.label.name,
           ...(topic.label.resolvedLocale === locale
             ? {}

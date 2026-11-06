@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import { requireAdminPage } from '@/composition/authorization';
@@ -36,7 +37,7 @@ export default async function EditionEditor({
   const context = await requireAdminPage(
     locale,
     'library.read',
-    `/${locale}/admin/library/editions`,
+    localizedPath(locale, '/admin/library/editions'),
   );
 
   const copy = await libraryCopy(locale);
@@ -102,7 +103,10 @@ export default async function EditionEditor({
 
       <p className="text-sm">
         <TextLink
-          href={`/${locale}/admin/library/translations?edition=${encodeURIComponent(record.id)}`}
+          href={localizedPath(
+            locale,
+            `/admin/library/translations?edition=${encodeURIComponent(record.id)}`,
+          )}
         >
           {t('adminManageTranslation')}
         </TextLink>

@@ -79,9 +79,7 @@ export default async function MigrationDuplicatesPage({
     <main className="flex min-w-0 flex-col gap-8">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('duplicates.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('duplicates.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('duplicates.description')}</p>
       </header>
 
       <nav aria-label={t('filter.state')} className="flex flex-wrap gap-2">
@@ -175,7 +173,7 @@ function Candidate({
             <span className="text-sm">{t('duplicates.score', { score: row.score })}</span>
           )}
         </div>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('duplicates.record')}>
             {row.recordTitle === null ? (
               <Code>{row.recordId}</Code>

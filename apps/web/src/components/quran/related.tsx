@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -102,7 +103,10 @@ async function relatedPage(
         }),
         hasMore: page.hasMore,
         size: WORK_PAGE,
-        owner: `/${locale}/library/books?topic=${encodeURIComponent(topic.id)}`,
+        owner: localizedPath(
+          locale,
+          `/library/books?topic=${encodeURIComponent(topic.id)}`,
+        ),
       };
     }
     case 'videos': {
@@ -119,7 +123,7 @@ async function relatedPage(
         }),
         hasMore: page.hasMore,
         size: MEDIA_PAGE,
-        owner: `/${locale}/watch/topics/${encodeURIComponent(topic.slug)}`,
+        owner: localizedPath(locale, `/watch/topics/${encodeURIComponent(topic.slug)}`),
       };
     }
     case 'research': {
@@ -200,9 +204,7 @@ export async function QuranRelatedPage({
     >
       <div className="flex flex-col gap-2">
         <PageHeading>{title}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">
-          {t(`sectionBody.${kind}`)}
-        </p>
+        <p className="text-foreground-muted">{t(`sectionBody.${kind}`)}</p>
       </div>
       {page.rows.length === 0 ? (
         <EmptyState>{t(`relatedEmpty.${kind}`)}</EmptyState>

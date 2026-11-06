@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import {
   MESSAGING_ATTACHMENT_TYPES,
   messageSequenceSchema,
@@ -89,7 +90,9 @@ export function shortId(id: string): string {
 
 /** Where a person's own conversations are listed on a surface. */
 export function conversationsPath(surface: MessagingSurface, locale: string): string {
-  return surface === 'my' ? `/${locale}/my/messages` : `/${locale}/teacher/messages`;
+  return surface === 'my'
+    ? localizedPath(locale, '/my/messages')
+    : localizedPath(locale, '/teacher/messages');
 }
 
 /** One conversation's page on a surface. */

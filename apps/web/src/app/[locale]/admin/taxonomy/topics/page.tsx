@@ -1,6 +1,6 @@
 import { getTranslations } from 'next-intl/server';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import { TOPIC_FALLBACK_LOCALE } from '@minhaj/contracts/taxonomy';
 import type { TopicView } from '@minhaj/contracts/taxonomy';
 
@@ -95,7 +95,7 @@ export default async function TopicsPage({
   const page = await requireAdminPage(
     locale,
     'taxonomy.read',
-    `/${locale}/admin/taxonomy/topics`,
+    localizedPath(locale, '/admin/taxonomy/topics'),
   );
   const copy = await taxonomyCopy(locale);
   const mayAdminister = page.authorization.can('taxonomy.administer');
@@ -126,7 +126,10 @@ export default async function TopicsPage({
     if (id !== null) search.set('parent', id);
     if (includeArchived) search.set('archived', '1');
     const suffix = search.toString();
-    return `/${locale}/admin/taxonomy/topics${suffix === '' ? '' : `?${suffix}`}`;
+    return localizedPath(
+      locale,
+      `/admin/taxonomy/topics${suffix === '' ? '' : `?${suffix}`}`,
+    );
   };
 
   /** This level, with the archived filter flipped. */
@@ -135,7 +138,10 @@ export default async function TopicsPage({
     if (parentId !== null) search.set('parent', parentId);
     if (!includeArchived) search.set('archived', '1');
     const suffix = search.toString();
-    return `/${locale}/admin/taxonomy/topics${suffix === '' ? '' : `?${suffix}`}`;
+    return localizedPath(
+      locale,
+      `/admin/taxonomy/topics${suffix === '' ? '' : `?${suffix}`}`,
+    );
   })();
 
   const editHref = (id: string): string => {
@@ -143,14 +149,14 @@ export default async function TopicsPage({
     if (parentId !== null) search.set('parent', parentId);
     if (includeArchived) search.set('archived', '1');
     search.set('topic', id);
-    return `/${locale}/admin/taxonomy/topics?${search.toString()}`;
+    return localizedPath(locale, `/admin/taxonomy/topics?${search.toString()}`);
   };
 
   return (
     <main className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('taxonomy.topics.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="text-sm text-foreground-muted">
           {t('taxonomy.topics.description')}
         </p>
       </header>
@@ -202,7 +208,7 @@ export default async function TopicsPage({
                     <span className="flex flex-col gap-1">
                       <TextLink href={browseHref(topic.id)}>{topic.label.name}</TextLink>
                       {topic.label.fallback ? (
-                        <span className="text-xs text-[color:var(--color-foreground-muted)]">
+                        <span className="text-xs text-foreground-muted">
                           {t('taxonomy.topics.shownInFallback', {
                             locale: topic.label.resolvedLocale,
                           })}
@@ -238,7 +244,7 @@ export default async function TopicsPage({
                     {missing.length === 0 ? (
                       <span className="text-xs">{t('taxonomy.topics.complete')}</span>
                     ) : (
-                      <span className="text-xs text-[color:var(--color-foreground-muted)]">
+                      <span className="text-xs text-foreground-muted">
                         {t('taxonomy.topics.missing', { locales: missing.join(', ') })}
                       </span>
                     )}
@@ -318,7 +324,7 @@ export default async function TopicsPage({
         <Panel>
           <div className="flex flex-col gap-3">
             <SectionHeading>{t('taxonomy.topics.createTitle')}</SectionHeading>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+            <p className="text-sm text-foreground-muted">
               {t('taxonomy.topics.createHere', {
                 parent: here === null ? t('taxonomy.topics.root') : here.label.name,
               })}
@@ -393,7 +399,7 @@ export default async function TopicsPage({
               <SectionHeading>
                 {t('taxonomy.topics.editing', { name: selected.label.name })}
               </SectionHeading>
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
+              <p className="text-sm text-foreground-muted">
                 <code className="text-xs">{selected.slug}</code>
               </p>
             </div>
@@ -407,7 +413,7 @@ export default async function TopicsPage({
               <h3 className="text-base font-semibold">
                 {t('taxonomy.topics.translationsTitle')}
               </h3>
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
+              <p className="text-sm text-foreground-muted">
                 {t('taxonomy.topics.translationsHelp', {
                   locale: TOPIC_FALLBACK_LOCALE,
                 })}
@@ -422,7 +428,7 @@ export default async function TopicsPage({
                 return (
                   <div
                     key={translationLocale}
-                    className="flex flex-col gap-3 border-t border-[color:var(--color-border)] pt-4"
+                    className="flex flex-col gap-3 border-t border-border pt-4"
                   >
                     <h4 className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                       <span>{translationLocale}</span>
@@ -529,7 +535,7 @@ export default async function TopicsPage({
 
             {/* ---- Identity and placement, for administrable topics ------ */}
             {mayAdminister && !selected.system ? (
-              <div className="flex flex-col gap-4 border-t border-[color:var(--color-border)] pt-4">
+              <div className="flex flex-col gap-4 border-t border-border pt-4">
                 <h3 className="text-base font-semibold">
                   {t('taxonomy.topics.placementTitle')}
                 </h3>
@@ -593,7 +599,7 @@ export default async function TopicsPage({
                     name="status"
                     value={selected.status === 'active' ? 'archived' : 'active'}
                   />
-                  <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                  <p className="text-sm text-foreground-muted">
                     {t('taxonomy.topics.archiveHelp')}
                   </p>
                 </ActionForm>

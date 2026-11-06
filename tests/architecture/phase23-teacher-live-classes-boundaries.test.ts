@@ -246,14 +246,17 @@ describe('the context depends on its contracts alone', () => {
   it('imports no Identity, People or Personalisation context, no database, no framework', async () => {
     const files = await sources(CONTEXT);
     expect(files.length).toBeGreaterThan(4);
-    // The one reach into the contracts root: the shared `Locale` TYPE, imported
-    // type-only (erased at build) as Personalisation's newsletter mail does.
+    // The two reaches into the contracts root: the shared `Locale` TYPE,
+    // imported type-only (erased at build) as Personalisation's newsletter
+    // mail does; and, since Rebaseline R1, the one locale-path builder
+    // `localizedPath` — a pure, framework-free string function that every
+    // emitted address goes through (ROUTE_MAP.md §1.1). Each is admitted only
+    // as that exact statement; any other name from the root barrel still fails.
     for (const file of files)
       for (const specifier of imports(
-        (await read(file)).replace(
-          /^import type \{ Locale \} from '@minhaj\/contracts';$/gmu,
-          '',
-        ),
+        (await read(file))
+          .replace(/^import type \{ Locale \} from '@minhaj\/contracts';$/gmu, '')
+          .replace(/^import \{ localizedPath \} from '@minhaj\/contracts';$/gmu, ''),
       )) {
         expect(specifier, `${file} imports ${specifier}`).not.toMatch(
           /identity|people|personalisation|@prisma|mssql|^next(?:\/|$)|@minhaj\/database/u,

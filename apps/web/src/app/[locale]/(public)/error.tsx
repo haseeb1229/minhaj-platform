@@ -36,13 +36,13 @@ export default function PublicError({ reset }: { readonly reset: () => void }) {
           {t('title')}
         </h1>
 
-        <p className="text-[color:var(--color-foreground-muted)]">{t('body')}</p>
+        <p className="text-foreground-muted">{t('body')}</p>
 
         <div>
           <button
             type="button"
             onClick={reset}
-            className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-4 py-2 text-sm font-medium"
+            className="inline-flex min-h-11 items-center rounded-control border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium"
           >
             {t('retry')}
           </button>

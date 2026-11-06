@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import type { ReactNode } from 'react';
@@ -97,7 +98,7 @@ export async function CourseDetailPage({
   return (
     <Container>
       <article className="flex flex-col gap-10 pt-6 pb-[var(--space-section)]">
-        <header className="flex flex-col gap-6 border-b border-[color:var(--color-border)] pb-8">
+        <header className="flex flex-col gap-6 border-b border-border pb-8">
           <Breadcrumbs
             label={parts.label}
             trail={[
@@ -108,7 +109,7 @@ export async function CourseDetailPage({
             ]}
           />
           <div className="flex max-w-3xl min-w-0 flex-col gap-4">
-            <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+            <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
               {courseKind(record, t)}
             </p>
             {/* The Course's own words, marked with their language as ONE block. */}
@@ -117,7 +118,7 @@ export async function CourseDetailPage({
                 {label.title}
               </h1>
               {label.summary === '' ? null : (
-                <p className="text-lede max-w-[var(--measure-prose)] wrap-anywhere text-[color:var(--color-foreground-muted)]">
+                <p className="text-lede max-w-[var(--measure-prose)] wrap-anywhere text-foreground-muted">
                   {label.summary}
                 </p>
               )}
@@ -131,14 +132,15 @@ export async function CourseDetailPage({
             />
             {teachers.length === 0 ? null : (
               <p className="text-sm wrap-anywhere" dir="auto">
-                <span className="text-[color:var(--color-foreground-muted)]">
-                  {t('course.teachers')}:{' '}
-                </span>
+                <span className="text-foreground-muted">{t('course.teachers')}: </span>
                 {teachers.map((person, index) => (
                   <span key={person.slug}>
                     {index === 0 ? null : ' · '}
                     <TextLink
-                      href={`/${locale}/people/${encodeURIComponent(person.slug)}`}
+                      href={localizedPath(
+                        locale,
+                        `/people/${encodeURIComponent(person.slug)}`,
+                      )}
                     >
                       {person.name}
                     </TextLink>
@@ -178,11 +180,11 @@ export async function CourseDetailPage({
             )}
 
             <section className="flex flex-col gap-5" aria-labelledby="course-syllabus">
-              <div className="flex flex-col gap-1.5 border-b border-[color:var(--color-border)] pb-3">
+              <div className="flex flex-col gap-1.5 border-b border-border pb-3">
                 <h2 id="course-syllabus" className="text-heading font-semibold">
                   {t('course.syllabus')}
                 </h2>
-                <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
+                <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
                   {t('course.syllabusNote')}
                 </p>
               </div>
@@ -201,7 +203,7 @@ export async function CourseDetailPage({
                       <Panel key={module.id} as="li">
                         <div className="flex min-w-0 flex-col gap-3">
                           <h3 className="flex flex-col gap-1">
-                            <span className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+                            <span className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
                               {t('course.module', { number: index + 1 })}
                             </span>
                             <span
@@ -214,7 +216,7 @@ export async function CourseDetailPage({
                           </h3>
                           {words.summary === '' ? null : (
                             <p
-                              className="max-w-[var(--measure-prose)] text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+                              className="max-w-[var(--measure-prose)] text-sm wrap-anywhere text-foreground-muted"
                               lang={words.locale}
                               dir={moduleDirection}
                             >
@@ -224,7 +226,7 @@ export async function CourseDetailPage({
                           {module.lessons.length === 0 ? null : (
                             <ol
                               aria-label={t('course.lessonsIn', { title: words.title })}
-                              className="flex list-decimal flex-col gap-3 border-t border-[color:var(--color-border)] ps-6 pt-3 marker:text-[color:var(--color-foreground-muted)]"
+                              className="flex list-decimal flex-col gap-3 border-t border-border ps-6 pt-3 marker:text-foreground-muted"
                             >
                               {module.lessons.map((lesson) => {
                                 const lessonWords = outlineLabel(
@@ -244,7 +246,7 @@ export async function CourseDetailPage({
                                     </p>
                                     {lessonWords.summary === '' ? null : (
                                       <p
-                                        className="wrap-anywhere text-[color:var(--color-foreground-muted)]"
+                                        className="wrap-anywhere text-foreground-muted"
                                         lang={lessonWords.locale}
                                         dir={lessonDirection}
                                       >
@@ -281,11 +283,11 @@ export async function CourseDetailPage({
           </div>
 
           <aside aria-labelledby="course-facts" className="min-w-0">
-            <div className="flex flex-col gap-4 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]">
+            <div className="flex flex-col gap-4 rounded-panel border border-border bg-surface-raised p-5 shadow-panel">
               <h2 id="course-facts" className="text-subheading font-semibold">
                 {t('course.facts')}
               </h2>
-              <dl className="flex flex-col divide-y divide-[color:var(--color-border)]">
+              <dl className="flex flex-col divide-y divide-border">
                 <DetailRow term={t('course.format')}>
                   {t(`format.${record.format}`)}
                 </DetailRow>

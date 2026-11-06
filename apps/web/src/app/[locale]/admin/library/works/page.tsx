@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { requireAdminPage } from '@/composition/authorization';
 import { libraryReferenceChoices, libraryRuntime } from '@/composition/library';
 import { requireLocale } from '@/config/route-locale';
@@ -47,7 +48,7 @@ export default async function WorksDirectory({
   const context = await requireAdminPage(
     locale,
     'library.read',
-    `/${locale}/admin/library/works`,
+    localizedPath(locale, '/admin/library/works'),
   );
 
   const copy = await libraryCopy(locale);
@@ -75,7 +76,9 @@ export default async function WorksDirectory({
           {page.items.map((record) => (
             <DataRow key={record.id}>
               <DataCell wrap>
-                <TextLink href={`/${locale}/admin/library/works/${record.id}`}>
+                <TextLink
+                  href={localizedPath(locale, `/admin/library/works/${record.id}`)}
+                >
                   {record.slug}
                 </TextLink>
               </DataCell>
@@ -126,20 +129,18 @@ export default async function WorksDirectory({
                 name="q"
                 defaultValue={queryValue(query, 'q') ?? ''}
                 maxLength={200}
-                className="rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-3 py-2"
+                className="rounded-control border border-border-strong bg-surface-raised px-3 py-2"
               />
             </label>
             <button
               type="submit"
-              className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-medium"
+              className="inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-medium"
             >
               {t('findReferences')}
             </button>
           </form>
 
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('referenceHelp')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('referenceHelp')}</p>
 
           <WorkForm locale={locale} record={null} choices={choices} copy={copy} />
         </div>

@@ -214,7 +214,7 @@ describe('the fatwa sitemap segment', () => {
         segment: 'fatwa',
         locale: 'en',
         urls: [
-          { loc: `${ORIGIN}/en/fatwa/non-fatwa-fixture-b`, lastmod: stamp.toISOString() },
+          { loc: `${ORIGIN}/fatwa/non-fatwa-fixture-b`, lastmod: stamp.toISOString() },
         ],
       },
       {

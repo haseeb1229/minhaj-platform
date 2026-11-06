@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import type { ReactNode } from 'react';
@@ -58,8 +59,8 @@ export async function quranTrail(locale: Locale) {
   const t = await getTranslations({ locale, namespace: 'quran' });
   return {
     label: shell('nav.breadcrumbs'),
-    home: { href: `/${locale}`, text: shell('nav.home') },
-    quran: { href: `/${locale}/quran`, text: t('title') },
+    home: { href: localizedPath(locale, ''), text: shell('nav.home') },
+    quran: { href: localizedPath(locale, '/quran'), text: t('title') },
   };
 }
 
@@ -73,7 +74,7 @@ export function FixtureBanner({ text }: { readonly text: string }) {
   return (
     <p
       role="note"
-      className="rounded-[var(--radius-panel)] border-2 border-[color:var(--color-warning)] bg-[color:var(--color-warning-surface)] px-4 py-3 font-semibold text-[color:var(--color-warning)]"
+      className="rounded-panel border-2 border-warning bg-warning-surface px-4 py-3 font-semibold text-warning"
     >
       {text}
     </p>
@@ -150,7 +151,7 @@ export async function QuranUnavailable({
           <PageHeading>{section ?? t('title')}</PageHeading>
           <Alert tone="info">{t('unavailable.body')}</Alert>
           <p>
-            <TextLink href={`/${locale}`}>{t('unavailable.home')}</TextLink>
+            <TextLink href={localizedPath(locale, '')}>{t('unavailable.home')}</TextLink>
           </p>
         </Prose>
       </div>
@@ -231,14 +232,14 @@ export function LayerBlock({
 }) {
   return (
     <div role="group" aria-labelledby={id} className="flex min-w-0 flex-col gap-1">
-      <p id={id} className="text-xs text-[color:var(--color-foreground-muted)]">
+      <p id={id} className="text-xs text-foreground-muted">
         {label}
       </p>
       <p
         lang={language.code}
         dir={language.direction}
         className={`${LAYER_SIZE[size]} break-words ${
-          muted ? 'text-[color:var(--color-foreground-muted)]' : ''
+          muted ? 'text-foreground-muted' : ''
         }`}
       >
         {text}

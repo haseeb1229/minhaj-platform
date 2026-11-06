@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -83,25 +84,18 @@ function RecitationRow({
         </Heading>
         {reciter === undefined ? null : (
           <p className="text-sm break-words" dir="auto">
-            <span className="text-[color:var(--color-foreground-muted)]">
-              {t('reciter')}:{' '}
-            </span>
+            <span className="text-foreground-muted">{t('reciter')}: </span>
             <TextLink href={reciterPath(locale, reciter.slug)}>{reciter.name}</TextLink>
           </p>
         )}
         {recitation.style === null ? null : (
           <p className="text-sm break-words" dir="auto">
-            <span className="text-[color:var(--color-foreground-muted)]">
-              {t('style')}:{' '}
-            </span>
+            <span className="text-foreground-muted">{t('style')}: </span>
             {recitation.style}
           </p>
         )}
         {recitation.attribution === null ? null : (
-          <p
-            className="text-xs break-words text-[color:var(--color-foreground-muted)]"
-            dir="auto"
-          >
+          <p className="text-xs break-words text-foreground-muted" dir="auto">
             {recitation.attribution}
           </p>
         )}
@@ -183,9 +177,7 @@ export async function RecitationsPage({
     >
       <div className="flex flex-col gap-2">
         <PageHeading>{title}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">
-          {t('sectionBody.recitations')}
-        </p>
+        <p className="text-foreground-muted">{t('sectionBody.recitations')}</p>
       </div>
       {recitations.length === 0 ? (
         <EmptyState>{t('worksEmpty.recitations')}</EmptyState>
@@ -226,8 +218,8 @@ export async function ListenRecitationsPage({
         <Breadcrumbs
           label={shell('nav.breadcrumbs')}
           trail={[
-            { href: `/${locale}`, text: shell('nav.home') },
-            { href: `/${locale}/listen`, text: listen('title') },
+            { href: localizedPath(locale, ''), text: shell('nav.home') },
+            { href: localizedPath(locale, '/listen'), text: listen('title') },
             { text: title },
           ]}
         />
@@ -268,7 +260,7 @@ async function RecitationSegments({
 }) {
   if (segments.length === 0) return <EmptyState>{t('recitationEmpty')}</EmptyState>;
   return (
-    <details className="rounded-[var(--radius-control)] border border-[color:var(--color-border)] px-4 py-2">
+    <details className="rounded-control border border-border px-4 py-2">
       <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">
         {t('segmentsShow', { count: segments.length })}
       </summary>
@@ -338,7 +330,9 @@ export async function ReciterPage({
           {reciter.name}
         </h1>
         <p>
-          <TextLink href={`/${locale}/people/${encodeURIComponent(reciter.slug)}`}>
+          <TextLink
+            href={localizedPath(locale, `/people/${encodeURIComponent(reciter.slug)}`)}
+          >
             {t('reciterProfile')}
           </TextLink>
         </p>
@@ -352,17 +346,12 @@ export async function ReciterPage({
               </h2>
               {recitation.style === null ? null : (
                 <p className="text-sm break-words" dir="auto">
-                  <span className="text-[color:var(--color-foreground-muted)]">
-                    {t('style')}:{' '}
-                  </span>
+                  <span className="text-foreground-muted">{t('style')}: </span>
                   {recitation.style}
                 </p>
               )}
               {recitation.attribution === null ? null : (
-                <p
-                  className="text-xs break-words text-[color:var(--color-foreground-muted)]"
-                  dir="auto"
-                >
+                <p className="text-xs break-words text-foreground-muted" dir="auto">
                   {recitation.attribution}
                 </p>
               )}

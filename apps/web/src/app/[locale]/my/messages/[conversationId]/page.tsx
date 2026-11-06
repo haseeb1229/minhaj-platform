@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { ConversationScreen } from '@/components/messaging/conversation';
 import { readBefore } from '@/components/messaging/presentation';
 import { requireLocale } from '@/config/route-locale';
@@ -36,7 +37,7 @@ export default async function MyConversationPage({
   const { conversationId } = await params;
   const session = await requireActiveSession(
     locale,
-    `/${locale}/my/messages/${encodeURIComponent(conversationId)}`,
+    localizedPath(locale, `/my/messages/${encodeURIComponent(conversationId)}`),
   );
 
   return (

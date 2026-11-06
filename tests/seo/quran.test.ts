@@ -115,10 +115,10 @@ describe('Quran page metadata', () => {
     expect(meta.robots).toEqual({ index: true, follow: true });
     expect(meta.alternates?.canonical).toBe(`${ORIGIN}/ar/quran/surah/2/3`);
     expect(meta.alternates?.languages).toEqual({
-      en: `${ORIGIN}/en/quran/surah/2/3`,
+      en: `${ORIGIN}/quran/surah/2/3`,
       ur: `${ORIGIN}/ur/quran/surah/2/3`,
       ar: `${ORIGIN}/ar/quran/surah/2/3`,
-      'x-default': `${ORIGIN}/en/quran/surah/2/3`,
+      'x-default': `${ORIGIN}/quran/surah/2/3`,
     });
   });
 
@@ -130,7 +130,7 @@ describe('Quran page metadata', () => {
       canonicalPath: '/quran/recitations',
       title: 'Recitations',
     });
-    expect(meta.alternates?.canonical).toBe(`${ORIGIN}/en/quran/recitations`);
+    expect(meta.alternates?.canonical).toBe(`${ORIGIN}/quran/recitations`);
   });
 
   it('keeps Quran search noindex always, following only an approved, indexable corpus', async () => {

@@ -89,9 +89,7 @@ export function ScheduleForm({
   const foldChoice = (name: string, label: string) => (
     <fieldset className="flex flex-col gap-1.5">
       <legend className="text-sm font-medium">{label}</legend>
-      <p className="text-xs text-[color:var(--color-foreground-muted)]">
-        {words.foldHelp}
-      </p>
+      <p className="text-xs text-foreground-muted">{words.foldHelp}</p>
       <div className="flex flex-col gap-1 text-sm">
         <label className="flex min-h-11 items-center gap-2">
           <input type="radio" name={name} value="earlier" defaultChecked />

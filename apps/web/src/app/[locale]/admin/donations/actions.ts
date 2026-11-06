@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 
 import { donationsRejected, field } from '@/components/donations/action-support';
 import { asciiAmount } from '@/components/donations/presentation';
@@ -68,7 +68,7 @@ async function administer(
 }
 
 function refreshed(locale: Locale): void {
-  revalidatePath(`/${locale}/admin/donations`, 'layout');
+  revalidatePath(localizedPath(locale, '/admin/donations'), 'layout');
 }
 
 /** The version-checked identity every act on an existing campaign carries. */
@@ -101,7 +101,9 @@ export async function createCampaignAction(
   }
   refreshed(actor.locale);
   // Outside the try: `redirect` signals by throwing, and that is not a failure.
-  redirect(`/${actor.locale}/admin/donations/campaigns/${encodeURIComponent(id)}`);
+  redirect(
+    localizedPath(actor.locale, `/admin/donations/campaigns/${encodeURIComponent(id)}`),
+  );
 }
 
 /** Moves a campaign in display order. */

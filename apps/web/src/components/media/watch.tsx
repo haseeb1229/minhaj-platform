@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
@@ -133,9 +134,7 @@ function Poster({
     <div
       aria-hidden="true"
       className={`relative flex aspect-video w-full items-center justify-center overflow-hidden ${
-        muted
-          ? 'bg-[color:var(--color-surface-sunken)] text-[color:var(--color-foreground-muted)]'
-          : 'bg-[color:var(--color-ink)] text-[color:var(--color-ink-accent)]'
+        muted ? 'bg-surface-sunken text-foreground-muted' : 'bg-ink text-ink-accent'
       }`}
     >
       {poster === null ? null : (
@@ -148,8 +147,8 @@ function Poster({
       <span
         className={`relative flex size-14 items-center justify-center rounded-full border transition-colors duration-[var(--duration-fast)] ${
           muted
-            ? 'border-[color:var(--color-border-strong)]'
-            : 'border-[color:var(--color-ink-border)] bg-[color:var(--color-ink-raised)] group-hover:border-[color:var(--color-ink-accent)]'
+            ? 'border-border-strong'
+            : 'border-ink-border bg-ink-raised group-hover:border-ink-accent'
         }`}
       >
         <svg viewBox="0 0 24 24" className="size-6" fill="currentColor">
@@ -234,7 +233,7 @@ function VideoCard({
       <div className="flex min-w-0 flex-1 flex-col gap-2.5 p-4">
         {eyebrow.every((word) => word === null) && !unavailable ? null : (
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-caption flex flex-wrap items-center gap-x-2 font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+            <p className="text-caption flex flex-wrap items-center gap-x-2 font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
               <EyebrowWords words={eyebrow} />
             </p>
             {unavailable ? (
@@ -253,7 +252,7 @@ function VideoCard({
         </Heading>
         {speakers.length === 0 ? null : (
           <p
-            className="line-clamp-2 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+            className="line-clamp-2 text-sm wrap-anywhere text-foreground-muted"
             dir="auto"
           >
             <span className="sr-only">{t('speakers')}: </span>
@@ -358,8 +357,8 @@ async function watchTrail(locale: Locale) {
   const t = await getTranslations({ locale, namespace: 'watch' });
   return {
     label: shell('nav.breadcrumbs'),
-    home: { href: `/${locale}`, text: shell('nav.home') },
-    watch: { href: `/${locale}/watch`, text: t('title') },
+    home: { href: localizedPath(locale, ''), text: shell('nav.home') },
+    watch: { href: localizedPath(locale, '/watch'), text: t('title') },
   };
 }
 
@@ -390,7 +389,7 @@ export async function VideoListingPage({
   const trail = await watchTrail(locale);
   const filters = readMediaQuery(query);
   const section = format === null ? 'videos' : viewOfFormat(format);
-  const base = `/${locale}/watch/${section}`;
+  const base = localizedPath(locale, `/watch/${section}`);
   const title = t(`sections.${section}` as 'sections.videos');
 
   const reads = mediaReadRuntime();
@@ -438,7 +437,10 @@ export async function VideoListingPage({
           <ul className="flex flex-wrap gap-2">
             {['videos', ...WATCH_VIEWS].map((view) => (
               <li key={view}>
-                <FilterLink href={`/${locale}/watch/${view}`} current={view === section}>
+                <FilterLink
+                  href={localizedPath(locale, `/watch/${view}`)}
+                  current={view === section}
+                >
                   {t(`sections.${view}` as 'sections.videos')}
                 </FilterLink>
               </li>
@@ -562,9 +564,9 @@ function videoTrail(
 ) {
   const label = mediaLabel(record, locale);
   return [
-    { name: labels.home, path: `/${locale}` },
-    { name: labels.watch, path: `/${locale}/watch` },
-    { name: labels.videos, path: `/${locale}/watch/videos` },
+    { name: labels.home, path: localizedPath(locale, '') },
+    { name: labels.watch, path: localizedPath(locale, '/watch') },
+    { name: labels.videos, path: localizedPath(locale, '/watch/videos') },
     { name: label.title, path: videoPath(locale, record.slug) },
   ];
 }
@@ -714,7 +716,10 @@ export async function VideoDetailPage({
                       <span key={person.slug}>
                         {index === 0 ? null : ' · '}
                         <TextLink
-                          href={`/${locale}/people/${encodeURIComponent(person.slug)}`}
+                          href={localizedPath(
+                            locale,
+                            `/people/${encodeURIComponent(person.slug)}`,
+                          )}
                         >
                           {person.name}
                         </TextLink>
@@ -798,7 +803,7 @@ export async function VideoDetailPage({
                         {paragraph}
                       </p>
                     ))}
-                    <p className="text-caption border-s-2 border-[color:var(--color-accent-rule)] ps-3 text-[color:var(--color-foreground-muted)]">
+                    <p className="text-caption border-s-2 border-accent-rule ps-3 text-foreground-muted">
                       {t('metadataNotice')}
                     </p>
                   </Prose>
@@ -813,7 +818,7 @@ export async function VideoDetailPage({
                   <h2 id="video-transcript" className="text-heading font-semibold">
                     {t('fact.transcript')}
                   </h2>
-                  <details className="rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] px-5 py-2">
+                  <details className="rounded-panel border border-border bg-surface-raised px-5 py-2">
                     <summary className="min-h-11 cursor-pointer py-2.5 font-medium">
                       {t('transcriptShow')}
                     </summary>
@@ -834,14 +839,14 @@ export async function VideoDetailPage({
 
           <aside className="flex min-w-0 flex-col gap-8">
             <section
-              className="flex flex-col gap-3 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5"
+              className="flex flex-col gap-3 rounded-panel border border-border bg-surface-raised p-5"
               aria-labelledby="video-facts"
             >
               <h2 id="video-facts" className="text-subheading font-semibold">
                 {t('facts')}
               </h2>
               <dl
-                className={`grid gap-x-8 divide-y divide-[color:var(--color-border)] ${
+                className={`grid gap-x-8 divide-y divide-border ${
                   hasStory ? '' : 'sm:grid-cols-2 sm:divide-y-0'
                 }`}
               >
@@ -900,7 +905,10 @@ export async function VideoDetailPage({
                 <TopicChips
                   label={t('topics')}
                   topics={topics.map((topic) => ({
-                    href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+                    href: localizedPath(
+                      locale,
+                      `/topics/${encodeURIComponent(topic.slug)}`,
+                    ),
                     text: topic.name,
                   }))}
                 />
@@ -1007,7 +1015,7 @@ export async function SeriesListingPage({
   const trail = await watchTrail(locale);
   const offset = readOffset(query);
   const section = seriesSegment(kind);
-  const base = `/${locale}/watch/${section}`;
+  const base = localizedPath(locale, `/watch/${section}`);
   const title = t(`sections.${section}` as 'sections.series');
   const page = await mediaReadRuntime().seriesList(kind, offset);
 
@@ -1116,7 +1124,7 @@ async function GroupDetail({
   const trail = [
     { name: parts.home.text, path: parts.home.href },
     { name: parts.watch.text, path: parts.watch.href },
-    { name: sectionTitle, path: `/${locale}/watch/${section}` },
+    { name: sectionTitle, path: localizedPath(locale, `/watch/${section}`) },
     { name: label.title, path },
   ];
   const description = paragraphsOf(label.description);
@@ -1218,7 +1226,7 @@ export async function PlaylistListingPage({
   const t = await getTranslations({ locale, namespace: 'watch' });
   const trail = await watchTrail(locale);
   const offset = readOffset(query);
-  const base = `/${locale}/watch/playlists`;
+  const base = localizedPath(locale, '/watch/playlists');
   const title = t('sections.playlists');
   const page = await mediaReadRuntime().playlists(offset);
 
@@ -1299,7 +1307,7 @@ function PersonMark() {
   return (
     <span
       aria-hidden="true"
-      className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-accent-surface)] text-[color:var(--color-accent)]"
+      className="flex size-11 shrink-0 items-center justify-center rounded-full bg-accent-surface text-accent"
     >
       <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor">
         <circle cx="12" cy="8.5" r="3.5" strokeWidth="1.6" />
@@ -1329,7 +1337,7 @@ export async function SpeakerBrowsePage({
   const trail = await watchTrail(locale);
   const offset = readOffset(query);
   const title = t('sections.speakers');
-  const base = `/${locale}/watch/speakers`;
+  const base = localizedPath(locale, '/watch/speakers');
   const page = await mediaReadRuntime().speakerFacets(offset);
   const names = await referenceNames(
     { personIds: page.items.map((facet) => facet.id), topicIds: [] },
@@ -1366,7 +1374,10 @@ export async function SpeakerBrowsePage({
                       dir="auto"
                     >
                       <TextLink
-                        href={`/${locale}/people/${encodeURIComponent(row.person.slug)}`}
+                        href={localizedPath(
+                          locale,
+                          `/people/${encodeURIComponent(row.person.slug)}`,
+                        )}
                       >
                         {row.person.name}
                       </TextLink>
@@ -1374,13 +1385,13 @@ export async function SpeakerBrowsePage({
                     <p className="text-sm">
                       <a
                         href={mediaQueryPath(
-                          `/${locale}/watch/videos`,
+                          localizedPath(locale, '/watch/videos'),
                           readMediaQuery({}),
                           {
                             speaker: row.id,
                           },
                         )}
-                        className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-[color:var(--color-action)] underline-offset-4 hover:underline"
+                        className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-action underline-offset-4 hover:underline"
                       >
                         {t('speakerVideos', { count: String(row.videos) })}
                         <span aria-hidden="true" className="rtl:-scale-x-100">
@@ -1424,7 +1435,7 @@ export async function WatchTopicPage({
   const t = await getTranslations({ locale, namespace: 'watch' });
   const trail = await watchTrail(locale);
   const offset = readOffset(query);
-  const path = `/${locale}/watch/topics/${encodeURIComponent(topic.slug)}`;
+  const path = localizedPath(locale, `/watch/topics/${encodeURIComponent(topic.slug)}`);
   const page = await mediaReadRuntime().videos({ topic: topic.id, offset });
   const labelLocale = topic.label.resolvedLocale;
 
@@ -1448,7 +1459,7 @@ export async function WatchTopicPage({
         >
           <div className="pt-1">
             <ActionLink
-              href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}
+              href={localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`)}
               tone="secondary"
             >
               {t('topicHub')}
@@ -1563,10 +1574,14 @@ export async function WatchLandingPage({
         lede={t('description')}
         actions={
           <>
-            <ActionLink href={`/${locale}/watch/videos`} onInk>
+            <ActionLink href={localizedPath(locale, '/watch/videos')} onInk>
               {t('allVideos')}
             </ActionLink>
-            <ActionLink href={`/${locale}/watch/programs`} tone="secondary" onInk>
+            <ActionLink
+              href={localizedPath(locale, '/watch/programs')}
+              tone="secondary"
+              onInk
+            >
               {t('sections.programs')}
             </ActionLink>
           </>
@@ -1586,7 +1601,10 @@ export async function WatchLandingPage({
                 {(['featured', 'latest'] as const).map((option) => (
                   <li key={option}>
                     <FilterLink
-                      href={`/${locale}/watch${option === 'featured' ? '' : '?sort=latest'}`}
+                      href={localizedPath(
+                        locale,
+                        `/watch${option === 'featured' ? '' : '?sort=latest'}`,
+                      )}
                       current={option === sort}
                     >
                       {t(`sort.${option}`)}
@@ -1600,7 +1618,7 @@ export async function WatchLandingPage({
                 {sort === 'featured' ? (
                   <span className="flex flex-col gap-2">
                     <span>{t('featuredEmpty')}</span>
-                    <TextLink href={`/${locale}/watch?sort=latest`}>
+                    <TextLink href={localizedPath(locale, '/watch?sort=latest')}>
                       {t('sort.latest')}
                     </TextLink>
                   </span>
@@ -1633,7 +1651,7 @@ export async function WatchLandingPage({
                 {group.surfaces.map((surface) => (
                   <LinkCard
                     key={surface}
-                    href={`/${locale}/watch/${surface}`}
+                    href={localizedPath(locale, `/watch/${surface}`)}
                     title={t(`sections.${surface}` as 'sections.videos')}
                     description={t(`sectionBody.${surface}` as 'sectionBody.videos')}
                   />
@@ -1650,17 +1668,17 @@ export async function WatchLandingPage({
             />
             <CardGrid>
               <LinkCard
-                href={`/${locale}/watch/speakers`}
+                href={localizedPath(locale, '/watch/speakers')}
                 title={t('sections.speakers')}
                 description={t('sectionBody.speakers')}
               />
               <LinkCard
-                href={`/${locale}/topics`}
+                href={localizedPath(locale, '/topics')}
                 title={t('sections.topics')}
                 description={t('sectionBody.topics')}
               />
               <LinkCard
-                href={`/${locale}/listen`}
+                href={localizedPath(locale, '/listen')}
                 title={t('sections.listen')}
                 description={t('sectionBody.listen')}
               />

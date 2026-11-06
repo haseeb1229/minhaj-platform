@@ -226,7 +226,7 @@ describe.skipIf(!databaseConfigured)('Phase 2 Chunk 1 — credential lifecycle',
 
       const parameters = linkParameters(link as string);
 
-      expect(parameters.pathname).toBe('/en/verify-email');
+      expect(parameters.pathname).toBe('/verify-email');
       expect(parameters.email).toBe(email);
 
       // 32 random bytes as base64url. A six-digit code in a URL would be
@@ -781,7 +781,7 @@ describe.skipIf(!databaseConfigured)('Phase 2 Chunk 1 — credential lifecycle',
       expect(link).not.toBeNull();
 
       const parameters = linkParameters(link as string);
-      expect(parameters.pathname).toBe('/en/reset-password');
+      expect(parameters.pathname).toBe('/reset-password');
 
       const reset = await harness.identity.resetPassword(anonymousContext(), {
         email: account.email,
@@ -1006,7 +1006,7 @@ describe.skipIf(!databaseConfigured)('Phase 2 Chunk 1 — credential lifecycle',
       expect(link).not.toBeNull();
 
       const parameters = linkParameters(link as string);
-      expect(parameters.pathname).toBe('/en/confirm-email-change');
+      expect(parameters.pathname).toBe('/confirm-email-change');
       expect(parameters.email).toBe(destination);
 
       const confirmed = await harness.identity.confirmEmailChange(

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import {
@@ -52,7 +53,7 @@ export default async function MyDonationsPage({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const path = `/${locale}/my/donations`;
+  const path = localizedPath(locale, '/my/donations');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myDonations' });
   const d = await getTranslations({ locale, namespace: 'donations' });
@@ -68,7 +69,7 @@ export default async function MyDonationsPage({
       label={t('nav.label')}
       links={[
         { href: donatePath(locale), text: t('nav.public') },
-        { href: `/${locale}/my`, text: t('nav.account') },
+        { href: localizedPath(locale, '/my'), text: t('nav.account') },
       ]}
     />
   );
@@ -110,7 +111,7 @@ export default async function MyDonationsPage({
                   <p className="font-semibold">
                     <CampaignTitle campaign={entry.campaign} locale={locale} t={d} />
                   </p>
-                  <dl className="divide-y divide-[color:var(--color-border)]">
+                  <dl className="divide-y divide-border">
                     <DetailRow term={d('detail.amount')}>
                       <Money money={entry.expected} locale={locale} />
                     </DetailRow>
@@ -162,9 +163,7 @@ export default async function MyDonationsPage({
         <span id="donations-give">
           <SectionHeading>{t('give.heading')}</SectionHeading>
         </span>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('give.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('give.help')}</p>
         {!giving.ok ? (
           <Alert tone="error">{t('failure.load')}</Alert>
         ) : !giving.value.availability.available ? (

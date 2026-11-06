@@ -44,6 +44,14 @@ acceptance; corpus acceptance is not launch approval; launch approval is not a c
 every later phase has shipped. The corresponding **gate types** — implementation, activation,
 content acceptance and launch — are defined in DELIVERY_PLAN.md §3.1.
 
+**Readiness vocabulary (owner decision, Rebaseline R1, 2026-11-06).** Readiness is never reported
+as a bare "complete". Status reports state six dimensions separately, each on its own evidence:
+**Engineering**, **Product**, **Content**, **Activation**, **Production** and
+**Flagship/presentation** (OPEN_DECISIONS.md §8; DELIVERY_PLAN.md, the Rebaseline R1 record). The
+three acceptance dimensions above say *who accepts*; the six readiness dimensions say *what is
+ready*. "A complete production-target platform" above describes the product's intent and
+architecture (no demo, no reduced build), not a readiness claim.
+
 ### Pre-adoption deployment
 
 A publicly reachable **developer-controlled pre-adoption / presentation origin** — currently
@@ -99,6 +107,16 @@ carry, which needed an owner decision (OPEN_DECISIONS.md §3.8). The owner decid
 for the pre-adoption build (Phase 30-RD, MIGRATION_STRATEGY.md §17): the introduction page is
 published after a person cleared its organisational contact details, and three curated archives
 are Collections. Minhaj's acceptance of both remains open.
+
+**Flagship foundation (Rebaseline R1, owner decisions 2026-11-06).** The build is identified by an
+owner-approved **interim One Minhaj identity** — a typographic wordmark, its own palette and
+self-hosted open-licence typefaces — replaceable by the organisation's brand pack, which remains
+open (OPEN_DECISIONS.md §6.4). The official MQI logo now appears **unmodified, in the footer only**,
+as a secondary organisational mark beside the build's one pre-adoption statement (at Phase-30-R exit it
+also appeared in the header — historical). English addresses are unprefixed (`/library`;
+Urdu and Arabic under `/ur` and `/ar`, ROUTE_MAP.md §1.1), and the shell promotes only areas with
+real published content or an open service; every route stays reachable by its address with its
+honest state (INFORMATION_ARCHITECTURE.md §2.2).
 
 Commercial questions — source ownership, licensing, portfolio rights, retention of a clone,
 future reuse — are **outside technical architecture** and are deliberately not recorded in

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Locale } from '@minhaj/contracts';
 import type { PublicEditorialSummary } from '@minhaj/contracts/editorial';
 
@@ -33,7 +34,7 @@ export function ArticleCard({
           image={image}
           alt={translation.leadAlt ?? ''}
           lang={translation.languageCode}
-          className="-mx-5 -mt-5 mb-1 w-[calc(100%+2.5rem)] max-w-none rounded-t-[var(--radius-panel)]"
+          className="-mx-5 -mt-5 mb-1 w-[calc(100%+2.5rem)] max-w-none rounded-t-panel"
         />
       )}
       {date === null ? null : (
@@ -54,7 +55,10 @@ export function ArticleCard({
         dir={direction}
       >
         <a
-          href={`/${locale}/library/articles/${encodeURIComponent(record.slug)}`}
+          href={localizedPath(
+            locale,
+            `/library/articles/${encodeURIComponent(record.slug)}`,
+          )}
           className={CARD_TITLE_LINK}
         >
           {translation.title}
@@ -62,7 +66,7 @@ export function ArticleCard({
       </Heading>
       {translation.excerpt === '' ? null : (
         <p
-          className="line-clamp-3 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+          className="line-clamp-3 text-sm wrap-anywhere text-foreground-muted"
           lang={translation.languageCode}
           dir={direction}
         >

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { FATWA_LIMITS } from '@minhaj/contracts/fatwa';
@@ -32,7 +33,7 @@ export default async function AskQuestionPage({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  await requireActiveSession(locale, `/${locale}/my/questions/ask`);
+  await requireActiveSession(locale, localizedPath(locale, '/my/questions/ask'));
   const t = await getTranslations({ locale, namespace: 'fatwa' });
   const availability = await fatwaRuntime().ask.availability();
   const limits = { min: FATWA_LIMITS.questionMin, max: FATWA_LIMITS.questionMax };
@@ -41,7 +42,7 @@ export default async function AskQuestionPage({
     <main className="flex w-full max-w-3xl min-w-0 flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('ask.title')}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">{t('ask.intro')}</p>
+        <p className="text-foreground-muted">{t('ask.intro')}</p>
       </header>
 
       {availability.active ? (
@@ -99,8 +100,8 @@ export default async function AskQuestionPage({
       )}
 
       <nav className="flex flex-col gap-2" aria-label={t('my.title')}>
-        <TextLink href={`/${locale}/my/questions`}>{t('my.back')}</TextLink>
-        <TextLink href={`/${locale}/fatwa/how-it-works`}>
+        <TextLink href={localizedPath(locale, '/my/questions')}>{t('my.back')}</TextLink>
+        <TextLink href={localizedPath(locale, '/fatwa/how-it-works')}>
           {t('sections.howItWorks')}
         </TextLink>
       </nav>

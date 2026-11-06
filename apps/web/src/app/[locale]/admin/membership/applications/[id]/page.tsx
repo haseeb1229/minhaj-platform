@@ -109,7 +109,7 @@ export default async function MembershipApplicationPage({
       </header>
 
       <Panel>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('application.applicant')}>
             <PersonName
               accountId={application.applicantAccountId}
@@ -236,9 +236,7 @@ export default async function MembershipApplicationPage({
 
       {application.status === 'submitted' ||
       application.status === 'under_review' ? null : (
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('application.terminal')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('application.terminal')}</p>
       )}
 
       {back}

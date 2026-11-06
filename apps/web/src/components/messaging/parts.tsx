@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';
@@ -63,10 +64,10 @@ interface Link {
 /** The neighbouring pages each person-facing Messaging page links to. */
 export function messagingLinks(locale: Locale, t: MessagingTranslator): readonly Link[] {
   return [
-    { href: `/${locale}/my/messages`, text: t('nav.messages') },
-    { href: `/${locale}/my/messages/support`, text: t('nav.support') },
-    { href: `/${locale}/my/teachers`, text: t('nav.teachers') },
-    { href: `/${locale}/my`, text: t('nav.account') },
+    { href: localizedPath(locale, '/my/messages'), text: t('nav.messages') },
+    { href: localizedPath(locale, '/my/messages/support'), text: t('nav.support') },
+    { href: localizedPath(locale, '/my/teachers'), text: t('nav.teachers') },
+    { href: localizedPath(locale, '/my'), text: t('nav.account') },
   ];
 }
 
@@ -204,9 +205,7 @@ export function CourseLine({
   if (course === undefined) return null;
   return (
     <p className="flex min-w-0 flex-wrap gap-x-2 text-sm">
-      <span className="text-[color:var(--color-foreground-muted)]">
-        {t('list.course')}
-      </span>
+      <span className="text-foreground-muted">{t('list.course')}</span>
       <LearningTitle
         labels={course.labels}
         primaryLocale={course.primaryLocale}
@@ -242,7 +241,7 @@ export function ConversationList({
             <p className="flex min-w-0 flex-wrap items-center gap-2">
               <a
                 href={conversationPath(surface, locale, summary.id)}
-                className="min-w-0 text-lg font-semibold text-[color:var(--color-action)] underline underline-offset-2"
+                className="min-w-0 text-lg font-semibold text-action underline underline-offset-2"
               >
                 <span dir="auto" className="wrap-anywhere">
                   {counterpartName(summary, names, t)}
@@ -261,7 +260,7 @@ export function ConversationList({
                 t={t}
               />
             )}
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+            <p className="text-sm text-foreground-muted">
               {summary.lastMessageAt === null ? (
                 t('list.noMessages')
               ) : (
@@ -458,7 +457,7 @@ export function Disclosure({
 }) {
   return (
     <details className="min-w-0 wrap-anywhere">
-      <summary className="inline-flex min-h-11 cursor-pointer items-center text-sm font-medium text-[color:var(--color-action)] underline underline-offset-2">
+      <summary className="inline-flex min-h-11 cursor-pointer items-center text-sm font-medium text-action underline underline-offset-2">
         {summary}
       </summary>
       <div className="mt-2 flex min-w-0 flex-col gap-3">{children}</div>

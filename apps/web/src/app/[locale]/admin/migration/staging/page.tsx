@@ -94,9 +94,7 @@ export default async function MigrationStagingPage({
     <main className="flex min-w-0 flex-col gap-8">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('staging.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('staging.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('staging.description')}</p>
       </header>
 
       <Panel>
@@ -236,7 +234,7 @@ function StagedTable({
                   />
                 </>
               ) : (
-                <span className="text-xs text-[color:var(--color-foreground-muted)]">
+                <span className="text-xs text-foreground-muted">
                   {t('staging.bulk.notSelectable')}
                 </span>
               )}
@@ -246,7 +244,7 @@ function StagedTable({
             <TextLink href={`${base}/${encodeURIComponent(row.id)}`}>
               <bdi>{row.title}</bdi>
             </TextLink>
-            <span className="block text-xs text-[color:var(--color-foreground-muted)]">
+            <span className="block text-xs text-foreground-muted">
               {t('staging.revision', { revision: row.revision })}
             </span>
           </DataCell>
@@ -276,9 +274,7 @@ function StagedTable({
   return (
     <div className="flex flex-col gap-3">
       <h3 className="font-semibold">{t('staging.bulk.heading')}</h3>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('staging.bulk.help')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('staging.bulk.help')}</p>
       <ReviewBatchForm
         locale={locale}
         titles={Object.fromEntries(rows.map((row) => [row.id, row.title]))}

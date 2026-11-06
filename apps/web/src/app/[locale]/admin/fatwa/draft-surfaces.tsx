@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import {
@@ -84,7 +85,7 @@ function startingRevision(fatwa: FatwaRecord | null): FatwaRevisionRecord | null
 export async function DraftsScreen({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/fatwa/drafts`;
+  const base = localizedPath(locale, '/admin/fatwa/drafts');
   const context = await requireAdminPage(locale, FATWA_PERMISSIONS.answer, base);
   const copy = await fatwaCopy(locale);
   const { t } = copy;
@@ -101,9 +102,7 @@ export async function DraftsScreen({ params, searchParams }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.drafts')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scope.drafts')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('scope.drafts')}</p>
 
       {page.items.length === 0 ? (
         <EmptyState>{t('drafts.empty')}</EmptyState>
@@ -176,14 +175,12 @@ function TopicSearch({ query, copy }: { readonly query: string; readonly copy: C
         </Field>
         <button
           type="submit"
-          className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-medium"
+          className="inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-medium"
         >
           {t('draft.topicSearchSubmit')}
         </button>
       </form>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('draft.topicSearchHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('draft.topicSearchHelp')}</p>
     </div>
   );
 }
@@ -198,7 +195,7 @@ export async function DraftScreen({
   const locale = await requireLocale(params);
   const questionId = recordTarget((await params).questionId);
   const query = await searchParams;
-  const list = `/${locale}/admin/fatwa/drafts`;
+  const list = localizedPath(locale, '/admin/fatwa/drafts');
   const context = await requireAdminPage(
     locale,
     FATWA_PERMISSIONS.answer,
@@ -369,16 +366,14 @@ export async function DraftScreen({
           <h2 id="fatwa-notes" className="text-lg font-semibold tracking-tight">
             {t('ruling.notes')}
           </h2>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('ruling.notesHelp')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('ruling.notesHelp')}</p>
           <ul className="flex flex-col gap-3">
             {[...returnNotes]
               .sort((a, b) => b.decidedAt.getTime() - a.decidedAt.getTime())
               .map((note) => (
                 <Panel key={`${note.revisionId}-${note.decidedAt.toISOString()}`} as="li">
                   <div className="flex flex-col gap-2">
-                    <p className="text-xs text-[color:var(--color-foreground-muted)]">
+                    <p className="text-xs text-foreground-muted">
                       {t('ruling.noteFor', {
                         number: revisionNumber.get(note.revisionId) ?? 0,
                       })}{' '}
@@ -396,7 +391,7 @@ export async function DraftScreen({
         <Panel>
           <div className="flex flex-col gap-3">
             <SectionHeading>{t('ruling.currentPublished')}</SectionHeading>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+            <p className="text-sm text-foreground-muted">
               {t('ruling.currentPublishedHelp')}
             </p>
             <RevisionView
@@ -421,9 +416,7 @@ export async function DraftScreen({
           <h2 id="fatwa-draft" className="text-lg font-semibold tracking-tight">
             {isCorrection ? t('draft.correctionHeading') : t('draft.heading')}
           </h2>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('draft.help')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('draft.help')}</p>
 
           <TopicSearch query={topicQuery} copy={copy} />
 
@@ -445,7 +438,7 @@ export async function DraftScreen({
                 <p className="text-sm">
                   <input type="hidden" name="slug" value={fatwa.slug} />
                   {t('draft.slug')}: <span dir="ltr">{fatwa.slug}</span>
-                  <span className="block text-xs text-[color:var(--color-foreground-muted)]">
+                  <span className="block text-xs text-foreground-muted">
                     {t('draft.slugFixed')}
                   </span>
                 </p>
@@ -592,10 +585,7 @@ export async function DraftScreen({
                 aria-describedby="fatwa-draft-topics-help"
               >
                 <legend className="text-sm font-medium">{t('draft.topics')}</legend>
-                <p
-                  id="fatwa-draft-topics-help"
-                  className="text-sm text-[color:var(--color-foreground-muted)]"
-                >
+                <p id="fatwa-draft-topics-help" className="text-sm text-foreground-muted">
                   {t('draft.topicsHelp', { max: FATWA_LIMITS.topicsPerRevision })}
                 </p>
                 {dropped > 0 ? (
@@ -669,7 +659,7 @@ export async function DraftScreen({
             <input type="hidden" name="fatwaId" value={fatwa.id} />
             <input type="hidden" name="version" value={String(fatwa.version)} />
             <input type="hidden" name="revisionId" value={pending.id} />
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+            <p className="text-sm text-foreground-muted">
               {t('submitReview.help', { number: pending.number })}
             </p>
           </ActionForm>

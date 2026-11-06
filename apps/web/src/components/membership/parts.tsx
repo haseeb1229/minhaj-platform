@@ -118,11 +118,7 @@ export function TypeTitle({
 }) {
   const label = type === undefined ? null : typeLabel(type, locale);
   if (label === null)
-    return (
-      <span className="text-[color:var(--color-foreground-muted)]">
-        {t('typeUnavailable')}
-      </span>
-    );
+    return <span className="text-foreground-muted">{t('typeUnavailable')}</span>;
   return (
     <span lang={label.locale} dir={directionOf(label.locale)} className="wrap-anywhere">
       {label.title}
@@ -191,9 +187,7 @@ export function TypeWords({
         <Heading id={headingId} className="text-lg font-semibold wrap-anywhere">
           {label.title}
         </Heading>
-        <p className="wrap-anywhere text-[color:var(--color-foreground-muted)]">
-          {label.summary}
-        </p>
+        <p className="wrap-anywhere text-foreground-muted">{label.summary}</p>
         {full
           ? paragraphs(label.description).map((paragraph, index) => (
               <p key={index} className="text-sm wrap-anywhere whitespace-pre-line">

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { settingsLinks } from '@/components/personal/nav';
@@ -38,7 +39,7 @@ export default async function NotificationSettingsPage({
   const locale = await requireLocale(params);
   const session = await requireActiveSession(
     locale,
-    `/${locale}/my/settings/notifications`,
+    localizedPath(locale, '/my/settings/notifications'),
   );
   const t = await getTranslations({ locale, namespace: 'personal' });
   const read = await personalRead('personal-notification-preferences', () =>
@@ -53,7 +54,7 @@ export default async function NotificationSettingsPage({
         <li>{t('notificationSettings.security')}</li>
         <li>
           {t('notificationSettings.newsletter')}{' '}
-          <TextLink href={`/${locale}/newsletter`}>
+          <TextLink href={localizedPath(locale, '/newsletter')}>
             {t('notificationSettings.newsletterLink')}
           </TextLink>
         </li>
@@ -78,7 +79,7 @@ export default async function NotificationSettingsPage({
                   <p className="font-medium">
                     {t(`notificationSettings.category.${preference.category}`)}
                   </p>
-                  <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                  <p className="text-sm text-foreground-muted">
                     {t(`notificationSettings.channel.${preference.channel}`)}
                   </p>
                   <p>

@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-import { localeSchema } from '@minhaj/contracts';
+import { localeSchema, localizedPath } from '@minhaj/contracts';
 
 import { requirePermittedAction } from '@/composition/authorization';
 import { globalRuntime } from '@/composition/global';
@@ -93,8 +93,8 @@ async function authorise(form: FormData) {
 }
 
 function settle(locale: string, path: string): string {
-  revalidatePath(`/${locale}/admin/global`, 'layout');
-  return `/${locale}/admin/global/${path}`;
+  revalidatePath(localizedPath(locale, '/admin/global'), 'layout');
+  return localizedPath(locale, `/admin/global/${path}`);
 }
 
 export async function saveCountry(

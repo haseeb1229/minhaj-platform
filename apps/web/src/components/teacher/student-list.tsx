@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import type { ReactNode } from 'react';
@@ -36,7 +37,10 @@ export function StudentList({
         <Panel key={student.accountId} as="li">
           <div className="flex min-w-0 flex-col gap-2">
             <TextLink
-              href={`/${locale}/teacher/students/${encodeURIComponent(student.accountId)}`}
+              href={localizedPath(
+                locale,
+                `/teacher/students/${encodeURIComponent(student.accountId)}`,
+              )}
             >
               <span dir="auto" className="wrap-anywhere">
                 {names.get(student.accountId) ?? t('common.learner')}
@@ -64,7 +68,7 @@ export function StudentList({
                       total: String(entry.course.lessons),
                     })}
                   </span>
-                  <span className="text-[color:var(--color-foreground-muted)]">
+                  <span className="text-foreground-muted">
                     {t('students.enrolledAt')} {enrolledAt(entry.enrolledAt)}
                   </span>
                 </li>

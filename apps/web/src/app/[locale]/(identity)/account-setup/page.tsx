@@ -1,3 +1,5 @@
+import { identityMetadata } from '../metadata';
+import { localizedPath } from '@minhaj/contracts';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
@@ -21,7 +23,9 @@ import { ActionForm } from '../form-state';
  * former Phase 3 removed (§14.1). Nothing on this page asks what someone is
  * interested in.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = identityMetadata('setup.title', {
+  robots: { index: false, follow: false },
+});
 
 /**
  * PER REQUEST, always. This surface reads a session or a one-time token, so
@@ -47,7 +51,10 @@ export default async function AccountSetupPage({
   // page as a VALIDATED return destination.
   if (outcome.state !== 'active') {
     redirect(
-      `/${locale}/signin?returnTo=${encodeURIComponent(`/${locale}/account-setup`)}`,
+      localizedPath(
+        locale,
+        `/signin?returnTo=${encodeURIComponent(localizedPath(locale, '/account-setup'))}`,
+      ),
     );
   }
 

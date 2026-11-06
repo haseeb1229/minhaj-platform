@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { cache } from 'react';
@@ -89,8 +90,8 @@ async function collectionsTrail(locale: Locale) {
   return {
     label: shell('nav.breadcrumbs'),
     homeText: shell('nav.home'),
-    home: { href: `/${locale}`, text: shell('nav.home') },
-    collections: { href: `/${locale}/collections`, text: t('title') },
+    home: { href: localizedPath(locale, ''), text: shell('nav.home') },
+    collections: { href: localizedPath(locale, '/collections'), text: t('title') },
   };
 }
 
@@ -129,7 +130,7 @@ function CollectionCard({
   });
   return (
     <li
-      className={`${CARD_SURFACE} border-t-4 border-t-[color:var(--color-accent-rule)] ${
+      className={`${CARD_SURFACE} border-t-4 border-t-accent-rule ${
         feature ? 'gap-4 sm:col-span-2 sm:p-7' : ''
       }`}
     >
@@ -143,7 +144,7 @@ function CollectionCard({
           dir={direction}
         >
           <a
-            href={`/${locale}${collectionPathOf(item.slug)}`}
+            href={localizedPath(locale, `${collectionPathOf(item.slug)}`)}
             className={CARD_TITLE_LINK}
           >
             {translation.title}
@@ -151,7 +152,7 @@ function CollectionCard({
         </Heading>
         {translation.excerpt === '' ? null : (
           <p
-            className={`wrap-anywhere text-[color:var(--color-foreground-muted)] ${
+            className={`wrap-anywhere text-foreground-muted ${
               feature ? 'text-lede line-clamp-4' : 'line-clamp-3 text-sm'
             }`}
             lang={translation.languageCode}
@@ -165,7 +166,7 @@ function CollectionCard({
             <TopicChips
               label={t('topics')}
               topics={topics.map((topic) => ({
-                href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+                href: localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`),
                 text: topic.name,
               }))}
             />
@@ -327,12 +328,12 @@ function MemberItem({
       <div className="flex min-w-0 items-start gap-4">
         <span
           aria-hidden="true"
-          className="text-heading w-10 shrink-0 leading-none font-semibold text-[color:var(--color-accent)] tabular-nums"
+          className="text-heading w-10 shrink-0 leading-none font-semibold text-accent tabular-nums"
         >
           {new Intl.NumberFormat(locale, { minimumIntegerDigits: 2 }).format(position)}
         </span>
         <span className="flex min-w-0 flex-col gap-1.5">
-          <span className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-foreground-muted)] uppercase">
+          <span className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-foreground-muted uppercase">
             {t(`kinds.${kind}`)}
           </span>
           <span
@@ -341,7 +342,7 @@ function MemberItem({
             {...(title.languageCode === null ? {} : { lang: title.languageCode })}
           >
             <a
-              href={`/${locale}${collectionMemberPathOf(kind, target.slug)}`}
+              href={localizedPath(locale, `${collectionMemberPathOf(kind, target.slug)}`)}
               className={CARD_TITLE_LINK}
             >
               {title.text}
@@ -408,7 +409,7 @@ export async function CollectionDetailPage({
           trail={[trail.home, trail.collections, { text: translation.title }]}
         />
 
-        <header className="flex max-w-3xl flex-col gap-4 border-b border-[color:var(--color-border)] pb-8">
+        <header className="flex max-w-3xl flex-col gap-4 border-b border-border pb-8">
           <Eyebrow>{t('type')}</Eyebrow>
           {translation.languageCode === locale ? null : (
             <Alert tone="info">
@@ -428,7 +429,7 @@ export async function CollectionDetailPage({
               {translation.title}
             </h1>
             {translation.excerpt === '' ? null : (
-              <p className="text-lede max-w-[var(--measure-prose)] wrap-anywhere text-[color:var(--color-foreground-muted)]">
+              <p className="text-lede max-w-[var(--measure-prose)] wrap-anywhere text-foreground-muted">
                 {translation.excerpt}
               </p>
             )}
@@ -482,7 +483,10 @@ export async function CollectionDetailPage({
                       {credits.map(({ person, role }) => (
                         <li key={`${person.slug}:${role}`} dir="auto">
                           <TextLink
-                            href={`/${locale}/people/${encodeURIComponent(person.slug)}`}
+                            href={localizedPath(
+                              locale,
+                              `/people/${encodeURIComponent(person.slug)}`,
+                            )}
                           >
                             {person.name}
                           </TextLink>{' '}
@@ -495,13 +499,14 @@ export async function CollectionDetailPage({
               )}
               {topics.length === 0 ? null : (
                 <div className="flex flex-col gap-2">
-                  <p className="text-xs text-[color:var(--color-foreground-muted)]">
-                    {t('topics')}
-                  </p>
+                  <p className="text-xs text-foreground-muted">{t('topics')}</p>
                   <TopicChips
                     label={t('topics')}
                     topics={topics.map((topic) => ({
-                      href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+                      href: localizedPath(
+                        locale,
+                        `/topics/${encodeURIComponent(topic.slug)}`,
+                      ),
                       text: topic.name,
                     }))}
                   />
@@ -512,7 +517,7 @@ export async function CollectionDetailPage({
         )}
 
         <p>
-          <ActionLink href={`/${locale}/collections`} tone="secondary">
+          <ActionLink href={localizedPath(locale, '/collections')} tone="secondary">
             {t('all')}
           </ActionLink>
         </p>
@@ -520,11 +525,17 @@ export async function CollectionDetailPage({
         <BreadcrumbData
           contentLocales={contentLocales}
           trail={[
-            { name: trail.homeText, path: `/${translation.languageCode}` },
-            { name: t('title'), path: `/${translation.languageCode}/collections` },
+            { name: trail.homeText, path: localizedPath(translation.languageCode, '') },
+            {
+              name: t('title'),
+              path: localizedPath(translation.languageCode, '/collections'),
+            },
             {
               name: translation.title,
-              path: `/${translation.languageCode}${collectionPathOf(record.slug)}`,
+              path: localizedPath(
+                translation.languageCode,
+                `${collectionPathOf(record.slug)}`,
+              ),
             },
           ]}
         />
@@ -561,7 +572,7 @@ export async function CollectionTopicSection({
       <SectionHeader
         id={headingId}
         heading={heading}
-        action={{ href: `/${locale}/collections`, text: t('all') }}
+        action={{ href: localizedPath(locale, '/collections'), text: t('all') }}
       />
       <CollectionGrid
         locale={locale}

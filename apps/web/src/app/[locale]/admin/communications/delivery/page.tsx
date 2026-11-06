@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getFormatter, getTranslations } from 'next-intl/server';
 
 import type { DeliveryStatus } from '@minhaj/contracts/platform';
@@ -73,7 +74,7 @@ export default async function DeliveryPage({
   const page = await requireAdminPage(
     locale,
     'delivery.read',
-    `/${locale}/admin/communications/delivery`,
+    localizedPath(locale, '/admin/communications/delivery'),
   );
   const copy = await adminCopy(locale);
 
@@ -97,9 +98,7 @@ export default async function DeliveryPage({
     <main className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('delivery.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('delivery.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('delivery.description')}</p>
       </header>
 
       <Panel>
@@ -169,7 +168,7 @@ export default async function DeliveryPage({
                 <DataCell>
                   <span className="block">{delivery.attemptCount}</span>
                   {delivery.nextAttemptAt === null ? null : (
-                    <span className="block text-xs text-[color:var(--color-foreground-muted)]">
+                    <span className="block text-xs text-foreground-muted">
                       {t('delivery.next')}:{' '}
                       {format.dateTime(delivery.nextAttemptAt, {
                         dateStyle: 'short',
@@ -181,13 +180,11 @@ export default async function DeliveryPage({
 
                 <DataCell wrap>
                   {delivery.failureCode === null ? (
-                    <span className="text-xs text-[color:var(--color-foreground-muted)]">
-                      —
-                    </span>
+                    <span className="text-xs text-foreground-muted">—</span>
                   ) : (
                     <>
                       <code className="block text-xs">{delivery.failureCode}</code>
-                      <span className="block text-xs text-[color:var(--color-foreground-muted)]">
+                      <span className="block text-xs text-foreground-muted">
                         {delivery.failureClass}
                       </span>
                     </>
@@ -204,9 +201,7 @@ export default async function DeliveryPage({
                 {mayOperate ? (
                   <DataCell>
                     {delivery.status === 'sent' || delivery.status === 'suppressed' ? (
-                      <span className="text-xs text-[color:var(--color-foreground-muted)]">
-                        —
-                      </span>
+                      <span className="text-xs text-foreground-muted">—</span>
                     ) : (
                       <ActionForm
                         action={retryDeliveryAction}

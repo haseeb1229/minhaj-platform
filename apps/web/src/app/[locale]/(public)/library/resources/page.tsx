@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
@@ -92,8 +93,8 @@ export default async function ResourcesPage({
     <ListingFrame
       breadcrumbLabel={shell('nav.breadcrumbs')}
       trail={[
-        { href: `/${locale}`, text: shell('nav.home') },
-        { href: `/${locale}/library`, text: t('title') },
+        { href: localizedPath(locale, ''), text: shell('nav.home') },
+        { href: localizedPath(locale, '/library'), text: t('title') },
         { text: t('section.resources') },
       ]}
       title={t('section.resources')}
@@ -104,7 +105,10 @@ export default async function ResourcesPage({
           <SectionHeader
             id="resources-books"
             heading={t('section.books')}
-            action={{ href: `/${locale}/library/books`, text: t('allBooks') }}
+            action={{
+              href: localizedPath(locale, '/library/books'),
+              text: t('allBooks'),
+            }}
           />
 
           {works.items.length === 0 ? (
@@ -132,7 +136,10 @@ export default async function ResourcesPage({
           <SectionHeader
             id="resources-articles"
             heading={t('section.articles')}
-            action={{ href: `/${locale}/library/articles`, text: t('allArticles') }}
+            action={{
+              href: localizedPath(locale, '/library/articles'),
+              text: t('allArticles'),
+            }}
           />
 
           {articles.length === 0 ? (
@@ -147,7 +154,10 @@ export default async function ResourcesPage({
                 return (
                   <LinkCard
                     key={record.slug}
-                    href={`/${locale}/library/articles/${encodeURIComponent(record.slug)}`}
+                    href={localizedPath(
+                      locale,
+                      `/library/articles/${encodeURIComponent(record.slug)}`,
+                    )}
                     title={translation.title}
                     description={translation.excerpt}
                     lang={translation.languageCode}

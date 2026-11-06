@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { requireAdminPage } from '@/composition/authorization';
 import { libraryRuntime } from '@/composition/library';
 import { requireLocale } from '@/config/route-locale';
@@ -43,7 +44,7 @@ export default async function SalePointsDirectory({
   const context = await requireAdminPage(
     locale,
     'library.read',
-    `/${locale}/admin/library/sale-points`,
+    localizedPath(locale, '/admin/library/sale-points'),
   );
 
   const copy = await libraryCopy(locale);
@@ -59,9 +60,7 @@ export default async function SalePointsDirectory({
     <main className="flex flex-col gap-8">
       <PageHeading>{t('admin.sale-points')}</PageHeading>
 
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('salePointsNotice')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('salePointsNotice')}</p>
 
       {page.items.length === 0 ? (
         <EmptyState>{t('adminEmpty')}</EmptyState>
@@ -70,7 +69,7 @@ export default async function SalePointsDirectory({
           {page.items.map((record) => (
             <Panel key={record.id} as="li">
               <div className="flex flex-col gap-3">
-                <p className="text-xs text-[color:var(--color-foreground-muted)]">
+                <p className="text-xs text-foreground-muted">
                   {t('identifier')}: <code>{record.id}</code>
                 </p>
                 <SalePointForm locale={locale} record={record} copy={copy} />

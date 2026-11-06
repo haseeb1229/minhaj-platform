@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { ConversationScreen } from '@/components/messaging/conversation';
@@ -39,7 +40,7 @@ export default async function TeacherConversationPage({
   const { conversationId } = await params;
   const gate = await requireTeacher(
     locale,
-    `/${locale}/teacher/messages/${encodeURIComponent(conversationId)}`,
+    localizedPath(locale, `/teacher/messages/${encodeURIComponent(conversationId)}`),
   );
   if (!gate.activated) {
     const t = await getTranslations({ locale, namespace: 'teacher' });

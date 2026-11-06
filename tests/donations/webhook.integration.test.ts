@@ -1,3 +1,4 @@
+import { localizedPath } from '../../packages/contracts/src/locale-path.ts';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 
@@ -547,7 +548,7 @@ live('Phase 27 payment protocol end to end (real route, services, adapters, SQL)
       });
 
       // The provider is sent back to a constant page that carries NO token and no query.
-      const destination = `${BASE_URL}/${locale}/donate/return`;
+      const destination = `${BASE_URL}${localizedPath(locale, '/donate/return')}`;
       expect(session['success_url']).toBe(destination);
       expect(session['cancel_url']).toBe(destination);
       expect(started.checkoutUrl).toBe(`${simulator.origin}/c/pay/${started.session}`);
@@ -619,7 +620,7 @@ live('Phase 27 payment protocol end to end (real route, services, adapters, SQL)
       const answer = await pay(started);
       expect(answer.status).toBe(303);
       // The provider sends the browser back to the constant, tokenless page.
-      expect(answer.headers.get('location')).toBe(`${BASE_URL}/en/donate/return`);
+      expect(answer.headers.get('location')).toBe(`${BASE_URL}/donate/return`);
       expect(await ledgerFootprint(started.id)).toBe(before);
     }
     const view = await services.donor.status(checked.token, address());

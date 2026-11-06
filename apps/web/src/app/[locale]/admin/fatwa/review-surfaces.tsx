@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import type { Locale } from '@minhaj/contracts';
@@ -155,7 +156,7 @@ function SummaryTable({
 export async function ReviewQueueScreen({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/fatwa/review`;
+  const base = localizedPath(locale, '/admin/fatwa/review');
   const context = await requireAdminPage(locale, FATWA_PERMISSIONS.publish, base);
   const copy = await fatwaCopy(locale);
   const { t } = copy;
@@ -165,9 +166,7 @@ export async function ReviewQueueScreen({ params, searchParams }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.review')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scope.review')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('scope.review')}</p>
       {page.items.length === 0 ? (
         <EmptyState>{t('review.empty')}</EmptyState>
       ) : (
@@ -202,7 +201,7 @@ export async function ReviewScreen({
 }) {
   const locale = await requireLocale(params);
   const fatwaId = recordTarget((await params).fatwaId);
-  const list = `/${locale}/admin/fatwa/review`;
+  const list = localizedPath(locale, '/admin/fatwa/review');
   const context = await requireAdminPage(
     locale,
     FATWA_PERMISSIONS.publish,
@@ -284,9 +283,7 @@ export async function ReviewScreen({
             <SectionHeading>
               {t('review.comparison', { number: previous.number })}
             </SectionHeading>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('review.comparisonHelp')}
-            </p>
+            <p className="text-sm text-foreground-muted">{t('review.comparisonHelp')}</p>
             <RevisionView
               revision={previous}
               categories={names}
@@ -366,9 +363,7 @@ export async function ReviewScreen({
               <input type="hidden" name="fatwaId" value={fatwa.id} />
               <input type="hidden" name="version" value={String(fatwa.version)} />
               <input type="hidden" name="revisionId" value={pending.id} />
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                {t('review.publishHelp')}
-              </p>
+              <p className="text-sm text-foreground-muted">{t('review.publishHelp')}</p>
               <ConfirmField
                 id="fatwa-publish-confirm"
                 label={t('review.publishConfirm')}
@@ -388,7 +383,7 @@ export async function ReviewScreen({
 export async function PublishedListScreen({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/fatwa/published`;
+  const base = localizedPath(locale, '/admin/fatwa/published');
   const context = await requireAdminPage(locale, FATWA_PERMISSIONS.publish, base);
   const copy = await fatwaCopy(locale);
   const { t } = copy;
@@ -398,9 +393,7 @@ export async function PublishedListScreen({ params, searchParams }: ListParams) 
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.published')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scope.published')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('scope.published')}</p>
       {page.items.length === 0 ? (
         <EmptyState>{t('published.empty')}</EmptyState>
       ) : (
@@ -431,7 +424,7 @@ export async function PublishedScreen({
 }) {
   const locale = await requireLocale(params);
   const fatwaId = recordTarget((await params).fatwaId);
-  const list = `/${locale}/admin/fatwa/published`;
+  const list = localizedPath(locale, '/admin/fatwa/published');
   const context = await requireAdminPage(
     locale,
     FATWA_PERMISSIONS.publish,
@@ -496,7 +489,7 @@ export async function PublishedScreen({
 
       {isPublic ? (
         <p className="text-sm">
-          <TextLink href={`/${locale}/fatwa/${fatwa.slug}`}>
+          <TextLink href={localizedPath(locale, `/fatwa/${fatwa.slug}`)}>
             {t('published.view')}
           </TextLink>
         </p>
@@ -508,7 +501,7 @@ export async function PublishedScreen({
             stage: t(`reviewStateName.${fatwa.reviewState}`),
           })}{' '}
           {fatwa.reviewState === 'in_review' ? (
-            <TextLink href={`/${locale}/admin/fatwa/review/${fatwa.id}`}>
+            <TextLink href={localizedPath(locale, `/admin/fatwa/review/${fatwa.id}`)}>
               {t('published.openReview')}
             </TextLink>
           ) : null}
@@ -556,7 +549,7 @@ export async function PublishedScreen({
             {withdrawals.map((note) => (
               <Panel key={`${note.revisionId}-${note.decidedAt.toISOString()}`} as="li">
                 <div className="flex flex-col gap-2">
-                  <p className="text-xs text-[color:var(--color-foreground-muted)]">
+                  <p className="text-xs text-foreground-muted">
                     <DateText date={note.decidedAt} locale={locale} time />
                   </p>
                   <WrittenText text={note.note} />
@@ -584,9 +577,7 @@ export async function PublishedScreen({
             <input type="hidden" name="locale" value={locale} />
             <input type="hidden" name="fatwaId" value={fatwa.id} />
             <input type="hidden" name="version" value={String(fatwa.version)} />
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('published.withdrawHelp')}
-            </p>
+            <p className="text-sm text-foreground-muted">{t('published.withdrawHelp')}</p>
             <Field
               id="fatwa-withdraw-reason"
               label={t('published.withdrawReason')}

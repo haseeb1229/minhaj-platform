@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Locale } from '@minhaj/contracts';
 import {
   FATWA_DEFAULT_SORT,
@@ -52,7 +53,9 @@ const part = (value: string) => encodeURIComponent(value);
 
 /** The Fatwa section address under a locale: `/{locale}/fatwa[/{section}]`. */
 export function fatwaSectionPath(locale: string, section = ''): string {
-  return section === '' ? `/${locale}/fatwa` : `/${locale}/fatwa/${section}`;
+  return section === ''
+    ? localizedPath(locale, '/fatwa')
+    : localizedPath(locale, `/fatwa/${section}`);
 }
 
 /** The LOCALE-FREE canonical address of one published ruling. */
@@ -61,7 +64,7 @@ export function rulingPathOf(slug: string): string {
 }
 
 export function rulingHref(locale: string, slug: string): string {
-  return `/${locale}${rulingPathOf(slug)}`;
+  return localizedPath(locale, `${rulingPathOf(slug)}`);
 }
 
 export function categoryPathOf(slug: string): string {
@@ -69,17 +72,17 @@ export function categoryPathOf(slug: string): string {
 }
 
 export function categoryHref(locale: string, slug: string): string {
-  return `/${locale}${categoryPathOf(slug)}`;
+  return localizedPath(locale, `${categoryPathOf(slug)}`);
 }
 
 /** The Fatwa topic view — a filtered view canonical to the topic hub. */
 export function fatwaTopicHref(locale: string, topicSlug: string): string {
-  return `/${locale}/fatwa/topics/${part(topicSlug)}`;
+  return localizedPath(locale, `/fatwa/topics/${part(topicSlug)}`);
 }
 
 /** The asker's own question, by its opaque id — never by anything it says. */
 export function ownQuestionHref(locale: string, id: string): string {
-  return `/${locale}/my/questions/${part(id)}`;
+  return localizedPath(locale, `/my/questions/${part(id)}`);
 }
 
 /* ===========================================================================

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -78,11 +79,17 @@ export async function CitationPage({
     collection: collectionName,
     number: hadith.number,
   });
-  const bookPath = `/${locale}${bookPathOf(collection.slug, hadith.book.slug)}`;
+  const bookPath = localizedPath(
+    locale,
+    `${bookPathOf(collection.slug, hadith.book.slug)}`,
+  );
   const chapterPath =
     hadith.chapter === null
       ? null
-      : `/${locale}${chapterPathOf(collection.slug, hadith.book.slug, hadith.chapter.slug)}`;
+      : localizedPath(
+          locale,
+          `${chapterPathOf(collection.slug, hadith.book.slug, hadith.chapter.slug)}`,
+        );
   const trail = citationTrail({
     locale,
     home: parts.home.text,
@@ -171,7 +178,7 @@ export async function CitationPage({
                   kind="book"
                 />
               </TextLink>{' '}
-              <span className="text-[color:var(--color-foreground-muted)]">
+              <span className="text-foreground-muted">
                 (<span dir="auto">{hadith.book.reference}</span>)
               </span>
             </DetailRow>
@@ -185,7 +192,7 @@ export async function CitationPage({
                     kind="chapter"
                   />
                 </TextLink>{' '}
-                <span className="text-[color:var(--color-foreground-muted)]">
+                <span className="text-foreground-muted">
                   (<span dir="auto">{hadith.chapter.reference}</span>)
                 </span>
               </DetailRow>
@@ -214,7 +221,7 @@ export async function CitationPage({
             <h2 id="hadith-gradings" className="text-lg font-semibold">
               {t('gradings.heading')}
             </h2>
-            <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
+            <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
               {t('gradings.note')}
             </p>
             <ol aria-labelledby="hadith-gradings" className="flex flex-col gap-3">
@@ -226,7 +233,7 @@ export async function CitationPage({
                     <li key={grading.position}>
                       <article
                         aria-label={t('gradings.item', { grader: grading.grader })}
-                        className="min-w-0 border-s-2 border-[color:var(--color-border)] ps-4"
+                        className="min-w-0 border-s-2 border-border ps-4"
                       >
                         <dl className="grid grid-cols-1 gap-x-8 sm:grid-cols-3">
                           <DetailRow term={t('gradings.grader')}>
@@ -329,7 +336,7 @@ export async function CitationPage({
                       </div>
                       {entry.attribution === null ? null : (
                         <p
-                          className="text-xs wrap-anywhere text-[color:var(--color-foreground-muted)]"
+                          className="text-xs wrap-anywhere text-foreground-muted"
                           dir="auto"
                         >
                           {entry.attribution}

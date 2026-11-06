@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import type { Locale } from '@minhaj/contracts';
@@ -114,7 +115,7 @@ function TrackTable({
         <DataRow key={track.id}>
           {position ? <DataCell>{track.seriesPosition ?? '—'}</DataCell> : null}
           <DataCell wrap>
-            <TextLink href={`/${locale}/admin/media/audio/${track.id}`}>
+            <TextLink href={localizedPath(locale, `/admin/media/audio/${track.id}`)}>
               <Title record={track} locale={locale} />
             </TextLink>
           </DataCell>
@@ -145,7 +146,7 @@ function formatBytes(bytes: number, locale: Locale): string {
 export async function AudioDirectory({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/media/audio`;
+  const base = localizedPath(locale, '/admin/media/audio');
   const context = await requireAdminPage(locale, 'media.read', base);
   const copy = await mediaCopy(locale);
   const { t } = copy;
@@ -163,9 +164,7 @@ export async function AudioDirectory({ params, searchParams }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.audio')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('audio.scope')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('audio.scope')}</p>
       <DirectoryFilter
         base={base}
         state={filter.state}
@@ -189,9 +188,7 @@ export async function AudioDirectory({ params, searchParams }: ListParams) {
         <Panel>
           <div className="flex flex-col gap-4">
             <SectionHeading>{t('audio.create')}</SectionHeading>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('audio.createHelp')}
-            </p>
+            <p className="text-sm text-foreground-muted">{t('audio.createHelp')}</p>
             <ReferenceSearch query={reference} copy={copy} />
             <TrackForm
               locale={locale}
@@ -211,7 +208,7 @@ export async function AudioEditor({ params, searchParams }: EditorParams) {
   const locale = await requireLocale(params);
   const { id } = await params;
   const query = await searchParams;
-  const base = `/${locale}/admin/media/audio`;
+  const base = localizedPath(locale, '/admin/media/audio');
   const context = await requireAdminPage(locale, 'media.read', base);
   const copy = await mediaCopy(locale);
   const { t } = copy;
@@ -355,9 +352,7 @@ function FileState({
         <span dir="ltr">{file.mediaType}</span>
         <span>{formatBytes(file.byteSize, locale)}</span>
       </p>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('audio.previewHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('audio.previewHelp')}</p>
       <AudioPlayer
         trackId={record.id}
         assetId={record.assetId}
@@ -398,9 +393,7 @@ function TrackForm({
     >
       <EditIdentity locale={locale} record={record} />
       <CommonFields prefix={prefix} locale={locale} record={record} copy={copy} />
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('audio.publishHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('audio.publishHelp')}</p>
 
       <LabelFields prefix={prefix} locale={locale} record={record} copy={copy} />
 
@@ -514,9 +507,7 @@ function TrackForm({
       </div>
 
       <SectionHeading>{t('audio.speakers')}</SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('audio.speakersHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('audio.speakersHelp')}</p>
       <div className="grid gap-3 sm:grid-cols-2">
         {Array.from({ length: MEDIA_FORM_ROWS.speakers }, (_, index) => {
           const selected = record?.speakerIds[index];
@@ -601,7 +592,9 @@ function SeriesTable({
       {items.map((item) => (
         <DataRow key={item.id}>
           <DataCell wrap>
-            <TextLink href={`/${locale}/admin/media/audio/series/${item.id}`}>
+            <TextLink
+              href={localizedPath(locale, `/admin/media/audio/series/${item.id}`)}
+            >
               <Title record={item} locale={locale} />
             </TextLink>
           </DataCell>
@@ -644,7 +637,7 @@ function SeriesForm({
 export async function AudioSeriesDirectory({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/media/audio/series`;
+  const base = localizedPath(locale, '/admin/media/audio/series');
   const context = await requireAdminPage(locale, 'media.read', base);
   const copy = await mediaCopy(locale);
   const { t } = copy;
@@ -692,7 +685,7 @@ export async function AudioSeriesEditor({ params, searchParams }: EditorParams) 
   const locale = await requireLocale(params);
   const { id } = await params;
   const query = await searchParams;
-  const base = `/${locale}/admin/media/audio/series`;
+  const base = localizedPath(locale, '/admin/media/audio/series');
   const context = await requireAdminPage(locale, 'media.read', base);
   const copy = await mediaCopy(locale);
   const { t } = copy;
@@ -733,9 +726,7 @@ export async function AudioSeriesEditor({ params, searchParams }: EditorParams) 
 
       <section className="flex flex-col gap-4">
         <SectionHeading>{t('audioSeries.tracks')}</SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('audioSeries.tracksHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('audioSeries.tracksHelp')}</p>
         <TrackTable
           locale={locale}
           tracks={tracks.items}

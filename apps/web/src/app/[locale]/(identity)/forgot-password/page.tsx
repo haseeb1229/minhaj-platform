@@ -1,3 +1,5 @@
+import { identityMetadata } from '../metadata';
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { requireLocale } from '@/config/route-locale';
@@ -13,7 +15,9 @@ import { ActionForm } from '../form-state';
  * address would answer the question an attacker is asking
  * (SECURITY_BASELINE.md §15.2).
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = identityMetadata('forgot.title', {
+  robots: { index: false, follow: false },
+});
 
 export default async function ForgotPasswordPage({
   params,
@@ -27,7 +31,11 @@ export default async function ForgotPasswordPage({
     <AuthLayout
       title={t('forgot.title')}
       description={t('forgot.description')}
-      footer={<TextLink href={`/${locale}/signin`}>{t('common.backToSignIn')}</TextLink>}
+      footer={
+        <TextLink href={localizedPath(locale, '/signin')}>
+          {t('common.backToSignIn')}
+        </TextLink>
+      }
     >
       <ActionForm
         action={requestPasswordResetAction}

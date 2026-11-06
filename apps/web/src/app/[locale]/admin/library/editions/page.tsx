@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { requireAdminPage } from '@/composition/authorization';
 import { libraryReferenceChoices, libraryRuntime } from '@/composition/library';
 import { requireLocale } from '@/config/route-locale';
@@ -42,7 +43,7 @@ export default async function EditionsDirectory({
   const context = await requireAdminPage(
     locale,
     'library.read',
-    `/${locale}/admin/library/editions`,
+    localizedPath(locale, '/admin/library/editions'),
   );
 
   const copy = await libraryCopy(locale);
@@ -77,7 +78,9 @@ export default async function EditionsDirectory({
           {page.items.map((record) => (
             <DataRow key={record.id}>
               <DataCell wrap>
-                <TextLink href={`/${locale}/admin/library/editions/${record.id}`}>
+                <TextLink
+                  href={localizedPath(locale, `/admin/library/editions/${record.id}`)}
+                >
                   {record.label}
                 </TextLink>
               </DataCell>

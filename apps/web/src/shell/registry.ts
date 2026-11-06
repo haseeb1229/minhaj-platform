@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import {
   EXPLORE_SECTIONS,
   exploreSlugsOf,
@@ -64,17 +65,11 @@ export type Indexing = 'eligible' | 'excluded';
  */
 export type Visibility = 'public' | 'private';
 
-/** Where a route appears in the shell. */
-export type Placement =
-  'primary' | 'utility' | 'footer-explore' | 'footer-legal' | 'footer-utility';
-
 interface ShellRouteBase {
   /** Stable key. The vocabulary code, never a display string. */
   readonly key: string;
   /** Message key within the `shell` namespace. */
   readonly label: string;
-  /** Where the shell renders it. A route reachable only by URL has none. */
-  readonly placements: readonly Placement[];
 }
 
 /** A route that exists and can be linked to. */
@@ -109,7 +104,7 @@ export function isAvailable(route: ShellRoute): route is AvailableRoute {
  * onto a path, so a route cannot acquire a second spelling.
  */
 export function pathFor(locale: string, route: AvailableRoute): string {
-  return `/${locale}${route.path}`;
+  return localizedPath(locale, route.path);
 }
 
 /* ===========================================================================
@@ -132,7 +127,6 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     key: 'explore',
     label: 'nav.explore',
     path: '/explore',
-    placements: Object.freeze(['primary'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
@@ -153,7 +147,6 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     key: 'quran',
     label: 'nav.quran',
     path: '/quran',
-    placements: Object.freeze(['primary'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'excluded' as const,
@@ -174,7 +167,6 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     key: 'hadith',
     label: 'nav.hadith',
     path: '/hadith',
-    placements: Object.freeze(['primary'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'excluded' as const,
@@ -191,7 +183,6 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     key: 'learn',
     label: 'nav.learn',
     path: '/learn',
-    placements: Object.freeze(['primary'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
@@ -209,7 +200,6 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     key: 'library',
     label: 'nav.library',
     path: '/library',
-    placements: Object.freeze(['primary'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
@@ -223,7 +213,6 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     key: 'watch',
     label: 'nav.watch',
     path: '/watch',
-    placements: Object.freeze(['primary'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
@@ -244,7 +233,6 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     key: 'fatwa',
     label: 'nav.fatwa',
     path: '/fatwa',
-    placements: Object.freeze(['primary'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'excluded' as const,
@@ -260,7 +248,6 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     key: 'news-events',
     label: 'nav.newsEvents',
     path: '/news',
-    placements: Object.freeze(['primary'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
@@ -275,7 +262,6 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     key: 'global',
     label: 'nav.global',
     path: '/global',
-    placements: Object.freeze(['primary'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
@@ -290,7 +276,6 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     key: 'search',
     label: 'nav.search',
     path: '/search',
-    placements: Object.freeze(['primary'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'excluded' as const,
@@ -307,7 +292,6 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     key: 'my-minhaj',
     label: 'nav.myMinhaj',
     path: '/my',
-    placements: Object.freeze(['primary'] as const),
     visibility: 'private' as const,
     availability: 'delivered' as const,
     indexing: 'excluded' as const,
@@ -325,7 +309,6 @@ const PRIMARY: readonly ShellRoute[] = Object.freeze([
     key: 'donate',
     label: 'nav.donate',
     path: '/donate',
-    placements: Object.freeze(['primary'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
@@ -348,7 +331,6 @@ const UTILITY: readonly ShellRoute[] = Object.freeze([
     key: 'find-a-centre',
     label: 'nav.findACentre',
     path: '/global/find-a-centre',
-    placements: Object.freeze(['utility'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
@@ -363,7 +345,6 @@ const UTILITY: readonly ShellRoute[] = Object.freeze([
     key: 'membership',
     label: 'nav.membership',
     path: '/membership',
-    placements: Object.freeze(['utility'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
@@ -372,7 +353,6 @@ const UTILITY: readonly ShellRoute[] = Object.freeze([
     key: 'contact-help',
     label: 'nav.contactHelp',
     path: '/help',
-    placements: Object.freeze(['utility'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'excluded' as const,
@@ -398,7 +378,6 @@ function exploreRoutes(): readonly ShellRoute[] {
         key: `explore.${section}`,
         label: `explore.${section}.title`,
         path: `/explore/${section}`,
-        placements: Object.freeze(['footer-explore'] as const),
         visibility: 'public' as const,
         availability: 'reserved' as const,
         indexing: 'excluded' as const,
@@ -412,7 +391,6 @@ function exploreRoutes(): readonly ShellRoute[] {
             key: `explore.${section}.${slug}`,
             label: `explore.${section}.pages.${slug}`,
             path: `/explore/${section}/${slug}`,
-            placements: Object.freeze([] as const),
             visibility: 'public' as const,
             availability: 'reserved' as const,
             indexing: 'excluded' as const,
@@ -443,7 +421,6 @@ const LEGAL: readonly ShellRoute[] = Object.freeze(
       key: `legal.${document}`,
       label: `legal.${document}`,
       path: `/legal/${document}`,
-      placements: Object.freeze(['footer-legal'] as const),
       visibility: 'public' as const,
       availability: 'reserved' as const,
       indexing: 'excluded' as const,
@@ -505,7 +482,6 @@ const LIBRARY: readonly ShellRoute[] = Object.freeze(
       // surface rather than printing "Library" twelve times.
       label: `library.${surface}`,
       path: `/library/${surface}`,
-      placements: Object.freeze([] as const),
       visibility: 'public' as const,
       availability: 'delivered' as const,
       indexing: 'eligible' as const,
@@ -542,7 +518,6 @@ const WATCH: readonly ShellRoute[] = Object.freeze(
       key: `watch.${surface}`,
       label: `watch.${surface}`,
       path: `/watch/${surface}`,
-      placements: Object.freeze([] as const),
       visibility: 'public' as const,
       availability: 'delivered' as const,
       indexing: 'eligible' as const,
@@ -569,7 +544,6 @@ const LISTEN: readonly ShellRoute[] = Object.freeze([
     key: 'listen',
     label: 'listen.home',
     path: '/listen',
-    placements: Object.freeze([] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
@@ -579,7 +553,6 @@ const LISTEN: readonly ShellRoute[] = Object.freeze([
       key: `listen.${surface}`,
       label: `listen.${surface}`,
       path: `/listen/${surface}`,
-      placements: Object.freeze([] as const),
       visibility: 'public' as const,
       availability: 'delivered' as const,
       indexing: 'eligible' as const,
@@ -631,7 +604,6 @@ const QURAN: readonly ShellRoute[] = Object.freeze(
       key: `quran.${surface}`,
       label: `quran.${surface}`,
       path: `/quran/${surface}`,
-      placements: Object.freeze([] as const),
       visibility: 'public' as const,
       availability: 'delivered' as const,
       indexing: 'excluded' as const,
@@ -674,7 +646,6 @@ const HADITH: readonly ShellRoute[] = Object.freeze(
       key: `hadith.${surface}`,
       label: `hadith.${surface}`,
       path: `/hadith/${surface}`,
-      placements: Object.freeze([] as const),
       visibility: 'public' as const,
       availability: 'delivered' as const,
       indexing: 'excluded' as const,
@@ -704,7 +675,6 @@ const LEARN: readonly ShellRoute[] = Object.freeze(
       key: `learn.${surface}`,
       label: `learn.${surface}`,
       path: `/learn/${surface}`,
-      placements: Object.freeze([] as const),
       visibility: 'public' as const,
       availability: 'delivered' as const,
       indexing: 'eligible' as const,
@@ -731,7 +701,6 @@ const LIVE_LEARNING: readonly ShellRoute[] = Object.freeze(
       key: `learn.${surface}`,
       label: `learn.${surface}`,
       path: `/learn/${surface}`,
-      placements: Object.freeze([] as const),
       visibility: 'public' as const,
       availability: 'delivered' as const,
       indexing: 'excluded' as const,
@@ -766,7 +735,6 @@ const FATWA: readonly ShellRoute[] = Object.freeze(
       key: `fatwa.${surface}`,
       label: `fatwa.${surface}`,
       path: `/fatwa/${surface}`,
-      placements: Object.freeze([] as const),
       visibility: 'public' as const,
       availability: 'delivered' as const,
       indexing: 'excluded' as const,
@@ -795,7 +763,6 @@ const MEDIA: readonly ShellRoute[] = Object.freeze(
       key: `media.${surface}`,
       label: `media.${surface}`,
       path: `/media/${surface}`,
-      placements: Object.freeze([] as const),
       visibility: 'public' as const,
       availability: 'delivered' as const,
       indexing: 'eligible' as const,
@@ -819,7 +786,6 @@ const NEWS: readonly ShellRoute[] = Object.freeze(
         key: `news.${surface}`,
         label: `news.${surface}`,
         path: `/news/${surface}`,
-        placements: Object.freeze([] as const),
         visibility: 'public' as const,
         availability: 'delivered' as const,
         indexing: 'eligible' as const,
@@ -845,7 +811,6 @@ const GLOBAL: readonly ShellRoute[] = Object.freeze([
       key: `global.${surface}`,
       label: `global.${surface}`,
       path: `/global/${surface}`,
-      placements: Object.freeze([] as const),
       visibility: 'public' as const,
       availability: 'delivered' as const,
       indexing: 'eligible' as const,
@@ -855,7 +820,6 @@ const GLOBAL: readonly ShellRoute[] = Object.freeze([
     key: 'global.pakistan',
     label: 'global.pakistan',
     path: '/global/pakistan',
-    placements: Object.freeze([] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'excluded' as const,
@@ -874,7 +838,6 @@ const EVENTS: readonly ShellRoute[] = Object.freeze([
     key: 'events',
     label: 'news.events',
     path: '/events',
-    placements: Object.freeze([] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
@@ -895,7 +858,6 @@ const COLLECTIONS: readonly ShellRoute[] = Object.freeze([
     key: 'collections',
     label: 'news.collections',
     path: '/collections',
-    placements: Object.freeze([] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
@@ -908,7 +870,6 @@ const SHELL: readonly ShellRoute[] = Object.freeze([
     key: 'articles',
     label: 'nav.articles',
     path: '/library/articles',
-    placements: Object.freeze(['footer-utility'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'excluded' as const,
@@ -917,7 +878,6 @@ const SHELL: readonly ShellRoute[] = Object.freeze([
     key: 'contact',
     label: 'nav.contact',
     path: '/contact',
-    placements: Object.freeze(['footer-utility'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'excluded' as const,
@@ -926,7 +886,6 @@ const SHELL: readonly ShellRoute[] = Object.freeze([
     key: 'feedback',
     label: 'nav.feedback',
     path: '/feedback',
-    placements: Object.freeze(['footer-utility'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'excluded' as const,
@@ -946,7 +905,6 @@ const SHELL: readonly ShellRoute[] = Object.freeze([
     key: 'newsletter',
     label: 'nav.newsletter',
     path: '/newsletter',
-    placements: Object.freeze(['footer-utility'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
@@ -955,7 +913,6 @@ const SHELL: readonly ShellRoute[] = Object.freeze([
     key: 'volunteer',
     label: 'nav.volunteer',
     path: '/volunteer',
-    placements: Object.freeze([] as const),
     visibility: 'public' as const,
     availability: 'reserved' as const,
     indexing: 'excluded' as const,
@@ -964,7 +921,6 @@ const SHELL: readonly ShellRoute[] = Object.freeze([
     key: 'home',
     label: 'nav.home',
     path: '',
-    placements: Object.freeze([] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
@@ -979,7 +935,6 @@ const SHELL: readonly ShellRoute[] = Object.freeze([
     key: 'topics',
     label: 'nav.topics',
     path: '/topics',
-    placements: Object.freeze(['footer-utility'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
@@ -988,7 +943,6 @@ const SHELL: readonly ShellRoute[] = Object.freeze([
     key: 'sitemap',
     label: 'nav.sitemap',
     path: '/sitemap',
-    placements: Object.freeze(['footer-utility'] as const),
     visibility: 'public' as const,
     availability: 'delivered' as const,
     indexing: 'eligible' as const,
@@ -1020,16 +974,6 @@ export const SHELL_ROUTES: readonly ShellRoute[] = Object.freeze([
 /* ===========================================================================
  * Views
  * ========================================================================= */
-
-/** Every route in a placement, in registry order. */
-export function routesIn(placement: Placement): readonly ShellRoute[] {
-  return SHELL_ROUTES.filter((route) => route.placements.includes(placement));
-}
-
-/** Every LINKABLE route in a placement. What a navigation renders. */
-export function linksIn(placement: Placement): readonly AvailableRoute[] {
-  return routesIn(placement).filter(isAvailable);
-}
 
 /** One route by key, or `null`. */
 export function routeByKey(key: string): ShellRoute | null {

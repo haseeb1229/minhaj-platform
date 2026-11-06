@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -96,7 +97,7 @@ export async function QuranSearchPage({
     >
       <div className="flex flex-col gap-2">
         <PageHeading>{title}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">{t('search.intro')}</p>
+        <p className="text-foreground-muted">{t('search.intro')}</p>
       </div>
 
       <Panel>
@@ -167,10 +168,8 @@ function QuranResults({
       // explain a malformed query identically.
       return (
         <div role="alert" className="flex flex-col gap-2 text-sm">
-          <p className="font-medium text-[color:var(--color-error)]">
-            {searchT('invalidTitle')}
-          </p>
-          <ul className="list-disc ps-5 text-[color:var(--color-error)]">
+          <p className="font-medium text-error">{searchT('invalidTitle')}</p>
+          <ul className="list-disc ps-5 text-error">
             {outcome.issues.map((key) => (
               <li key={key}>{searchT(`issues.${key}` as 'issues.type')}</li>
             ))}
@@ -187,7 +186,7 @@ function QuranResults({
           <h2 id="quran-results" className="sr-only">
             {t('search.results')}
           </h2>
-          <p role="status" className="text-sm text-[color:var(--color-foreground-muted)]">
+          <p role="status" className="text-sm text-foreground-muted">
             {results.capped
               ? t('search.capped', { count: SEARCH_RESULT_CEILING, query: words })
               : results.total > 0
@@ -277,8 +276,8 @@ function QuranHit({
       <article className="flex min-w-0 flex-col gap-2">
         <h3 className="text-lg font-semibold">
           <a
-            href={`/${locale}${hit.href}`}
-            className="text-[color:var(--color-action)] underline underline-offset-2"
+            href={localizedPath(locale, `${hit.href}`)}
+            className="text-action underline underline-offset-2"
           >
             {ref === null
               ? hit.title

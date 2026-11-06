@@ -1,5 +1,6 @@
 'use server';
 
+import { localizedPath } from '@minhaj/contracts';
 import { redirect } from 'next/navigation';
 
 import {
@@ -119,7 +120,7 @@ export async function createCollectionAction(
   }
   refreshMy(gate.locale);
   // Outside the try: `redirect` signals by throwing, and that is not a failure.
-  redirect(`/${gate.locale}/my/saved/collections/${encodeURIComponent(id)}`);
+  redirect(localizedPath(gate.locale, `/my/saved/collections/${encodeURIComponent(id)}`));
 }
 
 /** Renames or re-describes a collection, under the version the person read. */
@@ -163,7 +164,7 @@ export async function removeCollectionAction(
     return rejected(error, 'personal-collection-remove');
   }
   refreshMy(gate.locale);
-  redirect(`/${gate.locale}/my/saved/collections`);
+  redirect(localizedPath(gate.locale, '/my/saved/collections'));
 }
 
 /**

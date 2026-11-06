@@ -1,22 +1,42 @@
-import type { Page, Response } from '@playwright/test';
+import type { Locator, Page, Response } from '@playwright/test';
 
-import { expect, firstDifference, knowledgeOf, registerAndSignIn, test } from './support';
+import {
+  baseUrl,
+  expect,
+  firstDifference,
+  knowledgeOf,
+  localizedPath,
+  registerAndSignIn,
+  test,
+} from './support';
 
 /**
- * PHASE 4 — the public shell in a real browser.
+ * THE PUBLIC SHELL in a real browser (Phase 4, rebuilt by Rebaseline R1).
  *
- * WHAT ONLY A BROWSER CAN SHOW. That a mega menu opens from the keyboard and
- * gives focus back when it closes; that a drawer traps focus and locks the page
- * behind it; that nothing scrolls sideways at 320 pixels in Arabic; that the
- * Content-Security-Policy the server sends does not break the page it protects;
- * and — the one that matters most — that a visitor carrying a session cookie
- * and a visitor carrying none are served the same public document.
+ * WHAT ONLY A BROWSER CAN SHOW. That the address alone decides the interface
+ * language — English unprefixed, `/en/…` one permanent hop away, no cookie and
+ * no `Accept-Language` ever redirecting anybody; that the header promotes only
+ * what the platform actually holds and keeps a real search form and an account
+ * entry; that the mobile drawer traps focus and locks the page behind it; that
+ * the footer carries the organisation's mark and the one pre-adoption statement
+ * and no legal link to an unpublished document; that the private surfaces wear
+ * the same product bar; that nothing scrolls sideways at 320 pixels in Arabic;
+ * that the Content-Security-Policy does not break the page it protects; and —
+ * the one that matters most — that a visitor carrying a session cookie and a
+ * visitor carrying none are served the same public document.
  *
- * NO SURFACE HERE NEEDS AN ACCOUNT, and that is itself the claim: the public
- * platform is fully usable signed out (PRODUCT_SCOPE.md).
+ * PRESENCE IS LIVE STATE. The header's destinations follow the content other
+ * specs publish in parallel (through a presence snapshot up to 30 seconds old),
+ * so this file asserts the policy's INVARIANTS — what is always promoted, what
+ * is never promoted while only fixture corpora exist, the bar's bound and its
+ * order — and leaves "this area appears once published" to the specs that
+ * publish it.
+ *
+ * NO PUBLIC SURFACE HERE NEEDS AN ACCOUNT, and that is itself the claim: the
+ * public platform is fully usable signed out (PRODUCT_SCOPE.md).
  */
 
-/** Every public surface this phase delivers, as locale-relative paths. */
+/** Every public surface this phase delivers, as locale-free paths. */
 const PUBLIC_PATHS = [
   '',
   '/explore',
@@ -34,11 +54,66 @@ const LOCALES = [
   ['ar', 'rtl'],
 ] as const;
 
+/** The English shell's own words (apps/web/messages/en.json, `shell`). */
+const NAV = 'Main navigation';
+const SWITCHER = 'Choose a language';
+const SEARCH_LABEL = 'Search One Minhaj';
+const WORDMARK = /^One Minhaj\s*—\s*Home$/;
+const ORGANISATION = 'Minhaj-ul-Quran International';
+const PRE_ADOPTION = 'not currently commissioned';
+
+/**
+ * The destinations the presentation policy may ever put in the bar, in its
+ * display order (apps/web/src/shell/presence.ts). About is always present and
+ * always last; the rest need evidence.
+ */
+const PRIMARY_ORDER: readonly string[] = [
+  '/quran',
+  '/hadith',
+  '/library',
+  '/watch',
+  '/learn',
+  '/fatwa',
+  '/news',
+  '/collections',
+  '/explore',
+];
+
+/**
+ * Destinations that need an APPROVED corpus or service. The suite only ever
+ * activates fixture corpora, so these are never promoted during a run — a
+ * fixture text in the main navigation would advertise test data as the
+ * platform's Quran.
+ */
+const NEVER_PROMOTED_WITH_FIXTURES = ['/quran', '/hadith', '/fatwa'] as const;
+
 /** Does the document scroll sideways? The one thing no layout may do. */
 async function overflows(page: Page): Promise<boolean> {
   return page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
   );
+}
+
+/** The `href` of every visible link inside `scope`, in document order. */
+async function hrefsOf(scope: Locator): Promise<string[]> {
+  return scope
+    .getByRole('link')
+    .evaluateAll((links) =>
+      links.map((link) => (link as HTMLAnchorElement).getAttribute('href') ?? ''),
+    );
+}
+
+/** The `href` of every anchor inside `scope`, visible or not. */
+async function anchorsOf(scope: Locator): Promise<string[]> {
+  return scope
+    .locator('a[href]')
+    .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
+}
+
+/** The path and query of an address. */
+function pathAndQuery(url: string): string {
+  const parsed = new URL(url, baseUrl());
+  return `${parsed.pathname}${parsed.search}`;
 }
 
 /* ===========================================================================
@@ -49,37 +124,48 @@ test.describe('the public shell, signed out', () => {
   test('serves every delivered surface in all three locales', async ({ page }) => {
     for (const [locale, direction] of LOCALES) {
       for (const path of PUBLIC_PATHS) {
-        const response = await page.goto(`/${locale}${path}`);
+        const target = localizedPath(locale, path);
+        const response = await page.goto(target);
 
-        expect(response?.status(), `${locale}${path}`).toBe(200);
+        // Served at its own address — no hop on the way, in any locale.
+        expect(response?.status(), target).toBe(200);
+        expect(response?.request().redirectedFrom(), target).toBeNull();
 
         const document = await page.evaluate(() => ({
           lang: globalThis.document.documentElement.lang,
           dir: globalThis.document.documentElement.dir,
         }));
 
-        expect(document.lang, `${locale}${path} lang`).toBe(locale);
-        expect(document.dir, `${locale}${path} dir`).toBe(direction);
+        expect(document.lang, `${target} lang`).toBe(locale);
+        expect(document.dir, `${target} dir`).toBe(direction);
 
         // Exactly one first-level heading, and it is translated rather than
         // English under a prefix.
-        await expect(
-          page.getByRole('heading', { level: 1 }),
-          `${locale}${path}`,
-        ).toHaveCount(1);
+        await expect(page.getByRole('heading', { level: 1 }), target).toHaveCount(1);
       }
     }
   });
 
   test('needs no cookie at all', async ({ browser }) => {
     // A brand-new context with no storage whatsoever. A public page that
-    // needed a cookie to render would fail here and nowhere else.
+    // needed a cookie to render would fail here and nowhere else — and a page
+    // that SET one would show up in the jar.
     const context = await browser.newContext();
     const page = await context.newPage();
 
     for (const path of PUBLIC_PATHS) {
-      const response = await page.goto(`${test.info().project.use.baseURL}/en${path}`);
+      const response = await page.goto(`${baseUrl()}${localizedPath('en', path)}`);
       expect(response?.ok(), path).toBe(true);
+      expect(response?.headers()['set-cookie'], path).toBeUndefined();
+    }
+
+    // The Urdu and Arabic addresses store nothing either: there is no locale
+    // preference cookie any more.
+    for (const locale of ['ur', 'ar'] as const) {
+      const response = await page.goto(
+        `${baseUrl()}${localizedPath(locale, '/explore')}`,
+      );
+      expect(response?.headers()['set-cookie'], locale).toBeUndefined();
     }
 
     expect(await context.cookies()).toHaveLength(0);
@@ -89,7 +175,7 @@ test.describe('the public shell, signed out', () => {
   test('gives every page the landmarks a screen reader navigates by', async ({
     page,
   }) => {
-    await page.goto('/en/explore');
+    await page.goto('/explore');
 
     await expect(page.getByRole('banner')).toHaveCount(1);
     await expect(page.getByRole('main')).toHaveCount(1);
@@ -97,7 +183,7 @@ test.describe('the public shell, signed out', () => {
   });
 
   test('offers a skip link that actually moves focus', async ({ page }) => {
-    await page.goto('/en');
+    await page.goto('/');
 
     await page.keyboard.press('Tab');
 
@@ -114,6 +200,157 @@ test.describe('the public shell, signed out', () => {
 });
 
 /* ===========================================================================
+ * The address decides the language (Rebaseline R1)
+ * ========================================================================= */
+
+test.describe('locale addresses', () => {
+  test('answers a legacy /en address with ONE permanent hop, query preserved', async ({
+    page,
+  }) => {
+    for (const [legacy, canonical] of [
+      ['/en', '/'],
+      ['/en/explore', '/explore'],
+      [
+        '/en/explore/about/vision?ref=legacy&page=2',
+        '/explore/about/vision?ref=legacy&page=2',
+      ],
+      ['/en/sitemap', '/sitemap'],
+      ['/en/legal/privacy', '/legal/privacy'],
+      ['/en/signin?returnTo=%2Fmy', '/signin?returnTo=%2Fmy'],
+    ] as const) {
+      const response = await page.request.get(legacy, { maxRedirects: 0 });
+
+      // Permanent, so a former link's authority transfers; uncached, like every
+      // other hop the proxy answers, and it stores nothing.
+      expect(response.status(), legacy).toBe(301);
+      expect(response.headers()['set-cookie'], legacy).toBeUndefined();
+      expect(response.headers()['cache-control'], legacy).toBe('no-store');
+
+      // Same origin — a redirect built from the request never leaves the site.
+      const location = new URL(response.headers()['location'] ?? '', baseUrl());
+      expect(location.origin, legacy).toBe(new URL(baseUrl()).origin);
+      expect(`${location.pathname}${location.search}`, legacy).toBe(canonical);
+
+      // ONE hop: the target answers itself, with no second redirect.
+      const landed = await page.request.get(canonical, { maxRedirects: 0 });
+      expect(landed.status(), canonical).toBe(200);
+    }
+
+    // And in a browser: the navigation lands on the unprefixed page, in
+    // English, through exactly one redirect.
+    const response = await page.goto('/en/explore/about/vision?ref=browser');
+    expect(pathAndQuery(page.url())).toBe('/explore/about/vision?ref=browser');
+    expect(response?.status()).toBe(200);
+    const hop = response?.request().redirectedFrom();
+    expect(hop).toBeTruthy();
+    expect(hop?.redirectedFrom()).toBeNull();
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('en');
+  });
+
+  test('never redirects an unprefixed address by cookie or Accept-Language', async ({
+    browser,
+    clientAddress,
+  }) => {
+    // A browser that says, every way it can, that it prefers Urdu: its locale,
+    // its Accept-Language header, and the preference cookie the platform used
+    // to honour. None of it may move an unprefixed English address.
+    const context = await browser.newContext({
+      locale: 'ur-PK',
+      extraHTTPHeaders: {
+        'accept-language': 'ur-PK,ur;q=0.9,ar;q=0.8',
+        'x-forwarded-for': clientAddress,
+      },
+    });
+    await context.addCookies([{ name: 'NEXT_LOCALE', value: 'ur', url: baseUrl() }]);
+    const page = await context.newPage();
+
+    const redirects: string[] = [];
+    page.on('response', (response) => {
+      if (response.status() >= 300 && response.status() < 400)
+        redirects.push(response.url());
+    });
+
+    for (const path of ['/', '/explore', '/sitemap']) {
+      const response = await page.goto(`${baseUrl()}${path}`);
+      expect(response?.status(), path).toBe(200);
+      expect(new URL(page.url()).pathname, path).toBe(path);
+      expect(await page.evaluate(() => document.documentElement.lang), path).toBe('en');
+      expect(await page.evaluate(() => document.documentElement.dir), path).toBe('ltr');
+
+      const raw = await context.request.get(`${baseUrl()}${path}`, { maxRedirects: 0 });
+      expect(raw.status(), path).toBe(200);
+      expect(raw.headers()['set-cookie'], path).toBeUndefined();
+    }
+
+    expect(redirects).toEqual([]);
+
+    // Nothing was written back: the only cookie is the stale one this test set.
+    expect((await context.cookies()).map(({ name }) => name)).toEqual(['NEXT_LOCALE']);
+    await context.close();
+  });
+
+  test('switches language with plain links that keep the exact page and query', async ({
+    page,
+  }) => {
+    const responses: Response[] = [];
+    page.on('response', (response) => responses.push(response));
+
+    await page.goto('/explore/about/vision?ref=switcher');
+    const switcher = page.getByRole('banner').getByRole('navigation', { name: SWITCHER });
+
+    for (const [locale, name, direction] of [
+      ['en', 'English', 'ltr'],
+      ['ur', 'اردو', 'rtl'],
+      ['ar', 'العربية', 'rtl'],
+    ] as const) {
+      const link = switcher.getByRole('link', { name, exact: true });
+      // Each link IS the target locale's canonical address — English
+      // unprefixed, so switching to it never passes through a `/en/…` hop —
+      // announced in its own language and direction.
+      await expect(link, locale).toHaveAttribute(
+        'href',
+        localizedPath(locale, '/explore/about/vision?ref=switcher'),
+      );
+      await expect(link, locale).toHaveAttribute('hreflang', locale);
+      await expect(link, locale).toHaveAttribute('lang', locale);
+      await expect(link, locale).toHaveAttribute('dir', direction);
+    }
+    await expect(
+      switcher.getByRole('link', { name: 'English', exact: true }),
+    ).toHaveAttribute('aria-current', 'page');
+
+    await switcher.getByRole('link', { name: 'اردو', exact: true }).click();
+    await page.waitForURL((url) => url.pathname === '/ur/explore/about/vision');
+    expect(pathAndQuery(page.url())).toBe('/ur/explore/about/vision?ref=switcher');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+    expect(await page.evaluate(() => document.documentElement.dir)).toBe('rtl');
+
+    // And back to English, straight to the unprefixed address.
+    await page
+      .getByRole('banner')
+      .getByRole('link', { name: 'English', exact: true })
+      .click();
+    await page.waitForURL((url) => url.pathname === '/explore/about/vision');
+    expect(pathAndQuery(page.url())).toBe('/explore/about/vision?ref=switcher');
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('en');
+
+    // NOTHING IS STORED. The choice lives in the address alone: no cookie, no
+    // redirect anywhere in the journey, and the bare home stays English.
+    expect(await page.context().cookies()).toHaveLength(0);
+    for (const response of responses)
+      expect(response.headers()['set-cookie'], response.url()).toBeUndefined();
+    expect(
+      responses
+        .filter((response) => response.status() >= 300 && response.status() < 400)
+        .map((response) => response.url()),
+    ).toEqual([]);
+    await page.goto('/');
+    expect(new URL(page.url()).pathname).toBe('/');
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('en');
+  });
+});
+
+/* ===========================================================================
  * Reserved routes and 404
  * ========================================================================= */
 
@@ -121,7 +358,7 @@ test.describe('reserved routes are honest', () => {
   test('says a reserved page is not published, and publishes nothing', async ({
     page,
   }) => {
-    await page.goto('/en/legal/privacy');
+    await page.goto('/legal/privacy');
 
     const main = page.getByRole('main');
     await expect(main).toContainText('Not yet published');
@@ -134,7 +371,7 @@ test.describe('reserved routes are honest', () => {
   });
 
   test('keeps every reserved route out of the index', async ({ page }) => {
-    for (const path of ['/en/legal/terms', '/en/explore/about/mission', '/en/explore']) {
+    for (const path of ['/legal/terms', '/explore/about/mission', '/explore']) {
       await page.goto(path);
 
       const robots = await page.locator('meta[name="robots"]').getAttribute('content');
@@ -149,11 +386,12 @@ test.describe('reserved routes are honest', () => {
 
   test('refuses a slug the allowlist does not name', async ({ page }) => {
     for (const path of [
-      '/en/explore/about/not-a-page',
-      '/en/explore/community/anything',
-      '/en/explore/not-a-section',
-      '/en/legal/refunds',
-      '/en/this-does-not-exist',
+      '/explore/about/not-a-page',
+      '/explore/community/anything',
+      '/explore/not-a-section',
+      '/legal/refunds',
+      '/this-does-not-exist',
+      '/ur/explore/not-a-section',
     ]) {
       const response = await page.goto(path);
 
@@ -202,6 +440,40 @@ test.describe('reserved routes are honest', () => {
       expect(target.status(), href ?? '').toBe(200);
     }
   });
+
+  test('lists only published Explore pages, while a reserved one still answers honestly', async ({
+    page,
+  }) => {
+    await page.goto('/explore');
+    const hrefs = await hrefsOf(page.getByRole('main'));
+
+    // No Explore page is published during a run, so the index lists only what
+    // an owner delivered elsewhere (the newsletter) and the Leadership section
+    // once profiles exist — never a reserved address.
+    expect(hrefs).toContain('/newsletter');
+    for (const href of hrefs) {
+      for (const reserved of [
+        '/explore/about',
+        '/explore/shaykh-ul-islam',
+        '/explore/community',
+        '/explore/organization',
+        '/explore/digital-resources',
+      ])
+        expect(href.startsWith(reserved), `/explore lists reserved ${href}`).toBe(false);
+
+      expect((await page.request.get(href)).status(), href).toBe(200);
+    }
+
+    // Unlisted, not removed: the reserved address still renders its honest
+    // state, in every locale.
+    for (const locale of ['en', 'ur', 'ar'] as const) {
+      const target = localizedPath(locale, '/explore/about/vision');
+      expect((await page.goto(target))?.status(), target).toBe(200);
+      await expect(page.getByRole('heading', { level: 1 }), target).toHaveCount(1);
+    }
+    await page.goto('/explore/about/vision');
+    await expect(page.getByRole('main')).toContainText('Not yet published');
+  });
 });
 
 /* ===========================================================================
@@ -230,22 +502,34 @@ test.describe('the anonymous public tree is the same for everybody', () => {
     });
     const anonymousPage = await anonymous.newPage();
 
-    for (const path of ['/en', '/en/explore', '/en/sitemap']) {
-      const base = test.info().project.use.baseURL;
+    // The account entry is the ONE private island in the header: it asks
+    // `/api/my/account-state` after load and relabels itself. Its answer is
+    // held back here (and proved on its own below), so the rendered trees
+    // compare everything the SERVER sent and the page hydrated from it.
+    for (const viewer of [page, anonymousPage])
+      await viewer.route('**/api/my/account-state', (route) => route.abort());
 
-      await page.goto(`${base}${path}`);
-      await anonymousPage.goto(`${base}${path}`);
-
-      const signedIn = await page.locator('body').innerHTML();
-      const signedOut = await anonymousPage.locator('body').innerHTML();
+    for (const path of ['/', '/explore', '/sitemap']) {
+      const base = baseUrl();
 
       // Compared as KNOWLEDGE, not bytes: since Phase 30 the home page is a
       // per-request content route, and two renders of one may flush a Suspense
       // boundary on either side of the shell — scaffolding, never content.
-      // Every word, attribute and link must still be identical.
-      expect(firstDifference(knowledgeOf(signedOut), knowledgeOf(signedIn)), path).toBe(
-        'identical',
-      );
+      // Every word, attribute and link must still be identical. Retried only
+      // because the header's presence snapshot may refresh between the two
+      // loads while a parallel spec publishes; a session leak differs every
+      // time.
+      await expect(async () => {
+        await page.goto(`${base}${path}`);
+        await anonymousPage.goto(`${base}${path}`);
+
+        const signedIn = await page.locator('body').innerHTML();
+        const signedOut = await anonymousPage.locator('body').innerHTML();
+
+        expect(firstDifference(knowledgeOf(signedOut), knowledgeOf(signedIn)), path).toBe(
+          'identical',
+        );
+      }).toPass({ timeout: 45_000 });
     }
 
     await anonymous.close();
@@ -264,37 +548,39 @@ test.describe('the anonymous public tree is the same for everybody', () => {
     const anonymous = await browser.newContext({
       extraHTTPHeaders: { 'x-forwarded-for': clientAddress },
     });
-    const base = test.info().project.use.baseURL;
+    const base = baseUrl();
 
-    for (const path of ['/en', '/en/explore', '/en/sitemap']) {
-      const signedIn = await page.context().request.get(`${base}${path}`);
-      const signedOut = await anonymous.request.get(`${base}${path}`);
+    for (const path of ['/', '/explore', '/sitemap', '/ur', '/ar/explore']) {
+      await expect(async () => {
+        const signedIn = await page.context().request.get(`${base}${path}`);
+        const signedOut = await anonymous.request.get(`${base}${path}`);
 
-      // Knowledge, not bytes, for the same reason as above.
-      expect(
-        firstDifference(
-          knowledgeOf(await signedOut.text()),
-          knowledgeOf(await signedIn.text()),
-        ),
-        path,
-      ).toBe('identical');
+        // Knowledge, not bytes, for the same reason as above.
+        expect(
+          firstDifference(
+            knowledgeOf(await signedOut.text()),
+            knowledgeOf(await signedIn.text()),
+          ),
+          path,
+        ).toBe('identical');
 
-      const signedHeaders = signedIn.headers();
-      const anonymousHeaders = signedOut.headers();
+        const signedHeaders = signedIn.headers();
+        const anonymousHeaders = signedOut.headers();
 
-      expect(signedHeaders['set-cookie'], `${path} signed in`).toBeUndefined();
-      expect(anonymousHeaders['set-cookie'], `${path} anonymous`).toBeUndefined();
-      expect(signedHeaders['cache-control'], `${path} cache-control`).toBe(
-        anonymousHeaders['cache-control'],
-      );
-      expect(signedHeaders['vary'], `${path} vary`).toBe(anonymousHeaders['vary']);
-      expect(signedHeaders['vary']?.toLowerCase() ?? '', `${path} vary`).not.toContain(
-        'cookie',
-      );
+        expect(signedHeaders['set-cookie'], `${path} signed in`).toBeUndefined();
+        expect(anonymousHeaders['set-cookie'], `${path} anonymous`).toBeUndefined();
+        expect(signedHeaders['cache-control'], `${path} cache-control`).toBe(
+          anonymousHeaders['cache-control'],
+        );
+        expect(signedHeaders['vary'], `${path} vary`).toBe(anonymousHeaders['vary']);
+        expect(signedHeaders['vary']?.toLowerCase() ?? '', `${path} vary`).not.toContain(
+          'cookie',
+        );
+      }).toPass({ timeout: 45_000 });
     }
 
     // The contrast matters: a private page keeps its request-time boundary.
-    const privateResponse = await page.context().request.get(`${base}/en/my`);
+    const privateResponse = await page.context().request.get(`${base}/my`);
     expect(privateResponse.headers()['cache-control'] ?? '').toMatch(/no-store|private/);
 
     await anonymous.close();
@@ -303,8 +589,16 @@ test.describe('the anonymous public tree is the same for everybody', () => {
   test('never renders an account detail on a public page', async ({ page }) => {
     const { email } = await registerAndSignIn(page, 'no-leak');
 
-    for (const path of ['/en', '/en/explore', '/en/legal/privacy', '/en/sitemap']) {
+    for (const path of ['/', '/explore', '/legal/privacy', '/sitemap']) {
       await page.goto(path);
+      // The account island has had its answer: the header now knows this
+      // browser is signed in — and still names nobody.
+      await expect(
+        page
+          .getByRole('banner')
+          .getByRole('link', { name: /My Minhaj/ })
+          .first(),
+      ).toContainText('(signed in)');
 
       const html = await page.content();
 
@@ -318,75 +612,223 @@ test.describe('the anonymous public tree is the same for everybody', () => {
       expect(html.toLowerCase(), path).not.toContain('sign out');
     }
   });
+
+  test('tells the account island one boolean, privately, and nothing else', async ({
+    page,
+    browser,
+    clientAddress,
+  }) => {
+    const anonymous = await browser.newContext({
+      extraHTTPHeaders: { 'x-forwarded-for': clientAddress },
+    });
+    const signedOut = await anonymous.request.get(`${baseUrl()}/api/my/account-state`);
+    expect(signedOut.status()).toBe(200);
+    expect(await signedOut.json()).toEqual({ signedIn: false });
+    expect(signedOut.headers()['cache-control']).toBe('private, no-store');
+    expect(signedOut.headers()['set-cookie']).toBeUndefined();
+
+    // A cross-site read is refused before any session is resolved.
+    const crossSite = await anonymous.request.get(`${baseUrl()}/api/my/account-state`, {
+      headers: { 'sec-fetch-site': 'cross-site' },
+    });
+    expect(crossSite.status()).toBe(403);
+    await anonymous.close();
+
+    const { email } = await registerAndSignIn(page, 'account-state');
+    const signedIn = await page
+      .context()
+      .request.get(`${baseUrl()}/api/my/account-state`);
+    expect(signedIn.status()).toBe(200);
+    const body = await signedIn.text();
+    expect(JSON.parse(body)).toEqual({ signedIn: true });
+    expect(body).not.toContain(email);
+    expect(signedIn.headers()['cache-control']).toBe('private, no-store');
+  });
 });
 
 /* ===========================================================================
- * Navigation
+ * The header
  * ========================================================================= */
 
-test.describe('the Explore mega menu', () => {
-  test('opens by pointer, and every entry it offers resolves', async ({ page }) => {
-    await page.goto('/en');
+test.describe('the public header', () => {
+  test('is one quiet row: wordmark, content-aware destinations, search, account', async ({
+    page,
+  }) => {
+    await page.goto('/explore');
+    const banner = page.getByRole('banner');
 
-    const trigger = page.getByRole('button', { name: 'Explore' });
-    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    // The wordmark goes home.
+    const wordmark = banner.getByRole('link', { name: WORDMARK });
+    await expect(wordmark).toHaveCount(1);
+    await expect(wordmark).toHaveAttribute('href', '/');
 
-    await trigger.click();
-    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    // THE PRIMARY NAVIGATION — bounded, in the policy's order, About always
+    // present and always last, and marked current on its own section.
+    const nav = banner.getByRole('navigation', { name: NAV });
+    await expect(nav).toBeVisible();
+    const bar = await hrefsOf(nav);
+    expect(bar.length).toBeGreaterThanOrEqual(1);
+    expect(bar.length).toBeLessThanOrEqual(6);
+    expect(bar.at(-1)).toBe('/explore');
+    const about = nav.getByRole('link', { name: 'About', exact: true });
+    await expect(about).toHaveAttribute('href', '/explore');
+    await expect(about).toHaveAttribute('aria-current', 'page');
+    const positions = bar.map((href) => PRIMARY_ORDER.indexOf(href));
+    expect(positions, `bar ${bar.join(' ')}`).not.toContain(-1);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
 
-    const panel = page.locator(`#${await trigger.getAttribute('aria-controls')}`);
-    await expect(panel).toBeVisible();
+    // FIXTURE CORPORA ARE NEVER ADVERTISED. Every Quran, Hadith or Fatwa
+    // activation in this suite is a fixture, so none of them is a destination
+    // — not in the bar, not under More, not in the drawer, not anywhere in the
+    // header (hidden markup included).
+    const header = await anchorsOf(banner);
+    for (const absent of NEVER_PROMOTED_WITH_FIXTURES)
+      expect(header, `header promotes ${absent}`).not.toContain(absent);
 
-    const hrefs = await panel
-      .getByRole('link')
-      .evaluateAll((links) =>
-        links.map((link) => (link as HTMLAnchorElement).getAttribute('href') ?? ''),
+    // Every destination it does promote is a working page.
+    for (const href of bar)
+      expect((await page.request.get(href)).status(), href).toBe(200);
+
+    // NO UTILITY WALL, NO MEGA MENUS, NO PRE-ADOPTION MARKER in the header.
+    for (const removed of [
+      '/membership',
+      '/global/find-a-centre',
+      '/contact',
+      '/sitemap',
+    ])
+      expect(header, `header links ${removed}`).not.toContain(removed);
+    for (const name of ['Explore', 'Library', 'Watch', 'News and Events'])
+      await expect(banner.getByRole('button', { name, exact: true }), name).toHaveCount(
+        0,
       );
+    await expect(banner).not.toContainText(PRE_ADOPTION);
+    await expect(banner.getByRole('img', { name: ORGANISATION })).toHaveCount(0);
 
-    expect(hrefs.length).toBeGreaterThan(20);
-
-    for (const href of hrefs) {
-      const response = await page.request.get(href);
-      expect(response.status(), href).toBe(200);
+    // A "More" disclosure exists only for destinations beyond the six, and it
+    // is a disclosure: keyboard-operable, never a trap.
+    const more = nav.getByRole('button', { name: 'More', exact: true });
+    if ((await more.count()) > 0) {
+      expect(bar).toHaveLength(6);
+      await expect(more).toHaveAttribute('aria-expanded', 'false');
+      await more.focus();
+      await page.keyboard.press('Enter');
+      await expect(more).toHaveAttribute('aria-expanded', 'true');
+      await expect(page.locator('[aria-modal="true"]:visible')).toHaveCount(0);
+      const panel = page.locator(`#${await more.getAttribute('aria-controls')}`);
+      for (const href of await hrefsOf(panel))
+        expect(PRIMARY_ORDER, href).toContain(href);
+      await page.keyboard.press('Escape');
+      await expect(more).toHaveAttribute('aria-expanded', 'false');
+      await expect(more).toBeFocused();
     }
   });
 
-  test('opens from the keyboard, closes on Escape and gives focus back', async ({
+  test('searches with a real form that submits q by GET', async ({ page }) => {
+    for (const locale of ['en', 'ur'] as const) {
+      await page.goto(localizedPath(locale, '/explore'));
+      const form = page.getByRole('banner').getByRole('search');
+      await expect(form, locale).toHaveCount(1);
+      await expect(form, locale).toHaveAttribute('method', 'get');
+      await expect(form, locale).toHaveAttribute(
+        'action',
+        localizedPath(locale, '/search'),
+      );
+
+      // A labelled field — found through its accessible name, not a selector.
+      const field =
+        locale === 'en'
+          ? form.getByRole('searchbox', { name: SEARCH_LABEL })
+          : form.getByRole('searchbox', { name: /.+/ });
+      await expect(field, locale).toHaveAttribute('name', 'q');
+
+      await field.fill('vision');
+      await field.press('Enter');
+      await page.waitForURL((url) => url.pathname === localizedPath(locale, '/search'));
+      expect(new URL(page.url()).searchParams.get('q'), locale).toBe('vision');
+      await expect(page.getByRole('heading', { level: 1 }), locale).toHaveCount(1);
+    }
+  });
+
+  test('reaches search from the keyboard straight after the destinations', async ({
     page,
   }) => {
-    await page.goto('/en');
+    await page.goto('/');
+    const banner = page.getByRole('banner');
+    const nav = banner.getByRole('navigation', { name: NAV });
+    const stops =
+      (await nav.getByRole('link').count()) + (await nav.getByRole('button').count());
 
-    const trigger = page.getByRole('button', { name: 'Explore' });
-
-    await trigger.focus();
-    await page.keyboard.press('Enter');
-    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
-
-    // Tab reaches the panel's own links rather than skipping past it.
+    // From the wordmark, Tab walks the destinations in order and then lands in
+    // the search field — no hidden duplicate, no stop that goes nowhere.
+    await banner.getByRole('link', { name: WORDMARK }).focus();
+    for (let index = 0; index < stops; index += 1) {
+      await page.keyboard.press('Tab');
+      await expect(nav.locator(':focus'), `stop ${String(index)}`).toHaveCount(1);
+    }
     await page.keyboard.press('Tab');
-    const focusedHref = await page.evaluate(() =>
-      (document.activeElement as HTMLAnchorElement | null)?.getAttribute('href'),
-    );
-    expect(focusedHref).toContain('/en/explore/');
+    await expect(banner.getByRole('searchbox', { name: SEARCH_LABEL })).toBeFocused();
 
-    await page.keyboard.press('Escape');
-    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
-
-    // FOCUS RESTORATION. Closing a menu and dumping focus at the top of the
-    // document is how a keyboard visitor loses their place entirely.
-    await expect(trigger).toBeFocused();
+    await page.keyboard.type('mission');
+    await page.keyboard.press('Enter');
+    await page.waitForURL((url) => url.pathname === '/search');
+    expect(new URL(page.url()).searchParams.get('q')).toBe('mission');
   });
 
-  test('is a disclosure rather than a trap', async ({ page }) => {
-    await page.goto('/en');
+  test('offers the account entry: Sign in when signed out, My Minhaj when signed in', async ({
+    page,
+    browser,
+    clientAddress,
+  }) => {
+    // The document every visitor shares names My Minhaj; only the island, after
+    // load, may relabel it.
+    const document = await (await page.request.get('/')).text();
+    expect(document).toContain('href="/my"');
+    expect(document).toContain('My Minhaj');
 
-    const trigger = page.getByRole('button', { name: 'Explore' });
+    const anonymous = await browser.newContext({
+      extraHTTPHeaders: { 'x-forwarded-for': clientAddress },
+    });
+    const visitor = await anonymous.newPage();
+    await visitor.goto(`${baseUrl()}/`);
+    const entry = visitor
+      .getByRole('banner')
+      .getByRole('link', { name: 'Sign in', exact: true });
+    await expect(entry).toHaveAttribute('href', '/signin');
+    await entry.click();
+    await visitor.waitForURL((url) => url.pathname === '/signin');
+    await expect(visitor.getByRole('heading', { level: 1 })).toHaveText('Sign in');
 
-    // A mega menu is attached to the page, not modal: it must not claim to be.
-    await expect(trigger).toHaveAttribute('aria-controls', /.+/);
-    await expect(page.locator('[aria-modal="true"]:visible')).toHaveCount(0);
+    // The address behind the shared label works too: signed out, My Minhaj
+    // sends the visitor to sign in with the way back.
+    await visitor.goto(`${baseUrl()}/my`);
+    await visitor.waitForURL((url) => url.pathname === '/signin');
+    expect(new URL(visitor.url()).searchParams.get('returnTo')).toBe('/my');
+    await anonymous.close();
+
+    await registerAndSignIn(page, 'account-entry');
+    await page.goto('/');
+    const mine = page.getByRole('banner').getByRole('link', { name: /signed in/ });
+    await expect(mine).toHaveAttribute('href', '/my');
+    await expect(page.getByRole('banner').locator('a[href="/signin"]')).toHaveCount(0);
+    await mine.click();
+    await page.waitForURL((url) => url.pathname === '/my');
+
+    // In Urdu the same entry keeps the Urdu address.
+    const [answer] = await Promise.all([
+      page.waitForResponse('**/api/my/account-state'),
+      page.goto('/ur'),
+    ]);
+    expect(await answer.json()).toEqual({ signedIn: true });
+    await expect(
+      page.getByRole('banner').locator('a[href="/ur/my"]:visible'),
+    ).toHaveCount(1);
+    await expect(page.getByRole('banner').locator('a[href="/ur/signin"]')).toHaveCount(0);
   });
 });
+
+/* ===========================================================================
+ * The mobile navigation
+ * ========================================================================= */
 
 test.describe('the mobile navigation', () => {
   test.use({ viewport: { width: 375, height: 780 } });
@@ -394,14 +836,14 @@ test.describe('the mobile navigation', () => {
   test('opens, traps focus, locks the page and restores focus on Escape', async ({
     page,
   }) => {
-    await page.goto('/en');
+    await page.goto('/');
 
     const trigger = page.getByRole('button', { name: 'Menu' });
     await expect(trigger).toBeVisible();
 
     await trigger.click();
 
-    const drawer = page.getByRole('dialog');
+    const drawer = page.getByRole('dialog', { name: NAV });
     await expect(drawer).toBeVisible();
     await expect(drawer).toHaveAttribute('aria-modal', 'true');
 
@@ -415,12 +857,19 @@ test.describe('the mobile navigation', () => {
       ),
     ).toBe('hidden');
 
-    // The trap holds: tabbing from the last focusable returns to the first
-    // rather than escaping to the page underneath.
-    const focusables = await drawer.locator('a[href], button').count();
+    // The trap holds, both ways: tabbing past the last focusable returns to the
+    // first, and Shift+Tab from the first wraps to the last, rather than
+    // escaping to the page underneath.
+    const focusables = await drawer.locator('a[href], button, input').count();
     for (let index = 0; index < focusables + 1; index += 1) {
       await page.keyboard.press('Tab');
+      expect(
+        await drawer.evaluate((element) => element.contains(document.activeElement)),
+        `forward ${String(index)}`,
+      ).toBe(true);
     }
+    await drawer.getByRole('button', { name: 'Close' }).focus();
+    await page.keyboard.press('Shift+Tab');
     expect(
       await drawer.evaluate((element) => element.contains(document.activeElement)),
     ).toBe(true);
@@ -437,172 +886,191 @@ test.describe('the mobile navigation', () => {
     ).not.toBe('hidden');
   });
 
+  test('holds search, the destinations, the account entry and the organisation', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Menu' }).click();
+    const drawer = page.getByRole('dialog', { name: NAV });
+    await expect(drawer).toBeVisible();
+
+    // The destinations, About always among them, fixture corpora never.
+    const hrefs = await hrefsOf(drawer.getByRole('navigation', { name: NAV }));
+    expect(hrefs).toContain('/explore');
+    for (const absent of NEVER_PROMOTED_WITH_FIXTURES)
+      expect(hrefs).not.toContain(absent);
+
+    // The account entry, relabelled for this signed-out browser.
+    await expect(
+      drawer.getByRole('link', { name: 'Sign in', exact: true }),
+    ).toHaveAttribute('href', '/signin');
+
+    // The organisation group, About among its links.
+    await expect(drawer).toContainText('The organisation');
+
+    // Every link the drawer offers is a working page.
+    for (const href of new Set(await hrefsOf(drawer)))
+      expect((await page.request.get(href)).status(), href).toBe(200);
+
+    // The drawer's own search form submits `q` to the search page.
+    const field = drawer
+      .getByRole('search')
+      .getByRole('searchbox', { name: SEARCH_LABEL });
+    await field.fill('history');
+    await field.press('Enter');
+    await page.waitForURL((url) => url.pathname === '/search');
+    expect(new URL(page.url()).searchParams.get('q')).toBe('history');
+  });
+
   test('presents no second, hidden copy of the desktop navigation', async ({ page }) => {
-    await page.goto('/en');
+    await page.goto('/');
+    const banner = page.getByRole('banner');
 
     // Before the drawer opens, nothing inside it is focusable — a hidden
     // duplicate of every link is a tab order a keyboard visitor walks through
-    // for no reason.
+    // for no reason — and the desktop bar and search form are gone at this
+    // width, leaving one labelled search action.
     await expect(page.getByRole('dialog')).toBeHidden();
-    await expect(page.getByRole('button', { name: 'Explore' })).toBeHidden();
+    await expect(banner.getByRole('navigation', { name: NAV })).toHaveCount(0);
+    await expect(banner.getByRole('search')).toHaveCount(0);
+    const search = banner.getByRole('link', { name: 'Search', exact: true });
+    await expect(search).toBeVisible();
+    await expect(search).toHaveAttribute('href', '/search');
   });
 });
 
-test.describe('navigation is honest about what exists', () => {
-  test('renders no link to an undelivered domain', async ({ page }) => {
-    // Only domains still awaiting implementation remain absent.
-    // Absent, not greyed out and not linked to a stub (ROUTE_MAP.md §5.2).
-    const deferred = [
-      // `/quran` is delivered by Phase 18, `/hadith` by Phase 19, `/fatwa` by
-      // Phase 20, `/learn` by Phase 22 and its Live Learning and Find a Teacher
-      // surfaces by Phase 23 (asserted present on the human sitemap below).
-      // `/library` is delivered by Phase 8 and its scholarly and periodical
-      // surfaces by Phase 9. Phase 15 delivers `/collections` but deliberately
-      // no Library-filtered view, so `/library/collections` stays asserted
-      // absent.
-      '/library/collections',
-      // `/watch` and `/listen` are delivered by Phases 10 and 11; galleries
-      // remain deferred to Phase 12.
-      '/watch/audio',
-      '/watch/galleries',
-      // `/news` is delivered by Phase 13, `/events` by Phase 14 and
-      // `/newsletter` by Phase 21.
-      // `/global` is delivered by Phase 16. Local Events (Phase 14) live under
-      // each Centre, so no `/global/events` exists to be linked.
-      '/global/events',
-      // `/search` and `/topics` are delivered by Phase 17, and are asserted
-      // present below.
-      // `/membership` is delivered by Phase 26, in the utility navigation, and
-      // `/donate` by Phase 27, in the primary navigation.
-      '/people',
-    ];
+/* ===========================================================================
+ * The footer
+ * ========================================================================= */
 
-    for (const path of ['/en', '/en/explore', '/en/sitemap', '/en/legal/terms']) {
-      await page.goto(path);
+test.describe('the public footer', () => {
+  test('is three deliberate groups, every link working', async ({ page }) => {
+    await page.goto('/');
+    const footer = page.getByRole('contentinfo');
 
-      const hrefs = await page
-        .getByRole('link')
-        .evaluateAll((links) =>
-          links.map((link) => (link as HTMLAnchorElement).getAttribute('href') ?? ''),
-        );
-
-      for (const delivered of [
-        '/contact',
-        '/help',
-        '/feedback',
-        '/library/articles',
-        // Phase 8: the Library entry point is in the primary navigation.
-        '/library',
-        // Phase 17: search in the primary navigation, the topic browser in the
-        // footer.
-        '/search',
-        '/topics',
-        // Watch covers both video and audio in the primary navigation.
-        '/watch',
-        // Phase 16: the Global Network in the primary navigation and Find a
-        // Centre in the utility navigation.
-        '/global',
-        '/global/find-a-centre',
-        // Phase 21: the newsletter, in the footer.
-        '/newsletter',
-        // Phase 26: Membership, in the utility navigation.
-        '/membership',
-        // Phase 27: Donate, in the primary navigation.
-        '/donate',
-      ]) {
-        expect(hrefs, `${path} exposes delivered ${delivered}`).toContain(
-          `/en${delivered}`,
-        );
-      }
-
-      if (path === '/en/sitemap') {
-        expect(hrefs, 'sitemap exposes Listen').toContain('/en/listen');
-        // Phase 15: editorial Collections are delivered, with no placement of
-        // their own; the human sitemap lists them.
-        expect(hrefs, 'sitemap exposes Collections').toContain('/en/collections');
-        // Phase 23: Live Learning and Find a Teacher have no placement of
-        // their own; they are reached from Learn and listed here.
-        expect(hrefs, 'sitemap exposes Live learning').toContain('/en/learn/live');
-        expect(hrefs, 'sitemap exposes Find a teacher').toContain('/en/learn/teachers');
-      }
-
-      for (const href of hrefs) {
-        for (const domain of deferred) {
-          expect(href, `${path} links to ${href}`).not.toBe(`/en${domain}`);
-        }
-      }
-    }
-
-    await page.goto('/en/watch');
-    await expect(page.locator('main a[href="/en/listen"]')).toHaveCount(1);
-  });
-
-  test('every link on every public page resolves', async ({ page }) => {
-    // The blanket check. Dead navigation is the failure this phase is most
-    // exposed to, and it is cheap to make impossible rather than unlikely.
-    //
-    // Its own time budget: since the comprehensive six-column footer and the
-    // per-domain menus, every page carries several times more distinct links,
-    // each requested once and many of them content routes rendered from the
-    // database. The assertion is unchanged — every one must answer 200.
-    test.setTimeout(240_000);
-    const seen = new Set<string>();
-
-    for (const path of PUBLIC_PATHS) {
-      await page.goto(`/en${path}`);
-
-      const hrefs = await page
-        .getByRole('link')
-        .evaluateAll((links) =>
-          links.map((link) => (link as HTMLAnchorElement).getAttribute('href') ?? ''),
-        );
-
-      for (const href of hrefs) {
-        if (href === '' || href.startsWith('#') || seen.has(href)) continue;
-        seen.add(href);
-
-        const response = await page.request.get(href);
-        expect(response.status(), `${path} -> ${href}`).toBe(200);
-      }
-    }
-
-    expect(seen.size).toBeGreaterThan(20);
-  });
-
-  test('keeps the language switcher on the route it switches from', async ({ page }) => {
-    await page.goto('/en/explore/about/vision');
-
-    await page.getByRole('link', { name: 'اردو' }).click();
-    await page.waitForURL('**/ur/explore/about/vision');
-
-    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
-    expect(await page.evaluate(() => document.documentElement.dir)).toBe('rtl');
-
-    const preference = (await page.context().cookies()).find(
-      ({ name }) => name === 'NEXT_LOCALE',
+    await expect(footer.getByRole('link', { name: WORDMARK })).toHaveAttribute(
+      'href',
+      '/',
     );
 
-    expect(preference?.value).toBe('ur');
-    expect(preference?.path).toBe('/');
-    expect(preference?.sameSite).toBe('Lax');
-    expect(preference?.secure).toBe(true);
-    expect(preference?.httpOnly).toBe(false);
-    expect(preference?.expires ?? 0).toBeGreaterThan(Date.now() / 1_000);
+    // Each group is a labelled navigation holding at least the destination
+    // that needs no evidence: Topics, About and My Minhaj.
+    for (const [group, always] of [
+      ['Discover', '/topics'],
+      ['The organisation', '/explore'],
+      ['Take part', '/my'],
+    ] as const) {
+      const nav = footer.getByRole('navigation', { name: group, exact: true });
+      await expect(nav, group).toBeVisible();
+      expect(await hrefsOf(nav), group).toContain(always);
+    }
+    // Not a sitemap: three groups and nothing else while no legal page is
+    // published.
+    await expect(footer.getByRole('navigation')).toHaveCount(3);
 
-    // The stored value participates in the documented resolution order when
-    // the locale segment is absent, but it grants no private route access.
-    await page.goto('/');
-    await page.waitForURL('**/ur');
+    const seen = new Set(await hrefsOf(footer));
+    for (const absent of NEVER_PROMOTED_WITH_FIXTURES)
+      expect([...seen], `footer promotes ${absent}`).not.toContain(absent);
+    for (const href of seen)
+      expect((await page.request.get(href)).status(), href).toBe(200);
   });
 
-  test('links My Minhaj to a route that works', async ({ page }) => {
-    await page.goto('/en');
+  test('links a legal document only once it is published', async ({ page }) => {
+    // No legal page is published during a run: each answers honestly…
+    for (const document of ['privacy', 'terms', 'cookies', 'accessibility']) {
+      const response = await page.goto(`/legal/${document}`);
+      expect(response?.status(), document).toBe(200);
+      await expect(page.getByRole('main'), document).toContainText('Not yet published');
 
-    await page.getByRole('link', { name: 'My Minhaj' }).first().click();
+      // …and the footer promotes none of them, not even on the page itself.
+      const footer = page.getByRole('contentinfo');
+      await expect(
+        footer.getByRole('navigation', { name: 'Legal and site' }),
+        document,
+      ).toHaveCount(0);
+      await expect(footer.locator('a[href^="/legal/"]'), document).toHaveCount(0);
+    }
+  });
 
-    // Signed out, the account entry point sends the visitor to sign in with a
-    // return path — a working destination, not a dead end.
-    await page.waitForURL(/\/en\/signin\?returnTo=/);
+  test('carries the organisation’s mark beside the one pre-adoption statement', async ({
+    page,
+  }) => {
+    for (const locale of ['en', 'ur', 'ar'] as const) {
+      await page.goto(localizedPath(locale, ''));
+      const footer = page.getByRole('contentinfo');
+
+      // ONCE on the page, and in the footer: the official mark is never used
+      // as the product's own logo.
+      await expect(page.getByRole('img', { name: ORGANISATION }), locale).toHaveCount(1);
+      await expect(footer.getByRole('img', { name: ORGANISATION }), locale).toBeVisible();
+    }
+
+    await page.goto('/');
+    await expect(page.getByText(PRE_ADOPTION)).toHaveCount(1);
+    await expect(page.getByRole('contentinfo')).toContainText(PRE_ADOPTION);
+  });
+});
+
+/* ===========================================================================
+ * The private surfaces are the same product
+ * ========================================================================= */
+
+test.describe('the product bar on private surfaces', () => {
+  /** The shared bar: wordmark home, a way back, the switcher — no public nav. */
+  async function expectProductBar(page: Page, locale: 'en' | 'ur', where: string) {
+    const bar = page.getByRole('banner').first();
+    await expect(
+      bar.getByRole('link', { name: /One Minhaj/ }).first(),
+      where,
+    ).toHaveAttribute('href', localizedPath(locale, ''));
+    await expect(bar.getByRole('navigation').first(), where).toBeVisible();
+    // The public navigation stays on the public site.
+    await expect(page.getByRole('navigation', { name: NAV }), where).toHaveCount(0);
+  }
+
+  test('frames the sign-in pages with the wordmark, a way back and the language switcher', async ({
+    page,
+  }) => {
+    await page.goto('/signin');
+    await expect(page).toHaveTitle('Sign in · One Minhaj');
+    await expectProductBar(page, 'en', '/signin');
+    const bar = page.getByRole('banner').first();
+    await expect(
+      bar.getByRole('link', { name: 'Back to One Minhaj', exact: true }),
+    ).toHaveAttribute('href', '/');
+    await expect(
+      bar
+        .getByRole('navigation', { name: SWITCHER })
+        .getByRole('link', { name: 'اردو', exact: true }),
+    ).toHaveAttribute('href', '/ur/signin');
+
+    await page.goto('/signup');
+    await expect(page).toHaveTitle('Create an account · One Minhaj');
+    await expectProductBar(page, 'en', '/signup');
+
+    await page.goto('/ur/signin');
+    await expectProductBar(page, 'ur', '/ur/signin');
+  });
+
+  test('frames My Minhaj the same way, titled by its area', async ({ page }) => {
+    await registerAndSignIn(page, 'product-bar');
+
+    await page.goto('/my');
+    await expect(page).toHaveTitle(/(^|· )My Minhaj · One Minhaj$/);
+    await expectProductBar(page, 'en', '/my');
+    const bar = page.getByRole('banner').first();
+    await expect(bar).toContainText('My Minhaj');
+    await expect(
+      bar.getByRole('link', { name: 'Back to One Minhaj', exact: true }),
+    ).toHaveAttribute('href', '/');
+
+    // The switcher keeps the exact private page.
+    await bar
+      .getByRole('navigation', { name: SWITCHER })
+      .getByRole('link', { name: 'العربية', exact: true })
+      .click();
+    await page.waitForURL((url) => url.pathname === '/ar/my');
+    expect(await page.evaluate(() => document.documentElement.dir)).toBe('rtl');
   });
 });
 
@@ -619,9 +1087,10 @@ test.describe('layout holds at every supported width', () => {
 
       for (const [locale] of LOCALES) {
         for (const path of PUBLIC_PATHS) {
-          await page.goto(`/${locale}${path}`);
+          const target = localizedPath(locale, path);
+          await page.goto(target);
 
-          expect(await overflows(page), `${locale}${path} at ${width}px`).toBe(false);
+          expect(await overflows(page), `${target} at ${width}px`).toBe(false);
         }
       }
     });
@@ -645,18 +1114,16 @@ test.describe('layout holds at every supported width', () => {
 test.describe('reduced motion is honoured', () => {
   // Emulated on the page itself, as every other spec does. `test.use({
   // reducedMotion })` never reached these pages: the suite's own `context`
-  // fixture builds the context from `contextOptions`, which does not carry it,
-  // so this proof ran with motion ON and passed only while the header had no
-  // transitions at all.
+  // fixture builds the context from `contextOptions`, which does not carry it.
   test.beforeEach(async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
   });
 
   test('suppresses transition and animation timing', async ({ page }) => {
-    await page.goto('/en');
+    await page.goto('/');
 
     const timings = await page.evaluate(() =>
-      [...document.querySelectorAll('header *')].map((element) => {
+      [...document.querySelectorAll('header *, footer *')].map((element) => {
         const style = globalThis.getComputedStyle(element);
         return {
           // Named, so a failure says WHICH element still moves.
@@ -681,16 +1148,16 @@ test.describe('reduced motion is honoured', () => {
     }
   });
 
-  test('still opens the menu, because motion was never the mechanism', async ({
+  test('still opens the drawer, because motion was never the mechanism', async ({
     page,
   }) => {
-    await page.goto('/en');
+    await page.setViewportSize({ width: 375, height: 780 });
+    await page.goto('/');
 
-    await page.getByRole('button', { name: 'Explore' }).click();
-    await expect(page.getByRole('button', { name: 'Explore' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
+    const trigger = page.getByRole('button', { name: 'Menu' });
+    await trigger.click();
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('dialog', { name: NAV })).toBeVisible();
   });
 });
 
@@ -723,11 +1190,12 @@ test.describe('the pre-adoption indexing posture', () => {
   test('emits noindex on every public page', async ({ page }) => {
     for (const [locale] of LOCALES) {
       for (const path of PUBLIC_PATHS) {
-        await page.goto(`/${locale}${path}`);
+        const target = localizedPath(locale, path);
+        await page.goto(target);
 
         const robots = await page.locator('meta[name="robots"]').getAttribute('content');
 
-        expect(robots, `${locale}${path}`).toContain('noindex');
+        expect(robots, target).toContain('noindex');
       }
     }
   });
@@ -736,7 +1204,7 @@ test.describe('the pre-adoption indexing posture', () => {
     // No JSON-LD at all on a pre-adoption origin: a machine-readable claim to
     // be the organisation is exactly what must not be published from a
     // developer-controlled host (ROUTE_MAP.md §9.6).
-    for (const path of ['/en', '/en/explore']) {
+    for (const path of ['/', '/explore']) {
       await page.goto(path);
 
       await expect(page.locator('script[type="application/ld+json"]'), path).toHaveCount(
@@ -744,15 +1212,95 @@ test.describe('the pre-adoption indexing posture', () => {
       );
     }
   });
+});
 
-  test('states the pre-adoption position where a visitor will see it', async ({
+/* ===========================================================================
+ * Navigation is honest about what exists
+ * ========================================================================= */
+
+test.describe('navigation is honest about what exists', () => {
+  test('renders no link to an undelivered domain, and lists every delivered one', async ({
     page,
   }) => {
-    await page.goto('/en');
+    // Only domains still awaiting implementation remain absent — absent, not
+    // greyed out and not linked to a stub (ROUTE_MAP.md §5.2).
+    const deferred = [
+      // Phase 15 delivers `/collections` but deliberately no Library-filtered
+      // view.
+      '/library/collections',
+      // Audio is `/listen` and galleries live under `/media`, not `/watch`.
+      '/watch/audio',
+      '/watch/galleries',
+      // Local Events live under each Centre; no `/global/events` exists.
+      '/global/events',
+      '/people',
+    ];
 
-    await expect(page.getByRole('contentinfo')).toContainText(
-      'not currently commissioned',
-    );
+    for (const path of ['/', '/explore', '/sitemap', '/legal/terms']) {
+      await page.goto(path);
+      const hrefs = await anchorsOf(page.locator('body'));
+
+      // The header and footer promote by evidence now; the human sitemap is
+      // where EVERY delivered public route is listed, whatever is published.
+      if (path === '/sitemap')
+        for (const delivered of [
+          '/contact',
+          '/help',
+          '/feedback',
+          '/library',
+          '/library/articles',
+          '/search',
+          '/topics',
+          '/watch',
+          '/listen',
+          '/global',
+          '/global/find-a-centre',
+          '/newsletter',
+          '/membership',
+          '/donate',
+          '/collections',
+          '/learn/live',
+          '/learn/teachers',
+        ])
+          expect(hrefs, `sitemap lists delivered ${delivered}`).toContain(delivered);
+
+      for (const href of hrefs) {
+        for (const domain of deferred)
+          expect(href, `${path} links to ${href}`).not.toBe(domain);
+        // Every app link is built by the one locale-path contract: an English
+        // page never emits a legacy `/en` address that would cost a redirect.
+        expect(
+          href === '/en' || href.startsWith('/en/') || href.startsWith('/en?'),
+          href,
+        ).toBe(false);
+      }
+    }
+
+    await page.goto('/watch');
+    await expect(page.locator('main a[href="/listen"]')).toHaveCount(1);
+  });
+
+  test('every link on every public page resolves', async ({ page }) => {
+    // The blanket check. Dead navigation is the failure this phase is most
+    // exposed to, and it is cheap to make impossible rather than unlikely.
+    // Its own budget: many of these links are content routes rendered from the
+    // database, each requested once. Every one must answer 200.
+    test.setTimeout(240_000);
+    const seen = new Set<string>();
+
+    for (const path of PUBLIC_PATHS) {
+      await page.goto(localizedPath('en', path));
+
+      for (const href of await hrefsOf(page.locator('body'))) {
+        if (href === '' || href.startsWith('#') || seen.has(href)) continue;
+        seen.add(href);
+
+        const response = await page.request.get(href);
+        expect(response.status(), `${path} -> ${href}`).toBe(200);
+      }
+    }
+
+    expect(seen.size).toBeGreaterThan(15);
   });
 });
 
@@ -769,13 +1317,12 @@ test.describe('security headers', () => {
   test('sends the base policy on a public page, an auth page and an API route', async ({
     page,
   }) => {
-    for (const path of ['/en', '/en/signin', '/api/health']) {
+    for (const path of ['/', '/ur', '/signin', '/api/health']) {
       const response = await page.request.get(path);
       const headers = response.headers();
 
-      // `/api/health` is not implemented in this phase; whatever it answers,
-      // the headers must still be on it. A route that escapes the policy is
-      // the route an attacker looks for.
+      // Whatever an API route answers, the headers must still be on it. A route
+      // that escapes the policy is the route an attacker looks for.
       expect(headers['x-content-type-options'], path).toBe('nosniff');
       expect(headers['referrer-policy'], path).toBe('strict-origin-when-cross-origin');
       expect(headers['x-frame-options'], path).toBe('DENY');
@@ -796,7 +1343,7 @@ test.describe('security headers', () => {
   test('sends exactly one of each header, with nothing contradicting it', async ({
     page,
   }) => {
-    const headers = await headersOf(page, '/en');
+    const headers = await headersOf(page, '/');
 
     // Playwright joins repeated headers with a comma; two policies would both
     // apply, and the intersection is rarely what anybody intended.
@@ -806,22 +1353,34 @@ test.describe('security headers', () => {
 
   test('breaks nothing it protects', async ({ page }) => {
     const violations: string[] = [];
+    const fonts: string[] = [];
 
     page.on('console', (message) => {
       const text = message.text();
       if (/content security policy|refused to/i.test(text)) violations.push(text);
     });
+    page.on('request', (request) => {
+      if (request.resourceType() === 'font') fonts.push(request.url());
+    });
 
-    // The public shell, with its two client islands actually exercised, and an
-    // authentication form — the surface most likely to be broken by
-    // `form-action` or `connect-src`.
-    await page.goto('/en');
-    await page.getByRole('button', { name: 'Explore' }).click();
+    // The public shell with its client islands actually exercised — the
+    // account entry's same-origin read (`connect-src`), the language switcher
+    // and the mobile drawer — and an authentication form, the surface most
+    // likely to be broken by `form-action`.
+    await page.goto('/');
+    await expect(
+      page.getByRole('banner').getByRole('link', { name: 'Sign in', exact: true }),
+    ).toBeVisible();
+    await page.setViewportSize({ width: 375, height: 780 });
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await expect(page.getByRole('dialog', { name: NAV })).toBeVisible();
     await page.keyboard.press('Escape');
 
-    await page.goto('/en/signin');
+    // Urdu headings and Arabic script reading text use their own faces.
+    await page.goto('/ur/signin');
+    await page.goto('/signin');
     await expect(
-      page.getByRole('button', { name: 'Sign in', exact: true }),
+      page.getByRole('main').getByRole('button', { name: 'Sign in', exact: true }),
     ).toBeVisible();
 
     // The stylesheet actually applied, which is how a `style-src` mistake
@@ -830,6 +1389,17 @@ test.describe('security headers', () => {
       () => globalThis.getComputedStyle(document.body).backgroundColor,
     );
     expect(background).not.toBe('rgba(0, 0, 0, 0)');
+
+    // The type is SELF-HOSTED: every font the pages asked for came from this
+    // origin, and the faces actually loaded under the policy.
+    const loaded = await page.evaluate(async () => {
+      await document.fonts.ready;
+      return [...document.fonts].filter((face) => face.status === 'loaded').length;
+    });
+    expect(loaded).toBeGreaterThan(0);
+    expect(fonts.length).toBeGreaterThan(0);
+    for (const font of fonts)
+      expect(new URL(font).origin, font).toBe(new URL(baseUrl()).origin);
 
     expect(violations, violations.join('\n')).toEqual([]);
   });

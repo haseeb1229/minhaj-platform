@@ -191,28 +191,25 @@ export function PhotoViewer({
         aria-label={labels.dialog}
         onKeyDown={onDialogKeyDown}
         onClick={onDialogClick}
-        className="m-auto max-h-[100dvh] w-[min(72rem,100vw)] max-w-full overflow-y-auto rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-0 text-[color:var(--color-foreground)] backdrop:bg-[color:var(--color-foreground)]/80"
+        className="m-auto max-h-[100dvh] w-[min(72rem,100vw)] max-w-full overflow-y-auto rounded-panel border border-border bg-surface-raised p-0 text-foreground backdrop:bg-foreground/80"
       >
         {photo === undefined ? null : (
           <figure className="flex flex-col gap-4 p-4 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p
-                className="text-sm text-[color:var(--color-foreground-muted)]"
-                aria-live="polite"
-              >
+              <p className="text-sm text-foreground-muted" aria-live="polite">
                 {position}
               </p>
               <button
                 type="button"
                 onClick={close}
                 autoFocus
-                className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-medium"
+                className="inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-medium"
               >
                 {labels.close}
               </button>
             </div>
 
-            <div className="flex items-center justify-center rounded-[var(--radius-control)] bg-[color:var(--color-surface-sunken)]">
+            <div className="flex items-center justify-center rounded-control bg-surface-sunken">
               <img
                 key={photo.src}
                 src={photo.src}
@@ -237,10 +234,7 @@ export function PhotoViewer({
                   </p>
                 )}
                 {photo.details === null ? null : (
-                  <p
-                    className="text-sm text-[color:var(--color-foreground-muted)]"
-                    dir="auto"
-                  >
+                  <p className="text-sm text-foreground-muted" dir="auto">
                     {photo.details}
                   </p>
                 )}
@@ -252,14 +246,14 @@ export function PhotoViewer({
                 <button
                   type="button"
                   onClick={() => step(-1)}
-                  className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-medium"
+                  className="inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-medium"
                 >
                   {labels.previous}
                 </button>
                 <button
                   type="button"
                   onClick={() => step(1)}
-                  className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-medium"
+                  className="inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-medium"
                 >
                   {labels.next}
                 </button>

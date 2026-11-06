@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { FATWA_PAGE_SIZE } from '@minhaj/contracts/fatwa';
@@ -41,13 +42,16 @@ export default async function MyQuestionsPage({
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const locale = await requireLocale(params);
-  const session = await requireActiveSession(locale, `/${locale}/my/questions`);
+  const session = await requireActiveSession(
+    locale,
+    localizedPath(locale, '/my/questions'),
+  );
   const t = await getTranslations({ locale, namespace: 'fatwa' });
   const page = await fatwaRuntime().ask.questions(
     { accountId: session.account.id },
     readFatwaOffset(await searchParams),
   );
-  const path = `/${locale}/my/questions`;
+  const path = localizedPath(locale, '/my/questions');
   const links = pageLinks(page.offset, FATWA_PAGE_SIZE, page.total);
 
   return (
@@ -55,7 +59,9 @@ export default async function MyQuestionsPage({
       title={t('my.title')}
       description={<p>{t('my.description')}</p>}
       action={
-        <ActionLink href={`/${locale}/my/questions/ask`}>{t('sections.ask')}</ActionLink>
+        <ActionLink href={localizedPath(locale, '/my/questions/ask')}>
+          {t('sections.ask')}
+        </ActionLink>
       }
       measure="reading"
     >
@@ -90,7 +96,7 @@ export default async function MyQuestionsPage({
       />
 
       <p>
-        <TextLink href={`/${locale}/my`}>{t('my.account')}</TextLink>
+        <TextLink href={localizedPath(locale, '/my')}>{t('my.account')}</TextLink>
       </p>
     </WorkspacePage>
   );

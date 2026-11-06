@@ -32,7 +32,7 @@ export function ContributorFields({
   return (
     <fieldset className="flex flex-col gap-3">
       <legend className="text-sm font-semibold">{t('contributors.title')}</legend>
-      <p className="text-xs text-[color:var(--color-foreground-muted)]">
+      <p className="text-xs text-foreground-muted">
         {t('contributors.help', { limit: HADITH_LIMITS.contributors })}
       </p>
       {Array.from({ length: rows }, (_, index) => {

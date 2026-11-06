@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 
@@ -34,7 +35,10 @@ export default async function MarkAttendancePage({
 }) {
   const locale = await requireLocale(params);
   const { sessionId } = await params;
-  const path = `/${locale}/teacher/attendance/${encodeURIComponent(sessionId)}`;
+  const path = localizedPath(
+    locale,
+    `/teacher/attendance/${encodeURIComponent(sessionId)}`,
+  );
   const gate = await requireTeacher(locale, path);
   const t = await getTranslations({ locale, namespace: 'teacher' });
   if (!gate.activated) return <NotActivated t={t} />;
@@ -82,7 +86,10 @@ export default async function MarkAttendancePage({
           <p>{t('attendancePage.markDescription')}</p>
           <p>
             <TextLink
-              href={`/${locale}/teacher/classes/today/${encodeURIComponent(session.id)}`}
+              href={localizedPath(
+                locale,
+                `/teacher/classes/today/${encodeURIComponent(session.id)}`,
+              )}
             >
               {t('common.openClass')}
             </TextLink>

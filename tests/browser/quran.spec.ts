@@ -19,6 +19,7 @@ import {
   enrolSecondFactorInBrowser,
   expect,
   grantRole,
+  localizedPath,
   privilegedSession,
   registerAndSignIn,
   test,
@@ -399,7 +400,7 @@ test.describe('while no corpus is active', () => {
   test('the landing says so honestly — no cards, no counts, no banner, no cookie', async ({
     page,
   }) => {
-    const response = await page.goto('/en/quran');
+    const response = await page.goto('/quran');
     expect(response?.status()).toBe(200);
     expect(response?.headers()['set-cookie']).toBeUndefined();
     await expect(page.getByRole('heading', { level: 1, name: 'Quran' })).toBeVisible();
@@ -413,33 +414,33 @@ test.describe('while no corpus is active', () => {
     // Nothing to enter: no section card, no count, no sample, no search — only
     // the way home.
     const hrefs = await hrefsIn(page);
-    expect(hrefs).toContain('/en');
+    expect(hrefs).toContain('/');
     expect(hrefs.filter((href) => href.includes('/quran'))).toEqual([]);
     const main = page.getByRole('main');
     await expect(main).not.toContainText('NON_QURAN_FIXTURE');
     await expect(main).not.toContainText(/\bayat\b|\bayah\b|\bSurah\b|\bJuz\b/);
     await expect(main.getByRole('search')).toHaveCount(0);
-    await expectNoLearningLinks(page, '/en/quran');
+    await expectNoLearningLinks(page, '/quran');
 
     // Quran search, too, is honestly unavailable rather than an empty search.
-    const search = await page.goto(`/en/quran/search?q=${WORD}`);
+    const search = await page.goto(`/quran/search?q=${WORD}`);
     expect(search?.status()).toBe(200);
     expect(search?.headers()['set-cookie']).toBeUndefined();
     await expect(page.getByText(UNAVAILABLE)).toBeVisible();
-    await expect(page.getByRole('search')).toHaveCount(0);
+    await expect(page.getByRole('main').getByRole('search')).toHaveCount(0);
   });
 
   test('a Surah, an Ayah, a Juz, a topic view and the Listen catalogue are absent', async ({
     request,
   }) => {
     for (const missing of [
-      '/en/quran/surah/1',
-      '/en/quran/surah/1/1',
-      '/en/quran/juz/1',
-      `/en/quran/topics/${slug.topic}`,
-      '/en/listen/recitations',
+      '/quran/surah/1',
+      '/quran/surah/1/1',
+      '/quran/juz/1',
+      `/quran/topics/${slug.topic}`,
+      '/listen/recitations',
       '/ur/listen/recitations',
-      '/en/quran/teachers',
+      '/quran/teachers',
     ]) {
       const response = await request.get(missing, { maxRedirects: 0 });
       expect(response.status(), missing).toBe(404);
@@ -448,10 +449,10 @@ test.describe('while no corpus is active', () => {
   });
 
   test('Listen links no recitation catalogue', async ({ page }) => {
-    await page.goto('/en/listen');
+    await page.goto('/listen');
     await expect(page.getByRole('heading', { level: 1, name: 'Listen' })).toBeVisible();
     const hrefs = await hrefsIn(page);
-    expect(hrefs).toContain('/en/listen/lectures');
+    expect(hrefs).toContain('/listen/lectures');
     expect(hrefs.some((href) => href.includes('recitation'))).toBe(false);
   });
 });
@@ -475,7 +476,7 @@ test.describe('a fixture corpus', () => {
   });
 
   test('the landing offers only what exists, under the banner', async ({ page }) => {
-    await visitFixture(page, '/en/quran');
+    await visitFixture(page, '/quran');
     await expect(page.getByText(UNAVAILABLE)).toHaveCount(0);
     const hrefs = await hrefsIn(page);
     for (const section of [
@@ -488,15 +489,23 @@ test.describe('a fixture corpus', () => {
       'tajweed',
       'recitations',
     ])
-      expect(hrefs, section).toContain(`/en/quran/${section}`);
+      expect(hrefs, section).toContain(`/quran/${section}`);
     // No statistics and no sample verse on the landing.
     await expect(page.getByRole('main')).not.toContainText('NON_QURAN_FIXTURE_CANONICAL');
+
+    // A FIXTURE CORPUS IS NEVER PROMOTED (Rebaseline R1). The reader works at
+    // its address, under its banner, but the shell advertises the Quran only
+    // for an APPROVED corpus: no header, drawer or footer link leads here.
+    await expect(page.getByRole('banner').locator('a[href="/quran"]')).toHaveCount(0);
+    await expect(page.getByRole('contentinfo').locator('a[href="/quran"]')).toHaveCount(
+      0,
+    );
   });
 
   test('reads Surah index → Surah → Ayah by keyboard alone, with a visible focus', async ({
     page,
   }) => {
-    await visitFixture(page, '/en/quran/surah');
+    await visitFixture(page, '/quran/surah');
     const index = page.getByRole('list', { name: 'Surahs' });
     await expect(index.getByRole('listitem')).toHaveCount(2);
     await expect(index).toContainText('3 ayat');
@@ -504,14 +513,14 @@ test.describe('a fixture corpus', () => {
 
     await tabTo(page, index.getByRole('link', { name: /^Surah 1\b/ }));
     await page.keyboard.press('Enter');
-    await page.waitForURL(/\/en\/quran\/surah\/1$/);
+    await page.waitForURL(/\/quran\/surah\/1$/);
     await expect(page.getByRole('note').filter({ hasText: BANNER.en })).toBeVisible();
 
     const article = page.getByRole('article', { name: 'Surah 1, Ayah 2' });
     await expect(article).toBeVisible();
     await expect(page.locator('li#ayah-2')).toContainText(canonicalText(1, 2));
     const citation = article.getByRole('link', { name: '1:2' });
-    await expect(citation).toHaveAttribute('href', '/en/quran/surah/1/2');
+    await expect(citation).toHaveAttribute('href', '/quran/surah/1/2');
 
     await tabTo(page, citation);
     const focus = await citation.evaluate((element) => {
@@ -530,7 +539,7 @@ test.describe('a fixture corpus', () => {
     ).toBe(true);
 
     await page.keyboard.press('Enter');
-    await page.waitForURL(/\/en\/quran\/surah\/1\/2$/);
+    await page.waitForURL(/\/quran\/surah\/1\/2$/);
     await expect(
       page.getByRole('heading', { level: 1, name: 'Surah 1, Ayah 2' }),
     ).toBeVisible();
@@ -540,7 +549,7 @@ test.describe('a fixture corpus', () => {
       .getByRole('link', { name: 'Next Ayah (1:3)' });
     await tabTo(page, next);
     await page.keyboard.press('Enter');
-    await page.waitForURL(/\/en\/quran\/surah\/1\/3$/);
+    await page.waitForURL(/\/quran\/surah\/1\/3$/);
   });
 
   test('marks the Arabic as Arabic, right-to-left, in every interface locale', async ({
@@ -549,7 +558,7 @@ test.describe('a fixture corpus', () => {
     for (const locale of ['en', 'ur', 'ar'] as const) {
       await visitFixture(
         page,
-        `/${locale}/quran/surah/1/2?translation=${slug.translation}`,
+        localizedPath(locale, `/quran/surah/1/2?translation=${slug.translation}`),
         locale,
       );
       const arabic = page.locator('[aria-labelledby="ayah-arabic"] p');
@@ -568,7 +577,7 @@ test.describe('a fixture corpus', () => {
       await expect(page.locator('#ayah-translation')).toContainText(NAME.translation);
 
       // On the Surah page every Ayah is a named article with Arabic marked too.
-      await visitFixture(page, `/${locale}/quran/surah/2`, locale);
+      await visitFixture(page, localizedPath(locale, '/quran/surah/2'), locale);
       const scripture = page.locator('article p[lang="ar"]');
       await expect(scripture).toHaveCount(4);
       for (const element of await scripture.all()) {
@@ -582,7 +591,7 @@ test.describe('a fixture corpus', () => {
       expect(named).toHaveLength(4);
       for (const name of named) expect(name.length, locale).toBeGreaterThan(0);
     }
-    await page.goto('/en/quran/surah/2');
+    await page.goto('/quran/surah/2');
     await expect(page.getByRole('article', { name: 'Surah 2, Ayah 3' })).toBeVisible();
   });
 
@@ -591,7 +600,7 @@ test.describe('a fixture corpus', () => {
   }) => {
     await visitFixture(
       page,
-      `/en/quran/surah/1/2?translation=${slug.translation}&reciter=${slug.recitation}`,
+      `/quran/surah/1/2?translation=${slug.translation}&reciter=${slug.recitation}`,
     );
     // The preferences are honoured on the page...
     await expect(page.locator('[aria-labelledby="ayah-translation"]')).toHaveCount(1);
@@ -606,7 +615,7 @@ test.describe('a fixture corpus', () => {
   test('says an unknown reading preference is unavailable, and shows no layer for it', async ({
     page,
   }) => {
-    await visitFixture(page, '/en/quran/surah/1/2?translation=nope&tafsir=nope');
+    await visitFixture(page, '/quran/surah/1/2?translation=nope&tafsir=nope');
     const main = page.getByRole('main');
     await expect(
       main.getByText(
@@ -626,7 +635,7 @@ test.describe('a fixture corpus', () => {
     await expect(main).not.toContainText('NON_QURAN_FIXTURE_TAFSIR');
 
     // A draft work is as unknown as a made-up one: naming it reaches nothing.
-    await visitFixture(page, `/en/quran/surah/1?translation=${slug.adminTranslation}`);
+    await visitFixture(page, `/quran/surah/1?translation=${slug.adminTranslation}`);
     await expect(
       main.getByText(
         'The translation you asked for is not available, so no translation is shown.',
@@ -641,7 +650,7 @@ test.describe('a fixture corpus', () => {
     for (const width of [320, 640]) {
       await page.setViewportSize({ width, height: 800 });
       for (const target of [
-        `/en/quran/surah/1?translation=${slug.translation}&transliteration=${slug.transliteration}&tafsir=${slug.tafsir}&reciter=${slug.recitation}&size=larger`,
+        `/quran/surah/1?translation=${slug.translation}&transliteration=${slug.transliteration}&tafsir=${slug.tafsir}&reciter=${slug.recitation}&size=larger`,
         '/ur/quran/surah/2',
         `/ar/quran/surah/1/1?translation=${slug.translation}`,
       ]) {
@@ -655,7 +664,7 @@ test.describe('a fixture corpus', () => {
 
     // NO MOTION ON SCRIPTURE — with no reduced-motion preference, so a real
     // animation or transition would show here.
-    await page.goto(`/en/quran/surah/1?translation=${slug.translation}`);
+    await page.goto(`/quran/surah/1?translation=${slug.translation}`);
     const motion = await page.evaluate(() =>
       [
         ...document.querySelectorAll(
@@ -678,63 +687,60 @@ test.describe('a fixture corpus', () => {
   });
 
   test('a Juz lists its ayat, each linking to its citation', async ({ page }) => {
-    await visitFixture(page, '/en/quran/juz');
+    await visitFixture(page, '/quran/juz');
     const list = page.getByRole('list', { name: 'Juz' });
     await expect(list.getByRole('link', { name: 'Juz 1' })).toHaveAttribute(
       'href',
-      '/en/quran/juz/1',
+      '/quran/juz/1',
     );
     await expect(list).toContainText('From 2:3 to 2:4');
 
-    await visitFixture(page, '/en/quran/juz/2');
+    await visitFixture(page, '/quran/juz/2');
     for (const ayah of [3, 4]) {
       const article = page.getByRole('article', {
         name: `Surah 2, Ayah ${String(ayah)}`,
       });
       await expect(
         article.getByRole('link', { name: `2:${String(ayah)}` }),
-      ).toHaveAttribute('href', `/en/quran/surah/2/${String(ayah)}`);
+      ).toHaveAttribute('href', `/quran/surah/2/${String(ayah)}`);
       await expect(article.locator('p[lang="ar"]')).toHaveText(canonicalText(2, ayah));
     }
     await expect(page.getByRole('article', { name: 'Surah 2, Ayah 2' })).toHaveCount(0);
   });
 
   test('the study pages render the published fixture works', async ({ page }) => {
-    await visitFixture(page, '/en/quran/translations');
+    await visitFixture(page, '/quran/translations');
     await page.getByRole('link', { name: NAME.translation }).click();
-    await page.waitForURL(`**/en/quran/translations/${slug.translation}`);
+    await page.waitForURL(`**/quran/translations/${slug.translation}`);
     await expect(page.getByRole('note').filter({ hasText: BANNER.en })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(NAME.translation);
     expect(await hrefsIn(page)).toContain(
-      `/en/quran/surah/1?translation=${slug.translation}`,
+      `/quran/surah/1?translation=${slug.translation}`,
     );
 
-    await visitFixture(page, `/en/quran/tafsir/${slug.tafsir}`);
+    await visitFixture(page, `/quran/tafsir/${slug.tafsir}`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(NAME.tafsir);
     const entry = page.getByRole('link', { name: 'Surah 1, ayat 1–3' });
-    await expect(entry).toHaveAttribute(
-      'href',
-      `/en/quran/surah/1/1?tafsir=${slug.tafsir}`,
-    );
+    await expect(entry).toHaveAttribute('href', `/quran/surah/1/1?tafsir=${slug.tafsir}`);
     const commentary = page.locator(
       'ol[aria-labelledby="tafsir-entries"] div[lang="ur"]',
     );
     await expect(commentary).toHaveAttribute('dir', 'rtl');
     await expect(commentary).toContainText('NON_QURAN_FIXTURE_TAFSIR_1_1');
 
-    await visitFixture(page, '/en/quran/transliteration');
+    await visitFixture(page, '/quran/transliteration');
     await expect(page.getByRole('main')).toContainText(NAME.transliteration);
 
-    await visitFixture(page, '/en/quran/tajweed');
+    await visitFixture(page, '/quran/tajweed');
     await page.getByRole('link', { name: NAME.rule }).click();
-    await page.waitForURL(`**/en/quran/tajweed/${slug.rule}`);
+    await page.waitForURL(`**/quran/tajweed/${slug.rule}`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(NAME.rule);
     await expect(page.getByRole('main')).toContainText('NON_QURAN_FIXTURE rule body.');
 
     // A layer chosen on an Ayah page: the tafsir in its own language, open.
     await visitFixture(
       page,
-      `/en/quran/surah/1/1?tafsir=${slug.tafsir}&transliteration=${slug.transliteration}`,
+      `/quran/surah/1/1?tafsir=${slug.tafsir}&transliteration=${slug.transliteration}`,
     );
     await expect(
       page.locator('section[aria-labelledby="ayah-tafsir"] [lang="ur"]'),
@@ -745,19 +751,19 @@ test.describe('a fixture corpus', () => {
   });
 
   test('a topic view lists its ayat and points at the Topic hub', async ({ page }) => {
-    await visitFixture(page, `/en/quran/topics/${slug.topic}`);
+    await visitFixture(page, `/quran/topics/${slug.topic}`);
     const ayah = page.getByRole('article', { name: 'Surah 1, Ayah 2' });
-    await expect(ayah.getByRole('link')).toHaveAttribute('href', '/en/quran/surah/1/2');
-    expect(await hrefsIn(page)).toContain(`/en/topics/${slug.topic}`);
+    await expect(ayah.getByRole('link')).toHaveAttribute('href', '/quran/surah/1/2');
+    expect(await hrefsIn(page)).toContain(`/topics/${slug.topic}`);
     await expect(page.getByRole('article', { name: 'Surah 1, Ayah 1' })).toHaveCount(0);
 
     // The hub composes the same ayat, under the banner, and links the view.
-    const hub = await page.goto(`/en/topics/${slug.topic}`);
+    const hub = await page.goto(`/topics/${slug.topic}`);
     expect(hub?.status()).toBe(200);
     await expect(page.getByRole('note').filter({ hasText: BANNER.en })).toBeVisible();
-    expect(await hrefsIn(page)).toContain(`/en/quran/topics/${slug.topic}`);
+    expect(await hrefsIn(page)).toContain(`/quran/topics/${slug.topic}`);
 
-    const unknown = await page.goto(`/en/quran/topics/no-such-topic-${run}`);
+    const unknown = await page.goto(`/quran/topics/no-such-topic-${run}`);
     expect(unknown?.status()).toBe(404);
   });
 
@@ -765,7 +771,7 @@ test.describe('a fixture corpus', () => {
     page,
     request,
   }) => {
-    await visitFixture(page, `/en/quran/surah/1?reciter=${slug.recitation}`);
+    await visitFixture(page, `/quran/surah/1?reciter=${slug.recitation}`);
     const audio = page.locator('audio');
     await expect(audio).toHaveCount(1);
     await expect(audio).toHaveAttribute('controls', '');
@@ -782,8 +788,8 @@ test.describe('a fixture corpus', () => {
     expect(await audio.evaluate((element: HTMLAudioElement) => element.paused)).toBe(
       true,
     );
-    // Scoped to the page's content: the footer's "Library downloads" is
-    // navigation to another section, not a download of this recitation.
+    // Scoped to the page's content: the shell's own navigation is not a
+    // download of this recitation.
     await expect(
       page.getByRole('main').getByRole('link', { name: /download/i }),
     ).toHaveCount(0);
@@ -805,7 +811,7 @@ test.describe('a fixture corpus', () => {
     expect(wrong.status()).toBe(404);
 
     // The reciter's page, by the PERSON's slug, carries the same native player.
-    await visitFixture(page, `/en/quran/recitations/${slug.reciter}`);
+    await visitFixture(page, `/quran/recitations/${slug.reciter}`);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(NAME.reciter);
     await expect(page.locator('audio[controls]')).toHaveCount(1);
     expect(await page.locator('audio[autoplay]').count()).toBe(0);
@@ -814,22 +820,22 @@ test.describe('a fixture corpus', () => {
   test('Listen projects Quran’s recitation catalogue — and only Quran’s', async ({
     page,
   }) => {
-    await page.goto('/en/listen');
-    expect(await hrefsIn(page)).toContain('/en/listen/recitations');
+    await page.goto('/listen');
+    expect(await hrefsIn(page)).toContain('/listen/recitations');
 
-    await visitFixture(page, '/en/listen/recitations');
+    await visitFixture(page, '/listen/recitations');
     await expect(
       page.getByRole('heading', { level: 1, name: 'Recitations' }),
     ).toBeVisible();
     await expect(
       page.getByRole('link', { name: 'All recitations in the Quran section' }),
-    ).toHaveAttribute('href', '/en/quran/recitations');
+    ).toHaveAttribute('href', '/quran/recitations');
     const rows = page.getByRole('list', { name: 'Recitations' }).getByRole('listitem');
     await expect(rows).toHaveCount(1);
     await expect(rows.first().getByRole('heading')).toHaveText(NAME.recitation);
     await expect(rows.first().getByRole('link', { name: NAME.reciter })).toHaveAttribute(
       'href',
-      `/en/quran/recitations/${slug.reciter}`,
+      `/quran/recitations/${slug.reciter}`,
     );
     // Nothing of Media's: no lecture, no audio track, no Media byte route.
     const hrefs = await hrefsIn(page);
@@ -837,7 +843,7 @@ test.describe('a fixture corpus', () => {
     await expect(page.locator('audio[src*="/assets/media/"]')).toHaveCount(0);
 
     // The Quran section's own catalogue lists the same recitation.
-    await visitFixture(page, '/en/quran/recitations');
+    await visitFixture(page, '/quran/recitations');
     await expect(page.getByRole('main')).toContainText(NAME.recitation);
   });
 
@@ -850,9 +856,7 @@ test.describe('a fixture corpus', () => {
     await expect
       .poll(
         async () => {
-          const response = await page.goto(
-            `/en/quran/search?q=${encodeURIComponent(WORD)}`,
-          );
+          const response = await page.goto(`/quran/search?q=${encodeURIComponent(WORD)}`);
           expect(response?.status()).toBe(200);
           await page.getByRole('heading', { level: 1 }).waitFor();
           return page.getByRole('main').innerText();
@@ -867,7 +871,7 @@ test.describe('a fixture corpus', () => {
     );
     await expect(page.getByRole('note').filter({ hasText: BANNER.en })).toBeVisible();
     const hit = page.getByRole('link', { name: 'Surah 1, Ayah 2' });
-    await expect(hit).toHaveAttribute('href', '/en/quran/surah/1/2');
+    await expect(hit).toHaveAttribute('href', '/quran/surah/1/2');
     await expect(page.getByRole('main')).toContainText(translationText(1, 2));
     await expect(page.getByRole('link', { name: 'Surah 1, Ayah 1' })).toHaveCount(0);
   });
@@ -895,7 +899,7 @@ test.describe('a reader’s own reading position', () => {
     }
   ).personal;
 
-  const AYAH = '/en/quran/surah/2/3';
+  const AYAH = '/quran/surah/2/3';
   let reader: Page;
   let readerId: string;
 
@@ -962,14 +966,14 @@ test.describe('a reader’s own reading position', () => {
     await expect(region).toContainText(ISLAND['signedOutPrompt'] ?? '');
     await expect(region.getByRole('link', { name: ISLAND['signIn'] })).toHaveAttribute(
       'href',
-      `/en/signin?returnTo=${encodeURIComponent(AYAH)}`,
+      `/signin?returnTo=${encodeURIComponent(AYAH)}`,
     );
     await expect(region.getByRole('button')).toHaveCount(0);
   });
 
   test('set from the Ayah, shown on My Minhaj, refused from a stale page, and cleared', async () => {
     test.setTimeout(120_000);
-    await reader.goto('/en/my/progress/quran');
+    await reader.goto('/my/progress/quran');
     await expect(reader.getByRole('main')).toContainText(
       PROGRESS.progress['empty'] ?? '',
     );
@@ -984,11 +988,11 @@ test.describe('a reader’s own reading position', () => {
     );
     expect(await position()).toEqual({ surah: 2, ayah: 3 });
 
-    await reader.goto('/en/my/progress/quran');
+    await reader.goto('/my/progress/quran');
     await expect(
       reader.getByRole('link', { name: PROGRESS.progress['continue'] }),
     ).toHaveAttribute('href', AYAH);
-    await reader.goto('/en/my');
+    await reader.goto('/my');
     const main = reader.getByRole('main');
     await expect(main).not.toContainText(PROGRESS.home['quranNone'] ?? '');
     await expect(
@@ -999,8 +1003,8 @@ test.describe('a reader’s own reading position', () => {
     // it; its own attempt is a conflict, not an overwrite — and, refreshed,
     // its retry is honoured.
     const stale = await reader.context().newPage();
-    await openWithIsland(stale, '/en/quran/surah/2/4');
-    await openWithIsland(reader, '/en/quran/surah/2/2');
+    await openWithIsland(stale, '/quran/surah/2/4');
+    await openWithIsland(reader, '/quran/surah/2/2');
     await island(reader).getByRole('button', { name: ISLAND['positionSet'] }).click();
     await expect(reader.getByText(ISLAND['positionSaved'] ?? '')).toBeVisible();
     expect(await position()).toEqual({ surah: 2, ayah: 2 });
@@ -1013,13 +1017,13 @@ test.describe('a reader’s own reading position', () => {
     expect(await position()).toEqual({ surah: 2, ayah: 4 });
     await stale.close();
 
-    await reader.goto('/en/my/progress/quran');
+    await reader.goto('/my/progress/quran');
     await reader.getByRole('button', { name: PROGRESS.progress['clear'] }).click();
     await expect(reader.getByRole('main')).toContainText(
       PROGRESS.progress['empty'] ?? '',
     );
     expect(await position()).toBeNull();
-    await reader.goto('/en/my');
+    await reader.goto('/my');
     await expect(reader.getByRole('main')).toContainText(
       PROGRESS.home['quranNone'] ?? '',
     );
@@ -1070,8 +1074,8 @@ test.describe('Quran administration', () => {
   test('an anonymous visitor is sent to sign in; an account without a Quran key is refused', async ({
     page,
   }) => {
-    await page.goto('/en/admin/quran/ayat/1/1');
-    await page.waitForURL(/\/en\/signin\?returnTo=/);
+    await page.goto('/admin/quran/ayat/1/1');
+    await page.waitForURL(/\/signin\?returnTo=/);
 
     for (const surface of [
       'surahs',
@@ -1080,13 +1084,13 @@ test.describe('Quran administration', () => {
       'translations',
       `translations/${ids.translation}`,
     ]) {
-      const response = await nobody.goto(`/en/admin/quran/${surface}`);
+      const response = await nobody.goto(`/admin/quran/${surface}`);
       expect(response?.status(), surface).toBe(404);
     }
   });
 
   test('quran.read reads the canonical text, and is offered nothing to change', async () => {
-    const response = await reader.goto('/en/admin/quran/ayat/1/1');
+    const response = await reader.goto('/admin/quran/ayat/1/1');
     expect(response?.status()).toBe(200);
     const main = reader.getByRole('main');
     await expect(main.getByRole('heading', { name: 'Canonical text' })).toBeVisible();
@@ -1097,33 +1101,33 @@ test.describe('Quran administration', () => {
     await expect(main.getByRole('link', { name: 'Begin a correction' })).toHaveCount(0);
 
     // Asking for the correction by address shows nothing either.
-    await reader.goto('/en/admin/quran/ayat/1/1?correct=1');
+    await reader.goto('/admin/quran/ayat/1/1?correct=1');
     await expect(
       reader.getByRole('heading', { name: 'Canonical correction' }),
     ).toHaveCount(0);
     await expect(reader.locator('textarea')).toHaveCount(0);
 
     // Layered works are read, not edited.
-    await reader.goto(`/en/admin/quran/translations/${ids.translation}?surah=1`);
+    await reader.goto(`/admin/quran/translations/${ids.translation}?surah=1`);
     await expect(reader.getByRole('main')).toContainText(translationText(1, 2));
     await expect(reader.getByRole('button', { name: 'Save' })).toHaveCount(0);
     await expect(reader.getByRole('button', { name: 'Save changed texts' })).toHaveCount(
       0,
     );
-    await reader.goto('/en/admin/quran/translations');
+    await reader.goto('/admin/quran/translations');
     await expect(reader.getByRole('heading', { name: 'New translation' })).toHaveCount(0);
   });
 
   test('quran.administer creates, edits and publishes a translation — and never touches the Arabic', async () => {
     test.setTimeout(120_000);
     const page = administrator;
-    await page.goto('/en/admin/quran/translations');
+    await page.goto('/admin/quran/translations');
     await page.locator('#new-translation-slug').fill(slug.adminTranslation);
     await page.locator('#new-translation-name').fill(NAME.adminTranslation);
     await page.locator('#new-translation-language').selectOption('en');
     await page.locator('#new-translation-source').selectOption(ids.source);
     await page.getByRole('button', { name: 'Create', exact: true }).click();
-    await page.waitForURL(/\/en\/admin\/quran\/translations\/[0-9a-f-]{36}$/);
+    await page.waitForURL(/\/admin\/quran\/translations\/[0-9a-f-]{36}$/);
     const id = page.url().split('/').pop() ?? '';
 
     // Edit its metadata.
@@ -1159,7 +1163,7 @@ test.describe('Quran administration', () => {
 
     // It is public now, read beside the canonical Arabic.
     const reading = await page.goto(
-      `/en/quran/surah/1/3?translation=${slug.adminTranslation}`,
+      `/quran/surah/1/3?translation=${slug.adminTranslation}`,
     );
     expect(reading?.status()).toBe(200);
     await expect(
@@ -1167,9 +1171,9 @@ test.describe('Quran administration', () => {
     ).toHaveText('NON_QURAN_FIXTURE_ADMIN_TRANSLATION_1_3');
 
     // And the canonical text offers this account no control at all.
-    await page.goto('/en/admin/quran/ayat/1/1');
+    await page.goto('/admin/quran/ayat/1/1');
     await expect(page.getByRole('link', { name: 'Begin a correction' })).toHaveCount(0);
-    await page.goto('/en/admin/quran/ayat/1/1?correct=1');
+    await page.goto('/admin/quran/ayat/1/1?correct=1');
     await expect(page.getByRole('heading', { name: 'Canonical correction' })).toHaveCount(
       0,
     );
@@ -1183,7 +1187,7 @@ test.describe('Quran administration', () => {
   test('quran.editCanonical corrects one Ayah only behind its own step-up, and only to the exact source text', async () => {
     test.setTimeout(240_000);
     const page = canonical;
-    const correctionUrl = `/en/admin/quran/ayat/1/1?correct=1&source=${ids.correctionSource}`;
+    const correctionUrl = `/admin/quran/ayat/1/1?correct=1&source=${ids.correctionSource}`;
     const failedRuns = () =>
       scalar(
         "SELECT COUNT_BIG(*) AS [value] FROM [dbo].[QuranVerificationRun] WHERE [kind]=N'ayah-correction' AND [outcome]=N'failed';",
@@ -1224,7 +1228,7 @@ test.describe('Quran administration', () => {
     };
 
     // Entered on purpose, behind a warning, with the purpose's own prompt.
-    await page.goto('/en/admin/quran/ayat/1/1');
+    await page.goto('/admin/quran/ayat/1/1');
     await page.getByRole('link', { name: 'Begin a correction' }).click();
     await page.waitForURL(/correct=1/);
     await expect(
@@ -1304,7 +1308,7 @@ test.describe('Quran administration', () => {
     ).toBeVisible();
     expect(await ayah()).toEqual({ version: 2, text: CORRECTED });
 
-    await page.goto('/en/admin/quran/ayat/1/1');
+    await page.goto('/admin/quran/ayat/1/1');
     const history = page.locator('section[aria-labelledby="ayah-history"]');
     await expect(history.getByText('Version 2', { exact: true })).toBeVisible();
     await expect(history.getByText('Version 1', { exact: true })).toBeVisible();
@@ -1316,7 +1320,7 @@ test.describe('Quran administration', () => {
     expect(revision?.stepUpGrantId).not.toBeNull();
 
     // The public citation reads the corrected text.
-    await visitFixture(page, '/en/quran/surah/1/1');
+    await visitFixture(page, '/quran/surah/1/1');
     await expect(page.locator('[aria-labelledby="ayah-arabic"] p')).toHaveText(CORRECTED);
   });
 });

@@ -940,7 +940,25 @@ app icon; provenance and checksums are inventoried in TECH_STACK.md §18. No SVG
 published, so no palette or typeface was inferred from the logo's pixels: the restrained semantic
 palette stays. This is **provisional brand evidence, not the accepted brand pack**: the logo
 variants, palette, typefaces and guidelines remain this decision, and supplying them replaces the
-file and the token values.
+file and the token values. *(The header placement and "the restrained semantic palette stays"
+are historical at Phase-30-R exit, superseded by Rebaseline R1 below.)*
+
+**Interim One Minhaj identity — owner-approved (Rebaseline R1, 2026-11-06, Haseeb, project
+owner). The organisation's brand pack stays OPEN.**
+
+- **Approved:** an **interim** visual identity for the One Minhaj product — the palette by role,
+  radii and shipped OFL typefaces recorded in ARCHITECTURE.md §13.2–§13.3 and TECH_STACK.md §18.9.
+  It is explicitly **replaceable** by Minhaj's official brand pack; because every role is a token
+  consumed as a utility and every face is declared in one module, supplying the pack is a value
+  and font-module substitution, not a redesign.
+- **The product mark:** a typographic "One Minhaj" wordmark with a small eight-point star outline
+  — a neutral geometric form, not an organisational emblem and not a redrawing of any Minhaj mark.
+- **The official MQI logo** is used **unmodified** as a **secondary organisational mark**, in the
+  footer only, beside the one pre-adoption statement — never redrawn or recoloured, and no longer
+  in the header.
+- **Still OPEN for Minhaj:** the official brand pack — logo variants, palette, typefaces
+  (including any approved Urdu and Arabic typefaces and their licensing), guidelines — and the
+  acceptance of any brand use beyond pre-adoption staging.
 
 ### 6.5 Content team structure and roles
 **Owner:** Minhaj · **Gates:** Phase 6 · **Priority:** Medium
@@ -1054,6 +1072,17 @@ settled:
 | **One organisation per deployment** — no multi-tenancy, no white-label engine | ARCHITECTURE.md §10.5.3 |
 | **Unscheduled items gain no route or navigation** | PRODUCT_SCOPE.md §4.4; ROUTE_MAP.md §5.2 |
 
+**Owner decisions recorded at Rebaseline R1 (2026-11-06, Haseeb, project owner).** Product
+decisions the owner is entitled to make for the independently developed platform; none is a
+decision of Minhaj-ul-Quran International, and none closes an entry above:
+
+| Decided | Where |
+|---|---|
+| **English URLs are unprefixed** (`/`, `/library`); Urdu and Arabic keep `/ur/…` and `/ar/…`. Every `/en` and `/en/…` answers one 301 to the unprefixed address, query preserved and merged with slug history. Locale resolution is deterministic: no locale cookie, no `Accept-Language` redirect, `/` answers 200 in English. One canonical address per interface locale still holds; made before public indexing, so no search equity was affected. Supersedes the Phase-3A `/{locale}` contract and its 307 | ROUTE_MAP.md §1.1, §1.3, §9.1–§9.2.1 |
+| **Interim One Minhaj visual identity** — replaceable; the official logo unmodified as a secondary footer mark; the brand pack stays OPEN | §6.4; ARCHITECTURE.md §13.2–§13.3 |
+| **Content-aware navigation** — a destination is promoted only with published content or an open service; every route stays reachable by address | INFORMATION_ARCHITECTURE.md §2.2, §4 |
+| **Readiness vocabulary** — never a bare "complete"; readiness is reported in six separate dimensions: **Engineering**, **Product**, **Content**, **Activation**, **Production**, **Flagship/presentation** | PRODUCT_SCOPE.md, *Product status and acceptance*; DELIVERY_PLAN.md (Rebaseline R1 record) |
+
 ---
 
 ## 9. Blocking summary
@@ -1075,11 +1104,11 @@ gates. A decision may gate more than one thing.
 | 2.3.1 | Correspondence retention period | **D** | Activation | 6 | Public intake stays disabled until the privacy/legal and support owners approve a period |
 | 2.4 | Content licensing and attribution | **D** | Content acceptance | 8, 18, 19, 30 | Affected material is not published or migrated |
 | 2.5 | Student↔student messaging policy | **D** | Activation | 24 | Disabled by default |
-| 3.1 | Written migration authorisation per source | **D** | **Implementation of live-source work**; activation | **30 only** — the phase-start / real-source-contact gate | **No live ingestion.** **Phase 29 framework delivered on fixtures only; no source authorised.** Minimum record: §3.1.1 |
+| 3.1 | Written migration authorisation per source | **D** | **Implementation of live-source work**; activation | **30 only** — the phase-start / real-source-contact gate | **No live ingestion.** At Phase-29 exit the framework was delivered on fixtures only and no source was authorised (historical, superseded by Phase 30). **Since 2026-10-27 the seven anticipated sources are owner-attested for pre-adoption staging only** (§3.1); per-source records by Minhaj stay OPEN. Minimum record: §3.1.1 |
 | 3.2 | Source, API or export access | **C** | Content acceptance quality | 30 — **not a universal start blocker** | Authorised public-content ingestion, higher parsing effort; **an export is a source, never the target** (MIGRATION_STRATEGY.md §1.3) |
 | 3.3 | Migration scope per source | **C** | Content acceptance | 30 — per-source ingestion | Scope undetermined; out-of-scope content is not ingested |
 | 3.4 | Legacy domain control, production promotion and cutover | **C/E** | Launch | **35 only** | Legacy links break at launch; **no effect on Phase 30** |
-| 3.5 | Staging migration publication authority (`migration.publish` holder) | **C/D** | Content acceptance | **30 exit** | Migrated content is staged and reviewed but not published in staging; nobody holds the grant |
+| 3.5 | Staging migration publication authority (`migration.publish` holder) | **C/D** | Content acceptance | **30 exit** | Migrated content is staged and reviewed but not published in staging. "Nobody holds the grant" was true until 2026-10-28 (historical, superseded by Phase 30): **on pre-adoption staging only a holder exists** by the owner's authorisation (§3.5); Minhaj's naming of a holder stays OPEN |
 | 3.6 | Phase-30 gates by timing | — | (classification of 3.1–3.5, 1.1–1.6, 2.4) | 30 | — |
 | 3.7 | Pre-adoption review completeness (owner decision, Phase 30-R) | — | Owner, pre-adoption staging only | 30 (Stage 1A) | Decided for staging; Minhaj acceptance, brand pack and production licensing stay open |
 | 3.8 | Personal-data flag clearance; Collections from curated archives (Phase 30-RF findings) | **C** | Owner decision, then implementation | 30 (Stage 1A/1B) | **Decided for pre-adoption staging and implemented (Phase 30-RD).** Minhaj's acceptance and any production holder of `migration.clearPersonalData` stay open |
@@ -1094,7 +1123,7 @@ gates. A decision may gate more than one thing.
 | 6.1 | Canonical organisational facts | **D** | Content acceptance | 6 publishes | Placeholders only; **never published as configuration** |
 | 6.2 | Centre and global network data | **C** | Content acceptance | 16 | Find a Centre has no authoritative data |
 | 6.3 | Contributor records and capability grants | **D** | Activation · content acceptance | 5, 20, 23 | No real grants issued |
-| 6.4 | Brand and visual identity | **C** | Content acceptance | 4 | **Token structure is decided**; the current official logo is provisional pre-adoption evidence (§3.7); real values substituted later |
+| 6.4 | Brand and visual identity | **C** | Content acceptance | 4 | **Token structure is decided**; **the interim One Minhaj identity is owner-approved (Rebaseline R1, 2026-11-06)** and the official logo is used unmodified as a secondary footer mark (§3.7, §6.4); the organisation's brand pack stays OPEN and replaces the interim values when supplied |
 | 6.5 | Content team structure and roles | **C** | Activation | 6 | Separation-of-duties default applies |
 | 6.6 | Support and moderation ownership | **C** | Activation | 24 | Support conversations not staffed |
 | 7.1 | Search Console and analytics access | **C** | Launch | 35 | No third-party analytics assumed |
@@ -1135,3 +1164,11 @@ safeguarding consultation that takes real time and cannot be compressed once the
 phases arrive. **Raise §3.1 with them — with §3.3, §2.4 and §3.5 for a Phase 30 meant to complete
 in one run** — because Phase 30 is the next phase in the plan and cannot contact any source
 without it (§3.6). (§5.1 previously held this place; it is closed on evidence.)
+
+> **Reconciled at Rebaseline R1 (2026-11-06).** The two preceding paragraphs describe the
+> pre-Phase-30 baseline (historical, superseded by Phase 30): since 2026-10-27 Phase 30 has
+> contacted the seven anticipated sources under the owner's pre-adoption staging attestation
+> (§3.1), and a pre-adoption staging `migration.publish` holder exists (§3.5). What stays OPEN for
+> the organisation is unchanged: Minhaj's own per-source records (§3.1.1), its naming of a
+> publication holder (§3.5), religious authority (§1), the brand pack (§6.4) and every production
+> and launch decision. Stage 1B and Phases 31–35 have not started.

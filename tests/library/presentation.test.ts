@@ -274,9 +274,9 @@ describe('a URL is not a form: the listing query is tolerant, never trusting', (
 
   it('keeps the unfiltered listing at exactly one address', () => {
     const base = readLibraryQuery({});
-    expect(booksPath('en', base)).toBe('/en/library/books');
+    expect(booksPath('en', base)).toBe('/library/books');
     expect(booksPath('en', base, { language: 'ur', offset: 25 })).toBe(
-      '/en/library/books?offset=25&language=ur',
+      '/library/books?offset=25&language=ur',
     );
   });
 });

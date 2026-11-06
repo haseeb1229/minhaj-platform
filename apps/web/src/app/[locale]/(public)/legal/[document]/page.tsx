@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import {
   readPage,
   publishedPageMetadata,
@@ -86,7 +87,10 @@ export default async function LegalDocumentPage({ params }: LegalParams) {
     <>
       <ListingIntro
         trailLabel={t('nav.breadcrumbs')}
-        trail={[{ href: `/${locale}`, text: t('nav.home') }, { text: title }]}
+        trail={[
+          { href: localizedPath(locale, ''), text: t('nav.home') },
+          { text: title },
+        ]}
         title={title}
       />
       <Container>

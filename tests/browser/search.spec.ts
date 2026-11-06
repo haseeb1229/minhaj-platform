@@ -61,7 +61,7 @@ async function eventuallyFound(page: Page, query: string, text: string): Promise
   await expect
     .poll(
       async () => {
-        await page.goto(`/en/search?q=${encodeURIComponent(query)}`);
+        await page.goto(`/search?q=${encodeURIComponent(query)}`);
         // The results arrive in the streamed page; its heading exists only once
         // they have, so the text read below is the rendered result, not the
         // loading state.
@@ -111,7 +111,7 @@ test.beforeAll(async ({ browser }) => {
     ['search.read', 'search.operate'],
     'Synthetic search role',
   );
-  expect((await page.goto('/en/admin/system/search'))?.status()).toBe(200);
+  expect((await page.goto('/admin/system/search'))?.status()).toBe(200);
   await context.storageState({ path: OPERATOR_STATE });
   await context.close();
 });
@@ -127,7 +127,7 @@ test.describe('operating the index', () => {
     page,
   }) => {
     test.setTimeout(150_000);
-    await page.goto('/en/admin/system/search');
+    await page.goto('/admin/system/search');
 
     await expect(
       page.getByRole('heading', { level: 1, name: 'Search indexing' }),
@@ -158,12 +158,12 @@ test('refuses the operations surface to an account without the permission', asyn
   const page = await context.newPage();
   await registerAndSignIn(page, 'search-outsider');
 
-  expect((await page.goto('/en/admin/system/search'))?.status()).toBe(404);
+  expect((await page.goto('/admin/system/search'))?.status()).toBe(404);
   await context.close();
 });
 
 test('searches signed out, sets no cookie, and is never indexable', async ({ page }) => {
-  const response = await page.goto(`/en/search?q=${WORD}`);
+  const response = await page.goto(`/search?q=${WORD}`);
   expect(response?.status()).toBe(200);
   expect(response?.headers()['set-cookie']).toBeUndefined();
   expect(response?.headers()['cache-control'] ?? '').not.toMatch(/public/);
@@ -173,10 +173,10 @@ test('searches signed out, sets no cookie, and is never indexable', async ({ pag
   const results = page.getByRole('list', { name: 'Search results' });
   await expect(
     results.getByRole('link', { name: WORK_TITLE, exact: true }),
-  ).toHaveAttribute('href', `/en/library/books/search-browser-work-${run}`);
+  ).toHaveAttribute('href', `/library/books/search-browser-work-${run}`);
   await expect(
     results.getByRole('link', { name: PERSON_NAME, exact: true }),
-  ).toHaveAttribute('href', `/en/people/search-browser-${run}`);
+  ).toHaveAttribute('href', `/people/search-browser-${run}`);
 
   // A draft Work is never indexed, whatever its Edition says.
   await expect(page.getByText(DRAFT_TITLE)).toHaveCount(0);
@@ -188,12 +188,12 @@ test('searches signed out, sets no cookie, and is never indexable', async ({ pag
 });
 
 test('filters combine and every state is explained', async ({ page }) => {
-  await page.goto(`/en/search?q=${WORD}&type=person`);
+  await page.goto(`/search?q=${WORD}&type=person`);
   const results = page.getByRole('list', { name: 'Search results' });
   await expect(results.getByRole('listitem')).toHaveCount(1);
   await expect(results).toContainText(PERSON_NAME);
 
-  await page.goto(`/en/search?q=${WORD}&from=2020&to=2022`);
+  await page.goto(`/search?q=${WORD}&from=2020&to=2022`);
   await expect(page.getByRole('list', { name: 'Search results' })).toContainText(
     `${WORK_TITLE} — Synthetic edition`,
   );
@@ -201,22 +201,22 @@ test('filters combine and every state is explained', async ({ page }) => {
     PERSON_NAME,
   );
 
-  await page.goto(`/en/search?q=${WORD}zzzznomatch`);
+  await page.goto(`/search?q=${WORD}zzzznomatch`);
   await expect(page.getByText(/No results for/)).toBeVisible();
   await expect(page.getByRole('link', { name: 'Browse topics' }).first()).toBeVisible();
 
-  await page.goto('/en/search?q=%2A%2A%2A&page=99');
+  await page.goto('/search?q=%2A%2A%2A&page=99');
   await expect(alertIn(page)).toContainText('Type at least one letter or number.');
   await expect(alertIn(page)).toContainText('That page of results is not available.');
 
-  await page.goto('/en/search');
+  await page.goto('/search');
   await expect(page.getByText('What would you like to find?')).toBeVisible();
 });
 
 test('works from the keyboard, with the form state kept after searching', async ({
   page,
 }) => {
-  await page.goto('/en/search');
+  await page.goto('/search');
   const box = page.getByLabel('Search for', { exact: true });
   // READINESS IS THE BOX HOLDING THE WHOLE WORD. A boundary that resolves
   // after the shell is moved into place by the streaming runtime, and moving a
@@ -262,7 +262,7 @@ test('renders Urdu right to left, each result in its own language, without overf
 });
 
 test('never discloses a record withdrawn behind the index back', async ({ page }) => {
-  await page.goto(`/en/search?q=${WORD}&type=person`);
+  await page.goto(`/search?q=${WORD}&type=person`);
   await expect(page.getByRole('list', { name: 'Search results' })).toContainText(
     PERSON_NAME,
   );
@@ -278,7 +278,7 @@ test('never discloses a record withdrawn behind the index back', async ({ page }
   );
   expect(Number(held?.documents)).toBeGreaterThan(0);
 
-  await page.goto(`/en/search?q=${WORD}&type=person`);
+  await page.goto(`/search?q=${WORD}&type=person`);
   await expect(page.getByText(PERSON_NAME)).toHaveCount(0);
   await expect(page.getByText(/No results for/)).toBeVisible();
 
@@ -295,7 +295,7 @@ test('throttles a flood of queries at the request boundary', async ({
   // so no other test's budget is touched.
   let last = 0;
   for (let request = 0; request < 31; request += 1) {
-    const response = await page.request.get(`/en/search?q=${WORD}`, {
+    const response = await page.request.get(`/search?q=${WORD}`, {
       headers: { 'x-forwarded-for': clientAddress },
       maxRedirects: 0,
     });
@@ -303,32 +303,32 @@ test('throttles a flood of queries at the request boundary', async ({
   }
   expect(last).toBe(303);
 
-  await page.goto(`/en/search?q=${WORD}`);
-  await expect(page).toHaveURL(/\/en\/search\/limited$/);
+  await page.goto(`/search?q=${WORD}`);
+  await expect(page).toHaveURL(/\/search\/limited$/);
   await expect(
     page.getByRole('heading', { level: 1, name: 'Search paused' }),
   ).toBeVisible();
 
   // HEAD renders the page too, so it is throttled exactly like GET.
-  const head = await page.request.head(`/en/search?q=${WORD}`, {
+  const head = await page.request.head(`/search?q=${WORD}`, {
     headers: { 'x-forwarded-for': clientAddress },
     maxRedirects: 0,
   });
   expect(head.status()).toBe(303);
 
   // An empty search page spends nothing and is still available.
-  expect((await page.goto('/en/search'))?.status()).toBe(200);
+  expect((await page.goto('/search'))?.status()).toBe(200);
 });
 
 test('the topic hub is navigable and searchable within', async ({ page }) => {
-  await page.goto('/en/topics');
-  // Scoped to the page's own content: the footer's Our Work column carries an
-  // Explore page that is also called "Education".
+  await page.goto('/topics');
+  // Scoped to the page's own content, so no same-named link in the shell's
+  // header or footer can stand in for the topic.
   await page
     .getByRole('main')
     .getByRole('link', { name: 'Education', exact: true })
     .click();
-  await expect(page).toHaveURL(/\/en\/topics\/education$/);
+  await expect(page).toHaveURL(/\/topics\/education$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Education');
 
   const within = page.getByRole('search', { name: 'Search within this topic' });
@@ -337,14 +337,14 @@ test('the topic hub is navigable and searchable within', async ({ page }) => {
   await expect(page).toHaveURL(/topic=education/);
   await expect(page.getByText('Topic: Education')).toBeVisible();
 
-  expect((await page.goto('/en/topics/no-such-topic-anywhere'))?.status()).toBe(404);
+  expect((await page.goto('/topics/no-such-topic-anywhere'))?.status()).toBe(404);
 });
 
 test('a missing page offers search', async ({ page }) => {
-  const response = await page.goto(`/en/does-not-exist-${run}`);
+  const response = await page.goto(`/does-not-exist-${run}`);
   expect(response?.status()).toBe(404);
 
   await page.getByLabel('Search the site').fill(WORD);
   await page.getByRole('button', { name: 'Search' }).click();
-  await expect(page).toHaveURL(new RegExp(`/en/search\\?q=${WORD}`));
+  await expect(page).toHaveURL(new RegExp(`/search\\?q=${WORD}`));
 });

@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 
 import { textarea, whole } from '@/components/personal/action-support';
 import {
@@ -102,7 +102,7 @@ async function publisher(form: FormData) {
 }
 
 function refreshed(locale: Locale): void {
-  revalidatePath(`/${locale}/admin/migration`, 'layout');
+  revalidatePath(localizedPath(locale, '/admin/migration'), 'layout');
 }
 
 /** The version-checked identity every act on an existing row carries. */
@@ -609,7 +609,9 @@ export async function createManifestAction(
   }
   refreshed(actor.locale);
   // Outside the try: `redirect` signals by throwing, and that is not a failure.
-  redirect(`/${actor.locale}/admin/migration/manifests/${encodeURIComponent(id)}`);
+  redirect(
+    localizedPath(actor.locale, `/admin/migration/manifests/${encodeURIComponent(id)}`),
+  );
 }
 
 /** Discards a draft manifest; nothing was published from it. */

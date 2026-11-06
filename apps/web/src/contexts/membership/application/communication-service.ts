@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import type { Locale } from '@minhaj/contracts';
@@ -85,7 +86,7 @@ export function createMembershipCommunicationService(deps: {
 
   /** The person's own private Membership page, in their interface locale. */
   const membershipUrl = (locale: Locale): string =>
-    new URL(`/${locale}/my/membership`, deps.baseUrl).toString();
+    new URL(localizedPath(locale, '/my/membership'), deps.baseUrl).toString();
 
   return {
     /**

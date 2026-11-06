@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { requireAdminPage } from '@/composition/authorization';
@@ -62,7 +63,7 @@ export default async function TagsPage({
   const page = await requireAdminPage(
     locale,
     'taxonomy.read',
-    `/${locale}/admin/taxonomy/tags`,
+    localizedPath(locale, '/admin/taxonomy/tags'),
   );
   const copy = await taxonomyCopy(locale);
   const mayAdminister = page.authorization.can('taxonomy.administer');
@@ -85,16 +86,17 @@ export default async function TagsPage({
     if (includeRetired) next.set('retired', '1');
     if (target > 1) next.set('page', String(target));
     const suffix = next.toString();
-    return `/${locale}/admin/taxonomy/tags${suffix === '' ? '' : `?${suffix}`}`;
+    return localizedPath(
+      locale,
+      `/admin/taxonomy/tags${suffix === '' ? '' : `?${suffix}`}`,
+    );
   };
 
   return (
     <main className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('taxonomy.tags.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('taxonomy.tags.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('taxonomy.tags.description')}</p>
       </header>
 
       <Alert tone="info">{t('taxonomy.tags.notTopics')}</Alert>

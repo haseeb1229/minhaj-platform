@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { Pagination } from '@/components/media/parts';
@@ -35,7 +36,10 @@ export default async function CourseStudentsPage({
 }) {
   const locale = await requireLocale(params);
   const { id } = await params;
-  const path = `/${locale}/teacher/courses/${encodeURIComponent(id)}/students`;
+  const path = localizedPath(
+    locale,
+    `/teacher/courses/${encodeURIComponent(id)}/students`,
+  );
   const gate = await requireTeacher(locale, path);
   const t = await getTranslations({ locale, namespace: 'teacher' });
   if (!gate.activated) return <NotActivated t={t} />;

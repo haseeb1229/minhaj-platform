@@ -1,7 +1,7 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useCanonicalPathname } from '@/components/shell/canonical-pathname';
 
 /**
  * THE mega-menu framework (ROUTE_MAP.md §3.2, INFORMATION_ARCHITECTURE.md §3).
@@ -72,7 +72,9 @@ export function DisclosureMenu({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelId = `${useId()}-panel`;
-  const pathname = usePathname();
+  // The canonical address: an English page's internal `/en/…` path is
+  // normalised to the unprefixed one its links are built with (R1).
+  const pathname = useCanonicalPathname();
   const here = pathname === currentPrefix;
   const within = here || pathname.startsWith(`${currentPrefix}/`);
 
@@ -108,7 +110,7 @@ export function DisclosureMenu({
    * link's `aria-current` is what assistive technology hears.
    */
   const marker = within
-    ? 'after:absolute after:start-3 after:end-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-[color:var(--color-accent)]'
+    ? 'after:absolute after:start-3 after:end-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-accent'
     : '';
 
   return (
@@ -143,7 +145,7 @@ export function DisclosureMenu({
           aria-expanded={open}
           aria-controls={panelId}
           onClick={() => setOpen((current) => !current)}
-          className={`relative inline-flex min-h-11 items-center gap-1.5 rounded-[var(--radius-control)] px-3 py-2 text-sm transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--color-surface-sunken)] active:bg-[color:var(--color-border)] aria-expanded:bg-[color:var(--color-surface-sunken)] ${within ? 'font-semibold' : 'font-medium'} ${marker}`}
+          className={`relative inline-flex min-h-11 items-center gap-1.5 rounded-control px-3 py-2 text-sm transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border aria-expanded:bg-surface-sunken ${within ? 'font-semibold' : 'font-medium'} ${marker}`}
         >
           {label}
           <Chevron open={open} />
@@ -155,7 +157,7 @@ export function DisclosureMenu({
             {...(within
               ? { 'aria-current': here ? ('page' as const) : ('true' as const) }
               : {})}
-            className={`relative inline-flex min-h-11 items-center rounded-s-[var(--radius-control)] ps-3 pe-1.5 py-2 text-sm no-underline transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--color-surface-sunken)] active:bg-[color:var(--color-border)] ${within ? 'font-semibold' : 'font-medium'} ${marker}`}
+            className={`relative inline-flex min-h-11 items-center rounded-s-control ps-3 pe-1.5 py-2 text-sm no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border ${within ? 'font-semibold' : 'font-medium'} ${marker}`}
           >
             {link.text}
           </a>
@@ -166,7 +168,7 @@ export function DisclosureMenu({
             aria-controls={panelId}
             aria-label={label}
             onClick={() => setOpen((current) => !current)}
-            className="inline-flex min-h-11 min-w-7 items-center justify-center rounded-e-[var(--radius-control)] pe-2 ps-0.5 text-[color:var(--color-foreground-muted)] transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--color-surface-sunken)] hover:text-[color:var(--color-foreground)] active:bg-[color:var(--color-border)] aria-expanded:bg-[color:var(--color-surface-sunken)] aria-expanded:text-[color:var(--color-foreground)]"
+            className="inline-flex min-h-11 min-w-7 items-center justify-center rounded-e-control pe-2 ps-0.5 text-foreground-muted transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken hover:text-foreground active:bg-border aria-expanded:bg-surface-sunken aria-expanded:text-foreground"
           >
             <Chevron open={open} />
           </button>
@@ -181,7 +183,7 @@ export function DisclosureMenu({
          * accessibility tree, not invisible but still focusable.
          */
         hidden={!open}
-        className="absolute start-0 end-0 top-full z-[var(--layer-header)] mt-px rounded-b-[var(--radius-panel)] border border-t-2 border-[color:var(--color-border)] border-t-[color:var(--color-accent-rule)] bg-[color:var(--color-surface-raised)] p-6 shadow-[var(--shadow-raised)]"
+        className="absolute start-0 end-0 top-full z-[var(--layer-header)] mt-px rounded-b-panel border border-t-2 border-border border-t-accent-rule bg-surface-raised p-6 shadow-raised"
       >
         {children}
       </div>

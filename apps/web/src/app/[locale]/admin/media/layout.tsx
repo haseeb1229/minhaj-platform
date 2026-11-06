@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getTranslations } from 'next-intl/server';
@@ -66,7 +67,7 @@ export default async function MediaAdminLayout({
               key: 'media',
               links: SURFACES.map((surface) => ({
                 key: surface.key,
-                href: `/${locale}/admin/media/${surface.path}`,
+                href: localizedPath(locale, `/admin/media/${surface.path}`),
                 text: t(`surface.${surface.key}`),
               })),
             },

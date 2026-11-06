@@ -1,5 +1,6 @@
 'use server';
 
+import { localizedPath } from '@minhaj/contracts';
 import { revalidatePath } from 'next/cache';
 
 import {
@@ -84,7 +85,7 @@ function localeFrom(form: FormData): string {
  * have nothing to do with this.
  */
 function refresh(locale: string): void {
-  revalidatePath(`/${locale}/admin`, 'layout');
+  revalidatePath(localizedPath(locale, '/admin'), 'layout');
 }
 
 /* ===========================================================================

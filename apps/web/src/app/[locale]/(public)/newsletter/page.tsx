@@ -63,7 +63,7 @@ export default async function NewsletterPage({ params }: NewsletterParams) {
       <div className="flex max-w-[var(--measure-prose)] flex-col gap-6 py-12">
         <header className="flex flex-col gap-2">
           <PageHeading>{t('title')}</PageHeading>
-          <p className="text-[color:var(--color-foreground-muted)]">{t('description')}</p>
+          <p className="text-foreground-muted">{t('description')}</p>
         </header>
 
         <section className="flex flex-col gap-3" aria-labelledby="newsletter-notice">

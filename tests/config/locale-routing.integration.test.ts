@@ -11,13 +11,26 @@ import { ensureProductionBuild, nextBin, webRoot } from './next-production-build
  * `next start`. That is deliberate: locale resolution is decided by the proxy,
  * the framework's route matching and the render tree together, and a unit test
  * of any one of them would assert a model of the other two rather than the
- * behaviour a visitor gets. The redirect status, the `Location`, the cookie
- * attributes and the terminal outcome of a bad locale are all observable only
+ * behaviour a visitor gets. The redirect status, the `Location`, the absence of
+ * any cookie and the terminal outcome of a bad locale are all observable only
  * here.
  *
- * No browser and no Playwright: every property below is expressible over HTTP,
- * and the one that is not — restoring the query string after hydration — is
- * proven directly on its own function in `tests/config/messages.test.ts`.
+ * THE CONTRACT (Rebaseline R1, owner decision 2026-11-06):
+ *
+ *   - English is UNPREFIXED: `/`, `/explore`, `/library`.
+ *   - Urdu and Arabic carry their prefix: `/ur/explore`, `/ar/explore`.
+ *   - The ADDRESS ALONE decides the language. No cookie and no
+ *     `Accept-Language` header ever redirects an unprefixed URL, so a shared
+ *     link shows everyone the same language and a crawler sees what a
+ *     visitor sees.
+ *   - `/en` and `/en/…` answer ONE permanent redirect to the unprefixed
+ *     address, query preserved.
+ *   - No public GET writes a cookie.
+ *
+ * The pure builder behind every address is proven in `locale-path.test.ts`.
+ * No browser and no Playwright here: every property below is expressible over
+ * HTTP. The one that is not — the hydrated switcher restoring the current
+ * query string — is a browser property.
  */
 
 let server: ChildProcess | null = null;
@@ -61,18 +74,26 @@ async function isListening(port: number): Promise<boolean> {
 }
 
 /**
- * THE PAGE EACH LOCALE IS READ ON. Since Phase 30 the locale ROOT (`/en`) is the
- * home portal — a public CONTENT route that reads published records per request
+ * THE PAGE EACH LOCALE IS READ ON. The home page (`/`, `/ur`, `/ar`) is the
+ * portal — a public CONTENT route that reads published records per request
  * (ARCHITECTURE.md §8.3.1.1), so it needs the database this suite deliberately
  * runs without (the `Verify` job has none). Every property asserted on a page
  * below — the shell, the switcher, `lang`/`dir`, no alternates, `noindex`, no
  * canonical, shared caching, no catalogue in the payload — is a property of
  * the locale tree's PRERENDERED shell, and is read on the prerendered page every
- * locale has. The home portal's own rendering is proved where a database
- * exists: `tests/browser/shell.spec.ts` in the Browser flows job. Redirect
- * assertions still name the locale root itself: a redirect renders no page.
+ * locale has. English is that page's UNPREFIXED address. The home portal's own
+ * rendering is proved where a database exists: `tests/browser/shell.spec.ts`
+ * in the Browser flows job. What IS asserted on `/` here is the routing
+ * contract — it is never redirected — which needs no database.
  */
-const PAGE = { en: '/en/explore', ur: '/ur/explore', ar: '/ar/explore' } as const;
+const PAGE = { en: '/explore', ur: '/ur/explore', ar: '/ar/explore' } as const;
+
+/** The opening `<html>` tag each locale's document carries. */
+const HTML = {
+  en: '<html lang="en" dir="ltr"',
+  ur: '<html lang="ur" dir="rtl"',
+  ar: '<html lang="ar" dir="rtl"',
+} as const;
 
 /**
  * One request, never followed.
@@ -86,6 +107,54 @@ async function request(
 ): Promise<Response> {
   return fetch(base + path, { headers, redirect: 'manual' });
 }
+
+/** The document's opening `<html …>` tag, or `''` when there is none. */
+function openingTag(html: string): string {
+  return html.match(/<html[^>]*>/)?.[0] ?? '';
+}
+
+const isRedirect = (status: number) => status >= 300 && status < 400;
+
+/**
+ * Every redirect target must resolve back to THIS origin.
+ *
+ * Asserted by resolving the `Location` the way a browser would, rather than
+ * by banning a hostile substring. The substring test is the tempting one and
+ * it is wrong in both directions: it fails a perfectly safe
+ * `/?next=%2F%2Fevil.example.com`, where the hostile string is an inert query
+ * VALUE being carried along, and it would pass any off-site host whose name
+ * the test did not happen to enumerate.
+ *
+ * The property that actually matters is the origin, so the origin is what is
+ * checked. A protocol-relative `//evil.example.com` resolves to a different
+ * origin and fails here, which is exactly right.
+ */
+function expectInternal(location: string | null) {
+  expect(location).not.toBeNull();
+
+  const resolved = new URL(location as string, base);
+
+  expect(resolved.origin, `${location} must stay on this origin`).toBe(
+    new URL(base).origin,
+  );
+}
+
+/**
+ * The visitor-controlled language signals, every one of which an unprefixed
+ * address must IGNORE. The cookie name is the one next-intl used to store a
+ * preference before R1 — a returning visitor's browser may still send it.
+ */
+const PREFERENCES: readonly (readonly [string, Record<string, string>])[] = [
+  ['no preference at all', {}],
+  ['Accept-Language: ur', { 'accept-language': 'ur' }],
+  ['Accept-Language: ar', { 'accept-language': 'ar' }],
+  ['a regional Urdu tag', { 'accept-language': 'ur-PK,ur;q=0.9' }],
+  ['a stored NEXT_LOCALE=ur cookie', { cookie: 'NEXT_LOCALE=ur' }],
+  [
+    'a stored NEXT_LOCALE=ar cookie with Accept-Language: ar',
+    { cookie: 'NEXT_LOCALE=ar', 'accept-language': 'ar' },
+  ],
+];
 
 /**
  * The secrets a PRODUCTION process must supply for itself.
@@ -152,7 +221,7 @@ beforeAll(async () => {
       const probe = await fetch(`${base}${PAGE.en}`, { redirect: 'manual' });
       const html = await probe.text();
 
-      if (!html.includes('<html lang="en" dir="ltr">')) {
+      if (!html.includes(HTML.en)) {
         // The STATUS and the server's own output, not merely "something else".
         //
         // This check cannot tell a stolen port from this application failing to
@@ -181,173 +250,221 @@ afterAll(() => {
 });
 
 // ===========================================================================
-// Resolution order — ROUTE_MAP.md §1.1
+// The address alone decides the language — ROUTE_MAP.md §1.1 (R1)
 // ===========================================================================
 
-describe('`/` resolves a locale and redirects with 307', () => {
-  it('sends a visitor with no preference to `/en`', async () => {
-    const response = await request('/');
+describe('an unprefixed address is English, deterministically', () => {
+  it.each(PREFERENCES)(
+    '`/explore` serves English 200 with %s',
+    async (_label, headers) => {
+      const response = await request(PAGE.en, headers);
 
-    expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe('/en');
+      expect(response.status).toBe(200);
+      expect(response.headers.get('location')).toBeNull();
+      expect(openingTag(await response.text())).toContain(HTML.en);
+    },
+  );
+
+  it.each(PREFERENCES)('`/` is never redirected, with %s', async (_label, headers) => {
+    // `/` is the English home itself — not a negotiation point. Before R1 it
+    // answered a 307 chosen by cookie and `Accept-Language`; now no visitor
+    // signal can move it anywhere. Its CONTENT is the database-backed portal
+    // (see PAGE above), so what is asserted here is the routing outcome: the
+    // same answer as a visitor with no preference, never a redirect, and never
+    // an Urdu or Arabic document.
+    const baseline = await request('/');
+    const response = await request('/', headers);
+    const tag = openingTag(await response.text());
+
+    expect(isRedirect(response.status), `status ${response.status}`).toBe(false);
+    expect(response.status).toBe(baseline.status);
+    expect(response.headers.get('location')).toBeNull();
+    expect(tag).not.toContain('lang="ur"');
+    expect(tag).not.toContain('lang="ar"');
   });
 
-  it('uses 307 exactly — not 301, 302 or 308', async () => {
-    // The target varies by visitor. A 301 would let any intermediary cache one
-    // visitor's language as the permanent answer for everyone behind it, which
-    // is why §1.1 names the status rather than leaving it to the framework.
-    const response = await request('/');
+  it('serves the SAME document whatever language the visitor prefers', async () => {
+    // Not merely "also English": byte-identical, so no preference leaks into
+    // a shared, cached response.
+    const plain = await (await request(PAGE.en)).text();
 
-    expect(response.status).not.toBe(301);
-    expect(response.status).not.toBe(302);
-    expect(response.status).not.toBe(308);
-    expect(response.status).toBe(307);
+    for (const [label, headers] of PREFERENCES) {
+      expect(await (await request(PAGE.en, headers)).text(), label).toBe(plain);
+    }
   });
 
-  it('honours `Accept-Language: ur`', async () => {
-    const response = await request('/', { 'accept-language': 'ur' });
-
-    expect(response.headers.get('location')).toBe('/ur');
-  });
-
-  it('honours `Accept-Language: ar`', async () => {
-    const response = await request('/', { 'accept-language': 'ar' });
-
-    expect(response.headers.get('location')).toBe('/ar');
-  });
-
-  it('matches a regional tag to its supported language', async () => {
-    // `ur-PK` is what a real Pakistani browser sends. Treating it as
-    // unsupported would send most Urdu speakers to the English site.
-    const response = await request('/', { 'accept-language': 'ur-PK,ur;q=0.9' });
-
-    expect(response.headers.get('location')).toBe('/ur');
-  });
-
-  it('falls back to `en` when nothing in `Accept-Language` is supported', async () => {
-    const response = await request('/', { 'accept-language': 'de,fr;q=0.9,es;q=0.8' });
-
-    expect(response.headers.get('location')).toBe('/en');
-  });
-
-  it('lets a STORED preference beat `Accept-Language`', async () => {
-    // The ordering that makes the whole contract a contract: someone who chose
-    // Arabic keeps Arabic on a browser configured for Urdu.
-    const response = await request('/', {
-      'accept-language': 'ur',
-      cookie: 'NEXT_LOCALE=ar',
+  it('does not let a preference move a PREFIXED page either', async () => {
+    const response = await request(PAGE.ur, {
+      'accept-language': 'ar',
+      cookie: 'NEXT_LOCALE=en',
     });
 
-    expect(response.headers.get('location')).toBe('/ar');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
+    expect(openingTag(await response.text())).toContain(HTML.ur);
   });
 
-  it.each(['de', 'EN', 'en-GB', '', '../ar', 'en ar'])(
-    'ignores an unsupported stored preference %j rather than routing to it',
+  it.each(['de', 'EN', 'en-GB', '', '../ar', 'en ar', '//evil.example.com'])(
+    'ignores a stored value %j entirely',
     async (stored) => {
-      // A cookie is visitor-controlled input. An unsupported value must not
-      // become a path segment, and must not suppress the rest of the
-      // resolution order either — negotiation continues to `ur` here.
-      const response = await request('/', {
+      // A cookie is visitor-controlled input. Nothing reads it now; whatever
+      // it holds, it never becomes a path segment or a redirect.
+      const response = await request(PAGE.en, {
         'accept-language': 'ur',
         cookie: `NEXT_LOCALE=${stored}`,
       });
 
-      expect(response.status).toBe(307);
-      expect(response.headers.get('location')).toBe('/ur');
+      expect(response.status).toBe(200);
+      expect(response.headers.get('location')).toBeNull();
+      expect(openingTag(await response.text())).toContain(HTML.en);
     },
   );
 });
 
-// ===========================================================================
-// Locale roots and deep paths
-// ===========================================================================
-
 describe('every locale serves its prerendered shell', () => {
   it.each([
-    ['en', 'ltr'],
-    ['ur', 'rtl'],
-    ['ar', 'rtl'],
+    [PAGE.en, 'en', 'ltr'],
+    [PAGE.ur, 'ur', 'rtl'],
+    [PAGE.ar, 'ar', 'rtl'],
   ])(
-    '/%s/explore renders 200 with lang=%s and the accepted direction',
-    async (locale, dir) => {
-      const response = await request(`/${locale}/explore`);
+    '%s renders 200 with lang=%s and the accepted direction',
+    async (path, locale, dir) => {
+      const response = await request(path);
 
       expect(response.status).toBe(200);
+      expect(response.headers.get('location')).toBeNull();
 
-      const html = await response.text();
-      const openingTag = html.match(/<html[^>]*>/)?.[0] ?? '';
+      const tag = openingTag(await response.text());
 
-      expect(openingTag).toContain(`lang="${locale}"`);
-      expect(openingTag).toContain(`dir="${dir}"`);
+      expect(tag).toContain(`lang="${locale}"`);
+      expect(tag).toContain(`dir="${dir}"`);
     },
   );
 
   it('renders with no cookie and no session of any kind', async () => {
     // ARCHITECTURE.md §8: the public tree must never depend on session state,
-    // and must not degrade when there is none. Phase 3A has no Identity at
-    // all, so the meaningful assertion is that a bare request works fully.
+    // and must not degrade when there is none. A bare request works fully.
     const response = await request(PAGE.ur);
     const html = await response.text();
 
     expect(response.status).toBe(200);
-    expect(html).toContain('<html lang="ur" dir="rtl">');
+    expect(html).toContain(HTML.ur);
     expect(html).toContain('<nav');
   });
 });
 
-describe('an unprefixed path is redirected with its path and query intact', () => {
-  it('preserves a deep path', async () => {
-    const response = await request('/library/books/al-minhaj');
+// ===========================================================================
+// The legacy `/en` prefix — ONE permanent redirect
+// ===========================================================================
 
-    expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe('/en/library/books/al-minhaj');
+describe('a legacy `/en` address answers ONE permanent redirect to its unprefixed address', () => {
+  it.each([
+    ['/en', '/'],
+    ['/en/explore', '/explore'],
+    ['/en/explore?x=1', '/explore?x=1'],
+    ['/en/quran/surah/2', '/quran/surah/2'],
+    ['/en/library?topic=fiqh&topic=tafsir', '/library?topic=fiqh&topic=tafsir'],
+    ['/en/search?q=minhaj&page=2', '/search?q=minhaj&page=2'],
+    // Percent-encoding is carried, not re-encoded or decoded.
+    ['/en/search?q=%D8%A7%D8%B1%D8%AF%D9%88', '/search?q=%D8%A7%D8%B1%D8%AF%D9%88'],
+    // A page that does not exist is still one hop — to its own 404.
+    ['/en/de', '/de'],
+  ])('%s → 301 %s', async (legacy, canonical) => {
+    const response = await request(legacy);
+
+    expect(response.status).toBe(301);
+    expect(response.headers.get('location')).toBe(canonical);
   });
 
-  it('preserves the query string', async () => {
-    const response = await request('/search?q=minhaj&page=2');
+  it('uses 301 exactly — not 302, 307 or 308 — and marks the hop uncacheable and unindexable', async () => {
+    // The target no longer varies by visitor, so the redirect is PERMANENT:
+    // `/en/…` is a retired address, and search engines transfer its standing
+    // to the unprefixed one.
+    const response = await request('/en/explore');
 
-    expect(response.headers.get('location')).toBe('/en/search?q=minhaj&page=2');
+    expect(response.status).not.toBe(302);
+    expect(response.status).not.toBe(307);
+    expect(response.status).not.toBe(308);
+    expect(response.status).toBe(301);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('x-robots-tag')).toBe('noindex');
   });
 
-  it('preserves a REPEATED query key', async () => {
-    const response = await request('/library?topic=fiqh&topic=tafsir');
+  it('is ONE hop: the target is the page itself, never a further redirect', async () => {
+    const first = await request('/en/explore?x=1');
+    const target = first.headers.get('location') as string;
 
-    expect(response.headers.get('location')).toBe('/en/library?topic=fiqh&topic=tafsir');
+    const second = await request(target);
+
+    expect(second.status).toBe(200);
+    expect(second.headers.get('location')).toBeNull();
+    expect(openingTag(await second.text())).toContain(HTML.en);
   });
 
-  it('preserves a percent-encoded value without re-encoding it', async () => {
-    const response = await request('/search?q=%D8%A7%D8%B1%D8%AF%D9%88');
+  it('answers a legacy search URL by the redirect alone, never by spending search budget', async () => {
+    // Search admission runs before the legacy redirect and would answer a
+    // throttled `303` to `/search/limited`. A legacy `/en/search?q=…` skips
+    // it, so the visitor's ONE hop is the canonical search address.
+    const response = await request('/en/search?q=minhaj');
 
-    expect(response.headers.get('location')).toBe(
-      '/en/search?q=%D8%A7%D8%B1%D8%AF%D9%88',
+    expect(response.status).toBe(301);
+    expect(response.headers.get('location')).toBe('/search?q=minhaj');
+  });
+
+  it('does not redirect the Urdu or Arabic prefix', async () => {
+    for (const path of ['/ur/explore?x=1', '/ar/explore?x=1']) {
+      const response = await request(path);
+
+      expect(response.status, path).toBe(200);
+      expect(response.headers.get('location'), path).toBeNull();
+    }
+  });
+
+  it('never leaves a visitor on a slashed `/en/` address', async () => {
+    // Next normalises the trailing slash and the proxy retires `/en`; however
+    // the two are ordered, the chain is short, stays on this site, and ends on
+    // the unprefixed home.
+    let path = '/en/';
+    const seen: string[] = [];
+
+    for (let hop = 0; hop < 3; hop += 1) {
+      const response = await request(path);
+      if (!isRedirect(response.status)) break;
+      const location = response.headers.get('location');
+      expectInternal(location);
+      path = new URL(location as string, base).pathname;
+      seen.push(path);
+    }
+
+    expect(seen.length, JSON.stringify(seen)).toBeGreaterThan(0);
+    expect(seen.length, JSON.stringify(seen)).toBeLessThanOrEqual(2);
+    expect(seen.at(-1)).toBe('/');
+  });
+});
+
+describe('a trailing slash is normalised to the canonical form', () => {
+  it.each([
+    ['/explore/', '/explore'],
+    ['/ur/explore/', '/ur/explore'],
+    ['/ar/explore/', '/ar/explore'],
+    ['/ur/', '/ur'],
+  ])('%s redirects to %s', async (slashed, canonical) => {
+    // ROUTE_MAP.md §2.1 allows one canonical URL per resource; the slashed
+    // form redirects to the canonical one rather than serving a duplicate.
+    const response = await request(slashed);
+
+    expect([301, 307, 308]).toContain(response.status);
+    expect(new URL(response.headers.get('location') as string, base).pathname).toBe(
+      canonical,
     );
   });
 
-  it('carries the resolved locale, not always `en`', async () => {
-    const response = await request('/quran/surah/2', { 'accept-language': 'ar' });
-
-    expect(response.headers.get('location')).toBe('/ar/quran/surah/2');
-  });
-
-  it('normalises a trailing slash to the canonical form', async () => {
-    // ROUTE_MAP.md §2.1 allows one canonical URL per resource, and `/en/` and
-    // `/en` would otherwise be two. The routing policy keeps no trailing
-    // slash, so the slashed form redirects to the canonical one rather than
-    // serving a duplicate.
-    const response = await request('/en/');
-
-    expect([301, 307, 308]).toContain(response.status);
-    expect(response.headers.get('location')).toBe('/en');
-  });
-
-  it('normalises a trailing slash on a deep unprefixed path', async () => {
+  it('never leaves a deep unprefixed path slashed', async () => {
     const response = await request('/library/');
     const location = response.headers.get('location') as string;
 
     expect(location).not.toBeNull();
-    // Whether the slash or the locale prefix is resolved first, the visitor
-    // must not be left on a slashed, locale-less URL.
-    expect(new URL(location, base).pathname).not.toMatch(/\/$/);
+    expect(new URL(location, base).pathname).toBe('/library');
   });
 });
 
@@ -356,50 +473,71 @@ describe('an unprefixed path is redirected with its path and query intact', () =
 // ===========================================================================
 
 describe('an unsupported locale terminates at 404, never a localised 200', () => {
-  it.each(['/de', '/de/deep', '/zz', '/quran'])(
-    '%s is redirected under a supported locale rather than served',
-    async (path) => {
-      const response = await request(path);
+  it.each([
+    '/fr/explore',
+    '/de',
+    '/de/deep',
+    '/zz',
+    '/en-GB/explore',
+    '/ur/zz',
+    '/ar/nonexistent',
+    '/ur/fr/explore',
+  ])('%s is a terminal 404', async (path) => {
+    // An unprefixed path is English, so `/fr/explore` is the English path
+    // `fr/explore` — which does not exist. It is never redirected under some
+    // locale and never rendered as French.
+    const response = await request(path);
 
-      expect(response.status).toBe(307);
-      expect(response.headers.get('location')).toBe(`/en${path}`);
-    },
-  );
-
-  it.each(['/en/de', '/en/de/deep', '/ur/zz', '/ar/nonexistent'])(
-    '%s is a terminal 404',
-    async (path) => {
-      const response = await request(path);
-
-      expect(response.status).toBe(404);
-      expect(response.headers.get('location')).toBeNull();
-    },
-  );
+    expect(response.status).toBe(404);
+    expect(response.headers.get('location')).toBeNull();
+  });
 
   it('never renders unsupported-locale content as a valid localised page', async () => {
     // The guard that matters if the proxy is ever bypassed or its matcher
-    // changed: the render tree validates `[locale]` itself, so `/de` cannot
+    // changed: the render tree validates `[locale]` itself, so `/fr` cannot
     // become a page in some unsupported language whatever routing does.
-    const response = await request('/en/de');
-    const html = await response.text();
+    for (const [path, unsupported] of [
+      ['/fr/explore', 'fr'],
+      ['/de', 'de'],
+      ['/en-GB/explore', 'en-GB'],
+    ] as const) {
+      const response = await request(path);
+      const tag = openingTag(await response.text());
 
-    expect(response.status).toBe(404);
-    expect(html).not.toContain('lang="de"');
+      expect(response.status, path).toBe(404);
+      expect(tag, path).not.toContain(`lang="${unsupported}"`);
+    }
   });
 
-  it('canonicalises a case variant of a supported locale to the supported one', async () => {
-    // `/EN` is NOT an unsupported locale. BCP 47 language tags are
-    // case-insensitive (RFC 5646 §2.1.1), so `EN` names the same language as
-    // `en`; next-intl redirects it to the canonical lowercase form rather than
+  it('canonicalises a case variant of a supported locale, never serving it', async () => {
+    // `/UR` is NOT an unsupported locale. BCP 47 language tags are
+    // case-insensitive (RFC 5646 §2.1.1), so `UR` names the same language as
+    // `ur`; it is redirected to the canonical lowercase form rather than
     // serving two URLs for one page (ROUTE_MAP.md §2.1, §10 rule 5).
-    //
-    // The security property still holds and is what is asserted: the value
-    // that reaches the render tree is a SUPPORTED locale, and the response for
-    // the non-canonical spelling is a redirect, never a 200.
-    const response = await request('/EN');
+    const urdu = await request('/UR/explore');
 
-    expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe('/en');
+    expect(isRedirect(urdu.status)).toBe(true);
+    expect(urdu.headers.get('location')).toBe('/ur/explore');
+
+    // `/EN` is the retired English prefix in another spelling: the security
+    // property is that it is never a 200 and that the chain ends — on this
+    // site — at the unprefixed address.
+    let path = '/EN/explore';
+    const seen: string[] = [];
+    for (let hop = 0; hop < 3; hop += 1) {
+      const response = await request(path);
+      if (!isRedirect(response.status)) {
+        expect(response.status, path).toBe(200);
+        break;
+      }
+      const location = response.headers.get('location');
+      expectInternal(location);
+      path = new URL(location as string, base).pathname;
+      seen.push(path);
+    }
+
+    expect(seen.length, JSON.stringify(seen)).toBeGreaterThan(0);
+    expect(seen.at(-1)).toBe('/explore');
   });
 });
 
@@ -419,33 +557,58 @@ describe('the proxy matcher leaves non-locale routes alone', () => {
     ['the sitemap index', '/sitemap.xml'],
     ['a partitioned sitemap', '/sitemaps/library-en.xml'],
     ['the favicon', '/favicon.ico'],
-  ])('does not add a locale prefix to %s', async (_label, path) => {
-    // None of these is IMPLEMENTED yet — they all 404 today. What is proven is
-    // that they are not REDIRECTED: a locale prefix bolted onto a webhook or a
-    // health probe is a silent integration failure on the day it arrives.
+  ])('does not redirect %s', async (_label, path) => {
+    // What is proven is that they are not REDIRECTED: a locale prefix bolted
+    // onto a webhook or a health probe is a silent integration failure.
     const response = await request(path);
 
     expect(response.headers.get('location')).toBeNull();
-    expect(response.status).not.toBe(307);
+    expect(isRedirect(response.status)).toBe(false);
   });
 
-  it('still locale-routes the HUMAN-readable sitemap page', async () => {
+  it('serves the HUMAN-readable sitemap page in each locale', async () => {
     // ROUTE_MAP.md §3.1 lists `/sitemap` as an ordinary public page, while
     // §3.10 lists `/sitemap.xml` as unprefixed. A `sitemap` PREFIX exclusion
     // would have swallowed both.
-    const response = await request('/sitemap');
-
-    expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe('/en/sitemap');
-  });
-
-  it('still locale-routes a path that merely starts like an excluded one', async () => {
-    // The exclusions are segment-anchored, not prefix matches: `/apiary` and
-    // `/rssfeed` are ordinary application paths.
-    for (const path of ['/apiary', '/rssfeed']) {
+    for (const [path, html] of [
+      ['/sitemap', HTML.en],
+      ['/ur/sitemap', HTML.ur],
+      ['/ar/sitemap', HTML.ar],
+    ] as const) {
       const response = await request(path);
 
-      expect(response.headers.get('location'), path).toBe(`/en${path}`);
+      expect(response.status, path).toBe(200);
+      expect(openingTag(await response.text()), path).toContain(html);
+    }
+
+    const legacy = await request('/en/sitemap');
+
+    expect(legacy.status).toBe(301);
+    expect(legacy.headers.get('location')).toBe('/sitemap');
+  });
+
+  it('still routes a path that merely starts like an excluded one', async () => {
+    // The exclusions are segment-anchored, not prefix matches: `/apiary` and
+    // `/rssfeed` are ordinary application paths. The proxy therefore runs on
+    // them: it retires their `/en` form, and it rewrites the unprefixed form
+    // into the English tree (Next reports the internal target in
+    // `x-middleware-rewrite`), which answers with its own 404. An excluded
+    // path is never rewritten.
+    for (const path of ['/apiary', '/rssfeed']) {
+      const legacy = await request(`/en${path}`);
+
+      expect(legacy.status, path).toBe(301);
+      expect(legacy.headers.get('location'), path).toBe(path);
+
+      const response = await request(path);
+
+      expect(response.status, path).toBe(404);
+      expect(response.headers.get('location'), path).toBeNull();
+      expect(response.headers.get('x-middleware-rewrite'), path).toBe(`/en${path}`);
+    }
+
+    for (const path of ['/api/nonexistent', '/rss/x']) {
+      expect((await request(path)).headers.get('x-middleware-rewrite'), path).toBeNull();
     }
   });
 });
@@ -455,42 +618,20 @@ describe('the proxy matcher leaves non-locale routes alone', () => {
 // ===========================================================================
 
 describe('nothing a visitor controls can move a redirect off this site', () => {
-  /**
-   * Every redirect target must resolve back to THIS origin.
-   *
-   * Asserted by resolving the `Location` the way a browser would, rather than
-   * by banning a hostile substring. The substring test is the tempting one and
-   * it is wrong in both directions: it fails a perfectly safe
-   * `/en?next=%2F%2Fevil.example.com`, where the hostile string is an inert
-   * query VALUE being carried along, and it would pass any off-site host whose
-   * name the test did not happen to enumerate.
-   *
-   * The property that actually matters is the origin, so the origin is what is
-   * checked. A protocol-relative `//evil.example.com` resolves to a different
-   * origin and fails here, which is exactly right.
-   */
-  function expectInternal(location: string | null) {
-    expect(location).not.toBeNull();
-
-    const resolved = new URL(location as string, base);
-
-    expect(resolved.origin, `${location} must stay on this origin`).toBe(
-      new URL(base).origin,
-    );
-  }
-
   it('ignores a forwarded host', async () => {
-    const response = await request('/', {
+    const response = await request('/en/explore', {
       'x-forwarded-host': 'evil.example.com',
       'x-forwarded-proto': 'https',
     });
 
+    expect(response.status).toBe(301);
     expectInternal(response.headers.get('location'));
   });
 
   it('ignores a spoofed Host header', async () => {
-    const response = await request('/', { host: 'evil.example.com' });
+    const response = await request('/en', { host: 'evil.example.com' });
 
+    expect(response.status).toBe(301);
     expectInternal(response.headers.get('location'));
   });
 
@@ -500,10 +641,17 @@ describe('nothing a visitor controls can move a redirect off this site', () => {
     'https://evil.example.com',
     'en, //evil.example.com',
   ])('ignores hostile Accept-Language %j', async (value) => {
-    const response = await request('/', { 'accept-language': value });
+    // On an unprefixed page it is not consulted at all; on a legacy address
+    // it cannot change the one destination.
+    const page = await request(PAGE.en, { 'accept-language': value });
 
-    expectInternal(response.headers.get('location'));
-    expect(['/en', '/ur', '/ar']).toContain(response.headers.get('location'));
+    expect(page.status).toBe(200);
+    expect(page.headers.get('location')).toBeNull();
+
+    const legacy = await request('/en', { 'accept-language': value });
+
+    expectInternal(legacy.headers.get('location'));
+    expect(legacy.headers.get('location')).toBe('/');
   });
 
   it('cannot be steered by a query parameter', async () => {
@@ -512,25 +660,51 @@ describe('nothing a visitor controls can move a redirect off this site', () => {
     // query parameters would break every filtered route — and the destination
     // is still this site.
     const response = await request(
-      '/?next=//evil.example.com&returnTo=https://evil.example.com',
+      '/en?next=//evil.example.com&returnTo=https://evil.example.com',
     );
     const location = response.headers.get('location') as string;
 
     expectInternal(location);
-    expect(location).toMatch(/^\/en\?/);
-    expect(new URL(location, base).pathname).toBe('/en');
+    expect(location).toMatch(/^\/\?/);
+    expect(new URL(location, base).pathname).toBe('/');
   });
 
-  it('does not treat a protocol-relative-looking path as a host', async () => {
-    for (const path of ['/%5Cevil.example.com', '/%2F%2Fevil.example.com']) {
-      const response = await request(path);
-
-      expectInternal(response.headers.get('location'));
+  it.each([
+    '/%5Cevil.example.com',
+    '/%2F%2Fevil.example.com',
+    '/en/%5Cevil.example.com',
+    '/en/%5C%5Cevil.example.com',
+    '/en/%2F%2Fevil.example.com',
+    '/en/%2f%2fevil.example.com',
+    '/en//evil.example.com',
+    '/en///evil.example.com',
+  ])('does not turn %s into a network-path redirect', async (path) => {
+    // The legacy redirect builds its target from the request's own path, so
+    // this is where a `//host` target could be born. Every hop of whatever
+    // chain the path produces must stay on this origin.
+    let current = path;
+    for (let hop = 0; hop < 4; hop += 1) {
+      const response = await request(current);
+      if (!isRedirect(response.status)) break;
+      const location = response.headers.get('location');
+      expectInternal(location);
+      expect(location as string, current).not.toMatch(/^\/\//);
+      expect(location as string, current).not.toMatch(/^\/\\/);
+      const next = new URL(location as string, base);
+      current = next.pathname + next.search;
     }
   });
 
-  it('never emits an absolute URL as a redirect target', async () => {
-    for (const path of ['/', '/de', '/EN', '/deep/path?a=1', '/sitemap']) {
+  it('never emits an absolute or off-site redirect target', async () => {
+    for (const path of [
+      '/en',
+      '/en/explore?a=1',
+      '/en/de',
+      '/UR/explore',
+      '/EN',
+      '/explore/',
+      '/en/sitemap',
+    ]) {
       const location = (await request(path)).headers.get('location');
 
       expectInternal(location);
@@ -538,33 +712,79 @@ describe('nothing a visitor controls can move a redirect off this site', () => {
   });
 });
 
-describe('the locale cookie is a preference and carries no authority', () => {
-  it('does not write visitor state merely because a public locale URL was requested', async () => {
-    // A prefixed page is an ordinary shared-cache response, not proof that a
-    // person deliberately changed their preference. The browser switcher test
-    // covers the explicit action that does persist one.
-    const response = await request(PAGE.ar, { 'accept-language': 'en' });
+describe('no public GET writes a cookie', () => {
+  /**
+   * With detection off there is no preference to store, and a public GET that
+   * emitted `Set-Cookie` would turn a shared response private. Every public
+   * response — page, legacy redirect, slash redirect, 404 — is cookie-free,
+   * whatever the visitor sends.
+   */
+  it.each([
+    '/',
+    PAGE.en,
+    `${PAGE.en}?a=1`,
+    PAGE.ur,
+    PAGE.ar,
+    '/en',
+    '/en/explore?x=1',
+    '/explore/',
+    '/sitemap',
+    '/fr/explore',
+    '/UR/explore',
+  ])('%s sets no cookie', async (path) => {
+    for (const [label, headers] of PREFERENCES) {
+      const response = await request(path, headers);
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get('set-cookie')).toBeNull();
+      expect(response.headers.get('set-cookie'), `${path} ${label}`).toBeNull();
+    }
   });
 
-  it('stores nothing when negotiation redirects to the browser preference', async () => {
-    const response = await request('/', { 'accept-language': 'ar' });
-
-    expect(response.headers.get('location')).toBe('/ar');
-    expect(response.headers.get('set-cookie')).toBeNull();
-  });
-
-  it('grants nothing: a forged value only chooses a language', async () => {
+  it('grants nothing: a forged preference changes nothing at all', async () => {
     // The adversarial case. A visitor can write any cookie they like; the
-    // strongest thing an unsupported one can do is be ignored, and the
-    // strongest thing a supported one can do is select a public page that is
-    // already served to everyone.
+    // address alone still decides the language.
     const response = await request(PAGE.ur, { cookie: 'NEXT_LOCALE=ar' });
 
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain('<html lang="ur" dir="rtl">');
+    expect(await response.text()).toContain(HTML.ur);
+  });
+});
+
+// ===========================================================================
+// Route-scoped headers follow the unprefixed English address
+// ===========================================================================
+
+describe('route-scoped security headers apply to every locale’s address', () => {
+  /**
+   * `next.config.ts` widens or tightens a header for exact route shapes. Each
+   * shape must now match the UNPREFIXED English address and its `/ur` and
+   * `/ar` forms — an English page that silently lost its `no-store` or kept a
+   * too-wide policy is the regression this catches. Headers from the config
+   * apply whatever the page itself answers, so no database is needed.
+   */
+  it.each(['/donate/return', '/ur/donate/return', '/ar/donate/return'])(
+    '%s is never cached and never sends a Referer',
+    async (path) => {
+      const response = await request(path);
+
+      expect(response.headers.get('referrer-policy'), path).toBe('no-referrer');
+      expect(response.headers.get('cache-control'), path).toBe('private, no-store');
+    },
+  );
+
+  it.each(['/admin/media/videos/x', '/ur/admin/media/videos/x'])(
+    '%s may frame only the video providers',
+    async (path) => {
+      const csp = (await request(path)).headers.get('content-security-policy') ?? '';
+
+      expect(csp, path).toMatch(/frame-src https:\/\//);
+      expect(csp, path).not.toContain("frame-src 'none'");
+    },
+  );
+
+  it.each([PAGE.en, PAGE.ur, '/watch/videos'])('%s frames nothing', async (path) => {
+    const csp = (await request(path)).headers.get('content-security-policy') ?? '';
+
+    expect(csp, path).toContain("frame-src 'none'");
   });
 });
 
@@ -576,8 +796,8 @@ describe('locale availability is not advertised as content availability', () => 
   it.each([PAGE.en, PAGE.ur, PAGE.ar])(
     '%s declares no alternate language versions',
     async (path) => {
-      // Three interface locales now exist. That is NOT evidence that the
-      // CONTENT of a page exists in three languages, and §9.2 requires every
+      // Three interface locales exist. That is NOT evidence that the CONTENT
+      // of a page exists in three languages, and §9.2 requires every
       // advertised alternate to be a genuine canonical language version.
       //
       // What is prohibited is the DECLARATION — `<link rel="alternate"
@@ -591,12 +811,12 @@ describe('locale availability is not advertised as content availability', () => 
   );
 
   it('uses hreflang only as a link hint on the switcher, never as a declaration', async () => {
-    // next-intl's `Link` puts `hreflang` on the ANCHOR when a link changes
-    // language. That is the HTML meaning of the attribute — "the thing at the
-    // other end of this link is in that language" — and it is true: the target
-    // IS the interface in that language. It is not an alternates declaration,
-    // it makes no claim about any OTHER page, and search engines take the
-    // `<link rel="alternate">` form as authoritative.
+    // The switcher puts `hreflang` on each ANCHOR. That is the HTML meaning of
+    // the attribute — "the thing at the other end of this link is in that
+    // language" — and it is true: the target IS the interface in that
+    // language. It is not an alternates declaration, it makes no claim about
+    // any OTHER page, and search engines take the `<link rel="alternate">`
+    // form as authoritative.
     //
     // The distinction is worth pinning, because "no hreflang anywhere" is the
     // assertion someone would reach for, and it would forbid correct markup
@@ -606,16 +826,25 @@ describe('locale availability is not advertised as content availability', () => 
 
     expect(anchorHints.length).toBeGreaterThan(0);
 
-    // Every one of them sits inside the switcher, on an anchor.
-    const nav = /<nav[\s\S]*?<\/nav>/.exec(html)?.[0] ?? '';
+    // Every one of them sits inside a switcher, on an anchor. The document
+    // carries the switcher twice — the no-JavaScript rendering and the
+    // streamed one that knows the query — and both are switchers.
+    const switchers = (html.match(/<nav\b[\s\S]*?<\/nav>/g) ?? []).filter(
+      (region) =>
+        region.includes('English') &&
+        region.includes('اردو') &&
+        region.includes('العربية'),
+    );
+    const inSwitchers = switchers.join('').match(/<a\b[^>]*hrefLang=/gi) ?? [];
 
-    expect((nav.match(/hrefLang=/gi) ?? []).length).toBe(anchorHints.length);
+    expect(switchers.length).toBeGreaterThan(0);
+    expect(inSwitchers.length).toBe(anchorHints.length);
   });
 
   it('emits no `Link` alternates header either', async () => {
     // next-intl sets one by default. Turning it off is the same decision as
     // omitting the markup, and it is invisible in the HTML.
-    for (const path of [PAGE.en, PAGE.ur, PAGE.ar, '/']) {
+    for (const path of [PAGE.en, PAGE.ur, PAGE.ar, '/', '/en']) {
       const link = (await request(path)).headers.get('link') ?? '';
 
       expect(link, path).not.toMatch(/alternate/i);
@@ -639,45 +868,51 @@ describe('locale availability is not advertised as content availability', () => 
       expect(html).not.toMatch(/rel="canonical"/);
     },
   );
+
+  it('keeps robots.txt free of the retired English prefix', async () => {
+    const robots = await (await request('/robots.txt')).text();
+
+    expect(robots).not.toMatch(/^(?:Dis)?allow:\s*\/en(?:\/|$)/im);
+  });
 });
 
 // ===========================================================================
 // Public caching — ARCHITECTURE.md §8
 // ===========================================================================
 
-describe('locale routes stay publicly cacheable', () => {
+describe('public pages are rendered per request and never stored by a shared cache', () => {
+  /**
+   * R1 — the public shell reads a public "presence" snapshot per request
+   * (`apps/web/src/composition/presence.ts` calls `connection()`), so every
+   * page under `app/[locale]/(public)`, `/explore` included, is DYNAMIC. A
+   * dynamic page must say so: a shared cache that stored one rendering would
+   * serve it — whatever presence it showed — to everyone behind it.
+   */
   it.each([PAGE.en, PAGE.ur, PAGE.ar])(
-    '%s is served as prerendered static content',
+    '%s is marked private and uncacheable',
     async (path) => {
-      const response = await request(path);
+      const cacheControl = (await request(path)).headers.get('cache-control') ?? '';
 
-      // A prerendered route is served with a shared-cache directive. A dynamic
-      // one would be `private, no-store`, which is the regression this catches.
-      expect(response.headers.get('cache-control')).toMatch(/s-maxage/);
+      expect(cacheControl).toBe(
+        'private, no-cache, no-store, max-age=0, must-revalidate',
+      );
+      expect(cacheControl).not.toMatch(/s-maxage|public/);
     },
   );
 
   it.each([PAGE.en, PAGE.ur, PAGE.ar])(
     '%s does not vary by cookie or language',
     async (path) => {
-      // A `Vary: Cookie` or `Vary: Accept-Language` on a public page fragments
-      // the shared cache per visitor. Locale is in the URL precisely so it does
-      // not have to be in the cache key.
+      // Locale is in the URL precisely so it does not have to be in any cache
+      // key: a `Vary: Cookie` or `Vary: Accept-Language` would announce that a
+      // visitor preference changes the response, which it must not — the
+      // address alone decides the language.
       const vary = (await request(path)).headers.get('vary') ?? '';
 
       expect(vary.toLowerCase()).not.toContain('cookie');
       expect(vary.toLowerCase()).not.toContain('accept-language');
     },
   );
-
-  it('serves the same cached document whatever the query string', async () => {
-    const [plain, withQuery] = await Promise.all([
-      (await request(PAGE.en)).text(),
-      (await request(`${PAGE.en}?page=2`)).text(),
-    ]);
-
-    expect(withQuery).toBe(plain);
-  });
 });
 
 // ===========================================================================
@@ -688,21 +923,18 @@ describe('the locale switcher is present, accessible and same-origin', () => {
   /**
    * The SWITCHER'S anchors, as raw markup.
    *
-   * SCOPED TO THE SWITCHER, and it has to be. When Phase 3A wrote these
-   * assertions the page was a foundation placeholder whose only links were the
-   * three the switcher rendered, so scraping the whole document happened to be
-   * the same thing. Phase 4 puts the switcher in a real header, on a page with
-   * a mega menu and a footer, and a document-wide scrape would now be asserting
-   * that the entire shell has exactly three links.
+   * SCOPED TO THE SWITCHER, and it has to be: the page has a real header, a
+   * mega menu and a footer, and a document-wide scrape would be asserting that
+   * the entire shell has exactly three links.
    *
    * The switcher's `<nav>` is identified by the endonyms it renders — the three
    * language names, each in its own script — which is the one thing that is
    * true of it and of nothing else on the page, in every locale.
    */
-  async function anchorsOf(path: string): Promise<string[]> {
+  async function switchersOf(path: string): Promise<string[][]> {
     const html = await (await request(path)).text();
 
-    const switcher = (html.match(/<nav\b[\s\S]*?<\/nav>/g) ?? []).find(
+    const switchers = (html.match(/<nav\b[\s\S]*?<\/nav>/g) ?? []).filter(
       (region) =>
         region.includes('English') &&
         region.includes('اردو') &&
@@ -711,27 +943,71 @@ describe('the locale switcher is present, accessible and same-origin', () => {
 
     // Not `?? []`: an empty list would make every assertion below pass
     // vacuously on a page that had lost its switcher entirely.
-    if (switcher === undefined) {
+    if (switchers.length === 0) {
       throw new Error(`No locale switcher found on ${path}.`);
     }
 
-    return switcher.match(/<a\b[^>]*>[^<]*<\/a>/g) ?? [];
+    return switchers.map((switcher) => switcher.match(/<a\b[^>]*>[^<]*<\/a>/g) ?? []);
   }
 
+  /**
+   * The switcher a visitor WITHOUT JavaScript uses: the first one in the
+   * document, rendered before the query is read (the Suspense fallback).
+   */
+  async function anchorsOf(path: string): Promise<string[]> {
+    return (await switchersOf(path))[0] as string[];
+  }
+
+  const hrefOf = (anchor: string) =>
+    (/href="([^"]*)"/.exec(anchor)?.[1] ?? '').replaceAll('&amp;', '&');
+
   it.each([PAGE.en, PAGE.ur, PAGE.ar])(
-    '%s renders one link per supported locale WITHOUT JavaScript',
+    '%s renders one link per supported locale WITHOUT JavaScript, at each canonical address',
     async (path) => {
-      // The links are in the prerendered HTML, not produced by hydration. A
-      // language switcher that needs JavaScript is unusable by exactly the
-      // visitor most likely to need it.
+      // The links are in the server-rendered HTML, not produced by hydration.
+      // A language switcher that needs JavaScript is unusable by exactly the
+      // visitor most likely to need it. English is linked UNPREFIXED: a
+      // switch to English never passes through the `/en` redirect.
       const anchors = await anchorsOf(path);
 
-      expect(anchors).toHaveLength(3);
-      expect(anchors.join(' ')).toContain('href="/en/explore"');
-      expect(anchors.join(' ')).toContain('href="/ur/explore"');
-      expect(anchors.join(' ')).toContain('href="/ar/explore"');
+      expect(anchors.map(hrefOf)).toEqual(['/explore', '/ur/explore', '/ar/explore']);
     },
   );
+
+  it.each([
+    [`${PAGE.en}?a=1`, '?a=1'],
+    [`${PAGE.ur}?a=1`, '?a=1'],
+    [`${PAGE.ar}?x=1&x=2`, '?x=1&x=2'],
+    [`${PAGE.en}?q=%D8%A7%D8%B1%D8%AF%D9%88`, '?q=%D8%A7%D8%B1%D8%AF%D9%88'],
+  ])('%s keeps the path and the exact query in every locale', async (path, query) => {
+    // The page renders per request, so the server streams the switcher that
+    // KNOWS the query after its fallback. Each link is the target locale's
+    // canonical address with the query unchanged — a repeated key kept, an
+    // encoded value not re-encoded — and none is a `/en` hop. The fallback
+    // carries no query; nothing else is admitted.
+    const switchers = (await switchersOf(path)).map((anchors) => anchors.map(hrefOf));
+    const plain = ['/explore', '/ur/explore', '/ar/explore'];
+    const withQuery = plain.map((href) => `${href}${query}`);
+
+    expect(switchers).toContainEqual(withQuery);
+    for (const hrefs of switchers) {
+      expect([plain, withQuery]).toContainEqual(hrefs);
+      for (const href of hrefs) expect(href).not.toMatch(/^\/en(?:[/?#]|$)/);
+    }
+
+    // And each of those links is a working page in its language, directly.
+    for (const [href, html] of [
+      [withQuery[0], HTML.en],
+      [withQuery[1], HTML.ur],
+      [withQuery[2], HTML.ar],
+    ] as const) {
+      const response = await request(href as string);
+
+      expect(response.status, href).toBe(200);
+      expect(response.headers.get('location'), href).toBeNull();
+      expect(openingTag(await response.text()), href).toContain(html);
+    }
+  });
 
   it.each([PAGE.en, PAGE.ur, PAGE.ar])(
     '%s labels the control for assistive technology',
@@ -767,7 +1043,8 @@ describe('the locale switcher is present, accessible and same-origin', () => {
     const current = anchors.filter((a) => a.includes('aria-current="page"'));
 
     expect(current).toHaveLength(1);
-    expect(current[0]).toContain(`href="/${locale}/explore"`);
+    expect(hrefOf(current[0] as string)).toBe(path);
+    expect(current[0]).toContain(`lang="${locale}"`);
     // Weight and underline, both visible without perceiving colour.
     expect(current[0]).toMatch(/font-semibold/);
     expect(current[0]).toMatch(/underline/);
@@ -776,8 +1053,8 @@ describe('the locale switcher is present, accessible and same-origin', () => {
   it.each([PAGE.en, PAGE.ur, PAGE.ar])(
     '%s gives every language label its own lang and dir',
     async (path) => {
-      // The mixed-direction case Phase 3A genuinely has: اردو inside an
-      // English document, `English` inside an Arabic one (ARCHITECTURE.md §9).
+      // The mixed-direction case: اردو inside an English document, `English`
+      // inside an Arabic one (ARCHITECTURE.md §9).
       const anchors = (await anchorsOf(path)).join(' ');
 
       expect(anchors).toMatch(/lang="en"[^>]*dir="ltr"/);
@@ -811,10 +1088,10 @@ describe('the locale switcher is present, accessible and same-origin', () => {
   it.each([PAGE.en, PAGE.ur, PAGE.ar])(
     '%s emits no off-site or absolute link',
     async (path) => {
-      // Same-origin by construction: the helpers take a pathname, so no request
-      // value can become a host. Asserted on the output as well as by design.
+      // Same-origin by construction: the builder takes a pathname, so no
+      // request value can become a host. Asserted on the output as well.
       for (const anchor of await anchorsOf(path)) {
-        const href = /href="([^"]*)"/.exec(anchor)?.[1] ?? '';
+        const href = hrefOf(anchor);
 
         expect(href, anchor).toMatch(/^\//);
         expect(href, anchor).not.toMatch(/^\/\//);
@@ -824,19 +1101,25 @@ describe('the locale switcher is present, accessible and same-origin', () => {
   );
 
   it('follows a switch link to a working page in the chosen language', async () => {
-    // End to end: read the Urdu link off the English page, request it, and
-    // confirm it serves Urdu. A link that is merely well-formed is not proof
-    // that it goes anywhere.
-    const anchors = await anchorsOf(PAGE.en);
-    const urdu = anchors.find((a) => a.includes('lang="ur"')) ?? '';
-    const href = /href="([^"]*)"/.exec(urdu)?.[1] ?? '';
+    // End to end, in both directions: read the Urdu link off the English
+    // page and the English link off the Arabic page, request each, and confirm
+    // it serves that language directly — no redirect. A link that is merely
+    // well-formed is not proof that it goes anywhere.
+    for (const [from, target, html] of [
+      [PAGE.en, 'ur', HTML.ur],
+      [PAGE.ar, 'en', HTML.en],
+    ] as const) {
+      const anchors = await anchorsOf(from);
+      const href = hrefOf(anchors.find((a) => a.includes(`lang="${target}"`)) ?? '');
 
-    expect(href).toBe(PAGE.ur);
+      expect(href).toBe(PAGE[target]);
 
-    const response = await request(href);
+      const response = await request(href);
 
-    expect(response.status).toBe(200);
-    expect(await response.text()).toContain('<html lang="ur" dir="rtl">');
+      expect(response.status).toBe(200);
+      expect(response.headers.get('location')).toBeNull();
+      expect(await response.text()).toContain(html);
+    }
   });
 });
 

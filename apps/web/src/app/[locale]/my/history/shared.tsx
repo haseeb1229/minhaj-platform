@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Locale } from '@minhaj/contracts';
 
 import {
@@ -30,7 +31,7 @@ export function HistoryOffNotice({
     <div className="flex flex-col gap-2">
       <Alert tone="info">{t('history.off')}</Alert>
       <p className="text-sm">
-        <TextLink href={`/${locale}/my/settings/privacy`}>
+        <TextLink href={localizedPath(locale, '/my/settings/privacy')}>
           {t('history.offLink')}
         </TextLink>
       </p>
@@ -51,9 +52,7 @@ export function ClearHistory({
       <span id="history-clear">
         <SectionHeading>{t('history.clear')}</SectionHeading>
       </span>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('history.clearHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('history.clearHelp')}</p>
       <Panel>
         <ActionForm
           action={clearHistoryAction}

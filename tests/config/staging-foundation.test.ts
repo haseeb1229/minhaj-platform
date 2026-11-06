@@ -564,15 +564,15 @@ describe('Pre-Phase-30 — the staging edge credential rotation', () => {
   it('proves previous refused, new admitted, unauthenticated refused and the app layer unchanged', async () => {
     const rotate = await load();
     for (const [label, expected] of [
-      ['unauthenticated /en', "'401 1'"],
-      ['previous credential /en', "'401'"],
-      ['new credential /en (status, noindex)', "'200 1'"],
+      ['unauthenticated /', "'401 1'"],
+      ['previous credential /', "'401'"],
+      ['new credential / (status, noindex)', "'200 1'"],
       ['robots.txt (status, noindex)', "'200 1'"],
       ['robots.txt disallows /', "'1'"],
-      ['new credential /en/signin', "'200'"],
-      ['new credential /en/my without a session', "'30[2378]'"],
-      ['new credential /en/admin without a session', "'30[2378]'"],
-      ['new credential /en/admin/migration without a session', "'30[2378]'"],
+      ['new credential /signin', "'200'"],
+      ['new credential /my without a session', "'30[2378]'"],
+      ['new credential /admin without a session', "'30[2378]'"],
+      ['new credential /admin/migration without a session', "'30[2378]'"],
       ['new credential migration API without a session', "'404'"],
       ['new credential realtime handshake without a session', "'400|401|403'"],
     ]) {

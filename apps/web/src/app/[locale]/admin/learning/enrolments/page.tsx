@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { LEARNING_PAGE } from '@minhaj/contracts/learning';
 
 import {
@@ -34,7 +35,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function EnrolmentSummaryPage({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
-  const base = `/${locale}/admin/learning/enrolments`;
+  const base = localizedPath(locale, '/admin/learning/enrolments');
   const context = await requireAdminPage(locale, 'learning.read', base);
   const copy = await learningCopy(locale);
   const { t } = copy;
@@ -48,9 +49,7 @@ export default async function EnrolmentSummaryPage({ params, searchParams }: Lis
     <main className="flex flex-col gap-8">
       <div className="flex flex-col gap-2">
         <PageHeading>{t('surface.enrolments')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('enrolments.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('enrolments.description')}</p>
       </div>
       {page.items.length === 0 ? (
         <EmptyState>{t('enrolments.empty')}</EmptyState>
@@ -67,7 +66,9 @@ export default async function EnrolmentSummaryPage({ params, searchParams }: Lis
           {page.items.map((row) => (
             <DataRow key={row.course.id}>
               <DataCell wrap>
-                <TextLink href={`/${locale}/admin/learning/courses/${row.course.id}`}>
+                <TextLink
+                  href={localizedPath(locale, `/admin/learning/courses/${row.course.id}`)}
+                >
                   <Title record={row.course} locale={locale} />
                 </TextLink>
               </DataCell>

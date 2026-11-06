@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { z } from 'zod';
 import { editorialReadRuntime } from '@/composition/editorial-read';
 import { translationFor } from '@/components/editorial/public-content';
@@ -28,6 +29,8 @@ export async function generateMetadata({ params }: Props) {
   const locale = await requireLocale(params);
   return (
     (await publishedPageMetadata(locale, '/help')) ?? {
+      // R1: an unpublished Help page still names itself in the tab.
+      title: (await getTranslations({ locale, namespace: 'editorial' }))('help'),
       robots: { index: false, follow: false },
     }
   );
@@ -55,7 +58,10 @@ export default async function PublicPage({ params, searchParams }: Props) {
         <>
           <ListingIntro
             trailLabel={shell('nav.breadcrumbs')}
-            trail={[{ href: '/' + locale, text: shell('nav.home') }, { text: t('help') }]}
+            trail={[
+              { href: localizedPath(locale, ''), text: shell('nav.home') },
+              { text: t('help') },
+            ]}
             title={t('help')}
           />
           <Container>
@@ -76,7 +82,10 @@ export default async function PublicPage({ params, searchParams }: Props) {
                   return (
                     <LinkCard
                       key={page.slug}
-                      href={'/' + locale + '/help/' + encodeURIComponent(page.slug)}
+                      href={localizedPath(
+                        locale,
+                        '/help/' + encodeURIComponent(page.slug),
+                      )}
                       title={translation.title}
                       description={translation.excerpt}
                       lang={translation.languageCode}
@@ -96,16 +105,16 @@ export default async function PublicPage({ params, searchParams }: Props) {
           )}
           <nav
             aria-label={t('help')}
-            className="flex flex-col gap-4 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)] p-5 sm:flex-row sm:items-center sm:justify-between"
+            className="flex flex-col gap-4 rounded-panel border border-border bg-surface-sunken p-5 sm:flex-row sm:items-center sm:justify-between"
           >
-            <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
+            <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
               {t('helpMore')}
             </p>
             <div className="flex flex-wrap gap-3">
-              <ActionLink href={'/' + locale + '/contact'} tone="secondary">
+              <ActionLink href={localizedPath(locale, '/contact')} tone="secondary">
                 {t('contact')}
               </ActionLink>
-              <ActionLink href={'/' + locale + '/feedback'} tone="secondary">
+              <ActionLink href={localizedPath(locale, '/feedback')} tone="secondary">
                 {t('feedback')}
               </ActionLink>
             </div>

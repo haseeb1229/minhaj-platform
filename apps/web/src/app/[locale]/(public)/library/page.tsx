@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
@@ -136,7 +137,7 @@ export default async function LibraryLandingPage({
           <Breadcrumbs
             label={shell('nav.breadcrumbs')}
             trail={[
-              { href: `/${locale}`, text: shell('nav.home') },
+              { href: localizedPath(locale, ''), text: shell('nav.home') },
               { text: t('title') },
             ]}
           />
@@ -149,10 +150,14 @@ export default async function LibraryLandingPage({
         lede={t('description')}
         actions={
           <>
-            <ActionLink href={`/${locale}/library/books`} onInk>
+            <ActionLink href={localizedPath(locale, '/library/books')} onInk>
               {t('landing.browseBooks')}
             </ActionLink>
-            <ActionLink href={`/${locale}/library/resources`} tone="secondary" onInk>
+            <ActionLink
+              href={localizedPath(locale, '/library/resources')}
+              tone="secondary"
+              onInk
+            >
               {t('landing.allResources')}
             </ActionLink>
           </>
@@ -165,7 +170,7 @@ export default async function LibraryLandingPage({
          * DOMAIN_MODEL.md §10.1 exists to correct, and a reader has no way to
          * know that unless the page says so.
          */}
-        <p className="max-w-[var(--measure-prose)] border-s-2 border-[color:var(--color-ink-border)] ps-3 text-sm text-[color:var(--color-ink-muted)]">
+        <p className="max-w-[var(--measure-prose)] border-s-2 border-ink-border ps-3 text-sm text-ink-muted">
           {t('metadataNotice')}
         </p>
       </PageHero>
@@ -189,7 +194,7 @@ export default async function LibraryLandingPage({
                   {group.sections.map((section) => (
                     <LinkCard
                       key={section.key}
-                      href={`/${locale}${section.path}`}
+                      href={localizedPath(locale, `${section.path}`)}
                       title={t(`section.${section.key}`)}
                       description={t(`sectionBody.${section.key}`)}
                     />

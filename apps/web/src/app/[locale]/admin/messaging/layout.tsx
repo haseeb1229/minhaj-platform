@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
@@ -64,7 +65,7 @@ export default async function MessagingAdminLayout({
               key: 'messaging',
               links: visible.map((surface) => ({
                 key: surface.key,
-                href: `/${locale}/admin/messaging/${surface.key}`,
+                href: localizedPath(locale, `/admin/messaging/${surface.key}`),
                 text: t(`surface.${surface.key}`),
               })),
             },

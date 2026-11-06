@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getTranslations } from 'next-intl/server';
@@ -51,7 +52,7 @@ export default async function GlobalAdminLayout({
               key: 'global',
               links: SURFACES.map((surface) => ({
                 key: surface,
-                href: `/${locale}/admin/global/${surface}`,
+                href: localizedPath(locale, `/admin/global/${surface}`),
                 text: t(`surface.${surface}`),
               })),
             },

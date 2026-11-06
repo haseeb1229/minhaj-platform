@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 import { requireLocale } from '@/config/route-locale';
 import { Container, PageHeading, TextLink } from '@/components/ui';
@@ -39,9 +40,9 @@ export default async function PublicPage({ params }: Props) {
       <Container>
         <div className="flex flex-col gap-6 pb-12">
           <nav className="flex flex-wrap gap-4" aria-label={t('help')}>
-            <TextLink href={'/' + locale + '/help'}>{t('help')}</TextLink>
-            <TextLink href={'/' + locale + '/contact'}>{t('contact')}</TextLink>
-            <TextLink href={'/' + locale + '/feedback'}>{t('feedback')}</TextLink>
+            <TextLink href={localizedPath(locale, '/help')}>{t('help')}</TextLink>
+            <TextLink href={localizedPath(locale, '/contact')}>{t('contact')}</TextLink>
+            <TextLink href={localizedPath(locale, '/feedback')}>{t('feedback')}</TextLink>
           </nav>
         </div>
       </Container>

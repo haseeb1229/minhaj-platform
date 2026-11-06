@@ -36,21 +36,21 @@ import {
 
 describe('Learn addresses', () => {
   it('spells the section, a Course and a LearningPath one way', () => {
-    expect(learnPath('en')).toBe('/en/learn');
+    expect(learnPath('en')).toBe('/learn');
     expect(learnPath('ur', 'trial')).toBe('/ur/learn/trial');
     expect(coursePathOf('fiqh-basics')).toBe('/learn/courses/fiqh-basics');
     expect(courseHref('ar', 'fiqh-basics')).toBe('/ar/learn/courses/fiqh-basics');
     expect(learningPathPathOf('first-year')).toBe('/learn/paths/first-year');
-    expect(learningPathHref('en', 'first-year')).toBe('/en/learn/paths/first-year');
+    expect(learningPathHref('en', 'first-year')).toBe('/learn/paths/first-year');
   });
 
   it('encodes a slug rather than letting it add a segment', () => {
-    expect(courseHref('en', '../admin')).toBe('/en/learn/courses/..%2Fadmin');
+    expect(courseHref('en', '../admin')).toBe('/learn/courses/..%2Fadmin');
   });
 
   it('gives the first page of a listing the bare address', () => {
-    expect(offsetHref('/en/learn/paths', 0)).toBe('/en/learn/paths');
-    expect(offsetHref('/en/learn/paths', 24)).toBe('/en/learn/paths?offset=24');
+    expect(offsetHref('/learn/paths', 0)).toBe('/learn/paths');
+    expect(offsetHref('/learn/paths', 24)).toBe('/learn/paths?offset=24');
   });
 });
 
@@ -161,8 +161,8 @@ describe('the catalogue query', () => {
 
 describe('catalogue addresses', () => {
   it('is the bare catalogue with no view', () => {
-    expect(courseBrowseHref('en')).toBe('/en/learn/courses');
-    expect(courseBrowseHref('en', { topic: null, offset: 0 })).toBe('/en/learn/courses');
+    expect(courseBrowseHref('en')).toBe('/learn/courses');
+    expect(courseBrowseHref('en', { topic: null, offset: 0 })).toBe('/learn/courses');
   });
 
   it('writes every filter in one fixed order, whatever order it is given in', () => {

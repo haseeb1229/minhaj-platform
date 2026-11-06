@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import {
   globalIdSchema,
   type CityRecord,
@@ -72,7 +72,7 @@ import {
 async function Directory(level: Level, { params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/global/${level}`;
+  const base = localizedPath(locale, `/admin/global/${level}`);
   const context = await requireAdminPage(locale, 'global.read', base);
   const copy = await globalCopy(locale);
   const { t } = copy;
@@ -104,9 +104,7 @@ async function Directory(level: Level, { params, searchParams }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t(`surface.${level}`)}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t(`scope.${level}`)}
-      </p>
+      <p className="text-sm text-foreground-muted">{t(`scope.${level}`)}</p>
       {context.authorization.can('global.administer') ? (
         <p className="text-sm">
           <TextLink href={createHref}>{t(`create.${level}`)}</TextLink>
@@ -238,9 +236,7 @@ function FixedCountry({
       <p className="text-base">
         <ChoiceName choice={country} locale={locale} copy={copy} />
       </p>
-      <p className="text-xs text-[color:var(--color-foreground-muted)]">
-        {t('countryFixedHelp')}
-      </p>
+      <p className="text-xs text-foreground-muted">{t('countryFixedHelp')}</p>
     </div>
   );
 }
@@ -299,7 +295,7 @@ function CountryForm({
 export async function CountryEditor({ params }: EditorParams) {
   const locale = await requireLocale(params);
   const id = editorTarget((await params).id);
-  const base = `/${locale}/admin/global/countries`;
+  const base = localizedPath(locale, '/admin/global/countries');
   const context = await requireAdminPage(locale, 'global.read', `${base}/${id}`);
   const copy = await globalCopy(locale);
   const { t } = copy;
@@ -413,7 +409,7 @@ export async function RegionEditor({ params, searchParams }: EditorParams) {
   const locale = await requireLocale(params);
   const id = editorTarget((await params).id);
   const query = await searchParams;
-  const base = `/${locale}/admin/global/regions`;
+  const base = localizedPath(locale, '/admin/global/regions');
   const context = await requireAdminPage(locale, 'global.read', `${base}/${id}`);
   const copy = await globalCopy(locale);
   const { t } = copy;
@@ -536,7 +532,7 @@ export async function CityEditor({ params, searchParams }: EditorParams) {
   const locale = await requireLocale(params);
   const id = editorTarget((await params).id);
   const query = await searchParams;
-  const base = `/${locale}/admin/global/cities`;
+  const base = localizedPath(locale, '/admin/global/cities');
   const context = await requireAdminPage(locale, 'global.read', `${base}/${id}`);
   const copy = await globalCopy(locale);
   const { t } = copy;

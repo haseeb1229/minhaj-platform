@@ -13,6 +13,7 @@ import {
   accountIdFor,
   baseUrl,
   expect,
+  localizedPath,
   privilegedSession,
   registerAndSignIn,
   test,
@@ -72,8 +73,8 @@ const NOTE_STALE = `quillnote${run} stale private words`;
 const OTHER_NOTE = `quillother${run} another person's words`;
 
 const PAGE = {
-  work: `/en/library/books/${slug.work}`,
-  video: `/en/watch/videos/${slug.video}`,
+  work: `/library/books/${slug.work}`,
+  video: `/watch/videos/${slug.video}`,
 } as const;
 
 /** A YouTube-shaped identifier of this run's own. */
@@ -319,14 +320,14 @@ test.describe('a public page', () => {
     const link = island.getByRole('link', { name: ISLAND['signIn'] });
     await expect(link).toHaveAttribute(
       'href',
-      `/en/signin?returnTo=${encodeURIComponent(PAGE.work)}`,
+      `/signin?returnTo=${encodeURIComponent(PAGE.work)}`,
     );
     await expect(island.getByRole('button')).toHaveCount(0);
 
     // The return path survives sign-in: the reader lands back on the book,
     // and the island now offers what a signed-in reader can do.
     await link.click();
-    await page.waitForURL(/\/en\/signin\?returnTo=/);
+    await page.waitForURL(/\/signin\?returnTo=/);
     await page.getByLabel(LABEL.email).fill(ownerEmail);
     await page.getByLabel(LABEL.password, { exact: true }).fill(PASSWORD);
     await page.getByRole('button', { name: BUTTON.signIn, exact: true }).click();
@@ -342,7 +343,7 @@ test.describe('a public page', () => {
 
 test.describe('a signed-in reader', () => {
   test('the landing invites the optional interests, and nothing is saved yet', async () => {
-    await owner.goto('/en/my');
+    await owner.goto('/my');
     const main = owner.getByRole('main');
     await expect(main.getByRole('heading', { level: 2 })).toContainText([
       copy('home', 'onboardingHeading'),
@@ -364,7 +365,7 @@ test.describe('a signed-in reader', () => {
     await expect(owner.getByText(ISLAND['savedStatus'] ?? '')).toBeVisible();
     await expect(save).toHaveAttribute('aria-pressed', 'true');
 
-    await owner.goto('/en/my/saved/bookmarks');
+    await owner.goto('/my/saved/bookmarks');
     const list = owner.getByRole('list', { name: copy('bookmarks', 'list') });
     await expect(list.getByRole('listitem')).toHaveCount(1);
     await expect(list.getByRole('link', { name: TITLE.work })).toHaveAttribute(
@@ -385,7 +386,7 @@ test.describe('a signed-in reader', () => {
     await island.getByRole('button', { name: ISLAND['noteSave'] }).click();
     await expect(owner.getByText(ISLAND['noteSaved'] ?? '')).toBeVisible();
 
-    await owner.goto('/en/my/saved/notes');
+    await owner.goto('/my/saved/notes');
     const list = owner.getByRole('list', { name: copy('notes', 'list') });
     await expect(list.getByRole('listitem')).toHaveCount(1);
     await expect(list).toContainText(NOTE);
@@ -393,7 +394,7 @@ test.describe('a signed-in reader', () => {
 
     // TWO TABS read version 1. The first edit wins; the second is a conflict.
     const stale = await owner.context().newPage();
-    await stale.goto('/en/my/saved/notes');
+    await stale.goto('/my/saved/notes');
 
     await owner.getByText(copy('notes', 'edit')).click();
     const box = owner.getByRole('textbox', { name: copy('notes', 'label'), exact: true });
@@ -417,14 +418,14 @@ test.describe('a signed-in reader', () => {
     expect(row?.body).toBe(NOTE_EDIT);
     expect(Number(row?.version)).toBe(2);
 
-    await owner.goto('/en/my/saved/notes');
+    await owner.goto('/my/saved/notes');
     await expect(owner.getByRole('main')).toContainText(NOTE_EDIT);
     await expect(owner.getByRole('main')).not.toContainText(NOTE_STALE);
   });
 
   test('a private collection is made, filled from the pages, reordered by keyboard and pared down', async () => {
     test.setTimeout(120_000);
-    await owner.goto('/en/my/saved/collections');
+    await owner.goto('/my/saved/collections');
     await expect(owner.getByRole('main')).toContainText(copy('collections', 'empty'));
     await owner
       .getByRole('textbox', { name: copy('collections', 'titleLabel') })
@@ -432,7 +433,7 @@ test.describe('a signed-in reader', () => {
     await owner
       .getByRole('button', { name: copy('collections', 'createSubmit') })
       .click();
-    await owner.waitForURL(/\/en\/my\/saved\/collections\/[0-9a-f-]{36}$/);
+    await owner.waitForURL(/\/my\/saved\/collections\/[0-9a-f-]{36}$/);
     collectionId = owner.url().split('/').at(-1) ?? '';
     await expect(owner.getByRole('heading', { level: 1 })).toHaveText(TITLE.collection);
     await expect(owner.getByRole('main')).toContainText(copy('collection', 'empty'));
@@ -451,7 +452,7 @@ test.describe('a signed-in reader', () => {
       await expect(box).toBeChecked();
     }
 
-    const detail = `/en/my/saved/collections/${collectionId}`;
+    const detail = `/my/saved/collections/${collectionId}`;
     await owner.goto(detail);
     const members = owner
       .getByRole('list', { name: copy('collection', 'members') })
@@ -485,13 +486,13 @@ test.describe('a signed-in reader', () => {
     await expect(members.nth(0)).toContainText(TITLE.video);
 
     // The book's bookmark outlives its removal from the list.
-    await owner.goto('/en/my/saved/bookmarks');
+    await owner.goto('/my/saved/bookmarks');
     await expect(owner.getByRole('link', { name: TITLE.work })).toBeVisible();
   });
 
   test('history stays off until turned on, then records what is read and watched', async () => {
     test.setTimeout(120_000);
-    await owner.goto('/en/my/history/reading');
+    await owner.goto('/my/history/reading');
     const main = owner.getByRole('main');
     await expect(main).toContainText(copy('history', 'off'));
     await expect(main).toContainText(copy('history', 'readingEmpty'));
@@ -510,7 +511,7 @@ test.describe('a signed-in reader', () => {
       ),
     ).toBe(0);
 
-    await owner.goto('/en/my/settings/privacy');
+    await owner.goto('/my/settings/privacy');
     await expect(owner.getByRole('main')).toContainText(copy('privacy', 'historyOff'));
     await owner.getByRole('button', { name: copy('privacy', 'turnOn') }).click();
     await expect(owner.getByRole('main')).toContainText(copy('privacy', 'historyOn'));
@@ -529,14 +530,14 @@ test.describe('a signed-in reader', () => {
       expect((await recorded).status(), target).toBe(204);
     }
 
-    await owner.goto('/en/my/history/reading');
+    await owner.goto('/my/history/reading');
     await expect(main).not.toContainText(copy('history', 'off'));
     const reading = owner.getByRole('list', { name: copy('history', 'readingList') });
     await expect(reading.getByRole('link', { name: TITLE.work })).toHaveAttribute(
       'href',
       PAGE.work,
     );
-    await owner.goto('/en/my/history/watch');
+    await owner.goto('/my/history/watch');
     const watching = owner.getByRole('list', { name: copy('history', 'watchList') });
     await expect(watching.getByRole('link', { name: TITLE.video })).toHaveAttribute(
       'href',
@@ -547,19 +548,19 @@ test.describe('a signed-in reader', () => {
   test('no Quran reading position is shown until one is set', async () => {
     // Setting one needs an active Quran corpus, a database-wide singleton that
     // quran.spec.ts owns; that spec proves the Ayah journey against it.
-    await owner.goto('/en/my/progress/quran');
+    await owner.goto('/my/progress/quran');
     const main = owner.getByRole('main');
     await expect(main).toContainText(copy('progress', 'empty'));
     await expect(
       main.getByRole('link', { name: copy('progress', 'browse') }),
-    ).toHaveAttribute('href', '/en/quran');
+    ).toHaveAttribute('href', '/quran');
     await expect(
       owner.getByRole('button', { name: copy('progress', 'clear') }),
     ).toHaveCount(0);
   });
 
   test('the interests can be skipped, and answered later', async () => {
-    await owner.goto('/en/my/settings/interests');
+    await owner.goto('/my/settings/interests');
     const main = owner.getByRole('main');
     const state = EN.personal['interests']?.['state'] as Record<string, string>;
     await expect(main).toContainText(state['none'] ?? '');
@@ -570,12 +571,12 @@ test.describe('a signed-in reader', () => {
       owner.getByRole('button', { name: copy('interests', 'skip') }),
     ).toHaveCount(0);
 
-    await owner.goto('/en/my');
+    await owner.goto('/my');
     await expect(owner.getByRole('main')).not.toContainText(
       copy('home', 'onboardingHeading'),
     );
 
-    await owner.goto('/en/my/settings/interests');
+    await owner.goto('/my/settings/interests');
     const interest = EN.personal['interests']?.['interest'] as Record<string, string>;
     const goal = EN.personal['interests']?.['goal'] as Record<string, string>;
     await owner.getByLabel(interest['quran'] ?? '', { exact: true }).check();
@@ -586,18 +587,18 @@ test.describe('a signed-in reader', () => {
     await expect(owner.getByText(copy('interests', 'saved'))).toBeVisible();
     await expect(main).toContainText(state['completed'] ?? '');
 
-    await owner.goto('/en/my');
+    await owner.goto('/my');
     const sections = owner.getByRole('navigation', {
       name: copy('home', 'sectionsHeading'),
     });
     await expect(sections.getByRole('link', { name: interest['quran'] })).toHaveAttribute(
       'href',
-      '/en/quran',
+      '/quran',
     );
   });
 
   test('a notification category is turned off and on again', async () => {
-    await owner.goto('/en/my/settings/notifications');
+    await owner.goto('/my/settings/notifications');
     const list = owner.getByRole('list', { name: copy('notificationSettings', 'list') });
     const category = EN.personal['notificationSettings']?.['category'] as Record<
       string,
@@ -619,12 +620,12 @@ test.describe('a signed-in reader', () => {
       row.getByRole('button', { name: copy('notificationSettings', 'turnOff') }),
     ).toBeVisible();
 
-    await owner.goto('/en/my/notifications');
+    await owner.goto('/my/notifications');
     await expect(owner.getByRole('main')).toContainText(copy('notifications', 'empty'));
   });
 
   test('the landing shows what this person saved and read', async () => {
-    await owner.goto('/en/my');
+    await owner.goto('/my');
     const main = owner.getByRole('main');
     const saved = main.getByRole('list', { name: copy('home', 'savedHeading') });
     await expect(saved.getByRole('link', { name: TITLE.work })).toBeVisible();
@@ -649,15 +650,15 @@ test.describe('a signed-in reader', () => {
 
 test.describe('another account', () => {
   test('cannot open the collection, and lists nothing of the first person’s', async () => {
-    const response = await other.goto(`/en/my/saved/collections/${collectionId}`);
+    const response = await other.goto(`/my/saved/collections/${collectionId}`);
     expect(response?.status()).toBe(404);
     await expect(other.locator('body')).not.toContainText(TITLE.collection);
 
     for (const [target, empty] of [
-      ['/en/my/saved/bookmarks', copy('bookmarks', 'empty')],
-      ['/en/my/saved/notes', copy('notes', 'empty')],
-      ['/en/my/saved/collections', copy('collections', 'empty')],
-      ['/en/my/history/reading', copy('history', 'readingEmpty')],
+      ['/my/saved/bookmarks', copy('bookmarks', 'empty')],
+      ['/my/saved/notes', copy('notes', 'empty')],
+      ['/my/saved/collections', copy('collections', 'empty')],
+      ['/my/history/reading', copy('history', 'readingEmpty')],
     ] as const) {
       await other.goto(target);
       const main = other.getByRole('main');
@@ -769,7 +770,7 @@ test.describe('another account', () => {
     );
 
     // Through the page's own link, as a download.
-    await owner.goto('/en/my/settings/privacy');
+    await owner.goto('/my/settings/privacy');
     const [download] = await Promise.all([
       owner.waitForEvent('download'),
       owner.getByRole('link', { name: copy('privacy', 'exportLink') }).click(),
@@ -814,11 +815,11 @@ test.describe('every Phase-21 My Minhaj page', () => {
   test('sends a signed-out visitor to sign in, with the way back', async ({ page }) => {
     test.setTimeout(120_000);
     for (const route of routes()) {
-      await page.goto(`/en${route}`);
-      await page.waitForURL(/\/en\/signin\?/);
+      await page.goto(route);
+      await page.waitForURL(/\/signin\?/);
       const url = new URL(page.url());
       expect(`${url.pathname}${url.search}`, route).toBe(
-        `/en/signin?returnTo=${encodeURIComponent(`/en${route}`)}`,
+        `/signin?returnTo=${encodeURIComponent(route)}`,
       );
     }
   });
@@ -827,7 +828,7 @@ test.describe('every Phase-21 My Minhaj page', () => {
     test.setTimeout(180_000);
     await owner.setViewportSize({ width: 1280, height: 800 });
     for (const route of routes()) {
-      const target = `/en${route}`;
+      const target = route;
       const response = await owner.context().request.get(target, { maxRedirects: 0 });
       expect(response.status(), target).toBe(200);
       const cache = response.headers()['cache-control'] ?? '';
@@ -856,7 +857,7 @@ test.describe('every Phase-21 My Minhaj page', () => {
       await owner.setViewportSize({ width, height: 800 });
       for (const locale of LOCALES)
         for (const route of routes()) {
-          const target = `/${locale}${route}`;
+          const target = localizedPath(locale, route);
           const response = await owner.goto(target);
           expect(response?.status(), target).toBe(200);
           await expect(owner.locator('html'), target).toHaveAttribute(
@@ -877,9 +878,9 @@ test.describe('every Phase-21 My Minhaj page', () => {
   test('nothing moves under reduced motion', async () => {
     await owner.emulateMedia({ reducedMotion: 'reduce' });
     for (const target of [
-      '/en/my',
-      `/en/my/saved/collections/${collectionId}`,
-      '/en/my/settings/privacy',
+      '/my',
+      `/my/saved/collections/${collectionId}`,
+      '/my/settings/privacy',
     ]) {
       await owner.goto(target);
       await expect(owner.getByRole('heading', { level: 1 })).toBeVisible();

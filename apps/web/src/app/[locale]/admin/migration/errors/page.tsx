@@ -121,9 +121,7 @@ export default async function MigrationErrorsPage({
     <main className="flex min-w-0 flex-col gap-8">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('errors.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('errors.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('errors.description')}</p>
       </header>
 
       <section className="flex flex-col gap-3" aria-labelledby="migration-errors">
@@ -252,7 +250,7 @@ function ErrorItem({
           </span>
           <span className="text-sm">{t(`errorStage.${row.stage}`)}</span>
         </div>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('errors.occurred')}>
             <MigrationTime value={row.occurredAt} locale={locale} timeZone={timeZone} />
           </DetailRow>
@@ -321,7 +319,7 @@ function MissingItem({
   return (
     <Panel as="li">
       <div className="flex min-w-0 flex-col gap-3">
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('missing.externalKey')}>
             <Code>{row.externalKey}</Code>
           </DetailRow>

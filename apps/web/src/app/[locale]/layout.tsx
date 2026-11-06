@@ -8,6 +8,7 @@ import { directionOf, isSupportedLocale } from '@/config/locale';
 import { routing } from '@/i18n/routing';
 import { PRODUCT_NAME } from '@/shell/product';
 import '@/styles/globals.css';
+import { FONT_VARIABLES } from '@/styles/fonts';
 
 /**
  * The root layout for every application route.
@@ -123,7 +124,7 @@ export default async function LocaleLayout({
      * `@/config/locale`, so English cannot drift to `rtl` in one place and
      * `ltr` in another.
      */
-    <html lang={locale} dir={directionOf(locale)}>
+    <html lang={locale} dir={directionOf(locale)} className={FONT_VARIABLES}>
       <body>{children}</body>
     </html>
   );

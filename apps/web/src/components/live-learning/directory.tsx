@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -154,7 +155,7 @@ export async function TeacherDirectoryPage({
           <div className="flex flex-col gap-3">
             <Alert tone="info">{t('unavailable.body')}</Alert>
             <p>
-              <TextLink href={`/${locale}/learn/courses`}>
+              <TextLink href={localizedPath(locale, '/learn/courses')}>
                 {t('unavailable.browse')}
               </TextLink>
             </p>
@@ -196,17 +197,13 @@ export async function TeacherDirectoryPage({
                   ) : null}
                   {teacher.profile.subjects === null ? null : (
                     <p className="text-sm wrap-anywhere" dir="auto">
-                      <span className="text-[color:var(--color-foreground-muted)]">
-                        {t('subjects')}{' '}
-                      </span>
+                      <span className="text-foreground-muted">{t('subjects')} </span>
                       {teacher.profile.subjects}
                     </p>
                   )}
                   {teacher.profile.languages.length === 0 ? null : (
                     <p className="flex flex-wrap gap-x-2 text-sm">
-                      <span className="text-[color:var(--color-foreground-muted)]">
-                        {t('languages')}
-                      </span>
+                      <span className="text-foreground-muted">{t('languages')}</span>
                       {teacher.profile.languages.map((code) => {
                         const entry = languages.get(code);
                         return (
@@ -218,9 +215,7 @@ export async function TeacherDirectoryPage({
                     </p>
                   )}
                   <div className="flex flex-col gap-1 text-sm">
-                    <span className="text-[color:var(--color-foreground-muted)]">
-                      {t('courses')}
-                    </span>
+                    <span className="text-foreground-muted">{t('courses')}</span>
                     <ul className="flex flex-col gap-1 ps-4">
                       {teacher.courses.map((course) => {
                         const label = outlineLabel(

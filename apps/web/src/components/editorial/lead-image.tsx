@@ -43,7 +43,7 @@ export function LeadThumbnail({
       loading={priority ? 'eager' : 'lazy'}
       {...(priority ? { fetchPriority: 'high' as const } : {})}
       decoding="async"
-      className={`aspect-[16/9] w-full bg-[color:var(--color-surface-sunken)] object-cover ${className}`}
+      className={`aspect-[16/9] w-full bg-surface-sunken object-cover ${className}`}
     />
   );
 }
@@ -76,13 +76,10 @@ export function LeadFigure({
         fetchPriority="high"
         decoding="async"
         style={{ aspectRatio: `${String(image.width)} / ${String(image.height)}` }}
-        className="h-auto max-h-[36rem] w-full rounded-[var(--radius-panel)] bg-[color:var(--color-surface-sunken)] object-contain"
+        className="h-auto max-h-[36rem] w-full rounded-panel bg-surface-sunken object-contain"
       />
       {caption === null ? null : (
-        <figcaption
-          className="text-caption text-[color:var(--color-foreground-muted)]"
-          dir="auto"
-        >
+        <figcaption className="text-caption text-foreground-muted" dir="auto">
           {caption}
         </figcaption>
       )}

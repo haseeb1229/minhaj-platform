@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import {
@@ -78,7 +79,7 @@ export default async function MyClassesPage({
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const locale = await requireLocale(params);
-  const path = `/${locale}/my/classes`;
+  const path = localizedPath(locale, '/my/classes');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myClasses' });
   const offset = readPersonalOffset(await searchParams);
@@ -109,7 +110,10 @@ export default async function MyClassesPage({
     );
     return entry.course.state === 'published' ? (
       <TextLink
-        href={`/${locale}/learn/courses/${encodeURIComponent(entry.course.slug)}`}
+        href={localizedPath(
+          locale,
+          `/learn/courses/${encodeURIComponent(entry.course.slug)}`,
+        )}
       >
         {title}
       </TextLink>
@@ -153,9 +157,7 @@ export default async function MyClassesPage({
         <span id="classes-upcoming">
           <SectionHeading>{t('upcoming.heading')}</SectionHeading>
         </span>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('upcoming.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('upcoming.help')}</p>
         {upcoming.length === 0 ? (
           <EmptyState>{t('upcoming.empty')}</EmptyState>
         ) : (

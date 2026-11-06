@@ -1,230 +1,228 @@
 @import 'tailwindcss';
 
 /*
- * THE design foundation — Phase 2's subset of it.
+ * THE design foundation — the ONE design system (ARCHITECTURE.md §13.1).
  *
- * There is exactly one design system (ARCHITECTURE.md §13.1). This is a genuine
- * subset of it, not throw-away styling to be discarded in Phase 4: Phase 4
- * EXTENDS these tokens and primitives with the broad public shell rather than
- * replacing them.
+ * REBASELINE R1 — THE INTERIM ONE MINHAJ IDENTITY (owner-approved 2026-11-06).
+ * The values below replace the earlier placeholder set with a deliberate
+ * interim identity: warm manuscript-paper surfaces, a deep emerald ink, a
+ * sparing gold leaf, a scholarly serif for headings and reading, and genuine
+ * Nastaliq for Urdu. It is the PRODUCT's identity, not the organisation's: it
+ * does not redraw or recolour the official Minhaj-ul-Quran International logo
+ * (which appears unmodified, as a secondary organisational mark), and it is
+ * replaceable as a configuration change when the organisation's brand pack
+ * arrives (OPEN_DECISIONS.md §6.4).
  *
  * TOKENS, NOT VALUES. Colour is declared by ROLE — surface, foreground, action,
- * border, error — so the palette can be substituted as a configuration change
- * when brand evidence arrives (OPEN_DECISIONS.md §6.4). The values below are a
- * deliberately restrained, accessible placeholder set, NOT a frozen brand
- * palette: calm, scholarly and content-first, with no SaaS-dashboard gradient,
- * no glassmorphism and no decorative motion.
+ * accent, ink, border, feedback — and every role is a Tailwind theme colour, so
+ * components say `bg-surface-raised` / `text-foreground-muted` rather than an
+ * arbitrary `[color:var(--…)]` value. No gradient, no glassmorphism, no
+ * decorative motion.
  *
  * RTL. Every rule is direction-neutral or uses logical properties. Physical
- * properties (`margin-left`, `text-align: left`) are prohibited in layout code
- * — they silently break Urdu and Arabic, and the RTL checker fails the build on
- * them (TECH_STACK.md §5, ARCHITECTURE.md §9).
+ * properties are prohibited in layout code and the RTL checker fails the build
+ * on them (TECH_STACK.md §5, ARCHITECTURE.md §9).
  *
  * CONTRAST. Every foreground/background pair below meets WCAG 2.2 AA at its
- * intended size (SECURITY_BASELINE.md §16.1), asserted by test rather than by
- * eye.
+ * intended size, asserted by `tests/config/design-tokens.test.ts`, which parses
+ * this file — not by eye.
  */
 
 @theme {
-  /* Surfaces */
-  --color-surface: #faf9f7;
-  --color-surface-raised: #ffffff;
-  --color-surface-sunken: #f1efea;
+  /* Surfaces — warm paper, never pure white behind body text. */
+  --color-surface: #f7f4ec;
+  --color-surface-raised: #fffdf8;
+  --color-surface-sunken: #efe9dc;
 
-  /* Foreground */
-  --color-foreground: #1b1b1b;
-  --color-foreground-muted: #5b5b5b;
+  /* Foreground — a green-black ink, softer than #000 on paper. */
+  --color-foreground: #16201b;
+  --color-foreground-muted: #4f5751;
 
-  /* Action — the one accent, used sparingly */
-  --color-action: #1f3d2b;
-  --color-action-hover: #17301f;
+  /* Action — deep emerald, the one interactive colour. */
+  --color-action: #0e4a3b;
+  --color-action-hover: #0a382c;
   --color-action-foreground: #ffffff;
 
   /* Feedback */
   --color-error: #8a1f1f;
-  --color-error-surface: #fdf3f3;
-  --color-success: #1f5a3a;
-  --color-success-surface: #f1f8f4;
+  --color-error-surface: #fbf1ef;
+  --color-success: #1c5a3a;
+  --color-success-surface: #eef6f0;
   --color-warning: #7a4a11;
-  --color-warning-surface: #fdf7ef;
+  --color-warning-surface: #fbf4e8;
   --color-info: #1f3f5a;
-  --color-info-surface: #f1f6fa;
+  --color-info-surface: #eef3f8;
 
   /* Structure */
-  --color-border: #ddd9d1;
-  --color-border-strong: #b8b2a7;
-  --color-focus: #1f3d2b;
+  --color-border: #e2d9c6;
+  --color-border-strong: #857860;
+  --color-focus: #0e4a3b;
 
-  --radius-control: 0.375rem;
-  --radius-panel: 0.625rem;
+  --radius-control: 0.5rem;
+  --radius-panel: 0.875rem;
 
-  --shadow-panel: 0 1px 2px rgb(27 27 27 / 0.05);
+  --shadow-panel: 0 1px 2px rgb(22 32 27 / 0.05), 0 1px 1px rgb(22 32 27 / 0.03);
 
-  /* -------------------------------------------------------------------------
-   * Phase 4 — the broad product system.
-   *
-   * EXTENDING, NEVER REPLACING (ARCHITECTURE.md §13.1). Every role above keeps
-   * its name and its value: the authentication and administrative surfaces are
-   * not restyled, and nothing below forks a second system. What is added here
-   * is what the public shell genuinely consumes and nothing beyond it — a token
-   * with no consumer is an unused abstraction, not foresight.
-   * ---------------------------------------------------------------------- */
-
-  /* Reading measure. A line of text wider than this is measurably harder to
-     read, and the public shell is content-first (ARCHITECTURE.md §13.5). */
+  /* Reading measure. A line wider than this is measurably harder to read. */
   --measure-prose: 68ch;
 
-  /* Layering, declared only because a REAL stacking problem exists: a sticky
-     header and a mobile drawer that must cover it (§13.2 — "layering only where
-     a real stacking problem exists"). Two values, not a z-index scale. */
+  /* Layering: a header and a drawer that must cover it. Two values only. */
   --layer-header: 30;
   --layer-overlay: 40;
 
-  /* Motion. Short and unobtrusive; there is very little of it, which is the
-     point. Suppressed entirely under `prefers-reduced-motion` below. */
+  /* Motion. Short and unobtrusive; suppressed under reduced motion. */
   --duration-fast: 120ms;
   --duration-medium: 200ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
 
-  /* -------------------------------------------------------------------------
-   * TRI-SCRIPT TYPOGRAPHY — script SLOTS, not a brand typeface.
-   *
-   * Three named roles, each a stack of fonts the visitor's own system may
-   * already have, ending at the generic family. NOTHING IS DOWNLOADED and
-   * nothing is bundled: an approved typeface with Urdu and Arabic coverage and
-   * its licensing is organisational input that has not arrived
-   * (OPEN_DECISIONS.md §6.4), and shipping an unapproved font would be both a
-   * licensing risk and a brand claim. Substituting the real faces later is an
-   * edit to these three lines.
-   *
-   * Urdu is listed with Nastaliq faces FIRST. Naskh is legible for Urdu but it
-   * is not how Urdu is set, and a reader who has a Nastaliq face installed
-   * should see it (ARCHITECTURE.md §13.3).
-   * ---------------------------------------------------------------------- */
-  /* Phase 17 — the matched words in a search result. A quiet warm wash rather
-     than a saturated yellow: every text colour that sits on it (foreground,
-     muted foreground, action) keeps WCAG AA contrast, and it reads as emphasis
-     rather than as a warning. */
-  --color-highlight: #f6e8bf;
+  /* Search highlight — a warm wash every text colour keeps AA on. */
+  --color-highlight: #f5e3ae;
 
-  /* -------------------------------------------------------------------------
-   * The flagship presentation pass — the structure the public shell and the
-   * home portal compose with. Every existing role above keeps its name and
-   * its value; these are ADDED roles, each with a consumer.
-   * ---------------------------------------------------------------------- */
+  /* ACCENT — a restrained gold leaf: an eyebrow, a rule, a current-section
+     marker. Never a fill behind body text and never a second action colour.
+     Text-safe on every light surface and on its own wash. */
+  --color-accent: #80591a;
+  --color-accent-surface: #f3e8cc;
+  --color-accent-rule: #cfb57e;
 
-  /* ACCENT — a restrained brass, for small highlights only: an eyebrow, a
-     rule, the marker of the section a visitor is in. Never a fill behind body
-     text and never a second action colour. `--color-accent` is text-safe on
-     every light surface (≥ 5.4:1 on surface, raised, sunken and its own wash);
-     the wash carries foreground and muted text at AA as well. A pre-adoption
-     value like every other token (OPEN_DECISIONS.md §6.4). */
-  --color-accent: #7a5a17;
-  --color-accent-surface: #f4ecd9;
-  --color-accent-rule: #d8c497;
+  /* INK — the one deep surface, for the bands that frame a page (the brand
+     band of the home hero and the footer). Its foreground roles are measured
+     against both ink values. Focus on ink uses the ink accent. */
+  --color-ink: #0f2621;
+  --color-ink-raised: #15342d;
+  --color-ink-foreground: #f4efe3;
+  --color-ink-muted: #c3cdc6;
+  --color-ink-accent: #d8b868;
+  --color-ink-border: #29453d;
 
-  /* INK — the one deep surface, for the bands that frame a page: the home
-     hero and the footer. Its foreground roles are measured against BOTH ink
-     values: foreground ≥ 12:1, muted ≥ 8.8:1, accent ≥ 6.9:1. Focus on ink
-     uses the ink accent (see `.surface-ink` below), because the default focus
-     colour is itself a deep green and would vanish there. */
-  --color-ink: #15241b;
-  --color-ink-raised: #1e3127;
-  --color-ink-foreground: #f4f1ea;
-  --color-ink-muted: #c9d1ca;
-  --color-ink-accent: #d6b46c;
-  --color-ink-border: #34473b;
-
-  /* A SECOND ELEVATION, for surfaces that sit above the page — an open mega
-     menu, a card under the pointer. Soft and short; no glow. */
-  --shadow-raised: 0 1px 2px rgb(27 27 27 / 0.06), 0 12px 28px -14px rgb(27 27 27 / 0.28);
+  /* A second elevation, for surfaces above the page: an open menu, a drawer. */
+  --shadow-raised: 0 2px 4px rgb(22 32 27 / 0.05), 0 16px 32px -18px rgb(22 32 27 / 0.3);
 
   /* THE TYPE SCALE. Six roles, fluid where a heading must not dominate a
-     phone. The line heights here are the Latin ones; Urdu and Arabic are
-     re-tuned below, on the same names, because Nastaliq and Naskh need far
-     more vertical room than the Latin defaults give them (§13.3). Quran text
-     keeps its own specialised typography and is not set from this scale. */
-  --text-display: clamp(2.25rem, 1.6rem + 2.4vw, 3.5rem);
-  --text-display--line-height: 1.1;
-  --text-title: clamp(1.75rem, 1.45rem + 1.1vw, 2.25rem);
-  --text-title--line-height: 1.2;
-  --text-heading: clamp(1.3rem, 1.18rem + 0.5vw, 1.6rem);
-  --text-heading--line-height: 1.3;
-  --text-subheading: 1.125rem;
-  --text-subheading--line-height: 1.4;
-  --text-lede: clamp(1.0625rem, 1rem + 0.3vw, 1.25rem);
+     phone. Latin line heights here; Urdu and Arabic are re-tuned below on the
+     same names. Quran text keeps its own specialised typography. */
+  --text-display: clamp(2.375rem, 1.6rem + 2.8vw, 3.75rem);
+  --text-display--line-height: 1.08;
+  --text-title: clamp(1.875rem, 1.5rem + 1.3vw, 2.5rem);
+  --text-title--line-height: 1.15;
+  --text-heading: clamp(1.375rem, 1.22rem + 0.55vw, 1.75rem);
+  --text-heading--line-height: 1.25;
+  --text-subheading: 1.1875rem;
+  --text-subheading--line-height: 1.35;
+  --text-lede: clamp(1.0625rem, 1rem + 0.35vw, 1.3125rem);
   --text-lede--line-height: 1.6;
   --text-caption: 0.8125rem;
   --text-caption--line-height: 1.5;
 
-  /* Letter spacing is LATIN-ONLY. Spacing Arabic-script letters apart breaks
-     the joins between them, so both values are zeroed for Urdu and Arabic. */
-  --tracking-display: -0.02em;
-  --tracking-eyebrow: 0.08em;
+  /* Letter spacing is LATIN-ONLY: spacing Arabic-script letters apart breaks
+     their joins, so both are zeroed for Urdu and Arabic. */
+  --tracking-display: -0.015em;
+  --tracking-eyebrow: 0.1em;
 
-  /* SPACING RHYTHM — the page gutter and the vertical rhythm between and
-     inside sections, so every surface breathes the same way. The gutter is
-     16px on a phone and 24px from a small tablet up, as it has always been. */
+  /* SPACING RHYTHM — gutter (16px on a phone, 24px from a small tablet) and
+     the vertical rhythm between and inside sections. */
   --space-gutter: clamp(1rem, 4vw, 1.5rem);
   --space-page: clamp(2rem, 1.4rem + 2.5vw, 3rem);
   --space-section: clamp(2.75rem, 2rem + 3.5vw, 4.5rem);
   --space-stack: 1.25rem;
 
-  --font-latin: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-urdu:
-    'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Nafees Nastaleeq',
-    'Noto Naskh Arabic', 'Segoe UI', serif;
-  --font-arabic:
-    'Noto Naskh Arabic', 'Geeza Pro', 'Traditional Arabic', 'Segoe UI', serif;
+  /* THE TYPE ROLES (ARCHITECTURE.md §13.3). Each names a SHIPPED face
+     (`@/styles/fonts`, self-hosted, OFL) and ends at a generic family.
+     `font-sans` / `font-serif` / `font-urdu` / `font-naskh` are utilities. */
+  --font-sans: var(--font-face-ui), system-ui, 'Segoe UI', sans-serif;
+  --font-serif: var(--font-face-display), Georgia, 'Times New Roman', serif;
+  --font-urdu: var(--font-face-urdu), var(--font-face-naskh), serif;
+  --font-naskh: var(--font-face-naskh), 'Segoe UI', serif;
 }
 
 :root {
-  /* The platform commits to a single light presentation for now. A dark
-     palette is a design decision with its own contrast obligations, and
-     announcing support this foundation has not verified would be a claim
-     rather than a feature. */
+  /* One light presentation. A dark palette is a design decision with its own
+     contrast obligations, not a claim to make without verifying it. */
   color-scheme: light;
 }
 
-body {
-  margin-block: 0;
-  margin-inline: 0;
-  background-color: var(--color-surface);
-  color: var(--color-foreground);
-  font-family: var(--font-latin);
-  line-height: 1.6;
-}
-
 /*
- * Urdu and Arabic need more vertical room than the Latin default: their
- * ascenders and descenders are taller, and the same line height that reads
- * comfortably in English crowds them (ARCHITECTURE.md §13.3).
+ * THE SCRIPT ROLES, in the base layer so a utility (`font-serif`, `font-naskh`)
+ * can still override one element deliberately.
  *
- * The SCRIPT SLOT is selected the same way, so a page in Urdu is set in the
- * Urdu stack rather than in whatever the Latin stack happens to fall back to.
+ *   English  interface text in the UI face; headings and long-form reading in
+ *            the display serif.
+ *   Urdu     interface text in Naskh (Nastaliq is unsuitable at small sizes
+ *            and in dense lists); headings and long-form reading in GENUINE
+ *            NASTALIQ — this is how Urdu is set.
+ *   Arabic   Naskh throughout, a little heavier for headings.
+ *
+ * Keyed on `lang`, which the markup sets per element, so an Urdu headline on an
+ * English page is set in Nastaliq and an English title on an Urdu page in the
+ * Latin faces — nothing guesses from the characters (ARCHITECTURE.md §9, §13.3).
  */
-:root:lang(ur) body {
-  font-family: var(--font-urdu);
-  line-height: 1.9;
-}
+@layer base {
+  body {
+    margin: 0;
+    background-color: var(--color-surface);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
 
-:root:lang(ar) body {
-  font-family: var(--font-arabic);
-  line-height: 1.9;
+  /* The interface face of each language, INHERITED from the element that
+     declares the language (the root, or a run with its own `lang`). Attribute
+     selectors, not `:lang()`, so a descendant inherits its run's face instead
+     of being reset element by element. */
+  :root[lang|='ur'] body,
+  [lang|='ur'] {
+    font-family: var(--font-naskh);
+  }
+  :root[lang|='ar'] body,
+  [lang|='ar'] {
+    font-family: var(--font-naskh);
+  }
+  [lang|='en'] {
+    font-family: var(--font-sans);
+  }
+
+  /* Headings and long-form reading: the display serif in English, genuine
+     Nastaliq in Urdu (including an Urdu run inside an English page). */
+  :is(h1, h2, h3, .font-display):lang(en) {
+    font-family: var(--font-serif);
+    font-weight: 560;
+    letter-spacing: var(--tracking-display);
+  }
+  :is(.reading-face, .editorial-prose, .library-reader):lang(en) {
+    font-family: var(--font-serif);
+  }
+  :is(h1, h2, h3, .font-display, .reading-face, .editorial-prose, .library-reader):lang(
+    ur
+  ),
+  :is(h1, h2, h3, .reading-face, .editorial-prose, .library-reader) [lang|='ur'] {
+    font-family: var(--font-urdu);
+    font-weight: 400;
+    letter-spacing: 0;
+  }
+  :is(h1, h2, h3, .font-display):lang(ar) {
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+
+  :root:lang(ur) body,
+  :root:lang(ar) body {
+    line-height: 1.85;
+  }
 }
 
 /*
  * THE TYPE SCALE, RE-TUNED PER SCRIPT on the same token names, so a component
  * says "title" once and is right in all three languages. Nastaliq stacks
- * diagonally and needs the most room; Naskh a little less. Letter spacing is
- * removed entirely — it breaks the joins of Arabic script.
+ * diagonally and needs the most room; Naskh a little less.
  */
 :root:lang(ur) {
-  --text-display--line-height: 1.7;
-  --text-title--line-height: 1.8;
+  --text-display--line-height: 1.75;
+  --text-title--line-height: 1.85;
   --text-heading--line-height: 1.9;
-  --text-subheading--line-height: 1.9;
-  --text-lede--line-height: 2;
+  --text-subheading--line-height: 1.95;
+  --text-lede--line-height: 2.05;
   --text-caption--line-height: 1.9;
   --tracking-display: 0;
   --tracking-eyebrow: 0;
@@ -241,24 +239,9 @@ body {
   --tracking-eyebrow: 0;
 }
 
-/*
- * A RUN of another script inside a page carries its own slot.
- *
- * This is the mixed-direction case the platform actually has — اردو inside an
- * English page, an Arabic phrase inside an Urdu one — and it is keyed on the
- * `lang` the markup already sets per element, so nothing has to guess from the
- * characters (ARCHITECTURE.md §9, §13.3).
- */
-:lang(ur) {
-  font-family: var(--font-urdu);
-}
-
-:lang(ar) {
-  font-family: var(--font-arabic);
-}
-
-:lang(en) {
-  font-family: var(--font-latin);
+/* An Urdu run inside a Latin page keeps Nastaliq's vertical room. */
+:is(h1, h2, h3, .reading-face):lang(ur):not(:root:lang(ur) *) {
+  line-height: 1.9;
 }
 
 /*
@@ -447,4 +430,12 @@ p {
   line-height: var(--reader-line-height);
   max-inline-size: var(--reader-measure);
   overflow-wrap: anywhere;
+}
+
+/* Long-form Urdu is Nastaliq, which needs more room between lines. */
+.editorial-prose:lang(ur) {
+  line-height: 2.15;
+}
+.library-reader:lang(ur) {
+  --reader-line-height: 2.15;
 }

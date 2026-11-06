@@ -93,7 +93,7 @@ check('realtime /healthz answers 200 ok', health.status === 200 && health.body =
 const ready = await exchange(realtimeAddress, '/readyz', {});
 check('realtime /readyz answers 200', ready.status === 200);
 
-const web = await exchange(proxyAddress, '/en', { host: publicHost });
+const web = await exchange(proxyAddress, '/', { host: publicHost });
 check(
   'plain HTTP through the proxy reaches the web upstream',
   web.body === 'web-upstream',
@@ -117,7 +117,7 @@ check(
 );
 check('the proxy did not answer the upgrade itself', !proxied.body.includes('nginx'));
 
-const misdirected = await exchange(proxyAddress, '/en', { host: 'attacker.invalid' });
+const misdirected = await exchange(proxyAddress, '/', { host: 'attacker.invalid' });
 check('an unknown Host is refused by the proxy', misdirected.status === 421);
 
 if (failures.length > 0) {

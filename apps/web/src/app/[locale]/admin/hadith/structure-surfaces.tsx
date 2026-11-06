@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import type { Locale } from '@minhaj/contracts';
@@ -310,9 +311,7 @@ function NamesSection({
         <SectionHeading>
           <span id="names">{t('names.title')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('names.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('names.help')}</p>
         {administer ? (
           <ActionForm
             action={
@@ -399,7 +398,7 @@ function NamesSection({
 export async function CollectionsScreen({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/hadith/collections`;
+  const base = localizedPath(locale, '/admin/hadith/collections');
   const context = await requireAdminPage(locale, 'hadith.read', base);
   const copy = await hadithCopy(locale);
   const { t } = copy;
@@ -413,9 +412,7 @@ export async function CollectionsScreen({ params, searchParams }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.collections')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scope.collections')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('scope.collections')}</p>
 
       {page.items.length === 0 ? (
         <EmptyState>{t('collections.empty')}</EmptyState>
@@ -515,7 +512,7 @@ export async function CollectionsScreen({ params, searchParams }: ListParams) {
 export async function CollectionScreen({ params }: EditorParams) {
   const locale = await requireLocale(params);
   const id = recordTarget((await params).id);
-  const list = `/${locale}/admin/hadith/collections`;
+  const list = localizedPath(locale, '/admin/hadith/collections');
   const context = await requireAdminPage(locale, 'hadith.read', `${list}/${id}`);
   const copy = await hadithCopy(locale);
   const { t } = copy;
@@ -548,17 +545,19 @@ export async function CollectionScreen({ params }: EditorParams) {
               <ActivationBadge activation={collection.activation} copy={copy} />
             </DetailRow>
           </dl>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('collections.fixed')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('collections.fixed')}</p>
           <p className="flex flex-wrap gap-4 text-sm">
             <TextLink
-              href={withQuery(`/${locale}/admin/hadith/books`, { collection: id })}
+              href={withQuery(localizedPath(locale, '/admin/hadith/books'), {
+                collection: id,
+              })}
             >
               {t('collections.books')}
             </TextLink>
             <TextLink
-              href={withQuery(`/${locale}/admin/hadith/records`, { collection: id })}
+              href={withQuery(localizedPath(locale, '/admin/hadith/records'), {
+                collection: id,
+              })}
             >
               {t('collections.records')}
             </TextLink>
@@ -594,9 +593,7 @@ function EditionsSection({
       <SectionHeading>
         <span id="editions">{t('editions.title')}</span>
       </SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('editions.operatorOnly')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('editions.operatorOnly')}</p>
       {collection.editions.length === 0 ? (
         <EmptyState>{t('editions.empty')}</EmptyState>
       ) : (
@@ -653,7 +650,7 @@ async function collectionChoices(actor: HadithActor) {
 export async function BooksScreen({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/hadith/books`;
+  const base = localizedPath(locale, '/admin/hadith/books');
   const context = await requireAdminPage(locale, 'hadith.read', base);
   const copy = await hadithCopy(locale);
   const { t } = copy;
@@ -679,9 +676,7 @@ export async function BooksScreen({ params, searchParams }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.books')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scope.books')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('scope.books')}</p>
 
       <nav className="flex flex-wrap gap-2" aria-label={t('filter.collection')}>
         <FilterLink href={base} current={chosen === null}>
@@ -811,7 +806,7 @@ export async function BooksScreen({ params, searchParams }: ListParams) {
 export async function BookScreen({ params }: EditorParams) {
   const locale = await requireLocale(params);
   const id = recordTarget((await params).id);
-  const list = `/${locale}/admin/hadith/books`;
+  const list = localizedPath(locale, '/admin/hadith/books');
   const context = await requireAdminPage(locale, 'hadith.read', `${list}/${id}`);
   const copy = await hadithCopy(locale);
   const { t } = copy;
@@ -836,7 +831,9 @@ export async function BookScreen({ params }: EditorParams) {
 
       <StructureFacts structure={book} languages={languages} copy={copy}>
         <DetailRow term={t('structure.collection')}>
-          <TextLink href={`/${locale}/admin/hadith/collections/${book.collectionId}`}>
+          <TextLink
+            href={localizedPath(locale, `/admin/hadith/collections/${book.collectionId}`)}
+          >
             <span dir="ltr">{book.collectionSlug}</span>
           </TextLink>
         </DetailRow>
@@ -846,18 +843,22 @@ export async function BookScreen({ params }: EditorParams) {
       </StructureFacts>
 
       <p className="flex flex-wrap gap-4 text-sm">
-        <TextLink href={withQuery(`/${locale}/admin/hadith/chapters`, { book: book.id })}>
+        <TextLink
+          href={withQuery(localizedPath(locale, '/admin/hadith/chapters'), {
+            book: book.id,
+          })}
+        >
           {t('books.chapters')}
         </TextLink>
         {canonical ? (
           <>
             <TextLink
-              href={`${withQuery(`/${locale}/admin/hadith/chapters`, { book: book.id, create: '1' })}#create`}
+              href={`${withQuery(localizedPath(locale, '/admin/hadith/chapters'), { book: book.id, create: '1' })}#create`}
             >
               {t('books.addChapter')}
             </TextLink>
             <TextLink
-              href={`${withQuery(`/${locale}/admin/hadith/records`, { create: '1', book: book.id })}#create`}
+              href={`${withQuery(localizedPath(locale, '/admin/hadith/records'), { create: '1', book: book.id })}#create`}
             >
               {t('structure.addRecord')}
             </TextLink>
@@ -918,9 +919,7 @@ function StructureFacts({
               : languageText(structure.titleLanguage, languages)}
           </DetailRow>
         </dl>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('structure.readOnly')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('structure.readOnly')}</p>
       </section>
     </Panel>
   );
@@ -933,7 +932,7 @@ function StructureFacts({
 export async function ChaptersScreen({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/hadith/chapters`;
+  const base = localizedPath(locale, '/admin/hadith/chapters');
   const context = await requireAdminPage(locale, 'hadith.read', base);
   const copy = await hadithCopy(locale);
   const { t } = copy;
@@ -970,20 +969,20 @@ export async function ChaptersScreen({ params, searchParams }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.chapters')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scope.chapters')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('scope.chapters')}</p>
 
       {book === null ? (
         <p className="text-sm">
           {t('chapters.chooseBook')}{' '}
-          <TextLink href={`/${locale}/admin/hadith/books`}>{t('surface.books')}</TextLink>
+          <TextLink href={localizedPath(locale, '/admin/hadith/books')}>
+            {t('surface.books')}
+          </TextLink>
         </p>
       ) : (
         <p className="flex flex-wrap items-center gap-3 text-sm">
           <span>
             {t('structure.book')}:{' '}
-            <TextLink href={`/${locale}/admin/hadith/books/${book.id}`}>
+            <TextLink href={localizedPath(locale, `/admin/hadith/books/${book.id}`)}>
               <span dir="auto">{structureText(book)}</span>
             </TextLink>
           </span>
@@ -1083,7 +1082,7 @@ export async function ChaptersScreen({ params, searchParams }: ListParams) {
 export async function ChapterScreen({ params }: EditorParams) {
   const locale = await requireLocale(params);
   const id = recordTarget((await params).id);
-  const list = `/${locale}/admin/hadith/chapters`;
+  const list = localizedPath(locale, '/admin/hadith/chapters');
   const context = await requireAdminPage(locale, 'hadith.read', `${list}/${id}`);
   const copy = await hadithCopy(locale);
   const { t } = copy;
@@ -1115,7 +1114,7 @@ export async function ChapterScreen({ params }: EditorParams) {
           {book === null ? (
             t('unavailableReference')
           ) : (
-            <TextLink href={`/${locale}/admin/hadith/books/${book.id}`}>
+            <TextLink href={localizedPath(locale, `/admin/hadith/books/${book.id}`)}>
               <span dir="auto">
                 {book.collectionSlug} · {book.editionCode} · {structureText(book)}
               </span>
@@ -1127,7 +1126,7 @@ export async function ChapterScreen({ params }: EditorParams) {
       {canonical ? (
         <p className="text-sm">
           <TextLink
-            href={`${withQuery(`/${locale}/admin/hadith/records`, {
+            href={`${withQuery(localizedPath(locale, '/admin/hadith/records'), {
               create: '1',
               book: chapter.bookId,
               chapter: chapter.id,

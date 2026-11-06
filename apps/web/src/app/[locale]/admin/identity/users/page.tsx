@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getFormatter, getTranslations } from 'next-intl/server';
 
 import type { AccountStatus } from '@minhaj/contracts/identity';
@@ -65,7 +66,7 @@ export default async function UsersPage({
   const page = await requireAdminPage(
     locale,
     'users.read',
-    `/${locale}/admin/identity/users`,
+    localizedPath(locale, '/admin/identity/users'),
   );
   const copy = await adminCopy(locale);
 
@@ -96,9 +97,7 @@ export default async function UsersPage({
     <main className="flex flex-col gap-4">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('users.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('users.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('users.description')}</p>
       </header>
 
       {/*
@@ -170,12 +169,12 @@ export default async function UsersPage({
               <DataRow key={account.id}>
                 <DataCell wrap>
                   <span className="block">{account.email}</span>
-                  <span className="block text-xs text-[color:var(--color-foreground-muted)]">
+                  <span className="block text-xs text-foreground-muted">
                     {account.name}
                   </span>
                   {/* The internal identifier, because the grant form takes it
                       and an address is not a stable identity (§4.6). */}
-                  <code className="block text-xs break-all text-[color:var(--color-foreground-muted)]">
+                  <code className="block text-xs break-all text-foreground-muted">
                     {account.id}
                   </code>
                 </DataCell>
@@ -184,14 +183,14 @@ export default async function UsersPage({
                   <StatusBadge tone={STATUS_TONE[account.status]}>
                     {statusLabel(account.status)}
                   </StatusBadge>
-                  <span className="mt-1 block text-xs text-[color:var(--color-foreground-muted)]">
+                  <span className="mt-1 block text-xs text-foreground-muted">
                     {account.emailVerified ? t('users.verified') : t('users.unverified')}
                   </span>
                 </DataCell>
 
                 <DataCell wrap>
                   {account.roleKeys.length === 0 ? (
-                    <span className="text-xs text-[color:var(--color-foreground-muted)]">
+                    <span className="text-xs text-foreground-muted">
                       {t('users.noRoles')}
                     </span>
                   ) : (

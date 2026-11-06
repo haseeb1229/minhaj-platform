@@ -1,9 +1,9 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 
 import { currentLinkKey, type WorkspaceLinkGroup } from './nav-match';
+import { useCanonicalPathname } from '@/components/shell/canonical-pathname';
 
 /**
  * A workspace's navigation: the area's sections, or one domain's tabs.
@@ -34,7 +34,9 @@ export function WorkspaceNav({
   readonly groups: readonly WorkspaceLinkGroup[];
   readonly variant: 'sidebar' | 'tabs';
 }) {
-  const pathname = usePathname();
+  // The canonical address: an English page's internal `/en/…` path is
+  // normalised to the unprefixed one its links are built with (R1).
+  const pathname = useCanonicalPathname();
   const current = currentLinkKey(
     pathname,
     groups.flatMap((group) => group.links),

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import { indexAfterResponse } from '@/composition/search';
 
-import { localeSchema } from '@minhaj/contracts';
+import { localeSchema, localizedPath } from '@minhaj/contracts';
 import {
   languageCodeSchema,
   languageDirectionSchema,
@@ -91,7 +91,7 @@ function localeFrom(form: FormData): string {
  * would throw away caches that have nothing to do with this.
  */
 function refresh(locale: string): void {
-  revalidatePath(`/${locale}/admin`, 'layout');
+  revalidatePath(localizedPath(locale, '/admin'), 'layout');
   // Whatever changed may change what is searchable; the owner already
   // recorded that in its own transaction, and this indexes it promptly.
   indexAfterResponse();

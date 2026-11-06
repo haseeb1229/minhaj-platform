@@ -1,5 +1,5 @@
 import 'server-only';
-import { localeSchema } from '@minhaj/contracts';
+import { localeSchema, localizedPath } from '@minhaj/contracts';
 import { pagePath } from '@minhaj/contracts/editorial';
 import { editorialReadRuntime } from '@/composition/editorial-read';
 import { publicIndexingEnabled } from '@/config/indexing';
@@ -29,7 +29,7 @@ export async function editorialSitemapPartitions(): Promise<readonly SitemapPart
             : pagePath(row.routeBinding ?? '', row.slug);
         for (const locale of row.languages)
           buckets.get(locale)?.push({
-            loc: absoluteUrl('/' + locale + path),
+            loc: absoluteUrl(localizedPath(locale, path)),
             lastmod: row.updatedAt.toISOString(),
           });
       }

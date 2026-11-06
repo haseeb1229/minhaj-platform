@@ -77,9 +77,7 @@ export default async function MigrationRunsPage({
     <main className="flex min-w-0 flex-col gap-8">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('runs.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('runs.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('runs.description')}</p>
       </header>
 
       <Panel>

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
@@ -86,7 +87,7 @@ export default async function FatwaAdminLayout({
               key: 'fatwa',
               links: visible.map((surface) => ({
                 key: surface.key,
-                href: `/${locale}/admin/fatwa/${surface.key}`,
+                href: localizedPath(locale, `/admin/fatwa/${surface.key}`),
                 text: t(`surface.${surface.key}`),
               })),
             },

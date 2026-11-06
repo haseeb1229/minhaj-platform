@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import { collectionPathOf } from '@minhaj/contracts/editorial';
 
 import { editorialReadRuntime } from '@/composition/editorial-read';
@@ -41,7 +41,7 @@ export async function collectionSitemapPartitions(): Promise<
     for (const row of batch)
       for (const locale of row.languages)
         buckets.get(locale)?.push({
-          loc: absoluteUrl(`/${locale}${collectionPathOf(row.slug)}`),
+          loc: absoluteUrl(localizedPath(locale, `${collectionPathOf(row.slug)}`)),
           lastmod: row.updatedAt.toISOString(),
         });
     if (batch.length < READ_BATCH) break;

@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 
 import { field, membershipRejected } from '@/components/membership/action-support';
 import { textarea, whole } from '@/components/personal/action-support';
@@ -55,7 +55,7 @@ async function authorise(
 }
 
 function refreshed(locale: Locale): void {
-  revalidatePath(`/${locale}/admin/membership`, 'layout');
+  revalidatePath(localizedPath(locale, '/admin/membership'), 'layout');
 }
 
 /** One locale's words as the form names them; the contract trims and bounds them. */
@@ -96,7 +96,9 @@ export async function createTypeAction(
   }
   refreshed(actor.locale);
   // Outside the try: `redirect` signals by throwing, and that is not a failure.
-  redirect(`/${actor.locale}/admin/membership?type=${encodeURIComponent(id)}`);
+  redirect(
+    localizedPath(actor.locale, `/admin/membership?type=${encodeURIComponent(id)}`),
+  );
 }
 
 /** Moves a type in display order. */

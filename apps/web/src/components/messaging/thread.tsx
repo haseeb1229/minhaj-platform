@@ -106,14 +106,14 @@ export function ThreadAttachments({
                   alt={attachment.displayName ?? labels.image}
                   loading="lazy"
                   decoding="async"
-                  className="max-h-72 max-w-full rounded-[var(--radius-control)] border border-[color:var(--color-border)]"
+                  className="max-h-72 max-w-full rounded-control border border-border"
                 />
               </a>
             ) : (
               <a
                 href={address}
                 download
-                className="inline-flex min-h-11 max-w-full items-center font-medium text-[color:var(--color-action)] underline underline-offset-2"
+                className="inline-flex min-h-11 max-w-full items-center font-medium text-action underline underline-offset-2"
               >
                 <span dir="auto" className="min-w-0 wrap-anywhere">
                   {fill(labels.download, { name, size })}
@@ -172,15 +172,15 @@ export function ThreadItem({
     >
       <article
         aria-label={fill(labels.messageFrom, { name: message.sender })}
-        className={`flex min-w-0 max-w-full flex-col gap-2 rounded-[var(--radius-panel)] p-3 sm:max-w-[80%] ${
+        className={`flex min-w-0 max-w-full flex-col gap-2 rounded-panel p-3 sm:max-w-[80%] ${
           message.highlighted === true
-            ? 'border-2 border-[color:var(--color-warning)] bg-[color:var(--color-warning-surface)]'
+            ? 'border-2 border-warning bg-warning-surface'
             : message.own
-              ? 'border border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)]'
-              : 'border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)]'
+              ? 'border border-border bg-surface-sunken'
+              : 'border border-border-strong bg-surface-raised'
         }`}
       >
-        <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[color:var(--color-foreground-muted)]">
+        <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-foreground-muted">
           <span dir="auto" className="font-semibold wrap-anywhere">
             {message.sender}
           </span>
@@ -193,9 +193,7 @@ export function ThreadItem({
           ) : null}
         </p>
         {message.body === null ? (
-          <p className="text-sm text-[color:var(--color-foreground-muted)] italic">
-            {labels.withheld}
-          </p>
+          <p className="text-sm text-foreground-muted italic">{labels.withheld}</p>
         ) : message.body === '' ? null : (
           <p dir="auto" className="min-w-0 whitespace-pre-line wrap-anywhere">
             {message.body}

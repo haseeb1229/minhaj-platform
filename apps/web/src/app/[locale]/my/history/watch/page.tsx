@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { PERSONAL_LIMITS, targetKey } from '@minhaj/contracts/personalisation';
@@ -46,7 +47,7 @@ export default async function WatchHistoryPage({
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const locale = await requireLocale(params);
-  const path = `/${locale}/my/history/watch`;
+  const path = localizedPath(locale, '/my/history/watch');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'personal' });
   const actor = { accountId: session.account.id };
@@ -94,7 +95,7 @@ export default async function WatchHistoryPage({
                     resolved={titles.get(targetKey({ kind: 'video', id: entry.videoId }))}
                     t={t}
                   />
-                  <div className="flex flex-wrap items-center gap-3 text-sm text-[color:var(--color-foreground-muted)]">
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-foreground-muted">
                     <KindBadge kind="video" t={t} />
                     <span>
                       {t('history.lastWatched')}{' '}

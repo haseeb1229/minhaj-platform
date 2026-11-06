@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { LearningTitle } from '@/components/my-learning/parts';
@@ -30,7 +31,7 @@ export default async function TeacherCoursesPage({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const gate = await requireTeacher(locale, `/${locale}/teacher/courses`);
+  const gate = await requireTeacher(locale, localizedPath(locale, '/teacher/courses'));
   const t = await getTranslations({ locale, namespace: 'teacher' });
   if (!gate.activated) return <NotActivated t={t} />;
 
@@ -50,15 +51,15 @@ export default async function TeacherCoursesPage({
       ) : (
         <ul className="flex flex-col gap-3" aria-label={t('courses.list')}>
           {read.value.map(({ course, scope }) => {
-            const root = `/${locale}/teacher/courses/${encodeURIComponent(course.id)}`;
+            const root = localizedPath(
+              locale,
+              `/teacher/courses/${encodeURIComponent(course.id)}`,
+            );
             return (
               <Panel key={scope.id} as="li">
                 <div className="flex min-w-0 flex-col gap-2">
                   <h2 className="font-semibold">
-                    <a
-                      href={root}
-                      className="text-[color:var(--color-action)] underline underline-offset-2"
-                    >
+                    <a href={root} className="text-action underline underline-offset-2">
                       <LearningTitle
                         labels={course.labels}
                         primaryLocale={course.primaryLocale}
@@ -72,7 +73,7 @@ export default async function TeacherCoursesPage({
                       lessons: String(course.lessons),
                     })}
                   </p>
-                  <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                  <p className="text-sm text-foreground-muted">
                     {t('courses.since')}{' '}
                     <OwnTime
                       value={scope.grantedAt}

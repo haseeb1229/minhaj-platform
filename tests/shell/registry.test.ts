@@ -18,13 +18,11 @@ import {
   indexableRoutes,
   isAvailable,
   isLegalDocument,
-  linksIn,
   pathFor,
   requireRoute,
   routeByKey,
-  routesIn,
-  type ShellRoute,
 } from '../../apps/web/src/shell/registry.ts';
+import { policyRouteKeys } from '../../apps/web/src/shell/presence.ts';
 
 /**
  * PHASE 4 — the shell route registry.
@@ -100,7 +98,6 @@ describe('the registry describes routes, and nothing else', () => {
       'key',
       'label',
       'path',
-      'placements',
       'visibility',
       'availability',
       'indexing',
@@ -124,19 +121,13 @@ describe('a deferred capability cannot be linked', () => {
     }
   });
 
-  it('never returns a deferred route from a navigation view', () => {
-    const placements = [
-      'primary',
-      'utility',
-      'footer-explore',
-      'footer-legal',
-      'footer-utility',
-    ] as const;
-
-    for (const placement of placements) {
-      for (const route of linksIn(placement)) {
-        expect(route.availability, `${route.key} in ${placement}`).not.toBe('deferred');
-      }
+  it('lets the presentation policy promote only registered, linkable routes', () => {
+    // R1: what the header and footer PROMOTE is decided by `@/shell/presence`;
+    // every route it can name must exist here and carry a path.
+    for (const key of policyRouteKeys()) {
+      const route = routeByKey(key);
+      expect(route, key).not.toBeNull();
+      expect(route !== null && isAvailable(route), key).toBe(true);
     }
   });
 
@@ -181,8 +172,6 @@ describe('a deferred capability cannot be linked', () => {
     expect(route.visibility).toBe('public');
     expect(route.availability).toBe('delivered');
     expect(route.indexing).toBe('eligible');
-    expect(route.placements).toEqual(['primary']);
-    expect(linksIn('primary').map((entry) => entry.key)).toContain('donate');
     expect(
       SHELL_ROUTES.filter(
         (entry) => entry.key.startsWith('donate.') || entry.key.startsWith('donations'),
@@ -200,8 +189,6 @@ describe('a deferred capability cannot be linked', () => {
     expect(route.visibility).toBe('public');
     expect(route.availability).toBe('delivered');
     expect(route.indexing).toBe('eligible');
-    expect(route.placements).toEqual(['utility']);
-    expect(linksIn('utility').map((entry) => entry.key)).toContain('membership');
     expect(SHELL_ROUTES.filter((entry) => entry.key.startsWith('membership.'))).toEqual(
       [],
     );
@@ -217,7 +204,6 @@ describe('a deferred capability cannot be linked', () => {
     expect(route.visibility).toBe('public');
     expect(route.availability).toBe('delivered');
     expect(route.indexing).toBe('excluded');
-    expect(route.placements).toContain('primary');
 
     const quran = SHELL_ROUTES.filter((entry) => entry.key.startsWith('quran.'));
     expect(quran.map((entry) => entry.key).sort()).toEqual([
@@ -241,7 +227,6 @@ describe('a deferred capability cannot be linked', () => {
       expect(isAvailable(entry) && entry.path, entry.key).toBe(
         `/quran/${entry.key.slice('quran.'.length)}`,
       );
-      expect(entry.placements, entry.key).toEqual([]);
     }
     // No owner exposes a public by-topic Article read, and the teacher
     // directory is Phase 23's: these related views have no route to link
@@ -266,7 +251,6 @@ describe('a deferred capability cannot be linked', () => {
     expect(route.visibility).toBe('public');
     expect(route.availability).toBe('delivered');
     expect(route.indexing).toBe('excluded');
-    expect(route.placements).toContain('primary');
 
     const hadith = SHELL_ROUTES.filter((entry) => entry.key.startsWith('hadith.'));
     expect(hadith.map((entry) => entry.key).sort()).toEqual([
@@ -287,7 +271,6 @@ describe('a deferred capability cannot be linked', () => {
       expect(isAvailable(entry) && entry.path, entry.key).toBe(
         `/hadith/${entry.key.slice('hadith.'.length)}`,
       );
-      expect(entry.placements, entry.key).toEqual([]);
     }
     // No owner exposes a public by-topic Article read, and scholars have no
     // deterministic owner read: these related views have no route to link
@@ -311,7 +294,6 @@ describe('a deferred capability cannot be linked', () => {
     expect(route.visibility).toBe('public');
     expect(route.availability).toBe('delivered');
     expect(route.indexing).toBe('eligible');
-    expect(route.placements).toContain('primary');
 
     const learn = SHELL_ROUTES.filter((entry) => entry.key.startsWith('learn.'));
     expect(learn.map((entry) => entry.key).sort()).toEqual([
@@ -334,7 +316,6 @@ describe('a deferred capability cannot be linked', () => {
       expect(isAvailable(entry) && entry.path, entry.key).toBe(
         `/learn/${entry.key.slice('learn.'.length)}`,
       );
-      expect(entry.placements, entry.key).toEqual([]);
     }
     // Training, Resources and a separate Class Schedule are later work: no
     // entry, so nothing can link them (ROUTE_MAP.md §5.2).
@@ -359,7 +340,6 @@ describe('a deferred capability cannot be linked', () => {
     expect(route.visibility).toBe('public');
     expect(route.availability).toBe('delivered');
     expect(route.indexing).toBe('excluded');
-    expect(route.placements).toContain('primary');
 
     const fatwa = SHELL_ROUTES.filter((entry) => entry.key.startsWith('fatwa.'));
     expect(fatwa.map((entry) => entry.key).sort()).toEqual([
@@ -374,7 +354,6 @@ describe('a deferred capability cannot be linked', () => {
       expect(isAvailable(entry) && entry.path, entry.key).toBe(
         `/fatwa/${entry.key.slice('fatwa.'.length)}`,
       );
-      expect(entry.placements, entry.key).toEqual([]);
     }
     // Latest and Popular are QUERY views of `/fatwa` (`?sort=`), never paths
     // (ROUTE_MAP.md §2.3).
@@ -396,7 +375,6 @@ describe('a deferred capability cannot be linked', () => {
     expect(route.path).toBe('/news');
     expect(route.visibility).toBe('public');
     expect(route.indexing).toBe('eligible');
-    expect(route.placements).toContain('primary');
     for (const key of ['news.newsletter', 'news.latest', 'news.popular'])
       expect(routeByKey(key), key).toBeNull();
   });
@@ -413,8 +391,6 @@ describe('a deferred capability cannot be linked', () => {
     expect(route.visibility).toBe('public');
     expect(route.availability).toBe('delivered');
     expect(route.indexing).toBe('eligible');
-    expect(route.placements).toEqual(['footer-utility']);
-    expect(linksIn('footer-utility').map((entry) => entry.key)).toContain('newsletter');
 
     for (const key of ['newsletter.confirm', 'newsletter.unsubscribe'])
       expect(routeByKey(key), key).toBeNull();
@@ -437,7 +413,6 @@ describe('a deferred capability cannot be linked', () => {
     expect(route.visibility).toBe('public');
     expect(route.availability).toBe('delivered');
     expect(route.indexing).toBe('eligible');
-    expect(route.placements).toEqual([]);
     for (const key of ['events.upcoming', 'events.past', 'events.gallery'])
       expect(routeByKey(key), key).toBeNull();
   });
@@ -455,7 +430,6 @@ describe('a deferred capability cannot be linked', () => {
     expect(route.visibility).toBe('public');
     expect(route.availability).toBe('delivered');
     expect(route.indexing).toBe('eligible');
-    expect(route.placements).toEqual([]);
     for (const key of [
       'library.collections',
       'collections.latest',
@@ -479,11 +453,9 @@ describe('a deferred capability cannot be linked', () => {
     expect(global.path).toBe('/global');
     expect(global.visibility).toBe('public');
     expect(global.indexing).toBe('eligible');
-    expect(global.placements).toContain('primary');
 
     const finder = requireRoute('find-a-centre');
     expect(finder.path).toBe('/global/find-a-centre');
-    expect(finder.placements).toContain('utility');
     expect(finder.indexing).toBe('eligible');
 
     expect(requireRoute('global.countries').path).toBe('/global/countries');
@@ -506,7 +478,6 @@ describe('a deferred capability cannot be linked', () => {
     expect(route.path).toBe('/search');
     expect(route.visibility).toBe('public');
     expect(route.indexing).toBe('excluded');
-    expect(route.placements).toContain('primary');
   });
 
   it('delivers the canonical Topics browser, public and eligible', () => {
@@ -548,7 +519,6 @@ describe('a deferred capability cannot be linked', () => {
   it('delivers Watch with a path, and only the Phase-10 Watch surfaces', () => {
     const watch = requireRoute('watch');
     expect(watch.path).toBe('/watch');
-    expect(watch.placements).toContain('primary');
     expect(watch.indexing).toBe('eligible');
 
     const surfaces = SHELL_ROUTES.filter((route) => route.key.startsWith('watch.'))
@@ -592,7 +562,6 @@ describe('a deferred capability cannot be linked', () => {
     ]);
     for (const route of listen) {
       expect(isAvailable(route) && route.availability, route.key).toBe('delivered');
-      expect(route.placements, route.key).toEqual([]);
     }
     expect(routeByKey('listen')).toMatchObject({ path: '/listen' });
     for (const absent of ['listen.recitations', 'listen.podcasts', 'listen.tracks']) {
@@ -606,25 +575,6 @@ describe('a deferred capability cannot be linked', () => {
     // unknown key still fails loudly rather than rendering a guess.
     expect(() => requireRoute('donate')).not.toThrow();
     expect(() => requireRoute('no-such-route')).toThrow(/registered/);
-  });
-
-  it('keeps the primary navigation in the accepted order', () => {
-    // INFORMATION_ARCHITECTURE.md §2.2, in full. Later phases turn entries on;
-    // none of them may quietly reorder the IA while doing it.
-    expect(routesIn('primary').map((route) => route.key)).toEqual([
-      'explore',
-      'quran',
-      'hadith',
-      'learn',
-      'library',
-      'watch',
-      'fatwa',
-      'news-events',
-      'global',
-      'search',
-      'my-minhaj',
-      'donate',
-    ]);
   });
 });
 
@@ -765,7 +715,6 @@ describe('indexing eligibility is honest', () => {
     expect(route.availability).toBe('delivered');
     expect(route.visibility).toBe('private');
     expect(route.indexing).toBe('excluded');
-    expect(route.placements).toContain('primary');
   });
 });
 
@@ -802,7 +751,7 @@ describe('the registry and the Explore allowlists cannot drift', () => {
     expect(exploreHrefOf('ur', 'digital-resources', 'newsletter')).toBe('/ur/newsletter');
     // Every other item still links to its own reserved Explore address.
     expect(exploreHrefOf('en', 'digital-resources', 'rss')).toBe(
-      '/en/explore/digital-resources/rss',
+      '/explore/digital-resources/rss',
     );
     expect(
       Object.entries(EXPLORE_PAGES).flatMap(([section, pages]) =>
@@ -943,29 +892,20 @@ describe('no shell message is carried without a consumer', () => {
   });
 });
 
-describe('placement views agree with the registry', () => {
-  it('returns a route in every placement it declares', () => {
-    for (const route of SHELL_ROUTES) {
-      for (const placement of route.placements) {
-        expect(
-          routesIn(placement).some((entry: ShellRoute) => entry.key === route.key),
-          `${route.key} in ${placement}`,
-        ).toBe(true);
-      }
-    }
-  });
-
-  it('puts every reserved legal and Explore route somewhere a visitor can find it', () => {
-    // A reserved route nothing links to is a page that exists and cannot be
-    // reached — the mirror image of dead navigation. Explore pages are reached
-    // through their section landing and the mega menu rather than the footer,
-    // so the check is that a section or document is placed, not every leaf.
+describe('reserved routes stay reachable by their address', () => {
+  it('keeps every legal document and Explore section registered with a path', () => {
+    // R1: a reserved route is no longer PROMOTED in the header or footer until
+    // it is published, but it still exists — it answers its address with an
+    // honest publication-status page, and the human-readable sitemap lists it.
     for (const document of LEGAL_DOCUMENTS) {
-      expect(requireRoute(`legal.${document}`).placements).toContain('footer-legal');
+      const route = requireRoute(`legal.${document}`);
+      expect(route.availability).toBe('reserved');
+      expect(route.path).toBe(`/legal/${document}`);
     }
 
     for (const section of EXPLORE_SECTIONS) {
-      expect(requireRoute(`explore.${section}`).placements).toContain('footer-explore');
+      const route = requireRoute(`explore.${section}`);
+      expect(route.path).toBe(`/explore/${section}`);
     }
   });
 });

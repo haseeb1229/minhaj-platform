@@ -145,7 +145,7 @@ describe('under a synthetic indexable configuration', () => {
       .alternates?.languages;
 
     expect(languages).toMatchObject({
-      en: `${ORIGIN}/en/explore`,
+      en: `${ORIGIN}/explore`,
       ur: `${ORIGIN}/ur/explore`,
       ar: `${ORIGIN}/ar/explore`,
     });
@@ -212,7 +212,7 @@ describe('under a synthetic indexable configuration', () => {
       partition.urls.map((entry) => entry.loc),
     );
 
-    expect(urls).toContain(`${ORIGIN}/en`);
+    expect(urls).toContain(`${ORIGIN}/`);
     expect(urls).toContain(`${ORIGIN}/ar/explore`);
     expect(urls).toContain(`${ORIGIN}/ur/sitemap`);
 
@@ -268,7 +268,7 @@ describe('under a synthetic indexable configuration', () => {
     expect(child).toContain(
       '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     );
-    expect(child).toContain(`<loc>${ORIGIN}/en</loc>`);
+    expect(child).toContain(`<loc>${ORIGIN}/</loc>`);
   });
 
   it('resolves only partitions that genuinely exist', async () => {
@@ -288,8 +288,8 @@ describe('under a synthetic indexable configuration', () => {
 
     expect(rule?.disallow).toEqual([
       '/api/',
-      '/en/my',
-      '/en/admin',
+      '/my',
+      '/admin',
       '/ur/my',
       '/ur/admin',
       '/ar/my',

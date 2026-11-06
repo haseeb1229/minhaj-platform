@@ -10,9 +10,8 @@ import { requireLocale } from '@/config/route-locale';
  * THE PUBLIC SHELL.
  *
  * A ROUTE GROUP, so the chrome is scoped without changing a single URL:
- * `(public)` contributes no path segment, and `/en`, `/en/explore` and
- * `/en/legal/privacy` address exactly what they addressed before
- * (ROUTE_MAP.md §1.1 is untouched).
+ * `(public)` contributes no path segment: `/`, `/explore` and `/ur/explore`
+ * are addressed by the locale-path contract alone (ROUTE_MAP.md §1.1).
  *
  * WHY THE SPLIT EXISTS AT ALL. `/my`, `/admin` and the authentication surfaces
  * are not public pages with a header on them: they are private, `no-store`,
@@ -22,12 +21,17 @@ import { requireLocale } from '@/config/route-locale';
  * architecture forbids. They sit OUTSIDE this group and are unaffected by it.
  *
  * NOTHING HERE READS A SESSION. No cookie, no header, no user, no permission.
- * That is what lets the whole public tree render statically and be served from
- * one cache entry to every visitor, signed in or not (ARCHITECTURE.md §8.1).
- * A signed-in visitor sees the same public page; personalisation, when a phase
- * that owns some arrives, is composed in explicitly uncached islands beside it
- * (§8.2) — not by making this layout ask who is looking.
+ * Every visitor, signed in or not, receives the same document
+ * (ARCHITECTURE.md §8.1); personal state is composed in explicitly uncached
+ * islands after render (§8.2) — the header's account entry is one — never by
+ * making this layout ask who is looking.
+ *
+ * RENDERED PER REQUEST (Rebaseline R1): the header and footer promote only
+ * areas with published content, read from PUBLIC evidence
+ * (`@/composition/presence`) — not from anything about the visitor.
  */
+export const dynamic = 'force-dynamic';
+
 export default async function PublicLayout({
   children,
   params,

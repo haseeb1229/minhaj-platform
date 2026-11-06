@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-import { localeSchema } from '@minhaj/contracts';
+import { localeSchema, localizedPath } from '@minhaj/contracts';
 import { parseDuration, PHOTO_LIMITS } from '@minhaj/contracts/media';
 
 import { requirePermittedAction } from '@/composition/authorization';
@@ -137,8 +137,8 @@ export async function saveVideo(
       },
     );
 
-    destination = `/${locale}/admin/media/videos/${saved.id}`;
-    revalidatePath(`/${locale}/admin/media`, 'layout');
+    destination = localizedPath(locale, `/admin/media/videos/${saved.id}`);
+    revalidatePath(localizedPath(locale, '/admin/media'), 'layout');
     // Durable intent is already committed; this only indexes it sooner.
     indexAfterResponse();
   } catch (error) {
@@ -172,8 +172,8 @@ export async function saveSeries(
       },
     );
 
-    destination = `/${locale}/admin/media/series/${saved.id}`;
-    revalidatePath(`/${locale}/admin/media`, 'layout');
+    destination = localizedPath(locale, `/admin/media/series/${saved.id}`);
+    revalidatePath(localizedPath(locale, '/admin/media'), 'layout');
   } catch (error) {
     return rejected(error, 'media-save-series');
   }
@@ -204,8 +204,8 @@ export async function savePlaylist(
       },
     );
 
-    destination = `/${locale}/admin/media/playlists/${saved.id}`;
-    revalidatePath(`/${locale}/admin/media`, 'layout');
+    destination = localizedPath(locale, `/admin/media/playlists/${saved.id}`);
+    revalidatePath(localizedPath(locale, '/admin/media'), 'layout');
   } catch (error) {
     return rejected(error, 'media-save-playlist');
   }
@@ -248,8 +248,8 @@ export async function saveAudioTrack(
       },
     );
 
-    destination = `/${locale}/admin/media/audio/${saved.id}`;
-    revalidatePath(`/${locale}/admin/media`, 'layout');
+    destination = localizedPath(locale, `/admin/media/audio/${saved.id}`);
+    revalidatePath(localizedPath(locale, '/admin/media'), 'layout');
     // Durable intent is already committed; this only indexes it sooner.
     indexAfterResponse();
   } catch (error) {
@@ -282,8 +282,8 @@ export async function saveAudioSeries(
       },
     );
 
-    destination = `/${locale}/admin/media/audio/series/${saved.id}`;
-    revalidatePath(`/${locale}/admin/media`, 'layout');
+    destination = localizedPath(locale, `/admin/media/audio/series/${saved.id}`);
+    revalidatePath(localizedPath(locale, '/admin/media'), 'layout');
   } catch (error) {
     return rejected(error, 'media-save-audio-series');
   }
@@ -316,8 +316,11 @@ export async function changePlaylist(
         : { op, videoId: form.get('videoId') },
     );
 
-    destination = `/${locale}/admin/media/playlists/${encodeURIComponent(playlistId)}`;
-    revalidatePath(`/${locale}/admin/media`, 'layout');
+    destination = localizedPath(
+      locale,
+      `/admin/media/playlists/${encodeURIComponent(playlistId)}`,
+    );
+    revalidatePath(localizedPath(locale, '/admin/media'), 'layout');
   } catch (error) {
     return rejected(error, 'media-change-playlist');
   }
@@ -377,8 +380,8 @@ export async function savePhoto(
       },
     );
 
-    destination = `/${locale}/admin/media/photos/${saved.id}`;
-    revalidatePath(`/${locale}/admin/media`, 'layout');
+    destination = localizedPath(locale, `/admin/media/photos/${saved.id}`);
+    revalidatePath(localizedPath(locale, '/admin/media'), 'layout');
   } catch (error) {
     return rejected(error, 'media-save-photo');
   }
@@ -440,8 +443,8 @@ export async function saveGallery(
       },
     );
 
-    destination = `/${locale}/admin/media/galleries/${saved.id}`;
-    revalidatePath(`/${locale}/admin/media`, 'layout');
+    destination = localizedPath(locale, `/admin/media/galleries/${saved.id}`);
+    revalidatePath(localizedPath(locale, '/admin/media'), 'layout');
   } catch (error) {
     return rejected(error, 'media-save-gallery');
   }
@@ -485,8 +488,11 @@ export async function changeGallery(
           : { op, photoId: form.get('photoId') },
     );
 
-    destination = `/${locale}/admin/media/galleries/${encodeURIComponent(galleryId)}`;
-    revalidatePath(`/${locale}/admin/media`, 'layout');
+    destination = localizedPath(
+      locale,
+      `/admin/media/galleries/${encodeURIComponent(galleryId)}`,
+    );
+    revalidatePath(localizedPath(locale, '/admin/media'), 'layout');
   } catch (error) {
     return rejected(error, 'media-change-gallery');
   }

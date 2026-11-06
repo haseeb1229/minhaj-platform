@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
@@ -102,7 +103,8 @@ export async function generateMetadata({ params }: TopicParams): Promise<Metadat
     locale,
     contentLocales: topic.translatedLocales,
     primaryLocale: 'en',
-    pathFor: (target) => `/${target}/topics/${encodeURIComponent(topic.slug)}`,
+    pathFor: (target) =>
+      localizedPath(target, `/topics/${encodeURIComponent(topic.slug)}`),
     title: topic.label.name,
     ...(topic.label.description === null
       ? {}
@@ -132,7 +134,7 @@ const SCHOLARLY_SECTIONS: readonly ScholarlyKind[] = [
 /** A topic as a chip: its hub, its name, and its language when it fell back. */
 function chipOf(locale: Locale, topic: TopicView) {
   return {
-    href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+    href: localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`),
     text: topic.label.name,
     ...(topic.label.resolvedLocale === locale
       ? {}
@@ -200,10 +202,13 @@ export default async function TopicPage({ params }: TopicParams) {
           <Breadcrumbs
             label={shell('nav.breadcrumbs')}
             trail={[
-              { href: `/${locale}`, text: shell('nav.home') },
-              { href: `/${locale}/topics`, text: t('title') },
+              { href: localizedPath(locale, ''), text: shell('nav.home') },
+              { href: localizedPath(locale, '/topics'), text: t('title') },
               ...ancestors.map((ancestor) => ({
-                href: `/${locale}/topics/${encodeURIComponent(ancestor.slug)}`,
+                href: localizedPath(
+                  locale,
+                  `/topics/${encodeURIComponent(ancestor.slug)}`,
+                ),
                 text: ancestor.label.name,
               })),
               { text: topic.label.name },
@@ -233,7 +238,7 @@ export default async function TopicPage({ params }: TopicParams) {
 
         <form
           method="get"
-          action={`/${locale}/search`}
+          action={localizedPath(locale, '/search')}
           role="search"
           aria-label={t('searchWithin')}
           className="flex w-full max-w-2xl flex-col gap-2 pt-1"
@@ -259,7 +264,10 @@ export default async function TopicPage({ params }: TopicParams) {
                 id="topic-map"
                 heading={t('hub.map')}
                 intro={t('hub.mapIntro')}
-                action={{ href: `/${locale}/topics`, text: t('hub.allTopics') }}
+                action={{
+                  href: localizedPath(locale, '/topics'),
+                  text: t('hub.allTopics'),
+                }}
               />
               <div className="flex flex-col gap-5">
                 {map.map((group) => (
@@ -267,7 +275,7 @@ export default async function TopicPage({ params }: TopicParams) {
                     key={group.key}
                     className="grid gap-2 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-6"
                   >
-                    <h3 className="text-caption pt-2.5 font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-foreground-muted)] uppercase">
+                    <h3 className="text-caption pt-2.5 font-semibold tracking-[var(--tracking-eyebrow)] text-foreground-muted uppercase">
                       {group.label}
                     </h3>
                     <TopicChips
@@ -333,7 +341,10 @@ export default async function TopicPage({ params }: TopicParams) {
                     id="topic-books"
                     heading={t('books')}
                     action={{
-                      href: `/${locale}/library/books?topic=${encodeURIComponent(topic.id)}`,
+                      href: localizedPath(
+                        locale,
+                        `/library/books?topic=${encodeURIComponent(topic.id)}`,
+                      ),
                       text: t('allBooks'),
                     }}
                   />
@@ -413,7 +424,10 @@ export default async function TopicPage({ params }: TopicParams) {
               heading={t('videos')}
               headingId="topic-videos"
               more={{
-                href: `/${locale}/watch/topics/${encodeURIComponent(topic.slug)}`,
+                href: localizedPath(
+                  locale,
+                  `/watch/topics/${encodeURIComponent(topic.slug)}`,
+                ),
                 text: t('allVideos'),
               }}
             />
@@ -423,7 +437,10 @@ export default async function TopicPage({ params }: TopicParams) {
               heading={t('audio')}
               headingId="topic-audio"
               more={{
-                href: `/${locale}/listen/lectures?topic=${encodeURIComponent(topic.id)}`,
+                href: localizedPath(
+                  locale,
+                  `/listen/lectures?topic=${encodeURIComponent(topic.id)}`,
+                ),
                 text: t('allAudio'),
               }}
             />
@@ -481,7 +498,7 @@ function Band({
   return (
     <div className="hidden flex-col gap-[var(--space-stack)] has-[section]:flex">
       <div className="flex flex-col gap-1.5">
-        <p className="text-caption flex items-center gap-3 font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase after:h-px after:flex-1 after:bg-[color:var(--color-accent-rule)]">
+        <p className="text-caption flex items-center gap-3 font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase after:h-px after:flex-1 after:bg-accent-rule">
           {label}
         </p>
         {summary}

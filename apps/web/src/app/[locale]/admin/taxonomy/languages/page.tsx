@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { requireAdminPage } from '@/composition/authorization';
@@ -65,7 +66,7 @@ export default async function ContentLanguagesPage({
   const page = await requireAdminPage(
     locale,
     'taxonomy.read',
-    `/${locale}/admin/taxonomy/languages`,
+    localizedPath(locale, '/admin/taxonomy/languages'),
   );
   const copy = await taxonomyCopy(locale);
   const mayAdminister = page.authorization.can('taxonomy.administer');
@@ -89,13 +90,13 @@ export default async function ContentLanguagesPage({
       : (languages.find((language) => language.code === selectedCode) ?? null);
 
   const editHref = (code: string): string =>
-    `/${locale}/admin/taxonomy/languages?code=${encodeURIComponent(code)}`;
+    localizedPath(locale, `/admin/taxonomy/languages?code=${encodeURIComponent(code)}`);
 
   return (
     <main className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('taxonomy.languages.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="text-sm text-foreground-muted">
           {t('taxonomy.languages.description')}
         </p>
       </header>

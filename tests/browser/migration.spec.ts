@@ -19,6 +19,7 @@ import {
   enrolSecondFactorInBrowser,
   expect,
   grantRole,
+  localizedPath,
   privilegedSession,
   registerAndSignIn,
   test,
@@ -317,7 +318,8 @@ async function account(browser: Browser, index: number, prefix: string): Promise
   return { page, id: await accountIdFor(sql, email) };
 }
 
-const path = (rest = '', locale: UiLocale = 'en') => `/${locale}/admin/migration${rest}`;
+const path = (rest = '', locale: UiLocale = 'en') =>
+  localizedPath(locale, `/admin/migration${rest}`);
 const stagedPath = (locale: UiLocale = 'en') =>
   path(`/staging/${ids.hostileStaged}`, locale);
 const snapshotRoute = `/api/admin/migration/snapshots/${ids.hostileSnapshot}`;
@@ -414,7 +416,7 @@ test.describe('Migration administration access', () => {
     test.setTimeout(240_000);
     for (const target of [path('/sources'), stagedPath()]) {
       await page.goto(target);
-      await expect(page, target).toHaveURL(/\/en\/signin\?returnTo=/u);
+      await expect(page, target).toHaveURL(/\/signin\?returnTo=/u);
     }
     for (const route of [snapshotRoute, runRoute]) {
       const response = await page.request.get(route, { maxRedirects: 0 });
@@ -426,7 +428,7 @@ test.describe('Migration administration access', () => {
   test('an account without migration.read meets a 404 everywhere', async () => {
     test.setTimeout(300_000);
     const page = stranger.page;
-    expect((await page.goto('/en/admin'))?.status()).toBe(200);
+    expect((await page.goto('/admin'))?.status()).toBe(200);
     await expect(
       page.getByRole('link', { name: copy('admin.nav.migration'), exact: true }),
     ).toHaveCount(0);

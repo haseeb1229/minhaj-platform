@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Locale } from '@minhaj/contracts';
 import type { PublicPageSummary } from '@minhaj/contracts/editorial';
 
@@ -35,11 +36,11 @@ export function ExplorePageCard({
           image={image}
           alt={translation.leadAlt ?? ''}
           lang={translation.languageCode}
-          className="-mx-5 -mt-5 mb-1 w-[calc(100%+2.5rem)] max-w-none rounded-t-[var(--radius-panel)]"
+          className="-mx-5 -mt-5 mb-1 w-[calc(100%+2.5rem)] max-w-none rounded-t-panel"
         />
       )}
       {eyebrow === undefined ? null : (
-        <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+        <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
           {eyebrow}
         </p>
       )}
@@ -48,13 +49,16 @@ export function ExplorePageCard({
         lang={translation.languageCode}
         dir={direction}
       >
-        <a href={`/${locale}${page.routeBinding}`} className={CARD_TITLE_LINK}>
+        <a
+          href={localizedPath(locale, `${page.routeBinding}`)}
+          className={CARD_TITLE_LINK}
+        >
           {translation.title}
         </a>
       </Heading>
       {translation.excerpt === '' ? null : (
         <p
-          className="line-clamp-3 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+          className="line-clamp-3 text-sm wrap-anywhere text-foreground-muted"
           lang={translation.languageCode}
           dir={direction}
         >

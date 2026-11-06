@@ -13,6 +13,7 @@ import {
   enrolSecondFactorInBrowser,
   expect,
   grantRole,
+  localizedPath,
   privilegedSession,
   registerAndSignIn,
   test,
@@ -511,7 +512,7 @@ test.describe('while no collection is activated', () => {
     page,
   }) => {
     for (const locale of LOCALES) {
-      const response = await page.goto(`/${locale}/hadith`);
+      const response = await page.goto(localizedPath(locale, '/hadith'));
       expect(response?.status(), locale).toBe(200);
       expect(response?.headers()['set-cookie'], locale).toBeUndefined();
       await expect(page.getByText(COPY[locale].unavailable.body)).toBeVisible();
@@ -525,22 +526,22 @@ test.describe('while no collection is activated', () => {
       // Nothing to enter: no section card, no number, no sample, no search —
       // only the way home.
       const main = page.getByRole('main');
-      expect(await hrefsIn(page)).toContain(`/${locale}`);
+      expect(await hrefsIn(page)).toContain(localizedPath(locale, ''));
       expect((await hrefsIn(page)).filter((href) => href.includes('/hadith'))).toEqual(
         [],
       );
       await expect(main).not.toContainText('NON_HADITH_FIXTURE');
       await expect(main).not.toContainText(/\d/);
       await expect(main.getByRole('search')).toHaveCount(0);
-      await expectNoAbsentLinks(page, `/${locale}/hadith`);
+      await expectNoAbsentLinks(page, localizedPath(locale, '/hadith'));
     }
 
     // Hadith search, too, is honestly unavailable rather than an empty search.
-    const search = await page.goto(`/en/hadith/search?q=${WORD}`);
+    const search = await page.goto(`/hadith/search?q=${WORD}`);
     expect(search?.status()).toBe(200);
     expect(search?.headers()['set-cookie']).toBeUndefined();
     await expect(page.getByText(COPY.en.unavailable.body)).toBeVisible();
-    await expect(page.getByRole('search')).toHaveCount(0);
+    await expect(page.getByRole('main').getByRole('search')).toHaveCount(0);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
       'content',
       /noindex/,
@@ -560,7 +561,7 @@ test.describe('while no collection is activated', () => {
       'research',
       'courses',
     ]) {
-      const response = await page.goto(`/en/hadith/${section}`);
+      const response = await page.goto(`/hadith/${section}`);
       expect(response?.status(), section).toBe(200);
       expect(response?.headers()['set-cookie'], section).toBeUndefined();
       await expect(page.getByText(COPY.en.unavailable.body), section).toBeVisible();
@@ -576,17 +577,17 @@ test.describe('while no collection is activated', () => {
     request,
   }) => {
     for (const missing of [
-      `/en${COLLECTION}/1`,
+      `${COLLECTION}/1`,
       `/ur${COLLECTION}/1`,
       `/ar${COLLECTION}/1`,
-      `/en/hadith/collections/${slug.collection}`,
-      `/en/hadith/collections/${slug.collection}/books`,
-      `/en${BOOK}`,
-      `/en${CHAPTER}`,
-      `/en/hadith/sciences/${slug.science}`,
-      `/en/hadith/topics/${slug.topic}`,
-      '/en/hadith/articles',
-      '/en/hadith/scholars',
+      `/hadith/collections/${slug.collection}`,
+      `/hadith/collections/${slug.collection}/books`,
+      BOOK,
+      CHAPTER,
+      `/hadith/sciences/${slug.science}`,
+      `/hadith/topics/${slug.topic}`,
+      '/hadith/articles',
+      '/hadith/scholars',
     ]) {
       const response = await request.get(missing, { maxRedirects: 0 });
       expect(response.status(), missing).toBe(404);
@@ -617,35 +618,35 @@ test.describe('a fixture activation', () => {
   }) => {
     test.setTimeout(120_000);
     for (const target of [
-      '/en/hadith',
-      '/en/hadith/introduction',
-      '/en/hadith/collections',
-      `/en/hadith/collections/${slug.collection}`,
-      `/en/hadith/collections/${slug.collection}/books`,
-      `/en${BOOK}`,
-      `/en${CHAPTER}`,
-      `/en${COLLECTION}/1`,
-      '/en/hadith/browse',
-      `/en/hadith/search?q=${encodeURIComponent(NAME.collection)}`,
-      `/en/hadith/topics/${slug.topic}`,
-      '/en/hadith/sciences',
-      `/en/hadith/sciences/${slug.science}`,
-      '/en/hadith/commentary',
-      '/en/hadith/books',
-      '/en/hadith/videos',
-      '/en/hadith/research',
-      '/en/hadith/courses',
+      '/hadith',
+      '/hadith/introduction',
+      '/hadith/collections',
+      `/hadith/collections/${slug.collection}`,
+      `/hadith/collections/${slug.collection}/books`,
+      BOOK,
+      CHAPTER,
+      `${COLLECTION}/1`,
+      '/hadith/browse',
+      `/hadith/search?q=${encodeURIComponent(NAME.collection)}`,
+      `/hadith/topics/${slug.topic}`,
+      '/hadith/sciences',
+      `/hadith/sciences/${slug.science}`,
+      '/hadith/commentary',
+      '/hadith/books',
+      '/hadith/videos',
+      '/hadith/research',
+      '/hadith/courses',
     ])
       await visitFixture(page, target);
 
     for (const locale of ['ur', 'ar'] as const) {
       for (const target of ['/hadith', `${COLLECTION}/1`, '/hadith/browse'])
-        await visitFixture(page, `/${locale}${target}`, locale);
+        await visitFixture(page, localizedPath(locale, target), locale);
     }
   });
 
   test('the landing offers only what exists', async ({ page }) => {
-    await visitFixture(page, '/en/hadith');
+    await visitFixture(page, '/hadith');
     await expect(page.getByText(COPY.en.unavailable.body)).toHaveCount(0);
     const hrefs = await hrefsIn(page);
     for (const section of [
@@ -659,19 +660,28 @@ test.describe('a fixture activation', () => {
       'research',
       'courses',
     ])
-      expect(hrefs, section).toContain(`/en/hadith/${section}`);
-    expect(hrefs).toContain(`/en/hadith/collections/${slug.collection}`);
-    expect(hrefs).toContain('/en/topics/hadith');
+      expect(hrefs, section).toContain(`/hadith/${section}`);
+    expect(hrefs).toContain(`/hadith/collections/${slug.collection}`);
+    expect(hrefs).toContain('/topics/hadith');
     // No featured narration, no statistics.
     await expect(page.getByRole('main')).not.toContainText('NON_HADITH_FIXTURE_TEXT');
-    await expect(page.getByRole('search')).toHaveCount(1);
+    // Hadith's own search, beside the site-wide one in the header.
+    await expect(page.getByRole('main').getByRole('search')).toHaveCount(1);
+
+    // A FIXTURE COLLECTION IS NEVER PROMOTED (Rebaseline R1): Hadith appears in
+    // the shell only for an APPROVED corpus — not in the header, the drawer or
+    // the footer — while the fixture still reads at its address.
+    await expect(page.getByRole('banner').locator('a[href="/hadith"]')).toHaveCount(0);
+    await expect(page.getByRole('contentinfo').locator('a[href="/hadith"]')).toHaveCount(
+      0,
+    );
   });
 
   test('a citation shows its original, chain and gradings exactly as sourced, in every locale', async ({
     page,
   }) => {
     for (const locale of LOCALES) {
-      await visitFixture(page, `/${locale}${COLLECTION}/1`, locale);
+      await visitFixture(page, localizedPath(locale, `${COLLECTION}/1`), locale);
 
       // The ORIGINAL, in its own labelled group, Arabic and right-to-left in
       // every interface locale.
@@ -740,7 +750,7 @@ test.describe('a fixture activation', () => {
   test('the citation page is a heading outline a screen reader can walk', async ({
     page,
   }) => {
-    await visitFixture(page, `/en${COLLECTION}/1`);
+    await visitFixture(page, `${COLLECTION}/1`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(citationName(1));
     const outline = await page
       .locator('main article[aria-labelledby="hadith-heading"] :is(h2, h3)')
@@ -767,42 +777,42 @@ test.describe('a fixture activation', () => {
     // The topic links to the Hadith topic view.
     await expect(page.getByRole('link', { name: NAME.topic })).toHaveAttribute(
       'href',
-      `/en/hadith/topics/${slug.topic}`,
+      `/hadith/topics/${slug.topic}`,
     );
   });
 
   test('structure is read chapter → citation by keyboard alone, with a visible focus', async ({
     page,
   }) => {
-    await visitFixture(page, `/en${CHAPTER}`);
+    await visitFixture(page, CHAPTER);
     const list = page.getByRole('list', { name: 'Citations in this chapter' });
     await expect(list.getByRole('listitem')).toHaveCount(1);
     // The structural page links to the SHORT canonical citation, never a
     // deeper address of its own.
     const link = list.getByRole('link', { name: citationName(1) });
-    await expect(link).toHaveAttribute('href', `/en${COLLECTION}/1`);
+    await expect(link).toHaveAttribute('href', `${COLLECTION}/1`);
     // Number 3's record sits in this chapter too, but is not verified now.
     await expect(page.getByRole('main')).not.toContainText('NON_HADITH_FIXTURE_TEXT_4');
 
     await tabTo(page, link);
     await expectVisibleFocus(link);
     await page.keyboard.press('Enter');
-    await page.waitForURL(new RegExp(`/en${COLLECTION}/1$`));
+    await page.waitForURL(new RegExp(`${COLLECTION}/1$`));
     await expect(page.getByRole('note')).toHaveText(COPY.en.fixture);
 
     const book = page
       .locator('section[aria-labelledby="hadith-facts"]')
       .getByRole('link', { name: NAME.book });
-    await expect(book).toHaveAttribute('href', `/en${BOOK}`);
+    await expect(book).toHaveAttribute('href', BOOK);
     await tabTo(page, book);
     await expectVisibleFocus(book);
     await page.keyboard.press('Enter');
-    await page.waitForURL(new RegExp(`/en${BOOK}$`));
+    await page.waitForURL(new RegExp(`${BOOK}$`));
     await expect(
       page
         .getByRole('list', { name: 'Chapters' })
         .getByRole('link', { name: NAME.chapter }),
-    ).toHaveAttribute('href', `/en${CHAPTER}`);
+    ).toHaveAttribute('href', CHAPTER);
   });
 
   test('a conflicted citation and an unverified correction are absent everywhere', async ({
@@ -810,86 +820,86 @@ test.describe('a fixture activation', () => {
     request,
   }) => {
     for (const number of [2, 3, 4]) {
-      const response = await request.get(`/en${COLLECTION}/${String(number)}`, {
+      const response = await request.get(`${COLLECTION}/${String(number)}`, {
         maxRedirects: 0,
       });
       expect(response.status(), String(number)).toBe(404);
     }
     // The other edition's book holds only the conflicting candidate: absent.
     const otherBook = await request.get(
-      `/en/hadith/collections/${slug.collection}/books/${slug.bookB}`,
+      `/hadith/collections/${slug.collection}/books/${slug.bookB}`,
       { maxRedirects: 0 },
     );
     expect(otherBook.status()).toBe(404);
 
     const notPublic = /NON_HADITH_FIXTURE_TEXT_[2345]/;
     for (const [target, label] of [
-      ['/en/hadith/browse', 'Citations'],
-      [`/en/hadith/topics/${slug.topic}`, NAME.topic],
+      ['/hadith/browse', 'Citations'],
+      [`/hadith/topics/${slug.topic}`, NAME.topic],
     ] as const) {
       await visitFixture(page, target);
       const list = page.getByRole('list', { name: label, exact: true });
       await expect(list.getByRole('listitem'), target).toHaveCount(1);
       await expect(list.getByRole('link', { name: citationName(1) })).toHaveAttribute(
         'href',
-        `/en${COLLECTION}/1`,
+        `${COLLECTION}/1`,
       );
       await expect(page.getByRole('main'), target).not.toContainText(notPublic);
       const hrefs = await hrefsIn(page);
       for (const number of [2, 3, 4])
-        expect(hrefs, target).not.toContain(`/en${COLLECTION}/${String(number)}`);
+        expect(hrefs, target).not.toContain(`${COLLECTION}/${String(number)}`);
     }
 
     // The book lists the citations placed in it and in NO chapter. Number 2's
     // record is the only chapterless one mapped, and it is conflicted: the
     // book offers its chapter and no citation list at all.
-    await visitFixture(page, `/en${BOOK}`);
+    await visitFixture(page, BOOK);
     await expect(page.getByRole('list', { name: 'Citations in this book' })).toHaveCount(
       0,
     );
     await expect(page.getByRole('main')).not.toContainText(notPublic);
     const bookHrefs = await hrefsIn(page);
-    expect(bookHrefs).toContain(`/en${CHAPTER}`);
+    expect(bookHrefs).toContain(CHAPTER);
     for (const number of [2, 3, 4])
-      expect(bookHrefs).not.toContain(`/en${COLLECTION}/${String(number)}`);
+      expect(bookHrefs).not.toContain(`${COLLECTION}/${String(number)}`);
 
-    await visitFixture(page, `/en/hadith/collections/${slug.collection}/books`);
+    await visitFixture(page, `/hadith/collections/${slug.collection}/books`);
     const books = await hrefsIn(page);
-    expect(books).toContain(`/en${BOOK}`);
+    expect(books).toContain(BOOK);
     expect(books.some((href) => href.includes(slug.bookB))).toBe(false);
 
     // The topic hub composes the same single citation, under the banner.
-    const hub = await page.goto(`/en/topics/${slug.topic}`);
+    const hub = await page.goto(`/topics/${slug.topic}`);
     expect(hub?.status()).toBe(200);
     await expect(
       page.getByRole('note').filter({ hasText: COPY.en.fixture }),
     ).toBeVisible();
     const hubHrefs = await hrefsIn(page);
-    expect(hubHrefs).toContain(`/en${COLLECTION}/1`);
-    expect(hubHrefs).toContain(`/en/hadith/topics/${slug.topic}`);
+    expect(hubHrefs).toContain(`${COLLECTION}/1`);
+    expect(hubHrefs).toContain(`/hadith/topics/${slug.topic}`);
     for (const number of [2, 3])
-      expect(hubHrefs).not.toContain(`/en${COLLECTION}/${String(number)}`);
+      expect(hubHrefs).not.toContain(`${COLLECTION}/${String(number)}`);
   });
 
   test('the study pages render the published fixture works', async ({ page }) => {
-    await visitFixture(page, '/en/hadith/sciences');
+    await visitFixture(page, '/hadith/sciences');
     await page.getByRole('link', { name: NAME.science }).click();
-    await page.waitForURL(`**/en/hadith/sciences/${slug.science}`);
+    await page.waitForURL(`**/hadith/sciences/${slug.science}`);
     await expect(page.getByRole('note')).toHaveText(COPY.en.fixture);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(NAME.science);
     await expect(page.getByRole('main')).toContainText(TEXT.science);
 
-    await visitFixture(page, '/en/hadith/commentary');
+    await visitFixture(page, '/hadith/commentary');
     const work = page.getByRole('article', { name: NAME.commentary });
     await expect(work).toBeVisible();
     await expect(work).toContainText('1 entry');
 
-    await visitFixture(page, '/en/hadith/collections');
+    await visitFixture(page, '/hadith/collections');
     await expect(
       page.getByRole('list', { name: 'Collections' }).getByRole('listitem'),
     ).toHaveCount(1);
     await page.getByRole('link', { name: NAME.collection }).click();
-    await page.waitForURL(`**/en/hadith/collections/${slug.collection}`);
+    await page.waitForURL(`**/hadith/collections/${slug.collection}`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(NAME.collection);
     await expect(
       page.locator('section[aria-labelledby="collection-sources"]'),
@@ -907,7 +917,7 @@ test.describe('a fixture activation', () => {
       .poll(
         async () => {
           const response = await page.goto(
-            `/en/hadith/search?q=${encodeURIComponent(WORD)}`,
+            `/hadith/search?q=${encodeURIComponent(WORD)}`,
           );
           expect(response?.status()).toBe(200);
           await page.getByRole('heading', { level: 1 }).waitFor();
@@ -917,7 +927,7 @@ test.describe('a fixture activation', () => {
       )
       .toContain(citationName(1));
 
-    expect(new URL(page.url()).pathname).toBe('/en/hadith/search');
+    expect(new URL(page.url()).pathname).toBe('/hadith/search');
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
       'content',
       /noindex/,
@@ -934,10 +944,10 @@ test.describe('a fixture activation', () => {
     ).toContainText(`1 result for “${WORD}”`);
     const hit = page.getByRole('link', { name: citationName(1) });
     await expect(hit).toHaveCount(1);
-    await expect(hit).toHaveAttribute('href', `/en${COLLECTION}/1`);
+    await expect(hit).toHaveAttribute('href', `${COLLECTION}/1`);
     const hrefs = await hrefsIn(page);
     for (const number of [2, 3, 4])
-      expect(hrefs).not.toContain(`/en${COLLECTION}/${String(number)}`);
+      expect(hrefs).not.toContain(`${COLLECTION}/${String(number)}`);
     await expect(page.getByRole('main')).not.toContainText(
       /NON_HADITH_FIXTURE_TEXT_[234]/,
     );
@@ -967,8 +977,8 @@ test.describe('a fixture activation', () => {
     for (const width of [320, 640]) {
       await page.setViewportSize({ width, height: 800 });
       for (const target of [
-        ...LOCALES.map((locale) => `/${locale}${COLLECTION}/1`),
-        `/en${CHAPTER}`,
+        ...LOCALES.map((locale) => localizedPath(locale, `${COLLECTION}/1`)),
+        CHAPTER,
         '/ar/hadith/browse',
       ]) {
         const response = await page.goto(target);
@@ -988,7 +998,7 @@ test.describe('a fixture activation', () => {
     const ceiling = { 'no-preference': 0, reduce: 0.000_01 } as const;
     for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       await page.emulateMedia({ reducedMotion });
-      await page.goto(`/en${COLLECTION}/1`);
+      await page.goto(`${COLLECTION}/1`);
       const motion = await page.evaluate(() =>
         [
           ...document.querySelectorAll(
@@ -1020,7 +1030,7 @@ test.describe('a fixture activation', () => {
     // Phase 21: the citation carries the personal island, and must still be
     // ONE shared document — a fresh reader and a fresh anonymous visitor, each
     // on a client address of their own.
-    const target = `/en${COLLECTION}/1`;
+    const target = `${COLLECTION}/1`;
     const anonymous = await browser.newContext({
       baseURL: baseUrl(),
       extraHTTPHeaders: { 'x-forwarded-for': '100.64.240.1' },
@@ -1062,7 +1072,7 @@ test.describe('a fixture activation', () => {
     );
     await expect(island.getByRole('link', { name: 'Sign in to save' })).toHaveAttribute(
       'href',
-      `/en/signin?returnTo=${encodeURIComponent(target)}`,
+      `/signin?returnTo=${encodeURIComponent(target)}`,
     );
   });
 });
@@ -1111,8 +1121,8 @@ test.describe('Hadith administration', () => {
   test('an anonymous visitor is sent to sign in; an account without hadith.read is refused', async ({
     page,
   }) => {
-    await page.goto(`/en/admin/hadith/records/${ids.publicRecord}`);
-    await page.waitForURL(/\/en\/signin\?returnTo=/);
+    await page.goto(`/admin/hadith/records/${ids.publicRecord}`);
+    await page.waitForURL(/\/signin\?returnTo=/);
 
     for (const surface of [
       'records',
@@ -1123,25 +1133,25 @@ test.describe('Hadith administration', () => {
       'commentary',
       'sciences',
     ]) {
-      const response = await nobody.goto(`/en/admin/hadith/${surface}`);
+      const response = await nobody.goto(`/admin/hadith/${surface}`);
       expect(response?.status(), surface).toBe(404);
     }
   });
 
   test('hadith.read reads records and their evidence, and is offered nothing to change', async () => {
-    const list = await reader.goto('/en/admin/hadith/records');
+    const list = await reader.goto('/admin/hadith/records');
     expect(list?.status()).toBe(200);
     const main = reader.getByRole('main');
     await expect(main.getByRole('link', { name: LONG_REFERENCE })).toHaveAttribute(
       'href',
-      `/en/admin/hadith/records/${ids.publicRecord}`,
+      `/admin/hadith/records/${ids.publicRecord}`,
     );
     await expect(main.getByRole('heading', { name: 'New record' })).toHaveCount(0);
 
     // THE ADMINISTRATION IS NEVER CACHED OR INDEXED.
     for (const target of [
-      '/en/admin/hadith/records',
-      `/en/admin/hadith/records/${ids.publicRecord}`,
+      '/admin/hadith/records',
+      `/admin/hadith/records/${ids.publicRecord}`,
     ]) {
       const response = await reader.context().request.get(target);
       expect(response.status(), target).toBe(200);
@@ -1154,7 +1164,7 @@ test.describe('Hadith administration', () => {
       /noindex/,
     );
 
-    const detail = await reader.goto(`/en/admin/hadith/records/${ids.publicRecord}`);
+    const detail = await reader.goto(`/admin/hadith/records/${ids.publicRecord}`);
     expect(detail?.status()).toBe(200);
     await expect(reader.locator('meta[name="robots"]')).toHaveAttribute(
       'content',
@@ -1173,7 +1183,7 @@ test.describe('Hadith administration', () => {
 
     // Asking by address shows nothing either.
     for (const query of ['?canonical=1', '?translation=new']) {
-      await reader.goto(`/en/admin/hadith/records/${ids.publicRecord}${query}`);
+      await reader.goto(`/admin/hadith/records/${ids.publicRecord}${query}`);
       await expect(main.getByRole('heading', { name: 'Canonical changes' })).toHaveCount(
         0,
       );
@@ -1183,7 +1193,7 @@ test.describe('Hadith administration', () => {
     }
 
     // Conflict evidence is SHOWN to a reader, and nothing resolves it.
-    await reader.goto(`/en/admin/hadith/records/${ids.conflictedRecord}`);
+    await reader.goto(`/admin/hadith/records/${ids.conflictedRecord}`);
     const conflicts = main.locator('section[aria-labelledby="record-conflicts"]');
     await expect(conflicts).toContainText(
       'Records declaring the same citation number disagree.',
@@ -1196,7 +1206,7 @@ test.describe('Hadith administration', () => {
 
   test('hadith.administer adds a draft translation, and is offered no canonical change', async () => {
     const page = administrator;
-    await page.goto(`/en/admin/hadith/records/${ids.publicRecord}`);
+    await page.goto(`/admin/hadith/records/${ids.publicRecord}`);
     await page.getByRole('link', { name: 'Add a translation' }).click();
     await page.waitForURL(/translation=new/);
     await page.locator('#new-translation-language').selectOption('en');
@@ -1215,13 +1225,13 @@ test.describe('Hadith administration', () => {
     if (anonymous === undefined) throw new Error('No browser for the public check.');
     contexts.push(anonymous);
     const visitor = await anonymous.newPage();
-    await visitor.goto(`/en${COLLECTION}/1`);
+    await visitor.goto(`${COLLECTION}/1`);
     await expect(visitor.getByRole('main')).toContainText(TEXT.translation);
     await expect(visitor.getByRole('main')).not.toContainText(TEXT.adminTranslation);
 
     // And the canonical record offers this account no control at all.
     for (const query of ['', '?canonical=1']) {
-      await page.goto(`/en/admin/hadith/records/${ids.canonicalRecord}${query}`);
+      await page.goto(`/admin/hadith/records/${ids.canonicalRecord}${query}`);
       await expect(
         page.getByRole('main').getByRole('heading', { name: 'Canonical changes' }),
       ).toHaveCount(0);
@@ -1241,7 +1251,7 @@ test.describe('Hadith administration', () => {
   test('hadith.editCanonical verifies and maps only behind its own step-up', async () => {
     test.setTimeout(240_000);
     const page = canonical;
-    const recordUrl = `/en/admin/hadith/records/${ids.canonicalRecord}?canonical=1`;
+    const recordUrl = `/admin/hadith/records/${ids.canonicalRecord}?canonical=1`;
     const verifications = () =>
       sql.query<{ version: number; actorId: string; stepUpGrantId: string }>(
         `SELECT [version],[actorId],[stepUpGrantId] FROM [dbo].[HadithVerification] WHERE [hadithId]=N'${ids.canonicalRecord}';`,
@@ -1274,7 +1284,7 @@ test.describe('Hadith administration', () => {
     const refusal = 'Confirm it is you with the form above, then submit again.';
 
     // Entered on purpose, behind a warning, with the purpose's own prompt.
-    await page.goto(`/en/admin/hadith/records/${ids.canonicalRecord}`);
+    await page.goto(`/admin/hadith/records/${ids.canonicalRecord}`);
     await page
       .locator('section[aria-labelledby="canonical"]')
       .getByRole('link', { name: 'Begin' })
@@ -1355,25 +1365,25 @@ test.describe('Hadith administration', () => {
     });
 
     // The citation is public now, under the banner.
-    await visitFixture(page, `/en${COLLECTION}/4`);
+    await visitFixture(page, `${COLLECTION}/4`);
     await expect(
       page.locator('[aria-labelledby="hadith-original-text"] p[lang]'),
     ).toHaveText(TEXT.canonical);
     // And its book — where it sits in no chapter — now lists it, by its short
     // canonical address.
-    await visitFixture(page, `/en${BOOK}`);
+    await visitFixture(page, BOOK);
     const listed = page.getByRole('list', { name: 'Citations in this book' });
     await expect(listed.getByRole('listitem')).toHaveCount(1);
     await expect(listed.getByRole('link', { name: citationName(4) })).toHaveAttribute(
       'href',
-      `/en${COLLECTION}/4`,
+      `${COLLECTION}/4`,
     );
   });
 
   test('conflict evidence is shown to the canonical editor, and nothing resolves it', async () => {
     const page = canonical;
     for (const record of [ids.conflictingRecord, ids.conflictedRecord]) {
-      await page.goto(`/en/admin/hadith/records/${record}?canonical=1`);
+      await page.goto(`/admin/hadith/records/${record}?canonical=1`);
       const main = page.getByRole('main');
       await expect(main.getByText('Citation blocked by conflict evidence')).toBeVisible();
       const conflicts = main.locator('section[aria-labelledby="record-conflicts"]');
@@ -1398,7 +1408,7 @@ test.describe('Hadith administration', () => {
         `SELECT COUNT_BIG(*) AS [value] FROM [dbo].[HadithConflict] WHERE [collectionId]=N'${ids.collection}' AND [citationNumber]=2;`,
       ),
     ).toBe(1);
-    const blocked = await page.goto(`/en${COLLECTION}/2`);
+    const blocked = await page.goto(`${COLLECTION}/2`);
     expect(blocked?.status()).toBe(404);
   });
 });

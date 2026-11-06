@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
@@ -45,15 +46,15 @@ export default async function SearchLimitedPage({
         <Breadcrumbs
           label={shell('nav.breadcrumbs')}
           trail={[
-            { href: `/${locale}`, text: shell('nav.home') },
-            { href: `/${locale}/search`, text: t('title') },
+            { href: localizedPath(locale, ''), text: shell('nav.home') },
+            { href: localizedPath(locale, '/search'), text: t('title') },
             { text: t('limitedTitle') },
           ]}
         />
         <PageHeading>{t('limitedTitle')}</PageHeading>
         <Alert tone="warning">{t('rateLimited')}</Alert>
         <p>
-          <TextLink href={`/${locale}/search`}>{t('backToSearch')}</TextLink>
+          <TextLink href={localizedPath(locale, '/search')}>{t('backToSearch')}</TextLink>
         </p>
       </div>
     </Container>

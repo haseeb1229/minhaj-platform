@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
@@ -252,8 +253,8 @@ export async function ScholarlyListing({
     <ListingFrame
       breadcrumbLabel={shell('nav.breadcrumbs')}
       trail={[
-        { href: `/${locale}`, text: shell('nav.home') },
-        { href: `/${locale}/library`, text: t('title') },
+        { href: localizedPath(locale, ''), text: shell('nav.home') },
+        { href: localizedPath(locale, '/library'), text: t('title') },
         { text: title },
       ]}
       title={title}
@@ -425,16 +426,21 @@ function Contributors({
 
   return (
     <RecordSection id="scholarly-contributors" heading={t('contributors')}>
-      <ul className="flex flex-col divide-y divide-[color:var(--color-border)] text-sm">
+      <ul className="flex flex-col divide-y divide-border text-sm">
         {rows.map((row) => (
           <li
             key={`${row.person.slug}-${row.role}`}
             className="flex flex-col gap-0.5 py-2"
           >
-            <TextLink href={`/${locale}/people/${encodeURIComponent(row.person.slug)}`}>
+            <TextLink
+              href={localizedPath(
+                locale,
+                `/people/${encodeURIComponent(row.person.slug)}`,
+              )}
+            >
               {row.person.name}
             </TextLink>
-            <span className="text-caption text-[color:var(--color-foreground-muted)]">
+            <span className="text-caption text-foreground-muted">
               {t(`role.${row.role}`)}
             </span>
           </li>
@@ -472,7 +478,7 @@ function Topics({
       <TopicChips
         label={t('topics')}
         topics={rows.map((topic) => ({
-          href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+          href: localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`),
           text: topic.name,
         }))}
       />
@@ -499,7 +505,7 @@ function Citations({
       <h2 id="scholarly-citations" className="text-heading font-semibold">
         {t('scholarly.citations')}
       </h2>
-      <ol className="flex list-decimal flex-col gap-4 ps-6 text-sm marker:text-[color:var(--color-foreground-muted)]">
+      <ol className="flex list-decimal flex-col gap-4 ps-6 text-sm marker:text-foreground-muted">
         {citations.map((citation, index) => (
           <li key={index} className="break-words ps-1">
             <span lang={languageCode} dir={direction}>
@@ -696,8 +702,8 @@ export async function ScholarlyDetail({
       : scholarlyPath(locale, record.kind, record.slug);
 
   const trail = [
-    { name: shell('nav.home'), path: `/${locale}` },
-    { name: t('title'), path: `/${locale}/library` },
+    { name: shell('nav.home'), path: localizedPath(locale, '') },
+    { name: t('title'), path: localizedPath(locale, '/library') },
     { name: sectionTitle(t, listKind), path: scholarlyListPath(locale, listKind) },
     ...(record.kind === 'magazine-issue' && magazineLabel !== null
       ? [
@@ -746,7 +752,7 @@ export async function ScholarlyDetail({
             </div>
           ) : null}
           <RecordSection id="scholarly-facts" heading={t('scholarly.facts')}>
-            <dl className="flex flex-col divide-y divide-[color:var(--color-border)] rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] px-4 py-1">
+            <dl className="flex flex-col divide-y divide-border rounded-panel border border-border bg-surface-raised px-4 py-1">
               {record.kind === 'magazine-issue' && magazineLabel !== null ? (
                 <DetailRow term={t('scholarly.fact.magazine')}>
                   <TextLink
@@ -831,7 +837,7 @@ export async function ScholarlyDetail({
             {t('scholarly.abstract')}
           </h2>
           <div
-            className="library-reader flex max-w-[var(--measure-prose)] flex-col gap-4 border-s-2 border-[color:var(--color-accent-rule)] ps-5"
+            className="library-reader flex max-w-[var(--measure-prose)] flex-col gap-4 border-s-2 border-accent-rule ps-5"
             lang={record.languageCode}
             dir={contentDirection}
           >
@@ -857,7 +863,7 @@ export async function ScholarlyDetail({
       (neighbours.previous === null && neighbours.next === null) ? null : (
         <nav
           aria-label={t('scholarly.issueNavigation')}
-          className="grid grid-cols-1 gap-3 border-t border-[color:var(--color-border)] pt-6 sm:grid-cols-2"
+          className="grid grid-cols-1 gap-3 border-t border-border pt-6 sm:grid-cols-2"
         >
           {neighbours.previous === null ? (
             <span className="hidden sm:block" />
@@ -910,11 +916,11 @@ function IssueNeighbour({
   return (
     <a
       href={href}
-      className={`flex min-h-11 min-w-0 flex-col gap-1 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-4 no-underline transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--color-border-strong)] active:bg-[color:var(--color-surface-sunken)] ${
+      className={`flex min-h-11 min-w-0 flex-col gap-1 rounded-panel border border-border bg-surface-raised p-4 no-underline transition-colors duration-[var(--duration-fast)] hover:border-border-strong active:bg-surface-sunken ${
         direction === 'next' ? 'sm:col-start-2 sm:text-end' : ''
       }`}
     >
-      <span className="text-caption font-semibold text-[color:var(--color-accent)]">
+      <span className="text-caption font-semibold text-accent">
         {direction === 'previous' ? (
           <span aria-hidden="true" className="me-1 inline-block rtl:-scale-x-100">
             ←
@@ -929,7 +935,7 @@ function IssueNeighbour({
         <span className="sr-only">: </span>
       </span>
       <span
-        className="font-semibold wrap-anywhere text-[color:var(--color-foreground)]"
+        className="font-semibold wrap-anywhere text-foreground"
         lang={title.locale}
         dir={directionOf(title.locale)}
       >
@@ -983,8 +989,8 @@ export async function MagazineDetail({
   const label = scholarlyLabel(record, locale);
   const path = scholarlyPath(locale, 'magazine', record.slug);
   const trail = [
-    { name: shell('nav.home'), path: `/${locale}` },
-    { name: t('title'), path: `/${locale}/library` },
+    { name: shell('nav.home'), path: localizedPath(locale, '') },
+    { name: t('title'), path: localizedPath(locale, '/library') },
     { name: sectionTitle(t, 'magazine'), path: scholarlyListPath(locale, 'magazine') },
     { name: label.title, path },
   ];
@@ -1028,7 +1034,7 @@ export async function MagazineDetail({
       <section className="flex flex-col gap-5" aria-labelledby="magazine-issues">
         <h2
           id="magazine-issues"
-          className="border-b border-[color:var(--color-border)] pb-3 text-heading font-semibold"
+          className="border-b border-border pb-3 text-heading font-semibold"
         >
           {t('scholarly.issues')}
         </h2>

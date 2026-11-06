@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 
 import { fatwaReadRuntime } from '@/composition/fatwa-read';
 import { fatwaContentLocales, rulingPathOf } from '@/components/fatwa/presentation';
@@ -51,7 +51,7 @@ export async function fatwaSitemapPartitions(): Promise<readonly SitemapPartitio
     for (const row of batch)
       for (const locale of fatwaContentLocales(row.language))
         buckets.get(locale)?.push({
-          loc: absoluteUrl(`/${locale}${rulingPathOf(row.slug)}`),
+          loc: absoluteUrl(localizedPath(locale, `${rulingPathOf(row.slug)}`)),
           lastmod: row.lastModified.toISOString(),
         });
     if (batch.length < READ_BATCH) break;

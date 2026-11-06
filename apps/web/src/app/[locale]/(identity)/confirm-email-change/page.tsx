@@ -1,3 +1,5 @@
+import { identityMetadata } from '../metadata';
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { canonicaliseEmail } from '@minhaj/contracts/identity';
@@ -22,7 +24,9 @@ import { ActionForm } from '../form-state';
  * confirmation; the POST consumes it. A mail scanner following the link has no
  * session and consumes nothing even if it had one.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = identityMetadata('confirmChange.title', {
+  robots: { index: false, follow: false },
+});
 
 /**
  * PER REQUEST, always. This surface reads a session or a one-time token, so
@@ -48,7 +52,7 @@ export default async function ConfirmEmailChangePage({
     return (
       <AuthLayout title={t('confirmChange.title')}>
         <Alert tone="error">{t('confirmChange.missing')}</Alert>
-        <TextLink href={`/${locale}/my/settings/security`}>
+        <TextLink href={localizedPath(locale, '/my/settings/security')}>
           {t('confirmChange.backToSecurity')}
         </TextLink>
       </AuthLayout>
@@ -63,12 +67,14 @@ export default async function ConfirmEmailChangePage({
   // built here and validated again at the action, so a crafted `returnTo`
   // cannot ride in on this page (SECURITY_BASELINE.md §9.3).
   if (outcome.state !== 'active') {
-    const here = `/${locale}/confirm-email-change`;
+    const here = localizedPath(locale, '/confirm-email-change');
 
     return (
       <AuthLayout title={t('confirmChange.title')}>
         <Alert tone="info">{t('confirmChange.needSignIn')}</Alert>
-        <TextLink href={`/${locale}/signin?returnTo=${encodeURIComponent(here)}`}>
+        <TextLink
+          href={localizedPath(locale, `/signin?returnTo=${encodeURIComponent(here)}`)}
+        >
           {t('common.backToSignIn')}
         </TextLink>
       </AuthLayout>
@@ -90,7 +96,7 @@ export default async function ConfirmEmailChangePage({
     return (
       <AuthLayout title={t('confirmChange.title')}>
         <Alert tone="success">{t('confirmChange.done')}</Alert>
-        <TextLink href={`/${locale}/my/settings/security`}>
+        <TextLink href={localizedPath(locale, '/my/settings/security')}>
           {t('confirmChange.backToSecurity')}
         </TextLink>
       </AuthLayout>
@@ -103,7 +109,7 @@ export default async function ConfirmEmailChangePage({
     return (
       <AuthLayout title={t('confirmChange.title')}>
         <Alert tone="error">{t('confirmChange.invalid')}</Alert>
-        <TextLink href={`/${locale}/my/settings/security`}>
+        <TextLink href={localizedPath(locale, '/my/settings/security')}>
           {t('confirmChange.backToSecurity')}
         </TextLink>
       </AuthLayout>
@@ -134,7 +140,7 @@ export default async function ConfirmEmailChangePage({
         <input type="hidden" name="token" value={token} />
       </ActionForm>
 
-      <TextLink href={`/${locale}/my/settings/security`}>
+      <TextLink href={localizedPath(locale, '/my/settings/security')}>
         {t('confirmChange.backToSecurity')}
       </TextLink>
     </AuthLayout>

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import { MessagingTime } from '@/components/messaging/parts';
@@ -50,7 +51,7 @@ export default async function SupportQueuePage({
   readonly searchParams: Promise<Query>;
 }) {
   const locale = await requireLocale(params);
-  const base = `/${locale}/admin/messaging/support`;
+  const base = localizedPath(locale, '/admin/messaging/support');
   const context = await requireAdminPage(locale, 'messaging.support', base);
   const copy = await adminMessagingCopy(locale);
   const { t } = copy;
@@ -70,9 +71,7 @@ export default async function SupportQueuePage({
   return (
     <main className="flex flex-col gap-4">
       <PageHeading>{t('support.title')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('support.description')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('support.description')}</p>
       <QueueFilterLinks base={base} current={filter} copy={copy} />
 
       {!read.ok ? (

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -73,16 +74,14 @@ export async function LiveSchedulePage({
         <Prose>
           <PageHeading>{t('title')}</PageHeading>
           <p>{t('intro')}</p>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('zoneNote')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('zoneNote')}</p>
         </Prose>
 
         {mode === null ? (
           <div className="flex flex-col gap-3">
             <Alert tone="info">{t('unavailable.body')}</Alert>
             <p>
-              <TextLink href={`/${locale}/learn/courses`}>
+              <TextLink href={localizedPath(locale, '/learn/courses')}>
                 {t('unavailable.browse')}
               </TextLink>
             </p>
@@ -110,9 +109,7 @@ export async function LiveSchedulePage({
                       </TextLink>
                     </h2>
                     <p className="flex flex-wrap gap-x-2 text-sm">
-                      <span className="text-[color:var(--color-foreground-muted)]">
-                        {t('teacher')}
-                      </span>
+                      <span className="text-foreground-muted">{t('teacher')}</span>
                       <TeacherName
                         profile={profiles.get(session.teacherAccountId)}
                         locale={locale}
@@ -120,9 +117,7 @@ export async function LiveSchedulePage({
                       />
                     </p>
                     <p className="flex flex-wrap gap-x-2 text-sm">
-                      <span className="text-[color:var(--color-foreground-muted)]">
-                        {t('starts')}
-                      </span>
+                      <span className="text-foreground-muted">{t('starts')}</span>
                       <ClassTime
                         instant={session.startsAt}
                         local={session.startsLocal}
@@ -131,9 +126,7 @@ export async function LiveSchedulePage({
                       />
                     </p>
                     <p className="flex flex-wrap gap-x-2 text-sm">
-                      <span className="text-[color:var(--color-foreground-muted)]">
-                        {t('ends')}
-                      </span>
+                      <span className="text-foreground-muted">{t('ends')}</span>
                       <ClassTime
                         instant={session.endsAt}
                         local={session.endsLocal}
@@ -141,7 +134,7 @@ export async function LiveSchedulePage({
                         locale={locale}
                       />
                     </p>
-                    <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                    <p className="text-sm text-foreground-muted">
                       {t('zone', { zone: session.timeZone })}
                     </p>
                   </div>

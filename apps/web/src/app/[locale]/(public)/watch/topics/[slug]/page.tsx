@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -42,7 +43,8 @@ export async function generateMetadata({ params }: TopicParams): Promise<Metadat
     contentLocales: topic.translatedLocales,
     primaryLocale: 'en',
     // Canonical and alternates are the TOPIC HUB's, not this view's.
-    pathFor: (target) => `/${target}/topics/${encodeURIComponent(topic.slug)}`,
+    pathFor: (target) =>
+      localizedPath(target, `/topics/${encodeURIComponent(topic.slug)}`),
     title: `${t('topicTitle')}: ${topic.label.name}`,
   });
 }

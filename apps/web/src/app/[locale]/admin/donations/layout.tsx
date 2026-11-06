@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
@@ -64,7 +65,7 @@ export default async function DonationsAdminLayout({
               key: 'donations',
               links: SURFACES.map((surface) => ({
                 key: surface.key,
-                href: `/${locale}/admin/donations${surface.path}`,
+                href: localizedPath(locale, `/admin/donations${surface.path}`),
                 text: t(`surface.${surface.key}`),
               })),
             },

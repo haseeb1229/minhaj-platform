@@ -112,9 +112,7 @@ export default async function DonationStatusPage({ params, searchParams }: Statu
 
         <header className="flex flex-col gap-2">
           <PageHeading>{t('status.title')}</PageHeading>
-          <p className="text-[color:var(--color-foreground-muted)]">
-            {t('status.intro')}
-          </p>
+          <p className="text-foreground-muted">{t('status.intro')}</p>
         </header>
 
         {notice === null ? null : (
@@ -129,7 +127,7 @@ export default async function DonationStatusPage({ params, searchParams }: Statu
               <DonationStateBadge state={view.state} t={t} />
             </div>
             <p className="text-sm">{t(`stateHelp.${stateKey(view.state)}`)}</p>
-            <dl className="divide-y divide-[color:var(--color-border)]">
+            <dl className="divide-y divide-border">
               <DetailRow term={t('detail.campaign')}>
                 <CampaignTitle campaign={view.campaign} locale={locale} t={t} />
               </DetailRow>
@@ -201,9 +199,7 @@ export default async function DonationStatusPage({ params, searchParams }: Statu
           </section>
         ) : null}
 
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('status.private')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('status.private')}</p>
 
         <nav aria-label={t('status.title')} className="flex flex-wrap gap-x-6 gap-y-2">
           <TextLink href={donatePath(locale)}>{t('status.donate')}</TextLink>

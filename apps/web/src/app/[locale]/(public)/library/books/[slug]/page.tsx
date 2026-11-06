@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -206,9 +207,9 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
     <RecordFrame
       breadcrumbLabel={shell('nav.breadcrumbs')}
       trail={[
-        { href: `/${locale}`, text: shell('nav.home') },
-        { href: `/${locale}/library`, text: t('title') },
-        { href: `/${locale}/library/books`, text: t('books') },
+        { href: localizedPath(locale, ''), text: shell('nav.home') },
+        { href: localizedPath(locale, '/library'), text: t('title') },
+        { href: localizedPath(locale, '/library/books'), text: t('books') },
         { text: label.title },
       ]}
       eyebrow={t('kindBook')}
@@ -275,7 +276,10 @@ export default async function WorkPage({ params, searchParams }: WorkParams) {
               <TopicChips
                 label={t('topics')}
                 topics={topics.map((topic) => ({
-                  href: `/${locale}/library/books?topic=${encodeURIComponent(topic.id)}`,
+                  href: localizedPath(
+                    locale,
+                    `/library/books?topic=${encodeURIComponent(topic.id)}`,
+                  ),
                   text: topic.name,
                 }))}
               />
@@ -363,16 +367,21 @@ function Contributors({
 
   return (
     <RecordSection id="work-contributors" heading={t('contributors')}>
-      <ul className="flex flex-col divide-y divide-[color:var(--color-border)] text-sm">
+      <ul className="flex flex-col divide-y divide-border text-sm">
         {rows.map((row) => (
           <li
             key={`${row.person.slug}-${row.role}`}
             className="flex flex-col gap-0.5 py-2"
           >
-            <TextLink href={`/${locale}/people/${encodeURIComponent(row.person.slug)}`}>
+            <TextLink
+              href={localizedPath(
+                locale,
+                `/people/${encodeURIComponent(row.person.slug)}`,
+              )}
+            >
               {row.person.name}
             </TextLink>
-            <span className="text-caption text-[color:var(--color-foreground-muted)]">
+            <span className="text-caption text-foreground-muted">
               {t(`role.${row.role}` as 'role.author')}
             </span>
           </li>
@@ -418,7 +427,7 @@ function Editions({
     <section aria-labelledby="work-editions" className="flex flex-col gap-4">
       <h2
         id="work-editions"
-        className="border-b border-[color:var(--color-border)] pb-3 text-heading font-semibold"
+        className="border-b border-border pb-3 text-heading font-semibold"
       >
         {t('editions')}
       </h2>
@@ -437,10 +446,8 @@ function Editions({
           return (
             <li
               key={edition.id}
-              className={`flex min-w-0 flex-col gap-3 rounded-[var(--radius-panel)] border bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)] ${
-                isSelected
-                  ? 'border-[color:var(--color-accent)] border-s-4'
-                  : 'border-[color:var(--color-border)]'
+              className={`flex min-w-0 flex-col gap-3 rounded-panel border bg-surface-raised p-5 shadow-panel ${
+                isSelected ? 'border-accent border-s-4' : 'border-border'
               }`}
             >
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -452,7 +459,7 @@ function Editions({
                 ) : (
                   <a
                     href={`${workPath(locale, record.slug)}?${EDITION_PARAM}=${encodeURIComponent(edition.id)}`}
-                    className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-semibold no-underline transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--color-surface-sunken)] active:bg-[color:var(--color-border)]"
+                    className="inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-semibold no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border"
                   >
                     {t('showEdition')}
                   </a>
@@ -542,7 +549,7 @@ function EditionAccessPanel({
       <div className="flex flex-col gap-4">
         <h2
           id="work-availability"
-          className="border-b border-[color:var(--color-border)] pb-3 text-heading font-semibold"
+          className="border-b border-border pb-3 text-heading font-semibold"
         >
           {t('availability')}
         </h2>
@@ -553,8 +560,8 @@ function EditionAccessPanel({
          * may be taken.
          */}
         <dl className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-2 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-4">
-            <dt className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+          <div className="flex flex-col gap-2 rounded-panel border border-border bg-surface-raised p-4">
+            <dt className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
               {t('availabilityReading')}
             </dt>
             <dd className="flex flex-col gap-3 text-sm">
@@ -564,9 +571,7 @@ function EditionAccessPanel({
                 <p>{t('readBelow')}</p>
               ) : (
                 <>
-                  <p className="text-[color:var(--color-foreground-muted)]">
-                    {t('readableFileNotice')}
-                  </p>
+                  <p className="text-foreground-muted">{t('readableFileNotice')}</p>
                   <div>
                     <ActionLink
                       href={assetPath(edition.id, 'read', access.readableFile)}
@@ -580,15 +585,13 @@ function EditionAccessPanel({
             </dd>
           </div>
 
-          <div className="flex flex-col gap-2 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-4">
-            <dt className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+          <div className="flex flex-col gap-2 rounded-panel border border-border bg-surface-raised p-4">
+            <dt className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
               {t('availabilityDownload')}
             </dt>
             <dd className="flex flex-col gap-3 text-sm">
               {access.downloadable === null ? (
-                <p className="text-[color:var(--color-foreground-muted)]">
-                  {t('downloadUnavailable')}
-                </p>
+                <p className="text-foreground-muted">{t('downloadUnavailable')}</p>
               ) : (
                 <div>
                   <ActionLink
@@ -670,11 +673,11 @@ function SalePoints({
     <section aria-labelledby="work-sale-points" className="flex flex-col gap-4">
       <h2
         id="work-sale-points"
-        className="border-b border-[color:var(--color-border)] pb-3 text-heading font-semibold"
+        className="border-b border-border pb-3 text-heading font-semibold"
       >
         {t('salePoints')}
       </h2>
-      <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
+      <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
         {t('salePointsNotice')}
       </p>
       <ul className="grid list-none grid-cols-1 gap-4 p-0 *:min-w-0 sm:grid-cols-2">

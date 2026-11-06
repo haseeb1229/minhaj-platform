@@ -123,9 +123,7 @@ export default async function MigrationReconciliationPage({
     <main className="flex min-w-0 flex-col gap-8">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('reconciliation.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('reconciliation.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('reconciliation.description')}</p>
       </header>
 
       <section

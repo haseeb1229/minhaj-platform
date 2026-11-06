@@ -62,15 +62,15 @@ describe('NewsArticle structured data', () => {
       '@type': 'NewsArticle',
       headline: 'Synthetic news',
       inLanguage: 'en',
-      url: `${ORIGIN}/en/news/synthetic-news`,
-      mainEntityOfPage: `${ORIGIN}/en/news/synthetic-news`,
+      url: `${ORIGIN}/news/synthetic-news`,
+      mainEntityOfPage: `${ORIGIN}/news/synthetic-news`,
       datePublished: '2034-02-03T04:05:06.000Z',
       dateModified: '2034-02-04T00:00:00.000Z',
       author: [
         {
           '@type': 'Person',
           name: 'Synthetic Author',
-          url: `${ORIGIN}/en/people/synthetic-author`,
+          url: `${ORIGIN}/people/synthetic-author`,
         },
       ],
     });
@@ -96,12 +96,12 @@ describe('NewsArticle structured data', () => {
       newsStructuredData(record({ kind: 'press-release' }), 'en', AUTHORS),
     ).toMatchObject({
       '@type': 'NewsArticle',
-      url: `${ORIGIN}/en/news/press-releases/synthetic-news`,
+      url: `${ORIGIN}/news/press-releases/synthetic-news`,
       author: [{ name: 'Synthetic Author' }],
     });
     const statement = newsStructuredData(record({ kind: 'statement' }), 'en', AUTHORS);
     expect(statement).toMatchObject({
-      url: `${ORIGIN}/en/news/statements/synthetic-news`,
+      url: `${ORIGIN}/news/statements/synthetic-news`,
     });
     expect(statement).not.toHaveProperty('author');
   });
@@ -128,9 +128,9 @@ describe('canonical and hreflang', () => {
     expect(metadata.robots).toEqual({ index: true, follow: true });
     expect(metadata.alternates?.canonical).toBe(`${ORIGIN}/ur/news/synthetic-news`);
     expect(metadata.alternates?.languages).toEqual({
-      en: `${ORIGIN}/en/news/synthetic-news`,
+      en: `${ORIGIN}/news/synthetic-news`,
       ur: `${ORIGIN}/ur/news/synthetic-news`,
-      'x-default': `${ORIGIN}/en/news/synthetic-news`,
+      'x-default': `${ORIGIN}/news/synthetic-news`,
     });
   });
 
@@ -180,6 +180,6 @@ describe('query semantics', () => {
     expect(newsArchivePath('ur', { year: 2034, month: 2 }, 20)).toBe(
       '/ur/news/archive?year=2034&month=2&offset=20',
     );
-    expect(newsArchivePath('en', { year: null, month: 2 })).toBe('/en/news/archive');
+    expect(newsArchivePath('en', { year: null, month: 2 })).toBe('/news/archive');
   });
 });

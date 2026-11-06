@@ -918,7 +918,7 @@ describe('Membership’s durable communication', () => {
     if (english.outcome !== 'send') throw new Error('expected a message');
     expect(english.message.html).toContain('<html lang="en" dir="ltr">');
     expect(english.message.text).toContain(
-      'https://membership-proof.invalid/en/my/membership',
+      'https://membership-proof.invalid/my/membership',
     );
   });
 

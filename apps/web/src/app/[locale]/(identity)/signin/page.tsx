@@ -1,3 +1,5 @@
+import { identityMetadata } from '../metadata';
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { requireLocale } from '@/config/route-locale';
@@ -12,7 +14,9 @@ import { ActionForm } from '../form-state';
  * itself performs no mutation: the POST does, through a Server Action carrying
  * the Class-A protections.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = identityMetadata('signIn.title', {
+  robots: { index: false, follow: false },
+});
 
 interface PageProps {
   readonly params: Promise<{ readonly locale: string }>;
@@ -36,7 +40,9 @@ export default async function SignInPage({ params, searchParams }: PageProps) {
       footer={
         <span>
           {t('signIn.noAccount')}{' '}
-          <TextLink href={`/${locale}/signup`}>{t('signIn.createAccount')}</TextLink>
+          <TextLink href={localizedPath(locale, '/signup')}>
+            {t('signIn.createAccount')}
+          </TextLink>
         </span>
       }
     >
@@ -78,7 +84,9 @@ export default async function SignInPage({ params, searchParams }: PageProps) {
           )}
         </Field>
 
-        <TextLink href={`/${locale}/forgot-password`}>{t('signIn.forgot')}</TextLink>
+        <TextLink href={localizedPath(locale, '/forgot-password')}>
+          {t('signIn.forgot')}
+        </TextLink>
       </ActionForm>
     </AuthLayout>
   );

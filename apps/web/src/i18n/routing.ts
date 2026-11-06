@@ -2,7 +2,6 @@ import { localeSchema } from '@minhaj/contracts';
 import { defineRouting } from 'next-intl/routing';
 
 import { FALLBACK_LOCALE } from '@/config/locale';
-import { LOCALE_COOKIE } from '@/config/locale-cookie';
 
 /**
  * THE locale routing configuration (ROUTE_MAP.md §1).
@@ -25,24 +24,31 @@ export const routing = defineRouting({
   locales: localeSchema.options,
 
   /**
-   * The final step of ROUTE_MAP.md §1.1, reached only when a visitor expresses
-   * no stored preference and sends no `Accept-Language` that matches.
+   * The unprefixed interface locale — the same constant `localizedPath` uses
+   * (`UNPREFIXED_LOCALE` in `@minhaj/contracts`), so the routing library and
+   * the URL builder cannot disagree about which locale has no prefix.
    */
   defaultLocale: FALLBACK_LOCALE,
 
   /**
-   * ROUTE_MAP.md §1.1: the locale segment is ALWAYS present. There is no
-   * implicit unprefixed variant, because `/quran` and `/en/quran` addressing
-   * the same page splits search authority for a corpus meant to be cited for
-   * decades.
+   * ROUTE_MAP.md §1.1 (Rebaseline R1, owner decision 2026-11-06): ENGLISH IS
+   * UNPREFIXED. `/library` is the English Library; `/ur/library` and
+   * `/ar/library` are the Urdu and Arabic ones. One canonical address per
+   * interface locale still holds — `/en/…` never renders, the proxy answers it
+   * with ONE permanent redirect to the unprefixed address before this
+   * configuration is consulted. Every address is built by `localizedPath` in
+   * `@minhaj/contracts`, which states the same rule.
    */
-  localePrefix: 'always',
+  localePrefix: 'as-needed',
 
   /**
-   * Stored preference, then `Accept-Language` (ROUTE_MAP.md §1.1). Disabling
-   * detection would leave `en` as the only outcome for every visitor.
+   * DETECTION IS OFF: the address alone decides the interface language. An
+   * unprefixed URL is English deterministically — no stored preference and no
+   * `Accept-Language` header can send `/` or `/library` to `/ur` or `/ar`.
+   * A shared link therefore shows every visitor the same language, and a
+   * crawler (which sends no `Accept-Language`) sees what a visitor sees.
    */
-  localeDetection: true,
+  localeDetection: false,
 
   /**
    * The `Link` header advertising alternate language versions is DISABLED, and
@@ -62,30 +68,10 @@ export const routing = defineRouting({
   alternateLinks: false,
 
   /**
-   * The stored locale preference.
-   *
-   * Attributes are stated explicitly rather than inherited from library
-   * defaults, because they are a security surface:
-   *
-   *   - `path: '/'`      one preference for the whole site, not one per
-   *                      directory the visitor happened to switch language in
-   *   - `sameSite: 'lax'` a top-level navigation may carry it; a cross-site
-   *                      subrequest may not
-   *   - `secure` in production — the cookie never travels in clear text off a
-   *                      developer's machine
-   *   - `maxAge` finite  a year, then the visitor is re-negotiated from
-   *                      `Accept-Language` rather than pinned forever
-   *
-   * IT CARRIES NO AUTHORITY. It selects an interface language for an anonymous
-   * visitor and nothing else: no identity, no session, no permission, no
-   * profile capability (SECURITY_BASELINE.md — a profile alone grants
-   * nothing). It is deliberately not `httpOnly`, because locale switching is a
-   * client-side navigation concern and there is nothing here to protect from a
-   * script that could not simply navigate instead. The ACCOUNT's interface
-   * locale is Identity's (`/my/settings/language`), not this cookie's.
+   * NO LOCALE COOKIE. With detection off nothing would ever read one, and a
+   * public GET that emitted `Set-Cookie` would turn a shared response private.
+   * The account's interface locale remains Identity's
+   * (`/my/settings/language`).
    */
-  localeCookie: {
-    ...LOCALE_COOKIE,
-    secure: process.env.NODE_ENV === 'production',
-  },
+  localeCookie: false,
 });

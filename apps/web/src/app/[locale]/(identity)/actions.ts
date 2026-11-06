@@ -1,5 +1,6 @@
 'use server';
 
+import { localizedPath } from '@minhaj/contracts';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -74,7 +75,7 @@ function failed(failure: IdentityFailure, retryAfter?: number): ActionState {
  * outside `/{locale}/my` displays any of this.
  */
 function refreshAccountSurfaces(locale: string): void {
-  revalidatePath(`/${locale}/my`, 'layout');
+  revalidatePath(localizedPath(locale, '/my'), 'layout');
 }
 
 function localeFrom(form: FormData): string {
@@ -219,7 +220,12 @@ export async function signInAction(
   if (result.state === 'second-factor-required') {
     // NOT SIGNED IN YET, and the redirect says so. The destination travels
     // through the challenge so the person still lands where they were going.
-    redirect(`/${locale}/signin/two-factor?returnTo=${encodeURIComponent(destination)}`);
+    redirect(
+      localizedPath(
+        locale,
+        `/signin/two-factor?returnTo=${encodeURIComponent(destination)}`,
+      ),
+    );
   }
 
   // Only a validated same-origin destination. An unvalidated one is an open
@@ -286,7 +292,7 @@ export async function signOutAction(form: FormData): Promise<void> {
   const result = await identity.signOut(await requestContext(locale));
   if (result.ok) await applySetCookies(result.setCookies);
 
-  redirect(`/${locale}`);
+  redirect(localizedPath(locale, ''));
 }
 
 /**
@@ -592,7 +598,7 @@ export async function completeAccountSetupAction(
 
   if (!result.ok) return failed(result.failure);
 
-  redirect(`/${locale}/my`);
+  redirect(localizedPath(locale, '/my'));
 }
 
 /**
@@ -755,5 +761,5 @@ export async function closeAccountAction(
   )
     return { status: 'error', failure: 'closure-pending' };
 
-  redirect(`/${locale}`);
+  redirect(localizedPath(locale, ''));
 }

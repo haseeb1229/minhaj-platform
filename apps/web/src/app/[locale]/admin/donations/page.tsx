@@ -106,9 +106,7 @@ export default async function DonationsAdminPage({
     <main className="flex min-w-0 flex-col gap-8">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('records.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('records.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('records.description')}</p>
         <Alert tone="info">{t('records.audited')}</Alert>
       </header>
 
@@ -127,9 +125,7 @@ export default async function DonationsAdminPage({
         <p className="text-sm">
           <TextLink href={exportHref}>{t('records.export')}</TextLink>
         </p>
-        <p className="text-xs text-[color:var(--color-foreground-muted)]">
-          {t('records.exportHelp')}
-        </p>
+        <p className="text-xs text-foreground-muted">{t('records.exportHelp')}</p>
         {!listing.ok ? (
           <Alert tone="error">
             {listing.failure === 'invalid' ? t('beyond') : t('failure.load')}

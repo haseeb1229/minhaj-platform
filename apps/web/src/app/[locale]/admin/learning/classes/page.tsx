@@ -75,9 +75,7 @@ export default async function ClassDirectoryPage({ params, searchParams }: ListP
           <TextLink href={`${base}/scopes`}>{t('classes.scopes')}</TextLink>
         </nav>
       </div>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('classes.description')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('classes.description')}</p>
       <ActivationNotice mode={mode} copy={copy} />
 
       <form method="get" action={base} className="flex flex-wrap items-end gap-3">

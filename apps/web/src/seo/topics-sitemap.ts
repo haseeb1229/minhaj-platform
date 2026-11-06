@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { localeSchema } from '@minhaj/contracts';
+import { localeSchema, localizedPath } from '@minhaj/contracts';
 
 import { taxonomyRuntime } from '@/composition/taxonomy';
 import { publicIndexingEnabled } from '@/config/indexing';
@@ -37,7 +37,9 @@ export async function topicsSitemapPartitions(): Promise<readonly SitemapPartiti
     const urls = tree
       .filter((topic) => topic.translatedLocales.includes(locale))
       .map((topic) => ({
-        loc: absoluteUrl(`/${locale}/topics/${encodeURIComponent(topic.slug)}`),
+        loc: absoluteUrl(
+          localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`),
+        ),
       }));
     return urls.length === 0 ? [] : [{ segment: TOPICS_SEGMENT, locale, urls }];
   });

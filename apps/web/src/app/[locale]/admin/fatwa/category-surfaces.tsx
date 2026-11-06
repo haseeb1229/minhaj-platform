@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import type { Locale } from '@minhaj/contracts';
@@ -130,10 +131,7 @@ function CategoryFields({
       </Field>
       <fieldset className="flex flex-col gap-3" aria-describedby={`${prefix}-names-help`}>
         <legend className="text-sm font-medium">{t('categories.names')}</legend>
-        <p
-          id={`${prefix}-names-help`}
-          className="text-sm text-[color:var(--color-foreground-muted)]"
-        >
+        <p id={`${prefix}-names-help`} className="text-sm text-foreground-muted">
           {t('categories.namesHelp')}
         </p>
         {NAME_LOCALES.map((locale) => (
@@ -186,7 +184,7 @@ async function topicChoices(
 
 export async function CategoriesScreen({ params }: ListParams) {
   const locale = await requireLocale(params);
-  const base = `/${locale}/admin/fatwa/categories`;
+  const base = localizedPath(locale, '/admin/fatwa/categories');
   const context = await requireFatwaAreaPage(locale, base);
   const copy = await fatwaCopy(locale);
   const { t } = copy;
@@ -208,9 +206,7 @@ export async function CategoriesScreen({ params }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.categories')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scope.categories')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('scope.categories')}</p>
       {maintains ? null : <p className="text-sm">{t('categories.readOnly')}</p>}
 
       {ordered.length === 0 ? (
@@ -305,7 +301,7 @@ export async function CategoryScreen({
 }) {
   const locale = await requireLocale(params);
   const id = recordTarget((await params).id);
-  const list = `/${locale}/admin/fatwa/categories`;
+  const list = localizedPath(locale, '/admin/fatwa/categories');
   const context = await requireFatwaAreaPage(locale, `${list}/${id}`);
   const copy = await fatwaCopy(locale);
   const { t } = copy;
@@ -365,7 +361,7 @@ export async function CategoryScreen({
             <input type="hidden" name="version" value={String(category.version)} />
             <p className="text-sm">
               {t('categories.slug')}: <span dir="ltr">{category.slug}</span>
-              <span className="block text-xs text-[color:var(--color-foreground-muted)]">
+              <span className="block text-xs text-foreground-muted">
                 {t('categories.slugFixed')}
               </span>
             </p>

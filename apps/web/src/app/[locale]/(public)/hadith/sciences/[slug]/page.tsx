@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
@@ -44,7 +45,7 @@ export async function generateMetadata({ params }: ScienceParams): Promise<Metad
     locale,
     contentLocales,
     primaryLocale: contentLocales[0] ?? locale,
-    pathFor: (target) => `/${target}${sciencePathOf(science.slug)}`,
+    pathFor: (target) => localizedPath(target, `${sciencePathOf(science.slug)}`),
     title: scienceTextFor(science, locale)?.text.title ?? science.slug,
   });
 }

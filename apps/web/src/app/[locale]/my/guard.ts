@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { redirect } from 'next/navigation';
@@ -32,7 +33,7 @@ export async function requireActiveSession(
   const outcome = await session.resolve(context.headers);
 
   if (outcome.state !== 'active') {
-    redirect(`/${locale}/signin?returnTo=${encodeURIComponent(returnPath)}`);
+    redirect(localizedPath(locale, `/signin?returnTo=${encodeURIComponent(returnPath)}`));
   }
 
   return outcome.session;

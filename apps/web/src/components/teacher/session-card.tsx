@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import type { Locale } from '@minhaj/contracts';
@@ -26,7 +27,10 @@ export function SessionCard({
   readonly t: TeacherTranslator;
 }) {
   const { session, course } = view;
-  const href = `/${locale}/teacher/classes/today/${encodeURIComponent(session.id)}`;
+  const href = localizedPath(
+    locale,
+    `/teacher/classes/today/${encodeURIComponent(session.id)}`,
+  );
   return (
     <Panel as="li">
       <div className="flex min-w-0 flex-col gap-2">
@@ -38,7 +42,7 @@ export function SessionCard({
               locale={locale}
             />
           </TextLink>
-          <span className="text-sm text-[color:var(--color-foreground-muted)]">
+          <span className="text-sm text-foreground-muted">
             {t(`kind.${session.kind}`)}
           </span>
           <SessionStateBadge state={session.state} t={t} />

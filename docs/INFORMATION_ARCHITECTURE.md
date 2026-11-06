@@ -62,6 +62,11 @@ Al-Hidayah, Mawlid Conferences and Itikaf during Ramadhan — are migrated as Co
 `/collections/{slug}`, in the source's order, each member linking to its own canonical address;
 they still occupy no primary navigation item (MIGRATION_STRATEGY.md §17).
 
+**Since Rebaseline R1** the Collections *index* (`/collections`) is one content-aware primary
+destination, promoted while any Collection is published (§2.2). That is consistent with this rule:
+it is a single fixed entry, and no individual Collection or campaign ever becomes a navigation
+item.
+
 ### 1.4 Quran and Hadith are peers, never nested
 
 Neither is a subsection of Library, and neither is a subsection of the other. Each is a
@@ -70,15 +75,32 @@ search, and its own integrity rules.
 
 ### 1.5 Depth over breadth in navigation
 
-Twelve primary items is already a large navigation. Breadth is controlled by pushing
-detail into well-designed mega menus rather than by adding top-level items. Any future
-request for a new primary item is answered first by asking which mega menu it belongs in.
+Breadth is controlled by promoting only the destinations that hold real content and by keeping
+the bar short (at most six items, the rest under "More" — §2.2), not by adding top-level items.
+Detail lives on each section's own landing page, not in menus. Any future request for a new
+primary item is answered first by asking which existing destination it belongs under.
+
+*(Historical, superseded by Rebaseline R1, 2026-11-06: until R1 this rule read "Twelve primary
+items is already a large navigation. Breadth is controlled by pushing detail into well-designed
+mega menus rather than by adding top-level items", and new items were answered by asking which
+mega menu they belonged in.)*
 
 ---
 
 ## 2. Primary navigation
 
-### 2.1 Utility navigation (thin bar above primary)
+### 2.1 Language strip (since Rebaseline R1; formerly the utility navigation)
+
+**Since Rebaseline R1 (2026-11-06) there is no utility bar.** Above the primary row sits only a
+slim language strip: English / اردو / العربية, plain links that preserve the current route and
+query (ROUTE_MAP.md §1.3). The language switcher stays outside every menu deliberately: it is a
+persistent, site-wide concern and must be reachable from every page without entering a menu.
+Find a Centre, Membership and Contact / Help are no longer header items; Find a Centre and Help
+are footer links under the presence rule of §2.2 (§4), and every one of them stays reachable by
+its address, by search and from content.
+
+*Historical, superseded by Rebaseline R1.* Until R1 a thin utility bar above the primary row
+carried:
 
 | Item | Behaviour |
 |---|---|
@@ -87,11 +109,54 @@ request for a new primary item is answered first by asking which mega menu it be
 | Membership | Membership information and joining — `/membership`, delivered in Phase 26 |
 | Contact / Help | Contact routes and help centre |
 
-The language switcher is placed in utility navigation deliberately: it is a
-persistent, site-wide concern and must be reachable from every page without
-entering a menu.
-
 ### 2.2 Primary navigation
+
+**Since Rebaseline R1 (2026-11-06; owner direction "real content before empty capability") the
+primary navigation is content-aware.** The route registry (`apps/web/src/shell/registry.ts`)
+still records which routes exist; a separate presentation policy (`apps/web/src/shell/presence.ts`)
+decides which of them the shell *promotes*, from public evidence read per request by
+`apps/web/src/composition/presence.ts` from each owning context's own public reads.
+
+| Display order | Destination | Promoted only while |
+|---|---|---|
+| 1 | Quran | an **approved** Quran corpus is active (never a fixture) |
+| 2 | Hadith | an **approved** Hadith corpus is active (never a fixture) |
+| 3 | Library | a published work, periodical or article exists |
+| 4 | Watch | a published video exists |
+| 5 | Learn | a published course exists |
+| 6 | Fatwa | an approved Fatwa service is active **and** a ruling is published |
+| 7 | News | published news exists |
+| 8 | Collections | a published Collection exists |
+| 9 | About (→ `/explore`) | always |
+
+- **At most six destinations sit in the bar**; when more qualify, the bar keeps them by rank —
+  About, Quran, Hadith, Library, Watch, News, Learn, Fatwa, Collections — and the rest open under
+  **"More"**, both in display order.
+- The same row carries a real search form (GET to `/search`) and the account entry — a private
+  island that asks `/api/my/account-state` after the page loads and shows "Sign in" or
+  "My Minhaj"; the public HTML is identical for every visitor.
+- **Donate is promoted only while giving is open**: a provider configured, giving activated and
+  a campaign published.
+- **Nothing is hidden.** Every route stays reachable by its address, by search and from content,
+  and still renders its honest unavailable or reserved state; only promotion is conditional.
+- **Fail closed.** The evidence snapshot is read per request (React `cache`) and memoised
+  in-process for 30 seconds; an unknown signal (a failed read, no database at build time) is
+  treated as absent, so only About is promoted. The snapshot is deliberately not logged
+  (ARCHITECTURE.md §8).
+- On staging (2026-11-06, the evidence then present) the bar reads: **Library · Watch · News · Collections · About**.
+
+**IA before and after Rebaseline R1.**
+
+| | Before R1 (Phase 4 → Phase 30-RV) | Since R1 |
+|---|---|---|
+| Header | Utility bar + fixed twelve-item bar; a mega menu per domain since the Phase-30 presentation pass | Language strip + one row of at most six content-aware destinations, "More", search, account island, Donate only while giving is open |
+| Menus | A mega menu per §3 domain, reserved pages included | None; each section's landing page carries its structure |
+| Footer | Six columns (~70 links) + utility bar, reserved pages linked | Three groups under the same presence rule; legal links only for published legal pages (§4) |
+| `/explore` | Every reserved Explore page listed | Only published (or owner-delivered) pages listed |
+| Pre-adoption statement | Header marker + footer utility bar | Footer only, beside the official mark |
+
+*Historical, superseded by Rebaseline R1.* From Phase 4 until R1 the primary navigation was the
+fixed twelve-item bar below, each content item opening a mega menu (§3):
 
 | # | Item | Menu type |
 |---|---|---|
@@ -109,12 +174,14 @@ entering a menu.
 | 12 | Donate | Prominent call to action — `/donate`, delivered in Phase 27; says honestly when online giving is not available |
 
 **Note on "Watch".** The label is *Watch*, but the domain covers both video and audio.
-Audio lectures and Quran recitation live here, and the mega menu carries an explicit
-"Listen" grouping so audio is not lost behind a video-shaped label.
+Audio lectures and Quran recitation live here. Until Rebaseline R1 the Watch mega menu carried
+an explicit "Listen" grouping so audio was not lost behind a video-shaped label (historical);
+since R1, Listen is its own footer destination, promoted while published audio exists (§4).
 
 **Note on "My Minhaj".** This is an account entry point, not a content section. Signed
 out it presents sign-in and the value of an account; signed in it becomes the gateway to
-the authenticated area.
+the authenticated area. Since Rebaseline R1 it is the header's account island (§2.2) rather
+than a numbered bar item.
 
 **Note on "Media".** Photos and galleries are reachable through News & Events (where
 event galleries naturally belong) and through Collections (for the historical archive).
@@ -127,14 +194,25 @@ and the footer. Since Phase 14 each Centre page lists
 its Local Events beside its Local News. Since Phase 15 `/news` also links Collections (§3.8,
 the Archive column), a topic hub lists the Collections on its topic, and each Collection links
 its members at their owners' own addresses — a Video at `/watch/videos/{slug}`, a book at
-`/library/books/{slug}`. Collections still occupy no primary navigation item (§1.3), and
-Library's `/library/collections` filtered view is not yet offered (ROUTE_MAP.md §3.6).
-Media is therefore a content domain but **not** a primary navigation item — adding a
-thirteenth item for it would violate 1.5 while duplicating existing entry points.
+`/library/books/{slug}`. Until Rebaseline R1 Collections occupied no primary navigation item
+(§1.3); since R1 the Collections index is one content-aware destination (§2.2), and Library's
+`/library/collections` filtered view is not yet offered (ROUTE_MAP.md §3.6). Since R1 the
+Explore Connect column and the footer newsletter link described above are historical (no menus;
+the footer's three groups carry no newsletter link) — `/newsletter` stays reachable by its
+address and is listed in the `/explore` index as an owner-delivered Digital Resources item.
+Media is a content domain but **not** a primary navigation item — adding an item for it would
+violate 1.5 while duplicating existing entry points.
 
 ---
 
 ## 3. Mega-menu grouping
+
+> **Historical, superseded by Rebaseline R1 (2026-11-06).** The shell renders **no mega menus**
+> since R1 (`apps/web/src/shell/menus.ts` and `components/shell/menu-panel.tsx` were removed with
+> the registry's `placements`). The column groupings below remain the record of each section's
+> intended structure and of what each phase delivered; they are no longer a navigation
+> surface, and their entries are reached from each section's own landing page, by address and by
+> search. Every "Since Phase N" note below stays true of the routes themselves.
 
 Each mega menu is organised into labelled columns. A menu presents structure and
 entry points; it is not an exhaustive index of the section.
@@ -221,9 +299,10 @@ complete canonical taxonomy browser, which is shared platform-wide.
 Since Phase 22 the Learn item is delivered as a primary link to the `/learn` landing, which leads to
 All Courses, Learning Paths and Trial Classes (which explains that a trial class is a request on a
 live Course, recorded and not yet scheduled) and to the catalogue filtered by Topic. At Phase-22 exit
-the shell had no per-domain mega menu (historical); since the flagship presentation pass every §3
-domain has one, built in `apps/web/src/shell/menus.ts` from delivered registry routes only, so the
-curated topic subset (runtime topic addresses) is represented by All Topics. Since Phase 23 Live Learning (`/learn/live`, the class schedule) and Find a
+the shell had no per-domain mega menu (historical); from the Phase-30 flagship presentation pass
+until Rebaseline R1 every §3 domain had one, built in `apps/web/src/shell/menus.ts` from delivered
+registry routes only, with the curated topic subset represented by All Topics (historical,
+superseded by Rebaseline R1, which removed the menus). Since Phase 23 Live Learning (`/learn/live`, the class schedule) and Find a
 Teacher (`/learn/teachers`) are delivered as activation-aware pages, linked from the landing; they say
 honestly when live learning is not switched on. Training and Resources have no owner contract and are
 not linked.
@@ -291,7 +370,26 @@ the service is not activated the section says so plainly and accepts no question
 
 ## 4. Footer hierarchy
 
-The footer is the comprehensive index that the mega menus deliberately are not.
+**Since Rebaseline R1 (2026-11-06) the footer is three deliberate groups, not a sitemap**, drawn
+from the same presentation policy as the header (§2.2, `apps/web/src/shell/presence.ts`): a route
+link appears only while its area has its evidence, a Page link only while that Page is published,
+and a group left empty is dropped whole.
+
+| Group | Links (each under its signal) |
+|---|---|
+| **Discover** | Quran · Hadith · Library · Watch · Listen (published audio) · Fatwa · News · Events (a published Event) · Collections · Topics (always) |
+| **The organisation** | About → `/explore` (always) · Introduction (only while its Page is published) · Leadership (published contributor profiles) · Global presence (a published country of presence) · Find a Centre (a published Centre) |
+| **Take part** | Learn · Donate (only while giving is open) · My Minhaj (always) · Help (a published help article) |
+
+Beneath the groups: the **legal links only for published legal Pages** (privacy, terms, cookies,
+accessibility, in that order), and the **one pre-adoption statement**, beside the organisation's
+official mark used unmodified as a secondary organisational mark (OPEN_DECISIONS.md §6.4). The
+header carries no pre-adoption marker. The full route list remains in the human-readable sitemap
+(`/sitemap`); no reserved Explore page is linked.
+
+*Historical, superseded by Rebaseline R1.* From Phase 4 until R1 the footer was the comprehensive
+index below — six columns (~70 links) plus a utility bar — "the comprehensive index that the mega
+menus deliberately are not".
 
 ### Column 1 — About Minhaj-ul-Quran
 Introduction · Vision · Mission · Values · Objectives · History · Timeline ·
@@ -330,19 +428,23 @@ legal and compliance surfaces implied by operating an authenticated, multi-juris
 platform. They are noted here as IA slots; their content is an organisational
 responsibility, not an engineering one.*
 
-**Delivered in Phase 30 (flagship presentation pass).** The footer renders all six columns from
+**Delivered in Phase 30 (flagship presentation pass) — historical, superseded by Rebaseline R1.**
+At Phase-30 exit the footer rendered all six columns from
 `apps/web/src/shell/menus.ts` with **delivered or reserved registry routes only**: reserved pages
-(the Explore pages, Volunteer) are linked because they exist and say honestly that nothing is
+(the Explore pages, Volunteer) were linked because they existed and said honestly that nothing was
 published yet; entries with no static route (Scholars, Hadith by Topic, Training, Resources, Regions,
-Cities) are omitted rather than linked dead. The utility bar carries the legal links, the sitemap and the
-pre-adoption statement; the language switcher stays in the header only — a second one would
+Cities) were omitted rather than linked dead. The utility bar carried the legal links, the sitemap and
+the pre-adoption statement; the language switcher stays in the header only — a second one would
 duplicate a landmark and its pinned link names — and no copyright owner, contact detail or social
 profile is shown, since none is evidenced (OPEN_DECISIONS.md §6.1, §6.4).
 
-**Phase 30-R (review completeness, OPEN_DECISIONS.md §3.7).** The header and footer carry the
-organisation's **current official logo** as provisional pre-adoption brand evidence (the footer's on
-a light chip), and the utility bar a short "pre-adoption review build" marker — one quiet global
-statement, never a banner on every page. Explore items whose catalogued source page has been
+**Phase 30-R (review completeness, OPEN_DECISIONS.md §3.7).** At Phase-30-R exit the header and
+footer carried the organisation's **current official logo** as provisional pre-adoption brand
+evidence (the footer's on a light chip), and the utility bar a short "pre-adoption review build"
+marker — one quiet global statement, never a banner on every page (historical, superseded by
+Rebaseline R1: the product is now identified by the "One Minhaj" wordmark, the official mark
+appears unmodified in the footer only, and the pre-adoption statement is the footer's alone —
+OPEN_DECISIONS.md §6.4). Explore items whose catalogued source page has been
 migrated and published now carry that **published Page** at their own reserved address (About —
 Introduction and Global Impact; Shaykh-ul-Islam — Biography; Organization — Forums and UN
 Recognition; Our Work — Peace & Counter-extremism; Digital Resources — Mobile Apps and Social
@@ -355,6 +457,15 @@ even where no Centre is listed, and says so on each country rather than inventin
 ---
 
 ## 5. Authenticated hierarchy — My Minhaj
+
+**One product frame (since Rebaseline R1, 2026-11-06).** My Minhaj (§5), Teacher (§6), Admin (§7)
+— through their shared `WorkspaceShell` — and the identity pages (sign-in, sign-up, recovery,
+verification, account setup; their own `(identity)` layout) all carry the same **ProductBar**: the
+"One Minhaj" wordmark linking home, the area's name, a "Back to One Minhaj" link and the language
+switcher. Private pages are titled "<page> · <Area> · One Minhaj" by their area layouts; identity
+pages by their own heading ("Sign in · One Minhaj"); `noindex` is explicit at each surface. Only
+the frame changed in R1 — the hierarchies and workflows below are as delivered by their phases
+(their redesign is later rebaseline work, not R1).
 
 ```
 My Minhaj

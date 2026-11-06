@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getFormatter, getTranslations } from 'next-intl/server';
 
 import { identityRuntime } from '@/composition/identity';
@@ -62,7 +63,10 @@ export default async function SecurityPage({
   const t = await getTranslations({ locale, namespace: 'identity' });
   const format = await getFormatter({ locale });
 
-  const session = await requireActiveSession(locale, `/${locale}/my/settings/security`);
+  const session = await requireActiveSession(
+    locale,
+    localizedPath(locale, '/my/settings/security'),
+  );
 
   const { identity } = identityRuntime();
   const context = await requestContext(locale);
@@ -79,9 +83,7 @@ export default async function SecurityPage({
     <main className="flex w-full max-w-3xl min-w-0 flex-col gap-8">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('security.title')}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">
-          {t('security.description')}
-        </p>
+        <p className="text-foreground-muted">{t('security.description')}</p>
       </header>
 
       {/* ---- Password ---------------------------------------------------- */}
@@ -249,9 +251,7 @@ export default async function SecurityPage({
         <span id="sessions-heading">
           <SectionHeading>{t('security.sessions')}</SectionHeading>
         </span>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('security.sessionsHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('security.sessionsHelp')}</p>
 
         <SessionList label={t('security.sessions')}>
           {sessions.map((entry) => (
@@ -269,7 +269,7 @@ export default async function SecurityPage({
                     })}
                   </span>
                   {entry.ipAddress === null ? null : (
-                    <span className="truncate text-xs text-[color:var(--color-foreground-muted)]">
+                    <span className="truncate text-xs text-foreground-muted">
                       {t('security.lastSeenFrom')} {entry.ipAddress}
                     </span>
                   )}
@@ -320,9 +320,7 @@ export default async function SecurityPage({
         <span id="methods-heading">
           <SectionHeading>{t('security.methods')}</SectionHeading>
         </span>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('security.methodsHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('security.methodsHelp')}</p>
 
         <Panel>
           <p className="text-sm font-medium">{t('security.methodPassword')}</p>
@@ -331,7 +329,7 @@ export default async function SecurityPage({
               Google through the same count, so this needs no rewriting — and
               no Google affordance appears until it genuinely works. */}
           {methods.canRemoveOne ? null : (
-            <p className="mt-1 text-xs text-[color:var(--color-foreground-muted)]">
+            <p className="mt-1 text-xs text-foreground-muted">
               {t('security.methodFinal')}
             </p>
           )}
@@ -344,9 +342,7 @@ export default async function SecurityPage({
         <span id="close-heading">
           <SectionHeading>{t('security.close')}</SectionHeading>
         </span>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('security.closeHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('security.closeHelp')}</p>
 
         <Panel>
           <ActionForm

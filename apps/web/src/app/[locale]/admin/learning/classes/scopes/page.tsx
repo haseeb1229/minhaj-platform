@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { ConfirmField } from '@/components/personal/parts';
 import {
   Alert,
@@ -87,9 +88,7 @@ export default async function ScopesPage({ params, searchParams }: ListParams) {
     <main className="flex flex-col gap-8">
       <div className="flex flex-col gap-2">
         <PageHeading>{t('classes.scopes')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('classes.scopesDescription')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('classes.scopesDescription')}</p>
         <p>
           <TextLink href={classesBase(locale)}>{t('backToList')}</TextLink>
         </p>
@@ -198,9 +197,7 @@ export default async function ScopesPage({ params, searchParams }: ListParams) {
           <SectionHeading>
             <span id="scopes-grant">{t('classes.grant')}</span>
           </SectionHeading>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('classes.grantHelp')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('classes.grantHelp')}</p>
           {courses.length === 0 ? (
             <Alert tone="info">{t('classes.grantNoCourses')}</Alert>
           ) : (
@@ -245,7 +242,7 @@ export default async function ScopesPage({ params, searchParams }: ListParams) {
                   )}
                 </Field>
                 <p className="text-sm">
-                  <TextLink href={`/${locale}/admin/identity/assignments`}>
+                  <TextLink href={localizedPath(locale, '/admin/identity/assignments')}>
                     {t('classes.assignmentsLink')}
                   </TextLink>
                 </p>

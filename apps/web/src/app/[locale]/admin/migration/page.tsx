@@ -41,9 +41,7 @@ export default async function MigrationOverviewPage({
     <main className="flex min-w-0 flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('overview.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('overview.description')}</p>
         <Alert tone="info">{t('overview.sources')}</Alert>
         <p className="text-sm">{t('overview.commandLine')}</p>
       </header>
@@ -57,7 +55,7 @@ export default async function MigrationOverviewPage({
                   {t(`surface.${surface.key}`)}
                 </TextLink>
               </SectionHeading>
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
+              <p className="text-sm text-foreground-muted">
                 {t(`overview.surface.${surface.key}`)}
               </p>
             </div>

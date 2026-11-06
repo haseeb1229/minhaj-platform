@@ -474,11 +474,11 @@ edge_smoke() {
     "${insecure[@]}" "https://$MINHAJ_PUBLIC_HOST/robots.txt")"
   printf '%s' "$body" | grep -qx 'Disallow: /' || { log "smoke: robots.txt does not disallow /"; return 1; }
 
-  result="$(edge_probe /en no)" || { log "smoke: /en unreachable"; return 1; }
-  [ "$result" = '401 1' ] || { log "smoke: /en without the credential expected '401 1', got '$result'"; return 1; }
+  result="$(edge_probe / no)" || { log "smoke: / unreachable"; return 1; }
+  [ "$result" = '401 1' ] || { log "smoke: / without the credential expected '401 1', got '$result'"; return 1; }
 
-  result="$(edge_probe /en yes)" || { log "smoke: authorised /en unreachable"; return 1; }
-  [ "$result" = '200 1' ] || { log "smoke: authorised /en expected '200 1', got '$result'"; return 1; }
+  result="$(edge_probe / yes)" || { log "smoke: authorised / unreachable"; return 1; }
+  [ "$result" = '200 1' ] || { log "smoke: authorised / expected '200 1', got '$result'"; return 1; }
 
   result="$(edge_probe '/socket.io/?EIO=4&transport=websocket' no)" || { log "smoke: socket path unreachable"; return 1; }
   [ "${result%% *}" = 401 ] || { log "smoke: the WebSocket path is not behind the environment gate ('$result')"; return 1; }

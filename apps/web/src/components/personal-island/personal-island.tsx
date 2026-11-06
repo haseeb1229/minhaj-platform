@@ -1,5 +1,6 @@
 'use client';
 
+import { localizedPath } from '@minhaj/contracts';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import type { PersonalTarget, TargetState } from '@minhaj/contracts/personalisation';
@@ -81,15 +82,15 @@ interface Status {
 type Collection = TargetState['collections'][number];
 
 const PANEL =
-  'flex flex-col gap-4 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] ' +
-  'bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]';
+  'flex flex-col gap-4 rounded-panel border border-border ' +
+  'bg-surface-raised p-5 shadow-panel';
 
 const SUMMARY = 'inline-flex min-h-11 cursor-pointer items-center text-sm font-medium';
 
 const STATUS_TONES: Record<Status['tone'], string> = {
-  neutral: 'text-[color:var(--color-foreground-muted)]',
-  success: 'text-[color:var(--color-foreground)]',
-  error: 'font-medium text-[color:var(--color-error)]',
+  neutral: 'text-foreground-muted',
+  success: 'text-foreground',
+  error: 'font-medium text-error',
 };
 
 export function PersonalIsland({
@@ -216,7 +217,12 @@ export function PersonalIsland({
           {phase.ended ? labels.sessionEnded : labels.signedOutPrompt}
         </p>
         <p className="text-sm">
-          <TextLink href={`/${locale}/signin?returnTo=${encodeURIComponent(returnTo)}`}>
+          <TextLink
+            href={localizedPath(
+              locale,
+              `/signin?returnTo=${encodeURIComponent(returnTo)}`,
+            )}
+          >
             {labels.signIn}
           </TextLink>
         </p>
@@ -322,9 +328,7 @@ export function PersonalIsland({
         <h2 id={headingId} className="text-lg font-semibold tracking-tight">
           {labels.heading}
         </h2>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {labels.privacy}
-        </p>
+        <p className="text-sm text-foreground-muted">{labels.privacy}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -424,7 +428,7 @@ export function PersonalIsland({
             </fieldset>
           )}
           <p className="text-sm">
-            <TextLink href={`/${locale}/my/saved/collections`}>
+            <TextLink href={localizedPath(locale, '/my/saved/collections')}>
               {labels.collectionsManage}
             </TextLink>
           </p>

@@ -126,7 +126,7 @@ export default async function MigrationManifestPage({
       </header>
 
       <Panel>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('manifest.run')}>
             <TextLink
               href={migrationPath(locale, `/runs/${encodeURIComponent(manifest.runId)}`)}
@@ -173,9 +173,7 @@ export default async function MigrationManifestPage({
           <span id="manifest-entries">{t('manifest.entries')}</span>
         </SectionHeading>
         {entries.some((entry) => entry.targetStage === 'in-review') ? (
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('manifest.inReview')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('manifest.inReview')}</p>
         ) : null}
         {entries.length === 0 ? (
           <EmptyState>{t('manifest.noEntries')}</EmptyState>
@@ -253,9 +251,7 @@ export default async function MigrationManifestPage({
           ) : null}
         </section>
       ) : publishable || reversible ? (
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('publication.publisherOnly')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('publication.publisherOnly')}</p>
       ) : null}
 
       {administer && manifest.state === 'draft' ? (

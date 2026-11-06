@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { localeSchema, type Locale } from '../env/shared.ts';
+import { localizedPath } from '../locale-path.ts';
 
 /**
  * Global Network — Country, Region, City, Centre and CentreContact
@@ -675,23 +676,29 @@ export function labelFor<L extends { readonly locale: Locale }>(
 
 /** The canonical public addresses, one function per resource — never assembled by hand. */
 export const globalPaths = Object.freeze({
-  home: (locale: Locale) => `/${locale}/global`,
-  finder: (locale: Locale) => `/${locale}/global/find-a-centre`,
-  countries: (locale: Locale) => `/${locale}/global/countries`,
+  home: (locale: Locale) => localizedPath(locale, '/global'),
+  finder: (locale: Locale) => localizedPath(locale, '/global/find-a-centre'),
+  countries: (locale: Locale) => localizedPath(locale, '/global/countries'),
   country: (locale: Locale, country: string) =>
-    `/${locale}/global/countries/${encodeURIComponent(country)}`,
+    localizedPath(locale, `/global/countries/${encodeURIComponent(country)}`),
   region: (locale: Locale, country: string, region: string) =>
-    `/${locale}/global/countries/${encodeURIComponent(country)}/regions/${encodeURIComponent(region)}`,
+    localizedPath(
+      locale,
+      `/global/countries/${encodeURIComponent(country)}/regions/${encodeURIComponent(region)}`,
+    ),
   city: (locale: Locale, country: string, city: string) =>
-    `/${locale}/global/countries/${encodeURIComponent(country)}/cities/${encodeURIComponent(city)}`,
-  centres: (locale: Locale) => `/${locale}/global/centres`,
+    localizedPath(
+      locale,
+      `/global/countries/${encodeURIComponent(country)}/cities/${encodeURIComponent(city)}`,
+    ),
+  centres: (locale: Locale) => localizedPath(locale, '/global/centres'),
   centre: (locale: Locale, centre: string) =>
-    `/${locale}/global/centres/${encodeURIComponent(centre)}`,
+    localizedPath(locale, `/global/centres/${encodeURIComponent(centre)}`),
   centreNews: (locale: Locale, centre: string) =>
-    `/${locale}/global/centres/${encodeURIComponent(centre)}/news`,
+    localizedPath(locale, `/global/centres/${encodeURIComponent(centre)}/news`),
   centreEvents: (locale: Locale, centre: string) =>
-    `/${locale}/global/centres/${encodeURIComponent(centre)}/events`,
+    localizedPath(locale, `/global/centres/${encodeURIComponent(centre)}/events`),
   centreContact: (locale: Locale, centre: string) =>
-    `/${locale}/global/centres/${encodeURIComponent(centre)}/contact`,
-  pakistan: (locale: Locale) => `/${locale}/global/pakistan`,
+    localizedPath(locale, `/global/centres/${encodeURIComponent(centre)}/contact`),
+  pakistan: (locale: Locale) => localizedPath(locale, '/global/pakistan'),
 });

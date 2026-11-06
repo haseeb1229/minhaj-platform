@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound, redirect } from 'next/navigation';
 import type { Locale } from '@minhaj/contracts';
 import {
@@ -169,7 +170,7 @@ async function requireLearningTrialsPage(
 ): Promise<AdminPageContext> {
   const active = await requireOwnSession(locale);
   if (active === null)
-    redirect(`/${locale}/signin?returnTo=${encodeURIComponent(returnPath)}`);
+    redirect(localizedPath(locale, `/signin?returnTo=${encodeURIComponent(returnPath)}`));
   const held = (await identityRuntime().authorization.evaluate(active.session))
     .permissions;
   const key = (['learning.read', 'learning.classes.read'] as const).find((candidate) =>
@@ -182,7 +183,7 @@ async function requireLearningTrialsPage(
 export default async function TrialSummaryPage({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/learning/trials`;
+  const base = localizedPath(locale, '/admin/learning/trials');
   const context = await requireLearningTrialsPage(locale, base);
   const copy = await learningCopy(locale);
   const { t } = copy;
@@ -234,9 +235,7 @@ export default async function TrialSummaryPage({ params, searchParams }: ListPar
     <main className="flex flex-col gap-8">
       <div className="flex flex-col gap-2">
         <PageHeading>{t('surface.trials')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('trials.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('trials.description')}</p>
       </div>
       <Alert tone="info">
         {classesRead ? t('trials.notBookedUntilConfirmed') : t('trials.notScheduled')}
@@ -256,7 +255,9 @@ export default async function TrialSummaryPage({ params, searchParams }: ListPar
           {page.items.map((row) => (
             <DataRow key={row.course.id}>
               <DataCell wrap>
-                <TextLink href={`/${locale}/admin/learning/courses/${row.course.id}`}>
+                <TextLink
+                  href={localizedPath(locale, `/admin/learning/courses/${row.course.id}`)}
+                >
                   <Title record={row.course} locale={locale} />
                 </TextLink>
               </DataCell>
@@ -292,9 +293,7 @@ export default async function TrialSummaryPage({ params, searchParams }: ListPar
           <SectionHeading>
             <span id="trial-requests">{t('trials.requestsHeading')}</span>
           </SectionHeading>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('trials.requestsHelp')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('trials.requestsHelp')}</p>
           <ActivationNotice mode={classes.mode} copy={copy} />
           {classes.requests.items.length === 0 ? (
             <EmptyState>{t('trials.empty')}</EmptyState>
@@ -308,9 +307,7 @@ export default async function TrialSummaryPage({ params, searchParams }: ListPar
                     </p>
                     <dl className="flex flex-col gap-1 text-sm">
                       <div className="flex flex-wrap gap-x-2">
-                        <dt className="text-[color:var(--color-foreground-muted)]">
-                          {t('trials.requester')}
-                        </dt>
+                        <dt className="text-foreground-muted">{t('trials.requester')}</dt>
                         <dd>
                           <PersonName
                             accountId={request.accountId}
@@ -320,7 +317,7 @@ export default async function TrialSummaryPage({ params, searchParams }: ListPar
                         </dd>
                       </div>
                       <div className="flex flex-wrap gap-x-2">
-                        <dt className="text-[color:var(--color-foreground-muted)]">
+                        <dt className="text-foreground-muted">
                           {t('trials.requestedAt')}
                         </dt>
                         <dd>
@@ -330,9 +327,7 @@ export default async function TrialSummaryPage({ params, searchParams }: ListPar
                         </dd>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-2">
-                        <dt className="text-[color:var(--color-foreground-muted)]">
-                          {t('trials.booking')}
-                        </dt>
+                        <dt className="text-foreground-muted">{t('trials.booking')}</dt>
                         <dd>
                           <StatusBadge
                             tone={request.booking === null ? 'caution' : 'neutral'}
@@ -347,7 +342,10 @@ export default async function TrialSummaryPage({ params, searchParams }: ListPar
                     {request.booking === null ? null : (
                       <p className="text-sm">
                         <TextLink
-                          href={`/${locale}/admin/learning/classes/${request.booking.sessionId}`}
+                          href={localizedPath(
+                            locale,
+                            `/admin/learning/classes/${request.booking.sessionId}`,
+                          )}
                         >
                           {t('trials.openClass')}
                         </TextLink>

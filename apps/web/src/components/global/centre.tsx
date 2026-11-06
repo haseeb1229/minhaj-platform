@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
 
@@ -81,7 +82,7 @@ async function centreTrail(locale: Locale, centre: PublicCentre) {
     label: shell('nav.breadcrumbs'),
     shellHome: shell('nav.home'),
     base: [
-      { href: `/${locale}`, text: shell('nav.home') },
+      { href: localizedPath(locale, ''), text: shell('nav.home') },
       { href: globalPaths.home(locale), text: t('title') },
       { href: globalPaths.centres(locale), text: t('sections.centres') },
     ],
@@ -153,12 +154,10 @@ function ContactValue({
       <a
         href={contact.value}
         rel="external noopener noreferrer"
-        className="font-medium break-all text-[color:var(--color-action)] underline underline-offset-2"
+        className="font-medium break-all text-action underline underline-offset-2"
       >
         <span dir="ltr">{contact.value}</span>{' '}
-        <span className="text-[color:var(--color-foreground-muted)]">
-          {t('contact.external')}
-        </span>
+        <span className="text-foreground-muted">{t('contact.external')}</span>
       </a>
     );
   const href =
@@ -170,7 +169,7 @@ function ContactValue({
   ) : (
     <a
       href={href}
-      className="font-medium break-all text-[color:var(--color-action)] underline underline-offset-2"
+      className="font-medium break-all text-action underline underline-offset-2"
     >
       <span dir="ltr">{contact.value}</span>
     </a>
@@ -217,7 +216,7 @@ function FactCard({
   return (
     <section
       aria-labelledby={id}
-      className="flex min-w-0 flex-col gap-3 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] border-t-4 border-t-[color:var(--color-accent-rule)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]"
+      className="flex min-w-0 flex-col gap-3 rounded-panel border border-border border-t-4 border-t-accent-rule bg-surface-raised p-5 shadow-panel"
     >
       <h2 id={id} className="text-subheading font-semibold">
         {heading}
@@ -239,7 +238,7 @@ function MoreLink({
     <p>
       <a
         href={href}
-        className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-[color:var(--color-action)] underline-offset-4 hover:underline active:text-[color:var(--color-action-hover)]"
+        className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-action underline-offset-4 hover:underline active:text-action-hover"
       >
         {children}
         <span aria-hidden="true" className="inline-block rtl:-scale-x-100">
@@ -282,11 +281,9 @@ export async function CentreDetailPage({
         nameLocale={trail.nameLocale}
       >
         {centre.isVirtual ? (
-          <p className="text-[color:var(--color-foreground-muted)]">
-            <span className="font-semibold text-[color:var(--color-foreground)]">
-              {t('centre.virtual')}
-            </span>{' '}
-            — {t('centre.virtualBody')}
+          <p className="text-foreground-muted">
+            <span className="font-semibold text-foreground">{t('centre.virtual')}</span> —{' '}
+            {t('centre.virtualBody')}
           </p>
         ) : null}
         {words?.description == null ? null : (
@@ -381,7 +378,7 @@ export async function CentreDetailPage({
                       href={globalPaths.city(locale, centre.country.slug, city.slug)}
                       lang={name.locale}
                       dir={directionOf(name.locale)}
-                      className="inline-flex min-h-11 items-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] px-4 text-sm wrap-anywhere no-underline transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--color-accent)] hover:bg-[color:var(--color-accent-surface)] active:bg-[color:var(--color-accent-rule)]"
+                      className="inline-flex min-h-11 items-center rounded-full border border-border bg-surface-raised px-4 text-sm wrap-anywhere no-underline transition-colors duration-[var(--duration-fast)] hover:border-accent hover:bg-accent-surface active:bg-accent-rule"
                     >
                       {name.text}
                     </a>
@@ -438,7 +435,7 @@ export async function CentreDetailPage({
       <BreadcrumbData
         contentLocales={placeLocales(centre)}
         trail={[
-          { name: trail.shellHome, path: `/${trail.nameLocale}` },
+          { name: trail.shellHome, path: localizedPath(trail.nameLocale, '') },
           { name: t('title'), path: globalPaths.home(trail.nameLocale) },
           { name: t('sections.centres'), path: globalPaths.centres(trail.nameLocale) },
           { name: trail.name, path: globalPaths.centre(trail.nameLocale, centre.slug) },
@@ -677,8 +674,10 @@ export async function CentreContactPage({
               </address>
             </FactCard>
           )}
-          <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
-            <TextLink href={`/${locale}/contact`}>{t('contact.general')}</TextLink>
+          <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
+            <TextLink href={localizedPath(locale, '/contact')}>
+              {t('contact.general')}
+            </TextLink>
           </p>
         </div>
       </DirectoryBody>

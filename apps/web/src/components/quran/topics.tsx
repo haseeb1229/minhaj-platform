@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -59,7 +60,7 @@ function TopicAyatList({
           <li key={key}>
             <article
               aria-label={t('ayahName', ref)}
-              className="flex min-w-0 flex-col gap-2 border-b border-[color:var(--color-border)] py-4"
+              className="flex min-w-0 flex-col gap-2 border-b border-border py-4"
             >
               <Heading className="text-sm font-semibold">
                 <TextLink href={ayahPath(locale, ref)}>
@@ -96,7 +97,7 @@ export async function QuranTopicPage({
   const t = await getTranslations({ locale, namespace: 'quran' });
   const parts = await quranTrail(locale);
   const page = await quranReadRuntime().reader.topicAyat(topic.id, offset);
-  const path = `/${locale}/quran/topics/${encodeURIComponent(topic.slug)}`;
+  const path = localizedPath(locale, `/quran/topics/${encodeURIComponent(topic.slug)}`);
   const links = pageLinks(page.offset, QURAN_PAGE, page.total);
   const labelLocale = topic.label.resolvedLocale;
 
@@ -114,7 +115,9 @@ export async function QuranTopicPage({
           </span>
         </PageHeading>
         <p>
-          <TextLink href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}>
+          <TextLink
+            href={localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`)}
+          >
             {t('topicHub')}
           </TextLink>
         </p>
@@ -178,7 +181,9 @@ export async function QuranTopicSection({
         headingLevel="h3"
       />
       <p>
-        <TextLink href={`/${locale}/quran/topics/${encodeURIComponent(topic.slug)}`}>
+        <TextLink
+          href={localizedPath(locale, `/quran/topics/${encodeURIComponent(topic.slug)}`)}
+        >
           {t('topicAll')}
         </TextLink>
       </p>

@@ -11,6 +11,7 @@ import {
   alertIn,
   baseUrl,
   expect,
+  localizedPath,
   privilegedSession,
   registerAndSignIn,
   statusIn,
@@ -107,7 +108,7 @@ test.beforeAll(async ({ browser }) => {
   // Live authorisation, so the authority is in effect on the next request —
   // no re-sign-in, no session refresh. Proven here by navigating straight to a
   // route that was refused a moment ago.
-  const response = await page.goto('/en/admin/taxonomy/topics');
+  const response = await page.goto('/admin/taxonomy/topics');
   expect(response?.status()).toBe(200);
 
   await context.storageState({ path: EDITOR_STATE });
@@ -130,7 +131,7 @@ test.describe('taxonomy routes refuse an account without the permission', () => 
     // it, which is a map of the platform's privileged shape handed to anyone
     // with an account (SECURITY_BASELINE.md §1.5).
     for (const route of ['topics', 'mapping', 'languages', 'tags']) {
-      const response = await page.goto(`/en/admin/taxonomy/${route}`);
+      const response = await page.goto(`/admin/taxonomy/${route}`);
       expect(response?.status(), `/${route} must be 404`).toBe(404);
     }
   });
@@ -138,8 +139,8 @@ test.describe('taxonomy routes refuse an account without the permission', () => 
   test('sends a signed-out visitor to sign in, with a safe internal return path', async ({
     page,
   }) => {
-    await page.goto('/en/admin/taxonomy/topics');
-    await page.waitForURL(/\/en\/signin\?returnTo=/);
+    await page.goto('/admin/taxonomy/topics');
+    await page.waitForURL(/\/signin\?returnTo=/);
 
     // THE ADMINISTRATIVE SHELL REDIRECTS, not the page: a Next layout renders
     // before the route beneath it and cannot see the requested pathname, so the
@@ -153,7 +154,7 @@ test.describe('taxonomy routes refuse an account without the permission', () => 
     // locale-prefixed, internal, and carries no absolute URL.
     const returnTo = new URL(page.url()).searchParams.get('returnTo');
 
-    expect(returnTo).toBe('/en/admin');
+    expect(returnTo).toBe('/admin');
     expect(returnTo?.startsWith('//')).toBe(false);
     expect(returnTo).not.toMatch(/^https?:/);
   });
@@ -169,7 +170,7 @@ test.describe('the taxonomy editor', () => {
   test('sees the canonical taxonomy, and which topics still need translating', async ({
     page,
   }) => {
-    await page.goto('/en/admin/taxonomy/topics');
+    await page.goto('/admin/taxonomy/topics');
 
     const main = page.getByRole('main');
     await expect(main).toContainText('Quran');
@@ -188,7 +189,7 @@ test.describe('the taxonomy editor', () => {
   test('offers no slug, move or archive control for a canonical topic', async ({
     page,
   }) => {
-    await page.goto('/en/admin/taxonomy/topics');
+    await page.goto('/admin/taxonomy/topics');
     await page
       .getByRole('row')
       .filter({ hasText: 'quran' })
@@ -217,7 +218,7 @@ test.describe('the taxonomy editor', () => {
   }) => {
     const slug = proofSlug('topic');
 
-    await page.goto('/en/admin/taxonomy/topics');
+    await page.goto('/admin/taxonomy/topics');
     await page.getByLabel('Slug', { exact: true }).first().fill(slug);
     await page.getByLabel('Name (en)', { exact: true }).fill('Browser proof topic');
     await page
@@ -263,7 +264,7 @@ test.describe('the taxonomy editor', () => {
     const childSlug = proofSlug('child');
 
     // A parent at the root.
-    await page.goto('/en/admin/taxonomy/topics');
+    await page.goto('/admin/taxonomy/topics');
     await page.getByLabel('Slug', { exact: true }).first().fill(parentSlug);
     await page.getByLabel('Name (en)', { exact: true }).fill('Cycle parent');
     await page.getByRole('button', { name: 'Create topic' }).click();
@@ -286,7 +287,7 @@ test.describe('the taxonomy editor', () => {
     await expect(announced(page, 'topic was created')).toBeVisible();
 
     // Now try to move the PARENT beneath its own child.
-    await page.goto('/en/admin/taxonomy/topics');
+    await page.goto('/admin/taxonomy/topics');
     await page
       .getByRole('row')
       .filter({ hasText: parentSlug })
@@ -306,7 +307,7 @@ test.describe('the taxonomy editor', () => {
   test('administers a content language without touching the site languages', async ({
     page,
   }) => {
-    await page.goto('/en/admin/taxonomy/languages');
+    await page.goto('/admin/taxonomy/languages');
 
     const main = page.getByRole('main');
     await expect(main).toContainText('content languages, not site languages');
@@ -346,12 +347,12 @@ test.describe('the taxonomy editor', () => {
 
     // THE SITE LANGUAGES ARE UNCHANGED. The new content language creates no
     // route, whatever it is called.
-    const response = await page.goto(`/${code}/admin/taxonomy/languages`);
+    const response = await page.goto(localizedPath(code, '/admin/taxonomy/languages'));
     expect(response?.status()).toBe(404);
   });
 
   test('keeps tags visibly separate from topics', async ({ page }) => {
-    await page.goto('/en/admin/taxonomy/tags');
+    await page.goto('/admin/taxonomy/tags');
 
     const main = page.getByRole('main');
     await expect(main).toContainText('Tags are not topics');
@@ -385,7 +386,7 @@ test.describe('the taxonomy editor', () => {
   test('shows typed topic relationships without a generic assignment control', async ({
     page,
   }) => {
-    await page.goto('/en/admin/taxonomy/mapping');
+    await page.goto('/admin/taxonomy/mapping');
 
     const main = page.getByRole('main');
     // Editorial's ArticleTopic and PageTopic (Phase 6), Library's WorkTopic
@@ -433,7 +434,7 @@ test.describe('the taxonomy surfaces are usable', () => {
   });
 
   test('gives every table a caption and column headers', async ({ page }) => {
-    await page.goto('/en/admin/taxonomy/languages');
+    await page.goto('/admin/taxonomy/languages');
 
     const table = page.getByRole('table').first();
     await expect(table).toBeVisible();
@@ -442,7 +443,7 @@ test.describe('the taxonomy surfaces are usable', () => {
   });
 
   test('is operable from the keyboard', async ({ page }) => {
-    await page.goto('/en/admin/taxonomy/tags');
+    await page.goto('/admin/taxonomy/tags');
 
     await page.keyboard.press('Tab');
     const focused = page.locator(':focus');
@@ -456,7 +457,7 @@ test.describe('the taxonomy surfaces are usable', () => {
   });
 
   test('keeps the administrative tree out of search indexes', async ({ page }) => {
-    const response = await page.goto('/en/admin/taxonomy/topics');
+    const response = await page.goto('/admin/taxonomy/topics');
     expect(response?.status()).toBe(200);
 
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute(

@@ -16,6 +16,13 @@ import { requireRoute } from '@/shell/registry';
  * and the mobile drawer render, so the three cannot list different things.
  */
 
+/**
+ * Rendered per request (Rebaseline R1): the shell promotes only areas with
+ * published content, read from public evidence on every request. Nothing here
+ * reads a session — the anonymous tree stays one document for every visitor.
+ */
+export const dynamic = 'force-dynamic';
+
 export async function generateMetadata({
   params,
 }: {

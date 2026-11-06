@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
@@ -44,7 +45,7 @@ export async function generateMetadata({ params }: TopicsParams): Promise<Metada
 
 /** The address of one topic's hub. */
 function hubPath(locale: string, topic: TopicView): string {
-  return `/${locale}/topics/${encodeURIComponent(topic.slug)}`;
+  return localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`);
 }
 
 export default async function TopicsPage({ params }: TopicsParams) {
@@ -67,7 +68,7 @@ export default async function TopicsPage({ params }: TopicsParams) {
           <Breadcrumbs
             label={shell('nav.breadcrumbs')}
             trail={[
-              { href: `/${locale}`, text: shell('nav.home') },
+              { href: localizedPath(locale, ''), text: shell('nav.home') },
               { text: t('title') },
             ]}
           />
@@ -99,21 +100,21 @@ export default async function TopicsPage({ params }: TopicsParams) {
                 return (
                   <li
                     key={root.id}
-                    className="flex min-w-0 flex-col gap-3 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]"
+                    className="flex min-w-0 flex-col gap-3 rounded-panel border border-border bg-surface-raised p-5 shadow-panel"
                   >
                     <h2 className="text-subheading font-semibold wrap-anywhere">
                       <a
                         href={hubPath(locale, root)}
                         lang={root.label.resolvedLocale}
                         dir={directionOf(root.label.resolvedLocale)}
-                        className="inline-flex min-h-11 items-center text-[color:var(--color-foreground)] underline decoration-[color:var(--color-accent-rule)] underline-offset-4 hover:decoration-[color:var(--color-action)] active:text-[color:var(--color-action)]"
+                        className="inline-flex min-h-11 items-center text-foreground underline decoration-accent-rule underline-offset-4 hover:decoration-action active:text-action"
                       >
                         {root.label.name}
                       </a>
                     </h2>
                     {root.label.description === null ? null : (
                       <p
-                        className="line-clamp-3 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+                        className="line-clamp-3 text-sm wrap-anywhere text-foreground-muted"
                         lang={root.label.resolvedLocale}
                         dir={directionOf(root.label.resolvedLocale)}
                       >
@@ -125,7 +126,7 @@ export default async function TopicsPage({ params }: TopicsParams) {
                         <MetaRow
                           items={[t('index.children', { count: children.length })]}
                         />
-                        <ul className="flex list-none flex-col border-s-2 border-[color:var(--color-accent-rule)] p-0 ps-3">
+                        <ul className="flex list-none flex-col border-s-2 border-accent-rule p-0 ps-3">
                           {children.map((child) => (
                             <Branch
                               key={child.id}
@@ -165,12 +166,12 @@ function Branch({
         href={hubPath(locale, topic)}
         lang={topic.label.resolvedLocale}
         dir={directionOf(topic.label.resolvedLocale)}
-        className="inline-flex min-h-11 items-center text-sm font-medium wrap-anywhere text-[color:var(--color-action)] underline-offset-4 hover:underline active:text-[color:var(--color-action-hover)]"
+        className="inline-flex min-h-11 items-center text-sm font-medium wrap-anywhere text-action underline-offset-4 hover:underline active:text-action-hover"
       >
         {topic.label.name}
       </a>
       {children.length === 0 ? null : (
-        <ul className="flex list-none flex-col border-s border-[color:var(--color-border)] p-0 ps-3">
+        <ul className="flex list-none flex-col border-s border-border p-0 ps-3">
           {children.map((child) => (
             <Branch key={child.id} topic={child} locale={locale} tree={tree} />
           ))}

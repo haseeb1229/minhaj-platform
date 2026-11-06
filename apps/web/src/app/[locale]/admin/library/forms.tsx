@@ -192,9 +192,7 @@ export function WorkForm({
       </label>
 
       <SectionHeading>{t('labels')}</SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('labelsHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('labelsHelp')}</p>
 
       {localeSchema.options.map((language) => {
         const existing = record?.labels.find((entry) => entry.locale === language);
@@ -249,9 +247,7 @@ export function WorkForm({
       })}
 
       <SectionHeading>{t('contributors')}</SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('contributorsHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('contributorsHelp')}</p>
 
       {ROW_INDEXES.map((index) => {
         const existing = record?.contributors[index];
@@ -314,9 +310,7 @@ export function WorkForm({
       ))}
 
       <SectionHeading>{t('salePoints')}</SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('workSalePointsHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('workSalePointsHelp')}</p>
       {ROW_INDEXES.map((index) => (
         <Field key={index} id={`work-sale-${String(index)}`} label={t('salePoint')}>
           {(props) => (

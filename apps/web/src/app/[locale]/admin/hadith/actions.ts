@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
-import { localeSchema } from '@minhaj/contracts';
+import { localeSchema, localizedPath } from '@minhaj/contracts';
 import {
   HADITH_LIMITS,
   HADITH_NAME_LOCALES,
@@ -150,7 +150,7 @@ async function privileged(locale: string) {
 
 /** Re-renders the Hadith administration after a change it displays. */
 function refresh(locale: string): void {
-  revalidatePath(`/${locale}/admin/hadith`, 'layout');
+  revalidatePath(localizedPath(locale, '/admin/hadith'), 'layout');
 }
 
 /** The record being edited and the version the operator was looking at. */
@@ -248,7 +248,7 @@ export async function createHadithCollection(
       parsed.data,
     );
     refresh(locale);
-    destination = `/${locale}/admin/hadith/collections/${created.id}`;
+    destination = localizedPath(locale, `/admin/hadith/collections/${created.id}`);
   } catch (error) {
     return rejected(error, 'hadith-create-collection');
   }
@@ -282,7 +282,7 @@ export async function createHadithBook(
 
     const created = await hadithRuntime().canonical.createBook(gate.actor, parsed.data);
     refresh(locale);
-    destination = `/${locale}/admin/hadith/books/${created.id}`;
+    destination = localizedPath(locale, `/admin/hadith/books/${created.id}`);
   } catch (error) {
     return rejected(error, 'hadith-create-book');
   }
@@ -319,7 +319,7 @@ export async function createHadithChapter(
       parsed.data,
     );
     refresh(locale);
-    destination = `/${locale}/admin/hadith/chapters/${created.id}`;
+    destination = localizedPath(locale, `/admin/hadith/chapters/${created.id}`);
   } catch (error) {
     return rejected(error, 'hadith-create-chapter');
   }
@@ -355,7 +355,7 @@ export async function createHadithRecord(
     refresh(locale);
     // Durable intent is already committed; this only indexes it sooner.
     indexAfterResponse();
-    destination = `/${locale}/admin/hadith/records/${created.id}`;
+    destination = localizedPath(locale, `/admin/hadith/records/${created.id}`);
   } catch (error) {
     return rejected(error, 'hadith-create-record');
   }
@@ -597,7 +597,10 @@ export async function saveHadithTranslation(
         hadithId: hadithId.data,
         value: parsed.data,
       });
-      destination = `/${locale}/admin/hadith/records/${hadithId.data}?translation=${created.id}#translation-editor`;
+      destination = localizedPath(
+        locale,
+        `/admin/hadith/records/${hadithId.data}?translation=${created.id}#translation-editor`,
+      );
     } else {
       const target = versioned(form);
       if (!target.success) return INVALID;
@@ -638,7 +641,7 @@ export async function saveHadithCommentary(
     const service = hadithRuntime().hadith;
     if (value(form, 'id') === null) {
       const created = await service.createCommentary(actor, parsed.data);
-      destination = `/${locale}/admin/hadith/commentary/${created.id}`;
+      destination = localizedPath(locale, `/admin/hadith/commentary/${created.id}`);
     } else {
       const target = versioned(form);
       if (!target.success) return INVALID;
@@ -725,7 +728,7 @@ export async function saveHadithScience(
     const service = hadithRuntime().hadith;
     if (value(form, 'id') === null) {
       const created = await service.createScience(actor, parsed.data);
-      destination = `/${locale}/admin/hadith/sciences/${created.id}`;
+      destination = localizedPath(locale, `/admin/hadith/sciences/${created.id}`);
     } else {
       const target = versioned(form);
       if (!target.success) return INVALID;

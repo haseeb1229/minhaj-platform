@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import type { Locale } from '@minhaj/contracts';
@@ -100,7 +101,7 @@ export function eventsPath(
   if (filter.centre !== null) search.set('centre', filter.centre);
   if (offset > 0) search.set('offset', String(offset));
   const encoded = search.toString();
-  return `/${locale}/events${encoded === '' ? '' : `?${encoded}`}`;
+  return localizedPath(locale, `/events${encoded === '' ? '' : `?${encoded}`}`);
 }
 
 /* ===========================================================================
@@ -182,7 +183,7 @@ export function eventMetadata(record: PublicEvent, locale: Locale) {
     locale,
     contentLocales: record.translations.map((row) => row.languageCode),
     primaryLocale: record.primaryLanguage,
-    pathFor: (language) => `/${language}${eventPathOf(record.slug)}`,
+    pathFor: (language) => localizedPath(language, `${eventPathOf(record.slug)}`),
     title: translation.seoTitle || translation.title,
     ...(description ? { description } : {}),
   });
@@ -219,7 +220,7 @@ export function eventStructuredData(
   const country = labelFor(centre.country, language);
   const address = words?.address ?? null;
   if (words === null || (city === null && address === null)) return null;
-  const url = absoluteUrl(`/${language}${eventPathOf(record.slug)}`);
+  const url = absoluteUrl(localizedPath(language, `${eventPathOf(record.slug)}`));
   const place = {
     '@type': 'Place',
     name: words.name,

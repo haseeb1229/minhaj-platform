@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { PERSONAL_LIMITS, targetKey } from '@minhaj/contracts/personalisation';
@@ -49,7 +50,7 @@ export default async function ReadingHistoryPage({
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const locale = await requireLocale(params);
-  const path = `/${locale}/my/history/reading`;
+  const path = localizedPath(locale, '/my/history/reading');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'personal' });
   const actor = { accountId: session.account.id };
@@ -93,7 +94,7 @@ export default async function ReadingHistoryPage({
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex min-w-0 flex-col gap-2">
                   <TargetTitle resolved={titles.get(targetKey(entry.target))} t={t} />
-                  <div className="flex flex-wrap items-center gap-3 text-sm text-[color:var(--color-foreground-muted)]">
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-foreground-muted">
                     <KindBadge kind={entry.target.kind} t={t} />
                     <span>
                       {t('history.lastRead')}{' '}

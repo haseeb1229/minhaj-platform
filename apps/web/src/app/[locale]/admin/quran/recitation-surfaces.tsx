@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import type { Locale } from '@minhaj/contracts';
@@ -82,7 +83,7 @@ function formatBytes(bytes: number, locale: Locale): string {
 export async function RecitationDirectory({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/quran/recitations`;
+  const base = localizedPath(locale, '/admin/quran/recitations');
   const context = await requireAdminPage(locale, 'quran.read', base);
   const copy = await quranCopy(locale);
   const { t } = copy;
@@ -106,9 +107,7 @@ export async function RecitationDirectory({ params, searchParams }: ListParams) 
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.recitations')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scope.recitations')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('scope.recitations')}</p>
 
       {page.items.length === 0 ? (
         <EmptyState>{t('empty')}</EmptyState>
@@ -167,9 +166,7 @@ export async function RecitationDirectory({ params, searchParams }: ListParams) 
         <Panel>
           <div className="flex flex-col gap-4">
             <SectionHeading>{t('create.recitations')}</SectionHeading>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('createHelp')}
-            </p>
+            <p className="text-sm text-foreground-muted">{t('createHelp')}</p>
             <PeopleSearch query={reference} copy={copy} />
             <RecitationForm
               locale={locale}
@@ -193,7 +190,7 @@ export async function RecitationEditor({ params, searchParams }: EditorParams) {
   const locale = await requireLocale(params);
   const id = recordTarget((await params).id);
   const query = await searchParams;
-  const list = `/${locale}/admin/quran/recitations`;
+  const list = localizedPath(locale, '/admin/quran/recitations');
   const base = `${list}/${id}`;
   const context = await requireAdminPage(locale, 'quran.read', base);
   const copy = await quranCopy(locale);
@@ -291,7 +288,7 @@ export async function RecitationEditor({ params, searchParams }: EditorParams) {
         <SectionHeading>
           <span id="recitation-segments">{t('recitation.segments')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="text-sm text-foreground-muted">
           {t('recitation.segmentsHelp', {
             count: segments.length,
             limit: QURAN_LIMITS.segmentsPerRecitation,
@@ -564,9 +561,7 @@ function SegmentForm({
           )}
         </Field>
       </div>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('recitation.rangeHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('recitation.rangeHelp')}</p>
     </ActionForm>
   );
 }

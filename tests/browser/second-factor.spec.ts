@@ -32,7 +32,7 @@ test.describe('enrolling a second factor', () => {
     page,
   }) => {
     await registerAndSignIn(page, 'enrolling');
-    await page.goto('/en/my/settings/security');
+    await page.goto('/my/settings/security');
 
     const section = secondFactorSection(page);
 
@@ -71,7 +71,7 @@ test.describe('enrolling a second factor', () => {
   test('completes, then challenges the next sign-in', async ({ page }) => {
     const { email } = await registerAndSignIn(page, 'challenged');
 
-    await page.goto('/en/my/settings/security');
+    await page.goto('/my/settings/security');
     const section = secondFactorSection(page);
 
     const { totpUri, recoveryCodes } = await beginSecondFactorEnrolment(page);
@@ -86,17 +86,17 @@ test.describe('enrolling a second factor', () => {
     await expect(section).toContainText(SECOND_FACTOR_ON);
 
     // Sign out and back in: the password alone no longer produces a session.
-    await page.goto('/en/my');
+    await page.goto('/my');
     await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-    await page.waitForURL(/\/en$/);
+    await page.waitForURL((url) => url.pathname === '/');
 
-    await page.goto('/en/signin');
+    await page.goto('/signin');
     await page.getByLabel('Email address').fill(email);
     await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 
     // THE CHALLENGE. Not a session, and nothing about the account on screen.
-    await page.waitForURL(/\/en\/signin\/two-factor/);
+    await page.waitForURL(/\/signin\/two-factor/);
     const body = await page.getByRole('main').innerText();
     expect(body).not.toContain(email);
 
@@ -119,10 +119,10 @@ test.describe('enrolling a second factor', () => {
     // account uses the product with nothing enrolled, and is not nagged into it.
     await registerAndSignIn(page, 'ordinary');
 
-    await page.goto('/en/my');
+    await page.goto('/my');
     await expect(page.getByRole('main')).toBeVisible();
 
-    await page.goto('/en/my/settings/security');
+    await page.goto('/my/settings/security');
     await expect(secondFactorSection(page)).toContainText(SECOND_FACTOR_OFF);
 
     // Changing a password still works with no factor in the way. Scoped to the
@@ -141,7 +141,7 @@ test.describe('the challenge page', () => {
   test('discloses nothing to a visitor without a challenge', async ({ page }) => {
     // Opening it cold is not an error and not an oracle: it is a form that will
     // not work, and it names no account.
-    const response = await page.goto('/en/signin/two-factor');
+    const response = await page.goto('/signin/two-factor');
     expect(response?.status()).toBe(200);
 
     const body = await page.getByRole('main').innerText();
@@ -152,12 +152,12 @@ test.describe('the challenge page', () => {
     await expect(alertIn(page).first()).toBeVisible();
 
     // Still not signed in.
-    await page.goto('/en/my');
-    await page.waitForURL(/\/en\/signin/);
+    await page.goto('/my');
+    await page.waitForURL(/\/signin/);
   });
 
   test('is noindex, like every authentication surface', async ({ page }) => {
-    await page.goto('/en/signin/two-factor');
+    await page.goto('/signin/two-factor');
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
       'content',
       /noindex/,

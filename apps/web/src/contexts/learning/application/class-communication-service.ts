@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import type {
@@ -80,8 +81,8 @@ export function createClassCommunicationService(deps: {
   ): string {
     const path =
       role === 'teacher'
-        ? `/${locale}/teacher/classes/today/${sessionId}`
-        : `/${locale}/my/classes/${sessionId}`;
+        ? localizedPath(locale, `/teacher/classes/today/${sessionId}`)
+        : localizedPath(locale, `/my/classes/${sessionId}`);
     return new URL(path, deps.baseUrl).toString();
   }
 

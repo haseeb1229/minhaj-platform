@@ -10,6 +10,7 @@ import {
   accountIdFor,
   baseUrl,
   expect,
+  localizedPath,
   privilegedSession,
   registerAndSignIn,
   statusIn,
@@ -201,7 +202,7 @@ test.beforeAll(async ({ browser }) => {
   // Live authorisation, so the authority is in effect on the next request — no
   // re-sign-in and no session refresh. Proven by navigating straight to a route
   // that was refused a moment ago.
-  const editorResponse = await editorPage.goto('/en/admin/people/persons');
+  const editorResponse = await editorPage.goto('/admin/people/persons');
   expect(editorResponse?.status()).toBe(200);
 
   await editorContext.storageState({ path: EDITOR_STATE });
@@ -217,7 +218,7 @@ test.beforeAll(async ({ browser }) => {
   const { email: readerEmail } = await registerAndSignIn(readerPage, 'people-reader');
   await grantRole(await accountIdFor(sql, readerEmail), 'reader', ['people.read']);
 
-  const readerResponse = await readerPage.goto('/en/admin/people/persons');
+  const readerResponse = await readerPage.goto('/admin/people/persons');
   expect(readerResponse?.status()).toBe(200);
 
   await readerContext.storageState({ path: READER_STATE });
@@ -281,7 +282,7 @@ test.afterAll(async () => {
 
 test.describe('the public contributor profile', () => {
   test('renders for a visitor who has never signed in', async ({ page }) => {
-    const response = await page.goto(`/en/people/${FIXTURE.published}`);
+    const response = await page.goto(`/people/${FIXTURE.published}`);
 
     expect(response?.status()).toBe(200);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(NAME.en);
@@ -292,7 +293,7 @@ test.describe('the public contributor profile', () => {
   });
 
   test('shows only the facets that are genuinely active', async ({ page }) => {
-    await page.goto(`/en/people/${FIXTURE.published}`);
+    await page.goto(`/people/${FIXTURE.published}`);
     const main = page.getByRole('main');
 
     await expect(main).toContainText('Author');
@@ -303,7 +304,7 @@ test.describe('the public contributor profile', () => {
   });
 
   test('shows the alternative spellings an administrator entered', async ({ page }) => {
-    await page.goto(`/en/people/${FIXTURE.published}`);
+    await page.goto(`/people/${FIXTURE.published}`);
 
     await expect(page.getByRole('main')).toContainText('Proof Alternative Spelling');
   });
@@ -362,7 +363,7 @@ test.describe('the public contributor profile', () => {
         .trim();
 
     for (const slug of [FIXTURE.published, FIXTURE.urduOnly]) {
-      const url = `${base}/en/people/${slug}`;
+      const url = `${base}/people/${slug}`;
 
       const first = await anonymous.request.get(url);
       const second = await anonymous.request.get(url);
@@ -406,7 +407,7 @@ test.describe('the public contributor profile', () => {
     const base = test.info().project.use.baseURL;
     const response = await page
       .context()
-      .request.get(`${base}/en/people/${FIXTURE.published}`);
+      .request.get(`${base}/people/${FIXTURE.published}`);
     const body = await response.text();
 
     expect(body).not.toContain(sessionCookie!.value);
@@ -438,7 +439,7 @@ test.describe('the public contributor profile', () => {
       extraHTTPHeaders: { 'x-forwarded-for': clientAddress },
     });
     const base = test.info().project.use.baseURL;
-    const url = `${base}/en/people/${FIXTURE.published}`;
+    const url = `${base}/people/${FIXTURE.published}`;
 
     const signedIn = await page.context().request.get(url);
     const signedOut = await anonymous.request.get(url);
@@ -457,21 +458,25 @@ test.describe('the public contributor profile', () => {
   });
 
   test('sets no locale preference cookie on an ordinary visit', async ({ page }) => {
-    // A Phase-4 contract: only an explicit language-switch action persists a
-    // preference. An ordinary locale-prefixed response must not.
-    await page.goto(`/ur/people/${FIXTURE.published}`);
+    // Rebaseline R1: the address alone decides the language, so no locale
+    // preference is ever stored — not by a prefixed visit, and not by the
+    // language switcher either.
+    const response = await page.goto(`/ur/people/${FIXTURE.published}`);
+    expect(response?.headers()['set-cookie']).toBeUndefined();
+    await page
+      .getByRole('banner')
+      .getByRole('link', { name: 'English', exact: true })
+      .click();
+    await page.waitForURL((url) => url.pathname === `/people/${FIXTURE.published}`);
 
-    const preference = (await page.context().cookies()).find(
-      ({ name }) => name === 'NEXT_LOCALE',
-    );
-    expect(preference).toBeUndefined();
+    expect(await page.context().cookies()).toHaveLength(0);
   });
 
   test('answers 404 for a draft, an archived record and an unknown slug', async ({
     page,
   }) => {
     for (const slug of [FIXTURE.draft, FIXTURE.archived, 'no-such-contributor']) {
-      const response = await page.goto(`/en/people/${slug}`);
+      const response = await page.goto(`/people/${slug}`);
       expect(response?.status(), slug).toBe(404);
     }
   });
@@ -486,7 +491,9 @@ test.describe('a contributor reads in every interface language', () => {
     page,
   }) => {
     for (const locale of ['en', 'ur', 'ar'] as const) {
-      const response = await page.goto(`/${locale}/people/${FIXTURE.published}`);
+      const response = await page.goto(
+        localizedPath(locale, `/people/${FIXTURE.published}`),
+      );
       expect(response?.status(), locale).toBe(200);
 
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
@@ -508,7 +515,7 @@ test.describe('a contributor reads in every interface language', () => {
     // tone, which renders `role="status"` rather than `role="alert"` — polite
     // rather than interrupting — and the public shell carries its own status
     // regions. Matching by role alone would assert something about the shell.
-    await page.goto(`/en/people/${FIXTURE.published}`);
+    await page.goto(`/people/${FIXTURE.published}`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(NAME.en);
     await expect(languageNotice(page)).toHaveCount(0);
 
@@ -523,7 +530,7 @@ test.describe('a contributor reads in every interface language', () => {
     // ROUTE_MAP.md §9.3: the chrome stays in the requested locale, the content
     // is shown in a language that exists, and a visible notice says so. Never a
     // generated translation and never a silent substitution.
-    await page.goto(`/en/people/${FIXTURE.urduOnly}`);
+    await page.goto(`/people/${FIXTURE.urduOnly}`);
 
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(NAME.ur);
@@ -541,7 +548,7 @@ test.describe('a contributor reads in every interface language', () => {
     // An Urdu name inside an English page is marked `lang="ur"` and `dir` is
     // resolved from the text, so it renders right-to-left without flipping the
     // page around it.
-    await page.goto(`/en/people/${FIXTURE.urduOnly}`);
+    await page.goto(`/people/${FIXTURE.urduOnly}`);
 
     const heading = page.getByRole('heading', { level: 1 });
     await expect(heading).toHaveAttribute('lang', 'ur');
@@ -560,13 +567,12 @@ test.describe('the author aliases redirect once, permanently', () => {
 
       // NOT FOLLOWED, so the status itself is observed rather than inferred
       // from where the browser ended up.
-      const response = await page.request.get(
-        `${base}/en/${alias}/${FIXTURE.published}`,
-        { maxRedirects: 0 },
-      );
+      const response = await page.request.get(`${base}/${alias}/${FIXTURE.published}`, {
+        maxRedirects: 0,
+      });
 
       expect(response.status()).toBe(301);
-      expect(response.headers()['location']).toBe(`/en/people/${FIXTURE.published}`);
+      expect(response.headers()['location']).toBe(`/people/${FIXTURE.published}`);
       // A legacy alias is never indexable, and a redirect carries no document
       // for a `<meta>` to live in.
       expect(response.headers()['x-robots-tag']).toContain('noindex');
@@ -585,10 +591,10 @@ test.describe('the author aliases redirect once, permanently', () => {
     });
 
     test(`/${alias}/{slug} lands on the profile in ONE hop`, async ({ page }) => {
-      const response = await page.goto(`/en/${alias}/${FIXTURE.published}`);
+      const response = await page.goto(`/${alias}/${FIXTURE.published}`);
 
       expect(response?.status()).toBe(200);
-      expect(new URL(page.url()).pathname).toBe(`/en/people/${FIXTURE.published}`);
+      expect(new URL(page.url()).pathname).toBe(`/people/${FIXTURE.published}`);
 
       // EXACTLY ONE REDIRECT. A chain would mean the alias pointed at something
       // that pointed somewhere else, which wastes a crawl and is the duplicate
@@ -610,7 +616,7 @@ test.describe('the author aliases redirect once, permanently', () => {
       const base = test.info().project.use.baseURL;
 
       for (const slug of [FIXTURE.draft, FIXTURE.archived, 'no-such-contributor']) {
-        const response = await page.request.get(`${base}/en/${alias}/${slug}`, {
+        const response = await page.request.get(`${base}/${alias}/${slug}`, {
           maxRedirects: 0,
         });
         expect(response.status(), `${alias}/${slug}`).toBe(404);
@@ -629,7 +635,7 @@ test.describe('the pre-adoption posture holds on the contributor profile', () =>
     // pre-adoption: the whole site is `noindex` and advertises no sitemap
     // (ROUTE_MAP.md §9.5). The indexable half is proved in the SEO suite, where
     // the posture can be switched in-process.
-    await page.goto(`/en/people/${FIXTURE.published}`);
+    await page.goto(`/people/${FIXTURE.published}`);
 
     // NOT SCOPED TO `head`, which is the same streaming detail the content
     // comparison above had to account for: React resolves this page's metadata
@@ -650,7 +656,7 @@ test.describe('the pre-adoption posture holds on the contributor profile', () =>
     // A machine-readable claim about a real person, published from a
     // developer-controlled origin nobody may index, is exactly the
     // over-claiming §9.6 warns produces manual action penalties.
-    await page.goto(`/en/people/${FIXTURE.published}`);
+    await page.goto(`/people/${FIXTURE.published}`);
 
     expect(await page.locator('script[type="application/ld+json"]').count()).toBe(0);
   });
@@ -675,7 +681,7 @@ test.describe('the pre-adoption posture holds on the contributor profile', () =>
 test.describe('the contributor profile is usable', () => {
   test('fits a phone without horizontal overflow', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 780 });
-    await page.goto(`/en/people/${FIXTURE.published}`);
+    await page.goto(`/people/${FIXTURE.published}`);
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -694,17 +700,23 @@ test.describe('the contributor profile is usable', () => {
   });
 
   test('exposes one first-level heading and a reachable breadcrumb', async ({ page }) => {
-    await page.goto(`/en/people/${FIXTURE.published}`);
+    await page.goto(`/people/${FIXTURE.published}`);
 
     await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
 
     // The breadcrumb is a real navigation landmark, and its link works.
-    const home = page.getByRole('navigation').getByRole('link').first();
+    // Named, so the language switcher (also a navigation) cannot stand in for it.
+    const home = page
+      .getByRole('navigation', { name: 'Breadcrumb', exact: true })
+      .getByRole('link')
+      .first();
     await expect(home).toBeVisible();
+    await expect(home).toHaveAttribute('href', '/');
+    expect((await page.request.get('/')).status()).toBe(200);
   });
 
   test('moves focus through the page with the keyboard alone', async ({ page }) => {
-    await page.goto(`/en/people/${FIXTURE.published}`);
+    await page.goto(`/people/${FIXTURE.published}`);
 
     await page.keyboard.press('Tab');
     const focused = await page.evaluate(() => document.activeElement?.tagName ?? '');
@@ -725,7 +737,7 @@ test.describe('the People routes refuse an account without the permission', () =
     // it, which is a map of the platform's privileged shape handed to anyone
     // with an account (SECURITY_BASELINE.md §1.5).
     for (const route of ['persons', 'authors', 'speakers', 'scholars', 'teachers']) {
-      const response = await page.goto(`/en/admin/people/${route}`);
+      const response = await page.goto(`/admin/people/${route}`);
       expect(response?.status(), `/${route} must be 404`).toBe(404);
     }
   });
@@ -733,12 +745,12 @@ test.describe('the People routes refuse an account without the permission', () =
   test('sends a signed-out visitor to sign in, with a safe internal return path', async ({
     page,
   }) => {
-    await page.goto('/en/admin/people/persons');
-    await page.waitForURL(/\/en\/signin\?returnTo=/);
+    await page.goto('/admin/people/persons');
+    await page.waitForURL(/\/signin\?returnTo=/);
 
     const returnTo = new URL(page.url()).searchParams.get('returnTo');
 
-    expect(returnTo).toBe('/en/admin');
+    expect(returnTo).toBe('/admin');
     expect(returnTo?.startsWith('//')).toBe(false);
     expect(returnTo).not.toMatch(/^https?:/);
   });
@@ -752,20 +764,20 @@ test.describe('an operator holding only people.read', () => {
   test.use({ storageState: READER_STATE });
 
   test('sees the directory', async ({ page }) => {
-    const response = await page.goto('/en/admin/people/persons');
+    const response = await page.goto('/admin/people/persons');
 
     expect(response?.status()).toBe(200);
     await expect(page.getByRole('main')).toContainText(FIXTURE.published);
   });
 
   test('is offered no control they cannot use', async ({ page }) => {
-    await page.goto('/en/admin/people/persons');
+    await page.goto('/admin/people/persons');
 
     // The controls are ABSENT rather than disabled: a disabled control is a
     // client-side rule (SECURITY_BASELINE.md §3.4 rule 1).
     await expect(page.getByRole('button', { name: 'Create contributor' })).toHaveCount(0);
 
-    await page.goto(`/en/admin/people/persons?q=${FIXTURE.published}`);
+    await page.goto(`/admin/people/persons?q=${FIXTURE.published}`);
     await page.getByRole('link', { name: 'Edit' }).first().click();
 
     await expect(page.getByRole('button', { name: 'Save status' })).toHaveCount(0);
@@ -784,7 +796,7 @@ test.describe('the contributor editor', () => {
   test('creates a contributor, which arrives as a draft', async ({ page }) => {
     const slug = proofSlug('created');
 
-    await page.goto('/en/admin/people/persons');
+    await page.goto('/admin/people/persons');
     await page.locator('#create-slug').fill(slug);
     await page.locator('#create-name').fill('Created In Browser');
     await page.getByRole('button', { name: 'Create contributor' }).click();
@@ -793,24 +805,24 @@ test.describe('the contributor editor', () => {
 
     // NOT PUBLIC YET, which is the whole point of arriving as a draft.
     const response = await page.request.get(
-      `${test.info().project.use.baseURL}/en/people/${slug}`,
+      `${test.info().project.use.baseURL}/people/${slug}`,
     );
     expect(response.status()).toBe(404);
 
-    await page.goto(`/en/admin/people/persons?q=${slug}`);
+    await page.goto(`/admin/people/persons?q=${slug}`);
     await expect(page.getByRole('main')).toContainText('Draft');
   });
 
   test('publishes a contributor, and the public page then exists', async ({ page }) => {
     const slug = proofSlug('publish');
 
-    await page.goto('/en/admin/people/persons');
+    await page.goto('/admin/people/persons');
     await page.locator('#create-slug').fill(slug);
     await page.locator('#create-name').fill('Published In Browser');
     await page.getByRole('button', { name: 'Create contributor' }).click();
     await announced(page, 'Saved').waitFor();
 
-    await page.goto(`/en/admin/people/persons?q=${slug}`);
+    await page.goto(`/admin/people/persons?q=${slug}`);
     await page.getByRole('link', { name: 'Edit' }).first().click();
 
     await page.locator('#person-status').selectOption('published');
@@ -818,13 +830,13 @@ test.describe('the contributor editor', () => {
     await announced(page, 'Saved').waitFor();
 
     const response = await page.request.get(
-      `${test.info().project.use.baseURL}/en/people/${slug}`,
+      `${test.info().project.use.baseURL}/people/${slug}`,
     );
     expect(response.status()).toBe(200);
   });
 
   test('adds a translation in another language', async ({ page }) => {
-    await page.goto(`/en/admin/people/persons?q=${FIXTURE.published}`);
+    await page.goto(`/admin/people/persons?q=${FIXTURE.published}`);
     await page.getByRole('link', { name: 'Edit' }).first().click();
 
     // THE ARABIC SECTION, addressed by the field's own id rather than by
@@ -850,13 +862,13 @@ test.describe('the contributor editor', () => {
   }) => {
     const slug = proofSlug('facets');
 
-    await page.goto('/en/admin/people/persons');
+    await page.goto('/admin/people/persons');
     await page.locator('#create-slug').fill(slug);
     await page.locator('#create-name').fill('Many Facets');
     await page.getByRole('button', { name: 'Create contributor' }).click();
     await announced(page, 'Saved').waitFor();
 
-    await page.goto(`/en/admin/people/persons?q=${slug}`);
+    await page.goto(`/admin/people/persons?q=${slug}`);
     await page.getByRole('link', { name: 'Edit' }).first().click();
 
     // FOUR DISTINCT AGGREGATES, added one at a time through the interface.
@@ -885,7 +897,7 @@ test.describe('the contributor editor', () => {
   test('offers no grant control, and shows the capabilities as read-only', async ({
     page,
   }) => {
-    await page.goto(`/en/admin/people/persons?q=${FIXTURE.published}`);
+    await page.goto(`/admin/people/persons?q=${FIXTURE.published}`);
     await page.getByRole('link', { name: 'Edit' }).first().click();
 
     const main = page.getByRole('main');
@@ -904,7 +916,7 @@ test.describe('the contributor editor', () => {
   test('projects teaching as No without the required grant', async ({ page }) => {
     // A profile grants no authority. Editorial review is now grantable, but
     // teaching remains unavailable and this fixture holds no teaching grant.
-    await page.goto(`/en/admin/people/persons?q=${FIXTURE.published}`);
+    await page.goto(`/admin/people/persons?q=${FIXTURE.published}`);
     await page.getByRole('link', { name: 'Edit' }).first().click();
 
     const capabilityRows = page.getByRole('row').filter({ hasText: 'teaching.perform' });
@@ -915,7 +927,7 @@ test.describe('the contributor editor', () => {
     // Archive is the lifecycle: the runtime principal holds no DELETE on a
     // contributor or on any profile table, so a delete button would be a
     // control that cannot work.
-    await page.goto(`/en/admin/people/persons?q=${FIXTURE.published}`);
+    await page.goto(`/admin/people/persons?q=${FIXTURE.published}`);
     await page.getByRole('link', { name: 'Edit' }).first().click();
 
     for (const control of ['Delete', 'Delete contributor', 'Remove contributor']) {
@@ -931,7 +943,7 @@ test.describe('the contributor editor', () => {
       [first, 'Link Target One'],
       [second, 'Link Target Two'],
     ]) {
-      await page.goto('/en/admin/people/persons');
+      await page.goto('/admin/people/persons');
       await page.locator('#create-slug').fill(slug!);
       await page.locator('#create-name').fill(name!);
       await page.getByRole('button', { name: 'Create contributor' }).click();
@@ -939,7 +951,7 @@ test.describe('the contributor editor', () => {
     }
 
     // The first link succeeds.
-    await page.goto(`/en/admin/people/persons?q=${first}`);
+    await page.goto(`/admin/people/persons?q=${first}`);
     await page.getByRole('link', { name: 'Edit' }).first().click();
     await page.locator('#account-id').fill(FIXTURE.editorAccountId);
     await page.getByRole('button', { name: 'Link account' }).click();
@@ -947,7 +959,7 @@ test.describe('the contributor editor', () => {
 
     // The second is refused by the database's unique index, and reported as
     // something a person can act on.
-    await page.goto(`/en/admin/people/persons?q=${second}`);
+    await page.goto(`/admin/people/persons?q=${second}`);
     await page.getByRole('link', { name: 'Edit' }).first().click();
     await page.locator('#account-id').fill(FIXTURE.editorAccountId);
     await page.getByRole('button', { name: 'Link account' }).click();
@@ -960,13 +972,13 @@ test.describe('the contributor editor', () => {
   test('refuses a forged account identifier', async ({ page }) => {
     const slug = proofSlug('forged');
 
-    await page.goto('/en/admin/people/persons');
+    await page.goto('/admin/people/persons');
     await page.locator('#create-slug').fill(slug);
     await page.locator('#create-name').fill('Forged Link Target');
     await page.getByRole('button', { name: 'Create contributor' }).click();
     await announced(page, 'Saved').waitFor();
 
-    await page.goto(`/en/admin/people/persons?q=${slug}`);
+    await page.goto(`/admin/people/persons?q=${slug}`);
     await page.getByRole('link', { name: 'Edit' }).first().click();
     await page.locator('#account-id').fill('account-never-created');
     await page.getByRole('button', { name: 'Link account' }).click();
@@ -982,7 +994,7 @@ test.describe('the contributor editor', () => {
     // `people.administer` lets somebody attach an account they were given the
     // identifier for; it does not make them an account administrator
     // (SECURITY_BASELINE.md §19.1).
-    await page.goto(`/en/admin/people/persons?q=${FIXTURE.published}`);
+    await page.goto(`/admin/people/persons?q=${FIXTURE.published}`);
     await page.getByRole('link', { name: 'Edit' }).first().click();
 
     await expect(page.locator('#account-id')).toBeVisible();
@@ -1014,7 +1026,7 @@ test.describe('the contributor editor', () => {
       ['scholars', 'Scholars'],
       ['teachers', 'Teachers'],
     ]) {
-      const response = await page.goto(`/en/admin/people/${route}`);
+      const response = await page.goto(`/admin/people/${route}`);
       expect(response?.status(), route).toBe(200);
       // SCOPED TO `main`: the administrative shell renders its own first-level
       // heading in the layout, so every admin page carries two. That is the
@@ -1027,10 +1039,10 @@ test.describe('the contributor editor', () => {
 
     // The seeded contributor holds an author facet and a teacher facet, and no
     // speaker facet — so it appears on two of the four.
-    await page.goto(`/en/admin/people/authors?q=${FIXTURE.published}`);
+    await page.goto(`/admin/people/authors?q=${FIXTURE.published}`);
     await expect(page.getByRole('main')).toContainText(FIXTURE.published);
 
-    await page.goto(`/en/admin/people/speakers?q=${FIXTURE.published}`);
+    await page.goto(`/admin/people/speakers?q=${FIXTURE.published}`);
     await expect(page.getByRole('main')).not.toContainText(FIXTURE.published);
   });
 
@@ -1042,16 +1054,14 @@ test.describe('the contributor editor', () => {
     const base = test.info().project.use.baseURL;
 
     for (const route of ['persons', 'authors', 'speakers', 'scholars', 'teachers']) {
-      const response = await page
-        .context()
-        .request.get(`${base}/en/admin/people/${route}`);
+      const response = await page.context().request.get(`${base}/admin/people/${route}`);
       expect(response.status(), route).toBe(200);
 
       expect(response.headers()['cache-control'] ?? '', route).toMatch(
         /no-store|private/,
       );
 
-      await page.goto(`/en/admin/people/${route}`);
+      await page.goto(`/admin/people/${route}`);
       const robots = await page.locator('meta[name="robots"]').getAttribute('content');
       expect(robots, route).toContain('noindex');
       expect(robots, route).toContain('nofollow');
@@ -1061,10 +1071,10 @@ test.describe('the contributor editor', () => {
   test('says in words that a scholar facet is not religious authority', async ({
     page,
   }) => {
-    await page.goto('/en/admin/people/scholars');
+    await page.goto('/admin/people/scholars');
     await expect(page.getByRole('main')).toContainText('not an appointment');
 
-    await page.goto('/en/admin/people/teachers');
+    await page.goto('/admin/people/teachers');
     await expect(page.getByRole('main')).toContainText('not an approval');
   });
 });

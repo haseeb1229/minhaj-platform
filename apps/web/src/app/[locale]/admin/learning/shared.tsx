@@ -235,7 +235,7 @@ export function DirectoryFilter({
       </Field>
       <button
         type="submit"
-        className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-medium"
+        className="inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-medium"
       >
         {t('filterApply')}
       </button>
@@ -348,9 +348,7 @@ export function LabelFields({
   return (
     <fieldset className="flex min-w-0 flex-col gap-3">
       <legend className="pb-1 text-sm font-medium">{t('labels')}</legend>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('labelsHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('labelsHelp')}</p>
       {localeSchema.options.map((language) => {
         const existing = labels.find((entry) => entry.locale === language);
         const id = `${prefix}-${language}`;

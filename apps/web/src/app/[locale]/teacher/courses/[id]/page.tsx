@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { LearningTitle } from '@/components/my-learning/parts';
@@ -32,7 +33,7 @@ export default async function TeacherCoursePage({
   const { id } = await params;
   const gate = await requireTeacher(
     locale,
-    `/${locale}/teacher/courses/${encodeURIComponent(id)}`,
+    localizedPath(locale, `/teacher/courses/${encodeURIComponent(id)}`),
   );
   const t = await getTranslations({ locale, namespace: 'teacher' });
   if (!gate.activated) return <NotActivated t={t} />;
@@ -41,7 +42,10 @@ export default async function TeacherCoursePage({
   if (!read.ok) return <CourseUnavailable locale={locale} t={t} />;
   const { course } = read;
   const label = pickLabel(course.labels, locale, course.primaryLocale);
-  const materials = `/${locale}/teacher/courses/${encodeURIComponent(course.id)}/materials`;
+  const materials = localizedPath(
+    locale,
+    `/teacher/courses/${encodeURIComponent(course.id)}/materials`,
+  );
 
   return (
     <CourseFrame
@@ -72,7 +76,10 @@ export default async function TeacherCoursePage({
           {course.state === 'published' ? (
             <p>
               <TextLink
-                href={`/${locale}/learn/courses/${encodeURIComponent(course.slug)}`}
+                href={localizedPath(
+                  locale,
+                  `/learn/courses/${encodeURIComponent(course.slug)}`,
+                )}
               >
                 {t('course.publicPage')}
               </TextLink>

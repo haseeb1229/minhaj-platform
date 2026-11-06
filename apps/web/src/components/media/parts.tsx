@@ -30,7 +30,7 @@ export function Duration({ seconds }: { readonly seconds: number }) {
 }
 
 const PAGE_LINK =
-  'inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-4 text-sm font-semibold no-underline transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--color-surface-sunken)] active:bg-[color:var(--color-border)]';
+  'inline-flex min-h-11 items-center gap-2 rounded-control border border-border-strong bg-surface-raised px-4 text-sm font-semibold no-underline transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border';
 
 /**
  * Previous and next page links, or nothing when there is one page.
@@ -56,7 +56,7 @@ export function Pagination({
   if (previous === null && next === null) return null;
   return (
     <nav
-      className="flex flex-wrap items-center justify-between gap-4 border-t border-[color:var(--color-border)] pt-5"
+      className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-5"
       aria-label={label}
     >
       {previous === null ? (
@@ -112,11 +112,11 @@ export function MediaPageHeader({
   readonly children?: ReactNode;
 }) {
   return (
-    <header className="flex flex-col gap-6 border-b border-[color:var(--color-border)] pb-8">
+    <header className="flex flex-col gap-6 border-b border-border pb-8">
       <Breadcrumbs label={crumbs.label} trail={crumbs.trail} />
       <div className="flex max-w-3xl min-w-0 flex-col gap-3">
         {eyebrow === undefined ? null : (
-          <div className="text-caption flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+          <div className="text-caption flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
             {eyebrow}
           </div>
         )}
@@ -128,7 +128,7 @@ export function MediaPageHeader({
           {title}
         </h1>
         {lede === undefined ? null : (
-          <div className="text-lede max-w-[var(--measure-prose)] text-[color:var(--color-foreground-muted)]">
+          <div className="text-lede max-w-[var(--measure-prose)] text-foreground-muted">
             {lede}
           </div>
         )}
@@ -146,11 +146,11 @@ export function MediaPageHeader({
  * shared `LinkCard`.
  */
 export const MEDIA_CARD =
-  'card-surface group relative flex h-full min-w-0 flex-col overflow-hidden rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] shadow-[var(--shadow-panel)] transition-[border-color,box-shadow] duration-[var(--duration-fast)] hover:border-[color:var(--color-border-strong)] hover:shadow-[var(--shadow-raised)]';
+  'card-surface group relative flex h-full min-w-0 flex-col overflow-hidden rounded-panel border border-border bg-surface-raised shadow-panel transition-[border-color,box-shadow] duration-[var(--duration-fast)] hover:border-border-strong hover:shadow-raised';
 
 /** The title link of a Media card — the card's ONE anchor, stretched over it. */
 export const MEDIA_CARD_LINK =
-  'card-link text-[color:var(--color-foreground)] no-underline decoration-[color:var(--color-accent-rule)] underline-offset-4 hover:underline active:text-[color:var(--color-action)]';
+  'card-link text-foreground no-underline decoration-accent-rule underline-offset-4 hover:underline active:text-action';
 
 /** A dot-separated run of eyebrow words; the separators are decorative. */
 export function EyebrowWords({ words }: { readonly words: readonly ReactNode[] }) {

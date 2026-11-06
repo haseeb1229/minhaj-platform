@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getFormatter, getTranslations } from 'next-intl/server';
 
 import {
@@ -70,7 +71,7 @@ export default async function NewsletterAdminPage({
 }) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/communications/newsletter`;
+  const base = localizedPath(locale, '/admin/communications/newsletter');
 
   const page = await requireAdminPage(locale, NEWSLETTER_PERMISSIONS.read, base);
   const t = await getTranslations({ locale, namespace: 'newsletter.admin' });
@@ -120,7 +121,7 @@ export default async function NewsletterAdminPage({
 
   const when = (value: string | null) =>
     value === null ? (
-      <span className="text-xs text-[color:var(--color-foreground-muted)]">—</span>
+      <span className="text-xs text-foreground-muted">—</span>
     ) : (
       format.dateTime(new Date(value), { dateStyle: 'short', timeStyle: 'short' })
     );
@@ -137,9 +138,7 @@ export default async function NewsletterAdminPage({
         <input type="hidden" name="locale" value={locale} />
         <input type="hidden" name="subscriberId" value={entry.id} />
         <input type="hidden" name="expectedVersion" value={entry.version} />
-        <p className="text-xs text-[color:var(--color-foreground-muted)]">
-          {t('reinstate.explain')}
-        </p>
+        <p className="text-xs text-foreground-muted">{t('reinstate.explain')}</p>
         <Confirm id={`reinstate-${entry.id}`} label={t('reinstate.confirm')} />
       </ActionForm>
     ) : (
@@ -161,9 +160,7 @@ export default async function NewsletterAdminPage({
     <main className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('description')}</p>
       </header>
 
       <Panel>
@@ -174,7 +171,7 @@ export default async function NewsletterAdminPage({
             <li>
               {t('scope.provider')}{' '}
               {mayReadDelivery ? (
-                <TextLink href={`/${locale}/admin/communications/delivery`}>
+                <TextLink href={localizedPath(locale, '/admin/communications/delivery')}>
                   {t('scope.providerLink')}
                 </TextLink>
               ) : null}

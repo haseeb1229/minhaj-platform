@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -141,7 +142,7 @@ export async function FatwaRulingPage({
             <div className="flex flex-col gap-3 pt-1">
               {corrected && current.correctionReason !== null ? (
                 <p
-                  className="max-w-[var(--measure-prose)] rounded-[var(--radius-control)] border-s-4 border-[color:var(--color-warning)] bg-[color:var(--color-warning-surface)] px-4 py-3 text-sm whitespace-pre-wrap wrap-anywhere"
+                  className="max-w-[var(--measure-prose)] rounded-control border-s-4 border-warning bg-warning-surface px-4 py-3 text-sm whitespace-pre-wrap wrap-anywhere"
                   dir="auto"
                 >
                   <span className="font-semibold">{t('ruling.correctionReason')}:</span>{' '}
@@ -172,13 +173,13 @@ export async function FatwaRulingPage({
       <div className="grid min-w-0 gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-14">
         <div className="flex min-w-0 flex-col gap-10">
           <section
-            className="flex max-w-[var(--measure-prose)] min-w-0 flex-col gap-3 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)] p-5"
+            className="flex max-w-[var(--measure-prose)] min-w-0 flex-col gap-3 rounded-panel border border-border bg-surface-sunken p-5"
             aria-labelledby="fatwa-question"
           >
             <h2 id="fatwa-question" className="text-subheading font-semibold">
               {t('ruling.question')}
             </h2>
-            <p className="text-caption text-[color:var(--color-foreground-muted)]">
+            <p className="text-caption text-foreground-muted">
               {t('ruling.questionNote')}
             </p>
             <p
@@ -214,7 +215,10 @@ export async function FatwaRulingPage({
               <TopicChips
                 label={t('ruling.topics')}
                 topics={topics.map((topic) => ({
-                  href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+                  href: localizedPath(
+                    locale,
+                    `/topics/${encodeURIComponent(topic.slug)}`,
+                  ),
                   text: topic.name,
                 }))}
               />
@@ -230,11 +234,11 @@ export async function FatwaRulingPage({
         </div>
 
         <aside aria-labelledby="fatwa-provenance" className="min-w-0">
-          <div className="flex flex-col gap-4 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]">
+          <div className="flex flex-col gap-4 rounded-panel border border-border bg-surface-raised p-5 shadow-panel">
             <h2 id="fatwa-provenance" className="text-subheading font-semibold">
               {t('ruling.provenance')}
             </h2>
-            <dl className="flex flex-col divide-y divide-[color:var(--color-border)]">
+            <dl className="flex flex-col divide-y divide-border">
               {category === undefined ? null : (
                 <DetailRow term={t('ruling.category')}>
                   <TextLink href={categoryHref(locale, category.slug)}>
@@ -251,7 +255,10 @@ export async function FatwaRulingPage({
                 <DetailRow term={t('ruling.answeredBy')}>
                   <span dir="auto">
                     <TextLink
-                      href={`/${locale}/people/${encodeURIComponent(answeredBy.slug)}`}
+                      href={localizedPath(
+                        locale,
+                        `/people/${encodeURIComponent(answeredBy.slug)}`,
+                      )}
                     >
                       {answeredBy.name}
                     </TextLink>
@@ -262,7 +269,10 @@ export async function FatwaRulingPage({
                 <DetailRow term={t('ruling.publishedBy')}>
                   <span dir="auto">
                     <TextLink
-                      href={`/${locale}/people/${encodeURIComponent(publishedBy.slug)}`}
+                      href={localizedPath(
+                        locale,
+                        `/people/${encodeURIComponent(publishedBy.slug)}`,
+                      )}
                     >
                       {publishedBy.name}
                     </TextLink>
@@ -270,19 +280,17 @@ export async function FatwaRulingPage({
                 </DetailRow>
               )}
             </dl>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('ruling.provenanceNote')}
-            </p>
+            <p className="text-sm text-foreground-muted">{t('ruling.provenanceNote')}</p>
             <p className="flex flex-col gap-1 text-sm">
               <a
                 href={fatwaSectionPath(locale, 'how-it-works')}
-                className="inline-flex min-h-11 items-center font-medium text-[color:var(--color-action)] underline underline-offset-2"
+                className="inline-flex min-h-11 items-center font-medium text-action underline underline-offset-2"
               >
                 {t('unavailable.howItWorks')}
               </a>
               <a
                 href={fatwaSectionPath(locale)}
-                className="inline-flex min-h-11 items-center font-medium text-[color:var(--color-action)] underline underline-offset-2"
+                className="inline-flex min-h-11 items-center font-medium text-action underline underline-offset-2"
               >
                 {t('ruling.all')}
               </a>

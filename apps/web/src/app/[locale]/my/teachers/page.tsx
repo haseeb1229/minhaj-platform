@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { TeacherName } from '@/components/live-learning/parts';
@@ -44,7 +45,7 @@ export default async function MyTeachersPage({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const path = `/${locale}/my/teachers`;
+  const path = localizedPath(locale, '/my/teachers');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myClasses' });
   const back = <PersonalLinks label={t('nav.label')} links={classLinks(locale, t)} />;
@@ -90,7 +91,9 @@ export default async function MyTeachersPage({
         <>
           <EmptyState>{t('teachers.empty')}</EmptyState>
           <p>
-            <TextLink href={`/${locale}/learn/teachers`}>{t('teachers.find')}</TextLink>
+            <TextLink href={localizedPath(locale, '/learn/teachers')}>
+              {t('teachers.find')}
+            </TextLink>
           </p>
         </>
       ) : (
@@ -107,9 +110,7 @@ export default async function MyTeachersPage({
                 </p>
                 {teacher.courses.length === 0 ? null : (
                   <div className="flex flex-col gap-1 text-sm">
-                    <span className="text-[color:var(--color-foreground-muted)]">
-                      {t('teachers.courses')}
-                    </span>
+                    <span className="text-foreground-muted">{t('teachers.courses')}</span>
                     <ul className="flex flex-col gap-1 ps-4">
                       {teacher.courses.map((course) => (
                         <li key={course.id} className="list-disc">
@@ -152,7 +153,7 @@ export default async function MyTeachersPage({
                 <p className="text-sm">
                   {t('teachers.upcoming', { count: teacher.upcoming })}
                 </p>
-                <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                <p className="text-sm text-foreground-muted">
                   {teacher.lastClassAt === null ? (
                     t('teachers.noLast')
                   ) : (

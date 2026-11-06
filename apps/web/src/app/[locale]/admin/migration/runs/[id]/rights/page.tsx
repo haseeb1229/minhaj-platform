@@ -91,9 +91,7 @@ export default async function MigrationRunRightsPage({
     <main className="flex min-w-0 flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('rights.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('rights.intro')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('rights.intro')}</p>
       </header>
 
       <section className="flex flex-col gap-3" aria-labelledby="run-rights">
@@ -191,14 +189,14 @@ function RightsTable({
               target="_blank"
               rel="noreferrer noopener"
               dir="ltr"
-              className="break-all font-medium text-[color:var(--color-action)] underline underline-offset-2"
+              className="break-all font-medium text-action underline underline-offset-2"
             >
               {row.originalUrl}
             </a>
           </DataCell>
           <DataCell>
             <Code>{row.mediaType}</Code>
-            <span className="block text-xs text-[color:var(--color-foreground-muted)]">
+            <span className="block text-xs text-foreground-muted">
               {t('snapshot.bytes', { count: row.byteSize })}
             </span>
           </DataCell>
@@ -212,7 +210,7 @@ function RightsTable({
           </DataCell>
           <DataCell wrap>
             <span className="block">{t(`licence.${row.licence}`)}</span>
-            <span className="block text-xs text-[color:var(--color-foreground-muted)]">
+            <span className="block text-xs text-foreground-muted">
               {row.licenceEvidence ?? t('rights.noEvidence')}
             </span>
           </DataCell>
@@ -223,9 +221,7 @@ function RightsTable({
   if (!administer) return table;
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('rights.bulk.help')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('rights.bulk.help')}</p>
       <RightsBatchForm
         locale={locale}
         urls={Object.fromEntries(rows.map((row) => [row.id, row.originalUrl]))}

@@ -201,13 +201,11 @@ export function CollectionMembersIsland({
             return (
               <li
                 key={member.token}
-                className="flex flex-col gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-3"
+                className="flex flex-col gap-2 rounded-control border border-border p-3"
               >
                 <p className="flex min-w-0 flex-wrap items-baseline gap-2">
-                  <span className="text-sm text-[color:var(--color-foreground-muted)]">
-                    {index + 1}.
-                  </span>
-                  <span className="rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-2 py-0.5 text-xs font-medium">
+                  <span className="text-sm text-foreground-muted">{index + 1}.</span>
+                  <span className="rounded-control border border-border-strong px-2 py-0.5 text-xs font-medium">
                     {typeLabel(member.kind)}
                   </span>
                   <span
@@ -258,7 +256,7 @@ export function CollectionMembersIsland({
         </ol>
       )}
       {unsaved ? <p className="text-sm font-medium">{label('memberUnsaved')}</p> : null}
-      <fieldset className="flex flex-col gap-3 border-t border-[color:var(--color-border)] pt-3">
+      <fieldset className="flex flex-col gap-3 border-t border-border pt-3">
         <legend className="text-sm font-medium">{label('memberAddGroup')}</legend>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">

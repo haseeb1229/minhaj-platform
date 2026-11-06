@@ -1,3 +1,5 @@
+import { identityMetadata } from '../metadata';
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { identityRuntime } from '@/composition/identity';
@@ -17,7 +19,9 @@ import { ActionForm } from '../form-state';
  * `inspectToken` is non-mutating on a correct token, so rendering this page
  * twice leaves the link exactly as usable as it was.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = identityMetadata('verify.title', {
+  robots: { index: false, follow: false },
+});
 
 /**
  * PER REQUEST, always. This surface reads a session or a one-time token, so
@@ -43,7 +47,9 @@ export default async function VerifyEmailPage({
     return (
       <AuthLayout title={t('verify.title')}>
         <Alert tone="error">{t('verify.missing')}</Alert>
-        <TextLink href={`/${locale}/signin`}>{t('common.backToSignIn')}</TextLink>
+        <TextLink href={localizedPath(locale, '/signin')}>
+          {t('common.backToSignIn')}
+        </TextLink>
       </AuthLayout>
     );
   }
@@ -107,7 +113,9 @@ export default async function VerifyEmailPage({
         <input type="hidden" name="token" value={token} />
       </ActionForm>
 
-      <TextLink href={`/${locale}/signin`}>{t('common.backToSignIn')}</TextLink>
+      <TextLink href={localizedPath(locale, '/signin')}>
+        {t('common.backToSignIn')}
+      </TextLink>
     </AuthLayout>
   );
 }

@@ -1,75 +1,75 @@
+import { localizedPath, type Locale } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
-import type { Locale } from '@minhaj/contracts';
-
+import { OrganisationMark } from '@/components/shell/brand-lockup';
+import { BrandWordmark } from '@/components/shell/brand-wordmark';
 import { Container } from '@/components/ui';
-import { footerColumns, footerUtility } from '@/shell/menus';
-import { BrandLockup } from '@/components/shell/brand-lockup';
-import { PRODUCT_NAME } from '@/shell/product';
-import { pathFor } from '@/shell/registry';
+import { readPresence } from '@/composition/presence';
+import { footerGroups, legalLinks, type FooterLink } from '@/shell/presence';
+import { pathFor, requireRoute } from '@/shell/registry';
 
 /**
- * The public footer — "the comprehensive index that the mega menus
- * deliberately are not" (INFORMATION_ARCHITECTURE.md §4).
+ * THE PUBLIC FOOTER (Rebaseline R1).
  *
- * SIX COLUMNS, from `@/shell/menus`: About Minhaj-ul-Quran, Knowledge, Library
- * and Media, Learn and Participate, Our Work, and Global and Contact. Every
- * link is a registry route that answers today; reserved Explore and Volunteer
- * pages are included because they exist and say honestly that nothing is
- * published yet. Entries with no static route are absent rather than greyed.
+ * DELIBERATE, NOT A SITEMAP. Three short groups — discover, the organisation,
+ * take part — drawn from the same presentation policy as the header, so a link
+ * appears only when its area has published content or an open service, and a
+ * legal document only once it is published. The full route list remains in the
+ * human-readable sitemap.
  *
- * EACH COLUMN IS A NAMED NAVIGATION LIST under a real `h2`, so a screen-reader
- * user can jump between the groups by heading and hear each list's size.
- *
- * THE UTILITY BAR holds the legal documents and the human sitemap. The
- * language switcher is NOT repeated here: it is already in the utility bar at
- * the top of every page (§2.1), and a second copy would put two identically
- * named navigation landmarks, and two of every language link, on each page.
- *
- * SERVER-RENDERED AND SESSION-FREE, like the header. LABELS AND ROUTES ONLY:
- * no address, no contact details, no social profiles and no copyright owner —
- * each of those is an organisational fact this build has no evidence for.
+ * THE ONE PRE-ADOPTION STATEMENT lives here, once, beside the organisation's
+ * unmodified mark: the platform is independently developed and not an official
+ * service of Minhaj-ul-Quran International. It is not repeated in the header.
  */
 export async function SiteFooter({ locale }: { readonly locale: Locale }) {
-  const t = await getTranslations({ locale, namespace: 'shell' });
+  const [t, presence] = await Promise.all([
+    getTranslations({ locale, namespace: 'shell' }),
+    readPresence(),
+  ]);
 
-  const columns = footerColumns();
-  const utility = footerUtility();
+  const groups = footerGroups(presence);
+  const legal = legalLinks(presence);
+  const hrefOf = (link: FooterLink) =>
+    link.kind === 'route'
+      ? pathFor(locale, requireRoute(link.route))
+      : localizedPath(locale, link.binding);
 
   return (
-    <footer className="surface-ink mt-[var(--space-section)] border-t-4 border-[color:var(--color-ink-accent)]">
+    <footer className="surface-ink mt-[var(--space-section)]">
       <Container>
-        <div className="flex flex-col gap-10 py-[var(--space-section)]">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-            {/* The official lockup on a light chip: its red and grey are drawn for a light ground. */}
-            <span className="inline-flex rounded-[var(--radius-control)] bg-white px-3 py-2">
-              <BrandLockup placement="footer" />
-            </span>
-            <span lang="en" className="text-sm font-semibold opacity-90">
-              {PRODUCT_NAME}
-            </span>
+        <div className="grid grid-cols-1 gap-12 py-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-16 lg:py-20">
+          <div className="flex max-w-sm flex-col gap-4">
+            <a
+              href={pathFor(locale, requireRoute('home'))}
+              className="inline-flex min-h-11 w-fit items-center rounded-control no-underline"
+            >
+              <BrandWordmark tone="ink" />
+              <span className="sr-only"> — {t('nav.home')}</span>
+            </a>
+            <p className="text-sm leading-relaxed text-ink-muted">
+              {t('footer.description')}
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-x-8 gap-y-10 min-[30rem]:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-            {columns.map((column, index) => {
-              const id = `footer-column-${String(index)}`;
-              const heading = t(column.heading as 'footer.columns.about');
+          <div className="grid grid-cols-1 gap-x-8 gap-y-10 min-[30rem]:grid-cols-2 md:grid-cols-3">
+            {groups.map((group, index) => {
+              const id = `footer-group-${String(index)}`;
               return (
-                <nav key={column.heading} aria-labelledby={id} className="min-w-0">
+                <nav key={group.heading} aria-labelledby={id} className="min-w-0">
                   <h2
                     id={id}
-                    className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-ink-accent)] uppercase"
+                    className="font-sans text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-ink-accent uppercase"
                   >
-                    {heading}
+                    {t(group.heading as 'footer.groups.discover')}
                   </h2>
-                  <ul className="mt-3 flex list-none flex-col p-0">
-                    {column.links.map((link) => (
-                      <li key={link.key}>
+                  <ul className="mt-4 flex list-none flex-col gap-0.5 p-0">
+                    {group.links.map((link) => (
+                      <li key={hrefOf(link)}>
                         <a
-                          href={pathFor(locale, link.route)}
-                          className="inline-flex min-h-9 items-center text-sm wrap-anywhere text-[color:var(--color-ink-muted)] no-underline transition-colors duration-[var(--duration-fast)] hover:text-[color:var(--color-ink-foreground)] hover:underline hover:underline-offset-4 active:text-[color:var(--color-ink-accent)]"
+                          href={hrefOf(link)}
+                          className="inline-flex min-h-10 items-center text-[0.9375rem] wrap-anywhere text-ink-foreground/90 no-underline transition-colors duration-[var(--duration-fast)] hover:text-ink-foreground hover:underline hover:underline-offset-4"
                         >
-                          {t(link.label as 'nav.home')}
+                          {t(link.label as 'nav.about')}
                         </a>
                       </li>
                     ))}
@@ -78,38 +78,31 @@ export async function SiteFooter({ locale }: { readonly locale: Locale }) {
               );
             })}
           </div>
+        </div>
 
-          <div className="flex flex-col gap-5 border-t border-[color:var(--color-ink-border)] pt-6">
+        <div className="flex flex-col gap-6 border-t border-ink-border py-8 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+            <span className="inline-flex w-fit rounded-control bg-surface-raised px-3 py-2">
+              <OrganisationMark />
+            </span>
+            <p className="max-w-xl text-sm text-ink-muted">{t('footer.preAdoption')}</p>
+          </div>
+          {legal.length === 0 ? null : (
             <nav aria-label={t('footer.legalHeading')}>
-              <ul className="flex list-none flex-wrap gap-x-6 gap-y-1 p-0">
-                {utility.map((link) => (
-                  <li key={link.key}>
+              <ul className="flex list-none flex-wrap gap-x-5 gap-y-1 p-0">
+                {legal.map((link) => (
+                  <li key={hrefOf(link)}>
                     <a
-                      href={pathFor(locale, link.route)}
-                      className="inline-flex min-h-9 items-center text-sm text-[color:var(--color-ink-foreground)] underline decoration-[color:var(--color-ink-border)] underline-offset-4 transition-colors duration-[var(--duration-fast)] hover:decoration-[color:var(--color-ink-accent)] active:text-[color:var(--color-ink-accent)]"
+                      href={hrefOf(link)}
+                      className="inline-flex min-h-10 items-center text-sm text-ink-foreground underline decoration-ink-border underline-offset-4 hover:decoration-ink-accent"
                     >
-                      {t(link.label as 'nav.sitemap')}
+                      {t(link.label as 'legal.privacy')}
                     </a>
                   </li>
                 ))}
               </ul>
             </nav>
-
-            {/*
-             * THE PRE-ADOPTION STATEMENT.
-             *
-             * Stated plainly, in the visitor's language, on every public page:
-             * this platform is independently developed and is not currently
-             * commissioned, sponsored, adopted or deployed by Minhaj-ul-Quran
-             * International (PRODUCT_SCOPE.md, *Product status and acceptance*).
-             * It is a statement about the DEPLOYMENT, not a disclaimer that
-             * makes the software a demo — there is no reduced build and no demo
-             * mode.
-             */}
-            <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-ink-muted)]">
-              {t('footer.preAdoption')}
-            </p>
-          </div>
+          )}
         </div>
       </Container>
     </footer>

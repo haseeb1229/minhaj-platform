@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { requireAdminPage } from '@/composition/authorization';
@@ -51,7 +52,7 @@ export default async function RolesPage({
   const page = await requireAdminPage(
     locale,
     'roles.read',
-    `/${locale}/admin/identity/roles`,
+    localizedPath(locale, '/admin/identity/roles'),
   );
   const copy = await adminCopy(locale);
 
@@ -68,9 +69,7 @@ export default async function RolesPage({
     <main className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('roles.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('roles.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('roles.description')}</p>
       </header>
 
       {mayAdminister || mayGrant ? (
@@ -137,7 +136,7 @@ export default async function RolesPage({
                     />
                     <span>
                       <code className="text-xs">{entry.key}</code>
-                      <span className="block text-xs text-[color:var(--color-foreground-muted)]">
+                      <span className="block text-xs text-foreground-muted">
                         {entry.description}
                       </span>
                     </span>
@@ -164,7 +163,7 @@ export default async function RolesPage({
                 )}
               </div>
 
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
+              <p className="text-sm text-foreground-muted">
                 <code className="text-xs">{role.key}</code> — {role.description}
               </p>
 
@@ -175,7 +174,7 @@ export default async function RolesPage({
               <div className="flex flex-col gap-1">
                 <span className="text-sm font-medium">{t('roles.permissions')}</span>
                 {role.permissions.length === 0 ? (
-                  <span className="text-xs text-[color:var(--color-foreground-muted)]">
+                  <span className="text-xs text-foreground-muted">
                     {t('roles.noPermissions')}
                   </span>
                 ) : (

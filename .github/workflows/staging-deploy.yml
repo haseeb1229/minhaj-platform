@@ -298,9 +298,9 @@ jobs:
           expect /robots.txt 200
           curl -fsS --max-time 20 "$base/robots.txt" | grep -qx 'Disallow: /' \
             || { echo "::error::robots.txt does not disallow /"; exit 1; }
-          for path in /en /ur /ar /signin /my /admin /sitemap.xml /no-such-page /assets/synthetic; do
+          for path in / /ur /ar /signin /my /admin /sitemap.xml /no-such-page /assets/synthetic; do
             expect "$path" 401
           done
-          [ "$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "http://$PUBLIC_HOST/en")" = 301 ] \
+          [ "$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "http://$PUBLIC_HOST/")" = 301 ] \
             || { echo "::error::HTTP does not redirect to HTTPS"; exit 1; }
           echo "public edge verified"

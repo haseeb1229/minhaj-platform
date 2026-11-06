@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -159,14 +160,14 @@ function StructureList({
                 <StructureTitle structure={item} locale={locale} t={t} kind={kind} />
               </TextLink>
             </h3>
-            <p className="text-xs text-[color:var(--color-foreground-muted)] wrap-anywhere">
+            <p className="text-xs text-foreground-muted wrap-anywhere">
               {t('fact.sourceReference')}:{' '}
               <span dir="auto" className="whitespace-pre-wrap">
                 {item.reference}
               </span>
             </p>
             {'edition' in item ? (
-              <p className="text-xs text-[color:var(--color-foreground-muted)] wrap-anywhere">
+              <p className="text-xs text-foreground-muted wrap-anywhere">
                 {t('fact.edition')}: <span dir="auto">{item.edition.editionTitle}</span>{' '}
                 <span dir="ltr">({item.edition.editionCode})</span> · {t('fact.source')}:{' '}
                 <span dir="auto">{item.edition.sourceSystemTitle}</span>
@@ -203,9 +204,7 @@ export async function CollectionsPage({
     >
       <div className="flex flex-col gap-2">
         <PageHeading>{title}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">
-          {t('sectionBody.collections')}
-        </p>
+        <p className="text-foreground-muted">{t('sectionBody.collections')}</p>
       </div>
       {collections.length === 0 ? (
         <EmptyState>{t('collectionsEmpty')}</EmptyState>
@@ -302,7 +301,7 @@ export async function CollectionPage({
       ? [
           {
             name: t('books'),
-            path: `/${locale}${collectionBooksPathOf(collection.slug)}`,
+            path: localizedPath(locale, `${collectionBooksPathOf(collection.slug)}`),
           },
         ]
       : []),
@@ -339,7 +338,9 @@ export async function CollectionPage({
           <StructureList
             locale={locale}
             items={books}
-            hrefOf={(book) => `/${locale}${bookPathOf(collection.slug, book.slug)}`}
+            hrefOf={(book) =>
+              localizedPath(locale, `${bookPathOf(collection.slug, book.slug)}`)
+            }
             label={t('books')}
             kind="book"
             t={t}
@@ -436,11 +437,14 @@ export async function StructurePage({
     collectionLabels(locale),
     contentLanguages(),
   ]);
-  const bookPath = `/${locale}${bookPathOf(collection.slug, book.slug)}`;
+  const bookPath = localizedPath(locale, `${bookPathOf(collection.slug, book.slug)}`);
   const path =
     chapter === null
       ? bookPath
-      : `/${locale}${chapterPathOf(collection.slug, book.slug, chapter.slug)}`;
+      : localizedPath(
+          locale,
+          `${chapterPathOf(collection.slug, book.slug, chapter.slug)}`,
+        );
   const shown = chapter ?? book;
   const kind = chapter === null ? 'book' : 'chapter';
   const trail: Trail = [
@@ -451,7 +455,10 @@ export async function StructurePage({
       name: collectionText(collection, locale),
       path: collectionPath(locale, collection.slug),
     },
-    { name: t('books'), path: `/${locale}${collectionBooksPathOf(collection.slug)}` },
+    {
+      name: t('books'),
+      path: localizedPath(locale, `${collectionBooksPathOf(collection.slug)}`),
+    },
     { name: structureText(book, locale, t, 'book'), path: bookPath },
     ...(chapter === null
       ? []
@@ -501,7 +508,10 @@ export async function StructurePage({
               locale={locale}
               items={chapters}
               hrefOf={(item) =>
-                `/${locale}${chapterPathOf(collection.slug, book.slug, item.slug)}`
+                localizedPath(
+                  locale,
+                  `${chapterPathOf(collection.slug, book.slug, item.slug)}`,
+                )
               }
               label={t('chapters')}
               kind="chapter"
@@ -567,9 +577,7 @@ export async function BrowsePage({
     >
       <div className="flex flex-col gap-2">
         <PageHeading>{title}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">
-          {t('sectionBody.browse')}
-        </p>
+        <p className="text-foreground-muted">{t('sectionBody.browse')}</p>
       </div>
       {page.items.length === 0 ? (
         <EmptyState>{t('citationsEmpty')}</EmptyState>

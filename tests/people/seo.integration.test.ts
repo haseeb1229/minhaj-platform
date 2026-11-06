@@ -1,3 +1,4 @@
+import { localizedPath } from '../../packages/contracts/src/locale-path.ts';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { createProofDatabase, databaseConfigured } from '../identity/harness.ts';
@@ -117,7 +118,7 @@ describeLive('Phase 5 — the contributor profile SEO contract', () => {
       locale,
       contentLocales: profile.contentLocales,
       primaryLocale: profile.primaryLocale,
-      pathFor: (target) => `/${target}/people/${slug}`,
+      pathFor: (target) => localizedPath(target, `/people/${slug}`),
       title: profile.label.name,
     });
   }
@@ -174,7 +175,7 @@ describeLive('Phase 5 — the contributor profile SEO contract', () => {
 
       const languages = (await metadataFor(slug, 'ur')).alternates?.languages ?? {};
 
-      expect(languages['x-default']).toBe(`${ORIGIN}/en/people/${slug}`);
+      expect(languages['x-default']).toBe(`${ORIGIN}/people/${slug}`);
     });
 
     it('points at the ORIGINAL language when there is no English version', async () => {
@@ -187,7 +188,7 @@ describeLive('Phase 5 — the contributor profile SEO contract', () => {
       const languages = (await metadataFor(slug, 'ur')).alternates?.languages ?? {};
 
       expect(languages['x-default']).toBe(`${ORIGIN}/ar/people/${slug}`);
-      expect(languages['x-default']).not.toBe(`${ORIGIN}/en/people/${slug}`);
+      expect(languages['x-default']).not.toBe(`${ORIGIN}/people/${slug}`);
     });
 
     it('never names a language version that does not exist', async () => {
@@ -268,7 +269,7 @@ describeLive('Phase 5 — the contributor profile SEO contract', () => {
           .flatMap((partition) => partition.urls.map((entry) => entry.loc));
 
       expect(urls('ur')).toContain(`${ORIGIN}/ur/people/${slug}`);
-      expect(urls('en')).not.toContain(`${ORIGIN}/en/people/${slug}`);
+      expect(urls('en')).not.toContain(`${ORIGIN}/people/${slug}`);
       expect(urls('ar')).not.toContain(`${ORIGIN}/ar/people/${slug}`);
     });
 
@@ -436,7 +437,7 @@ describeLive('Phase 5 — the contributor profile SEO contract', () => {
       expect(partitions.every((partition) => partition.urls.length <= 5_000)).toBe(true);
       expect(volumeUrls).toHaveLength(5_001);
       expect(new Set(volumeUrls).size).toBe(5_001);
-      expect(volumeUrls).toContain(`${ORIGIN}/en/people/sitemap-volume-05001`);
+      expect(volumeUrls).toContain(`${ORIGIN}/people/sitemap-volume-05001`);
     }, 60_000);
   });
 

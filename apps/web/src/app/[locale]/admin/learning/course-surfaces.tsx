@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import type { Locale } from '@minhaj/contracts';
@@ -110,14 +111,12 @@ function ReferenceSearch({
         </Field>
         <button
           type="submit"
-          className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-medium"
+          className="inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-medium"
         >
           {t('course.findTeachers')}
         </button>
       </form>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('course.teacherQueryHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('course.teacherQueryHelp')}</p>
     </>
   );
 }
@@ -129,7 +128,7 @@ function ReferenceSearch({
 export async function CourseDirectory({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/learning/courses`;
+  const base = localizedPath(locale, '/admin/learning/courses');
   const context = await requireAdminPage(locale, 'learning.read', base);
   const copy = await learningCopy(locale);
   const { t } = copy;
@@ -202,7 +201,7 @@ export async function CourseEditor({ params, searchParams }: EditorParams) {
   const locale = await requireLocale(params);
   const id = editorTarget((await params).id);
   const query: Query = await searchParams;
-  const base = `/${locale}/admin/learning/courses`;
+  const base = localizedPath(locale, '/admin/learning/courses');
   const context = await requireAdminPage(locale, 'learning.read', `${base}/${id}`);
   const copy = await learningCopy(locale);
   const { t } = copy;
@@ -242,7 +241,10 @@ export async function CourseEditor({ params, searchParams }: EditorParams) {
             </span>
             {record.state === 'published' ? (
               <TextLink
-                href={`/${locale}/learn/courses/${encodeURIComponent(record.slug)}`}
+                href={localizedPath(
+                  locale,
+                  `/learn/courses/${encodeURIComponent(record.slug)}`,
+                )}
               >
                 {t('viewPublic')}
               </TextLink>
@@ -375,9 +377,7 @@ function CourseForm({
       />
 
       <SectionHeading>{t('course.teachers')}</SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('course.teachersHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('course.teachersHelp')}</p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {Array.from({ length: LEARNING_FORM_ROWS.teachers }, (_, index) => {
           const selected = record?.teacherIds[index];
@@ -549,9 +549,7 @@ function Outline({
       <SectionHeading>
         <span id="course-outline">{t('outline.heading')}</span>
       </SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('outline.help')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('outline.help')}</p>
       {editable ? null : <Alert tone="info">{t('outline.frozen')}</Alert>}
 
       {course.outline.length === 0 ? (
@@ -566,7 +564,7 @@ function Outline({
               <Panel key={part.id} as="li">
                 <div className="flex flex-col gap-3">
                   <h3 className="flex flex-wrap items-baseline gap-2 font-semibold">
-                    <span className="text-sm font-normal text-[color:var(--color-foreground-muted)]">
+                    <span className="text-sm font-normal text-foreground-muted">
                       {t('outline.modulePosition', {
                         position: place.position,
                         total: place.total,
@@ -705,11 +703,9 @@ function Lessons({
   const total = part.lessons.length;
 
   return (
-    <div className="flex flex-col gap-3 border-s-2 border-[color:var(--color-border)] ps-4">
+    <div className="flex flex-col gap-3 border-s-2 border-border ps-4">
       {total === 0 ? (
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('outline.noLessons')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('outline.noLessons')}</p>
       ) : (
         <ol
           aria-label={t('outline.lessonsOf', { title: moduleTitle })}
@@ -721,14 +717,17 @@ function Lessons({
             return (
               <li key={lesson.id} className="flex flex-col gap-2">
                 <p className="flex flex-wrap items-baseline gap-2">
-                  <span className="text-sm text-[color:var(--color-foreground-muted)]">
+                  <span className="text-sm text-foreground-muted">
                     {t('outline.lessonPosition', {
                       position: place.position,
                       total: place.total,
                     })}
                   </span>
                   <TextLink
-                    href={`/${locale}/admin/learning/courses/${course.id}/lessons/${lesson.id}`}
+                    href={localizedPath(
+                      locale,
+                      `/admin/learning/courses/${course.id}/lessons/${lesson.id}`,
+                    )}
                   >
                     <span
                       lang={
@@ -832,7 +831,7 @@ export async function LessonEditor({
     !learningIdSchema.safeParse(lessonId).success
   )
     notFound();
-  const courseBase = `/${locale}/admin/learning/courses/${id}`;
+  const courseBase = localizedPath(locale, `/admin/learning/courses/${id}`);
   const context = await requireAdminPage(
     locale,
     'learning.read',
@@ -884,9 +883,7 @@ export async function LessonEditor({
         <Panel>
           <div className="flex flex-col gap-4">
             <SectionHeading>{t('lesson.edit')}</SectionHeading>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('lesson.plainText')}
-            </p>
+            <p className="text-sm text-foreground-muted">{t('lesson.plainText')}</p>
             <ActionForm
               action={changeLessonAction}
               submitLabel={t('save')}

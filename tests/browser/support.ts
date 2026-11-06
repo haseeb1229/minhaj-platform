@@ -23,6 +23,14 @@ import {
   type SqlSession,
 } from '../../packages/database/src/lifecycle/sql-connection.ts';
 
+/**
+ * THE localised-URL contract (Rebaseline R1): English is unprefixed, Urdu and
+ * Arabic carry their prefix. Specs build every locale-dependent address with
+ * the same builder the application uses, so a spec can never assert a shape
+ * the product does not emit.
+ */
+export { localizedPath } from '../../packages/contracts/src/locale-path.ts';
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..');
 
@@ -283,7 +291,7 @@ export async function verificationLink(email: string): Promise<string> {
   if (material === null)
     throw new Error(`No outstanding verification token for ${email}`);
 
-  return link('/en/verify-email', { email, token: material.token });
+  return link('/verify-email', { email, token: material.token });
 }
 
 /** The password-reset link for this address. */
@@ -294,7 +302,7 @@ export async function resetLink(email: string): Promise<string> {
 
   if (material === null) throw new Error(`No outstanding reset token for ${email}`);
 
-  return link('/en/reset-password', { email, token: material.token });
+  return link('/reset-password', { email, token: material.token });
 }
 
 /** The email-change confirmation link, which is keyed on a PAIR of addresses. */
@@ -308,7 +316,7 @@ export async function emailChangeLink(
 
   if (material === null) throw new Error(`No outstanding change token for ${newEmail}`);
 
-  return link('/en/confirm-email-change', { email: newEmail, token: material.token });
+  return link('/confirm-email-change', { email: newEmail, token: material.token });
 }
 
 function link(pathname: string, query: Record<string, string>): string {
@@ -384,7 +392,7 @@ export async function registerAndSignIn(
 
 /** Submits the sign-up form and waits for its uniform acknowledgement. */
 export async function signUp(page: Page, email: string, password: string): Promise<void> {
-  await page.goto('/en/signup');
+  await page.goto('/signup');
   await page.getByLabel(LABEL.name).fill('Browser Proof');
   await page.getByLabel(LABEL.email).fill(email);
   await page.getByLabel(LABEL.password, { exact: true }).fill(password);
@@ -401,7 +409,7 @@ export async function confirmVerification(page: Page, email: string): Promise<vo
 
 /** Signs in through the form and waits for the destination. */
 export async function signIn(page: Page, email: string, password: string): Promise<void> {
-  await page.goto('/en/signin');
+  await page.goto('/signin');
   await page.getByLabel(LABEL.email).fill(email);
   await page.getByLabel(LABEL.password, { exact: true }).fill(password);
   await page.getByRole('button', { name: BUTTON.signIn, exact: true }).click();
@@ -410,9 +418,9 @@ export async function signIn(page: Page, email: string, password: string): Promi
 
 /** Signs out from `/my` and waits for the public landing page. */
 export async function signOut(page: Page): Promise<void> {
-  await page.goto('/en/my');
+  await page.goto('/my');
   await page.getByRole('button', { name: BUTTON.signOut, exact: true }).click();
-  await page.waitForURL(/\/en$/);
+  await page.waitForURL((url) => url.pathname === '/');
 }
 
 /* ===========================================================================
@@ -619,7 +627,7 @@ export async function beginSecondFactorEnrolment(
 export async function enrolSecondFactorInBrowser(
   page: Page,
 ): Promise<{ totpUri: string; recoveryCodes: string[] }> {
-  await page.goto('/en/my/settings/security');
+  await page.goto('/my/settings/security');
 
   const section = secondFactorSection(page);
   const enrolment = await beginSecondFactorEnrolment(page);
@@ -652,7 +660,7 @@ export async function signInWithSecondFactor(
   email: string,
   totpUri: string,
 ): Promise<void> {
-  await page.goto('/en/signin');
+  await page.goto('/signin');
   await page.getByLabel(LABEL.email).fill(email);
   await page.getByLabel(LABEL.password, { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: BUTTON.signIn, exact: true }).click();

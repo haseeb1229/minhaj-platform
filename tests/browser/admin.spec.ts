@@ -70,7 +70,7 @@ test.beforeAll(async ({ browser }) => {
   // THE ROLE IS HELD IMMEDIATELY; THE CAPABILITIES ARE NOT. The dashboard says
   // so before it says anything else, which is the one thing a freshly
   // bootstrapped administrator most needs to be told (§8.3).
-  await page.goto('/en/admin');
+  await page.goto('/admin');
   await expect(statusIn(page).first()).toContainText('two-step verification');
 
   const enrolment = await enrolSecondFactorInBrowser(page);
@@ -119,25 +119,25 @@ test.describe('administrative routes', () => {
     // 404, not 403: a 403 would confirm the route exists and that somebody may
     // use it, which is a map of the platform's privileged shape handed to
     // anyone with an account (SECURITY_BASELINE.md §1.5).
-    const response = await page.goto('/en/admin/identity/users');
+    const response = await page.goto('/admin/identity/users');
     expect(response?.status()).toBe(404);
 
     // Phase 4's surface is gated the same way and refuses the same way. It
     // discloses the platform's route shape, including reserved routes nothing
     // public links to, so "read-only" is not a reason to leave it open.
-    const navigation = await page.goto('/en/admin/system/navigation');
+    const navigation = await page.goto('/admin/system/navigation');
     expect(navigation?.status()).toBe(404);
 
     // The root is a route too. It must not render an administrative shell to
     // an account with no administrative permission.
-    const root = await page.goto('/en/admin');
+    const root = await page.goto('/admin');
     expect(root?.status()).toBe(404);
     await expect(page.getByRole('navigation')).toHaveCount(0);
   });
 
   test('sends a signed-out visitor to sign in, and back again', async ({ page }) => {
-    await page.goto('/en/admin/identity/users');
-    await page.waitForURL(/\/en\/signin\?returnTo=/);
+    await page.goto('/admin/identity/users');
+    await page.waitForURL(/\/signin\?returnTo=/);
   });
 });
 
@@ -146,14 +146,14 @@ test.describe('the privileged administrator', () => {
   test.use({ storageState: ADMINISTRATOR_STATE });
 
   test('reads every surface its role reaches', async ({ page }) => {
-    await page.goto('/en/admin');
+    await page.goto('/admin');
     await expect(page.getByRole('main')).toContainText('Accounts');
 
-    await page.goto('/en/admin/identity/permissions');
+    await page.goto('/admin/identity/permissions');
     await expect(page.getByRole('main')).toContainText('permissions.grant');
     await expect(page.getByRole('main')).toContainText('Read-only');
 
-    await page.goto('/en/admin/identity/roles');
+    await page.goto('/admin/identity/roles');
     await expect(page.getByRole('main')).toContainText('Platform Administrator');
     await expect(page.getByRole('main')).toContainText('Protected system role');
 
@@ -167,19 +167,19 @@ test.describe('the privileged administrator', () => {
       protectedRole.getByRole('button', { name: 'Deactivate the role' }),
     ).toHaveCount(0);
 
-    await page.goto('/en/admin/identity/assignments');
+    await page.goto('/admin/identity/assignments');
     await expect(page.getByRole('main')).toContainText('platform-administrator');
 
     // Through the audit view's own Action filter: the unfiltered view is a
     // bounded newest-first page, and specs running in parallel append rows
     // that legitimately push the bootstrap record off it.
-    await page.goto('/en/admin/system/audit?action=identity.bootstrap.completed');
+    await page.goto('/admin/system/audit?action=identity.bootstrap.completed');
     await expect(page.getByRole('main')).toContainText('identity.bootstrap.completed');
 
-    await page.goto('/en/admin/communications/delivery');
+    await page.goto('/admin/communications/delivery');
     await expect(page.getByRole('main')).toContainText('Pending');
 
-    await page.goto('/en/admin/identity/users');
+    await page.goto('/admin/identity/users');
     await expect(page.getByRole('main')).toContainText(administrator.email);
   });
 
@@ -195,7 +195,7 @@ test.describe('the privileged administrator', () => {
   test('reads the navigation status, and is offered nothing to change', async ({
     page,
   }) => {
-    await page.goto('/en/admin/system/navigation');
+    await page.goto('/admin/system/navigation');
 
     const main = page.getByRole('main');
 
@@ -205,11 +205,32 @@ test.describe('the privileged administrator', () => {
     // claiming "not built yet".
     await expect(main).toContainText('Delivered');
     await expect(main).toContainText('Reserved');
-    await expect(main.getByRole('row').filter({ hasText: '/en/donate' })).toContainText(
+    await expect(main.getByRole('row').filter({ hasText: '/donate' })).toContainText(
       'Delivered',
     );
     await expect(main).not.toContainText('Deferred');
     await expect(main).not.toContainText('No route yet');
+
+    // PROMOTION, not placement (Rebaseline R1): the view states the policy the
+    // shell applies — what is always promoted, what waits for published
+    // content, what is only reachable by its address — and English paths are
+    // unprefixed.
+    await expect(main.getByRole('columnheader', { name: 'Promotion' })).toHaveCount(1);
+    await expect(main.getByRole('columnheader', { name: 'Placement' })).toHaveCount(0);
+    const rowAt = (path: string) =>
+      main
+        .getByRole('row')
+        .filter({ has: page.getByRole('cell', { name: path, exact: true }) });
+    await expect(rowAt('/explore')).toContainText('Always promoted');
+    // Only fixture corpora exist during a run, so the Quran is never promoted.
+    await expect(rowAt('/quran')).toContainText('Waits for published quran');
+    await expect(rowAt('/contact')).toContainText(
+      'Not promoted — reachable by its address',
+    );
+    await expect(rowAt('/donate')).toContainText(
+      /Waits for published giving|Promoted now \(giving is published\)/,
+    );
+    await expect(main).not.toContainText('/en/');
 
     // The posture this deployment is actually in, stated on the screen.
     await expect(main).toContainText('Public indexing is disabled');
@@ -222,8 +243,35 @@ test.describe('the privileged administrator', () => {
     await expect(main.locator('form')).toHaveCount(0);
   });
 
+  test('wears the shared product bar, titled by its area', async ({ page }) => {
+    await page.goto('/admin/identity/security');
+
+    // ONE PRODUCT (Rebaseline R1): the administrative shell carries the same
+    // bar as every private surface — the wordmark home, the area's name, the
+    // way back to the public site and a language switcher that keeps the page.
+    await expect(page).toHaveTitle(/(^|· )Administration · One Minhaj$/);
+    const bar = page.getByRole('banner').first();
+    await expect(bar.getByRole('link', { name: /One Minhaj/ }).first()).toHaveAttribute(
+      'href',
+      '/',
+    );
+    await expect(bar).toContainText('Administration');
+    await expect(
+      bar.getByRole('link', { name: 'Back to One Minhaj', exact: true }),
+    ).toHaveAttribute('href', '/');
+    await expect(
+      bar
+        .getByRole('navigation', { name: 'Choose a language' })
+        .getByRole('link', { name: 'اردو', exact: true }),
+    ).toHaveAttribute('href', '/ur/admin/identity/security');
+    // The public navigation stays on the public site.
+    await expect(page.getByRole('navigation', { name: 'Main navigation' })).toHaveCount(
+      0,
+    );
+  });
+
   test('shows bootstrap status and offers no way to perform it', async ({ page }) => {
-    await page.goto('/en/admin/identity/security');
+    await page.goto('/admin/identity/security');
 
     await expect(page.getByRole('main')).toContainText('Completed');
     await expect(page.getByRole('main')).toContainText('BROWSER-PROOF');
@@ -234,7 +282,7 @@ test.describe('the privileged administrator', () => {
   });
 
   test('never displays a provider credential', async ({ page }) => {
-    await page.goto('/en/admin/system/integrations');
+    await page.goto('/admin/system/integrations');
 
     await expect(page.getByRole('main')).toContainText('Sender address');
 
@@ -258,7 +306,7 @@ test.describe('the privileged administrator', () => {
   test('gives every administrative table a caption and column headers', async ({
     page,
   }) => {
-    await page.goto('/en/admin/system/audit');
+    await page.goto('/admin/system/audit');
 
     const table = page.getByRole('table').first();
     await expect(table).toBeVisible();
@@ -272,7 +320,7 @@ test.describe('the privileged administrator', () => {
     // nothing — so "tab reaches something" would be asserting a control that
     // ought not to exist. The roles surface is where an administrator actually
     // works, and it is the one that has to be operable without a mouse.
-    await page.goto('/en/admin/identity/roles');
+    await page.goto('/admin/identity/roles');
 
     await page.keyboard.press('Tab');
     const focused = page.locator(':focus');
@@ -305,7 +353,7 @@ test.describe('a privileged mutation, end to end', () => {
     const otherId = await accountIdFor(sql, otherEmail);
 
     // A custom role to grant. Creating one needs a step-up first.
-    await page.goto('/en/admin/identity/roles');
+    await page.goto('/admin/identity/roles');
 
     const roleKey = `browser-${Date.now()}`;
     const fillNewRole = async () => {
@@ -332,7 +380,7 @@ test.describe('a privileged mutation, end to end', () => {
     await expect(announced(page, 'role was created')).toBeVisible();
 
     // Grant it, and watch the other person's session end.
-    await page.goto('/en/admin/identity/assignments');
+    await page.goto('/admin/identity/assignments');
     await stepUp(page);
 
     await page.getByLabel('Account identifier').fill(otherId);
@@ -346,12 +394,12 @@ test.describe('a privileged mutation, end to end', () => {
     // THE OTHER DEVICE. A privilege change revokes the affected account's
     // sessions, so their next navigation is a sign-in page — the consequence
     // that only a second browser context can show.
-    await otherPage.goto('/en/my');
-    await otherPage.waitForURL(/\/en\/signin/);
+    await otherPage.goto('/my');
+    await otherPage.waitForURL(/\/signin/);
 
     // Signing in again, the new authority is live immediately.
     await signIn(otherPage, otherEmail, PASSWORD);
-    const audit = await otherPage.goto('/en/admin/system/audit');
+    const audit = await otherPage.goto('/admin/system/audit');
     expect(audit?.status()).toBe(200);
 
     await other.close();

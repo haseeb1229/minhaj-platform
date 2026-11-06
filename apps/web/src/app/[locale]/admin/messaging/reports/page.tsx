@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import { MessagingTime } from '@/components/messaging/parts';
@@ -51,7 +52,7 @@ export default async function ReportsPage({
   readonly searchParams: Promise<Query>;
 }) {
   const locale = await requireLocale(params);
-  const base = `/${locale}/admin/messaging/reports`;
+  const base = localizedPath(locale, '/admin/messaging/reports');
   const context = await requireAdminPage(locale, 'messaging.moderate', base);
   const copy = await adminMessagingCopy(locale);
   const { t } = copy;
@@ -70,9 +71,7 @@ export default async function ReportsPage({
   return (
     <main className="flex flex-col gap-4">
       <PageHeading>{t('reports.title')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('reports.description')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('reports.description')}</p>
       <QueueFilterLinks base={base} current={filter} copy={copy} />
 
       {!read.ok ? (
@@ -116,7 +115,10 @@ export default async function ReportsPage({
             <DataRow key={report.id}>
               <DataCell>
                 <TextLink
-                  href={`/${locale}/admin/messaging/reports/${encodeURIComponent(report.id)}`}
+                  href={localizedPath(
+                    locale,
+                    `/admin/messaging/reports/${encodeURIComponent(report.id)}`,
+                  )}
                 >
                   <span className="font-mono" dir="ltr">
                     {t('reports.open', { id: shortId(report.id) })}

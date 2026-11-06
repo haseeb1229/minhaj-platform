@@ -1,3 +1,5 @@
+import { identityMetadata } from '../metadata';
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { requireLocale } from '@/config/route-locale';
@@ -13,7 +15,9 @@ import { ActionForm } from '../form-state';
  * account: "check your email". Anything more specific turns this form into a
  * way to discover who is registered (SECURITY_BASELINE.md §15.2).
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = identityMetadata('signUp.title', {
+  robots: { index: false, follow: false },
+});
 
 export default async function SignUpPage({
   params,
@@ -30,7 +34,9 @@ export default async function SignUpPage({
       footer={
         <span>
           {t('signUp.haveAccount')}{' '}
-          <TextLink href={`/${locale}/signin`}>{t('signUp.signIn')}</TextLink>
+          <TextLink href={localizedPath(locale, '/signin')}>
+            {t('signUp.signIn')}
+          </TextLink>
         </span>
       }
     >

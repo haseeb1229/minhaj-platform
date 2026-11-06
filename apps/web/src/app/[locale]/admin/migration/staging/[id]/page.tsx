@@ -214,7 +214,7 @@ export default async function MigrationStagedRecordPage({
       </header>
 
       <Panel>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('staged.contentKind')}>
             <ContentKindLabel kind={staged.contentKind} copy={copy} />
           </DetailRow>
@@ -271,7 +271,7 @@ export default async function MigrationStagedRecordPage({
         <SectionHeading>
           <span id="staged-provenance">{t('staged.provenance')}</span>
         </SectionHeading>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('provenance.adapter')}>
             <Code>{`${staged.provenance.adapterKey}@${staged.provenance.adapterVersion}`}</Code>
           </DetailRow>
@@ -326,9 +326,7 @@ export default async function MigrationStagedRecordPage({
         <SectionHeading>
           <span id="staged-payload">{t('staged.payload')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('staged.payloadHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('staged.payloadHelp')}</p>
         <EscapedText label={t('staged.payload')} testId="staged-payload">
           {readablePayload(staged.payload)}
         </EscapedText>
@@ -417,7 +415,7 @@ export default async function MigrationStagedRecordPage({
           <Alert tone="error">{t('failure.load')}</Alert>
         ) : (
           <>
-            <dl className="divide-y divide-[color:var(--color-border)]">
+            <dl className="divide-y divide-border">
               <DetailRow term={t('snapshot.requestedUrl')}>
                 <Code>{snapshot.value.requestedUrl}</Code>
               </DetailRow>
@@ -463,7 +461,7 @@ export default async function MigrationStagedRecordPage({
               )}
             </dl>
             {!administer ? (
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
+              <p className="text-sm text-foreground-muted">
                 {t('snapshot.administerOnly')}
               </p>
             ) : snapshot.value.disposedAt !== null ? (
@@ -494,7 +492,7 @@ export default async function MigrationStagedRecordPage({
             ) : (
               <div className="flex flex-col gap-2">
                 <h3 className="font-semibold">{t('snapshot.preview')}</h3>
-                <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                <p className="text-sm text-foreground-muted">
                   {preview.value.truncated
                     ? t('snapshot.previewTruncated')
                     : t('snapshot.previewHelp')}
@@ -515,9 +513,7 @@ export default async function MigrationStagedRecordPage({
         <SectionHeading>
           <span id="staged-assets">{t('assets.heading')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('assets.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('assets.help')}</p>
         {!assets.ok ? (
           <Alert tone="error">{t('failure.load')}</Alert>
         ) : assets.value.rows.length === 0 ? (
@@ -572,7 +568,7 @@ function EscapedText({
       aria-label={label}
       data-testid={testId}
       dir="ltr"
-      className="max-h-[32rem] overflow-auto rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)] p-3 text-xs whitespace-pre-wrap wrap-anywhere"
+      className="max-h-[32rem] overflow-auto rounded-control border border-border bg-surface-sunken p-3 text-xs whitespace-pre-wrap wrap-anywhere"
     >
       {children}
     </pre>
@@ -635,9 +631,7 @@ function PersonalDataFindings({
           {decidable ? (
             <MigrationPersonalDataStepUp locale={locale} />
           ) : awaiting ? (
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('findings.clearerOnly')}
-            </p>
+            <p className="text-sm text-foreground-muted">{t('findings.clearerOnly')}</p>
           ) : null}
           <ol className="flex flex-col gap-3" aria-label={t('findings.heading')}>
             {findings.value.map((finding) => (
@@ -671,7 +665,7 @@ function PersonalDataFindings({
                       <bdi>{finding.context}</bdi>
                     </p>
                     {finding.decidedByUserId === null ? null : (
-                      <dl className="divide-y divide-[color:var(--color-border)] text-sm">
+                      <dl className="divide-y divide-border text-sm">
                         <DetailRow term={t('findings.decidedBy')}>
                           <Code>{finding.decidedByUserId}</Code>
                         </DetailRow>
@@ -778,9 +772,7 @@ function ReviewForms({
         <p className="text-sm">{t('review.notPublishable')}</p>
       ) : null}
       {decisions.length === 0 ? (
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('review.closed')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('review.closed')}</p>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {decisions.map((decision) => (
@@ -829,7 +821,7 @@ function Acquisition({
   return (
     <Panel as="li">
       <div className="flex min-w-0 flex-col gap-3" data-testid={prefix}>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('assets.originalUrl')}>
             <Code>{asset.originalUrl}</Code>
           </DetailRow>

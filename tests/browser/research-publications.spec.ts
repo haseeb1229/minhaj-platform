@@ -73,7 +73,7 @@ async function eventuallyFound(page: Page, query: string, text: string): Promise
   await expect
     .poll(
       async () => {
-        await page.goto(`/en/search?q=${encodeURIComponent(query)}`);
+        await page.goto(`/search?q=${encodeURIComponent(query)}`);
         await page.getByRole('heading', { level: 1, name: 'Search' }).waitFor();
         return page.getByRole('main').innerText();
       },
@@ -167,29 +167,29 @@ test.describe('an anonymous visitor reads research and publications', () => {
   test('lists research signed out, sets no cookie, and filters honestly', async ({
     page,
   }) => {
-    const response = await page.goto('/en/library/research');
+    const response = await page.goto('/library/research');
     expect(response?.status()).toBe(200);
     expect(response?.headers()['set-cookie']).toBeUndefined();
     await expect(page.getByRole('link', { name: RESEARCH_TITLE })).toBeVisible();
 
-    await page.goto('/en/library/research-papers?language=ar');
+    await page.goto('/library/research-papers?language=ar');
     await expect(
       page.getByRole('link', { name: `Synthetic browser paper ${PAPER_WORD}` }),
     ).toBeVisible();
 
     // A filter that matches nothing says so, and offers the way back.
-    await page.goto('/en/library/research-papers?language=ur&from=1900&to=1901');
+    await page.goto('/library/research-papers?language=ur&from=1900&to=1901');
     await expect(
       page.getByText('Nothing published matches these filters.'),
     ).toBeVisible();
     await page.getByRole('link', { name: 'Clear all filters' }).first().click();
-    await expect(page).toHaveURL(/\/en\/library\/research-papers$/);
+    await expect(page).toHaveURL(/\/library\/research-papers$/);
   });
 
   test('shows a research record with its abstract, citations, people, topics and text', async ({
     page,
   }) => {
-    await page.goto(`/en/library/research/${researchSlug}`);
+    await page.goto(`/library/research/${researchSlug}`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(RESEARCH_TITLE);
 
     await expect(page.getByRole('heading', { name: 'Abstract' })).toBeVisible();
@@ -210,9 +210,9 @@ test.describe('an anonymous visitor reads research and publications', () => {
 
     await expect(page.getByRole('link', { name: 'Education' }).first()).toHaveAttribute(
       'href',
-      '/en/topics/education',
+      '/topics/education',
     );
-    await expect(page.locator('a[href^="/en/people/"]').first()).toBeVisible();
+    await expect(page.locator('a[href^="/people/"]').first()).toBeVisible();
 
     // The full text, navigable by keyboard.
     const contents = page.getByRole('navigation', { name: 'Contents' });
@@ -229,12 +229,12 @@ test.describe('an anonymous visitor reads research and publications', () => {
   });
 
   test('states plainly when no full text is available', async ({ page }) => {
-    await page.goto(`/en/library/publications/${publicationSlug}`);
+    await page.goto(`/library/publications/${publicationSlug}`);
     await expect(page.getByText('Synthetic Press')).toBeVisible();
     await expect(
       page.getByText('The full text is not available on this platform.'),
     ).toBeVisible();
-    await page.goto(`/en/library/encyclopedias/${encyclopediaSlug}`);
+    await page.goto(`/library/encyclopedias/${encyclopediaSlug}`);
     await expect(page.locator('#library-reader')).toBeVisible();
   });
 
@@ -256,8 +256,8 @@ test.describe('an anonymous visitor reads research and publications', () => {
   test('reflows at a 320px width without horizontal scroll', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     for (const path of [
-      '/en/library/research',
-      `/en/library/research/${researchSlug}`,
+      '/library/research',
+      `/library/research/${researchSlug}`,
       `/ur/library/magazines/${magazineSlug}/issues/${issueSlug}`,
     ]) {
       await page.goto(path);
@@ -273,7 +273,7 @@ test.describe('an anonymous visitor reads research and publications', () => {
 
 test.describe('a periodical and its issues', () => {
   test('lists public issues newest first, and never a draft', async ({ page }) => {
-    await page.goto(`/en/library/magazines/${magazineSlug}`);
+    await page.goto(`/library/magazines/${magazineSlug}`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(MAGAZINE_TITLE);
     const issues = page.getByRole('list', { name: 'Issues' });
     await expect(issues.getByRole('listitem')).toHaveCount(2);
@@ -287,7 +287,7 @@ test.describe('a periodical and its issues', () => {
   test('places an issue within its Magazine, with its numbers and neighbours', async ({
     page,
   }) => {
-    await page.goto(`/en/library/magazines/${magazineSlug}/issues/${issueSlug}`);
+    await page.goto(`/library/magazines/${magazineSlug}/issues/${issueSlug}`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
       'Synthetic spring issue',
     );
@@ -296,7 +296,7 @@ test.describe('a periodical and its issues', () => {
     const breadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' });
     await expect(breadcrumb.getByRole('link', { name: MAGAZINE_TITLE })).toHaveAttribute(
       'href',
-      `/en/library/magazines/${magazineSlug}`,
+      `/library/magazines/${magazineSlug}`,
     );
 
     const neighbours = page.getByRole('navigation', {
@@ -326,22 +326,19 @@ test.describe('a periodical and its issues', () => {
       `/ur/library/research/${researchOld}`,
       `/ur/library/research/${researchSlug}`,
     );
-    await hop(
-      `/en/library/magazines/${magazineOld}`,
-      `/en/library/magazines/${magazineSlug}`,
-    );
+    await hop(`/library/magazines/${magazineOld}`, `/library/magazines/${magazineSlug}`);
     // BOTH halves former: still ONE hop, straight to the current full address.
     await hop(
       `/ar/library/magazines/${magazineOld}/issues/${issueOld}`,
       `/ar/library/magazines/${magazineSlug}/issues/${issueSlug}`,
     );
     await hop(
-      `/en/library/magazines/${magazineSlug}/issues/${issueOld}`,
-      `/en/library/magazines/${magazineSlug}/issues/${issueSlug}`,
+      `/library/magazines/${magazineSlug}/issues/${issueOld}`,
+      `/library/magazines/${magazineSlug}/issues/${issueSlug}`,
     );
 
     const draft = await request.get(
-      `/en/library/magazines/${magazineSlug}/issues/draft-${run}`,
+      `/library/magazines/${magazineSlug}/issues/draft-${run}`,
       { maxRedirects: 0 },
     );
     expect(draft.status()).toBe(404);
@@ -354,7 +351,7 @@ test.describe('Library-wide surfaces include what Phase 9 delivered', () => {
   test('lists the new sections on the landing, resources and topic pages', async ({
     page,
   }) => {
-    await page.goto('/en/library');
+    await page.goto('/library');
     for (const name of [
       'Research',
       'Research papers',
@@ -362,22 +359,22 @@ test.describe('Library-wide surfaces include what Phase 9 delivered', () => {
       'Encyclopedias',
       'Magazines and journals',
     ]) {
-      // The landing's own list — the footer's Our Work column also has a
-      // "Research" (an Explore page), which is not what this proves.
+      // The landing's own list — the shell's header and footer may carry
+      // same-named destinations, which is not what this proves.
       await expect(
         page.getByRole('main').getByRole('link', { name, exact: true }),
       ).toBeVisible();
     }
 
-    await page.goto('/en/library/resources');
+    await page.goto('/library/resources');
     await expect(page.getByRole('link', { name: RESEARCH_TITLE })).toBeVisible();
     await expect(page.getByRole('link', { name: 'All research papers' })).toBeVisible();
 
-    await page.goto('/en/topics/education');
+    await page.goto('/topics/education');
     const section = page.getByRole('region', { name: 'Research on this topic' });
     await expect(section.getByRole('link', { name: RESEARCH_TITLE })).toHaveAttribute(
       'href',
-      `/en/library/research/${researchSlug}`,
+      `/library/research/${researchSlug}`,
     );
   });
 });
@@ -395,14 +392,11 @@ test.describe('search finds Phase-9 records, and never a withdrawn one', () => {
     const results = page.getByRole('list', { name: 'Search results' });
     await expect(results.getByRole('link', { name: RESEARCH_TITLE })).toHaveAttribute(
       'href',
-      `/en/library/research/${researchSlug}`,
+      `/library/research/${researchSlug}`,
     );
     await expect(
       results.getByRole('link', { name: 'Synthetic spring issue' }),
-    ).toHaveAttribute(
-      'href',
-      `/en/library/magazines/${magazineSlug}/issues/${issueSlug}`,
-    );
+    ).toHaveAttribute('href', `/library/magazines/${magazineSlug}/issues/${issueSlug}`);
 
     await eventuallyFound(page, PAPER_WORD, `Synthetic browser paper ${PAPER_WORD}`);
     // Withdrawn with no indexing request: the stale row is still in the index,
@@ -411,7 +405,7 @@ test.describe('search finds Phase-9 records, and never a withdrawn one', () => {
     await sql.query(
       `UPDATE [dbo].[ResearchPaper] SET [state]=N'archived' WHERE [id]=N'${paperId}';`,
     );
-    await page.goto(`/en/search?q=${PAPER_WORD}`);
+    await page.goto(`/search?q=${PAPER_WORD}`);
     await page.getByRole('heading', { level: 1, name: 'Search' }).waitFor();
     await expect(page.getByText(`Synthetic browser paper ${PAPER_WORD}`)).toHaveCount(0);
   });
@@ -451,14 +445,14 @@ test.describe('Research and publications administration', () => {
       'encyclopedias',
       `magazines/${magazineId}`,
     ]) {
-      const response = await stranger.goto(`/en/admin/library/${surface}`);
+      const response = await stranger.goto(`/admin/library/${surface}`);
       expect(response?.status(), surface).toBe(404);
     }
   });
 
   test('creates research through the form, and a stale save conflicts visibly', async () => {
     const created = `browser-admin-research-${run}`;
-    await admin.goto('/en/admin/library/research');
+    await admin.goto('/admin/library/research');
     await expect(
       admin.getByRole('heading', { level: 1, name: 'Research' }),
     ).toBeVisible();
@@ -468,10 +462,10 @@ test.describe('Research and publications administration', () => {
     await admin.locator('#new-research-state').selectOption('published');
     await admin.locator('#new-research-citation-0-text').fill('Synthetic admin citation');
     await admin.getByRole('button', { name: 'Create', exact: true }).click();
-    await admin.waitForURL(/\/en\/admin\/library\/research\/[0-9a-f-]{36}$/);
+    await admin.waitForURL(/\/admin\/library\/research\/[0-9a-f-]{36}$/);
     const editor = admin.url();
 
-    await admin.goto(`/en/library/research/${created}`);
+    await admin.goto(`/library/research/${created}`);
     await expect(admin.getByText('Synthetic admin citation')).toBeVisible();
 
     // Two operators open the same version; the second save is refused.
@@ -496,7 +490,7 @@ test.describe('Research and publications administration', () => {
   });
 
   test('manages a Magazine’s issues beneath it', async () => {
-    await admin.goto(`/en/admin/library/magazines/${magazineId}`);
+    await admin.goto(`/admin/library/magazines/${magazineId}`);
     const issues = admin.getByRole('table', { name: 'Issues' });
     await expect(
       issues.getByRole('link', { name: 'Synthetic spring issue' }),
@@ -515,9 +509,7 @@ test.describe('Research and publications administration', () => {
     // is shown. (The administrative loading boundary has already begun streaming
     // by then, so the not-found state arrives in the body, as it does for every
     // Library editor.)
-    await admin.goto(
-      `/en/admin/library/magazines/${randomUUID()}/issues/${secondIssueId}`,
-    );
+    await admin.goto(`/admin/library/magazines/${randomUUID()}/issues/${secondIssueId}`);
     await expect(
       admin.getByRole('heading', { name: 'This page could not be found.' }),
     ).toBeVisible();

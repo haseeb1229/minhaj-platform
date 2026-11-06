@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import {
   formatDuration,
   MEDIA_LIMITS,
@@ -194,7 +194,7 @@ export function DirectoryFilter({
       </Field>
       <button
         type="submit"
-        className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-medium"
+        className="inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-medium"
       >
         {t('filterApply')}
       </button>
@@ -264,14 +264,12 @@ export function ReferenceSearch({
         </Field>
         <button
           type="submit"
-          className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-medium"
+          className="inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-medium"
         >
           {t('findReferences')}
         </button>
       </form>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('referenceHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('referenceHelp')}</p>
     </>
   );
 }
@@ -295,9 +293,7 @@ export function LabelFields({
   return (
     <>
       <SectionHeading>{t('labels')}</SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('labelsHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('labelsHelp')}</p>
       {localeSchema.options.map((language) => {
         const existing = record?.labels.find((entry) => entry.locale === language);
         return (
@@ -468,7 +464,7 @@ function VideoTable({
         <DataRow key={video.id}>
           {episode ? <DataCell>{video.seriesPosition ?? '—'}</DataCell> : null}
           <DataCell wrap>
-            <TextLink href={`/${locale}/admin/media/videos/${video.id}`}>
+            <TextLink href={localizedPath(locale, `/admin/media/videos/${video.id}`)}>
               <Title record={video} locale={locale} />
             </TextLink>
           </DataCell>
@@ -491,7 +487,7 @@ function VideoTable({
 export async function VideoDirectory({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/media/videos`;
+  const base = localizedPath(locale, '/admin/media/videos');
   const context = await requireAdminPage(locale, 'media.read', base);
   const copy = await mediaCopy(locale);
   const { t } = copy;
@@ -548,7 +544,7 @@ export async function VideoEditor({ params, searchParams }: EditorParams) {
   const locale = await requireLocale(params);
   const { id } = await params;
   const query = await searchParams;
-  const base = `/${locale}/admin/media/videos`;
+  const base = localizedPath(locale, '/admin/media/videos');
   const context = await requireAdminPage(locale, 'media.read', base);
   const copy = await mediaCopy(locale);
   const { t } = copy;
@@ -595,9 +591,7 @@ export async function VideoEditor({ params, searchParams }: EditorParams) {
         <SectionHeading>
           <span id="video-preview">{t('video.preview')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('video.previewHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('video.previewHelp')}</p>
         {record.availability === 'available' ? (
           <VideoPlayer
             provider={record.provider}
@@ -835,9 +829,7 @@ function VideoForm({
         />
         {t('video.captions')}
       </label>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('video.captionsHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('video.captionsHelp')}</p>
       <Field
         id={`${prefix}-transcript`}
         label={t('video.transcript')}
@@ -889,9 +881,7 @@ function VideoForm({
       </div>
 
       <SectionHeading>{t('video.speakers')}</SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('video.speakersHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('video.speakersHelp')}</p>
       <div className="grid gap-3 sm:grid-cols-2">
         {Array.from({ length: MEDIA_FORM_ROWS.speakers }, (_, index) => {
           const selected = record?.speakerIds[index];
@@ -1043,7 +1033,7 @@ function SeriesForm({
 export async function SeriesDirectory({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/media/series`;
+  const base = localizedPath(locale, '/admin/media/series');
   const context = await requireAdminPage(locale, 'media.read', base);
   const copy = await mediaCopy(locale);
   const { t } = copy;
@@ -1091,7 +1081,7 @@ export async function SeriesEditor({ params, searchParams }: EditorParams) {
   const locale = await requireLocale(params);
   const { id } = await params;
   const query = await searchParams;
-  const base = `/${locale}/admin/media/series`;
+  const base = localizedPath(locale, '/admin/media/series');
   const context = await requireAdminPage(locale, 'media.read', base);
   const copy = await mediaCopy(locale);
   const { t } = copy;
@@ -1133,9 +1123,7 @@ export async function SeriesEditor({ params, searchParams }: EditorParams) {
 
       <section className="flex flex-col gap-4">
         <SectionHeading>{t('series.episodes')}</SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('series.episodesHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('series.episodesHelp')}</p>
         <VideoTable
           locale={locale}
           videos={episodes.items}
@@ -1196,7 +1184,7 @@ function PlaylistForm({
 export async function PlaylistDirectory({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/media/playlists`;
+  const base = localizedPath(locale, '/admin/media/playlists');
   const context = await requireAdminPage(locale, 'media.read', base);
   const copy = await mediaCopy(locale);
   const { t } = copy;
@@ -1287,7 +1275,7 @@ export async function PlaylistEditor({ params, searchParams }: EditorParams) {
   const locale = await requireLocale(params);
   const { id } = await params;
   const query = await searchParams;
-  const base = `/${locale}/admin/media/playlists`;
+  const base = localizedPath(locale, '/admin/media/playlists');
   const context = await requireAdminPage(locale, 'media.read', base);
   const copy = await mediaCopy(locale);
   const { t } = copy;
@@ -1333,7 +1321,7 @@ export async function PlaylistEditor({ params, searchParams }: EditorParams) {
         <SectionHeading>
           <span id="playlist-videos">{t('playlist.videos')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="text-sm text-foreground-muted">
           {t('playlist.videosHelp', { count: String(record.videos.length) })}
         </p>
         {record.videos.length === 0 ? (
@@ -1344,10 +1332,12 @@ export async function PlaylistEditor({ params, searchParams }: EditorParams) {
               <Panel key={video.id} as="li">
                 <div className="flex flex-col gap-3">
                   <p className="flex flex-wrap items-center gap-3">
-                    <span className="text-sm text-[color:var(--color-foreground-muted)]">
+                    <span className="text-sm text-foreground-muted">
                       {t('playlist.position', { number: index + 1 })}
                     </span>
-                    <TextLink href={`/${locale}/admin/media/videos/${video.id}`}>
+                    <TextLink
+                      href={localizedPath(locale, `/admin/media/videos/${video.id}`)}
+                    >
                       <Title record={video} locale={locale} />
                     </TextLink>
                     <StateBadge state={video.state} copy={copy} />
@@ -1408,7 +1398,7 @@ export async function PlaylistEditor({ params, searchParams }: EditorParams) {
             </Field>
             <button
               type="submit"
-              className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-medium"
+              className="inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-medium"
             >
               {t('playlist.find')}
             </button>

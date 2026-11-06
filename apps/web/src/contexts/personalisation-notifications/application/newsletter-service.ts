@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
@@ -231,7 +232,10 @@ export function createNewsletterService(deps: {
         return { outcome: 'nothing-owed' };
 
       const link = (path: string, purpose: NewsletterTokenPurpose, salt: string) => {
-        const url = new URL(`/${source.locale}/newsletter/${path}`, deps.baseUrl);
+        const url = new URL(
+          localizedPath(source.locale, `/newsletter/${path}`),
+          deps.baseUrl,
+        );
         url.searchParams.set(
           'token',
           token(purpose, source.subscriberId, generation, salt),

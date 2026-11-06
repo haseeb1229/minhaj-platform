@@ -149,7 +149,7 @@ export default async function DonationRecordPage({
             <DonationStateBadge state={donation.state} t={d} />
             <EnvironmentBadge environment={donation.scope.environment} t={d} />
           </div>
-          <dl className="divide-y divide-[color:var(--color-border)]">
+          <dl className="divide-y divide-border">
             <DetailRow term={d('detail.campaign')}>
               <CampaignTitle campaign={donation.campaign} locale={locale} t={d} />
             </DetailRow>
@@ -261,7 +261,7 @@ export default async function DonationRecordPage({
         <SectionHeading>
           <span id="donation-reconcile">{t('reconcile.heading')}</span>
         </SectionHeading>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('reconcile.due')}>
             {donation.reconcileDueAt === null ? (
               t('reconcile.notScheduled')
@@ -309,7 +309,7 @@ export default async function DonationRecordPage({
                   <div className="flex flex-wrap items-center gap-2">
                     <RefundStateBadge state={refund.state} t={d} />
                   </div>
-                  <dl className="divide-y divide-[color:var(--color-border)]">
+                  <dl className="divide-y divide-border">
                     <DetailRow term={d('detail.amount')}>
                       <Money money={refund.amount} locale={locale} />
                     </DetailRow>
@@ -344,7 +344,7 @@ export default async function DonationRecordPage({
         )}
 
         {!refunder ? null : !captured || remaining === 0n ? (
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
+          <p className="text-sm text-foreground-muted">
             {captured ? t('refund.nothingLeft') : t('refund.notCaptured')}
           </p>
         ) : (
@@ -360,9 +360,7 @@ export default async function DonationRecordPage({
                     ),
                   })}
                 </p>
-                <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                  {t('refund.help')}
-                </p>
+                <p className="text-sm text-foreground-muted">{t('refund.help')}</p>
                 <ActionForm
                   action={refundDonationAction}
                   submitLabel={t('refund.submit')}

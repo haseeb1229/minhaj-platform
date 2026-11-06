@@ -108,7 +108,7 @@ export function AudioUploader({
             className="min-h-11 w-full text-sm"
           />
         ) : null}
-        <p id={helpId} className="text-xs text-[color:var(--color-foreground-muted)]">
+        <p id={helpId} className="text-xs text-foreground-muted">
           {labels.help}
         </p>
       </div>

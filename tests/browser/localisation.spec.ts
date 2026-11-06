@@ -7,6 +7,7 @@ import {
   alertIn,
   expect,
   freshEmail,
+  localizedPath,
   registerAndSignIn,
   signOut,
   statusIn,
@@ -53,7 +54,7 @@ test.describe('the three interface locales', () => {
   ] as const) {
     test(`renders every public surface in ${locale} (${direction})`, async ({ page }) => {
       for (const surface of PUBLIC_SURFACES) {
-        await page.goto(`/${locale}/${surface}`);
+        await page.goto(localizedPath(locale, `/${surface}`));
 
         const document = await documentDirection(page);
 
@@ -81,7 +82,7 @@ test.describe('the three interface locales', () => {
       ['ar', 'rtl'],
     ] as const) {
       for (const surface of ACCOUNT_SURFACES) {
-        await page.goto(`/${locale}/${surface}`);
+        await page.goto(localizedPath(locale, `/${surface}`));
 
         const document = await documentDirection(page);
 
@@ -107,7 +108,7 @@ test.describe('the three interface locales', () => {
 
   test('names each language in its OWN script', async ({ page }) => {
     await registerAndSignIn(page, 'endonym');
-    await page.goto('/en/my/settings/language');
+    await page.goto('/my/settings/language');
 
     // A language list that says "Urdu" and "Arabic" in English is a list
     // somebody who reads only Urdu cannot use.
@@ -126,20 +127,23 @@ test.describe('the three interface locales', () => {
   }) => {
     await registerAndSignIn(page, 'language-change');
 
-    await page.goto('/en/my/settings/language');
+    await page.goto('/my/settings/language');
     await page.getByLabel(LABEL.accountLanguage).selectOption('ur');
     await page.getByLabel(LABEL.timezone).fill('Asia/Karachi');
     await page.getByRole('button', { name: BUTTON.save, exact: true }).click();
 
     await expect(statusIn(page).filter({ hasText: 'Saved' })).toBeVisible();
 
-    // The ACCOUNT's interface locale changed. The URL prefix still decides
-    // what THIS request renders in, because they are different things
-    // (DOMAIN_MODEL.md §19.1).
-    expect(new URL(page.url()).pathname.startsWith('/en/')).toBe(true);
+    // The ACCOUNT's interface locale changed. The address still decides what
+    // THIS request renders in, because they are different things
+    // (DOMAIN_MODEL.md §19.1): the unprefixed page stays English, and saving
+    // the preference redirects nowhere.
+    expect(new URL(page.url()).pathname).toBe('/my/settings/language');
 
     await page.reload();
     await expect(page.getByLabel(LABEL.accountLanguage)).toHaveValue('ur');
+    expect(new URL(page.url()).pathname).toBe('/my/settings/language');
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('en');
   });
 });
 
@@ -148,7 +152,7 @@ test.describe('keyboard operation', () => {
     const { email } = await registerAndSignIn(page, 'keyboard');
     await signOut(page);
 
-    await page.goto('/en/signin');
+    await page.goto('/signin');
 
     // Focus is MOVED with the keyboard rather than by clicking, so the proof
     // is about focus order rather than about where a click landed.
@@ -166,7 +170,7 @@ test.describe('keyboard operation', () => {
   });
 
   test('gives every focusable control a VISIBLE focus indicator', async ({ page }) => {
-    await page.goto('/en/signup');
+    await page.goto('/signup');
 
     for (const label of [LABEL.name, LABEL.email]) {
       const outline = await page.getByLabel(label).evaluate((element) => {
@@ -188,7 +192,7 @@ test.describe('keyboard operation', () => {
 
 test.describe('accessible form semantics', () => {
   test('associates every field with a real label', async ({ page }) => {
-    await page.goto('/en/signup');
+    await page.goto('/signup');
 
     // `getByLabel` resolves through the accessibility tree, so these passing
     // IS the assertion: a placeholder masquerading as a label is not found.
@@ -198,7 +202,7 @@ test.describe('accessible form semantics', () => {
   });
 
   test('announces a failure through an alert region', async ({ page }) => {
-    await page.goto('/en/signin');
+    await page.goto('/signin');
     await page.getByLabel(LABEL.email).fill(freshEmail('nobody'));
     await page.getByLabel(LABEL.password, { exact: true }).fill('not-the-right-one');
     await page.getByRole('button', { name: BUTTON.signIn, exact: true }).click();
@@ -209,7 +213,7 @@ test.describe('accessible form semantics', () => {
   });
 
   test('announces a success politely rather than by interrupting', async ({ page }) => {
-    await page.goto('/en/forgot-password');
+    await page.goto('/forgot-password');
     await page.getByLabel(LABEL.email).fill(freshEmail('polite'));
     await page.getByRole('button', { name: BUTTON.sendResetLink }).click();
 
@@ -217,7 +221,7 @@ test.describe('accessible form semantics', () => {
   });
 
   test('describes the password field with its own requirement text', async ({ page }) => {
-    await page.goto('/en/signup');
+    await page.goto('/signup');
 
     const described = await page
       .getByLabel(LABEL.password, { exact: true })
@@ -232,7 +236,7 @@ test.describe('accessible form semantics', () => {
 
   test('gives every page exactly one first-level heading', async ({ page }) => {
     for (const surface of PUBLIC_SURFACES) {
-      await page.goto(`/en/${surface}`);
+      await page.goto(`/${surface}`);
 
       // Heading structure is how somebody using a screen reader navigates a
       // page at all; two `h1`s, or none, makes that guesswork.
@@ -246,7 +250,7 @@ test.describe('reflow', () => {
     await page.setViewportSize({ width: 360, height: 740 });
 
     for (const surface of PUBLIC_SURFACES) {
-      await page.goto(`/en/${surface}`);
+      await page.goto(`/${surface}`);
 
       const overflows = await page.evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
@@ -262,7 +266,7 @@ test.describe('reflow', () => {
 test.describe('indexability', () => {
   test('keeps every authentication surface out of search results', async ({ page }) => {
     for (const surface of PUBLIC_SURFACES) {
-      const response = await page.goto(`/en/${surface}`);
+      const response = await page.goto(`/${surface}`);
 
       expect(response?.ok(), surface).toBe(true);
 
@@ -275,7 +279,7 @@ test.describe('indexability', () => {
     await registerAndSignIn(page, 'noindex-account');
 
     for (const surface of ACCOUNT_SURFACES) {
-      await page.goto(`/en/${surface}`);
+      await page.goto(`/${surface}`);
 
       const robots = await page.locator('meta[name="robots"]').getAttribute('content');
       expect(robots, `${surface} robots`).toContain('noindex');
@@ -289,10 +293,10 @@ test.describe('the public site needs no account', () => {
     // listening need no account (PRODUCT_SCOPE.md). A Phase-2 change that
     // quietly put the front page behind a session would be the single most
     // damaging regression this phase could introduce.
-    const response = await page.goto('/en');
+    const response = await page.goto('/');
 
     expect(response?.ok()).toBe(true);
-    expect(new URL(page.url()).pathname).toBe('/en');
+    expect(new URL(page.url()).pathname).toBe('/');
   });
 
   test('still serves it, in every locale, after a sign-out', async ({ page }) => {
@@ -300,10 +304,10 @@ test.describe('the public site needs no account', () => {
     await signOut(page);
 
     for (const locale of ['en', 'ur', 'ar']) {
-      const response = await page.goto(`/${locale}`);
+      const response = await page.goto(localizedPath(locale, ''));
 
       expect(response?.ok(), locale).toBe(true);
-      expect(new URL(page.url()).pathname).toBe(`/${locale}`);
+      expect(new URL(page.url()).pathname).toBe(localizedPath(locale, ''));
     }
   });
 });

@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache';
 
 import { indexAfterResponse } from '@/composition/search';
 import { redirect } from 'next/navigation';
-import { localeSchema } from '@minhaj/contracts';
+import { localeSchema, localizedPath } from '@minhaj/contracts';
 import {
   COLLECTION_LIMITS,
   EVENT_LIMITS,
@@ -140,8 +140,11 @@ export async function saveEditorial(
           content,
           kind === 'page' ? String(form.get('routeBinding')) : null,
         );
-    destination = `/${locale}/admin/editorial/${EDITORIAL_SEGMENTS[kind]}/${saved.id}`;
-    revalidatePath(`/${locale}/admin/editorial`, 'layout');
+    destination = localizedPath(
+      locale,
+      `/admin/editorial/${EDITORIAL_SEGMENTS[kind]}/${saved.id}`,
+    );
+    revalidatePath(localizedPath(locale, '/admin/editorial'), 'layout');
     indexAfterResponse();
   } catch (error) {
     return rejected(error);
@@ -175,7 +178,7 @@ export async function transitionEditorial(
         timezone: form.get('timezone') || null,
       },
     );
-    revalidatePath(`/${locale}/admin/editorial`, 'layout');
+    revalidatePath(localizedPath(locale, '/admin/editorial'), 'layout');
     indexAfterResponse();
     return { status: 'success' };
   } catch (error) {
@@ -201,7 +204,7 @@ export async function triageCorrespondence(
         note: form.get('note'),
       },
     );
-    revalidatePath(`/${locale}/admin/editorial/correspondence`);
+    revalidatePath(localizedPath(locale, '/admin/editorial/correspondence'));
     return { status: 'success' };
   } catch (error) {
     return rejected(error);

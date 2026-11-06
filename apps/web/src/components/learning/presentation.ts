@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Locale } from '@minhaj/contracts';
 import {
   COURSE_FORMATS,
@@ -44,7 +45,9 @@ function single(query: Query, name: string): string | null {
 
 /** The Learn section address under a locale: `/{locale}/learn[/{section}]`. */
 export function learnPath(locale: string, section = ''): string {
-  return section === '' ? `/${locale}/learn` : `/${locale}/learn/${section}`;
+  return section === ''
+    ? localizedPath(locale, '/learn')
+    : localizedPath(locale, `/learn/${section}`);
 }
 
 /** The LOCALE-FREE canonical address of one published Course. */
@@ -53,7 +56,7 @@ export function coursePathOf(slug: string): string {
 }
 
 export function courseHref(locale: string, slug: string): string {
-  return `/${locale}${coursePathOf(slug)}`;
+  return localizedPath(locale, `${coursePathOf(slug)}`);
 }
 
 /** The LOCALE-FREE canonical address of one published LearningPath. */
@@ -62,7 +65,7 @@ export function learningPathPathOf(slug: string): string {
 }
 
 export function learningPathHref(locale: string, slug: string): string {
-  return `/${locale}${learningPathPathOf(slug)}`;
+  return localizedPath(locale, `${learningPathPathOf(slug)}`);
 }
 
 /** A paged listing address: the first page is the bare address. */

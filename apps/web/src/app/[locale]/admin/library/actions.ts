@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { indexAfterResponse } from '@/composition/search';
 import { redirect } from 'next/navigation';
 
-import { localeSchema } from '@minhaj/contracts';
+import { localeSchema, localizedPath } from '@minhaj/contracts';
 import {
   parseReaderDocument,
   SCHOLARLY_LIMITS,
@@ -138,8 +138,8 @@ export async function saveWork(
       },
     );
 
-    destination = `/${locale}/admin/library/works/${saved.id}`;
-    revalidatePath(`/${locale}/admin/library`, 'layout');
+    destination = localizedPath(locale, `/admin/library/works/${saved.id}`);
+    revalidatePath(localizedPath(locale, '/admin/library'), 'layout');
     indexAfterResponse();
   } catch (error) {
     return rejected(error, 'library-save-work');
@@ -167,8 +167,8 @@ export async function saveEdition(
       editionInput(form),
     );
 
-    destination = `/${locale}/admin/library/editions/${saved.id}`;
-    revalidatePath(`/${locale}/admin/library`, 'layout');
+    destination = localizedPath(locale, `/admin/library/editions/${saved.id}`);
+    revalidatePath(localizedPath(locale, '/admin/library'), 'layout');
     indexAfterResponse();
   } catch (error) {
     return rejected(error, 'library-save-edition');
@@ -236,7 +236,7 @@ export async function saveTranslation(
       });
     }
 
-    revalidatePath(`/${locale}/admin/library`, 'layout');
+    revalidatePath(localizedPath(locale, '/admin/library'), 'layout');
     indexAfterResponse();
     return { status: 'success' };
   } catch (error) {
@@ -267,7 +267,7 @@ export async function saveSalePoint(
       },
     );
 
-    revalidatePath(`/${locale}/admin/library/sale-points`);
+    revalidatePath(localizedPath(locale, '/admin/library/sale-points'));
     indexAfterResponse();
     return { status: 'success' };
   } catch (error) {
@@ -402,12 +402,15 @@ export async function saveScholarly(
       scholarlyInput(kind, form),
     );
 
-    destination = `/${locale}/admin/library/${editorPath(
-      kind,
-      saved.id,
-      saved.kind === 'magazine-issue' ? saved.magazineId : null,
-    )}`;
-    revalidatePath(`/${locale}/admin/library`, 'layout');
+    destination = localizedPath(
+      locale,
+      `/admin/library/${editorPath(
+        kind,
+        saved.id,
+        saved.kind === 'magazine-issue' ? saved.magazineId : null,
+      )}`,
+    );
+    revalidatePath(localizedPath(locale, '/admin/library'), 'layout');
     indexAfterResponse();
   } catch (error) {
     return rejected(error, 'library-save-scholarly');
@@ -535,7 +538,7 @@ export async function attachEditionAsset(
       { ...editionInput(form), [slot]: stored.id },
     );
 
-    revalidatePath(`/${locale}/admin/library/editions/${id}`);
+    revalidatePath(localizedPath(locale, `/admin/library/editions/${id}`));
     indexAfterResponse();
     return { status: 'success' };
   } catch (error) {

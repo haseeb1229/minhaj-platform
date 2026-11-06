@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import { requireAdminPage } from '@/composition/authorization';
@@ -53,7 +54,7 @@ export default async function WorkEditor({
   const context = await requireAdminPage(
     locale,
     'library.read',
-    `/${locale}/admin/library/works`,
+    localizedPath(locale, '/admin/library/works'),
   );
 
   const copy = await libraryCopy(locale);
@@ -89,7 +90,9 @@ export default async function WorkEditor({
             {record.editions.map((edition) => (
               <DataRow key={edition.id}>
                 <DataCell wrap>
-                  <TextLink href={`/${locale}/admin/library/editions/${edition.id}`}>
+                  <TextLink
+                    href={localizedPath(locale, `/admin/library/editions/${edition.id}`)}
+                  >
                     {edition.label}
                   </TextLink>
                 </DataCell>
@@ -104,7 +107,7 @@ export default async function WorkEditor({
         )}
 
         <p className="text-sm">
-          <TextLink href={`/${locale}/admin/library/editions`}>
+          <TextLink href={localizedPath(locale, '/admin/library/editions')}>
             {t('adminManageEditions')}
           </TextLink>
         </p>
@@ -122,12 +125,12 @@ export default async function WorkEditor({
                 name="q"
                 defaultValue={queryValue(query, 'q') ?? ''}
                 maxLength={200}
-                className="rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-3 py-2"
+                className="rounded-control border border-border-strong bg-surface-raised px-3 py-2"
               />
             </label>
             <button
               type="submit"
-              className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-medium"
+              className="inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-medium"
             >
               {t('findReferences')}
             </button>

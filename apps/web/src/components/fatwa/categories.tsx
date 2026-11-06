@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -136,7 +137,7 @@ export async function FatwaCategoryPage({
             </ActionLink>
             {topic === undefined ? null : (
               <ActionLink
-                href={`/${locale}/topics/${encodeURIComponent(topic.slug)}`}
+                href={localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`)}
                 tone="secondary"
               >
                 {t('categories.topicLink', { topic: topic.name })}

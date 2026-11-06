@@ -152,10 +152,8 @@ function FatwaResults({
       // explain a malformed query identically.
       return (
         <div role="alert" className="flex flex-col gap-2 text-sm">
-          <p className="font-medium text-[color:var(--color-error)]">
-            {searchT('invalidTitle')}
-          </p>
-          <ul className="list-disc ps-5 text-[color:var(--color-error)]">
+          <p className="font-medium text-error">{searchT('invalidTitle')}</p>
+          <ul className="list-disc ps-5 text-error">
             {outcome.issues.map((key) => (
               <li key={key}>{searchT(`issues.${key}` as 'issues.type')}</li>
             ))}
@@ -172,7 +170,7 @@ function FatwaResults({
           <h2 id="fatwa-results" className="sr-only">
             {searchT('resultsLabel')}
           </h2>
-          <p role="status" className="text-sm text-[color:var(--color-foreground-muted)]">
+          <p role="status" className="text-sm text-foreground-muted">
             {results.capped
               ? searchT('resultsCapped', { count: SEARCH_RESULT_CEILING, query: words })
               : results.total > 0
@@ -199,14 +197,14 @@ function FatwaResults({
                       >
                         <a
                           href={rulingHref(locale, display.slug)}
-                          className="text-[color:var(--color-action)] underline underline-offset-2"
+                          className="text-action underline underline-offset-2"
                         >
                           <Highlighted text={display.title} query={words} />
                         </a>
                       </h3>
                       {display.text === '' ? null : (
                         <p
-                          className="text-sm whitespace-pre-wrap wrap-anywhere text-[color:var(--color-foreground-muted)]"
+                          className="text-sm whitespace-pre-wrap wrap-anywhere text-foreground-muted"
                           lang={display.language}
                           dir={direction}
                         >

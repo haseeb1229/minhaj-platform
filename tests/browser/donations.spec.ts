@@ -28,6 +28,7 @@ import {
   enrolSecondFactorInBrowser,
   expect,
   grantRole,
+  localizedPath,
   privilegedSession,
   registerAndSignIn,
   statusIn,
@@ -250,7 +251,7 @@ function giveButton(card: Locator, locale: UiLocale = 'en'): Locator {
   });
 }
 
-const STATUS_PATH = /\/en\/donate\/status\/[A-Za-z0-9_-]{43}(?:\?.*)?$/u;
+const STATUS_PATH = /\/donate\/status\/[A-Za-z0-9_-]{43}(?:\?.*)?$/u;
 
 /** Waits for the provider's hosted checkout page and returns its session id. */
 async function onHostedPage(page: Page): Promise<string> {
@@ -339,7 +340,7 @@ async function expectNoPaymentDetailFields(page: Page, where: string): Promise<v
 
 /** The administration's record of one donation. */
 function recordPath(donationId: string): string {
-  return `/en/admin/donations/${donationId}`;
+  return `/admin/donations/${donationId}`;
 }
 
 /* ===========================================================================
@@ -437,7 +438,7 @@ test.describe('availability', () => {
     ).toBe(0);
 
     for (const locale of LOCALES) {
-      const target = `/${locale}/donate`;
+      const target = localizedPath(locale, '/donate');
       const response = await page.goto(target);
       expect(response?.status(), target).toBe(200);
       expect(response?.headers()['set-cookie'], target).toBeUndefined();
@@ -456,10 +457,23 @@ test.describe('availability', () => {
       await expect(main, target).not.toContainText('TEST ENVIRONMENT');
       expect(await page.content(), target).not.toContain(TEXT.draft);
       await expectNoPaymentDetailFields(page, target);
+
+      // NOTHING PROMOTES A CLOSED SERVICE (Rebaseline R1). The page answers at
+      // its address, but neither the header nor the footer offers Donate while
+      // giving is closed — hidden markup included, so the drawer's copy is
+      // covered too.
+      await expect(
+        page.getByRole('banner').locator(`a[href="${target}"]`),
+        target,
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole('contentinfo').locator(`a[href="${target}"]`),
+        target,
+      ).toHaveCount(0);
     }
 
     // My donations says the same, and offers no form either.
-    await donor.page.goto('/en/my/donations');
+    await donor.page.goto('/my/donations');
     const mine = donor.page.getByRole('main');
     await expect(mine).toContainText(copy('donations.unavailable'));
     await expect(mine).toContainText(copy('myDonations.history.empty'));
@@ -475,7 +489,7 @@ test.describe('availability', () => {
     await activateFixtureGiving();
 
     for (const locale of LOCALES) {
-      const target = `/${locale}/donate`;
+      const target = localizedPath(locale, '/donate');
       const response = await page.goto(target);
       expect(response?.status(), target).toBe(200);
       expect(response?.headers()['set-cookie'], target).toBeUndefined();
@@ -509,6 +523,31 @@ test.describe('availability', () => {
       expect(await page.content(), target).not.toContain(TEXT.draft);
       await expectNoPaymentDetailFields(page, target);
     }
+
+    // OPEN, AND NOW PROMOTED: with an activation and a published campaign the
+    // header offers Donate as its call to action and the footer's Take part
+    // group lists it. The shell's presence snapshot may be up to 30 seconds
+    // old, so the promotion is awaited rather than assumed.
+    await expect(async () => {
+      await page.goto('/');
+      await expect(
+        page
+          .getByRole('banner')
+          .getByRole('link', { name: copy('shell.nav.donate'), exact: true }),
+      ).toHaveAttribute('href', '/donate', { timeout: 1_000 });
+      await expect(
+        page
+          .getByRole('contentinfo')
+          .getByRole('navigation', { name: 'Take part', exact: true })
+          .locator('a[href="/donate"]'),
+      ).toHaveCount(1, { timeout: 1_000 });
+    }).toPass({ timeout: 50_000, intervals: [2_000, 5_000] });
+    await page.goto('/ur');
+    await expect(
+      page
+        .getByRole('banner')
+        .getByRole('link', { name: copy('shell.nav.donate', {}, 'ur') }),
+    ).toHaveAttribute('href', '/ur/donate');
   });
 });
 
@@ -531,7 +570,7 @@ test.describe('an anonymous gift', () => {
     });
 
     await withWebhooks('hold', async () => {
-      await page.goto('/en/donate');
+      await page.goto('/donate');
       const submitted = actionRequest(page);
       const { operationId, session } = await startGift(page, TEXT.main, '12.34');
       const first = await captured(await submitted);
@@ -551,13 +590,13 @@ test.describe('an anonymous gift', () => {
       });
 
       // The status cookie: HttpOnly, Lax, only on this locale's giving pages.
-      const cookie = (await page.context().cookies(`${app}/en/donate/return`)).find(
+      const cookie = (await page.context().cookies(`${app}/donate/return`)).find(
         (entry) => entry.name === 'minhaj-donation-status',
       );
       expect(cookie).toMatchObject({
         httpOnly: true,
         sameSite: 'Lax',
-        path: '/en/donate',
+        path: '/donate',
       });
 
       // THE SAME SUBMISSION AGAIN, while the checkout is open: the same
@@ -594,7 +633,7 @@ test.describe('an anonymous gift', () => {
 
       // A RETURN ADDRESS CLAIMING SUCCESS PROVES NOTHING.
       await page.goto(
-        `/en/donate/return?status=success&amount=12.34&currency=USD&session_id=${session}`,
+        `/donate/return?status=success&amount=12.34&currency=USD&session_id=${session}`,
       );
       await page.waitForURL(STATUS_PATH);
       expect(new URL(page.url()).pathname).toBe(statusPath);
@@ -610,11 +649,11 @@ test.describe('an anonymous gift', () => {
       });
       contexts.push(elsewhere);
       const other = await elsewhere.newPage();
-      await other.goto(`/en/donate/return?status=success&session_id=${session}`);
+      await other.goto(`/donate/return?status=success&session_id=${session}`);
       await expect(other.getByRole('main')).toContainText(
         copy('donations.return.missing'),
       );
-      expect(new URL(other.url()).pathname).toBe('/en/donate/return');
+      expect(new URL(other.url()).pathname).toBe('/donate/return');
 
       // THE PROVIDER'S VERIFIED WEBHOOKS, released: now it is paid.
       const deliveries = await simulator<(number | string)[]>('releaseHeld');
@@ -661,7 +700,7 @@ test.describe('an anonymous gift', () => {
     page,
   }) => {
     test.setTimeout(300_000);
-    await page.goto('/en/donate');
+    await page.goto('/donate');
     const card = campaignCard(page, TEXT.main);
     const operationId = await card.locator('input[name="operationId"]').inputValue();
     // The default suggestion — the first currency's first, 500 yen, a
@@ -712,7 +751,7 @@ test.describe('an anonymous gift', () => {
     test.setTimeout(300_000);
     // DECLINED: the provider's page says so, the checkout stays open, and the
     // donation is not paid — whatever page the donor returns to.
-    await page.goto('/en/donate');
+    await page.goto('/donate');
     const declined = await startGift(page, TEXT.main, '7.00');
     await page.getByRole('button', { name: 'Decline', exact: true }).click();
     await expect(page.getByRole('alert')).toHaveText(
@@ -726,7 +765,7 @@ test.describe('an anonymous gift', () => {
 
     // FAILED: an asynchronous payment the provider later reports failed —
     // given to the campaign that offers no suggestions, by typing.
-    await page.goto('/en/donate');
+    await page.goto('/donate');
     const card = campaignCard(page, TEXT.long);
     await expect(card.locator('input[type="radio"]')).toHaveCount(0);
     const failing = await startGift(page, TEXT.long, '3.50');
@@ -740,7 +779,7 @@ test.describe('an anonymous gift', () => {
       .toBe('failed');
 
     // The browser comes back the way a donor would, and reads it in words.
-    await page.goto('/en/donate/return');
+    await page.goto('/donate/return');
     await page.waitForURL(STATUS_PATH);
     await expectState(page, 'failed');
     await expect(page.getByRole('main')).toContainText(/USD\s3\.50/u);
@@ -754,7 +793,7 @@ test.describe('an anonymous gift', () => {
   }) => {
     test.setTimeout(240_000);
     const app = new URL(baseUrl()).origin;
-    await page.goto('/en/donate');
+    await page.goto('/donate');
     const card = campaignCard(page, TEXT.main);
     const operationId = await card.locator('input[name="operationId"]').inputValue();
     await fillUsd(card, '4.00');
@@ -796,7 +835,7 @@ test.describe('My donations', () => {
   test('a gift on the public page stays unlinked even when signed in', async () => {
     test.setTimeout(240_000);
     const page = donor.page;
-    await page.goto('/en/donate');
+    await page.goto('/donate');
     const { operationId } = await startGift(page, TEXT.main, '2.00');
     expect((await donationOf(operationId)).donorUserId).toBeNull();
     await page.getByRole('button', { name: 'Cancel and return', exact: true }).click();
@@ -806,11 +845,11 @@ test.describe('My donations', () => {
   test('a gift started here is linked, and "Check again" asks the provider when no webhook arrives', async () => {
     test.setTimeout(360_000);
     const page = donor.page;
-    const response = await page.context().request.get('/en/my/donations', {
+    const response = await page.context().request.get('/my/donations', {
       maxRedirects: 0,
     });
     expect(response.headers()['cache-control']).toContain('no-store');
-    await page.goto('/en/my/donations');
+    await page.goto('/my/donations');
     await expect(page.getByRole('main').getByRole('note')).toHaveText(
       copy('donations.banner.fixture'),
     );
@@ -818,7 +857,7 @@ test.describe('My donations', () => {
       'content',
       /noindex/u,
     );
-    await expectNoPaymentDetailFields(page, '/en/my/donations');
+    await expectNoPaymentDetailFields(page, '/my/donations');
 
     await withWebhooks('drop', async () => {
       // The second suggestion, chosen by its label.
@@ -847,7 +886,7 @@ test.describe('My donations', () => {
       linked = { operationId };
     });
 
-    await page.goto('/en/my/donations');
+    await page.goto('/my/donations');
     const history = page
       .getByRole('main')
       .getByRole('list', { name: copy('myDonations.history.heading'), exact: true });
@@ -858,7 +897,7 @@ test.describe('My donations', () => {
     await expect(entry).toContainText(copy('donations.environment.fixture'));
 
     // The account's home says so too.
-    await page.goto('/en/my');
+    await page.goto('/my');
     await expect(page.getByRole('main')).toContainText(copy('myDonations.home.heading'));
 
     // The export is the person's own, privately.
@@ -882,7 +921,7 @@ test.describe('My donations', () => {
     const anonymous = await donationOf(paid.operationId);
     const page = stranger.page;
 
-    await page.goto('/en/my/donations');
+    await page.goto('/my/donations');
     await expect(page.getByRole('main')).toContainText(copy('myDonations.history.empty'));
     const html = await page.content();
     for (const secret of [own.id, anonymous.id, paid.statusPath, donor.email])
@@ -896,10 +935,10 @@ test.describe('My donations', () => {
     // Guessed addresses: an id is not a token, and a token is not guessable.
     const forged = randomBytes(32).toString('base64url');
     for (const target of [
-      `/en/my/donations/${own.id}`,
-      `/en/donate/status/${own.id}`,
-      `/en/donate/status/${forged}`,
-      `/en/donate/status/${paid.statusPath.split('/').at(-1) ?? ''}x`,
+      `/my/donations/${own.id}`,
+      `/donate/status/${own.id}`,
+      `/donate/status/${forged}`,
+      `/donate/status/${paid.statusPath.split('/').at(-1) ?? ''}x`,
     ]) {
       const response = await page.goto(target);
       expect(response?.status(), target).toBe(404);
@@ -907,13 +946,13 @@ test.describe('My donations', () => {
     }
 
     // The administration does not exist for an administrator of another area.
-    expect((await page.goto('/en/admin'))?.status()).toBe(200);
+    expect((await page.goto('/admin'))?.status()).toBe(200);
     await expect(
       page.getByRole('link', { name: copy('admin.nav.donations'), exact: true }),
     ).toHaveCount(0);
     for (const target of [
-      '/en/admin/donations',
-      '/en/admin/donations/campaigns',
+      '/admin/donations',
+      '/admin/donations/campaigns',
       recordPath(own.id),
     ]) {
       const response = await page.goto(target);
@@ -934,7 +973,7 @@ test.describe('Donations administration', () => {
     test.setTimeout(300_000);
     const page = reader.page;
     const main = page.getByRole('main');
-    expect((await page.goto('/en/admin/donations'))?.status()).toBe(200);
+    expect((await page.goto('/admin/donations'))?.status()).toBe(200);
     await expect(mainHeading(page)).toHaveText(copy('adminDonations.records.title'));
     await expect(
       page.getByRole('link', { name: copy('admin.nav.donations'), exact: true }),
@@ -958,12 +997,12 @@ test.describe('Donations administration', () => {
     for (const row of await rows.all())
       await expect(row).toContainText(copy('donations.state.succeeded'));
 
-    await page.goto('/en/admin/donations?donor=linked');
+    await page.goto('/admin/donations?donor=linked');
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toContainText(copy('adminDonations.donor.linked'));
     await expect(rows.first()).toContainText(/USD\s25\.00/u);
 
-    await page.goto(`/en/admin/donations?campaign=${ids.long}`);
+    await page.goto(`/admin/donations?campaign=${ids.long}`);
     await expect(rows).toHaveCount(
       await scalar(
         `SELECT COUNT_BIG(*) AS [value] FROM [dbo].[Donation] WHERE [campaignId]=N'${ids.long}';`,
@@ -974,7 +1013,7 @@ test.describe('Donations administration', () => {
     // A filter that does not parse is refused, never broadened.
     // (The refusal renders below the area's streaming boundary, so the status
     // line is already sent; what matters is that nothing is listed.)
-    await page.goto('/en/admin/donations?state=paid');
+    await page.goto('/admin/donations?state=paid');
     await expect(
       page.getByRole('heading', { name: /^(?:404|Page not found)$/u }),
     ).toBeVisible();
@@ -1031,7 +1070,7 @@ test.describe('Donations administration', () => {
   }) => {
     test.setTimeout(360_000);
     await withWebhooks('drop', async () => {
-      await page.goto('/en/donate');
+      await page.goto('/donate');
       const { operationId } = await startGift(page, TEXT.main, '9.99');
       await payAndReturn(page);
       await expectState(page, 'pending');
@@ -1165,7 +1204,7 @@ test.describe('the giving surfaces', () => {
     for (const [page, target] of [
       [visitor, '/ur/donate'],
       [visitor, '/ar/donate'],
-      [visitor, paid.statusPath.replace('/en/', '/ur/')],
+      [visitor, paid.statusPath.replace('/', '/ur/')],
       [donor.page, '/ur/my/donations'],
       [donor.page, '/ar/my/donations'],
       [reader.page, '/ar/admin/donations'],
@@ -1182,10 +1221,10 @@ test.describe('the giving surfaces', () => {
     }
 
     for (const [page, target] of [
-      [visitor, '/en/donate'],
+      [visitor, '/donate'],
       [visitor, paid.statusPath],
-      [donor.page, '/en/my/donations'],
-      [reader.page, '/en/admin/donations'],
+      [donor.page, '/my/donations'],
+      [reader.page, '/admin/donations'],
       [reader.page, recordPath(own.id)],
     ] as const) {
       const response = await page.goto(target);
@@ -1204,7 +1243,7 @@ test.describe('the giving surfaces', () => {
     // 640 CSS pixels is a 1280-pixel window at 200% zoom.
     for (const width of [320, 640]) {
       await page.setViewportSize({ width, height: 800 });
-      for (const target of ['/en/donate', '/ar/donate', paid.statusPath]) {
+      for (const target of ['/donate', '/ar/donate', paid.statusPath]) {
         const where = `${String(width)}px ${target}`;
         const response = await page.goto(target);
         expect(response?.status(), where).toBe(200);
@@ -1220,8 +1259,8 @@ test.describe('the giving surfaces', () => {
     }
     for (const width of [320, 640]) {
       await donor.page.setViewportSize({ width, height: 800 });
-      const where = `${String(width)}px /en/my/donations`;
-      await donor.page.goto('/en/my/donations');
+      const where = `${String(width)}px /my/donations`;
+      await donor.page.goto('/my/donations');
       await expect(mainHeading(donor.page), where).toBeVisible();
       expect(await overflowOf(donor.page), where).toBeLessThanOrEqual(0);
     }
@@ -1230,7 +1269,7 @@ test.describe('the giving surfaces', () => {
     // The giving form, by keyboard alone, with a focus that can be seen.
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto('/en/donate');
+    await page.goto('/donate');
     const card = campaignCard(page, TEXT.main);
     const amount = card.getByLabel(copy('donations.form.amount'), { exact: true });
     await tabTo(page, amount);

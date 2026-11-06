@@ -3,7 +3,12 @@ import 'server-only';
 import { cache } from 'react';
 import type { Metadata } from 'next';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import {
+  localeSchema,
+  type Locale,
+  localizedPath,
+  UNPREFIXED_LOCALE,
+} from '@minhaj/contracts';
 import type { FatwaAvailability, PublicFatwa } from '@minhaj/contracts/fatwa';
 
 import { fatwaReadRuntime } from '@/composition/fatwa-read';
@@ -105,15 +110,17 @@ export function fatwaMetadata(input: {
 
   const languages: Record<string, string> = {};
   for (const locale of localeSchema.options)
-    languages[locale] = absoluteUrl(`/${locale}${input.canonicalPath}`);
-  languages['x-default'] = absoluteUrl(`/en${input.canonicalPath}`);
+    languages[locale] = absoluteUrl(localizedPath(locale, `${input.canonicalPath}`));
+  languages['x-default'] = absoluteUrl(
+    localizedPath(UNPREFIXED_LOCALE, input.canonicalPath),
+  );
 
   return {
     title: input.title,
     ...(input.description === undefined ? {} : { description: input.description }),
     robots: { index: true, follow: true },
     alternates: {
-      canonical: absoluteUrl(`/${input.locale}${input.canonicalPath}`),
+      canonical: absoluteUrl(localizedPath(input.locale, `${input.canonicalPath}`)),
       languages,
     },
   };
@@ -152,7 +159,7 @@ export function rulingMetadata(
     locale,
     contentLocales,
     primaryLocale: contentLocales[0] ?? locale,
-    pathFor: (target) => `/${target}${rulingPathOf(fatwa.slug)}`,
+    pathFor: (target) => localizedPath(target, `${rulingPathOf(fatwa.slug)}`),
     title: fatwa.current.title,
     description: rulingDescription(fatwa.current.publicQuestion),
   });

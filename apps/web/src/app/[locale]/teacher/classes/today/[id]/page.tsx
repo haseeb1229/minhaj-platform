@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 
@@ -70,7 +71,7 @@ export default async function ClassDetailPage({
 }) {
   const locale = await requireLocale(params);
   const { id } = await params;
-  const path = `/${locale}/teacher/classes/today/${encodeURIComponent(id)}`;
+  const path = localizedPath(locale, `/teacher/classes/today/${encodeURIComponent(id)}`);
   const gate = await requireTeacher(locale, path);
   const t = await getTranslations({ locale, namespace: 'teacher' });
   if (!gate.activated) return <NotActivated t={t} />;
@@ -125,7 +126,10 @@ export default async function ClassDetailPage({
           <ClassTime session={session} locale={locale} accountZone={accountZone} t={t} />
           <p>
             <TextLink
-              href={`/${locale}/teacher/courses/${encodeURIComponent(course.id)}`}
+              href={localizedPath(
+                locale,
+                `/teacher/courses/${encodeURIComponent(course.id)}`,
+              )}
             >
               {t('common.course')}
             </TextLink>
@@ -156,7 +160,7 @@ export default async function ClassDetailPage({
                   href={meeting.value}
                   rel="noreferrer noopener"
                   target="_blank"
-                  className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] bg-[color:var(--color-action)] px-4 py-2 text-sm font-medium text-[color:var(--color-action-foreground)] hover:bg-[color:var(--color-action-hover)]"
+                  className="inline-flex min-h-11 items-center rounded-control bg-action px-4 py-2 text-sm font-medium text-action-foreground hover:bg-action-hover"
                 >
                   {t('meeting.join')}
                 </a>
@@ -232,9 +236,7 @@ export default async function ClassDetailPage({
         <span id="class-participants">
           <SectionHeading>{t('session.participants')}</SectionHeading>
         </span>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('session.markHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('session.markHelp')}</p>
         {!participants.ok ? (
           <Alert tone="error">{t('failure.load')}</Alert>
         ) : (
@@ -265,9 +267,7 @@ export default async function ClassDetailPage({
             <Panel>
               <div className="flex flex-col gap-3">
                 <h3 className="font-semibold">{t('reschedule.heading')}</h3>
-                <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                  {t('reschedule.help')}
-                </p>
+                <p className="text-sm text-foreground-muted">{t('reschedule.help')}</p>
                 <p className="text-sm">
                   {lead === null
                     ? t('reschedule.currentReminderNone')

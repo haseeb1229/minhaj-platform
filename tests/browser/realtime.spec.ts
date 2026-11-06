@@ -30,6 +30,7 @@ import {
   baseUrl,
   expect,
   grantRole,
+  localizedPath,
   privilegedSession,
   registerAndSignIn,
   test,
@@ -258,7 +259,7 @@ test.describe('a learner and their teacher, live', () => {
   test('a message crosses without a reload, exactly once and through the socket; presence and typing are words', async () => {
     test.setTimeout(300_000);
     const page = learner.page;
-    await page.goto('/en/my/teachers');
+    await page.goto('/my/teachers');
     await page
       .getByRole('main')
       .getByRole('button', {
@@ -269,11 +270,11 @@ test.describe('a learner and their teacher, live', () => {
         exact: true,
       })
       .click();
-    await page.waitForURL(/\/en\/my\/messages\/[0-9a-f-]{36}$/);
+    await page.waitForURL(/\/my\/messages\/[0-9a-f-]{36}$/);
     conversationId = new URL(page.url()).pathname.split('/').at(-1) ?? '';
     await expect(liveStatus(page)).toHaveText(copy('messages.live.live'));
 
-    await teacher.page.goto(`/en/teacher/messages/${conversationId}`);
+    await teacher.page.goto(`/teacher/messages/${conversationId}`);
     await expect(mainHeading(teacher.page)).toHaveText(TEXT.learner);
     await expect(liveStatus(teacher.page)).toHaveText(copy('messages.live.live'));
 
@@ -322,7 +323,7 @@ test.describe('a learner and their teacher, live', () => {
         name: copy('messages.live.reportReload'),
         exact: true,
       }),
-    ).toHaveAttribute('href', `/en/my/messages/${conversationId}`);
+    ).toHaveAttribute('href', `/my/messages/${conversationId}`);
   });
 
   test('a reply is sent by keyboard alone, and focus stays on Send', async () => {
@@ -430,7 +431,7 @@ test.describe('an unrelated account', () => {
   test('reaches nothing — not the page, the catch-up read, nor the socket — and is sent no frame', async () => {
     test.setTimeout(240_000);
     const page = stranger.page;
-    const response = await page.goto(`/en/my/messages/${conversationId}`);
+    const response = await page.goto(`/my/messages/${conversationId}`);
     expect(response?.status()).toBe(404);
     await expect(page.locator('body')).not.toContainText(TEXT.first);
     const read = await page
@@ -444,7 +445,7 @@ test.describe('an unrelated account', () => {
     // the conversation's own people are live.
     expect(await isRealtimeRunning(), 'the realtime process is running').toBe(true);
     await expect(liveStatus(learner.page)).toHaveText(copy('messages.live.live'));
-    await page.goto('/en/my');
+    await page.goto('/my');
     await page.evaluate((target) => {
       const probe = {
         connected: false,
@@ -524,7 +525,7 @@ test.describe('the live surfaces', () => {
     test.setTimeout(600_000);
     const page = learner.page;
     await page.setViewportSize({ width: 320, height: 800 });
-    await page.goto(`/en/my/messages/${conversationId}`);
+    await page.goto(`/my/messages/${conversationId}`);
     await expect(liveStatus(page)).toHaveText(copy('messages.live.live'));
     await send(teacher.page, `${TEXT.long}\n${LONG_TOKEN}`);
     await expect(messageFrom(page, TEXT.teacher, TEXT.long)).toHaveCount(1);
@@ -536,8 +537,12 @@ test.describe('the live surfaces', () => {
     for (const width of [320, 640])
       for (const locale of ['en', 'ur', 'ar'] as const)
         for (const [viewer, target, other] of [
-          [page, `/${locale}/my/messages/${conversationId}`, TEXT.teacher],
-          [teacher.page, `/${locale}/teacher/messages/${conversationId}`, TEXT.learner],
+          [page, localizedPath(locale, `/my/messages/${conversationId}`), TEXT.teacher],
+          [
+            teacher.page,
+            localizedPath(locale, `/teacher/messages/${conversationId}`),
+            TEXT.learner,
+          ],
         ] as const) {
           const where = `${String(width)}px ${target}`;
           await viewer.setViewportSize({ width, height: 800 });
@@ -568,9 +573,9 @@ test.describe('the live surfaces', () => {
     test.setTimeout(180_000);
     const page = learner.page;
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto(`/en/my/messages/${conversationId}`);
+    await page.goto(`/my/messages/${conversationId}`);
     await expect(liveStatus(page)).toHaveText(copy('messages.live.live'));
-    await teacher.page.goto(`/en/teacher/messages/${conversationId}`);
+    await teacher.page.goto(`/teacher/messages/${conversationId}`);
     await expect(liveStatus(teacher.page)).toHaveText(copy('messages.live.live'));
 
     // Typing and a live arrival — the moments a page might animate.

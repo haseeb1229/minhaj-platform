@@ -1,5 +1,6 @@
 'use server';
 
+import { localizedPath } from '@minhaj/contracts';
 import { revalidatePath } from 'next/cache';
 
 import { localeSchema, passwordSchema } from '@minhaj/contracts/identity';
@@ -68,7 +69,7 @@ function localeFrom(form: FormData): string {
 
 /** Re-renders the account tree, which displays the posture this changed. */
 function refresh(locale: string): void {
-  revalidatePath(`/${locale}/my`, 'layout');
+  revalidatePath(localizedPath(locale, '/my'), 'layout');
 }
 
 /**

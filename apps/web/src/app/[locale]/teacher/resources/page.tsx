@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { LearningTitle } from '@/components/my-learning/parts';
@@ -26,7 +27,7 @@ export default async function ResourcesPage({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const gate = await requireTeacher(locale, `/${locale}/teacher/resources`);
+  const gate = await requireTeacher(locale, localizedPath(locale, '/teacher/resources'));
   const t = await getTranslations({ locale, namespace: 'teacher' });
   if (!gate.activated) return <NotActivated t={t} />;
 
@@ -63,7 +64,10 @@ export default async function ResourcesPage({
                 </p>
                 <p>
                   <TextLink
-                    href={`/${locale}/teacher/courses/${encodeURIComponent(course.id)}/materials`}
+                    href={localizedPath(
+                      locale,
+                      `/teacher/courses/${encodeURIComponent(course.id)}/materials`,
+                    )}
                   >
                     {t('resources.open', {
                       title:

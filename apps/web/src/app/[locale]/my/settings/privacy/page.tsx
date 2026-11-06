@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { settingsLinks } from '@/components/personal/nav';
@@ -45,7 +46,10 @@ export default async function PrivacyPage({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const session = await requireActiveSession(locale, `/${locale}/my/settings/privacy`);
+  const session = await requireActiveSession(
+    locale,
+    localizedPath(locale, '/my/settings/privacy'),
+  );
   const t = await getTranslations({ locale, namespace: 'personal' });
   const read = await personalRead('personal-privacy', () =>
     personalisationRuntime().settings.settings({ accountId: session.account.id }),
@@ -69,9 +73,7 @@ export default async function PrivacyPage({
         <span id="privacy-history">
           <SectionHeading>{t('privacy.historyHeading')}</SectionHeading>
         </span>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('privacy.historyHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('privacy.historyHelp')}</p>
         {!read.ok ? (
           <Alert tone="error">{t('failure.load')}</Alert>
         ) : (
@@ -103,11 +105,13 @@ export default async function PrivacyPage({
               </ActionForm>
             </div>
             <p className="mt-3 text-sm">
-              <TextLink href={`/${locale}/my/history/reading`}>
+              <TextLink href={localizedPath(locale, '/my/history/reading')}>
                 {t('nav.reading')}
               </TextLink>
               {' · '}
-              <TextLink href={`/${locale}/my/history/watch`}>{t('nav.watch')}</TextLink>
+              <TextLink href={localizedPath(locale, '/my/history/watch')}>
+                {t('nav.watch')}
+              </TextLink>
             </p>
           </Panel>
         )}
@@ -128,14 +132,12 @@ export default async function PrivacyPage({
           <li>{t('privacy.exportSettings')}</li>
           <li>{t('privacy.exportNotifications')}</li>
         </ul>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('privacy.exportScope')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('privacy.exportScope')}</p>
         <p>
           <a
             href="/api/my/export"
             download
-            className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-4 py-2 text-sm font-medium hover:bg-[color:var(--color-surface-sunken)]"
+            className="inline-flex min-h-11 items-center justify-center rounded-control border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-sunken"
           >
             {t('privacy.exportLink')}
           </a>
@@ -154,7 +156,7 @@ export default async function PrivacyPage({
           <a
             href="/api/my/export/learning"
             download
-            className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-4 py-2 text-sm font-medium hover:bg-[color:var(--color-surface-sunken)]"
+            className="inline-flex min-h-11 items-center justify-center rounded-control border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-sunken"
           >
             {t('privacy.learningExportLink')}
           </a>
@@ -169,14 +171,14 @@ export default async function PrivacyPage({
         <ul className="flex list-disc flex-col gap-1 ps-5 text-sm">
           <li>{t('privacy.messagingExportContents')}</li>
         </ul>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="text-sm text-foreground-muted">
           {t('privacy.messagingExportClosure')}
         </p>
         <p>
           <a
             href="/api/my/export/messaging"
             download
-            className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-4 py-2 text-sm font-medium hover:bg-[color:var(--color-surface-sunken)]"
+            className="inline-flex min-h-11 items-center justify-center rounded-control border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-sunken"
           >
             {t('privacy.messagingExportLink')}
           </a>
@@ -194,14 +196,14 @@ export default async function PrivacyPage({
         <ul className="flex list-disc flex-col gap-1 ps-5 text-sm">
           <li>{t('privacy.membershipExportContents')}</li>
         </ul>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="text-sm text-foreground-muted">
           {t('privacy.membershipExportClosure')}
         </p>
         <p>
           <a
             href="/api/my/export/membership"
             download
-            className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-4 py-2 text-sm font-medium hover:bg-[color:var(--color-surface-sunken)]"
+            className="inline-flex min-h-11 items-center justify-center rounded-control border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-sunken"
           >
             {t('privacy.membershipExportLink')}
           </a>
@@ -216,14 +218,14 @@ export default async function PrivacyPage({
         <ul className="flex list-disc flex-col gap-1 ps-5 text-sm">
           <li>{t('privacy.donationsExportContents')}</li>
         </ul>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="text-sm text-foreground-muted">
           {t('privacy.donationsExportClosure')}
         </p>
         <p>
           <a
             href="/api/my/export/donations"
             download
-            className="inline-flex min-h-11 items-center justify-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-4 py-2 text-sm font-medium hover:bg-[color:var(--color-surface-sunken)]"
+            className="inline-flex min-h-11 items-center justify-center rounded-control border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-sunken"
           >
             {t('privacy.donationsExportLink')}
           </a>
@@ -238,7 +240,7 @@ export default async function PrivacyPage({
         </span>
         <p className="text-sm">{t('privacy.closureBody')}</p>
         <p>
-          <TextLink href={`/${locale}/my/settings/security#close-heading`}>
+          <TextLink href={localizedPath(locale, '/my/settings/security#close-heading')}>
             {t('privacy.closureLink')}
           </TextLink>
         </p>
@@ -252,7 +254,7 @@ export default async function PrivacyPage({
         </span>
         <p className="text-sm">{t('privacy.newsletterBody')}</p>
         <p>
-          <TextLink href={`/${locale}/newsletter`}>
+          <TextLink href={localizedPath(locale, '/newsletter')}>
             {t('privacy.newsletterLink')}
           </TextLink>
         </p>

@@ -134,7 +134,7 @@ export default defineConfig({
     // `server-only` marker, which resolves to an empty module under that
     // condition and throws under any other.
     command: `node --conditions=react-server scripts/browser-server.mjs ${PORT}`,
-    url: `${BASE_URL}/en`,
+    url: `${BASE_URL}/explore`,
     reuseExistingServer: false,
     timeout: 300_000,
     stdout: 'pipe',

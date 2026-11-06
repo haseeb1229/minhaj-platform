@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -56,9 +57,7 @@ export async function SciencesPage({
     >
       <div className="flex flex-col gap-2">
         <PageHeading>{title}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">
-          {t('sectionBody.sciences')}
-        </p>
+        <p className="text-foreground-muted">{t('sectionBody.sciences')}</p>
       </div>
       {sciences.length === 0 ? (
         <EmptyState>{t('worksEmpty.sciences')}</EmptyState>
@@ -75,7 +74,9 @@ export async function SciencesPage({
                   lang={language.code}
                   dir={language.direction}
                 >
-                  <TextLink href={`/${locale}${sciencePathOf(science.slug)}`}>
+                  <TextLink
+                    href={localizedPath(locale, `${sciencePathOf(science.slug)}`)}
+                  >
                     {shown.title}
                   </TextLink>
                 </h2>

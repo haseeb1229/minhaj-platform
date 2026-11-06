@@ -1,5 +1,6 @@
 'use server';
 
+import { localizedPath } from '@minhaj/contracts';
 import { redirect } from 'next/navigation';
 
 import { learningIdSchema, learningSlugSchema } from '@minhaj/contracts/learning';
@@ -66,7 +67,9 @@ export async function completeLessonAction(
   const slug = learningSlugSchema.safeParse(form.get('slug'));
   const lesson = learningIdSchema.safeParse(lessonId);
   if (!slug.success || !lesson.success) return DONE;
-  redirect(`/${gate.locale}/my/learning/courses/${slug.data}?lesson=${lesson.data}`);
+  redirect(
+    localizedPath(gate.locale, `/my/learning/courses/${slug.data}?lesson=${lesson.data}`),
+  );
 }
 
 /**
@@ -87,7 +90,7 @@ export async function leaveCourseAction(
   }
   refreshMy(gate.locale);
   // Outside the try: `redirect` signals by throwing, and that is not a failure.
-  redirect(`/${gate.locale}/my/learning`);
+  redirect(localizedPath(gate.locale, '/my/learning'));
 }
 
 /** Withdraws the person's own trial-class request. Idempotent. */

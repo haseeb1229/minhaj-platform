@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { z } from 'zod';
 
 import type { Locale } from '@minhaj/contracts';
@@ -69,7 +70,7 @@ export function videoPathOf(slug: string): string {
 }
 
 export function videoPath(locale: string, slug: string): string {
-  return `/${locale}${videoPathOf(slug)}`;
+  return localizedPath(locale, `${videoPathOf(slug)}`);
 }
 
 export function seriesPathOf(kind: SeriesKind, slug: string): string {
@@ -77,7 +78,7 @@ export function seriesPathOf(kind: SeriesKind, slug: string): string {
 }
 
 export function seriesPath(locale: string, kind: SeriesKind, slug: string): string {
-  return `/${locale}${seriesPathOf(kind, slug)}`;
+  return localizedPath(locale, `${seriesPathOf(kind, slug)}`);
 }
 
 export function playlistPathOf(slug: string): string {
@@ -85,7 +86,7 @@ export function playlistPathOf(slug: string): string {
 }
 
 export function playlistPath(locale: string, slug: string): string {
-  return `/${locale}${playlistPathOf(slug)}`;
+  return localizedPath(locale, `${playlistPathOf(slug)}`);
 }
 
 /**
@@ -98,7 +99,7 @@ export function audioTrackPathOf(slug: string): string {
 }
 
 export function audioTrackPath(locale: string, slug: string): string {
-  return `/${locale}${audioTrackPathOf(slug)}`;
+  return localizedPath(locale, `${audioTrackPathOf(slug)}`);
 }
 
 export function audioSeriesPathOf(slug: string): string {
@@ -106,7 +107,7 @@ export function audioSeriesPathOf(slug: string): string {
 }
 
 export function audioSeriesPath(locale: string, slug: string): string {
-  return `/${locale}${audioSeriesPathOf(slug)}`;
+  return localizedPath(locale, `${audioSeriesPathOf(slug)}`);
 }
 
 /**
@@ -132,7 +133,7 @@ export function galleryPathOf(slug: string): string {
 }
 
 export function galleryPath(locale: string, slug: string): string {
-  return `/${locale}${galleryPathOf(slug)}`;
+  return localizedPath(locale, `${galleryPathOf(slug)}`);
 }
 
 /**
@@ -302,7 +303,7 @@ export function archivePath(
     search.set('month', String(filter.month));
   if (offset > 0) search.set('offset', String(offset));
   const encoded = search.toString();
-  return `/${locale}/media/archive${encoded === '' ? '' : `?${encoded}`}`;
+  return localizedPath(locale, `/media/archive${encoded === '' ? '' : `?${encoded}`}`);
 }
 
 /**

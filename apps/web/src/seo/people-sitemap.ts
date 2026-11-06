@@ -17,7 +17,7 @@ import { fatwaSitemapPartitions } from './fatwa-sitemap';
 import { learningSitemapPartitions } from './learning-sitemap';
 import 'server-only';
 
-import { localeSchema } from '@minhaj/contracts';
+import { localeSchema, localizedPath } from '@minhaj/contracts';
 import type { PersonSitemapEntry } from '@minhaj/contracts/people';
 
 import { peopleReadRuntime } from '@/composition/people-read';
@@ -114,7 +114,7 @@ export async function peopleSitemapPartitions(): Promise<readonly SitemapPartiti
     const urls = entries
       .filter((entry) => entry.contentLocales.includes(locale))
       .map((entry) => ({
-        loc: absoluteUrl(`/${locale}/people/${entry.slug}`),
+        loc: absoluteUrl(localizedPath(locale, `/people/${entry.slug}`)),
         // GENUINE CONTENT MODIFICATION. `Person.updatedAt` is moved by every
         // mutation that changes what the profile page renders, including the
         // ones that write a child row — so this is the date the page actually

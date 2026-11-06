@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getTranslations } from 'next-intl/server';
@@ -66,7 +67,7 @@ export default async function QuranAdminLayout({
               key: 'quran',
               links: SURFACES.map((surface) => ({
                 key: surface,
-                href: `/${locale}/admin/quran/${surface}`,
+                href: localizedPath(locale, `/admin/quran/${surface}`),
                 text: t(`surface.${surface}`),
               })),
             },

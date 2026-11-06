@@ -4,6 +4,7 @@ import type {
   HadithAvailability,
   HadithSitemapEntry,
 } from '../../packages/contracts/src/hadith/index.ts';
+import { localizedPath } from '../../packages/contracts/src/locale-path.ts';
 
 /**
  * PHASE 19 — what the Hadith surfaces claim to a search engine, in each
@@ -124,10 +125,10 @@ describe('Hadith page metadata', () => {
     expect(meta.robots).toEqual({ index: true, follow: true });
     expect(meta.alternates?.canonical).toBe(`${ORIGIN}/ar${CITATION}`);
     expect(meta.alternates?.languages).toEqual({
-      en: `${ORIGIN}/en${CITATION}`,
+      en: `${ORIGIN}${CITATION}`,
       ur: `${ORIGIN}/ur${CITATION}`,
       ar: `${ORIGIN}/ar${CITATION}`,
-      'x-default': `${ORIGIN}/en${CITATION}`,
+      'x-default': `${ORIGIN}${CITATION}`,
     });
   });
 
@@ -136,13 +137,13 @@ describe('Hadith page metadata', () => {
       locale: 'en' as const,
       contentLocales: ['en' as const, 'ur' as const],
       primaryLocale: 'en' as const,
-      pathFor: (target: string) => `/${target}/topics/fixture-topic`,
+      pathFor: (target: string) => localizedPath(target, '/topics/fixture-topic'),
       title: 'Hadith: fixture topic',
     };
     const indexable = await withIndexing(true);
     const meta = indexable.hadithContentMetadata(APPROVED, view);
     expect(meta.robots).toEqual({ index: true, follow: true });
-    expect(meta.alternates?.canonical).toBe(`${ORIGIN}/en/topics/fixture-topic`);
+    expect(meta.alternates?.canonical).toBe(`${ORIGIN}/topics/fixture-topic`);
     expect(Object.values(meta.alternates?.languages ?? {})).not.toContainEqual(
       expect.stringContaining('/hadith/topics/'),
     );
@@ -219,21 +220,21 @@ describe('Hadith structured data', () => {
       }),
     ).toBe(true);
     expect(trailOf(loaded)).toEqual([
-      { name: 'Home', path: '/en' },
-      { name: 'Hadith', path: '/en/hadith' },
+      { name: 'Home', path: '/' },
+      { name: 'Hadith', path: '/hadith' },
       {
         name: 'fixture-collection-a',
-        path: '/en/hadith/collections/fixture-collection-a',
+        path: '/hadith/collections/fixture-collection-a',
       },
       {
         name: 'Book NON_HADITH_FIXTURE_REFERENCE_1',
-        path: '/en/hadith/collections/fixture-collection-a/books/fixture-book-a',
+        path: '/hadith/collections/fixture-collection-a/books/fixture-book-a',
       },
       {
         name: 'Chapter NON_HADITH_FIXTURE_REFERENCE_2',
-        path: '/en/hadith/collections/fixture-collection-a/books/fixture-book-a/chapters/fixture-chapter-a',
+        path: '/hadith/collections/fixture-collection-a/books/fixture-book-a/chapters/fixture-chapter-a',
       },
-      { name: 'fixture-collection-a, number 7', path: `/en${CITATION}` },
+      { name: 'fixture-collection-a, number 7', path: `${CITATION}` },
     ]);
   });
 

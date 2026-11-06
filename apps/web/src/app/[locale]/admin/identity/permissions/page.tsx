@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { requireAdminPage } from '@/composition/authorization';
@@ -32,7 +33,7 @@ export default async function PermissionsPage({
   await requireAdminPage(
     locale,
     'permissions.read',
-    `/${locale}/admin/identity/permissions`,
+    localizedPath(locale, '/admin/identity/permissions'),
   );
 
   const { administration } = identityRuntime();
@@ -42,9 +43,7 @@ export default async function PermissionsPage({
     <main className="flex flex-col gap-4">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('permissions.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('permissions.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('permissions.description')}</p>
       </header>
 
       <Alert tone="info">{t('permissions.readOnly')}</Alert>

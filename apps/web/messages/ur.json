@@ -3,7 +3,6 @@
     "description": "منہاج القرآن انٹرنیشنل کے قرآن، حدیث، تعلیم، کتب خانہ اور ذرائع ابلاغ کے وسائل کے لیے ایک متحد ڈیجیٹل پلیٹ فارم۔"
   },
   "shell": {
-    "preAdoptionMarker": "منظوری سے قبل جائزے کا نسخہ",
     "nav": {
       "home": "صفحۂ اول",
       "primary": "مرکزی فہرست",
@@ -32,7 +31,19 @@
       "feedback": "رائے",
       "volunteer": "رضاکار",
       "topics": "موضوعات",
-      "newsletter": "نیوز لیٹر"
+      "newsletter": "نیوز لیٹر",
+      "about": "ہمارا تعارف",
+      "news": "خبریں",
+      "collections": "مجموعے",
+      "listen": "سنیں",
+      "events": "تقریبات",
+      "presence": "دنیا بھر میں",
+      "help": "مدد",
+      "more": "مزید",
+      "signIn": "سائن ان",
+      "signedIn": "(سائن ان ہیں)",
+      "searchLabel": "One Minhaj میں تلاش کریں",
+      "searchPlaceholder": "کتب، خطابات، خبریں تلاش کریں…"
     },
     "home": {
       "description": "منہاج القرآن انٹرنیشنل کے قرآن، حدیث، تعلیم، کتب خانہ اور ذرائع ابلاغ کے وسائل کے لیے ایک متحد ڈیجیٹل پلیٹ فارم۔",
@@ -180,13 +191,11 @@
     "footer": {
       "legalHeading": "قانونی اور سائٹ",
       "preAdoption": "ون منہاج ایک آزادانہ طور پر تیار کیا گیا پلیٹ فارم ہے۔ یہ فی الحال منہاج القرآن انٹرنیشنل کی جانب سے مأمور، معاون، منظور شدہ یا نافذ شدہ نہیں ہے، اور یہاں موجود کسی بات کو تنظیم کا سرکاری بیان نہ سمجھا جائے۔",
-      "columns": {
-        "about": "منہاج القرآن کا تعارف",
-        "knowledge": "علم",
-        "libraryMedia": "کتب خانہ اور میڈیا",
-        "learnParticipate": "سیکھیں اور شامل ہوں",
-        "ourWork": "ہمارا کام",
-        "globalContact": "عالمی نیٹ ورک اور رابطہ"
+      "description": "منہاج القرآن انٹرنیشنل کی کتب، خطابات، خبریں اور تعلیم — ایک کثیر لسانی پلیٹ فارم پر۔",
+      "groups": {
+        "discover": "دریافت کریں",
+        "organisation": "ادارہ",
+        "participate": "شامل ہوں"
       }
     },
     "reserved": {
@@ -298,42 +307,13 @@
       "live": "براہِ راست تعلیم",
       "teachers": "استاد تلاش کریں"
     },
-    "menu": {
-      "overview": "{section}: جائزہ",
-      "toggle": "{section} کے مزید صفحات",
-      "columns": {
-        "connect": "رابطہ",
-        "read": "پڑھیں",
-        "study": "مطالعہ",
-        "explore": "دریافت کریں",
-        "learn": "سیکھیں",
-        "browse": "فہرست",
-        "learning": "تعلیم",
-        "topics": "موضوعات",
-        "live": "براہِ راست",
-        "people": "افراد",
-        "writtenWorks": "تحریری کام",
-        "periodicals": "جرائد",
-        "access": "رسائی",
-        "watch": "دیکھیں",
-        "seriesPrograms": "سلسلے اور پروگرام",
-        "byTopic": "موضوع کے لحاظ سے",
-        "listen": "سنیں",
-        "find": "ڈھونڈیں",
-        "ask": "سوال کریں",
-        "understand": "سمجھیں",
-        "news": "خبریں",
-        "events": "تقریبات",
-        "media": "میڈیا",
-        "archive": "آرکائیو",
-        "structure": "تنظیمی ڈھانچہ"
-      },
-      "labels": {
-        "help": "مدد اور عمومی سوالات",
-        "quranRead": "قرآن پڑھیں",
-        "quranSurah": "سورتوں کی فہرست",
-        "quranJuz": "پاروں کی فہرست",
-        "hadithIntroduction": "حدیث کا تعارف"
+    "private": {
+      "backToSite": "One Minhaj پر واپس جائیں",
+      "areas": {
+        "my": "میرا منہاج",
+        "teacher": "تدریس",
+        "admin": "انتظامیہ",
+        "account": "اکاؤنٹ"
       }
     }
   },
@@ -992,11 +972,9 @@
       "caption": "وہ تمام راستے جنہیں عوامی ڈھانچہ جانتا ہے، ان کی دستیابی اور انڈیکسنگ اہلیت کے ساتھ۔",
       "columnRoute": "راستہ",
       "columnPath": "پتھ",
-      "columnPlacement": "جگہ",
       "columnAvailability": "دستیابی",
       "columnIndexing": "انڈیکسنگ",
       "noPath": "ابھی کوئی راستہ نہیں",
-      "noPlacement": "نیویگیشن میں نہیں",
       "availability": {
         "delivered": "فراہم شدہ",
         "reserved": "محفوظ",
@@ -1005,6 +983,13 @@
       "indexing": {
         "eligible": "اہل",
         "excluded": "خارج"
+      },
+      "columnPromotion": "نمایاں کرنا",
+      "promotion": {
+        "always": "ہمیشہ نمایاں",
+        "live": "اب نمایاں ({signal} شائع ہے)",
+        "waiting": "شائع شدہ {signal} کا منتظر",
+        "never": "نمایاں نہیں — اپنے پتے سے قابلِ رسائی"
       }
     },
     "audit": {

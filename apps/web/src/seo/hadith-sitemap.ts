@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 
 import { hadithReadRuntime } from '@/composition/hadith-read';
 import { hadithCitationPath } from '@/components/hadith/presentation';
@@ -50,7 +50,7 @@ export async function hadithSitemapPartitions(): Promise<readonly SitemapPartiti
       const path = hadithCitationPath(row.collectionSlug, row.number);
       for (const [locale, urls] of buckets)
         urls.push({
-          loc: absoluteUrl(`/${locale}${path}`),
+          loc: absoluteUrl(localizedPath(locale, `${path}`)),
           lastmod: row.lastModified.toISOString(),
         });
     }

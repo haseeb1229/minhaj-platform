@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
@@ -69,8 +70,8 @@ export default async function DownloadsPage({ params, searchParams }: DownloadsP
     <ListingFrame
       breadcrumbLabel={shell('nav.breadcrumbs')}
       trail={[
-        { href: `/${locale}`, text: shell('nav.home') },
-        { href: `/${locale}/library`, text: t('title') },
+        { href: localizedPath(locale, ''), text: shell('nav.home') },
+        { href: localizedPath(locale, '/library'), text: t('title') },
         { text: t('section.downloads') },
       ]}
       title={t('section.downloads')}
@@ -102,12 +103,18 @@ export default async function DownloadsPage({ params, searchParams }: DownloadsP
         label={t('section.downloads')}
         previous={
           offset > 0
-            ? `/${locale}/library/downloads?offset=${String(Math.max(0, offset - WORK_PAGE))}`
+            ? localizedPath(
+                locale,
+                `/library/downloads?offset=${String(Math.max(0, offset - WORK_PAGE))}`,
+              )
             : null
         }
         next={
           page.hasMore
-            ? `/${locale}/library/downloads?offset=${String(offset + WORK_PAGE)}`
+            ? localizedPath(
+                locale,
+                `/library/downloads?offset=${String(offset + WORK_PAGE)}`,
+              )
             : null
         }
         previousLabel={t('previous')}

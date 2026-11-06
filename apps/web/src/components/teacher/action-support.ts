@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { revalidatePath } from 'next/cache';
@@ -12,7 +13,7 @@ import type { Locale } from '@minhaj/contracts';
  * by `learningRejected`, Learning's own category vocabulary.
  */
 export function refreshTeacher(locale: Locale): void {
-  revalidatePath(`/${locale}/teacher`, 'layout');
+  revalidatePath(localizedPath(locale, '/teacher'), 'layout');
 }
 
 /** One text field, as typed; the service validates its shape. */

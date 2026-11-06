@@ -48,9 +48,7 @@ export async function CommentaryPage({
     >
       <div className="flex flex-col gap-2">
         <PageHeading>{title}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">
-          {t('sectionBody.commentary')}
-        </p>
+        <p className="text-foreground-muted">{t('sectionBody.commentary')}</p>
       </div>
       {works.length === 0 ? (
         <EmptyState>{t('worksEmpty.commentary')}</EmptyState>

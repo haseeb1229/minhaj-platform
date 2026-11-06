@@ -78,7 +78,7 @@ export function ClassTime({
   return (
     <div className="flex flex-col gap-1 text-sm">
       <p>
-        <span className="text-[color:var(--color-foreground-muted)]">
+        <span className="text-foreground-muted">
           {t('time.classZone', {
             zone: zoneName(session.timeZone, session.startsAt, locale),
           })}
@@ -88,10 +88,10 @@ export function ClassTime({
         </time>
       </p>
       {same ? (
-        <p className="text-[color:var(--color-foreground-muted)]">{t('time.sameZone')}</p>
+        <p className="text-foreground-muted">{t('time.sameZone')}</p>
       ) : (
         <p>
-          <span className="text-[color:var(--color-foreground-muted)]">
+          <span className="text-foreground-muted">
             {t('time.ownZone', { zone: zoneName(own, session.startsAt, locale) })}
           </span>{' '}
           <time dateTime={session.startsAt.toISOString()}>

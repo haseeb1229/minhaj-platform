@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -32,7 +33,7 @@ export async function LearningControls({
 }) {
   const t = await getTranslations({ locale, namespace: 'learningIsland' });
   const slug = encodeURIComponent(courseSlug);
-  const coursePage = `/${locale}/learn/courses/${slug}`;
+  const coursePage = localizedPath(locale, `/learn/courses/${slug}`);
 
   const labels: LearningIslandLabels = {
     heading: t('heading'),
@@ -68,9 +69,12 @@ export async function LearningControls({
     <LearningIsland
       courseId={courseId}
       live={live}
-      signInHref={`/${locale}/signin?returnTo=${encodeURIComponent(coursePage)}`}
-      myCourseHref={`/${locale}/my/learning/courses/${slug}`}
-      myLearningHref={`/${locale}/my/learning`}
+      signInHref={localizedPath(
+        locale,
+        `/signin?returnTo=${encodeURIComponent(coursePage)}`,
+      )}
+      myCourseHref={localizedPath(locale, `/my/learning/courses/${slug}`)}
+      myLearningHref={localizedPath(locale, '/my/learning')}
       labels={labels}
     />
   );

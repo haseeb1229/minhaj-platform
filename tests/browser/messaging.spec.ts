@@ -25,6 +25,7 @@ import {
   baseUrl,
   expect,
   grantRole,
+  localizedPath,
   privilegedSession,
   registerAndSignIn,
   test,
@@ -304,29 +305,29 @@ test.describe('Messaging, before anyone writes', () => {
     test.setTimeout(180_000);
     const nobody = randomUUID();
     for (const target of [
-      '/en/my/messages',
-      '/en/my/messages/support',
-      `/en/my/messages/${nobody}`,
+      '/my/messages',
+      '/my/messages/support',
+      `/my/messages/${nobody}`,
     ]) {
       await page.goto(target);
-      await page.waitForURL(/\/en\/signin\?/);
+      await page.waitForURL(/\/signin\?/);
       const url = new URL(page.url());
       expect(`${url.pathname}${url.search}`, target).toBe(
-        `/en/signin?returnTo=${encodeURIComponent(target)}`,
+        `/signin?returnTo=${encodeURIComponent(target)}`,
       );
     }
     // The Teacher area's and administration's own shells send a visitor to
     // sign in before any page of theirs renders, returning to the area.
     for (const [target, area] of [
-      ['/en/teacher/messages', '/en/teacher'],
-      [`/en/teacher/messages/${nobody}`, '/en/teacher'],
-      ['/en/admin/messaging', '/en/admin'],
+      ['/teacher/messages', '/teacher'],
+      [`/teacher/messages/${nobody}`, '/teacher'],
+      ['/admin/messaging', '/admin'],
     ] as const) {
       await page.goto(target);
-      await page.waitForURL(/\/en\/signin\?/);
+      await page.waitForURL(/\/signin\?/);
       const url = new URL(page.url());
       expect(`${url.pathname}${url.search}`, target).toBe(
-        `/en/signin?returnTo=${encodeURIComponent(area)}`,
+        `/signin?returnTo=${encodeURIComponent(area)}`,
       );
     }
 
@@ -370,9 +371,9 @@ test.describe('Messaging, before anyone writes', () => {
     ).toBe(0);
 
     for (const [viewer, target, words] of [
-      [learner.page, '/en/my/messages', copy('messages.notActivated')],
-      [learner.page, '/en/my/messages/support', copy('messages.support.notActivated')],
-      [teacher.page, '/en/teacher/messages', copy('messages.teacher.notActivated')],
+      [learner.page, '/my/messages', copy('messages.notActivated')],
+      [learner.page, '/my/messages/support', copy('messages.support.notActivated')],
+      [teacher.page, '/teacher/messages', copy('messages.teacher.notActivated')],
     ] as const) {
       const response = await viewer.goto(target);
       expect(response?.status(), target).toBe(200);
@@ -384,7 +385,7 @@ test.describe('Messaging, before anyone writes', () => {
     }
     // My Teachers lists the teacher — the relationship is Learning's — and
     // offers no conversation while Messaging is off.
-    await learner.page.goto('/en/my/teachers');
+    await learner.page.goto('/my/teachers');
     await expect(learner.page.getByRole('main')).toContainText(TEXT.course);
     await expect(
       learner.page.getByRole('main').getByRole('button', { name: /^Message / }),
@@ -395,7 +396,7 @@ test.describe('Messaging, before anyone writes', () => {
       INSERT INTO [dbo].[MessagingActivation] ([capability],[authority],[authorisedBy]) VALUES
         (N'teacher-student', N'fixture', N'${SENTINEL} browser operator'),
         (N'support', N'fixture', N'${SENTINEL} browser operator');`);
-    await learner.page.goto('/en/my/messages');
+    await learner.page.goto('/my/messages');
     const main = learner.page.getByRole('main');
     await expect(main).toContainText(copy('messages.fixture'));
     await expect(main).not.toContainText(copy('messages.notActivated'));
@@ -415,24 +416,24 @@ test.describe('a learner and their teacher', () => {
       name: copy('myClasses.teachers.unnamed'),
       course: TEXT.course,
     });
-    await page.goto('/en/my/teachers');
+    await page.goto('/my/teachers');
     await page
       .getByRole('main')
       .getByRole('button', { name: start, exact: true })
       .click();
-    await page.waitForURL(/\/en\/my\/messages\/[0-9a-f-]{36}$/);
+    await page.waitForURL(/\/my\/messages\/[0-9a-f-]{36}$/);
     conversationId = new URL(page.url()).pathname.split('/').at(-1) ?? '';
     await expect(mainHeading(page)).toHaveText(TEXT.teacher);
     await expect(page.getByRole('main')).toContainText(TEXT.course);
     await expect(page.getByRole('main')).toContainText(copy('messages.thread.empty'));
 
     // Pressing it again RETURNS the same conversation; it never opens a second.
-    await page.goto('/en/my/teachers');
+    await page.goto('/my/teachers');
     await page
       .getByRole('main')
       .getByRole('button', { name: start, exact: true })
       .click();
-    await page.waitForURL(`**/en/my/messages/${conversationId}`);
+    await page.waitForURL(`**/my/messages/${conversationId}`);
     expect(
       await scalar(
         `SELECT COUNT_BIG(*) AS [value] FROM [dbo].[Conversation] WHERE [courseId]=N'${ids.course}';`,
@@ -470,7 +471,7 @@ test.describe('a learner and their teacher', () => {
     const page = learner.page;
     // 320 pixels, so the long file name's reflow is measured where it is hardest.
     await page.setViewportSize({ width: 320, height: 800 });
-    await page.goto(`/en/my/messages/${conversationId}`);
+    await page.goto(`/my/messages/${conversationId}`);
     const picker = page
       .getByRole('main')
       .getByLabel(copy('messages.composer.attach'), { exact: true });
@@ -520,7 +521,7 @@ test.describe('a learner and their teacher', () => {
   test('the teacher finds the conversation with its unread count in words, reads it and replies', async () => {
     test.setTimeout(180_000);
     const page = teacher.page;
-    const response = await page.goto('/en/teacher/messages');
+    const response = await page.goto('/teacher/messages');
     expect(response?.status()).toBe(200);
     const list = page
       .getByRole('main')
@@ -530,14 +531,14 @@ test.describe('a learner and their teacher', () => {
     await expect(entry).toContainText(TEXT.course);
 
     await entry.getByRole('link', { name: TEXT.learner }).click();
-    await page.waitForURL(`**/en/teacher/messages/${conversationId}`);
+    await page.waitForURL(`**/teacher/messages/${conversationId}`);
     await expect(mainHeading(page)).toHaveText(TEXT.learner);
     await expect(messageFrom(page, TEXT.learner, TEXT.first)).toBeVisible();
     await send(page, TEXT.reply);
     await expect(messageFrom(page, copy('messages.you'), TEXT.reply)).toBeVisible();
 
     // Shown, therefore read: the count is gone on the next visit.
-    await page.goto('/en/teacher/messages');
+    await page.goto('/teacher/messages');
     await expect(
       page.getByRole('main').getByRole('listitem').filter({ hasText: TEXT.learner }),
     ).not.toContainText(plural('messages.list.unread', 1));
@@ -580,7 +581,7 @@ test.describe('a report, and its moderation', () => {
   test('the learner reports the reply for a controlled reason', async () => {
     test.setTimeout(120_000);
     const page = learner.page;
-    await page.goto(`/en/my/messages/${conversationId}`);
+    await page.goto(`/my/messages/${conversationId}`);
     const reply = messageFrom(page, TEXT.teacher, TEXT.reply);
     await reply.getByText(copy('messages.safety.reportMessage'), { exact: true }).click();
     await reply
@@ -605,7 +606,7 @@ test.describe('a report, and its moderation', () => {
     expect(report.messageId).toBe(replied?.id);
 
     // Holding no administrative key at all, the teacher meets the shell's 404.
-    expect((await teacher.page.goto('/en/admin/messaging/reports'))?.status()).toBe(404);
+    expect((await teacher.page.goto('/admin/messaging/reports'))?.status()).toBe(404);
   });
 
   test('a moderator sees metadata in the queues, reads the evidence as an audited act, and withholds the message', async () => {
@@ -614,8 +615,8 @@ test.describe('a report, and its moderation', () => {
     const short = reportId.slice(0, 8);
 
     // The area root sends a moderator to the first surface the key opens.
-    await page.goto('/en/admin/messaging');
-    await page.waitForURL('**/en/admin/messaging/moderation');
+    await page.goto('/admin/messaging');
+    await page.waitForURL('**/admin/messaging/moderation');
     await expect(
       sectionHeading(page, copy('adminMessaging.moderation.title')),
     ).toBeVisible();
@@ -629,7 +630,7 @@ test.describe('a report, and its moderation', () => {
     ).toBeVisible();
     await expect(page.getByRole('main')).not.toContainText(TEXT.reply);
 
-    await page.goto('/en/admin/messaging/reports');
+    await page.goto('/admin/messaging/reports');
     await expect(
       sectionHeading(page, copy('adminMessaging.reports.title')),
     ).toBeVisible();
@@ -651,7 +652,7 @@ test.describe('a report, and its moderation', () => {
     await row
       .getByRole('link', { name: copy('adminMessaging.reports.open', { id: short }) })
       .click();
-    await page.waitForURL(`**/en/admin/messaging/reports/${reportId}`);
+    await page.waitForURL(`**/admin/messaging/reports/${reportId}`);
     await expect(
       sectionHeading(page, copy('adminMessaging.evidence.title', { id: short })),
     ).toBeVisible();
@@ -690,13 +691,13 @@ test.describe('a report, and its moderation', () => {
     for (const [viewer, target, replier, writer] of [
       [
         learner.page,
-        `/en/my/messages/${conversationId}`,
+        `/my/messages/${conversationId}`,
         TEXT.teacher,
         copy('messages.you'),
       ],
       [
         teacher.page,
-        `/en/teacher/messages/${conversationId}`,
+        `/teacher/messages/${conversationId}`,
         copy('messages.you'),
         TEXT.learner,
       ],
@@ -712,7 +713,7 @@ test.describe('a report, and its moderation', () => {
       await expect(messageFrom(viewer, writer, TEXT.first), target).toBeVisible();
     }
     // Nothing is left to report on a withheld message.
-    await learner.page.goto(`/en/my/messages/${conversationId}`);
+    await learner.page.goto(`/my/messages/${conversationId}`);
     await expect(
       messageFrom(learner.page, TEXT.teacher, copy('messages.thread.withheld')).getByText(
         copy('messages.safety.reportMessage'),
@@ -731,18 +732,18 @@ test.describe('a report, and its moderation', () => {
     test.setTimeout(180_000);
     const page = administrator.page;
     // The administration area is open to them…
-    expect((await page.goto('/en/admin'))?.status()).toBe(200);
+    expect((await page.goto('/admin'))?.status()).toBe(200);
     await expect(
       page.getByRole('link', { name: copy('admin.nav.messaging'), exact: true }),
     ).toHaveCount(0);
     // …and Messaging's is not, at any address.
     for (const target of [
-      '/en/admin/messaging',
-      '/en/admin/messaging/support',
-      '/en/admin/messaging/moderation',
-      '/en/admin/messaging/reports',
-      `/en/admin/messaging/reports/${reportId}`,
-      `/en/admin/messaging/support/${randomUUID()}`,
+      '/admin/messaging',
+      '/admin/messaging/support',
+      '/admin/messaging/moderation',
+      '/admin/messaging/reports',
+      `/admin/messaging/reports/${reportId}`,
+      `/admin/messaging/support/${randomUUID()}`,
     ]) {
       const response = await page.goto(target);
       expect(response?.status(), target).toBe(404);
@@ -759,28 +760,28 @@ test.describe('a support conversation', () => {
   test('a person opens one and writes; staff see metadata only until an audited open', async () => {
     test.setTimeout(240_000);
     const page = learner.page;
-    await page.goto('/en/my/messages/support');
+    await page.goto('/my/messages/support');
     await page
       .getByRole('main')
       .getByRole('button', { name: copy('messages.support.start'), exact: true })
       .click();
-    await page.waitForURL(/\/en\/my\/messages\/[0-9a-f-]{36}$/);
+    await page.waitForURL(/\/my\/messages\/[0-9a-f-]{36}$/);
     supportId = new URL(page.url()).pathname.split('/').at(-1) ?? '';
     expect(supportId).not.toBe(conversationId);
     await expect(mainHeading(page)).toHaveText(copy('messages.supportName'));
     await send(page, TEXT.support);
 
     // The support page now continues the one open conversation.
-    await page.goto('/en/my/messages/support');
+    await page.goto('/my/messages/support');
     await expect(
       page
         .getByRole('main')
         .getByRole('link', { name: copy('messages.support.continue'), exact: true }),
-    ).toHaveAttribute('href', `/en/my/messages/${supportId}`);
+    ).toHaveAttribute('href', `/my/messages/${supportId}`);
 
     const desk = staff.page;
-    await desk.goto('/en/admin/messaging');
-    await desk.waitForURL('**/en/admin/messaging/support');
+    await desk.goto('/admin/messaging');
+    await desk.waitForURL('**/admin/messaging/support');
     await expect(
       sectionHeading(desk, copy('adminMessaging.support.title')),
     ).toBeVisible();
@@ -809,7 +810,7 @@ test.describe('a support conversation', () => {
     ).toBe(0);
 
     await row.getByRole('link').click();
-    await desk.waitForURL(`**/en/admin/messaging/support/${supportId}`);
+    await desk.waitForURL(`**/admin/messaging/support/${supportId}`);
     const main = desk.getByRole('main');
     await expect(main).toContainText(copy('adminMessaging.conversation.audited'));
     await expect(messageFrom(desk, TEXT.learner, TEXT.support)).toBeVisible();
@@ -827,7 +828,7 @@ test.describe('a support conversation', () => {
     test.setTimeout(180_000);
     // The person has their conversation open while staff answer it.
     const page = learner.page;
-    await page.goto(`/en/my/messages/${supportId}`);
+    await page.goto(`/my/messages/${supportId}`);
     await expect(messageFrom(page, copy('messages.you'), TEXT.support)).toBeVisible();
 
     const desk = staff.page;
@@ -877,7 +878,7 @@ test.describe('a support conversation', () => {
       ['the teacher', teacher.page],
       ['a moderator', moderator.page],
     ] as const) {
-      const response = await viewer.goto(`/en/my/messages/${supportId}`);
+      const response = await viewer.goto(`/my/messages/${supportId}`);
       expect(response?.status(), `${who}: support`).toBe(404);
       await expect(viewer.locator('body'), who).not.toContainText(TEXT.support);
       await expectRefusal(
@@ -892,7 +893,7 @@ test.describe('a support conversation', () => {
       ['a moderator', moderator.page],
       ['support staff', staff.page],
     ] as const) {
-      const response = await viewer.goto(`/en/my/messages/${conversationId}`);
+      const response = await viewer.goto(`/my/messages/${conversationId}`);
       expect(response?.status(), `${who}: teaching`).toBe(404);
       await expect(viewer.locator('body'), who).not.toContainText(TEXT.first);
       await expectRefusal(
@@ -903,7 +904,7 @@ test.describe('a support conversation', () => {
       );
     }
     // A teacher's own surface does not open a support conversation either.
-    expect((await teacher.page.goto(`/en/teacher/messages/${supportId}`))?.status()).toBe(
+    expect((await teacher.page.goto(`/teacher/messages/${supportId}`))?.status()).toBe(
       404,
     );
     // No attachment was ever attached here (the scanner refused it), so every
@@ -964,7 +965,7 @@ test.describe('a block', () => {
   test('replaces the composer with the blocked state for both people, until it is lifted', async () => {
     test.setTimeout(180_000);
     const page = learner.page;
-    await page.goto(`/en/my/messages/${conversationId}`);
+    await page.goto(`/my/messages/${conversationId}`);
     const main = page.getByRole('main');
     await main
       .getByText(copy('messages.safety.block', { name: TEXT.teacher }), { exact: true })
@@ -979,7 +980,7 @@ test.describe('a block', () => {
     await expect(composerBox(page)).toHaveCount(0);
 
     // The other side is told neutrally — not who decided it.
-    await teacher.page.goto(`/en/teacher/messages/${conversationId}`);
+    await teacher.page.goto(`/teacher/messages/${conversationId}`);
     await expect(teacher.page.getByRole('main')).toContainText(
       copy('messages.state.blocked'),
     );
@@ -1013,17 +1014,17 @@ test.describe('the Messaging surfaces', () => {
   test('are private and unindexed', async () => {
     test.setTimeout(300_000);
     for (const [viewer, target] of [
-      [learner.page, '/en/my/messages'],
-      [learner.page, `/en/my/messages/${conversationId}`],
-      [learner.page, '/en/my/messages/support'],
-      [learner.page, `/en/my/messages/${supportId}`],
-      [teacher.page, '/en/teacher/messages'],
-      [teacher.page, `/en/teacher/messages/${conversationId}`],
-      [moderator.page, '/en/admin/messaging/moderation'],
-      [moderator.page, '/en/admin/messaging/reports'],
-      [moderator.page, `/en/admin/messaging/reports/${reportId}`],
-      [staff.page, '/en/admin/messaging/support'],
-      [staff.page, `/en/admin/messaging/support/${supportId}`],
+      [learner.page, '/my/messages'],
+      [learner.page, `/my/messages/${conversationId}`],
+      [learner.page, '/my/messages/support'],
+      [learner.page, `/my/messages/${supportId}`],
+      [teacher.page, '/teacher/messages'],
+      [teacher.page, `/teacher/messages/${conversationId}`],
+      [moderator.page, '/admin/messaging/moderation'],
+      [moderator.page, '/admin/messaging/reports'],
+      [moderator.page, `/admin/messaging/reports/${reportId}`],
+      [staff.page, '/admin/messaging/support'],
+      [staff.page, `/admin/messaging/support/${supportId}`],
     ] as const) {
       const response = await viewer.context().request.get(target, { maxRedirects: 0 });
       expect(response.status(), target).toBe(200);
@@ -1041,13 +1042,13 @@ test.describe('the Messaging surfaces', () => {
 
   test('a thread is right-to-left in Urdu and Arabic, and reflows at 320px and 640px around unbroken text', async () => {
     test.setTimeout(600_000);
-    await learner.page.goto(`/en/my/messages/${conversationId}`);
+    await learner.page.goto(`/my/messages/${conversationId}`);
     await send(learner.page, `${TEXT.long}\n${LONG_TOKEN}\n${LONG_URL}`);
 
     for (const locale of ['en', 'ur', 'ar'] as const)
       for (const [viewer, target] of [
-        [learner.page, `/${locale}/my/messages/${conversationId}`],
-        [teacher.page, `/${locale}/teacher/messages/${conversationId}`],
+        [learner.page, localizedPath(locale, `/my/messages/${conversationId}`)],
+        [teacher.page, localizedPath(locale, `/teacher/messages/${conversationId}`)],
       ] as const) {
         const response = await viewer.goto(target);
         expect(response?.status(), target).toBe(200);
@@ -1079,13 +1080,13 @@ test.describe('the Messaging surfaces', () => {
       for (const viewer of viewers) await viewer.setViewportSize({ width, height: 800 });
       for (const locale of ['en', 'ar'] as const)
         for (const [viewer, target] of [
-          [learner.page, `/${locale}/my/messages/${conversationId}`],
-          [learner.page, `/${locale}/my/messages`],
-          [learner.page, `/${locale}/my/messages/support`],
-          [teacher.page, `/${locale}/teacher/messages/${conversationId}`],
-          [teacher.page, `/${locale}/teacher/messages`],
-          [moderator.page, `/${locale}/admin/messaging/reports/${reportId}`],
-          [staff.page, `/${locale}/admin/messaging/support/${supportId}`],
+          [learner.page, localizedPath(locale, `/my/messages/${conversationId}`)],
+          [learner.page, localizedPath(locale, '/my/messages')],
+          [learner.page, localizedPath(locale, '/my/messages/support')],
+          [teacher.page, localizedPath(locale, `/teacher/messages/${conversationId}`)],
+          [teacher.page, localizedPath(locale, '/teacher/messages')],
+          [moderator.page, localizedPath(locale, `/admin/messaging/reports/${reportId}`)],
+          [staff.page, localizedPath(locale, `/admin/messaging/support/${supportId}`)],
         ] as const) {
           const where = `${String(width)}px ${target}`;
           const response = await viewer.goto(target);
@@ -1107,14 +1108,14 @@ test.describe('the Messaging surfaces', () => {
   test('every control is labelled, a message is sent by keyboard alone, and nothing moves under reduced motion', async () => {
     test.setTimeout(240_000);
     const page = learner.page;
-    await page.goto(`/en/my/messages/${conversationId}`);
+    await page.goto(`/my/messages/${conversationId}`);
     await expectLabelledControls(page, 'the learner’s thread');
-    await teacher.page.goto(`/en/teacher/messages/${conversationId}`);
+    await teacher.page.goto(`/teacher/messages/${conversationId}`);
     await expectLabelledControls(teacher.page, 'the teacher’s thread');
-    await staff.page.goto(`/en/admin/messaging/support/${supportId}`);
+    await staff.page.goto(`/admin/messaging/support/${supportId}`);
     await expect(composerBox(staff.page)).toBeVisible();
     await expectLabelledControls(staff.page, 'the support conversation');
-    await moderator.page.goto(`/en/admin/messaging/reports/${reportId}`);
+    await moderator.page.goto(`/admin/messaging/reports/${reportId}`);
     await expect(
       sectionHeading(
         moderator.page,
@@ -1136,7 +1137,7 @@ test.describe('the Messaging surfaces', () => {
     await expect(messageFrom(page, copy('messages.you'), TEXT.keyboard)).toBeVisible();
 
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    for (const target of [`/en/my/messages/${conversationId}`, '/en/my/messages']) {
+    for (const target of [`/my/messages/${conversationId}`, '/my/messages']) {
       await page.goto(target);
       await expect(mainHeading(page)).toBeVisible();
       await expect(page.locator('main [class*="animate-"]'), target).toHaveCount(0);
@@ -1177,10 +1178,7 @@ test.describe('when the teaching role is revoked', () => {
     await sql.query(
       `UPDATE [dbo].[RoleAssignment] SET [revokedAt]=SYSUTCDATETIME() WHERE [userId]=N'${teacher.id}' AND [revokedAt] IS NULL;`,
     );
-    for (const target of [
-      `/en/teacher/messages/${conversationId}`,
-      '/en/teacher/messages',
-    ]) {
+    for (const target of [`/teacher/messages/${conversationId}`, '/teacher/messages']) {
       const response = await teacher.page.goto(target);
       expect(response?.status(), target).toBe(404);
       await expect(teacher.page.locator('body'), target).not.toContainText(TEXT.first);
@@ -1193,7 +1191,7 @@ test.describe('when the teaching role is revoked', () => {
     );
 
     const page = learner.page;
-    const response = await page.goto(`/en/my/messages/${conversationId}`);
+    const response = await page.goto(`/my/messages/${conversationId}`);
     expect(response?.status()).toBe(200);
     await expect(mainHeading(page)).toHaveText(copy('messages.ended.title'));
     const main = page.getByRole('main');
@@ -1209,7 +1207,7 @@ test.describe('when the teaching role is revoked', () => {
     );
 
     // The inbox keeps the support conversation and no longer lists this one.
-    await page.goto('/en/my/messages');
+    await page.goto('/my/messages');
     await expect(
       page.getByRole('main').getByRole('link', { name: TEXT.teacher }),
     ).toHaveCount(0);

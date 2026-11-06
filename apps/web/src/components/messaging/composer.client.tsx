@@ -331,17 +331,15 @@ export function MessageComposer({
           onBlur={() => live?.typing(false)}
           aria-describedby={`${helpId} ${counterId}`}
           aria-invalid={over > 0 ? true : undefined}
-          className="w-full rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-3 py-2 text-base aria-[invalid=true]:border-[color:var(--color-error)]"
+          className="w-full rounded-control border border-border-strong bg-surface-raised px-3 py-2 text-base aria-[invalid=true]:border-error"
         />
-        <p id={helpId} className="text-xs text-[color:var(--color-foreground-muted)]">
+        <p id={helpId} className="text-xs text-foreground-muted">
           {labels.help}
         </p>
         <p
           id={counterId}
           className={
-            over > 0
-              ? 'text-xs font-medium text-[color:var(--color-error)]'
-              : 'text-xs text-[color:var(--color-foreground-muted)]'
+            over > 0 ? 'text-xs font-medium text-error' : 'text-xs text-foreground-muted'
           }
         >
           {over > 0
@@ -366,7 +364,7 @@ export function MessageComposer({
           {uploads.map((upload) => (
             <li
               key={upload.key}
-              className="flex min-w-0 flex-col gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-3 text-sm"
+              className="flex min-w-0 flex-col gap-2 rounded-control border border-border p-3 text-sm"
             >
               <span className="min-w-0 wrap-anywhere" dir="auto">
                 {upload.name}
@@ -386,7 +384,7 @@ export function MessageComposer({
                 <span>{fill(labels.ready, { name: upload.name })}</span>
               ) : null}
               {upload.state === 'failed' ? (
-                <span className="text-[color:var(--color-error)]">
+                <span className="text-error">
                   {fill(labels.uploadFailed, { name: upload.name })}{' '}
                   {failureText(upload.failure)}
                 </span>
@@ -467,7 +465,7 @@ function AttachmentPicker({
         }}
         className="min-h-11 w-full text-sm"
       />
-      <p id={pickerHelpId} className="text-xs text-[color:var(--color-foreground-muted)]">
+      <p id={pickerHelpId} className="text-xs text-foreground-muted">
         {labels.attachHelp}
       </p>
     </div>

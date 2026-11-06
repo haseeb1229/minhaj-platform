@@ -87,7 +87,7 @@ async function eventuallyFound(page: Page, query: string, text: string): Promise
   await expect
     .poll(
       async () => {
-        await page.goto(`/en/search?q=${encodeURIComponent(query)}`);
+        await page.goto(`/search?q=${encodeURIComponent(query)}`);
         await page.getByRole('heading', { level: 1, name: 'Search' }).waitFor();
         return page.getByRole('main').innerText();
       },
@@ -174,7 +174,7 @@ test.describe('an anonymous visitor browses Watch', () => {
   test('lands on Watch signed out, with honest sorting and only delivered surfaces', async ({
     page,
   }) => {
-    const response = await page.goto('/en/watch');
+    const response = await page.goto('/watch');
     expect(response?.status()).toBe(200);
     expect(response?.headers()['set-cookie']).toBeUndefined();
     await expect(page.getByRole('heading', { level: 1, name: 'Watch' })).toBeVisible();
@@ -183,7 +183,7 @@ test.describe('an anonymous visitor browses Watch', () => {
     await expect(page.getByRole('link', { name: LECTURE_TITLE })).toBeVisible();
     await expect(page.getByRole('link', { name: INTERVIEW_TITLE })).toHaveCount(0);
     await page.getByRole('link', { name: 'Latest' }).click();
-    await expect(page).toHaveURL(/\/en\/watch\?sort=latest$/);
+    await expect(page).toHaveURL(/\/watch\?sort=latest$/);
     await expect(page.getByRole('link', { name: INTERVIEW_TITLE })).toBeVisible();
 
     // Every surface it offers exists; audio and galleries are not offered.
@@ -199,12 +199,12 @@ test.describe('an anonymous visitor browses Watch', () => {
       'playlists',
       'speakers',
     ]) {
-      expect(hrefs).toContain(`/en/watch/${surface}`);
+      expect(hrefs).toContain(`/watch/${surface}`);
     }
     // Phase 11: Listen, Watch's sibling for audio, is linked; audio is never a
     // Watch surface, and galleries are not offered.
-    expect(hrefs).toContain('/en/listen');
-    for (const absent of ['/en/watch/audio', '/en/watch/galleries']) {
+    expect(hrefs).toContain('/listen');
+    for (const absent of ['/watch/audio', '/watch/galleries']) {
       expect(hrefs).not.toContain(absent);
     }
     // A card paints no remote image.
@@ -214,37 +214,37 @@ test.describe('an anonymous visitor browses Watch', () => {
   test('filters videos by language and by curated view, and says so when nothing matches', async ({
     page,
   }) => {
-    await page.goto('/en/watch/videos?language=ur');
+    await page.goto('/watch/videos?language=ur');
     await expect(page.getByRole('link', { name: INTERVIEW_TITLE })).toBeVisible();
     await expect(page.getByRole('link', { name: LECTURE_TITLE })).toHaveCount(0);
 
-    await page.goto('/en/watch/lectures');
+    await page.goto('/watch/lectures');
     await expect(page.getByRole('link', { name: LECTURE_TITLE })).toBeVisible();
     await expect(page.getByRole('link', { name: INTERVIEW_TITLE })).toHaveCount(0);
     await expect(page.getByText('Synthetic hidden draft video')).toHaveCount(0);
 
-    await page.goto(`/en/watch/interviews?series=${programId}&language=ar`);
+    await page.goto(`/watch/interviews?series=${programId}&language=ar`);
     await expect(
       page.getByText('No published video matches these filters.'),
     ).toBeVisible();
     await page.getByRole('link', { name: 'Clear all filters' }).first().click();
-    await expect(page).toHaveURL(/\/en\/watch\/interviews$/);
+    await expect(page).toHaveURL(/\/watch\/interviews$/);
   });
 
   test('shows a Video with its speakers, facts and transcript, and loads NOTHING third-party', async ({
     page,
   }) => {
     const external = thirdPartyRequests(page);
-    const response = await page.goto(`/en/watch/videos/${lectureSlug}`);
+    const response = await page.goto(`/watch/videos/${lectureSlug}`);
     expect(response?.headers()['set-cookie']).toBeUndefined();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(LECTURE_TITLE);
 
     await expect(
-      page.locator(`a[href="/en/people/${people.linkedSlug}"]`).first(),
+      page.locator(`a[href="/people/${people.linkedSlug}"]`).first(),
     ).toBeVisible();
     await expect(page.getByRole('link', { name: 'Education' }).first()).toHaveAttribute(
       'href',
-      '/en/topics/education',
+      '/topics/education',
     );
     await expect(
       page.getByText('Captions are offered in the YouTube player.'),
@@ -257,7 +257,7 @@ test.describe('an anonymous visitor browses Watch', () => {
     // The Series context, at the programme's ONE address.
     await expect(page.getByRole('link', { name: PROGRAM_TITLE }).first()).toHaveAttribute(
       'href',
-      `/en/watch/programs/${programSlug}`,
+      `/watch/programs/${programSlug}`,
     );
 
     // Nothing from a provider: no frame, no request, no image.
@@ -286,7 +286,7 @@ test.describe('an anonymous visitor browses Watch', () => {
       }),
     );
     const external = thirdPartyRequests(page);
-    await page.goto(`/en/watch/videos/${lectureSlug}`);
+    await page.goto(`/watch/videos/${lectureSlug}`);
 
     const load = page.getByRole('button', { name: 'Load the video from YouTube' });
     await load.focus();
@@ -314,7 +314,7 @@ test.describe('an anonymous visitor browses Watch', () => {
   test('sends a frame allowance ONLY on the player page, and one policy there', async ({
     request,
   }) => {
-    const player = await request.get(`/en/watch/videos/${lectureSlug}`);
+    const player = await request.get(`/watch/videos/${lectureSlug}`);
     const policy = player.headers()['content-security-policy'] ?? '';
     expect(policy.split('default-src').length).toBe(2);
     expect(policy).toContain(
@@ -324,11 +324,7 @@ test.describe('an anonymous visitor browses Watch', () => {
     expect(policy).not.toContain('unsafe-eval');
     expect(player.headers()['permissions-policy']).toContain('autoplay=()');
 
-    for (const path of [
-      '/en/watch',
-      '/en/watch/videos',
-      `/en/watch/programs/${programSlug}`,
-    ]) {
+    for (const path of ['/watch', '/watch/videos', `/watch/programs/${programSlug}`]) {
       const other = await request.get(path);
       expect(other.headers()['content-security-policy'], path).toContain(
         "frame-src 'none'",
@@ -337,7 +333,7 @@ test.describe('an anonymous visitor browses Watch', () => {
   });
 
   test('offers no player for a video the provider no longer serves', async ({ page }) => {
-    await page.goto(`/en/watch/videos/${unavailableSlug}`);
+    await page.goto(`/watch/videos/${unavailableSlug}`);
     await expect(
       page.getByText('YouTube does not currently offer this video to be played here.'),
     ).toBeVisible();
@@ -349,14 +345,14 @@ test.describe('an anonymous visitor browses Watch', () => {
   });
 
   test('never serves a draft', async ({ request }) => {
-    const draft = await request.get(`/en/watch/videos/${draftSlug}`, { maxRedirects: 0 });
+    const draft = await request.get(`/watch/videos/${draftSlug}`, { maxRedirects: 0 });
     expect(draft.status()).toBe(404);
   });
 
   test('lists a programme’s episodes and a playlist’s videos in their own order', async ({
     page,
   }) => {
-    await page.goto(`/en/watch/programs/${programSlug}`);
+    await page.goto(`/watch/programs/${programSlug}`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(PROGRAM_TITLE);
     const episodes = page.getByRole('list', { name: 'Episodes' });
     await expect(episodes.getByRole('heading')).toHaveText([
@@ -365,7 +361,7 @@ test.describe('an anonymous visitor browses Watch', () => {
     ]);
     await expect(episodes.getByText('Episode 1')).toBeVisible();
 
-    await page.goto(`/en/watch/playlists/${playlistSlug}`);
+    await page.goto(`/watch/playlists/${playlistSlug}`);
     const videos = page.getByRole('list', { name: 'Videos in this playlist' });
     await expect(videos.getByRole('heading')).toHaveText([
       INTERVIEW_TITLE,
@@ -387,23 +383,17 @@ test.describe('an anonymous visitor browses Watch', () => {
     };
 
     await hop(`/ur/watch/videos/${lectureOld}`, `/ur/watch/videos/${lectureSlug}`);
-    await hop(
-      `/en/watch/playlists/${playlistOld}`,
-      `/en/watch/playlists/${playlistSlug}`,
-    );
+    await hop(`/watch/playlists/${playlistOld}`, `/watch/playlists/${playlistSlug}`);
     // A former SERIES slug of what is now a PROGRAMME: one hop, straight to the
     // programme's current address — never through /watch/series first.
     await hop(`/ar/watch/series/${seriesOld}`, `/ar/watch/programs/${programSlug}`);
-    await hop(`/en/watch/programs/${seriesOld}`, `/en/watch/programs/${programSlug}`);
+    await hop(`/watch/programs/${seriesOld}`, `/watch/programs/${programSlug}`);
     // The current slug under the other family is not a second canonical URL.
-    await hop(`/en/watch/series/${programSlug}`, `/en/watch/programs/${programSlug}`);
+    await hop(`/watch/series/${programSlug}`, `/watch/programs/${programSlug}`);
     // A speaker's detail is their ONE profile.
-    await hop(
-      `/en/watch/speakers/${people.linkedSlug}`,
-      `/en/people/${people.linkedSlug}`,
-    );
+    await hop(`/watch/speakers/${people.linkedSlug}`, `/people/${people.linkedSlug}`);
 
-    for (const missing of [`/en/watch/videos/${draftSlug}`, '/en/watch/sermons']) {
+    for (const missing of [`/watch/videos/${draftSlug}`, '/watch/sermons']) {
       const response = await request.get(missing, { maxRedirects: 0 });
       expect(response.status(), missing).toBe(404);
     }
@@ -412,25 +402,25 @@ test.describe('an anonymous visitor browses Watch', () => {
   test('browses speakers through People, and topics through the hub', async ({
     page,
   }) => {
-    await page.goto('/en/watch/speakers');
+    await page.goto('/watch/speakers');
     await expect(
-      page.locator(`a[href="/en/people/${people.linkedSlug}"]`).first(),
+      page.locator(`a[href="/people/${people.linkedSlug}"]`).first(),
     ).toBeVisible();
 
-    await page.goto('/en/watch/topics/education');
+    await page.goto('/watch/topics/education');
     await expect(page.getByRole('link', { name: LECTURE_TITLE })).toBeVisible();
     await expect(
       page.getByRole('link', { name: 'Everything on this topic' }),
-    ).toHaveAttribute('href', '/en/topics/education');
+    ).toHaveAttribute('href', '/topics/education');
 
-    await page.goto('/en/topics/education');
+    await page.goto('/topics/education');
     const section = page.getByRole('region', { name: 'Videos on this topic' });
     await expect(section.getByRole('link', { name: LECTURE_TITLE })).toHaveAttribute(
       'href',
-      `/en/watch/videos/${lectureSlug}`,
+      `/watch/videos/${lectureSlug}`,
     );
 
-    await page.goto(`/en/people/${people.linkedSlug}`);
+    await page.goto(`/people/${people.linkedSlug}`);
     const videos = page.getByRole('region', { name: 'Videos' });
     await expect(videos.getByRole('link', { name: LECTURE_TITLE })).toBeVisible();
   });
@@ -454,9 +444,9 @@ test.describe('an anonymous visitor browses Watch', () => {
   }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     for (const path of [
-      '/en/watch',
-      '/en/watch/videos',
-      `/en/watch/videos/${lectureSlug}`,
+      '/watch',
+      '/watch/videos',
+      `/watch/videos/${lectureSlug}`,
       `/ur/watch/videos/${lectureSlug}`,
       `/ar/watch/playlists/${playlistSlug}`,
     ]) {
@@ -480,7 +470,7 @@ test.describe('search finds a Video, and never a withdrawn one', () => {
     const results = page.getByRole('list', { name: 'Search results' });
     await expect(results.getByRole('link', { name: LECTURE_TITLE })).toHaveAttribute(
       'href',
-      `/en/watch/videos/${lectureSlug}`,
+      `/watch/videos/${lectureSlug}`,
     );
 
     await eventuallyFound(page, WITHDRAWN_WORD, INTERVIEW_TITLE);
@@ -489,7 +479,7 @@ test.describe('search finds a Video, and never a withdrawn one', () => {
     await sql.query(
       `UPDATE [dbo].[Video] SET [state]=N'archived' WHERE [id]=N'${interviewId}';`,
     );
-    await page.goto(`/en/search?q=${WITHDRAWN_WORD}`);
+    await page.goto(`/search?q=${WITHDRAWN_WORD}`);
     await page.getByRole('heading', { level: 1, name: 'Search' }).waitFor();
     await expect(page.getByText(INTERVIEW_TITLE)).toHaveCount(0);
   });
@@ -528,7 +518,7 @@ test.describe('Media administration', () => {
       `videos/${lectureId}`,
       `playlists/${playlistId}`,
     ]) {
-      const response = await stranger.goto(`/en/admin/media/${surface}`);
+      const response = await stranger.goto(`/admin/media/${surface}`);
       expect(response?.status(), surface).toBe(404);
     }
   });
@@ -536,7 +526,7 @@ test.describe('Media administration', () => {
   test('creates a Video from a provider address, and refuses anything else', async () => {
     const created = `browser-admin-video-${run}`;
     const providerId = `Ad${run.slice(0, 9)}`;
-    await admin.goto('/en/admin/media/videos');
+    await admin.goto('/admin/media/videos');
     await expect(admin.getByRole('heading', { level: 1, name: 'Videos' })).toBeVisible();
 
     // A hostile "address" is refused with a message the operator can act on.
@@ -549,14 +539,14 @@ test.describe('Media administration', () => {
       admin.getByRole('alert').filter({ hasText: 'Some of the details are not valid.' }),
     ).toBeVisible();
 
-    await admin.goto('/en/admin/media/videos');
+    await admin.goto('/admin/media/videos');
     await admin.locator('#new-video-slug').fill(created);
     await admin.locator('#new-video-reference').fill(`https://youtu.be/${providerId}`);
     await admin.locator('#new-video-title-en').fill('Synthetic admin video');
     await admin.locator('#new-video-language').selectOption('en');
     await admin.locator('#new-video-state').selectOption('published');
     await admin.getByRole('button', { name: 'Create', exact: true }).click();
-    await admin.waitForURL(/\/en\/admin\/media\/videos\/[0-9a-f-]{36}$/);
+    await admin.waitForURL(/\/admin\/media\/videos\/[0-9a-f-]{36}$/);
 
     // The editor previews through the same gate: nothing loaded until asked.
     await expect(
@@ -569,14 +559,14 @@ test.describe('Media administration', () => {
     );
     expect(row?.providerVideoId).toBe(providerId);
 
-    await admin.goto(`/en/watch/videos/${created}`);
+    await admin.goto(`/watch/videos/${created}`);
     await expect(admin.getByRole('heading', { level: 1 })).toHaveText(
       'Synthetic admin video',
     );
   });
 
   test('refuses a stale Video save visibly, and keeps the first', async () => {
-    await admin.goto(`/en/admin/media/videos/${lectureId}`);
+    await admin.goto(`/admin/media/videos/${lectureId}`);
     const editor = admin.url();
     const second = await admin.context().newPage();
     await second.goto(editor);
@@ -599,7 +589,7 @@ test.describe('Media administration', () => {
   });
 
   test('orders a Playlist with named moves, and refuses a stale one', async () => {
-    await admin.goto(`/en/admin/media/playlists/${playlistId}`);
+    await admin.goto(`/admin/media/playlists/${playlistId}`);
     const members = admin.getByRole('list', { name: 'Videos in this playlist' });
     await expect(members.getByRole('listitem')).toHaveCount(3);
 

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { notFound } from 'next/navigation';
@@ -36,13 +37,13 @@ export async function readTeacherCourse(
 
 /** The links between one Course's pages. */
 export function courseLinks(locale: Locale, courseId: string, t: TeacherTranslator) {
-  const root = `/${locale}/teacher/courses/${encodeURIComponent(courseId)}`;
+  const root = localizedPath(locale, `/teacher/courses/${encodeURIComponent(courseId)}`);
   return [
     { href: root, text: t('course.syllabus') },
     { href: `${root}/students`, text: t('courses.students') },
     { href: `${root}/sessions`, text: t('courses.sessions') },
     { href: `${root}/materials`, text: t('courses.materials') },
-    { href: `/${locale}/teacher/courses`, text: t('course.back') },
+    { href: localizedPath(locale, '/teacher/courses'), text: t('course.back') },
   ];
 }
 
@@ -99,7 +100,9 @@ export function CourseUnavailable({
     <TeacherFrame title={t('course.fallbackTitle')}>
       <Alert tone="error">{t('failure.load')}</Alert>
       <p>
-        <TextLink href={`/${locale}/teacher/courses`}>{t('course.back')}</TextLink>
+        <TextLink href={localizedPath(locale, '/teacher/courses')}>
+          {t('course.back')}
+        </TextLink>
       </p>
     </TeacherFrame>
   );

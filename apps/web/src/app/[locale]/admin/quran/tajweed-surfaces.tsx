@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import type { Locale } from '@minhaj/contracts';
@@ -69,7 +70,7 @@ function titleOf(rule: TajweedRuleRecord, locale: Locale) {
 
 export async function TajweedDirectory({ params }: ListParams) {
   const locale = await requireLocale(params);
-  const base = `/${locale}/admin/quran/tajweed`;
+  const base = localizedPath(locale, '/admin/quran/tajweed');
   const context = await requireAdminPage(locale, 'quran.read', base);
   const copy = await quranCopy(locale);
   const { t } = copy;
@@ -87,9 +88,7 @@ export async function TajweedDirectory({ params }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.tajweed')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scope.tajweed')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('scope.tajweed')}</p>
 
       {ordered.length === 0 ? (
         <EmptyState>{t('empty')}</EmptyState>
@@ -152,9 +151,7 @@ export async function TajweedDirectory({ params }: ListParams) {
           <Panel>
             <div className="flex flex-col gap-4">
               <SectionHeading>{t('create.tajweed')}</SectionHeading>
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                {t('createHelp')}
-              </p>
+              <p className="text-sm text-foreground-muted">{t('createHelp')}</p>
               <RuleForm
                 locale={locale}
                 record={null}
@@ -177,7 +174,7 @@ export async function TajweedDirectory({ params }: ListParams) {
 export async function TajweedEditor({ params }: EditorParams) {
   const locale = await requireLocale(params);
   const id = recordTarget((await params).id);
-  const list = `/${locale}/admin/quran/tajweed`;
+  const list = localizedPath(locale, '/admin/quran/tajweed');
   const context = await requireAdminPage(locale, 'quran.read', `${list}/${id}`);
   const copy = await quranCopy(locale);
   const { t } = copy;
@@ -353,9 +350,7 @@ function RuleForm({
 
       <fieldset className="flex flex-col gap-4">
         <legend className="text-sm font-semibold">{t('tajweed.texts')}</legend>
-        <p className="text-xs text-[color:var(--color-foreground-muted)]">
-          {t('tajweed.textsHelp')}
-        </p>
+        <p className="text-xs text-foreground-muted">{t('tajweed.textsHelp')}</p>
         {Array.from({ length: rows }, (_, index) => {
           const text = texts[index];
           const direction =

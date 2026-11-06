@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
@@ -33,7 +34,9 @@ export default async function MyQuestionPage({
   const valid = readQuestionId(id);
   const session = await requireActiveSession(
     locale,
-    valid === null ? `/${locale}/my/questions` : `/${locale}/my/questions/${valid}`,
+    valid === null
+      ? localizedPath(locale, '/my/questions')
+      : localizedPath(locale, `/my/questions/${valid}`),
   );
   if (valid === null) notFound();
   const question = await fatwaRuntime().ask.question(
@@ -50,7 +53,7 @@ export default async function MyQuestionPage({
       </header>
 
       <Panel>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('my.statusLabel')}>
             <StatusBadge tone={question.status === 'answered' ? 'positive' : 'neutral'}>
               {t(`my.status.${question.status}`)}
@@ -60,7 +63,7 @@ export default async function MyQuestionPage({
             <FatwaDate value={question.submittedAt} locale={locale} />
           </DetailRow>
         </dl>
-        <p className="mt-3 text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="mt-3 text-sm text-foreground-muted">
           {t(`my.statusNote.${question.status}`)}
         </p>
       </Panel>
@@ -84,9 +87,7 @@ export default async function MyQuestionPage({
           {t('my.yourWords')}
         </h2>
         {question.body === null ? (
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('my.erased')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('my.erased')}</p>
         ) : (
           <p className="whitespace-pre-wrap wrap-anywhere" dir="auto">
             {question.body}
@@ -95,7 +96,7 @@ export default async function MyQuestionPage({
       </section>
 
       <p>
-        <TextLink href={`/${locale}/my/questions`}>{t('my.back')}</TextLink>
+        <TextLink href={localizedPath(locale, '/my/questions')}>{t('my.back')}</TextLink>
       </p>
     </main>
   );

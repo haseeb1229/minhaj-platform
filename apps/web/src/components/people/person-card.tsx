@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Locale } from '@minhaj/contracts';
 import type { PublicPersonCard as PersonCardData } from '@minhaj/contracts/people';
 
@@ -45,7 +46,7 @@ export function PersonCard({
           dir={dir}
         >
           <a
-            href={`/${locale}/people/${encodeURIComponent(person.slug)}`}
+            href={localizedPath(locale, `/people/${encodeURIComponent(person.slug)}`)}
             className={CARD_TITLE_LINK}
           >
             {person.name}
@@ -53,7 +54,7 @@ export function PersonCard({
         </Heading>
         {person.excerpt === null ? null : (
           <p
-            className="line-clamp-4 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+            className="line-clamp-4 text-sm wrap-anywhere text-foreground-muted"
             lang={language}
             dir={dir}
           >

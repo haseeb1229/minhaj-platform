@@ -14,30 +14,55 @@ document authorises no implementation by itself.
 
 ### 1.1 Strategy
 
-All application routes are nested under an explicit locale segment.
+**English addresses are unprefixed; Urdu and Arabic carry their locale segment** (owner decision,
+Rebaseline R1, 2026-11-06 — OPEN_DECISIONS.md §8).
 
 ```
-/{locale}/...        locale ∈ { en, ur, ar }
+/...           English     e.g. /  ·  /library  ·  /watch/videos/{slug}
+/ur/...        Urdu        e.g. /ur  ·  /ur/library
+/ar/...        Arabic      e.g. /ar  ·  /ar/watch/videos/{slug}
 ```
 
-The locale is **always present**. There is no implicit unprefixed variant, because ambiguity
-between `/quran` and `/en/quran` produces duplicate URLs, split search authority, and
-unstable canonical links for a corpus meant to be cited for decades.
+**One canonical address per interface locale still holds.** Every `/en` and `/en/…` request is
+answered with **one 301** to the unprefixed English address, query preserved; where the same
+request also needs a slug-history 301 (§1.4), the two are merged into that single hop. So
+`/quran` and `/en/quran` never coexist as two answering URLs — the anti-duplicate rationale
+(duplicate URLs, split search authority, unstable canonical links for a corpus meant to be cited
+for decades) is met by the permanent redirect rather than by a mandatory prefix.
 
-`/` performs a **307** redirect to a resolved locale — stored preference, then
-`Accept-Language`, then `en`. A 307 rather than a 301 because the target varies by visitor
-and must not be cached as permanent.
+**Locale resolution is deterministic: the address alone decides the interface language.** No
+cookie and no `Accept-Language` header ever redirects an unprefixed URL; there is no locale
+cookie at all. `/` is the English home and answers **200**. A shared link shows every visitor the
+same language, and a crawler sees what a visitor sees. (next-intl `localePrefix: 'as-needed'`,
+`localeDetection: false`, `localeCookie: false` — `apps/web/src/i18n/routing.ts`.)
+
+**Every localised pathname is built by one helper and parsed by one helper**:
+`localizedPath(locale, path)` and `splitLocalePath(pathname)` in
+`packages/contracts/src/locale-path.ts` (`UNPREFIXED_LOCALE = 'en'`). Links, redirects, canonical
+URLs, alternates and the proxy therefore cannot disagree about what a localised address looks
+like. `LegacyMapping` (§9.7) is **not** used for locale redirects. The change was made before
+public indexing (§9.5), so no search equity was affected.
+
+> **Historical, superseded by Rebaseline R1 (2026-11-06).** From Phase 3A until R1 every route
+> carried an explicit `/{locale}/` segment (`locale ∈ { en, ur, ar }`), there was no unprefixed
+> variant, and `/` (or any unprefixed path) answered a **307** to a locale resolved from the
+> stored preference cookie, then `Accept-Language`, then `en`. That resolution order, the
+> locale cookie and the 307 no longer exist. Examples elsewhere in the docs written as
+> `/{locale}/…` describe the internal route tree (`app/[locale]/…`); the public English address
+> of such a route is its unprefixed form.
 
 **This policy is implemented by the application's routing layer together with next-intl.**
 It is not built-in framework behaviour. It is delivered **once**, in the Localisation Foundation
 phase (DELIVERY_PLAN.md, Phase 3A), **before any phase is required to deliver en/ur/ar routes** —
-including the authentication surfaces of §4. No later phase re-implements it.
+including the authentication surfaces of §4. No later phase re-implements it; Rebaseline R1
+changed its URL shape in that one routing layer (the proxy, `i18n/routing.ts` and the
+locale-path helper) rather than re-implementing it elsewhere.
 
 ### 1.2 Locale properties
 
 | Locale | Language | Direction |
 |---|---|---|
-| `en` | English | LTR — default resolution target |
+| `en` | English | LTR — the unprefixed locale |
 | `ur` | Urdu | **RTL** |
 | `ar` | Arabic | **RTL** |
 
@@ -49,6 +74,11 @@ an otherwise LTR page.
 
 **Switching the locale switches the interface, and always preserves the current route and its
 parameters.** The locale segment changes; the resource does not.
+
+**Since Rebaseline R1 the language switcher is a set of plain links** built by the same
+`localizedPath` helper as every other address: each keeps the exact path and query, the English
+link is the unprefixed address (never a `/en` hop through the 301), and following one writes no
+cookie — the chosen address is the whole of the choice.
 
 What the visitor then sees depends on **content language**, which is a different concept
 (§1.5, DOMAIN_MODEL.md §19.1):
@@ -105,6 +135,9 @@ Correcting duplicate indexable routes in the prior revision.
 | **Quran ayah** | `/{locale}/quran/surah/{surah}/{ayah}` | Reading preferences are query parameters |
 | **Hadith** | `/{locale}/hadith/{collectionSlug}/{hadithNumber}` | Short citation form is canonical; deep structural paths carry a canonical link to it |
 
+In this table and in §4, `/{locale}/…` names the route in every interface locale; its public
+address follows §1.1 — unprefixed in English (`/people/{slug}`), `/ur/…` and `/ar/…` otherwise.
+
 **One contributor profile route** replaces the prior two. A Person may hold author, speaker,
 scholar and teacher profiles (DOMAIN_MODEL.md §5.2); presenting them at separate indexable
 URLs would fragment one human being's search authority across several pages.
@@ -154,7 +187,8 @@ navigable route.
 
 ## 3. Public routes
 
-All prefixed with `/{locale}`.
+Every route is localised per §1.1: unprefixed in English, under `/ur` or `/ar` otherwise.
+(Historical: until Rebaseline R1 every route was prefixed with `/{locale}`, English included.)
 
 ### 3.1 Root
 
@@ -411,7 +445,10 @@ learner level and preferred format belong to **Personalisation & Notifications**
 preference (Phase 22's level and format are catalogue filters chosen per visit). Authentication never depends on it, and the
 two are never merged into one route.
 
-`returnTo` is validated against an allowlist of internal paths. **All are `noindex`.**
+`returnTo` is validated against an allowlist of internal paths. **All are `noindex`.** Since
+Rebaseline R1 an accepted destination is an unprefixed English path or a `/ur`/`/ar` path; a
+legacy `/en/…` value is accepted and returned in its canonical unprefixed form, and the `/teacher`
+and `/admin` roots are known destinations.
 
 **Protocol classification** (SECURITY_BASELINE.md §7). These routes are not all one kind of
 request, and are not treated as one:
@@ -429,8 +466,8 @@ above; Google sign-in and its callbacks remain Phase 2G's, separately gated and 
 
 ## 5. My Minhaj routes
 
-All authenticated, all `noindex`, all **private cache** (ARCHITECTURE.md §8.3). Prefixed
-`/{locale}/my`.
+All authenticated, all `noindex`, all **private cache** (ARCHITECTURE.md §8.3). At `/my`
+(English) and `/ur/my` · `/ar/my` (§1.1).
 
 `/my` · `/my/learning` (+ `/courses/{slug}`, `/paths/{slug}`) · `/my/classes` (+ `/{id}`) ·
 `/my/teachers` · `/my/messages` (+ `/{conversationId}`) · `/my/saved` (+ `/bookmarks`,
@@ -579,7 +616,7 @@ to the holder of its 32-byte opaque token (a malformed and an unknown token answ
 | `/admin/system/integrations` — provider configuration and status | Platform integrations | **Phase 2** for email; extended per provider |
 | `/admin/communications/newsletter` | **Personalisation & Notifications** | **Phase 21** — delivered: subscription counts and a paginated list of masked addresses, states and consent dates under `newsletter.read`; suppress and reinstate (to `unsubscribed`, requiring fresh confirmation) under `newsletter.operate`. No campaign, sending or segmentation surface exists |
 | `/admin/communications/delivery` — pending, failed, suppressed mail | The shared communication concern | **Phase 2** |
-| `/admin/system/navigation` | Layer 4 shell | **Phase 4**, only to the extent it is genuinely promised |
+| `/admin/system/navigation` | Layer 4 shell | **Phase 4**, only to the extent it is genuinely promised. Read-only. Since Rebaseline R1 its Placement column (registry `placements`) is replaced by a **Promotion** column — always / waits for a named signal / promoted now / not promoted (reachable by address) — from the content-aware presentation policy (INFORMATION_ARCHITECTURE.md §2.2) |
 
 **Every route above carries:** a semantic owner · a delivery phase · availability rules
 (§5.2) · defined empty, loading and error behaviour where applicable · and permissions where
@@ -619,8 +656,8 @@ governed by PRODUCT_SCOPE.md §4.4, and gets **no route and no navigation entry 
 
 ## 6. Teacher routes
 
-Require a current `teaching.perform` assignment. All `noindex`, private cache. Prefixed
-`/{locale}/teacher`.
+Require a current `teaching.perform` assignment. All `noindex`, private cache. At
+`/teacher` (English) and `/ur/teacher` · `/ar/teacher` (§1.1).
 
 `/teacher` · `/teacher/classes/today` (+ `/{id}`) · `/teacher/calendar` ·
 `/teacher/students` (+ `/{id}`) · `/teacher/courses` (+ `/{id}`, `/{id}/students`,
@@ -652,7 +689,7 @@ Detail, per Course they currently teach that learner on — there is no learner 
 ## 7. Admin routes
 
 Permission-checked **server-side per route and per action**. All `noindex`, private cache.
-Prefixed `/{locale}/admin`.
+At `/admin` (English) and `/ur/admin` · `/ar/admin` (§1.1).
 
 | Area | Routes |
 |---|---|
@@ -696,7 +733,7 @@ owning phase's handlers and tests, not this table.
 | Auth | `/api/auth/*` | Delegated to the authentication library |
 | Search | `/api/search/*` | Search, suggestions, typeahead |
 | Content read | `/api/content/*` | Public read for progressive enhancement |
-| Personal | `/api/my/*` | Authenticated personal actions. Phase 21: `target-state` (GET) and `bookmarks`, `notes`, `collection-items`, `history`, `quran-progress` (POST) serve the private island on public content pages after hydration, and `export` (GET) returns the person's Personalisation data as a JSON download. Phase 22: `learning/state` (GET) and `learning/enrolments`, `learning/trials` (POST) serve a Course page's private island, and `export/learning` (GET) returns the person's Learning data. Phase 26: `export/membership` (GET) returns the person's Membership applications and Memberships. Phase 27: `export/donations` (GET) returns the person's linked donations. Every response is private and `no-store`; every POST requires the configured origin, `Sec-Fetch-Site: same-origin` where sent and the `x-minhaj-intent: personal` header (SECURITY_BASELINE.md §7.1 rule 6) |
+| Personal | `/api/my/*` | Authenticated personal actions. Phase 21: `target-state` (GET) and `bookmarks`, `notes`, `collection-items`, `history`, `quran-progress` (POST) serve the private island on public content pages after hydration, and `export` (GET) returns the person's Personalisation data as a JSON download. Phase 22: `learning/state` (GET) and `learning/enrolments`, `learning/trials` (POST) serve a Course page's private island, and `export/learning` (GET) returns the person's Learning data. Phase 26: `export/membership` (GET) returns the person's Membership applications and Memberships. Phase 27: `export/donations` (GET) returns the person's linked donations. Rebaseline R1: `account-state` (GET, same-origin only) answers only `{ signedIn: boolean }` for the shared header's account island, so the public HTML stays identical for everyone. Every response is private and `no-store`; every POST requires the configured origin, `Sec-Fetch-Site: same-origin` where sent and the `x-minhaj-intent: personal` header (SECURITY_BASELINE.md §7.1 rule 6) |
 | Messaging REST | `/api/messaging/*` | Phase 24: `conversations/{id}/messages?after={sequence}` (GET) — durable catch-up after a sequence the reader holds, the source Phase 25 reconnection uses; `conversations/{id}/attachments` (POST) — one attachment's streamed raw body, JPEG, PNG or PDF up to 5 MiB, Class A with `x-minhaj-intent: messaging-attachment`; `attachments/{id}/discard` (POST) — release an unsent upload. Every response private and `no-store`; current access re-decided on every request |
 | Teacher / Admin | `/api/teacher/*` · `/api/admin/*` | Role-gated operations |
 | Migration | `/api/admin/migration/*` | Import control and status. Phase 29 delivers two private reads, GET only: `runs/{id}` — one run's state, discovery, reconciliation and item counts as JSON under `migration.read` (identifiers, states and numbers only); `snapshots/{id}` — one raw snapshot's bytes under `migration.administer`, an audited read sent as an inert attachment (`application/octet-stream`, `nosniff`, `sandbox; default-src 'none'`, `private, no-store`; SECURITY_BASELINE.md §10.5). A cross-site Fetch-Metadata request is refused first and every refusal is the same empty 404. Runs and promotions are started by the command line, mutations are Server Actions; nothing here changes state |
@@ -747,7 +784,10 @@ A complete contract, absent from the prior revision.
    `/people/{slug}`.
 4. **Pagination** self-canonicalises per page — page 2 is not canonical to page 1, which
    would deindex its contents.
-5. Canonical URLs are **absolute, locale-prefixed, and lowercase**.
+5. Canonical URLs are **absolute, localised per §1.1, and lowercase** — the English canonical
+   is the unprefixed address, the Urdu and Arabic canonicals carry `/ur` and `/ar`, and a
+   `/en/…` address is never canonical (it 301s). (Historical: until Rebaseline R1 every
+   canonical was locale-prefixed, English included.)
 
 ### 9.2 Locale alternates
 
@@ -755,11 +795,16 @@ Every indexable page emits `hreflang` alternates for **each locale in which the 
 genuinely exists**:
 
 ```
-<link rel="alternate" hreflang="en"        href="https://…/en/…">
+<link rel="alternate" hreflang="en"        href="https://…/…">      ← unprefixed (§1.1)
 <link rel="alternate" hreflang="ur"        href="https://…/ur/…">
 <link rel="alternate" hreflang="ar"        href="https://…/ar/…">
 <link rel="alternate" hreflang="x-default" href="https://…/…">   ← resolved per §9.2.1
 ```
+
+Every alternate, canonical and `x-default` URL is built by `localizedPath` (§1.1); the shape of
+the alternate, canonical and `x-default` logic is unchanged by Rebaseline R1 — only the English
+address lost its prefix (and the Fatwa, Hadith, Quran and Global `x-default` paths, which had
+hand-built the prefix, were moved onto the helper).
 
 - **Every `hreflang` URL must itself be a valid canonical version of the content in that
   language.** A URL that merely falls back to another language is not a language version and
@@ -780,7 +825,7 @@ Resolved in order:
 
 | Condition | `x-default` target |
 |---|---|
-| **A canonical English version exists** | The **English** canonical URL — matching the default resolution of §1.1 |
+| **A canonical English version exists** | The **English** canonical URL — the unprefixed address of §1.1 |
 | **No English version, but one or more other languages exist** | The **canonical URL of the most appropriate existing language** — normally the content's **original language**, and where that is ambiguous, the locale-selection URL below |
 | **Several equally appropriate language versions, with no clear original** | A **defined locale-selection/discovery URL** for that resource, which lists the genuine language versions |
 | **No language version exists** | **No `x-default` is emitted** — and the page is not indexable (§9.3) |
@@ -841,7 +886,8 @@ A **sitemap index** at `/sitemap.xml` referencing partitioned child sitemaps:
 > **Why the pre-adoption row exists.** While the platform runs on a developer-controlled origin
 > and has not been officially adopted, its SEO posture must not compete with or impersonate the
 > official organisation site, and it must claim no endorsement. **This is an environment and
-> launch-state control, not a reduced product** — the application is complete. Official
+> launch-state control, not a reduced product** — the application is the same one (its readiness
+> is reported in PRODUCT_SCOPE.md's six dimensions, never as a bare "complete"). Official
 > indexing and canonical production SEO are switched on **only** at the launch transition
 > (DELIVERY_PLAN.md, Phase 35).
 
@@ -918,7 +964,10 @@ validation with no over-claiming · legacy 301 correctness with no chains.
 4. **Derived sort and flag views are query parameters** (§2.3).
 5. **Lowercase, hyphenated paths.**
 6. **Non-locale routes** are limited to `robots.txt`, sitemaps, `/api/*`, `/rss/*`, health
-   probes and `/assets/{id}`. Each is machine-readable and unprefixed BY CONTRACT; none
+   probes, `/assets/{id}`, `favicon.ico` and the app icon `icon.png` (excluded from the locale
+   proxy's matcher since Rebaseline R1 — before it, the icon was being locale-routed). Each is
+   machine-readable and outside locale routing BY CONTRACT (now that English pages are also
+   unprefixed, "unprefixed" alone no longer distinguishes them); none
    renders a page. **`/assets/{id}` is stored bytes, not a document**: an asset has no
    interface locale, and giving one object three localised URLs would give the same bytes
    three cache entries and three canonical addresses. It is the default-deny serving route

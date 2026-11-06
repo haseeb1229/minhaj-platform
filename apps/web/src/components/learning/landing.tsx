@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -89,7 +90,7 @@ export async function LearnLandingPage({ locale }: { readonly locale: Locale }) 
           </>
         }
       >
-        <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
           {t('signedOut')}
         </p>
       </PageHero>
@@ -105,7 +106,10 @@ export async function LearnLandingPage({ locale }: { readonly locale: Locale }) 
               filter={{}}
               heading={t('landing.fromWatch')}
               headingId="learn-watch"
-              more={{ href: `/${locale}/watch/videos`, text: t('landing.allVideos') }}
+              more={{
+                href: localizedPath(locale, '/watch/videos'),
+                text: t('landing.allVideos'),
+              }}
             />
           ) : null}
 
@@ -171,12 +175,12 @@ export async function LearnLandingPage({ locale }: { readonly locale: Locale }) 
                   <h2 id="learn-topics" className="text-heading font-semibold">
                     {t('sections.topics')}
                   </h2>
-                  <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
+                  <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
                     {t('sectionBody.topics')}
                   </p>
                 </div>
                 <div className="shrink-0">
-                  <ActionLink href={`/${locale}/topics`} tone="secondary">
+                  <ActionLink href={localizedPath(locale, '/topics')} tone="secondary">
                     {t('landing.allTopics')}
                   </ActionLink>
                 </div>
@@ -211,7 +215,10 @@ async function LearnFromTheLibrary({ locale }: { readonly locale: Locale }) {
         id="learn-library"
         heading={t('landing.fromLibrary')}
         intro={t('landing.fromLibraryIntro')}
-        action={{ href: `/${locale}/library/books`, text: t('landing.allBooks') }}
+        action={{
+          href: localizedPath(locale, '/library/books'),
+          text: t('landing.allBooks'),
+        }}
       />
       <ul
         aria-label={t('landing.fromLibrary')}
@@ -294,11 +301,11 @@ export async function TrialPage({
             {TRIAL_STEPS.map((step, index) => (
               <li
                 key={step}
-                className="flex min-w-0 gap-3 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5"
+                className="flex min-w-0 gap-3 rounded-panel border border-border bg-surface-raised p-5"
               >
                 <span
                   aria-hidden="true"
-                  className="text-subheading font-semibold text-[color:var(--color-accent)]"
+                  className="text-subheading font-semibold text-accent"
                 >
                   {index + 1}
                 </span>

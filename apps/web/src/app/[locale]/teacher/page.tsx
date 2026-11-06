@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { learningRead } from '@/components/my-learning/read';
@@ -33,7 +34,7 @@ export default async function TeacherOverviewPage({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const gate = await requireTeacher(locale, `/${locale}/teacher`);
+  const gate = await requireTeacher(locale, localizedPath(locale, '/teacher'));
   const t = await getTranslations({ locale, namespace: 'teacher' });
   if (!gate.activated) return <NotActivated t={t} />;
 
@@ -77,7 +78,7 @@ export default async function TeacherOverviewPage({
                         count: String(today.value.items.length),
                       })}
                 </span>
-                <TextLink href={`/${locale}/teacher/classes/today`}>
+                <TextLink href={localizedPath(locale, '/teacher/classes/today')}>
                   {t('overview.todayLink')}
                 </TextLink>
               </p>
@@ -109,9 +110,7 @@ export default async function TeacherOverviewPage({
         <span id="overview-pending">
           <SectionHeading>{t('overview.pending')}</SectionHeading>
         </span>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('overview.pendingHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('overview.pendingHelp')}</p>
         {!upcoming.ok ? (
           <Alert tone="error">{t('overview.unavailable')}</Alert>
         ) : pending.length === 0 ? (

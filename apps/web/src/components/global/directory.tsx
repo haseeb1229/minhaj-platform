@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
 
@@ -80,7 +81,7 @@ async function globalTrail(locale: Locale) {
   const t = await getTranslations({ locale, namespace: 'global' });
   return {
     label: shell('nav.breadcrumbs'),
-    home: { href: `/${locale}`, text: shell('nav.home') },
+    home: { href: localizedPath(locale, ''), text: shell('nav.home') },
     global: { href: globalPaths.home(locale), text: t('title') },
     shellHome: shell('nav.home'),
   };
@@ -126,10 +127,10 @@ export function RecordHeader({
   readonly children?: ReactNode;
 }) {
   return (
-    <div className="border-b border-[color:var(--color-border)]">
+    <div className="border-b border-border">
       <Container>
         <div className="flex max-w-3xl flex-col gap-4 py-[var(--space-section)]">
-          <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+          <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
             {eyebrow}
           </p>
           <h1
@@ -219,11 +220,9 @@ function Locality({
     (part): part is PublicPlace => part !== null,
   );
   return (
-    <p className="text-caption text-[color:var(--color-foreground-muted)]">
+    <p className="text-caption text-foreground-muted">
       {centre.isVirtual ? (
-        <span className="font-semibold text-[color:var(--color-accent)]">
-          {t('card.virtual')} ·{' '}
-        </span>
+        <span className="font-semibold text-accent">{t('card.virtual')} · </span>
       ) : null}
       {parts.map((part, index) => (
         <span key={part.id}>
@@ -329,7 +328,7 @@ function PlaceList({
         <li key={place.id} className="min-w-0">
           <a
             href={href(place)}
-            className="inline-flex min-h-11 items-center text-sm font-medium wrap-anywhere text-[color:var(--color-action)] underline-offset-4 hover:underline active:text-[color:var(--color-action-hover)]"
+            className="inline-flex min-h-11 items-center text-sm font-medium wrap-anywhere text-action underline-offset-4 hover:underline active:text-action-hover"
           >
             <Name record={place} locale={locale} />
           </a>
@@ -345,12 +344,12 @@ function PlaceList({
         <li key={place.id}>
           <a
             href={href(place)}
-            className="flex min-h-11 items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] px-4 py-2 text-sm font-medium wrap-anywhere text-[color:var(--color-foreground)] no-underline transition-colors duration-[var(--duration-fast)] hover:border-[color:var(--color-accent)] hover:bg-[color:var(--color-accent-surface)] active:bg-[color:var(--color-accent-rule)]"
+            className="flex min-h-11 items-center justify-between gap-3 rounded-control border border-border bg-surface-raised px-4 py-2 text-sm font-medium wrap-anywhere text-foreground no-underline transition-colors duration-[var(--duration-fast)] hover:border-accent hover:bg-accent-surface active:bg-accent-rule"
           >
             <Name record={place} locale={locale} />
             <span
               aria-hidden="true"
-              className="inline-block shrink-0 text-[color:var(--color-accent)] rtl:-scale-x-100"
+              className="inline-block shrink-0 text-accent rtl:-scale-x-100"
             >
               →
             </span>
@@ -442,11 +441,9 @@ export async function GlobalLandingPage({ locale }: { readonly locale: Locale })
               />
             ))}
           </CardGrid>
-          <div className="flex max-w-[var(--measure-prose)] flex-col gap-1 border-s-4 border-[color:var(--color-accent-rule)] ps-4">
+          <div className="flex max-w-[var(--measure-prose)] flex-col gap-1 border-s-4 border-accent-rule ps-4">
             <h3 className="text-subheading font-semibold">{t('landing.localTitle')}</h3>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('landing.localBody')}
-            </p>
+            <p className="text-sm text-foreground-muted">{t('landing.localBody')}</p>
           </div>
         </section>
 
@@ -473,7 +470,7 @@ export async function GlobalLandingPage({ locale }: { readonly locale: Locale })
           />
         </section>
 
-        <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
           {t('dataNotice')}
         </p>
       </DirectoryBody>
@@ -609,7 +606,7 @@ export async function FinderPage({
               <Button type="submit">{t('finder.submit')}</Button>
               <a
                 href={base}
-                className="inline-flex min-h-11 items-center text-sm font-medium text-[color:var(--color-action)] underline underline-offset-2"
+                className="inline-flex min-h-11 items-center text-sm font-medium text-action underline underline-offset-2"
               >
                 {t('finder.reset')}
               </a>
@@ -626,7 +623,7 @@ export async function FinderPage({
               {/* Phase 30-R: the countries of presence remain a way on. */}
               <a
                 href={globalPaths.countries(locale)}
-                className="inline-flex min-h-11 items-center font-medium text-[color:var(--color-action)] underline underline-offset-2"
+                className="inline-flex min-h-11 items-center font-medium text-action underline underline-offset-2"
               >
                 {t('allCountries')}
               </a>
@@ -886,7 +883,7 @@ export async function CountryPage({
       <BreadcrumbData
         contentLocales={placeLocales(country)}
         trail={[
-          { name: trail.shellHome, path: `/${name.locale}` },
+          { name: trail.shellHome, path: localizedPath(name.locale, '') },
           { name: t('title'), path: globalPaths.home(name.locale) },
           { name: t('sections.countries'), path: globalPaths.countries(name.locale) },
           { name: name.text, path: globalPaths.country(name.locale, country.slug) },
@@ -992,7 +989,7 @@ export async function RegionPage({
       <BreadcrumbData
         contentLocales={placeLocales(region)}
         trail={[
-          { name: trail.shellHome, path: `/${name.locale}` },
+          { name: trail.shellHome, path: localizedPath(name.locale, '') },
           { name: t('title'), path: globalPaths.home(name.locale) },
           {
             name: countryName.text,
@@ -1081,7 +1078,7 @@ export async function CityPage({
       <BreadcrumbData
         contentLocales={placeLocales(city)}
         trail={[
-          { name: trail.shellHome, path: `/${name.locale}` },
+          { name: trail.shellHome, path: localizedPath(name.locale, '') },
           { name: t('title'), path: globalPaths.home(name.locale) },
           {
             name: countryName.text,
@@ -1170,7 +1167,7 @@ export async function PakistanPage({
                   return (
                     <section
                       key={region.id}
-                      className="flex flex-col gap-3 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] border-t-4 border-t-[color:var(--color-accent-rule)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]"
+                      className="flex flex-col gap-3 rounded-panel border border-border border-t-4 border-t-accent-rule bg-surface-raised p-5 shadow-panel"
                       aria-labelledby={`pakistan-${region.id}`}
                     >
                       <h2

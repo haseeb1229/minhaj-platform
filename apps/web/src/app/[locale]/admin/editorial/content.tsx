@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getMessages, getTranslations } from 'next-intl/server';
 import type { Locale } from '@minhaj/contracts';
-import { localeSchema } from '@minhaj/contracts';
+import { localeSchema, localizedPath } from '@minhaj/contracts';
 import {
   COLLECTION_LIMITS,
   COLLECTION_MEMBER_KINDS,
@@ -71,7 +71,7 @@ export async function ContentDirectory({
 }) {
   if (state && !editorialStateSchema.safeParse(state).success) notFound();
   const segment = EDITORIAL_SEGMENTS[kind];
-  const path = `/${locale}/admin/editorial/${queue ? 'queue' : segment}`;
+  const path = localizedPath(locale, `/admin/editorial/${queue ? 'queue' : segment}`);
   const context = await requireAdminPage(locale, 'content.read', path);
   const t = await getTranslations({ locale, namespace: 'editorial' });
   const data = await editorialRuntime().editorial.directory(
@@ -106,7 +106,9 @@ export async function ContentDirectory({
         <ul className="flex flex-col gap-4">
           {data.items.map((row) => (
             <li key={row.id} className="flex flex-wrap gap-3">
-              <TextLink href={`/${locale}/admin/editorial/${segment}/${row.id}`}>
+              <TextLink
+                href={localizedPath(locale, `/admin/editorial/${segment}/${row.id}`)}
+              >
                 {row.title}
               </TextLink>
               <span>{t(row.state)}</span>
@@ -167,7 +169,10 @@ export async function ContentEditor({
     readonly members: readonly CollectionMember[];
   } | null;
 }) {
-  const path = `/${locale}/admin/editorial/${EDITORIAL_SEGMENTS[kind]}/${id}`;
+  const path = localizedPath(
+    locale,
+    `/admin/editorial/${EDITORIAL_SEGMENTS[kind]}/${id}`,
+  );
   const context = await requireAdminPage(locale, 'content.read', path);
   const actor = { accountId: context.session.account.id };
   const t = await getTranslations({ locale, namespace: 'editorial' });
@@ -402,17 +407,12 @@ export async function ContentEditor({
               true,
             )}
             {kind === 'news-article' ? (
-              <p className="text-xs text-[color:var(--color-foreground-muted)]">
-                {t('slugReserved')}
-              </p>
+              <p className="text-xs text-foreground-muted">{t('slugReserved')}</p>
             ) : null}
             {hasCentre ? (
-              <fieldset className="flex flex-col gap-4 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-4">
+              <fieldset className="flex flex-col gap-4 rounded-control border border-border p-4">
                 <legend className="px-1 text-sm font-semibold">{t('centre')}</legend>
-                <p
-                  id="centreId-help"
-                  className="text-xs text-[color:var(--color-foreground-muted)]"
-                >
+                <p id="centreId-help" className="text-xs text-foreground-muted">
                   {t(kind === 'event' ? 'eventCentreHelp' : 'centreHelp')}
                 </p>
                 <Select
@@ -435,13 +435,11 @@ export async function ContentEditor({
               </fieldset>
             ) : null}
             {kind === 'event' ? (
-              <fieldset className="flex flex-col gap-4 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-4">
+              <fieldset className="flex flex-col gap-4 rounded-control border border-border p-4">
                 <legend className="px-1 text-sm font-semibold">
                   {t('eventSchedule')}
                 </legend>
-                <p className="text-xs text-[color:var(--color-foreground-muted)]">
-                  {t('eventScheduleHelp')}
-                </p>
+                <p className="text-xs text-foreground-muted">{t('eventScheduleHelp')}</p>
                 <Field
                   id="eventTimezone"
                   label={t('eventTimezone')}
@@ -467,7 +465,7 @@ export async function ContentEditor({
                   return (
                     <fieldset
                       key={index}
-                      className="flex flex-col gap-3 border-t border-[color:var(--color-border)] pt-3"
+                      className="flex flex-col gap-3 border-t border-border pt-3"
                     >
                       <legend className="text-sm font-medium">
                         {t('occurrence', { number: index + 1 })}
@@ -512,20 +510,16 @@ export async function ContentEditor({
                   );
                 })}
                 {occurrenceRows < EVENT_LIMITS.occurrences ? (
-                  <p className="text-xs text-[color:var(--color-foreground-muted)]">
-                    {t('moreOccurrences')}
-                  </p>
+                  <p className="text-xs text-foreground-muted">{t('moreOccurrences')}</p>
                 ) : null}
               </fieldset>
             ) : null}
             {kind === 'event' ? (
-              <fieldset className="flex flex-col gap-4 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-4">
+              <fieldset className="flex flex-col gap-4 rounded-control border border-border p-4">
                 <legend className="px-1 text-sm font-semibold">
                   {t('eventGalleries')}
                 </legend>
-                <p className="text-xs text-[color:var(--color-foreground-muted)]">
-                  {t('eventGalleriesHelp')}
-                </p>
+                <p className="text-xs text-foreground-muted">{t('eventGalleriesHelp')}</p>
                 {Array.from({ length: galleryRows }, (_, index) => (
                   <Field
                     key={index}
@@ -554,11 +548,9 @@ export async function ContentEditor({
               </fieldset>
             ) : null}
             {kind === 'media-coverage' ? (
-              <fieldset className="flex flex-col gap-4 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-4">
+              <fieldset className="flex flex-col gap-4 rounded-control border border-border p-4">
                 <legend className="px-1 text-sm font-semibold">{t('coverage')}</legend>
-                <p className="text-xs text-[color:var(--color-foreground-muted)]">
-                  {t('sourceHelp')}
-                </p>
+                <p className="text-xs text-foreground-muted">{t('sourceHelp')}</p>
                 {input(
                   'coverage-outlet',
                   t('outlet'),
@@ -603,10 +595,7 @@ export async function ContentEditor({
                     />
                   )}
                 </Field>
-                <p
-                  id="sourcePublishedOn-help"
-                  className="text-xs text-[color:var(--color-foreground-muted)]"
-                >
+                <p id="sourcePublishedOn-help" className="text-xs text-foreground-muted">
                   {t('sourcePublishedOnHelp')}
                 </p>
               </div>
@@ -620,10 +609,10 @@ export async function ContentEditor({
             isEditorialLeadFamily(kind) &&
             record !== null &&
             revision?.leadImage ? (
-              <figure className="flex flex-col gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-4">
+              <figure className="flex flex-col gap-2 rounded-control border border-border p-4">
                 <figcaption className="flex flex-col gap-1">
                   <span className="text-sm font-semibold">{t('leadImage')}</span>
-                  <span className="text-xs text-[color:var(--color-foreground-muted)]">
+                  <span className="text-xs text-foreground-muted">
                     {t('leadImageHelp')}
                   </span>
                 </figcaption>
@@ -638,7 +627,7 @@ export async function ContentEditor({
                   height={revision.leadImage.height}
                   loading="lazy"
                   decoding="async"
-                  className="h-auto max-h-64 w-auto max-w-full self-start rounded-[var(--radius-control)] bg-[color:var(--color-surface-sunken)] object-contain"
+                  className="h-auto max-h-64 w-auto max-w-full self-start rounded-control bg-surface-sunken object-contain"
                 />
                 {(() => {
                   const alt = revision.translations.find(
@@ -659,16 +648,13 @@ export async function ContentEditor({
             ) : null}
             {kind === 'collection' ? (
               <fieldset
-                className="flex flex-col gap-4 rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-4"
+                className="flex flex-col gap-4 rounded-control border border-border p-4"
                 aria-describedby="collection-members-help"
               >
                 <legend className="px-1 text-sm font-semibold">
                   {t('collectionMembers')}
                 </legend>
-                <p
-                  id="collection-members-help"
-                  className="text-xs text-[color:var(--color-foreground-muted)]"
-                >
+                <p id="collection-members-help" className="text-xs text-foreground-muted">
                   {t('collectionMembersHelp')}
                 </p>
                 <CollectionMembersIsland

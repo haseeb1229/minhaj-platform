@@ -119,7 +119,7 @@ export function TestEnvironmentBanner({
   return (
     <p
       role="note"
-      className="rounded-[var(--radius-panel)] border-2 border-[color:var(--color-warning)] bg-[color:var(--color-warning-surface)] px-4 py-3 font-semibold text-[color:var(--color-warning)]"
+      className="rounded-panel border-2 border-warning bg-warning-surface px-4 py-3 font-semibold text-warning"
     >
       {t(`banner.${environment === 'fixture' ? 'fixture' : 'sandbox'}`)}
     </p>
@@ -170,11 +170,7 @@ export function CampaignTitle({
 }) {
   const words = campaign === undefined ? null : campaignWords(campaign, locale);
   if (words === null)
-    return (
-      <span className="text-[color:var(--color-foreground-muted)]">
-        {t('campaign.unavailable')}
-      </span>
-    );
+    return <span className="text-foreground-muted">{t('campaign.unavailable')}</span>;
   return (
     <span lang={words.locale} dir={directionOf(words.locale)} className="wrap-anywhere">
       {words.title}
@@ -215,9 +211,7 @@ export function CampaignWords({
         <h3 id={headingId} className="text-lg font-semibold wrap-anywhere">
           {words.title}
         </h3>
-        <p className="wrap-anywhere text-[color:var(--color-foreground-muted)]">
-          {words.summary}
-        </p>
+        <p className="wrap-anywhere text-foreground-muted">{words.summary}</p>
         {paragraphs(words.description).map((paragraph, index) => (
           <p key={index} className="text-sm wrap-anywhere whitespace-pre-line">
             {paragraph}

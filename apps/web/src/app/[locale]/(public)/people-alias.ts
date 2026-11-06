@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { peopleReadRuntime } from '@/composition/people-read';
@@ -66,7 +67,7 @@ export async function contributorAlias(
       // Built from the validated locale and the slug the resolver has just
       // confirmed names a published contributor — not from anything the
       // request supplied unchecked, so there is no open redirect to be had.
-      location: `/${locale}/people/${encodeURIComponent(slug)}`,
+      location: localizedPath(locale, `/people/${encodeURIComponent(slug)}`),
       'x-robots-tag': 'noindex',
       // The answer depends on whether a contributor is published, which an
       // administrator changes. A cached 301 for a record that has since been

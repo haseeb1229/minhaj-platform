@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import type { ScholarlyKind } from '@minhaj/contracts/library';
 
 import { libraryReadRuntime } from '@/composition/library-read';
@@ -64,7 +64,7 @@ export async function scholarlySitemapPartitions(): Promise<readonly SitemapPart
           const path = scholarlyPathOf(kind, row.slug, row.magazineSlug);
           for (const locale of row.locales) {
             buckets.get(locale as Locale)?.push({
-              loc: absoluteUrl(`/${locale}${path}`),
+              loc: absoluteUrl(localizedPath(locale, `${path}`)),
               lastmod: row.updatedAt.toISOString(),
             });
           }

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Locale } from '@minhaj/contracts';
 import {
   membershipIdSchema,
@@ -45,17 +46,17 @@ function single(query: Query, name: string): string | null {
 
 /** The public explanation and catalogue. */
 export function membershipPath(locale: Locale): string {
-  return `/${locale}/membership`;
+  return localizedPath(locale, '/membership');
 }
 
 /** The signed-in person's own applications and Memberships. */
 export function myMembershipPath(locale: Locale): string {
-  return `/${locale}/my/membership`;
+  return localizedPath(locale, '/my/membership');
 }
 
 /** The administration's types-and-members screen. */
 export function adminMembershipPath(locale: Locale): string {
-  return `/${locale}/admin/membership`;
+  return localizedPath(locale, '/admin/membership');
 }
 
 /** An address with its query, in a fixed order, omitting what is unset. */

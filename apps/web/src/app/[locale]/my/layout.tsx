@@ -1,9 +1,12 @@
+import type { Metadata } from 'next';
+import { localizedPath } from '@minhaj/contracts';
 import type { ReactNode } from 'react';
 import { getTranslations } from 'next-intl/server';
 
 import { WorkspaceShell } from '@/components/workspace/parts';
 import { WorkspaceNav } from '@/components/workspace/workspace-nav';
 import { requireLocale } from '@/config/route-locale';
+import { privateAreaMetadata } from '@/shell/private-metadata';
 
 /**
  * My Minhaj's workspace frame (ROUTE_MAP.md §5.1): a header band naming the
@@ -23,7 +26,15 @@ import { requireLocale } from '@/config/route-locale';
  * already declares: a cached copy of anything under `/my` would be somebody
  * else's.
  */
-export const metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  readonly params: Promise<{ readonly locale: string }>;
+}): Promise<Metadata> {
+  const locale = await requireLocale(params);
+  const t = await getTranslations({ locale, namespace: 'identity' });
+  return privateAreaMetadata(t('my.title'), { robots: { index: false, follow: false } });
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -44,7 +55,7 @@ export default async function MyLayout({
   const membership = await getTranslations({ locale, namespace: 'myMembership' });
   const donations = await getTranslations({ locale, namespace: 'myDonations' });
 
-  const my = `/${locale}/my`;
+  const my = localizedPath(locale, '/my');
 
   return (
     <WorkspaceShell

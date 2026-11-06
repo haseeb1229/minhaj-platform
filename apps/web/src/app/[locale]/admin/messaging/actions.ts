@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import type { PermissionKey } from '@minhaj/contracts/identity';
 import { MODERATION_ACTIONS } from '@minhaj/contracts/messaging';
 
@@ -51,7 +51,7 @@ async function authorise(
 }
 
 function refreshed(locale: Locale): void {
-  revalidatePath(`/${locale}/admin/messaging`, 'layout');
+  revalidatePath(localizedPath(locale, '/admin/messaging'), 'layout');
 }
 
 /** Takes an unclaimed support conversation, so its holder may answer it. */

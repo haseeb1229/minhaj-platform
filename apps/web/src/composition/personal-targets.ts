@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import type { Locale } from '@minhaj/contracts';
@@ -75,7 +76,7 @@ function byTitles(
         status: 'available',
         title: chosen.title,
         titleLanguage: chosen.language,
-        href: `/${locale}${path}`,
+        href: localizedPath(locale, `${path}`),
       };
 }
 
@@ -196,7 +197,7 @@ export async function resolvePersonalTargets(
             status: 'available',
             title: `${name} ${ref.surah}:${ref.ayah}`,
             titleLanguage: localName !== undefined ? locale : 'ar',
-            href: `/${locale}/quran/surah/${ref.surah}/${ref.ayah}`,
+            href: localizedPath(locale, `/quran/surah/${ref.surah}/${ref.ayah}`),
           });
         }
       },
@@ -225,7 +226,10 @@ export async function resolvePersonalTargets(
             status: 'available',
             title: `${chosen?.title ?? citation.collectionSlug} ${citation.number}`,
             titleLanguage: chosen?.language ?? locale,
-            href: `/${locale}/hadith/${encodeURIComponent(citation.collectionSlug)}/${citation.number}`,
+            href: localizedPath(
+              locale,
+              `/hadith/${encodeURIComponent(citation.collectionSlug)}/${citation.number}`,
+            ),
           });
         }
       },

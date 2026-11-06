@@ -1565,7 +1565,10 @@ the timestamp, the source, and revocation history where applicable**.
 
 **No automatic behavioural tracking is introduced, and no cosmetic cookie banner is added.** A
 consent surface exists only where genuine non-essential processing requires one
-(ARCHITECTURE.md §4.7.1).
+(ARCHITECTURE.md §4.7.1). **No locale cookie exists** since Rebaseline R1 (2026-11-06): the
+interface language is decided by the address alone, and neither locale routing nor the language
+switcher writes a cookie (ROUTE_MAP.md §1.1, §1.3); until R1 the locale router stored a
+preference cookie (historical).
 
 **Fatwa questions are sensitive** — strictest access control, never exposed in listings,
 search, logs or caches. **Student data** is limited to teachers with a **current** assignment.
@@ -1618,7 +1621,12 @@ made, and no cookie banner is added — there is no non-essential processing to 
   into a block on their password reset.
 - **Cache boundary.** Public content pages render the same for everyone; their private island reads
   and writes through `/api/my/*` after hydration, so no personal state enters a shared render or a
-  public GET's cookies.
+  public GET's cookies. Since Rebaseline R1 (2026-11-06) the public header's account entry is such
+  an island too: `GET /api/my/account-state` answers **only** `{ signedIn: boolean }` — no name,
+  email, identifier, role or permission — `private, no-store`, through the same personal
+  transport, refusing a cross-site read before the session is resolved; a signed-out browser gets
+  an ordinary `200 { signedIn: false }`, which reveals nothing that opening `/my` would not. The
+  public HTML is identical for every visitor.
 - **Logging.** Note text, addresses, tokens, history and export bodies are never logged; failures are
   logged by operation name only, and operator audit rows carry identifiers and states, not addresses.
 

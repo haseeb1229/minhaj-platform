@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { NextIntlClientProvider } from 'next-intl';
 import { getTranslations } from 'next-intl/server';
 import { requireLocale } from '@/config/route-locale';
@@ -46,7 +47,7 @@ export default async function Layout({
               )
               .map((section) => ({
                 key: section,
-                href: '/' + locale + '/admin/editorial/' + section,
+                href: localizedPath(locale, '/admin/editorial/' + section),
                 text: t(section),
               })),
           },

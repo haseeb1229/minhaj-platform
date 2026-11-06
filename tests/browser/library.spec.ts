@@ -158,7 +158,7 @@ test.describe('an anonymous visitor reads the Library', () => {
   test('browses books with no session and no cookie, and never sees a draft', async ({
     page,
   }) => {
-    const response = await page.goto('/en/library/books');
+    const response = await page.goto('/library/books');
     expect(response?.status()).toBe(200);
     expect(response?.headers()['set-cookie']).toBeUndefined();
 
@@ -177,7 +177,7 @@ test.describe('an anonymous visitor reads the Library', () => {
     await expect(page.locator('h2', { has: arabicTitle })).toHaveAttribute('lang', 'ar');
 
     // A content-language filter is the visitor's choice and narrows in SQL.
-    await page.goto('/en/library/books?language=ur');
+    await page.goto('/library/books?language=ur');
     await expect(
       page.getByRole('link', { name: 'Synthetic browser proof work' }),
     ).toBeVisible();
@@ -186,7 +186,7 @@ test.describe('an anonymous visitor reads the Library', () => {
   test('shows the Work with truthful editions, translation and availability', async ({
     page,
   }) => {
-    await page.goto(`/en/library/books/${currentSlug}`);
+    await page.goto(`/library/books/${currentSlug}`);
 
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
       'Synthetic browser proof work',
@@ -223,14 +223,14 @@ test.describe('an anonymous visitor reads the Library', () => {
       /noindex/,
     );
 
-    await page.goto(`/en/library/books/${currentSlug}?edition=${draftEditionId}`);
+    await page.goto(`/library/books/${currentSlug}?edition=${draftEditionId}`);
     await expect(page.getByText('Synthetic draft edition')).toHaveCount(0);
   });
 
   test('reads the whole edition, by keyboard, with a stable position', async ({
     page,
   }) => {
-    await page.goto(`/en/library/books/${currentSlug}?edition=${arabicId}`);
+    await page.goto(`/library/books/${currentSlug}?edition=${arabicId}`);
 
     const reader = page.locator('#library-reader');
     await expect(reader).toHaveAttribute('lang', 'ar');
@@ -293,7 +293,7 @@ test.describe('an anonymous visitor reads the Library', () => {
 
   test('reflows at a 320px width without horizontal scroll', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 });
-    await page.goto(`/en/library/books/${currentSlug}?edition=${arabicId}`);
+    await page.goto(`/library/books/${currentSlug}?edition=${arabicId}`);
     await page.getByRole('button', { name: 'Increase: Text size' }).click();
 
     const overflow = await page.evaluate(
@@ -313,15 +313,13 @@ test.describe('an anonymous visitor reads the Library', () => {
     await expect(page.locator('#library-reader-contents')).toHaveAttribute('lang', 'ur');
 
     // English interface, Arabic edition: the chrome is LTR and the text is RTL.
-    await page.goto(`/en/library/books/${currentSlug}?edition=${arabicId}`);
+    await page.goto(`/library/books/${currentSlug}?edition=${arabicId}`);
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
     await expect(page.locator('#library-reader')).toHaveAttribute('dir', 'rtl');
   });
 
   test('says honestly when an edition cannot be read or downloaded', async ({ page }) => {
-    const response = await page.goto(
-      `/en/library/books/${currentSlug}?edition=${urduId}`,
-    );
+    const response = await page.goto(`/library/books/${currentSlug}?edition=${urduId}`);
     expect(response?.status()).toBe(200);
 
     await expect(
@@ -347,7 +345,7 @@ test.describe('an anonymous visitor reads the Library', () => {
       new RegExp(`/ur/library/books/${currentSlug}$`),
     );
 
-    const unknown = await request.get(`/en/library/books/${draftSlug}`, {
+    const unknown = await request.get(`/library/books/${draftSlug}`, {
       maxRedirects: 0,
     });
     expect(unknown.status()).toBe(404);
@@ -439,7 +437,7 @@ test.describe('Library administration', () => {
 
   test('refuses a signed-in account without the permission, as a 404', async () => {
     for (const surface of ['works', 'editions', 'translations', 'sale-points']) {
-      const response = await stranger.goto(`/en/admin/library/${surface}`);
+      const response = await stranger.goto(`/admin/library/${surface}`);
       expect(response?.status(), surface).toBe(404);
     }
   });
@@ -449,17 +447,17 @@ test.describe('Library administration', () => {
   const adminSlug = `browser-admin-work-${run}`;
 
   test('creates and edits a Work, and a stale save conflicts visibly', async () => {
-    await admin.goto('/en/admin/library/works');
+    await admin.goto('/admin/library/works');
     await admin.locator('#work-slug').fill(adminSlug);
     await admin.locator('#work-title-en').fill('Synthetic admin proof work');
     await admin.locator('#work-state').selectOption('published');
     await admin.getByRole('button', { name: 'Create', exact: true }).click();
-    await admin.waitForURL(/\/en\/admin\/library\/works\/[0-9a-f-]{36}$/);
+    await admin.waitForURL(/\/admin\/library\/works\/[0-9a-f-]{36}$/);
     createdWorkId = admin.url().split('/').pop() ?? '';
 
     // Two tabs open the SAME version.
     const second = await admin.context().newPage();
-    await second.goto(`/en/admin/library/works/${createdWorkId}`);
+    await second.goto(`/admin/library/works/${createdWorkId}`);
 
     await admin.locator('input[name="featured"]').check();
     await admin.getByRole('button', { name: 'Save', exact: true }).click();
@@ -473,7 +471,7 @@ test.describe('Library administration', () => {
   });
 
   test('creates an Edition, records a genuine translation, and a sale point', async () => {
-    await admin.goto('/en/admin/library/editions');
+    await admin.goto('/admin/library/editions');
     await admin.locator('#edition-work').selectOption({ label: adminSlug });
     await admin.locator('#edition-label').fill('Synthetic admin edition');
     await admin.locator('#edition-language').selectOption('en');
@@ -485,10 +483,10 @@ test.describe('Library administration', () => {
         '## Opening\nSynthetic admin proof text.\n\n## Closing\nMore synthetic text.',
       );
     await admin.getByRole('button', { name: 'Create', exact: true }).click();
-    await admin.waitForURL(/\/en\/admin\/library\/editions\/[0-9a-f-]{36}$/);
+    await admin.waitForURL(/\/admin\/library\/editions\/[0-9a-f-]{36}$/);
     createdEditionId = admin.url().split('/').pop() ?? '';
 
-    await admin.goto(`/en/admin/library/translations?edition=${createdEditionId}`);
+    await admin.goto(`/admin/library/translations?edition=${createdEditionId}`);
     const translator = admin.locator('#translator-0');
     const firstPerson = await translator.locator('option').nth(1).getAttribute('value');
     expect(firstPerson).toBeTruthy();
@@ -501,18 +499,18 @@ test.describe('Library administration', () => {
     );
     expect(Number(translation?.total)).toBe(1);
 
-    await admin.goto('/en/admin/library/sale-points');
+    await admin.goto('/admin/library/sale-points');
     await admin.locator('#sale-name-new').fill(`Synthetic admin sale point ${run}`);
     await admin.getByRole('button', { name: 'Create', exact: true }).click();
     await expect(admin.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
 
     // The Edition text is readable publicly, through the plain-text format.
-    await admin.goto(`/en/library/books/${adminSlug}`);
+    await admin.goto(`/library/books/${adminSlug}`);
     await expect(admin.getByText('Synthetic admin proof text.')).toBeVisible();
   });
 
   test('refuses to attach a file the scanner could not clear, and attaches nothing', async () => {
-    await admin.goto(`/en/admin/library/editions/${createdEditionId}`);
+    await admin.goto(`/admin/library/editions/${createdEditionId}`);
     await admin.locator('#asset-file').setInputFiles({
       name: 'synthetic-proof.pdf',
       mimeType: 'application/pdf',

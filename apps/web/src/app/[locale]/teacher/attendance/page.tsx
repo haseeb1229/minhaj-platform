@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { learningRead } from '@/components/my-learning/read';
@@ -31,7 +32,7 @@ export default async function AttendancePage({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const gate = await requireTeacher(locale, `/${locale}/teacher/attendance`);
+  const gate = await requireTeacher(locale, localizedPath(locale, '/teacher/attendance'));
   const t = await getTranslations({ locale, namespace: 'teacher' });
   if (!gate.activated) return <NotActivated t={t} />;
 
@@ -41,7 +42,7 @@ export default async function AttendancePage({
       REPORT_PAGES,
     ),
   );
-  const reports = `/${locale}/teacher/attendance/reports`;
+  const reports = localizedPath(locale, '/teacher/attendance/reports');
   const pending = read.ok ? read.value.items.filter((row) => row.unmarked > 0) : [];
 
   return (

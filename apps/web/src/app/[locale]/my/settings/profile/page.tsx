@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { requireLocale } from '@/config/route-locale';
@@ -28,15 +29,16 @@ export default async function ProfilePage({
 }) {
   const locale = await requireLocale(params);
   const t = await getTranslations({ locale, namespace: 'identity' });
-  const session = await requireActiveSession(locale, `/${locale}/my/settings/profile`);
+  const session = await requireActiveSession(
+    locale,
+    localizedPath(locale, '/my/settings/profile'),
+  );
 
   return (
     <main className="flex w-full max-w-3xl min-w-0 flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('profile.title')}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">
-          {t('profile.description')}
-        </p>
+        <p className="text-foreground-muted">{t('profile.description')}</p>
       </header>
 
       <Panel>

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { targetKey } from '@minhaj/contracts/personalisation';
@@ -40,7 +41,10 @@ export default async function QuranProgressPage({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const session = await requireActiveSession(locale, `/${locale}/my/progress/quran`);
+  const session = await requireActiveSession(
+    locale,
+    localizedPath(locale, '/my/progress/quran'),
+  );
   const t = await getTranslations({ locale, namespace: 'personal' });
   const read = await personalRead('personal-quran-progress', () =>
     personalisationRuntime().history.quranProgress({ accountId: session.account.id }),
@@ -66,7 +70,9 @@ export default async function QuranProgressPage({
       <PersonalFrame title={t('progress.title')} description={description} back={back}>
         <EmptyState>{t('progress.empty')}</EmptyState>
         <p>
-          <TextLink href={`/${locale}/quran`}>{t('progress.browse')}</TextLink>
+          <TextLink href={localizedPath(locale, '/quran')}>
+            {t('progress.browse')}
+          </TextLink>
         </p>
       </PersonalFrame>
     );
@@ -79,7 +85,7 @@ export default async function QuranProgressPage({
   return (
     <PersonalFrame title={t('progress.title')} description={description} back={back}>
       <Panel>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('progress.position')}>
             <TargetTitle resolved={resolved} t={t} />
           </DetailRow>

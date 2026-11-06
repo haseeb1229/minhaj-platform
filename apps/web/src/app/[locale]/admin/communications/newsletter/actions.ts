@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { localeSchema } from '@minhaj/contracts';
+import { localeSchema, localizedPath } from '@minhaj/contracts';
 import { NEWSLETTER_PERMISSIONS } from '@minhaj/contracts/personalisation';
 
 import { requirePermittedAction } from '@/composition/authorization';
@@ -58,7 +58,7 @@ async function operate(
       expectedVersion: whole(form, 'expectedVersion'),
     });
 
-    revalidatePath(`/${locale}/admin/communications/newsletter`);
+    revalidatePath(localizedPath(locale, '/admin/communications/newsletter'));
     return { status: 'success' };
   } catch (error) {
     const failure = personalFailure(error);

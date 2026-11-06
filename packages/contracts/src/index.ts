@@ -38,3 +38,5 @@ export {
   parseEnvironment,
 } from './env/shared.ts';
 export type { Locale, LogLevel, NodeEnv } from './env/shared.ts';
+export { UNPREFIXED_LOCALE, localizedPath, splitLocalePath } from './locale-path.ts';
+export type { LocalePathParts } from './locale-path.ts';

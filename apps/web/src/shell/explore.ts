@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 export {
   EXPLORE_SECTIONS,
   EXPLORE_PAGES,
@@ -24,5 +25,8 @@ export function ownerPathOf(section: string, slug: string): string | null {
 
 /** The locale-prefixed address an Explore item links to. */
 export function exploreHrefOf(locale: string, section: string, slug: string): string {
-  return `/${locale}${ownerPathOf(section, slug) ?? `/explore/${section}/${slug}`}`;
+  return localizedPath(
+    locale,
+    ownerPathOf(section, slug) ?? `/explore/${section}/${slug}`,
+  );
 }

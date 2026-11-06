@@ -1,5 +1,6 @@
 'use server';
 
+import { localizedPath } from '@minhaj/contracts';
 import { revalidatePath } from 'next/cache';
 import { after } from 'next/server';
 
@@ -78,7 +79,7 @@ async function operate(
     return { status: 'error', failure: 'unavailable' };
   }
 
-  revalidatePath(`/${locale}/admin/system/search`);
+  revalidatePath(localizedPath(locale, '/admin/system/search'));
   return { status: 'success' };
 }
 

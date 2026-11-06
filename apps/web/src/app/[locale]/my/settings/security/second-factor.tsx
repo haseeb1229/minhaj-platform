@@ -159,7 +159,7 @@ export function SecondFactorSection({
       <div id="second-factor-heading">
         <SectionHeading>{labels.heading}</SectionHeading>
       </div>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">{labels.help}</p>
+      <p className="text-sm text-foreground-muted">{labels.help}</p>
 
       <Alert tone={summary.tone}>{summary.text}</Alert>
 
@@ -206,15 +206,10 @@ export function SecondFactorSection({
         <Panel>
           <div className="flex flex-col gap-3">
             <SectionHeading>{labels.enrolCodes}</SectionHeading>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {labels.enrolCodesHelp}
-            </p>
+            <p className="text-sm text-foreground-muted">{labels.enrolCodesHelp}</p>
             <ul className="grid grid-cols-2 gap-2 font-mono text-sm">
               {issuedCodes.map((code) => (
-                <li
-                  key={code}
-                  className="rounded-[var(--radius-control)] bg-[color:var(--color-surface-sunken)] px-3 py-2"
-                >
+                <li key={code} className="rounded-control bg-surface-sunken px-3 py-2">
                   {code}
                 </li>
               ))}
@@ -245,9 +240,7 @@ export function SecondFactorSection({
             <input type="hidden" name="locale" value={locale} />
 
             <SectionHeading>{labels.verifyTitle}</SectionHeading>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {labels.verifyHelp}
-            </p>
+            <p className="text-sm text-foreground-muted">{labels.verifyHelp}</p>
 
             {verify.outcome === 'verified' ? (
               <Alert tone="success">{labels.verified}</Alert>
@@ -284,9 +277,7 @@ export function SecondFactorSection({
               <input type="hidden" name="locale" value={locale} />
 
               <SectionHeading>{labels.regenerate}</SectionHeading>
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                {labels.regenerateHelp}
-              </p>
+              <p className="text-sm text-foreground-muted">{labels.regenerateHelp}</p>
 
               {fresh.outcome === 'regenerated' ? (
                 <Alert tone="success">{labels.regenerated}</Alert>
@@ -331,9 +322,7 @@ export function SecondFactorSection({
               <input type="hidden" name="locale" value={locale} />
 
               <SectionHeading>{labels.disable}</SectionHeading>
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                {labels.disableHelp}
-              </p>
+              <p className="text-sm text-foreground-muted">{labels.disableHelp}</p>
 
               {off.outcome === 'disabled' ? (
                 <Alert tone="success">{labels.disabled}</Alert>
@@ -414,12 +403,10 @@ function SetupKey({
   return (
     <div className="flex flex-col gap-3">
       <SectionHeading>{labels.enrolUri}</SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {labels.enrolUriHelp}
-      </p>
+      <p className="text-sm text-foreground-muted">{labels.enrolUriHelp}</p>
 
       {setup === null || modules === null ? (
-        <code className="block overflow-x-auto rounded-[var(--radius-control)] bg-[color:var(--color-surface-sunken)] p-3 text-xs break-all">
+        <code className="block overflow-x-auto rounded-control bg-surface-sunken p-3 text-xs break-all">
           {uri}
         </code>
       ) : (
@@ -429,7 +416,7 @@ function SetupKey({
             aria-label={labels.enrolQr}
             viewBox={`0 0 ${extent} ${extent}`}
             shapeRendering="crispEdges"
-            className="size-48 shrink-0 rounded-[var(--radius-control)] border border-[color:var(--color-border)]"
+            className="size-48 shrink-0 rounded-control border border-border"
           >
             <rect width={extent} height={extent} fill="#ffffff" />
             <path d={qrPath(modules, QUIET_ZONE)} fill="#000000" />
@@ -439,7 +426,7 @@ function SetupKey({
             <p className="text-sm font-semibold">{labels.enrolKey}</p>
             <code
               dir="ltr"
-              className="block rounded-[var(--radius-control)] bg-[color:var(--color-surface-sunken)] p-3 font-mono text-base tracking-wider break-all select-all"
+              className="block rounded-control bg-surface-sunken p-3 font-mono text-base tracking-wider break-all select-all"
             >
               {setup.groupedSecret}
             </code>

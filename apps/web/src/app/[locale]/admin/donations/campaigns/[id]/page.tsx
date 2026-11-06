@@ -117,7 +117,7 @@ export default async function DonationCampaignPage({
       </header>
 
       <Panel>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('editor.state')}>
             <StatusBadge tone={record.state === 'published' ? 'positive' : 'neutral'}>
               {t(`campaignState.${record.state}`)}
@@ -167,9 +167,7 @@ export default async function DonationCampaignPage({
         <SectionHeading>
           <span id="campaign-currencies">{t('currencies.heading')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('currencies.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('currencies.help')}</p>
         {record.currencies.length === 0 ? (
           <EmptyState>{t('currencies.empty')}</EmptyState>
         ) : (
@@ -197,9 +195,7 @@ export default async function DonationCampaignPage({
         <SectionHeading>
           <span id="campaign-words">{t('translations.heading')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('translations.help')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('translations.help')}</p>
         {localeSchema.options.map((language) => (
           <TranslationEditor
             key={language}
@@ -341,9 +337,7 @@ function PolicyFields({
       </div>
       <fieldset className="flex min-w-0 flex-col gap-2">
         <legend className="text-sm font-medium">{t('currencies.suggested')}</legend>
-        <p className="text-xs text-[color:var(--color-foreground-muted)]">
-          {t('currencies.suggestedHelp')}
-        </p>
+        <p className="text-xs text-foreground-muted">{t('currencies.suggestedHelp')}</p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {[0, 1, 2].map((index) =>
             amount(
@@ -355,9 +349,7 @@ function PolicyFields({
           )}
         </div>
       </fieldset>
-      <p className="text-xs text-[color:var(--color-foreground-muted)]">
-        {t('currencies.exactHelp')}
-      </p>
+      <p className="text-xs text-foreground-muted">{t('currencies.exactHelp')}</p>
     </>
   );
 }
@@ -385,7 +377,7 @@ function CurrencyPolicy({
       <h3 className="font-semibold">
         <bdi>{policy.currency}</bdi>
       </h3>
-      <dl className="divide-y divide-[color:var(--color-border)]">
+      <dl className="divide-y divide-border">
         <DetailRow term={t('currencies.minimum')}>{money(policy.minimumMinor)}</DetailRow>
         <DetailRow term={t('currencies.maximum')}>{money(policy.maximumMinor)}</DetailRow>
         <DetailRow term={t('currencies.suggested')}>
@@ -514,9 +506,7 @@ function TranslationEditor({
             : name}
         </h3>
         {existing === undefined ? (
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('translations.missing')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('translations.missing')}</p>
         ) : null}
         {administer ? (
           <ActionForm
@@ -572,11 +562,7 @@ function TranslationEditor({
             </Field>
           </ActionForm>
         ) : existing === undefined ? null : (
-          <dl
-            className="divide-y divide-[color:var(--color-border)]"
-            lang={language}
-            dir="auto"
-          >
+          <dl className="divide-y divide-border" lang={language} dir="auto">
             <DetailRow term={t('fields.title')}>{existing.title}</DetailRow>
             <DetailRow term={t('fields.summary')}>{existing.summary}</DetailRow>
             <DetailRow term={t('fields.description')}>

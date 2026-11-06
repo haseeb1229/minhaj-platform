@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Locale } from '@minhaj/contracts';
 import {
   CLASS_PAGE,
@@ -42,7 +43,7 @@ import { Title, type Copy, type Query } from '../shared';
  */
 
 export function classesBase(locale: Locale): string {
-  return `/${locale}/admin/learning/classes`;
+  return localizedPath(locale, '/admin/learning/classes');
 }
 
 /** The display name of each account, from Identity — identifiers only cross. */
@@ -145,9 +146,7 @@ export function SessionTimes({
           date={false}
         />
       </span>
-      <span className="text-xs text-[color:var(--color-foreground-muted)]">
-        {session.timeZone}
-      </span>
+      <span className="text-xs text-foreground-muted">{session.timeZone}</span>
     </span>
   );
 }
@@ -403,17 +402,13 @@ export function ScheduleFields({
           )}
         </Field>
       </div>
-      <p className="text-xs text-[color:var(--color-foreground-muted)]">
-        {t('classes.windowHelp')}
-      </p>
-      <details className="rounded-[var(--radius-control)] border border-[color:var(--color-border)] p-3">
+      <p className="text-xs text-foreground-muted">{t('classes.windowHelp')}</p>
+      <details className="rounded-control border border-border p-3">
         <summary className="min-h-11 cursor-pointer text-sm font-medium">
           {t('classes.foldSummary')}
         </summary>
         <div className="flex flex-col gap-3 pt-3">
-          <p className="text-xs text-[color:var(--color-foreground-muted)]">
-            {t('classes.foldHelp')}
-          </p>
+          <p className="text-xs text-foreground-muted">{t('classes.foldHelp')}</p>
           <FoldChoice name="startFold" legend={t('classes.foldStart')} copy={copy} />
           <FoldChoice name="endFold" legend={t('classes.foldEnd')} copy={copy} />
         </div>

@@ -51,12 +51,12 @@ describe('Editorial sitemap completeness', () => {
       'https://proof.invalid/ur/library/articles/proof-1000',
     );
     expect(partitions.find((p) => p.segment === 'pages')!.urls[0]!.loc).toBe(
-      'https://proof.invalid/en/help',
+      'https://proof.invalid/help',
     );
   });
   it('partitions every URL and deduplicates replaced shell destinations', () => {
     const urls = Array.from({ length: 5001 }, (_, i) => ({
-      loc: 'https://proof.invalid/en/help/' + i,
+      loc: 'https://proof.invalid/help/' + i,
     }));
     const partitions = mergePagePartitions([
       { segment: 'pages', locale: 'en', urls },

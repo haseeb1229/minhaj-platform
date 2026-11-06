@@ -12,6 +12,7 @@ import {
   browserEnvironment,
   expect,
   grantRole,
+  localizedPath,
   privilegedSession,
   registerAndSignIn,
   test,
@@ -149,7 +150,7 @@ function linkFor(purpose: 'confirm' | 'unsubscribe', row: SubscriberRow): string
   const token = createHmac('sha256', browserEnvironment().NEWSLETTER_TOKEN_KEY)
     .update(`newsletter|${purpose}|${row.id}|${String(row.generation)}|${salt}`)
     .digest('base64url');
-  return `/${row.locale}/newsletter/${purpose}?token=${token}`;
+  return localizedPath(row.locale, `/newsletter/${purpose}?token=${token}`);
 }
 
 /** What the form answered, success or not, in the page's own words. */
@@ -160,7 +161,7 @@ function answerOn(page: Page): Locator {
 
 /** Submits the public form and returns its answer. */
 async function subscribe(page: Page, email: string, locale: UiLocale = 'en') {
-  await page.goto(`/${locale}/newsletter`);
+  await page.goto(localizedPath(locale, '/newsletter'));
   await page.getByLabel(COPY[locale].form.email).fill(email);
   await page.getByRole('button', { name: COPY[locale].form.submit, exact: true }).click();
   const answer = answerOn(page);
@@ -250,7 +251,7 @@ async function account(
   return { page, id: await accountIdFor(sql, email) };
 }
 
-const ADMIN = '/en/admin/communications/newsletter';
+const ADMIN = '/admin/communications/newsletter';
 
 /** The operator form that names one subscriber. */
 function formFor(page: Page, subscriberId: string): Locator {
@@ -287,7 +288,7 @@ test.describe('the public newsletter', () => {
   test('answers the same for a fresh, a pending and a confirmed address', async ({
     page,
   }) => {
-    const response = await page.goto('/en/newsletter');
+    const response = await page.goto('/newsletter');
     expect(response?.status()).toBe(200);
     expect(response?.headers()['set-cookie']).toBeUndefined();
 
@@ -317,8 +318,8 @@ test.describe('the public newsletter', () => {
 
   test('is the same page signed in and signed out', async ({ request, browser }) => {
     const { page } = await account(browser, 1, 'newsletter-reader-account');
-    const anonymous = await request.get('/en/newsletter');
-    const signedIn = await page.context().request.get('/en/newsletter');
+    const anonymous = await request.get('/newsletter');
+    const signedIn = await page.context().request.get('/newsletter');
     expect(anonymous.status()).toBe(200);
     expect(signedIn.headers()['set-cookie']).toBeUndefined();
     expect((await signedIn.text()) === (await anonymous.text()), 'differs').toBe(true);
@@ -381,7 +382,7 @@ test.describe('the emailed links', () => {
     await expect(page.getByRole('button', { name: EN.confirm.submit })).toHaveCount(0);
 
     // A malformed token reads the same.
-    await page.goto('/en/newsletter/confirm?token=not-a-token');
+    await page.goto('/newsletter/confirm?token=not-a-token');
     await expect(page.getByRole('main')).toContainText(EN.link.invalid);
 
     unsubscribeLink = linkFor('unsubscribe', confirmed);
@@ -461,7 +462,7 @@ test.describe('the operator surface', () => {
     // Another administrative key, so the shell itself opens and the refusal
     // is the newsletter surface's own.
     await grantRole(sql, id, ['delivery.read'], 'Newsletter browser proof');
-    expect((await page.goto('/en/admin'))?.status()).toBe(200);
+    expect((await page.goto('/admin'))?.status()).toBe(200);
     const response = await page.goto(ADMIN);
     expect(response?.status()).toBe(404);
     await expect(page.locator('body')).not.toContainText('•••@proof.invalid');
@@ -580,9 +581,9 @@ test.describe('the operator surface', () => {
         await viewer.setViewportSize({ width, height: 800 });
       for (const locale of LOCALES) {
         for (const [viewer, target] of [
-          [page, `/${locale}/newsletter`],
-          [page, `/${locale}/newsletter/confirm${token}`],
-          [reader, `/${locale}/admin/communications/newsletter`],
+          [page, localizedPath(locale, '/newsletter')],
+          [page, localizedPath(locale, `/newsletter/confirm${token}`)],
+          [reader, localizedPath(locale, '/admin/communications/newsletter')],
         ] as const) {
           const response = await viewer.goto(target);
           expect(response?.status(), target).toBe(200);
@@ -604,7 +605,7 @@ test.describe('the operator surface', () => {
     for (const viewer of [page, reader])
       await viewer.setViewportSize({ width: 1280, height: 800 });
 
-    await page.goto('/en/newsletter');
+    await page.goto('/newsletter');
     const email = page.getByLabel(EN.form.email);
     await tabTo(page, email);
     await expectVisibleFocus(email, 'newsletter email');

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { cache } from 'react';
@@ -107,8 +108,8 @@ async function eventsTrail(locale: Locale) {
   return {
     label: shell('nav.breadcrumbs'),
     homeText: shell('nav.home'),
-    home: { href: `/${locale}`, text: shell('nav.home') },
-    events: { href: `/${locale}/events`, text: t('title') },
+    home: { href: localizedPath(locale, ''), text: shell('nav.home') },
+    events: { href: localizedPath(locale, '/events'), text: t('title') },
   };
 }
 
@@ -214,7 +215,7 @@ function CentreName({
 /** "Happening now", in words and never by colour alone. */
 function NowLabel({ t }: { readonly t: EventsTranslator }) {
   return (
-    <span className="inline-flex w-fit rounded-[var(--radius-control)] border border-[color:var(--color-action)] px-2 py-0.5 text-xs font-semibold text-[color:var(--color-action)]">
+    <span className="inline-flex w-fit rounded-control border border-action px-2 py-0.5 text-xs font-semibold text-action">
       {t('now')}
     </span>
   );
@@ -244,11 +245,11 @@ function DateLeaf({
   return (
     <span
       aria-hidden="true"
-      className={`flex shrink-0 flex-col items-center justify-center overflow-hidden rounded-[var(--radius-control)] border border-[color:var(--color-accent-rule)] bg-[color:var(--color-accent-surface)] text-center ${
+      className={`flex shrink-0 flex-col items-center justify-center overflow-hidden rounded-control border border-accent-rule bg-accent-surface text-center ${
         size === 'card' ? 'w-16 py-2' : 'w-14 py-1.5'
       }`}
     >
-      <span className="text-caption font-semibold text-[color:var(--color-accent)] uppercase">
+      <span className="text-caption font-semibold text-accent uppercase">
         {part({ month: 'short' })}
       </span>
       <span
@@ -258,7 +259,7 @@ function DateLeaf({
       >
         {part({ day: 'numeric' })}
       </span>
-      <span className="text-caption text-[color:var(--color-foreground-muted)]">
+      <span className="text-caption text-foreground-muted">
         {part({ weekday: 'short' })}
       </span>
     </span>
@@ -323,7 +324,10 @@ function EventCard({
             lang={translation.languageCode}
             dir={direction}
           >
-            <a href={`/${locale}${eventPathOf(item.slug)}`} className={CARD_TITLE_LINK}>
+            <a
+              href={localizedPath(locale, `${eventPathOf(item.slug)}`)}
+              className={CARD_TITLE_LINK}
+            >
               {translation.title}
             </a>
           </Heading>
@@ -332,13 +336,11 @@ function EventCard({
               <time dateTime={words.start} className="font-medium">
                 {words.text}
               </time>
-              <span className="text-[color:var(--color-foreground-muted)]">
-                {words.zoneName}
-              </span>
+              <span className="text-foreground-muted">{words.zoneName}</span>
             </p>
           )}
           {occurrences.length > 1 ? (
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+            <p className="text-sm text-foreground-muted">
               {t('moreDates', { count: occurrences.length - 1 })}
             </p>
           ) : null}
@@ -357,7 +359,7 @@ function EventCard({
           )}
           {translation.excerpt === '' ? null : (
             <p
-              className="line-clamp-3 text-sm wrap-anywhere text-[color:var(--color-foreground-muted)]"
+              className="line-clamp-3 text-sm wrap-anywhere text-foreground-muted"
               lang={translation.languageCode}
               dir={direction}
             >
@@ -369,7 +371,10 @@ function EventCard({
               <TopicChips
                 label={t('topics')}
                 topics={topics.map((topic) => ({
-                  href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+                  href: localizedPath(
+                    locale,
+                    `/topics/${encodeURIComponent(topic.slug)}`,
+                  ),
                   text: topic.name,
                 }))}
               />
@@ -570,7 +575,7 @@ export async function EventsPage({
             <Panel>
               <form
                 method="get"
-                action={`/${locale}/events`}
+                action={localizedPath(locale, '/events')}
                 className="flex flex-col gap-4"
                 aria-label={t('filters.label')}
               >
@@ -647,7 +652,7 @@ export async function EventsPage({
                 </div>
               </form>
               {geography.status === 'narrowed' && geography.centre !== null ? (
-                <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[color:var(--color-border)] pt-4 text-sm">
+                <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-4 text-sm">
                   <span>{t('filters.atCentre')}</span>
                   <CentreName centre={geography.centre} locale={locale} />
                   <TextLink href={eventsPath(locale, { ...filter, centre: null })}>
@@ -776,17 +781,15 @@ export async function EventDetailPage({
           trail={[trail.home, trail.events, { text: translation.title }]}
         />
 
-        <header className="flex max-w-3xl flex-col gap-4 border-b border-[color:var(--color-border)] pb-8">
+        <header className="flex max-w-3xl flex-col gap-4 border-b border-border pb-8">
           <p className="text-caption flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+            <span className="font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
               {t('type')}
             </span>
             {timing === 'ongoing' ? (
               <NowLabel t={t} />
             ) : (
-              <span className="text-[color:var(--color-foreground-muted)]">
-                {t(`status.${timing}`)}
-              </span>
+              <span className="text-foreground-muted">{t(`status.${timing}`)}</span>
             )}
           </p>
           {translation.languageCode === locale ? null : (
@@ -807,7 +810,7 @@ export async function EventDetailPage({
               {translation.title}
             </h1>
             {translation.excerpt === '' ? null : (
-              <p className="text-lede max-w-[var(--measure-prose)] text-[color:var(--color-foreground-muted)]">
+              <p className="text-lede max-w-[var(--measure-prose)] text-foreground-muted">
                 {translation.excerpt}
               </p>
             )}
@@ -837,7 +840,7 @@ export async function EventDetailPage({
                         <time dateTime={words.start} className="font-medium">
                           {words.text}
                         </time>
-                        <span className="text-sm text-[color:var(--color-foreground-muted)]">
+                        <span className="text-sm text-foreground-muted">
                           {words.zoneName}
                           {over ? <> — {t('held')}</> : null}
                         </span>
@@ -846,9 +849,7 @@ export async function EventDetailPage({
                   );
                 })}
               </ol>
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                {t('localTimeNote')}
-              </p>
+              <p className="text-sm text-foreground-muted">{t('localTimeNote')}</p>
             </RecordSection>
           </Panel>
 
@@ -907,7 +908,7 @@ export async function EventDetailPage({
             ) : (
               <p>
                 <ActionLink
-                  href={`/${locale}${eventGalleryPathOf(record.slug)}`}
+                  href={localizedPath(locale, `${eventGalleryPathOf(record.slug)}`)}
                   tone="secondary"
                 >
                   {t('viewPhotographs', { count: galleries.length })}
@@ -926,7 +927,10 @@ export async function EventDetailPage({
                     {credits.map(({ person, role }) => (
                       <li key={`${person.slug}:${role}`} dir="auto">
                         <TextLink
-                          href={`/${locale}/people/${encodeURIComponent(person.slug)}`}
+                          href={localizedPath(
+                            locale,
+                            `/people/${encodeURIComponent(person.slug)}`,
+                          )}
                         >
                           {person.name}
                         </TextLink>{' '}
@@ -939,13 +943,14 @@ export async function EventDetailPage({
             )}
             {topics.length === 0 ? null : (
               <div className="flex flex-col gap-2">
-                <p className="text-xs text-[color:var(--color-foreground-muted)]">
-                  {t('topics')}
-                </p>
+                <p className="text-xs text-foreground-muted">{t('topics')}</p>
                 <TopicChips
                   label={t('topics')}
                   topics={topics.map((topic) => ({
-                    href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+                    href: localizedPath(
+                      locale,
+                      `/topics/${encodeURIComponent(topic.slug)}`,
+                    ),
                     text: topic.name,
                   }))}
                 />
@@ -955,7 +960,7 @@ export async function EventDetailPage({
         )}
 
         <p>
-          <ActionLink href={`/${locale}/events`} tone="secondary">
+          <ActionLink href={localizedPath(locale, '/events')} tone="secondary">
             {t('all')}
           </ActionLink>
         </p>
@@ -963,11 +968,17 @@ export async function EventDetailPage({
         <BreadcrumbData
           contentLocales={contentLocales}
           trail={[
-            { name: trail.homeText, path: `/${translation.languageCode}` },
-            { name: t('title'), path: `/${translation.languageCode}/events` },
+            { name: trail.homeText, path: localizedPath(translation.languageCode, '') },
+            {
+              name: t('title'),
+              path: localizedPath(translation.languageCode, '/events'),
+            },
             {
               name: translation.title,
-              path: `/${translation.languageCode}${eventPathOf(record.slug)}`,
+              path: localizedPath(
+                translation.languageCode,
+                `${eventPathOf(record.slug)}`,
+              ),
             },
           ]}
         />
@@ -1004,7 +1015,7 @@ export async function EventGalleryPage({
   const trail = await eventsTrail(locale);
   const translation = translationFor(record, locale);
   const galleries = await galleriesFor(record.galleryIds);
-  const eventHref = `/${locale}${eventPathOf(record.slug)}`;
+  const eventHref = localizedPath(locale, `${eventPathOf(record.slug)}`);
   const title = t('galleryTitle');
 
   return (
@@ -1030,7 +1041,7 @@ export async function EventGalleryPage({
       />
       <Container>
         <div className="flex flex-col gap-6 py-[var(--space-page)]">
-          <p className="max-w-[var(--measure-prose)] text-[color:var(--color-foreground-muted)]">
+          <p className="max-w-[var(--measure-prose)] text-foreground-muted">
             {t('galleryIntro')}
           </p>
           {galleries === null ? (

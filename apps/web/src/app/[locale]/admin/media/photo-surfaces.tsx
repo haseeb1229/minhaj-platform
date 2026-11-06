@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import {
   MEDIA_PAGE,
   mediaStateSchema,
@@ -138,7 +138,7 @@ function AdminImage({
   if (source === null || photo.width === null || photo.height === null) {
     return (
       <div
-        className={`flex items-center justify-center rounded-[var(--radius-control)] bg-[color:var(--color-surface-sunken)] p-4 text-center text-sm text-[color:var(--color-foreground-muted)] ${large ? 'min-h-48' : 'aspect-[4/3]'}`}
+        className={`flex items-center justify-center rounded-control bg-surface-sunken p-4 text-center text-sm text-foreground-muted ${large ? 'min-h-48' : 'aspect-[4/3]'}`}
       >
         {missingImage(photo, administer, servable, copy)}
       </div>
@@ -155,8 +155,8 @@ function AdminImage({
       decoding="async"
       className={
         large
-          ? 'h-auto max-h-[28rem] w-auto max-w-full rounded-[var(--radius-control)] bg-[color:var(--color-surface-sunken)] object-contain'
-          : 'aspect-[4/3] w-full rounded-[var(--radius-control)] bg-[color:var(--color-surface-sunken)] object-cover'
+          ? 'h-auto max-h-[28rem] w-auto max-w-full rounded-control bg-surface-sunken object-contain'
+          : 'aspect-[4/3] w-full rounded-control bg-surface-sunken object-cover'
       }
     />
   );
@@ -202,7 +202,7 @@ function PhotoCard({
         copy={copy}
       />
       <p className="text-sm break-words">
-        <TextLink href={`/${locale}/admin/media/photos/${photo.id}`}>
+        <TextLink href={localizedPath(locale, `/admin/media/photos/${photo.id}`)}>
           <span {...(name.locale === null ? {} : { lang: name.locale })} dir="auto">
             {name.text.length > 120 ? `${name.text.slice(0, 117)}…` : name.text}
           </span>
@@ -271,7 +271,7 @@ function photoHref(base: string, filter: PhotoAdminQuery): (page: number) => str
 export async function PhotoDirectory({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/media/photos`;
+  const base = localizedPath(locale, '/admin/media/photos');
   const context = await requireAdminPage(locale, 'media.read', base);
   const copy = await mediaCopy(locale);
   const { t } = copy;
@@ -286,17 +286,13 @@ export async function PhotoDirectory({ params, searchParams }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.photos')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('photo.scope')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('photo.scope')}</p>
 
       {administer ? (
         <Panel>
           <div className="flex flex-col gap-4">
             <SectionHeading>{t('photo.create')}</SectionHeading>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('photo.createHelp')}
-            </p>
+            <p className="text-sm text-foreground-muted">{t('photo.createHelp')}</p>
             <PhotoUploader
               mode="batch"
               locale={locale}
@@ -371,7 +367,7 @@ export async function PhotoDirectory({ params, searchParams }: ListParams) {
 export async function PhotoEditor({ params }: EditorParams) {
   const locale = await requireLocale(params);
   const { id } = await params;
-  const base = `/${locale}/admin/media/photos`;
+  const base = localizedPath(locale, '/admin/media/photos');
   const context = await requireAdminPage(locale, 'media.read', base);
   const copy = await mediaCopy(locale);
   const { t } = copy;
@@ -424,16 +420,14 @@ export async function PhotoEditor({ params }: EditorParams) {
             large
           />
           {record.width === null || record.height === null ? null : (
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+            <p className="text-sm text-foreground-muted">
               {t('photo.dimensionsShown', {
                 width: String(record.width),
                 height: String(record.height),
               })}
             </p>
           )}
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('photo.privacyNote')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('photo.privacyNote')}</p>
           {administer ? (
             <PhotoUploader
               mode="replace"
@@ -467,7 +461,9 @@ export async function PhotoEditor({ params }: EditorParams) {
           <ul className="flex flex-col gap-2 text-sm">
             {galleries.map((gallery) => (
               <li key={gallery.id} className="flex flex-wrap items-center gap-3">
-                <TextLink href={`/${locale}/admin/media/galleries/${gallery.id}`}>
+                <TextLink
+                  href={localizedPath(locale, `/admin/media/galleries/${gallery.id}`)}
+                >
                   <Title record={gallery} locale={locale} />
                 </TextLink>
                 <StateBadge state={gallery.state} copy={copy} />
@@ -582,9 +578,7 @@ function PhotoForm({
       </div>
 
       <SectionHeading>{t('photo.words')}</SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('photo.wordsHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('photo.wordsHelp')}</p>
       {localeSchema.options.map((language) => {
         const existing = record.labels.find((entry) => entry.locale === language);
         return (
@@ -652,9 +646,7 @@ function PhotoForm({
       </Field>
       <fieldset className="flex flex-col gap-3">
         <legend className="text-sm font-medium">{t('photo.taken')}</legend>
-        <p className="text-xs text-[color:var(--color-foreground-muted)]">
-          {t('photo.takenHelp')}
-        </p>
+        <p className="text-xs text-foreground-muted">{t('photo.takenHelp')}</p>
         <div className="grid gap-4 sm:grid-cols-3">
           <Field id="photo-year" label={t('photo.year')}>
             {(props) => (
@@ -726,12 +718,10 @@ function GalleryTable({
       {items.map((item) => (
         <Panel key={item.id} as="li">
           <p className="flex flex-wrap items-center gap-3">
-            <TextLink href={`/${locale}/admin/media/galleries/${item.id}`}>
+            <TextLink href={localizedPath(locale, `/admin/media/galleries/${item.id}`)}>
               <Title record={item} locale={locale} />
             </TextLink>
-            <span className="text-sm text-[color:var(--color-foreground-muted)]">
-              {item.slug}
-            </span>
+            <span className="text-sm text-foreground-muted">{item.slug}</span>
             <StateBadge state={item.state} copy={copy} />
             <span className="text-sm">
               {t('version')}: {item.version}
@@ -763,9 +753,7 @@ function GalleryForm({
     >
       <EditIdentity locale={locale} record={record} />
       <CommonFields prefix={prefix} locale={locale} record={record} copy={copy} />
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('gallery.publishHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('gallery.publishHelp')}</p>
       <LabelFields prefix={prefix} locale={locale} record={record} copy={copy} />
     </ActionForm>
   );
@@ -774,7 +762,7 @@ function GalleryForm({
 export async function GalleryDirectory({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/media/galleries`;
+  const base = localizedPath(locale, '/admin/media/galleries');
   const context = await requireAdminPage(locale, 'media.read', base);
   const copy = await mediaCopy(locale);
   const { t } = copy;
@@ -787,9 +775,7 @@ export async function GalleryDirectory({ params, searchParams }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.galleries')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('gallery.scope')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('gallery.scope')}</p>
       <DirectoryFilter
         base={base}
         state={filter.state}
@@ -860,7 +846,7 @@ export async function GalleryEditor({ params, searchParams }: EditorParams) {
   const locale = await requireLocale(params);
   const { id } = await params;
   const query = await searchParams;
-  const base = `/${locale}/admin/media/galleries`;
+  const base = localizedPath(locale, '/admin/media/galleries');
   const context = await requireAdminPage(locale, 'media.read', base);
   const copy = await mediaCopy(locale);
   const { t } = copy;
@@ -916,7 +902,7 @@ export async function GalleryEditor({ params, searchParams }: EditorParams) {
         <SectionHeading>
           <span id="gallery-photos">{t('gallery.photos')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="text-sm text-foreground-muted">
           {t('gallery.photosHelp', {
             count: String(record.photos.length),
             limit: String(PHOTO_LIMITS.galleryPhotos),
@@ -938,7 +924,7 @@ export async function GalleryEditor({ params, searchParams }: EditorParams) {
                   servable={servable}
                   copy={copy}
                 >
-                  <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                  <p className="text-sm text-foreground-muted">
                     {index === 0
                       ? t('gallery.cover')
                       : t('gallery.position', { number: index + 1 })}
@@ -1011,7 +997,7 @@ export async function GalleryEditor({ params, searchParams }: EditorParams) {
         <Panel>
           <div className="flex flex-col gap-4">
             <SectionHeading>{t('gallery.add')}</SectionHeading>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+            <p className="text-sm text-foreground-muted">
               {t('gallery.addHelp', { room: String(Math.max(0, room)) })}
             </p>
             <DirectoryFilter

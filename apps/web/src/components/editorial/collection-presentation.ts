@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import type { Locale } from '@minhaj/contracts';
@@ -34,7 +35,7 @@ export function readCollectionOffset(query: Query): number {
 
 /** The listing's address for an offset; the first page is the bare `/collections`. */
 export function collectionsPath(locale: string, offset = 0): string {
-  return `/${locale}/collections${offset > 0 ? `?offset=${offset}` : ''}`;
+  return localizedPath(locale, `/collections${offset > 0 ? `?offset=${offset}` : ''}`);
 }
 
 /**
@@ -72,7 +73,7 @@ export function collectionMetadata(record: PublicCollection, locale: Locale) {
     locale,
     contentLocales: record.translations.map((row) => row.languageCode),
     primaryLocale: record.primaryLanguage,
-    pathFor: (language) => `/${language}${collectionPathOf(record.slug)}`,
+    pathFor: (language) => localizedPath(language, `${collectionPathOf(record.slug)}`),
     title: translation.seoTitle || translation.title,
     ...(description ? { description } : {}),
   });

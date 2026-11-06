@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { PERSONAL_LIMITS, targetKey } from '@minhaj/contracts/personalisation';
@@ -52,7 +53,7 @@ export default async function NotesPage({
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const locale = await requireLocale(params);
-  const path = `/${locale}/my/saved/notes`;
+  const path = localizedPath(locale, '/my/saved/notes');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'personal' });
   const offset = readPersonalOffset(await searchParams);
@@ -96,7 +97,7 @@ export default async function NotesPage({
               <Panel key={note.savedItemId} as="li">
                 <article className="flex min-w-0 flex-col gap-3">
                   <TargetTitle resolved={titles.get(targetKey(note.target))} t={t} />
-                  <div className="flex flex-wrap items-center gap-3 text-sm text-[color:var(--color-foreground-muted)]">
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-foreground-muted">
                     <KindBadge kind={note.target.kind} t={t} />
                     <span>
                       {t('notes.updatedAt')}{' '}

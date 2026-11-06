@@ -1,3 +1,5 @@
+import { identityMetadata } from '../metadata';
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { identityRuntime } from '@/composition/identity';
@@ -16,7 +18,9 @@ import { ActionForm } from '../form-state';
  * token, and a completed reset revokes every session the old credential
  * authorised (§2.3).
  */
-export const metadata = { robots: { index: false, follow: false } };
+export const generateMetadata = identityMetadata('reset.title', {
+  robots: { index: false, follow: false },
+});
 
 /**
  * PER REQUEST, always. This surface reads a session or a one-time token, so
@@ -42,7 +46,7 @@ export default async function ResetPasswordPage({
     return (
       <AuthLayout title={t('reset.title')}>
         <Alert tone="error">{t('reset.invalid')}</Alert>
-        <TextLink href={`/${locale}/forgot-password`}>
+        <TextLink href={localizedPath(locale, '/forgot-password')}>
           {t('reset.requestAnother')}
         </TextLink>
       </AuthLayout>
@@ -58,7 +62,7 @@ export default async function ResetPasswordPage({
         <Alert tone="error">
           {state === 'expired' ? t('reset.expired') : t('reset.invalid')}
         </Alert>
-        <TextLink href={`/${locale}/forgot-password`}>
+        <TextLink href={localizedPath(locale, '/forgot-password')}>
           {t('reset.requestAnother')}
         </TextLink>
       </AuthLayout>
@@ -103,7 +107,9 @@ export default async function ResetPasswordPage({
         </Field>
       </ActionForm>
 
-      <TextLink href={`/${locale}/signin`}>{t('common.backToSignIn')}</TextLink>
+      <TextLink href={localizedPath(locale, '/signin')}>
+        {t('common.backToSignIn')}
+      </TextLink>
     </AuthLayout>
   );
 }

@@ -37,9 +37,7 @@ export function FatwaHistory({
       <h2 id="fatwa-history" className="text-subheading font-semibold">
         {t('ruling.history')}
       </h2>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('ruling.historyIntro')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('ruling.historyIntro')}</p>
       <ol className="flex flex-col gap-3">
         {previous.map((entry, index) => {
           // The version that REPLACED this one carries the public reason.
@@ -47,7 +45,7 @@ export function FatwaHistory({
           const direction = fatwaTextDirection(entry.language);
           return (
             <li key={entry.revisionId}>
-              <details className="rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] px-4 py-1">
+              <details className="rounded-panel border border-border bg-surface-raised px-4 py-1">
                 <summary className="min-h-11 cursor-pointer py-3 font-medium">
                   {t('ruling.version')}:{' '}
                   <FatwaDate value={entry.publishedAt} locale={locale} />

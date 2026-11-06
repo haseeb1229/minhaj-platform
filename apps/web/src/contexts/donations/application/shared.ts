@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { createHash } from 'node:crypto';
@@ -154,7 +155,7 @@ export type CheckoutAttempt =
 
 /** The provider's return page — constant per locale, carrying no token and no state. */
 export function returnUrl(baseUrl: string, locale: Locale): string {
-  return new URL(`/${locale}/donate/return`, baseUrl).toString();
+  return new URL(localizedPath(locale, '/donate/return'), baseUrl).toString();
 }
 
 /** The idempotency key of a donation's one checkout. */

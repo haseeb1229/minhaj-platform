@@ -1,3 +1,4 @@
+import { localizedPath } from '../../packages/contracts/src/locale-path.ts';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -697,7 +698,9 @@ live('Phase 13 real SQL News workflow', () => {
            WHERE r.[state]=N'published';`,
         );
         for (const row of rows)
-          expected.add(`${ORIGIN}/${row.languageCode}${newsPathOf(kind, row.slug)}`);
+          expected.add(
+            `${ORIGIN}${localizedPath(row.languageCode, newsPathOf(kind, row.slug))}`,
+          );
         const former = await db.admin.query<{ slug: string }>(
           `SELECT h.[slug] FROM [${TABLE[kind]}SlugHistory] h JOIN [${TABLE[kind]}] r ON r.[id]=h.[ownerId] WHERE h.[slug]<>r.[slug];`,
         );

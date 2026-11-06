@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import {
   readPage,
   publishedPageMetadata,
@@ -96,7 +97,7 @@ export default async function ExplorePagePage({ params }: PageParams) {
   const owner = requirePage(section, page);
   // The owner delivered the real page: one permanent redirect to it.
   const delivered = ownerPathOf(owner, page);
-  if (delivered !== null) permanentRedirect(`/${locale}${delivered}`);
+  if (delivered !== null) permanentRedirect(localizedPath(locale, `${delivered}`));
   setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: 'shell' });
@@ -120,9 +121,9 @@ export default async function ExplorePagePage({ params }: PageParams) {
       <ListingIntro
         trailLabel={t('nav.breadcrumbs')}
         trail={[
-          { href: `/${locale}`, text: t('nav.home') },
-          { href: `/${locale}/explore`, text: t('explore.title') },
-          { href: `/${locale}/explore/${owner}`, text: sectionTitle },
+          { href: localizedPath(locale, ''), text: t('nav.home') },
+          { href: localizedPath(locale, '/explore'), text: t('explore.title') },
+          { href: localizedPath(locale, `/explore/${owner}`), text: sectionTitle },
           { text: title },
         ]}
         title={title}

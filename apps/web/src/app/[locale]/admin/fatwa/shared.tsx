@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { ReactNode } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -117,7 +118,7 @@ export async function requireFatwaAreaPage(
 ): Promise<AdminPageContext> {
   const active = await requireOwnSession(locale);
   if (active === null) {
-    redirect(`/${locale}/signin?returnTo=${encodeURIComponent(returnPath)}`);
+    redirect(localizedPath(locale, `/signin?returnTo=${encodeURIComponent(returnPath)}`));
   }
   const held = (await identityRuntime().authorization.evaluate(active.session))
     .permissions;

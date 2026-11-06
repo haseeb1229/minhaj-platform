@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import {
   GLOBAL_ADMIN_PAGE,
   GLOBAL_LIMITS,
@@ -304,7 +304,7 @@ export function Pager({
 }
 
 const SUBMIT_CLASSES =
-  'inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-medium';
+  'inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-medium';
 
 /** A narrowing GET form: a state, a name or slug, and — below Country — a Country. */
 export function DirectoryFilter({
@@ -406,7 +406,7 @@ export function DirectoryTable({
         <DataRow key={item.id}>
           <DataCell wrap>
             <span className="inline-flex flex-wrap items-center gap-2">
-              <TextLink href={`/${locale}/admin/global/${level}/${item.id}`}>
+              <TextLink href={localizedPath(locale, `/admin/global/${level}/${item.id}`)}>
                 <Name record={item} locale={locale} copy={copy} />
               </TextLink>
               {item.isVirtual === true ? (
@@ -551,9 +551,7 @@ export function PlaceNameFields({
   return (
     <fieldset className="flex flex-col gap-4">
       <legend className="text-sm font-semibold">{t('names')}</legend>
-      <p className="text-xs text-[color:var(--color-foreground-muted)]">
-        {t('namesHelp')}
-      </p>
+      <p className="text-xs text-foreground-muted">{t('namesHelp')}</p>
       {localeSchema.options.map((language) => (
         <Field
           key={language}
@@ -653,9 +651,7 @@ export function CitySearch({
           {t('citySearchSubmit')}
         </button>
       </form>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('citySearchHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('citySearchHelp')}</p>
     </div>
   );
 }
@@ -684,7 +680,7 @@ export function CountryStep({
     return (
       <EmptyState>
         {t('countryNone')}{' '}
-        <TextLink href={`/${locale}/admin/global/countries/new`}>
+        <TextLink href={localizedPath(locale, '/admin/global/countries/new')}>
           {t('create.countries')}
         </TextLink>
       </EmptyState>

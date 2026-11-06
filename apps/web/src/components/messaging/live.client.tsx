@@ -587,7 +587,7 @@ export function LiveThread({
                     <p className="text-sm">
                       <a
                         href={path}
-                        className="inline-flex min-h-11 items-center font-medium text-[color:var(--color-action)] underline underline-offset-2"
+                        className="inline-flex min-h-11 items-center font-medium text-action underline underline-offset-2"
                       >
                         {labels.reportReload}
                       </a>

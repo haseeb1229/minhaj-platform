@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 import { cache } from 'react';
 import { getTranslations } from 'next-intl/server';
@@ -42,7 +43,7 @@ export function editorialMetadata(record: PublicEditorial, locale: Locale, path:
     locale,
     contentLocales: record.translations.map((row) => row.languageCode),
     primaryLocale: record.primaryLanguage,
-    pathFor: (language) => '/' + language + path,
+    pathFor: (language) => localizedPath(language, path),
     title: translation.seoTitle || translation.title,
     description: translation.seoDescription || translation.excerpt,
   });
@@ -100,22 +101,27 @@ export async function PublicContent({
         <Breadcrumbs
           label={shell('nav.breadcrumbs')}
           trail={[
-            { href: '/' + locale, text: shell('nav.home') },
+            { href: localizedPath(locale, ''), text: shell('nav.home') },
             ...(kind === 'Article'
-              ? [{ href: '/' + locale + '/library/articles', text: t('articles') }]
+              ? [
+                  {
+                    href: localizedPath(locale, '/library/articles'),
+                    text: t('articles'),
+                  },
+                ]
               : []),
             { text: translation.title },
           ]}
         />
 
         {/* THE HEADER: what it is and when, the title, its standfirst, its byline. */}
-        <header className="flex max-w-3xl flex-col gap-4 border-b border-[color:var(--color-border)] pb-8">
+        <header className="flex max-w-3xl flex-col gap-4 border-b border-border pb-8">
           <MetaRow
             items={[
               kind === 'Article' ? (
                 <span
                   key="type"
-                  className="font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase"
+                  className="font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase"
                 >
                   {t('articles')}
                 </span>
@@ -141,7 +147,7 @@ export async function PublicContent({
               {translation.title}
             </h1>
             {translation.excerpt ? (
-              <p className="text-lede max-w-[var(--measure-prose)] text-[color:var(--color-foreground-muted)]">
+              <p className="text-lede max-w-[var(--measure-prose)] text-foreground-muted">
                 {translation.excerpt}
               </p>
             ) : null}
@@ -183,13 +189,14 @@ export async function PublicContent({
                     {credits.map(({ credit, person }) => (
                       <li key={credit.personId + ':' + credit.role} className="min-w-0">
                         <TextLink
-                          href={
-                            '/' + locale + '/people/' + encodeURIComponent(person.slug)
-                          }
+                          href={localizedPath(
+                            locale,
+                            '/people/' + encodeURIComponent(person.slug),
+                          )}
                         >
                           {person.name}
                         </TextLink>
-                        <span className="text-[color:var(--color-foreground-muted)]">
+                        <span className="text-foreground-muted">
                           {' '}
                           — {t(credit.role as 'author')}
                         </span>
@@ -203,7 +210,10 @@ export async function PublicContent({
                   <TopicChips
                     label={news('topics')}
                     topics={references.topics.map((topic) => ({
-                      href: '/' + locale + '/topics/' + encodeURIComponent(topic.slug),
+                      href: localizedPath(
+                        locale,
+                        '/topics/' + encodeURIComponent(topic.slug),
+                      ),
                       text: topic.name,
                     }))}
                   />
@@ -226,13 +236,13 @@ export async function PublicContent({
                         '@type': 'ListItem',
                         position: 1,
                         name: shell('nav.home'),
-                        item: absoluteUrl('/' + translation.languageCode),
+                        item: absoluteUrl(localizedPath(translation.languageCode, '')),
                       },
                       {
                         '@type': 'ListItem',
                         position: 2,
                         name: translation.title,
-                        item: absoluteUrl('/' + translation.languageCode + path),
+                        item: absoluteUrl(localizedPath(translation.languageCode, path)),
                       },
                     ],
                   },
@@ -240,7 +250,7 @@ export async function PublicContent({
                     '@type': kind,
                     headline: translation.title,
                     inLanguage: translation.languageCode,
-                    url: absoluteUrl('/' + translation.languageCode + path),
+                    url: absoluteUrl(localizedPath(translation.languageCode, path)),
                     ...(image === null
                       ? {}
                       : { image: absoluteUrl(leadImagePath(image)) }),

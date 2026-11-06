@@ -115,7 +115,7 @@ export function MobileNav({
         aria-expanded={open}
         aria-controls={drawerId}
         onClick={() => setOpen(true)}
-        className="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-3 py-2 text-sm font-medium transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--color-surface-sunken)] active:bg-[color:var(--color-border)] lg:hidden"
+        className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-strong px-3 py-2 text-sm font-medium transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border lg:hidden"
       >
         <svg
           aria-hidden="true"
@@ -140,7 +140,7 @@ export function MobileNav({
         hidden={!open}
         aria-hidden="true"
         onClick={close}
-        className="fixed inset-0 z-[var(--layer-overlay)] bg-[color:var(--color-foreground)]/40"
+        className="fixed inset-0 z-[var(--layer-overlay)] bg-foreground/40"
       />
 
       <div
@@ -151,14 +151,14 @@ export function MobileNav({
         aria-label={title}
         hidden={!open}
         onKeyDown={onKeyDown}
-        className="fixed inset-y-0 end-0 z-[var(--layer-overlay)] flex w-[min(24rem,100vw)] flex-col gap-5 overflow-y-auto overscroll-contain border-s border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-raised)]"
+        className="fixed inset-y-0 end-0 z-[var(--layer-overlay)] flex w-[min(24rem,100vw)] flex-col gap-5 overflow-y-auto overscroll-contain border-s border-border bg-surface-raised p-5 shadow-raised"
       >
         <div className="flex justify-end">
           <button
             ref={closeRef}
             type="button"
             onClick={close}
-            className="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-3 py-2 text-sm font-medium transition-colors duration-[var(--duration-fast)] hover:bg-[color:var(--color-surface-sunken)] active:bg-[color:var(--color-border)]"
+            className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border-strong px-3 py-2 text-sm font-medium transition-colors duration-[var(--duration-fast)] hover:bg-surface-sunken active:bg-border"
           >
             <svg
               aria-hidden="true"

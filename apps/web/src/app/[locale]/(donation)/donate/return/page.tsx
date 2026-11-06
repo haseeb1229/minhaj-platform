@@ -54,9 +54,7 @@ export default async function DonationReturnPage({
         <Prose>
           <PageHeading>{t('return.title')}</PageHeading>
           <p>{t('return.missing')}</p>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
-            {t('return.help')}
-          </p>
+          <p className="text-sm text-foreground-muted">{t('return.help')}</p>
         </Prose>
         <nav aria-label={t('return.title')} className="flex flex-wrap gap-x-6 gap-y-2">
           <TextLink href={myDonationsPath(locale)}>{t('return.mine')}</TextLink>

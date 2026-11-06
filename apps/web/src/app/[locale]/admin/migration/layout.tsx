@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
@@ -68,7 +69,7 @@ export default async function MigrationAdminLayout({
           <ul className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
             {SURFACES.map((surface) => (
               <li key={surface.key}>
-                <TextLink href={`/${locale}/admin/migration${surface.path}`}>
+                <TextLink href={localizedPath(locale, `/admin/migration${surface.path}`)}>
                   {t(`surface.${surface.key}`)}
                 </TextLink>
               </li>

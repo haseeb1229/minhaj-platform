@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import { CONTRIBUTION_ROLES } from '@minhaj/contracts/people';
 import {
   formatReaderDocument,
@@ -160,9 +160,7 @@ function RecordTable({
                 </span>
               </TextLink>
               {numbering === null ? null : (
-                <span className="block text-sm text-[color:var(--color-foreground-muted)]">
-                  {numbering}
-                </span>
+                <span className="block text-sm text-foreground-muted">{numbering}</span>
               )}
             </DataCell>
             <DataCell wrap>{row.slug}</DataCell>
@@ -227,14 +225,12 @@ function ReferenceSearch({
         </Field>
         <button
           type="submit"
-          className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-medium"
+          className="inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-medium"
         >
           {t('findReferences')}
         </button>
       </form>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('referenceHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('referenceHelp')}</p>
     </>
   );
 }
@@ -250,7 +246,7 @@ export async function ScholarlyDirectory({
 }: Params & { readonly kind: StandaloneScholarlyKind }) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/library/${ADMIN_SEGMENT[kind]}`;
+  const base = localizedPath(locale, `/admin/library/${ADMIN_SEGMENT[kind]}`);
   const context = await requireAdminPage(locale, 'library.read', base);
 
   const copy = await libraryCopy(locale);
@@ -283,10 +279,10 @@ export async function ScholarlyDirectory({
 
       {kind === 'research' || kind === 'research-paper' ? (
         <nav className="flex flex-wrap gap-4 text-sm" aria-label={t('admin.research')}>
-          <TextLink href={`/${locale}/admin/library/research`}>
+          <TextLink href={localizedPath(locale, '/admin/library/research')}>
             {t('admin.research')}
           </TextLink>
-          <TextLink href={`/${locale}/admin/library/research/papers`}>
+          <TextLink href={localizedPath(locale, '/admin/library/research/papers')}>
             {t('admin.research-papers')}
           </TextLink>
         </nav>
@@ -311,7 +307,7 @@ export async function ScholarlyDirectory({
         </Field>
         <button
           type="submit"
-          className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] px-4 text-sm font-medium"
+          className="inline-flex min-h-11 items-center rounded-control border border-border-strong px-4 text-sm font-medium"
         >
           {t('filterApply')}
         </button>
@@ -372,7 +368,7 @@ export async function ScholarlyEditor({
   const locale = await requireLocale(params);
   const { id } = await params;
   const query = await searchParams;
-  const base = `/${locale}/admin/library/${ADMIN_SEGMENT[kind]}`;
+  const base = localizedPath(locale, `/admin/library/${ADMIN_SEGMENT[kind]}`);
   const context = await requireAdminPage(locale, 'library.read', base);
 
   const copy = await libraryCopy(locale);
@@ -495,11 +491,11 @@ export async function IssueEditor({
   const locale = await requireLocale(params);
   const { id, issueId } = await params;
   const query = await searchParams;
-  const magazinePath = `/${locale}/admin/library/magazines/${id}`;
+  const magazinePath = localizedPath(locale, `/admin/library/magazines/${id}`);
   const context = await requireAdminPage(
     locale,
     'library.read',
-    `/${locale}/admin/library/magazines`,
+    localizedPath(locale, '/admin/library/magazines'),
   );
 
   const copy = await libraryCopy(locale);
@@ -738,9 +734,7 @@ function ScholarlyForm({
       </div>
 
       <SectionHeading>{t('labels')}</SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scholarlyAdmin.labelsHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('scholarlyAdmin.labelsHelp')}</p>
       {localeSchema.options.map((language) => {
         const existing = record?.labels.find((entry) => entry.locale === language);
         return (
@@ -995,9 +989,7 @@ function ScholarlyForm({
       ) : null}
 
       <SectionHeading>{t('contributors')}</SectionHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('contributorsHelp')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('contributorsHelp')}</p>
       {ROW_INDEXES.map((index) => {
         const existing = record?.contributors[index];
         return (
@@ -1063,7 +1055,7 @@ function ScholarlyForm({
       {cited ? (
         <>
           <SectionHeading>{t('scholarly.citations')}</SectionHeading>
-          <p className="text-sm text-[color:var(--color-foreground-muted)]">
+          <p className="text-sm text-foreground-muted">
             {t('scholarlyAdmin.citationsHelp')}
           </p>
           <ol className="flex flex-col gap-4">

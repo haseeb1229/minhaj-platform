@@ -1,6 +1,6 @@
 import { getTranslations } from 'next-intl/server';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import { personStatusSchema, type ProfileKind } from '@minhaj/contracts/people';
 
 import { requireAdminPage } from '@/composition/authorization';
@@ -68,7 +68,7 @@ export async function FacetDirectory({
   const page = await requireAdminPage(
     locale,
     'people.read',
-    `/${locale}/admin/people/${segment}`,
+    localizedPath(locale, `/admin/people/${segment}`),
   );
   const mayAdminister = page.authorization.can('people.administer');
 
@@ -92,11 +92,14 @@ export async function FacetDirectory({
     if (status !== null) next.set('status', status);
     if (target > 1) next.set('page', String(target));
     const suffix = next.toString();
-    return `/${locale}/admin/people/${segment}${suffix === '' ? '' : `?${suffix}`}`;
+    return localizedPath(
+      locale,
+      `/admin/people/${segment}${suffix === '' ? '' : `?${suffix}`}`,
+    );
   };
 
   const editHref = (id: string): string =>
-    `/${locale}/admin/people/persons?person=${encodeURIComponent(id)}`;
+    localizedPath(locale, `/admin/people/persons?person=${encodeURIComponent(id)}`);
 
   return (
     <main className="flex flex-col gap-6">
@@ -104,7 +107,7 @@ export async function FacetDirectory({
         <PageHeading>
           {t(`people.facets.${kind}.title` as 'people.facets.author.title')}
         </PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
+        <p className="text-sm text-foreground-muted">
           {t(`people.facets.${kind}.description` as 'people.facets.author.description')}
         </p>
       </header>
@@ -152,7 +155,7 @@ export async function FacetDirectory({
           <div>
             <button
               type="submit"
-              className="rounded-[var(--radius-control)] border border-[color:var(--color-border-strong)] bg-[color:var(--color-surface-raised)] px-4 py-2 text-sm font-medium hover:bg-[color:var(--color-surface-sunken)]"
+              className="rounded-control border border-border-strong bg-surface-raised px-4 py-2 text-sm font-medium hover:bg-surface-sunken"
             >
               {t('people.persons.searchSubmit')}
             </button>

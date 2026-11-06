@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { PERSONAL_LIMITS } from '@minhaj/contracts/personalisation';
@@ -45,7 +46,10 @@ export default async function MyCollectionsPage({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const session = await requireActiveSession(locale, `/${locale}/my/saved/collections`);
+  const session = await requireActiveSession(
+    locale,
+    localizedPath(locale, '/my/saved/collections'),
+  );
   const t = await getTranslations({ locale, namespace: 'personal' });
   const read = await personalRead('personal-collections', () =>
     personalisationRuntime().saved.collections({ accountId: session.account.id }),
@@ -77,7 +81,9 @@ export default async function MyCollectionsPage({
           {read.value.map((collection) => (
             <Panel key={collection.id} as="li">
               <div className="flex min-w-0 flex-col gap-2">
-                <TextLink href={`/${locale}/my/saved/collections/${collection.id}`}>
+                <TextLink
+                  href={localizedPath(locale, `/my/saved/collections/${collection.id}`)}
+                >
                   <span dir="auto" className="wrap-anywhere">
                     {collection.title}
                   </span>
@@ -87,7 +93,7 @@ export default async function MyCollectionsPage({
                     {collection.description}
                   </p>
                 )}
-                <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                <p className="text-sm text-foreground-muted">
                   {t('collections.items', { count: collection.itemCount })} ·{' '}
                   {t('collections.updatedAt')}{' '}
                   <PersonalTime

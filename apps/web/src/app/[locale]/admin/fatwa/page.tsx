@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { redirect } from 'next/navigation';
 
 import { FATWA_PERMISSIONS } from '@minhaj/contracts/fatwa';
@@ -19,7 +20,7 @@ export default async function FatwaAdminRoot({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const base = `/${locale}/admin/fatwa`;
+  const base = localizedPath(locale, '/admin/fatwa');
   const context = await requireFatwaAreaPage(locale, base);
   const { authorization } = context;
 

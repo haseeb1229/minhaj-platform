@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { getTranslations } from 'next-intl/server';
@@ -102,7 +103,7 @@ function searchHref(
     query.set('page', String(overrides.page));
   }
   const text = query.toString();
-  return `/${locale}/search${text === '' ? '' : `?${text}`}`;
+  return localizedPath(locale, `/search${text === '' ? '' : `?${text}`}`);
 }
 
 function hasFilters(form: SearchFormState): boolean {
@@ -166,26 +167,26 @@ export default async function SearchPage({ params, searchParams }: SearchParams)
        * orientation and the form — and the results start within the first
        * screen on a phone.
        */}
-      <div className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)]">
+      <div className="border-b border-border bg-surface-raised">
         <Container>
           <div className="flex flex-col gap-5 py-[var(--space-page)]">
             <Breadcrumbs
               label={shell('nav.breadcrumbs')}
               trail={[
-                { href: `/${locale}`, text: shell('nav.home') },
+                { href: localizedPath(locale, ''), text: shell('nav.home') },
                 { text: t('title') },
               ]}
             />
             <div className="flex max-w-3xl flex-col gap-2">
               <PageHeading>{t('title')}</PageHeading>
-              <p className="text-lede max-w-[var(--measure-prose)] text-[color:var(--color-foreground-muted)]">
+              <p className="text-lede max-w-[var(--measure-prose)] text-foreground-muted">
                 {t('intro')}
               </p>
             </div>
 
             <form
               method="get"
-              action={`/${locale}/search`}
+              action={localizedPath(locale, '/search')}
               role="search"
               aria-label={t('title')}
               className="flex w-full max-w-3xl flex-col gap-4"
@@ -215,7 +216,7 @@ export default async function SearchPage({ params, searchParams }: SearchParams)
               </Field>
 
               <details
-                className="rounded-[var(--radius-control)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4"
+                className="rounded-control border border-border bg-surface px-4"
                 open={hasFilters(form) || issues.size > 0}
               >
                 <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium">
@@ -299,7 +300,7 @@ export default async function SearchPage({ params, searchParams }: SearchParams)
                       )}
                     </Field>
                   </div>
-                  <p className="text-xs text-[color:var(--color-foreground-muted)] sm:col-span-2">
+                  <p className="text-xs text-foreground-muted sm:col-span-2">
                     {t('yearHelp')}
                   </p>
                 </div>
@@ -308,7 +309,9 @@ export default async function SearchPage({ params, searchParams }: SearchParams)
               <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                 <Button>{t('submit')}</Button>
                 {form.q === '' && !hasFilters(form) ? null : (
-                  <QuietLink href={`/${locale}/search`}>{t('clear')}</QuietLink>
+                  <QuietLink href={localizedPath(locale, '/search')}>
+                    {t('clear')}
+                  </QuietLink>
                 )}
                 {hasFilters(form) && form.q !== '' ? (
                   <QuietLink
@@ -360,7 +363,7 @@ function QuietLink({
   return (
     <a
       href={href}
-      className="inline-flex min-h-11 items-center text-sm font-medium text-[color:var(--color-action)] underline underline-offset-2 hover:text-[color:var(--color-action-hover)]"
+      className="inline-flex min-h-11 items-center text-sm font-medium text-action underline underline-offset-2 hover:text-action-hover"
     >
       {children}
     </a>
@@ -433,7 +436,7 @@ function SearchResults({
       return (
         <div
           role="alert"
-          className="flex flex-col gap-2 rounded-[var(--radius-control)] border border-[color:var(--color-error)] bg-[color:var(--color-error-surface)] px-4 py-3 text-sm text-[color:var(--color-error)]"
+          className="flex flex-col gap-2 rounded-control border border-error bg-error-surface px-4 py-3 text-sm text-error"
         >
           <p className="font-semibold">{t('invalidTitle')}</p>
           <ul className="list-disc ps-5">
@@ -457,7 +460,7 @@ function SearchResults({
             {t('resultsLabel')}
           </h2>
 
-          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-[color:var(--color-border)] pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-border pb-3">
             <p role="status" className="text-sm font-medium">
               {results.capped
                 ? t('resultsCapped', { count: SEARCH_RESULT_CEILING, query })
@@ -467,7 +470,7 @@ function SearchResults({
             </p>
             {topic === null ? null : (
               <p className="flex flex-wrap items-center gap-x-3 text-sm">
-                <span className="rounded-full border border-[color:var(--color-accent)] bg-[color:var(--color-accent-surface)] px-3 py-1">
+                <span className="rounded-full border border-accent bg-accent-surface px-3 py-1">
                   {t('topicActive', { name: topic.name })}
                 </span>
                 <QuietLink href={href({ topic: '' })}>{t('removeTopic')}</QuietLink>
@@ -482,7 +485,7 @@ function SearchResults({
               </EmptyState>
             ) : (
               <EmptyState>
-                <span className="block font-medium text-[color:var(--color-foreground)]">
+                <span className="block font-medium text-foreground">
                   {t('noResults', { query })}
                 </span>
                 <span className="mt-1 block">{t('noResultsHelp')}</span>
@@ -513,7 +516,7 @@ function SearchResults({
           {results.pageCount > 1 && results.hits.length > 0 ? (
             <nav
               aria-label={t('pagination')}
-              className="flex max-w-3xl flex-wrap items-center justify-between gap-4 border-t border-[color:var(--color-border)] pt-5"
+              className="flex max-w-3xl flex-wrap items-center justify-between gap-4 border-t border-border pt-5"
             >
               <span className="min-w-0">
                 {results.page > 1 ? (
@@ -522,10 +525,7 @@ function SearchResults({
                   </ActionLink>
                 ) : null}
               </span>
-              <span
-                aria-current="page"
-                className="text-sm text-[color:var(--color-foreground-muted)]"
-              >
+              <span aria-current="page" className="text-sm text-foreground-muted">
                 {t('pageStatus', { page: results.page, pages: results.pageCount })}
               </span>
               <span className="min-w-0">
@@ -602,9 +602,9 @@ function ResultItem({
       : (languageNames.get(contentLanguageCode) ?? null);
 
   return (
-    <li className="min-w-0 border-b border-[color:var(--color-border)] py-5 first:pt-0 last:border-b-0">
+    <li className="min-w-0 border-b border-border py-5 first:pt-0 last:border-b-0">
       <article className="flex min-w-0 flex-col gap-2">
-        <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+        <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
           {t(`kinds.${hit.kind}`)}
         </p>
         <h3
@@ -613,15 +613,15 @@ function ResultItem({
           dir={direction}
         >
           <a
-            href={`/${locale}${hit.href}`}
-            className="text-[color:var(--color-foreground)] underline decoration-[color:var(--color-accent-rule)] underline-offset-4 hover:decoration-[color:var(--color-action)] active:text-[color:var(--color-action)]"
+            href={localizedPath(locale, `${hit.href}`)}
+            className="text-foreground underline decoration-accent-rule underline-offset-4 hover:decoration-action active:text-action"
           >
             <Highlighted text={title} query={query} />
           </a>
         </h3>
         {summary === '' ? null : (
           <p
-            className="max-w-[var(--measure-prose)] text-sm break-words text-[color:var(--color-foreground-muted)]"
+            className="max-w-[var(--measure-prose)] text-sm break-words text-foreground-muted"
             lang={textLanguage}
             dir={direction}
           >

@@ -64,7 +64,7 @@ export function ListingFrame({
       <CrumbStrip label={breadcrumbLabel} trail={trail} />
       <PageHero title={title} {...(lede === undefined ? {} : { lede })}>
         {notice === undefined ? null : (
-          <p className="max-w-[var(--measure-prose)] border-s-2 border-[color:var(--color-accent-rule)] ps-3 text-sm text-[color:var(--color-foreground-muted)]">
+          <p className="max-w-[var(--measure-prose)] border-s-2 border-accent-rule ps-3 text-sm text-foreground-muted">
             {notice}
           </p>
         )}
@@ -114,10 +114,10 @@ export function RecordFrame({
   return (
     <>
       <CrumbStrip label={breadcrumbLabel} trail={trail} />
-      <div className="border-b border-[color:var(--color-border)]">
+      <div className="border-b border-border">
         <Container>
           <header className="flex max-w-3xl flex-col gap-4 py-[var(--space-page)]">
-            <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+            <p className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
               {eyebrow}
             </p>
             <h1
@@ -130,7 +130,7 @@ export function RecordFrame({
             {summary.map((paragraph, index) => (
               <p
                 key={index}
-                className="text-lede max-w-[var(--measure-prose)] text-[color:var(--color-foreground-muted)]"
+                className="text-lede max-w-[var(--measure-prose)] text-foreground-muted"
                 lang={lang}
                 dir={descriptionDirection(dir)}
               >
@@ -139,7 +139,7 @@ export function RecordFrame({
             ))}
             {meta}
             {notice === undefined ? null : (
-              <p className="max-w-[var(--measure-prose)] border-s-2 border-[color:var(--color-accent-rule)] ps-3 text-sm text-[color:var(--color-foreground-muted)]">
+              <p className="max-w-[var(--measure-prose)] border-s-2 border-accent-rule ps-3 text-sm text-foreground-muted">
                 {notice}
               </p>
             )}
@@ -212,7 +212,7 @@ export function FilterPanel({
   return (
     <section
       aria-labelledby={id}
-      className="flex flex-col gap-4 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)] p-5"
+      className="flex flex-col gap-4 rounded-panel border border-border bg-surface-sunken p-5"
     >
       <h2 id={id} className="text-subheading font-semibold">
         {heading}

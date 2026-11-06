@@ -1,3 +1,9 @@
+import {
+  localeSchema,
+  localizedPath,
+  splitLocalePath,
+  UNPREFIXED_LOCALE,
+} from '@minhaj/contracts';
 import createMiddleware from 'next-intl/middleware';
 import { NextResponse, type NextRequest } from 'next/server';
 
@@ -5,33 +11,27 @@ import { standaloneKindOfSegment } from '@/components/library/scholarly-presenta
 import { routing } from '@/i18n/routing';
 
 /**
- * Locale routing (ROUTE_MAP.md §1.1).
+ * Locale routing (ROUTE_MAP.md §1.1, Rebaseline R1).
  *
  * `proxy.ts` is the Next 16 convention; `middleware.ts` is its predecessor and
  * Next fails the build when both exist. There is exactly one of these files in
- * the repository, and it does exactly one thing.
+ * the repository.
  *
  * WHAT IT DECIDES
  *
- *   GET /            → 307 to the resolved locale root
- *   GET /some/path   → 307 to /{locale}/some/path, query preserved
- *   GET /{locale}/…  → served
+ *   GET /some/path        → served in English (unprefixed is English)
+ *   GET /ur/… , /ar/…     → served in Urdu / Arabic
+ *   GET /en , /en/…       → ONE 301 to the unprefixed English address, query
+ *                           preserved — merged with any slug-history hop below,
+ *                           so a former slug under `/en` is still one hop
  *
- * Resolution order, which is ROUTE_MAP.md §1.1 exactly:
+ * The address alone decides the interface language. No cookie and no
+ * `Accept-Language` header redirects an unprefixed URL anywhere: a shared link
+ * shows everyone the same language, and a crawler sees what a visitor sees.
  *
- *   1. an explicit, supported locale already in the path
- *   2. the stored preference cookie
- *   3. `Accept-Language` negotiation against the supported locales
- *   4. `en`
- *
- * 307 and not 301: the target varies by visitor, so an intermediary caching it
- * as permanent would pin one visitor's language onto everyone behind it.
- *
- * THIS IS NOT A TRUST BOUNDARY. It is a convenience that gets visitors to a
- * sensible URL. The authority on whether a locale is real lives in the render
- * tree (`app/[locale]/layout.tsx`), so a request that never passes through
- * here — a matcher change, a direct hit on a prefixed path — still cannot
- * render an unsupported locale.
+ * THIS IS NOT A TRUST BOUNDARY. The authority on whether a locale is real
+ * lives in the render tree (`app/[locale]/layout.tsx`), so a request that
+ * never passes through here still cannot render an unsupported locale.
  */
 const localeMiddleware = createMiddleware(routing);
 
@@ -55,7 +55,45 @@ function permanent(request: NextRequest, pathname: string): NextResponse {
   return redirect;
 }
 
+/**
+ * THE ENGLISH REWRITE, AND ITS RE-ENTRY.
+ *
+ * An unprefixed address is served by rewriting it to `/en/…` internally. Next
+ * only performs a rewrite in-process when the rewrite URL's origin matches the
+ * server's own initial URL; when the server is bound to an explicit address
+ * (`--hostname 127.0.0.1`, as behind a front door) Next hands this proxy a
+ * `localhost` origin, the two differ, and Next PROXIES the rewrite as a fresh
+ * HTTP request to `…/en/…` — which arrives back here looking exactly like a
+ * legacy `/en/…` address and would be answered with the 301, forever.
+ *
+ * So every rewrite this proxy makes carries a mark that only this process can
+ * produce: a random value minted once per process, in a private request
+ * header. A request carrying it is this proxy's own rewrite re-entering, and is
+ * served as-is; a client cannot guess the value, so a genuine `/en/…` still
+ * gets its one 301. The header never reaches a response.
+ */
+const REWRITE_MARK_HEADER = 'x-minhaj-locale-rewrite';
+const REWRITE_MARK = globalThis.crypto.randomUUID();
+
+/** next-intl's own request header naming the locale of a rewritten request. */
+const NEXT_INTL_LOCALE_HEADER = 'X-NEXT-INTL-LOCALE';
+
 export default async function proxy(request: NextRequest) {
+  if (request.headers.get(REWRITE_MARK_HEADER) === REWRITE_MARK) {
+    const headers = new Headers(request.headers);
+    headers.delete(REWRITE_MARK_HEADER);
+    return NextResponse.next({ request: { headers } });
+  }
+
+  /**
+   * The locale and the locale-free path, split once by the locale-path
+   * contract. The slug-history branches below match `routed` — the same
+   * address in its internal `/{locale}/…` form — so each keeps one pattern for
+   * all three locales; every redirect target is built by `localizedPath`.
+   */
+  const parts = splitLocalePath(request.nextUrl.pathname);
+  const routed = `/${parts.locale}${parts.rest}`;
+  const legacyEnglish = parts.prefixed && parts.locale === UNPREFIXED_LOCALE;
   if (request.method === 'GET' || request.method === 'HEAD') {
     /**
      * PHASE 9 — A MAGAZINE ISSUE HAS A TWO-PART ADDRESS, and either part may be
@@ -65,7 +103,7 @@ export default async function proxy(request: NextRequest) {
      * hop (ROUTE_MAP.md §9.7).
      */
     const issue = /^\/(en|ur|ar)\/library\/magazines\/([^/]+)\/issues\/([^/]+)$/.exec(
-      request.nextUrl.pathname,
+      routed,
     );
     if (issue?.[1] && issue[2] && issue[3]) {
       const magazineSlug = decodedSegment(issue[2]);
@@ -82,7 +120,10 @@ export default async function proxy(request: NextRequest) {
         ) {
           return permanent(
             request,
-            `/${issue[1]}/library/magazines/${encodeURIComponent(current.magazineSlug)}/issues/${encodeURIComponent(current.issueSlug)}`,
+            localizedPath(
+              parts.locale,
+              `/library/magazines/${encodeURIComponent(current.magazineSlug)}/issues/${encodeURIComponent(current.issueSlug)}`,
+            ),
           );
         }
       }
@@ -91,7 +132,7 @@ export default async function proxy(request: NextRequest) {
   if (request.method === 'GET' || request.method === 'HEAD') {
     const match =
       /^\/(en|ur|ar)\/(library\/articles|library\/books|library\/research|library\/research-papers|library\/publications|library\/magazines|library\/encyclopedias|help)\/([^/]+)$/.exec(
-        request.nextUrl.pathname,
+        routed,
       );
     if (match?.[3]) {
       const slug = decodedSegment(match[3]);
@@ -141,7 +182,10 @@ export default async function proxy(request: NextRequest) {
                     : editorialReadRuntime().articleCanonicalSlug(slug);
                 })();
         if (record && record !== slug) {
-          return permanent(request, `/${match[1]}/${area}/${encodeURIComponent(record)}`);
+          return permanent(
+            request,
+            localizedPath(parts.locale, `/${area}/${encodeURIComponent(record)}`),
+          );
         }
       }
     }
@@ -159,9 +203,7 @@ export default async function proxy(request: NextRequest) {
      * The target is built from Media's answer, never from the request.
      */
     const watch =
-      /^\/(en|ur|ar)\/watch\/(videos|series|programs|playlists)\/([^/]+)$/.exec(
-        request.nextUrl.pathname,
-      );
+      /^\/(en|ur|ar)\/watch\/(videos|series|programs|playlists)\/([^/]+)$/.exec(routed);
     if (watch?.[1] && watch[2] && watch[3]) {
       const slug = decodedSegment(watch[3]);
       if (slug !== null) {
@@ -188,7 +230,10 @@ export default async function proxy(request: NextRequest) {
         if (current !== null && (current.family !== family || current.slug !== slug)) {
           return permanent(
             request,
-            `/${watch[1]}/watch/${current.family}/${encodeURIComponent(current.slug)}`,
+            localizedPath(
+              parts.locale,
+              `/watch/${current.family}/${encodeURIComponent(current.slug)}`,
+            ),
           );
         }
       }
@@ -203,9 +248,7 @@ export default async function proxy(request: NextRequest) {
      * current address, locale preserved, the target built from Media's answer and
      * never from the request.
      */
-    const listen = /^\/(en|ur|ar)\/listen\/(lectures|series)\/([^/]+)$/.exec(
-      request.nextUrl.pathname,
-    );
+    const listen = /^\/(en|ur|ar)\/listen\/(lectures|series)\/([^/]+)$/.exec(routed);
     if (listen?.[1] && listen[2] && listen[3]) {
       const slug = decodedSegment(listen[3]);
       if (slug !== null) {
@@ -218,7 +261,10 @@ export default async function proxy(request: NextRequest) {
         if (current !== null && current !== slug) {
           return permanent(
             request,
-            `/${listen[1]}/listen/${listen[2]}/${encodeURIComponent(current)}`,
+            localizedPath(
+              parts.locale,
+              `/listen/${listen[2]}/${encodeURIComponent(current)}`,
+            ),
           );
         }
       }
@@ -231,9 +277,7 @@ export default async function proxy(request: NextRequest) {
      * built from Media's answer and never from the request. A Photo has no
      * slug, so nothing else under `/media` redirects.
      */
-    const gallery = /^\/(en|ur|ar)\/media\/galleries\/([^/]+)$/.exec(
-      request.nextUrl.pathname,
-    );
+    const gallery = /^\/(en|ur|ar)\/media\/galleries\/([^/]+)$/.exec(routed);
     if (gallery?.[1] && gallery[2]) {
       const slug = decodedSegment(gallery[2]);
       if (slug !== null) {
@@ -242,7 +286,10 @@ export default async function proxy(request: NextRequest) {
         if (current !== null && current !== slug) {
           return permanent(
             request,
-            `/${gallery[1]}/media/galleries/${encodeURIComponent(current)}`,
+            localizedPath(
+              parts.locale,
+              `/media/galleries/${encodeURIComponent(current)}`,
+            ),
           );
         }
       }
@@ -261,7 +308,7 @@ export default async function proxy(request: NextRequest) {
      */
     const news =
       /^\/(en|ur|ar)\/news\/(?:(press-releases|statements|media-coverage)\/)?([^/]+)$/.exec(
-        request.nextUrl.pathname,
+        routed,
       );
     if (news?.[1] && news[3]) {
       const slug = decodedSegment(news[3]);
@@ -276,7 +323,10 @@ export default async function proxy(request: NextRequest) {
         const { editorialReadRuntime } = await import('@/composition/editorial-read');
         const current = await editorialReadRuntime().newsCanonicalSlug(kind, slug);
         if (current !== null && current !== slug) {
-          return permanent(request, `/${news[1]}${newsPathOf(kind, current)}`);
+          return permanent(
+            request,
+            localizedPath(parts.locale, newsPathOf(kind, current)),
+          );
         }
       }
     }
@@ -289,9 +339,7 @@ export default async function proxy(request: NextRequest) {
      * with the gallery view's suffix resolves straight to the current gallery
      * view — ONE hop, never a chain through the Event page.
      */
-    const event = /^\/(en|ur|ar)\/events\/([^/]+)(\/gallery)?$/.exec(
-      request.nextUrl.pathname,
-    );
+    const event = /^\/(en|ur|ar)\/events\/([^/]+)(\/gallery)?$/.exec(routed);
     if (event?.[1] && event[2]) {
       const slug = decodedSegment(event[2]);
       if (slug !== null) {
@@ -301,7 +349,7 @@ export default async function proxy(request: NextRequest) {
           const { eventPathOf } = await import('@minhaj/contracts/editorial');
           return permanent(
             request,
-            `/${event[1]}${eventPathOf(current)}${event[3] ?? ''}`,
+            localizedPath(parts.locale, `${eventPathOf(current)}${event[3] ?? ''}`),
           );
         }
       }
@@ -314,9 +362,7 @@ export default async function proxy(request: NextRequest) {
      * built from Editorial's answer and never from the request. Only a published
      * Collection resolves; a withheld one's former slug falls through to the 404.
      */
-    const collection = /^\/(en|ur|ar)\/collections\/([^/]+)$/.exec(
-      request.nextUrl.pathname,
-    );
+    const collection = /^\/(en|ur|ar)\/collections\/([^/]+)$/.exec(routed);
     if (collection?.[1] && collection[2]) {
       const slug = decodedSegment(collection[2]);
       if (slug !== null) {
@@ -324,7 +370,10 @@ export default async function proxy(request: NextRequest) {
         const current = await editorialReadRuntime().collectionCanonicalSlug(slug);
         if (current !== null && current !== slug) {
           const { collectionPathOf } = await import('@minhaj/contracts/editorial');
-          return permanent(request, `/${collection[1]}${collectionPathOf(current)}`);
+          return permanent(
+            request,
+            localizedPath(parts.locale, collectionPathOf(current)),
+          );
         }
       }
     }
@@ -344,7 +393,7 @@ export default async function proxy(request: NextRequest) {
      */
     const place =
       /^\/(en|ur|ar)\/global\/countries\/([^/]+)(?:\/(regions|cities)\/([^/]+))?$/.exec(
-        request.nextUrl.pathname,
+        routed,
       );
     if (place?.[1] && place[2]) {
       const country = decodedSegment(place[2]);
@@ -378,9 +427,7 @@ export default async function proxy(request: NextRequest) {
       }
     }
     const centre =
-      /^\/(en|ur|ar)\/global\/centres\/([^/]+)(\/news|\/events|\/contact)?$/.exec(
-        request.nextUrl.pathname,
-      );
+      /^\/(en|ur|ar)\/global\/centres\/([^/]+)(\/news|\/events|\/contact)?$/.exec(routed);
     if (centre?.[1] && centre[2]) {
       const slug = decodedSegment(centre[2]);
       if (slug !== null) {
@@ -389,7 +436,10 @@ export default async function proxy(request: NextRequest) {
         if (current !== null && current !== slug)
           return permanent(
             request,
-            `/${centre[1]}/global/centres/${encodeURIComponent(current)}${centre[3] ?? ''}`,
+            localizedPath(
+              parts.locale,
+              `/global/centres/${encodeURIComponent(current)}${centre[3] ?? ''}`,
+            ),
           );
       }
     }
@@ -415,15 +465,13 @@ export default async function proxy(request: NextRequest) {
      *
      * PHASE 20 — `/fatwa/search` likewise, restricted to the `fatwa` kind.
      */
-    const search = /^\/(en|ur|ar)\/(?:quran\/|hadith\/|fatwa\/)?search$/.exec(
-      request.nextUrl.pathname,
-    );
+    const search = /^\/(en|ur|ar)\/(?:quran\/|hadith\/|fatwa\/)?search$/.exec(routed);
     const query = request.nextUrl.searchParams.get('q');
-    if (search?.[1] && query !== null && query.trim() !== '') {
+    if (!legacyEnglish && search?.[1] && query !== null && query.trim() !== '') {
       const { admitPublicSearch } = await import('@/composition/search-admission');
       if (!(await admitPublicSearch(request.headers))) {
         const target = request.nextUrl.clone();
-        target.pathname = `/${search[1]}/search/limited`;
+        target.pathname = localizedPath(parts.locale, '/search/limited');
         target.search = '';
         const throttled = NextResponse.redirect(target, 303);
         throttled.headers.set('Cache-Control', 'no-store');
@@ -442,9 +490,7 @@ export default async function proxy(request: NextRequest) {
      * draft or archived one's former slug falls through to the page's 404 — and
      * Learn's own path words can never be a slug, so no section is shadowed.
      */
-    const learn = /^\/(en|ur|ar)\/learn\/(courses|paths)\/([^/]+)$/.exec(
-      request.nextUrl.pathname,
-    );
+    const learn = /^\/(en|ur|ar)\/learn\/(courses|paths)\/([^/]+)$/.exec(routed);
     if (learn?.[1] && learn[2] && learn[3]) {
       const slug = decodedSegment(learn[3]);
       if (slug !== null) {
@@ -458,28 +504,53 @@ export default async function proxy(request: NextRequest) {
         if (current !== null && current !== slug) {
           return permanent(
             request,
-            `/${learn[1]}${learn[2] === 'courses' ? coursePath(current) : learningPathPath(current)}`,
+            localizedPath(
+              parts.locale,
+              learn[2] === 'courses' ? coursePath(current) : learningPathPath(current),
+            ),
           );
         }
       }
     }
   }
 
-  const response = localeMiddleware(request);
-  const pathname = request.nextUrl.pathname;
-  const explicitlyPrefixed = routing.locales.some(
-    (locale) => pathname === `/${locale}` || pathname.startsWith(`/${locale}/`),
-  );
+  /**
+   * R1 — A LEGACY `/en/…` ADDRESS. English is unprefixed, so `/en` and
+   * `/en/…` never render: they answer ONE permanent redirect to the same
+   * resource's unprefixed address, query preserved. Every slug-history branch
+   * above has already run, so a former slug under `/en` was answered in one
+   * hop straight to its current unprefixed address; search admission skips a
+   * legacy address, so a legacy search URL never spends budget twice.
+   */
+  if (legacyEnglish)
+    return permanent(request, localizedPath(UNPREFIXED_LOCALE, parts.rest));
 
-  if (explicitlyPrefixed) {
-    // next-intl normally remembers any explicit prefix. That makes an ordinary
-    // public GET emit Set-Cookie even though its render is session-independent,
-    // which defeats the shared response boundary Phase 4 establishes. The
-    // switcher stores the same preference on explicit user action instead.
-    response.headers.delete('set-cookie');
+  /**
+   * A CASE VARIANT OF A SUPPORTED LOCALE — `/UR/…`, `/Ar`, `/EN/…`. Language
+   * tags are case-insensitive (RFC 5646 §2.1.1), so it names a real locale, not
+   * English content: ONE permanent redirect to the canonical address, never a
+   * second URL for the same page.
+   */
+  const segment = request.nextUrl.pathname.split('/', 2)[1] ?? '';
+  const folded = localeSchema.safeParse(segment.toLowerCase());
+  if (!parts.prefixed && folded.success) {
+    return permanent(
+      request,
+      localizedPath(folded.data, request.nextUrl.pathname.slice(segment.length + 1)),
+    );
   }
 
-  return response;
+  if (!parts.prefixed) {
+    // English: served from `/en/…` internally, marked (see REWRITE_MARK).
+    const target = request.nextUrl.clone();
+    target.pathname = `/${UNPREFIXED_LOCALE}${parts.rest}`;
+    const headers = new Headers(request.headers);
+    headers.set(NEXT_INTL_LOCALE_HEADER, UNPREFIXED_LOCALE);
+    headers.set(REWRITE_MARK_HEADER, REWRITE_MARK);
+    return NextResponse.rewrite(target, { request: { headers } });
+  }
+
+  return localeMiddleware(request);
 }
 
 /**
@@ -509,6 +580,9 @@ export default async function proxy(request: NextRequest) {
  *                forms are excluded, which is why this names `sitemap.xml`
  *                exactly rather than the `sitemap` prefix.
  *   favicon.ico — requested by browsers at a fixed unprefixed path.
+ *   icon.png   — the app icon (`app/icon.png`), served by Next at `/icon.png`.
+ *                R1: an unprefixed path is otherwise routed as English, which
+ *                would rewrite the icon to a page that does not exist.
  *   assets     — `/assets/*`, the platform's BYTES.
  *
  * `assets` WAS MISSING, AND PHASE 8 IS WHERE THAT STOPPED BEING THEORETICAL.
@@ -530,6 +604,6 @@ export default async function proxy(request: NextRequest) {
  */
 export const config = {
   matcher: [
-    '/((?!api(?:$|/)|_next(?:$|/)|assets(?:$|/)|rss(?:$|/)|robots\\.txt$|sitemap\\.xml$|sitemaps(?:$|/)|favicon\\.ico$).*)',
+    '/((?!api(?:$|/)|_next(?:$|/)|assets(?:$|/)|rss(?:$|/)|robots\\.txt$|sitemap\\.xml$|sitemaps(?:$|/)|favicon\\.ico$|icon\\.png$).*)',
   ],
 };

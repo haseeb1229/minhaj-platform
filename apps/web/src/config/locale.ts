@@ -1,4 +1,4 @@
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, UNPREFIXED_LOCALE, type Locale } from '@minhaj/contracts';
 
 /**
  * Locale PROPERTIES — the direction and the endonym of each supported locale.
@@ -15,30 +15,25 @@ import { localeSchema, type Locale } from '@minhaj/contracts';
  * `NEXT_PUBLIC_DEFAULT_LOCALE`, because no locale routing existed yet and
  * something had to decide the single `<html lang>` the skeleton rendered.
  *
- * Phase 3A delivers the real contract, and ROUTE_MAP.md §1.1 fixes it:
- *
- *     stored preference → Accept-Language → en
- *
- * The last step is `en`. Not "whatever `DEFAULT_LOCALE` says", because an
- * environment variable that can move the final fallback to `ur` or `ar` is a
- * way to contradict the accepted routing contract from a deployment file — and
- * a visitor with no preference and no matching `Accept-Language` would then
- * land on a locale the contract says they must not. The configurable keys are
- * therefore retired, in this phase, along with the resolution function that
- * read them.
+ * The routing contract decides it instead (ROUTE_MAP.md §1.1). Since
+ * Rebaseline R1 the ADDRESS alone decides the interface locale: an unprefixed
+ * path is English, `/ur/…` Urdu, `/ar/…` Arabic — no cookie and no
+ * `Accept-Language` header is consulted. The unprefixed locale is a fixed
+ * contract (`UNPREFIXED_LOCALE`), never an environment variable: a deployment
+ * file that could move it would contradict the accepted routing contract.
  */
 
 /** RTL locales (ROUTE_MAP.md §1.2). */
 const rtlLocales = new Set<Locale>(['ur', 'ar']);
 
 /**
- * The locale a visitor reaches when they express no usable preference
- * (ROUTE_MAP.md §1.1, final step).
+ * The interface locale of an unprefixed address (ROUTE_MAP.md §1.1, R1).
  *
- * A fixed contract, not configuration. It is the `defaultLocale` of the
- * next-intl routing configuration, which is the only place it is consumed.
+ * A fixed contract, not configuration: it is `UNPREFIXED_LOCALE` from the
+ * locale-path contract, and the `defaultLocale` of the next-intl routing
+ * configuration.
  */
-export const FALLBACK_LOCALE: Locale = 'en';
+export const FALLBACK_LOCALE: Locale = UNPREFIXED_LOCALE;
 
 /** Text direction for a locale. */
 export function directionOf(locale: Locale): 'ltr' | 'rtl' {

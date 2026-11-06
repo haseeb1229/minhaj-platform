@@ -164,9 +164,7 @@ export async function SurahIndexPage({
     >
       <div className="flex flex-col gap-2">
         <PageHeading>{title}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">
-          {t('sectionBody.surah')}
-        </p>
+        <p className="text-foreground-muted">{t('sectionBody.surah')}</p>
       </div>
       {surahs.length === 0 ? (
         <EmptyState>{t('empty')}</EmptyState>
@@ -184,9 +182,7 @@ export async function SurahIndexPage({
                   </TextLink>
                 </h2>
                 <ArabicName surah={surah} />
-                <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                  {surahFacts(surah, t)}
-                </p>
+                <p className="text-sm text-foreground-muted">{surahFacts(surah, t)}</p>
               </div>
             </Panel>
           ))}
@@ -221,10 +217,7 @@ function TafsirEntry({
       ? t('tafsirOne', { name: work.name, ayah: entry.startAyah })
       : t('tafsirRange', { name: work.name, start: entry.startAyah, end: entry.endAyah });
   return (
-    <details
-      open={open}
-      className="rounded-[var(--radius-control)] border border-[color:var(--color-border)] px-4 py-2"
-    >
+    <details open={open} className="rounded-control border border-border px-4 py-2">
       <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium">
         {range}
       </summary>
@@ -295,7 +288,7 @@ function AyahItem({
     <li id={withSurah ? `ayah-${key}` : ayahAnchor(ayah.ayah)} className="scroll-mt-4">
       <article
         aria-label={t('ayahName', { surah: ayah.surah, ayah: ayah.ayah })}
-        className="flex min-w-0 flex-col gap-3 border-b border-[color:var(--color-border)] py-5"
+        className="flex min-w-0 flex-col gap-3 border-b border-border py-5"
       >
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <TextLink href={withReading(ayahPath(locale, ref), choice)}>
@@ -468,9 +461,7 @@ export async function SurahPage({
           <SurahTitle surah={surah} locale={locale} t={t} />
         </h1>
         <ArabicName surah={surah} />
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {surahFacts(surah, t)}
-        </p>
+        <p className="text-sm text-foreground-muted">{surahFacts(surah, t)}</p>
       </Prose>
 
       <LayerNotices locale={locale} unavailable={context.unavailable} />
@@ -687,7 +678,7 @@ export async function AyahPage({
             size={choice.size}
           />
           {layers.translation === null ? null : translation === undefined ? (
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+            <p className="text-sm text-foreground-muted">
               {t('layerMissing.translation', { name: layers.translation.name })}
             </p>
           ) : (
@@ -700,7 +691,7 @@ export async function AyahPage({
             />
           )}
           {layers.transliteration === null ? null : transliteration === undefined ? (
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
+            <p className="text-sm text-foreground-muted">
               {t('layerMissing.transliteration', { name: layers.transliteration.name })}
             </p>
           ) : (
@@ -721,7 +712,7 @@ export async function AyahPage({
               {t('layer.tafsir', { name: tafsirLayer.name })}
             </h2>
             {tafsir.length === 0 ? (
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
+              <p className="text-sm text-foreground-muted">
                 {t('layerMissing.tafsir', { name: tafsirLayer.name })}
               </p>
             ) : (
@@ -829,9 +820,7 @@ export async function JuzIndexPage({
     >
       <div className="flex flex-col gap-2">
         <PageHeading>{title}</PageHeading>
-        <p className="text-[color:var(--color-foreground-muted)]">
-          {t('sectionBody.juz')}
-        </p>
+        <p className="text-foreground-muted">{t('sectionBody.juz')}</p>
       </div>
       {list.length === 0 ? (
         <EmptyState>{t('empty')}</EmptyState>
@@ -861,7 +850,7 @@ export async function JuzIndexPage({
 /** "From 2:142 to 2:252 · 111 ayat" — the reader's own derived range. */
 function JuzRange({ juz, t }: { readonly juz: PublicJuz; readonly t: QuranTranslator }) {
   return (
-    <p className="text-sm text-[color:var(--color-foreground-muted)]">
+    <p className="text-sm text-foreground-muted">
       {t('juzRange', {
         start: citationOf(juz.start),
         end: citationOf(juz.end),

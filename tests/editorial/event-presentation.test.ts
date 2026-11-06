@@ -161,18 +161,18 @@ describe('the /events query', () => {
   it('canonicalises every neutral value away', async () => {
     const { eventsPath } = await withIndexing(false);
     const none = { when: 'upcoming', country: null, city: null, centre: null } as const;
-    expect(eventsPath('en', none)).toBe('/en/events');
+    expect(eventsPath('en', none)).toBe('/events');
     expect(eventsPath('ur', none, 0)).toBe('/ur/events');
     expect(eventsPath('ar', { ...none, when: 'past' }, 20)).toBe(
       '/ar/events?when=past&offset=20',
     );
     expect(
       eventsPath('en', { when: 'upcoming', country: 'xa', city: 'town', centre: null }),
-    ).toBe('/en/events?country=xa&city=town');
+    ).toBe('/events?country=xa&city=town');
     // A City is never written without its Country.
-    expect(eventsPath('en', { ...none, city: 'town' })).toBe('/en/events');
+    expect(eventsPath('en', { ...none, city: 'town' })).toBe('/events');
     expect(eventsPath('en', { ...none, centre: 'synthetic-centre' }, 40)).toBe(
-      '/en/events?centre=synthetic-centre&offset=40',
+      '/events?centre=synthetic-centre&offset=40',
     );
   });
 });
@@ -299,7 +299,7 @@ describe('Event structured data claims only what is true', () => {
       name: 'Synthetic event',
       description: 'A synthetic summary',
       inLanguage: 'en',
-      url: `${ORIGIN}/en/events/synthetic-event`,
+      url: `${ORIGIN}/events/synthetic-event`,
       startDate: '2031-11-14T19:00:00+05:00',
       endDate: '2031-11-14T21:00:00+05:00',
       location: {
@@ -417,9 +417,9 @@ describe('canonical and hreflang', () => {
     expect(metadata.robots).toEqual({ index: true, follow: true });
     expect(metadata.alternates?.canonical).toBe(`${ORIGIN}/ur/events/synthetic-event`);
     expect(metadata.alternates?.languages).toEqual({
-      en: `${ORIGIN}/en/events/synthetic-event`,
+      en: `${ORIGIN}/events/synthetic-event`,
       ur: `${ORIGIN}/ur/events/synthetic-event`,
-      'x-default': `${ORIGIN}/en/events/synthetic-event`,
+      'x-default': `${ORIGIN}/events/synthetic-event`,
     });
   });
 

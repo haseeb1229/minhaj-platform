@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import type { ReactNode } from 'react';
@@ -140,8 +141,8 @@ async function newsTrail(locale: Locale) {
   const t = await getTranslations({ locale, namespace: 'news' });
   return {
     label: shell('nav.breadcrumbs'),
-    home: { href: `/${locale}`, text: shell('nav.home') },
-    news: { href: `/${locale}/news`, text: t('title') },
+    home: { href: localizedPath(locale, ''), text: shell('nav.home') },
+    news: { href: localizedPath(locale, '/news'), text: t('title') },
   };
 }
 
@@ -169,10 +170,14 @@ function NewsSections({
   const entries = [
     ...NEWS_KINDS.map((kind) => ({
       key: kind as NewsKind | 'archive',
-      href: `/${locale}${newsListPathOf(kind)}`,
+      href: localizedPath(locale, `${newsListPathOf(kind)}`),
       text: t(`families.${kind}`),
     })),
-    { key: 'archive' as const, href: `/${locale}/news/archive`, text: t('archive') },
+    {
+      key: 'archive' as const,
+      href: localizedPath(locale, '/news/archive'),
+      text: t('archive'),
+    },
   ];
   return (
     <nav aria-label={t('sectionsLabel')}>
@@ -192,7 +197,7 @@ function NewsSections({
 /** The type of a record, in words — never a colour alone. */
 function TypeLabel({ children }: { readonly children: ReactNode }) {
   return (
-    <span className="font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+    <span className="font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
       {children}
     </span>
   );
@@ -258,7 +263,7 @@ function NewsCard({
   return (
     <li
       className={`${CARD_SURFACE} ${
-        lead ? 'gap-4 border-t-4 border-t-[color:var(--color-accent)] sm:p-7' : ''
+        lead ? 'gap-4 border-t-4 border-t-accent sm:p-7' : ''
       } ${className}`}
     >
       {image === null ? null : (
@@ -266,7 +271,7 @@ function NewsCard({
           image={image}
           alt={translation.leadAlt ?? ''}
           lang={translation.languageCode}
-          className={`-mx-5 -mt-5 mb-1 w-[calc(100%+2.5rem)] max-w-none rounded-t-[var(--radius-panel)] ${
+          className={`-mx-5 -mt-5 mb-1 w-[calc(100%+2.5rem)] max-w-none rounded-t-panel ${
             lead ? 'sm:-mx-7 sm:-mt-7 sm:w-[calc(100%+3.5rem)]' : ''
           }`}
         />
@@ -286,7 +291,7 @@ function NewsCard({
           dir={direction}
         >
           <a
-            href={`/${locale}${newsPathOf(item.kind, item.slug)}`}
+            href={localizedPath(locale, `${newsPathOf(item.kind, item.slug)}`)}
             className={CARD_TITLE_LINK}
           >
             {translation.title}
@@ -308,7 +313,7 @@ function NewsCard({
         )}
         {compact || translation.excerpt === '' ? null : (
           <p
-            className={`wrap-anywhere text-[color:var(--color-foreground-muted)] ${
+            className={`wrap-anywhere text-foreground-muted ${
               lead ? 'text-lede line-clamp-5' : 'line-clamp-3 text-sm'
             }`}
             lang={translation.languageCode}
@@ -322,7 +327,12 @@ function NewsCard({
             {authors.map((person, index) => (
               <span key={person.slug}>
                 {index === 0 ? null : ' · '}
-                <TextLink href={`/${locale}/people/${encodeURIComponent(person.slug)}`}>
+                <TextLink
+                  href={localizedPath(
+                    locale,
+                    `/people/${encodeURIComponent(person.slug)}`,
+                  )}
+                >
                   {person.name}
                 </TextLink>
               </span>
@@ -334,7 +344,7 @@ function NewsCard({
             <TopicChips
               label={t('topics')}
               topics={topics.map((topic) => ({
-                href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+                href: localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`),
                 text: topic.name,
               }))}
             />
@@ -444,7 +454,7 @@ export async function NewsLandingPage({
         )
       : []),
   ]);
-  const base = `/${locale}/news`;
+  const base = localizedPath(locale, '/news');
   const others = (['press-release', 'statement', 'media-coverage'] as const).flatMap(
     (kind, index) => {
       const page = families[index];
@@ -467,7 +477,11 @@ export async function NewsLandingPage({
             <ActionLink href={pathFor(locale, requireRoute('events'))} onInk>
               {t('events')}
             </ActionLink>
-            <ActionLink href={`/${locale}/news/archive`} tone="secondary" onInk>
+            <ActionLink
+              href={localizedPath(locale, '/news/archive')}
+              tone="secondary"
+              onInk
+            >
               {t('archive')}
             </ActionLink>
           </>
@@ -528,7 +542,7 @@ export async function NewsLandingPage({
                 heading={t(`families.${kind}`)}
                 intro={t(`familyBody.${kind}`)}
                 action={{
-                  href: `/${locale}${newsListPathOf(kind)}`,
+                  href: localizedPath(locale, `${newsListPathOf(kind)}`),
                   text: t(`all.${kind}`),
                 }}
               />
@@ -551,7 +565,7 @@ export async function NewsLandingPage({
                   (kind) => (
                     <LinkCard
                       key={kind}
-                      href={`/${locale}${newsListPathOf(kind)}`}
+                      href={localizedPath(locale, `${newsListPathOf(kind)}`)}
                       title={t(`families.${kind}`)}
                       description={t(`familyBody.${kind}`)}
                     />
@@ -568,7 +582,7 @@ export async function NewsLandingPage({
                   description={t('collectionsBody')}
                 />
                 <LinkCard
-                  href={`/${locale}/news/archive`}
+                  href={localizedPath(locale, '/news/archive')}
                   title={t('archive')}
                   description={t('archiveBody')}
                 />
@@ -577,7 +591,7 @@ export async function NewsLandingPage({
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-8">
                   <div className="flex min-w-0 flex-col gap-1.5">
                     <h3 className="text-subheading font-semibold">{t('media')}</h3>
-                    <p className="max-w-[var(--measure-prose)] text-sm text-[color:var(--color-foreground-muted)]">
+                    <p className="max-w-[var(--measure-prose)] text-sm text-foreground-muted">
                       {t('mediaBody')}
                     </p>
                   </div>
@@ -621,7 +635,7 @@ export async function NewsFamilyPage({
   const offset = readNewsOffset(query);
   const page = await editorialReadRuntime().newsList(kind, offset);
   const title = t(`families.${kind}`);
-  const base = `/${locale}${newsListPathOf(kind)}`;
+  const base = localizedPath(locale, `${newsListPathOf(kind)}`);
 
   return (
     <>
@@ -757,7 +771,7 @@ export async function NewsDetailPage({
     trail.news,
     ...(record.kind === 'news-article'
       ? []
-      : [{ href: `/${locale}${familyPath}`, text: familyTitle }]),
+      : [{ href: localizedPath(locale, `${familyPath}`), text: familyTitle }]),
     { text: translation.title },
   ];
 
@@ -767,7 +781,7 @@ export async function NewsDetailPage({
         <Breadcrumbs label={trail.label} trail={crumbs} />
 
         {/* THE HEADER: what it is and when, the headline, its standfirst. */}
-        <header className="flex max-w-3xl flex-col gap-4 border-b border-[color:var(--color-border)] pb-8">
+        <header className="flex max-w-3xl flex-col gap-4 border-b border-border pb-8">
           <div className="text-caption">
             <MetaRow
               items={[
@@ -801,7 +815,7 @@ export async function NewsDetailPage({
               </p>
             ) : null}
             {translation.excerpt === '' ? null : (
-              <p className="text-lede max-w-[var(--measure-prose)] text-[color:var(--color-foreground-muted)]">
+              <p className="text-lede max-w-[var(--measure-prose)] text-foreground-muted">
                 {translation.excerpt}
               </p>
             )}
@@ -811,7 +825,12 @@ export async function NewsDetailPage({
               {authors.map(({ person }, index) => (
                 <span key={person.slug}>
                   {index === 0 ? null : ' · '}
-                  <TextLink href={`/${locale}/people/${encodeURIComponent(person.slug)}`}>
+                  <TextLink
+                    href={localizedPath(
+                      locale,
+                      `/people/${encodeURIComponent(person.slug)}`,
+                    )}
+                  >
                     {person.name}
                   </TextLink>
                 </span>
@@ -837,7 +856,7 @@ export async function NewsDetailPage({
           <div className="flex min-w-0 flex-col gap-6">
             {coverage === null ? null : (
               <p
-                className="max-w-[var(--measure-prose)] rounded-[var(--radius-control)] border-s-4 border-[color:var(--color-accent-rule)] bg-[color:var(--color-accent-surface)] px-4 py-3 text-sm"
+                className="max-w-[var(--measure-prose)] rounded-control border-s-4 border-accent-rule bg-accent-surface px-4 py-3 text-sm"
                 dir="auto"
               >
                 {t('coverageNotice', { outlet: coverage.outlet })}
@@ -875,14 +894,12 @@ export async function NewsDetailPage({
                     <a
                       href={coverage.sourceUrl}
                       rel="external noopener noreferrer"
-                      className="inline-flex min-h-11 flex-wrap items-center gap-x-1 font-medium wrap-anywhere text-[color:var(--color-action)] underline underline-offset-2"
+                      className="inline-flex min-h-11 flex-wrap items-center gap-x-1 font-medium wrap-anywhere text-action underline underline-offset-2"
                     >
                       <span dir="auto">
                         {t('sourceLink', { outlet: coverage.outlet })}
                       </span>{' '}
-                      <span className="text-[color:var(--color-foreground-muted)]">
-                        {t('sourceExternal')}
-                      </span>
+                      <span className="text-foreground-muted">{t('sourceExternal')}</span>
                     </a>
                   </p>
                 )}
@@ -907,7 +924,10 @@ export async function NewsDetailPage({
                       {credits.map(({ person, role }) => (
                         <li key={`${person.slug}:${role}`} dir="auto">
                           <TextLink
-                            href={`/${locale}/people/${encodeURIComponent(person.slug)}`}
+                            href={localizedPath(
+                              locale,
+                              `/people/${encodeURIComponent(person.slug)}`,
+                            )}
                           >
                             {person.name}
                           </TextLink>{' '}
@@ -932,13 +952,14 @@ export async function NewsDetailPage({
               </dl>
               {topics.length === 0 ? null : (
                 <div className="flex flex-col gap-2">
-                  <p className="text-xs text-[color:var(--color-foreground-muted)]">
-                    {t('topics')}
-                  </p>
+                  <p className="text-xs text-foreground-muted">{t('topics')}</p>
                   <TopicChips
                     label={t('topics')}
                     topics={topics.map((topic) => ({
-                      href: `/${locale}/topics/${encodeURIComponent(topic.slug)}`,
+                      href: localizedPath(
+                        locale,
+                        `/topics/${encodeURIComponent(topic.slug)}`,
+                      ),
                       text: topic.name,
                     }))}
                   />
@@ -947,7 +968,7 @@ export async function NewsDetailPage({
             </RecordSection>
 
             <p>
-              <ActionLink href={`/${locale}${familyPath}`} tone="secondary">
+              <ActionLink href={localizedPath(locale, `${familyPath}`)} tone="secondary">
                 {t(`all.${record.kind}`)}
               </ActionLink>
             </p>
@@ -957,19 +978,25 @@ export async function NewsDetailPage({
         <BreadcrumbData
           contentLocales={contentLocales}
           trail={[
-            { name: shell('nav.home'), path: `/${translation.languageCode}` },
-            { name: t('title'), path: `/${translation.languageCode}/news` },
+            {
+              name: shell('nav.home'),
+              path: localizedPath(translation.languageCode, ''),
+            },
+            { name: t('title'), path: localizedPath(translation.languageCode, '/news') },
             ...(record.kind === 'news-article'
               ? []
               : [
                   {
                     name: familyTitle,
-                    path: `/${translation.languageCode}${familyPath}`,
+                    path: localizedPath(translation.languageCode, `${familyPath}`),
                   },
                 ]),
             {
               name: translation.title,
-              path: `/${translation.languageCode}${newsPathOf(record.kind, record.slug)}`,
+              path: localizedPath(
+                translation.languageCode,
+                `${newsPathOf(record.kind, record.slug)}`,
+              ),
             },
           ]}
         />
@@ -1051,7 +1078,7 @@ export async function NewsArchivePage({
             <div className="grid gap-10 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-12">
               <div className="flex min-w-0 flex-col gap-8">
                 <nav aria-label={t('archiveYears')} className="flex flex-col gap-3">
-                  <h2 className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-foreground-muted)] uppercase">
+                  <h2 className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-foreground-muted uppercase">
                     {t('archiveYears')}
                   </h2>
                   <ul className="flex list-none flex-wrap gap-2 p-0 lg:flex-col">
@@ -1074,7 +1101,7 @@ export async function NewsArchivePage({
                           partial={filter.year === entry.year && filter.month !== null}
                         >
                           {yearText(entry.year, locale)}
-                          <span className="ms-1 text-[color:var(--color-foreground-muted)]">
+                          <span className="ms-1 text-foreground-muted">
                             ({t('countShort', { count: entry.count })})
                           </span>
                         </FilterLink>
@@ -1085,7 +1112,7 @@ export async function NewsArchivePage({
 
                 {months.length === 0 ? null : (
                   <nav aria-label={t('archiveMonths')} className="flex flex-col gap-3">
-                    <h2 className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-foreground-muted)] uppercase">
+                    <h2 className="text-caption font-semibold tracking-[var(--tracking-eyebrow)] text-foreground-muted uppercase">
                       {t('archiveMonths')}
                     </h2>
                     <ul className="flex list-none flex-wrap gap-2 p-0 lg:flex-col">
@@ -1099,7 +1126,7 @@ export async function NewsArchivePage({
                             current={filter.month === entry.month}
                           >
                             {monthName(entry.month, locale)}
-                            <span className="ms-1 text-[color:var(--color-foreground-muted)]">
+                            <span className="ms-1 text-foreground-muted">
                               ({t('countShort', { count: entry.count })})
                             </span>
                           </FilterLink>

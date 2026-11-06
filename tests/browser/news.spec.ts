@@ -78,7 +78,7 @@ async function throughWorkflow(path: string) {
 }
 
 async function saveNew(page: Page, segment: string, fill: () => Promise<void>) {
-  await page.goto(`/en/admin/editorial/${segment}/new`);
+  await page.goto(`/admin/editorial/${segment}/new`);
   await fill();
   await page.getByRole('button', { name: 'Save revision', exact: true }).click();
   await page.waitForURL(new RegExp(`/admin/editorial/${segment}/[0-9a-f-]{36}$`));
@@ -117,7 +117,7 @@ test.afterAll(async () => {
 test('authors each family through the shared workflow, refusing what does not belong', async () => {
   test.setTimeout(180000);
   // A NewsArticle may not claim a static /news sibling.
-  await author.goto('/en/admin/editorial/news/new');
+  await author.goto('/admin/editorial/news/new');
   await expect(
     author.getByText('A news slug cannot be archive', { exact: false }),
   ).toBeVisible();
@@ -148,7 +148,7 @@ test('authors each family through the shared workflow, refusing what does not be
   await throughWorkflow(paths['statement']);
 
   // A coverage source must be a safe HTTPS address.
-  await author.goto('/en/admin/editorial/media-coverage/new');
+  await author.goto('/admin/editorial/media-coverage/new');
   await author.getByLabel('Canonical slug', { exact: true }).fill(slugs.coverage);
   await author.locator('#en-title').fill(TITLE.coverage);
   await author.getByLabel('Outlet', { exact: true }).fill(OUTLET);
@@ -174,7 +174,7 @@ test('authors each family through the shared workflow, refusing what does not be
   await throughWorkflow(paths['coverage']);
 
   // The shared queue holds every family's records awaiting review.
-  await reviewer.goto('/en/admin/editorial/queue');
+  await reviewer.goto('/admin/editorial/queue');
   for (const heading of ['News', 'Press releases', 'Statements', 'Media coverage'])
     await expect(
       reviewer.getByRole('heading', { name: heading, exact: true }),
@@ -184,11 +184,13 @@ test('authors each family through the shared workflow, refusing what does not be
 test('shows News and Events to an anonymous visitor with no cookie, and the same body signed in', async ({
   page,
 }) => {
+  // Room for the shell's presence snapshot to catch up (see below).
+  test.setTimeout(120_000);
   const external: string[] = [];
   page.on('request', (request) => {
     if (!request.url().startsWith(baseUrl())) external.push(request.url());
   });
-  const response = await page.goto('/en/news');
+  const response = await page.goto('/news');
   expect(response?.status()).toBe(200);
   expect(response?.headers()['set-cookie']).toBeUndefined();
   const main = page.getByRole('main');
@@ -197,49 +199,70 @@ test('shows News and Events to an anonymous visitor with no cookie, and the same
   await expect(main.getByRole('link', { name: TITLE.statement })).toBeVisible();
   await expect(main.getByRole('link', { name: TITLE.coverage })).toBeVisible();
   for (const href of [
-    '/en/news/press-releases',
-    '/en/news/statements',
-    '/en/news/media-coverage',
-    '/en/news/archive',
-    '/en/media/photos',
-    '/en/media/galleries',
-    '/en/media/archive',
+    '/news/press-releases',
+    '/news/statements',
+    '/news/media-coverage',
+    '/news/archive',
+    '/media/photos',
+    '/media/galleries',
+    '/media/archive',
   ])
     await expect(main.locator(`a[href="${href}"]`).first()).toBeVisible();
   // Events (Phase 14) are linked as the other half of News and Events.
-  await expect(main.locator('a[href="/en/events"]').first()).toBeVisible();
+  await expect(main.locator('a[href="/events"]').first()).toBeVisible();
   // Nothing that does not exist is linked. The newsletter is delivered by
-  // Phase 21 and reached from the footer and Explore, not from News.
-  await expect(main.locator('a[href="/en/newsletter"]')).toHaveCount(0);
+  // Phase 21 and reached from Explore, not from News.
+  await expect(main.locator('a[href="/newsletter"]')).toHaveCount(0);
   await expect(page.locator('a[href^="/rss"]')).toHaveCount(0);
   // No picture in the content: these synthetic stories carry no lead image.
-  // (Phase 30-R: the shell's official brand lockup is the page's only picture.)
+  // (Rebaseline R1: the organisation's official mark appears once, in the
+  // footer; the header carries the product's own wordmark, not a picture.)
   await expect(main.locator('img')).toHaveCount(0);
-  await expect(page.locator('header img')).toHaveAttribute(
+  await expect(page.locator('header img')).toHaveCount(0);
+  await expect(page.locator('footer img')).toHaveAttribute(
     'alt',
     'Minhaj-ul-Quran International',
   );
-  // The primary navigation now leads here.
+  // PROMOTED BY EVIDENCE: published news puts News in the primary navigation
+  // and in the footer's Discover group. The shell's presence snapshot may be
+  // up to 30 seconds old, so the promotion is awaited, never assumed.
+  await expect(async () => {
+    await page.goto('/news');
+    await expect(
+      page
+        .getByRole('banner')
+        .getByRole('navigation', { name: 'Main navigation' })
+        .locator('a[href="/news"]'),
+    ).toBeVisible({ timeout: 1_000 });
+    await expect(
+      page
+        .getByRole('contentinfo')
+        .getByRole('navigation', { name: 'Discover' })
+        .locator('a[href="/news"]'),
+    ).toHaveCount(1, { timeout: 1_000 });
+  }).toPass({ timeout: 45_000, intervals: [2_000, 5_000] });
+  // The current section is marked for assistive technology.
   await expect(
     page
+      .getByRole('banner')
       .getByRole('navigation', { name: 'Main navigation' })
-      .locator('a[href="/en/news"]'),
-  ).toBeVisible();
+      .locator('a[href="/news"]'),
+  ).toHaveAttribute('aria-current', 'page');
 
   // `?sort=latest` is the same resource, never a path of its own.
-  expect((await page.goto('/en/news?sort=latest'))?.status()).toBe(200);
-  expect((await page.request.get('/en/news/latest')).status()).toBe(404);
+  expect((await page.goto('/news?sort=latest'))?.status()).toBe(200);
+  expect((await page.request.get('/news/latest')).status()).toBe(404);
 
   // A statement names its authority; the page is the same signed in.
-  await page.goto(`/en/news/statements/${slugs.statement}`);
+  await page.goto(`/news/statements/${slugs.statement}`);
   await expect(page.getByText(`Issued by ${ISSUER}`).first()).toBeVisible();
   const text = await page.getByRole('main').innerText();
-  await author.goto(`/en/news/statements/${slugs.statement}`);
+  await author.goto(`/news/statements/${slugs.statement}`);
   expect(await author.getByRole('main').innerText()).toBe(text);
   expect(await page.context().cookies()).toHaveLength(0);
 
   // Coverage is a summary with a described outbound link — never an embed.
-  await page.goto(`/en/news/media-coverage/${slugs.coverage}`);
+  await page.goto(`/news/media-coverage/${slugs.coverage}`);
   const link = page.getByRole('link', { name: /Read the original at/ });
   await expect(link).toHaveAttribute('href', SOURCE);
   await expect(link).toHaveAttribute('rel', 'external noopener noreferrer');
@@ -249,11 +272,11 @@ test('shows News and Events to an anonymous visitor with no cookie, and the same
   expect(external).toEqual([]);
 
   // The archive lists every family with its type, and tolerates a bad query.
-  await page.goto('/en/news/archive');
+  await page.goto('/news/archive');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('News archive');
   await expect(page.getByRole('link', { name: TITLE.coverage })).toBeVisible();
   await expect(page.getByText('Statement', { exact: true }).first()).toBeVisible();
-  expect((await page.goto('/en/news/archive?year=abc&month=99'))?.status()).toBe(200);
+  expect((await page.goto('/news/archive?year=abc&month=99'))?.status()).toBe(200);
 });
 
 test('answers a former slug with one 301 and never shadows a static route', async ({
@@ -274,10 +297,10 @@ test('answers a former slug with one 301 and never shadows a static route', asyn
     `/ur/news/statements/${slugs.statementRenamed}`,
   );
   for (const path of [
-    '/en/news/archive',
-    '/en/news/press-releases',
-    '/en/news/statements',
-    '/en/news/media-coverage',
+    '/news/archive',
+    '/news/press-releases',
+    '/news/statements',
+    '/news/media-coverage',
   ]) {
     const response = await anon.request.get(path, { maxRedirects: 0 });
     expect(response.status(), path).toBe(200);

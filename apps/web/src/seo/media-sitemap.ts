@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { localeSchema, type Locale } from '@minhaj/contracts';
+import { localeSchema, type Locale, localizedPath } from '@minhaj/contracts';
 import type { MediaSitemapRow } from '@minhaj/contracts/media';
 
 import { mediaReadRuntime } from '@/composition/media-read';
@@ -60,7 +60,7 @@ function addRow(
 ): void {
   for (const locale of row.locales) {
     buckets.get(locale as Locale)?.push({
-      loc: absoluteUrl(`/${locale}${path}`),
+      loc: absoluteUrl(localizedPath(locale, `${path}`)),
       lastmod: row.updatedAt.toISOString(),
     });
   }

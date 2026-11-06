@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getFormatter, getTranslations } from 'next-intl/server';
 
 import { requireAdminPage } from '@/composition/authorization';
@@ -50,7 +51,7 @@ export default async function SearchOperationsPage({
   const page = await requireAdminPage(
     locale,
     'search.read',
-    `/${locale}/admin/system/search`,
+    localizedPath(locale, '/admin/system/search'),
   );
   const copy = await adminCopy(locale);
   const status = await searchRuntime().status();
@@ -66,9 +67,7 @@ export default async function SearchOperationsPage({
     <main className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
         <PageHeading>{t('search.title')}</PageHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('search.description')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('search.description')}</p>
       </header>
 
       <Alert tone={healthy ? 'success' : 'warning'}>
@@ -103,9 +102,7 @@ export default async function SearchOperationsPage({
         <div className="flex flex-col gap-3">
           <SectionHeading>{t('search.failures')}</SectionHeading>
           {status.failures.length === 0 ? (
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('common.none')}
-            </p>
+            <p className="text-sm text-foreground-muted">{t('common.none')}</p>
           ) : (
             <DataTable
               caption={t('search.failures')}
@@ -151,9 +148,7 @@ export default async function SearchOperationsPage({
             <SectionHeading>{t('search.operations')}</SectionHeading>
 
             <div className="flex flex-col gap-2">
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                {t('search.retryHelp')}
-              </p>
+              <p className="text-sm text-foreground-muted">{t('search.retryHelp')}</p>
               <ActionForm
                 action={retrySearchIndexingAction}
                 submitLabel={t('search.retry')}
@@ -166,9 +161,7 @@ export default async function SearchOperationsPage({
             </div>
 
             <div className="flex flex-col gap-2">
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                {t('search.reconcileHelp')}
-              </p>
+              <p className="text-sm text-foreground-muted">{t('search.reconcileHelp')}</p>
               <ActionForm
                 action={reconcileSearchIndexAction}
                 submitLabel={t('search.reconcile')}
@@ -181,9 +174,7 @@ export default async function SearchOperationsPage({
             </div>
 
             <div className="flex flex-col gap-2">
-              <p className="text-sm text-[color:var(--color-foreground-muted)]">
-                {t('search.rebuildHelp')}
-              </p>
+              <p className="text-sm text-foreground-muted">{t('search.rebuildHelp')}</p>
               <ActionForm
                 action={rebuildSearchIndexAction}
                 submitLabel={t('search.rebuild')}

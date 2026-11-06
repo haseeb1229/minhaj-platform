@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getLocale, getTranslations } from 'next-intl/server';
 
 import { Button, Container, Prose, TextInput } from '@/components/ui';
@@ -46,9 +47,7 @@ export default async function PublicNotFound() {
       <div lang={locale} dir={direction} className="flex flex-col gap-6 py-16">
         <Prose>
           <h1 className="text-3xl font-semibold tracking-tight">{t('notFound.title')}</h1>
-          <p className="text-[color:var(--color-foreground-muted)]">
-            {t('notFound.body')}
-          </p>
+          <p className="text-foreground-muted">{t('notFound.body')}</p>
         </Prose>
 
         {/*
@@ -58,7 +57,7 @@ export default async function PublicNotFound() {
          */}
         <form
           method="get"
-          action={`/${locale}/search`}
+          action={localizedPath(locale, '/search')}
           role="search"
           className="flex max-w-md flex-wrap items-end gap-3"
         >
@@ -74,17 +73,26 @@ export default async function PublicNotFound() {
         <nav aria-label={t('notFound.title')}>
           <ul className="flex flex-col gap-2 text-sm">
             <li>
-              <a href={`/${locale}`} className="underline underline-offset-2">
+              <a
+                href={localizedPath(locale, '')}
+                className="underline underline-offset-2"
+              >
                 {t('nav.home')}
               </a>
             </li>
             <li>
-              <a href={`/${locale}/explore`} className="underline underline-offset-2">
+              <a
+                href={localizedPath(locale, '/explore')}
+                className="underline underline-offset-2"
+              >
                 {t('nav.explore')}
               </a>
             </li>
             <li>
-              <a href={`/${locale}/sitemap`} className="underline underline-offset-2">
+              <a
+                href={localizedPath(locale, '/sitemap')}
+                className="underline underline-offset-2"
+              >
                 {t('nav.sitemap')}
               </a>
             </li>

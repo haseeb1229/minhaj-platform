@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 
-import { localeSchema } from '@minhaj/contracts';
+import { localeSchema, localizedPath } from '@minhaj/contracts';
 
 import { requireOwnSession } from '@/composition/authorization';
 import { fatwaRuntime } from '@/composition/fatwa';
@@ -55,5 +55,5 @@ export async function submitFatwaQuestion(
     return { status: 'error', failure };
   }
   // Outside the try: `redirect` signals by throwing, and that is not a failure.
-  redirect(`/${locale}/my/questions/${encodeURIComponent(id)}`);
+  redirect(localizedPath(locale, `/my/questions/${encodeURIComponent(id)}`));
 }

@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { LEARNING_PAGE } from '@minhaj/contracts/learning';
@@ -47,7 +48,7 @@ export default async function CourseProgressPage({
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const locale = await requireLocale(params);
-  const path = `/${locale}/my/progress/courses`;
+  const path = localizedPath(locale, '/my/progress/courses');
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myLearning' });
   const offset = readPersonalOffset(await searchParams);
@@ -76,7 +77,9 @@ export default async function CourseProgressPage({
         <>
           <EmptyState>{offset === 0 ? t('courses.empty') : t('list.beyond')}</EmptyState>
           <p>
-            <TextLink href={`/${locale}/learn/courses`}>{t('courses.browse')}</TextLink>
+            <TextLink href={localizedPath(locale, '/learn/courses')}>
+              {t('courses.browse')}
+            </TextLink>
           </p>
         </>
       ) : (
@@ -89,7 +92,10 @@ export default async function CourseProgressPage({
               <DataCell wrap>
                 <span className="flex min-w-0 flex-col gap-1">
                   <TextLink
-                    href={`/${locale}/my/learning/courses/${encodeURIComponent(entry.course.slug)}`}
+                    href={localizedPath(
+                      locale,
+                      `/my/learning/courses/${encodeURIComponent(entry.course.slug)}`,
+                    )}
                   >
                     <LearningTitle
                       labels={entry.course.labels}

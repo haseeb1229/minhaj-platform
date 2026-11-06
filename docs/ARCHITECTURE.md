@@ -951,7 +951,9 @@ The diagram and the bullets above are the **Phase-29 exit** state; §5.2 records
   module `migration-runner.ts` reaches.
 - **The brand lockup.** The official logo is a statically imported PNG bundled into the Next build
   output (`apps/web/src/shell/brand/`), and the favicon is the App Router `icon.png` file convention;
-  neither is a remote reference (OPEN_DECISIONS.md §6.4).
+  neither is a remote reference (OPEN_DECISIONS.md §6.4). Since Rebaseline R1 that logo is used
+  unmodified as a secondary organisational mark in the footer only; the product is identified by
+  the "One Minhaj" wordmark (§13.2).
 
 ### 5.4 As delivered (Phase 30-RD) — Collections and the personal-data clearance
 
@@ -1185,6 +1187,21 @@ critical path, which §8.3.1 exists to prevent.
 > Caching such a route is a **later, separate decision** with its own invalidation proof
 > (§8.4, DELIVERY_PLAN.md Phase 34). Serving it uncached is correct until then.
 
+**The public shell is a content route since Rebaseline R1 (2026-11-06).** The header, footer and
+`/explore` index now promote destinations from public evidence (INFORMATION_ARCHITECTURE.md §2.2):
+`apps/web/src/composition/presence.ts` reads each owning context's own **public** reads (approved
+active corpora, published records, published Pages, open giving) into one snapshot. So the public
+layout (`app/[locale]/(public)/layout.tsx`) and `/explore` are declared **content routes**
+(`force-dynamic`) and are held to every content-route rule above: they reach no session service,
+no identity or authorisation service, no logger and no authentication library. The snapshot is
+computed at most once per request (React `cache`) and memoised in-process for 30 seconds; each
+signal fails **closed** (an unknown read promotes nothing), and the snapshot is deliberately not
+logged, because the anonymous public graph reaches no logger and no server-environment parser.
+The shell still reads nothing about who is looking: the header's account entry is a private
+island that asks `/api/my/account-state` (one boolean, `private, no-store`, same-origin) after
+the page has loaded, so the public HTML is identical for every visitor (§8.2). Until R1 the
+public layout and `/explore` read only code and were not content routes (historical).
+
 ### 8.4 Validation
 
 **Cache-leakage tests are a standing exit criterion of every feature phase**: no
@@ -1249,7 +1266,9 @@ infrastructure.
   **before any phase required to serve en/ur/ar routes** — including the Phase 2 authentication
   surfaces. next-intl is introduced and compatibility-validated there (TECH_STACK.md §1.5).
   **No later phase re-implements localisation.**
-- Locale is the first path segment; always present (ROUTE_MAP.md §1).
+- Locale is the first path segment for Urdu and Arabic (`/ur/…`, `/ar/…`); English is unprefixed
+  and `/en/…` answers one 301 to it (ROUTE_MAP.md §1.1; owner decision, Rebaseline R1,
+  2026-11-06). Until R1 the segment was always present, English included (historical).
 - **RTL from day one:** logical CSS properties throughout, `dir` derived from locale, correct
   mixed-direction handling (Arabic Quranic text within an English page).
 - **One codebase, one content database, three locales.** Three codebases or three content
@@ -1605,7 +1624,8 @@ surface is built to be discarded.
 | Stage | Owns |
 |---|---|
 | **Phase 2** | The **minimum** shared visual and interaction foundation needed by authentication, Account & Security and the initial privileged entry surfaces |
-| **Phase 4** | The **canonical broad product design system** and the public shell |
+| **Phase 4** | The **canonical broad product design system** and the public shell *(at Phase-4 exit; its visual values are historical, superseded by Rebaseline R1's interim identity — the token structure it established stands)* |
+| **Rebaseline R1** (operational macro, 2026-11-06) | The owner-approved **interim One Minhaj visual identity** — token values, utilities, shipped typefaces and the shell frame (§13.2–§13.3) — replaceable by the organisation's official brand pack (OPEN_DECISIONS.md §6.4) |
 | **Later specialised phases** | Extensions for readers, media, editorial, religious content, learning and administrative complexity |
 | **Phase 32** | The assembled UX, accessibility and SEO acceptance pass |
 
@@ -1626,12 +1646,61 @@ where a real stacking problem exists.
 > the architectural decision; the **values** arrive with accepted brand evidence, and the
 > structure is what makes substituting them a configuration change.
 
+**As delivered (Rebaseline R1, 2026-11-06) — the interim One Minhaj identity.** The project owner
+approved an **interim** identity, replaceable by Minhaj's official brand pack, which stays OPEN
+(OPEN_DECISIONS.md §6.4). The values live in one place, the `@theme` block of
+`apps/web/src/styles/globals.css`, by role:
+
+| Role | Value | Role | Value |
+|---|---|---|---|
+| surface | `#f7f4ec` | ink (dark band) | `#0f2621` |
+| surface-raised | `#fffdf8` | ink-raised | `#15342d` |
+| surface-sunken | `#efe9dc` | ink-foreground | `#f4efe3` |
+| foreground | `#16201b` | ink-muted | `#c3cdc6` |
+| foreground-muted | `#4f5751` | ink-accent | `#d8b868` |
+| action (hover) | `#0e4a3b` (`#0a382c`) | ink-border | `#29453d` |
+| accent | `#80591a` | border | `#e2d9c6` |
+| accent-surface | `#f3e8cc` | border-strong | `#857860` |
+| accent-rule | `#cfb57e` | focus | `#0e4a3b` |
+| highlight | `#f5e3ae` | radius control · panel | `0.5rem` · `0.875rem` |
+
+- **Every role is a Tailwind theme colour consumed as a utility** (`bg-surface-raised`,
+  `text-foreground-muted`, `rounded-panel`). R1 migrated 1,403 arbitrary `[color:var(--…)]`,
+  radius and shadow classes onto the utilities, so a component names a role, never a value. The
+  semantic status roles (error, warning, success, info, each with a surface) sit in the same block.
+- **Contrast is asserted, not claimed:** `tests/config/design-tokens.test.ts` computes every listed
+  text pair at ≥ 4.5:1 and the control boundary and focus ring at ≥ 3:1 from the token values.
+- **The product is identified by a typographic "One Minhaj" wordmark** with a small eight-point
+  star outline — a neutral geometric form, not an organisational emblem. The organisation's
+  official MQI logo is used **unmodified** as a **secondary** organisational mark, in the footer
+  only beside the one pre-adoption statement; it is never redrawn or recoloured.
+
 ### 13.3 Typography across three scripts
 
 English, Urdu and Arabic — including **mixed scripts within one page** — with deliberate
 decisions on long-form reading, line height, hierarchy, readable measure, loading performance
 and **licensing**. Quran-specific typography remains specialised to the Quran phase and is not
 generalised into the shared scale (SECURITY_BASELINE.md §16.2).
+
+**As delivered (Rebaseline R1) — four shipped faces, one job each.** Self-hosted SIL OFL 1.1 faces,
+declared through `next/font/local` in **one** module, `apps/web/src/styles/fonts.ts`, each file
+beside its verbatim `OFL.txt` (provenance, versions and hashes: TECH_STACK.md §18.9):
+
+| Role (utility) | Face | Used for | Preloaded |
+|---|---|---|---|
+| display (`font-serif`) | Newsreader (variable, latin, normal + italic) | headings and English long-form reading | yes |
+| ui (`font-sans`) | Instrument Sans (variable, latin) | interface text, navigation, metadata | yes |
+| urdu (`font-urdu`) | Gulzar 400 (arabic subset) — genuine Nastaliq | Urdu headings and Urdu long-form reading | no |
+| naskh (`font-naskh`) | Noto Naskh Arabic 400 + 600 (arabic subset) | Arabic throughout, and dense Urdu interface text where Nastaliq is unsuitable | no |
+
+The script roles are applied by `:lang()` in the base layer, so a page's language selects its
+faces. The faces were chosen after a rendered side-by-side trial (Newsreader + Instrument Sans
+against Source Serif/Sans and Literata/Plex; Gulzar against Noto Nastaliq Urdu and Naskh; Noto
+Naskh Arabic against IBM Plex Sans Arabic and Noto Sans Arabic). **No Quran face is shipped** —
+one arrives with an approved corpus and is never used for ordinary Arabic interface text; Jameel
+Noori Nastaleeq is not shipped because its licence is unclear. `tests/config/fonts.test.ts`
+enforces one font module, `next/font/local` only, no Google-hosted font loading, an `OFL.txt`
+beside every file and the preload policy. CSP `font-src 'self'` is unchanged.
 
 ### 13.4 Component and state contract
 
@@ -1658,7 +1727,8 @@ every breakpoint** — not only at the width a developer happened to check (§9)
 ### 13.6 Navigation, scroll, focus and motion
 
 **Skip links** · deliberate focus management · sensible sticky behaviour · a real mobile
-navigation · **keyboard-operable mega menus** · scroll restoration · predictable anchor
+navigation · **keyboard-operable disclosure menus** (the header's "More"; the mega menus this
+line named until Rebaseline R1 are historical, removed by R1) · scroll restoration · predictable anchor
 behaviour · **focus restoration when a dialog closes** · scroll locking while it is open · and
 no scroll jank.
 
@@ -1681,6 +1751,11 @@ The audience is global, predominantly mobile and frequently on constrained conne
 (PRODUCT_SCOPE.md §5). Image optimisation · responsive images · lazy loading · font
 discipline · **Server Components by default** · minimal client JavaScript · stable layout
 without shift · bounded lists · route-level loading states · graceful media degradation.
+
+Font discipline as delivered (Rebaseline R1): only the two Latin faces (~150 KB together) are
+preloaded, with metric-adjusted fallbacks so the swap does not shift layout; the Arabic-script
+faces (Gulzar ~204 KB, Noto Naskh Arabic ~53–57 KB per weight) are subset to Arabic script and
+fetched only by pages that show Urdu or Arabic text (§13.3).
 
 ### 13.9 Data scale
 

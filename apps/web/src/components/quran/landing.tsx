@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import 'server-only';
 
 import { getTranslations } from 'next-intl/server';
@@ -120,7 +121,10 @@ export async function QuranLandingPage({
       ? []
       : [
           ...RELATED_KINDS.filter((kind) => kind !== 'courses').map(section),
-          { key: 'topics', href: `/${locale}/topics/${encodeURIComponent(topic.slug)}` },
+          {
+            key: 'topics',
+            href: localizedPath(locale, `/topics/${encodeURIComponent(topic.slug)}`),
+          },
         ];
   const learn = topic === null ? [] : [section('courses')];
   const title = (key: string) => t(`sections.${key}` as 'sections.read');
@@ -265,17 +269,17 @@ export async function QuranLandingUnavailable({ locale }: { readonly locale: Loc
               {parts4.map((part) => (
                 <li
                   key={part.key}
-                  className="flex h-full min-w-0 flex-col gap-2.5 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]"
+                  className="flex h-full min-w-0 flex-col gap-2.5 rounded-panel border border-border bg-surface-raised p-5 shadow-panel"
                 >
                   <h3 className="text-subheading font-semibold">
                     {t(`landing.${part.key}`)}
                   </h3>
-                  <p className="text-sm text-[color:var(--color-foreground-muted)]">
+                  <p className="text-sm text-foreground-muted">
                     {t(`unavailable.parts.${part.key}`)}
                   </p>
                   <p className="mt-auto pt-1 text-sm">
                     {part.href === null ? (
-                      <span className="text-caption font-medium text-[color:var(--color-foreground-muted)]">
+                      <span className="text-caption font-medium text-foreground-muted">
                         {t('unavailable.awaiting')}
                       </span>
                     ) : (
@@ -290,7 +294,7 @@ export async function QuranLandingUnavailable({ locale }: { readonly locale: Loc
           </section>
 
           <p>
-            <TextLink href={`/${locale}`}>{t('unavailable.home')}</TextLink>
+            <TextLink href={localizedPath(locale, '')}>{t('unavailable.home')}</TextLink>
           </p>
         </div>
       </Container>

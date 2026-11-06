@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import type { Locale } from '@minhaj/contracts';
@@ -101,7 +102,10 @@ export async function FacetBrowse({
               browse: booksPath(locale, readLibraryQuery({}), {
                 contributor: facet.id,
               }),
-              canonical: `/${locale}/people/${encodeURIComponent(person.slug)}`,
+              canonical: localizedPath(
+                locale,
+                `/people/${encodeURIComponent(person.slug)}`,
+              ),
               lang: null,
               dir: null,
             };
@@ -143,8 +147,8 @@ export async function FacetBrowse({
     <ListingFrame
       breadcrumbLabel={shell('nav.breadcrumbs')}
       trail={[
-        { href: `/${locale}`, text: shell('nav.home') },
-        { href: `/${locale}/library`, text: t('title') },
+        { href: localizedPath(locale, ''), text: shell('nav.home') },
+        { href: localizedPath(locale, '/library'), text: t('title') },
         { text: title },
       ]}
       title={title}
@@ -180,7 +184,7 @@ export async function FacetBrowse({
                */
               <li
                 key={row.key}
-                className="flex h-full min-w-0 flex-col gap-2 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-raised)] p-5 shadow-[var(--shadow-panel)]"
+                className="flex h-full min-w-0 flex-col gap-2 rounded-panel border border-border bg-surface-raised p-5 shadow-panel"
               >
                 <h2 className="text-subheading font-semibold wrap-anywhere">
                   <TextLink href={row.canonical}>{row.name}</TextLink>
@@ -200,12 +204,18 @@ export async function FacetBrowse({
         label={title}
         previous={
           offset > 0
-            ? `/${locale}/library/${kind}?offset=${String(Math.max(0, offset - FACET_PAGE))}`
+            ? localizedPath(
+                locale,
+                `/library/${kind}?offset=${String(Math.max(0, offset - FACET_PAGE))}`,
+              )
             : null
         }
         next={
           page.hasMore
-            ? `/${locale}/library/${kind}?offset=${String(offset + FACET_PAGE)}`
+            ? localizedPath(
+                locale,
+                `/library/${kind}?offset=${String(offset + FACET_PAGE)}`,
+              )
             : null
         }
         previousLabel={t('previous')}

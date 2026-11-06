@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
@@ -67,7 +68,7 @@ export default async function MembershipAdminLayout({
               key: 'membership',
               links: SURFACES.map((surface) => ({
                 key: surface.key,
-                href: `/${locale}/admin/membership${surface.path}`,
+                href: localizedPath(locale, `/admin/membership${surface.path}`),
                 text: t(`surface.${surface.key}`),
               })),
             },

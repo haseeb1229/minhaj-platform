@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 
 import type { Locale } from '@minhaj/contracts';
@@ -100,7 +101,7 @@ function entryRecordText(entry: HadithCommentaryEntryRecord): string {
 export async function CommentaryDirectory({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/hadith/commentary`;
+  const base = localizedPath(locale, '/admin/hadith/commentary');
   const context = await requireAdminPage(locale, 'hadith.read', base);
   const copy = await hadithCopy(locale);
   const { t } = copy;
@@ -121,9 +122,7 @@ export async function CommentaryDirectory({ params, searchParams }: ListParams) 
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.commentary')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scope.commentary')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('scope.commentary')}</p>
 
       {page.items.length === 0 ? (
         <EmptyState>{t('empty')}</EmptyState>
@@ -182,9 +181,7 @@ export async function CommentaryDirectory({ params, searchParams }: ListParams) 
         <Panel>
           <div className="flex flex-col gap-4">
             <SectionHeading>{t('commentary.create')}</SectionHeading>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('createHelp')}
-            </p>
+            <p className="text-sm text-foreground-muted">{t('createHelp')}</p>
             <PeopleSearch query={reference} copy={copy} />
             <CommentaryForm
               locale={locale}
@@ -205,7 +202,7 @@ export async function CommentaryEditor({ params, searchParams }: EditorParams) {
   const locale = await requireLocale(params);
   const id = recordTarget((await params).id);
   const query = await searchParams;
-  const list = `/${locale}/admin/hadith/commentary`;
+  const list = localizedPath(locale, '/admin/hadith/commentary');
   const base = `${list}/${id}`;
   const context = await requireAdminPage(locale, 'hadith.read', base);
   const copy = await hadithCopy(locale);
@@ -320,9 +317,7 @@ export async function CommentaryEditor({ params, searchParams }: EditorParams) {
         <SectionHeading>
           <span id="work-entries">{t('commentary.entries')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('commentary.entriesHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('commentary.entriesHelp')}</p>
         {entries.items.length === 0 ? (
           <EmptyState>{t('commentary.entriesEmpty')}</EmptyState>
         ) : (
@@ -331,7 +326,12 @@ export async function CommentaryEditor({ params, searchParams }: EditorParams) {
               <Panel key={entry.hadithId} as="li">
                 <div className="flex flex-col gap-3">
                   <p className="text-sm font-semibold">
-                    <TextLink href={`/${locale}/admin/hadith/records/${entry.hadithId}`}>
+                    <TextLink
+                      href={localizedPath(
+                        locale,
+                        `/admin/hadith/records/${entry.hadithId}`,
+                      )}
+                    >
                       <span dir="auto">{entryRecordText(entry)}</span>
                     </TextLink>
                   </p>
@@ -429,9 +429,7 @@ async function EntryAdder({
         <SectionHeading>
           <span id="add-entry">{t('commentary.addEntry')}</span>
         </SectionHeading>
-        <p className="text-sm text-[color:var(--color-foreground-muted)]">
-          {t('commentary.addEntryHelp')}
-        </p>
+        <p className="text-sm text-foreground-muted">{t('commentary.addEntryHelp')}</p>
         <form method="get" action={base} className="flex flex-wrap items-end gap-3">
           <Field id="entry-collection" label={t('structure.collection')}>
             {(props) => (
@@ -679,7 +677,7 @@ function ScienceTitle({
 export async function SciencesDirectory({ params, searchParams }: ListParams) {
   const locale = await requireLocale(params);
   const query = await searchParams;
-  const base = `/${locale}/admin/hadith/sciences`;
+  const base = localizedPath(locale, '/admin/hadith/sciences');
   const context = await requireAdminPage(locale, 'hadith.read', base);
   const copy = await hadithCopy(locale);
   const { t } = copy;
@@ -698,9 +696,7 @@ export async function SciencesDirectory({ params, searchParams }: ListParams) {
   return (
     <main className="flex flex-col gap-8">
       <PageHeading>{t('surface.sciences')}</PageHeading>
-      <p className="text-sm text-[color:var(--color-foreground-muted)]">
-        {t('scope.sciences')}
-      </p>
+      <p className="text-sm text-foreground-muted">{t('scope.sciences')}</p>
 
       {page.items.length === 0 ? (
         <EmptyState>{t('empty')}</EmptyState>
@@ -757,9 +753,7 @@ export async function SciencesDirectory({ params, searchParams }: ListParams) {
         <Panel>
           <div className="flex flex-col gap-4">
             <SectionHeading>{t('sciences.create')}</SectionHeading>
-            <p className="text-sm text-[color:var(--color-foreground-muted)]">
-              {t('createHelp')}
-            </p>
+            <p className="text-sm text-foreground-muted">{t('createHelp')}</p>
             <ScienceForm
               locale={locale}
               record={null}
@@ -777,7 +771,7 @@ export async function SciencesDirectory({ params, searchParams }: ListParams) {
 export async function ScienceEditor({ params }: EditorParams) {
   const locale = await requireLocale(params);
   const id = recordTarget((await params).id);
-  const list = `/${locale}/admin/hadith/sciences`;
+  const list = localizedPath(locale, '/admin/hadith/sciences');
   const context = await requireAdminPage(locale, 'hadith.read', `${list}/${id}`);
   const copy = await hadithCopy(locale);
   const { t } = copy;
@@ -942,9 +936,7 @@ function ScienceForm({
 
       <fieldset className="flex flex-col gap-4">
         <legend className="text-sm font-semibold">{t('sciences.texts')}</legend>
-        <p className="text-xs text-[color:var(--color-foreground-muted)]">
-          {t('sciences.textsHelp')}
-        </p>
+        <p className="text-xs text-foreground-muted">{t('sciences.textsHelp')}</p>
         {Array.from({ length: rows }, (_, index) => {
           const text = texts[index];
           const direction =

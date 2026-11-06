@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { z } from 'zod';
 
 import type { Locale } from '@minhaj/contracts';
@@ -45,7 +46,7 @@ export function ayahPathOf(ref: QuranRef): string {
 }
 
 export function ayahPath(locale: string, ref: QuranRef): string {
-  return `/${locale}${ayahPathOf(ref)}`;
+  return localizedPath(locale, `${ayahPathOf(ref)}`);
 }
 
 export function surahPathOf(surah: number): string {
@@ -53,7 +54,7 @@ export function surahPathOf(surah: number): string {
 }
 
 export function surahPath(locale: string, surah: number): string {
-  return `/${locale}${surahPathOf(surah)}`;
+  return localizedPath(locale, `${surahPathOf(surah)}`);
 }
 
 export function juzPathOf(juz: number): string {
@@ -61,29 +62,31 @@ export function juzPathOf(juz: number): string {
 }
 
 export function juzPath(locale: string, juz: number): string {
-  return `/${locale}${juzPathOf(juz)}`;
+  return localizedPath(locale, `${juzPathOf(juz)}`);
 }
 
 /** The Quran section address under a locale: `/{locale}/quran[/{section}]`. */
 export function quranPath(locale: string, section = ''): string {
-  return section === '' ? `/${locale}/quran` : `/${locale}/quran/${section}`;
+  return section === ''
+    ? localizedPath(locale, '/quran')
+    : localizedPath(locale, `/quran/${section}`);
 }
 
 export function translationPath(locale: string, slug: string): string {
-  return `/${locale}/quran/translations/${part(slug)}`;
+  return localizedPath(locale, `/quran/translations/${part(slug)}`);
 }
 
 export function tafsirPath(locale: string, slug: string): string {
-  return `/${locale}/quran/tafsir/${part(slug)}`;
+  return localizedPath(locale, `/quran/tafsir/${part(slug)}`);
 }
 
 export function tajweedRulePath(locale: string, slug: string): string {
-  return `/${locale}/quran/tajweed/${part(slug)}`;
+  return localizedPath(locale, `/quran/tajweed/${part(slug)}`);
 }
 
 /** A reciter's recitations — addressed by the PERSON's public slug. */
 export function reciterPath(locale: string, personSlug: string): string {
-  return `/${locale}/quran/recitations/${part(personSlug)}`;
+  return localizedPath(locale, `/quran/recitations/${part(personSlug)}`);
 }
 
 /** A recitation segment's bytes: first-party, addressed by all three identifiers. */

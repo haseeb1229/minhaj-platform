@@ -111,12 +111,12 @@ export function Reader({
         aria-label={labels.contents}
         lang={interfaceLocale}
         dir={interfaceDirection}
-        className="scroll-mt-8 rounded-[var(--radius-panel)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-sunken)] px-4 py-3"
+        className="scroll-mt-8 rounded-panel border border-border bg-surface-sunken px-4 py-3"
       >
-        <p className="text-caption pb-1 font-semibold tracking-[var(--tracking-eyebrow)] text-[color:var(--color-accent)] uppercase">
+        <p className="text-caption pb-1 font-semibold tracking-[var(--tracking-eyebrow)] text-accent uppercase">
           {labels.contents}
         </p>
-        <ol className="flex list-decimal flex-col ps-6 marker:text-[color:var(--color-foreground-muted)]">
+        <ol className="flex list-decimal flex-col ps-6 marker:text-foreground-muted">
           {sections.map((section) => (
             <li key={section.key}>
               {/*
@@ -128,7 +128,7 @@ export function Reader({
                 href={`#${section.id}`}
                 lang={languageCode}
                 dir={direction}
-                className="inline-block py-2.5 underline decoration-[color:var(--color-accent-rule)] underline-offset-4 hover:decoration-[color:var(--color-action)]"
+                className="inline-block py-2.5 underline decoration-accent-rule underline-offset-4 hover:decoration-action"
               >
                 {section.title}
               </a>
@@ -192,7 +192,7 @@ export function Reader({
                   aria-label={section.title}
                   lang={interfaceLocale}
                   dir={interfaceDirection}
-                  className="flex flex-wrap gap-x-6 gap-y-1 border-t border-[color:var(--color-border)] pt-2 text-sm"
+                  className="flex flex-wrap gap-x-6 gap-y-1 border-t border-border pt-2 text-sm"
                 >
                   {previous === undefined ? null : (
                     <a

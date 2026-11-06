@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
@@ -46,7 +47,7 @@ export default async function MyClassPage({
 }) {
   const locale = await requireLocale(params);
   const { id } = await params;
-  const path = `/${locale}/my/classes/${encodeURIComponent(id)}`;
+  const path = localizedPath(locale, `/my/classes/${encodeURIComponent(id)}`);
   const session = await requireActiveSession(locale, path);
   const t = await getTranslations({ locale, namespace: 'myClasses' });
   const actor = { accountId: session.account.id };
@@ -117,7 +118,10 @@ export default async function MyClassPage({
           {course.state === 'published' ? (
             <p>
               <TextLink
-                href={`/${locale}/learn/courses/${encodeURIComponent(course.slug)}`}
+                href={localizedPath(
+                  locale,
+                  `/learn/courses/${encodeURIComponent(course.slug)}`,
+                )}
               >
                 {t('detail.coursePage')}
               </TextLink>
@@ -128,7 +132,10 @@ export default async function MyClassPage({
           {entry.participation === 'enrolment' ? (
             <p>
               <TextLink
-                href={`/${locale}/my/learning/courses/${encodeURIComponent(course.slug)}`}
+                href={localizedPath(
+                  locale,
+                  `/my/learning/courses/${encodeURIComponent(course.slug)}`,
+                )}
               >
                 {t('detail.myCourse')}
               </TextLink>

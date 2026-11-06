@@ -72,9 +72,7 @@ export default async function HumanSitemapPage({
       <div className="flex flex-col gap-8 py-12">
         <Prose>
           <h1 className="text-3xl font-semibold tracking-tight">{t('sitemap.title')}</h1>
-          <p className="text-[color:var(--color-foreground-muted)]">
-            {t('sitemap.description')}
-          </p>
+          <p className="text-foreground-muted">{t('sitemap.description')}</p>
         </Prose>
 
         <nav aria-label={t('sitemap.title')}>

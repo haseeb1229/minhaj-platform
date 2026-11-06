@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { z } from 'zod';
 
 import type { Locale } from '@minhaj/contracts';
@@ -65,7 +66,7 @@ export function scholarlyPath(
   kind: StandaloneScholarlyKind,
   slug: string,
 ): string {
-  return `/${locale}${scholarlyPathOf(kind, slug, null)}`;
+  return localizedPath(locale, `${scholarlyPathOf(kind, slug, null)}`);
 }
 
 /** The canonical public address of one issue in one locale. */
@@ -74,12 +75,15 @@ export function issuePath(
   magazineSlug: string,
   issueSlug: string,
 ): string {
-  return `/${locale}${scholarlyPathOf('magazine-issue', issueSlug, magazineSlug)}`;
+  return localizedPath(
+    locale,
+    `${scholarlyPathOf('magazine-issue', issueSlug, magazineSlug)}`,
+  );
 }
 
 /** The listing address of one standalone kind. */
 export function scholarlyListPath(locale: string, kind: StandaloneScholarlyKind): string {
-  return `/${locale}/library/${SCHOLARLY_SEGMENTS[kind]}`;
+  return localizedPath(locale, `/library/${SCHOLARLY_SEGMENTS[kind]}`);
 }
 
 /**

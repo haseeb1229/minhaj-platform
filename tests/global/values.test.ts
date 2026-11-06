@@ -292,11 +292,16 @@ describe('words and addresses', () => {
     expect(globalPaths.region('ar', 'xa', 'area')).toBe(
       '/ar/global/countries/xa/regions/area',
     );
-    expect(globalPaths.centreContact('en', 'a b')).toBe(
-      '/en/global/centres/a%20b/contact',
-    );
+    expect(globalPaths.centreContact('en', 'a b')).toBe('/global/centres/a%20b/contact');
     // Phase 14: a Centre's Events page sits beside its News and Contact pages.
     expect(globalPaths.centreEvents('ur', 'a b')).toBe('/ur/global/centres/a%20b/events');
     expect(globalPaths.centreNews('ar', 'xa')).toBe('/ar/global/centres/xa/news');
+    // ROUTE_MAP.md §1.1 (R1): English is unprefixed — every English address is
+    // its canonical one, never a `/en/…` form that answers a redirect.
+    expect(globalPaths.home('en')).toBe('/global');
+    expect(globalPaths.home('ur')).toBe('/ur/global');
+    expect(globalPaths.country('en', 'xa')).toBe('/global/countries/xa');
+    expect(globalPaths.pakistan('ar')).toBe('/ar/global/pakistan');
+    expect(globalPaths.centre('en', '../x')).toBe('/global/centres/..%2Fx');
   });
 });

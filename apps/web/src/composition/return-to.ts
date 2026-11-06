@@ -1,4 +1,4 @@
-import { isSupportedLocale } from '@/config/locale';
+import { localizedPath, splitLocalePath } from '@minhaj/contracts';
 
 /**
  * Destination validation for post-authentication redirects.
@@ -62,50 +62,52 @@ const OWN_LEARNING_PAGES: readonly RegExp[] = [
   new RegExp(`^/my/learning/paths/${SLUG}$`),
 ];
 
-/** Destinations that actually exist and a sign-in may return to. */
-function isKnownDestination(pathname: string, locale: string): boolean {
-  const path = pathname.replace(/\/$/, '');
-  if (
-    new Set([
-      `/${locale}/account-setup`,
-      `/${locale}/my`,
-      `/${locale}/my/settings/profile`,
-      `/${locale}/my/settings/security`,
-      `/${locale}/my/settings/language`,
-      // Phase 20 — Fatwa's `/my/questions`.
-      `/${locale}/my/questions`,
-      `/${locale}/my/questions/ask`,
-      // Phase 21 — Personalisation & Notifications.
-      `/${locale}/my/saved`,
-      `/${locale}/my/saved/bookmarks`,
-      `/${locale}/my/saved/notes`,
-      `/${locale}/my/saved/collections`,
-      `/${locale}/my/history/reading`,
-      `/${locale}/my/history/watch`,
-      `/${locale}/my/progress/quran`,
-      `/${locale}/my/notifications`,
-      `/${locale}/my/settings/interests`,
-      `/${locale}/my/settings/notifications`,
-      `/${locale}/my/settings/privacy`,
-      // Phase 22 — Learning's `/my/learning` and course progress.
-      `/${locale}/my/learning`,
-      `/${locale}/my/progress/courses`,
-    ]).has(path)
-  )
-    return true;
-  const question = `/${locale}/my/questions/`;
+/**
+ * Destinations that actually exist and a sign-in may return to, matched on the
+ * LOCALE-FREE pathname (`/my`, not `/ur/my`): the locale is split off once,
+ * by the one locale-path contract, before any of this runs.
+ */
+const KNOWN_DESTINATIONS = new Set([
+  '/account-setup',
+  '/my',
+  '/my/settings/profile',
+  '/my/settings/security',
+  '/my/settings/language',
+  // Phase 20 — Fatwa's `/my/questions`.
+  '/my/questions',
+  '/my/questions/ask',
+  // Phase 21 — Personalisation & Notifications.
+  '/my/saved',
+  '/my/saved/bookmarks',
+  '/my/saved/notes',
+  '/my/saved/collections',
+  '/my/history/reading',
+  '/my/history/watch',
+  '/my/progress/quran',
+  '/my/notifications',
+  '/my/settings/interests',
+  '/my/settings/notifications',
+  '/my/settings/privacy',
+  // Phase 22 — Learning's `/my/learning` and course progress.
+  '/my/learning',
+  '/my/progress/courses',
+  // R1 — the teacher and administration entry points, which send their own
+  // address as `returnTo` and were previously dropped to `/my`. Each page
+  // still makes its own authorisation decision after sign-in.
+  '/teacher',
+  '/admin',
+]);
+
+function isKnownDestination(rest: string): boolean {
+  const path = rest.replace(/\/$/, '');
+  if (KNOWN_DESTINATIONS.has(path)) return true;
+  const question = '/my/questions/';
   if (path.startsWith(question)) return OWN_QUESTION.test(path.slice(question.length));
   // One of the person's own private collections, by its opaque id.
-  const collection = `/${locale}/my/saved/collections/`;
+  const collection = '/my/saved/collections/';
   if (path.startsWith(collection))
     return OWN_QUESTION.test(path.slice(collection.length));
-  const prefix = `/${locale}`;
-  return (
-    path.startsWith(`${prefix}/`) &&
-    [...SAVEABLE_PAGES, ...OWN_LEARNING_PAGES].some((pattern) =>
-      pattern.test(path.slice(prefix.length)),
-    )
-  );
+  return [...SAVEABLE_PAGES, ...OWN_LEARNING_PAGES].some((pattern) => pattern.test(path));
 }
 
 /**
@@ -116,8 +118,10 @@ function isKnownDestination(pathname: string, locale: string): boolean {
  * reason to trust a link that appears to come from it
  * (SECURITY_BASELINE.md §9.3).
  *
- * ALLOWLIST, NOT DENYLIST. Only a same-origin absolute PATH is accepted, and it
- * must be under a known locale prefix. Everything else falls back:
+ * ALLOWLIST, NOT DENYLIST. Only a same-origin absolute PATH naming a known
+ * destination is accepted — unprefixed (English) or under the `ur`/`ar`
+ * prefix; a legacy `/en/…` value is returned in its canonical unprefixed form.
+ * Everything else falls back:
  *
  *   - absolute URLs (`https://evil.example/x`)
  *   - protocol-relative URLs (`//evil.example`)
@@ -127,7 +131,7 @@ function isKnownDestination(pathname: string, locale: string): boolean {
  *   - anything that does not parse as a path at all
  */
 export function safeReturnTo(candidate: string | null, locale: string): string {
-  const fallback = `/${locale}/my`;
+  const fallback = localizedPath(locale, '/my');
 
   if (candidate === null || candidate === '') return fallback;
 
@@ -156,13 +160,12 @@ export function safeReturnTo(candidate: string | null, locale: string): string {
   // header if it were ever echoed into one.
   if (hasControlCharacters(decoded)) return fallback;
 
-  // It must be a route on this application, under a supported locale.
-  const segments = decoded.split('/');
-  const prefix = segments[1];
-  if (prefix === undefined || !isSupportedLocale(prefix)) return fallback;
-
+  // It must be a known route on this application. An unprefixed path is
+  // English; `/ur/…` and `/ar/…` keep their locale (ROUTE_MAP.md §1.1).
   const pathname = decoded.split(/[?#]/, 1)[0];
-  if (pathname === undefined || !isKnownDestination(pathname, prefix)) return fallback;
+  if (pathname === undefined) return fallback;
+  const parts = splitLocalePath(pathname);
+  if (!isKnownDestination(parts.rest)) return fallback;
 
-  return decoded;
+  return localizedPath(parts.locale, parts.rest + decoded.slice(pathname.length));
 }

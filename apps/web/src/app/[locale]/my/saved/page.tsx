@@ -1,3 +1,4 @@
+import { localizedPath } from '@minhaj/contracts';
 import { getTranslations } from 'next-intl/server';
 
 import { targetKey } from '@minhaj/contracts/personalisation';
@@ -47,7 +48,7 @@ export default async function SavedPage({
   readonly params: Promise<{ readonly locale: string }>;
 }) {
   const locale = await requireLocale(params);
-  const session = await requireActiveSession(locale, `/${locale}/my/saved`);
+  const session = await requireActiveSession(locale, localizedPath(locale, '/my/saved'));
   const t = await getTranslations({ locale, namespace: 'personal' });
   const actor = { accountId: session.account.id };
   const { saved } = personalisationRuntime();
@@ -76,15 +77,19 @@ export default async function SavedPage({
       back={back}
     >
       <Panel>
-        <dl className="divide-y divide-[color:var(--color-border)]">
+        <dl className="divide-y divide-border">
           <DetailRow term={t('saved.bookmarks')}>
-            <TextLink href={`/${locale}/my/saved/bookmarks`}>{counts.bookmarks}</TextLink>
+            <TextLink href={localizedPath(locale, '/my/saved/bookmarks')}>
+              {counts.bookmarks}
+            </TextLink>
           </DetailRow>
           <DetailRow term={t('saved.notes')}>
-            <TextLink href={`/${locale}/my/saved/notes`}>{counts.notes}</TextLink>
+            <TextLink href={localizedPath(locale, '/my/saved/notes')}>
+              {counts.notes}
+            </TextLink>
           </DetailRow>
           <DetailRow term={t('saved.collections')}>
-            <TextLink href={`/${locale}/my/saved/collections`}>
+            <TextLink href={localizedPath(locale, '/my/saved/collections')}>
               {counts.collections}
             </TextLink>
           </DetailRow>
@@ -103,7 +108,7 @@ export default async function SavedPage({
               <Panel key={entry.savedItemId} as="li">
                 <div className="flex flex-col gap-2">
                   <TargetTitle resolved={titles.get(targetKey(entry.target))} t={t} />
-                  <div className="flex flex-wrap items-center gap-3 text-sm text-[color:var(--color-foreground-muted)]">
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-foreground-muted">
                     <KindBadge kind={entry.target.kind} t={t} />
                     <span>
                       {t('target.savedAt')}{' '}
