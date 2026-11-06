@@ -73,7 +73,7 @@ export async function SiteHeader({ locale }: { readonly locale: Locale }) {
       </div>
 
       <Container>
-        <div className="flex min-h-[4.5rem] items-center gap-4 lg:gap-7">
+        <div className="flex min-h-[4.5rem] items-center gap-2 sm:gap-4 lg:gap-7">
           <a
             href={home}
             className="inline-flex min-h-11 shrink-0 items-center rounded-control no-underline"
@@ -116,7 +116,7 @@ export async function SiteHeader({ locale }: { readonly locale: Locale }) {
             </ul>
           </nav>
 
-          <div className="ms-auto flex items-center gap-1.5 lg:ms-0 lg:gap-2">
+          <div className="ms-auto flex items-center gap-1 sm:gap-1.5 lg:ms-0 lg:gap-2">
             {/* SEARCH — a real field from a tablet up; a labelled action on a phone. */}
             <SearchForm
               action={searchAction}

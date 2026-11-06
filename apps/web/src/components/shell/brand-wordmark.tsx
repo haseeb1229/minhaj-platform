@@ -20,7 +20,7 @@ export function BrandWordmark({ tone = 'light' }: { readonly tone?: 'light' | 'i
         aria-hidden="true"
         focusable="false"
         viewBox="0 0 32 32"
-        className={`size-7 shrink-0 ${tone === 'ink' ? 'text-ink-accent' : 'text-accent'}`}
+        className={`size-6 shrink-0 sm:size-7 ${tone === 'ink' ? 'text-ink-accent' : 'text-accent'}`}
       >
         <path
           d="M16 2.5 L19.95 6.45 L25.55 6.45 L25.55 12.05 L29.5 16 L25.55 19.95 L25.55 25.55 L19.95 25.55 L16 29.5 L12.05 25.55 L6.45 25.55 L6.45 19.95 L2.5 16 L6.45 12.05 L6.45 6.45 L12.05 6.45 Z"
@@ -36,7 +36,7 @@ export function BrandWordmark({ tone = 'light' }: { readonly tone?: 'light' | 'i
         />
       </svg>
       <span
-        className={`font-serif text-[1.375rem] leading-none font-semibold tracking-[-0.02em] ${
+        className={`font-serif text-[1.25rem] sm:text-[1.375rem] leading-none font-semibold tracking-[-0.02em] ${
           tone === 'ink' ? 'text-ink-foreground' : 'text-foreground'
         }`}
       >

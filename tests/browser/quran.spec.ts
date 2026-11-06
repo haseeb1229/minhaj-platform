@@ -496,7 +496,14 @@ test.describe('a fixture corpus', () => {
     // A FIXTURE CORPUS IS NEVER PROMOTED (Rebaseline R1). The reader works at
     // its address, under its banner, but the shell advertises the Quran only
     // for an APPROVED corpus: no header, drawer or footer link leads here.
-    await expect(page.getByRole('banner').locator('a[href="/quran"]')).toHaveCount(0);
+    // The PRIMARY NAVIGATION, not the whole banner: the language switcher
+    // there links to this very page in English, which is not a promotion.
+    await expect(
+      page
+        .getByRole('banner')
+        .getByRole('navigation', { name: 'Main navigation' })
+        .locator('a[href="/quran"]'),
+    ).toHaveCount(0);
     await expect(page.getByRole('contentinfo').locator('a[href="/quran"]')).toHaveCount(
       0,
     );

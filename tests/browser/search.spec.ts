@@ -344,7 +344,9 @@ test('a missing page offers search', async ({ page }) => {
   const response = await page.goto(`/does-not-exist-${run}`);
   expect(response?.status()).toBe(404);
 
-  await page.getByLabel('Search the site').fill(WORD);
-  await page.getByRole('button', { name: 'Search' }).click();
+  // Scoped to the page: the header carries its own search form since R1.
+  const main = page.getByRole('main');
+  await main.getByLabel('Search the site').fill(WORD);
+  await main.getByRole('button', { name: 'Search' }).click();
   await expect(page).toHaveURL(new RegExp(`/search\\?q=${WORD}`));
 });

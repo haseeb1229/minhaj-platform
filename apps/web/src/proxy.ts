@@ -79,12 +79,6 @@ const REWRITE_MARK = globalThis.crypto.randomUUID();
 const NEXT_INTL_LOCALE_HEADER = 'X-NEXT-INTL-LOCALE';
 
 export default async function proxy(request: NextRequest) {
-  if (request.headers.get(REWRITE_MARK_HEADER) === REWRITE_MARK) {
-    const headers = new Headers(request.headers);
-    headers.delete(REWRITE_MARK_HEADER);
-    return NextResponse.next({ request: { headers } });
-  }
-
   /**
    * The locale and the locale-free path, split once by the locale-path
    * contract. The slug-history branches below match `routed` — the same
@@ -94,6 +88,20 @@ export default async function proxy(request: NextRequest) {
   const parts = splitLocalePath(request.nextUrl.pathname);
   const routed = `/${parts.locale}${parts.rest}`;
   const legacyEnglish = parts.prefixed && parts.locale === UNPREFIXED_LOCALE;
+
+  /**
+   * THIS PROXY'S OWN REWRITE, RE-ENTERING (see REWRITE_MARK). It is honoured
+   * only for what a re-entry actually is — an `/en/…` address — and served
+   * as-is. A marked request for any OTHER address is not a re-entry: Next
+   * forwards the original request's headers when it renders a Server Action's
+   * redirect target (`/my` after sign-in), and that request must be routed
+   * like any other, so the mark is simply ignored there and re-minted below.
+   */
+  if (legacyEnglish && request.headers.get(REWRITE_MARK_HEADER) === REWRITE_MARK) {
+    const headers = new Headers(request.headers);
+    headers.delete(REWRITE_MARK_HEADER);
+    return NextResponse.next({ request: { headers } });
+  }
   if (request.method === 'GET' || request.method === 'HEAD') {
     /**
      * PHASE 9 — A MAGAZINE ISSUE HAS A TWO-PART ADDRESS, and either part may be

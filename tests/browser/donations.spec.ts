@@ -462,8 +462,12 @@ test.describe('availability', () => {
       // its address, but neither the header nor the footer offers Donate while
       // giving is closed — hidden markup included, so the drawer's copy is
       // covered too.
+      // By NAME, not by address: on /donate the header's language switcher
+      // links to the page itself, which is not a promotion of giving.
       await expect(
-        page.getByRole('banner').locator(`a[href="${target}"]`),
+        page
+          .getByRole('banner')
+          .getByRole('link', { name: copy('shell.nav.donate'), exact: true }),
         target,
       ).toHaveCount(0);
       await expect(

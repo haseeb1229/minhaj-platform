@@ -129,7 +129,8 @@ export function MobileNav({
         >
           <path d="M2.5 4h11M2.5 8h11M2.5 12h11" />
         </svg>
-        {openLabel}
+        {/* At the narrowest phones the word yields its room; the button keeps it as its name. */}
+        <span className="max-[22.5rem]:sr-only">{openLabel}</span>
       </button>
 
       {/*

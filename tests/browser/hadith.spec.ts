@@ -671,7 +671,14 @@ test.describe('a fixture activation', () => {
     // A FIXTURE COLLECTION IS NEVER PROMOTED (Rebaseline R1): Hadith appears in
     // the shell only for an APPROVED corpus — not in the header, the drawer or
     // the footer — while the fixture still reads at its address.
-    await expect(page.getByRole('banner').locator('a[href="/hadith"]')).toHaveCount(0);
+    // The PRIMARY NAVIGATION, not the whole banner: the language switcher
+    // there links to this very page in English, which is not a promotion.
+    await expect(
+      page
+        .getByRole('banner')
+        .getByRole('navigation', { name: 'Main navigation' })
+        .locator('a[href="/hadith"]'),
+    ).toHaveCount(0);
     await expect(page.getByRole('contentinfo').locator('a[href="/hadith"]')).toHaveCount(
       0,
     );

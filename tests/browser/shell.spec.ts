@@ -690,13 +690,12 @@ test.describe('the public header', () => {
       expect((await page.request.get(href)).status(), href).toBe(200);
 
     // NO UTILITY WALL, NO MEGA MENUS, NO PRE-ADOPTION MARKER in the header.
-    for (const removed of [
-      '/membership',
-      '/global/find-a-centre',
-      '/contact',
-      '/sitemap',
-    ])
+    for (const removed of ['/membership', '/contact', '/sitemap'])
       expect(header, `header links ${removed}`).not.toContain(removed);
+    // Find a Centre is no utility link any more: it is never in the bar. The
+    // drawer's organisation group may list it, but only while Centres are
+    // published — the same rule as the footer.
+    expect(bar).not.toContain('/global/find-a-centre');
     for (const name of ['Explore', 'Library', 'Watch', 'News and Events'])
       await expect(banner.getByRole('button', { name, exact: true }), name).toHaveCount(
         0,
