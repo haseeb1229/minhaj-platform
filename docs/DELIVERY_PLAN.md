@@ -2661,7 +2661,25 @@ Minhaj religious authority.** Completes on review capacity, not a date.
 > **Production** and **Flagship/presentation** — each stated on its own evidence, so that an
 > engineering exit is never read as content, activation, production or presentation readiness.
 >
-> **Closure evidence: pending exact-SHA CI and staging.**
+> **Closure evidence (2026-11-06).** Branch `feature/rebaseline-r1-flagship-foundation` from main
+> `0382218`: `46b68b8` (the macro), `3edbb93` (the English rewrite mark honoured only on its own
+> `/en/…` re-entry — a Server Action's redirect target had answered 404 — and the header fitted at
+> 320px), `3fb5863` (the staging deploy gate admits exactly `feature/phase-*` and
+> `feature/rebaseline-*` heads, owner-approved, pinned by test). Runtime SHA `3fb5863`: CI run
+> 42212656181, 5/5 green; staging deploy run 42215217113 (gate, images, deploy, public-edge
+> verify) green — staging serves `3fb5863`. Staging acceptance: 126 loads (10 public and 4 private
+> routes × en/ur/ar × 390/768/1440 px), all 200, no horizontal overflow, no broken image, no
+> third-party request, titled; header bar Library · Watch · News · Collections · About, no Donate;
+> Gulzar Nastaliq on Urdu headings, Naskh on Arabic; `/en…` and case variants one 301 with the
+> query kept, `Accept-Language` never redirects, `/fr/…` 404, no public `Set-Cookie`. The closing
+> commit is documentation only; `main` is fast-forwarded to it. No schema change (31 migrations).
+>
+> **Readiness after R1 (six dimensions).** Engineering — R1 contract delivered and CI-proven.
+> Product — the shell, routing and identity foundation is in place; the home, landings, media
+> player, My Minhaj and internal workflows are not yet redesigned (R2–R4). Content — unchanged
+> (Stage 1A, 617 public records; Stage 1B not started). Activation — unchanged (religious corpora,
+> giving, learning and messaging not activated). Production — not started (Phases 34–35).
+> Flagship/presentation — improved but not yet presentation-ready; R2 is the next step.
 
 ---
 
