@@ -17,7 +17,9 @@
 # itself and is no less deliberate. The tag names the mode; the commit is the
 # release.
 #
-#   gate    the tagged commit must be the HEAD of a `feature/phase-*` branch,
+#   gate    the tagged commit must be the HEAD of a `feature/phase-*` branch or,
+#           for the owner-directed Rebaseline programme (2026-11-06), of a
+#           `feature/rebaseline-*` branch — exactly those two prefixes —
 #           and the ordinary CI run for that exact commit must have all five
 #           jobs green.
 #   images  build web (for the staging origin), realtime and ops from that
@@ -96,17 +98,17 @@ jobs:
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "release $TAGGED, mode $mode"
 
-      - name: Require the commit to be the head of a feature/phase-* branch
+      - name: Require the commit to be the head of a feature/phase-* or feature/rebaseline-* branch
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED: ${{ github.sha }}
         run: |
           set -eu
           heads="$(gh api --paginate "repos/$GITHUB_REPOSITORY/branches?per_page=100" \
-            --jq '.[] | select(.name | startswith("feature/phase-")) | "\(.commit.sha) \(.name)"' \
+            --jq '.[] | select((.name | startswith("feature/phase-")) or (.name | startswith("feature/rebaseline-"))) | "\(.commit.sha) \(.name)"' \
             | awk -v sha="$REQUESTED" '$1 == sha { print $2 }')"
           [ -n "$heads" ] \
-            || { echo "::error::$REQUESTED is not the head of any feature/phase-* branch"; exit 1; }
+            || { echo "::error::$REQUESTED is not the head of any feature/phase-* or feature/rebaseline-* branch"; exit 1; }
           echo "head of: $heads"
 
       - name: Require all five ordinary CI jobs green on that exact commit

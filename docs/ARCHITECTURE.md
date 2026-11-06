@@ -1465,7 +1465,8 @@ digests its exact-SHA tag already names, and that tag is never overwritten. SQL 
 
 **Deployment.** `.github/workflows/staging-deploy.yml`, triggered deliberately by the operator
 pushing a deploy tag — `staging/deploy/<UTC time>` or `staging/migrate-and-deploy/<UTC time>` —
-onto one commit that is the head of a `feature/phase-*` branch and has all five ordinary CI jobs
+onto one commit that is the head of a `feature/phase-*` branch (or, since Rebaseline R1, a
+`feature/rebaseline-*` branch — exactly those two prefixes) and has all five ordinary CI jobs
 green. (A tag rather than `workflow_dispatch`, because a dispatchable workflow must exist on the
 default branch, which this project does not change.) GitHub
 reaches Azure by OIDC federation (no secret); the VM is told what to run through Azure Run

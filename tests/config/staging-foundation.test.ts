@@ -282,9 +282,19 @@ describe('Phase 28 — the staging deploy workflow', () => {
   it('deploys one exact, CI-green commit, serialised, by digest', async () => {
     const workflow = code(await load());
     expect(workflow).toContain("grep -Eqx '[0-9a-f]{40}'");
-    // The tagged commit must be the head of a reviewed phase branch.
-    expect(workflow).toContain('select(.name | startswith("feature/phase-"))');
-    expect(workflow).toContain('is not the head of any feature/phase-* branch');
+    // The tagged commit must be the head of a reviewed phase branch or, since
+    // the owner-directed Rebaseline programme (R1), a rebaseline branch.
+    expect(workflow).toContain(
+      'select((.name | startswith("feature/phase-")) or (.name | startswith("feature/rebaseline-")))',
+    );
+    expect(workflow).toContain(
+      'is not the head of any feature/phase-* or feature/rebaseline-* branch',
+    );
+    // Exactly those two prefixes: no wildcard, no main, no arbitrary branch.
+    expect(workflow.match(/startswith\("[^"]*"\)/g)).toEqual([
+      'startswith("feature/phase-")',
+      'startswith("feature/rebaseline-")',
+    ]);
     // Downstream jobs build and deploy exactly the gate's commit.
     expect(workflow).not.toContain('inputs.');
     expect(workflow).toContain('ref: ${{ needs.gate.outputs.sha }}');

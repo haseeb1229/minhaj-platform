@@ -2041,7 +2041,9 @@ managed-identity tokens. Docker starts only once the data disk is mounted.
   password, storage key or SAS exists on the host**; storage-account shared-key access is
   disabled.
 - The deploy workflow runs **only** when the operator pushes a deploy tag onto one **exact,
-  CI-green commit** that is the head of a `feature/phase-*` branch — never on a branch push or a
+  CI-green commit** that is the head of a `feature/phase-*` branch — or, since Rebaseline R1
+  (owner-approved 2026-11-06), a `feature/rebaseline-*` branch; exactly those two prefixes,
+  pinned by `tests/config/staging-foundation.test.ts` — never on a branch push or a
   pull request — serialised, with no `pull_request_target`, no fork access, no repository
   secret, actions pinned by commit SHA and images deployed **by digest**. The `staging`
   environment admits only the two deploy-tag patterns.

@@ -1530,7 +1530,9 @@ test.describe('Learning surfaces', () => {
       for (const viewer of [page, learner])
         await viewer.setViewportSize({ width, height: 800 });
       for (const [viewer, target, outline] of targets) {
-        const locale = target.split('/')[1] as UiLocale;
+        // An unprefixed address is English (R1); only /ur and /ar carry a prefix.
+        const first = target.split('/')[1];
+        const locale: UiLocale = first === 'ur' || first === 'ar' ? first : 'en';
         const response = await viewer.goto(target);
         expect(response?.status(), target).toBe(200);
         await expect(viewer.locator('html'), target).toHaveAttribute(
