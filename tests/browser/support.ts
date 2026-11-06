@@ -685,11 +685,25 @@ export async function asTwoVisitors(
   signedIn: APIRequestContext,
   target: string,
 ): Promise<{ readonly anonymous: APIResponse; readonly signedIn: APIResponse }> {
-  const [first, second] = await Promise.all([
-    anonymous.get(target, { maxRedirects: 0 }),
-    signedIn.get(target, { maxRedirects: 0 }),
-  ]);
-  return { anonymous: first, signedIn: second };
+  // R1: the public shell promotes areas from a PUBLIC presence snapshot that
+  // refreshes (30 s) as other specs publish into the shared database. Two
+  // loads can straddle a refresh and differ in the navigation alone — a
+  // difference of time, not of visitor. The pair is therefore re-fetched until
+  // both come from the same snapshot (bounded), and the caller still makes its
+  // own strict comparison: a per-visitor difference never converges.
+  const deadline = Date.now() + 45_000;
+  for (;;) {
+    const [first, second] = await Promise.all([
+      anonymous.get(target, { maxRedirects: 0 }),
+      signedIn.get(target, { maxRedirects: 0 }),
+    ]);
+    const settled =
+      first.status() !== 200 ||
+      second.status() !== 200 ||
+      knowledgeOf(await first.text()) === knowledgeOf(await second.text());
+    if (settled || Date.now() > deadline) return { anonymous: first, signedIn: second };
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
 }
 
 /**
