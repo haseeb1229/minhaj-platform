@@ -23,7 +23,9 @@ import { CommandError, positiveInteger, runCommand } from '../migration/cli.ts';
  *
  * Idempotent and resumable: a derived width is kept, so running it again
  * creates nothing new and continues anything an earlier run left. Bounded:
- * `--limit` pictures per run (default 1,000, at most 10,000).
+ * `--limit` pictures WORKED ON per run (default 1,000, at most 10,000) — a
+ * picture whose widths all exist is passed over without counting, so a
+ * repeated run reaches the pictures the last one did not.
  *
  * THE TARGET IS PROVED BEFORE ANYTHING IS READ. `DATABASE_URL` must be either
  * the staging database on the internal staging SQL host — which

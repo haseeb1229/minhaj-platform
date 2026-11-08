@@ -128,8 +128,10 @@ function noCounts(): BackfillCounts {
 }
 
 /**
- * Derives every public picture's missing widths, examining at most `limit`
- * pictures. `complete` is false when the limit stopped the run: run it again.
+ * Derives every public picture's missing widths, WORKING ON at most `limit`
+ * pictures: a picture whose widths all exist already is passed over without
+ * counting, so a repeated run reaches the pictures the last one did not.
+ * `complete` is false when the limit stopped the run: run it again.
  */
 export async function backfillDerivatives(
   limit: number,
@@ -145,28 +147,33 @@ export async function backfillDerivatives(
   const byFamily: Record<string, BackfillCounts> = {};
   // A picture two records share is derived once per run.
   const seen = new Set<string>();
+  // Pictures that needed work this run: any width created, or a refusal or
+  // failure to report. Only these count against `limit`.
+  let worked = 0;
 
   for (const family of families()) {
     const counts = noCounts();
     byFamily[family.name] = counts;
     let after: string | null = null;
     for (;;) {
-      if (totals.examined >= limit)
-        return { totals, families: byFamily, complete: false };
-      const page = await family.page(after, Math.min(PAGE, limit - totals.examined));
+      if (worked >= limit) return { totals, families: byFamily, complete: false };
+      const page = await family.page(after, PAGE);
       if (page.length === 0) break;
       for (const reference of page) {
+        if (worked >= limit) return { totals, families: byFamily, complete: false };
         counts.examined += 1;
         totals.examined += 1;
         if (seen.has(reference.assetId)) continue;
         seen.add(reference.assetId);
         const outcome = await storage.derive(reference.assetId, family.policy(reference));
         if (outcome.status === 'derived') {
+          if (outcome.created > 0) worked += 1;
           for (const key of ['created', 'existing', 'withheld'] as const) {
             counts[key] += outcome[key];
             totals[key] += outcome[key];
           }
         } else {
+          worked += 1;
           counts[outcome.status] += 1;
           totals[outcome.status] += 1;
         }

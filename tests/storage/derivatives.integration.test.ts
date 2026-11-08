@@ -187,4 +187,29 @@ live('R2 storage derivatives against real SQL Server', () => {
     const third = await backfill(1_000, storage);
     expect(third.families['people:portrait']?.examined).toBe(0);
   });
+
+  it('the backfill limit counts pictures worked on, so a repeated run moves past finished ones', async () => {
+    // Staging found the opposite: with `limit` capping pictures EXAMINED, every
+    // run re-read the same first pictures and never reached the rest.
+    const first = await storedPhoto(800, 800);
+    const second = await storedPhoto(800, 800);
+    for (const asset of [first, second])
+      await db.admin.query(
+        `INSERT INTO [dbo].[Person] ([id],[slug],[primaryLocale],[status],[portraitAssetId],[portraitWidth],[portraitHeight])
+         VALUES (N'${randomUUID()}',N'r2-limit-${asset}',N'en',N'published',N'${asset}',800,800);`,
+      );
+
+    const runOne = await backfill(1, storage);
+    expect(runOne.complete).toBe(false);
+    const runTwo = await backfill(1, storage);
+    expect(runTwo.complete).toBe(false);
+    const runThree = await backfill(1, storage);
+    expect(runThree.complete).toBe(true);
+    expect(runThree.totals.created).toBe(0);
+    // Two runs of one picture each derived BOTH pictures.
+    for (const asset of [first, second])
+      expect((await assets.derivatives(asset)).map((row) => row.width).sort()).toEqual([
+        320, 640,
+      ]);
+  });
 });
