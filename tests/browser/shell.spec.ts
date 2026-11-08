@@ -93,8 +93,13 @@ const internal = (href: string) => href.startsWith('/');
  * activates fixture corpora, so these are never promoted during a run — a
  * fixture text in the main navigation would advertise test data as the
  * platform's Quran.
+ *
+ * R2: `/hadith` itself is the Hadith WORKS landing — linked as "Hadith works"
+ * whenever the Library holds a public work filed under Hadith, which other
+ * specs publish — so the corpus-only destination checked here is the
+ * collections browser beneath it.
  */
-const NEVER_PROMOTED_WITH_FIXTURES = ['/quran', '/hadith', '/fatwa'] as const;
+const NEVER_PROMOTED_WITH_FIXTURES = ['/quran', '/hadith/collections', '/fatwa'] as const;
 
 /** Does the document scroll sideways? The one thing no layout may do. */
 async function overflows(page: Page): Promise<boolean> {
